@@ -1,0 +1,13 @@
+ok settle.rule
+ok settle.kn: 1 function, fails rule
+warning[ritsu W201]: settle.kn:15:3: Whether the call of the rule settle keeps its precondition `subtotal <= 500` cannot be decided
+    15 |   settle(lines: map(lines, l => settle.lines { price: l.price, held: l.held }), payments: map(payments, p => settle.payments { paid: p.paid, pending: p.pending })).due
+  = The list given to `lines` has up to 6 elements; at that length and the ends of its elements' ranges `subtotal <= 500` does not hold, and no input among the function's vectors gives such a list.
+  = kaname's generated code checks it there when it runs: where the rule's generated code refuses the call at its door, the function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`), and it is shown.
+error[ritsu E201]: settle.kn:15:3: The call of the rule settle can give it values that break its precondition `len(lines) <= 5`
+    15 |   settle(lines: map(lines, l => settle.lines { price: l.price, held: l.held }), payments: map(payments, p => settle.payments { paid: p.paid, pending: p.pending })).due
+  = For example, `due_of(lines: [Line { price: 50, held: true }, Line { price: 50, held: true }, Line { price: 50, held: true }, Line { price: 50, held: true }, Line { price: 50, held: true }, Line { price: 50, held: true }], payments: [])` gives the rule lines = [6 elements].
+  = The rule's generated code refuses a call that breaks a precondition at its door, and the kaname function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or correct the ranges of the values given.
+ritsu check: 2 files (rulec 1, kaname 1): 1 fail (1 error, 1 warning); borders between the languages: 4 checked, 1 undecided

@@ -1,0 +1,28 @@
+rule tier_of_small_orders v1
+description "A tier a table writes from whether an order is small and its amount, read with whether it is small: gold comes only for an order that is not small, so no row is asked for a small order on gold"
+
+enum route = desk | post
+enum channel_kind = shop | online
+enum level = gold | bronze
+
+inputs
+  amount : money[JPY]  range >=0JPY <=130JPY
+  channel : channel_kind
+
+define small : bool = amount <= 55JPY
+
+outputs
+  x : route
+
+table tier_of
+| small | amount   | -> tier : level |
+| false | <=127JPY | bronze          |
+| false | >127JPY  | gold            |
+| true  | <=127JPY | bronze          |
+
+table pick
+| channel | small | tier          | -> x |
+| shop    | true  | bronze        | desk |
+| shop    | false | gold          | post |
+| shop    | false | bronze        | desk |
+| online  | -     | gold, bronze  | post |

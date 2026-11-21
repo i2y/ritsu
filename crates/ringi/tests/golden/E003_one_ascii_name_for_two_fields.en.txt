@@ -1,0 +1,2 @@
+error[E003]: tests/mutants/E003_one_ascii_name_for_two_fields.ringi:5:9: The ASCII name `amount` is given to two names in the form (`amount` on line 4)
+     5 |   total(amount) : money[JPY] "Total"  range >=1JPY <=100_000JPY

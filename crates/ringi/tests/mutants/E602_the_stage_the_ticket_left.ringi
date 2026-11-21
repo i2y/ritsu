@@ -1,0 +1,24 @@
+request example v1 "Example"
+
+use organization org from "shared/small.ringi"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check   finance
+  decide  sales
+
+who
+  finance = team finance
+  sales   = team sales
+
+ticket
+  self approval  allowed
+
+scenario a_small_expense
+  requester e03
+  form amount = 5_000JPY
+| at               | event   | by  | -> stage | status      |
+| 2026-06-01 09:00 | submit  | e03 | check    | in progress |
+| 2026-06-01 10:00 | approve | e04 | check    | in progress |

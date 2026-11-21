@@ -1,0 +1,5 @@
+warning[W402]: tests/spellings/python_store.gate:13:1: The type `Return` is written `return` in the code of Python, a reserved word of the language
+    13 | resource Return
+  = Python (`--target python`): the type `Return` is written `return` as the method of `Store` that reads it, and `return` is a reserved word of Python: the module does not load (`SyntaxError`), nor pass `mypy --strict`.
+  = For a target you do not build, leave it as it is. For one you do, change its alias. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/python_store.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

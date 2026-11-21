@@ -4,24 +4,25 @@ description "履歴を暗号化するワークフローのクライアントが�
 
 use proto 通話 from "protos/calls.ja.proto"
 
-# names.ja.flow の、W105 が挙げた名前を変えたもの。クライアントがそのまま持てる名前です。
+# names.ja.flow の、W105 が挙げた名前を変えたもの。Go の client.go が自分のためだけに宣言する
+# CodecFailureConverter と CodecDataConverter は、そのままにする。パッケージが自分の方を別の名前にする。
 record Reached
   答え : string
 
 record PickedUp
   出た : bool
 
-record Confirmed
+record CodecFailureConverter
   確認 : string
 
 record 保留
   理由 : string
 
-enum LineKind = landline | mobile
+enum CodecDataConverter = landline | mobile
 
 inputs
   番号 : string  secret
-  回線 : LineKind
+  回線 : CodecDataConverter
 
 outputs
   記録 : string
@@ -40,7 +41,7 @@ task かける(番号: string) -> Reached
   callback
   timeout 1 day
 
-task 確かめる(答え: string) -> Confirmed
+task 確かめる(答え: string) -> CodecFailureConverter
   callback
   timeout 1 day
 

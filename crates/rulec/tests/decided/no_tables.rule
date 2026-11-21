@@ -1,0 +1,10 @@
+rule no_tables v1
+description "A rule with outputs and no table at all"
+
+enum level = low "Low" | high "High"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  grade : level

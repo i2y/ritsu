@@ -1,0 +1,20 @@
+rule fee_band v1
+description "A card fee of 3% of the amount, accepted up to 20,000 yen, and the band of the amount"
+
+enum band = small | large
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0JPY <=20_000JPY
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+  band    : band
+
+table bands
+| amount      | -> band |
+| <=30_000JPY | small   |
+| >30_000JPY  | large   |
+
+result charged = fee

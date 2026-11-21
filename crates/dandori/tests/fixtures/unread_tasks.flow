@@ -1,0 +1,49 @@
+workflow unread_tasks v1
+description "Tasks and variables made from a rule that does not pass rulec's check, which is said once, at its line (E005): the `starts` line of a task that starts a machine of the rule, a Jev task whose answer is an enum of the rule and what it asks of it, a Jev task whose answer is a record with a field of that enum and what it asks of the field and how sure it is of it, and a variable set from the rule and set again to a value of the enum, which has no type to be read as. None of them says more, and the rest of each task is checked: what is wrong elsewhere is said, a field Jev is asked to write as text (E007) and a field the record does not have (E002)"
+
+use rule quote from "rules/broken_quote.rule"
+
+record Sorted
+  band : quote.band
+  sure : rate[step 1%]
+  note : string
+
+record Parcel
+  id     : string
+  weight : int
+
+inputs
+  text   : string
+  parcel : Parcel
+
+task pick(text: string) -> quote.band
+  jev "Which band is the parcel in?"
+    light "It weighs less than 5 kg"
+    heavy "It weighs 10 kg or more"
+  model "jev-1.13.0"
+
+task sort(text: string) -> Sorted
+  jev
+    band "Which band is the parcel in?"
+      light "It weighs less than 5 kg"
+      heavy "It weighs 10 kg or more"
+    sure confidence of band
+    note "What does the sender say of it?"
+  model "jev-1.13.0"
+
+task open_shipment(id: string) -> Parcel
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:open-shipment"
+  starts quote.shipment
+
+task tag(text: string)
+  http POST "https://tag.example.com/labels"
+  idempotent
+
+flow
+  let b = pick(text: text)
+  let s = sort(text: text)
+  let shipment = open_shipment(id: parcel.id)
+  let band = b
+  let band = light
+  tag(text: "{s.note} {band}")
+  tag(text: parcel.code)

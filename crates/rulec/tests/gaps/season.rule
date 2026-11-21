@@ -1,0 +1,14 @@
+rule season v1
+description "A price by day and age, the age left out by some: no row for the second half of the season, nor for those of 13 and over in the first"
+
+inputs
+  day : date     range >=2026-04-01 <=2026-09-30
+  age : number?  range >=0 <=120
+
+outputs
+  price : money[JPY]  round down(1JPY)
+
+table prices
+| day         | age  | -> price |
+| <2026-07-01 | none | 900JPY   |
+| <2026-07-01 | <13  | 500JPY   |

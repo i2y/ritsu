@@ -1,0 +1,15 @@
+company.gate: ok — action 11、ポリシー 4（permit 3、forbid 1）、期待 0、職務の分離 0
+ok purchase.ringi: 申請の種類、フィールド 1 個、ステップ 1 個
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます
+警告[ritsu W911]: purchase.ringi:3: ゲート company.gate が、`purchase` の経路が決めた承認者に `approve`、`reject` を許すかを決められません
+     3 | use gate "company.gate"
+  = ゲートに尋ねた形: principal が `resource.approvers` に入っている、`resource.requester` が principal でない、`resource.self_approval` が false。
+  = 決められない理由: `resource.self_approval` は bool ではありません。
+  = ringi がステップについてゲートに渡すのは、`resource.requester`（申請者。principal と同じ型のエンティティ）、`resource.approvers`（承認者がメンバーであるエンティティ）、`resource.self_approval`（bool）です。ゲートの resource に、その型で宣言してください。
+警告[ritsu W911]: purchase.ringi:15: ゲート company.gate が、`purchase` の申請者に、自分の申請への `approve`、`reject` を許すかを決められません
+    15 |   self approval  not allowed
+  = 申請の 15 行目が `self approval not allowed` と書いています。
+  = ゲートに尋ねた形: `resource.requester` が principal 自身、`resource.self_approval` が false。
+  = 決められない理由: `resource.self_approval` は bool ではありません。
+  = ringi がステップについてゲートに渡すのは、`resource.requester`（申請者。principal と同じ型のエンティティ）、`resource.approvers`（承認者がメンバーであるエンティティ）、`resource.self_approval`（bool）です。ゲートの resource に、その型で宣言してください。
+ritsu check: ファイル 2 個（sekisho 1、ringi 1）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 3 か所、決められない 2 か所

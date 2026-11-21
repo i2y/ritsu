@@ -20,7 +20,7 @@ empty.
 |---|---|
 | **Completeness** | if some input matches no row, it stops — **with that input** |
 | **Overlap** | under `policy unique`, an overlap is an error. Under `policy first`, structural shadowing (the staircase) is told apart from the pairs whose outputs differ and therefore deserve a decision. Two rows that meet only where no input reaches overlap nothing |
-| **Dead rows** | a row nothing reaches. The message tells apart "earlier rows already cover it", "the upstream table never emits the value it names" and "the derive or the `define` never comes to the values the row asks for", the last with the interval it does come to — or with the row of the table above that writes the value the row asks for, and what the derive comes to while that row fires |
+| **Dead rows** | a row nothing reaches. The message tells apart "earlier rows already cover it", "the upstream table never emits the value it names" — or emits it only for inputs the earlier rows take first — and "the derive or the `define` never comes to the values the row asks for", the last with the interval it does come to — over the inputs the row takes, where it reads them too — or the grid its values sit on, or with the row of the table above that writes the value the row asks for, and what the derive comes to while that row fires |
 | **Units** | adding yen to grams stops. So does tax-inclusive plus tax-exclusive |
 | **Rounding** | a numeric output must declare one. Without it, the message shows the money: "down(1JPY) gives 0JPY, half_up(1JPY) gives 0JPY and up(10JPY) gives 10JPY, so the rounding mode moves the result by up to 10JPY" |
 | **Overflow** | that every intermediate fits in int64, proved from the declared ranges and steps |
@@ -31,6 +31,17 @@ combination declared not to happen, and the generated code refuses one at the do
 instead. A `never` line does the same for a combination that is not a comparison,
 `never has_tool = true, all_parts = true`. In a rule that walks a sequence, the same completeness check asks whether
 **every verdict the table can produce has an arm** in the fold (E024).
+
+A rule that passes answers every call it takes with every output it declares. An output nothing
+decides — no table writes it after `->`, no `define` or `derive` has its name, no `result` line —
+stops the check, and so do an output a table or a definition reads above what decides it, an
+output read in the expression of the `define` that decides it, and a table whose heading has no
+`->`: the output would have no value, and the generated code would fail on every call. A `define`
+whose range holds none of the values it takes stops it as well: `gifts * 2 + 1` is odd, so
+`range >=2 <=2` would refuse every call. A step written on a rate the rule works with and does not
+answer — on a table's heading, or on the type of a `derive` or a `define` — holds what the rate
+takes: a cell of `0.5%` under `-> markup : rate[step 1%]` stops the check (E114), where the rule
+would have worked on with a value between two steps.
 
 A `derive` is checked against the values it can actually come to, not against the `range`
 written on it. With `amount` from 1GBP to 100GBP and `limit` from 0GBP to 100GBP,
@@ -43,7 +54,7 @@ in: under `constraint paid <= billed`, `billed - paid` never goes below zero. Th
 are read on the step they take, which can be finer than the whole units a cell is written in:
 `commission = amount * 10%` comes in tenths of a pound, so rows `<=1GBP` and `>=2GBP` leave
 `1.1GBP` to no row, and completeness stops with it and with the amount that makes it,
-`amount = 11`.
+`amount = 11GBP`.
 
 A `define` that computes a number is read the same way. With `score` from 0 to 200,
 `define share : rate = score / 200` comes to 0% up to 100%, so completeness demands no row for
@@ -69,6 +80,39 @@ more is an `added` of two or more, so a row asking for that excess and that limi
 `added` of at most one is E102, and completeness asks no row for it. The certificate carries
 the equation as a fact of the `define`, and the two re-checkers build it again from the
 expression rather than taking the certificate's word for it.
+
+A table may read a value the rule works out beside the inputs it is worked out from, and then the
+check reads the two together. An output of a rule brought in with `apply` is read through the rows
+of that rule's table, with its inputs as this rule passes them: a purchase route that reads the kind
+and the amount beside whether the applied table of authority sends the request to finance needs rows
+only for the answers that table gives for that kind and amount. A value a table of this rule writes
+is read the same way, through as many tables as it passes, and so is a number a table above writes.
+A row is E102 only where no input gets its values: where the table above cuts its bands at 50 yen
+and the table reading them cuts the amount at 80, the row for an amount over 50 up to 80 yen and the
+band `small` is reached by every amount from 51 to 80 yen. A `define` is worked out again over the
+values each cell gives the inputs it reads, one read as an equation too, for what only whole
+numbers leave out: with `define fee : money[JPY] = down(amount * 3%, 1JPY)`, the fee passes 900 yen
+only from an amount of 30,034 yen, so a row that asks for a fee over 900 yen on an amount up to
+30,000 yen is E102, and the message marks what the fee comes to there, `>=0JPY <=900JPY`, on the
+`define`. The expression is also read as each of those inputs times a number, added up:
+`max(amount, 30JPY) - amount` cancels to 0 yen from an amount of 30 yen. Where that does not settle
+it, the expression is worked out again over pieces of the amount, halved until each piece leaves
+the value out. A rounding puts its value on the grid of its step: `up(amount * 10%, 10JPY)` comes to
+multiples of 10 yen alone, so a table that reads it needs no row for 11 to 19 yen, and a row that
+asks only for 15 yen is E102. An input sits on its own step, so `gifts * 2` comes to even numbers
+alone. A `define` with a `range` is read inside the range the rule accepts. Under `policy first`,
+the rows of a table above are read where the rows before them, taken together, leave them: a fee
+of 50 yen written by the last row, under a row that takes every amount from 38 yen, needs no row
+from 38 yen, nor does it under two rows that share those amounts between them. A table above that
+writes dates is read by the days it writes, and one that decides a tier from a fee the rule works
+out is read with the fee worked out again over the amounts of each cell. A row every input of which
+either a row above it takes first or the tables above do not give the value for is E102 too. The
+example of a gap
+or an overlap on such columns is an input the reference evaluator has run, with the values it gives
+them (`An input that matches no row: amount = 33_367JPY, f_fee = 1001JPY`), and a line under it gives
+the whole input where it holds inputs the table does not read. Where no such input is found, the
+example is called a combination, not an input. The certificate carries each of these reasons, and
+the two re-checkers work them out again.
 
 In a rule that binds an enum to a `.proto` with `import proto`,
 completeness reaches **across the contract**. Every `rulec check` reads
@@ -160,8 +204,8 @@ error[E101]: Completeness gap: some input matches no row
  This combination never comes out of the definitions (`has_tool` is `any order.lines where category = tool`, `all_parts` is `all order.lines where category = part`).
  A row is still asked for because a call that does not read through `from` reaches it: the code generated for NumPy, Rust, Go, Swift, Java, SQL and Wasm does not read `from`, and takes whatever the caller worked out.
  hint: a combination that does not happen comes out of the tables with this line, and no row: `never has_tool = true, all_parts = true`
- hint: add a row that matches this input.
- The shape of the row to add: `| true | true | 5USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
+ hint: add this row, with what it answers written in place of `?`: `| true | true | ? |`
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.
 ```
 
 The line is then held to the same definitions. `never has_tool = true, all_parts = false` says an
@@ -255,7 +299,9 @@ absent passed to an input of the applied rule that is not optional is E043 as we
 through others, or it fails check — is E044; a rule that applies another, walks a sequence or
 produces an enum of its own can be applied. The applied rule's tables and clauses are expanded into the rule and checked
 with it; the rows this rule never reaches stay silent, and only a whole table none of whose
-rows is reached is W118.
+rows is reached is W118. A table that reads an output of the applied rule beside the inputs this
+rule passes it reads the two together, as above: no row is asked for an answer the applied rule
+never gives for those inputs.
 
 A rule in which two or more tables define the same output — a main rule and the special case
 that says `overrides` over it, a `clause` written as one line of prose among them — runs the
@@ -333,7 +379,8 @@ contribution adds to an enum is asked for a row by every table that reads the en
 that a table that is not open would decide in silence, by its `-` row or a comparing cell, is
 **E033**. The rule is checked alone and merged: its claims of chances hold whatever is added, and
 a contribution that moves a claimed chance is E133, naming the contribution's rows. A `sum` over a
-sequence has its range checked at the door, so rows a contribution adds can let the total pass the
+sequence is held to its range by the generated code where the walk ends — past the top, or under a
+bottom above zero, the call is refused — so rows a contribution adds can let the total pass the
 top without the check saying anything. Where a field of the elements is of an enum or a truth value
 and marked `unique` (no two elements share its value), the check adds up the most the element of
 each value can add, the contributed rows among them; a total past the top is **E147**, naming the
@@ -374,7 +421,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 248 deliberately broken
+   and that implementation has not been proved correct. The evidence is 280 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**
@@ -412,18 +459,26 @@ error[E101]: Completeness gap: some input matches no row
 30 | table base_rate
    |       ^^^^^^^^^ the input space is not fully covered
    |
+ No row matches: dest = overseas, size = small
  An input that matches no row: dest = overseas, size = small, weight = 1lb
- An input producing this example: dest = overseas, girth = 23, signature = true, weight = 1
- hint: add a row that matches this input.
- The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied
- from the first row to give a shape that parses; they are not the right amounts. …
+ An input producing this example: dest = overseas, girth = 23in, signature = true, weight = 1lb
+ hint: add this row, with what it answers written in place of `?`: `| overseas | small | - | ? |`
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges:
+ no new boundary is chosen, and the rows close the whole gap as they are. …
 ```
 
 The witness is the part to reason about. `dest = overseas, size = small, weight = 1lb`
 is not an illustration — it is an input the checker constructed, and it
 is the sentence you hand to whoever knows the answer. `size` is a value the rule
 works out from the girth, so the line under it gives the values a caller sends to
-get there.
+get there. The line above it says how far the gap goes: every small parcel sent
+overseas, whatever it weighs. The hint is the row that takes all of that, cut where
+the table already cuts its columns, with `?` where the fee goes — a row left with
+its `?` does not pass. Both say only the values an input reaches there: a value a
+`constraint` or a computed column leaves no input at is left out, so the row asks
+for nothing that never comes, and still closes the gap. A table short of rows in
+several places is told every one of them, each with its row, so one run closes
+the gap.
 
 ### `--terse`, when there are many
 
@@ -446,21 +501,23 @@ downstream has to take a sentence apart:
 
 ```console
 $ rulec check rules/parcel_rate.rule --format json | jq -c 'select(.code=="E101") | {table:.where.table, witness:.witness.inputs, fix:.fix}'
-{"table":"base_rate","witness":{"dest":"overseas","size":"small","weight":1},"fix":{"kind":"add_row","text":"| overseas | small | 1lb | 6USD |"}}
+{"table":"base_rate","witness":{"dest":"overseas","size":"small","weight":1},"fix":{"kind":"add_row","text":"| overseas | small | - | ? |"}}
 ```
 
 `where` says which table and row, `witness` is an assignment of values
 in the canonical unit, `rows` names every row that takes part, and `fix`
-carries the rewritten form ready to paste. **`witness` and `fix` do not
+carries the form to paste. **`witness` and `fix` do not
 change with `--lang`** — only fields whose names say prose do. The full
 shape is in [Formats](formats.md#check).
 
 !!! warning "`fix.text` is a form, not a decision"
 
-    It parses, and it removes the code — both are tested. It does not
-    know the right amount, the right rounding direction or the right
-    grid. Those are business decisions, and the caveat sits in `notes`,
-    which is prose, because `fix.text` is bytes.
+    It does not know the right amount, the right rounding direction or
+    the right grid. Those are business decisions, and the caveat sits in
+    `notes`, which is prose, because `fix.text` is bytes. The rows of an
+    E101 carry a `?` in each output cell, and a row left with its `?`
+    does not pass (E063). With the answers written in, the rows close
+    the gap in one run — that much is tested.
 
 ## Looking a code up
 
@@ -563,13 +620,21 @@ It says so. It does not approximate and pass.
   land here: those are decided by eliminating one variable at a time.
   What is left is what that cannot decide because it works over the
   rationals — a pair kept apart only by the values being whole.
-- **W128** — a row asks a computed column (a derive, a `define`) for
-  values, and no input was found that reaches it, nor was it shown that
-  none does. It warns rather than passing the row as reached: `ok` would
-  otherwise read as "every row is reached". An example that reaches the
-  row decides it, and the warning goes. If no input does, delete the row
-  — unless completeness then asks for it back, which means the combination
-  cannot be shown impossible either, and the row can stay.
+- **W128** — a row asks a computed column (a derive, a `define`, an
+  output of a rule brought in with `apply` or of another table of the
+  rule) for values, and no input was
+  found that reaches it — among the vectors, built inside the row so
+  that the computed columns land in its cells, and, where the inputs
+  those columns are worked out from have no more than 16,384
+  combinations, among all of them — nor was it shown that none does. It
+  warns rather than passing the row as reached: `ok` would otherwise read
+  as "every row is reached". Where every input was run and none reaches
+  the row, the warning says so; the check decides only by what its
+  certificate carries for a re-checker to confirm, so the row stays
+  undecided. An example that reaches the row decides it, and the warning
+  goes. If no input does, delete the row — unless completeness then asks
+  for it back, which means the combination cannot be shown impossible
+  either, and the row can stay.
 
 ## Over the days a koyomi date comes to
 
@@ -628,6 +693,11 @@ generated code reads the value, and `fed by` is where the code that fills the ob
 The range of the values is what is checked. **Nothing checks that the hand-written code really
 carries that value**, and `rulec doc` says so beside the input. Generated code does not change by a
 character, and the `meaning` hash does not read the form.
+
+For the same reason, completeness reads an input `fed by` another rule's output as free of the
+other inputs: the line says where the value comes from, not what that rule was given. Where a gap
+turns on such an input, E101 says so and points to `apply`, which brings the rule in with its inputs
+bound, so that its output is read as what it decides from them.
 
 ## An input that may be missing
 

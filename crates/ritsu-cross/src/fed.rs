@@ -16,7 +16,7 @@
 //! is that language's to say, and undecided here. Nothing holds the hand-written code to carrying
 //! the value, which is what a page says of it.
 
-use crate::{Border, Borders, Came, Check, Side};
+use crate::{numbers, Border, Borders, Came, Check, Side};
 use ritsu_base::diag::Diag;
 use ritsu_base::document::{self, Documents, Loaded};
 use ritsu_base::json::Json;
@@ -27,7 +27,8 @@ use ritsu_base::tr;
 use ritsu_ports::{Answer, Books, Carried, ColumnType, Dates, DaySet, Fed, Finding, Found, OutputValues, Ports, RuleFacts, Rules, Spelled, Value, Values, day_text};
 use ritsu_project::{Joined, Project};
 use ritsu_proto::validate::{self, Ints};
-use ritsu_proto::{Label, Protos, Resolved, Type};
+use ritsu_proto::{DATE, Label, Protos, Resolved, Type};
+use ritsu_units::written::{self, End};
 use ritsu_units::{Dim, Unit};
 use std::path::{Path, PathBuf};
 
@@ -38,8 +39,12 @@ const BOOK_LIMIT: i128 = i64::MAX as i128;
 enum Numbers {
     /// A rule's output: what rulec counts of it, with an input for the values its vectors reach.
     Output(Found<OutputValues>),
-    /// What a contract or a book lets through: whatever it does not rule out can come.
+    /// What a contract lets through: whatever it does not rule out can come.
     Passes(Ints),
+    /// What an account of a book lets through: the bounds it writes (`at least`, `at most`), each
+    /// end it does not write going as far as chobo's limit; and the places of its unit (`unit USD
+    /// scale 2` writes `12.50`), which a sentence writes its bounds with.
+    Book { lo: Option<i128>, hi: Option<i128>, scale: u32 },
     /// A range a workflow or a module writes on a place: any number in it can come, and an end it
     /// does not write is one nothing says.
     Declared(Option<i128>, Option<i128>),
@@ -50,10 +55,23 @@ enum Gives {
     Bool,
     /// A string of a language.
     Str,
-    /// A string of a contract: the ones it lists, or None for any. An enum of a `.proto`, by the names
-    /// a rule calls its values, is a list; so is a date, which travels as a string (a contract says
-    /// nothing of which days, as with E122).
+    /// A string of a contract: the ones it lists, or None for any. A date travels as one (a contract
+    /// says nothing of which days, as with E122).
     Wire(Option<Vec<String>>),
+    /// A string an OpenAPI document or a JSON Schema marks `format: date`: a day, held to a place as
+    /// any string of a contract is (`Wire`), and said with its mark.
+    Day(Option<Vec<String>>),
+    /// A string an OpenAPI document or a JSON Schema marks `format: date-time`: a moment, a day with a
+    /// time of day, which no place of a date takes and a `timestamp` does. The ones it lists, or None
+    /// for any.
+    Moment(Option<Vec<String>>),
+    /// A `.proto`'s `google.type.Date`: a day, known by its name as dandori knows it and reads it as a
+    /// `date` (dandori's DESIGN 42). It says nothing of which days.
+    ProtoDate,
+    /// An enum of a `.proto`: each value the field lets through, by every name a rule may call it
+    /// (more than one under `allow_alias`), read as rulec's `import proto` reads it (rulec's DESIGN
+    /// §15.59). It travels as a string.
+    Named(Vec<Vec<String>>),
     /// Each day of a koyomi date, with where to ask for the input that gives a day.
     Days(Found<DaySet>, Option<(PathBuf, String)>),
     /// Days in a range: ends a rule says it can name (or None), or the range a workflow or a module
@@ -85,21 +103,57 @@ enum Asked {
 /// An example of what a place does not take.
 struct Against {
     /// The value; None where the types differ, or the source lets through any string.
-    value: Option<String>,
+    value: Option<Said>,
     /// The input that gives it, where a rule or a dates file has one.
-    at: Option<String>,
+    at: Option<Said>,
     /// What is wrong, for a note.
     why: Option<Text>,
 }
 
 impl Against {
-    fn value(v: impl Into<String>, at: Option<String>) -> Against {
-        Against { value: Some(v.into()), at, why: None }
+    fn value(v: Said, at: Option<Said>) -> Against {
+        Against { value: Some(v), at, why: None }
     }
 
     fn none(why: Text) -> Against {
         Against { value: None, at: None, why: Some(why) }
     }
+}
+
+/// A value as the record of the border keeps it, a number as the whole number on the wire
+/// (`10000001`), and as a sentence says it, in the unit and the digits it is written with
+/// (`10_000_001USDc`, DESIGN 6.2 item 8).
+struct Said {
+    kept: String,
+    said: String,
+}
+
+impl Said {
+    /// A value with no number in it: the same both ways.
+    fn same(s: impl Into<String>) -> Said {
+        let s = s.into();
+        Said { kept: s.clone(), said: s }
+    }
+
+    /// A whole number on the wire, said in `unit`.
+    fn number(v: i128, unit: Option<&Unit>) -> Said {
+        Said { kept: v.to_string(), said: written::value(v, unit) }
+    }
+}
+
+/// The bounds of an account as its book writes them, in the places of its unit (`>=0.00USD`), and
+/// each end it does not write left out: what the book takes there is chobo's limit, which a note
+/// says (`at least` and `at most` are all a book writes of an account's range).
+fn book_ends(lo: Option<i128>, hi: Option<i128>, scale: u32, word: &str, unit: Option<&Unit>) -> String {
+    written::range(lo.map(End::Closed), hi.map(End::Closed), |n| match unit {
+        Some(u) => written::amount(n, scale, word, u),
+        None => written::digits(n),
+    })
+}
+
+/// What an account of a book lets through, as the integers on the wire.
+fn book_ints(lo: Option<i128>, hi: Option<i128>) -> Ints {
+    Ints::between(Some(lo.unwrap_or(-BOOK_LIMIT)), Some(hi.unwrap_or(BOOK_LIMIT)))
 }
 
 /// The ends of a range as a line writes them: `>=1 <=50`.
@@ -112,7 +166,7 @@ fn with_ends(word: &str, range: String) -> String {
     if range.is_empty() { word.to_string() } else { format!("{word} {range}") }
 }
 
-/// What a place takes, for a message and the record.
+/// What a place takes, as the record keeps it: a number's ends as the integers on the wire.
 fn takes_text(c: &Carried) -> String {
     match c {
         Carried::Bool => "bool".into(),
@@ -129,12 +183,22 @@ fn takes_text(c: &Carried) -> String {
     }
 }
 
+/// What a place takes, as a sentence says it: a number's ends in its unit (`money[USDc] >=0USDc
+/// <=10_000_000USDc`).
+fn takes_said(c: &Carried) -> String {
+    match c {
+        Carried::Num { written: word, unit, min, max } => with_ends(word, written::between(*min, *max, unit.as_ref())),
+        Carried::Opt(t) => format!("{}?", takes_said(t)),
+        _ => takes_text(c),
+    }
+}
+
 /// The values of an enum by their public names, as a message shows them.
 fn publics(values: &[Spelled]) -> String {
     values.iter().map(|v| v.public.as_str()).collect::<Vec<_>>().join(", ")
 }
 
-/// The integers a contract or a book lets through: `>=1 <=50`, `1, 2, 3`.
+/// The integers a contract or a book lets through, as the record keeps them: `>=1 <=50`, `1, 2, 3`.
 fn ints_text(s: &Ints) -> String {
     let one = |(a, b): &(Option<i128>, Option<i128>)| match (a, b) {
         (Some(a), Some(b)) if a == b => a.to_string(),
@@ -143,13 +207,29 @@ fn ints_text(s: &Ints) -> String {
     s.0.iter().map(one).collect::<Vec<_>>().join(", ")
 }
 
-/// What can come from a source, for a message and the record.
+/// The integers a contract lets through, as a sentence says them: `>=1 <=50`, `1, 2, 3`,
+/// `>=0 <=4_294_967_295`.
+fn ints_said(s: &Ints) -> String {
+    let one = |(a, b): &(Option<i128>, Option<i128>)| match (a, b) {
+        (Some(a), Some(b)) if a == b => written::digits(*a),
+        (a, b) => written::between(*a, *b, None),
+    };
+    s.0.iter().map(one).collect::<Vec<_>>().join(", ")
+}
+
+/// What can come from a source, as the record keeps it: a number's ends as the integers on the wire.
 fn gives_text(g: &Gives) -> String {
     match g {
         Gives::Bool => "bool".into(),
         Gives::Str => "string".into(),
         Gives::Wire(None) => "any string".into(),
         Gives::Wire(Some(list)) => format!("string ({})", list.join(", ")),
+        Gives::Day(None) => "string (format: date)".into(),
+        Gives::Day(Some(list)) => format!("string (format: date; {})", list.join(", ")),
+        Gives::Moment(None) => "string (format: date-time)".into(),
+        Gives::Moment(Some(list)) => format!("string (format: date-time; {})", list.join(", ")),
+        Gives::ProtoDate => DATE.into(),
+        Gives::Named(values) => format!("string ({})", values.iter().map(|v| v.join(" / ")).collect::<Vec<_>>().join(", ")),
         Gives::Days(Found::Value(set), _) => match (set.first(), set.last()) {
             (Some(a), Some(b)) => format!("date ({} days from {} to {})", set.len(), day_text(*a), day_text(*b)),
             _ => "date (no day)".into(),
@@ -164,6 +244,7 @@ fn gives_text(g: &Gives) -> String {
                 Numbers::Output(Found::Value(o)) => with_ends(word, ends(o.min, o.max)),
                 Numbers::Output(Found::Undecided(_)) => word.to_string(),
                 Numbers::Passes(s) => with_ends(word, ints_text(s)),
+                Numbers::Book { lo, hi, .. } => with_ends(word, ints_text(&book_ints(*lo, *hi))),
                 Numbers::Declared(a, b) => with_ends(word, ends(*a, *b)),
             }
         }
@@ -173,23 +254,44 @@ fn gives_text(g: &Gives) -> String {
     }
 }
 
-/// A rule's input as a message says it: `a = 1, b = "x"`.
-fn inputs_text(v: &Values) -> Option<String> {
-    let shown = |x: &Value| match x {
+/// What can come from a source, as a sentence says it: a number's ends in its unit (`money[USD]
+/// >=0USD <=100USD`), an account's in its book's places with the ends the book writes (`USD
+/// >=0.00USD`), a contract's integers in digits.
+fn gives_said(g: &Gives) -> String {
+    match g {
+        Gives::Num { unit, values } => {
+            let word = unit.as_ref().map_or("integer", |(w, _)| w.as_str());
+            let u = unit.as_ref().and_then(|(_, u)| u.as_ref());
+            match values {
+                Numbers::Output(Found::Value(o)) => with_ends(word, written::between(o.min, o.max, u)),
+                Numbers::Output(Found::Undecided(_)) => word.to_string(),
+                Numbers::Passes(s) => with_ends(word, ints_said(s)),
+                Numbers::Book { lo, hi, scale } => with_ends(word, book_ends(*lo, *hi, *scale, word, u)),
+                Numbers::Declared(a, b) => with_ends(word, written::between(*a, *b, u)),
+            }
+        }
+        Gives::Opt(g, _) => format!("{}?", gives_said(g)),
+        _ => gives_text(g),
+    }
+}
+
+/// A rule's input, as the record keeps it (`a = 10000, b = "x"`) and as a sentence says it, each
+/// number in the input's unit (`a = 10_000JPY, b = "x"`). `facts` is the source rule's.
+fn inputs_text(v: &Values, facts: Option<&RuleFacts>) -> Option<Said> {
+    let kept = |x: &Value| match x {
         Value::Int(n) => n.to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Str(s) => format!("\"{s}\""),
-        Value::Date(d) | Value::Enum(d) => d.clone(),
-        Value::None => "none".into(),
-        Value::List(xs) => format!("[{} elements]", xs.len()),
+        other => numbers::value(other, None),
     };
-    (!v.is_empty()).then(|| v.iter().map(|(n, x)| format!("{n} = {}", shown(x))).collect::<Vec<_>>().join(", "))
+    (!v.is_empty()).then(|| Said {
+        kept: v.iter().map(|(n, x)| format!("{n} = {}", kept(x))).collect::<Vec<_>>().join(", "),
+        said: numbers::inputs(facts, v),
+    })
 }
 
 /// Whether a value counted one way is counted the same way: the same unit, step and tax. A count
 /// with a name and nothing else is a number, as dandori and kaname read it, and two counts are the
 /// same when their names are. A spelling the table of units does not have is the same as itself.
-fn same_unit(a: (&str, Option<&Unit>), b: (&str, Option<&Unit>)) -> bool {
+pub(crate) fn same_unit(a: (&str, Option<&Unit>), b: (&str, Option<&Unit>)) -> bool {
     match (a.1, b.1) {
         (Some(x), Some(y)) => match (&x.dim, &y.dim) {
             (Dim::Count(m), Dim::Count(n)) => m == n,
@@ -201,9 +303,20 @@ fn same_unit(a: (&str, Option<&Unit>), b: (&str, Option<&Unit>)) -> bool {
     }
 }
 
-/// Whether the numbers that can come are ones a range takes (an end not written takes anything).
-fn numbers_fit(lo: Option<i128>, hi: Option<i128>, values: &Numbers) -> Answer<Against> {
+/// Whether the numbers that can come are ones a range takes (an end not written takes anything). An
+/// example is said in the place's unit (`place`), which the range it falls outside is written in;
+/// what rulec counts of a rule's output in the output's (`source`), and an input that gives it in
+/// the input's (`facts`, the source rule's).
+fn numbers_fit(lo: Option<i128>, hi: Option<i128>, values: &Numbers, place: Option<&Unit>, source: Option<&Unit>, facts: Option<&RuleFacts>) -> Answer<Against> {
     let outside = |v: i128| lo.is_some_and(|l| v < l) || hi.is_some_and(|h| v > h);
+    let passes = |set: &Ints| {
+        let below = lo.map_or(Ints(Vec::new()), |l| set.intersect(&Ints::between(None, Some(l.saturating_sub(1)))));
+        let above = hi.map_or(Ints(Vec::new()), |h| set.intersect(&Ints::between(Some(h.saturating_add(1)), None)));
+        match below.max().or(above.min()) {
+            Some(v) => Answer::Fails(Against::value(Said::number(v, place), None)),
+            None => Answer::Holds,
+        }
+    };
     match values {
         Numbers::Output(Found::Undecided(why)) => Answer::Undecided(why.clone()),
         Numbers::Output(Found::Value(o)) => {
@@ -214,9 +327,9 @@ fn numbers_fit(lo: Option<i128>, hi: Option<i128>, values: &Numbers) -> Answer<A
             let below = o.examples.iter().filter(|(v, _)| lo.is_some_and(|l| *v < l)).min_by_key(|(v, _)| *v);
             let above = o.examples.iter().filter(|(v, _)| outside(*v)).max_by_key(|(v, _)| *v);
             if let Some((v, inputs)) = below.or(above) {
-                return Answer::Fails(Against::value(v.to_string(), inputs_text(inputs)));
+                return Answer::Fails(Against::value(Said::number(*v, place), inputs_text(inputs, facts)));
             }
-            let range = ends(o.min, o.max);
+            let range = written::between(o.min, o.max, source);
             Answer::Undecided(match (o.min, o.max) {
                 (Some(_), Some(_)) => tr!(
                     "rulec の数えた範囲では出力が {range} で、規則のベクタには、受け取る側の範囲を外れる値になる入力がありません",
@@ -228,17 +341,11 @@ fn numbers_fit(lo: Option<i128>, hi: Option<i128>, values: &Numbers) -> Answer<A
                 ),
             })
         }
-        Numbers::Passes(set) => {
-            let below = lo.map_or(Ints(Vec::new()), |l| set.intersect(&Ints::between(None, Some(l.saturating_sub(1)))));
-            let above = hi.map_or(Ints(Vec::new()), |h| set.intersect(&Ints::between(Some(h.saturating_add(1)), None)));
-            match below.max().or(above.min()) {
-                Some(v) => Answer::Fails(Against::value(v.to_string(), None)),
-                None => Answer::Holds,
-            }
-        }
+        Numbers::Passes(set) => passes(set),
+        Numbers::Book { lo: a, hi: b, .. } => passes(&book_ints(*a, *b)),
         Numbers::Declared(a, b) => {
             if let Some(v) = a.filter(|v| outside(*v)).or(b.filter(|v| outside(*v))) {
-                return Answer::Fails(Against::value(v.to_string(), None));
+                return Answer::Fails(Against::value(Said::number(v, place), None));
             }
             if (lo.is_some() && a.is_none()) || (hi.is_some() && b.is_none()) {
                 return Answer::Undecided(tr!("出どころの範囲に、受け取る側が書いた端がありません", "the source's range has no end where this place writes one"));
@@ -249,7 +356,7 @@ fn numbers_fit(lo: Option<i128>, hi: Option<i128>, values: &Numbers) -> Answer<A
 }
 
 /// Whether the days that can come are ones a place takes, as a range or as a set of days.
-fn days_fit(takes: &Carried, gives: &Gives, input: &dyn Fn(&Path, &str, i64) -> Option<String>) -> Answer<Against> {
+fn days_fit(takes: &Carried, gives: &Gives, input: &dyn Fn(&Path, &str, i64) -> Option<Said>) -> Answer<Against> {
     let takes_day = |d: i64| match takes {
         Carried::Date { min, max } => min.is_none_or(|m| d >= m) && max.is_none_or(|m| d <= m),
         Carried::Days(set) => set.contains(&d),
@@ -259,7 +366,7 @@ fn days_fit(takes: &Carried, gives: &Gives, input: &dyn Fn(&Path, &str, i64) -> 
     match gives {
         Gives::Days(Found::Undecided(why), _) => Answer::Undecided(why.clone()),
         Gives::Days(Found::Value(set), from) => match set.iter().copied().find(|d| !takes_day(*d)) {
-            Some(d) => Answer::Fails(Against::value(day_text(d), from.as_ref().and_then(|(disk, date)| input(disk, date, d)))),
+            Some(d) => Answer::Fails(Against::value(Said::same(day_text(d)), from.as_ref().and_then(|(disk, date)| input(disk, date, d)))),
             None => Answer::Holds,
         },
         Gives::DayRange { min, max, declared } => {
@@ -271,7 +378,7 @@ fn days_fit(takes: &Carried, gives: &Gives, input: &dyn Fn(&Path, &str, i64) -> 
             };
             let out_lo = |d: i64| lo.is_some_and(|l| d < l) || hi.is_some_and(|h| d > h);
             if *declared && let Some(d) = min.filter(|d| out_lo(*d)).or(max.filter(|d| out_lo(*d))) {
-                return Answer::Fails(Against::value(day_text(d), None));
+                return Answer::Fails(Against::value(Said::same(day_text(d)), None));
             }
             let inside = lo.is_none_or(|l| min.is_some_and(|m| m >= l)) && hi.is_none_or(|h| max.is_some_and(|m| m <= h));
             if inside {
@@ -280,41 +387,72 @@ fn days_fit(takes: &Carried, gives: &Gives, input: &dyn Fn(&Path, &str, i64) -> 
             Answer::Undecided(tr!("出どころの日の範囲が、受け取る側の範囲に収まるとは言えません", "the source's range of days cannot be said to lie in what this place takes"))
         }
         // The days a contract lists; a day it does not read as is no day this place takes.
-        Gives::Wire(Some(list)) if !open => match list.iter().find(|v| !ritsu_ports::day_of(v).is_some_and(takes_day)) {
-            Some(v) => Answer::Fails(Against::value(format!("\"{v}\""), None)),
+        Gives::Wire(Some(list)) | Gives::Day(Some(list)) if !open => match list.iter().find(|v| !ritsu_ports::day_of(v).is_some_and(takes_day)) {
+            Some(v) => Answer::Fails(Against::value(Said::same(format!("\"{v}\"")), None)),
             None => Answer::Holds,
         },
         // A date travels as a string, and a contract says nothing of which day (as with E122).
         _ if open => Answer::Holds,
+        // nor does a `.proto`'s date
+        Gives::ProtoDate => Answer::Undecided(tr!("契約は日付を運ぶだけで、どの日が来るかを言いません", "a contract carries a date, and does not say which days can come")),
         _ => Answer::Undecided(tr!("契約は日付を文字列として運ぶだけで、どの日が来るかを言いません", "a contract carries a date as a string, and does not say which days can come")),
+    }
+}
+
+/// Whether a place takes a moment: dandori's `timestamp`, the one place of the languages that holds
+/// one. The port carries it, as it does a record or a list, as a thing it compares no value of
+/// (`Carried::Other`), by the spelling of its language.
+fn takes_moment(c: &Carried) -> bool {
+    matches!(c, Carried::Other(w) if w == "timestamp")
+}
+
+/// Whether what comes from a source is a moment: a string a document marks `format: date-time`, a
+/// workflow's `timestamp`, or a `.proto`'s `google.protobuf.Timestamp`.
+fn gives_moment(g: &Gives) -> bool {
+    match g {
+        Gives::Moment(_) => true,
+        Gives::Other(w) => w == "timestamp" || w == "google.protobuf.Timestamp",
+        _ => false,
     }
 }
 
 /// What the type of what can come is not, when it is not what a place takes.
 fn types_differ(takes: &Carried, gives: &Gives) -> Answer<Against> {
-    let (t, g) = (takes_text(takes), gives_text(gives));
+    let (t, g) = (takes_said(takes), gives_said(gives));
     Answer::Fails(Against::none(tr!("受け取る側は {t}、出どころは {g} で、型が違います", "this place takes {t}, and the source is {g}: the types differ")))
 }
 
-/// Whether what can come from a source is what a place takes (DESIGN 7.16).
-fn fits(takes: &Carried, gives: &Gives, input: &dyn Fn(&Path, &str, i64) -> Option<String>) -> Answer<Against> {
+/// Whether what can come from a source is what a place takes (DESIGN 7.16). `facts` is the source
+/// rule's, whose inputs an example names.
+fn fits(takes: &Carried, gives: &Gives, input: &dyn Fn(&Path, &str, i64) -> Option<Said>, facts: Option<&RuleFacts>) -> Answer<Against> {
     if let Gives::Opt(g, how) = gives {
         return match takes {
-            Carried::Opt(t) => fits(t, g, input),
-            _ => Answer::Fails(Against { value: Some("none".into()), at: None, why: Some(how.clone()) }),
+            Carried::Opt(t) => fits(t, g, input, facts),
+            _ => Answer::Fails(Against { value: Some(Said::same("none")), at: None, why: Some(how.clone()) }),
         };
     }
     let t = takes.present().0;
     match (t, gives) {
+        // a moment where a place takes one: a `timestamp` writes no range to compare it with
+        (p, g) if takes_moment(p) && gives_moment(g) => Answer::Holds,
+        (Carried::Date { .. } | Carried::Days(_), Gives::Moment(_)) => Answer::Fails(Against::none(tr!(
+            "契約はこの文字列を `format: date-time`（`2026-11-16T09:00:00Z` のような、時刻の付いた日時）とし、受け取る側は日付を受け取ります",
+            "the contract marks this string `format: date-time`, a day with a time of day (as `2026-11-16T09:00:00Z`), and this place takes a date"
+        ))),
         (Carried::Other(a), Gives::Other(b)) => {
             Answer::Undecided(tr!("{a} と {b} は、値を比べません", "{a} and {b} are not compared value by value"))
         }
-        (Carried::Bool, Gives::Bool) | (Carried::Str, Gives::Str | Gives::Wire(_) | Gives::Enum { .. }) => Answer::Holds,
-        (Carried::Enum { values, .. }, Gives::Wire(Some(list))) => match list.iter().find(|v| !values.iter().any(|x| x.is(v))) {
-            Some(v) => Answer::Fails(Against::value(format!("\"{v}\""), None)),
+        (Carried::Bool, Gives::Bool) | (Carried::Str, Gives::Str | Gives::Wire(_) | Gives::Day(_) | Gives::Moment(_) | Gives::ProtoDate | Gives::Named(_) | Gives::Enum { .. }) => Answer::Holds,
+        (Carried::Enum { values, .. }, Gives::Wire(Some(list)) | Gives::Day(Some(list))) => match list.iter().find(|v| !values.iter().any(|x| x.is(v))) {
+            Some(v) => Answer::Fails(Against::value(Said::same(format!("\"{v}\"")), None)),
             None => Answer::Holds,
         },
-        (Carried::Enum { .. }, Gives::Wire(None)) => {
+        // a value is taken when the place takes it by any of its names
+        (Carried::Enum { values, .. }, Gives::Named(named)) => match named.iter().find(|names| !names.iter().any(|n| values.iter().any(|x| x.is(n)))) {
+            Some(names) => Answer::Fails(Against::value(Said::same(format!("\"{}\"", names.join("\" / \""))), None)),
+            None => Answer::Holds,
+        },
+        (Carried::Enum { .. }, Gives::Wire(None) | Gives::Day(None)) => {
             Answer::Fails(Against::none(tr!("契約はどの文字列でも通しますが、受け取る側は列挙の値だけを受け取ります", "the contract lets any string through, and this place takes only the values of the enum")))
         }
         (Carried::Enum { values, .. }, Gives::Enum { all, reached }) => {
@@ -325,19 +463,22 @@ fn fits(takes: &Carried, gives: &Gives, input: &dyn Fn(&Path, &str, i64) -> Opti
             match reached {
                 Found::Undecided(why) => Answer::Undecided(why.clone()),
                 Found::Value(vs) => match vs.iter().find(|(v, _)| !all.iter().find(|x| x.is(v)).map_or_else(|| values.iter().any(|x| x.is(v)), taken)) {
-                    Some((v, inputs)) => Answer::Fails(Against::value(v.clone(), inputs_text(inputs))),
+                    Some((v, inputs)) => Answer::Fails(Against::value(Said::same(v.clone()), inputs_text(inputs, facts))),
                     None => Answer::Holds,
                 },
             }
         }
-        (Carried::Date { .. } | Carried::Days(_), Gives::Days(..) | Gives::DayRange { .. } | Gives::Wire(_)) => days_fit(t, gives, input),
+        (Carried::Date { .. } | Carried::Days(_), Gives::Days(..) | Gives::DayRange { .. } | Gives::Wire(_) | Gives::Day(_) | Gives::ProtoDate) => days_fit(t, gives, input),
         (Carried::Num { written, unit, min, max }, Gives::Num { unit: from, values }) => {
             if let Some((w, u)) = from
                 && !same_unit((written, unit.as_ref()), (w, u.as_ref()))
             {
                 return Answer::Fails(Against::none(tr!("受け取る側の単位は {written}、出どころの単位は {w} です", "this place counts in {written}, and the source in {w}")));
             }
-            numbers_fit(*min, *max, values)
+            // the same unit both sides (a contract's integer is read as the place's): an example in
+            // the place's spelling of it, what rulec counts of the output in the output's
+            let source = from.as_ref().and_then(|(_, u)| u.as_ref()).or(unit.as_ref());
+            numbers_fit(*min, *max, values, unit.as_ref(), source, facts)
         }
         // A rule's number is a whole number on the wire (§10.2), and a contract's fraction only a rate
         // can read; E122 does not compare it.
@@ -394,7 +535,12 @@ fn schema_gives(s: &Schema) -> Gives {
     match s.ty.as_deref() {
         Some("integer") => ints(s),
         Some("number") => Gives::Frac,
-        Some("string") => Gives::Wire(s.values.clone()),
+        // a day, and a day with a time of day (a moment), as a document marks them
+        Some("string") => match s.format.as_deref() {
+            Some("date") => Gives::Day(s.values.clone()),
+            Some("date-time") => Gives::Moment(s.values.clone()),
+            _ => Gives::Wire(s.values.clone()),
+        },
         Some("boolean") => Gives::Bool,
         Some(other) => Gives::Other(other.to_string()),
         None => match &s.values {
@@ -411,10 +557,7 @@ fn output_gives(joined: &Joined, disk: &Path, output: &str, facts: &RuleFacts, t
         ColumnType::Opt(t) => Gives::Opt(Box::new(output_gives(joined, disk, output, facts, t, true)), tr!("規則の出力は `none` になることがあります", "the rule's output can be `none`")),
         ColumnType::Bool => Gives::Bool,
         ColumnType::Str => Gives::Str,
-        ColumnType::Date => {
-            let (min, max) = joined.rulec.date_range(disk, output).unwrap_or((None, None));
-            Gives::DayRange { min, max, declared: false }
-        }
+        ColumnType::Date { min, max } => Gives::DayRange { min: *min, max: *max, declared: false },
         ColumnType::Enum { name, .. } => {
             let all = facts.enums.iter().find(|e| &e.name == name).map(|e| e.values.iter().map(|v| Spelled { written: v.name.clone(), public: v.public.clone() }).collect()).unwrap_or_default();
             let unread = || tr!("rulec が出力の値を答えません", "rulec does not answer for the output's values");
@@ -432,7 +575,7 @@ fn output_gives(joined: &Joined, disk: &Path, output: &str, facts: &RuleFacts, t
             };
             Gives::Enum { all, reached }
         }
-        ColumnType::Num { written, unit, min, max } => {
+        ColumnType::Num { written, unit, min, max, .. } => {
             // the values of an output that may be none are not counted; the range still is
             let values = if under_opt {
                 Found::Value(OutputValues { min: *min, max: *max, values: None, examples: Vec::new() })
@@ -461,7 +604,10 @@ fn carried_gives(c: Carried) -> Gives {
     }
 }
 
-/// A `.proto`'s field.
+/// A `.proto`'s field. One that may be left unset, unless a rule says it is `required`, can come as
+/// no value: an `optional` field, one of a `oneof`, and a singular message that is not proto2's
+/// `required` (a `google.protobuf.Timestamp`, a `google.type.Date`, any other), as protobuf has it
+/// and dandori reads it.
 fn proto_gives(ps: &Protos, file: &str, message: &str, field: &str) -> Asked {
     let Some(f) = ps.files.get(file) else {
         return Asked::Missing(tr!("{file} を .proto として読めません", "{file} does not read as a .proto"));
@@ -473,31 +619,50 @@ fn proto_gives(ps: &Protos, file: &str, message: &str, field: &str) -> Asked {
         return Asked::Missing(tr!("message `{message}` にフィールド `{field}` がありません", "the message `{message}` has no field `{field}`"));
     };
     let optional = fd.label == Label::Optional || fd.oneof.is_some();
-    let gives = match (&fd.label, &fd.ty) {
-        (Label::Repeated, _) => Gives::Other("a repeated field".into()),
-        (_, Type::Map(..)) => Gives::Other("a map".into()),
-        (_, Type::Scalar(s)) => match s.as_str() {
-            "bool" => Gives::Bool,
-            "string" => Gives::Wire(validate::field_strs(&fd.rules, optional)),
-            "double" | "float" => Gives::Frac,
-            "bytes" => Gives::Other("bytes".into()),
-            kind => match (validate::field_ints(kind, &fd.rules, optional), validate::int_bounds(kind)) {
-                // what the rules let through, up to what the kind can hold
-                (Some(set), Some((lo, hi))) => Gives::Num { unit: None, values: Numbers::Passes(set.intersect(&Ints::between(Some(lo), Some(hi)))) },
-                _ => Gives::Other(kind.to_string()),
+    // what can come, and whether it is a singular message
+    let (gives, message_field) = match (&fd.label, &fd.ty) {
+        (Label::Repeated, _) => (Gives::Other("a repeated field".into()), false),
+        (_, Type::Map(..)) => (Gives::Other("a map".into()), false),
+        (_, Type::Scalar(s)) => (
+            match s.as_str() {
+                "bool" => Gives::Bool,
+                "string" => Gives::Wire(validate::field_strs(&fd.rules, optional)),
+                "double" | "float" => Gives::Frac,
+                "bytes" => Gives::Other("bytes".into()),
+                kind => match (validate::field_ints(kind, &fd.rules, optional), validate::int_bounds(kind)) {
+                    // what the rules let through, up to what the kind can hold
+                    (Some(set), Some((lo, hi))) => Gives::Num { unit: None, values: Numbers::Passes(set.intersect(&Ints::between(Some(lo), Some(hi)))) },
+                    _ => Gives::Other(kind.to_string()),
+                },
             },
-        },
-        (_, Type::Named(n)) => match ps.resolve(file, &f.full(message), n) {
-            Resolved::Found(s) if s.is_enum => {
-                let e = ps.files.get(&s.file).and_then(|x| x.enums.iter().find(|e| e.name == s.name));
-                Gives::Wire(Some(e.map(|e| validate::enum_names(e, &fd.rules.enum_values)).unwrap_or_default()))
+            false,
+        ),
+        (_, Type::Named(n)) => {
+            let scope = f.full(message);
+            match ps.resolve(file, &scope, n) {
+                // the date by its name, whatever file declares it
+                Resolved::Found(s) if s.full == DATE => (Gives::ProtoDate, true),
+                Resolved::Found(s) if s.is_enum => {
+                    let e = ps.files.get(&s.file).and_then(|x| x.enums.iter().find(|e| e.name == s.name));
+                    let values = e.map(|e| validate::enum_names(e, &fd.rules.enum_values)).unwrap_or_default();
+                    (Gives::Named(values.iter().map(|v| v.names.iter().map(|n| n.read.clone()).collect()).collect()), false)
+                }
+                Resolved::Found(s) => (Gives::Other(s.full), true),
+                Resolved::Known(k) => {
+                    let message_field = k != "google.protobuf.NullValue";
+                    (Gives::Other(k), message_field)
+                }
+                // and where no file read declares it, without the file or the import: by protobuf's
+                // rule, from the scope out
+                Resolved::Unknown | Resolved::Missing if ritsu_proto::resolve_name(&scope, n, |full| (full == DATE).then_some(())).is_some() => (Gives::ProtoDate, true),
+                // a type not known is not known to be a message either
+                Resolved::Unknown | Resolved::Missing => (Gives::Other(n.clone()), false),
             }
-            Resolved::Found(s) => Gives::Other(s.full),
-            Resolved::Known(k) => Gives::Other(k),
-            Resolved::Unknown | Resolved::Missing => Gives::Other(n.clone()),
-        },
+        }
     };
-    Asked::Gives(if optional && !fd.rules.required {
+    // proto2's `required` is always set
+    let unset = optional || (message_field && fd.label != Label::Required);
+    Asked::Gives(if unset && !fd.rules.required {
         Gives::Opt(Box::new(gives), tr!("契約は、このフィールドを設定しないことを許します", "the contract lets this field be left unset"))
     } else {
         gives
@@ -611,10 +776,10 @@ fn ask(project: &Project, joined: &Joined, ports: &Ports, source: &Name) -> Aske
                 let list = names(facts.accounts.iter().map(|a| a.name.as_str()).collect());
                 return Asked::Missing(tr!("{file} に勘定 `{account}` がありません（勘定は {list}）", "{file} has no account `{account}` (its accounts are {list})"));
             };
-            let lo = a.lower.as_ref().map_or(-BOOK_LIMIT, |b| b.value);
-            let hi = a.upper.as_ref().map_or(BOOK_LIMIT, |b| b.value);
+            let (lo, hi) = (a.lower.as_ref().map(|b| b.value), a.upper.as_ref().map(|b| b.value));
+            let scale = facts.units.iter().find(|u| u.name == a.unit).map_or(0, |u| u.scale);
             let unit = Some((a.unit.clone(), facts.unit(&a.unit).cloned()));
-            Asked::Gives(Gives::Num { unit, values: Numbers::Passes(Ints::between(Some(lo), Some(hi))) })
+            Asked::Gives(Gives::Num { unit, values: Numbers::Book { lo, hi, scale } })
         }
         Tool::Proto => match ritsu_proto::load_from(root, file, &[], &[]) {
             Ok((ps, _)) => proto_gives(&ps, file, item(0), item(1)),
@@ -655,32 +820,63 @@ fn about(place: &Name) -> String {
     place.items.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(" ")
 }
 
-/// The input of a dates file at which a date comes to a day, as `received = 2026-01-20`.
-fn date_input(joined: &Joined, disk: &Path, date: &str, day: i64) -> Option<String> {
+/// The input of a dates file at which a date comes to a day, as `received = 2026-01-20`; a whole
+/// number as the record keeps it, and in digits as a sentence says it (`months = 3`).
+fn date_input(joined: &Joined, disk: &Path, date: &str, day: i64) -> Option<Said> {
     let facts = joined.koyomi.facts(disk).ok()?;
     let inputs = joined.koyomi.input_for(disk, date, day).ok()??;
-    let shown: Vec<String> = inputs
-        .iter()
-        .map(|(n, v)| match facts.inputs.iter().find(|i| i.name == *n).map(|i| i.kind) {
-            Some(ritsu_ports::DateKind::Date) => format!("{n} = {}", day_text(*v)),
-            _ => format!("{n} = {v}"),
-        })
-        .collect();
-    Some(shown.join(", "))
+    let shown = |said: bool| -> String {
+        inputs
+            .iter()
+            .map(|(n, v)| match facts.inputs.iter().find(|i| i.name == *n).map(|i| i.kind) {
+                Some(ritsu_ports::DateKind::Date) => format!("{n} = {}", day_text(*v)),
+                _ if said => format!("{n} = {}", written::digits(i128::from(*v))),
+                _ => format!("{n} = {v}"),
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    Some(Said { kept: shown(false), said: shown(true) })
 }
 
-/// What would decide a border that cannot be, by who answers for the source.
-fn what_decides(source: &Name) -> Option<Text> {
+/// What would decide a border that cannot be, by who answers for the source, what it gives and what
+/// this place takes. A range on the source's line decides a number or a date, and a contract decides
+/// a string by listing its values; it cannot list the days of a `.proto`'s date, nor decide a
+/// fraction. An enum whose values rulec does not count is decided by a place that takes each of
+/// them, and nothing on any source's line decides what is not compared value by value (a record, a
+/// list).
+fn what_decides(source: &Name, takes: &Carried, gives: &Gives) -> Option<Text> {
+    let mut given = gives;
+    while let Gives::Opt(g, _) = given {
+        given = &**g;
+    }
+    if matches!(given, Gives::Other(_)) {
+        return None;
+    }
     match source.tool {
         Tool::Rulec | Tool::Koyomi if takes_a_value(source) => Some(tr!("出どころの行に範囲を書けば、決められます。", "Write the range on the source's line, and it can be decided.")),
-        Tool::Rulec => Some(tr!(
-            "規則が出力の端を数えられるように書くか（`min(…, 上限)` など）、受け取る側の範囲を広げれば、決められます。",
-            "Write the rule so that rulec counts the output's ends (`min(…, <the limit>)`, say), or widen what this place takes, and it can be decided."
-        )),
-        Tool::Openapi | Tool::Jsonschema | Tool::Proto => Some(tr!(
-            "契約がとりうる値を並べれば（JSON Schema の `enum`、Protovalidate の `in`）、決められます。",
-            "A contract that lists its values (`enum` in a schema, `in` in Protovalidate) can be decided."
-        )),
+        Tool::Rulec => match (takes.present().0, given) {
+            // no end to count: the values this place leaves out
+            (Carried::Enum { values, .. }, Gives::Enum { all, .. }) => {
+                let lacks: Vec<String> = all.iter().filter(|v| !values.iter().any(|x| x.same(v))).map(|v| format!("`{}`", v.public)).collect();
+                Some(tr!("受け取る側が {} も受け取れば、決められます。", "Take {} in this place too, and it can be decided.", lacks.join("、"); lacks.join(", ")))
+            }
+            _ => Some(tr!(
+                "規則が出力の端を数えられるように書くか（`min(…, 上限)` など）、受け取る側の範囲を広げれば、決められます。",
+                "Write the rule so that rulec counts the output's ends (`min(…, <the limit>)`, say), or widen what this place takes, and it can be decided."
+            )),
+        },
+        Tool::Openapi | Tool::Jsonschema | Tool::Proto => match given {
+            Gives::Wire(_) | Gives::Day(_) | Gives::Moment(_) => Some(tr!(
+                "契約がとりうる値を並べれば（JSON Schema の `enum`、Protovalidate の `in`）、決められます。",
+                "A contract that lists its values (`enum` in a schema, `in` in Protovalidate) can be decided."
+            )),
+            Gives::ProtoDate => Some(tr!(
+                "`google.type.Date` は日を並べられません。日を並べた文字列のフィールド（Protovalidate の `in`）なら、決められます。",
+                "A `google.type.Date` lists no days; a string field that lists them (`in` in Protovalidate) can be decided."
+            )),
+            _ => None,
+        },
         Tool::Dandori | Tool::Kaname | Tool::Sekisho => Some(tr!("出どころの行に範囲を書けば、決められます。", "Write the range on the source's line, and it can be decided.")),
         _ => None,
     }
@@ -710,7 +906,8 @@ fn one(project: &Project, joined: &Joined, ports: &Ports, f: &ritsu_project::Fil
     let what = about(&fed.place);
     let at = Side::at(f.tool, &f.rel, fed.line);
     let written = &fed.written;
-    let takes = takes_text(&fed.takes);
+    // the record keeps the integers on the wire, and a sentence writes them (DESIGN 6.2 item 8)
+    let (takes, takes_said) = (takes_text(&fed.takes), takes_said(&fed.takes));
     let base = |code: &'static str, text: Text| -> Diag { Diag::at(code, &f.shown, fed.line, 1, text).source(src).rel(&f.rel) };
     let record = |to: Option<Side>, came: Came, code: Option<&str>, gives: Json, example: Json, why: Json, source: Json| {
         let mut b = Border::new(Check::FedBy, what.clone(), at.clone(), to, came, code);
@@ -740,9 +937,14 @@ fn one(project: &Project, joined: &Joined, ports: &Ports, f: &ritsu_project::Fil
             return Some(Finding::of(&d, Some(f.rel.clone()), lang));
         }
     };
-    let given = gives_text(&gives);
+    let (given, given_said) = (gives_text(&gives), gives_said(&gives));
     let input = |disk: &Path, date: &str, day: i64| date_input(joined, disk, date, day);
-    let answer = fits(&fed.takes, &gives, &input);
+    // the source rule's facts, whose inputs an example names in their units
+    let facts = match source.tool {
+        Tool::Rulec if !takes_a_value(source) => joined.rulec.facts(&ritsu_base::paths::on_disk(&project.root, &source.path)).ok(),
+        _ => None,
+    };
+    let answer = fits(&fed.takes, &gives, &input, facts.as_ref());
     let code = match &answer {
         Answer::Holds => None,
         Answer::Fails(_) => Some("E207"),
@@ -752,7 +954,7 @@ fn one(project: &Project, joined: &Joined, ports: &Ports, f: &ritsu_project::Fil
     let (example, why) = match &answer {
         Answer::Holds => (Json::Null, Json::Null),
         Answer::Fails(a) => (
-            Json::obj([("value", Json::opt_str(a.value.clone())), ("at", Json::opt_str(a.at.clone()))]),
+            Json::obj([("value", Json::opt_str(a.value.as_ref().map(|v| v.kept.clone()))), ("at", Json::opt_str(a.at.as_ref().map(|x| x.kept.clone())))]),
             a.why.as_ref().map_or(Json::Null, |w| Json::str(w.get(lang))),
         ),
         Answer::Undecided(w) => (Json::Null, Json::str(w.get(lang))),
@@ -761,15 +963,23 @@ fn one(project: &Project, joined: &Joined, ports: &Ports, f: &ritsu_project::Fil
     match answer {
         Answer::Holds => None,
         Answer::Fails(a) => {
+            let takes = &takes_said;
             let head = match &a.value {
-                Some(v) => tr!("`{what}` は {takes} を受け取りますが、出どころ {written} は {v} になることがあります", "`{what}` takes {takes}, and its source {written} can be {v}"),
-                None => tr!("`{what}` は {takes} を受け取りますが、出どころ {written} は {given} です", "`{what}` takes {takes}, and its source {written} is {given}"),
+                Some(v) => {
+                    let v = &v.said;
+                    tr!("`{what}` は {takes} を受け取りますが、出どころ {written} は {v} になることがあります", "`{what}` takes {takes}, and its source {written} can be {v}")
+                }
+                None => {
+                    let given = &given_said;
+                    tr!("`{what}` は {takes} を受け取りますが、出どころ {written} は {given} です", "`{what}` takes {takes}, and its source {written} is {given}")
+                }
             };
             let mut d = base("E207", head);
             if let Some(w) = &a.why {
                 d = d.note(w.clone());
             }
             if let (Some(v), Some(i)) = (&a.value, &a.at) {
+                let (v, i) = (&v.said, &i.said);
                 d = d.note(tr!("{written} は、{i} のとき {v} になります。", "{written} comes to {v} at {i}."));
             }
             if a.value.is_some() && a.why.is_none() {
@@ -790,7 +1000,7 @@ fn one(project: &Project, joined: &Joined, ports: &Ports, f: &ritsu_project::Fil
         }
         Answer::Undecided(why) => {
             let mut d = base("W207", tr!("`{what}` が出どころ {written} の値を受け取るかを決められません", "Whether `{what}` takes what can come from {written} cannot be decided")).note(why);
-            if let Some(n) = what_decides(&source) {
+            if let Some(n) = what_decides(source, &fed.takes, &gives) {
                 d = d.note(n);
             }
             Some(Finding::of(&d, Some(f.rel.clone()), lang))

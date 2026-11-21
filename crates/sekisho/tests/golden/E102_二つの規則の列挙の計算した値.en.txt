@@ -1,0 +1,3 @@
+error[E102]: tests/mutants/E102_二つの規則の列挙の計算した値.gate:40:8: `段階` is of different types in different actions (the enum `段階` of the rule `大きさの段階`, and the enum `段階` of the rule `自分の段階` in `注文を止める`)
+    40 |   when 段階 is 金
+  = The enum `段階` of the rule `大きさの段階` is the enum `段階` of the `enums` file `read/注文の状態.rule`; the enum `段階` of the rule `自分の段階` is the enum `段階` that the rule `自分の段階` (`read/自分の段階.rule`) declares itself. Enums declared at two places are two types, even with the same values; to make them one, put the enum in an `enums` file, and read it with `import enum` in each file that uses it.

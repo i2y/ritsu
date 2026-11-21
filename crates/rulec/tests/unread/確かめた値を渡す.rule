@@ -1,0 +1,34 @@
+rule 確かめた値を渡す(handed_on) v1
+description "荷物の行き先と、預かりを続けるかを、今いる所、スキャンで見つかったか、預かり中かから出す。どの表も、一行目が確かめた値をそのまま渡す（架空）"
+
+enum 場所(place) = 荷受け場(dock) | トラック(truck) | 玄関(door)
+
+inputs
+  今いる所(at)          : 場所
+  スキャン済み(scanned) : bool
+  預かり中(kept)        : bool
+
+outputs
+  行き先(goes) : 場所
+  預かる(hold) : bool
+
+table 経路(route)
+policy unique
+| 今いる所 | スキャン済み | -> 行き先 |
+| 荷受け場 | false        | 今いる所  |
+| 荷受け場 | true         | トラック  |
+| トラック | -            | 玄関      |
+| 玄関     | -            | 今いる所  |
+
+table 預かり(keep)
+policy unique
+| 預かり中 | スキャン済み | -> 預かる |
+| true     | -            | 預かり中  |
+| false    | false        | true      |
+| false    | true         | false     |
+
+examples
+| 今いる所 | スキャン済み | 預かり中 | -> 行き先 | 預かる |
+| 荷受け場 | false        | true     | 荷受け場  | true   |
+| 荷受け場 | true         | false    | トラック  | false  |
+| トラック | true         | false    | 玄関      | false  |

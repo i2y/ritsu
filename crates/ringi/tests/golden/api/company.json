@@ -1,0 +1,119 @@
+{
+  "ringi": "0.55.2",
+  "file": "examples/shared/company.ringi",
+  "kind": "organization",
+  "name": "company",
+  "written": "company",
+  "version": 1,
+  "title": "Company",
+  "description": "The shape of the company's organization (fictional): the positions from the lowest, the kinds of teams from the widest, and the folder that holds the data of each version",
+  "owner": null,
+  "effective_from": null,
+  "uses": [],
+  "form": [],
+  "items": [
+    {
+      "kind": "position",
+      "name": "staff",
+      "written": "staff",
+      "lines": [
+        5,
+        5
+      ],
+      "text": "staff \"Staff\""
+    },
+    {
+      "kind": "position",
+      "name": "manager",
+      "written": "manager",
+      "lines": [
+        6,
+        6
+      ],
+      "text": "manager \"Manager\""
+    },
+    {
+      "kind": "position",
+      "name": "dept_head",
+      "written": "dept_head",
+      "lines": [
+        7,
+        7
+      ],
+      "text": "dept_head \"Head of department\""
+    },
+    {
+      "kind": "position",
+      "name": "division_head",
+      "written": "division_head",
+      "lines": [
+        8,
+        8
+      ],
+      "text": "division_head \"Head of division\""
+    },
+    {
+      "kind": "position",
+      "name": "president",
+      "written": "president",
+      "lines": [
+        9,
+        9
+      ],
+      "text": "president \"President\""
+    },
+    {
+      "kind": "team_kind",
+      "name": "company",
+      "written": "company",
+      "lines": [
+        12,
+        12
+      ],
+      "text": "company \"Company\""
+    },
+    {
+      "kind": "team_kind",
+      "name": "division",
+      "written": "division",
+      "lines": [
+        13,
+        13
+      ],
+      "text": "division \"Division\""
+    },
+    {
+      "kind": "team_kind",
+      "name": "department",
+      "written": "department",
+      "lines": [
+        14,
+        14
+      ],
+      "text": "department \"Department\""
+    },
+    {
+      "kind": "team_kind",
+      "name": "section",
+      "written": "section",
+      "lines": [
+        15,
+        15
+      ],
+      "text": "section \"Section\""
+    },
+    {
+      "kind": "team_kind",
+      "name": "committee",
+      "written": "committee",
+      "lines": [
+        16,
+        16
+      ],
+      "text": "committee \"Committee\""
+    }
+  ],
+  "usable": null,
+  "utc_offset_minutes": null,
+  "ticket": null
+}

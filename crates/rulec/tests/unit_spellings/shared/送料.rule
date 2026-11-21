@@ -1,0 +1,21 @@
+rule 送料(shipping_fee) v1
+description "注文の送料。重さと小計で決まる。通貨は JPY と書く（架空）"
+
+inputs
+  重さ(weight)   : mass[g]     range >=1g <=30_000g
+  小計(subtotal) : money[JPY]  range >=0JPY <=100_000JPY
+
+outputs
+  送料(fee) : money[JPY]  round down(1JPY)
+
+table 送料
+| 小計         | 重さ       | -> 送料    |
+| >=5_000JPY  | -          | 0JPY      |
+| <5_000JPY   | <=2_000g   | 800JPY    |
+| <5_000JPY   | >2_000g    | 1_200JPY  |
+
+examples
+| 重さ     | 小計       | -> 送料    |
+| 2_000g  | 4_999JPY  | 800JPY    |
+| 2_001g  | 4_999JPY  | 1_200JPY  |
+| 2_001g  | 5_000JPY  | 0JPY      |

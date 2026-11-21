@@ -230,3 +230,24 @@ fn max_and_min_of_numbers_are_read_from_their_arguments() {
         }
     }
 }
+
+/// A derived value the callee computes in one of its enums is read as the enum this rule binds
+/// it to, when the bound input is one: its expression is already spelled in this rule's words
+/// after the substitution, so typing it as a `<apply>:` copy typed the expansion against itself
+/// (E103 `lifted:tier is given tier`, §15.346). No `lifted:tier` enum is declared beside it.
+#[test]
+fn an_enum_derive_of_the_callee_is_this_rules_enum() {
+    let callee = "rule lift_derive v1\n\nenum tier = basic < silver < gold\n\ninputs\n  campaign : tier\n\nderive best : tier = max(campaign, campaign)\n\noutputs\n  fee : money[USD]  round down(1USD)\n\ntable out\npolicy unique\n| best     | -> fee |\n| basic    | 0USD   |\n| >=silver | 5USD   |\n";
+    let tmp = TempDir::new("apply-enum-derive");
+    std::fs::write(tmp.path().join("lift_derive.rule"), callee).unwrap();
+    let meaning = rulec::link::pin::meaning(callee);
+    let src = format!(
+        "rule caller v1\n\nenum tier = basic < silver < gold\n\ninputs\n  campaign : tier\n\noutputs\n  fee : money[USD]  round down(1USD)\n\napply lifted = \"lift_derive.rule\" meaning:{meaning}\n  campaign = campaign\n  fee -> lifted_fee\n\ntable out\npolicy unique\n| lifted:best | -> fee |\n| basic       | 0USD   |\n| >=silver    | 5USD   |\n"
+    );
+    let rel = tmp.path().join("caller.rule").to_string_lossy().into_owned();
+    let ds = i18n::with(Lang::En, || rulec::check_source(&src, &rel));
+    let errors: Vec<&str> = ds.iter().filter(|d| d.severity == rulec::diag::Severity::Error).map(|d| d.code).collect();
+    assert!(errors.is_empty(), "{:?}", ds.iter().map(|d| (d.code, d.title.clone(), d.notes.clone())).collect::<Vec<_>>());
+    let (f, _) = i18n::with(Lang::En, || rulec::prepare(&src, &rel)).unwrap_or_else(|ds| panic!("{ds:?}"));
+    assert!(!f.enums.iter().any(|e| e.name.text == "lifted:tier"), "{:?}", f.enums.iter().map(|e| e.name.text.clone()).collect::<Vec<_>>());
+}

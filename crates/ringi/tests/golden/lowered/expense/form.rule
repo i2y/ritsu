@@ -1,0 +1,27 @@
+rule expense_form v1
+description "What ringi writes from the form of expense.ringi: the totals and computations, and when a field is shown and asked for"
+
+import enum category from "choices.rule"
+
+inputs
+  category : category
+
+elements items
+  price : money[JPY]  range >=1JPY <=1_000_000JPY
+
+sum amount over items of price  range >=1JPY <=10_000_000JPY
+
+outputs
+  amount           : money[JPY]  round down(1JPY)
+  trip_to_shown    : bool
+  receipt_required : bool
+
+table trip_to_shown
+| category    | -> trip_to_shown |
+| travel      | true             |
+| not: travel | false            |
+
+table receipt_required
+| amount      | -> receipt_required |
+| <=30_000JPY | false               |
+| >30_000JPY  | true                |

@@ -1,5 +1,5 @@
 workflow plain_tasks v1
-description "Tasks you implement named as the builtins of Python the code never reads, each read into a variable of its name."
+description "Tasks you implement named as the builtins of Python the code never reads, and as a name of Python's typing it reads by another name, each read into a variable of its name."
 
 inputs
   id : string
@@ -25,6 +25,8 @@ task setattr(id: string) -> string
 task slice(id: string) -> string
 task sum(id: string) -> string
 task vars(id: string) -> string
+task TypeError(id: string) -> string
+task TypeGuard(id: string) -> string
 
 flow
   let bytes = bytes(id: id)
@@ -45,4 +47,6 @@ flow
   let slice = slice(id: id)
   let sum = sum(id: id)
   let vars = vars(id: id)
-  succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}"
+  let TypeError = TypeError(id: id)
+  let TypeGuard = TypeGuard(id: id)
+  succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}{TypeError}{TypeGuard}"

@@ -1,0 +1,5 @@
+error[E504]: example.ringi:9:11: In the organization from 2026-04-01, the stage `review` cannot get 2 approvals for some requesters
+     9 |   review  at least 2 of sales
+  = `sales` has only 1 member besides the requester.
+  = For 2 requesters: e02 (Head of Sales) and e03 (Sales staff).
+  = Add people to the team, or change the quorum.

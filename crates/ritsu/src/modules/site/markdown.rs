@@ -10,8 +10,35 @@ use ritsu_base::docpage::esc;
 
 // ── What ritsu wrote ────────────────────────────────────────────────────
 
+/// The entities [`esc`] writes. Markdown that a language wrote with them (`&lt;` for a `<` that would
+/// open a tag) means the character, so outside a code span they reach the page as they are.
+const ENTITIES: [&str; 5] = ["&lt;", "&gt;", "&amp;", "&quot;", "&#39;"];
+
+/// A text outside code escaped, an entity of [`ENTITIES`] left as it is, not escaped a second time.
+fn esc_text(s: &str) -> String {
+    let mut o = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(a) = rest.find('&') {
+        o.push_str(&esc(&rest[..a]));
+        let at = &rest[a..];
+        match ENTITIES.iter().find(|e| at.starts_with(**e)) {
+            Some(e) => {
+                o.push_str(e);
+                rest = &at[e.len()..];
+            }
+            None => {
+                o.push_str("&amp;");
+                rest = &at[1..];
+            }
+        }
+    }
+    o.push_str(&esc(rest));
+    o
+}
+
 /// A text of a page with its `` `code` `` spans made code, its `**strong**` strong, and the rest
-/// escaped.
+/// escaped. An entity outside code (`&lt;`) is the character it stands for, as in Markdown; in code
+/// it is what it is written as.
 pub(super) fn inline(s: &str) -> String {
     let mut o = String::new();
     for (i, part) in s.split('`').enumerate() {
@@ -19,7 +46,7 @@ pub(super) fn inline(s: &str) -> String {
             o.push_str(&format!("<code>{}</code>", esc(part)));
             continue;
         }
-        let e = esc(part);
+        let e = esc_text(part);
         let mut rest = e.as_str();
         while let Some(a) = rest.find("**") {
             let Some(z) = rest[a + 2..].find("**") else { break };
@@ -534,6 +561,16 @@ mod tests {
         assert!(h.contains("<ul>\n<li>Files: 2 changed</li>\n<ul>\n<li>one <code>a|b</code></li>\n</ul>\n</ul>\n"), "{h}");
         assert!(h.contains("<tr><th>Change</th><th>File</th></tr>\n<tr><td>changed</td><td><code>x|y</code></td></tr>"), "{h}");
         assert!(h.contains("<details><summary><code>r.rule</code> (rulec): differ</summary>\n<p><strong>Version diff</strong></p>\n<p>weight &gt;=2g</p>\n</details>"), "{h}");
+    }
+
+    /// A language writes `&lt;` in its Markdown for a `<` that would open a tag (ringi's diff does):
+    /// the page shows a `<`, not `&lt;`. In code, `&lt;` is what is written, and a `<` written as
+    /// it is is escaped.
+    #[test]
+    fn an_entity_of_the_markdown_is_not_escaped_twice() {
+        assert_eq!(inline("a &lt;b&gt; &amp; &quot;c&quot; &#39;d&#39; `&lt;x` <y & z &copy;"), "a &lt;b&gt; &amp; &quot;c&quot; &#39;d&#39; <code>&amp;lt;x</code> &lt;y &amp; z &amp;copy;");
+        assert_eq!(md_html("| Stage | Who |\n|---|---|\n| first | &lt;manager&gt; |\n"), "<div class=\"scroll\"><table class=\"t\">\n<tr><th>Stage</th><th>Who</th></tr>\n<tr><td>first</td><td>&lt;manager&gt;</td></tr>\n</table></div>\n");
+        assert_eq!(md_html("- **&lt;b&gt;** `a&amp;b`\n"), "<ul>\n<li><strong>&lt;b&gt;</strong> <code>a&amp;amp;b</code></li>\n</ul>\n");
     }
 
     fn no_files(_: &str) -> Option<String> {

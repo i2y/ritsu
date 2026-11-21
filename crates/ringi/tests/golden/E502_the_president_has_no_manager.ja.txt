@@ -1,0 +1,6 @@
+エラー[E502]: tests/mutants/E502_the_president_has_no_manager.ringi:9:10: 2026-04-01 からの組織では、ステップ `check` に承認者がいません
+     9 |   check  manager
+  = 申請者の上に、`manager` に当たる長がいません。
+  = 申請者 1 人: e01（社長（架空））。
+  = `when empty stay` なので、チケットはこのステップで、管理する人が承認者を足すまで待ちます。
+  = 版のデータを直すか、ステップの承認者の決め方か `when empty` を変えてください。

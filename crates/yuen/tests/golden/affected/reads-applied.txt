@@ -1,0 +1,12 @@
+diff: tests/fixtures/reads/changes/size.diff
+files read by the files that requirements name, that the diff touches:
+  tests/fixtures/reads/rules/size.rule
+    rulec "rules/refund_band.rule" line 12 (apply): met by bands_of_a_refund
+    sekisho "gates/refunds.gate" line 5 (use rule) -> rulec "rules/refund_band.rule" line 12 (apply): met by who_refunds
+    sakai "contexts/desk.ctx" line 9 (published language) -> rulec "rules/refund_band.rule" line 12 (apply): met by refund_words
+changes no requirement reaches: none
+requirements touched:
+  bands_of_a_refund (tests/fixtures/reads/refunds.req:6): owner finance; decided 2026-11-02 by finance: "Written for this test"
+  who_refunds (tests/fixtures/reads/refunds.req:15): owner finance; decided 2026-11-02 by finance: "Written for this test"
+  refund_words (tests/fixtures/reads/refunds.req:51): owner finance; decided 2026-11-02 by finance: "Written for this test"
+3 requirements touched; ask finance

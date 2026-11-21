@@ -1,0 +1,12 @@
+rule 注文の明細(order_lines) v1
+description "円で書いた注文の明細を、JPY と書く規則で数える（架空）"
+
+elements 品目(items)
+  価格(price) : money[円]  range >=0円 <=10_000円
+
+outputs
+  大口の数(big_lines) : number  round down(1)
+
+apply 数えて(counted) = "shared/大口の明細.rule" meaning:6e31865b04c1edf6
+  明細 = 品目
+  大口の数 -> 大口の数

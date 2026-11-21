@@ -1,0 +1,110 @@
+── W002 (go)
+error[E008]: example.kn:6:4: In the generated code, this function `totalWeight` and the function `total_weight` on line 3 are named alike: `TotalWeight` (Go)
+     6 | fn totalWeight() -> number
+  = The generated code writes each name as its target writes names: a type's name in every target, and Go's function, field and constant of a value of an enum and Rust's value of an enum, with each word's first letter in upper case and no `_` (`foo_bar` is `FooBar`); TypeScript's and Python's value of an enum in upper case (`gold` is `GOLD`).
+  = Rename one of them, or give it another alias. For a target you do not use, name the ones you use with `--target`.
+
+── W002 (typescript, python)
+error[E008]: example.kn:3:20: In the generated code, this value `tier.GOLD` and the value `tier.gold` on line 3 are named alike: `GOLD` (TypeScript, Python)
+     3 | enum tier = gold | GOLD
+  = The generated code writes each name as its target writes names: a type's name in every target, and Go's function, field and constant of a value of an enum and Rust's value of an enum, with each word's first letter in upper case and no `_` (`foo_bar` is `FooBar`); TypeScript's and Python's value of an enum in upper case (`gold` is `GOLD`).
+  = Rename one of them, or give it another alias. For a target you do not use, name the ones you use with `--target`.
+
+── W002 (go)
+error[E008]: example.kn:5:3: In the generated code, this field `unitPrice` and the field `unit_price` on line 4 are named alike: `UnitPrice` (Go)
+     5 |   unitPrice  : string
+  = The generated code writes each name as its target writes names: a type's name in every target, and Go's function, field and constant of a value of an enum and Rust's value of an enum, with each word's first letter in upper case and no `_` (`foo_bar` is `FooBar`); TypeScript's and Python's value of an enum in upper case (`gold` is `GOLD`).
+  = Rename one of them, or give it another alias. For a target you do not use, name the ones you use with `--target`.
+
+── W002 (go)
+error[E008]: example.kn:5:8: In the generated code, this record `WayAb` and the value `way.ab` on line 3 are named alike: `WayAb` (Go)
+     5 | record WayAb
+  = The generated code writes each name as its target writes names: a type's name in every target, and Go's function, field and constant of a value of an enum and Rust's value of an enum, with each word's first letter in upper case and no `_` (`foo_bar` is `FooBar`); TypeScript's and Python's value of an enum in upper case (`gold` is `GOLD`).
+  = Rename one of them, or give it another alias. For a target you do not use, name the ones you use with `--target`.
+
+── W002 (python)
+error[E008]: example.kn:6:4: In the generated code, this function `Total` and the record `total` on line 3 are named alike: `Total` (Python)
+     6 | fn Total() -> number
+  = The generated code writes each name as its target writes names: a type's name in every target, and Go's function, field and constant of a value of an enum and Rust's value of an enum, with each word's first letter in upper case and no `_` (`foo_bar` is `FooBar`); TypeScript's and Python's value of an enum in upper case (`gold` is `GOLD`).
+  = Rename one of them, or give it another alias. For a target you do not use, name the ones you use with `--target`.
+
+── W002 (typescript, python)
+error[E008]: example.kn:5:4: In the generated code, this function `Kind` and the enum `kind` on line 3 are named alike: `Kind` (TypeScript, Python)
+     5 | fn Kind() -> number
+  = The generated code writes each name as its target writes names: a type's name in every target, and Go's function, field and constant of a value of an enum and Rust's value of an enum, with each word's first letter in upper case and no `_` (`foo_bar` is `FooBar`); TypeScript's and Python's value of an enum in upper case (`gold` is `GOLD`).
+  = Rename one of them, or give it another alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (python)
+error[E008]: example.kn:4:3: The generated Python cannot take `class` as the name of a field
+     4 |   class : string
+  = The generated Python writes a field's name as it is, as the name of an attribute of a data class, and `class` is a keyword of Python.
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (typescript)
+error[E008]: example.kn:3:4: The generated TypeScript cannot take `delete` as the name of a function
+     3 | fn delete() -> number
+  = `delete` is a word TypeScript takes as no name (a reserved word, or one strict mode does not bind).
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (typescript, python)
+error[E008]: example.kn:3:4: The generated TypeScript and Python cannot take `class` as the name of a function
+     3 | fn class() -> number
+  = `class` is a word TypeScript takes as no name (a reserved word, or one strict mode does not bind).
+  = `class` is a keyword of Python.
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (python)
+error[E008]: example.kn:3:11: The generated Python cannot take `lambda` as the name of a parameter
+     3 | fn scaled(lambda: number range >=0 <=9) -> number
+  = The generated Python's function takes what a host gives it by the parameters' names, which it writes as they are, and `lambda` is a keyword of Python.
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (python)
+error[E008]: example.kn:4:3: The generated Python cannot take `__sku` as the name of a field
+     4 |   __sku : string
+  = Python renames a name that starts with `__` in a class, the class's name before it (`__x` is `_Line__x`): a host could not read the field by its name.
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (python)
+error[E008]: example.kn:4:3: The generated Python cannot take `__init__` as the name of a field
+     4 |   __init__ : string
+  = Python keeps the names of the form `__x__` for itself (`__init__`, `__eq__`: the names that make what a class does).
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (typescript, python)
+error[E008]: example.kn:4:3: The generated TypeScript and Python cannot take `__proto__` as the name of a field
+     4 |   __proto__ : string
+  = Python keeps the names of the form `__x__` for itself (`__init__`, `__eq__`: the names that make what a class does).
+  = TypeScript (JavaScript) reads `__proto__` in an object it writes as the object's prototype, not as a field.
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (python)
+error[E008]: example.kn:3:13: The generated Python cannot write `tier._gold_` as the value `_GOLD_` of an enum
+     3 | enum tier = _gold_ | silver
+  = Python's enum (`enum.Enum`) keeps the names of the forms `_x_` and `__x__` for itself, and makes no value of a name that starts with `__`.
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (python)
+error[E008]: example.kn:3:4: The generated Python cannot take `__getattr__` as the name of a function
+     3 | fn __getattr__() -> number
+  = Python keeps the names of the form `__x__` for itself (a module's `__getattr__` and `__dir__` change what the module does).
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (typescript, python, rust)
+error[E008]: example.kn:3:8: The generated TypeScript, Python and Rust cannot write `_1` as the name of a type
+     3 | record _1
+  = The name of a type is its words with their first letters in upper case and no `_` (`foo_bar` is `FooBar`), which `_1` makes empty or starting with a digit.
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (python)
+error[E008]: example.kn:3:8: The generated Python cannot write `none_` as the type `None`
+     3 | record none_
+  = The name of a type is its words with their first letters in upper case, and `None` is a keyword of Python.
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+── W001 (rust)
+error[E008]: example.kn:3:13: The generated Rust cannot write `_1` as the name of a value of an enum
+     3 | enum tier = _1 | gold
+  = The name of a value of an enum is its words with their first letters in upper case and no `_` (`foo_bar` is `FooBar`), which `_1` makes empty or starting with a digit.
+  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+

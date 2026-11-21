@@ -1,0 +1,24 @@
+error[E153]: `_tell` starts with `_`, which the code generated for Python and Connect cannot take
+  --> parcel_flags.rule:9
+  |
+9 |   _tell : bool
+  |   ^^^^^ the output's name
+  |
+ Python: the outputs of a rule with two or more are the fields of `Output`, a `NamedTuple`, and a `NamedTuple` takes no field whose name starts with `_`, so the generated Python file does not load.
+ Connect: the service runs the Python module, which does not load.
+ For a target you do not generate, leave it. For one you do, give it an alias that does not start with `_` (`_tell(<alias>)`).
+ The code `--target python` writes cannot be used with the name as it stands, so gen writes nothing of `--target python`; the targets it does not name are written.
+
+error: the targets E153 names are not written until the names of the code are put right
+エラー[E153]: `_tell` は `_` で始まるので、Python・Connect の生成コードでは使えません
+  --> 小包の印.rule:9
+  |
+9 |   知らせる(_tell) : bool
+  |   ^^^^^^^^ 出力の別名
+  |
+ Python: 出力が二つ以上ある規則の出力は `NamedTuple` の `Output` のフィールドになり、`NamedTuple` のフィールドの名前は `_` で始められません。生成した Python のファイルは読み込めません。
+ Connect: サービスは Python のモジュールを動かすので、読み込めません。
+ 使わない生成先なら、このままで構いません。使うなら、別名を `_` で始まらないものに変えてください。
+ `--target python` が書くコードは、この名前のままでは使えないので、gen は`--target python`を書かず、ほかの出力先は書きます。
+
+エラー: 生成するコードの名前を直すまで、E153 が挙げた出力先は書きません（E153）

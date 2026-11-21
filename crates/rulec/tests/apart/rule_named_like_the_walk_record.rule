@@ -1,0 +1,53 @@
+rule walked v1
+description "A rule named like the record the walk of a pick by weight gives back in Java"
+
+enum presence = away | in_office
+
+# One reviewer of the team. The caller passes the whole team, in a fixed order
+elements reviewers
+  reviewer_id : number  range >=1 <=50
+  present     : bool
+  capacity    : number  range >=0 <=100
+
+inputs
+  w : number  range >=0 <=9999  random  # drawn below the total of the capacities of those in
+
+outputs
+  reviewer : number  round down(1)  # 0 when nobody is in
+
+table in_today
+policy unique
+| present | -> presence : presence |
+| true    | in_office              |
+| false   | away                   |
+
+fold presence over reviewers
+  away      -> next
+  in_office -> take_weighted reviewer_id by capacity
+  draw      -> w
+  empty     -> 0
+  exhausted -> held
+
+sequence team_of_three
+| reviewer_id | present | capacity |
+| 1           | true    | 50       |
+| 2           | true    | 30       |
+| 3           | true    | 20       |
+
+sequence nobody_in
+| reviewer_id | present | capacity |
+| 1           | false   | 50       |
+
+chances
+| reviewers     | -> reviewer | chance |
+| team_of_three | 1           | 1/2    |
+| team_of_three | 2           | 3/10   |
+| team_of_three | 3           | 1/5    |
+| nobody_in     | 0           | 1      |
+
+examples
+| w | reviewers     | -> reviewer |
+| 0    | team_of_three | 1           |
+| 50   | team_of_three | 2           |
+| 80   | team_of_three | 3           |
+| 0    | nobody_in     | 0           |

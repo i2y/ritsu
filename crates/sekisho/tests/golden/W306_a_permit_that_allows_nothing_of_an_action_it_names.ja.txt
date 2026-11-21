@@ -1,0 +1,7 @@
+警告[W306]: tests/mutants/W306_a_permit_that_allows_nothing_of_an_action_it_names.gate:26:1: permit `staff_read_and_purge` は action `purge_doc` を挙げていますが、`purge_doc` では何も許しません。許すはずの組み合わせを、どれも forbid が拒みます
+    26 | permit staff_read_and_purge
+  = `purge_doc` で許すはずの組み合わせは 1 通りで、`no_one_purges` が 1 通りを拒みます。
+  = 例：staff を持つ User、Doc。`no_one_purges` が拒みます。
+  = ほかに挙げた action では、`read_doc` の 1 通りを許します。
+  = `action` の行から `purge_doc` を外すか、`purge_doc` も許すつもりなら forbid を狭めてください。
+tests/mutants/W306_a_permit_that_allows_nothing_of_an_action_it_names.gate: ok — action 2、ポリシー 2（permit 1、forbid 1）、期待 0、職務の分離 0

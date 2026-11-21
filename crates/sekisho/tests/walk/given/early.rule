@@ -1,0 +1,19 @@
+rule early v1
+description "Whether a day is in the first half of 2026: a date input that may not be left out"
+
+inputs
+  on : date  range >=2026-01-01 <=2026-12-31
+
+outputs
+  early : bool
+
+table early_of
+policy unique
+| on           | -> early |
+| <2026-07-01  | true     |
+| >=2026-07-01 | false    |
+
+examples
+| on         | -> early |
+| 2026-02-01 | true     |
+| 2026-09-01 | false    |

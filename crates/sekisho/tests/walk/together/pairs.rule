@@ -1,0 +1,19 @@
+rule two_amounts v1
+description "How two amounts stand to 500 yen: both at or under it, both over it, or one on each side"
+
+enum kind = both_low | both_high | mixed
+
+inputs
+  first  : money[JPY]  range >=1JPY <=1_000JPY
+  second : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  kind : kind
+
+table decide
+policy unique
+| first    | second   | -> kind   |
+| <=500JPY | <=500JPY | both_low  |
+| >500JPY  | >500JPY  | both_high |
+| <=500JPY | >500JPY  | mixed     |
+| >500JPY  | <=500JPY | mixed     |

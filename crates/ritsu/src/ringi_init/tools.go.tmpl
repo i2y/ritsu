@@ -1,0 +1,24 @@
+package {{package}}
+
+import (
+	"log/slog"
+	"net/http"
+
+	server "{{framework}}"
+	"{{framework}}/mcp"
+	"{{framework}}/serve"
+)
+
+// HandleTools puts the agents' tools at /mcp of the server st serves: the tools ritsu wrote for the
+// kinds of request (requests/mcp/tools.json), over MCP. An agent is the person the server's sign-in
+// finds in its requests, as a browser is (serve.Person), and what it does is asked of the gate as
+// the pages' and the API's operations are. A request with no one signed in is answered 401.
+func HandleTools(st *serve.Stores, log *slog.Logger) {
+	st.Handle("/mcp", func(srv *server.Server) (http.Handler, error) {
+		tools, err := mcp.New(srv, mcp.Config{Logger: log})
+		if err != nil {
+			return nil, err
+		}
+		return tools.Handler(mcp.HTTP{Person: serve.Person})
+	})
+}

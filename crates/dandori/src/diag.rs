@@ -67,19 +67,28 @@ pub struct Diag {
     pub ja: String,
     pub notes: Vec<Text>,
     pub path: Vec<Step>,
+    /// The name it says is declared nowhere, with the kind of name (`task`, `type`, `value`): the
+    /// findings of one name are said once, at the first ([`once`]).
+    pub same: Option<(String, String)>,
 }
 
 impl Diag {
     pub fn error(code: &'static str, line: usize, col: usize, message: Text) -> Diag {
-        Diag { code, severity: Severity::Error, line, col, en: message.en, ja: message.ja, notes: vec![], path: vec![] }
+        Diag { code, severity: Severity::Error, line, col, en: message.en, ja: message.ja, notes: vec![], path: vec![], same: None }
     }
 
     pub fn warning(code: &'static str, line: usize, col: usize, message: Text) -> Diag {
-        Diag { code, severity: Severity::Warning, line, col, en: message.en, ja: message.ja, notes: vec![], path: vec![] }
+        Diag { code, severity: Severity::Warning, line, col, en: message.en, ja: message.ja, notes: vec![], path: vec![], same: None }
     }
 
     pub fn note(mut self, note: Text) -> Diag {
         self.notes.push(note);
+        self
+    }
+
+    /// The name of a kind the finding says is declared nowhere ([`once`]).
+    pub fn same_in(mut self, kind: &str, name: impl Into<String>) -> Diag {
+        self.same = Some((kind.to_string(), name.into()));
         self
     }
 
@@ -142,6 +151,40 @@ impl Diag {
             })).collect::<Vec<_>>(),
         })
     }
+}
+
+/// A name declared nowhere is said once in a file (ritsu's DESIGN 8.3): of the findings that say
+/// so of one name of one kind ([`Diag::same`]), the first is kept, with a note of the other lines
+/// the name is written on, and the others are dropped. The reader fixes the declaration, or the
+/// lines the note lists.
+pub fn once(diags: &mut Vec<Diag>) {
+    let mut order: Vec<usize> = (0..diags.len()).collect();
+    order.sort_by_key(|&i| (diags[i].line, diags[i].col));
+    let mut firsts: Vec<((String, String), usize, Vec<usize>)> = Vec::new();
+    let mut drop = vec![false; diags.len()];
+    for i in order {
+        let Some(key) = diags[i].same.clone() else { continue };
+        match firsts.iter_mut().find(|(k, ..)| *k == key) {
+            Some((_, _, lines)) => {
+                drop[i] = true;
+                lines.push(diags[i].line);
+            }
+            None => firsts.push((key, i, Vec::new())),
+        }
+    }
+    for ((_, name), i, mut lines) in firsts {
+        lines.retain(|l| *l != diags[i].line);
+        lines.sort_unstable();
+        lines.dedup();
+        if !lines.is_empty() {
+            diags[i].notes.push(ritsu_base::diag::unstopped(ritsu_base::diag::written_too(&name, &lines)));
+        }
+    }
+    let mut k = 0;
+    diags.retain(|_| {
+        k += 1;
+        !drop[k - 1]
+    });
 }
 
 pub fn has_errors(diags: &[Diag]) -> bool {

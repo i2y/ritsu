@@ -21,6 +21,15 @@ pub fn run(args: &[String], suite: Suite, out: &mut dyn Write, err: &mut dyn Wri
     code
 }
 
+/// `sekisho doc <gate> …` as HTML and as Markdown from one check of the gate ([`crate::cli::doc_pages`]):
+/// what the page in the browser shows for a gate's one question.
+pub fn doc_pages(args: &[String], suite: Suite) -> [(u8, String, String); 2] {
+    COMMAND.with(|c| *c.borrow_mut() = Some(args.to_vec()));
+    let pages = crate::cli::doc_pages(args, &suite);
+    COMMAND.with(|c| *c.borrow_mut() = None);
+    pages
+}
+
 /// A word as a shell reads it back: as it is, or in single quotes.
 fn shell_word(w: &str) -> String {
     if !w.is_empty() && w.chars().all(|c| !c.is_whitespace() && !"'\"\\$`;&|<>()*?[]#~".contains(c)) {

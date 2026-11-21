@@ -1,0 +1,5 @@
+警告[W308]: tests/mutants/W308_a_numeric_line_that_leaves_out_no_combination.gate:26:1: permit `clerks_refund_large_orders` の行 `when resource.amount > 1_000JPY` は、起こりうるどの組み合わせも外しません
+    26 |   when resource.amount > 1_000JPY
+  = `principal` の行とほかの行が満たされる 1 通りで満たされます。
+  = 行を消すか、外すつもりの組み合わせを外すよう行を直してください。
+tests/mutants/W308_a_numeric_line_that_leaves_out_no_combination.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

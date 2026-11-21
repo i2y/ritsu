@@ -1,0 +1,6 @@
+error[E017]: tests/fixtures/service_date_outputs.ja.flow:1:33: the output `bookedOn` goes to `bookedOn` of `BookResponse`, which is a `google.type.Date` or holds one, and a run's output does not write a date as protobuf's JSON does (`{year, month, day}`); make that field a `string`
+     1 | workflow 予約の日付の出力 v1 implements dates.BookingServiceJa
+error[E017]: tests/fixtures/service_date_outputs.ja.flow:1:33: the output `span` goes to `span` of `BookResponse`, which is a `google.type.Date` or holds one, and a run's output does not write a date as protobuf's JSON does (`{year, month, day}`); make that field a `string`
+     1 | workflow 予約の日付の出力 v1 implements dates.BookingServiceJa
+error[E017]: tests/fixtures/service_date_outputs.ja.flow:1:33: the output `days` goes to `days` of `BookResponse`, which is a `google.type.Date` or holds one, and a run's output does not write a date as protobuf's JSON does (`{year, month, day}`); make that field a `string`
+     1 | workflow 予約の日付の出力 v1 implements dates.BookingServiceJa

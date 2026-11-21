@@ -1,0 +1,12 @@
+warning[W101]: tests/fixtures/unsettled_retry.flow:33:1: if `notify` fails, the workflow fails with the case `goods` in held; 2 call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case
+    33 |   notify(order: order)
+  = The `retry` of `notify` does not take the failure away: once the retries run out, the call fails.
+  the run that gets there:
+      31  reserve: goods starts in held
+      33  notify fails (timeout, failure)
+gen --target asl:
+error[E050]: tests/fixtures/unsettled_retry.flow:17:1: `notify` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions
+    17 | task notify(order: string)
+gen --target argo:
+error[E050]: tests/fixtures/unsettled_retry.flow:17:1: `notify` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows
+    17 | task notify(order: string)

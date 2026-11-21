@@ -1,0 +1,27 @@
+gate goのauthorizeの直し(go_authorize_ja_renamed) v1
+description "GoのAuthorize.gate の型の別名を、注のとおりに Slip にしたもの"
+namespace Shop
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 返信
+
+principal 係の人(Clerk)
+  description "尋ねる人"
+  roles 係
+
+resource 引換券(Slip)
+  description "持つ人が答えをもらえる券"
+  attributes
+    有効(open) : bool
+
+action 返信(reply)
+  description "問い合わせに返信する"
+  principal 係の人
+  resource 引換券
+
+permit 係は返信できる(clerks_reply)
+  description "係は次のことができる: 問い合わせに返信する"
+  principal in 係
+  action 返信
+  when resource.有効

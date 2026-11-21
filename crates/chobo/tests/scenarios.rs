@@ -71,7 +71,7 @@ fn every_kind_that_applies_is_there_and_every_scenario_runs() {
             let v = scenario::to_json(&book, s);
             // what is written out reads back as the same scenario
             assert_eq!(&scenario::from_json(&book, &v).unwrap(), s, "{}", s.name);
-            let r = scenario::run_json(&book, s).unwrap_or_else(|e| panic!("{}: {e}", s.name));
+            let r = scenario::run_json(&book, s).unwrap_or_else(|e| panic!("{}: {}", s.name, e.en));
             if scenario::has_together(s) {
                 assert!(r["outcomes"].as_array().unwrap().len() >= 2, "{}", s.name);
             }
@@ -125,9 +125,9 @@ fn the_scenarios_written_by_hand_run_and_their_results_are_fixed() {
         let list: Vec<Value> = serde_json::from_str(&text).unwrap();
         let mut out = Vec::new();
         for v in &list {
-            let s = scenario::from_json(&book, v).unwrap_or_else(|e| panic!("{}: {e}", more.display()));
+            let s = scenario::from_json(&book, v).unwrap_or_else(|e| panic!("{}: {}", more.display(), e.en));
             assert!(s.name.starts_with("more: "), "{}: a scenario written by hand is named `more: …`", s.name);
-            let r = scenario::run_json(&book, &s).unwrap_or_else(|e| panic!("{}: {e}", s.name));
+            let r = scenario::run_json(&book, &s).unwrap_or_else(|e| panic!("{}: {}", s.name, e.en));
             out.push(json!({"scenario": scenario::to_json(&book, &s), "result": r}));
             found += 1;
         }

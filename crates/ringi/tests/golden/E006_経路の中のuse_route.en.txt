@@ -1,0 +1,3 @@
+error[E006]: tests/mutants/E006_経路の中のuse_route.ringi:3:1: A shared route's file cannot read another route with `use route`
+     3 | use route 標準(standard) from "shared/標準.ringi"
+  = Routes are put together in a request's file.

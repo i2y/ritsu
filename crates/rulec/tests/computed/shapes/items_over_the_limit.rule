@@ -1,0 +1,19 @@
+rule items_over_the_limit v1
+description "Items in a cart over a limit of 1 to 5 items. With fewer than 2 items the excess is never above 0, since items and the limit are whole numbers; between whole numbers it would be, at one and a half items"
+
+enum choice = one | two
+
+inputs
+  items : number  range >=0 <=10
+  limit : number  range >=1 <=5
+
+define excess : number = items - limit
+
+outputs
+  x : choice
+
+table pick
+| items | excess | -> x |
+| <2    | <=0    | one  |
+| >=2   | <=0    | two  |
+| >=2   | >0     | one  |

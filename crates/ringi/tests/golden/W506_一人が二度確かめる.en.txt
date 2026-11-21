@@ -1,0 +1,10 @@
+warning[W506]: tests/mutants/W506_一人が二度確かめる.ringi:10:16: In the organization from 2026-04-01, one person answers two stages of a ticket
+    10 |   決裁(decide)   財務部長
+  = The stage `確かめ` is `財務` and the stage `決裁` is `財務部長`, and both come to one person.
+  = For 4 requesters, e04 (Head of Finance) answers both: e01 (President (fictional)), e02 (Head of Sales), e03 (Sales staff) and 1 more.
+  = If one approval is enough, write `same approver approves once` under `ticket`: `決裁` is then done with the approval of `確かめ`.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+ok tests/mutants/W506_一人が二度確かめる.ringi: a request, 1 field, 2 stages
+  used from 2026-04-01: the first version of the organization `shared/小さい会社.ringi` (data `org-small`)
+  used with no end: no data it reads ends
+  may never end: the stages `確かめ` and `決裁` have no deadline (`due in …`), and wait until they are answered

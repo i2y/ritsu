@@ -1,0 +1,39 @@
+rule total_lottery v1
+description "An input Java writes like a local of the function that counts the answers"
+
+enum prize = first | second | third | no_prize
+
+inputs
+  ticket : number  range >=0 <=999  random
+  Total : bool
+
+outputs
+  prize : prize
+
+table numbers
+policy unique
+| ticket    | Total | -> prize |
+| 0         | -        | first    |
+| >=1 <=9   | -        | second   |
+| >=10 <=99 | true     | third    |
+| >=10 <=59 | false    | third    |
+| >=60 <=99 | false    | no_prize |
+| >=100     | -        | no_prize |
+
+chances
+| Total | -> prize | chance |
+| -        | first    | 0.1%   |
+| -        | second   | 0.9%   |
+| true     | third    | 9%     |
+| false    | third    | 5%     |
+| true     | no_prize | 90%    |
+| false    | no_prize | 94%    |
+
+examples
+| ticket | Total | -> prize |
+| 0      | false    | first    |
+| 9      | false    | second   |
+| 59     | false    | third    |
+| 60     | false    | no_prize |
+| 99     | true     | third    |
+| 100    | true     | no_prize |

@@ -1,0 +1,186 @@
+module one_arm v1
+description "A match with one arm, which the code writes as the arm's body: the one value of an enum, named and not where it has fields; else alone on a number, a string, a bool, a date, an optional value, a result and a value of a type parameter; one arm that names every value; a match of one arm in a match of two, of two in one and of one in one; one whose answer a let takes, or in a branch of an if; and one that splits a value a let holds, the value of a call, of a call that can fail, or comes after a try"
+
+enum Way
+  only
+
+enum Wrapped
+  box
+    n : number  range >=0 <=9
+
+enum Two = first | second
+
+# the name of the one way: an enum of one value
+fn name(w: Way) -> string
+  match w
+    only => "only"
+
+# what the box holds: the one value of an enum with fields, named
+fn held(b: Wrapped) -> number
+  match b
+    box x => x.n
+
+# the same value, not named
+fn boxed(b: Wrapped) -> bool
+  match b
+    box => true
+
+# else alone, on a number
+fn next(n: number range >=0 <=100) -> number
+  match n
+    else => n + 1
+
+# else alone, on a string
+fn tidy(s: string count <=20) -> string
+  match s
+    else => s.trim()
+
+# else alone, on a bool
+fn flipped(b: bool) -> bool
+  match b
+    else => not b
+
+# else alone, on a date
+fn same_day(d: date range >=2026-01-01 <=2026-12-31) -> date
+  match d
+    else => d
+
+# else alone, on an optional value
+fn or_zero(o: number? range >=0 <=9) -> number
+  match o
+    else => 0
+
+# else alone, on a result
+fn one_of(r: result[number, string]) -> number
+  match r
+    else => 1
+
+# else alone, on an enum of one value and on one with fields
+fn named(w: Way) -> string
+  match w
+    else => "any"
+
+fn any_box(b: Wrapped) -> number
+  match b
+    else => 5
+
+# one arm that names every value
+fn either(t: Two) -> string
+  match t
+    first, second => "either"
+
+fn any_bool(b: bool) -> number
+  match b
+    true, false => 1
+
+# a match of one arm in a match of two
+fn inner(w: Way, b: bool) -> number
+  match b
+    true =>
+      match w
+        only => 1
+    false => 0
+
+# a match of two in a match of one
+fn outer(w: Way, b: bool) -> number
+  match w
+    only =>
+      match b
+        true => 1
+        false => 0
+
+# a match of one in a match of one
+fn twice(w: Way, b: Wrapped) -> number
+  match w
+    only =>
+      match b
+        box x => x.n + 1
+
+# the answer of a match of one arm, taken by a let
+fn kept(w: Way) -> number
+  let k =
+    match w
+      only => 2
+  k * 3
+
+# a match of one arm in a branch of an if
+fn branch(w: Way, n: number range >=0 <=100) -> number
+  if n > 50
+    match w
+      only => n - 50
+  else
+    n
+
+# a match of one arm that splits the value of a call
+fn of_call(n: number range >=0 <=100) -> number
+  match next(n: n)
+    else => 7
+
+fn of_call_named(n: number range >=0 <=9) -> number
+  match wrap(n: n)
+    box x => x.n * 2
+
+fn wrap(n: number range >=0 <=9) -> Wrapped
+  Wrapped.box { n: n }
+
+# a match of one arm that splits the value of a call that can fail: the call is made all the same
+fn cube(n: number) -> number
+  n * n * n
+
+fn of_cube(n: number) -> number
+  match cube(n: n)
+    else => 7
+
+# a match of one arm that splits a value a let holds
+fn of_let(n: number range >=0 <=100) -> number
+  let y = n + 1
+  match y
+    else => 7
+
+fn of_let_way(w: Way) -> string
+  let v = w
+  match v
+    only => "only"
+
+# a match of one arm after a try
+fn after_try(w: Way, r: result[number, string]) -> result[number, string]
+  let x = try r
+  match w
+    only => ok(x + 1)
+
+# else alone, on a value of a type parameter that may be none
+fn first_or[T](xs: list[T] count <=3, d: T) -> T
+  match xs.first()
+    else => d
+
+fn first_number(xs: list[number] count <=3) -> number
+  first_or(xs: xs, d: 0)
+
+examples
+  name(w: Way.only) = "only"
+  held(b: Wrapped.box { n: 3 }) = 3
+  boxed(b: Wrapped.box { n: 3 }) = true
+  next(n: 4) = 5
+  tidy(s: " a ") = "a"
+  flipped(b: true) = false
+  same_day(d: 2026-05-01) = 2026-05-01
+  or_zero(o: none) = 0
+  one_of(r: ok(3)) = 1
+  named(w: Way.only) = "any"
+  any_box(b: Wrapped.box { n: 1 }) = 5
+  inner(w: Way.only, b: true) = 1
+  outer(w: Way.only, b: false) = 0
+  twice(w: Way.only, b: Wrapped.box { n: 2 }) = 3
+  kept(w: Way.only) = 6
+  branch(w: Way.only, n: 60) = 10
+  of_call(n: 1) = 7
+  of_call_named(n: 4) = 8
+  of_let(n: 1) = 7
+  of_let_way(w: Way.only) = "only"
+  either(t: Two.second) = "either"
+  any_bool(b: false) = 1
+  of_cube(n: 2) = 7
+  of_cube(n: 3_000_000) fails overflow
+  after_try(w: Way.only, r: ok(4)) = ok(5)
+  after_try(w: Way.only, r: err("no")) = err("no")
+  first_number(xs: [3]) = 0

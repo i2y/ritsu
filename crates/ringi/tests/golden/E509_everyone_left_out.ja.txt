@@ -1,0 +1,4 @@
+エラー[E509]: tests/mutants/E509_everyone_left_out.ringi:15:3: 2026-04-01 からの組織では、この申請をだれも出せません
+    15 |   submitted by   position dept_head or higher in sales except person "e02"
+  = 2026-04-01 からの組織では、`position dept_head or higher in sales except person "e02"` に当たる人がいません。
+  = `submitted by` を広げるか、版のデータを直してください。

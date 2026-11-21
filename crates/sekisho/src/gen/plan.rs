@@ -346,6 +346,22 @@ pub fn pascal(alias: &str) -> String {
 }
 
 /// `RefundRecord` as `refund_record`: a type's alias as a method or a variable of Python.
+/// Each type that holds roles, by its alias (its name in Cedar), with the aliases of the roles its
+/// `roles` line names, in the order the gate declares them: what the list of the roles of a type
+/// returns (DESIGN 33). Types in the order the gate declares them.
+pub fn roles_of(g: &Gate) -> Vec<(&str, Vec<&str>)> {
+    g.types
+        .iter()
+        .filter(|t| !t.roles.is_empty())
+        .map(|t| {
+            let mut rs = t.roles.clone();
+            rs.sort_unstable();
+            rs.dedup();
+            (t.named.alias.as_str(), rs.into_iter().map(|r| g.roles[r].named.alias.as_str()).collect())
+        })
+        .collect()
+}
+
 pub fn snake(alias: &str) -> String {
     let mut out = String::new();
     for (i, c) in alias.chars().enumerate() {
@@ -362,7 +378,9 @@ pub fn snake(alias: &str) -> String {
 }
 
 /// A field's type, as the comment beside it says it: `money[GBP, incl_tax], 1 to 10000`,
-/// `2026-01-01 to 2028-09-30`, `one of paid, shipped`, `the id of a Customer`.
+/// `2026-01-01 to 2028-09-30`, `one of paid, shipped`, `the id of an entity of type Customer`.
+/// A type is named as the gate names it, never made plural or given an article of its own:
+/// `Approvers` and `Editor` read alike.
 pub fn field_note(g: &Gate, f: &Field, lang: Lang) -> String {
     let ja = lang == Lang::Ja;
     let text = match &f.ty {
@@ -383,7 +401,7 @@ pub fn field_note(g: &Gate, f: &Field, lang: Lang) -> String {
         }
         FieldType::Entity(t) => {
             let n = &g.types[*t].named.alias;
-            if ja { format!("{n} の ID") } else { format!("the id of a {n}") }
+            if ja { format!("{n} の ID") } else { format!("the id of an entity of type {n}") }
         }
         FieldType::Bool => String::new(),
     };

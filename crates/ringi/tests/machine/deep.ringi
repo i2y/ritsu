@@ -1,0 +1,47 @@
+request deep v1 "Deep organization"
+description "A requester far below the top (fictional rules): the person a stage comes to is looked for at most thirty teams up, and the stage is skipped where the climb finds nobody"
+
+use organization org from ".deep_org/deep_org.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  first  manager
+    when empty escalate, then skip
+  decide board
+
+who
+  manager = manager of requester
+  board   = team board
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval     not allowed
+  send back         to any earlier stage, at most 2 times
+  resubmit          within 3 business days
+  withdraw          until decide
+  retract approval  until the next stage answers
+  pause             at most 5 business days
+
+# the head is found thirty teams above the requester
+scenario the_head_thirty_teams_up
+  requester r0001
+  form what = "A projector"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | r0001 | first    | in progress |
+| 2026-11-16 11:00 | approve | h0030 | decide   | in progress |
+| 2026-11-16 12:00 | approve | e0001 |          | approved    |
+
+# no head within thirty teams: the stage is skipped
+scenario nobody_within_thirty_teams_up
+  requester u0001
+  form what = "A projector"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | u0001 | decide   | in progress |
+| 2026-11-16 12:00 | approve | e0001 |          | approved    |

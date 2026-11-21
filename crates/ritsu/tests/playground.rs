@@ -18,11 +18,14 @@
 //! and with its copy of the store, in English and in Japanese; DESIGN 17.26), an empty one, the
 //! examples of rulec's playground (one rule each, from rulec's corpus and the table on rulec's
 //! front page), the examples of dandori's (each flow with every file it reads, from dandori's
-//! examples), chobo's examples (one book each, which chobo's site opens) and sekisho's example
-//! (each version of its gate with every file it reads). Node drives the module, Chrome the page
+//! examples), chobo's examples (one book each, which chobo's site opens), sekisho's example
+//! (each version of its gate with every file it reads) and ringi's leave request (each version
+//! with every file it reads). Node drives the module, Chrome the page
 //! (ritsu-testkit's: `RITSU_CHROME`, else where macOS keeps it, else on the PATH), and the Cedar
 //! CLI is ritsu-testkit's too (`RITSU_CEDAR`, else on the PATH, at 4.13.0). A test that cannot find
 //! what it needs prints `SKIP: ritsu: …` and passes.
+
+mod common;
 
 use ritsu_base::fs::{Files, Kind, Memory, Meta};
 use ritsu_base::naming::Tool;
@@ -413,6 +416,64 @@ fn sekisho_examples() -> Vec<Project> {
         .collect()
 }
 
+/// ringi's examples, whose leave request reads a shared route, the organization and its data, a
+/// calendar, a book and a gate: each version (English, then Japanese) at its path in the examples'
+/// directory.
+const RINGI: &str = "crates/ringi/examples";
+const LEAVES: [(&str, &str); 2] = [("en", "leave.ringi"), ("ja", "leave.ja.ringi")];
+/// Where the examples are held in memory while what a request reads is found.
+const RINGI_HOME: &str = "/ringi";
+
+/// What a request reads of ringi's examples (the request too): what `ritsu check` reads when it
+/// checks it, then the files it read with it, until it reads nothing new, and what `ringi doc`
+/// reads to draw it, as [`gate_reads`] finds what a gate reads.
+fn request_reads(request: &str, every: &[(String, String)]) -> BTreeSet<String> {
+    let mut members = BTreeSet::from([request.to_string()]);
+    loop {
+        let inner = Memory::new(RINGI_HOME);
+        for (p, text) in every {
+            inner.add(p, text.as_bytes().to_vec());
+        }
+        let noting = Rc::new(Noting { home: RINGI_HOME, inner, read: RefCell::default() });
+        ritsu_base::fs::with(noting.clone(), || {
+            let mut args: Vec<String> = vec!["--root".into(), ".".into()];
+            args.extend(members.iter().filter(|p| ritsu_project::project::kind_of(p).is_some()).cloned());
+            args.extend(["--lang".to_string(), "en".to_string()]);
+            let (mut o, mut e) = (Vec::new(), Vec::new());
+            ritsu::check::run(&args, Lang::En, &mut o, &mut e);
+            let doc: Vec<String> = ["doc", request, "--root", ".", "--format", "html", "--lang", "en"].map(String::from).to_vec();
+            ritsu::languages::ringi(&doc, &mut o, &mut e);
+        });
+        let before = members.len();
+        members.extend(noting.read.borrow().iter().cloned());
+        if members.len() == before {
+            return members;
+        }
+    }
+}
+
+/// ringi's leave request, as projects of the page: each version with every file it reads, open on
+/// the request, listed on the page of its language.
+fn ringi_examples() -> Vec<Project> {
+    let every = files_of(&repo().join(RINGI));
+    LEAVES
+        .iter()
+        .map(|(lang, request)| {
+            let mut files: Vec<(String, String)> = request_reads(request, &every)
+                .into_iter()
+                .map(|p| {
+                    let text = every.iter().find(|(q, _)| *q == p).map(|(_, t)| t.clone()).unwrap_or_else(|| panic!("{request} reads {p}, which is not a file of ringi's examples"));
+                    (p, text)
+                })
+                .collect();
+            in_order(&mut files);
+            let from = files.iter().map(|(p, _)| format!("{RINGI}/{p}")).collect();
+            let name = if *lang == "ja" { "ringi/leave.ja" } else { "ringi/leave" };
+            Project { name: name.into(), group: "ringi".into(), lang: Some(lang.to_string()), open: request.to_string(), files, from, ..Project::default() }
+        })
+        .collect()
+}
+
 /// `ritsu`, run in `dir` with the store at `store` and English asked of the environment; it has to
 /// pass.
 fn ritsu_with_store(dir: &Path, store: &Path, args: &[&str]) {
@@ -474,7 +535,8 @@ fn modules_example(name: &str) -> Project {
 /// language): the shop in English and in Japanese, the example of modules in English and in
 /// Japanese, an empty project to start from one file, the examples of rulec's page in English and
 /// then in Japanese, the examples of dandori's page, chobo's examples in English and then in
-/// Japanese, and sekisho's example in English and in Japanese.
+/// Japanese, sekisho's example in English and in Japanese, and ringi's leave request in English and
+/// in Japanese.
 fn made() -> Vec<Project> {
     let mut out = vec![shop("shop"), shop("shop.ja"), modules_example("modules"), modules_example("modules.ja")];
     out.push(Project { name: "empty".into(), group: "own".into(), ..Project::default() });
@@ -486,6 +548,7 @@ fn made() -> Vec<Project> {
     out.extend(dandori_examples());
     out.extend(chobo_examples());
     out.extend(sekisho_examples());
+    out.extend(ringi_examples());
     out
 }
 
@@ -571,7 +634,7 @@ fn the_projects_are_what_the_page_opens() {
         return;
     }
     let was = std::fs::read_to_string(&file).unwrap_or_default();
-    assert!(was == now, "website/docs/playground/projects.json is not what website/playground, rulec's corpus, dandori's examples, chobo's examples and sekisho's example hold now; write it anew with RITSU_BLESS=1 cargo test -p ritsu --test playground");
+    assert!(was == now, "website/docs/playground/projects.json is not what website/playground, rulec's corpus, dandori's examples, chobo's examples, sekisho's example and ringi's examples hold now; write it anew with RITSU_BLESS=1 cargo test -p ritsu --test playground");
 }
 
 /// The quoted words between `start` and the first `end` after it, as dandori's tests read its
@@ -586,7 +649,7 @@ fn quoted(text: &str, start: &str, end: &str) -> Vec<String> {
 /// the words it reserves: rulec's reserved words with the words that start a line (`kw::RESERVED`,
 /// `LINE_HEAD`, `CONTRIBUTION_HEAD`), dandori's `KEYWORDS` (src/syntax.rs), koyomi's
 /// `kw::RESERVED`, chobo's `syntax::KEYWORDS`, every word of sekisho's, yuen's and sakai's
-/// `kw::TABLE`, and the words of geas's grammar (crates/geas/DESIGN.md, 6), which geas keeps in
+/// `kw::TABLE` and of ringi's `kw::WORDS`, and the words of geas's grammar (crates/geas/DESIGN.md, 6), which geas keeps in
 /// no table of its code. A keyword of several words (`at least`, `shared kernel with`) gives each
 /// of them; a mark (`->`, `sha256:`) gives the word in it, if any. Sorted, each once.
 fn language_words() -> BTreeMap<&'static str, Vec<String>> {
@@ -609,6 +672,7 @@ fn language_words() -> BTreeMap<&'static str, Vec<String>> {
     out.insert("gate", set(table(sekisho::kw::TABLE)));
     out.insert("req", set(table(yuen::kw::TABLE)));
     out.insert("ctx", set(table(sakai::kw::TABLE)));
+    out.insert("ringi", set(table(ringi::kw::WORDS)));
     let design = read_repo("crates/geas/DESIGN.md");
     let surface = design.split("\n## 6. Surface, v1\n").nth(1).expect("geas's DESIGN.md has its grammar in 6");
     let grammar = surface.split("```").nth(1).expect("the grammar is the first block of 6");
@@ -622,7 +686,7 @@ fn words_json() -> String {
     format!("{{\n{}\n}}\n", lines.join(",\n"))
 }
 
-/// The editor colours the words of each of the eight languages the page runs (kaname is not on it
+/// The editor colours the words of each of the nine languages the page runs (kaname is not on it
 /// yet: kaname's DESIGN 19), and they are the words the
 /// language itself reserves (`language_words`): words.json, which the page reads, is written from
 /// the languages' own lists (`RITSU_BLESS=1`), so a word a language gains or loses is a word the
@@ -630,8 +694,8 @@ fn words_json() -> String {
 #[test]
 fn the_editor_colours_the_words_each_language_reserves() {
     let words = language_words();
-    let want: BTreeMap<&str, &str> = [("rule", "rule"), ("flow", "workflow"), ("cal", "calendar"), ("book", "book"), ("gate", "gate"), ("req", "requirements"), ("ctx", "context"), ("geas", "target")].into();
-    assert_eq!(words.keys().copied().collect::<Vec<_>>(), want.keys().copied().collect::<Vec<_>>(), "the eight languages, by their extensions");
+    let want: BTreeMap<&str, &str> = [("rule", "rule"), ("flow", "workflow"), ("cal", "calendar"), ("book", "book"), ("gate", "gate"), ("req", "requirements"), ("ctx", "context"), ("geas", "target"), ("ringi", "request")].into();
+    assert_eq!(words.keys().copied().collect::<Vec<_>>(), want.keys().copied().collect::<Vec<_>>(), "the nine languages, by their extensions");
     for (ext, first) in want {
         assert!(words[ext].iter().any(|w| w == first), "the words of .{ext} have no `{first}`: {:?}", words[ext]);
         assert_eq!(ritsu_project::project::kind_of(&format!("x.{ext}")).map(|t| t.word()), Some(match ext {
@@ -642,6 +706,7 @@ fn the_editor_colours_the_words_each_language_reserves() {
             "gate" => "sekisho",
             "req" => "yuen",
             "ctx" => "sakai",
+            "ringi" => "ringi",
             _ => "geas",
         }), ".{ext} is not the language the words are of");
     }
@@ -829,7 +894,7 @@ fn every_example_of_the_pages_before_is_a_project() {
 fn ritsu_in(dir: &Path, args: &[String]) -> (u8, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -885,8 +950,10 @@ fn holds(files: &[(String, String)], lang: &str, what: &str, answer: &Value, fai
 
 /// The targets the page offers a file's generator, in the order its command lists them, the first
 /// the one the file opens on (DESIGN 8.7): every target of rulec, koyomi, sekisho and dandori,
-/// chobo's pairs of a database and a language, and yuen's two formats.
-fn targets_of(path: &str) -> Vec<&'static str> {
+/// chobo's pairs of a database and a language, yuen's two formats, and the commands of ringi's
+/// that print or write what is made of a file of its kind, which its first word says (`text` is
+/// the file's).
+fn targets_of(path: &str, text: &str) -> Vec<&'static str> {
     match ritsu_project::project::kind_of(path) {
         Some(Tool::Rulec) => vec!["python", "numpy", "typescript", "javascript", "rust", "ruby", "php", "go", "swift", "java", "sql", "wasm", "proto"],
         Some(Tool::Koyomi) => vec!["typescript", "python", "go", "rust", "sql", "wasm"],
@@ -894,6 +961,11 @@ fn targets_of(path: &str) -> Vec<&'static str> {
         Some(Tool::Dandori) => vec!["asl", "temporal-typescript", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"],
         Some(Tool::Sekisho) => vec!["cedar", "typescript", "python", "go"],
         Some(Tool::Yuen) => vec!["reqif", "prov"],
+        Some(Tool::Ringi) => match text.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#')).and_then(|l| l.split_whitespace().next()) {
+            Some("route") => vec!["api", "extract"],
+            Some("organization" | "masters") => vec!["api"],
+            _ => vec!["api", "run", "extract", "vectors"],
+        },
         _ => vec![],
     }
 }
@@ -903,8 +975,8 @@ fn targets_of(path: &str) -> Vec<&'static str> {
 fn requests(files: &[(String, String)], lang: &str) -> Vec<(&'static str, Value)> {
     let base = |path: &str, target: Option<&str>| json!({ "files": {}, "lang": lang, "path": path, "target": target });
     let mut out = vec![("check", base("", None))];
-    for (p, _) in files {
-        let targets = targets_of(p);
+    for (p, text) in files {
+        let targets = targets_of(p, text);
         if targets.is_empty() {
             out.push(("gen", base(p, None)));
         }
@@ -929,7 +1001,8 @@ fn files_json(files: &[(String, String)]) -> Value {
 /// flow allowed in no combination, X16's E908, and a requirement's link to the permit no longer as
 /// it was looked at), a flow that does not parse, a file of no language added, and a geas spec
 /// that does not parse (a spec that parses runs programs, which the page cannot: it is not held to
-/// the binary). Then the steps the playgrounds of
+/// the binary). In ringi's leave request: the shared route made to remind after the deadline,
+/// which the route passes and the request's scenario does not. Then the steps the playgrounds of
 /// rulec and dandori had the reader take (a band widened over the next one, a rounding taken off,
 /// a failure that hands the case over, an arm of a `match` taken out), one file of the reader's own
 /// in the empty project, and what those playgrounds were held to beyond their examples: rules of
@@ -1010,6 +1083,11 @@ fn edits() -> Vec<(&'static str, &'static str, Vec<(String, String)>)> {
         x.1 = x.1.replacen(from, to, 1);
         f
     };
+    // ringi's shared route reminds after the deadline: the route passes, and the scenario of the
+    // leave request that takes it, which has the head reminded, does not
+    for (name, lang) in [("ringi/leave", "en"), ("ringi/leave.ja", "ja")] {
+        out.push(("a shared route that reminds after the deadline", lang, edited(name, "shared/manager_approval.ringi", "remind after 1 business day at 09:00", "remind after 3 business days at 09:00")));
+    }
     for (name, lang, rule, rounding) in [("rulec/full", "en", "fee.rule", "  round up(1USD)"), ("rulec/full.ja", "ja", "運賃.rule", "  round up(10円)")] {
         out.push(("a band of the table widened over the next", lang, edited(name, rule, "<=2kg", "<=6kg")));
         out.push(("the rounding taken off the output", lang, edited(name, rule, rounding, "")));
@@ -1159,6 +1237,44 @@ fn a_file_of_bytes_goes_in_as_its_bytes() {
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
 
+/// A request of ringi's is lowered, and the files it is lowered to checked, over the files in
+/// memory as over the disk (ringi's PLAN C1.2 and C2, its DESIGN 6.5): every answer of the module on
+/// the project of requests is the binary's in a directory holding the same files, with the deadlines
+/// right and with a reminder that comes at the deadline (ringi's E403, which koyomi finds in the
+/// lowered dates), and no lowered file is among the files the check names. A request that reads an
+/// organization and masters reads their data (the CSV files of the versions, the proxies and the
+/// rows) from the page's files as from the disk: the approvers of each version are listed, and the
+/// lines under `ok` say what the data holds.
+#[test]
+fn a_request_is_lowered_in_memory_as_on_the_disk() {
+    let org = files_of(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/projects/requests-org"));
+    let mut failures = Vec::new();
+    let mut n = 0;
+    for lang in ["en", "ja"] {
+        n += compare("requests that read an organization", lang, &org, &mut failures);
+    }
+    let said = playground::check(&ask_in("en", &org, "", None));
+    let out = said["out"].as_str().unwrap();
+    assert_eq!(said["code"], 0, "{said}");
+    assert!(out.contains("warning[ringi W506]: expense.ringi:13:11: ") && !out.contains("W500"), "{out}");
+    assert!(out.contains("  data `versions`: 2 versions (2026-04-01, 2027-04-01), 3 teams and 6 people in the last, 1 proxy\n"), "{out}");
+    assert!(out.contains("  data: accounts 2 rows, systems 1 row\n"), "{out}");
+    let files = files_of(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/projects/requests"));
+    let late: Vec<(String, String)> = files.iter().map(|(p, t)| (p.clone(), if p == "purchase.ringi" { t.replacen("remind after 2 business days", "remind after 3 business days", 1) } else { t.clone() })).collect();
+    assert_ne!(files, late);
+    for lang in ["en", "ja"] {
+        n += compare("requests", lang, &files, &mut failures);
+        n += compare("requests with a late reminder", lang, &late, &mut failures);
+    }
+    let said = playground::check(&ask_in("en", &late, "", None));
+    let out = said["out"].as_str().unwrap();
+    assert_eq!(said["code"], 1, "{said}");
+    assert!(out.contains("error[ringi E403]: purchase.ringi:"), "{out}");
+    assert!(!out.contains(".lowered"), "{out}");
+    eprintln!("compared: {n} answers of the page with what the binary prints, on requests");
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
 /// Every request of one project's page, each held to the binary; how many answers were compared.
 fn compare(what: &str, lang: &str, files: &[(String, String)], failures: &mut Vec<String>) -> usize {
     let mut n = 0;
@@ -1184,7 +1300,8 @@ fn compare(what: &str, lang: &str, files: &[(String, String)], failures: &mut Ve
                 let a = playground::generate(&r);
                 if a["none"] != true {
                     let offered: Vec<&str> = a["targets"].as_array().map(|ts| ts.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-                    if offered != targets_of(&path) {
+                    let text = files.iter().find(|(q, _)| *q == path).map(|(_, t)| t.as_str()).unwrap_or_default();
+                    if offered != targets_of(&path, text) {
                         failures.push(format!("{label} ({lang}): the page offers the targets {offered:?}"));
                     }
                     holds(files, lang, &label, &a, failures);
@@ -1360,7 +1477,8 @@ fn the_module_answers_as_the_library_does() {
         for lang in p.langs() {
             // the target the file opens on: the project's (a version of dandori's examples), or the
             // first of its generator's
-            let first = p.target.as_deref().or_else(|| targets_of(&p.open).first().copied());
+            let opened_text = p.files.iter().find(|(q, _)| *q == p.open).map(|(_, t)| t.as_str()).unwrap_or_default();
+            let first = p.target.as_deref().or_else(|| targets_of(&p.open, opened_text).first().copied());
             for (kind, mut req) in requests_of(&p.files, lang) {
                 let opened = req["path"] == p.open.as_str() && (req["target"].is_null() || req["target"].as_str() == first);
                 if p.group != "ritsu" && kind != "check" && !opened {
@@ -1679,6 +1797,7 @@ const STATE: &str = r#"(async () => {
     line: v.state.doc.lineAt(v.state.selection.main.head).number,
     view,
     marked: [...r.querySelectorAll(".pg-file.err")].map((b) => b.dataset.path),
+    waiting: [...r.querySelectorAll(".pg-file.wait")].map((b) => b.dataset.path),
     listed: [...r.querySelectorAll(".pg-project option")].map((o) => o.dataset.name),
     groups: r.querySelectorAll(".pg-project optgroup").length,
     said,
@@ -1791,15 +1910,15 @@ fn drive(chrome: &Path, visits: Vec<Visit>) -> Vec<Vec<Value>> {
     // not TMPDIR): the directory of the singleton socket a stopped Chrome leaves there
     // (`com.google.Chrome.*`) goes with it, as ritsu-testkit's Chrome does.
     let tmp = ritsu_testkit::tmp::tmpdir_in(dir);
-    let o = Command::new("node")
-        .current_dir(dir)
-        .env("MAC_CHROMIUM_TMPDIR", &tmp)
-        .env("TMPDIR", &tmp)
-        .args(["cdp.mjs", chrome.to_str().unwrap(), dir.join("profile").to_str().unwrap(), "visits.json", "out.json"])
-        .output()
-        .expect("could not run node");
-    let out: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join("out.json")).unwrap_or_else(|_| panic!("the driver wrote nothing: {}", String::from_utf8_lossy(&o.stderr)))).unwrap();
-    assert_eq!(out.len(), visits.len(), "the driver came back from {} of {} visits: {}", out.len(), visits.len(), String::from_utf8_lossy(&o.stderr));
+    // the driver and the Chrome it starts, for no longer than ten minutes (a minute or so on a busy
+    // machine): past it, both are stopped and the test fails with what they printed
+    let o = ritsu_testkit::run::finish(
+        Command::new("node").current_dir(dir).env("MAC_CHROMIUM_TMPDIR", &tmp).env("TMPDIR", &tmp).args(["cdp.mjs", chrome.to_str().unwrap(), dir.join("profile").to_str().unwrap(), "visits.json", "out.json"]),
+        std::time::Duration::from_secs(10 * 60),
+        "the driver of Chrome visiting the pages",
+    );
+    let out: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join("out.json")).unwrap_or_else(|_| panic!("the driver wrote nothing: {}", o.stderr))).unwrap();
+    assert_eq!(out.len(), visits.len(), "the driver came back from {} of {} visits: {}", out.len(), visits.len(), o.stderr);
     let mut wrong = Vec::new();
     for (v, got) in visits.iter().zip(&out) {
         let errors = got["errors"].as_array().cloned().unwrap_or_default();
@@ -1826,15 +1945,25 @@ fn ask_in(tag: &str, files: &[(String, String)], path: &str, target: Option<&str
     Request::from_json(&req).unwrap()
 }
 
-/// What the status says of a check, in a page's language.
+/// The word a problem that waits begins with, in a page's language.
+fn t_waiting(tag: &str) -> &'static str {
+    if tag == "ja" { "待ち" } else { "waiting" }
+}
+
+/// What the status says of a check, in a page's language: the errors, the warnings, and the lines that
+/// wait for a file that does not pass (`waits_for`, DESIGN 8.3), which are not counted as errors.
 fn counts_in(tag: &str, a: &Value) -> String {
     let d = a["json"]["diagnostics"].as_array().cloned().unwrap_or_default();
-    let (e, w) = (d.iter().filter(|x| x["severity"] == "error").count(), d.iter().filter(|x| x["severity"] == "warning").count());
-    match (tag, e + w) {
+    let waits = |x: &Value| x["waits_for"].as_array().is_some_and(|w| !w.is_empty());
+    let e = d.iter().filter(|x| !waits(x) && x["severity"] == "error").count();
+    let w = d.iter().filter(|x| !waits(x) && x["severity"] == "warning").count();
+    let n = d.iter().filter(|x| waits(x)).count();
+    match (tag, e + w + n) {
         ("ja", 0) => "どれも検査を通りました".to_string(),
+        ("ja", _) if n > 0 => format!("エラー {e} 件、警告 {w} 件、待っている行 {n} 件"),
         ("ja", _) => format!("エラー {e} 件、警告 {w} 件"),
         (_, 0) => "all pass".to_string(),
-        _ => format!("{e} error{}, {w} warning{}", if e == 1 { "" } else { "s" }, if w == 1 { "" } else { "s" }),
+        _ => format!("{e} error{}, {w} warning{}{}", if e == 1 { "" } else { "s" }, if w == 1 { "" } else { "s" }, if n > 0 { format!(", {n} waiting") } else { String::new() }),
     }
 }
 
@@ -1877,8 +2006,8 @@ fn text_of<'a>(v: &'a Value, key: &str) -> &'a str {
 /// problems and the files it names marked, lists the projects of its language in their groups, and
 /// opens a project, a file, a view and a target from a link (its own, and the links dandori's page
 /// gave), and gives a link to what the reader has made of a project that opens it as it was: the
-/// shop edited, and a file of the reader's own in the empty project. The page for people follows the
-/// site's switch to dark.
+/// shop edited, and a file of the reader's own in the empty project. It opens ringi's leave request
+/// and the page of the shared route it takes. The page for people follows the site's switch to dark.
 #[test]
 fn the_page_starts_in_chrome() {
     let Some(chrome) = chrome() else {
@@ -1899,6 +2028,8 @@ fn the_page_starts_in_chrome() {
         let urgency = "ordering/rules/urgency.rule";
         let gap = project(if tag == "ja" { "rulec/gap.ja" } else { "rulec/gap" });
         let gate = project(if tag == "ja" { "sekisho/refunds.ja" } else { "sekisho/refunds" });
+        let leave = project(if tag == "ja" { "ringi/leave.ja" } else { "ringi/leave" });
+        let route = "shared/manager_approval.ringi";
         let draft = project(&format!("dandori/{DRAFT}"));
         let hotel = if tag == "ja" { "examples/hotel/temporal/hotel.ja.flow" } else { "examples/hotel/temporal/hotel.flow" };
         let version = project(&format!("dandori/{hotel}"));
@@ -1934,6 +2065,10 @@ fn the_page_starts_in_chrome() {
             Visit::to(&at).ready().edited(returned, "").run(&press(".pg-share")).wait(shared).state(),
             // one file of the reader's own, pasted into the empty project, and the link to it
             Visit::to(&at).ready().run(&paste).ready().run(&format!("{}\n", edit_into_empty(&rule))).ready().run(&press(".pg-share")).wait(shared).state(),
+            // ringi's leave request: the check of the request with every file it reads, and the page
+            // for people of the shared route it takes, which lists the request
+            Visit::to(format!("{at}#project={}", leave.name)).ready().state(),
+            Visit::to(format!("{at}#project={}&file={route}&view=doc", leave.name)).ready().state(),
         ];
         let got = drive(&chrome, visits);
 
@@ -1948,16 +2083,22 @@ fn the_page_starts_in_chrome() {
         assert_eq!(opened["problems"].as_array().unwrap().len(), diagnostics.len(), "{page}: the problems list another number of findings than the check says");
         let first = opened["problems"][0].as_str().unwrap_or_default();
         assert!(first.contains("rulec E032") && first.contains("billing/rules/billing_need.rule:5"), "{page}: the first problem is not rulec's E032 at billing/rules/billing_need.rule:5: {first:?}");
+        // the lines that wait for the rule (yuen's E203 and sakai's E105) come after it, as waiting
+        let waiting_lines: Vec<&str> = opened["problems"].as_array().unwrap().iter().filter_map(|p| p.as_str()).filter(|p| p.starts_with(t_waiting(tag))).collect();
+        assert_eq!(waiting_lines.len(), 2, "{page}: the problems do not list the two lines that wait for the rule: {}", opened["problems"]);
+        assert!(waiting_lines.iter().all(|p| p.contains(if tag == "ja" { "billing/rules/billing_need.rule が通るのを待っています" } else { "It waits for billing/rules/billing_need.rule to pass" })), "{page}: {waiting_lines:?}");
+        assert!(opened["problems"].as_array().unwrap().iter().skip_while(|p| !p.as_str().unwrap().starts_with(t_waiting(tag))).all(|p| p.as_str().unwrap().starts_with(t_waiting(tag))), "{page}: a line that waits comes before an error: {}", opened["problems"]);
         assert_eq!(text_of(opened, "count"), diagnostics.len().to_string(), "{page}: the tab of the problems counts otherwise");
-        for marked in ["billing/rules/billing_need.rule", "requirements/billing.req"] {
-            assert!(opened["marked"].as_array().unwrap().iter().any(|m| m == marked), "{page}: the tab of {marked} is not marked");
-        }
+        // the rule is marked for its error; the requirement only waits for the rule, and is marked so
+        let marks = |key: &str| opened[key].as_array().unwrap().iter().map(|m| m.as_str().unwrap().to_string()).collect::<Vec<_>>();
+        assert!(marks("marked").contains(&"billing/rules/billing_need.rule".to_string()), "{page}: the tab of the rule is not marked: {:?}", marks("marked"));
+        assert!(marks("waiting").contains(&"requirements/billing.req".to_string()) && !marks("marked").contains(&"requirements/billing.req".to_string()), "{page}: the tab of the requirement is not marked as waiting: {:?} {:?}", marks("marked"), marks("waiting"));
         assert_eq!(text_of(opened, "open"), contract, "{page}: the page does not open on the contract");
         assert_eq!(text_of(opened, "text"), shop.files.iter().find(|(p, _)| p == contract).unwrap().1, "{page}: the editor holds another contract");
-        // the list: the projects of this page's language, in their seven groups
+        // the list: the projects of this page's language, in their eight groups
         let mine: Vec<&str> = projects.iter().filter(|p| p.langs().contains(&tag)).map(|p| p.name.as_str()).collect();
         assert_eq!(opened["listed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect::<Vec<_>>(), mine, "{page}: the list has other projects than projects.json has for this page");
-        assert_eq!(opened["groups"], 7, "{page}: the list does not have its seven groups");
+        assert_eq!(opened["groups"], 8, "{page}: the list does not have its eight groups");
         // a .proto has no page for people, which the page says; under the site's dark scheme, a rule's
         // page is drawn dark (the next visit opens one)
         assert_eq!(dark["page"], Value::Null, "{page}: a page is drawn of the contract");
@@ -2021,6 +2162,16 @@ fn the_page_starts_in_chrome() {
         let want = playground::check(&ask(&[(own.to_string(), rule.clone())], "", None));
         assert_eq!(text_of(&again[1][0], "said"), said(&want), "{page}: the link {own_hash} does not open the file pasted into the empty project");
         assert_eq!((text_of(&again[1][0], "open"), text_of(&again[1][0], "text")), (own, rule.as_str()), "{page}: the link {own_hash} opens another file");
+        looked += 2;
+
+        // ringi's leave request, and the page of the route it takes
+        let want = playground::check(&ask(&leave.files, "", None));
+        assert_eq!(text_of(&got[13][0], "said"), said(&want), "{page}: the page shows another check of {}", leave.name);
+        assert_eq!(text_of(&got[13][0], "open"), leave.open, "{page}: {} does not open on its request", leave.name);
+        let want = playground::doc(&ask(&leave.files, route, None));
+        let shown = got[14][0]["page"].as_str().unwrap_or_else(|| panic!("{page}: no page for people of {route}"));
+        assert!(unframed(shown) == want["html"]["out"].as_str().unwrap(), "{page}: the frame holds another page than ringi doc draws of {route}");
+        assert!(want["html"]["out"].as_str().unwrap().contains(&leave.open), "{page}: the page of {route} does not list {}", leave.open);
         looked += 2;
     }
     // the site switched to dark draws the page of a rule dark: the shop's first rule, from a link

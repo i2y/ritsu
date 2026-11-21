@@ -133,12 +133,13 @@ warning[W301]: refunds.gate:93:1: Every combination the permit `managers_refund_
   = Remove `managers_refund_in_period`, or narrow `clerks_refund_within_their_limit` if `managers_refund_in_period` says what is meant.
 error[E304]: refunds.gate:134:1: The expectation `clerks_never_refund_over_their_limit` does not hold: 12 of the 128 combinations it picks are allowed
    134 | expect deny clerks_never_refund_over_their_limit
-  = For example: User holding clerk (suspended: no), Order (status: paid), amount: 1GBP to 50GBP, refund_band: over_limit, in_period: yes, business_day: no; allowed by `clerks_refund_within_their_limit`.
+  = For example: User holding clerk (suspended: no), Order (status: paid), amount: 1GBP to 50GBP, refund_band: over_limit (as when refund_limit is 0GBP and amount is 1GBP), in_period: yes, business_day: no; allowed by `clerks_refund_within_their_limit`.
   = Fix the policies, or the expectation if it says more than is meant.
 ```
 
-The example is an amount of 50 pounds or less that the rule answers `over_limit` for, which it does
-when the clerk's own limit is lower. The warning comes from the same edit: a manager includes
+The example is an amount of 50 pounds or less that the rule answers `over_limit` for. The brackets
+say one input the check ran through the rule and saw come to that answer: a clerk whose own limit
+is 0 pounds refunding 1 pound. The warning comes from the same edit: a manager includes
 clerk, so the clerks' permit now allows everything the managers' permit for the refund period does.
 
 Every check comes to one of three answers: it holds, here is a combination where it does not, or it
@@ -146,7 +147,11 @@ cannot be decided, and then it says why. The others find an action no permit all
 permit that allows nothing because a forbid denies all it would allow (E302), a policy whose
 conditions never hold together (E303), a separation of duties that one principal breaks (E305), a
 role allowed an action its `can` line does not list (E306) or never allowed one it lists (W302), an
-expectation that picks nothing (W304), a value given to a rule outside the range of its input or
+expectation that picks nothing (W304), a policy that names an action it never applies to while it
+applies to another it names (W305), a permit that names an action a forbid keeps it from in every
+combination while it allows something of another it names (W306), a line of a permit that changes
+no decision because a forbid denies everything it leaves out (W307), a line of a policy that leaves
+out no combination that can occur (W308), a value given to a rule outside the range of its input or
 breaking its precondition (E206), and a finding that rests on an answer of rulec or koyomi that
 cannot be decided (W303). `sekisho explain E304` tells when a code comes, how to fix it, and the
 smallest gate that gives it.
@@ -229,6 +234,41 @@ The function takes no computed value from its caller. When the data is not what 
 or today is outside the range the gate was checked over, it refuses before it asks Cedar. The
 Python asks cedarpy in the process, the TypeScript cedar-wasm and the Go cedar-go; with
 `--authorizer avp`, each asks Amazon Verified Permissions instead.
+
+Beside the function of each action, the code has `authorize` (`Authorize` in Go), for a caller
+that holds the name of the action as a string. It takes the ids of the resources by the name of
+their types, reads the one the action asks about, and asks through the action's own function:
+
+```python
+def authorize(store: Store, principal: Principal, action: str, resources: dict[str, str], now: datetime | None = None) -> Answer:
+    …
+    if action == 'view_order':
+        if 'Order' not in resources:
+            return Answer(False, [], None, SekishoError('resource', 'resources holds no id of the resource of view_order (Order)'))
+        return authorize_view_order(store, principal, {'orderId': resources['Order']}, now)
+    if action == 'refund_order':
+        return Answer(False, [], None, SekishoError('input', 'refund_order takes inputs of its own (amount): ask it through authorize_refund_order'))
+    …
+    return Answer(False, [], None, SekishoError('action', f'the gate has no action {json.dumps(action, ensure_ascii=False)}'))
+```
+
+A name the gate has no action of is refused with the kind `action`. `refund_order` takes the amount
+as an input of its own, which a name and ids do not carry, so it is asked through
+`authorize_refund_order`.
+
+The code also lists the roles: `roles()`, the roles the gate declares, and `roles_of()`
+(`RolesOf()` in Go), the roles a principal of a type can hold, by the type's name in Cedar. The code
+refuses every action to one who holds a role their type cannot hold, so a service whose sign-in
+carries roles from elsewhere passes them through `roles_of()` of the principal's type before it
+hands them to the code:
+
+```python
+def roles_of(t: str) -> list[str]:
+    …
+    if t == 'User':
+        return ['clerk', 'manager', 'auditor']
+    return []
+```
 
 ## The page for people
 
@@ -334,7 +374,10 @@ permit returns_refunds_returned_orders
 `ritsu check` holds every call a flow makes to what its gate allows the workflow. A call allowed in
 no combination is an error (E908); a call that can be denied, from a task that declares no error for
 a denial, a warning (W909); and an action the workflow is allowed and never calls, a warning too
-(W908). Here the task declares it, and the call is one border for each version of the gate:
+(W908). A number the call gives that the action's `input` counts in another unit or step is an
+error too (E909): a fee the task gives as `rate[step 0.1%]` and the gate reads as `rate[step 1%]`
+is 0.5% to the flow and 5% to the gate. Here the task declares the error of a denial, and the call
+is one border for each version of the gate:
 
 ```console
 $ cd crates/sekisho/examples/refunds
@@ -349,6 +392,65 @@ refunds.gate: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectatio
 refunds.ja.gate: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectations, 1 separation
 ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; borders between the languages: 2 checked, 0 undecided
 ```
+
+### A call in an arm of the flow
+
+A flow often calls an operation only in one arm of a `match`, and a gate often allows the workflow
+only for some resources. `ritsu check` asks of each call on its own, over the runs of the flow that
+reach it: what the call gives the operation, and what the arms on the way leave. What the service
+reads of the resource is not in the flow, so the gate says which value of the flow it is, under the
+workflow ([examples/claims](https://github.com/i2y/ritsu/tree/main/crates/sekisho/examples/claims)):
+
+```gate
+workflow pay from "flows/pay.flow"
+  description "Pays a claim the rule leaves to the desk, and hands the others to a person"
+  resource Claim from claim_id
+    amount = amount
+```
+
+Where the flow gives its `claim_id` as the claim's id, the claim's `amount` is the flow's `amount`.
+The gate allows the workflow to pay only a claim the rule `who_pays` leaves to the desk, and the
+flow asks the same rule and pays in the arm for `desk`: every run that reaches the call is allowed.
+Put the arms the other way round:
+
+```diff
+   let r = who_pays(amount: amount)
+   match r.who
+-    desk =>
++    person =>
+       let p = pay_claim(claimId: claim_id)
+         on denied => fail Denied "The gate did not let the workflow pay this claim"
+       succeed paid = p.paid
+-    person =>
++    desk =>
+       hand_over(claimId: claim_id)
+       succeed paid = false
+```
+
+and `ritsu check` finds every run that reaches the call denied:
+
+```text
+ok rules/who_pays.rule
+ok rules/支払う人.rule
+flows/pay.flow: ok
+flows/pay.ja.flow: ok
+claims.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+claims.ja.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+error[ritsu E908]: flows/pay.flow:30: The task `pay_claim` calls openapi "api/desk.json" operation payClaim, and the action `pay_claim` of claims.gate that guards it allows the workflow `pay` in no combination this call can come to
+    30 |       let p = pay_claim(claimId: claim_id)
+  = Where the flow makes this call, `who_pays(amount: resource.amount).who` (the flow's `r.who`) is `person`.
+  = The gate says what the flow holds of the resource: `amount = amount` under `resource Claim from claim_id` (claims.gate line 22). Nothing checks that the resource the service reads holds the same.
+  = Every run that comes to the call is denied there.
+  = The gate allows the workflow, for example: workflow pay, Claim, payer: desk (as when amount is 1JPY).
+  = Make the call where the gate allows the workflow, or change the policies of claims.gate so that they allow it here.
+ritsu check: 6 files (rulec 2, dandori 2, sekisho 2): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided
+```
+
+Nothing checks the lines under `resource`: they are what the writer of the gate says, and every
+answer that rests on them names them. So a call that can be denied still needs its task's error for
+a denial, lines or no lines. What `ritsu check` does hold them to is the flow: a value the flow has,
+of the attribute's type, inside its range at each call the line speaks of (E212), and a line some
+call speaks of at all, one that gives its `from` value as the id (W202).
 
 ### One enum for the workflow and the gate
 
@@ -408,7 +510,7 @@ ritsu check: 1 file (sekisho 1): all pass; borders between the languages: 2 chec
 ```
 
 Raise the schema's `maximum` for `amount` to 2000000 and it stops with E207: the attribute takes
-money[USDc] >=1 <=1000000, and its source can be 1000001.
+money[USDc] >=1USDc <=1_000_000USDc, and its source can be 1_000_001USDc.
 
 The range of the values is what is checked. Nothing checks that the hand-written code really
 carries that value, and the page says so. Nothing `gen` writes changes.
@@ -459,8 +561,8 @@ for every other combination, every action is decided the same.
 
 Each side is a path, a path at a git revision (`gates/refunds.gate@origin/main` on a pull request),
 or a gate of a dependency: `@<name>/<path>` at the version the lock pins, `@<name>@<version>/<path>`
-at another version in the store. The exit code is 1 when a permission is gained or lost or the
-interface differs, 0 when only the deciding policies change, and 2 when the two cannot be compared
+at another version in the store. The exit code is 1 when a permission is gained or lost, the
+interface differs, or a line under a workflow differs, 0 when only the deciding policies change, and 2 when the two cannot be compared
 (a side that does not pass `sekisho check`, or more combinations than `--budget`).
 `--format markdown` writes the same in Markdown, and `--format json` gives every change.
 

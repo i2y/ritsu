@@ -21,12 +21,12 @@
 
 `old/fine.rule` → `new/fine.rule`
 
-- `most` — 出力の範囲が変わった (`100..100` → `200..200`)
+- `most` — 出力の範囲が変わった (`100USD..100USD` → `200USD..200USD`)
 
 | 違いが出る入力 | 答え | 例 | 通り |
 |---|---|---|---|
-| violation = serious | most: 100 → 200 | violation=serious | 1 |
-| violation = other | most: 100 → 200 | violation=other | 1 |
+| violation = serious | most: 100USD → 200USD | violation=serious | 1 |
+| violation = other | most: 100USD → 200USD | violation=other | 1 |
 
 ここに挙げた入力のほかでは、二つの版は同じ答えを返します。
 

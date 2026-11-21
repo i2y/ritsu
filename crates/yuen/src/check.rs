@@ -168,14 +168,16 @@ fn unread_diag(p: &Project, fi: usize, line: usize, col: usize, n: &Name, u: &Un
         Unread::NoPort(_) => return None,
         Unread::Refused(said) => refused(p, fi, span, n, said),
         Unread::Proto(file, why) => {
-            let f = p.shown(file);
+            // the file as a naming writes it, from the root (ritsu's DESIGN 6.2, item 8)
+            let f = file;
             p.err(fi, "E205", span, tr!("{f} を proto として読めません: {}", "{f} does not read as a .proto: {}", why.ja; why.en)).note(tr!(
                 "yuen は、ritsu の .proto のパーサーで読みます。proto3 の `.proto` に直してください。",
                 "yuen reads it with ritsu's reader of .proto files; make it a proto3 `.proto`."
             ))
         }
         Unread::Doc(file, why) => {
-            let (f, t) = (p.shown(file), n.tool.word());
+            // the file as a naming writes it, from the root (ritsu's DESIGN 6.2, item 8)
+            let (f, t) = (file, n.tool.word());
             let what = match n.tool {
                 crate::names::Tool::Openapi => tr!("OpenAPI の文書", "an OpenAPI document"),
                 crate::names::Tool::Asyncapi => tr!("AsyncAPI の文書", "an AsyncAPI document"),
@@ -197,7 +199,8 @@ fn unread_diag(p: &Project, fi: usize, line: usize, col: usize, n: &Name, u: &Un
         }
         Unread::Twice(spaces) => {
             let (kind, name) = n.items.last().map(|(k, v)| (k.clone(), crate::names::word_or_quote(v))).unwrap_or_default();
-            let (shown, ja, en) = (p.shown(&n.path), spaces.join("、"), spaces.join(", "));
+            // the file as the naming writes it (ritsu's DESIGN 6.2, item 8)
+            let (shown, ja, en) = (&n.path, spaces.join("、"), spaces.join(", "));
             p.err(fi, "E202", span, tr!("{shown} は {kind} {name} を二つ以上の名前空間（{ja}）で宣言しているので、一つに決まりません", "{shown} declares {kind} {name} in more than one namespace ({en}), so it names no one thing")).note(tr!(
                 "yuen は action と entity を、名前空間を付けずに、宣言した名前で指します。名前空間ごとに、スキーマのファイルを分けてください。",
                 "yuen names an action or an entity by the name it is declared with, without its namespace: keep each namespace in a file of the schema of its own."
@@ -214,7 +217,8 @@ fn no_such_name(p: &Project, fi: usize, span: crate::ast::Span, n: &Name, same_k
     let (t, kind) = (n.text(), n.kind().unwrap_or(""));
     let name = n.items.last().map(|(_, v)| v.clone()).unwrap_or_default();
     let written = crate::names::word_or_quote(&name);
-    let shown = p.shown(&n.path);
+    // the file as the naming writes it (ritsu's DESIGN 6.2, item 8)
+    let shown = &n.path;
     let mut d = p.err(fi, "E202", span, tr!("{shown} に {kind} {written} はありません", "{shown} has no {kind} {written}"));
     if let Some(real) = alias_of(p, n) {
         let fixed = Name { items: [&n.items[..n.items.len() - 1], &[(kind.to_string(), real.clone())]].concat(), ..n.clone() };
@@ -279,6 +283,9 @@ pub fn check(args: &[String], root: Option<&str>) -> Result<Checked, Refusal> {
 
 /// [`check`], reading what another language holds through the ports `suite` joins.
 pub fn check_with(args: &[String], root: Option<&str>, suite: crate::suite::Suite) -> Result<Checked, Refusal> {
+    for a in args.iter().filter(|a| !a.starts_with('-')) {
+        ritsu_base::tally::count("yuen", std::path::Path::new(a));
+    }
     let (project, d1) = project::load_with(args, root, suite)?;
     let Some(mut p) = project else {
         return Ok(Checked { project: None, diags: d1, stage: 1, model: None });
@@ -298,7 +305,9 @@ pub fn check_with(args: &[String], root: Option<&str>, suite: crate::suite::Suit
         return Ok(Checked { project: Some(p), diags, stage: 2, model: None });
     }
     // 3. Sources.
-    let (srcs, d3) = sources::check_sources(&p);
+    let (srcs, mut d3) = sources::check_sources(&p);
+    // a source declared nowhere in the file is said once, where it is first cited (ritsu's DESIGN 8.3)
+    ritsu_base::diag::once(&mut d3);
     diags.extend(d3);
     // 4. Artifacts.
     let mut artifacts: BTreeMap<Name, Result<End, Unread>> = BTreeMap::new();
@@ -436,13 +445,20 @@ fn scope_noun(kind: &Option<String>) -> (String, String, String) {
     }
 }
 
+/// The line after the diagnostics when `e` of them are errors and `w` warnings (`e` more than 0):
+/// `expense.req: 1 error, 2 warnings`. `ritsu check` writes it again without the lines that wait
+/// for a file that does not pass (ritsu's DESIGN 8.3).
+pub fn count_line(label: &str, e: usize, w: usize) -> Text {
+    let wj = if w > 0 { format!("、警告 {w} 件") } else { String::new() };
+    let we = if w > 0 { format!(", {}", plural(w, "warning", "warnings")) } else { String::new() };
+    tr!("{label}: エラー {e} 件{wj}", "{label}: {}{we}", ; plural(e, "error", "errors"))
+}
+
 /// The line after the diagnostics: what was checked, or how many errors and warnings.
 pub fn summary(c: &Checked, label: &str) -> Text {
     let (e, w) = diag::count(&c.diags);
     if e > 0 {
-        let wj = if w > 0 { format!("、警告 {w} 件") } else { String::new() };
-        let we = if w > 0 { format!(", {}", plural(w, "warning", "warnings")) } else { String::new() };
-        return tr!("{label}: エラー {e} 件{wj}", "{label}: {}{we}", ; plural(e, "error", "errors"));
+        return count_line(label, e, w);
     }
     let Some(k) = counts(c) else { return tr!("{label}: ok", "{label}: ok") };
     let reqs = if k.names == k.versions {

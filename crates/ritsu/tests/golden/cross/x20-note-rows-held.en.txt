@@ -1,0 +1,4 @@
+summary.flow: ok
+ok contract.ringi: a request, 4 fields, 2 stages
+  may never end: the stages `summary` and `review` have no deadline (`due in …`), and wait until they are answered
+ritsu check: 2 files (dandori 1, ringi 1): all pass; borders between the languages: 5 checked, 0 undecided

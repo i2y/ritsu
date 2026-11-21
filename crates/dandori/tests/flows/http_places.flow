@@ -1,0 +1,105 @@
+# Where the arguments of an HTTP call go, and how a list or a record is written there (DESIGN 43).
+# The library's description puts each parameter in the path, the query, a header or a cookie, or
+# in the body, and says the style and explode it is written in: a list under its name for each
+# item or joined, a record by its fields' names, as `sort[by]` or in the path's matrix and label
+# styles. A name with `-` in the description goes by `_` in the flow, and a header's in any case.
+# The search's calls have no description, and go as OpenAPI's defaults write them. A value that
+# is not there goes nowhere: the note, the trace and the memo are inputs a run may leave out, and
+# the order, a shelf and the theme are none. Runs on every platform; the default Transports send
+# what each run has.
+workflow http_places v1
+description "Find a library's books, look at a spot on a shelf, lend a book and note it, where each argument goes to the place and in the style the library's description says, and search and mark books where no description says"
+
+use openapi library from "apis/library.json"
+
+record Years
+  first : int
+  last  : int
+
+record Sort
+  by    : string
+  order : string?
+
+record Spot
+  row : int
+  col : int
+
+record Place
+  room  : string
+  shelf : int
+
+record Marks
+  page : int
+  line : int
+
+record Found
+  count : int  range >=0 <=1000
+
+record Seen
+  shelf : string
+
+record Loan
+  id : string
+
+record Note
+  id : string
+
+inputs
+  shelf  : string
+  reader : string
+  due    : date
+  note   : string?
+  trace  : string?
+  memo   : string?
+
+outputs
+  count  : int  range >=0 <=1000
+  seen   : string
+  loan   : string
+  noted  : string
+  found  : int  range >=0 <=1000
+  marked : string
+
+# The path's list joined with commas; the query's lists, records and values in each style.
+task find_books(ids: list[string], tags: list[string], authors: list[string], years: Years, sort: Sort, words: list[string], codes: list[string], lost: bool, note: string?) -> Found
+  http GET library "/books/{ids}"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/library/5a6b7c8d"
+  idempotent
+
+# The path's matrix and label styles, the headers (text that is not ASCII as its UTF-8), and the cookies.
+task look_spot(shelf: string, spot: Spot, labels: list[string], x_library_key: string, x_trace_id: string?, x_shelves: list[string?], x_spot: Spot, session_id: string, prefs: list[string], theme: string?) -> Seen
+  http GET library "/shelves/{shelf}/spots{spot}/labels/{labels}"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/library/5a6b7c8d"
+  idempotent
+
+# A POST whose description puts the due day in the query, and the reader in a JSON body.
+task lend(book_id: string, due: date, reader: string) -> Loan
+  http POST library "/books/{book-id}/loans"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/library/5a6b7c8d"
+
+# A URL-encoded body: a list under its name for each item, a record by its fields' names and as
+# `marks[page]`, a list joined with `|`, and a memo that may not be there.
+task note_book(id: string, text: string, tags: list[string], place: Place, marks: Marks, words: list[string], memo: string?) -> Note
+  http POST library "/books/{id}/notes"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/library/5a6b7c8d"
+
+# No description: the path's list joined with commas, the query's list under its name for each
+# item and its record by the fields' names.
+task search(rooms: list[string], words: list[string], years: Years, page: int?) -> Found
+  http GET "https://search.example.com/v1/rooms/{rooms}/books"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/search/9e8d7c6b"
+  idempotent
+
+# No description, and a URL-encoded body: the same as the query.
+task mark(id: string, tags: list[string], place: Place, memo: string?) -> Note
+  http POST "https://search.example.com/v1/books/{id}/marks" form
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/search/9e8d7c6b"
+
+flow
+  let found = find_books(ids: ["b-1", "b/2"], tags: ["old", "rare map"], authors: ["Ito", "O'Neil"], years: {first: 1901, last: 1950}, sort: {by: "title", order: none}, words: ["sea", "salt & pepper"], codes: ["A|1", "B"], lost: false, note: note)
+  let seen = look_spot(shelf: shelf, spot: {row: 3, col: 12}, labels: ["red", "blue"], x_library_key: "key-1", x_trace_id: trace, x_shelves: ["東", none, "west"], x_spot: {row: 3, col: 12}, session_id: "s 1;2", prefs: ["dark", "large"], theme: none)
+  let loan = lend(book_id: "b-1", due: due, reader: reader)
+  let noted = note_book(id: "b-1", text: "torn page", tags: ["repair", "soon"], place: {room: "east", shelf: 3}, marks: {page: 12, line: 4}, words: ["glue", "tape"], memo: memo)
+  let searched = search(rooms: ["east", "west 2"], words: ["sea", "salt"], years: {first: 1901, last: 1950}, page: none)
+  let marked = mark(id: "b/1", tags: ["repair", "soon"], place: {room: "east", shelf: 3}, memo: memo)
+  succeed count = found.count, seen = seen.shelf, loan = loan.id, noted = noted.id, found = searched.count, marked = marked.id

@@ -1678,7 +1678,9 @@ impl<'a> Analyzer<'a> {
                 };
                 Abs::Date(if whole == Whole::No { iv } else { fill(iv, whole_range(&Ty::Date), marked) })
             }
-            Ty::Record(id @ RecId::Module { .. }) => {
+            // a record of a module, and the builtin records whose fields are of the types they take
+            // (`indexed[T]`, `entry[K, V]`, `running[T, W]`): each field as its place declares it
+            Ty::Record(id @ (RecId::Module { .. } | RecId::Indexed(_) | RecId::Entry(..) | RecId::Running(..))) => {
                 let fields = self.p.fields(id).iter().map(|(f, fs)| (f.text.clone(), self.slot_in(fs, reached, whole, depth + 1, inner))).collect();
                 Abs::Record(Rec { fields, rels: Vec::new() })
             }
@@ -2916,7 +2918,7 @@ impl<'a> Analyzer<'a> {
         // the parameters with the types the call gives the type parameters (DESIGN 26.2)
         let names = crate::names::tnames(&info.tparams);
         let targs = m.typed.inst.get(&e.id).cloned().unwrap_or_default();
-        let slots: Vec<Slot> = info.params.iter().map(|p| subst_slot(&p.slot, &names, &targs)).collect();
+        let slots: Vec<Slot> = info.params.iter().map(|p| crate::ty::subst_param(&p.slot, &names, &targs)).collect();
         let mut given: Vec<Option<Abs>> = vec![None; info.params.len()];
         for (n, x, v) in vals {
             let Some(n) = n else { continue };
@@ -2995,7 +2997,6 @@ impl<'a> Analyzer<'a> {
         let Some(vals) = self.args(args) else { return V::of(Abs::Never) };
         let Some(facts) = self.p.rules.get(canon).cloned() else { return V::of(Abs::Any) };
         let rule = self.src(callee.span);
-        let file = self.p.file(canon);
         let mut given: BTreeMap<String, &Expr> = BTreeMap::new();
         let mut gave = Vec::new();
         for (n, x, v) in vals {
@@ -3019,12 +3020,9 @@ impl<'a> Analyzer<'a> {
                             self.assume(x, r, &slot.ty);
                         }
                     }
-                    (_, Ty::Date, _) if !days => {
-                        let ranged = self.suite.rules.as_ref().and_then(|r| r.date_range(&file, &c.name).ok()).is_some_and(|(lo, hi)| lo.is_some() || hi.is_some());
-                        if ranged {
-                            let what = What::RuleDate { rule: rule.clone(), input: c.name.clone() };
-                            self.place(x, format!("rdate:{}", c.name), FailKind::Rule, what, v.abs, lin, &slot.ty);
-                        }
+                    (Some(_), Ty::Date, _) if !days => {
+                        let what = What::RuleDate { rule: rule.clone(), input: c.name.clone() };
+                        self.place(x, format!("rdate:{}", c.name), FailKind::Rule, what, v.abs, lin, &slot.ty);
                     }
                     // the name is not narrowed after the call: what an enum is narrowed to, only a
                     // `match` or a comparison with one value says (DESIGN 5.4)
@@ -3043,9 +3041,10 @@ impl<'a> Analyzer<'a> {
                     Abs::List(_, el) => (**el).clone(),
                     _ => Abs::Any,
                 };
+                // a number's field and a date's, to the range of its column
                 for c in cols {
                     let slot = column_slot(c, canon);
-                    if let (Some(r), Ty::Num(_)) = (&slot.range, strip(&slot.ty)) {
+                    if let (Some(r), Ty::Num(_) | Ty::Date) = (&slot.range, strip(&slot.ty)) {
                         let what = What::RuleField { rule: rule.clone(), list: seq.clone(), field: c.name.clone(), range: r.clone(), ty: slot.ty.clone() };
                         let fv = elem.field(&c.name);
                         self.place(x, format!("elem:{seq}.{}", c.name), FailKind::Rule, what, fv, None, &slot.ty);
@@ -4107,6 +4106,14 @@ impl<'a> Analyzer<'a> {
 /// places, ring of calls by ring, the functions a ring calls first; the examples looked for where a
 /// place is not shown; the effects; and the diagnostics of all of it (E301–W303, E401, W501).
 pub fn analyze(c: &std::rc::Rc<Checked>, suite: &Suite) -> (Analysis, Vec<crate::diag::Diag>) {
+    settle(c, suite, walk(c, suite))
+}
+
+/// The part of [`analyze`] the verdicts of the checks across the languages change nothing of: each
+/// function's values and places, ring of calls by ring, with the examples looked for where a place
+/// is not shown. A check with the verdicts and one without them walk a module once (ritsu's DESIGN
+/// 4.15), and each settles on what it has ([`settle`]).
+pub fn walk(c: &std::rc::Rc<Checked>, suite: &Suite) -> Analysis {
     let p = Program::of(c);
     let rings = crate::effects::rings(c);
     let mut an = Analyzer::new(c, &p, suite);
@@ -4120,6 +4127,15 @@ pub fn analyze(c: &std::rc::Rc<Checked>, suite: &Suite) -> (Analysis, Vec<crate:
             fns[f] = facts;
         }
     }
+    Analysis { fns, at: std::mem::take(&mut an.at) }
+}
+
+/// The rest of [`analyze`], on what [`walk`] found of `c`: the verdicts of the checks across the
+/// languages taken where the run hands them over, the effects, and the diagnostics.
+pub fn settle(c: &std::rc::Rc<Checked>, suite: &Suite, walked: Analysis) -> (Analysis, Vec<crate::diag::Diag>) {
+    let p = Program::of(c);
+    let rings = crate::effects::rings(c);
+    let Analysis { mut fns, at } = walked;
     // what the checks across the languages came to, where the run hands it over (DESIGN 14.5)
     if let Some(v) = &suite.verdicts {
         let verdicts = v.verdicts(std::path::Path::new(&c.path));
@@ -4143,9 +4159,9 @@ pub fn analyze(c: &std::rc::Rc<Checked>, suite: &Suite) -> (Analysis, Vec<crate:
         }
     }
     diags.extend(crate::effects::written_holds(c, &fns, &rings, &said));
-    diags.extend(crate::effects::passed_hold(c, &fns, &an.at, &rings));
+    diags.extend(crate::effects::passed_hold(c, &fns, &at, &rings));
     diags.extend(crate::hatch::check(c));
-    (Analysis { fns, at: std::mem::take(&mut an.at) }, diags)
+    (Analysis { fns, at }, diags)
 }
 
 /// The check across the languages a place is decided by, and what at the place it is about, as the
@@ -5198,11 +5214,14 @@ pub fn said(p: &Precondition) -> String {
     match p {
         Precondition::Relation { left, op, right } => format!("{left} {op} {right}"),
         Precondition::SumRelation { left, op, right } => format!("{} {op} {}", left.join(" + "), right.join(" + ")),
-        Precondition::Sum { name, max, .. } => format!("{name} <= {max}"),
+        Precondition::Sum { name, max, min: None, .. } => format!("{name} <= {max}"),
+        Precondition::Sum { name, max, min: Some(min), .. } => format!("{min} <= {name} <= {max}"),
+        Precondition::Count { name, min, .. } => format!("{name} >= {min}"),
         Precondition::Length { sequence, max } => format!("len({sequence}) <= {max}"),
         Precondition::Unique { sequence, field } => format!("{sequence}.{field} unique"),
         Precondition::Days { input, file, date, .. } => format!("{input} in koyomi \"{file}\" date {date}"),
         Precondition::Never { said, .. } => said.clone(),
+        Precondition::Define { name, range, .. } => format!("{name} range {range}"),
     }
 }
 

@@ -42,9 +42,12 @@ one). A reference may use either. The words a condition, a computed value or a t
 cannot be a name or an alias (E002): `and`, `or`, `not`, `in`, `is`, `principal`, `resource`,
 `workflow`, `true`, `false`, `any`, `today`, `bool`, `date`, `number`, `rate`. Every other keyword
 stands at the start of a line or where nothing else can, so a name may be spelled like one: an
-enum's value `open`, an attribute `description`. An alias that is a reserved word of Cedar or of the
-generated code, and a type named like one of Cedar's own types (or `Role` and `Workflow`, which
-sekisho declares), are E008. Two declarations of one name or alias among things of one kind are
+enum's value `open`, an attribute `description`. An alias that is a reserved word of Cedar, and a
+type named like one of Cedar's own types (or `Role` and `Workflow`, which sekisho declares), are
+E008. A reserved word of TypeScript, Python or Go is that language's alone: it matters only where
+the code of that target writes the name as that word, and there `check` warns (W402) and `gen` of
+that target stops (E401), as for the other names a target cannot take ([What `gen`
+writes](#what-gen-writes)). Two declarations of one name or alias among things of one kind are
 E006.
 
 ## The heading
@@ -147,11 +150,21 @@ used: a gate has no expression that compares values; `doc` and `api` say it is o
 The enum belongs to the `enums` file, not to the gate: `references` names it as `import enum`
 (`rulec "rules/order_states.rule" enum order_state`), and the items of the gate do not list it.
 
+An enum is one type by every name the gate reads it by, when it is declared at one place (a file,
+and its name there) with the same values in the same order: read twice, once with `-> <name>`;
+read here and in a file read with `use gate`; or given by the outputs of rules that read it whole
+with `import enum`. Two attributes of those names compare, an input of one name takes a value of
+the other with `allowed`, and one computed value name in two actions may hold the outputs of two
+rules that read the enum. Enums declared at two places are two types, even with the same values
+(E102, E104), and the note says where each is declared: read the enum from one `enums` file in each
+file that uses it.
+
 A file that is not there or is a rule, or that does not pass rulec's check, is E201 (with what
 rulec says in the notes); an enum the file does not have is E101, which lists the ones it has; a
 name that is already an enum's, a type's or another import's is E006; a name or a value that
-Cedar or the generated code cannot take is E007 or E008, said at the line, with a note that the
-`enums` file is where a value is corrected. Where rulec is not joined, the line is E209.
+Cedar cannot take is E007 or E008, said at the line, with a note that the `enums` file is where a
+value is corrected (a name the code of a target cannot take is W402, as for an enum declared in the
+gate). Where rulec is not joined, the line is E209.
 
 ## Roles
 
@@ -190,6 +203,33 @@ credentials. `roles` lists the roles one may hold, which the service's data give
 every set of them, none and several. A workflow is an entity of Cedar's type `Workflow`, named as
 the gate names it, calling under its own credentials; its `.flow` has to pass dandori's check
 (E208). `ritsu check` holds what the flow calls to what the gate allows the workflow (X16, below).
+
+Under a workflow's `description`, the gate can say what the flow holds of a resource it acts on:
+
+```gate
+workflow pay from "flows/pay.flow"
+  description "Pays a claim the rule leaves to the desk, and hands the others to a person"
+  resource Claim from claim_id
+    amount = amount
+```
+
+It reads: where the flow calls an operation of an action that takes a `Claim`, and gives the flow's
+`claim_id` as the claim's id, the `amount` of the claim the service reads is the flow's `amount`
+then. The left of `=` is an attribute of the resource, the right a value of the flow: an input, a
+variable, or a field of one (`order.total`). `resource <type> from <value>` says which resource,
+as an action's `resource Claim from claimId` does; the lines hold at a call where the action takes
+the id from an argument and the flow gives that argument the same value. An attribute left out is
+one the flow holds nothing of, and every value of it is counted. An attribute that points to an
+entity cannot be written (E102), nor one the type does not have (E101), nor the same one twice
+(E006). A value the flow does not have, or one of another type or unit, is E212, which reads the flow
+through dandori; so is a value that can be outside the attribute's range at a call the lines speak of,
+by what the runs that reach the call put in it last (the note names the calls such a value reaches).
+
+Nothing checks these lines. They are what the writer of the gate says: neither sekisho nor dandori
+can see that the claim the service reads has the amount the flow holds. So every answer that rests
+on them says so, with the lines it rests on (the notes of E908 and W909, `assumes` in the JSON of
+`ritsu check` and of `sekisho api`, the workflow's section of `sekisho doc`), and a task whose call
+can be denied still needs its error for a denial. The lines change nothing `gen` writes.
 
 ## Resources
 
@@ -256,7 +296,14 @@ action refund_order
   without it, an action no permit allows is E301, and with it, an action some combination allows
   is E304.
 - `input`: the arguments of the operation that a policy or a computed value reads, under the names
-  the operation gives them, with types and ranges the operation accepts (E203).
+  the operation gives them, with types and ranges the operation accepts (E203). An enum input has
+  every value the operation takes: an OpenAPI `enum`, or the values of the enum a `.proto` field's
+  type comes to by protobuf's rules for names, as far as Protovalidate lets them through. A
+  `.proto` value's name is read as rulec's `import proto` reads it, with the enum's own name taken
+  off the front and the rest in lower case (`CATEGORY_TRAVEL` is `travel`); the names of one number
+  (`allow_alias`) are one value, which the enum here holds by any one of them. rulec's reference
+  has the whole table, under `import proto`. A `repeated` field is a list of values, and an input
+  takes one value: an input of one is E203.
 - `context`: the computed values, each an attribute of Cedar's context of the action.
 
 ### Computed values
@@ -273,8 +320,8 @@ service's data, the input and the clock, and puts it in the request; a caller ca
 
 A value given to a rule or a date is an attribute of the principal or the resource, an input, a
 constant or `today`; another computed value cannot be (E105). Its range has to fit within what the
-rule or the date takes, and a precondition of the rule (its `constraint` or `never` line) has to hold over it
-(E206; W201 when rulec cannot decide). An input of a rule that holds an ordered enum to a range
+rule or the date takes, and a precondition of the rule (its `constraint` or `never` line, or the range it accepts for a value it
+works out, `define … range`) has to hold over it (E206; W201 when rulec cannot decide). An input of a rule that holds an ordered enum to a range
 (`campaign : tier  range >=basic <=gold`) takes the values the range lets in: an enum given to it
 has to have only those values, and a constant has to be one of them (E206). A calendar has to have data for every day of `today`'s range
 and every day the dates can come to (E207). What a rule's output can be (over the stretches the
@@ -282,6 +329,16 @@ policies cut its number inputs into, at each value of an enum or a bool the poli
 the gate writes as a constant, and over only the values of an enum of the gate's that has fewer
 than the rule's), and which answers of the dates can come together on one day, sekisho asks rulec
 and koyomi, so that the check counts what can happen and nothing else.
+
+Values that read the same data are counted together. Two outputs of one call of a rule
+(`a = sizes(amount: resource.amount).a` and `b = sizes(amount: resource.amount).b`), two rules given
+the same attribute, and a rule given one attribute as two of its inputs come to the combinations
+of values that some input brings about, not to every pair of what each can be: where a table writes
+`a` and `b` low together and high together, no combination has one low and the other high. sekisho
+asks rulec what the outputs of one call come to together; for the rest it runs concrete inputs
+through the rule's evaluator, and cuts a number where they show the outputs change. A pair it can
+neither find an input for nor rule out (two outputs of the sum of two numbers, say, which do not
+change along one of the numbers alone) is counted in case it happens, and marked so (below, W303).
 
 ## Policies
 
@@ -437,15 +494,44 @@ With the two `unless` lines taken out of the expectation that a manager refunds 
 ```text
 error[E304]: tests/mutants/E304_expect_fails.gate:147:1: The expectation `managers_refund_in_period` does not hold: 144 of the 192 combinations it picks are denied
    147 | expect allow managers_refund_in_period
-  = For example: User holding manager (suspended: yes), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit, in_period: yes, business_day: no; denied by `suspended_staff_do_nothing`.
+  = For example: User holding manager (suspended: yes), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit (as when refund_limit is 1GBP and amount is 1GBP), in_period: yes, business_day: no; denied by `suspended_staff_do_nothing`.
   = Fix the policies, or the expectation if it says more than is meant.
 ```
 
+An example is a combination as the check counts it: the roles, and each attribute, input and
+computed value a policy reads, a number by the stretch of it the policies do not tell apart
+(`amount: 1GBP to 50GBP`). The policies read `refund_band`, which a rule computes from the amount
+and the manager's own limit, and the amounts of the stretch do not all come to one answer. So the
+brackets after the computed value say an input the check ran through the rule and saw come to it:
+
+- `(as when refund_limit is 1GBP and amount is 1GBP)` is one input: every attribute and input the
+  rule is given, each with the value that was run.
+- `(whenever amount is 101JPY to 300JPY)` is a stretch: rulec says every input of it comes to
+  these values and to nothing else, and one that was run did. It says only what narrows the
+  combination. Other inputs may come to the same values too.
+
+Values that several rules compute from the same data share one pair of brackets, after the last of
+them (`a: low, step: large (as when amount is 301JPY)`). An attribute is named by its own name, and
+as the gate writes it (`principal.refund_limit`) where something else the action reads has the
+same name. There are no brackets where no input was run (a rule with no evaluator joined, a value
+counted in case it can happen, a rule that is given `today`), and none where every input of the
+combination comes to the values.
+
+When the lines of a policy or of an expectation are met on no combination because of the rules,
+E303 and W304 say so: which values, and what they are computed from. The rules may never give the
+values together (two values computed from one attribute, such as `a` high and `step` small of one
+amount), or a rule may answer a value for nothing the gate gives it (one amount given as both
+inputs of a rule that asks whether two amounts differ). For an expectation, that is decided by the
+rules whatever the policies say; what is to be held of a rule's answers is written in the rule, as
+its `examples`.
+
 Every check comes to one of three answers: it holds, here is a combination where it does not, or it
 cannot be decided, and then it says why. A rule or a date whose answers rulec or koyomi cannot
-decide over a stretch is counted with every value its output has, and what holds over those
-combinations still holds; a finding that rests on such a combination alone is tried with real
-inputs through the rule's evaluator, and when none brings it about it is W303.
+decide over a stretch is counted with every value its output has, and two values of a rule whose
+pairs cannot be told apart with every pair of them; what holds over those combinations still
+holds. A finding that rests on such a combination alone is tried with real inputs through the
+rule's evaluator, and when none brings it about it is W303: a combination that cannot happen is
+never said to be allowed or denied.
 
 ## What `gen` writes
 
@@ -505,21 +591,70 @@ generate (the package's `rules/` and `dates/`, as `ritsu gen` lays them out), an
 refuses without asking when what it reads is not what the gate declared, and says which: the
 `principal`, the `resource` or the `input` is not there or outside its range or its enum, `today`
 is outside the range the gate was checked over, or the code of a `rule` or a `date` failed; `cedar`
-when Cedar met an error or could not be asked. `--authorizer avp` asks Amazon Verified Permissions
+when Cedar met an error or could not be asked; `action` when the entry by name is given a name the
+gate has no action of. `--authorizer avp` asks Amazon Verified Permissions
 instead, and says W401 of what is over its quotas. An action whose policies read `allowed` asks
 that action first, through its function, and puts the answer in the context (`allowed_approve`);
 a refusal of that action refuses this one, of the same kind, and with `--authorizer avp` the
 request function of such an action takes `avp` too. `ritsu gen` writes the same into the packages
 of a project, and with `--target cedar` the Cedar once in `<out>/cedar/`.
 
+Beside the functions of the actions, the code has one entry that asks by the name of an action:
+`authorize` in TypeScript and Python, `Authorize` in Go, which takes the store, the principal, the
+action's name in Cedar, the ids of the resources by the name of their types in Cedar
+(`resources`), and the time, and asks through the action's own function. It reads the id of the
+type the action takes, and leaves the others alone, so a caller that holds its names as strings
+(a server that asks of a ticket, its stage and its kind of request) gives every id it knows. It
+refuses without asking a name the gate has no action of (the kind `action`), an action that takes
+inputs of its own (`input`: such an action is asked through its own function, which takes them),
+and no id of the action's resource, or ids of two of its types where it takes several
+(`resource`).
+
+```go
+answer := refunds.Authorize(store, refunds.Principal{Type: "User", ID: "u1"}, "view_order", map[string]string{"Order": "o1"}, time.Now())
+```
+
+The code also lists the roles: `roles()` in TypeScript and Python and `Roles()` in Go, the aliases
+of the roles the gate declares; and `rolesOf(t)` in TypeScript, `roles_of(t)` in Python and
+`RolesOf(t)` in Go, the roles a principal of the type `t` (its name in Cedar, as `resources` names
+the types of the entry) can hold, those its `roles` line names. Both are in the order the gate
+declares the roles, a new list each call; the second is empty for a name that is not a principal's
+type, or that the gate does not declare. A record holds only the roles its type can hold: the code
+refuses every action to one who holds any other, as the `principal`. So a service whose sign-in
+carries roles from elsewhere (a directory that knows more than this gate does) passes them through
+the list of the principal's type before it puts them into the record:
+
+```go
+can := map[string]bool{}
+for _, r := range refunds.RolesOf("User") {
+	can[r] = true
+}
+held := []string{}
+for _, r := range signIn.Roles {
+	if can[r] {
+		held = append(held, r)
+	}
+}
+user := &refunds.User{Roles: held, RefundLimit: 50}
+```
+
 The code writes each name as its language spells it, and changes none to make room for another.
-Where two names are one identifier in a language (the actions `refund_order` and `refund__order`
-are both `RefundOrder`, the attributes `order_id` and `order__id` both `OrderId` in Go), or a name
-is one the code uses itself (`Store`, `Date` in TypeScript, `Literal` in Python, `ReplyInput` for an
-action `reply`), `sekisho check` warns about it and names the languages, with how each one's code
-would break (W402), and `sekisho gen` writes nothing when it is to write one of them (E401). For a
-language you do not build, leave it as it is. For one you do, change the alias; an alias is also
-the name in Cedar, so if the gate is in use, compare with the version in use with `sekisho diff`.
+Where two names are one identifier in a language (the actions `refund_order` and `refund__order` are
+both `RefundOrder`, the attributes `order_id` and `order__id` both `OrderId` in Go), or a name is
+one the code uses itself (`Store`, `Date` in TypeScript, `Literal` in Python, `Authorize`, `Roles`
+and `RolesOf` in Go, `ReplyInput` for an action `reply`), or a name is a reserved word where a
+language's code writes it as it is, `sekisho check` warns about it and names the languages, with how
+each one's code would break (W402), and `sekisho gen` and `ritsu gen` write nothing when they are to
+write one of them (E401, exit 1). A reserved word is met where the code writes a name as it is:
+Python writes a type and an enum at the top level of its module (a type `None`), an attribute as a
+field of its record (an attribute `class`), and a type in snake case as the method of `Store` that
+reads it (a type `Return` is `return`); and the alias of the file names the module of Python (a file
+`pass`), the package of Go (`select`), and the module the index of a package of `ritsu gen`'s
+exports in TypeScript, which takes no reserved word of strict mode (`interface`). Everywhere else a
+reserved word breaks nothing: each language writes the name as a property, a method or a string, or
+with more around it, and Go with a capital. For a language you do not build, leave it as it is. For
+one you do, change the alias; an alias is also the name in Cedar (the file's names the files and the
+module), so if the gate is in use, compare with the version in use with `sekisho diff`.
 
 ## Across the languages
 
@@ -530,11 +665,23 @@ them (ritsu's codes, which `ritsu explain` looks up):
   an action of a gate, unless its contract says anyone may call it (`security: []`). E907 for an
   operation no action guards in a context where others are guarded, W907 for a context none of
   whose operations is guarded yet. It looks only when the project holds a gate.
-- **X16**: a workflow is allowed the operations its flow calls, and calls what it is allowed. E908
-  for a call its gate allows in no combination; W909 for a call that can be denied, or where
-  whether it is allowed cannot be decided, while the task declares no error for a denial (status
-  403, or Connect's `permission_denied`); W908 for an action the workflow is allowed and never
-  calls. A flow's calls of a book's transfers (dandori's `book` tasks) are not among them: the code
+- **X16**: a workflow is allowed the operations its flow calls, and calls what it is allowed. Each
+  call is asked of on its own, over the combinations the runs of the flow that reach it can come
+  to: an input of the action is what the call gives the operation's argument of its name (a number
+  written out is one of the argument's unit), an attribute of the resource is what the workflow's
+  `resource` lines say it is, and a rule's output is what the arms of a `match` on the flow's own
+  call of the same rule leave, with what the flow gives the rule there. A value the runs that reach
+  the call hold is read in a loop too, as each round leaves it. E908 for a call
+  allowed in none of those combinations; W909, while the task declares no error for a denial
+  (status 403, or Connect's `permission_denied`), for a call that can be denied, for one the gate
+  denies in some combinations with nothing written of which the runs come to, for one allowed
+  only as far as the `resource` lines say (nothing checks them), and for one that cannot be
+  decided; W908 for an action the workflow is allowed and never calls. E909 for an argument the
+  call gives a number whose type the action's `input` of its name counts in another unit, step or
+  tax (a task's `fee: rate[step 0.1%]` and a gate's `fee : rate[step 1%]`: the flow's 0.5% is 5%
+  to the gate), compared as `fed by` compares a place with its source; the error of a denial,
+  declared or not, does not help, and of the gate's answer at that call only E908 is said. A Cedar
+  pair's context writes no unit, and is not compared. A flow's calls of a book's transfers (dandori's `book` tasks) are not among them: the code
   dandori writes calls chobo's client without asking a gate, and chobo refuses for no reason that
   stands for a denial. An action that guards a transfer's operation holds where the service that
   keeps the book asks the gate before it moves the book.
@@ -580,11 +727,11 @@ A contract often leaves a bound to the code, which checks it by hand and then gi
 
 - **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
 - **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
-- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date (a string, or a `.proto`'s `google.type.Date`) and lists no days.
 
 E208 says the source is not there: its file, or the name in it.
 
-Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. A string an OpenAPI document or a JSON Schema marks `format: date-time` is a moment, a day with a time of day: no date takes it, and a workflow's `timestamp` does, as it does another workflow's `timestamp` and a `.proto`'s `google.protobuf.Timestamp`. A `.proto`'s `google.type.Date` is a date, known by its name as dandori knows it. A field of a `.proto` that may be left unset (`optional`, in a `oneof`, or a message, unless a rule or proto2 marks it `required`) can come as no value, which a place that is not `T?` refuses. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
 
 **What is not checked.** Nothing checks that the hand-written code really carries that value. The
 page of `sekisho doc` says so: Comes from `…` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). Nothing `gen` writes changes, and `sekisho api` gives the
@@ -645,24 +792,30 @@ $ sekisho explain E302
 - `api <file.gate> [--root <dir>]`: JSON for other tools (below).
 - `diff <old> <new> [--format text|markdown|json] [--budget <n>] [--root <dir>]`: what changes between
   two versions of a gate, for each action both have, on every combination of both versions' cuts:
-  the permissions gained and lost, the combinations decided by other policies, and what only one
-  version has. Each side is a path, `<path>@<git revision>`, `@<name>/<path>` or
+  the permissions gained and lost, the combinations decided by other policies, what only one
+  version has, and the lines under a workflow (`resource … from …`) that differ. Each side is a path, `<path>@<git revision>`, `@<name>/<path>` or
   `@<name>@<version>/<path>`; a side that does not pass check stops it (exit 2). `--budget` is the
   most combinations of one action walked over both versions.
-- `explain <code> | --all [--format markdown|json]`: when a diagnostic is printed, how to fix it,
-  and the smallest file that prints it.
+- `explain <code>... | --all [--format markdown|json]`: when a diagnostic is printed, how to fix it,
+  and the smallest file that prints it; the codes in the order given.
 
 `doc`, `vectors` and `api` take one file, which has to pass check; else they print its diagnostics
-and exit 1. Every command takes `--lang ja|en` (else `SEKISHO_LANG`, then `RITSU_LANG`, else
-English) and `--help`.
+and exit 1. Every command takes `--lang ja|en` and `--help`. Without `--lang`, the text a command
+prints follows `SEKISHO_LANG`, then `RITSU_LANG`, else English, and what `gen` and `doc` write is in
+English, whatever the environment says.
 
 ### Exit codes
 
 | Code | When |
 |---|---|
 | 0 | no errors (there may be warnings); generated; printed |
-| 1 | at least one error; `gen --check` found a file that differs or is missing; `diff` found a permission gained or lost, or an interface that differs |
+| 1 | at least one error; `gen --check` found a file that differs or is missing; `diff` found a permission gained or lost, an interface that differs, or a line under a workflow that differs |
 | 2 | bad arguments, a file that cannot be read or written, or a file that reads another language run with sekisho's own binary (E209); two versions `diff` cannot compare |
+
+With `--format json` anywhere on the line, a run that stops before its work (exit 2: a file
+that is not there or not UTF-8, a flag it does not take, an argument missing) writes the sentence
+it says on stderr in JSON on stdout as well, `{"error": {"code": 2, "message": "…"}}`, without
+its `error: ` head.
 
 ## JSON
 
@@ -674,6 +827,54 @@ English) and `--help`.
   "ok": true,
   "summary": "3 actions, 10 policies (7 permits, 3 forbids), 3 expectations, 1 separation",
   "diagnostics": []
+}
+```
+
+A diagnostic is an object of `code`, `severity`, `file`, `line`, `col`, `message`, `notes`,
+`example` and `fix`. The keys are English whatever the language; `message`, `notes` and the values
+of an example are in the language asked for.
+
+- `example` is the combination a check of every combination shows, as it is counted: an object of
+  each value by what it is the value of (`principal`, each role walked, `principal.<attribute>`,
+  `resource`, `resource.<attribute>`, the relations, each input and each computed value by its
+  name, `allowed <action>`), in that order. It is null for a diagnostic that shows no combination.
+- `example_inputs` comes after `example` when an input was run through the rules for computed
+  values of the example, and is left out otherwise. It is an array, one object for each group of
+  computed values that are computed from the same data: `computed` (the names of the values it
+  explains), `kind` (`point` for one input that was run, `region` for a stretch every input of
+  which comes to the values) and `given` (each attribute and input the rules are given: its `name`
+  as the gate writes it, the `type` whose attribute it is or null for an input of the action, and
+  its `value`). A `point` lists every attribute and input the rules are given; a `region` lists
+  those it holds further than `example` does.
+
+The E304 above, in part:
+
+```json
+{
+  "code": "E304",
+  "example": {
+    "principal": "User",
+    "clerk": "yes",
+    "manager": "yes",
+    "auditor": "no",
+    "principal.suspended": "yes",
+    "resource": "Order",
+    "resource.status": "paid",
+    "amount": "1GBP to 50GBP",
+    "refund_band": "within_limit",
+    "in_period": "yes",
+    "business_day": "no"
+  },
+  "example_inputs": [
+    {
+      "computed": ["refund_band"],
+      "kind": "point",
+      "given": [
+        {"name": "principal.refund_limit", "type": "User", "value": "1GBP"},
+        {"name": "amount", "type": null, "value": "1GBP"}
+      ]
+    }
+  ]
 }
 ```
 
@@ -694,5 +895,5 @@ yuen's are.
 
 | Variable | What it does |
 |---|---|
-| `SEKISHO_LANG` | `ja` or `en`, the language of the text when `--lang` is not given |
+| `SEKISHO_LANG` | `ja` or `en`, the language of the text a command prints when `--lang` is not given (what `gen` and `doc` write follows `--lang` alone) |
 | `RITSU_LANG` | the same, for every language of ritsu, after `SEKISHO_LANG` |

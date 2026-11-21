@@ -113,6 +113,10 @@ struct E<'a> {
     arts: &'a [Artifact],
     read: &'a crate::suite::Read,
     diags: Vec<Diag>,
+    /// Whether a name is looked for where E312 says what it goes through is not published: it
+    /// is said nothing of, and the elements are not complete.
+    behind: bool,
+    quiet: bool,
 }
 
 /// An element of an OpenAPI or AsyncAPI document, as sakai holds it (DESIGN 15.4): its reference
@@ -307,9 +311,15 @@ impl E<'_> {
                 match found.len() {
                     // A file that could not be read is told as E106 already; what is in it is not known.
                     0 if files.iter().any(|f| !self.ps.files.contains_key(f)) => None,
+                    // what a `through` names and the upstream does not publish is said once, at the
+                    // `through` line (E312, or E302 at the heading it waits for)
+                    0 if self.behind => {
+                        self.quiet = true;
+                        None
+                    }
                     0 => {
                         let w = where_.clone();
-                        self.err(c, *pos, "E007", tr!("{} に {kind} {name} はありません", "There is no {kind} {name} in {}", w.ja; w.en));
+                        self.err(c, *pos, "E007", tr!("{} に {kind} {name} はありません", "There is no {kind} {name} in {}", w.ja; w.en)).same_in_mut(format!("{kind} in {}", w.en), name.clone());
                         None
                     }
                     1 => {
@@ -364,7 +374,7 @@ pub fn published_contracts(m: &Model, cs: &Contracts, arts: &[Artifact], c: usiz
 
 /// Resolve every element the map names.
 pub fn resolve(m: &Model, ps: &Protos, cs: &Contracts, arts: &[Artifact], read: &crate::suite::Read) -> (Elements, Vec<Diag>) {
-    let mut e = E { m, ps, cs, arts, read, diags: Vec::new() };
+    let mut e = E { m, ps, cs, arts, read, diags: Vec::new(), behind: false, quiet: false };
     let mut out = Elements { complete: true, ..Elements::default() };
     for (ci, c) in m.contexts.iter().enumerate() {
         let own = own_published(m, ci);
@@ -385,11 +395,14 @@ pub fn resolve(m: &Model, ps: &Protos, cs: &Contracts, arts: &[Artifact], read: 
             let files: Vec<String> = up.published.iter().filter(|p| pkgs.contains(&p.package)).flat_map(|p| p.protos.iter().map(|(f, _)| f.clone())).collect();
             let docs = published_contracts(m, cs, arts, r.partner, Some(&pkgs));
             let through_text = packages_text(&pkgs);
+            let behind = pkgs.iter().any(|k| !up.published.iter().any(|pl| pl.package == *k));
             for (ei, em) in enums.iter().enumerate() {
                 let from = Element::Short { kind: "enum".into(), name: em.from.clone(), child: None, pos: em.from_pos };
+                e.behind = behind;
                 if let Some(n) = e.element(ci, &from, &files, &docs, &through_text) {
                     out.found.insert(At::From(ci, ri, ei), n);
                 }
+                e.behind = false;
                 if let Target::Element(te) = &em.target {
                     // The target is an enum: a proto enum or a rule's.
                     let ok_kind = match te {
@@ -414,6 +427,7 @@ pub fn resolve(m: &Model, ps: &Protos, cs: &Contracts, arts: &[Artifact], read: 
         }
     }
     out.complete = e.diags.is_empty()
+        && !e.quiet
         && !m.contexts.iter().flat_map(|c| c.published.iter()).flat_map(|p| p.protos.iter()).any(|(f, _)| !ps.files.contains_key(f))
         && cs.unread.is_empty();
     (out, e.diags)

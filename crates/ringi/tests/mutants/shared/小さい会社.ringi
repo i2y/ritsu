@@ -1,0 +1,13 @@
+organization 会社(company) v1 "会社"
+description "小さな会社（架空）。社長、二人の営業部、一人の財務部"
+
+positions
+  担当(staff)     "担当"
+  部長(dept_head) "部長"
+  社長(president) "社長"
+
+team kinds
+  会社(company)  "会社"
+  部(department) "部"
+
+data "org-small"

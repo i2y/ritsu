@@ -177,12 +177,18 @@ struct Abs {
     cases: Vec<CaseAbs>,
     /// for a value narrowed by a match: the values it can have, each with its run
     narrow: BTreeMap<String, BTreeMap<String, Path>>,
+    /// for a variable that holds an enum's value or a truth value: each value the runs can have
+    /// put in it last (as `held` reads a value, `ranges::held`), each with a run that did, so that
+    /// a `match` on it shows a run that comes with the value it speaks of (E010, E011); a variable
+    /// not here (the variable of a `for`, which any value of the list can come in on any round)
+    /// shows the run to the `match`
+    put: BTreeMap<String, BTreeMap<String, Path>>,
     path: Path,
 }
 
 impl Abs {
     fn dead() -> Abs {
-        Abs { live: false, set: BTreeMap::new(), cases: vec![], narrow: BTreeMap::new(), path: vec![] }
+        Abs { live: false, set: BTreeMap::new(), cases: vec![], narrow: BTreeMap::new(), put: BTreeMap::new(), path: vec![] }
     }
 
     /// Record a step of the run, on the run to this point and on every witness it carries.
@@ -197,7 +203,7 @@ impl Abs {
                 p.push(s.clone());
             }
         }
-        for vals in self.narrow.values_mut() {
+        for vals in self.narrow.values_mut().chain(self.put.values_mut()) {
             for p in vals.values_mut() {
                 p.push(s.clone());
             }
@@ -207,12 +213,25 @@ impl Abs {
     }
 
     fn same(&self, o: &Abs) -> bool {
+        let values = |a: &BTreeMap<String, BTreeMap<String, Path>>, b: &BTreeMap<String, BTreeMap<String, Path>>| a.len() == b.len() && a.iter().zip(b).all(|((ka, va), (kb, vb))| ka == kb && va.keys().eq(vb.keys()));
         self.live == o.live
             && self.set.iter().map(|(k, v)| (k, v.0)).eq(o.set.iter().map(|(k, v)| (k, v.0)))
             && self.cases.len() == o.cases.len()
             && self.cases.iter().zip(&o.cases).all(|(a, b)| a.pairs.keys().eq(b.pairs.keys()))
-            && self.narrow.len() == o.narrow.len()
-            && self.narrow.iter().zip(&o.narrow).all(|((ka, va), (kb, vb))| ka == kb && va.keys().eq(vb.keys()))
+            && values(&self.narrow, &o.narrow)
+            && values(&self.put, &o.put)
+    }
+}
+
+/// Each value of `b` not in `a` into `a`, and the shorter run of a value both have.
+fn add_values(a: &mut BTreeMap<String, Path>, b: &BTreeMap<String, Path>) {
+    for (val, p) in b {
+        match a.get(val) {
+            Some(q) if q.len() <= p.len() => {}
+            _ => {
+                a.insert(val.clone(), p.clone());
+            }
+        }
     }
 }
 
@@ -251,18 +270,16 @@ fn join(a: &Abs, b: &Abs) -> Abs {
     for (k, v) in &a.narrow {
         if let Some(w) = b.narrow.get(k) {
             let mut u = v.clone();
-            for (val, p) in w {
-                match u.get(val) {
-                    Some(q) if q.len() <= p.len() => {}
-                    _ => {
-                        u.insert(val.clone(), p.clone());
-                    }
-                }
-            }
+            add_values(&mut u, w);
             narrow.insert(k.clone(), u);
         }
     }
-    Abs { live: true, set, cases, narrow, path: shorter(&a.path, &b.path) }
+    // a value either way put in a variable: one way that has put none in it adds none
+    let mut put = a.put.clone();
+    for (k, w) in &b.put {
+        add_values(put.entry(k.clone()).or_default(), w);
+    }
+    Abs { live: true, set, cases, narrow, put, path: shorter(&a.path, &b.path) }
 }
 
 pub struct Flow<'a> {
@@ -283,6 +300,10 @@ pub struct Flow<'a> {
     /// what the values of an enum each variable holds can be, as the ranges of the places they come
     /// from hold them (`ranges::held`): a `match` on one takes only those
     held: BTreeMap<String, crate::ranges::Est>,
+    /// the same on the runs that reach each `match`, by its site, for the variables the walk of the
+    /// runs follows there (`crossings::held_here`): a value put in on a way that does not reach the
+    /// `match` is not one it needs an arm for
+    held_at: BTreeMap<usize, BTreeMap<String, crate::ranges::Est>>,
 }
 
 pub struct FlowResult {
@@ -296,8 +317,8 @@ pub struct FlowResult {
 const PERIOD_POINT: &str = "now";
 
 pub fn analyze(m: &Model) -> FlowResult {
-    let mut f = Flow { m, diags: BTreeMap::new(), loops: vec![], failures: vec![], cancels: vec![], monitors: BTreeMap::new(), in_on_failure: false, in_on_cancel: false, seen: BTreeMap::new(), ends: BTreeMap::new(), held: crate::ranges::held(m) };
-    let mut start = Abs { live: true, set: BTreeMap::new(), cases: vec![], narrow: BTreeMap::new(), path: vec![] };
+    let mut f = Flow { m, diags: BTreeMap::new(), loops: vec![], failures: vec![], cancels: vec![], monitors: BTreeMap::new(), in_on_failure: false, in_on_cancel: false, seen: BTreeMap::new(), ends: BTreeMap::new(), held: crate::ranges::held(m), held_at: crate::crossings::held_here(m) };
+    let mut start = Abs { live: true, set: BTreeMap::new(), cases: vec![], narrow: BTreeMap::new(), put: BTreeMap::new(), path: vec![] };
     for (v, _) in &m.vars {
         let is_input = m.inputs.iter().any(|(i, _)| i == v);
         start.set.insert(v.clone(), if is_input { (Tri::Yes, None) } else { (Tri::No, Some(vec![])) });
@@ -555,6 +576,31 @@ impl<'a> Flow<'a> {
         a.set.insert(name.to_string(), (Tri::Yes, None));
         let pre = format!("{name}.");
         a.narrow.retain(|k, _| k != name && !k.starts_with(&pre));
+        a.put.remove(name);
+    }
+
+    /// The values `e` can be on the runs `a`, each with a run that has it, as `held` reads a value
+    /// (`ranges::held`): what a `match` on the way left of a variable, what the runs put in it, or
+    /// else what the places the value comes from let in, on the run to here.
+    fn values_of(&self, a: &Abs, e: &TExpr) -> BTreeMap<String, Path> {
+        let followed = match e {
+            TExpr::Var { name, fields, .. } if fields.is_empty() => a.narrow.get(name).or_else(|| a.put.get(name)),
+            _ => None,
+        };
+        match followed {
+            Some(vals) => vals.clone(),
+            None => crate::ranges::estimate_held(self.m, &self.held, e).values.into_iter().map(|v| (v, a.path.clone())).collect(),
+        }
+    }
+
+    /// Keep what the variable `name` was just given, `values`, for a `match` on it to show the run
+    /// each comes on: only for a variable of an enum or a truth value, the only ones a `match`
+    /// names the values of.
+    fn put(&self, a: &mut Abs, name: &str, values: BTreeMap<String, Path>) {
+        let kept = self.m.var_ty(name).is_some_and(|t| matches!(t.inner(), Ty::Enum(_) | Ty::Bool));
+        if kept && !values.is_empty() {
+            a.put.insert(name.to_string(), values);
+        }
     }
 
     fn stmts(&mut self, ss: &[TStmt], mut a: Abs) -> Abs {
@@ -593,13 +639,18 @@ impl<'a> Flow<'a> {
             }
             TK::Assign { name, expr } => {
                 self.check_reads(expr, &a, s.line);
-                let mut a = a.step(Step::new(s.line, tr!("{name} = {}", "{name} = {}", show(expr))).at(here));
+                // a number written with a unit, as written (DESIGN 40)
+                let shown = if matches!(expr, TExpr::Str(_) | TExpr::Interp(_)) { show(expr) } else { self.m.shown_at(s.site, "", expr) };
+                let mut a = a.step(Step::new(s.line, tr!("{name} = {shown}", "{name} = {shown}")).at(here));
+                let values = self.values_of(&a, expr);
                 Flow::assign(&mut a, name);
+                self.put(&mut a, name, values);
                 a
             }
             TK::For { var, list, max, parallel, body, result, locals } => {
                 self.check_reads(list, &a, s.line);
-                let entry = a.step(Step::new(s.line, tr!("for {var} in {}（{max} 個まで）", "for {var} in {} (at most {max})", show(list))).at(here));
+                let list_text = self.m.shown_at(s.site, "in", list);
+                let entry = a.step(Step::new(s.line, tr!("for {var} in {list_text}（{max} 個まで）", "for {var} in {list_text} (at most {max})")).at(here));
                 match parallel {
                     None => {
                         // like `repeat`, but the list may be empty, so the loop can also end before a round
@@ -820,7 +871,24 @@ impl<'a> Flow<'a> {
                     ),
                     Settling::No => tr!("`{callee}` が失敗すると、案件 `{cn}` が {st_ja} のままワークフローが失敗します。そうなる呼び出しは {count} か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください", "if `{callee}` fails, the workflow fails with the case `{cn}` in {st}; {count} call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case"),
                 };
-                self.push(Diag::warning("W101", line, 1, message).with_path(path));
+                let mut d = Diag::warning("W101", line, 1, message).with_path(path);
+                // what fixes it, said for the form it came in (DESIGN 10): a retry leaves the call
+                // able to fail, and a call that fails while a block settles the case cannot be settled
+                // by that block again
+                if self.m.tasks.iter().any(|t| t.name == callee && t.retry.is_some()) {
+                    d = d.note(tr!(
+                        "`{callee}` の `retry` は失敗を無くしません。リトライを使い切ると、呼び出しは失敗します。",
+                        "The `retry` of `{callee}` does not take the failure away: once the retries run out, the call fails."
+                    ));
+                }
+                if let Settling::OnFailure | Settling::OnCancel = settling {
+                    let block = if settling == Settling::OnFailure { "on failure" } else { "on cancel" };
+                    d = d.note(tr!(
+                        "`{block}` の中で呼び出しが失敗すると、`{cn}` はもう `{block}` では片付けられません。`{callee}` の呼び出しで失敗を受け、`{cn}` をそのまま人に渡してください（`on failure, timeout => fail <エラー> \"…\" leaving {cn}`）。",
+                        "Once a call fails inside `{block}`, `{block}` cannot settle `{cn}` any more: handle the failure at the call of `{callee}`, and hand `{cn}` over as it is (`on failure, timeout => fail <Error> \"…\" leaving {cn}`)."
+                    ));
+                }
+                self.push(d);
             }
         }
     }
@@ -847,6 +915,11 @@ impl<'a> Flow<'a> {
             Some(Target::Let(v)) => {
                 ok = ok.step(Step::new(s.line, tr!("{v} = {callee_name}(…)", "{v} = {callee_name}(…)")).at(At::Stmt(s.site)));
                 Flow::assign(&mut ok, v);
+                // what a task answers, as the range of its result lets in
+                if let Callee::Task(t) = callee {
+                    let values = crate::ranges::of_answer(self.m, &self.m.tasks[*t]).values.into_iter().map(|x| (x, ok.path.clone())).collect();
+                    self.put(&mut ok, v, values);
+                }
             }
             Some(Target::Case(c)) => {
                 let c = *c;
@@ -1189,8 +1262,17 @@ impl<'a> Flow<'a> {
         let ety = expr.ty();
         let optional = matches!(ety, Ty::Opt(_));
         // a value of an enum that every place it comes from holds to a range is one of the values
-        // the ranges let in: the code each platform is given checks it where it comes in
-        let held = if case_state.is_none() { crate::ranges::held_values(self.m, &self.held, expr) } else { None };
+        // the ranges let in: the code each platform is given checks it where it comes in. A
+        // variable is what the runs that reach the `match` last put in it.
+        let held = match (case_state, self.held_at.get(&s.site)) {
+            (Some(_), _) => None,
+            (None, Some(here)) => {
+                let mut vars = self.held.clone();
+                vars.extend(here.iter().map(|(k, v)| (k.clone(), v.clone())));
+                crate::ranges::held_values(self.m, &vars, expr)
+            }
+            (None, None) => crate::ranges::held_values(self.m, &self.held, expr),
+        };
         let mut domain: Vec<String> = match (ety.inner(), &held) {
             (Ty::Enum(_), Some(values)) => values.clone(),
             (Ty::Enum(e), None) => self.m.enums[*e].values.clone(),
@@ -1234,8 +1316,10 @@ impl<'a> Flow<'a> {
                     narrowed = true;
                 }
                 None => {
+                    // each value with a run that put it in the variable, where the walk knows one
+                    let put = a.put.get(&key);
                     for v in &domain {
-                        possible.insert(v.clone(), a.path.clone());
+                        possible.insert(v.clone(), put.and_then(|p| p.get(v)).unwrap_or(&a.path).clone());
                     }
                     // a value the ranges keep out can never be there, as one an arm above took
                     narrowed = held.is_some();
@@ -1268,6 +1352,7 @@ impl<'a> Flow<'a> {
                         } else {
                             tr!("分岐 `{v}` は通りません。ここで `{key}` がとりうる値は {} だけです", "the arm `{v}` can never be taken: `{key}` is one of {} here", listed.join("・"); listed.join(", "))
                         };
+                        // a run that comes with one of the values the message says it is
                         let why = if v == "none" { a.path.clone() } else { possible.values().next().cloned().unwrap_or_else(|| a.path.clone()) };
                         self.push(Diag::error("E011", arm.line, 1, message).with_path(why));
                     }
@@ -1311,6 +1396,11 @@ impl<'a> Flow<'a> {
                         if let Some(p) = vals.values().min_by_key(|p| p.len()) {
                             inner.path = p.clone();
                         }
+                        // the value the arm takes out of it, on the run each value came on
+                        if let Some(x) = &arm.some {
+                            let taken = vals.iter().filter(|(v, _)| *v != "none").map(|(v, p)| (v.clone(), p.clone())).collect();
+                            self.put(&mut inner, x, taken);
+                        }
                         inner.narrow.insert(key.clone(), vals);
                     }
                 }
@@ -1322,6 +1412,7 @@ impl<'a> Flow<'a> {
         if !missing.is_empty() {
             let names: Vec<String> = in_order(missing.iter().map(|(v, _)| v.clone()).collect());
             let message = tr!("`match` に {} の分岐がありません。ここで `{key}` はその値を取りえます", "`match` has no arm for {}, which `{key}` can be here", names.join("・"); names.join(", "));
+            // a run that comes with one of the values the message names
             let path = missing[0].1.clone();
             self.push(Diag::error("E010", s.line, 1, message).with_path(path));
         }

@@ -18,7 +18,12 @@
 //! - the crates `tools/rust` pins are those chobo's clients name, at their versions
 //!   (`the_crates_are_those_the_clients_name`);
 //! - a `kaname::Date` of no calendar a host makes (2026-02-30) is outside the range of every
-//!   parameter, the ends written or not (`a_day_of_no_calendar_is_outside_every_range`).
+//!   parameter, the ends written or not (`a_day_of_no_calendar_is_outside_every_range`);
+//! - shapes the modules of the tests do not have, each of which the Rust once wrote with an error or
+//!   a warning (lists lent at once, results matched where they are lent, records built and matched
+//!   where they are lent, functions held in a name and passed on, answers of rules held and listed,
+//!   and a package with no function a host calls), each its own crate, build with clippy's
+//!   `-D warnings` and answer as the reference interpreter does.
 //!
 //! Without cargo's clippy, the crate is held to rustc's lints alone and a SKIP line says so; without
 //! PostgreSQL or TigerBeetle, the transfers are not made there, and a SKIP line says so.
@@ -59,7 +64,7 @@ fn the_generated_rust_answers_as_the_reference_does() {
             write_package(&base, Target::Rust, lang, &modules);
             let dir = package_dir(&base, Target::Rust);
             std::fs::create_dir_all(dir.join("harness")).unwrap();
-            std::fs::write(dir.join("harness/main.rs"), kaname::r#gen::harness::program(&checked, Target::Rust, PY_NAME, GO_PACKAGE)).unwrap();
+            std::fs::write(dir.join("harness/main.rs"), kaname::r#gen::harness::program(&checked, Target::Rust, PY_NAME, GO_PACKAGE, lang)).unwrap();
             let (cases, counts) = cases(&modules, lang, Target::Rust);
             std::fs::write(dir.join("calls.jsonl"), kaname::r#gen::harness::call_lines(&checked, &cases)).unwrap();
             // the 2021 edition first, then the 2024 edition, which the harness is built on
@@ -608,4 +613,254 @@ fn a_day_of_no_calendar_is_outside_every_range() {
          open 2026-03-02: ok\n"
     );
     print!("{said}");
+}
+
+/// The module of [`a_list_lent_at_once_and_an_indexed_value_build_with_no_warning`].
+const LENT: &str = "module lent v1
+
+record Tree
+  label : string
+  kids  : list[Tree]  count <=3
+
+fn labels(names: list[string] count <=5) -> number total
+  names.count()
+
+fn one(t: Tree) -> number total
+  labels(names: [t.label])
+
+fn label_at(x: indexed[Tree]) -> string total
+  x.item.label
+
+examples
+  one(t: Tree { label: \"a\", kids: [] }) = 1
+";
+
+/// Two shapes the modules of the tests do not have, each of which the Rust once wrote with a
+/// warning clippy turns into an error: a list written out where it is given to a function
+/// (`&vec![t.label.clone()]`, `useless_vec`; one value cloned into it is lent as its own slice,
+/// `std::slice::from_ref(&t.label)`, and more are `&[…]`), and a parameter of a record a built-in
+/// function answers (`indexed[Tree]`), whose check of how deep a host's value nests checked nothing
+/// and left its parameters unused (it walks the record's fields, as the interpreter's `nesting`
+/// does). The crate builds with clippy's `-D warnings`, and answers every case as the reference
+/// interpreter does, the trees nested deeper than a host may give to `one` and to `label_at` among
+/// them (`vectors::nested_value` goes into the record a built-in function answers, as the check
+/// does).
+#[test]
+fn a_list_lent_at_once_and_an_indexed_value_build_with_no_warning() {
+    builds_with_no_warning_and_agrees("lent", LENT, 6);
+}
+
+/// The module of [`a_result_matched_and_a_result_in_a_record_build_with_no_warning`].
+const RESULTS: &str = "module results v1
+
+enum Tree
+  leaf
+  node
+    kids : list[Tree]
+
+record Try
+  r : result[Tree?, string]
+
+fn failed(r: result[date, string]) -> bool total
+  match r
+    ok d => false
+    err e => true
+
+fn kept(t: Try) -> Try total
+  t
+";
+
+/// Two more shapes the modules of the tests do not have, which the Rust once wrote so that rustc
+/// refused it: a `match` of a parameter of a result whose value is `Copy` (`result[date, string]`),
+/// whose arm took the value out of the reference (`if let Ok(&r0) = r`, a pattern of a reference
+/// against a `&Result`; the result is matched as it is lent, `r.as_ref()`), and a record whose field
+/// is a result of a value that may be absent (`result[Tree?, string]`), whose check of how deep a
+/// host's value nests gave the check of the inner value the reference to the `Option` itself (it is
+/// lent as `r.as_ref()`). The crate builds with clippy's `-D warnings`, and answers every case as the
+/// reference interpreter does.
+#[test]
+fn a_result_matched_and_a_result_in_a_record_build_with_no_warning() {
+    builds_with_no_warning_and_agrees("results", RESULTS, 4);
+}
+
+/// The module of [`records_built_and_matched_where_they_are_lent_build_with_no_warning`].
+const LENT_RECORDS: &str = "module lent_records v1
+
+record Rec
+  did  : string
+  note : string?
+
+enum Quorum
+  all
+  at_least
+    n : number range >=1 <=10
+
+enum Shape
+  quorum
+    q : Quorum
+  single
+
+record Late
+  first : string
+  after : string?
+
+record Occ
+  shape : Shape
+  late  : Late?
+
+fn kept(r: Rec) -> Rec total
+  r
+
+fn noted(r: Rec, n: number range >=0 <=100) -> Rec total
+  kept(r: Rec { ..r, note: concat(text(n), \" business days\") })
+
+fn quorum_of(o: Occ) -> Quorum? total
+  match o.shape
+    quorum x => x.q
+    else => none
+
+fn late_first(o: Occ) -> string? total
+  match o.late
+    none => none
+    some l => l.first
+";
+
+/// Shapes of records the Rust once wrote so that rustc or clippy refused it: a record a function is
+/// given, built from one that is lent with a string made in place in a field that may be absent
+/// (`Rec { ..r, note: concat(…) }`: the string made in place was taken for a name and lent, and what
+/// it borrowed was dropped at the end of its statement, rustc's E0716), and a field of a value of a
+/// sum or of a record that may be absent, read where the value is lent (`Some((&x.q).clone())`,
+/// clippy's `needless_borrow`). The crate builds with clippy's `-D warnings`, and answers every case
+/// as the reference interpreter does.
+#[test]
+fn records_built_and_matched_where_they_are_lent_build_with_no_warning() {
+    builds_with_no_warning_and_agrees("lent_records", LENT_RECORDS, 20);
+}
+
+/// The module of [`functions_held_in_a_name_and_passed_on_build_with_no_warning`].
+const PASSED_ON: &str = "module passed_on v1
+
+record Ref
+  id : string
+
+fn inner(r: Ref, on: (Ref) -> list[string] total) -> list[string] total
+  on(r)
+
+fn outer[F](r: Ref, form: F, on: (Ref, F) -> list[string] total) -> list[string] total
+  let on_form = (x: Ref) => on(x, form)
+  inner(r: r, on: on_form)
+
+fn loose(x: number range >=0 <=10, on: (number) -> number) -> number fails range
+  on(x)
+
+fn strict(x: number range >=0 <=10, on: (number) -> number total) -> number fails range
+  loose(x: x, on: on)
+
+fn one() -> number total
+  1
+";
+
+/// Functions held as values, which the Rust once wrote so that rustc refused it (E0308): a lambda
+/// held in a `let` and given to a parameter of a function that cannot fail (it was written as a
+/// closure answering a `Result`), and a function that cannot fail given on to a parameter of one whose
+/// type writes no effect (which answers a `Result`; the closure is adapted where it is given). The
+/// crate builds with clippy's `-D warnings`; the one function a host calls is answered as the
+/// reference interpreter answers it.
+#[test]
+fn functions_held_in_a_name_and_passed_on_build_with_no_warning() {
+    builds_with_no_warning_and_agrees("passed_on", PASSED_ON, 1);
+}
+
+/// The module of [`answers_of_rules_held_and_listed_build_with_no_warning`].
+const HELD_ANSWERS: &str = "module held_answers v1
+
+use rule part from \"tests/rules/part.rule\"
+use rule tiers from \"../rulec/tests/corpus/member_tier_shipping.rule\"
+
+record Worked
+  part   : money[JPY]
+  lifted : bool
+
+fn worked(amount: money[JPY] range >=0JPY <=1_000_000JPY) -> Worked
+  let got = part(share: 10%, amount: amount)
+  let t = tiers(member: tiers.tier.basic, campaign: tiers.tier.gold, subtotal: 10USD)
+  taken(got: got, t: t)
+
+private fn taken(got: part.outputs, t: tiers.outputs) -> Worked total
+  Worked { part: got.part, lifted: t.lifted }
+
+fn walked(xs: list[money[JPY]] count <=3 range >=0JPY <=1_000_000JPY) -> list[money[JPY]]
+  let gots = xs.map(x => part(share: 10%, amount: x))
+  gots.map(g => g.part)
+";
+
+/// Answers of rules held in names, given to a function and put in a list, which the Rust once
+/// borrowed and cloned as if no answer of a rule were `Copy` (clippy's `clone_on_copy`): the answer of
+/// a rule of one output is the value itself, `Copy` but a string, and rulec's struct of many outputs is
+/// `Copy` where no column is a string or may be absent (DESIGN 36.4). The crate builds with clippy's
+/// `-D warnings`, and answers every case as the reference interpreter does.
+#[test]
+fn answers_of_rules_held_and_listed_build_with_no_warning() {
+    builds_with_no_warning_and_agrees("held_answers", HELD_ANSWERS, 8);
+}
+
+/// The module of [`a_package_with_no_function_a_host_calls_builds_with_no_warning`].
+const HOF_ONLY: &str = "module hof_only v1
+
+fn applied(f: (number) -> number total, x: number range >=0 <=10) -> number total
+  f(x)
+";
+
+/// A package whose modules have no function a host calls (each takes a function): its door reads a
+/// call as any door does and answers that no module has it, with no `match` of no arms, which rustc
+/// and clippy said was unreachable and left `function` and `in` unread (DESIGN 36.11). The crate
+/// builds with clippy's `-D warnings`; there is no case to run.
+#[test]
+fn a_package_with_no_function_a_host_calls_builds_with_no_warning() {
+    builds_with_no_warning_and_agrees("hof_only", HOF_ONLY, 0);
+}
+
+/// The module `src` (`<name>.kn`) generated as Rust, built with clippy's `-D warnings` (rustc's alone
+/// where clippy is not here) and run on its cases: at least `least` cases, each answered as the
+/// reference interpreter answers it.
+fn builds_with_no_warning_and_agrees(name: &'static str, src: &'static str, least: usize) {
+    if !ritsu_testkit::need(Need::Rustc) {
+        return;
+    }
+    let clippy = clippy();
+    if !clippy {
+        ritsu_testkit::skip("cargo clippy is not here; the Rust kaname generates is held to rustc's lints alone");
+    }
+    let t = TempDir::new(&format!("kaname-rust-{name}"));
+    let root = t.path().to_path_buf();
+    let (agree, n, wrong) = deep(move || {
+        let file = format!("{name}.kn");
+        let o = common::check_text(&file, src);
+        let c = o.analysed.clone().unwrap_or_else(|| panic!("{}", common::shown(&o, Lang::En)));
+        let modules = vec![(c.clone(), file)];
+        write_package(&root, Target::Rust, Lang::En, &modules);
+        let dir = package_dir(&root, Target::Rust);
+        std::fs::create_dir_all(dir.join("harness")).unwrap();
+        std::fs::write(dir.join("harness/main.rs"), kaname::r#gen::harness::program(std::slice::from_ref(&c), Target::Rust, PY_NAME, GO_PACKAGE, Lang::En)).unwrap();
+        let (cases, _) = cases(&modules, Lang::En, Target::Rust);
+        std::fs::write(dir.join("calls.jsonl"), kaname::r#gen::harness::call_lines(&[c], &cases)).unwrap();
+        crate_files(&dir, "2024", name);
+        let mut lint = cargo_in(&dir);
+        if clippy {
+            lint.args(["clippy", "--locked", "--quiet", "--all-targets", "--", "-D", "warnings"]);
+        } else {
+            lint.args(["rustc", "--locked", "--quiet", "--lib", "--", "-D", "warnings"]);
+        }
+        let r = ritsu_testkit::run(&mut lint, LIMIT);
+        assert!(r.ok, "the Rust kaname generates does not build with no warning:\n{}", r.both());
+        let r = ritsu_testkit::run(cargo_in(&dir).args(["build", "--locked", "--quiet", "--bin", name]), LIMIT);
+        assert!(r.ok, "cargo build of the harness failed:\n{}", r.both());
+        let r = ritsu_testkit::run(Command::new(rust_target().join("debug").join(name)).arg(dir.join("calls.jsonl")).current_dir(&dir), LIMIT);
+        assert!(r.ok, "the harness failed:\n{}", r.both());
+        let (agree, wrong) = kaname::r#gen::harness::compare_lines(&cases, &r.stdout);
+        (agree, cases.len(), wrong)
+    });
+    assert!(wrong.is_empty(), "the Rust answers otherwise than the reference:\n{}", wrong.join("\n"));
+    assert!(agree == n && n >= least, "{agree} of {n} cases agree");
+    println!("{agree} of {n} cases agree");
 }

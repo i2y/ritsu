@@ -75,7 +75,16 @@ fn modules() -> Vec<Rc<kaname::check::Checked>> {
 
 /// The modules only these tests run (not in `tests/modules/`, whose count the generated code's tests
 /// and the models' comparisons say).
-const LEAN_MODULES: [(&str, &str); 2] = [("numbers", include_str!("lean/numbers.kn")), ("numbers.ja", include_str!("lean/numbers.ja.kn"))];
+const LEAN_MODULES: [(&str, &str); 8] = [
+    ("numbers", include_str!("lean/numbers.kn")),
+    ("numbers.ja", include_str!("lean/numbers.ja.kn")),
+    ("shadow", include_str!("lean/shadow.kn")),
+    ("shadow_lib", include_str!("lean/shadow_lib.kn")),
+    ("deadline", include_str!("lean/deadline.kn")),
+    ("chunks", include_str!("lean/chunks.kn")),
+    ("shapes", include_str!("lean/shapes.kn")),
+    ("mut", include_str!("lean/mut.kn")),
+];
 
 /// The Lean definitions of every function of the modules that stops, evaluated on every vector of
 /// its parameters that the reference interpreter answers, answer what it answers (PLAN 12.2.6): the
@@ -625,4 +634,27 @@ fn lean_proves_the_properties_of_the_examples() {
         assert_eq!(common::codes(o), vec!["W603"; undecided], "{f}:\n{}", common::shown(o, Lang::En));
     }
     ritsu_testkit::golden("tests/golden/lean/examples.txt", &text);
+}
+
+/// A property whose statement is not written is W604 in the check's language (stage 2): the
+/// writer's reason, in Japanese where it asks it, English otherwise — and the Lean's comment,
+/// English wherever the check reads it. A parameter whose record holds a dict is no obstacle the
+/// check names (`holds_keyed` looks no deeper), but `keyed` turns its Lean type down, so the
+/// statement is not written; and no proof needs building (`sent` is empty, no `lake` is run).
+#[test]
+fn lean_says_why_a_statement_is_not_written() {
+    let (_keep, dir) = place("lean_says_why_a_statement_is_not_written");
+    write(&dir, &[
+        (PathBuf::from("boxed.kn"), "module boxed v1\n\nrecord pair\n  n : number             range >=-99 <=99\n  d : dict[string, number]\n\nproperty pair_or_not(p: pair)\n  description \"A pair's number is itself\"\n  p.n = p.n\n".to_string()),
+        (PathBuf::from("boxed.lean"), "import Kaname.boxed\n".to_string()),
+    ]);
+    let o = common::check(&dir.join("boxed.kn").to_string_lossy());
+    assert!(o.analysed.is_some(), "{}", common::shown(&o, Lang::En));
+    let answered = kaname::check::with_lean(&[o], &scanned()).unwrap_or_else(|e| panic!("{}", e.text().get(Lang::En)));
+    let w604 = answered[0].diags.iter().filter(|d| d.render(Lang::En).contains("W604")).collect::<Vec<_>>();
+    assert_eq!(w604.len(), 1, "{}", common::shown(&answered[0], Lang::En));
+    let e = w604[0].render(Lang::En);
+    assert!(e.contains("its statement is not written for Lean: a type that holds a dict or a set"), "{e}");
+    let j = w604[0].render(Lang::Ja);
+    assert!(j.contains("Lean に文を書けません（辞書か集合を持つ型を使います）"), "{j}");
 }

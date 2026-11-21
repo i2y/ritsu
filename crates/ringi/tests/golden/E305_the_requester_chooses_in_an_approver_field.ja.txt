@@ -1,0 +1,3 @@
+エラー[E305]: tests/mutants/E305_the_requester_chooses_in_an_approver_field.ringi:13:44: `chosen_reviewer` は申請者が `reviewer` で指名しますが、`reviewer` は承認者だけが入れるフィールドです
+    13 |   chosen_reviewer = chosen by requester in reviewer
+  = 承認者が指名するなら `chosen by previous approver in reviewer` と書き、申請者が指名するなら `reviewer` の `approvers only` を消してください。

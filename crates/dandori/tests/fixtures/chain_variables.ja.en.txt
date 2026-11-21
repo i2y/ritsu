@@ -1,0 +1,10 @@
+error[E002]: tests/fixtures/chain_variables.ja.flow:26:13: `段` has no field `承認社` (承認者)
+    26 |     yield 段.承認社
+error[E002]: tests/fixtures/chain_variables.ja.flow:28:11: there is no task or rule `取特`
+    28 |   let 見 = 取特(ID: ID)
+error[E003]: tests/fixtures/chain_variables.ja.flow:30:11: write the record's type: `let 記: <record> = {…}`
+    30 |   let 記 = {合計: 3}
+error[E003]: tests/fixtures/chain_variables.ja.flow:32:21: `for` goes through a list; this is `string`
+    32 |   let 名前 = for 名 in ID at most 3
+error[E009]: tests/fixtures/chain_variables.ja.flow:35:9: `match` works on an enum, a bool, or a value that may be absent (`T?`); this is `string`
+    35 |   match ID

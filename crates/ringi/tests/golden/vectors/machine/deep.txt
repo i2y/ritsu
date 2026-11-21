@@ -1,0 +1,103 @@
+scenario the_head_thirty_teams_up, line 37: submit by r0001 at 2026-11-16 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, line 38: approve by h0030 at 2026-11-16 11:00 -> decide, in progress
+scenario the_head_thirty_teams_up, line 39: approve by e0001 at 2026-11-16 12:00 -> approved
+scenario the_head_thirty_teams_up, after it ended: comment by r0001 at 2026-11-16 12:00 -> refused (state)
+scenario the_head_thirty_teams_up, after line 37: approvals: approve by h0030 at 2026-11-16 10:00 -> decide, in progress
+scenario the_head_thirty_teams_up, after line 37: rejections: reject by h0030 at 2026-11-16 10:00 -> rejected
+scenario the_head_thirty_teams_up, after line 37: the requester: approve by r0001 at 2026-11-16 10:00 -> refused (person)
+scenario the_head_thirty_teams_up, after line 37: the requester: withdraw by r0001 at 2026-11-16 10:00 -> with requester
+scenario the_head_thirty_teams_up, after line 37: the requester: comment by r0001 at 2026-11-16 10:00 -> with requester
+scenario the_head_thirty_teams_up, after line 37: sent back: send back by h0030 at 2026-11-16 10:00 -> with requester
+scenario the_head_thirty_teams_up, after line 37: sent back: resubmit by r0001 at 2026-11-17 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: made again, with fields made empty: resubmit by r0001 at 2026-11-17 10:00 -> refused (form)
+scenario the_head_thirty_teams_up, after line 37: made again, with fields made empty: resubmit by r0001 at 2026-11-17 10:00 -> refused (form)
+scenario the_head_thirty_teams_up, after line 37: made again, with fields made empty: resubmit by r0001 at 2026-11-17 10:00 -> refused (form)
+scenario the_head_thirty_teams_up, after line 37: sent back: discard by r0001 at 2026-11-16 10:00 -> withdrawn
+scenario the_head_thirty_teams_up, after line 37: sent back: comment by h0030 at 2026-11-16 10:00 -> with requester
+scenario the_head_thirty_teams_up, after line 37: sent back: comment by r0001 at 2026-11-16 10:00 -> with requester
+scenario the_head_thirty_teams_up, after line 37: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_head_thirty_teams_up, after line 37: paused: pause by h0030 at 2026-11-16 10:00 -> first, paused
+scenario the_head_thirty_teams_up, after line 37: paused: resume by h0030 at 2026-11-17 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: paused: comment by r0001 at 2026-11-16 10:00 -> first, paused
+scenario the_head_thirty_teams_up, after line 37: paused: pause ends at 2026-11-24 00:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: an administrator, by name: add approver by u0001 at 2026-11-16 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: an administrator, by name: hand over by u0001 at 2026-11-16 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: clocks: late at 2026-11-20 00:00 -> expired
+scenario the_head_thirty_teams_up, after line 37: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario the_head_thirty_teams_up, after line 37: clocks: approve by h0030 at 2026-11-20 00:00 -> refused (clock)
+scenario the_head_thirty_teams_up, after line 37: clocks: comment by h0030 at 2026-11-20 00:00 -> refused (clock)
+scenario the_head_thirty_teams_up, after line 37: comments: comment by h0030 at 2026-11-16 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: comments: comment by r0001 at 2026-11-16 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: comments: comment by h0030 at 2026-11-16 10:00 -> refused (comment)
+scenario the_head_thirty_teams_up, after line 37: comments: comment by h0030 at 2026-11-16 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: comments: comment by h0030 at 2026-11-16 10:00 -> refused (comment)
+scenario the_head_thirty_teams_up, after line 37: comments: approve by h0030 at 2026-11-16 10:00 -> decide, in progress
+scenario the_head_thirty_teams_up, after line 37: comments: send back by h0030 at 2026-11-16 10:00 -> with requester
+scenario the_head_thirty_teams_up, after line 37: comments: approve by h0030 at 2026-11-16 10:00 -> refused (comment)
+scenario the_head_thirty_teams_up, after line 37: sent back to the limit: send back by h0030 at 2026-11-17 10:00 -> with requester
+scenario the_head_thirty_teams_up, after line 37: sent back to the limit: resubmit by r0001 at 2026-11-18 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 37: sent back to the limit: send back by h0030 at 2026-11-18 10:00 -> refused (limit)
+scenario the_head_thirty_teams_up, after line 38: approvals: approve by e0001 at 2026-11-16 11:00 -> approved
+scenario the_head_thirty_teams_up, after line 38: rejections: reject by e0001 at 2026-11-16 11:00 -> rejected
+scenario the_head_thirty_teams_up, after line 38: the requester: approve by r0001 at 2026-11-16 11:00 -> refused (person)
+scenario the_head_thirty_teams_up, after line 38: the requester: withdraw by r0001 at 2026-11-16 11:00 -> with requester
+scenario the_head_thirty_teams_up, after line 38: sent back: send back by e0001 at 2026-11-16 11:00 -> with requester
+scenario the_head_thirty_teams_up, after line 38: sent back: resubmit by r0001 at 2026-11-17 11:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 38: sent back: discard by r0001 at 2026-11-16 11:00 -> withdrawn
+scenario the_head_thirty_teams_up, after line 38: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_head_thirty_teams_up, after line 38: sent back: send back by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 38: paused: pause by e0001 at 2026-11-16 11:00 -> decide, paused
+scenario the_head_thirty_teams_up, after line 38: paused: resume by e0001 at 2026-11-17 11:00 -> decide, in progress
+scenario the_head_thirty_teams_up, after line 38: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario the_head_thirty_teams_up, after line 38: retracted: retract by h0030 at 2026-11-16 11:00 -> first, in progress
+scenario the_head_thirty_teams_up, after line 38: clocks: late at 2026-11-20 00:00 -> expired
+scenario nobody_within_thirty_teams_up, line 46: submit by u0001 at 2026-11-16 10:00 -> decide, in progress
+scenario nobody_within_thirty_teams_up, line 47: approve by e0001 at 2026-11-16 12:00 -> approved
+scenario nobody_within_thirty_teams_up, after line 46: approvals: approve by e0001 at 2026-11-16 10:00 -> approved
+scenario nobody_within_thirty_teams_up, after line 46: rejections: reject by e0001 at 2026-11-16 10:00 -> rejected
+scenario nobody_within_thirty_teams_up, after line 46: the requester: approve by u0001 at 2026-11-16 10:00 -> refused (person)
+scenario nobody_within_thirty_teams_up, after line 46: the requester: withdraw by u0001 at 2026-11-16 10:00 -> with requester
+scenario nobody_within_thirty_teams_up, after line 46: sent back: send back by e0001 at 2026-11-16 10:00 -> with requester
+scenario nobody_within_thirty_teams_up, after line 46: sent back: resubmit by u0001 at 2026-11-17 10:00 -> decide, in progress
+scenario nobody_within_thirty_teams_up, after line 46: sent back: discard by u0001 at 2026-11-16 10:00 -> withdrawn
+scenario nobody_within_thirty_teams_up, after line 46: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario nobody_within_thirty_teams_up, after line 46: paused: pause by e0001 at 2026-11-16 10:00 -> decide, paused
+scenario nobody_within_thirty_teams_up, after line 46: paused: resume by e0001 at 2026-11-17 10:00 -> decide, in progress
+scenario nobody_within_thirty_teams_up, after line 46: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario nobody_within_thirty_teams_up, after line 46: an administrator: add approver at 2026-11-16 10:00 -> decide, in progress
+scenario nobody_within_thirty_teams_up, after line 46: an administrator: hand over at 2026-11-16 10:00 -> decide, in progress
+scenario nobody_within_thirty_teams_up, after line 46: clocks: late at 2026-11-20 00:00 -> expired
+scenario nobody_within_thirty_teams_up, after line 46: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario nobody_within_thirty_teams_up, after line 46: clocks: approve by e0001 at 2026-11-20 00:00 -> refused (clock)
+scenario nobody_within_thirty_teams_up, after line 46: sent back to the limit: send back by e0001 at 2026-11-17 10:00 -> with requester
+scenario nobody_within_thirty_teams_up, after line 46: sent back to the limit: resubmit by u0001 at 2026-11-18 10:00 -> decide, in progress
+scenario nobody_within_thirty_teams_up, after line 46: sent back to the limit: send back by e0001 at 2026-11-18 10:00 -> refused (limit)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: approve by h0030 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: reject by h0030 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: send back by h0030 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: retract by h0030 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: pause by h0030 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: resume by h0030 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: edit by h0030 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: withdraw by r0001 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: discard by r0001 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: resubmit by r0001 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: add approver at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: hand over at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: agent answered at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: note ready at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: made on the revision before: flow failed at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: no revision: approve by h0030 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, after line 38: a comment, which says no revision: comment by h0030 at 2026-11-16 11:00 -> decide, in progress
+scenario the_head_thirty_teams_up, after line 38: made on the revision before, with a comment too long: approve by h0030 at 2026-11-16 11:00 -> refused (stale)
+scenario the_head_thirty_teams_up, made on 2026-11-20 (closed from 2026-11-21): submit by r0001 at 2026-11-20 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-26 00:00 -> expired
+scenario the_head_thirty_teams_up, made on 2026-12-28 (closed from 2026-12-29): submit by r0001 at 2026-12-28 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-07 00:00 -> expired
+scenario the_head_thirty_teams_up, made with a comment: submit by r0001 at 2026-11-16 10:00 -> first, in progress
+scenario the_head_thirty_teams_up, made with a comment: submit by r0001 at 2026-11-16 10:00 -> refused (comment)
+requester e0001: submit by e0001 at 2026-11-16 10:00 -> approved
+requester h0030: submit by h0030 at 2026-11-16 10:00 -> decide, in progress
+proxy e0001 for r0001: submit by e0001 at 2026-11-16 10:00 -> refused (person)

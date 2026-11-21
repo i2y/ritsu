@@ -1,0 +1,1 @@
+エラー[E501]: tests/mutants/shared/org-json-keys/2026-04-01/organization.json:12:1: `Junk` は、このファイルのキーではありません（読むキーは `teams`, `people`, `members`）

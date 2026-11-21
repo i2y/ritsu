@@ -93,7 +93,7 @@ $ cd crates/kaname
 $ ritsu kaname check tests/docs/unnarrowed.kn
 error[E301]: tests/docs/unnarrowed.kn:15:44: `late` can be outside >=1 <=1500, the range of the input `days_late` of the rule `charges`
     15 |   charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate).interest
-  = For example, `interest(invoice: Invoice { id: "a", invoiced: 2026-01-01, amount: 50000000GBPc }, paid_on: 2026-01-01, reference_rate: 0%)` gives it -29.
+  = For example, `interest(invoice: Invoice { id: "a", invoiced: 2026-01-01, amount: 50_000_000GBPc }, paid_on: 2026-01-01, reference_rate: 0%)` gives it -29.
   = Narrow it to that range with an `if` before it goes there, or widen the range it goes to.
 ```
 
@@ -107,10 +107,10 @@ it runs.
 
 The meaning of a module is its reference interpreter's, which `kaname run` runs and `vectors`
 chooses inputs for. The code `ritsu gen` writes is held to it in TypeScript, Python, Go and Rust, and
-so is the Wasm built from the Rust: on every vector of 52 modules of the examples and the tests
-(14,096), on every input just outside what their parameters declare, and on values of the types that
+so is the Wasm built from the Rust: on every vector of 60 modules of the examples and the tests
+(14,746), on every input just outside what their parameters declare, and on values of the types that
 hold themselves nested 200 deep, as deep as a host may give one, and 201. In English and in Japanese,
-all 16,874 cases agree in TypeScript, 16,790 in Python, and 16,770 in each of Go, Rust and the Wasm
+all 17,634 cases agree in TypeScript, 17,550 in Python, and 17,510 in each of Go, Rust and the Wasm
 (an input past the whole of a type is run where the language can hold it), and the code passes
 `tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt, `go vet` and
 `cargo clippy -- -D warnings`.
@@ -119,9 +119,9 @@ The hosts of the four [functional cores](examples.md) print what their `output.t
 ## The analysis of ranges, against what runs
 
 The analysis says what each expression can be. Every function of the examples and the test modules
-is run on its vectors and on 200 inputs drawn from what its parameters declare: on 139,754 runs, the
-3,452,025 values that 5,009 expressions came to are each inside what the analysis says, and each of
-the 1,617 runs that fail fails in a way the function's effect says.
+is run on its vectors and on 200 inputs drawn from what its parameters declare: on 153,902 runs, the
+3,574,060 values that 5,415 expressions came to are each inside what the analysis says, and each of
+the 1,627 runs that fail fails in a way the function's effect says.
 
 ## Lean
 

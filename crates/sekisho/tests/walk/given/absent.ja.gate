@@ -1,0 +1,85 @@
+gate 無いことのある値(absent_ja) v1
+description "無いことのある属性と入力を、それを読む所それぞれに渡す。書かなければならない規則の入力、列挙、規則と日付に渡す日付、日付そのものと比べる今日、規則に渡す入力、別の action の入力。無い値から計算する値も無く、null で渡した値は無い"
+namespace AbsentJa
+
+use rule 年齢の区分 from "年齢の区分.rule"
+use rule 大人か from "大人か.rule"
+use rule 上の段か from "上の段か.rule"
+use rule 前半か from "前半か.rule"
+use dates 返金の期限 from "../../../examples/refunds/dates/返金の期限.cal"
+
+today range >=2026-10-01 <=2026-10-31 offset +00:00
+
+enum 段(tier) = 下(low) | 上(high)
+
+principal ゲスト(Guest)
+  description "何かが分からないことのある読者"
+  attributes
+    年齢(age)    : number?  range >=1 <=100
+    段(tier)     : 段?
+    入会日(joined) : date?  range >=2026-01-01 <=2026-12-31
+
+resource 文書(Doc)
+  description "期日のあることがある文書"
+  attributes
+    期日(due) : date?  range >=2026-09-01 <=2026-11-30
+
+action 流し読む(skim_doc)
+  description "文書を流し読む"
+  principal ゲスト
+  resource 文書
+  input
+    年数(years) : number?  range >=1 <=100
+  context
+    大人(grown)     = 大人か(年齢: principal.年齢).大人
+    上(top)         = 上の段か(段: principal.段).上
+    前半(early)     = 前半か(日: principal.入会日).前半
+    期限内(in_time)  = today <= 返金の期限.最終日(支払日: principal.入会日)
+    期日後(overdue)  = today > resource.期日
+    年数の区分(by_year) = 年齢の区分(年齢: 年数).区分
+
+action 読む(read_doc)
+  description "文書を読む"
+  principal ゲスト
+  resource 文書
+  input
+    年数(years) : number?  range >=1 <=100
+
+action のぞく(peek_doc)
+  description "文書をのぞく"
+  principal ゲスト
+  resource 文書
+
+permit 大人のゲストは期日前なら流し読める(grown_guests_skim_what_is_not_overdue)
+  description "大人のゲストは、期日を過ぎていない文書を流し読める"
+  principal is ゲスト
+  action 流し読む
+  when 大人
+  unless 期日後
+
+permit 上の段のゲストは前半か期限内なら流し読める(top_guests_skim_early_or_in_time)
+  description "上の段のゲストで、前半に入会したか期限内なら流し読める"
+  principal is ゲスト
+  action 流し読む
+  when 上
+  when 前半 or 期限内
+
+permit 年数が子どものゲストは流し読める(children_by_their_years_skim)
+  description "渡した年数が子どもの区分のゲストは流し読める"
+  principal is ゲスト
+  action 流し読む
+  when 年数の区分 is 子ども
+
+permit 流し読めるゲストは五十までなら読める(guests_who_could_skim_read_up_to_fifty)
+  description "流し読めるゲストは、渡した年数が五十までなら読める"
+  principal is ゲスト
+  action 読む
+  when allowed 流し読む
+  when 年数 <= 50
+
+permit 自分の年齢で読める大人のゲストはのぞける(grown_guests_who_could_read_at_their_age_peek)
+  description "自分の年齢を渡して読める大人のゲストはのぞける"
+  principal is ゲスト
+  action のぞく
+  when allowed 読む(年数: principal.年齢)
+  when principal.年齢 >= 18

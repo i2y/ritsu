@@ -366,7 +366,7 @@ fn rust_files(book: &BookFacts, ops: &[(TransferId, Vec<String>)], opts: &Option
     let lit = ritsu_emit::lit::rust;
     let mut types = format!("{head}//! {what_types}
 
-#![allow(non_snake_case, non_camel_case_types)]
+#![allow(non_snake_case, non_camel_case_types, dead_code, clippy::all)]
 
 ");
     if units_used {

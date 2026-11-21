@@ -1,0 +1,4 @@
+diff: tests/fixtures/reads/changes/fed.diff
+changes no requirement reaches: none
+other files the diff touches: tests/fixtures/reads/rules/counter.rule
+no requirement is touched

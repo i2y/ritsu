@@ -1,0 +1,30 @@
+#/paths/~1refunds/post
+{
+  "operationId": "refundOrder",
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "$ref": "schemas.yaml#/Refund"
+        }
+      }
+    }
+  },
+  "responses": {
+    "201": {
+      "description": "Refunded"
+    }
+  }
+}
+api/schemas.yaml#/Refund
+{
+  "properties": {
+    "items": {
+      "type": "integer"
+    },
+    "order": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

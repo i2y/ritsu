@@ -28,16 +28,18 @@
 //!   writes checks when the workflow runs.
 //!   [`Flows::sends`] adds the calls that give a value the contracts mark secret to another
 //!   file of the project ([`Send`]), for the check of where secrets go (X14), and
-//!   [`Flows::operation_calls`] the calls of an operation of a contract ([`OperationCall`]), for
-//!   the check of what a workflow is allowed (X16).
+//!   [`Flows::operation_calls`] the calls of an operation of a contract ([`OperationCall`]), each
+//!   with what it gives and what the runs that reach it hold ([`FlowValue`], [`Reached`]), for the
+//!   check of what a workflow is allowed (X16).
 //! - [`Maps`]: sakai's maps — their contexts and relationships ([`MapFacts`]), the context a file
 //!   belongs to, and the operations each context opens ([`PublishedOperation`]) — as the checks
 //!   across the borders read them (X14, X15).
 //! - [`Checked`]: what a language's own `check` prints for a unit it checks, a diagnostic at a
 //!   time, the text and the JSON, as `ritsu check` prints it again (DESIGN 8.3).
 //! - [`Gates`]: a `.gate`'s actions with the operations they guard, its workflows, policies and
-//!   expectations, and how far someone is allowed an action, for the checks across the borders;
-//!   and [`GatePorts`], the ports sekisho reads a `.gate` with.
+//!   expectations, and how far someone is allowed an action — over every combination, with some
+//!   attributes held to values, or at one call of a flow — for the checks across the borders; and
+//!   [`GatePorts`], the ports sekisho reads a `.gate` with.
 //! - [`Programs`]: the calls a module of kaname makes to rules, koyomi dates and chobo transfers,
 //!   with what kaname knows of each value it gives (its range as kaname's analysis finds it, the
 //!   places it can come from, the relations between the inputs of a call) and what the function's
@@ -47,6 +49,11 @@
 //! - [`Feeds`]: the places a file says where their value comes from (`fed by`, [`Fed`]), and what a
 //!   place holds ([`Carried`]), for the check that holds what can come from a source to what the
 //!   place takes (X17).
+//! - [`Requests`]: ringi's requests — the files a request is lowered to, with the line of the request
+//!   each of their lines comes from ([`LoweredFile`]), its form ([`RequestForm`]), and the days it
+//!   can be used on ([`RequestUsable`]). A language that lowers what it holds reads the
+//!   diagnostics of the files back through [`Rules::findings`] and [`Dates::findings`], as the
+//!   languages' `--format json` writes them.
 //!
 //! Every check across a border answers with an [`Answer`]: shown to hold, an example where it
 //! does not, or why it cannot be decided (P5). A question that asks for a value answers with a
@@ -62,6 +69,7 @@ mod gates;
 mod index;
 mod maps;
 mod programs;
+mod requests;
 mod rests;
 mod rules;
 mod sources;
@@ -73,16 +81,21 @@ pub use sources::{Source, SourceKind, Sources};
 pub use dates::{day_of, day_text, DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet, DaySpan};
 pub use dates::CalendarFacts;
 pub use feeds::{Carried, Fed, Feeds, Spelled};
-pub use gates::{Allowance, Asker, GateAction, GateFacts, GatePolicy, GatePorts, GateWorkflow, Gates};
-pub use index::{Index, Item, Items, Lookup, Reference, References};
+pub use gates::{AllowedAt, Allowance, Asker, GateAction, GateFacts, GateGiven, GateGivenValue, GateHolds, GateInput, GatePolicy, GatePorts, GateWorkflow, Gates};
+pub use index::{Index, Item, Items, Lookup, Read, Reference, References};
 pub use flows::{
-    seconds_text, Amount, CallArg, CallInput, Crossings, DateCall, Destination, Flows, Held, HoldSpan, OperationCall, Origin, OutputCall, Ports,
-    RuleCall, Secret, Send, TransferCall, Undecided, UndecidedPrecondition,
+    seconds_text, Amount, AnswerCall, CallArg, CallInput, Crossings, DateCall, Destination, FlowDeclared, FlowPlace, FlowValue, Flows, Held, HoldSpan, OperationCall, Origin,
+    OutputCall, Ports, Reached, RuleCall, Secret, Send, TransferCall, Undecided, UndecidedPrecondition,
 };
 pub use maps::{MapFacts, MapRelationship, Maps, PublishedOperation};
+pub use requests::{
+    FlowGiven, HoldArg, LineFrom, Lined, LoweredFile, LoweredTool, RequestField, RequestForm, RequestTicket, RequestUsable, Requests, TicketCalendar, TicketFlow, TicketGate, TicketHold,
+    TicketNoEnd, TicketOperation, TicketTime, UsableBy, UsableEnd, VersionWithout,
+};
 pub use rests::rests_on;
 pub use programs::{At, CallVerdict, Crossing, Ends, Given, ProgramCrossings, ProgramDateCall, ProgramRuleCall, ProgramTransfer, Programs, Seen, Verdicts};
-pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, NeverCond, NeverTest, OutputValues, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
+pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, NeverCond, NeverTest, Outside, OutputValues, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
+pub use rules::{DiffChange, DiffColumn, DiffDeclared, DiffHeld, DiffKind, DiffSide, DiffUnknown, RuleDiff};
 
 use ritsu_base::text::Text;
 
@@ -124,8 +137,9 @@ impl Said {
         Said { code: d.code.to_string(), file: d.file.clone(), line: d.line, message: d.message.clone() }
     }
 
-    /// A file that could not be read at all.
-    pub fn unreadable(file: &str, why: &str) -> Said {
-        Said { code: String::new(), file: file.to_string(), line: None, message: ritsu_base::tr!("`{file}` を読めません: {why}", "cannot read `{file}`: {why}") }
+    /// A file that could not be read at all, said as every command of ritsu says it (ritsu-base's
+    /// `cli::cannot_read`): it is not there, it is not UTF-8, or the system's reason.
+    pub fn unreadable(file: &str, e: &std::io::Error) -> Said {
+        Said { code: String::new(), file: file.to_string(), line: None, message: ritsu_base::cli::cannot_read(file, e) }
     }
 }

@@ -181,7 +181,8 @@ fn borrow(p: &Project, fi: usize, s: &SourceDecl, n: &Name, diags: &mut Vec<Diag
     let Some(src) = declared.iter().find(|x| x.name == wanted) else {
         let have: Vec<&str> = declared.iter().map(|x| x.name.as_str()).collect();
         let (ja, en) = (have.join("、"), have.join(", "));
-        let shown = p.shown(&n.path);
+        // the file as the requirement names it (ritsu's DESIGN 6.2, item 8)
+        let shown = &n.path;
         let mut d = e106(tr!("{shown} は出典「{wanted}」を宣言していません", "{shown} declares no source {wanted}"));
         d = d.note(if have.is_empty() {
             tr!("{shown} が宣言している出典はありません。", "{shown} declares no source at all.")
@@ -391,7 +392,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
             for fl in &r.from {
                 let FromWhat::Cite { source, source_span, fragments } = &fl.what else { continue };
                 let Some(decl) = f.ast.sources.iter().find(|s| &s.name == source) else {
-                    diags.push(p.err(fi, "E105", *source_span, tr!("出典「{source}」はこのファイルで宣言されていません", "The source {source} is not declared in this file")).note(tr!(
+                    diags.push(p.err(fi, "E105", *source_span, tr!("出典「{source}」はこのファイルで宣言されていません", "The source {source} is not declared in this file")).same_in("source", source.clone()).note(tr!(
                         "引く出典は、同じファイルに `source {source} = law \"<法令ID>\" asof <日付>` のように宣言してください。出典の名前は、ファイルごとに別々です。",
                         "Declare the source in the same file, like `source {source} = law \"<law id>\" asof <date>`; source names belong to a file."
                     )));
@@ -561,7 +562,10 @@ fn spec_source(p: &Project, fi: usize, s: &SourceDecl, name: &Name, pins: &[PinL
     let f = &p.files[fi];
     let line_of = |n: usize| f.src.lines().nth(n.saturating_sub(1)).unwrap_or("").to_string();
     let abs = p.root.join(&name.path);
+    // where it was looked for, as the run writes its paths; the spec as the file names it, in what
+    // is said of it (ritsu's DESIGN 6.2, item 8)
     let shown = p.shown(&name.path);
+    let written = &name.path;
     let sname = &s.name;
     let unread = |pins: &[PinLine]| pins.iter().map(|pl| SpecPin { name: pl.fragment.clone(), pin: pl.pin.clone(), block: None, span: pl.span }).collect();
     let bytes = match ritsu_base::fs::read(&abs) {
@@ -596,7 +600,7 @@ fn spec_source(p: &Project, fi: usize, s: &SourceDecl, name: &Name, pins: &[PinL
                 openspec::SpecError::NoRequirements { delta: false } => tr!("`## Requirements` の節がありません", "it has no `## Requirements` section"),
                 openspec::SpecError::Twice { name, first, line } => tr!("要件「{name}」が {first} 行目と {line} 行目の二か所にあります", "the requirement {name} is written twice, on lines {first} and {line}"),
             };
-            diags.push(p.err(fi, "E104", s.span, tr!("出典「{sname}」の仕様 {shown} が読めません: {}", "The spec {shown} of the source {sname} cannot be read: {}", why.ja; why.en)).note(tr!(
+            diags.push(p.err(fi, "E104", s.span, tr!("出典「{sname}」の仕様 {written} が読めません: {}", "The spec {written} of the source {sname} cannot be read: {}", why.ja; why.en)).note(tr!(
                 "出典に書くのは `openspec/specs/<capability>/spec.md` です。仕様の形の誤りは `openspec validate --specs` が言います。",
                 "A source names `openspec/specs/<capability>/spec.md`; `openspec validate --specs` says what is wrong with the form of a spec."
             )));
@@ -609,7 +613,7 @@ fn spec_source(p: &Project, fi: usize, s: &SourceDecl, name: &Name, pins: &[PinL
         let n = crate::lex::spelled_name(rname);
         let mut sp = SpecPin { name: rname.clone(), pin: pl.pin.clone(), block: None, span: pl.span };
         match spec.get(rname) {
-            None => diags.push(no_such_requirement(p, fi, pl.span, &shown, rname, &spec)),
+            None => diags.push(no_such_requirement(p, fi, pl.span, written, rname, &spec)),
             Some(req) => {
                 let actual = sha256::short(req.block.as_bytes());
                 match &pl.pin {
@@ -630,7 +634,7 @@ fn spec_source(p: &Project, fi: usize, s: &SourceDecl, name: &Name, pins: &[PinL
                             ));
                         if let Some(old) = crate::marks::reviewed_content(p, fi, pin) {
                             let (dl, more) = crate::diff::unified(&String::from_utf8_lossy(&old), &req.block);
-                            d = d.diff(tr!("固定したときの要件からの差分（仕様は {shown}）", "what changed in the requirement since it was pinned (the spec {shown})"), dl);
+                            d = d.diff(tr!("固定したときの要件からの差分（仕様は {written}）", "what changed in the requirement since it was pinned (the spec {written})"), dl);
                             if more > 0 {
                                 d = d.note(tr!("差分はほかに {more} 行あります。", "{more} more lines of the diff are not shown."));
                             }
@@ -669,7 +673,8 @@ fn unpinned(p: &Project, sources: &Sources) -> Vec<Diag> {
             if left.is_empty() {
                 continue;
             }
-            let shown = p.shown(&name.path);
+            // the spec as the file names it (ritsu's DESIGN 6.2, item 8)
+            let shown = &name.path;
             let k = left.len();
             let (ja, en) = (left.join("、"), left.join(", "));
             let msg = if k == 1 {

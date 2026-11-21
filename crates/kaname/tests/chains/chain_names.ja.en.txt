@@ -1,0 +1,11 @@
+error[E101]: chain_names.ja.kn:20:5: `金` is not a value of the enum `段階`
+    20 |     金 => 5
+  = `金` is written on line 33 too.
+error[E101]: chain_names.ja.kn:23:18: There is no field `数量` in 明細
+    23 |   sum(明細, l => l.数量)
+  = The fields of 明細 are `品番`, `数`.
+  = `数量` is written on lines 34 and 35 too.
+error[E101]: chain_names.ja.kn:25:21: There is no type `注文`
+    25 | fn 請求額(bill)(注文(o): 注文, 単価(price): money[USDc] range >=1USDc <=1000USDc) -> money[USDc]
+  = A type is `number`, `bool`, `string`, `date`, `rate`, a type of a unit (`money[USD]`, `mass[kg]`), `list[…]`, a record or an enum of this module, the type of a value of an enum whose values have fields (`<enum>.<value>`), one a `use` reads (`<rule>.outputs`, `<rule>.<enum>`, `<rule>.<list>`, `<book>.<transfer>.<operation>`, `<module>.<record>`), a type parameter or `result[…]`.
+  = `注文` is written on line 29 too.

@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_a_value_the_rule_does_not_have.ringi:11:30: `ceo` is not one of the values to choose from
+    11 |   audit  cfos  when level is ceo
+  = The values declared: `manager` and `cfo`

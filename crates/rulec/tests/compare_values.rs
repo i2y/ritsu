@@ -14,19 +14,16 @@
 use std::path::Path;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready};
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec verify` talks to the adapter, and waits for its
+/// answers without a limit of its own. Past it, rulec is stopped with every process it started,
+/// and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn rulec(dir: &Path, lang: &str, args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", lang)
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("rulec を起動できない");
-    (
-        o.status.code().unwrap_or(-1),
-        String::from_utf8_lossy(&o.stdout).into_owned(),
-        String::from_utf8_lossy(&o.stderr).into_owned(),
-    )
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", lang).current_dir(dir).args(args), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 fn json(s: &str) -> rulec::json::Json {
@@ -307,7 +304,7 @@ policy unique
 {"in":{"地域":"海外"}}
 "#,
     out: "手数料",
-    said: ["規則 手数料=200050銭 / 旧版 手数料=2000円", "手数料: 2000円 → 200050銭"],
+    said: ["規則 手数料=200_050銭 / 旧版 手数料=2000円", "手数料: 2000円 → 200_050銭"],
 };
 
 #[test]
@@ -470,7 +467,7 @@ const ALLOWANCE_JA: Allowance = Allowance {
     out: "非常勤手当",
     said: [
         "観測の値が規則の取りうる範囲の外にある記録 1 件（非常勤手当 1 件）。不一致に数えています",
-        "`observed.非常勤手当`: 規則が取りうる範囲 50万円..2000万円 の外です",
+        "`observed.非常勤手当`: 規則が取りうる範囲 500_000円..20_000_000円 の外です",
     ],
 };
 

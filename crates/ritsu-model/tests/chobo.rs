@@ -135,7 +135,7 @@ fn every_scenario_of_every_book_comes_out_as_the_model_says() {
         if let Ok(text) = std::fs::read_to_string(&more) {
             let v: Value = serde_json::from_str(&text).unwrap();
             for s in v.as_array().unwrap() {
-                scenarios.push(scenario::from_json(&book, s).unwrap_or_else(|e| panic!("{}: {e}", more.display())));
+                scenarios.push(scenario::from_json(&book, s).unwrap_or_else(|e| panic!("{}: {}", more.display(), e.en)));
             }
         }
         assert!(!scenarios.is_empty(), "{}: no scenarios", p.display());
@@ -143,7 +143,7 @@ fn every_scenario_of_every_book_comes_out_as_the_model_says() {
         let rows = scenarios.iter().map(|s| {
             let ours = match scenario::run_json(&book, s) {
                 Ok(v) => v.to_string(),
-                Err(e) => json!({"error": e}).to_string(),
+                Err(e) => json!({"error": e.en}).to_string(),
             };
             (scenario_json(s), ours)
         });

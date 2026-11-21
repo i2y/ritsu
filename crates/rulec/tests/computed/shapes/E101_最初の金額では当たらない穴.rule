@@ -1,0 +1,20 @@
+rule 最初の金額では当たらない穴(gap_past_the_first_value) v1
+description "穴の最初の金額では、手数料が穴の外になる。手数料が 1,000 円を超えるのは 33,367 円からで、例はその金額"
+
+enum 判定(verdict) = よい(ok) | 確かめる(check)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=600_000円
+
+apply 手数料(f) = "shared/手数料と区分.rule" meaning:0de5e2badae1c5d6
+  金額 = 金額
+  請求額 -> 受けた手数料
+
+outputs
+  答え(v) : 判定
+
+table 選ぶ(pick)
+| 金額       | 受けた手数料       | -> 答え  |
+| <=30_000円 | -                  | よい     |
+| >30_000円  | <=900円            | よい     |
+| >30_000円  | >900円 <=1_000円   | 確かめる |

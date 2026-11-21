@@ -16,8 +16,14 @@
 //! - X2 (a rule's preconditions where a workflow calls it): `refund` — the amount asked is kept
 //!   below what was paid by the ranges (held), can pass it (E201), comes from a task with no range
 //!   (W201), or is what another rule's `result` comes to, with no range written on its line, which
-//!   can pass it too (E201 with the range of the `result`, rulec's §15.271). `quota` is the same
-//!   with a sum on one side (`used + requested <= quota`).
+//!   can pass it too (E201 with the range of the `result`, rulec's §15.271); where the amount asked
+//!   is a variable given a small amount first and a task's answer in one arm of a `match`, the call
+//!   in the other arm is held and the call in that arm is E201. `quota` is the same
+//!   with a sum on one side (`used + requested <= quota`). `pay` is the range a fee the rule works
+//!   out is accepted in (rulec's §15.313): the amounts the flow and the module give keep it inside
+//!   (held), can take it past its top (E201), or come from a task with no range (W201); and a
+//!   module's lines keep the subtotal each line works out inside the range accepted for it (held),
+//!   or can take it past (E201).
 //! - The range of a rule's input of an ordered enum (rulec's §15.251), which the languages that give
 //!   the rule a value hold it to themselves, as they hold a number's: `lift` and `tiers` — a flow
 //!   and a gate that give only values the range lets in (held), a flow that holds the campaign it is
@@ -40,7 +46,9 @@
 //!   though the low end of the range, −55, is never reached), a concert needs more than the hall
 //!   holds (E204), the task handles the hall being full, which no kind comes to (W204).
 //! - X6 (the day given to a koyomi date): `reminding` — the payment day given to a reminder whose
-//!   range holds every payment day (held), ends before the last (E205), or the day received (W205).
+//!   range holds every payment day (held), ends before the last (E205), or the day received (W205);
+//!   where the day is a variable given the payment day first and the day received in one arm of a
+//!   `match`, the call in the other arm is held and the call in that arm is W205.
 //! - X5 (a hold against its expiry): `invoice` — goods held three days, with timeouts (held), until
 //!   the payment day at 09:00 when the hold lasts 14 days (E206), or 60 days (W206). The hold
 //!   voided when an approval does not come in 15 days: an event, which only its own timer times
@@ -64,10 +72,65 @@
 //!   declaring nothing (W909); allowed to look at an order too, which it never does (W908). Its
 //!   permit can read another action's answer (sekisho's `allowed`): the workflow refunds a returned
 //!   order unless it would be allowed to have the refund reviewed, which it is for a disputed
-//!   order (held, the answer counted with what decides it).
+//!   order (held, the answer counted with what decides it). Each call is asked over what the runs
+//!   that reach it can come to. The amount the call gives is the action's input: up to 50 pounds
+//!   where the permit lets in up to 50 (held, the task declaring nothing), where it lets in more
+//!   than 100 only (E908), and up to 100 where it lets in up to 50 (W909, with amounts the flow
+//!   gives); where the amount is a variable given up to 50 first and up to 10,000 in one arm of a
+//!   `match`, the call in the other arm is held and the call in that arm is W909. A rule says who refunds, and the flow refunds under an arm of its answer; the gate
+//!   reads the same rule of the order's total, which a `resource` line under the workflow says is
+//!   the flow's amount: under the arm the gate allows (held where the task declares the error;
+//!   W909 where it does not, since nothing checks the line of the order the service reads), under
+//!   the other (E908, the error declared or not), and with no line (W909: nothing says what the
+//!   flow holds of the total). An argument the gate's input counts in another unit or step (E909):
+//!   a fee the task gives in steps of 0.1% and the gate reads in steps of 1%, the error of a denial
+//!   declared or not, with E908 beside it where no permit allows the workflow, and with the
+//!   Japanese names (the input taking the argument by its alias); the same steps pass; an amount the
+//!   gate counts in pence, or without the tax.
+//! - X18 (a request's route, against the gate the request reads; ringi's DESIGN 9.3): `purchase` —
+//!   a request that lets no requester decide their own request, and a gate with the same rule
+//!   (held); the gate without it (E911, with a combination it allows); a route that allows self
+//!   approval, with the gate that has no rule against it (held) and with one that forbids it
+//!   whatever the route says (E911); a gate that lets only the requester answer a stage (E911, the
+//!   approvers allowed in no combination); a gate with no action for an operation, one and two of
+//!   them (E911, with the line of the request that gives the tickets the operation), `see` among
+//!   them (E911, with who sees a ticket without it); a gate whose action for an operation takes
+//!   inputs of its own, which the server has nothing to give (E911, one action and two); a gate that
+//!   declares `self_approval` as an enum (W911). The same in Japanese names (E911).
+//! - X19 (a hold a ticket makes, against the book it is made in): `purchase` — a round of ten
+//!   business days and a hold of thirty days (held), of seven days (E209, with the day that makes it
+//!   the longest), one that never expires (held); a request whose stages send back to an earlier
+//!   stage, the round walked three times (E209); a stage with no deadline (W209); the days counted
+//!   in two calendars (W209). With an organization: a hold that takes the requester's department,
+//!   which the president has none of (W209, with who), the same line kept to the requesters who
+//!   have one (held), and an organization with no data (W209).
+//! - X20 (what a ticket gives a flow, against what the flow takes): `purchase` starts the order's
+//!   flow with an amount up to 1,000,000 JPY — the flow takes it (held), takes half (E210), the
+//!   `on` line's `when` keeps it to what the flow takes (held) or to more (E210, with the range
+//!   where the `when` holds), a `when` ringi does not follow (W210, beside the other side's W210 of
+//!   the ledger's reproduction); a call with no value for an
+//!   input, a value the flow has no input for, and a value of another type (E210). An agent's flow
+//!   for the small amounts, by the rows of the route (held), which takes less than its rows give
+//!   (E210), takes a field a request may leave empty, one the form does not have or one of another
+//!   type (E210), or does not answer `reason` (E210). A summary's flow at a stage with a `when` (held), without it
+//!   (E210), with an `or` (W210), with no output (E210), and with outputs a note holds or does not:
+//!   rows (held), a record on its own, a list of strings, a `json` (E210).
+//! - X20 on the side where a flow opens a ticket: `restock` submits a purchase through the API
+//!   `ritsu gen --target requests` wrote (held); sends a value of another type, or a range wider than
+//!   the form's (dandori's E016 against the document, and nothing more); the form narrowed, the
+//!   version raised or the request renamed after the document was written (E210, with where they
+//!   differ); the request's file gone (W210). `ritsu gen` stops for the document out of date when it
+//!   writes another target; when it writes `requests`, it holds the flow to the document it writes
+//!   (dandori's E016 where the flow sends what the request no longer takes, and nothing written).
+//! - X18 to X20 say the same of a request however it is given: by its name, by its absolute path
+//!   and found in its directory, the gate, the book and the flow beside it or in a directory beside
+//!   its own, which a request given by its name in a directory that is no project's reaches outside
+//!   the root.
 //!
 //! The day a flow's date call is given from its own input says nothing of what day it is (W205):
 //! the projects of X3 (a) and X5 show it alongside what they are about.
+
+mod common;
 
 use ritsu_testkit::TempDir;
 use std::path::{Path, PathBuf};
@@ -80,7 +143,7 @@ fn here() -> PathBuf {
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -104,6 +167,16 @@ fn repro(code: &str) -> Vec<(&'static str, &'static str)> {
     }
 }
 
+/// The files of a code's reproduction with Japanese names. A code without one fails here, rather
+/// than running its reproduction with English names under a Japanese test's name.
+fn repro_ja(code: &str) -> Vec<(&'static str, String)> {
+    let l = ritsu_cross::codes::ledger();
+    match l.find(code).expect("the code is in the ledger").repro_ja.as_ref() {
+        Some(ritsu_base::ledger::Repro::Dir { files, .. }) => files.iter().map(|(n, b)| (*n, b.to_string())).collect(),
+        other => panic!("{code} has no files in Japanese names: {other:?}"),
+    }
+}
+
 fn lay_out(files: &[(&str, String)], tag: &str) -> TempDir {
     let t = TempDir::new(tag);
     for (name, body) in files {
@@ -117,12 +190,17 @@ fn lay_out(files: &[(&str, String)], tag: &str) -> TempDir {
 /// The text in both languages, the exit, and the JSON's `borders`, each held to its golden file.
 fn run(name: &str, files: &[(&str, String)], want_code: i32, borders: (u64, u64, u64), failures: &mut Vec<String>) {
     let t = lay_out(files, name);
+    run_at(name, t.path(), want_code, borders, failures);
+}
+
+/// [`run`], of the project at `dir`.
+fn run_at(name: &str, dir: &Path, want_code: i32, borders: (u64, u64, u64), failures: &mut Vec<String>) {
     for lang in ["en", "ja"] {
-        let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--lang", lang]);
+        let (code, out, err) = ritsu_in(dir, &["check", ".", "--lang", lang]);
         assert_eq!(code, want_code, "{name} ({lang}):\n{out}{err}");
         golden(&format!("{name}.{lang}.txt"), &out, failures);
     }
-    let (_, out, _) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
+    let (_, out, _) = ritsu_in(dir, &["check", ".", "--format", "json"]);
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     let b = &v["borders"];
     assert_eq!((b["held"].as_u64(), b["failed"].as_u64(), b["undecided"].as_u64()), (Some(borders.0), Some(borders.1), Some(borders.2)), "{name}: {b}");
@@ -251,6 +329,21 @@ fn x2_a_rules_preconditions_where_a_flow_calls_it() {
         .replace("  let asked = ask_amount(order: order)\n", "  let shared = share(price: price, items: items)\n  let asked = shared.asked\n");
     assert!(!by_rule.contains("ask_amount") && by_rule.contains("refund_share.rule"), "{by_rule}");
     run("x2-result-E201", &[("refund_check.rule", rule.clone()), ("refund_share.rule", share), ("refund.flow", by_rule)], 1, (0, 1, 0), &mut failures);
+    // a variable given a value in two places is, where the rule is called, what the runs that reach
+    // the call last put in it (dandori's DESIGN 1.3): `asked` is a small amount first, and what the
+    // task answers in one arm of a `match`
+    let body = "  let asked = ask_amount(order: order)\n  let decision = check(paid: paid, asked: asked)\n  match decision.route\n    at_once => pay_back(order: order, amount: asked)\n    review => pass\n";
+    let call = "      let decision = check(paid: paid, asked: asked)\n      match decision.route\n        at_once => pay_back(order: order, amount: asked)\n        review => pass\n";
+    let rebound = |arms: String| {
+        let inputs = swapped(&flow, "  paid  : int  range >=0 <=10000\n", "  quick : bool\n  paid  : int  range >=5000 <=10000\n  small : int  range >=0 <=5000\n");
+        swapped(&inputs, body, &format!("  let asked = small\n  match quick\n{arms}"))
+    };
+    // held: the rule is called in the other arm, where `asked` is still the small amount
+    let other_arm = rebound(format!("    true =>\n{call}    false =>\n      let asked = ask_amount(order: order)\n      pass\n"));
+    run("x2-rebound-held", &[("refund_check.rule", rule.clone()), ("refund.flow", other_arm)], 0, (1, 0, 0), &mut failures);
+    // an example: the rule is called in the arm that asks the task
+    let same_arm = rebound(format!("    true => pass\n    false =>\n      let asked = ask_amount(order: order)\n{call}"));
+    run("x2-rebound-E201", &[("refund_check.rule", rule.clone()), ("refund.flow", same_arm)], 1, (0, 1, 0), &mut failures);
     // the same value on both sides of `<=` holds whatever it is
     let same = flow.replace("check(paid: paid, asked: asked)", "check(paid: asked, asked: asked)");
     run("x2-same-value", &[("refund_check.rule", rule), ("refund.flow", same)], 0, (1, 0, 0), &mut failures);
@@ -264,9 +357,14 @@ const NEVER_MODULE: &str = "module refund v1\ndescription \"Whether a refund is 
 
 /// X2 with a rule's `never` lines (rulec's §15.282). A number that cannot meet its condition shows
 /// a line holds, whatever the truth value beside it; numbers that can all meet theirs are an example
-/// (E201); a truth value, or a number with no range, leaves it undecided (W201), and the workflow
-/// checks it when it runs (`crates/dandori/tests/flows/never_lines.flow`). kaname holds its calls to
-/// the lines the same way.
+/// (E201); a truth value that can be either, or a number with no range, leaves it undecided (W201),
+/// and the workflow checks it when it runs (`crates/dandori/tests/flows/never_lines.flow`). A truth
+/// value the flow writes out, or gives in the arm of a `match` on it, is that value at the call: it
+/// keeps the line when it does not meet its condition, and with the numbers that can meet theirs it
+/// is an example when it does; the example's note says the value and what to give instead. So is a
+/// variable a truth value was put in, by what the runs that reach the call last put in it (one
+/// value, or either where the ways that reach the call put in both). kaname holds its calls to the
+/// lines by their numbers.
 #[test]
 fn x2_a_rules_never_lines_where_a_call_gives_it_values() {
     let mut failures = Vec::new();
@@ -279,10 +377,165 @@ fn x2_a_rules_never_lines_where_a_call_gives_it_values() {
     run("x2-never-E201", &files(&none), 1, (1, 1, 0), &mut failures);
     let open = NEVER_FLOW.replace("shipped : int  range >=1 <=100", "shipped : int");
     run("x2-never-W201", &files(&open), 0, (0, 0, 2), &mut failures);
+    let call = "check(shipped: shipped, asked: asked, express: express)";
+    run("x2-never-written-held", &files(&NEVER_FLOW.replace(call, "check(shipped: shipped, asked: asked, express: false)")), 0, (2, 0, 0), &mut failures);
+    run("x2-never-written-E201", &files(&NEVER_FLOW.replace(call, "check(shipped: shipped, asked: asked, express: true)")), 1, (1, 1, 0), &mut failures);
+    // every condition met by a value written out: the note says what to give instead, and no branch helps
+    run("x2-never-all-written-E201", &files(&NEVER_FLOW.replace(call, "check(shipped: 60, asked: asked, express: true)")), 1, (1, 1, 0), &mut failures);
+    let body = "  let decision = check(shipped: shipped, asked: asked, express: express)\n  match decision.route\n    at_once => pay_back(order: order, amount: asked)\n    review => pass\n";
+    let arms = |calls: &str, passes: &str| format!("  match express\n    {passes} => pass\n    {calls} =>\n      let decision = check(shipped: shipped, asked: asked, express: express)\n      match decision.route\n        at_once => pay_back(order: order, amount: asked)\n        review => pass\n");
+    assert!(NEVER_FLOW.contains(body));
+    run("x2-never-arm-held", &files(&NEVER_FLOW.replace(body, &arms("false", "true"))), 0, (2, 0, 0), &mut failures);
+    run("x2-never-arm-E201", &files(&NEVER_FLOW.replace(body, &arms("true", "false"))), 1, (1, 1, 0), &mut failures);
+    // a variable a truth value is put in, given on
+    let given = body.replace("express: express", "express: fast");
+    let put = |puts: &str| NEVER_FLOW.replace(body, &format!("{puts}{given}"));
+    run("x2-never-variable-held", &files(&put("  let fast = false\n")), 0, (2, 0, 0), &mut failures);
+    run("x2-never-variable-E201", &files(&put("  let fast = true\n")), 1, (1, 1, 0), &mut failures);
+    // put in on one way only: the runs that reach the call can bring either value
+    let both = "  let fast = false\n  match express\n    true =>\n      let fast = true\n      pass\n    false => pass\n";
+    run("x2-never-variable-W201", &files(&put(both)), 0, (1, 0, 1), &mut failures);
+    // the call on the way that puts in false keeps the line
+    let on_the_way = format!("  let fast = false\n  match express\n    true =>\n      let fast = true\n      pass\n    false =>\n{}", given.lines().map(|l| format!("    {l}\n")).collect::<String>());
+    run("x2-never-variable-arm-held", &files(&NEVER_FLOW.replace(body, &on_the_way)), 0, (2, 0, 0), &mut failures);
     let module = |text: &str| vec![("refund_route.rule", rule.clone()), ("refund.kn", text.to_string())];
     run("kaname-x2-never-held", &module(NEVER_MODULE), 0, (2, 0, 0), &mut failures);
     let none = NEVER_MODULE.replace("shipped: number range >=1 <=49", "shipped: number range >=0 <=49");
     run("kaname-x2-never-E201", &module(&none), 1, (1, 1, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A rule that works out a fee and accepts it only up to 20,000 (rulec's §15.313), where a workflow
+/// and a module of kaname call it; and one that works out a subtotal on each line it walks.
+const DEFINE_RULE: &str = "rule card_fee v1\ndescription \"The fee for paying by card: 3% of the amount, which the card service takes only up to 20,000\"\n\ninputs\n  amount : number  range >=1 <=1_000_000\n\ndefine fee : number = down(amount * 3%, 1)  range >=0 <=20_000\n\noutputs\n  fee : number  round down(1)\n";
+const DEFINE_FLOW: &str = "workflow pay v1\ndescription \"Charges a card payment with its fee, as the rule works it out\"\n\nuse rule card_fee from \"card_fee.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:card-fee\"\n\ninputs\n  order : string\n\ntask amount_of(order: string) -> int range >=1 <=500000\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:amount-of\"\n  idempotent\n\ntask charge(order: string, fee: int range >=0 <=20000)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:charge\"\n  key\n\nflow\n  let amount = amount_of(order: order)\n  let worked = card_fee(amount: amount)\n  charge(order: order, fee: worked.fee)\n";
+const DEFINE_MODULE: &str = "module pay v1\ndescription \"The fee for paying by card, as the rule works it out\"\n\nuse rule card_fee from \"card_fee.rule\"\n\nfn fee_of(amount: number range >=1 <=500000) -> number\n  card_fee(amount: amount).fee\n";
+const LINES_RULE: &str = "rule order_lines v1\ndescription \"The amount of an order. A line's subtotal is its quantity times its price, and one line is accepted up to 10,000,000\"\n\nelements lines\n  quantity : number  range >=1 <=10_000\n  price    : number  range >=1 <=50_000_000\n\ndefine subtotal : number = quantity * price  range >=1 <=10_000_000\n\nsum amount over lines of subtotal  range >=1 <=100_000_000\n\noutputs\n  amount : number  round down(1)\n";
+const LINES_MODULE: &str = "module order v1\ndescription \"The amount of an order, as the rule works it out\"\n\nuse rule order_lines from \"order_lines.rule\"\n\nrecord Line\n  quantity : number  range >=1 <=100\n  price    : number  range >=1 <=1000\n\nfn amount_of(lines: list[Line] count >=1 <=10) -> number\n  order_lines(lines: map(lines, l => order_lines.lines { quantity: l.quantity, price: l.price })).amount\n";
+
+/// X2 with the range a value the rule works out is accepted in (rulec's §15.313): rulec decides
+/// what the value reaches over the ranges of the inputs the call gives, and of the fields of the
+/// elements a module gives. Held, an example past the top (E201), and an amount with no range
+/// (W201): the workflow's code does not work the fee out, and the note says the rule's generated
+/// code refuses the call where it works the value out, not at its door. A module's call is broken
+/// by a run of its vectors; one whose ranges reach past the top while no run of its vectors does
+/// is W201, with the same words.
+#[test]
+fn x2_the_range_a_value_the_rule_works_out_is_accepted_in() {
+    let mut failures = Vec::new();
+    let flow = |text: &str| vec![("card_fee.rule", DEFINE_RULE.to_string()), ("pay.flow", text.to_string())];
+    run("x2-define-held", &flow(DEFINE_FLOW), 0, (1, 0, 0), &mut failures);
+    let past = DEFINE_FLOW.replace("-> int range >=1 <=500000", "-> int range >=1 <=1000000");
+    assert_ne!(past, DEFINE_FLOW);
+    run("x2-define-E201", &flow(&past), 1, (0, 1, 0), &mut failures);
+    let open = DEFINE_FLOW.replace("-> int range >=1 <=500000", "-> int");
+    run("x2-define-W201", &flow(&open), 0, (0, 0, 1), &mut failures);
+    let module = |text: &str| vec![("card_fee.rule", DEFINE_RULE.to_string()), ("pay.kn", text.to_string())];
+    run("kaname-x2-define-held", &module(DEFINE_MODULE), 0, (1, 0, 0), &mut failures);
+    let past = DEFINE_MODULE.replace("amount: number range >=1 <=500000", "amount: number range >=1 <=1000000");
+    assert_ne!(past, DEFINE_MODULE);
+    run("kaname-x2-define-E201", &module(&past), 1, (0, 1, 0), &mut failures);
+    // the ranges find the amount up to 699,999, which no amount up to 500,000 comes to
+    let wide = DEFINE_MODULE.replace("card_fee(amount: amount).fee", "card_fee(amount: mod(amount, 300_000) + mod(amount, 400_000) + 1).fee");
+    assert_ne!(wide, DEFINE_MODULE);
+    run("kaname-x2-define-W201", &module(&wide), 0, (0, 0, 1), &mut failures);
+    let lines = |text: &str| vec![("order_lines.rule", LINES_RULE.to_string()), ("order.kn", text.to_string())];
+    run("kaname-x2-define-lines-held", &lines(LINES_MODULE), 0, (2, 0, 0), &mut failures);
+    let past = LINES_MODULE.replace("price    : number  range >=1 <=1000\n", "price    : number  range >=1 <=1000000\n");
+    assert_ne!(past, LINES_MODULE);
+    run("kaname-x2-define-lines-E201", &lines(&past), 1, (1, 1, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// X2 with the bottom of the range of a total (rulec's §15.314): the rule refuses a call whose
+/// total ends under it, an empty list among them, and rulec decides it over the fewest elements
+/// the call gives, each at the bottom of its range. One line at the least, of 1 at the least,
+/// reaches an amount accepted from 1 (held, in the test above). A list that may be empty does
+/// not, and the empty list among the function's vectors is the example (E201). One line of 1 does
+/// not reach an amount accepted from 5, and no run of the vectors gives that line (W201). A total of
+/// money says its ends in yen (DESIGN 7.1), from the unit the precondition carries (rulec's
+/// §15.333): it adds up a `define`, whose type the facts do not carry, whether an output of its
+/// name returns it or not. The total no output returns was said in digits (`1 <= total <=
+/// 100_000_000`).
+#[test]
+fn x2_the_bottom_of_a_total_over_a_list() {
+    let mut failures = Vec::new();
+    let empty = LINES_MODULE.replace("count >=1 <=10", "count >=0 <=10");
+    assert_ne!(empty, LINES_MODULE);
+    run("kaname-x2-total-empty-E201", &[("order_lines.rule", LINES_RULE.to_string()), ("order.kn", empty.clone())], 1, (1, 1, 0), &mut failures);
+    let from_five = LINES_RULE.replace("range >=1 <=100_000_000", "range >=5 <=100_000_000");
+    assert_ne!(from_five, LINES_RULE);
+    run("kaname-x2-total-bottom-W201", &[("order_lines.rule", from_five), ("order.kn", LINES_MODULE.to_string())], 0, (1, 0, 1), &mut failures);
+    let mut yen = LINES_RULE.to_string();
+    for (from, to) in [
+        ("price    : number  range >=1 <=50_000_000", "price    : money[JPY]  range >=1JPY <=50_000_000JPY"),
+        ("define subtotal : number = quantity * price  range >=1 <=10_000_000", "define subtotal : money[JPY] = quantity * price  range >=1JPY <=10_000_000JPY"),
+        ("range >=1 <=100_000_000", "range >=1JPY <=100_000_000JPY"),
+        ("amount : number  round down(1)", "amount : money[JPY]  round down(1JPY)"),
+    ] {
+        yen = swapped(&yen, from, to);
+    }
+    let module = swapped(&swapped(&empty, "price    : number  range >=1 <=1000\n", "price    : money[JPY]  range >=1JPY <=1000JPY\n"), ") -> number", ") -> money[JPY]");
+    run("kaname-x2-total-yen-E201", &[("order_lines.rule", yen.clone()), ("order.kn", module.clone())], 1, (1, 1, 0), &mut failures);
+    // the total under a name of its own, which the output works out from
+    let unseen = swapped(
+        &swapped(&yen, "sum amount over lines of subtotal", "sum total over lines of subtotal"),
+        "amount : money[JPY]  round down(1JPY)\n",
+        "amount : money[JPY]  round down(1JPY)\n\ndefine amount : money[JPY] = total\n",
+    );
+    run("kaname-x2-total-unseen-yen-E201", &[("order_lines.rule", unseen), ("order.kn", module)], 1, (1, 1, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A rule whose total adds up a value worked out on each line that keeps its fractions: 8% of a
+/// line's price, to the sen.
+const TAX_RULE: &str = "rule line_tax v1\ndescription \"The tax on the lines of an order, each line's worked out to the sen\"\n\nelements lines\n  price : money[JPY]  range >=0JPY <=10_000JPY\n\ndefine tax : money[JPY] = price * 8%  range >=0JPY <=800JPY\n\nsum total_tax over lines of tax  range >=0JPY <=8_000JPY\n\noutputs\n  due : money[JPY]  round down(1JPY)\n\ndefine due : money[JPY] = total_tax\n";
+const TAX_MODULE: &str = "module order v1\ndescription \"The tax on an order, as the rule works it out\"\n\nuse rule line_tax from \"line_tax.rule\"\n\nrecord Line\n  price : money[JPY]  range >=0JPY <=10_000JPY\n\nfn tax_of(lines: list[Line] count >=0 <=20) -> money[JPY]\n  line_tax(lines: map(lines, l => line_tax.lines { price: l.price })).due\n";
+
+/// X2 with a total held finer than its unit: the tax of each line keeps its fractions, and the
+/// precondition on their total counts hundredths of a yen (rulec's §15.314). The tops of the
+/// elements were added up in whole yen and compared with the top of the total in hundredths, so
+/// twenty lines of up to 800JPY of tax, 16_000JPY, were said to keep a total accepted up to
+/// 8_000JPY, and the call passed. It is not decided now, and the precondition is said at the value
+/// the rule writes, in yen (§15.333), where it was the integer on the wire (`total_tax <= 800_000`).
+#[test]
+fn x2_a_total_held_finer_than_its_unit() {
+    let mut failures = Vec::new();
+    run("kaname-x2-total-sen-W201", &[("line_tax.rule", TAX_RULE.to_string()), ("order.kn", TAX_MODULE.to_string())], 0, (0, 0, 1), &mut failures);
+    // ten lines keep it: 10 × 800JPY is 8_000JPY
+    let ten = swapped(TAX_MODULE, "count >=0 <=20", "count >=0 <=10");
+    run("kaname-x2-total-sen-held", &[("line_tax.rule", TAX_RULE.to_string()), ("order.kn", ten)], 0, (1, 0, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A rule that walks two sequences, where a module gives each its own list: what is still due on
+/// an order, its lines added up less what was paid.
+const TWO_LISTS_RULE: &str = "rule settle v1\ndescription \"What is still due on an order, its lines added up less what was paid, and how many of its entries wait. Up to five lines and up to twenty payments\"\n\nelements lines\n  price : number  range >=0 <=100\n  held  : bool\n\nelements payments\n  paid    : number  range >=0 <=100\n  pending : bool\n\ncount held_lines over lines where held  range >=0 <=5\ncount pending_payments over payments where pending  range >=0 <=20\nsum subtotal over lines of price  range >=0 <=500\nsum paid_total over payments of paid  range >=0 <=2000\n\noutputs\n  due     : number  round down(1)\n  waiting : number  round down(1)\n\ndefine due : number = subtotal - paid_total\ndefine waiting : number = held_lines + pending_payments\n";
+const TWO_LISTS_MODULE: &str = "module settle_up v1\ndescription \"What is still due on an order, as the rule works it out\"\n\nuse rule settle from \"settle.rule\"\n\nrecord Line\n  price : number  range >=0 <=100\n  held  : bool\n\nrecord Payment\n  paid    : number  range >=0 <=100\n  pending : bool\n\nfn due_of(lines: list[Line] count >=0 <=5, payments: list[Payment] count >=0 <=20) -> number\n  settle(lines: map(lines, l => settle.lines { price: l.price, held: l.held }), payments: map(payments, p => settle.payments { paid: p.paid, pending: p.pending })).due\n";
+
+/// X2 where a rule walks two sequences and the call gives each a list of its own: a bound the rule
+/// puts on one walk is asked with the fewest and the most elements of the list given to that
+/// sequence. They were asked with the shortest and the longest of every list of the call, so five
+/// lines of up to 100 beside twenty payments were said to reach a subtotal past 500 at "up to 20
+/// elements" and to pass the five lines the rule takes (two W201 for a call that keeps all four
+/// bounds), and two lines of 1 at the least beside payments that may be none were said to come
+/// under a subtotal accepted from 2 at "as few as 0 elements". Held, all four; six lines are an
+/// example past the five (E201) and reach 600 at "up to 6 elements" (W201); and the bottom is
+/// held with the two lines the call gives at the least.
+#[test]
+fn x2_each_list_is_asked_with_its_own_length() {
+    let mut failures = Vec::new();
+    let files = |rule: &str, module: &str| vec![("settle.rule", rule.to_string()), ("settle.kn", module.to_string())];
+    run("kaname-x2-two-lists-held", &files(TWO_LISTS_RULE, TWO_LISTS_MODULE), 0, (4, 0, 0), &mut failures);
+    let six = TWO_LISTS_MODULE.replace("lines: list[Line] count >=0 <=5", "lines: list[Line] count >=0 <=6");
+    assert_ne!(six, TWO_LISTS_MODULE);
+    run("kaname-x2-two-lists-six-lines", &files(TWO_LISTS_RULE, &six), 1, (2, 1, 1), &mut failures);
+    let from_two = TWO_LISTS_RULE.replace("  price : number  range >=0 <=100", "  price : number  range >=1 <=100").replace("of price  range >=0 <=500", "of price  range >=2 <=500");
+    let two_lines = TWO_LISTS_MODULE
+        .replace("  price : number  range >=0 <=100", "  price : number  range >=1 <=100")
+        .replace("lines: list[Line] count >=0 <=5, payments: list[Payment] count >=0 <=20", "lines: list[Line] count >=2 <=5, payments: list[Payment] count >=0 <=5");
+    assert!(from_two.contains(">=2 <=500") && two_lines.contains("count >=2 <=5"));
+    run("kaname-x2-two-lists-bottom-held", &files(&from_two, &two_lines), 0, (4, 0, 0), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
@@ -482,6 +735,16 @@ fn x6_the_day_given_to_a_koyomi_date() {
     run("x6-E205", &changed("E205", &[]), 1, (0, 1, 1), &mut failures);
     let open = changed("W205", &[("reminding.flow", "reminders.reminder(due: due.day)", "reminders.reminder(due: received)")]);
     run("x6-W205", &open, 0, (0, 0, 2), &mut failures);
+    // a variable given a day in two places is, where the date is called, what the runs that reach
+    // the call last put in it (dandori's DESIGN 1.3): `day` is the day the payment is due first,
+    // and the day the order was received, which nothing bounds, in one arm of a `match`
+    let tail = "  let note = reminders.reminder(due: due.day)\n  remind(order: order, on: note.day)\n";
+    let call = "      let note = reminders.reminder(due: day)\n      remind(order: order, on: note.day)\n";
+    let rebound = |arms: String| changed("W205", &[("reminding.flow", "  received : date\n", "  received : date\n  late     : bool\n"), ("reminding.flow", tail, &format!("  let day = due.day\n  match late\n{arms}"))]);
+    // held: the date is called in the other arm, where `day` is still the day the payment is due
+    run("x6-rebound-held", &rebound(format!("    true =>\n      let day = received\n      pass\n    false =>\n{call}")), 0, (1, 0, 1), &mut failures);
+    // undecided: the date is called in the arm that puts the day of the receipt in it
+    run("x6-rebound-W205", &rebound(format!("    true =>\n      let day = received\n{call}    false => pass\n")), 0, (0, 0, 2), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
@@ -715,8 +978,563 @@ fn x16_what_a_workflow_calls() {
         ],
     );
     run("x16-allowed", &allowed, 0, (1, 0, 0), &mut failures);
+    // the amount the call gives is the action's input: the flow gives `range`, the permit lets in
+    // `when`
+    let given = |range: &str, when: &str| {
+        changed(
+            "W909",
+            &[
+                (
+                    "orders.json",
+                    "        \"responses\": {\"201\": {\"description\": \"Refunded\"}",
+                    "        \"requestBody\": {\"required\": true, \"content\": {\"application/json\": {\"schema\": {\"type\": \"object\", \"required\": [\"amount\"], \"properties\": {\"amount\": {\"type\": \"integer\", \"minimum\": 1, \"maximum\": 10000}}}}}},\n        \"responses\": {\"201\": {\"description\": \"Refunded\"}",
+                ),
+                ("returns.flow", "  order : string\n", &format!("  order  : string\n  amount : money[GBP, incl_tax]  range {range}\n")),
+                ("returns.flow", "task refund_order(orderId: string)\n", "task refund_order(orderId: string, amount: money[GBP, incl_tax] range >=1 <=10000)\n"),
+                ("returns.flow", "  refund_order(orderId: order)\n", "  refund_order(orderId: order, amount: amount)\n"),
+                ("refunds.gate", "  resource Order from orderId\n", "  resource Order from orderId\n  input\n    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP\n"),
+                ("refunds.gate", "  when resource.status is returned\n", &format!("  when {when}\n")),
+            ],
+        )
+    };
+    run("x16-given-held", &given(">=1 <=50", "amount <= 50GBP"), 0, (1, 0, 0), &mut failures);
+    run("x16-given-E908", &given(">=1 <=50", "amount > 100GBP"), 1, (0, 1, 0), &mut failures);
+    run("x16-given-W909", &given(">=1 <=100", "amount <= 50GBP"), 0, (0, 0, 1), &mut failures);
+    // a variable given an amount in two places is, where the task is called, what the runs that
+    // reach the call last put in it (dandori's DESIGN 1.3): `sum` is up to 50 pounds first, and up
+    // to 10,000 in one arm of a `match`
+    let rebound = |arms: &str| {
+        let mut files = given(">=1 <=50", "amount <= 50GBP");
+        let flow = &mut files.iter_mut().find(|(n, _)| *n == "returns.flow").unwrap().1;
+        *flow = swapped(flow, "  order  : string\n", "  order  : string\n  bulk   : bool\n  wide   : money[GBP, incl_tax]  range >=1 <=10000\n");
+        *flow = swapped(flow, "  refund_order(orderId: order, amount: amount)\n", &format!("  let sum = amount\n  match bulk\n{arms}"));
+        files
+    };
+    // held: the task is called in the other arm, where `sum` is still up to 50
+    run("x16-given-rebound-held", &rebound("    true =>\n      let sum = wide\n      pass\n    false => refund_order(orderId: order, amount: sum)\n"), 0, (1, 0, 0), &mut failures);
+    // undecided: the task is called in the arm that puts the wider amount in it
+    run("x16-given-rebound-W909", &rebound("    true =>\n      let sum = wide\n      refund_order(orderId: order, amount: sum)\n    false => pass\n"), 0, (0, 0, 1), &mut failures);
+    // E909: the task gives the fee in steps of 0.1%, and the gate reads it in steps of 1%, so the
+    // flow's 0.5% (5 steps) is 5% to it. The error whether the task declares the error of a denial
+    // or not (0.55.2 said nothing of the first, and W909 of the second, that the flow's number is not
+    // of the gate's type); beside it, of the gate's answer only E908, where no permit allows the
+    // workflow
+    let declared = [("returns.flow", "  errors denied = 403\n", ""), ("returns.flow", "    on denied => fail Denied \"the gate did not let the workflow refund\"\n", "")];
+    run("x16-E909", &changed("E909", &[]), 1, (0, 1, 0), &mut failures);
+    run("x16-E909-undeclared", &changed("E909", &declared), 1, (0, 1, 0), &mut failures);
+    // the fee written as a whole number of steps, as 0.55.2 read it: the same 5, so the same
+    // error, and dandori's W106 beside it, asking for the unit
+    run("x16-E909-whole", &changed("E909", &[("returns.flow", "fee: 0.5%)", "fee: 5)")]), 1, (0, 1, 0), &mut failures);
+    let no_permit = "\npermit returns_keeps_a_small_fee\n  description \"The returns workflow refunds an order, keeping a fee of up to 1%\"\n  principal is workflow returns\n  action refund_order\n  when fee <= 1%\n";
+    run("x16-E909-E908", &changed("E909", &[("refunds.gate", no_permit, "")]), 1, (0, 1, 0), &mut failures);
+    // the Japanese names: the gate's input `手数料(fee)` takes the argument `fee` by its alias
+    run("x16-E909-ja", &repro_ja("E909"), 1, (0, 1, 0), &mut failures);
+    // the same fee in the same steps passes as before: the gate allows the flow's 0.5%
+    run("x16-E909-same-step", &changed("E909", &[("refunds.gate", "    fee : rate[step 1%]  range >=0% <=10%\n", "    fee : rate[step 0.1%]  range >=0% <=10%\n")]), 0, (1, 0, 0), &mut failures);
+    // a quantity in another unit is the same error: the flow's 5g is 5kg to the gate
+    let mass = [
+        ("returns.flow", "fee: rate[step 0.1%] range >=0% <=10%", "fee: mass[g] range >=0g <=100g"),
+        ("returns.flow", "fee: 0.5%)", "fee: 5g)"),
+        ("refunds.gate", "    fee : rate[step 1%]  range >=0% <=10%\n", "    fee : mass[kg]  range >=0kg <=100kg\n"),
+        ("refunds.gate", "  when fee <= 1%\n", "  when fee <= 1kg\n"),
+    ];
+    run("x16-E909-mass", &changed("E909", &mass), 1, (0, 1, 0), &mut failures);
+    // an amount the gate counts in pence (the integers the operation takes, as the flow's pounds
+    // are), and one it counts without the tax: the second reads the same number as the same
+    // pounds, so the error says the two types only
+    let retyped = |ty: &str| {
+        let mut files = given(">=1 <=50", "amount <= 50GBP");
+        let gate = &mut files.iter_mut().find(|(n, _)| *n == "refunds.gate").unwrap().1;
+        *gate = swapped(gate, "    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP\n", &format!("    amount : {ty}\n"));
+        files
+    };
+    run("x16-given-E909-pence", &retyped("money[GBPc, incl_tax]  range >=1GBPc <=10_000GBPc"), 1, (0, 1, 0), &mut failures);
+    run("x16-given-E909-tax", &retyped("money[GBP]  range >=1GBP <=10_000GBP"), 1, (0, 1, 0), &mut failures);
+    // and an amount in another currency: the flow's pound is a yen to the gate
+    let mut yen = given(">=1 <=50", "amount <= 5_000JPY");
+    let gate = &mut yen.iter_mut().find(|(n, _)| *n == "refunds.gate").unwrap().1;
+    *gate = swapped(gate, "    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP\n", "    amount : money[JPY, incl_tax]  range >=1JPY <=10_000JPY\n");
+    run("x16-given-E909-currency", &yen, 1, (0, 1, 0), &mut failures);
+    // a rule says who refunds, and the flow refunds under the arm `arm` of its answer; the gate
+    // reads the same rule of the order's total, which `lines` under the workflow say is the flow's
+    // amount; `declared`, the task declares the error of a denial
+    let routed = |arm: &str, lines: &str, declared: bool| {
+        let (errors, on_denied) = if declared { ("  errors denied = 403\n", "        on denied => fail Denied \"the gate did not let the workflow refund\"\n") } else { ("", "") };
+        let other = if arm == "itself" { "clerk" } else { "itself" };
+        let mut files = changed(
+            "W909",
+            &[
+                ("returns.flow", "use openapi orders from \"orders.json\"\n", "use rule route from \"refund_route.rule\"\nuse openapi orders from \"orders.json\"\n"),
+                ("returns.flow", "  order : string\n", "  order  : string\n  amount : money[GBP, incl_tax]  range >=1 <=10000\n"),
+                ("returns.flow", "  key\n", &format!("{errors}  key\n")),
+                ("returns.flow", "  refund_order(orderId: order)\n", &format!("  let r = route(amount: amount)\n  match r.who\n    {arm} =>\n      refund_order(orderId: order)\n{on_denied}    {other} => pass\n")),
+                ("refunds.gate", "use openapi orders from \"orders.json\"\n", "use rule route from \"refund_route.rule\"\nuse openapi orders from \"orders.json\"\n"),
+                ("refunds.gate", "  description \"Refunds an order once the item is back\"\n", &format!("  description \"Refunds an order once the item is back\"\n{lines}")),
+                ("refunds.gate", "    status : order_status\n", "    status : order_status\n    total  : money[GBP, incl_tax]  range >=1GBP <=10_000GBP\n"),
+                ("refunds.gate", "  resource Order from orderId\n", "  resource Order from orderId\n  context\n    who = route(amount: resource.total).who\n"),
+                ("refunds.gate", "  when resource.status is returned\n", "  when who is itself\n"),
+            ],
+        );
+        files.push(("refund_route.rule", REFUND_ROUTE.to_string()));
+        files
+    };
+    let lines = "  resource Order from order\n    total = amount\n";
+    run("x16-arm-held", &routed("itself", lines, true), 0, (1, 0, 0), &mut failures);
+    run("x16-arm-W909", &routed("itself", lines, false), 0, (0, 0, 1), &mut failures);
+    run("x16-arm-E908", &routed("clerk", lines, true), 1, (0, 1, 0), &mut failures);
+    run("x16-arm-unsaid-W909", &routed("itself", "", false), 0, (0, 0, 1), &mut failures);
+    // the answer reads who asked for the refund and who approved it, which no value of a flow is
+    // said for: the examples are the gate's own, in Japanese with the spaces of the suite's
+    let related = changed(
+        "W909",
+        &[
+            ("refunds.gate", "    status : order_status\n", "    status    : order_status\n    requester : User\n    approver  : User\n"),
+            ("refunds.gate", "  when resource.status is returned\n", "  unless resource.requester is resource.approver\n"),
+        ],
+    );
+    run("x16-relation-W909", &related, 0, (0, 0, 1), &mut failures);
+    // the records of the borders say which lines of the gate an answer rests on (`assumes`): the
+    // call under the arm the gate allows, and the one under the arm it denies; none for a call
+    // that holds because the flow handles a denial
+    let mut both = routed("itself", lines, false);
+    for (name, body) in &mut both {
+        if *name == "returns.flow" {
+            assert!(body.contains("    clerk => pass\n"), "{body}");
+            *body = body.replace("    clerk => pass\n", "    clerk =>\n      refund_order(orderId: order)\n");
+        }
+    }
+    let t = lay_out(&both, "x16-records");
+    for (lang, file) in [("en", "records-x16.json"), ("ja", "records-x16.ja.json")] {
+        let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--format", "json", "--lang", lang]);
+        assert_eq!(code, 1, "{out}{err}");
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        records_agree("x16-records", &v);
+        let b = &v["borders"];
+        assert_eq!((b["held"].as_u64(), b["failed"].as_u64(), b["undecided"].as_u64()), (Some(0), Some(1), Some(1)), "{b}");
+        golden(file, &(serde_json::to_string_pretty(b).unwrap() + "\n"), &mut failures);
+    }
+    let t = lay_out(&routed("itself", lines, true), "x16-records-held");
+    let (_, out, _) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["borders"]["records"][0]["assumes"], serde_json::json!([]), "{}", v["borders"]);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// The rule the company's gate holds every request to: no one decides their own request, unless
+/// its route allows it.
+const OWN_REQUEST: &str = "\nforbid no_one_decides_their_own\n  principal is Staff\n  action approve, reject\n  when resource.requester is principal\n  unless resource.self_approval\n";
+
+#[test]
+fn x18_a_requests_route_against_its_gate() {
+    let mut failures = Vec::new();
+    let permit = "permit approvers_answer_their_stage\n  principal is Staff\n  action approve, reject\n  when principal in resource.approvers\n";
+    let with_rule = [("company.gate", permit, &*format!("{permit}{OWN_REQUEST}"))];
+    // held: the route allows no self approval, and the gate forbids it unless the route allows it
+    run("x18-held", &changed("E911", &with_rule), 0, (3, 0, 0), &mut failures);
+    // the gate lets the approvers of a stage answer it, the requester among them
+    run("x18-E911", &changed("E911", &[]), 1, (2, 1, 0), &mut failures);
+    // a route that allows it: the gate says nothing against it (held), or forbids it whatever the
+    // route says
+    let allowed = ("purchase.ringi", "  self approval  not allowed\n", "  self approval  allowed\n");
+    run("x18-allowed-held", &changed("E911", &[allowed]), 0, (3, 0, 0), &mut failures);
+    let whatever = OWN_REQUEST.replace("  unless resource.self_approval\n", "");
+    run("x18-allowed-E911", &changed("E911", &[allowed, ("company.gate", permit, &format!("{permit}{whatever}"))]), 1, (2, 1, 0), &mut failures);
+    // only the requester answers a stage: the approvers are allowed nothing, and the requester is
+    let requester_only = ("company.gate", "  when principal in resource.approvers\n", "  when resource.requester is principal\n");
+    run("x18-approvers-E911", &changed("E911", &[requester_only]), 1, (1, 2, 0), &mut failures);
+    // an operation the gate has no action for: one every ticket has
+    let all = "  action submit, see, add_approver, hand_over, change_request_type, read_audit, import_organization, read_organization_audit\n";
+    let no_hand_over = [
+        with_rule[0],
+        ("company.gate", "action hand_over\n  principal Staff\n  resource Stage\n", ""),
+        ("company.gate", all, "  action submit, see, add_approver, change_request_type, read_audit, import_organization, read_organization_audit\n"),
+    ];
+    run("x18-operation-E911", &changed("E911", &no_hand_over), 1, (2, 1, 0), &mut failures);
+    // no `see`: no one off a ticket sees it, an administrator among them (ringi's DESIGN 12.4)
+    let no_see = [
+        with_rule[0],
+        ("company.gate", "action see\n  principal Staff\n  resource Ticket\n", ""),
+        ("company.gate", all, "  action submit, add_approver, hand_over, change_request_type, read_audit, import_organization, read_organization_audit\n"),
+    ];
+    run("x18-see-E911", &changed("E911", &no_see), 1, (2, 1, 0), &mut failures);
+    // the operations of the server's administration (ringi's DESIGN 14): a gate that declares only
+    // the switch of a request type, as a gate did before the record and the organization were
+    // administered, and then one with no switch of a request type either and no `hand_over`
+    let admin = "action read_audit\n  principal Staff\n  resource RequestType\naction import_organization\n  principal Staff\n  resource Organization\naction read_organization_audit\n  principal Staff\n  resource Organization\n";
+    let switch_only = [with_rule[0], ("company.gate", admin, ""), ("company.gate", "resource Organization\n", ""), ("company.gate", all, "  action submit, see, add_approver, hand_over, change_request_type\n")];
+    run("x18-administration-E911", &changed("E911", &switch_only), 1, (2, 1, 0), &mut failures);
+    let and_a_ticket = [
+        with_rule[0],
+        ("company.gate", "action hand_over\n  principal Staff\n  resource Stage\n", ""),
+        ("company.gate", "action change_request_type\n  principal Staff\n  resource RequestType\n", ""),
+        ("company.gate", all, "  action submit, see, add_approver, read_audit, import_organization, read_organization_audit\n"),
+    ];
+    run("x18-ticket-and-administration-E911", &changed("E911", &and_a_ticket), 1, (2, 1, 0), &mut failures);
+    // an action of the administration that takes an input of its own
+    let admin_input = [with_rule[0], ("company.gate", "action import_organization\n  principal Staff\n  resource Organization\n", "action import_organization\n  principal Staff\n  resource Organization\n  input\n    dry_run : bool\n")];
+    run("x18-administration-input-E911", &changed("E911", &admin_input), 1, (2, 1, 0), &mut failures);
+    // and two the request gives its tickets, each with the line that does
+    let sends_back = [with_rule[0], ("purchase.ringi", "ticket\n", "ticket\n  send back      to the requester, at most 2 times\n")];
+    run("x18-operations-E911", &changed("E911", &sends_back), 1, (2, 1, 0), &mut failures);
+    // an action an operation asks that takes inputs of its own: the server asks the gate with the
+    // person, the resource and the time, and has nothing to give them; one action, then two
+    let own_input = [with_rule[0], ("company.gate", "action approve\n  principal Staff\n  resource Stage\n", "action approve\n  principal Staff\n  resource Stage\n  input\n    urgent : bool\n")];
+    run("x18-input-E911", &changed("E911", &own_input), 1, (2, 1, 0), &mut failures);
+    let own_inputs = [own_input[0], own_input[1], ("company.gate", "action comment\n  principal Staff\n  resource Stage\n", "action comment\n  principal Staff\n  resource Stage\n  input\n    length : number  range >=1 <=2000\n    shared : bool\n")];
+    run("x18-inputs-E911", &changed("E911", &own_inputs), 1, (2, 1, 0), &mut failures);
+    // `self_approval` declared as an enum, where ringi hands the gate a bool
+    run("x18-W911", &changed("W911", &[]), 0, (1, 0, 2), &mut failures);
+    // in Japanese names
+    run("x18-E911-ja", &repro_ja("E911"), 1, (2, 1, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A calendar that closes other days than the office's.
+const PLANT_CAL: &str = "calendar plant v1\ndescription \"The business days of the plant: Sundays and Mondays are closed\"\noffset +00:00\n\nclosed weekly sun, mon\n";
+
+/// A small organization (fictional): the president, two departments, and their people.
+const COMPANY: &str = "organization company v1 \"Company\"\ndescription \"The shape of the company's organization (fictional)\"\n\npositions\n  staff     \"Staff\"\n  dept_head \"Head of department\"\n  president \"President\"\n\nteam kinds\n  company    \"Company\"\n  department \"Department\"\n\ndata \"org\"\n";
+const TEAMS: &str = "id,name,name_ja,kind,parent,head\ncompany,Example Co. (fictional),株式会社サンプル（架空）,company,,e0001\nsales,Sales,営業部,department,company,e1001\nfinance,Finance,財務部,department,company,e2001\n";
+const PEOPLE: &str = "id,name,name_ja,email\ne0001,President (fictional),社長（架空）,e0001@example.com\ne1001,Head of Sales,営業部長,e1001@example.com\ne1002,Sales staff,営業部員,e1002@example.com\ne2001,Head of Finance,財務部長,e2001@example.com\ne2002,Finance staff,財務部員,e2002@example.com\n";
+const MEMBERS: &str = "person,team,position,primary\ne0001,company,president,yes\ne1001,sales,dept_head,yes\ne1002,sales,staff,yes\ne2001,finance,dept_head,yes\ne2002,finance,staff,yes\n";
+
+#[test]
+fn x19_a_hold_a_ticket_makes() {
+    let mut failures = Vec::new();
+    let days = |n: u32| ("budget.book", "  pending expires after 7 days\n".to_string(), format!("  pending expires after {n} days\n"));
+    let edits = |e: &[(&'static str, String, String)]| -> Vec<(&'static str, String)> { changed("E209", &e.iter().map(|(f, a, b)| (*f, a.as_str(), b.as_str())).collect::<Vec<_>>()) };
+    // ten business days are fifteen days at the most: a hold of thirty lasts, one of seven does not
+    run("x19-held", &edits(&[days(30)]), 0, (1, 0, 0), &mut failures);
+    run("x19-E209", &changed("E209", &[]), 1, (0, 1, 0), &mut failures);
+    // a hold that ends on the last second of the fifteenth day has expired when the round ends
+    run("x19-E209-to-the-second", &edits(&[days(15)]), 1, (0, 1, 0), &mut failures);
+    run("x19-never-expires", &changed("E209", &[("budget.book", "  pending expires after 7 days\n", "  pending never expires\n")]), 0, (1, 0, 0), &mut failures);
+    // a stage sends the ticket back to an earlier stage, which starts no new round: the round of
+    // twenty business days is walked three times
+    let back = [
+        days(60),
+        ("purchase.ringi", "  check  finance\n".to_string(), "  check   finance\n  decide  finance\n".to_string()),
+        ("purchase.ringi", "ticket\n".to_string(), "ticket\n  send back     to any earlier stage, at most 2 times\n".to_string()),
+        ("purchase.ringi", "  on rejected, expired  void".to_string(), "  on sent back, rejected, expired  void".to_string()),
+    ];
+    run("x19-earlier-stage-E209", &edits(&back), 1, (0, 1, 0), &mut failures);
+    // a stage with no deadline
+    run("x19-W209", &changed("W209", &[]), 0, (0, 0, 1), &mut failures);
+    // the stages counted in the office's calendar, the pause in the plant's
+    let mut two = edits(&[
+        days(21),
+        ("purchase.ringi", "use calendar office from \"office.cal\"\n".to_string(), "use calendar office from \"office.cal\"\nuse calendar plant from \"plant.cal\"\n".to_string()),
+        ("purchase.ringi", "  due in 10 business days at end of day\n".to_string(), "  due in 10 business days in office at end of day\n".to_string()),
+        ("purchase.ringi", "ticket\n".to_string(), "ticket\n  pause         at most 5 business days in plant\n".to_string()),
+    ]);
+    two.push(("plant.cal", PLANT_CAL.to_string()));
+    run("x19-two-calendars-W209", &two, 0, (0, 0, 1), &mut failures);
+    // the hold takes the requester's department, and the president is above every department
+    let org = |edits: &[(&'static str, String, String)], company: &str| {
+        let mut with = vec![
+            days(30),
+            ("purchase.ringi", "use calendar office".to_string(), "use organization org from \"company.ringi\"\nuse calendar office".to_string()),
+            ("purchase.ringi", "  dept   : text \"Department\"  count >=1 <=20\n".to_string(), String::new()),
+            ("purchase.ringi", "dept: dept,".to_string(), "dept: requester.department,".to_string()),
+        ];
+        with.extend(edits.iter().cloned());
+        let mut files = self::changed("E209", &with.iter().map(|(f, a, b)| (*f, a.as_str(), b.as_str())).collect::<Vec<_>>());
+        files.extend([("company.ringi", company.to_string()), ("org/2026-04-01/teams.csv", TEAMS.to_string()), ("org/2026-04-01/people.csv", PEOPLE.to_string()), ("org/2026-04-01/members.csv", MEMBERS.to_string())]);
+        files
+    };
+    run("x19-requesters-W209", &org(&[], COMPANY), 0, (1, 0, 1), &mut failures);
+    // four directors beside the president, two of them gone in the next version: the note names
+    // three people and says how many more, as ringi's check lists the requesters of a finding
+    let mut many = org(&[], COMPANY);
+    many.retain(|(f, _)| !f.starts_with("org/"));
+    let directors = |ids: &[u32]| {
+        let people: String = ids.iter().map(|n| format!("e000{n},Director {},取締役 {},e000{n}@example.com\n", n - 1, n - 1)).collect();
+        let members: String = ids.iter().map(|n| format!("e000{n},company,staff,yes\n")).collect();
+        (format!("{PEOPLE}{people}"), format!("{MEMBERS}{members}"))
+    };
+    let ((people, members), (people_next, members_next)) = (directors(&[2, 3, 4, 5]), directors(&[2, 3]));
+    many.extend([
+        ("org/2026-04-01/teams.csv", TEAMS.to_string()),
+        ("org/2026-04-01/people.csv", people),
+        ("org/2026-04-01/members.csv", members),
+        ("org/2027-04-01/teams.csv", TEAMS.to_string()),
+        ("org/2027-04-01/people.csv", people_next),
+        ("org/2027-04-01/members.csv", members_next),
+    ]);
+    run("x19-many-requesters-W209", &many, 0, (1, 0, 1), &mut failures);
+    // kept to the requesters who have one, the line holds nothing for the president
+    let kept = ("purchase.ringi", "amount: amount)\n  on approved".to_string(), "amount: amount)  when requester.department is not none\n  on approved".to_string());
+    run("x19-requesters-held", &org(&[kept], COMPANY), 0, (1, 0, 0), &mut failures);
+    // an organization with no data says nothing of who has a department
+    run("x19-no-data-W209", &org(&[], &COMPANY.replace("\ndata \"org\"\n", "")), 0, (1, 0, 1), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A request whose small amounts an agent's flow answers in place of a person, by the rows of its
+/// route.
+const AGENT_REQUEST: &str = "request purchase v1 \"Purchase request\"\n\nuse flow precheck from \"precheck.flow\"\n\nform\n  amount  : money[JPY] \"Amount\"  range >=1JPY <=1_000_000JPY\n  purpose : long text \"Purpose\"  count >=1 <=200\n  vendor  : text \"Vendor\"  count <=100  optional\n\nroute\n| amount      | -> check | decide  |\n| <=30_000JPY |          | small   |\n| >30_000JPY  | finance  | finance |\n\nwho\n  finance = team finance\n  small   = agent precheck, else finance\n\nticket\n  self approval  not allowed\n";
+const AGENT_FLOW: &str = "workflow purchase_precheck v1\ndescription \"The check of a small purchase request in place of a person: ok, or doubt with the reason\"\n\nenum Check = ok | doubt\n\nrecord Reading\n  verdict : Check\n  reason  : string\n\ninputs\n  request_id : string\n  amount     : money[JPY]  range >=1JPY <=30_000JPY\n  purpose    : string\n\noutputs\n  verdict : Check\n  reason  : string\n\ntask read(amount: money[JPY], purpose: string) -> Reading\n  timeout 60 seconds\n  idempotent\n\nflow\n  let r = read(amount: amount, purpose: purpose)\n  succeed verdict = r.verdict, reason = r.reason\n";
+
+/// A request with a stage that shows a flow's summary to the people who review it, for the amounts
+/// the stage's `when` names.
+const NOTE_REQUEST: &str = "request contract v1 \"Contract review\"\n\nuse flow summarize from \"summary.flow\"\n\nform\n  title  : text \"Title\"  count >=1 <=100\n  terms  : long text \"Terms\"  count >=1 <=2000\n  amount : money[JPY] \"Amount\"  range >=0JPY <=100_000_000JPY\n  urgent : bool \"Urgent\"\n\nroute\n  summary  note from summarize  when amount >= 1_000_000JPY and amount <= 50_000_000JPY\n  review   legal\n\nwho\n  legal = team legal\n\nticket\n  self approval  not allowed\n";
+const NOTE_FLOW: &str = "workflow contract_summary v1\ndescription \"A summary of a contract for the people who review it, shown on the approval card\"\n\ninputs\n  request_id : string\n  title      : string\n  terms      : string\n  amount     : money[JPY]  range >=1_000_000JPY <=50_000_000JPY\n\noutputs\n  summary : string\n\nrecord Note\n  summary : string\n\ntask summarize(title: string, terms: string, amount: money[JPY]) -> Note\n  timeout 5 minutes\n  idempotent\n\nflow\n  let n = summarize(title: title, terms: terms, amount: amount)\n  succeed summary = n.summary\n";
+
+#[test]
+fn x20_what_a_ticket_gives_a_flow() {
+    let mut failures = Vec::new();
+    // a flow an ending starts: the amount the form lets in, against the amount the flow takes
+    run("x20-held", &changed("E210", &[("order.flow", "<=500_000JPY", "<=1_000_000JPY")]), 0, (2, 0, 0), &mut failures);
+    run("x20-E210", &changed("E210", &[]), 1, (1, 1, 0), &mut failures);
+    // the `on` line's `when` holds the amount to what the flow takes, or to more than that
+    let when = |cond: &str| changed("E210", &[("purchase.ringi", "amount: amount)\n", &format!("amount: amount)  when {cond}\n"))]);
+    run("x20-when-held", &when("amount <= 500_000JPY"), 0, (2, 0, 0), &mut failures);
+    run("x20-when-E210", &when("amount <= 800_000JPY"), 1, (1, 1, 0), &mut failures);
+    // written with `not`, ringi does not follow it
+    // the ledger's W210 holds the other side too: a flow that submits a request through an API
+    // whose request's file the project does not have
+    run("x20-W210", &changed("W210", &[]), 0, (1, 0, 2), &mut failures);
+    // the call itself: no value for an input, a value with no input, a value of another type
+    let call = |args: &str| changed("E210", &[("order.flow", "<=500_000JPY", "<=1_000_000JPY"), ("purchase.ringi", "launch order(request_id: ticket.id, amount: amount)", &format!("launch order({args})"))]);
+    run("x20-call-not-given-E210", &call("request_id: ticket.id"), 1, (1, 1, 0), &mut failures);
+    run("x20-call-no-input-E210", &call("request_id: ticket.id, amount: amount, round: ticket.round"), 1, (2, 1, 0), &mut failures);
+    run("x20-call-types-E210", &call("request_id: amount, amount: amount"), 1, (1, 1, 0), &mut failures);
+    // an agent's flow: the amounts its rows of the route give it
+    let agent = |edits: &[(&str, &str)]| {
+        let mut flow = AGENT_FLOW.to_string();
+        for (from, to) in edits {
+            assert!(flow.contains(from), "the agent's flow has no {from:?}");
+            flow = flow.replacen(from, to, 1);
+        }
+        vec![("purchase.ringi", AGENT_REQUEST.to_string()), ("precheck.flow", flow)]
+    };
+    run("x20-agent-held", &agent(&[]), 0, (4, 0, 0), &mut failures);
+    run("x20-agent-row-E210", &agent(&[("<=30_000JPY", "<=10_000JPY")]), 1, (3, 1, 0), &mut failures);
+    // a field a request may leave empty is taken as `T?`
+    let more = "  purpose    : string\n\noutputs";
+    run("x20-agent-optional-held", &agent(&[(more, "  purpose    : string\n  vendor     : string?\n\noutputs")]), 0, (5, 0, 0), &mut failures);
+    run("x20-agent-optional-E210", &agent(&[(more, "  purpose    : string\n  vendor     : string\n\noutputs")]), 1, (4, 1, 0), &mut failures);
+    // an input that is no field of the form
+    run("x20-agent-no-field-E210", &agent(&[(more, "  purpose    : string\n  budget     : string\n\noutputs")]), 1, (4, 1, 0), &mut failures);
+    // an input of another type than the field
+    run("x20-agent-types-E210", &agent(&[("  purpose    : string\n\noutputs", "  purpose    : int\n\noutputs"), ("task read(amount: money[JPY], purpose: string)", "task read(amount: money[JPY], purpose: int)")]), 1, (3, 1, 0), &mut failures);
+    // what ringi reads as the agent's answer
+    let no_reason = [("outputs\n  verdict : Check\n  reason  : string\n", "outputs\n  verdict : Check\n"), ("  succeed verdict = r.verdict, reason = r.reason", "  succeed verdict = r.verdict")];
+    run("x20-agent-answer-E210", &agent(&no_reason), 1, (3, 1, 0), &mut failures);
+    // a summary's flow: the amounts the stage's `when` names
+    let note = |request: &[(&str, &str)], flow: &[(&str, &str)]| {
+        let made = |body: &str, edits: &[(&str, &str)]| {
+            let mut body = body.to_string();
+            for (from, to) in edits {
+                assert!(body.contains(from), "the summary's project has no {from:?}");
+                body = body.replacen(from, to, 1);
+            }
+            body
+        };
+        vec![("contract.ringi", made(NOTE_REQUEST, request)), ("summary.flow", made(NOTE_FLOW, flow))]
+    };
+    let cond = "  when amount >= 1_000_000JPY and amount <= 50_000_000JPY";
+    run("x20-note-held", &note(&[], &[]), 0, (5, 0, 0), &mut failures);
+    run("x20-note-E210", &note(&[(cond, "")], &[]), 1, (4, 1, 0), &mut failures);
+    run("x20-note-when-E210", &note(&[("amount <= 50_000_000JPY", "amount <= 80_000_000JPY")], &[]), 1, (4, 1, 0), &mut failures);
+    run("x20-note-W210", &note(&[(cond, "  when urgent or amount >= 1_000_000JPY")], &[]), 0, (4, 0, 1), &mut failures);
+    let silent = [("outputs\n  summary : string\n\n", ""), ("  let n = summarize(title: title, terms: terms, amount: amount)\n  succeed summary = n.summary\n", "  summarize(title: title, terms: terms, amount: amount)\n")];
+    run("x20-note-no-output-E210", &note(&[], &silent), 1, (4, 1, 0), &mut failures);
+    // what a note holds: text, a whole number, a truth, rows of records, nothing; not a record on
+    // its own, a list of what is no record, or `json`
+    let output = |ty: &str, returns: &str, whole: bool| {
+        let mut edits = vec![("outputs\n  summary : string\n", format!("outputs\n  summary : {ty}\n"))];
+        if whole {
+            edits.push(("succeed summary = n.summary", "succeed summary = n".to_string()));
+        }
+        if !returns.is_empty() {
+            edits.push(("amount: money[JPY]) -> Note", format!("amount: money[JPY]) -> {returns}")));
+        }
+        let edits: Vec<(&str, &str)> = edits.iter().map(|(a, b)| (*a, b.as_str())).collect();
+        note(&[], &edits)
+    };
+    run("x20-note-rows-held", &output("list[Note]", "list[Note]", true), 0, (5, 0, 0), &mut failures);
+    run("x20-note-record-E210", &output("Note", "", true), 1, (4, 1, 0), &mut failures);
+    run("x20-note-list-E210", &output("list[string]", "list[string]", true), 1, (4, 1, 0), &mut failures);
+    run("x20-note-json-E210", &output("json", "", false), 1, (4, 1, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The reproductions of E911, E209 and E210, the request in `requests/` and what it reads in
+/// `shared/`: the diagnostic is the same, in both languages, whether the request is found in the
+/// directory, given by its name (the root is then `requests/`, and the gate, the book and the flow
+/// are outside it) or given by its absolute path, but for the path given; and the JSON's records
+/// are the same but for the files from the root.
+/// A request with an organization, whose API `ritsu gen --target requests` writes.
+const API_REQUEST: &str = "request purchase v1 \"Purchase request\"\n\nuse organization org from \"company.ringi\"\n\nform\n  amount  : money[JPY] \"Amount\"  range >=1JPY <=1_000_000JPY\n  purpose : text \"Purpose\"  count >=1 <=200\n\nroute\n  check  finance\n\nwho\n  finance = team finance\n\nticket\n  self approval  not allowed\n";
+
+/// A flow that submits a purchase request through the API.
+const API_FLOW: &str = "workflow restock v1\ndescription \"Asks for a purchase of the supplies that run low, through the server of the requests\"\n\nuse openapi requests from \"out/requests/openapi.json\"\n  url \"https://requests.example.com\"\n\nrecord Purchase\n  amount  : money[JPY]  range >=1JPY <=500_000JPY\n  purpose : string\n\nrecord Ticket\n  id : string\n\nrecord Moved\n  ticket : Ticket\n\ninputs\n  purchase : Purchase\n\noutputs\n  ticket : string\n\ntask submit_purchase(form: Purchase) -> Moved\n  http POST requests \"/requests/purchase/tickets\"\n  key\n\nflow\n  let moved = submit_purchase(form: purchase)\n  succeed ticket = moved.ticket.id\n";
+
+/// The catalog the screens `requests` writes name.
+const CATALOG: &str = "https://requests.example.com/a2ui/catalog.json";
+
+#[test]
+fn x20_a_flow_that_opens_a_ticket() {
+    // the API written once, the flow put beside it after; each case a copy of the project
+    let base = lay_out(&[("purchase.ringi", API_REQUEST.to_string()), ("company.ringi", COMPANY.to_string()), ("org/2026-04-01/teams.csv", TEAMS.to_string()), ("org/2026-04-01/people.csv", PEOPLE.to_string()), ("org/2026-04-01/members.csv", MEMBERS.to_string())], "x20-api");
+    let gen_requests = ["gen", ".", "--target", "requests", "--catalog", CATALOG, "--out", "out"];
+    let (code, out, err) = ritsu_in(base.path(), &gen_requests);
+    assert_eq!(code, 0, "{out}{err}");
+    std::fs::write(base.path().join("restock.flow"), API_FLOW).unwrap();
+    let case = |name: &str, edits: &[(&str, &str, &str)], gone: &[&str]| {
+        let t = TempDir::new(name);
+        ritsu_testkit::tmp::copy_dir(base.path(), t.path());
+        for (file, from, to) in edits {
+            let p = t.path().join(file);
+            let body = std::fs::read_to_string(&p).unwrap();
+            assert!(body.contains(from), "{name}: {file} has no {from:?}");
+            std::fs::write(&p, body.replacen(from, to, 1)).unwrap();
+        }
+        for g in gone {
+            std::fs::remove_file(t.path().join(g)).unwrap();
+        }
+        t
+    };
+    let mut failures = Vec::new();
+    run_at("x20-api-held", case("x20-api-held", &[], &[]).path(), 0, (1, 0, 0), &mut failures);
+    // what the flow sends against a document that is the request's now: dandori's alone
+    let types = case("x20-api-types", &[("restock.flow", "  purpose : string\n", "  purpose : int\n")], &[]);
+    run_at("x20-api-types-E016", types.path(), 1, (0, 0, 0), &mut failures);
+    let wide = case("x20-api-wide", &[("restock.flow", "range >=1JPY <=500_000JPY", "range >=1JPY <=2_000_000JPY")], &[]);
+    run_at("x20-api-wide-E016", wide.path(), 1, (0, 0, 0), &mut failures);
+    // the request changed after the document was written: its form, its version, its name
+    let narrowed = ("purchase.ringi", "range >=1JPY <=1_000_000JPY", "range >=1JPY <=300_000JPY");
+    let stale = case("x20-api-E210", &[narrowed], &[]);
+    run_at("x20-api-E210", stale.path(), 1, (0, 1, 0), &mut failures);
+    run_at("x20-api-version-E210", case("x20-api-version", &[("purchase.ringi", "request purchase v1", "request purchase v2")], &[]).path(), 1, (0, 1, 0), &mut failures);
+    run_at("x20-api-renamed-E210", case("x20-api-renamed", &[("purchase.ringi", "request purchase v1", "request supplies v1")], &[]).path(), 1, (0, 1, 0), &mut failures);
+    // the request's file gone: nothing to hold the document to
+    run_at("x20-api-W210", case("x20-api-gone", &[], &["purchase.ringi"]).path(), 0, (0, 0, 1), &mut failures);
+    // `ritsu gen` stops for the document out of date, as for any E210, when it writes another target
+    let (code, out, err) = ritsu_in(stale.path(), &["gen", ".", "--target", "typescript", "--out", "other"]);
+    assert!(code == 1 && err.contains("error[ritsu E210]: restock.flow:28:") && !stale.path().join("other").exists(), "{out}{err}");
+    // and when it writes `requests`, the flow is held to the document the run writes, the request as
+    // it is now: dandori says the flow sends what the request no longer takes, and nothing is
+    // written (ringi's DESIGN 9.3)
+    let document = stale.path().join("out/requests/openapi.json");
+    let before = std::fs::read_to_string(&document).unwrap();
+    let (code, out, err) = ritsu_in(stale.path(), &gen_requests);
+    let said = format!("{out}{err}");
+    // the range said in its unit, as the files write it (dandori's DESIGN 39.2)
+    assert!(code == 1 && said.contains("dandori E016") && said.contains("`>=1JPY <=300_000JPY` is taken") && !said.contains("E210"), "{said}");
+    assert_eq!(std::fs::read_to_string(&document).unwrap(), before, "nothing is written");
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn x18_to_x20_say_the_same_however_the_request_is_given() {
+    for code in ["E911", "E209", "E210"] {
+        let files: Vec<(String, String)> = repro(code)
+            .into_iter()
+            .map(|(name, body)| match name {
+                "purchase.ringi" => {
+                    let mut body = body.to_string();
+                    for (other, _) in repro(code).iter().filter(|(n, _)| *n != "purchase.ringi") {
+                        assert!(body.contains(&format!("\"{other}\"")), "{code}: the request does not read {other}");
+                        body = body.replace(&format!("\"{other}\""), &format!("\"../shared/{other}\""));
+                    }
+                    (format!("requests/{name}"), body)
+                }
+                other => (format!("shared/{other}"), body.to_string()),
+            })
+            .collect();
+        let files: Vec<(&str, String)> = files.iter().map(|(n, b)| (n.as_str(), b.clone())).collect();
+        let t = lay_out(&files, &format!("ritsu-given-{code}"));
+        let top = t.path().to_string_lossy().to_string();
+        let absolute = format!("{top}/requests/purchase.ringi");
+        // what ritsu says across the borders: the diagnostic of the code, with its notes
+        let said = |out: &str| -> String {
+            let mut on = false;
+            let mut kept = String::new();
+            for l in out.lines() {
+                if !l.starts_with("  ") && !l.starts_with("    ") {
+                    on = l.contains(&format!("[ritsu {code}]"));
+                }
+                if on {
+                    kept.push_str(l);
+                    kept.push('\n');
+                }
+            }
+            kept
+        };
+        for lang in ["en", "ja"] {
+            let (code_dir, found, _) = ritsu_in(t.path(), &["check", ".", "--lang", lang]);
+            let (code_name, named, _) = ritsu_in(t.path(), &["check", "requests/purchase.ringi", "--lang", lang]);
+            let (code_abs, abs, _) = ritsu_in(t.path(), &["check", &absolute, "--lang", lang]);
+            assert_eq!((code_dir, code_name, code_abs), (1, 1, 1), "{code} ({lang}):\n{found}\n{named}\n{abs}");
+            let want = said(&found);
+            assert!(want.contains(&format!("[ritsu {code}]: requests/purchase.ringi:")) && want.contains("shared/"), "{code} ({lang}): {found}");
+            assert_eq!(said(&named), want, "{code} ({lang}), given by its name");
+            assert_eq!(said(&abs).replace(&format!("{top}/"), ""), want, "{code} ({lang}), given by its absolute path");
+            // and from the request's own directory, the files are written from there
+            let (_, inside, _) = ritsu_in(&t.path().join("requests"), &["check", "purchase.ringi", "--lang", lang]);
+            assert_eq!(said(&inside).replace("../shared/", "shared/"), want.replace("requests/purchase.ringi", "purchase.ringi"), "{code} ({lang}), given in its own directory");
+        }
+        // the records: the same checks about the same things with the same results
+        let records = |args: &[&str]| -> Vec<(String, String, String, Option<String>)> {
+            let (_, out, _) = ritsu_in(t.path(), args);
+            let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+            records_agree(code, &v);
+            v["borders"]["records"].as_array().unwrap().iter().map(|r| (r["check"].as_str().unwrap().to_string(), r["about"].as_str().unwrap().to_string(), r["result"].as_str().unwrap().to_string(), r["code"].as_str().map(str::to_string))).collect()
+        };
+        let found = records(&["check", ".", "--format", "json"]);
+        assert!(found.iter().any(|r| r.3.as_deref() == Some(code)), "{code}: {found:?}");
+        assert_eq!(records(&["check", "requests/purchase.ringi", "--format", "json"]), found, "{code}");
+        assert_eq!(records(&["check", &absolute, "--format", "json"]), found, "{code}");
+    }
+}
+
+/// Requests beside a project change nothing of what X2 to X6 say of it (ringi's PLAN C4.4): the
+/// files a request is lowered to are no files of the project, and no module of kaname is lowered
+/// yet, so the calls ritsu holds to the rules, the dates and the books are the flows' and the
+/// modules' own. The reproductions of E201 (a rule's precondition), E202 (a day given to a rule),
+/// E203 (a transfer's amount) and E206 (a hold against its expiry), each with its module of kaname
+/// where it has one: the same records and the same diagnostics, with three requests and what they
+/// read laid beside them.
+#[test]
+fn requests_beside_a_project_leave_the_other_borders_as_they_are() {
+    let l = ritsu_cross::codes::ledger();
+    let files_of = |code: &str| -> Vec<(String, String)> {
+        match &l.find(code).expect("the code is in the ledger").repro {
+            ritsu_base::ledger::Repro::Dir { files, .. } => files.iter().map(|(n, b)| (n.to_string(), b.to_string())).collect(),
+            other => panic!("{code} has no files: {other:?}"),
+        }
+    };
+    let own = |file: &serde_json::Value| file.as_str().is_some_and(|f| f.starts_with("requests-"));
+    let mut modules = 0;
+    for code in ["E201", "E202", "E203", "E206"] {
+        let mut files = files_of(code);
+        modules += files.iter().filter(|(n, _)| n.ends_with(".kn")).count();
+        let said = |files: &[(String, String)]| -> (Vec<serde_json::Value>, Vec<serde_json::Value>, usize) {
+            let laid: Vec<(&str, String)> = files.iter().map(|(n, b)| (n.as_str(), b.clone())).collect();
+            let t = lay_out(&laid, &format!("ritsu-beside-{code}"));
+            let (_, out, _) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
+            let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+            let all = v["borders"]["records"].as_array().unwrap();
+            let records: Vec<_> = all.iter().filter(|r| !own(&r["at"]["file"])).cloned().collect();
+            let diagnostics = v["diagnostics"].as_array().unwrap().iter().filter(|d| !own(&d["file"])).cloned().collect();
+            (records, diagnostics, all.len())
+        };
+        let (records, diagnostics, all) = said(&files);
+        assert!(records.iter().any(|r| r["code"] == code) && records.len() == all, "{code}: {records:?}");
+        for request in ["E911", "E209", "E210"] {
+            files.extend(files_of(request).into_iter().map(|(n, b)| (format!("requests-{request}/{n}"), b)));
+        }
+        let (with_records, with_diagnostics, with_all) = said(&files);
+        assert_eq!((with_records, with_diagnostics), (records, diagnostics), "{code}");
+        // and the requests' own borders are there beside them: 3 of the gate, 1 of the hold, 2 of the flow
+        assert_eq!(with_all - all, 6, "{code}");
+    }
+    assert_eq!(modules, 3, "three of the four have a module of kaname");
+}
+/// Who refunds an order (fictional): the returns workflow itself up to 50 pounds, a clerk above.
+const REFUND_ROUTE: &str = "rule refund_route v1\ndescription \"Who refunds an order: the returns workflow itself up to 50 pounds, a clerk above it\"\n\nenum refunder = itself \"Itself\" | clerk \"Clerk\"\n\ninputs\n  amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP\n\noutputs\n  who : refunder\n\ntable route\n| amount  | -> who |\n| <=50GBP | itself |\n| >50GBP  | clerk  |\n\nexamples\n| amount | -> who |\n| 50GBP  | itself |\n| 51GBP  | clerk  |\n";
 
 /// One of kaname's examples (its DESIGN 17), English only: the module with `edits` made to it
 /// (the module's own examples dropped where it is changed), and the files it reads, with the copies

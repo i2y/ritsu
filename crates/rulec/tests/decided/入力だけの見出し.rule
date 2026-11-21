@@ -1,0 +1,16 @@
+rule 入力だけの見出し(no_arrow_inputs_ja) v1
+description "見出しに `->` が無く、出力の名前も無い表。どの列も入力"
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100000円
+  会員(member) : bool
+
+outputs
+  確認(review) : bool
+
+table 確認の要否(review_of)
+policy unique
+| 金額      | 会員  |
+| <10000円  | -     |
+| >=10000円 | true  |
+| >=10000円 | false |

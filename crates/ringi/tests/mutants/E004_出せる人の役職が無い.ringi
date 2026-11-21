@@ -1,0 +1,16 @@
+request 例(example) v1 "例"
+
+use organization 組織(org) from "shared/小さい会社.ringi"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確かめ(check)  財務
+
+who
+  財務(finance) = team finance
+
+ticket
+  submitted by   position 課長 or higher
+  self approval  not allowed

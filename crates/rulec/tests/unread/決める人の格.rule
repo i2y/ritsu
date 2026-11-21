@@ -1,0 +1,26 @@
+rule 決める人の格(who_heads) v1
+description "物品の購入を取締役会が決めるか。経理の確かめには別の名前を付け、決める人は自分の列挙に移し、どちらも読まない（架空）"
+
+enum 格(head) = 部(dept) | 上(upper)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100_000_000円
+
+apply 決裁権限(authority) = "共有/決裁権限.rule" meaning:25f8b9bef50a501c
+  種類 = 物品
+  金額 = 金額
+  取締役会 -> 取締役会で(by_board)
+  経理 -> 経理で(by_finance)
+  決める人 -> 決める人の格(who) with 部長 -> 部, 本部長 -> 上, 社長 -> 上
+
+outputs
+  取締役会が決める(board_decides) : bool
+
+table 取締役会が決める(board_decides)
+| -> 取締役会が決める |
+| 取締役会で          |
+
+examples
+| 金額         | -> 取締役会が決める |
+| 1_000_000円  | false               |
+| 20_000_000円 | true                |

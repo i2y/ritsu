@@ -1,0 +1,22 @@
+rule 計算した値を渡す(computed_binding) v1
+description "表が読む入力から計算した値を渡して、規則を取り込む。渡す一次式の define が、取り込んだ表の行とその入力を結ぶ"
+
+enum 選択(choice) = 一(one) | 二(two) | 三(three)
+
+inputs
+  総額(gross) : money[円]  range >=1円 <=1_000_000円
+
+define 正味(net) : money[円] = 総額 - 0円
+
+apply 区分け(t) = "shared/金額の区分.rule" meaning:e7d6953fd795c588
+  金額 = 正味
+  区分 -> 受けた区分
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 総額                  | 受けた区分 | -> 答え |
+| <=10_000円            | 小         | 一      |
+| >10_000円 <=100_000円 | 中         | 二      |
+| >100_000円            | 大         | 三      |

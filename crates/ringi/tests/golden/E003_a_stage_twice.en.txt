@@ -1,0 +1,2 @@
+error[E003]: tests/mutants/E003_a_stage_twice.ringi:8:3: `check` is declared twice in the stages of the route (first on line 7)
+     8 |   check  finance

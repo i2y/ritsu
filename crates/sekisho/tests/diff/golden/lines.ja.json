@@ -1,0 +1,69 @@
+{
+  "sekisho": "0.55.2",
+  "old": {
+    "file": "tests/diff/請求.gate",
+    "name": "請求",
+    "version": "v1"
+  },
+  "new": {
+    "file": "tests/diff/請求_二版.gate",
+    "name": "請求",
+    "version": "v2"
+  },
+  "actions": [
+    {
+      "action": "請求を支払う",
+      "combinations": 2,
+      "gained": [],
+      "lost": [],
+      "reasons": [],
+      "unknown": [],
+      "frames_only_old": [],
+      "frames_only_new": [],
+      "same_elsewhere": true
+    }
+  ],
+  "only_old": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "only_new": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "workflow_lines": [
+    {
+      "workflow": "支払い",
+      "head": "resource 請求 from 請求番号",
+      "attribute": "金額",
+      "old": "金額 = 金額",
+      "new": "金額 = 求めた額"
+    },
+    {
+      "workflow": "支払い",
+      "head": "resource 請求 from 請求番号",
+      "attribute": "急ぎ",
+      "old": null,
+      "new": "急ぎ = 急ぎ"
+    },
+    {
+      "workflow": "支払い",
+      "head": "resource 請求 from 請求番号",
+      "attribute": "確認済み",
+      "old": "確認済み = 確認済み",
+      "new": null
+    }
+  ],
+  "total": {
+    "gained": 0,
+    "lost": 0,
+    "reasons": 0,
+    "unknown": 0
+  }
+}

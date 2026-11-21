@@ -61,7 +61,8 @@ class Here(http.server.BaseHTTPRequestHandler):
                 "method": self.command,
                 "path": re.sub(r"^/[^/]+", "", url.path[len("/http") :]),
                 "query": pairs(url.query),
-                "headers": {k.lower(): v for k, v in self.headers.items()},
+                # http.server reads a header's bytes as latin-1; the Transports send each value's UTF-8
+                "headers": {k.lower(): v.encode("latin-1").decode("utf-8") for k, v in self.headers.items()},
                 "body": None if text == "" else json.loads(text) if "json" in kind else pairs(text) if "x-www-form-urlencoded" in kind else text,
                 "raw": text,
                 "rawQuery": f"?{url.query}" if url.query else "",
@@ -86,12 +87,13 @@ class Here(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(out)
         else:
-            # any other AWS API: moto's
+            # any other AWS API: moto's, and what went and came back written down
             c = http.client.HTTPConnection(moto_url.hostname, moto_url.port)
             headers = {k: v for k, v in self.headers.items() if k.lower() != "host"}
             c.request(self.command, self.path, body=body, headers=headers)
             m = c.getresponse()
             out = m.read()
+            now.setdefault("moto", []).append({"method": self.command, "path": self.path, "body": body.decode("utf-8", "replace"), "answer": out.decode("utf-8", "replace")})
             self.send_response(m.status)
             for k, v in m.getheaders():
                 if k.lower() not in ("content-length", "transfer-encoding", "connection", "server", "date"):
@@ -109,7 +111,10 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 # this server's address, in place of an HTTP task's scheme and host, and boto3's endpoint
 front = f"http://127.0.0.1:{server.server_address[1]}"
 
-transport = io.DefaultTransport(headers=lambda url: {"X-Dandori-Check": "wire"}, aws={"endpoint_url": front, "region_name": REGION, **CREDENTIALS})
+# a header of the options' own; for the library of tests/flows/http_places.flow, one that takes the
+# place of the request's of its name, which it gives in another case; and a cookie that joins the
+# request's (DESIGN 43)
+transport = io.DefaultTransport(headers=lambda url: {"X-Dandori-Check": "wire", **({"x-library-key": "wire-key"} if "/library.example.com/" in url else {}), "Cookie": "wire_session=1"}, aws={"endpoint_url": front, "region_name": REGION, **CREDENTIALS})
 sns = boto3.client("sns", endpoint_url=moto, region_name=REGION, **CREDENTIALS)
 sqs = boto3.client("sqs", endpoint_url=moto, region_name=REGION, **CREDENTIALS)
 
@@ -118,7 +123,7 @@ async def main() -> list[dict[str, Any]]:
     results = []
     for c in cases:
         now.clear()
-        now.update({"case": c, "received": None})
+        now.update({"case": c, "received": None, "moto": []})
         messages = None
         if c["kind"] == "http":
             u = urllib.parse.urlsplit(c["request"]["url"])
@@ -129,6 +134,9 @@ async def main() -> list[dict[str, Any]]:
         else:
             # moto as the case wants it: the topics and queues that exist, and a queue that listens
             urllib.request.urlopen(urllib.request.Request(f"{moto}/moto-api/reset", method="POST")).read()
+            # what else the call needs there, as the case's requests to moto make it (urlopen raises when moto refuses one)
+            for r in c.get("setup", []):
+                urllib.request.urlopen(urllib.request.Request(f"{moto}{r['path']}", data=r["body"].encode("utf-8"), headers=r["headers"], method=r["method"])).read()
             for name in c["topics"]:
                 sns.create_topic(Name=name)
             for name in c["queues"]:
@@ -146,7 +154,7 @@ async def main() -> list[dict[str, Any]]:
             if listen:
                 got = sqs.receive_message(QueueUrl=sqs.get_queue_url(QueueName=listen["queue"])["QueueUrl"], MaxNumberOfMessages=10)
                 messages = [m["Body"] for m in got.get("Messages", [])]
-        results.append({"received": now["received"], "returned": returned, "messages": messages})
+        results.append({"received": now["received"], "returned": returned, "messages": messages, "moto": now["moto"]})
     return results
 
 

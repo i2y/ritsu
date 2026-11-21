@@ -1,0 +1,19 @@
+rule dearest_of_two v1
+description "Whether an order holds a dear line. An order has two shipped lines or more: a single line is refused, whatever its price"
+
+# A line of the order
+elements lines
+  price   : money[JPY]  range >=1JPY <=100JPY
+  shipped : bool
+
+count shipped_lines over lines where shipped  range >=2 <=5
+max dearest over lines of price empty 0JPY
+
+outputs
+  pricey : bool
+
+table pricey_of
+policy unique
+| dearest | -> pricey |
+| <50JPY  | false     |
+| >=50JPY | true      |

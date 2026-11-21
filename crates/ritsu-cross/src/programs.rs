@@ -6,7 +6,9 @@
 //!   given (a condition in force, the running totals of `running_totals`) shows it; else rulec is
 //!   asked over the ranges kaname finds, as for a workflow ([`crate::preconditions`]); a bound on the
 //!   total or the length of a list the rule walks is asked with the most elements kaname knows the
-//!   list can have; the days of a koyomi date are held to the days kaname finds the value can be.
+//!   list can have; the days of a koyomi date are held to the days kaname finds the value can be; the
+//!   range a value the rule works out is accepted in is asked over the ranges of the inputs it is
+//!   worked out from, and a run breaks it where rulec's reference evaluator refuses what it gave.
 //! - X3 (a): the day given to a rule's date input that declares a range, held to that range: the
 //!   days of the koyomi dates it is carried from unchanged, and the days kaname finds it can be.
 //! - X4: every amount given to a transfer, wherever it comes from, held to what chobo takes; and the
@@ -22,14 +24,14 @@
 //! kaname generates checks it when it runs. [`ProgramVerdicts`] is what kaname reads of all this
 //! (ritsu's port `Verdicts`), and [`check`] what `ritsu check` says.
 
-use crate::{borders, Border, Borders, Came, Check, Side};
+use crate::{borders, numbers, Border, Borders, Came, Check, Side};
 use ritsu_base::diag::Diag;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
 use ritsu_ports::{
-    day_text, Answer, At, Books, CallArg, CallVerdict, ColumnType, Crossing, Dates, DaySet, Finding, Found, Given, Origin, Precondition, ProgramDateCall, ProgramRuleCall, ProgramTransfer, Programs, RuleFacts,
-    Rules, Seen, Value,
+    day_text, Answer, At, Books, CallArg, CallVerdict, Crossing, Dates, DaySet, Finding, Found, Given, Origin, Outside, Precondition, ProgramDateCall, ProgramRuleCall, ProgramTransfer, Programs,
+    RuleFacts, Rules, Seen, Value,
 };
 use ritsu_project::{Joined, Project};
 use std::cell::RefCell;
@@ -168,39 +170,20 @@ fn int_of(v: &Value) -> Option<i128> {
     }
 }
 
-/// A value on the wire as a note writes it.
-fn value_text(v: &Value) -> String {
-    match v {
-        Value::Int(i) => i.to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Str(s) => format!("\"{s}\""),
-        Value::Date(d) | Value::Enum(d) => d.clone(),
-        Value::None => "none".into(),
-        Value::List(xs) => format!("[{} elements]", xs.len()),
-    }
-}
-
-/// A range on the wire as a note writes it: `>=0 <=90000000`, or for a date `>=2026-01-01`.
-fn range_text(r: (Option<i128>, Option<i128>), date: bool) -> String {
-    let end = |v: i128| if date { day_text(v as i64) } else { v.to_string() };
-    let mut parts = Vec::new();
-    if let Some(lo) = r.0 {
-        parts.push(format!(">={}", end(lo)));
-    }
-    if let Some(hi) = r.1 {
-        parts.push(format!("<={}", end(hi)));
-    }
-    if parts.is_empty() { "any".into() } else { parts.join(" ") }
+/// The range of a value given to a rule's input as a note says it, in the input's unit:
+/// `>=0JPY <=90_000_000JPY`, or for a date `>=2026-01-01`.
+fn given_range(facts: &RuleFacts, g: &Given) -> String {
+    numbers::range(g.range, is_date(facts, &g.to), numbers::input_unit(facts, &g.to).as_ref())
 }
 
 /// Whether an input of the rule is a date (a date that may be none too).
 fn is_date(facts: &RuleFacts, input: &str) -> bool {
-    facts.inputs.iter().any(|c| c.name == input && (c.ty == ColumnType::Date || c.ty == ColumnType::Opt(Box::new(ColumnType::Date))))
+    facts.inputs.iter().any(|c| c.name == input && c.ty.is_date())
 }
 
 /// A value a module gives, as a flow's is handed over to the decisions of X2.
 fn as_flows(g: &Given) -> CallArg {
-    CallArg { input: g.to.clone(), shown: g.shown.clone(), range: Some(g.range), unknown: None, from: g.from.clone() }
+    CallArg { input: g.to.clone(), shown: g.shown.clone(), range: Some(g.range), unknown: None, values: None, from: g.from.clone() }
 }
 
 /// The days a value can be (X2's days, X3 (a), X6): the days of each koyomi date it is carried from
@@ -265,25 +248,45 @@ fn points(s: &Seen, names: &[&String]) -> Option<Ranges> {
         .collect()
 }
 
-/// rulec's answer for the precondition `p` over these ranges and this most of a list.
-fn asked(rules: &dyn Rules, rule: &Path, p: &Precondition, ranges: &[(String, Option<i128>, Option<i128>)], max_len: Option<i128>) -> Option<Answer<ritsu_ports::Values>> {
-    rules.preconditions_hold(rule, ranges, max_len).ok().and_then(|xs| xs.into_iter().find(|(q, _)| q == p)).map(|(_, a)| a)
+/// Whether rulec's reference evaluator refuses what a run gave because the total or the count
+/// `name` ends outside its range.
+fn outside_its_range(rules: &dyn Rules, rule: &Path, name: &str, s: &Seen) -> bool {
+    matches!(rules.eval_outside(rule, &s.given), Err((_, Some(Outside::Summary { name: n }))) if n == name)
+}
+
+/// The fewest and the most elements of the list a call gives the sequence `over`, as kaname knows
+/// them (`Given::range` of a list is its count); neither, where the call gives it none.
+fn len_of(call: &ProgramRuleCall, over: &str) -> (Option<i128>, Option<i128>) {
+    call.args.iter().find(|a| a.to == over).map_or((None, None), |a| a.range)
+}
+
+/// rulec's answer for the precondition `p` over these ranges, and this least and this most of a
+/// list (`(least, most)`).
+fn asked(rules: &dyn Rules, rule: &Path, p: &Precondition, ranges: &[(String, Option<i128>, Option<i128>)], len: (Option<i128>, Option<i128>)) -> Option<Answer<ritsu_ports::Values>> {
+    rules.preconditions_hold(rule, ranges, len.0, len.1).ok().and_then(|xs| xs.into_iter().find(|(q, _)| q == p)).map(|(_, a)| a)
 }
 
 /// Whether rulec says a run breaks the precondition `p` (asked over the values the run gave, each
 /// held to itself). A total over a list is asked over its largest element as many times as it has
 /// elements, so a run breaks it only when every element gives the same.
 fn run_breaks(rules: &dyn Rules, rule: &Path, p: &Precondition, s: &Seen) -> bool {
-    let fails = |ranges: &[(String, Option<i128>, Option<i128>)], max_len: Option<i128>| matches!(asked(rules, rule, p, ranges, max_len), Some(Answer::Fails(_)));
+    let fails = |ranges: &[(String, Option<i128>, Option<i128>)], max_len: Option<i128>| matches!(asked(rules, rule, p, ranges, (None, max_len)), Some(Answer::Fails(_)));
     match p {
         Precondition::Relation { left, right, .. } => points(s, &[left, right]).is_some_and(|r| fails(&r, None)),
         Precondition::SumRelation { left, right, .. } => points(s, &left.iter().chain(right.iter()).collect::<Vec<_>>()).is_some_and(|r| fails(&r, None)),
-        Precondition::Sum { over, of, .. } => {
+        Precondition::Sum { name, over, of, min, .. } => {
+            // Under the bottom of the range, where it starts above zero (rulec's §15.314): rulec's
+            // reference evaluator refuses the run's values for it, as the generated code does.
+            if min.is_some() && outside_its_range(rules, rule, name, s) {
+                return true;
+            }
             let Some(Value::List(xs)) = s.given.iter().find(|(n, _)| n == over).map(|(_, v)| v) else { return false };
             let each: Vec<i128> = xs.iter().filter_map(|el| el.iter().find(|(n, _)| n == of).and_then(|(_, v)| int_of(v))).collect();
             let (Some(top), true) = (each.iter().copied().max(), each.windows(2).all(|w| w[0] == w[1])) else { return false };
             fails(&[(of.clone(), Some(top), Some(top))], Some(xs.len() as i128))
         }
+        // Fewer elements counted than the range of the count starts at: the same question.
+        Precondition::Count { name, .. } => outside_its_range(rules, rule, name, s),
         Precondition::Length { sequence, .. } => match s.given.iter().find(|(n, _)| n == sequence).map(|(_, v)| v) {
             Some(Value::List(xs)) => fails(&[], Some(xs.len() as i128)),
             _ => false,
@@ -299,6 +302,13 @@ fn run_breaks(rules: &dyn Rules, rule: &Path, p: &Precondition, s: &Seen) -> boo
         Precondition::Days { input, days, .. } => s.given.iter().any(|(n, v)| n == input && day_of(v).is_some_and(|d| !days.contains(&d))),
         // Every value the line names was given, and meets its condition.
         Precondition::Never { conds, .. } => conds.iter().all(|k| s.given.iter().find(|(n, _)| *n == k.name).is_some_and(|(_, v)| k.test.holds(v) == Some(true))),
+        // What the rule works out from what the run gave falls outside the range it accepts: rulec's
+        // reference evaluator refuses the run's values for it, as the generated code does.
+        // One worked out on each element is refused at the element it falls outside on.
+        Precondition::Define { name, over, .. } => {
+            matches!(rules.eval_outside(rule, &s.given), Err((_, Some(Outside::Define { name: n, at })))
+                if n == *name && at.as_ref().map(|(o, _)| o.as_str()) == over.as_deref())
+        }
     }
 }
 
@@ -310,12 +320,12 @@ fn relation_open(rules: &dyn Rules, facts: &RuleFacts, call: &ProgramRuleCall, p
         let missing = names.iter().find(|n| !call.args.iter().any(|a| a.to == **n)).cloned().unwrap_or_default();
         return no_run_breaks(&tr!("呼び出しが `{missing}` を渡していません", "the call does not give `{missing}`"));
     }
-    let each_ja: Vec<String> = given.iter().map(|g| format!("`{}` は {}", g.shown, range_text(g.range, is_date(facts, &g.to)))).collect();
-    let each_en: Vec<String> = given.iter().map(|g| format!("`{}` in {}", g.shown, range_text(g.range, is_date(facts, &g.to)))).collect();
+    let each_ja: Vec<String> = given.iter().map(|g| format!("`{}` は {}", g.shown, given_range(facts, g))).collect();
+    let each_en: Vec<String> = given.iter().map(|g| format!("`{}` in {}", g.shown, given_range(facts, g))).collect();
     let ranges: Vec<(String, Option<i128>, Option<i128>)> = given.iter().map(|g| (g.to.clone(), g.range.0, g.range.1)).collect();
-    match asked(rules, &call.rule, p, &ranges, None) {
+    match asked(rules, &call.rule, p, &ranges, (None, None)) {
         Some(Answer::Fails(corner)) => {
-            let at = corner.iter().map(|(n, v)| format!("{n} = {}", value_text(v))).collect::<Vec<_>>().join(", ");
+            let at = numbers::inputs(Some(facts), &corner);
             tr!(
                 "範囲の解析では、{} です。範囲の端の {at} では `{pre}` が成り立ちませんが、関数のベクタに、そういう値を渡す入力はありませんでした。",
                 "The analysis of ranges finds {}; at the ends of the ranges, {at}, `{pre}` does not hold, and no input among the function's vectors gives such values.",
@@ -338,7 +348,7 @@ fn join_en(xs: &[String]) -> String {
 
 /// X2: one precondition at one call of a rule.
 fn precondition(rules: &dyn Rules, dates: &dyn Dates, seen: &Seeing, facts: &RuleFacts, call: &ProgramRuleCall, p: &Precondition) -> Answer<Seen> {
-    let pre = crate::preconditions::said(p);
+    let pre = crate::preconditions::said_in(p);
     let ranges = match p {
         Precondition::Relation { left, op, right } => {
             if kept(&call.relations, left, op, right) {
@@ -365,25 +375,75 @@ fn precondition(rules: &dyn Rules, dates: &dyn Dates, seen: &Seeing, facts: &Rul
                 _ => ByRanges::Open(relation_open(rules, facts, call, p, &conds.iter().map(|k| k.name.clone()).collect::<Vec<_>>(), &pre)),
             }
         }
-        // kaname knows how many elements a list can have: the bound is asked with it
-        Precondition::Sum { over, .. } | Precondition::Length { sequence: over, .. } => {
+        // kaname knows how many elements a list can have: the bound is asked with the fewest and
+        // the most of the list the call gives this sequence — a rule that walks two is given two
+        // lists, and how long the other can be says nothing of this one
+        Precondition::Sum { over, .. } | Precondition::Count { over, .. } | Precondition::Length { sequence: over, .. } => {
             let fields: Vec<(String, Option<i128>, Option<i128>)> = call.args.iter().find(|a| a.to == *over).map(|a| a.fields.iter().map(|(n, (lo, hi))| (n.clone(), *lo, *hi)).collect()).unwrap_or_default();
-            match asked(rules, &call.rule, p, &fields, call.max_len) {
+            let len = len_of(call, over);
+            match asked(rules, &call.rule, p, &fields, len) {
                 Some(Answer::Holds) => ByRanges::Shown,
-                Some(Answer::Fails(_)) => ByRanges::Open(match call.max_len {
-                    Some(n) => tr!(
-                        "並び `{over}` に渡すリストは {n} 件までです。その長さと要素の範囲の端では `{pre}` が成り立ちませんが、関数のベクタに、そういうリストを渡す入力はありませんでした。",
-                        "The list given to `{over}` has up to {n} elements; at that length and the ends of its elements' ranges `{pre}` does not hold, and no input among the function's vectors gives such a list."
-                    ),
-                    None => no_run_breaks(&tr!("並び `{over}` に渡すリストの長さの上限が分かりません", "nothing says how long the list given to `{over}` can be")),
-                }),
+                Some(Answer::Fails(example)) => {
+                    // The list rulec gives as the example is the longest the call can give where
+                    // a top is passed, and the shortest where the total comes in under a bottom
+                    // (rulec's §15.314).
+                    let shown = example.iter().find(|(n, _)| n == over).and_then(|(_, v)| if let Value::List(xs) = v { Some(xs.len() as i128) } else { None });
+                    ByRanges::Open(match (len.0, len.1, shown) {
+                        (Some(k), most, Some(m)) if m == k && most != Some(k) => {
+                            let elements = if k == 1 { "element" } else { "elements" };
+                            tr!(
+                                "並び `{over}` に渡すリストは {k} 件のことがあります。その長さと要素の範囲の端では `{pre}` が成り立ちませんが、関数のベクタに、そういうリストを渡す入力はありませんでした。",
+                                "The list given to `{over}` can have as few as {k} {elements}; at that length and the ends of its elements' ranges `{pre}` does not hold, and no input among the function's vectors gives such a list."
+                            )
+                        }
+                        (_, Some(n), _) => tr!(
+                            "並び `{over}` に渡すリストは {n} 件までです。その長さと要素の範囲の端では `{pre}` が成り立ちませんが、関数のベクタに、そういうリストを渡す入力はありませんでした。",
+                            "The list given to `{over}` has up to {n} elements; at that length and the ends of its elements' ranges `{pre}` does not hold, and no input among the function's vectors gives such a list."
+                        ),
+                        (_, None, _) => no_run_breaks(&tr!("並び `{over}` に渡すリストの長さの上限が分かりません", "nothing says how long the list given to `{over}` can be")),
+                    })
+                }
                 Some(Answer::Undecided(why)) => ByRanges::Open(no_run_breaks(&why)),
                 None => ByRanges::Open(no_run_breaks(&tr!("rulec から、この前提が成り立つかどうかの結果を得られません", "rulec does not answer for this precondition"))),
             }
         }
+        // A value the rule works out and accepts only inside a range (rulec's §15.313): rulec is asked
+        // over the ranges kaname finds for the inputs it is worked out from, and for the fields of
+        // the elements of each list the call gives.
+        Precondition::Define { name, range, from, .. } => {
+            let inputs: Vec<&Given> = call.args.iter().filter(|a| from.contains(&a.to)).collect();
+            if let Some(missing) = from.iter().find(|n| facts.inputs.iter().any(|c| c.name == **n) && !inputs.iter().any(|a| a.to == **n)) {
+                ByRanges::Open(no_run_breaks(&tr!("呼び出しが `{missing}` を渡していません", "the call does not give `{missing}`")))
+            } else {
+                let mut ranges: Vec<(String, Option<i128>, Option<i128>)> = inputs.iter().map(|g| (g.to.clone(), g.range.0, g.range.1)).collect();
+                for a in call.args.iter().filter(|a| facts.elements.iter().any(|(s, _, _)| *s == a.to)) {
+                    ranges.extend(a.fields.iter().filter(|(n, _)| from.contains(n)).map(|(n, (lo, hi))| (n.clone(), *lo, *hi)));
+                }
+                match asked(rules, &call.rule, p, &ranges, (None, None)) {
+                    Some(Answer::Holds) => ByRanges::Shown,
+                    Some(Answer::Fails(corner)) => {
+                        let at = numbers::inputs(Some(facts), &corner);
+                        let each_ja: Vec<String> = inputs.iter().map(|g| format!("`{}` は {}", g.shown, given_range(facts, g))).collect();
+                        let each_en: Vec<String> = inputs.iter().map(|g| format!("`{}` in {}", g.shown, given_range(facts, g))).collect();
+                        let past = tr!(
+                            "{at} のとき、規則が計算する `{name}` が受け付ける範囲 `{range}` の外になりますが、関数のベクタに、そういう値を渡す入力はありませんでした。",
+                            "at {at} the `{name}` the rule works out falls outside the range it accepts, `{range}`, and no input among the function's vectors gives such values."
+                        );
+                        ByRanges::Open(if inputs.is_empty() {
+                            let (first, rest) = past.en.split_at(1);
+                            Text::new(past.ja, format!("{}{rest}", first.to_uppercase()))
+                        } else {
+                            tr!("範囲の解析では、{} です。{}", "The analysis of ranges finds {}; {}", each_ja.join("、"), past.ja; join_en(&each_en), past.en)
+                        })
+                    }
+                    Some(Answer::Undecided(why)) => ByRanges::Open(no_run_breaks(&why)),
+                    None => ByRanges::Open(no_run_breaks(&tr!("rulec から、この前提が成り立つかどうかの結果を得られません", "rulec does not answer for this precondition"))),
+                }
+            }
+        }
         // Whether two elements share a value is not something a range says; rulec shows it of a list
         // of one element at most.
-        Precondition::Unique { .. } => match asked(rules, &call.rule, p, &[], call.max_len) {
+        Precondition::Unique { sequence, .. } => match asked(rules, &call.rule, p, &[], len_of(call, sequence)) {
             Some(Answer::Holds) => ByRanges::Shown,
             Some(Answer::Undecided(why)) => ByRanges::Open(no_run_breaks(&why)),
             _ => ByRanges::Open(no_run_breaks(&tr!("rulec から、この前提が成り立つかどうかの結果を得られません", "rulec does not answer for this precondition"))),
@@ -474,7 +534,8 @@ fn rule_call(rules: &dyn Rules, dates: &dyn Dates, seen: &Seeing, call: &Program
     let refused = tr!("規則から生成したコードが入口で受け付けなければ", "where the rule's generated code refuses the call at its door");
     let mut out = Vec::new();
     for p in &facts.preconditions {
-        let pre = crate::preconditions::said(p);
+        // the record keeps the whole numbers on the wire, and a sentence writes them
+        let (about, pre) = (crate::preconditions::said(p), crate::preconditions::said_in(p));
         let outcome = precondition(rules, dates, seen, &facts, call, p);
         let headline = match &outcome {
             Answer::Fails(_) => tr!("規則 {rule} を呼ぶところで、前提 `{pre}` を破る値を渡すことがあります", "The call of the rule {rule} can give it values that break its precondition `{pre}`"),
@@ -486,45 +547,68 @@ fn rule_call(rules: &dyn Rules, dates: &dyn Dates, seen: &Seeing, call: &Program
                 let names = match p {
                     Precondition::Relation { left, right, .. } => vec![left.clone(), right.clone()],
                     Precondition::SumRelation { left, right, .. } => left.iter().chain(right.iter()).cloned().collect(),
-                    Precondition::Sum { over, .. } => vec![over.clone()],
+                    Precondition::Sum { over, .. } | Precondition::Count { over, .. } => vec![over.clone()],
                     Precondition::Length { sequence, .. } | Precondition::Unique { sequence, .. } => vec![sequence.clone()],
                     Precondition::Days { input, .. } => vec![input.clone()],
                     Precondition::Never { conds, .. } => conds.iter().map(|k| k.name.clone()).collect(),
+                    // the inputs it is worked out from, and each list whose fields it reads
+                    Precondition::Define { from, .. } => from
+                        .iter()
+                        .cloned()
+                        .chain(facts.elements.iter().filter(|(_, _, cols)| cols.iter().any(|c| from.contains(&c.name))).map(|(n, _, _)| n.clone()))
+                        .collect(),
                 };
-                let at = names.iter().filter_map(|n| s.given.iter().find(|(m, _)| m == n).map(|(_, v)| format!("{n} = {}", value_text(v)))).collect::<Vec<_>>().join(", ");
+                // a list said by its count, in the sentence's language (`[0 件]`, `[0 elements]`)
+                let at = |ja: bool| names.iter().filter_map(|n| s.given.iter().find(|(m, _)| m == n).map(|(_, v)| format!("{n} = {}", numbers::value_in(v, numbers::input_unit(&facts, n).as_ref(), ja)))).collect::<Vec<_>>().join(", ");
                 let call_text = &s.call;
                 vec![
-                    tr!("たとえば `{call_text}` のとき、規則に {at} を渡します。", "For example, `{call_text}` gives the rule {at}."),
-                    tr!(
-                        "規則から生成したコードは、前提を破る呼び出しを入口で受け付けません。kaname の関数は、そこで `rule` で失敗します。",
-                        "The rule's generated code refuses a call that breaks a precondition at its door, and the kaname function fails there with `rule`."
-                    ),
+                    tr!("たとえば `{call_text}` のとき、規則に {} を渡します。", "For example, `{call_text}` gives the rule {}.", at(true); at(false)),
+                    // a value the rule works out is refused where it is worked out (rulec's §15.313)
+                    if matches!(p, Precondition::Define { .. }) {
+                        tr!(
+                            "規則から生成したコードは、計算した値が範囲の外になる呼び出しを、その値を計算したところで受け付けません。kaname の関数は、そこで `rule` で失敗します。",
+                            "Where the rule's generated code works the value out, it refuses a call whose value falls outside the range, and the kaname function fails there with `rule`."
+                        )
+                    } else {
+                        tr!(
+                            "規則から生成したコードは、前提を破る呼び出しを入口で受け付けません。kaname の関数は、そこで `rule` で失敗します。",
+                            "The rule's generated code refuses a call that breaks a precondition at its door, and the kaname function fails there with `rule`."
+                        )
+                    },
                     tr!("呼ぶ前に前提を `if` で確かめて分けるか、渡す値の範囲を直してください。", "Branch on the precondition with an `if` before the call, or correct the ranges of the values given."),
                 ]
             }
             Answer::Undecided(why) => vec![
                 why.clone(),
-                checked_when_run(refused.clone(), "rule"),
+                checked_when_run(
+                    if matches!(p, Precondition::Define { .. }) {
+                        tr!("規則から生成したコードが、その値を計算したところで受け付けなければ", "if the rule's generated code refuses the call where it works the value out")
+                    } else {
+                        refused.clone()
+                    },
+                    "rule",
+                ),
                 tr!(
                     "呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡すと、示せるようになります。",
                     "Branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`), and it is shown."
                 ),
             ],
         };
-        out.push(decided(call.at, Crossing::Precondition, pre, outcome, ("E201", "W201"), headline, notes, (Tool::Rulec, &call.rule)));
+        out.push(decided(call.at, Crossing::Precondition, about, outcome, ("E201", "W201"), headline, notes, (Tool::Rulec, &call.rule)));
     }
     // X3 (a): a day given to a date input with a declared range; an input whose range is a koyomi
     // date takes the date's days as a precondition, above
     for a in &call.args {
-        if !is_date(&facts, &a.to) || facts.preconditions.iter().any(|p| matches!(p, Precondition::Days { input, .. } if *input == a.to)) {
+        // the range the rule declares for the input, as its column carries it
+        let Some(range) = facts.inputs.iter().find(|c| c.name == a.to).and_then(|c| c.ty.date_range()) else { continue };
+        if facts.preconditions.iter().any(|p| matches!(p, Precondition::Days { input, .. } if *input == a.to)) {
             continue;
         }
-        let range = rules.date_range(&call.rule, &a.to).unwrap_or((None, None));
         if range == (None, None) {
             continue;
         }
         let input = &a.to;
-        let shown_range = range_text((range.0.map(i128::from), range.1.map(i128::from)), true);
+        let shown_range = numbers::range((range.0.map(i128::from), range.1.map(i128::from)), true, None);
         let outcome = match days_in(dates, a, range) {
             ByRanges::Shown => Answer::Holds,
             ByRanges::Open(why) => by_runs(day_outside(&seen.at(&call.function, a.at), input, range), why),
@@ -597,9 +681,12 @@ fn date_call(dates: &dyn Dates, seen: &Seeing, call: &ProgramDateCall) -> Vec<De
 fn transfer(books: &dyn Books, seen: &Seeing, t: &ProgramTransfer) -> Vec<Decided> {
     // the operation as the book names it, which the verdict is about, and as the module writes it
     let (op, written) = (format!("{}.{}", t.transfer, t.op), &t.name);
+    let book = books.facts(&t.book).ok();
     let mut out = Vec::new();
     for a in &t.amounts {
         let (param, shown) = (&a.to, &a.shown);
+        // an amount is counted in the parameter's unit, the smallest step of the book's unit
+        let unit = book.as_ref().and_then(|b| numbers::param_unit(b, &t.transfer, param));
         let outside = |s: &Seen| s.given.iter().any(|(n, v)| n == param && int_of(v).is_some_and(|x| !(0..=borders::MAX_AMOUNT).contains(&x)));
         let outcome = match borders::amounts_given(&[], &[a.range], None) {
             Answer::Holds => Answer::Holds,
@@ -608,7 +695,7 @@ fn transfer(books: &dyn Books, seen: &Seeing, t: &ProgramTransfer) -> Vec<Decide
                 tr!(
                     "範囲の解析では、`{shown}` は {} です。関数のベクタにも、chobo が受け取らない額になる入力はありませんでした。",
                     "The analysis of ranges finds `{shown}` in {}, and no input among the function's vectors takes it out of what chobo takes.",
-                    range_text(a.range, false); range_text(a.range, false)
+                    numbers::range(a.range, false, unit.as_ref()); numbers::range(a.range, false, unit.as_ref())
                 ),
             ),
             Answer::Undecided(why) => by_runs(seen.at(&t.function, a.at).into_iter().find(outside), no_run_breaks(&why)),
@@ -617,11 +704,11 @@ fn transfer(books: &dyn Books, seen: &Seeing, t: &ProgramTransfer) -> Vec<Decide
             Answer::Fails(_) => tr!("振替 `{written}` の `{param}` に渡す `{shown}` が、chobo の受け取らない額になることがあります", "`{shown}`, given to `{param}` of the transfer `{written}`, can be an amount chobo does not take"),
             _ => tr!("振替 `{written}` の `{param}` に渡す `{shown}` を、chobo が額として受け取るかを決められません", "Whether chobo takes `{shown}`, given to `{param}` of the transfer `{written}`, as an amount cannot be decided"),
         };
-        let takes = tr!("chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 9223372036854775807 までです。", "chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step.");
+        let takes = tr!("chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 2⁶³ − 1 までです。", "chobo takes an amount from 0 to 2⁶³ − 1 in the unit's smallest step.");
         let notes = match &outcome {
             Answer::Holds => Vec::new(),
             Answer::Fails(s) => {
-                let v = s.given.iter().find(|(n, _)| n == param).map(|(_, v)| value_text(v)).unwrap_or_default();
+                let v = s.given.iter().find(|(n, _)| n == param).map(|(_, v)| numbers::value(v, unit.as_ref())).unwrap_or_default();
                 vec![
                     example_note(s, &v),
                     takes,

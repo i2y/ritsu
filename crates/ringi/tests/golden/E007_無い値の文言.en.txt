@@ -1,0 +1,2 @@
+error[E007]: tests/mutants/E007_無い値の文言.ringi:20:3: The label `種類.タクシー` is for nothing: `種類` has no such value and no such field of its row
+    20 |   種類.タクシー  "Taxi"

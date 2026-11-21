@@ -44,7 +44,7 @@ export function leftovers() {
 export function plainEnv(extra = {}) {
   const env = { ...process.env };
   for (const k of Object.keys(env)) {
-    if (k.endsWith("_LANG") && ["RITSU", "RULEC", "DANDORI", "KOYOMI", "CHOBO", "GEAS", "YUEN", "SAKAI", "SEKISHO"].includes(k.slice(0, -5))) {
+    if (k.endsWith("_LANG") && ["RITSU", "RULEC", "DANDORI", "KOYOMI", "CHOBO", "GEAS", "YUEN", "SAKAI", "SEKISHO", "KANAME", "RINGI"].includes(k.slice(0, -5))) {
       delete env[k];
     }
   }

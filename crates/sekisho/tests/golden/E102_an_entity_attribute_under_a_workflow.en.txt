@@ -1,0 +1,3 @@
+error[E102]: tests/mutants/E102_an_entity_attribute_under_a_workflow.gate:15:5: `claimant` points to an entity of `Customer`, and no value of a flow is said to be it
+    15 |     claimant = claim_id
+  = A value of a flow is said for an attribute that is a bool, an enum, a number or a date.

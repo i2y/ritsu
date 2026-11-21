@@ -1,0 +1,14 @@
+エラー[E002]: tests/fixtures/chain_declarations.ja.flow:8:10: 型 `strng` はありません
+     8 |   ID   : strng
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E002]: tests/fixtures/chain_declarations.ja.flow:13:9: 型 `札の種類` はありません
+    13 |   札   : 札の種類
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E002]: tests/fixtures/chain_declarations.ja.flow:16:24: 型 `見積り` はありません
+    16 | task 取得(ID: string) -> 見積り
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E002]: tests/fixtures/chain_declarations.ja.flow:19:25: 型 `役割` はありません
+    19 | task 尋ねる(ID: string, 役: 役割)
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E007]: tests/fixtures/chain_declarations.ja.flow:25:20: `無い` と `遅い` がどちらも 410 で返ってきます。Step Functions はエラーをステータスで見分けるので、別々のステータスにしてください
+    25 |   errors 無い = 410, 遅い = 410

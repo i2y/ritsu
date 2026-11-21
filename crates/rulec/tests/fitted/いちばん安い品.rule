@@ -1,0 +1,18 @@
+rule いちばん安い品(cheapest_line_ja) v1
+description "注文に 80 円以下の品があるか。注文は 250 円以上で、一件は 100 円まで。いちばん安い品は、それより安くないほかの明細と一緒でないと下の端に届かない"
+
+# 注文の明細の一件ぶん
+elements 明細(lines)
+  価格(price) : money[円]  range >=1円 <=100円
+
+min 最安値(cheapest) over 明細 of 価格 empty 100円
+sum 金額(total) over 明細 of 価格  range >=250円 <=500円
+
+outputs
+  安い品(cheap) : bool
+
+table 安い品の判定(cheap_of)
+policy unique
+| 最安値 | -> 安い品 |
+| <=80円 | true      |
+| >80円  | false     |

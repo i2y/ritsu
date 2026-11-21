@@ -1,0 +1,6 @@
+警告[W202]: tests/mutants/W202_どのactionも受け取らない型の行.gate:21:1: この行が当たる呼び出しがありません。ワークフロー `支払い`（`../../examples/claims/flows/pay.ja.flow`）のどの呼び出しも、`請求番号` を `入金` の ID として渡しません
+    21 |   resource 入金 from 請求番号
+  = `ritsu check` がこの行を前提にするのは、`請求番号` を ID として渡す呼び出しだけです（E212 と、ゲートが呼び出しを許すかの確かめ）。この行は、フローのどの呼び出しの確かめにも効きません。
+  = `入金` を引数から受け取る action がありません。`請求を支払う` は `請求` を `claimId` から受け取ります。
+  = action が受け取る resource の型を書くか、行を消してください。
+tests/mutants/W202_どのactionも受け取らない型の行.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0

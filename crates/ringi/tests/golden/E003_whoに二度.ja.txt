@@ -1,0 +1,2 @@
+エラー[E003]: tests/mutants/E003_whoに二度.ringi:11:3: `経理` は `who` に二度宣言されています（最初は 10 行目）
+    11 |   経理(accounting) = team accounting

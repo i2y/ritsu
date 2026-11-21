@@ -1,0 +1,357 @@
+request 経費(expense) v1 "経費の申請（最後のステップで一度だけ答える）"
+description "一人が二つ以上のステップに答えることになる経費の申請（架空の決まり）。`same approver approves once, at the last stage` で、ステップがあとのステップを待つ所、そこでの承認で済む所、やはり始める所"
+
+use organization 組織(org) from "../../examples/shared/company.ringi"
+use masters マスタ(m) from "../../examples/shared/masters.ringi"
+use calendar 本社(office) from "../../examples/shared/office.cal"
+use flow 事前の確かめ(precheck_agent) from "precheck.flow"
+
+form
+  品目(what)  : text "品目"  count >=1 <=100
+  形(shape)   : choice "経路の形"
+    順(plain)           "上長、部長、本部長"
+    経理をはさむ(between) "上長と部長のあいだに経理"
+    上長と経理(joint)    "上長と経理が一緒に、次に部長"
+    部長と経理(later)    "上長、次に部長と経理が一緒に"
+    エージェント(agent)  "上長と部長のあいだにエージェント"
+    三度(three)         "上長、部長、経理、もう一度部長"
+    取締役(voted)       "上長、取締役の全員、社長"
+    持ち主(owned)       "上長、経理、システムの持ち主"
+    部長なし(short)     "上長、経理、本部長"
+    二つの席(seats)     "上長、部長、次に両方が一緒に"
+    決裁なし(gone)      "上長、経理、部長（いるとき）"
+    部長が二度(twice)   "上長、経理、部長、もう一度部長"
+    二人とも(both)      "上長と部長が一緒に、経理、次にそれぞれがもう一度"
+  システム(system) : choice from マスタ.systems "システム"  optional
+
+route
+| 形           | -> 一次(first) | 確認(middle)  | 二次(second)     | 決裁(decide) |
+| 順           | 上長           |               | 部長             | 本部長       |
+| 経理をはさむ | 上長           | 経理          | 部長             | 本部長       |
+| 上長と経理   | 上長 and 経理  |               | 部長             | 本部長       |
+| 部長と経理   | 上長           |               | 部長 and 経理    | 本部長       |
+| エージェント | 上長           | 事前確認      | 部長             | 本部長       |
+| 三度         | 上長           | 部長          | 経理             | 上の部長     |
+| 取締役       | 上長           | all of 取締役 |                  | 社長         |
+| 持ち主       | 上長           | 経理          | システムの持ち主 | 本部長       |
+| 部長なし     | 上長           | 経理          |                  | 本部長       |
+| 二つの席     | 上長           | 部長          | 同じ上長 and 上の部長 | 本部長  |
+| 決裁なし     | 上長           | 経理          | 部長             |              |
+| 部長が二度   | 上長           | 経理          | 部長             | 上の部長     |
+| 二人とも     | 上長 and 部長  | 経理          | 同じ上長         | 上の部長     |
+
+who
+  上長(manager)                 = manager of requester
+  同じ上長(manager_too)         = manager of requester
+  部長(dept_head)               = head of requester.department
+  上の部長(chief)               = nearest dept_head above requester
+  本部長(division_head)         = nearest division_head above requester
+  社長(president)               = nearest president above requester
+  経理(accounting)              = team accounting
+  取締役(board)                 = team board
+  システムの持ち主(system_owner) = lookup マスタ.systems.owner by システム
+  事前確認(check)               = agent 事前の確かめ, else 上長
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval     not allowed
+  same approver     approves once, at the last stage
+  send back         to any earlier stage, at most 2 times
+  resubmit          within 3 business days
+  withdraw          until 一次
+  retract approval  until the next stage answers
+  pause             at most 5 business days
+  approvers edit    形, システム
+
+# 部長が上長の上長でもある。一次は二次を待ち、そこでの一度の承認で両方が済む
+scenario 二つのステップのあとのほうで一度答える
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 順
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | 二次     | in progress |
+| 2026-11-16 11:00 | approve | e3101 | 決裁     | in progress |
+| 2026-11-16 12:00 | approve | e0101 |          | approved    |
+
+# 二つのあいだで経理が答える。部長はそのあとに、一度だけ答える
+scenario あいだのステップのあとで一度答える
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve | e1001 | 二次     | in progress |
+| 2026-11-16 12:00 | approve | e3101 | 決裁     | in progress |
+| 2026-11-16 13:00 | approve | e0101 |          | approved    |
+
+# 三つのステップが部長に来る。前の二つは最後の一つを待つ
+scenario 三つのステップに最後で一度答える
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 三度
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | 二次     | in progress |
+| 2026-11-16 11:00 | approve | e1002 | 決裁     | in progress |
+| 2026-11-16 12:00 | approve | e3101 |          | approved    |
+
+# あいだのステップは取締役の全員が答え、社長もその一人。社長はそこでも答え、
+# 社長が一人で答える一次は、最後のステップで済む
+scenario あいだのステップでもその人が答える
+  requester e0101
+  form 品目 = "プロジェクター", 形 = 取締役
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e0101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve | e0001 | 確認     | in progress |
+| 2026-11-16 11:10 | approve | e0201 | 確認     | in progress |
+| 2026-11-16 11:20 | approve | e0202 | 確認     | in progress |
+| 2026-11-16 11:30 | approve | e0203 | 確認     | in progress |
+| 2026-11-16 11:40 | approve | e0204 | 決裁     | in progress |
+| 2026-11-16 12:00 | approve | e0001 |          | approved    |
+
+# 二つの決め方を持つステップ。上長の分はあとのステップを待ち、経理の分はそこで答える
+scenario 二つの決め方の一方が待つ
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 上長と経理
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | 一次     | in progress |
+| 2026-11-16 11:00 | approve | e1002 | 二次     | in progress |
+| 2026-11-16 12:00 | approve | e3101 | 決裁     | in progress |
+
+# あとのステップが二つの決め方を持つ。そこでの部長の承認で、一次が済む
+scenario 二つの決め方を持つステップを待つ
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 部長と経理
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | 二次     | in progress |
+| 2026-11-16 11:00 | approve | e3101 | 二次     | in progress |
+| 2026-11-16 12:00 | approve | e1001 | 決裁     | in progress |
+
+# エージェントのステップは、だれにも待たれない。一次はそれを越えて二次を待つ
+scenario エージェントを越えて待つ
+  requester e1101
+  form 品目 = "プロジェクター", 形 = エージェント
+| at               | event                       | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                      | e1101 | 確認     | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: ok) |       | 二次     | in progress |
+| 2026-11-16 12:00 | approve                     | e3101 | 決裁     | in progress |
+
+# エージェントが疑いを出す。上長はそのステップに答え、あとのステップにも答える
+scenario エージェントが疑いを出す
+  requester e1101
+  form 品目 = "プロジェクター", 形 = エージェント
+| at               | event                                                  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                 | e1101 | 確認     | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: doubt, reason: "領収書が無い") |       | 確認     | in progress |
+| 2026-11-16 11:00 | approve                                                | e3101 | 二次     | in progress |
+| 2026-11-16 12:00 | approve                                                | e3101 | 決裁     | in progress |
+
+# あとのステップで却下。チケットは終わり、一次は答えられないまま
+scenario あとのステップで却下
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve | e1001 | 二次     | in progress |
+| 2026-11-16 12:00 | reject  | e3101 |          | rejected    |
+
+# あとのステップから申請者へ戻り、出し直す。一次はもう一度待つ
+scenario あとのステップから戻って出し直す
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event     | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit    | e1101 | 確認     | in progress    |
+| 2026-11-16 11:00 | approve   | e1001 | 二次     | in progress    |
+| 2026-11-16 12:00 | send back | e3101 |          | with requester |
+| 2026-11-17 10:00 | resubmit  | e1101 | 確認     | in progress    |
+| 2026-11-17 11:00 | approve   | e1001 | 二次     | in progress    |
+| 2026-11-17 12:00 | approve   | e3101 | 決裁     | in progress    |
+
+# 待っていたステップへ戻す。今度はそこで答え、あとのステップでももう一度答える
+scenario 待っていたステップへ戻す
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event               | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit              | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve             | e1001 | 二次     | in progress |
+| 2026-11-16 12:00 | approve             | e3101 | 決裁     | in progress |
+| 2026-11-16 13:00 | send back(to: 一次) | e0101 | 一次     | in progress |
+| 2026-11-16 14:00 | approve             | e3101 | 確認     | in progress |
+| 2026-11-16 15:00 | approve             | e1001 | 二次     | in progress |
+| 2026-11-16 16:00 | approve             | e3101 | 決裁     | in progress |
+
+# あいだのステップへ戻す。一次を済ませた承認は消え、一次はもう一度あとのステップを待つ
+scenario あいだのステップへ戻す
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event               | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit              | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve             | e1001 | 二次     | in progress |
+| 2026-11-16 12:00 | approve             | e3101 | 決裁     | in progress |
+| 2026-11-16 13:00 | send back(to: 確認) | e0101 | 確認     | in progress |
+| 2026-11-16 15:00 | approve             | e1001 | 二次     | in progress |
+| 2026-11-16 16:00 | approve             | e3101 | 決裁     | in progress |
+
+# あとのステップの承認を取り消す。その承認で済んでいたステップは、もう一度待つ
+scenario 済ませたステップごと取り消す
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve | e1001 | 二次     | in progress |
+| 2026-11-16 12:00 | approve | e3101 | 決裁     | in progress |
+| 2026-11-16 13:00 | retract | e3101 | 二次     | in progress |
+| 2026-11-16 14:00 | approve | e3101 | 決裁     | in progress |
+
+# 両方のステップが待つ人が、あとのステップで保留し、再開する
+scenario あとのステップで保留
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve | e1001 | 二次     | in progress |
+| 2026-11-17 10:00 | pause   | e3101 | 二次     | paused      |
+| 2026-11-18 10:00 | resume  | e3101 | 二次     | in progress |
+| 2026-11-18 11:00 | approve | e3101 | 決裁     | in progress |
+
+# `withdraw until 一次`。一次は待っていて、チケットがあいだのステップにあるあいだは、まだ答えていない
+scenario ステップが待つあいだに取り下げる
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event    | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit   | e1101 | 確認     | in progress    |
+| 2026-11-16 11:00 | approve  | e1001 | 二次     | in progress    |
+| 2026-11-16 12:00 | withdraw | e1101 |          | with requester |
+
+# あとのステップが期限を過ぎて上へ回る。回った先の人が承認すると、待っていたステップが
+# そのとき始まり、自分の期限を持つ
+scenario 期限を過ぎて回った先で承認
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve | e1001 | 二次     | in progress |
+| 2026-11-18 09:00 | remind  |       | 二次     | in progress |
+| 2026-11-20 00:00 | late    |       | 二次     | in progress |
+| 2026-11-20 10:00 | approve | e0101 | 一次     | in progress |
+| 2026-11-20 11:00 | approve | e3101 | 決裁     | in progress |
+| 2026-11-20 12:00 | approve | e0101 |          | approved    |
+
+# あとのステップをほかの人へ引き継ぐ。その人の承認は、一次が待つ承認ではない
+scenario あとのステップを引き継ぐ
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event                                                 | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve                                               | e1001 | 二次     | in progress |
+| 2026-11-16 12:00 | hand over(from: person "e3101", to: person "e0102")   |       | 二次     | in progress |
+| 2026-11-16 13:00 | approve                                               | e0102 | 一次     | in progress |
+| 2026-11-16 14:00 | approve                                               | e3101 | 決裁     | in progress |
+
+# あとのステップに足した承認者が答える。一次はそのとき始まる
+scenario 足した承認者があとのステップに答える
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event                                  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                 | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve                                | e1001 | 二次     | in progress |
+| 2026-11-16 12:00 | add approver(approver: person "e0102") |       | 二次     | in progress |
+| 2026-11-16 13:00 | approve                                | e0102 | 一次     | in progress |
+| 2026-11-16 14:00 | approve                                | e3101 | 決裁     | in progress |
+
+# あとのステップに承認者を足しても、両方のステップが待つ人が答えれば同じ
+scenario 承認者を足しても待っていた人が答える
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event                                  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                 | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | approve                                | e1001 | 二次     | in progress |
+| 2026-11-16 12:00 | add approver(approver: person "e0102") |       | 二次     | in progress |
+| 2026-11-16 13:00 | approve                                | e3101 | 決裁     | in progress |
+
+# 承認者の直しで、あとのステップが経路から外れる。待っていたステップはそのとき始まる
+scenario あとのステップが経路から外れる
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event            | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit           | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | edit(形: 部長なし) | e1001 | 確認     | in progress |
+| 2026-11-16 12:00 | approve          | e1001 | 一次     | in progress |
+| 2026-11-16 13:00 | approve          | e3101 | 決裁     | in progress |
+
+# 承認者の直しで、あとのステップがほかの人に来る。待っていたステップは、その前に始まる
+scenario あとのステップがほかの人に来る
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 持ち主, システム = crm
+| at               | event                | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit               | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | edit(システム: wiki) | e1001 | 確認     | in progress |
+| 2026-11-16 12:00 | approve              | e1001 | 一次     | in progress |
+| 2026-11-16 13:00 | approve              | e3101 | 二次     | in progress |
+| 2026-11-16 14:00 | approve              | e7001 | 決裁     | in progress |
+
+# 一つのステップの二つの決め方が、それぞれ別のあとのステップを待つ。それぞれ、その人が答える所で済む
+scenario 二つの決め方が二つのステップを待つ
+  requester e1201
+  form 品目 = "プロジェクター", 形 = 二人とも
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 確認     | in progress |
+| 2026-11-16 11:00 | approve | e1001 | 二次     | in progress |
+| 2026-11-16 12:00 | approve | e1101 | 決裁     | in progress |
+| 2026-11-16 13:00 | approve | e3101 |          | approved    |
+
+# 二つの決め方の一方が待つステップに、ほかの人が答える。その決め方はそのとき始まり、
+# もう一方は、あとに来る自分のステップを待ち続ける
+scenario 二つの決め方の一方が始まりもう一方は待ち続ける
+  requester e1201
+  form 品目 = "プロジェクター", 形 = 二人とも
+| at               | event                                                 | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                | e1201 | 確認     | in progress |
+| 2026-11-16 11:00 | approve                                               | e1001 | 二次     | in progress |
+| 2026-11-16 12:00 | hand over(from: person "e1101", to: person "e0102")   |       | 二次     | in progress |
+| 2026-11-16 13:00 | approve                                               | e0102 | 一次     | in progress |
+| 2026-11-16 14:00 | approve                                               | e1101 | 決裁     | in progress |
+| 2026-11-16 15:00 | approve                                               | e3101 |          | approved    |
+
+# 承認者の直しで、決裁のステップも部長に来る。あとのステップは決裁を待ち、
+# あとのステップを待っていたステップも、一緒に決裁を待つ
+scenario あとのステップも待つ
+  requester e1101
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event              | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit             | e1101 | 確認     | in progress |
+| 2026-11-16 11:00 | edit(形: 部長が二度) | e1001 | 確認     | in progress |
+| 2026-11-16 12:00 | approve            | e1001 | 決裁     | in progress |
+| 2026-11-16 13:00 | approve            | e3101 |          | approved    |
+
+# ステップが待つあいだに組織の版が変わる。部長がいなくなり、どちらのステップも本部長へ回る。
+# 本部長は決裁もする。一度の答えで三つが済む
+scenario ステップが待つあいだに組織が変わる
+  requester e9002
+  form 品目 = "プロジェクター", 形 = 経理をはさむ
+| at               | event   | by    | -> stage | status      |
+| 2027-03-30 10:00 | submit  | e9002 | 確認     | in progress |
+| 2027-04-01 09:00 | remind  |       | 確認     | in progress |
+| 2027-04-01 11:00 | approve | e1001 | 決裁     | in progress |
+| 2027-04-01 12:00 | approve | e0102 |          | approved    |
+
+# 代理が、部長の代わりに最後のステップに答える。部長の承認なので、待っていた部長のステップが済む
+scenario 代理があとのステップに答える
+  requester e1201
+  form 品目 = "プロジェクター", 形 = 三度
+| at               | event   | by    | -> stage | status      |
+| 2026-12-28 10:00 | submit  | e1201 | 一次     | in progress |
+| 2026-12-28 11:00 | approve | e1101 | 二次     | in progress |
+| 2026-12-28 12:00 | approve | e1002 | 決裁     | in progress |
+| 2026-12-28 13:00 | approve | e1101 |          | approved    |
+
+# 代理が、あとのステップに自分の分も持ち、自分の前のステップもそこを待っていた。
+# 一度目の答えは自分の分で、自分のステップが済む。二度目は、代わりを務める人の分
+scenario 代理が自分のステップも持つ
+  requester e1201
+  form 品目 = "プロジェクター", 形 = 二つの席
+| at               | event   | by    | -> stage | status      |
+| 2026-12-28 10:00 | submit  | e1201 | 二次     | in progress |
+| 2026-12-28 11:00 | approve | e1101 | 二次     | in progress |
+| 2026-12-28 12:00 | approve | e1101 | 決裁     | in progress |

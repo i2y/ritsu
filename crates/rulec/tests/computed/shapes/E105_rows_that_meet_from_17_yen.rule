@@ -1,0 +1,19 @@
+rule meet_from_17_yen v1
+description "Whether the amount is 17 yen or more, read with the amount: the last row asks for that up to 20 yen, and meets the second row only from 17 yen to 20 yen, where the example is"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=1JPY <=191JPY
+
+define big : bool = amount >= 17JPY
+
+outputs
+  x : choice
+
+table pick
+| amount  | big   | -> x |
+| <=22JPY | false | one  |
+| <=22JPY | true  | two  |
+| >22JPY  | -     | one  |
+| <=20JPY | true  | one  |

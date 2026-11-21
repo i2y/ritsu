@@ -1,0 +1,10 @@
+warning[W121]: `_parcel_fee` is a name the code generated for Go cannot take
+  --> tests/own_names/rule_named_with_a_leading_underscore.rule:1
+  |
+1 | rule _parcel_fee v1
+  |      ^^^^^^^^^^^ the rule's name
+  |
+ Go: the rule's file is `_parcel_fee.go`, and the go command leaves a file whose name starts with `_` out of the package (`go help packages`): the package has none of the rule's functions, and the code that calls them does not build.
+ For a target you do not generate, leave it. For one you do, give it an alias (`_parcel_fee(<alias>)`).
+
+ok tests/own_names/rule_named_with_a_leading_underscore.rule

@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_a_field_kaname_reserves.ringi:5:3: `match` is a word kaname reserves, and cannot be a field's name
+     5 |   match  : text "Matching order"  count <=20
+  = The JSON of a ticket holds each field by its ASCII name, and the kaname code that reads and writes it cannot take a word kaname reserves as a name. Choose another name, or give another ASCII name in brackets, as in `name(ascii_name)`.

@@ -1,0 +1,9 @@
+order.flow: ok
+ok purchase.ringi: a request, 1 field, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+error[ritsu E210]: purchase.ringi:15: `purchase` can give the flow `order` 800_000JPY as its input `amount`, which takes money[JPY] >=1JPY <=500_000JPY
+    15 |   on approved  launch order(request_id: ticket.id, amount: amount)  when amount <= 800_000JPY
+  = `amount` is money[JPY] >=1JPY <=800_000JPY where the `when` of the `on` line holds.
+  = The flow takes 500_000JPY or less.
+  = Hold the value to what the flow takes, or widen the input `amount` of "order.flow" (line 6).
+ritsu check: 2 files (dandori 1, ringi 1): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided

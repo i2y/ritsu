@@ -1,0 +1,45 @@
+request apart v1 "Tool request"
+description "A stage due by the office's days and reminded by the plant's (fictional rules): the reminder of the ones it goes up to is counted in the plant's calendar too"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+use calendar plant from "plant.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  decide  manager
+
+who
+  manager = manager of requester
+  board   = team board
+
+every stage
+  due in 2 business days in office at end of day
+  remind after 1 business day in plant at 09:00
+  when late escalate, then escalate
+  when empty escalate, then board
+
+ticket
+  self approval  not allowed
+
+claims
+  reminded_in_time : every stage reminds before it is due
+
+# submitted on a Friday. The plant opens on Saturday, so the reminder goes on Saturday morning, and
+# the stage is due at the end of Tuesday. It goes up on Wednesday: the one it goes up to is reminded
+# on the plant's next business day, Thursday, and is due at the end of Friday. It goes up again on
+# Saturday: the plant closes on Sunday and Monday, so the reminder goes on Tuesday morning, the day
+# the stage is due
+scenario late_and_up_twice
+  requester e1201
+  form what = "A drill"
+| at               | event  | by | -> stage | status      |
+| 2026-11-13 10:00 | submit | e1201 | decide | in progress |
+| 2026-11-14 09:00 | remind |    | decide   | in progress |
+| 2026-11-18 00:00 | late   |    | decide   | in progress |
+| 2026-11-19 09:00 | remind |    | decide   | in progress |
+| 2026-11-21 00:00 | late   |    | decide   | in progress |
+| 2026-11-24 09:00 | remind |    | decide   | in progress |
+| 2026-11-25 00:00 | late   |    |          | expired     |

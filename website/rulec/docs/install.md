@@ -25,7 +25,7 @@ $ rulec --version
 rulec 0.41.0
 ```
 
-That puts `ritsu` on the path with the nine links beside it, so `rulec` is a
+That puts `ritsu` on the path with the ten links beside it, so `rulec` is a
 command just as before. The old name, `i2y/tap/rulec`, leads to the same
 formula, but Homebrew 7 takes it only once that formula is trusted: by itself,
 `brew install i2y/tap/rulec` stops with
@@ -34,7 +34,7 @@ formula, but Homebrew 7 takes it only once that formula is trusted: by itself,
 
 The formula installs the release archive for your platform, held to its line
 in `SHA256SUMS`. Each release rewrites it, and only after brew has installed it
-and run its test on macOS and on Linux, which calls all nine names;
+and run its test on macOS and on Linux, which calls all ten names;
 `brew upgrade ritsu` takes the next one.
 
 ## Debian, Ubuntu, Fedora, RHEL
@@ -58,7 +58,7 @@ ritsu-0.41.0-1.x86_64.rpm: OK
 $ sudo dnf install "./ritsu-$v-1.$a.rpm"
 ```
 
-The package installs `/usr/bin/ritsu` with the nine links beside it
+The package installs `/usr/bin/ritsu` with the ten links beside it
 (`/usr/bin/rulec -> ritsu`, and so on), and replaces the package `rulec` of
 rulec's own releases.
 
@@ -173,9 +173,17 @@ Two steps reach outside:
   whatever that adapter is written in.
 
 Three more, and only if you want to **type-check** the output: the generated Python passes
-`mypy --strict`, the generated TypeScript passes `tsc --strict`, and the generated Ruby ships
-an `.rbs` that `steep` reads. None of them is needed to use what comes out — it runs as it
+`mypy --strict`, the generated TypeScript passes `tsc --strict` (with `--noUnusedLocals` and
+`--noUnusedParameters` too), and the generated Ruby ships an `.rbs` that `steep` reads. None of them is needed to use what comes out — it runs as it
 stands.
+
+For tsc, the TypeScript wants an ECMAScript target of ES2020 or later, for its numbers are
+`bigint`s: TypeScript 7 takes one by default, and TypeScript 5 is given `--target es2020` or
+later. A rule that reads an `enums` file imports that file's module by its `.ts` name, as Node
+runs it, so tsc compiles the two with `rewriteRelativeImportExtensions` (TypeScript 5.7 and
+later), or type-checks them without writing anything with `allowImportingTsExtensions` and
+`noEmit` (TypeScript 5.0 and later). A rule that reads none imports nothing beside it, and wants
+neither.
 
 ## The agent skill
 
@@ -196,9 +204,9 @@ That gives `.claude/skills/rulec/SKILL.md` with six files beside it.
 The folder is what makes the skill findable, so keep it whole. To have
 it in every project rather than one, add `--user`, which puts it in
 `~/.claude/skills/` instead; `--dir <dir>` puts it where another agent reads skills.
-In Claude Code, the plugin `ritsu` holds all ten skills: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
+In Claude Code, the plugin `ritsu` holds all eleven skills: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
 then `/plugin install ritsu@ritsu`. From a clone of the repository, copying `skills/rulec` does
-the same, and every release has the ten in `ritsu-skills-v<version>.zip`.
+the same, and every release has the eleven in `ritsu-skills-v<version>.zip`.
 
 The only thing it needs is `rulec` on the path, whichever way above put it there.
 
@@ -239,7 +247,7 @@ also offers the page for people as the tool's own view:
 
 ## Language
 
-Output is **English by default**. One setting brings back Japanese —
+Output is **English by default**. `--lang ja` brings back Japanese —
 every surface, including the prose inside generated code:
 
 ```console
@@ -247,9 +255,10 @@ $ rulec check rules/shipping_fee.rule --lang ja
 $ RULEC_LANG=ja rulec check rules/shipping_fee.rule
 ```
 
-`--lang` beats `RULEC_LANG`, which beats `RITSU_LANG`, which beats the default. The system locale
-is deliberately ignored: generated files are checked with `gen --check`
-and CI logs are diffed, so the output must not change with the machine
+`--lang` beats `RULEC_LANG`, which beats `RITSU_LANG`, which beats the default. The variables choose
+what rulec prints; what `gen`, `doc`, `api`, `vectors`, `schema` and `adapter` write follows `--lang`
+alone, English without it. The system locale is deliberately ignored too: generated files are
+checked with `gen --check` and CI logs are diffed, so the output must not change with the machine
 it runs on.
 
 ## In CI

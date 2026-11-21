@@ -1,0 +1,23 @@
+rule 取引先の上乗せ率(partner_markup_ja) v1
+description "品物の値段。取引先の品物は取引先の決めた上乗せ率、ほかは種類ごとの上乗せ率。見出しは上乗せ率を 1% の刻みにしているが、取引先の率は 0.5% の刻みで来る"
+
+enum 種類(kind) = 本(books) | 音楽(music) | おもちゃ(toys)
+
+inputs
+  品目(item_kind)           : 種類
+  取引先(partner)           : bool
+  取引先の率(partner_rate)  : rate[step 0.5%]  range >=0% <=30%
+  定価(list_price)          : money[円]  range >=0円 <=100000円
+
+outputs
+  値段(price) : money[円]  round half_up(1円)
+
+table 上乗せ率の判定(markup_of)
+policy unique
+| 取引先 | 品目     | -> 上乗せ率(markup) : rate[step 1%] |
+| true   | -        | 取引先の率                          |
+| false  | 本       | 5%                                  |
+| false  | 音楽     | 10%                                 |
+| false  | おもちゃ | 20%                                 |
+
+define 値段(price) : money[円] = 定価 + 定価 * 上乗せ率

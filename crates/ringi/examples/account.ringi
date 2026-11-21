@@ -1,0 +1,93 @@
+request account v1 "Account request"
+description "Access to a company system for a member of the staff (fictional rules): the requester's manager approves, then the owner of the system the list of systems gives, and IT security too for administrator access; IT operations see it once it is approved"
+owner it
+
+use organization org from "shared/company.ringi"
+use masters m from "shared/masters.ringi"
+use calendar office from "shared/office.cal"
+use gate "shared/company.gate"
+use flow provision from "shared/provision.flow"
+
+form
+  person : person "For whom"
+  system : choice from m.systems "System"
+  level  : choice "Access level"
+    read  "Read"
+    write "Write"
+    admin "Administrator"
+  until  : date "Until"  range >=2026-01-01 <=2028-12-31
+  reason : long text "Why it is needed"  count >=1 <=300
+
+route
+  # The president has no manager: their request goes to the system's owner, and to IT security for
+  # administrator access, as anyone's does.
+  manager     manager
+    when empty escalate, then skip
+  owner       system_owner
+  security    security  when level is admin
+  operations  circulate to operations
+
+who
+  manager      = manager of requester
+  system_owner = lookup m.systems.owner by system
+  security     = team it_security
+  operations   = team it_operations
+
+every stage
+  due in 2 business days at end of day
+  remind after 1 business day at 09:00
+  when late escalate, then expire
+  when empty escalate
+
+ticket
+  self approval  not allowed
+  # A manager who also owns the system, or answers for security, answers once, at the last of
+  # their stages.
+  same approver  approves once, at the last stage
+  send back      to any earlier stage, at most 2 times
+  resubmit       within 5 business days
+  withdraw       until security
+  on approved    launch provision(request_id: ticket.id, person: person, system: system, level: level, until: until)
+
+claims
+  admins_pass_security : possible security is security
+  ends_in_time         : every ticket ends within 55 business days
+
+scenario administrator_access
+  requester e1201
+  form person = person "e1203", system = crm, level = admin, until = 2027-03-31, reason = "To set up the accounts of the new members of the section"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | manager  | in progress |
+| 2026-11-16 11:00 | approve | e1101 | owner    | in progress |
+| 2026-11-16 16:00 | approve | e3101 | security | in progress |
+| 2026-11-17 09:00 | remind  |       | security | in progress |
+| 2026-11-17 15:00 | approve | e7102 |          | approved    |
+
+# The manager of IT security is the requester's manager, and answers for security too: they answer
+# once, at `security`, after the owner of the system
+scenario the_manager_answers_once_at_security
+  requester e7102
+  form person = person "e7102", system = wiki, level = admin, until = 2027-03-31, reason = "To keep the pages of the security team"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e7102 | owner    | in progress |
+| 2026-11-16 11:00 | approve | e7001 | security | in progress |
+| 2026-11-16 15:00 | approve | e7101 |          | approved    |
+
+labels ja
+  request           "アカウントの申請"
+  person            "使う人"
+  system            "システム"
+  level             "権限"
+  level.read        "読み取り"
+  level.write       "書き込み"
+  level.admin       "管理者"
+  until             "使える期限"
+  reason            "必要な理由"
+  stage manager     "上長"
+  stage owner       "持ち主"
+  stage security    "セキュリティ"
+  stage operations  "運用"
+  who manager       "上長"
+  who system_owner  "システムの持ち主"
+  who security      "情報セキュリティ"
+  who operations    "運用担当"

@@ -146,6 +146,9 @@ pub fn crate_files(o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec<String
             lines.push_str(&if k == "books" { kaname::r#gen::wasm::BOOKS.to_string() } else { format!("pub mod {k};\n") });
         }
         if dir.is_empty() {
+            if files.iter().any(|(p, _, _)| p == "ticket_kinds.rs") {
+                lines.push_str("pub mod ticket_kinds;\n");
+            }
             if files.iter().any(|(p, _, _)| p == "units.rs") {
                 lines.push_str("pub mod units;\n");
             }

@@ -17,18 +17,49 @@ use std::process::ExitCode;
 /// The documents served as resources, embedded at build time so the server never serves a
 /// version of them that differs from the binary. The links between them are rewritten to the
 /// resource URIs.
-const RESOURCES: &[(&str, &str, &str, &str)] = &[
+const RESOURCES: &[(&str, &str, &str, &str, &str)] = &[
     (
         "rulec://docs/agents.md",
         "agents",
+        "エージェントの手順: 書く、確かめる、直す、生成する、組み込む、影響を見せる、人に聞く。最初に読んでください。",
         "The procedure for an agent: write, check, fix, generate, integrate, show the impact, ask a person. Read this first.",
         include_str!("../AGENTS.md"),
     ),
-    ("rulec://docs/reference.md", "reference", "The complete grammar of a .rule file.", include_str!("../docs/reference.md")),
-    ("rulec://docs/formats.md", "formats", "Every machine-readable format: --format json, vectors, fixtures, the manifest, the adapter protocol.", include_str!("../docs/formats.md")),
-    ("rulec://docs/generated-code.md", "generated-code", "The shape and guarantees of the generated code in each language, and how to call it.", include_str!("../docs/generated-code.md")),
-    ("rulec://docs/backends.md", "backends", "Targeting a language rulec does not generate, without losing the comparison.", include_str!("../docs/backends.md")),
-    ("rulec://docs/compatibility.md", "compatibility", "What every 1.x release keeps — the language, the answers, the calls, the CLI, the codes, the formats — and what it may change.", include_str!("../docs/compatibility.md")),
+    (
+        "rulec://docs/reference.md",
+        "reference",
+        ".rule ファイルの文法の全部。",
+        "The complete grammar of a .rule file.",
+        include_str!("../docs/reference.md"),
+    ),
+    (
+        "rulec://docs/formats.md",
+        "formats",
+        "機械が読む形の全部: --format json、ベクタ、fixture、目録、adapter の約束。",
+        "Every machine-readable format: --format json, vectors, fixtures, the manifest, the adapter protocol.",
+        include_str!("../docs/formats.md"),
+    ),
+    (
+        "rulec://docs/generated-code.md",
+        "generated-code",
+        "各言語で生成するコードの形と約束、呼び方。",
+        "The shape and guarantees of the generated code in each language, and how to call it.",
+        include_str!("../docs/generated-code.md"),
+    ),
+    (
+        "rulec://docs/backends.md",
+        "backends",
+        "rulec が生成しない言語を、比べることを失わずに出力先にする方法。",
+        "Targeting a language rulec does not generate, without losing the comparison.",
+        include_str!("../docs/backends.md"),
+    ),
+    (
+        "rulec://docs/compatibility.md",
+        "compatibility",
+        "1.x の版が守るもの——言語、答え、呼び方、CLI、コード、形式——と、変えてよいもの。",
+        "What every 1.x release keeps — the language, the answers, the calls, the CLI, the codes, the formats — and what it may change.",
+        include_str!("../docs/compatibility.md"),
+    ),
 ];
 
 pub fn serve(limit: std::time::Duration) -> ExitCode {
@@ -38,8 +69,7 @@ pub fn serve(limit: std::time::Duration) -> ExitCode {
     if let Err(e) = std::env::current_exe()
         && ritsu_base::wasi::unsupported(&e)
     {
-        eprintln!("error: {}", crate::i18n::text(&ritsu_base::wasi::cannot_start_programs()));
-        return ExitCode::from(2);
+        return ExitCode::from(crate::i18n::refuse(&mut std::io::stderr(), &ritsu_base::wasi::cannot_start_programs()));
     }
     let cmds = commands();
     let stdin = std::io::stdin();
@@ -52,7 +82,7 @@ pub fn serve(limit: std::time::Duration) -> ExitCode {
         let req = match json::parse(line.trim()) {
             Ok(j) => j,
             Err(e) => {
-                let _ = writeln!(out, "{}", error_msg("null", -32700, &format!("parse error: {e}")));
+                let _ = writeln!(out, "{}", error_msg("null", -32700, &tr!("JSON の解釈に失敗しました: {e}", "parse error: {e}")));
                 let _ = out.flush();
                 continue;
             }
@@ -70,7 +100,7 @@ pub fn serve(limit: std::time::Duration) -> ExitCode {
             "resources/list" => Ok(resources_list()),
             "resources/read" => resources_read(params),
             "prompts/list" => Ok("{\"prompts\":[]}".to_string()),
-            _ => Err((-32601, format!("unknown method: {method}"))),
+            _ => Err((-32601, tr!("`{method}` というメソッドはありません", "unknown method: {method}"))),
         };
         let msg = match answer {
             Ok(r) => format!("{{\"jsonrpc\":\"2.0\",\"id\":{id},\"result\":{r}}}"),
@@ -117,11 +147,18 @@ fn initialize(params: Option<&Json>) -> String {
         )
         .str(
             "instructions",
-            "rulec turns a table-shaped business rule (a .rule file) into proved, dependency-free code. \
-             Read the resource rulec://docs/agents.md first: it is the procedure, and it says what an \
-             agent must not decide on its own. Every tool is one rulec command; pass format \"json\" \
-             to get its findings as data. The result's last text says the exit code: 0 no errors, \
-             1 findings, 2 bad arguments.",
+            &tr!(
+                "rulec は表の形の業務の規則（.rule ファイル）を、証明済みで依存の無いコードにします。\
+                 最初に資源 rulec://docs/agents.md を読んでください——手順と、エージェントが自分で\
+                 決めてはいけないことが書いてあります。道具はどれも rulec のコマンド一つです。\
+                 結果をデータとして受け取るには format \"json\" を渡してください。結果の最後の行は\
+                 終了コードです: 0 は誤りなし、1 は指摘あり、2 は引数の誤り。",
+                "rulec turns a table-shaped business rule (a .rule file) into proved, dependency-free code. \
+                 Read the resource rulec://docs/agents.md first: it is the procedure, and it says what an \
+                 agent must not decide on its own. Every tool is one rulec command; pass format \"json\" \
+                 to get its findings as data. The result's last text says the exit code: 0 no errors, \
+                 1 findings, 2 bad arguments."
+            ),
         )
         .finish()
 }
@@ -192,7 +229,7 @@ fn tools_list(cmds: &[Cmd]) -> String {
                         o.push_str(&format!(",\"enum\":{}", json::strs(f.choices)));
                     }
                 }
-                let mut help = f.help.clone();
+                let mut help = if f.name == "--lang" { crate::cli::lang_help(c.name, &f.help) } else { f.help.clone() };
                 if f.rest {
                     help.push_str(&tr!("（一つの文字列で渡す。空白で区切って、コマンドとその引数に分ける）", " (one string; it is split on spaces into the command and its arguments)"));
                 }
@@ -230,7 +267,7 @@ fn tools_list(cmds: &[Cmd]) -> String {
 fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -> Result<String, (i64, String)> {
     let name = params.and_then(|p| p.get("name")).and_then(|n| n.as_str()).unwrap_or("");
     let Some(c) = name.strip_prefix("rulec_").and_then(|n| cmds.iter().find(|c| c.name == n)) else {
-        return Err((-32602, format!("unknown tool: {name}")));
+        return Err((-32602, tr!("`{name}` という道具はありません", "unknown tool: {name}")));
     };
     let args = params.and_then(|p| p.get("arguments")).and_then(json::members).unwrap_or_default();
     let mut argv: Vec<String> = vec![c.name.to_string()];
@@ -243,7 +280,7 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -
             Json::Int(n) => Ok(n.to_string()),
             Json::Frac(s) => Ok(s.clone()),
             Json::Bool(b) => Ok(b.to_string()),
-            other => Err((-32602, format!("a {} is not a value an argument takes", json::kind(other)))),
+            other => Err((-32602, tr!("`{}` の値は引数が取りません", "a {} is not a value an argument takes", json::kind(other)))),
         }
     };
     let pos = positionals(c);
@@ -257,12 +294,12 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -
             Some(v) if !*list => {
                 let v = text(v)?;
                 if !choices.is_empty() && !choices.contains(&v.as_str()) {
-                    return Err((-32602, format!("`{pname}` is one of {}", choices.join(", "))));
+                    return Err((-32602, tr!("`{pname}` は {} のどれかです", "`{pname}` is one of {}", choices.join(", "))));
                 }
                 argv.push(v);
             }
-            Some(_) => return Err((-32602, format!("`{pname}` has the wrong shape"))),
-            None if *req => return Err((-32602, format!("`{pname}` is required"))),
+            Some(_) => return Err((-32602, tr!("`{pname}` の形が違います", "`{pname}` has the wrong shape"))),
+            None if *req => return Err((-32602, tr!("`{pname}` が要ります", "`{pname}` is required"))),
             None => {}
         }
     }
@@ -273,7 +310,7 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -
         }
         let flag_name = format!("--{}", k.replace('_', "-"));
         let Some(f) = c.flags.iter().chain(globals.iter()).find(|f| f.name == flag_name) else {
-            return Err((-32602, format!("`{k}` is not an argument of rulec {}", c.name)));
+            return Err((-32602, tr!("`{k}` は `rulec {}` の引数ではありません", "`{k}` is not an argument of rulec {}", c.name)));
         };
         if f.rest {
             argv.push(f.name.to_string());
@@ -282,7 +319,7 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -
             match v {
                 Json::Bool(true) => argv.push(f.name.to_string()),
                 Json::Bool(false) | Json::Null => {}
-                _ => return Err((-32602, format!("`{k}` is a boolean"))),
+                _ => return Err((-32602, tr!("`{k}` は真偽値です", "`{k}` is a boolean"))),
             }
         } else if let Json::Arr(items) = v {
             for it in items {
@@ -294,7 +331,7 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -
             argv.push(text(v)?);
         }
     }
-    let exe = std::env::current_exe().map_err(|e| (-32603, format!("cannot find rulec itself: {e}")))?;
+    let exe = std::env::current_exe().map_err(|e| (-32603, tr!("rulec 自身が見つかりません: {e}", "cannot find rulec itself: {e}")))?;
     let mut cmd = std::process::Command::new(exe);
     // Run as `rulec` whatever the file is: ritsu's one binary is rulec when it is called by that
     // name (ritsu's DESIGN 2.3), and the file `current_exe` names is the binary under its own
@@ -305,7 +342,7 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -
         cmd.arg0("rulec");
     }
     cmd.args(&argv);
-    let ran = run_limited(cmd, limit).map_err(|e| (-32603, format!("cannot run rulec: {e}")))?;
+    let ran = run_limited(cmd, limit).map_err(|e| (-32603, crate::i18n::text(&ritsu_base::cli::cannot_start("rulec", &e))))?;
     let mut body = String::from_utf8_lossy(&ran.stdout).into_owned();
     let err = String::from_utf8_lossy(&ran.stderr);
     if !err.trim().is_empty() {
@@ -398,8 +435,8 @@ fn run_into(
 fn resources_list() -> String {
     let rs: Vec<String> = RESOURCES
         .iter()
-        .map(|(uri, name, desc, _)| {
-            Obj::new().str("uri", uri).str("name", name).str("description", desc).str("mimeType", "text/markdown").finish()
+        .map(|(uri, name, ja_desc, en_desc, _)| {
+            Obj::new().str("uri", uri).str("name", name).str("description", if crate::i18n::ja() { ja_desc } else { en_desc }).str("mimeType", "text/markdown").finish()
         })
         .collect();
     format!("{{\"resources\":{}}}", json::arr(&rs))
@@ -407,8 +444,8 @@ fn resources_list() -> String {
 
 fn resources_read(params: Option<&Json>) -> Result<String, (i64, String)> {
     let uri = params.and_then(|p| p.get("uri")).and_then(|u| u.as_str()).unwrap_or("");
-    let Some((_, _, _, text)) = RESOURCES.iter().find(|(u, ..)| *u == uri) else {
-        return Err((-32002, format!("no such resource: {uri}")));
+    let Some((_, _, _, _, text)) = RESOURCES.iter().find(|(u, ..)| *u == uri) else {
+        return Err((-32002, tr!("`{uri}` という資源はありません", "no such resource: {uri}")));
     };
     // AGENTS.md links its companions as `docs/…`; here they are resources.
     let text = text.replace("](docs/", "](rulec://docs/");

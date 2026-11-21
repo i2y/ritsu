@@ -1,0 +1,2 @@
+エラー[E009]: example.ringi:5:50: `金額` と `30_000` は比べられません（`money[円]` と `number`）
+     5 |   領収書(receipt) : attachment "領収書"  required when 金額 > 30_000

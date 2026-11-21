@@ -1,0 +1,4 @@
+enums time v1
+description "An enums file named like a module of the standard libraries"
+
+enum zone = north | south

@@ -1,0 +1,3 @@
+clause courier_fee -> fee
+  when way courier
+  then 8

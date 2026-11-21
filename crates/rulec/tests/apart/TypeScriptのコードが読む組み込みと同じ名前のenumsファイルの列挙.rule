@@ -1,0 +1,12 @@
+enums 台本の種類(script_kinds) v1
+description "TypeScript と JavaScript のコードが読む組み込みと同じ名前の、enums ファイルの列挙"
+
+enum 物(object) = 素(plain) | 箱入り(boxed)
+enum 数(number) = 一つ(one) | 二つ(two)
+enum 大きさ(big_int) = 小さい(small) | 大きい(large)
+enum 算(math) = 足す(add) | 引く(subtract)
+enum 誤り(error) = 良い(fine) | 壊れた(broken)
+
+prerequisites 順(order) over 物
+  start 素
+  箱入り requires 素

@@ -1,0 +1,5 @@
+table fee open
+policy unique
+| way     | -> fee : number |
+| post    | 5               |
+| counter | 0               |

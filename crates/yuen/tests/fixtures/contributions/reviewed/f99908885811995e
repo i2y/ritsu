@@ -1,0 +1,5 @@
+table 手数料(fee) open
+policy unique
+| 戻し方 | -> 手数料 : number |
+| 郵送   | 5                  |
+| 窓口   | 0                  |

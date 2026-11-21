@@ -1,0 +1,21 @@
+rule その地域では出荷しない日(day_the_zone_never_ships_on) v1
+description "取り込んだ表が書く日付を、それを決める地域と一緒に一日ずつ読む。三行目は県内の注文に 7 月 3 日を求めるが、その日に出荷するのは県外の注文だけ"
+
+enum 地域(zone) = 県内(local) | 県外(national)
+enum 時期(timing) = 早い(early) | 遅い(late) | 合わない(odd)
+
+inputs
+  地域(zone) : 地域
+
+apply 出荷(s) = "shared/出荷日.rule" meaning:4829fabdcc60ee01
+  地域 = 地域
+  出荷日 -> 受けた出荷日
+
+outputs
+  答え(x) : 時期
+
+table 選ぶ(pick)
+| 地域 | 受けた出荷日 | -> 答え  |
+| 県内 | 2026-07-01   | 早い     |
+| 県外 | 2026-07-03   | 遅い     |
+| 県内 | 2026-07-03   | 合わない |

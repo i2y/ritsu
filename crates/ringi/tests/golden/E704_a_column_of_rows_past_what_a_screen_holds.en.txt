@@ -1,0 +1,3 @@
+error[E704]: tests/mutants/E704_a_column_of_rows_past_what_a_screen_holds.ringi:11:1: The range of `items.serial` reaches `99_999_999_999_999_999`, past what a screen holds exactly (`9_007_199_254_740_991`)
+    11 |     serial : number "Serial number"  range >=1 <=99_999_999_999_999_999
+  = A screen holds a number as JavaScript does, exactly only from `-9_007_199_254_740_991` to `9_007_199_254_740_991`: a value past it would be rounded, and checked and sent as another. Narrow the range to within it.

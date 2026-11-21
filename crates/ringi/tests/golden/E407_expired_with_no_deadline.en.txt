@@ -1,0 +1,3 @@
+error[E407]: tests/mutants/E407_expired_with_no_deadline.ringi:19:16: The ticket is never `expired`: no stage expires at a deadline, and no turn of the requester at `resubmit within`
+    19 |   on rejected, expired  void budget.reserve(request: ticket.id, attempt: ticket.attempt)
+  = Take the line out, or write the line that allows that ending.

@@ -1,0 +1,11 @@
+2026-11-16 10:00  submit   by e1201  -> decide (e1101), due 2026-11-19 end of day; hold budget.reserve 60_000 JPY
+2026-11-16 11:00  approve  by e1101  -> approved; post budget.reserve
+the book `budget` at the end: dept_budget(sales1) 440_000 JPY, allocations -500_000 JPY, payees 60_000 JPY
+  the hold `reserve` (T-1, attempt-1): posted
+scenario `held_and_posted`: as written (2 rows)
+
+2026-11-16 10:00  submit  by e1201  -> decide (e1101), due 2026-11-19 end of day; hold budget.reserve 60_000 JPY
+2026-11-16 11:00  reject  by e1101  -> rejected; void budget.reserve
+the book `budget` at the end: dept_budget(sales1) 500_000 JPY, allocations -500_000 JPY, payees 0 JPY
+  the hold `reserve` (T-1, attempt-1): voided
+scenario `held_and_voided`: as written (2 rows)

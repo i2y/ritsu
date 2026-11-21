@@ -11,7 +11,7 @@
 //! - the output it shows (the blocks marked `text`) is lines of one of ritsu's golden files;
 //! - the commands it names are commands.
 //!
-//! It holds the ten skills of `skills/` together too, and the ways they are handed out
+//! It holds the eleven skills of `skills/` together too, and the ways they are handed out
 //! (PLAN F.3):
 //!
 //! - `skills/` holds a folder for ritsu and one for each language, and no other, each with a
@@ -19,11 +19,11 @@
 //!   and names the repository's license;
 //! - the marketplace of Claude Code is one file the site publishes (website/docs/marketplace.json),
 //!   not the repository; it says what it must, in the version of the workspace, and its plugin is
-//!   the folder skills/, fetched alone, with the ten skills and nothing else Claude Code would
+//!   the folder skills/, fetched alone, with the eleven skills and nothing else Claude Code would
 //!   load; the pages that say how to install it add it at the URL the site publishes it at;
-//! - the binary carries every file of the ten folders, `ritsu skills install` writes them as they
+//! - the binary carries every file of the eleven folders, `ritsu skills install` writes them as they
 //!   are, refuses a file changed by hand unless `--force` is given, and writes only the skills
-//!   named; `ritsu skills list` names the ten;
+//!   named; `ritsu skills list` names the eleven;
 //! - the zip of a release (`packaging/skills.sh`) holds the same files;
 //! - `skills/README.md` and `skills/README.ja.md` show what `ritsu skills list` prints, and their
 //!   links lead somewhere.
@@ -193,7 +193,7 @@ fn the_commands_it_names_are_commands() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-// ---- the ten skills, and how they are handed out
+// ---- the eleven skills, and how they are handed out
 
 /// A value of `[workspace.package]` in the root Cargo.toml: `version`, `license`, `repository`.
 fn workspace(key: &str) -> String {
@@ -201,8 +201,8 @@ fn workspace(key: &str) -> String {
     cargo.lines().find_map(|l| l.strip_prefix(&format!("{key} = \""))).and_then(|l| l.strip_suffix('"')).unwrap_or_else(|| panic!("the workspace names its {key}")).to_string()
 }
 
-/// The names of the ten skills: ritsu's, then the languages in the order `ritsu --help` lists them.
-fn ten() -> Vec<&'static str> {
+/// The names of the eleven skills: ritsu's, then the languages in the order `ritsu --help` lists them.
+fn eleven() -> Vec<&'static str> {
     let mut names = vec!["ritsu"];
     names.extend(LANGUAGES);
     names
@@ -221,14 +221,14 @@ fn json(rel: &str) -> Value {
 }
 
 #[test]
-fn skills_holds_the_ten_each_with_its_frontmatter() {
+fn skills_holds_the_eleven_each_with_its_frontmatter() {
     let mut dirs: Vec<String> = fs::read_dir(root().join("skills")).unwrap().flatten().filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().to_string()).collect();
     dirs.sort();
-    let mut want = ten();
+    let mut want = eleven();
     want.sort();
     assert_eq!(dirs, want, "skills/ holds a folder for ritsu and one for each language, and no other");
     let license = workspace("license");
-    for name in ten() {
+    for name in eleven() {
         let md = root().join("skills").join(name).join("SKILL.md");
         let front = frontmatter(&fs::read_to_string(&md).unwrap_or_else(|e| panic!("{}: {e}", md.display())));
         assert_eq!(field(&front, "name").as_deref(), Some(name), "skills/{name}/SKILL.md names its folder");
@@ -247,7 +247,7 @@ fn site_url() -> String {
 #[test]
 fn the_marketplace_on_the_site_hands_out_the_folder_of_skills_alone() {
     // Were the repository the marketplace, adding it would clone all of ritsu, and installing would
-    // copy all of it again, to read the ten folders of skills/. The marketplace is one file the
+    // copy all of it again, to read the eleven folders of skills/. The marketplace is one file the
     // site publishes instead, and the plugin it lists is skills/, which Claude Code fetches alone.
     assert!(!root().join(".claude-plugin").exists(), ".claude-plugin/ makes the repository a marketplace, the adding of which clones all of it; the marketplace is website/docs/marketplace.json");
     let market = json("website/docs/marketplace.json");
@@ -321,8 +321,8 @@ fn the_marketplace_on_the_site_hands_out_the_folder_of_skills_alone() {
 }
 
 #[test]
-fn the_binary_carries_every_file_of_the_ten() {
-    assert_eq!(SKILLS.iter().map(|s| s.name).collect::<Vec<_>>(), ten(), "the skills ritsu carries, in order");
+fn the_binary_carries_every_file_of_the_eleven() {
+    assert_eq!(SKILLS.iter().map(|s| s.name).collect::<Vec<_>>(), eleven(), "the skills ritsu carries, in order");
     for s in SKILLS {
         assert_eq!(s.files[0].0, "SKILL.md", "{}: SKILL.md first", s.name);
         let mut carried: Vec<String> = s.files.iter().map(|(n, _)| n.to_string()).collect();
@@ -376,14 +376,14 @@ fn same_as_skills(dir: &Path) {
 }
 
 #[test]
-fn ritsu_skills_install_writes_the_ten_as_they_are() {
+fn ritsu_skills_install_writes_the_eleven_as_they_are() {
     let t = TempDir::new("skills-install");
     let (code, out, err) = ritsu_in(t.path(), t.path(), &["skills", "install"]);
     assert_eq!(code, 0, "{out}{err}");
     let dir = t.path().join(".claude/skills");
-    assert_eq!(every_file(&dir), files_of_skills(&ten()), "the project's .claude/skills/ holds the ten, and nothing else");
+    assert_eq!(every_file(&dir), files_of_skills(&eleven()), "the project's .claude/skills/ holds the eleven, and nothing else");
     same_as_skills(&dir);
-    assert_eq!(out.lines().count(), 10, "{out}");
+    assert_eq!(out.lines().count(), 11, "{out}");
     assert!(out.starts_with("wrote .claude/skills/ritsu (2 files)\nwrote .claude/skills/rulec ("), "{out}");
     // Again: every file is already the same, and nothing is written.
     let (code, out, err) = ritsu_in(t.path(), t.path(), &["skills", "install"]);
@@ -415,7 +415,7 @@ fn ritsu_skills_install_refuses_a_file_changed_by_hand_and_force_writes_over_it(
     assert!(out.contains("wrote .claude/skills/rulec (1 file)") && out.contains("wrote .claude/skills/dandori ("), "{out}");
     assert_eq!(fs::read_to_string(&mine).unwrap(), "the project's notes\n");
     fs::remove_file(&mine).unwrap();
-    assert_eq!(every_file(&dir), files_of_skills(&ten()));
+    assert_eq!(every_file(&dir), files_of_skills(&eleven()));
     same_as_skills(&dir);
 }
 
@@ -439,19 +439,19 @@ fn ritsu_skills_install_writes_only_the_skills_named_where_it_is_told() {
     // a skill that does not exist, and the two places at once, are bad arguments that write nothing
     let (code, _, err) = ritsu_in(t.path(), &home, &["skills", "install", "rulec", "nope"]);
     assert_eq!(code, 2);
-    assert_eq!(err, "error: there is no skill `nope`; the skills are ritsu, rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho, kaname\n");
+    assert_eq!(err, "error: there is no skill `nope`; the skills are ritsu, rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho, kaname, ringi\n");
     let (code, _, err) = ritsu_in(t.path(), &home, &["skills", "install", "--dir", "x", "--user"]);
     assert_eq!((code, err.as_str()), (2, "error: give `--dir` or `--user`, not both\n"));
     assert!(!t.path().join(".claude").exists() && !t.path().join("x").exists());
 }
 
 #[test]
-fn ritsu_skills_list_names_the_ten() {
+fn ritsu_skills_list_names_the_eleven() {
     let t = TempDir::new("skills-list");
     let (code, out, err) = ritsu_in(t.path(), t.path(), &["skills", "list"]);
     assert_eq!(code, 0, "{err}");
     let names: Vec<&str> = out.lines().filter_map(|l| l.split_whitespace().next()).collect();
-    assert_eq!(names, ten(), "{out}");
+    assert_eq!(names, eleven(), "{out}");
     let (code, out, _) = ritsu_in(t.path(), t.path(), &["skills", "list", "--lang", "ja"]);
     assert!(code == 0 && out.contains("rulec    業務の規則（.rule）"), "{out}");
     // `skills` is in the table, and so in `ritsu --help`
@@ -462,7 +462,7 @@ fn ritsu_skills_list_names_the_ten() {
 }
 
 #[test]
-fn the_release_zip_holds_the_ten_as_they_are() {
+fn the_release_zip_holds_the_eleven_as_they_are() {
     let t = TempDir::new("skills-zip");
     let dist = t.path().join("dist");
     let o = Command::new("sh").args(["packaging/skills.sh", "v0.0.0", dist.to_str().unwrap()]).current_dir(root()).output().unwrap();
@@ -473,10 +473,10 @@ fn the_release_zip_holds_the_ten_as_they_are() {
     let into = t.path().join("unzipped");
     let st = Command::new("unzip").args(["-q", zip.to_str().unwrap(), "-d", into.to_str().unwrap()]).status().expect("unzip");
     assert!(st.success());
-    let mut want = files_of_skills(&ten());
+    let mut want = files_of_skills(&eleven());
     want.extend(["LICENSE-APACHE".to_string(), "LICENSE-MIT".to_string()]);
     want.sort();
-    assert_eq!(every_file(&into), want, "the zip holds the ten folders at its top, and the two licenses");
+    assert_eq!(every_file(&into), want, "the zip holds the eleven folders at its top, and the two licenses");
     for f in every_file(&into) {
         let from = if f.starts_with("LICENSE-") { root().join(&f) } else { root().join("skills").join(&f) };
         assert!(fs::read(into.join(&f)).unwrap() == fs::read(from).unwrap(), "{f} in the zip is not the repository's");

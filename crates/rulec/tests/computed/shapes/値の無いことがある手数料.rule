@@ -1,0 +1,23 @@
+rule 値の無いことがある手数料(same_rule_optional_number) v1
+description "同じ規則の表が書く手数料を、それだけで読む。店で受け取る注文には手数料が無い"
+
+enum 地域(zone) = 県内(local) | 県外(national) | 店で受け取る(pickup)
+enum 区分(band) = 安い(low) | 高い(high) | 無料(free)
+
+inputs
+  地域(zone) : 地域
+
+outputs
+  答え(x) : 区分
+
+table 手数料の表(fee_of)
+| 地域         | -> 手数料 : money[円]? |
+| 県内         | 100円                  |
+| 県外         | 300円                  |
+| 店で受け取る | none                   |
+
+table 選ぶ(pick)
+| 手数料  | -> 答え |
+| <=100円 | 安い    |
+| >=300円 | 高い    |
+| none    | 無料    |

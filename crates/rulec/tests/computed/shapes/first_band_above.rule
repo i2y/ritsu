@@ -1,0 +1,25 @@
+rule first_band_above v1
+description "A band a policy first table writes, read with the amount it is decided from: small comes only at 115 yen, which none of the first three rows of the table above takes, so no row is asked for small at 102 yen or less"
+
+enum choice = one | two
+enum size = small | medium | large
+
+inputs
+  amount : money[JPY]  range >=1JPY <=115JPY
+
+outputs
+  x : choice
+
+table band_of
+policy first
+| amount         | -> band : size |
+| >15JPY <=40JPY | medium         |
+| >=41JPY <=114JPY | medium       |
+| <16JPY         | large          |
+| -              | small          |
+
+table pick
+| amount    | band       | -> x |
+| <=102JPY  | not: small | one  |
+| >=103JPY  | small      | two  |
+| >=103JPY  | not: small | one  |

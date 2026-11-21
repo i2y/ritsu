@@ -11,8 +11,12 @@
 use crate::tmp::TempDir;
 use crate::tools;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::Duration;
+
+/// How long psql may take with one statement before it is stopped: the statements of a test take a
+/// second or two, and a server that does not answer is not waited for without end.
+const SQL_LIMIT: Duration = Duration::from_secs(5 * 60);
 
 /// The longest path of a Unix socket.
 pub const SOCKET_PATH_MAX: usize = 103;
@@ -105,8 +109,11 @@ impl Postgres {
     /// Run SQL on the database `postgres` and answer what it prints, unaligned and without
     /// headers.
     pub fn sql(&self, sql: &str) -> Result<String, String> {
-        let out = self.psql("postgres").args(["-A", "-t", "-c", sql]).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
-        if out.status.success() { Ok(String::from_utf8_lossy(&out.stdout).to_string()) } else { Err(String::from_utf8_lossy(&out.stderr).to_string()) }
+        let out = crate::run::run(self.psql("postgres").args(["-A", "-t", "-c", sql]), SQL_LIMIT);
+        if out.timed_out {
+            return Err(format!("psql did not answer within {} seconds, and was stopped: {sql}", SQL_LIMIT.as_secs()));
+        }
+        if out.ok { Ok(out.stdout) } else { Err(out.stderr) }
     }
 
     /// The cluster's log, for a failure to show.

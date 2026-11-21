@@ -1,0 +1,16 @@
+budget.book: ok
+  allocate.do   may be refused: key_conflict
+  reserve.hold  may be refused: over_budget (dept_budget(dept) at least 0), key_conflict, already_refused
+  reserve.post  may be refused: key_conflict, already_voided, expired, over_hold, no_such_hold
+  reserve.void  may be refused: already_posted, expired, no_such_hold
+  key: allocate once per dept, period; a second call that differs only in amount is refused with key_conflict
+  key: reserve once per request, attempt; a second call that differs only in dept or amount is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+ok purchase.ringi: a request, 2 fields, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+warning[ritsu W209]: purchase.ringi:16:22: Whether the hold `budget.reserve` expires before a ticket of `purchase` posts or voids it cannot be decided
+    16 |   on submitted  hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)
+  = A round of the request may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered.
+  = The hold expires 7 days after it is made (`reserve` of "budget.book").
+  = The book refuses a post or a void of an expired hold with `expired`: the ticket would be approved with nothing held for it.
+  = Where a round has an end, how long the hold stays open is known: write a deadline (`due in …`).
+ritsu check: 2 files (chobo 1, ringi 1): all pass (1 warning); borders between the languages: 1 checked, 1 undecided

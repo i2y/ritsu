@@ -1,0 +1,10 @@
+warning[W121]: `fall_through` takes a name the code generated for Go uses itself
+  --> tests/own_names/rule_named_like_a_go_keyword.rule:1
+  |
+1 | rule fall_through v1
+  |      ^^^^^^^^^^^^ the rule's name
+  |
+ Go: `fallthrough` is a keyword of the language, which the rule written so cannot be named: it does not build.
+ For a target you do not generate, leave it. For one you do, give it an alias (`fall_through(<alias>)`).
+
+ok tests/own_names/rule_named_like_a_go_keyword.rule

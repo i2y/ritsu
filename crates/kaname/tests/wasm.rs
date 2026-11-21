@@ -159,7 +159,7 @@ fn the_wasm_answers_as_the_reference_does() {
             let dir = package_dir(&base, Target::Rust);
             // the crate's Cargo.toml names the native harness, which the Wasm leaves out
             std::fs::create_dir_all(dir.join("harness")).unwrap();
-            std::fs::write(dir.join("harness/main.rs"), kaname::r#gen::harness::program(&checked, Target::Rust, PY_NAME, GO_PACKAGE)).unwrap();
+            std::fs::write(dir.join("harness/main.rs"), kaname::r#gen::harness::program(&checked, Target::Rust, PY_NAME, GO_PACKAGE, lang)).unwrap();
             // the cases the native harness runs, the door being the same
             let (cases, counts) = cases(&modules, lang, Target::Rust);
             std::fs::write(dir.join("calls.jsonl"), kaname::r#gen::harness::call_lines(&checked, &cases)).unwrap();
@@ -209,7 +209,7 @@ fn built(root: &Path, test: &str, lang: Lang, modules: &[(Rc<Checked>, String)])
     write_package(root, Target::Rust, lang, modules);
     let dir = package_dir(root, Target::Rust);
     std::fs::create_dir_all(dir.join("harness")).unwrap();
-    std::fs::write(dir.join("harness/main.rs"), kaname::r#gen::harness::program(&checked, Target::Rust, PY_NAME, GO_PACKAGE)).unwrap();
+    std::fs::write(dir.join("harness/main.rs"), kaname::r#gen::harness::program(&checked, Target::Rust, PY_NAME, GO_PACKAGE, lang)).unwrap();
     crate_files(&dir, "2024", "harness");
     let module = build(&dir, test);
     (dir, module)
@@ -268,34 +268,39 @@ fn an_input_outside_the_contract_is_answered() {
             (s(r#"{"module":"calc","function":"fee","in":{"a":1000.0}}"#), fee.into()),
             (s(r#"{"module":"calc","function":"fee","in":{"a":1e3}}"#), fee.into()),
             (s(r#"{"module":"calc","function":"fee","in":{"a":10.00E2}}"#), fee.into()),
-            (s(r#"{"module":"calc","function":"fee","in":{"a":1000.5}}"#), r#"{"refused":"input","error":"The argument `a` of `fee` is not an integer"}"#.into()),
-            (s(r#"{"module":"calc","function":"fee","in":{"a":99999999999999999999}}"#), r#"{"refused":"input","error":"The argument `a` of `fee` is outside int64"}"#.into()),
+            (s(r#"{"module":"calc","function":"fee","in":{"a":1000.5}}"#), r#"{"refused":"input","error":"The argument `a` of `fee` is 1000.5, and must be an integer","path":"a"}"#.into()),
+            (s(r#"{"module":"calc","function":"fee","in":{"a":99999999999999999999}}"#), r#"{"refused":"input","error":"The argument `a` of `fee` is outside int64","path":"a"}"#.into()),
             // outside the range the parameter declares: the entry's failure, as the vectors write it
             (
                 s(r#"{"module":"calc","function":"fee","in":{"a":-1}}"#),
-                r#"{"function":"fee","in":{"a":-1},"fails":{"kind":"input","module":"calc","line":20,"message":"The argument `a` of `fee` is -1USDc, outside its range >=0USDc <=1000000USDc"}}"#.into(),
+                r#"{"function":"fee","in":{"a":-1},"fails":{"kind":"input","module":"calc","line":20,"message":"The argument `a` of `fee` is -1USDc, outside its range >=0USDc <=1_000_000USDc","path":"a"}}"#.into(),
             ),
-            (s(r#"{"module":"calc","function":"fee","in":{"a":"1000"}}"#), r#"{"refused":"input","error":"The argument `a` of `fee` is not an integer"}"#.into()),
-            (s(r#"{"module":"calc","function":"fee","in":{}}"#), r#"{"refused":"input","error":"The argument `a` of `fee` is missing"}"#.into()),
+            (s(r#"{"module":"calc","function":"fee","in":{"a":"1000"}}"#), r#"{"refused":"input","error":"The argument `a` of `fee` is \"1000\", and must be an integer","path":"a"}"#.into()),
+            (s(r#"{"module":"calc","function":"fee","in":{}}"#), r#"{"refused":"input","error":"The argument `a` of `fee` is missing, and must be an integer","path":"a"}"#.into()),
             // a day of no calendar is read, and the entry finds it outside the range, between whose
             // ends its day number falls (that of 2026-03-02); a date not written YYYY-MM-DD is none
             (
                 s(r#"{"module":"calc","function":"days","in":{"a":"2026-02-30","b":"2026-03-01"}}"#),
-                r#"{"function":"days","in":{"a":"2026-02-30","b":"2026-03-01"},"fails":{"kind":"input","module":"calc","line":29,"message":"The argument `a` of `days` is 2026-02-30, outside its range >=2026-01-01 <=2026-12-31"}}"#.into(),
+                r#"{"function":"days","in":{"a":"2026-02-30","b":"2026-03-01"},"fails":{"kind":"input","module":"calc","line":29,"message":"The argument `a` of `days` is 2026-02-30, outside its range >=2026-01-01 <=2026-12-31","path":"a"}}"#.into(),
             ),
-            (s(r#"{"module":"calc","function":"days","in":{"a":"2026-2-3","b":"2026-03-01"}}"#), r#"{"refused":"input","error":"The argument `a` of `days` is not a date written YYYY-MM-DD"}"#.into()),
+            (s(r#"{"module":"calc","function":"days","in":{"a":"2026-2-3","b":"2026-03-01"}}"#), r#"{"refused":"input","error":"The argument `a` of `days` is \"2026-2-3\", and must be a date written YYYY-MM-DD","path":"a"}"#.into()),
             (
                 s(r#"{"module":"calc","function":"total_weight","in":{"lines":[{"qty":2,"weight":3},{"qty":1,"weight":160}]}}"#),
                 r#"{"function":"total_weight","in":{"lines":[{"qty":2,"weight":3},{"qty":1,"weight":160}]},"out":166}"#.into(),
             ),
-            (s(r#"{"module":"calc","function":"total_weight","in":{"lines":[{"qty":2}]}}"#), r#"{"refused":"input","error":"The argument `lines[0].weight` of `total_weight` is missing"}"#.into()),
+            (s(r#"{"module":"calc","function":"total_weight","in":{"lines":[{"qty":2}]}}"#), r#"{"refused":"input","error":"The argument `lines[0].weight` of `total_weight` is missing, and must be an integer","path":"lines[0].weight"}"#.into()),
+            // JSON of another type: the place, what is there and what it must be
+            (s(r#"{"module":"calc","function":"total_weight","in":{"lines":{}}}"#), r#"{"refused":"input","error":"The argument `lines` of `total_weight` is an object, and must be an array","path":"lines"}"#.into()),
+            (s(r#"{"module":"calc","function":"total_weight","in":{"lines":[{"qty":2,"weight":"3"}]}}"#), r#"{"refused":"input","error":"The argument `lines[0].weight` of `total_weight` is \"3\", and must be an integer","path":"lines[0].weight"}"#.into()),
+            (s(r#"{"module":"texts","function":"handle","in":{"name":5}}"#), r#"{"refused":"input","error":"The argument `name` of `handle` is 5, and must be a string","path":"name"}"#.into()),
+            (s(r#"{"module":"texts","function":"handle","in":{"name":null}}"#), r#"{"refused":"input","error":"The argument `name` of `handle` is null, and must be a string","path":"name"}"#.into()),
             // a string's escapes read, and written as the vectors write them
             (s(r#"{"module":"texts","function":"handle","in":{"name":"  Ada \u00e9\tLovelace "}}"#), r#"{"function":"handle","in":{"name":"  Ada é\tLovelace "},"out":"ada é lovelace"}"#.into()),
             // a lone surrogate, which no string of Rust holds: the entry's failure of a string that is not
             // well formed, with the character in its place in `in`
             (
                 s(r#"{"module":"texts","function":"handle","in":{"name":"a\ud800b"}}"#),
-                "{\"function\":\"handle\",\"in\":{\"name\":\"a\u{fffd}b\"},\"fails\":{\"kind\":\"input\",\"module\":\"texts\",\"line\":14,\"message\":\"The argument `name` of `handle` is no well-formed string of Unicode\"}}".into(),
+                "{\"function\":\"handle\",\"in\":{\"name\":\"a\u{fffd}b\"},\"fails\":{\"kind\":\"input\",\"module\":\"texts\",\"line\":14,\"message\":\"The argument `name` of `handle` is no well-formed string of Unicode\",\"path\":\"name\"}}".into(),
             ),
             (s(r#"{"module":"texts","function":"handle","in":{"name":"a\ud83d\ude00b"}}"#), "{\"function\":\"handle\",\"in\":{\"name\":\"a\u{1f600}b\"},\"out\":\"a\u{1f600}b\"}".into()),
             // an inner function: no host calls it
@@ -318,7 +323,7 @@ fn an_input_outside_the_contract_is_answered() {
             // deeper than the door reads: refused before it is read to its end, where it nests no deeper,
             // read
             (s(&deep_arr), r#"{"refused":"input","error":"The input nests deeper than 1024"}"#.into()),
-            (s(&format!("{{\"module\":\"calc\",\"function\":\"fee\",\"in\":{{\"a\":{}1{}}}}}", "[".repeat(600), "]".repeat(600))), r#"{"refused":"input","error":"The argument `a` of `fee` is not an integer"}"#.into()),
+            (s(&format!("{{\"module\":\"calc\",\"function\":\"fee\",\"in\":{{\"a\":{}1{}}}}}", "[".repeat(600), "]".repeat(600))), r#"{"refused":"input","error":"The argument `a` of `fee` is an array, and must be an integer","path":"a"}"#.into()),
             (bytes(&[123, 34, 255, 34, 125]), r#"{"refused":"input","error":"The input is not UTF-8"}"#.into()),
         ];
         // one module, which a call need not name; the messages in Japanese
@@ -340,18 +345,18 @@ fn an_input_outside_the_contract_is_answered() {
                 )),
                 claim.into(),
             ),
-            (s(r#"{"function":"遅れの請求","in":{"請求書":{"番号":"inv_1","請求日":"2026-03-02","金額":100000},"基準金利":50}}"#), r#"{"refused":"input","error":"関数 `遅れの請求` の引数 `支払日` がありません"}"#.into()),
+            (s(r#"{"function":"遅れの請求","in":{"請求書":{"番号":"inv_1","請求日":"2026-03-02","金額":100000},"基準金利":50}}"#), r#"{"refused":"input","error":"関数 `遅れの請求` の引数 `支払日` がありません。YYYY-MM-DD と書いた日付が要ります","path":"支払日"}"#.into()),
             (
                 s(r#"{"function":"遅れの請求","in":{"請求書":{"番号":"inv_1","請求日":"2026-03-02","金額":100000},"支払日":"2026-02-30","基準金利":50}}"#),
-                r#"{"function":"遅れの請求","in":{"請求書":{"番号":"inv_1","請求日":"2026-03-02","金額":100000},"支払日":"2026-02-30","基準金利":50},"fails":{"kind":"input","module":"支払いの遅れ","line":18,"message":"関数 `遅れの請求` の引数 `支払日` の 2026-02-30 は、範囲 >=2026-01-01 <=2029-12-31 の外です"}}"#.into(),
+                r#"{"function":"遅れの請求","in":{"請求書":{"番号":"inv_1","請求日":"2026-03-02","金額":100000},"支払日":"2026-02-30","基準金利":50},"fails":{"kind":"input","module":"支払いの遅れ","line":18,"message":"関数 `遅れの請求` の引数 `支払日` の 2026-02-30 は、範囲 >=2026-01-01 <=2029-12-31 の外です","path":"支払日"}}"#.into(),
             ),
             (
                 s(r#"{"function":"遅れの請求","in":{"請求書":{"番号":"inv_1","請求日":"2026-03-02","金額":100000},"支払日":"2026-5-20","基準金利":50}}"#),
-                r#"{"refused":"input","error":"関数 `遅れの請求` の引数 `支払日` が YYYY-MM-DD と書いた日付ではありません"}"#.into(),
+                r#"{"refused":"input","error":"関数 `遅れの請求` の引数 `支払日` が \"2026-5-20\" です。YYYY-MM-DD と書いた日付が要ります","path":"支払日"}"#.into(),
             ),
             (
                 s(r#"{"function":"遅れの請求","in":{"請求書":{"番号":"inv_1","請求日":"2026-03-02","金額":100000},"支払日":"2030-01-01","基準金利":50}}"#),
-                r#"{"function":"遅れの請求","in":{"請求書":{"番号":"inv_1","請求日":"2026-03-02","金額":100000},"支払日":"2030-01-01","基準金利":50},"fails":{"kind":"input","module":"支払いの遅れ","line":18,"message":"関数 `遅れの請求` の引数 `支払日` の 2030-01-01 は、範囲 >=2026-01-01 <=2029-12-31 の外です"}}"#.into(),
+                r#"{"function":"遅れの請求","in":{"請求書":{"番号":"inv_1","請求日":"2026-03-02","金額":100000},"支払日":"2030-01-01","基準金利":50},"fails":{"kind":"input","module":"支払いの遅れ","line":18,"message":"関数 `遅れの請求` の引数 `支払日` の 2030-01-01 は、範囲 >=2026-01-01 <=2029-12-31 の外です","path":"支払日"}}"#.into(),
             ),
             // a module is named as it writes its name, not by its alias
             (s(r#"{"module":"late_payment_ja","function":"遅れの請求","in":{}}"#), r#"{"refused":"input","error":"モジュール `late_payment_ja` はありません"}"#.into()),

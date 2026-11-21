@@ -1,0 +1,32 @@
+rule 注文ごとのさいころ(dice_on_an_order_ja) v1
+description "注文ごとにさいころを二つ振る。5,000 円を超える注文は、合計が 8 以上なら大きい景品になり、それ以下の注文はいつも小さい景品になる。金額は 100 万円まであり、金額を一つずつ全部の目と組み合わせるには多すぎるので、検査は表が切る金額の区分ごとに一度だけ目を数える"
+
+enum 景品(prize) = 小(small) | 大(large)
+
+inputs
+  金額(amount)   : money[円]  range >=1円 <=100万円
+  一つ目(first)  : number  range >=1 <=6  random
+  二つ目(second) : number  range >=1 <=6  random
+
+define 合計(total) : number = 一つ目 + 二つ目
+
+outputs
+  景品(prize) : 景品
+
+table 景品表(prize_of)
+policy unique
+| 金額      | 合計 | -> 景品 |
+| <=5_000円 | -    | 小      |
+| >5_000円  | <8   | 小      |
+| >5_000円  | >=8  | 大      |
+
+chances
+| 金額      | -> 景品 | chance |
+| >5_000円  | 大      | 5/12   |
+| <=5_000円 | 小      | 1      |
+
+examples
+| 金額   | 一つ目 | 二つ目 | -> 景品 |
+| 5000円 | 6      | 6      | 小      |
+| 5001円 | 3      | 5      | 大      |
+| 5001円 | 1      | 1      | 小      |

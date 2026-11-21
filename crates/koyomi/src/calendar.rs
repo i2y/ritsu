@@ -19,8 +19,11 @@ pub struct Info {
     pub name: String,
     pub alias: Option<String>,
     pub version: String,
-    /// The path koyomi read it from.
+    /// The path koyomi read it from, folded by its letters: how what is made from it names it.
     pub path: PathBuf,
+    /// The path it was read by, not folded, which reads the same file again: a `..` in it climbs out
+    /// of a symbolic link as the system climbs out of it.
+    pub read: PathBuf,
     /// As diagnostics show it.
     pub shown: String,
     pub sha256: String,
@@ -336,10 +339,21 @@ pub fn clean(p: &Path) -> PathBuf {
     out.iter().collect()
 }
 
-/// Reads calendar files once each, however many `.cal` files use them.
+/// How a diagnostic names the calendar a file wrote at `written` (the path it wrote, joined to the
+/// directory of the path the file is shown by): folded by its letters, unless a `..` in it climbs
+/// out of a symbolic link, where it is the path that opens, from where the run is, the file read
+/// (ritsu's DESIGN 6.2, item 8).
+fn said(written: &Path) -> PathBuf {
+    if ritsu_base::paths::folds_by_letters(written) { clean(written) } else { PathBuf::from(ritsu_base::paths::show(written)) }
+}
+
+/// Reads calendar files once each, however many `.cal` files use them. A file is told by the path
+/// that opens it (`ritsu_base::paths::opened`), so two spellings of one file are one, and a path
+/// whose `..` climbs out of a symbolic link is the file the system opens.
 #[derive(Default)]
 pub struct Loader {
-    done: HashMap<PathBuf, Result<Calendar, ()>>,
+    /// Each calendar read, or the errors it was refused for.
+    done: HashMap<PathBuf, Result<Calendar, Vec<Diag>>>,
     /// The calendars being read, for a `use calendar` that comes back round (E015).
     stack: Vec<PathBuf>,
 }
@@ -353,7 +367,7 @@ pub struct Loaded {
 impl Loader {
     /// Read the calendar at `path` (`shown` is how diagnostics name it).
     pub fn load(&mut self, path: &Path, shown: &str) -> Loaded {
-        let key = clean(path);
+        let key = ritsu_base::paths::opened(path);
         if let Some(r) = self.done.get(&key) {
             return Loaded { calendar: r.clone().ok(), diags: vec![] };
         }
@@ -367,7 +381,7 @@ impl Loader {
         let parsed = crate::parse::parse(shown, &text);
         let mut diags = parsed.diags;
         let Some(f) = parsed.file else {
-            self.done.insert(key, Err(()));
+            self.done.insert(key, Err(diags.iter().filter(|d| d.is_error()).cloned().collect()));
             return Loaded { calendar: None, diags };
         };
         self.stack.push(key.clone());
@@ -376,13 +390,13 @@ impl Loader {
         diags.append(&mut more);
         let ok = !diags.iter().any(|d| d.is_error());
         let cal = if ok { cal } else { None };
-        self.done.insert(key, cal.clone().ok_or(()));
+        self.done.insert(key, cal.clone().ok_or_else(|| diags.iter().filter(|d| d.is_error()).cloned().collect()));
         Loaded { calendar: cal, diags }
     }
 
     /// Whether `path` is a calendar being read right now (a `use calendar` cycle).
     pub fn in_progress(&self, path: &Path) -> bool {
-        self.stack.contains(&clean(path))
+        self.stack.contains(&ritsu_base::paths::opened(path))
     }
 
     /// Stages 2 and 3 of a calendar file (DESIGN 3.1).
@@ -395,6 +409,7 @@ impl Loader {
             alias: f.name.ascii().map(|s| s.to_string()),
             version: f.version.clone(),
             path: clean(path),
+            read: path.to_path_buf(),
             shown: f.path.clone(),
             sha256: ritsu_base::sha256::hex(bytes),
         };
@@ -601,7 +616,7 @@ impl Loader {
         let err = |msg: Text| Box::new(Diag::error("E015", &f.path, sp.line, sp.col, msg).source(&f.src));
         // in a module, the path is held to it, and `@<name>/…` is read from its root (ritsu's DESIGN 17.6)
         let path = ritsu_base::modules::refer_shown(dir, p).map_err(|r| err(r.text()))?;
-        let shown = if path == dir.join(p) { clean(&Path::new(&f.path).parent().unwrap_or(Path::new("")).join(p)) } else { clean(&path) }.to_string_lossy().to_string();
+        let shown = if path == dir.join(p) { said(&Path::new(&f.path).parent().unwrap_or(Path::new("")).join(p)) } else { clean(&path) }.to_string_lossy().to_string();
         let where_ = if shown == p { String::new() } else { format!("（{shown}）") };
         let where_en = if shown == p { String::new() } else { format!(" ({shown})") };
         if self.in_progress(&path) {
@@ -628,12 +643,25 @@ impl Loader {
                 "{p} is not a calendar file (its first line is not `calendar …`)"
             )));
         }
-        let loaded = self.load(&path, &shown);
-        if loaded.calendar.is_none() && loaded.diags.is_empty() {
-            // Read before and refused then; say so here, where it is used.
-            return Err(err(tr!("カレンダー {p} にエラーがあるので使えません", "The calendar {p} has errors, so it cannot be used")));
+        // The calendar's own errors and warnings are said where it is checked, once: here, that it
+        // does not pass, with its errors (as every language says a file it reads that does not).
+        if let Some(c) = self.load(&path, &shown).calendar {
+            return Ok((Some(c), Vec::new()));
         }
-        Ok((loaded.calendar, loaded.diags))
+        let errors = match self.done.get(&ritsu_base::paths::opened(&path)) {
+            Some(Err(ds)) => ds.clone(),
+            _ => Vec::new(),
+        };
+        let mut d = *err(tr!("カレンダー {p} は koyomi の検査を通らないので、使えません{where_}", "The calendar {p} does not pass koyomi's check, so it cannot be used{where_en}"));
+        for x in errors.iter().take(3) {
+            let (code, at) = (x.code, x.line.map_or_else(|| x.file.clone(), |l| format!("{}:{l}", x.file)));
+            d = d.note(tr!("{code}: {}（{at}）", "{code}: {} ({at})", x.message.ja; ritsu_base::text::capitalize(&x.message.en)));
+        }
+        if errors.len() > 3 {
+            let more = errors.len() - 3;
+            d = d.note(tr!("ほかに {more} 件", "and {more} more"));
+        }
+        Err(Box::new(d.note(tr!("そのカレンダーを、koyomi の検査が通るように直してください。", "Correct the calendar until koyomi's check passes it."))))
     }
 }
 

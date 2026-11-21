@@ -1,0 +1,6 @@
+警告[W307]: tests/mutants/W307_a_line_of_a_permit_that_changes_no_decision.gate:22:1: permit `services_index` の行 `when resource.open_to_all` は、どの決定も変えません。この行が外す組み合わせを、どれも forbid が拒みます
+    22 |   when resource.open_to_all
+  = この行が無ければ、permit は、この行だけが満たされない 1 通りにも当てはまります。その組み合わせは、`services_skip_closed_docs` が拒みます。
+  = 例：Service、Doc（open_to_all：いいえ）。`services_skip_closed_docs` が拒みます。
+  = 行を消しても、答えは変わりません。行を消すか、ほかの組み合わせを外すつもりだったなら、行を直してください。
+tests/mutants/W307_a_line_of_a_permit_that_changes_no_decision.gate: ok — action 1、ポリシー 2（permit 1、forbid 1）、期待 0、職務の分離 0

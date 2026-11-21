@@ -1,0 +1,19 @@
+rule 決めるものの無い等級を読む(read_unwritten_ja) v1
+description "等級の表を抜いた形。確認の表が、何も決めていない等級を読む"
+
+enum 段階(level) = 低(low) | 高(high)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100000円
+  会員(member) : bool
+
+outputs
+  等級(grade)  : 段階
+  確認(review) : bool
+
+table 確認の要否(review_of)
+policy unique
+| 等級 | 会員  | -> 確認 |
+| 低   | -     | false   |
+| 高   | true  | false   |
+| 高   | false | true    |

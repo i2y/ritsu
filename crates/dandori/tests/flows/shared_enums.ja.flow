@@ -1,0 +1,33 @@
+workflow 同じ列挙を読む v1
+description "enums のファイルの一つの列挙を、四つの名前で読む。自分の import enum、規則として読んだ enums のファイル、呼ぶ二つの規則（どちらも同じ列挙を import enum で読む）。四つは一つの型なので、一つの名前の値を、ほかの名前が要るところに渡せる。どの出力先でも走る。shared_enums.flow の日本語の版"
+
+import enum 区分 from "rules/経費の区分.rule"
+use rule 区分表 from "rules/経費の区分.rule"
+use rule 上長 from "rules/上長の確認.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:needs-manager"
+use rule 経理 from "rules/経理の確認.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:needs-accounting"
+
+record 申請
+  番号 : string
+  区分 : 区分表.区分
+
+task 知らせる(申請番号: string, 区分: 区分)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:notify"
+
+inputs
+  申請 : 申請
+
+outputs
+  確かめる区分 : 区分
+  上長         : bool
+  経理         : bool
+
+flow
+  # 上長.区分 が要るところに 区分表.区分 を渡す
+  let 上 = 上長(区分: 申請.区分)
+  # 経理.区分 が要るところに 上長.区分 を渡す
+  let 経 = 経理(区分: 上.確かめる区分)
+  # flow の 区分 が要るところに 上長.区分 を渡す
+  知らせる(申請番号: 申請.番号, 区分: 上.確かめる区分)
+  succeed 確かめる区分 = 上.確かめる区分, 上長 = 上.上長, 経理 = 経.経理

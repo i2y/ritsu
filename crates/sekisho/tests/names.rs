@@ -88,6 +88,41 @@ fn what_a_condition_cannot_read() {
     }
 }
 
+/// A constant with no unit compared with a number that has one (E102): the message shows the
+/// constant with the unit. A rate's unit is the percent, and where the rate counts steps of
+/// another size than 1%, the same number of steps is shown as the percent it comes to.
+#[test]
+fn a_constant_with_no_unit_is_shown_with_the_unit() {
+    let src = |ty: &str, c: &str| format!("{SHOP}action charge\n  principal User\n  resource Order\n  input\n    fee : {ty}\n\npermit p\n  principal is User\n  action charge\n  when fee <= {c}\n");
+    let said = |src: &str| {
+        let o = checked(src);
+        assert_eq!(o.diags.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E102"], "{}", sekisho::check::render(&o, Lang::En));
+        (o.diags[0].message.get(Lang::En).to_string(), o.diags[0].message.get(Lang::Ja).to_string())
+    };
+    assert_eq!(
+        said(&src("rate[step 0.1%]  range >=0% <=10%", "10")),
+        (
+            "`fee` is a number of rate[step 0.1%], so the constant `10` is written in percent too (`10%`, say; 10 steps of 0.1% are `1%`)".to_string(),
+            "`fee` は rate[step 0.1%] の数なので、定数 `10` も百分率で書いてください（`10%` など。0.1% の刻みを 10 数えるなら `1%`）".to_string()
+        )
+    );
+    assert_eq!(
+        said(&src("rate[step 1%]  range >=0% <=10%", "5")),
+        (
+            "`fee` is a number of rate[step 1%], so the constant `5` is written in percent too (`5%`, say)".to_string(),
+            "`fee` は rate[step 1%] の数なので、定数 `5` も百分率で書いてください（`5%` など）".to_string()
+        )
+    );
+    // an amount of money, as before
+    assert_eq!(
+        said(&src("money[GBP, incl_tax]  range >=1GBP <=100GBP", "50")),
+        (
+            "`fee` is a number of money[GBP, incl_tax], so the constant `50` takes a unit too (`50GBP`, say)".to_string(),
+            "`fee` は money[GBP, incl_tax] の数なので、定数 `50` にも単位を付けてください（`50GBP` など）".to_string()
+        )
+    );
+}
+
 #[test]
 fn the_values_given_to_a_rule() {
     let head = "gate t v1\n\nuse rule refund_limit from \"rules/refund_limit.rule\"\n\nprincipal User\n  attributes\n    limit : money[GBP, incl_tax]  range >=0GBP <=10_000GBP\n\nresource Order\n\naction refund\n  principal User\n  resource Order\n  input\n    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP\n  context\n";
@@ -135,13 +170,19 @@ fn a_wrong_type_is_said_once() {
     assert_eq!(codes(src), vec!["E101", "E103"]);
 }
 
+/// What Cedar cannot take is E008. A reserved word of TypeScript, Python or Go is not the check's:
+/// it is that target's, W402 and E401 where its code writes the name as an identifier
+/// (tests/spellings.rs, DESIGN 32), and a role or a value of an enum is a string in every target.
 #[test]
-fn names_cedar_and_the_targets_cannot_take() {
+fn names_cedar_cannot_take() {
     assert_eq!(codes("gate t v1\nnamespace 店\n"), vec!["E007"]);
     assert_eq!(codes("gate t v1\n\nrole if\n"), vec!["E008"]);
-    assert_eq!(codes("gate t v1\n\nrole 役(class)\n"), vec!["E008"]);
     assert_eq!(codes("gate t v1\n\nprincipal 職員(user)\n"), vec!["E007"]);
     assert!(codes("gate t v1\n\nrole open\nrole description\n").is_empty());
+    for word in ["class", "delete", "func", "return", "def", "interface"] {
+        assert!(codes(&format!("gate t v1\n\nrole 役({word})\n")).is_empty(), "role {word}");
+        assert!(codes(&format!("gate t v1\n\nenum state = open | {word}\n")).is_empty(), "value {word}");
+    }
 }
 
 /// A `.gate` read with `use gate`: its declarations are this file's to use, its forbids for every

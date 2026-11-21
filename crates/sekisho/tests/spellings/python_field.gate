@@ -1,0 +1,29 @@
+gate python_field v1
+description "An attribute Python writes as a field of its record, named as a keyword of Python"
+namespace Shop
+
+enum seat_class = first | business | economy
+
+role clerk
+  description "Answers requests"
+  can change_seat
+
+principal Clerk
+  description "The one who asks"
+  roles clerk
+
+resource Seat
+  description "A seat of a flight"
+  attributes
+    class : seat_class
+
+action change_seat
+  description "Change a seat"
+  principal Clerk
+  resource Seat
+
+permit clerks_change_economy_seats
+  description "A clerk can: Change a seat"
+  principal in clerk
+  action change_seat
+  when resource.class is economy

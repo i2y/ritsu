@@ -1,0 +1,33 @@
+gate order_desk v1
+description "Declarations whose names are written wrong, and the lines that use them: each name is said once, where it is first written"
+namespace OrderDesk
+
+enum refund_reason = damaged | late
+
+# the role named wrong where it is declared: the principal and the permit still write `clerk`
+role clrk
+  description "Answers customers at the desk"
+  can refund_order
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Order
+  description "An order of the shop"
+  attributes
+    amount : money[USDc]  range >=1USDc <=1000000USDc
+
+# the action named wrong where it is declared: the role and the permit still write `refund_order`
+action refund_ordr
+  description "Refund an order"
+  principal User
+  resource Order
+  input
+    reason : refund_reason
+
+permit clerks_refund_small_orders
+  description "A clerk refunds an order of 100 dollars or less"
+  principal in clerk
+  action refund_order
+  when resource.amount <= 10000USDc

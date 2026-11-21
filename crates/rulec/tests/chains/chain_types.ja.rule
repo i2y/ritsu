@@ -1,0 +1,37 @@
+rule 価格(price) v1
+description "誤りのある宣言と、宣言した物を使う行。どの誤りも、宣言の行で一度だけ言う。chain_types.rule の日本語の版"
+
+enum 種類(kind) = 本(books) "本" | 音楽(music) "音楽" | おもちゃ(toys) "おもちゃ"
+enum 段階(tier) = 一般(plain) "一般" | 金(gold) "金"
+
+inputs
+  # 名前の書き誤り。表と例は `品の種類` と書いたまま
+  品の種(item_knd) : 種類
+  # 型の書き誤り。型 `段会` は無く、`会員` のセルは確かめない
+  会員(member) : 段会
+  # 単位の書き誤り。範囲と定義と例は確かめない
+  定価(list_price) : money[UDS]  range >=0USD <=1000USD
+
+outputs
+  価格(price) : money[USD]  round half_up(1USD)
+
+table 上乗せ(markup_of)
+policy unique
+| 品の種類 | -> 上乗せ率(markup) : rate[step 1%] |
+| 本       | 0%                                  |
+| 音楽     | 10%                                 |
+| おもちゃ | 20%                                 |
+
+table 割引(discount_of)
+policy unique
+| 会員 | -> 割引率(discount) : rate[step 1%] |
+| 一般 | 0%                                  |
+| 金   | 5%                                  |
+
+define 総額(gross) : money[USD] = 定価 + 定価 * 上乗せ率
+define 価格 : money[USD] = 総額 - 総額 * 割引率
+
+examples
+| 品の種類 | 会員 | 定価   | -> 価格 |
+| 本       | 一般 | 20USD  | 20USD   |
+| おもちゃ | 金   | 100USD | 114USD  |

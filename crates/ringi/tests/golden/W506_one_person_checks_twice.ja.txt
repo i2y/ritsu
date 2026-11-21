@@ -1,0 +1,10 @@
+警告[W506]: tests/mutants/W506_one_person_checks_twice.ringi:10:11: 2026-04-01 からの組織では、一つのチケットの二つのステップに同じ人が当たります
+    10 |   decide  head
+  = ステップ `check` の決め方は `finance`、ステップ `decide` の決め方は `head` で、同じ人に当たります。
+  = e04（財務部長）が両方に当たる申請者 4 人: e01（社長（架空））、e02（営業部長）、e03（営業担当）、ほか 1 人。
+  = 一度の承認でよいなら、`ticket` に `same approver approves once` と書いてください。`decide` は `check` の承認で済みます。
+  = 一人が二度確かめても、二人が確かめたことにはなりません。どちらかのステップの承認者の決め方を変えるか、そのままでよいかを確かめてください。
+ok tests/mutants/W506_one_person_checks_twice.ringi: 申請の種類、フィールド 1 個、ステップ 2 個
+  2026-04-01 から使えます: 組織 `shared/small.ringi` の最初の版（データ `org-small`）
+  終わり無く使えます: 読むデータに終わりがありません
+  終わらないことがあります: ステップ `check`、`decide` には期限がありません（`due in …`）。答えが来るまで待ちます

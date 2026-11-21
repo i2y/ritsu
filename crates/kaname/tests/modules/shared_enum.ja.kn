@@ -1,0 +1,32 @@
+module 共有する列挙(shared_enum_ja) v1
+description "enums ファイルの列挙は、モジュールがどの名前で読んでも一つの型。そのファイルを規則として読んだ名前でも、列挙を丸ごと読む規則のそれぞれの名前でも同じ。shared_enum.kn の日本語の版"
+
+use rule 品目表 from "../rulec/tests/corpus/shared/品目.rule"
+use rule 送料 from "../rulec/tests/corpus/品目の送料.rule"
+use rule 返品 from "../rulec/tests/corpus/品目の返品.rule"
+
+# ファイルの名前の型を、列挙を丸ごと読む規則に渡す
+fn 配送料(fee)(品(goods): 品目表.種類, 先(to): 品目表.地域, 重さ(weight): mass[kg] range >=1kg <=30kg) -> money[USD]
+  送料(品目: 品, 届け先: 先, 重さ: 重さ).配送料
+
+# 一つの規則の名前の型を、もう一つの規則に渡す
+fn 返送無料(free_return)(品(goods): 送料.種類, 先(to): 送料.地域) -> bool
+  返品(品目: 品, 届け先: 先, 開封済み: false).返送無料
+
+# 一つの値を二つの規則に渡す
+fn 返品できる日数(days_to_return)(品(goods): 品目表.種類, 先(to): 品目表.地域) -> number
+  if 送料(品目: 品, 届け先: 先, 重さ: 1kg).配送料 > 10USD
+    返品(品目: 品, 届け先: 先, 開封済み: false).返品期間
+  else
+    0
+
+# 一つの型の三つの名前を比べる。順序のある列挙の値を、二つの名前の間で比べる
+fn 同じ品目(same_goods)(甲(a): 品目表.種類, 乙(b): 送料.種類, 丙(c): 返品.種類) -> bool
+  甲 = 乙 and 乙 = 丙
+
+fn より近い(nearer)(甲(a): 品目表.地域, 乙(b): 返品.地域) -> bool
+  甲 < 乙
+
+# 三つの名前の値を一つのリストにし、四つ目の名前のリストの場所に置く
+fn 品目の一覧(goods_of)(甲(a): 品目表.種類, 乙(b): 送料.種類, 丙(c): 返品.種類) -> list[返品.種類]
+  [甲, 乙, 丙]

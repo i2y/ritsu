@@ -1,0 +1,8 @@
+ok line_tax.rule
+ok order.kn: 1 function, fails rule
+warning[ritsu W201]: order.kn:10:3: Whether the call of the rule line_tax keeps its precondition `total_tax <= 8000JPY` cannot be decided
+    10 |   line_tax(lines: map(lines, l => line_tax.lines { price: l.price })).due
+  = The list given to `lines` has up to 20 elements; at that length and the ends of its elements' ranges `total_tax <= 8000JPY` does not hold, and no input among the function's vectors gives such a list.
+  = kaname's generated code checks it there when it runs: where the rule's generated code refuses the call at its door, the function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`), and it is shown.
+ritsu check: 2 files (rulec 1, kaname 1): all pass (1 warning); borders between the languages: 1 checked, 1 undecided

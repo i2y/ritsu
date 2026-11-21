@@ -1,0 +1,8 @@
+差分: tests/fixtures/reads/changes/money.diff
+要件が指すファイルが読むファイルで、差分が触るもの:
+  tests/fixtures/reads/proto/money.proto
+    proto "proto/refunds.proto" の 5 行目（import）: 満たす要件 返金のメッセージ
+どの要件にも届かない変更: なし
+触る要件:
+  返金のメッセージ（tests/fixtures/reads/refunds.ja.req:42）持ち主 経理。2026-11-02 に 経理 が「この試験のために書いた」と決めました
+触る要件は 1 件です。経理 に見てもらってください

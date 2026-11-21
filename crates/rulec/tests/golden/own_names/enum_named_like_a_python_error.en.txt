@@ -1,0 +1,10 @@
+warning[W121]: `value_error` takes a name the code generated for Connect uses itself
+  --> tests/own_names/enum_named_like_a_python_error.rule:4
+  |
+4 | enum value_error = late | missing
+  |      ^^^^^^^^^^^ the enum's name
+  |
+ Connect: the Python stub written from the `.proto` annotates the request's field with the enum's type, `ValueError`, which a type checker reads as the builtin `ValueError`: neither the service nor a caller's code that reads it passes the type check (mypy).
+ For a target you do not generate, leave it. For one you do, give it an alias (`value_error(<alias>)`).
+
+ok tests/own_names/enum_named_like_a_python_error.rule

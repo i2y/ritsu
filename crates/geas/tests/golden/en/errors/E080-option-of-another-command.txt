@@ -1,2 +1,1 @@
-error[E080]: `--all` is not an option of `geas check`
-  = it takes: --json, --lang, --jobs
+error[E080]: unknown flag `--all`; run `geas check --help`

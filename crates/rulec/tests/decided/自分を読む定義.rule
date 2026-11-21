@@ -1,0 +1,10 @@
+rule 自分を読む定義(reads_itself_ja) v1
+description "手数料の定義の式が、手数料そのものを読む形"
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100000円
+
+outputs
+  手数料(fee) : money[円]  round down(1円)
+
+define 手数料 : money[円] = 手数料 + down(金額 * 3%, 1円)

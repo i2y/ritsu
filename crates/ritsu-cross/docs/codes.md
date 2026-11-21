@@ -27,9 +27,9 @@ message Order {
 
 ## E201 — A call can give a rule values that break its precondition
 
-**When**: Where a workflow or a function of kaname calls a rule, it can give the rule values that break one of its preconditions (a relation between inputs, `constraint`; a combination that cannot happen, `never`; a bound on the total or the length of the list it walks; a field no two elements of the list share, `unique`; the days of `range from koyomi`). For a workflow, the ranges dandori knows for the values it gives hold a combination that breaks it. The ranges are dandori's, gathered from every place a value comes from, read as dandori's E014 reads them. A date input whose range is `range from koyomi` and is given the day of a koyomi date, or a date the `.flow` holds to a range (`range >=2026-01-01 <=2026-12-31`), is this error too when one of those days is not one of the rule's. For a function of kaname, a run of the function's vectors gives values that break it: kaname's ranges are an estimate from above, so a corner of them alone is no example. The rule's generated code refuses such a call at its door, so it would fail only when it runs. The notes give the ranges and the combination or the day that breaks it, or the function's input that does.
+**When**: Where a workflow or a function of kaname calls a rule, it can give the rule values that break one of its preconditions (a relation between inputs, `constraint`; a combination that cannot happen, `never`; a bound on the total or the length of the list it walks, or on how few of its elements may count; a field no two elements of the list share, `unique`; the days of `range from koyomi`; the range a value it works out from the inputs is accepted in, `define … range`). For a workflow, the ranges dandori knows for the values it gives hold a combination that breaks it. The ranges are dandori's, from what the runs that reach the call last put in the values, read as dandori's E014 reads them. A truth value or an enum's value a `never` line reads counts as meeting its condition when every value it can be on the runs that reach the call does (a value written out, the values the arms of a `match` leave, the values a `range` lets in; for a variable, what those runs last put in it). Where the call gives one value that meets a condition of the line (`express: true` written out, or `express: fast` after `let fast = true`), a note says that value and, from the `never` line, what to give for the line to hold. A date input whose range is `range from koyomi` and is given the day of a koyomi date, or a date the `.flow` holds to a range (`range >=2026-01-01 <=2026-12-31`), is this error too when one of those days is not one of the rule's. For a function of kaname, a run of the function's vectors gives values that break it: kaname's ranges are an estimate from above, so a corner of them alone is no example. The rule's generated code refuses such a call at its door (the range of a value it works out, where it works the value out), so it would fail only when it runs. The notes give the ranges and the combination or the day that breaks it, or the function's input that does.
 
-**Fix**: Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result; in kaname, an `if` before the call). If the precondition is the part that is wrong, correct the rule's `constraint` or `never` line.
+**Fix**: Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result; in kaname, an `if` before the call). Where a value written out meets a `never` line, give the value the note says. If the precondition is the part that is wrong, correct the rule's `constraint` or `never` line, or the range of its `define`.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -104,9 +104,9 @@ See also: [W201](#w201)
 
 ## W201 — Whether a call keeps a rule's precondition cannot be decided
 
-**When**: Where a workflow or a function of kaname calls a rule, whether a precondition holds cannot be decided. For a workflow: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list, or asks that no two of its elements share a `unique` field (dandori knows neither a list's length nor what it holds), it is a `never` line that reads a truth value or an enum (a range cannot count those), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input or a task's answer with no range, `now`). The workflow's code that `ritsu dandori gen` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition`. For a function of kaname: neither the ranges kaname finds nor a relation it keeps between the inputs shows it, and no run of the function's vectors breaks it. kaname's generated code checks it there, and the function fails with `rule` where the rule refuses the call.
+**When**: Where a workflow or a function of kaname calls a rule, whether a precondition holds cannot be decided. For a workflow: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list or how few of its elements may count, or asks that no two of its elements share a `unique` field (dandori knows neither a list's length nor what it holds), it is a `never` line that reads a truth value or an enum, and the value the call gives can meet its condition or not (written out, given in the arm of a `match` on it, or a variable the runs that reach the call put one value in, it is decided), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input or a task's answer with no range, `now`). The workflow's code that `ritsu dandori gen` writes checks such a precondition as soon as the values are made, and so does `ritsu run`; a run that breaks it fails with `Dandori.BrokenPrecondition`. The range a value the rule works out is accepted in is the exception: the workflow's code does not repeat the rule's arithmetic, and the rule's generated code refuses a call whose value falls outside it where it works the value out. For a function of kaname: neither the ranges kaname finds nor a relation it keeps between the inputs shows it, and no run of the function's vectors breaks it. kaname's generated code checks it there, and the function fails with `rule` where the rule refuses the call.
 
-**Fix**: Give the place the value comes from a range (the `range` of a task's result or of the workflow's input; a date takes one too, `range >=2026-01-01 <=2026-12-31`). Where none can be given, leave it: the workflow's code checks it at run time. In kaname, branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`).
+**Fix**: Give the place the value comes from a range (the `range` of a task's result or of the workflow's input; a date takes one too, `range >=2026-01-01 <=2026-12-31`). Where none can be given, leave it: the workflow's code and `ritsu run` check it where the values are made (the range of a value the rule works out, the rule's code checks). In kaname, branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`).
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -1090,9 +1090,9 @@ See also: [E206](#e206)
 
 ## E207 — What can come from a place's source is not what the place takes
 
-**When**: A line of an input or a field writes `fed by <naming>`, and the line does not take something that can come from there. A number is compared by its unit, its step and its range (another unit does not hold); an enum by the public names of its values, a date by its days, a bool and a string by their type. The message gives an example value and, from a rule or a dates file, the input that gives it. A contract (proto, OpenAPI, JSON Schema) with no upper end, and a book with none (up to chobo's limit of 2⁶³ − 1), let that value come, so they are examples too; so is a contract's property that can be left out or be null, where the place is not `T?`. An end the place does not write is not compared. `fed by` changes no generated code and does not check that the hand-written code carries the value: it checks the range of the values.
+**When**: A line of an input or a field writes `fed by <naming>`, and the line does not take something that can come from there. A number is compared by its unit, its step and its range (another unit does not hold); an enum by the public names of its values, a date by its days, a bool and a string by their type. A string an OpenAPI document or a JSON Schema marks `format: date-time` is read as a moment, a day with a time of day: it never comes to a line that takes a date, and a workflow's `timestamp` takes it (as it does another workflow's `timestamp` and a `.proto`'s `google.protobuf.Timestamp`). A `.proto`'s `google.type.Date` is read as a date, known by its name as dandori knows it. A `.proto` value's name is read as rulec's `import proto` reads it (the enum's own name taken off the front and the rest in lower case; the names of one number are one value, and the place holds it by any one of them; rulec's reference has the table, under `import proto`). A `repeated` field is a list of values, which never comes to a line that takes one. The message gives an example value and, from a rule or a dates file, the input that gives it. A contract (proto, OpenAPI, JSON Schema) with no upper end, and a book with none (up to chobo's limit of 2⁶³ − 1), let that value come, so they are examples too; so is a contract's property that can be left out or be null, and a `.proto`'s field that may be left unset (`optional`, in a `oneof`, or a message, unless a rule or proto2 marks it `required`), where the place is not `T?`. An end the place does not write is not compared. `fed by` changes no generated code and does not check that the hand-written code carries the value: it checks the range of the values.
 
-**Fix**: Widen what the place takes, or narrow what the source gives. Which of the two is a person's decision.
+**Fix**: Widen what the place takes, or narrow what the source gives. Which of the two is a person's decision. Where a string a contract marks `format: date-time` carries only a day, the contract marks it `format: date`.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -1140,9 +1140,9 @@ See also: [W207](#w207), [E208](#e208)
 
 ## W207 — Whether a place takes what can come from its source cannot be decided
 
-**When**: The source of a `fed by` does not say all of its values: rulec does not count an end of a rule's output; what it counts lies outside what the place takes, and none of the rule's vectors comes to such a value (rulec bounds an output by moving each input over its own range); the source's language does not pass its file (which that language says); a contract's date where the place writes a range (a contract carries a date as a string); two records or lists.
+**When**: The source of a `fed by` does not say all of its values: rulec does not count an end of a rule's output, or the values of an enum a rule gives; what it counts lies outside what the place takes, and none of the rule's vectors comes to such a value (rulec bounds an output by moving each input over its own range); the source's language does not pass its file (which that language says); a contract's date where the place writes a range (a contract carries a date as a string or as a `.proto`'s `google.type.Date`, and lists no days); two records or lists.
 
-**Fix**: For a rule, write it so that rulec counts the output's ends (`min(…, <the limit>)`, say), or widen what the place takes. For a contract, list its values (`enum` in a schema, `in` in Protovalidate). For a workflow or a module of kaname, write the range on the source's line.
+**Fix**: For a rule, write it so that rulec counts the output's ends (`min(…, <the limit>)`, say), or widen what the place takes; for an enum whose values rulec does not count, take the values the place leaves out too. For a contract, list its values (`enum` in a schema, `in` in Protovalidate); a `.proto`'s `google.type.Date` lists no days, and a string field that lists them can be decided. For a workflow or a module of kaname, write the range on the source's line. Two records or lists are not compared value by value, and nothing on the source's line decides them.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -1238,6 +1238,329 @@ policy unique
 ```
 
 See also: [E207](#e207)
+
+<a id="e209"></a>
+
+## E209 — A ticket's hold can expire before its round posts or voids it
+
+**When**: A hold a request makes with `on submitted hold` can reach the book's expiry (the transfer's `pending expires after`) before the ending of its round (approved, rejected, sent back, withdrawn, expired) posts or voids it. How long the hold stays open is the business days ringi's check counts: one round and the pause (`pause at most`), and where a stage can send the ticket back to an earlier stage (`send back to any earlier stage`), which starts no new round, the round once more each time. The days are laid on the calendar from every day a request can be submitted on, and a note gives the day that makes the stretch the longest: from 00:00 of that day to the end of the last business day. The business days are the upper bound ringi's check holds its claims to (`ends within`), which a ticket need not take. The book refuses a post or a void of an expired hold with `expired`: the ticket would be approved with nothing held for it. A hold that never expires (`pending never expires`), and one shown to end before it expires, are not said.
+
+**Fix**: Make the hold last longer (the transfer's `pending expires after`), or give the stages shorter deadlines.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`purchase.ringi`:
+
+```
+request purchase v1 "Purchase request"
+effective from 2026-04-01
+
+use calendar office from "office.cal"
+use book budget from "budget.book"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  dept   : text "Department"  count >=1 <=20
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+every stage
+  due in 10 business days at end of day
+  when late expire
+
+ticket
+  on submitted  hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)
+  on approved   post budget.reserve(request: ticket.id, attempt: ticket.attempt)
+  on rejected, expired  void budget.reserve(request: ticket.id, attempt: ticket.attempt)
+```
+
+`office.cal`:
+
+```cal
+calendar office v1
+description "The business days of the office: Saturdays and Sundays are closed"
+offset +00:00
+
+closed weekly sat, sun
+```
+
+`budget.book`:
+
+```book
+book budget v1
+description "The budget of each department: a purchase request holds its amount while it is approved"
+
+unit JPY
+
+account dept_budget(dept: string) : JPY
+  at least 0 refused as over_budget
+account allocations : JPY outside
+account payees : JPY outside
+
+transfer allocate(dept: string, period: string, amount: JPY)
+  key dept, period
+  move amount from allocations to dept_budget(dept)
+
+transfer reserve(request: string, attempt: string, dept: string, amount: JPY)
+  key request, attempt
+  pending expires after 7 days
+  move amount from dept_budget(dept) to payees
+```
+
+See also: [W209](#w209), [E206](#e206)
+
+<a id="w209"></a>
+
+## W209 — Whether a ticket's hold expires cannot be decided, or some requesters cannot make it
+
+**When**: Two cases. One: whether a hold reaches its expiry before it is posted or voided cannot be decided. A round has a wait with no end (a stage with no deadline, a stage that stays when it is late); the business days are counted in several calendars, and the stretch over the days all of them open reaches the expiry (which a ticket need not take); or a calendar's data does not cover the business days of a round. The other: an argument of the hold reads a team above the requester (`dept: requester.department`), and some of the people who may submit the request have no team of that kind above them. The hold cannot be made for them, so their `submit` is refused. The notes give, for each version of the organization, how many of how many, and their IDs; where the organization has no data, it is undecided. A line whose `when` says `requester.department is not none` makes the hold for the requesters who have the team alone, and nothing is said.
+
+**Fix**: For the expiry: give every stage a deadline (`due in …`), or make the hold last longer. For the argument: if those people do not submit the request, leave them out (`submitted by … except …`); if they do, give the hold a value every requester has, or write `when requester.<kind> is not none` on the line, so that their requests hold nothing.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`purchase.ringi`:
+
+```
+request purchase v1 "Purchase request"
+
+use book budget from "budget.book"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  dept   : text "Department"  count >=1 <=20
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  on submitted  hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)
+  on approved   post budget.reserve(request: ticket.id, attempt: ticket.attempt)
+  on rejected   void budget.reserve(request: ticket.id, attempt: ticket.attempt)
+```
+
+`budget.book`:
+
+```book
+book budget v1
+description "The budget of each department: a purchase request holds its amount while it is approved"
+
+unit JPY
+
+account dept_budget(dept: string) : JPY
+  at least 0 refused as over_budget
+account allocations : JPY outside
+account payees : JPY outside
+
+transfer allocate(dept: string, period: string, amount: JPY)
+  key dept, period
+  move amount from allocations to dept_budget(dept)
+
+transfer reserve(request: string, attempt: string, dept: string, amount: JPY)
+  key request, attempt
+  pending expires after 7 days
+  move amount from dept_budget(dept) to payees
+```
+
+See also: [E209](#e209)
+
+<a id="e210"></a>
+
+## E210 — What a ticket and a workflow hand each other does not fit
+
+**When**: An input of a flow does not take something a request gives it. A `launch` (`on … launch`) gives what its call writes; an agent's way (`agent <flow>, else …`) and a summary (`note from <flow>`) are given the ticket's ID (`request_id`) and the fields of the form the flow declares as its inputs. A number and an amount are compared by unit and range, a date by its days, a choice by the names of its values, the rest by type; a value that can be absent where the input is not `T?` does not hold either. A value is read as the place the flow is given it holds it: for an agent and a summary, the rows of the route's table that give the stage; on a line or a stage with a `when`, the comparisons of fields of the form with constants (joined with `and`). An input a `launch` does not give, a value it gives that the flow has no input for, and an input of an agent's or a summary's flow that is neither `request_id` nor a field of the form, are this error too. An agent's flow answers in the outputs `verdict` (an enum whose values are `ok` and `doubt`) and `reason` (a string), and a summary's flow has at least one output, each of a type a note holds: text (a string, a date, a timestamp, an enum), a whole number (an int, or a number with a unit), a truth (a bool), rows (a list of records whose fields are of these types), or a `T?` of these, and not a record on its own, a list of what is not a record, or `json`; a flow that does not is this error. The other way, where a flow makes a request through the server's API (the `openapi.json` `ritsu gen --target requests` writes), the operation the flow calls is compared with the one ringi writes from the request now: where the operation is, what its body takes (the form's schema), and the request it names (the name and the version of `x-ritsu-request`). Where they differ, the document was written from the request as it was, and what dandori held the flow to is not the request now: this error too, as is a call of an operation the request no longer has. Where the document is the request's now, the types and the ranges of what the flow sends are dandori's to compare with the document (dandori's E016).
+
+**Fix**: Hold the value to what the flow takes (the form's `range`, a `when` on the `on` line), or widen the flow's input. Which of the two is a person's decision. Where the API a flow calls is not the request's now, write it again with `ritsu gen --target requests`, and check again.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`purchase.ringi`:
+
+```
+request purchase v1 "Purchase request"
+
+use flow order from "order.flow"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=1_000_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  on approved  launch order(request_id: ticket.id, amount: amount)
+```
+
+`order.flow`:
+
+```flow
+workflow purchase_order v1
+description "The order of an approved purchase request, placed with the supplier"
+
+inputs
+  request_id : string
+  amount     : money[JPY]  range >=1JPY <=500_000JPY
+
+outputs
+  reference : string
+
+record Order
+  reference : string
+
+task place_order(request_id: string, amount: money[JPY]) -> Order
+  timeout 1 day
+  idempotent
+
+flow
+  let o = place_order(request_id: request_id, amount: amount)
+  succeed reference = o.reference
+```
+
+See also: [W210](#w210), [E207](#e207)
+
+<a id="w210"></a>
+
+## W210 — Whether what a ticket and a workflow hand each other fits cannot be decided
+
+**When**: An input of the flow is not shown to take what it is given: the request gives a value ringi does not follow; the two types are not compared value by value (a `rows` field and a list of records); the organization has no data, so that whether `requester.<kind>` has a value is not decided; or the values look as if they do not fit, at a place whose condition ringi does not follow. Such a condition is a `when` with `or` or `not`, a `when` that reads a field the value is counted with, the rows where a rule's output names the way, a stage another line sends there, a shared route. Two types or units that differ are E210 whatever the condition. Where a flow makes a request through the server's API, it cannot be decided either when the request's file an operation of the API names is not the project's (outside the root, not there, or no request's file), or ringi cannot write the API of the request (a request that reads no organization): the flow is held to the document alone.
+
+**Fix**: Write the `when` as comparisons of fields of the form with constants (`amount <= 500_000JPY`, joined with `and`), which ringi follows. Where that cannot be done, widen the flow's input to take the form's range. Where the request of the API a flow calls is in this project, write the API again with `ritsu gen --target requests` from the project's root.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`purchase.ringi`:
+
+```
+request purchase v1 "Purchase request"
+
+use flow order from "order.flow"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=1_000_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  on approved  launch order(request_id: ticket.id, amount: amount)  when not (amount > 500_000JPY)
+```
+
+`order.flow`:
+
+```flow
+workflow purchase_order v1
+description "The order of an approved purchase request, placed with the supplier"
+
+inputs
+  request_id : string
+  amount     : money[JPY]  range >=1JPY <=500_000JPY
+
+outputs
+  reference : string
+
+record Order
+  reference : string
+
+task place_order(request_id: string, amount: money[JPY]) -> Order
+  timeout 1 day
+  idempotent
+
+flow
+  let o = place_order(request_id: request_id, amount: amount)
+  succeed reference = o.reference
+```
+
+`requests.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Requests", "version": "1" },
+  "paths": {
+    "/requests/supplies/tickets": {
+      "post": {
+        "operationId": "submit_supplies",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["form"],
+            "properties": {
+              "form": {
+                "type": "object",
+                "required": ["item", "count"],
+                "properties": {
+                  "item": { "type": "string", "maxLength": 100 },
+                  "count": { "type": "integer", "minimum": 1, "maximum": 100 }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          } } }
+        },
+        "responses": {
+          "200": { "description": "The ticket", "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["ticket"],
+            "properties": { "ticket": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } } }
+          } } } }
+        },
+        "x-ritsu-request": { "file": "supplies.ringi", "name": "supplies", "version": 1 }
+      }
+    }
+  }
+}
+```
+
+`restock.flow`:
+
+```flow
+workflow restock v1
+description "Asks for the supplies that run low, through the server of the requests"
+
+use openapi requests from "requests.json"
+  url "https://requests.example.com"
+
+record Supplies
+  item  : string
+  count : int  range >=1 <=50
+
+record Ticket
+  id : string
+
+record Moved
+  ticket : Ticket
+
+inputs
+  supplies : Supplies
+
+outputs
+  ticket : string
+
+task submit_supplies(form: Supplies) -> Moved
+  http POST requests "/requests/supplies/tickets"
+  key
+
+flow
+  let moved = submit_supplies(form: supplies)
+  succeed ticket = moved.ticket.id
+```
+
+See also: [E210](#e210)
 
 <a id="e301"></a>
 
@@ -2709,9 +3032,9 @@ See also: [E907](#e907)
 
 ## E908 — A gate allows a workflow an operation it calls in no combination
 
-**When**: A workflow a `.gate` writes with `workflow … from` calls an operation an action of the gate guards (`http` on a `use openapi`, `connect` on a `use proto`), and the action allows the workflow in no combination: every run that comes to the call is denied there.
+**When**: A workflow a `.gate` writes with `workflow … from` calls an operation an action of the gate guards (`http` on a `use openapi`, `connect` on a `use proto`), and the action allows the workflow in no combination the call can come to: every run that comes to the call is denied there. What the call can come to is what it gives the operation (the action's `input`s), the values of the flow the gate's `resource` lines under the workflow say the resource's attributes are, and what the arms of a `match` on the way leave of each (of the answer of a rule the flow called, too).
 
-**Fix**: Write a permit in the gate that allows the workflow (`principal is workflow <name>`), or take the call out.
+**Fix**: Make the call where the gate allows the workflow, or change the gate's policies. Where no permit allows the workflow, write one (`principal is workflow <name>`); or take the call out.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -2915,11 +3238,107 @@ permit returns_look_and_refund
 
 See also: [E908](#e908)
 
+<a id="e909"></a>
+
+## E909 — The gate reads a number a call gives in another unit or step
+
+**When**: A workflow a `.gate` writes with `workflow … from` calls an operation an action of the gate guards, and gives an argument a number whose type is counted in another unit, step or tax than the action's `input` of its name: `fee: rate[step 0.1%]` in the task and `fee : rate[step 1%]` in the gate, or `money[GBP]` and `money[GBPc]`. The code generated from the flow sends the number in its type, and the code generated from the gate reads the same number in its own, so the two read one call as two values (the flow's 0.5% is 5% to the gate). The types are compared as `fed by` compares a place with its source. The gate's answer at the call does not read such an argument: of it, only E908 is said (allowed in no combination, whatever the argument is), and whether the call can be denied (W909) is asked again once the types agree.
+
+**Fix**: Write one type as the other: the task's parameter, or the action's `input` (and the ends of its range, where they are written without a unit).
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Orders", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["fee"], "properties": {"fee": {"type": "integer", "minimum": 0, "maximum": 100}}}}}},
+        "responses": {"201": {"description": "Refunded"}, "403": {"description": "Not allowed"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`returns.flow`:
+
+```flow
+workflow returns v1
+description "Refunds an order once the item is back, keeping a restocking fee"
+
+use openapi orders from "orders.json"
+
+inputs
+  order : string
+
+task refund_order(orderId: string, fee: rate[step 0.1%] range >=0% <=10%)
+  http POST orders "/orders/{orderId}/refunds"
+  errors denied = 403
+  key
+
+flow
+  refund_order(orderId: order, fee: 0.5%)
+    on denied => fail Denied "the gate did not let the workflow refund"
+```
+
+`refunds.gate`:
+
+```
+gate refunds v1
+description "Who may refund an order"
+
+use openapi orders from "orders.json"
+
+role clerk
+  description "Answers the customers, and refunds"
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+workflow returns from "returns.flow"
+  description "Refunds an order once the item is back, keeping a restocking fee"
+
+resource Order
+  description "An order"
+
+action refund_order
+  description "Refund an order, keeping a restocking fee"
+  guards orders refundOrder
+  principal User, Workflow
+  resource Order from orderId
+  input
+    fee : rate[step 1%]  range >=0% <=10%
+
+permit clerks_refund
+  description "A clerk refunds an order"
+  principal in clerk
+  action refund_order
+
+permit returns_keeps_a_small_fee
+  description "The returns workflow refunds an order, keeping a fee of up to 1%"
+  principal is workflow returns
+  action refund_order
+  when fee <= 1%
+```
+
+See also: [E908](#e908), [W909](#w909)
+
 <a id="w909"></a>
 
 ## W909 — A call that can be denied declares no error for it
 
-**When**: The action that guards an operation a workflow calls denies the workflow in some combinations (or whether it does cannot be decided), and the task that calls it declares no error for a denial (403 for HTTP, `permission_denied` for Connect): a run that is denied stops with a failure the workflow does not declare.
+**When**: The action that guards an operation a workflow calls denies the workflow in some of the combinations the call can come to, and the task that calls it declares no error for a denial (403 for HTTP, `permission_denied` for Connect): a run that is denied stops with a failure the workflow does not declare. Also where the answer reads attributes of the resource and the gate says nothing of what the flow holds of them (a `resource` line under the workflow); where every call is allowed only as far as those `resource` lines hold (nothing checks them of the resource the service reads); and where whether it denies cannot be decided.
 
 **Fix**: Declare the error on the task, `errors denied = 403` (`errors denied = permission_denied` for Connect), and say under the call what happens when it is denied (`on denied => …`).
 
@@ -3016,3 +3435,207 @@ permit returns_refunds_returned_orders
 ```
 
 See also: [E908](#e908)
+
+<a id="e911"></a>
+
+## E911 — A gate does not say what a request's route says
+
+**When**: A gate a request reads (`use gate`) does not say what the route of the request says. Three things are asked. One: the gate declares an action for every operation of a ticket and of the server's administration, and none of them takes inputs of its own (`input`). The operations of a ticket are `submit`, `approve`, `reject`, `add_approver`, `hand_over`, `comment`, `see`, which is asked before a ticket is shown to someone not on it, and `withdraw`, `send_back`, `pause` and `retract` where the request has them; those of the administration, `change_request_type` and `read_audit`, which switch a version of a request type and read its record, and `import_organization` and `read_organization_audit`, which import the organization's data and read its record. The server asks the gate before it takes an operation: an action the gate does not declare is allowed to no one, and since the server gives the gate the person, the resource and the time only, an action that takes inputs of its own is denied on every ticket. Two: the approvers the route decides are allowed what an approver does, asked with the principal in `resource.approvers` and not the requester. Allowed in no combination is the error; allowed in some holds, as with a gate that denies a suspended member of the staff. Three, self approval. Where the route does not allow it (`self approval not allowed`, or no such line), nothing that decides a stage (`approve`, `reject`, `send_back`) is allowed in any combination where `resource.requester` is the principal and `resource.self_approval` is false. Where the route allows it, some combination is allowed where the requester is among the approvers and `resource.self_approval` is true. The gate is asked with the attributes ringi hands it held to those values, over every value of the rest (the roles, the other attributes), so the organization's data is not read.
+
+**Fix**: In the gate, declare the missing action, take the `input` lines off an action an operation asks, write a permit for the approvers of a stage (`when principal in resource.approvers`), and a forbid that keeps a requester from deciding their own request (`when resource.requester is principal`, `unless resource.self_approval`). Or change the `self approval` line of the request. Which of the two is right is a person's decision.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`purchase.ringi`:
+
+```
+request purchase v1 "Purchase request"
+
+use gate "company.gate"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed
+```
+
+`company.gate`:
+
+```
+gate company v1
+description "Who does what to a ticket: the approvers of a stage answer it"
+namespace Ringi
+
+principal Staff
+resource Approvers
+resource Ticket
+resource RequestType
+resource Organization
+resource Stage
+  attributes
+    requester     : Staff
+    approvers     : Approvers
+    self_approval : bool
+
+action submit
+  principal Staff
+  resource Ticket
+action see
+  principal Staff
+  resource Ticket
+action approve
+  principal Staff
+  resource Stage
+action reject
+  principal Staff
+  resource Stage
+action add_approver
+  principal Staff
+  resource Stage
+action hand_over
+  principal Staff
+  resource Stage
+action comment
+  principal Staff
+  resource Stage
+action change_request_type
+  principal Staff
+  resource RequestType
+action read_audit
+  principal Staff
+  resource RequestType
+action import_organization
+  principal Staff
+  resource Organization
+action read_organization_audit
+  principal Staff
+  resource Organization
+
+permit staff_submit_and_administer
+  principal is Staff
+  action submit, see, add_approver, hand_over, change_request_type, read_audit, import_organization, read_organization_audit
+
+permit staff_comment
+  principal is Staff
+  action comment
+
+permit approvers_answer_their_stage
+  principal is Staff
+  action approve, reject
+  when principal in resource.approvers
+```
+
+See also: [W911](#w911), [E908](#e908)
+
+<a id="w911"></a>
+
+## W911 — Whether a gate says what a request's route says cannot be decided
+
+**When**: sekisho does not answer the second or the third question of E911: the gate declares an attribute ringi hands it with another type (a `self_approval` that is not a bool, a `requester` or an `approvers` that does not point to an entity), or the gate's answer rests on a combination of a condition another language is asked, which that language does not decide. A note says why.
+
+**Fix**: Declare `requester` (an entity of the principal's type), `approvers` (an entity the approvers are members of) and `self_approval` (a bool) on the gate's resource.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`purchase.ringi`:
+
+```
+request purchase v1 "Purchase request"
+
+use gate "company.gate"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed
+```
+
+`company.gate`:
+
+```
+gate company v1
+description "Who does what to a ticket: the approvers of a stage answer it, and no one decides their own request unless its route lets them"
+namespace Ringi
+
+enum own_decision = permitted | not_permitted
+
+principal Staff
+resource Approvers
+resource Ticket
+resource RequestType
+resource Organization
+resource Stage
+  attributes
+    requester     : Staff
+    approvers     : Approvers
+    self_approval : own_decision
+
+action submit
+  principal Staff
+  resource Ticket
+action see
+  principal Staff
+  resource Ticket
+action approve
+  principal Staff
+  resource Stage
+action reject
+  principal Staff
+  resource Stage
+action add_approver
+  principal Staff
+  resource Stage
+action hand_over
+  principal Staff
+  resource Stage
+action comment
+  principal Staff
+  resource Stage
+action change_request_type
+  principal Staff
+  resource RequestType
+action read_audit
+  principal Staff
+  resource RequestType
+action import_organization
+  principal Staff
+  resource Organization
+action read_organization_audit
+  principal Staff
+  resource Organization
+
+permit staff_submit_and_administer
+  principal is Staff
+  action submit, see, add_approver, hand_over, change_request_type, read_audit, import_organization, read_organization_audit
+
+permit staff_comment
+  principal is Staff
+  action comment
+
+permit approvers_answer_their_stage
+  principal is Staff
+  action approve, reject
+  when principal in resource.approvers
+
+forbid no_one_decides_their_own
+  principal is Staff
+  action approve, reject
+  when resource.requester is principal
+  unless resource.self_approval is permitted
+```
+
+See also: [E911](#e911)

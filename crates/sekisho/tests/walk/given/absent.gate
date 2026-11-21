@@ -1,0 +1,85 @@
+gate absent v1
+description "Attributes and inputs that may be absent, given to each thing that reads them: a rule's input that may not be left out, an enum, a date given to a rule and to the dates, today against the date itself, an input given to a rule, and another action's input. What is computed from an absent value is absent too, and a value given as null is absent"
+namespace Absent
+
+use rule band from "band.rule"
+use rule grown from "grown.rule"
+use rule top from "top.rule"
+use rule early from "early.rule"
+use dates refund_terms from "../../../examples/refunds/dates/refund_terms.cal"
+
+today range >=2026-10-01 <=2026-10-31 offset +00:00
+
+enum tier = low | high
+
+principal Guest
+  description "A reader of whom anything may not be known"
+  attributes
+    age    : number?  range >=1 <=100
+    tier   : tier?
+    joined : date?  range >=2026-01-01 <=2026-12-31
+
+resource Doc
+  description "A document, which may have a day it is due"
+  attributes
+    due : date?  range >=2026-09-01 <=2026-11-30
+
+action skim_doc
+  description "Skim a document"
+  principal Guest
+  resource Doc
+  input
+    years : number?  range >=1 <=100
+  context
+    grown   = grown(age: principal.age).grown
+    top     = top(tier: principal.tier).top
+    early   = early(on: principal.joined).early
+    in_time = today <= refund_terms.last_day(paid_on: principal.joined)
+    overdue = today > resource.due
+    by_year = band(age: years).band
+
+action read_doc
+  description "Read a document"
+  principal Guest
+  resource Doc
+  input
+    years : number?  range >=1 <=100
+
+action peek_doc
+  description "Peek at a document"
+  principal Guest
+  resource Doc
+
+permit grown_guests_skim_what_is_not_overdue
+  description "A grown guest skims a document that is not overdue"
+  principal is Guest
+  action skim_doc
+  when grown
+  unless overdue
+
+permit top_guests_skim_early_or_in_time
+  description "A guest of the high tier who joined early, or within the terms, skims"
+  principal is Guest
+  action skim_doc
+  when top
+  when early or in_time
+
+permit children_by_their_years_skim
+  description "A guest whose years given are a child's skims"
+  principal is Guest
+  action skim_doc
+  when by_year is child
+
+permit guests_who_could_skim_read_up_to_fifty
+  description "A guest who could skim reads, up to fifty years given"
+  principal is Guest
+  action read_doc
+  when allowed skim_doc
+  when years <= 50
+
+permit grown_guests_who_could_read_at_their_age_peek
+  description "A grown guest who could read, given the guest's own age, peeks"
+  principal is Guest
+  action peek_doc
+  when allowed read_doc(years: principal.age)
+  when principal.age >= 18

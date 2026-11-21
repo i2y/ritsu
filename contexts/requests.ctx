@@ -1,0 +1,12 @@
+context Requests(ringi) v1
+description "A company's applications and approvals: the form of a kind of request, the route it takes and who approves at each stage, its deadlines and what happens when it ends, checked in ritsu's types (ringi)"
+
+owns
+  dir "../crates/ringi"
+
+published language ringi
+  crate "../crates/ringi"
+
+# A language stands on the base, and reads another language only through the ports.
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_emit, ritsu_ports

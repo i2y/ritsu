@@ -1,7 +1,8 @@
 //! `unique` on a field of `elements` (§15.290): the door refuses two elements with the same value of
 //! the field, in the reference evaluator and in every language; a `sum` the values of a `unique` field
 //! of an enum or a truth value take past its range, each value once, is E147, for the rule alone and
-//! for the rule with its contributions; and `unique` where it cannot stand is E148.
+//! for the rule with its contributions; a `sum` or a `count` they leave short of the bottom of its
+//! range is E150 (§15.314); and `unique` where it cannot stand is E148.
 //!
 //! The materials: `tests/merging/unique/` — the learning of a province, an academy that adds forty a
 //! season and one that adds ten — in English, with `州の学問.rule` and its two contributions beside
@@ -10,6 +11,12 @@
 use ritsu_testkit::{Need, TempDir, ready, skip};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -20,7 +27,7 @@ fn fixtures() -> PathBuf {
 }
 
 fn run_in(dir: &Path, lang: &str, args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", lang).current_dir(dir).args(args).output().expect("cannot start rulec");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", lang).current_dir(dir).args(args).args(["--lang", lang]).output().expect("cannot start rulec");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
@@ -143,6 +150,114 @@ fn a_count_cap_adds_the_largest_that_many() {
     }
 }
 
+/// The other side of the cap (§15.314): a range a `unique` field leaves nothing to come to is E150,
+/// as one a `count` leaves nothing to come to is. A truth value marked `unique` holds a sequence to
+/// two elements, so a `count` that starts at three is never reached, and neither is a total that
+/// starts past two elements at the top of the summed column; three buildings that add 40, 2 and 1
+/// come to 43 each once, short of a total that starts at 50. Each passed `check` and refused every
+/// call. A total that starts at 43 is reached, and passes. English first, then Japanese.
+#[test]
+fn a_range_a_unique_field_leaves_nothing_to_come_to_is_stopped() {
+    let basket = |count: &str, sum: &str, shipping: &str, card: &str| {
+        format!(
+            "rule gift_basket v1\n\n\
+             elements lines\n  price   : money[JPY]  range >=0JPY <=50_000JPY\n  wrapped : bool  unique\n\n\
+             count wrapped_items over lines where wrapped  range {count}\n\
+             sum amount over lines of price  range {sum}\n\n\
+             outputs\n  free_shipping : bool\n  card          : bool\n\n\
+             table shipping\npolicy unique\n| amount | -> free_shipping |\n{shipping}\n\
+             table card_of\npolicy unique\n| wrapped_items | -> card |\n{card}"
+        )
+    };
+    let かご = |count: &str, sum: &str, shipping: &str, card: &str| {
+        format!(
+            "rule 贈り物のかご(gift_basket) v1\n\n\
+             elements 明細(lines)\n  価格(price) : money[JPY]  range >=0円 <=50000円\n  包装(wrapped) : bool  unique\n\n\
+             count 包装した数(wrapped_items) over 明細 where 包装  range {count}\n\
+             sum 金額(amount) over 明細 of 価格  range {sum}\n\n\
+             outputs\n  送料無料(free_shipping) : bool\n  カード(card) : bool\n\n\
+             table 送料(shipping)\npolicy unique\n| 金額 | -> 送料無料 |\n{shipping}\n\
+             table カードの有無(card_of)\npolicy unique\n| 包装した数 | -> カード |\n{card}"
+        )
+    };
+    let learning = |range: &str| {
+        format!(
+            "rule t v1\n\nenum building = temple | library | academy\n\n\
+             elements buildings\n  kind : building  unique\n\n\
+             outputs\n  learning : number  round down(1)\n\n\
+             table learning_of\npolicy unique\n\
+             | kind    | -> learning_add : number |\n| temple  | 1 |\n| library | 2 |\n| academy | 40 |\n\n\
+             sum building_learning over buildings of learning_add  range {range}\n\n\
+             define learning : number = 1 + building_learning\n"
+        )
+    };
+    let 学問 = |range: &str| {
+        format!(
+            "rule 学問(t) v1\n\nenum 建物(building) = 寺(temple) | 書庫(library) | 学院(academy)\n\n\
+             elements 建物の並び(buildings)\n  種類(kind) : 建物  unique\n\n\
+             outputs\n  学問の値(learning) : number  round down(1)\n\n\
+             table 学問の加算(learning_of)\npolicy unique\n\
+             | 種類 | -> 加算(learning_add) : number |\n| 寺 | 1 |\n| 書庫 | 2 |\n| 学院 | 40 |\n\n\
+             sum 建物の学問(building_learning) over 建物の並び of 加算  range {range}\n\n\
+             define 学問の値 : number = 1 + 建物の学問\n"
+        )
+    };
+    let t = TempDir::new("unique-short");
+    let cases: [(&str, String, &str, Option<&[&str]>); 8] = [
+        (
+            "en",
+            basket(">=3 <=5", ">=0JPY <=250_000JPY", "| <5_000JPY | false |\n| >=5_000JPY | true |\n", "| >=3 | true |\n"),
+            "The range of the count does not meet the values it can reach",
+            Some(&["wrapped_items can only be <=2", "lines has at most 2 elements (`wrapped` is `unique` and takes 2 values, each once at most), so no sequence comes to the bottom 3 of wrapped_items", "Hint: bring the bottom of wrapped_items down to 2 or less."]),
+        ),
+        (
+            "en",
+            basket(">=0 <=5", ">=150_000JPY <=1_000_000JPY", "| >=150_000JPY | true |\n", "| 0 | false |\n| >=1 | true |\n"),
+            "The range of the sum does not meet the values it can reach",
+            Some(&["amount can only be <=100_000JPY", "(`wrapped` is `unique` and takes 2 values, each once at most), and price is at most 50_000JPY in each: 2 × 50_000JPY = 100_000JPY, short of the bottom 150_000JPY of this range", "Raising the top of price reaches it too."]),
+        ),
+        (
+            "en",
+            learning(">=50 <=100"),
+            "The range of the sum does not meet the values it can reach",
+            Some(&["building_learning can only be <=43", "`kind` is `unique`, so buildings holds each of its values once at most. The most the element of each `kind` can add, largest first: academy 40, library 2, temple 1.", "They come to 43, short of the bottom 50 of this range. The generated code would refuse every call once the walk is over.", "Hint: bring the bottom of the range down to 43 or less, or raise what the rows add."]),
+        ),
+        ("en", learning(">=43 <=100"), "", None),
+        (
+            "ja",
+            かご(">=3 <=5", ">=0円 <=250000円", "| <5000円 | false |\n| >=5000円 | true |\n", "| >=3 | true |\n"),
+            "数え上げの範囲が、その値の届く範囲と重なりません",
+            Some(&["包装した数 が取りうる値は <=2 です", "明細 の要素は多くて 2 件です（`unique` の 包装 が取る値は 2 個で、同じ値の要素は二つ入りません）。包装した数 の下限 3 には、どの並びも届きません。", "ヒント: 包装した数 の下限を 2 以下にしてください。"]),
+        ),
+        (
+            "ja",
+            かご(">=0 <=5", ">=150000円 <=1000000円", "| >=150000円 | true |\n", "| 0 | false |\n| >=1 | true |\n"),
+            "合計の範囲が、その値の届く範囲と重なりません",
+            Some(&["明細 の要素は多くて 2 件（`unique` の 包装 が取る値は 2 個で、同じ値の要素は二つ入りません）で、価格 は一件につき多くて 50_000JPY です。2 × 50_000JPY = 100_000JPY は、この範囲の下限 150_000JPY に届きません。", "価格 の上限を上げても届きます。"]),
+        ),
+        (
+            "ja",
+            学問(">=50 <=100"),
+            "合計の範囲が、その値の届く範囲と重なりません",
+            Some(&["建物の学問 が取りうる値は <=43 です", "種類 は `unique` なので、建物の並び に同じ 種類 の要素は二つ入りません。種類 の値ごとに、その要素が足しうる最大を、大きい順に: 学院 40、書庫 2、寺 1。", "合わせて 43 で、この範囲の下限 50 に届きません。", "ヒント: 範囲の下限を 43 以下にするか、行が足す値を上げてください。"]),
+        ),
+        ("ja", 学問(">=43 <=100"), "", None),
+    ];
+    for (lang, src, title, said) in cases {
+        std::fs::write(t.path().join("short.rule"), &src).unwrap();
+        let (c, out, _) = run_in(t.path(), lang, &["check", "short.rule"]);
+        match said {
+            None => assert_eq!(c, 0, "{src}\n{out}"),
+            Some(said) => {
+                assert_eq!(c, 1, "{src}\n{out}");
+                assert_eq!((out.matches("[E150]").count(), out.matches("[E").count()), (1, 1), "{src}\n{out}");
+                assert!(out.contains(title), "{src}\n{out}");
+                has_all(&out, said);
+            }
+        }
+    }
+}
+
 /// `unique` on a number, an amount or a string holds at the door, and caps no `sum`: a field with that
 /// many values to take is not counted value by value, so the check says nothing of a `sum` over the
 /// sequence, and the door refuses two elements with the same value, compared as values (`1` and `1.0`
@@ -163,8 +278,8 @@ fn unique_on_a_number_or_a_string_is_the_doors_alone() {
     assert_eq!(c, 0, "{out}");
     assert!(!out.contains("E147"), "{out}");
     for (input, said) in [
-        (r#"{"lots":[{"lot":1,"tag":"a","fee":10},{"lot":1.0,"tag":"b","fee":10}]}"#, "refused (input): lots has two elements with the same lot"),
-        (r#"{"lots":[{"lot":1,"tag":"a","fee":10},{"lot":2,"tag":"a","fee":10}]}"#, "refused (input): lots has two elements with the same tag"),
+        (r#"{"lots":[{"lot":1,"tag":"a","fee":10},{"lot":1.0,"tag":"b","fee":10}]}"#, "refused (input): lots has two elements with the same lot (lots[0] and lots[1])"),
+        (r#"{"lots":[{"lot":1,"tag":"a","fee":10},{"lot":2,"tag":"a","fee":10}]}"#, "refused (input): lots has two elements with the same tag (lots[0] and lots[1])"),
         (r#"{"lots":[{"lot":1,"tag":"a","fee":10},{"lot":2,"tag":"b","fee":10}]}"#, "total = 20USD"),
     ] {
         std::fs::write(t.path().join("in.json"), input).unwrap();
@@ -236,13 +351,13 @@ fn the_door_refuses_two_elements_with_the_same_value() {
     let three = t.path().join("three.json").to_string_lossy().into_owned();
     let (c, out, _) = run_in(&d, "en", &["run", "province_learning.rule", "--input", &two]);
     assert_eq!(c, 0, "{out}");
-    assert!(out.contains("refused (input): buildings has two elements with the same building"), "{out}");
+    assert!(out.contains("refused (input): buildings has two elements with the same building (buildings[0] and buildings[1])"), "{out}");
     let (_, out, _) = run_in(&d, "en", &["run", "province_learning.rule", "--input", &three]);
     assert!(out.contains("learning = 4"), "{out}");
     std::fs::write(t.path().join("two_ja.json"), r#"{"建物一覧":[{"建物":"寺"},{"建物":"寺"}]}"#).unwrap();
     let two_ja = t.path().join("two_ja.json").to_string_lossy().into_owned();
     let (_, out, _) = run_in(&d, "ja", &["run", "州の学問.rule", "--input", &two_ja]);
-    assert!(out.contains("建物一覧 の要素に 建物 が同じものが二つあります"), "{out}");
+    assert!(out.contains("建物一覧 の要素に 建物 が同じものが二つあります（建物一覧[0] と 建物一覧[1]）"), "{out}");
 
     // The refused input the vectors carry, which `rulec test` holds every language to.
     let (f, c) = {
@@ -252,7 +367,8 @@ fn the_door_refuses_two_elements_with_the_same_value() {
     let vs = rulec::vectors::generate(&f, &c);
     let refused = rulec::i18n::with(rulec::i18n::Lang::En, || rulec::vectors::door_cases(&f, &c, &vs));
     let line = refused.iter().find(|l| l.contains("has two elements")).unwrap_or_else(|| panic!("{refused:?}"));
-    assert!(line.contains(r#""error":"buildings has two elements with the same building""#), "{line}");
+    // The first and the third, so that a door that says another pair is caught (§15.324).
+    assert!(line.contains(r#""error":"buildings has two elements with the same building (buildings[0] and buildings[2])""#), "{line}");
     // No answered vector has two elements alike: the door would refuse it.
     for v in &vs {
         let j = rulec::json::parse(&rulec::vectors::in_object(&f, &c, v)).unwrap();
@@ -316,10 +432,12 @@ fn fmt_api_doc_and_the_pins_read_the_mark() {
 }
 
 /// The Python door keeps the values it has seen of an enum or a truth value in a list, and those of
-/// another type in a set (§15.290): the walk stops at the first value seen twice, so the list never
-/// holds more than the values of the type, and a Python that compiles the module ahead of time takes
-/// a list where it refuses a set; a long sequence of numbers or strings is not walked once for each
-/// element.
+/// another type in a dict from the value to the index of the element it was first seen on (§15.290,
+/// §15.324): the walk stops at the first value seen twice, so the list never holds more than the
+/// values of the type, and a Python that compiles the module ahead of time takes a list where it
+/// refuses a set or a dict in a function; a long sequence of numbers or strings is not walked once
+/// for each element. The refusal of an enum or a truth value seen twice finds the element it was
+/// first seen on by walking the list, not by its `index()`, which such a compiler refuses too.
 #[test]
 fn the_python_door_keeps_an_enum_or_a_truth_value_in_a_list() {
     let t = TempDir::new("unique-python");
@@ -331,14 +449,17 @@ fn the_python_door_keeps_an_enum_or_a_truth_value_in_a_list() {
     for line in [
         "    building_seen: list[Building] = []\n",
         "    coastal_seen: list[bool] = []\n",
-        "    lot_seen = _set()\n",
-        "    tag_seen = _set()\n",
-        "    opened_seen = _set()\n",
-        "    price_seen = _set()\n",
+        "    lot_seen: dict[int, int] = {}\n",
+        "    tag_seen: dict[str, int] = {}\n",
+        "    opened_seen: dict[int, int] = {}\n",
+        "    price_seen: dict[JPY, int] = {}\n",
+        "            while building_seen[building_first] != elem.building:\n",
+        "            while coastal_seen[coastal_first] != elem.coastal:\n",
     ] {
         assert!(py.contains(line), "missing `{}`:\n{py}", line.trim());
     }
-    assert!(py.contains("building_seen.append(") && py.contains("coastal_seen.append(") && py.contains("lot_seen.add("), "{py}");
+    assert!(py.contains("building_seen.append(") && py.contains("coastal_seen.append(") && py.contains("lot_seen[elem.lot] = index\n"), "{py}");
+    assert!(!py.contains(".index("), "{py}");
 }
 
 /// Every language the door is generated for refuses two elements with the same value of a `unique`
@@ -373,17 +494,13 @@ fn every_language_refuses_two_elements_with_the_same_value() {
         let refused = std::fs::read_to_string(out.join("vectors").join(format!("{alias}.refused.jsonl"))).unwrap();
         let seq = if alias == "each_kind" { "lots" } else { "buildings" };
         for f in fields {
-            assert!(refused.contains(&format!(r#""error":"{seq} has two elements with the same {f}""#)), "{alias} {f}:\n{refused}");
+            // The two by their places, the first element and a later one (§15.324).
+            assert!(refused.contains(&format!(r#""error":"{seq} has two elements with the same {f} ({seq}[0] and {seq}["#)), "{alias} {f}:\n{refused}");
         }
         let tmp = TempDir::new("unique-langs-tmp");
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-            .env("RULEC_LANG", "en")
-            .env("TMPDIR", tmp.path())
-            .args(["test", &out.to_string_lossy(), "--format", "json"])
-            .output()
-            .expect("cannot start rulec");
-        let said = String::from_utf8_lossy(&o.stdout).into_owned();
-        let j = rulec::json::parse(said.lines().next().unwrap_or_else(|| panic!("no result: {}", String::from_utf8_lossy(&o.stderr)))).unwrap_or_else(|x| panic!("{x}: {said}"));
+        let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp.path()).args(["test", &out.to_string_lossy(), "--format", "json"]), RULEC_LIMIT, "rulec test running the generated code");
+        let said = o.stdout.clone();
+        let j = rulec::json::parse(said.lines().next().unwrap_or_else(|| panic!("no result: {}", o.stderr))).unwrap_or_else(|x| panic!("{x}: {said}"));
         for why in j.get("skipped").and_then(|v| v.as_arr()).unwrap_or_default() {
             skip(&format!("rulec test: {}", why.as_str().unwrap_or_default()));
         }

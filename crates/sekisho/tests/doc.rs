@@ -2,8 +2,9 @@
 //! Japanese twin, each in English and in Japanese as Markdown and in its own language as HTML, and
 //! of the materials that show what the example does not (the forms of condition and two resource
 //! types, a forbid read with `use gate`, an action that guards two operations, an answer that rests
-//! on a value no language vouches for, an expectation that picks nothing), and of the examples and
-//! the material of a condition on another action's answer (`allowed`), are the golden files in
+//! on a value no language vouches for, an expectation that picks nothing, policies written for
+//! every action that apply on some and not on others, values that read the same data), and of the
+//! examples and the material of a condition on another action's answer (`allowed`), are the golden files in
 //! `tests/golden/doc/` — but for the pages of the rules and the dates the page holds, which are
 //! what rulec's and koyomi's own `doc` draw now, word for word, and stand in the golden files as
 //! one line each. The HTML reads nothing from outside, and neither does any page it holds; in
@@ -22,7 +23,7 @@ use sekisho::suite::Suite;
 use std::time::Duration;
 
 /// Each page held to a golden file: the `.gate`, the language, the form, and the file's stem.
-const PAGES: [(&str, Lang, Format, &str); 18] = [
+const PAGES: [(&str, Lang, Format, &str); 27] = [
     ("examples/refunds/refunds.gate", Lang::En, Format::Markdown, "refunds.en.md"),
     ("examples/refunds/refunds.gate", Lang::Ja, Format::Markdown, "refunds.ja.md"),
     ("examples/refunds/refunds.gate", Lang::En, Format::Html, "refunds.html"),
@@ -40,7 +41,16 @@ const PAGES: [(&str, Lang, Format, &str); 18] = [
     ("examples/approvals/approvals.gate", Lang::En, Format::Markdown, "approvals.en.md"),
     ("examples/approvals/approvals.ja.gate", Lang::Ja, Format::Markdown, "approvals.ja.ja.md"),
     ("examples/documents/documents.gate", Lang::En, Format::Markdown, "documents.en.md"),
+    ("examples/claims/claims.gate", Lang::En, Format::Markdown, "claims.en.md"),
+    ("examples/claims/claims.ja.gate", Lang::Ja, Format::Markdown, "claims.ja.ja.md"),
+    ("examples/claims/claims.gate", Lang::En, Format::Html, "claims.en.html"),
     ("tests/gen/asked.gate", Lang::En, Format::Markdown, "asked.en.md"),
+    ("tests/doc/services.gate", Lang::En, Format::Markdown, "services.en.md"),
+    ("tests/doc/services.ja.gate", Lang::Ja, Format::Markdown, "services.ja.ja.md"),
+    ("tests/walk/together/together.gate", Lang::En, Format::Markdown, "together.en.md"),
+    ("tests/walk/together/together.ja.gate", Lang::Ja, Format::Markdown, "together.ja.ja.md"),
+    ("tests/walk/together/sums.gate", Lang::En, Format::Markdown, "sums.en.md"),
+    ("tests/walk/together/sums.ja.gate", Lang::Ja, Format::Markdown, "sums.ja.ja.md"),
 ];
 
 /// The page of a file, with every language joined as `ritsu sekisho` joins them: what its
@@ -143,8 +153,10 @@ fn the_pages_held_are_what_rulec_and_koyomi_draw() {
     }
     // the example's rule, dates file and calendar, in each of its six pages and in the two pages of
     // W304, which is the example with one more expectation; the rule of W303, in its two; the rule
-    // of the approvals, in its two; the dates file and the calendar `tests/gen/asked.gate` reads
-    assert_eq!(looked, 6 * 3 + 2 * 3 + 2 + 2 + 2, "pages held");
+    // of the approvals, in its two; the dates file and the calendar `tests/gen/asked.gate` reads;
+    // the four rules of `tests/walk/together/together.gate`, in its two, and the rule of
+    // `sums.gate`, in its two; the rule of the claims, in its three
+    assert_eq!(looked, 6 * 3 + 2 * 3 + 2 + 2 + 2 + 2 * 4 + 2 + 3, "pages held");
     // the page of the example as the command prints it holds them as they are
     let (code, out, err) = run(&["doc", "examples/refunds/refunds.gate", "--root", "examples/refunds"], common::joined());
     assert_eq!(code, 0, "{err}");
@@ -248,9 +260,9 @@ fn the_calls_of_a_flow_stand_under_its_workflow() {
     let calls = [FlowCalls {
         workflow: 0,
         calls: Ok(vec![
-            Call { line: 20, task: "refund_order".into(), operation: op("refundOrder"), denied: Some("denied".into()) },
-            Call { line: 21, task: "look".into(), operation: op("getOrder"), denied: None },
-            Call { line: 22, task: "elsewhere".into(), operation: Name::file(Tool::Openapi, "api/other.json").with("operation", "x"), denied: None },
+            Call::new(20, "refund_order", op("refundOrder"), Some("denied")),
+            Call::new(21, "look", op("getOrder"), None),
+            Call::new(22, "elsewhere", Name::file(Tool::Openapi, "api/other.json").with("operation", "x"), None),
         ]),
     }];
     for (lang, rows) in [
@@ -295,14 +307,131 @@ fn dandori_says_what_the_flow_calls() {
     let calls = doc::calls_of(&o, &common::joined()).expect("dandori is joined");
     assert_eq!(calls.len(), 1);
     let got = calls[0].calls.as_ref().unwrap_or_else(|s| panic!("{s:?}"));
-    assert_eq!(
-        got,
-        &vec![Call { line: 22, task: "refund_order".into(), operation: Name::file(Tool::Openapi, "api/orders.json").with("operation", "refundOrder"), denied: Some("denied".into()) }]
-    );
+    // the call, with what it gives (the order's id and the amount) and the runs dandori follows to
+    // it, which the page asks the gate with
+    let said: Vec<(usize, &str, &Name, Option<&str>)> = got.iter().map(|c| (c.line, c.task.as_str(), &c.operation, c.denied.as_deref())).collect();
+    assert_eq!(said, [(22, "refund_order", &Name::file(Tool::Openapi, "api/orders.json").with("operation", "refundOrder"), Some("denied"))]);
+    assert_eq!(got[0].args.iter().map(|(to, v)| (to.as_str(), v.shown.as_str())).collect::<Vec<_>>(), [("orderId", "order_id"), ("amount", "amount")]);
+    assert!(got[0].reached.is_some());
     assert!(doc::calls_of(&o, &Suite::default()).is_none());
     let (code, out, _) = run(&["doc", "examples/refunds/refunds.gate", "--root", "examples/refunds"], common::joined());
     assert_eq!(code, 0);
     assert!(out.contains("| 22 | `refund_order` | `openapi \"api/orders.json\" operation refundOrder` | `refund_order` | sometimes | `denied` |"), "{out}");
+}
+
+/// A policy written for several actions (`action any`, or a list) that applies to no combination
+/// of one of them is not listed among what denies that action's combinations, and its own section
+/// says why it does not apply there: no principal of the action meets its `principal` line, or its
+/// lines are met on no combination of the action. No sentence of the page's own counts 0
+/// combinations, and a count of one is said as one (`denies it`), in English and in Japanese
+/// (`tests/doc/services.gate` and its twin). The warnings `sekisho check` gives are the page's last
+/// section, as the check prints them: of such a policy (W305), which counts each line's
+/// combinations, 0 among them; of the permit a forbid keeps from `purge_doc` (W306), which its own
+/// section says allows none there; and of the line of the service's permit that leaves out only what
+/// a forbid denies (W307).
+#[test]
+fn a_policy_that_applies_to_nothing_of_an_action_says_why_in_its_own_section() {
+    let section = |page: &str, heading: &str| -> String {
+        let from = page.find(heading).unwrap_or_else(|| panic!("no {heading} in\n{page}"));
+        let rest = &page[from + heading.len()..];
+        let to = rest.find("\n### ").unwrap_or(rest.len());
+        rest[..to].to_string()
+    };
+    let whole = doc::write(&page_of("tests/doc/services.gate", Lang::En, Format::Markdown), Format::Markdown);
+    let (en, warned) = whole.split_once("\n## What check warns of\n").unwrap_or_else(|| panic!("no warnings in\n{whole}"));
+    assert!(warned.contains("warning[W305]: tests/doc/services.gate:77:1: The forbid `suspended_staff_see_nothing_open` names the action `list_folder`, and applies to no combination of it"), "{warned}");
+    assert!(warned.contains("warning[W306]: tests/doc/services.gate:46:1: The permit `staff_read_and_purge` names the action `purge_doc`, and allows nothing of it: a forbid denies every combination it would allow there"), "{warned}");
+    assert!(warned.contains("warning[W307]: tests/doc/services.gate:55:1: The line `when resource.open_to_all` of the permit `services_index` changes no decision: a forbid denies every combination it leaves out"), "{warned}");
+    assert!(!warned.contains("\n## "), "{warned}");
+    assert!(!en.contains(" 0 combinations") && !en.contains(" 0 of them"), "{en}");
+    assert!(!en.contains("1 combinations") && !en.contains("1 combination, and denies each") && !en.contains("1 combination and denies them"), "{en}");
+    // the service's action: the forbid on the suspended, which no service is, denies nothing there
+    let index = section(&en, "### action `index_doc`");
+    assert!(!index.contains("suspended_do_nothing") && !index.contains("suspended_staff_see_nothing_open"), "{index}");
+    assert!(index.contains("- `services_skip_closed_docs` (`principal is Service`, `unless resource.open_to_all`) applies to 1 combination, and denies it; no permit applies to it."), "{index}");
+    // each forbid's own section, action by action
+    let skip = section(&en, "### forbid `services_skip_closed_docs`");
+    assert!(skip.contains("- On `read_doc`, it applies to no combination: no principal of `read_doc` (`User`) meets its line `principal is Service`."), "{skip}");
+    assert!(skip.contains("- On `index_doc`, it applies to 1 combination and denies it; no permit applies to it."), "{skip}");
+    let suspended = section(&en, "### forbid `suspended_do_nothing`");
+    assert!(suspended.contains("- On `index_doc`, it applies to no combination: its line `when principal.suspended` is met on no combination of the action."), "{suspended}");
+    let open = section(&en, "### forbid `suspended_staff_see_nothing_open`");
+    assert!(open.contains("- On `read_doc`, it applies to 1 combination and denies it; a permit applies to it too."), "{open}");
+    assert!(open.contains("- On `list_folder`, it applies to no combination: its `principal` line is met on 2 combinations, and its `when` and `unless` lines are never all met there."), "{open}");
+    // a permit a forbid denies everywhere on one of its actions allows none there
+    let permit = section(&en, "### permit `staff_read_and_purge`");
+    assert!(permit.contains("- On `purge_doc`, it applies to 4 combinations, and a forbid denies each: it allows none."), "{permit}");
+    let whole = doc::write(&page_of("tests/doc/services.ja.gate", Lang::Ja, Format::Markdown), Format::Markdown);
+    let (ja, warned) = whole.split_once("\n## 検査の警告\n").unwrap_or_else(|| panic!("no warnings in\n{whole}"));
+    assert!(warned.contains("警告[W305]: tests/doc/services.ja.gate:77:1: forbid `停止中の職員は公開の物を見られない` は action `フォルダを見る` を挙げていますが、`フォルダを見る` のどの組み合わせにも当てはまりません"), "{warned}");
+    assert!(warned.contains("警告[W306]: tests/doc/services.ja.gate:46:1: permit `職員は読めて消せる` は action `文書を消す` を挙げていますが、`文書を消す` では何も許しません。許すはずの組み合わせを、どれも forbid が拒みます"), "{warned}");
+    assert!(warned.contains("警告[W307]: tests/doc/services.ja.gate:55:1: permit `サービスは索引を作れる` の行 `when resource.公開` は、どの決定も変えません。この行が外す組み合わせを、どれも forbid が拒みます"), "{warned}");
+    assert!(!warned.contains("\n## "), "{warned}");
+    assert!(!ja.contains(" 0 通り"), "{ja}");
+    assert!(!ja.contains("1 通りに当てはまり、どれも"), "{ja}");
+    let index = section(&ja, "### action `索引を作る`");
+    assert!(!index.contains("停止中は何もできない"), "{index}");
+    let skip = section(&ja, "### forbid `サービスは非公開の文書に触れない`");
+    assert!(skip.contains("- `文書を読む` では、どの組み合わせにも当てはまりません。`文書を読む` の principal（`利用者`）は、`principal is サービス` の行を満たしません。"), "{skip}");
+    assert!(skip.contains("- `索引を作る` では 1 通りに当てはまり、それを拒みます。permit は当てはまりません。"), "{skip}");
+}
+
+/// A note of the page that sends the reader to another section names a section the page has. The
+/// note of an action whose combinations hold some counted in case points to the warnings only when
+/// an answer could not be decided for it (W303): `tests/walk/together/sums.gate` has the warning
+/// and the pointer; the same gate without its expectation has neither, and still says that some
+/// combinations are counted in case. Every page held to a golden file is read the same way: each
+/// `under <heading> below` (`下の「<見出し>」`) names a heading of the page.
+#[test]
+fn a_note_points_only_to_a_section_the_page_has() {
+    let headings = |page: &str| -> Vec<String> { page.lines().filter(|l| l.starts_with('#')).map(|l| l.trim_start_matches('#').trim().to_string()).collect() };
+    // the headings a page points to: `under X below` in English, 下の「X」 in Japanese
+    let pointed = |page: &str| -> Vec<String> {
+        let mut out = Vec::new();
+        for (open, close) in [("下の「", "」"), ("under ", " below")] {
+            let mut rest = page;
+            while let Some(at) = rest.find(open) {
+                rest = &rest[at + open.len()..];
+                if let Some(end) = rest.find(close)
+                    && end < 60
+                    && !rest[..end].contains('\n')
+                {
+                    out.push(rest[..end].to_string());
+                }
+            }
+        }
+        out
+    };
+    let mut seen = 0;
+    for (path, lang, format, stem) in PAGES {
+        if format != Format::Markdown {
+            continue;
+        }
+        let page = doc::write(&page_of(path, lang, format), format);
+        let hs = headings(&page);
+        for target in pointed(&page) {
+            seen += 1;
+            assert!(hs.contains(&target), "{stem}: a note points to {target:?}, and the page has no such heading: {hs:?}");
+        }
+    }
+    assert!(seen >= 20, "{seen} pointers read");
+    // counted in case, and an answer undecided for it: the note points to the warnings
+    let en = doc::write(&page_of("tests/walk/together/sums.gate", Lang::En, Format::Markdown), Format::Markdown);
+    assert!(en.contains("are counted in case it can; the tables below hold them too. The answers that could not be decided for it are under What check warns of below."), "{en}");
+    assert!(headings(&en).contains(&"What check warns of".to_string()));
+    let ja = doc::write(&page_of("tests/walk/together/sums.ja.gate", Lang::Ja, Format::Markdown), Format::Markdown);
+    assert!(ja.contains("下の表にもその行が入っています。そのために決められなかった答えは、下の「検査の警告」にあります。"), "{ja}");
+    assert!(headings(&ja).contains(&"検査の警告".to_string()));
+    // counted in case, and nothing undecided: no warning, no section of warnings, no pointer
+    let dir = ritsu_testkit::TempDir::new("quiet");
+    std::fs::copy("tests/walk/together/sums.rule", dir.path().join("sums.rule")).unwrap();
+    let gate = std::fs::read_to_string("tests/walk/together/sums.gate").unwrap();
+    let gate = &gate[..gate.find("expect deny").unwrap()];
+    let path = dir.path().join("sums.gate");
+    std::fs::write(&path, gate).unwrap();
+    let quiet = doc::write(&page_of(path.to_str().unwrap(), Lang::En, Format::Markdown), Format::Markdown);
+    assert!(quiet.contains("are counted in case it can; the tables below hold them too.\n"), "{quiet}");
+    assert!(!quiet.contains("What check warns of"), "{quiet}");
 }
 
 /// A file that does not pass has no page: what check says, and exit 1. One that reads a rule, a

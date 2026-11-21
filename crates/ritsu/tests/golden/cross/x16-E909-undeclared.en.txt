@@ -1,0 +1,7 @@
+returns.flow: ok
+refunds.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+error[ritsu E909]: returns.flow:14: The task `refund_order` gives `fee` as rate[step 0.1%], and the action `refund_order` of refunds.gate reads its input `fee` as rate[step 1%]
+    14 |   refund_order(orderId: order, fee: 0.5%)
+  = The two read one number as two values: the flow's 0.5% is 5% to the gate.
+  = Write one type as the other: the task's parameter `fee` here, or the input `fee` of the action `refund_order` in refunds.gate (and the ends of its range, where they are written without a unit).
+ritsu check: 2 files (dandori 1, sekisho 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

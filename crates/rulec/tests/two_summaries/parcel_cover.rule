@@ -1,0 +1,29 @@
+rule parcel_cover v1
+description "What a parcel is insured for: twice the total of its lines, and the price of its dearest line wrapped as a gift (0 yen where no line is wrapped). The insurer insures a parcel from 10,000 yen, and a parcel whose dearest line is 30,000 yen or more goes by courier"
+
+# one line of the parcel
+elements lines
+  price : money[JPY]  range >=0JPY <=50_000JPY
+  gift  : bool
+
+sum total over lines of price  range >=0JPY <=100_000JPY
+max highest over lines of price empty 0JPY
+max dearest_gift over lines of price where gift empty 0JPY
+
+define cover : money[JPY] = total * 2 + dearest_gift
+
+outputs
+  insured : bool
+  courier : bool
+
+table insure
+policy unique
+| cover       | -> insured |
+| <10_000JPY  | false      |
+| >=10_000JPY | true       |
+
+table courier_of
+policy unique
+| highest     | -> courier |
+| <30_000JPY  | false      |
+| >=30_000JPY | true       |

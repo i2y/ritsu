@@ -1,0 +1,18 @@
+rule expression_output v1
+description "An applied output a `define` works out, read with the amount: the first row asks for a fee over 900 yen on an amount up to 30,000 yen, which no amount gives"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+apply c = "shared/calc.rule" meaning:12271f77080f6b9f
+  amount = amount
+  fee -> c_fee
+
+outputs
+  hidden : bool
+
+table hidden
+| c_fee    | amount      | -> hidden |
+| >900JPY  | <=30_000JPY | true      |
+| >900JPY  | >30_000JPY  | false     |
+| <=900JPY | -           | false     |

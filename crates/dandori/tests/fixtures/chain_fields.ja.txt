@@ -1,0 +1,8 @@
+エラー[E005]: tests/fixtures/chain_fields.flow:4:10: 規則 `rules/missing_zones.rule` を読めませんでした
+     4 | use rule zones from "rules/missing_zones.rule"
+  = `tests/fixtures/rules/missing_zones.rule` がありません
+エラー[E002]: tests/fixtures/chain_fields.flow:22:15: タスクか規則 `locat` はありません
+    22 |   let where = locat(id: id)
+エラー[E002]: tests/fixtures/chain_fields.flow:24:39: 変数や値 `nowhere` はありません
+    24 |   succeed label = where.zone, other = nowhere.zone
+  = 値は変数・そのフィールド・文字列・数・true・false のどれかです

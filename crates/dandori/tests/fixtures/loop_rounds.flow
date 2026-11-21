@@ -1,0 +1,187 @@
+workflow loop_rounds v1
+description "A loop whose rounds pass a secret back through 70 variables, one a round: past 64 rounds the walk of the runs reads the variables a round still changes as every value put in them anywhere in the flow (W107), and follows the others to the end"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:member-tier-shipping"
+
+record Reply
+  done : bool
+
+inputs
+  name    : string
+  token   : string  secret
+  pin     : string  secret
+  narrow  : tiers.tier  range >=basic <=silver
+  wide    : tiers.tier
+
+outputs
+  done : bool
+
+task greet(text: string) -> Reply
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:greet"
+  idempotent
+
+flow
+  let memo = name
+  let v = narrow
+  let c00 = name
+  let c01 = name
+  let c02 = name
+  let c03 = name
+  let c04 = name
+  let c05 = name
+  let c06 = name
+  let c07 = name
+  let c08 = name
+  let c09 = name
+  let c10 = name
+  let c11 = name
+  let c12 = name
+  let c13 = name
+  let c14 = name
+  let c15 = name
+  let c16 = name
+  let c17 = name
+  let c18 = name
+  let c19 = name
+  let c20 = name
+  let c21 = name
+  let c22 = name
+  let c23 = name
+  let c24 = name
+  let c25 = name
+  let c26 = name
+  let c27 = name
+  let c28 = name
+  let c29 = name
+  let c30 = name
+  let c31 = name
+  let c32 = name
+  let c33 = name
+  let c34 = name
+  let c35 = name
+  let c36 = name
+  let c37 = name
+  let c38 = name
+  let c39 = name
+  let c40 = name
+  let c41 = name
+  let c42 = name
+  let c43 = name
+  let c44 = name
+  let c45 = name
+  let c46 = name
+  let c47 = name
+  let c48 = name
+  let c49 = name
+  let c50 = name
+  let c51 = name
+  let c52 = name
+  let c53 = name
+  let c54 = name
+  let c55 = name
+  let c56 = name
+  let c57 = name
+  let c58 = name
+  let c59 = name
+  let c60 = name
+  let c61 = name
+  let c62 = name
+  let c63 = name
+  let c64 = name
+  let c65 = name
+  let c66 = name
+  let c67 = name
+  let c68 = name
+  let c69 = name
+  repeat at most 3 times
+    # followed to the end: no run brings the secret put in `memo` on the way out of the loop
+    # here, nor the tiers put in `v` after it
+    greet(text: memo)
+    match v
+      basic => pass
+      silver => pass
+    # read as anywhere in the flow from the 64th round on: the secret comes here from round 70,
+    # and the pin put in `c00` after the loop never does
+    greet(text: c00)
+    let v = narrow
+    # each round passes the secret back one variable
+    let c00 = c01
+    let c01 = c02
+    let c02 = c03
+    let c03 = c04
+    let c04 = c05
+    let c05 = c06
+    let c06 = c07
+    let c07 = c08
+    let c08 = c09
+    let c09 = c10
+    let c10 = c11
+    let c11 = c12
+    let c12 = c13
+    let c13 = c14
+    let c14 = c15
+    let c15 = c16
+    let c16 = c17
+    let c17 = c18
+    let c18 = c19
+    let c19 = c20
+    let c20 = c21
+    let c21 = c22
+    let c22 = c23
+    let c23 = c24
+    let c24 = c25
+    let c25 = c26
+    let c26 = c27
+    let c27 = c28
+    let c28 = c29
+    let c29 = c30
+    let c30 = c31
+    let c31 = c32
+    let c32 = c33
+    let c33 = c34
+    let c34 = c35
+    let c35 = c36
+    let c36 = c37
+    let c37 = c38
+    let c38 = c39
+    let c39 = c40
+    let c40 = c41
+    let c41 = c42
+    let c42 = c43
+    let c43 = c44
+    let c44 = c45
+    let c45 = c46
+    let c46 = c47
+    let c47 = c48
+    let c48 = c49
+    let c49 = c50
+    let c50 = c51
+    let c51 = c52
+    let c52 = c53
+    let c53 = c54
+    let c54 = c55
+    let c55 = c56
+    let c56 = c57
+    let c57 = c58
+    let c58 = c59
+    let c59 = c60
+    let c60 = c61
+    let c61 = c62
+    let c62 = c63
+    let c63 = c64
+    let c64 = c65
+    let c65 = c66
+    let c66 = c67
+    let c67 = c68
+    let c68 = c69
+    let c69 = token
+    let m = greet(text: name)
+    match m.done
+      true =>
+        let memo = token
+        break
+      false => pass
+  let v = wide
+  let c00 = pin
+  succeed done = true

@@ -1,0 +1,18 @@
+rule 大口の明細(big_lines) v1
+description "注文の明細のうち、1_000 円以上の行の数。通貨は JPY と書く（架空）"
+
+elements 明細(lines)
+  価格(price) : money[JPY]  range >=0JPY <=10_000JPY
+
+outputs
+  大口の数(big_lines) : number  round down(1)
+
+table 価格ごとの大口(big_by_price)
+policy unique
+| 価格       | -> 大口(big) : bool |
+| >=1_000JPY | true                |
+| <1_000JPY  | false               |
+
+count 大口の件数(big_count) over 明細 where 大口  range >=0 <=20
+
+define 大口の数 : number = 大口の件数

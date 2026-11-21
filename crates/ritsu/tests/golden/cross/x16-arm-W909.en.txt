@@ -1,0 +1,11 @@
+ok refund_route.rule
+returns.flow: ok
+refunds.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+warning[ritsu W909]: returns.flow:19: The action `refund_order` of refunds.gate allows every call of the task `refund_order` here only where the resource holds what the gate says the flow holds, and the task declares no error for a denial
+    19 |       refund_order(orderId: order)
+  = Where the flow makes this call, `route(amount: resource.total).who` (the flow's `r.who`) is `itself`.
+  = The gate says what the flow holds of the resource: `total = amount` under `resource Order from order` (refunds.gate line 19). Nothing checks that the resource the service reads holds the same.
+  = Where the resource does not, the call can be denied, for example: workflow returns, Order, who: clerk (as when total is 51GBP).
+  = A run that is denied stops with a failure the workflow does not declare.
+  = Declare the error on the task, `errors denied = 403`, and say under the call what happens when it is denied (`on denied => …`).
+ritsu check: 3 files (rulec 1, dandori 1, sekisho 1): all pass (1 warning); borders between the languages: 1 checked, 1 undecided

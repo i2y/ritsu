@@ -1,0 +1,9 @@
+ok card_fee.rule
+warning[dandori W104]: pay.flow:20:1: nothing says what range `amount` is in (the answer of `amount_of` has no range), and `amount` of the rule `card_fee` takes `>=1 <=1_000_000`
+    20 |   let worked = card_fee(amount: amount)
+pay.flow: ok (1 warning(s))
+warning[ritsu W201]: pay.flow:20:1: Whether the call of the rule card_fee keeps its precondition `fee range >=0 <=20_000` cannot be decided
+    20 |   let worked = card_fee(amount: amount)
+  = nothing says what range `amount` is in (the answer of `amount_of` has no range)
+  = The workflow's code does not work out what the rule works out: where the rule's generated code works the value out, it refuses a call whose value falls outside the range.
+ritsu check: 2 files (rulec 1, dandori 1): all pass (2 warnings); borders between the languages: 1 checked, 1 undecided

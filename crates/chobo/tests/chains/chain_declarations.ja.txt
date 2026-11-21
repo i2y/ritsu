@@ -1,0 +1,8 @@
+エラー[E002]: chain_declarations.book:8:42: 単位 `USD` が宣言されていません
+     8 | account seller_balance(seller: string) : USD
+  = `USD` は 11、12、15 行目にも書かれています
+エラー[E030]: chain_declarations.book:17:7: キーの `payment` は振替 `capture` の引数にありません
+    17 |   key payment
+エラー[E002]: chain_declarations.book:21:63: 型 `dollars` がありません。型は string か、宣言した単位の名前です
+    21 | transfer processing_fee(payment: string, seller: string, fee: dollars)
+chain_declarations.book: エラー 3 件、警告 0 件

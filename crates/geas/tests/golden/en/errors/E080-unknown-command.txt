@@ -1,2 +1,1 @@
-error[E080]: `chekc` is not a command
-  = the commands: check, snap, drift, map, affected, scenarios, explain, skill; `geas --help` says more
+error[E080]: there is no command `chekc`; run `geas --help`

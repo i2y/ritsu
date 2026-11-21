@@ -1,0 +1,28 @@
+dates purchase_ja_terms v1
+description "What ringi writes from the deadlines of purchase.ja.ringi: from the day a stage starts, when it is due and when its reminder goes"
+use calendar "../../../../examples/shared/office.cal"
+
+inputs
+  started : date  range >=2026-04-01 <=2426-03-31
+
+date remind = started
+  + 3 business days
+  at 09:00
+
+date due = started
+  + 5 business days
+  at end of day
+
+date due_escalated = due
+  + 1 day
+  + 5 business days
+  at end of day
+
+date remind_escalated = due
+  + 1 day
+  + 3 business days
+  at 09:00
+
+date board_due = started
+  + 10 business days
+  at end of day

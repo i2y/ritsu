@@ -1,0 +1,10 @@
+エラー[E002]: tests/fixtures/chain_variables.flow:26:13: `Step` にフィールド `approvr` はありません（あるのは approver）
+    26 |     yield s.approvr
+エラー[E002]: tests/fixtures/chain_variables.flow:28:11: タスクか規則 `fetsh` はありません
+    28 |   let q = fetsh(id: id)
+エラー[E003]: tests/fixtures/chain_variables.flow:30:11: レコードの型を `let r: <レコード> = {…}` のように書いてください
+    30 |   let r = {total: 3}
+エラー[E003]: tests/fixtures/chain_variables.flow:32:24: `for` で回せるのはリストです。これは `string` です
+    32 |   let names = for n in id at most 3
+エラー[E009]: tests/fixtures/chain_variables.flow:35:9: `match` に渡せるのは列挙・bool・オプショナルな値（`T?`）です。これは `string` です
+    35 |   match id

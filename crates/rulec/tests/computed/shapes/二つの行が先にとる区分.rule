@@ -1,0 +1,26 @@
+rule 二つの行が先にとる区分(first_band_rows_together) v1
+description "policy first の表が注文の種類と金額から書く区分を、金額だけと一緒に読む。46 円未満では物品が小、役務が中なので、最後の行が大を書くより先に、二つの行が 46 円未満の注文を全部とる。46 円未満で大の行は求められない"
+
+enum 選択(choice) = 一(one) | 二(two)
+enum 注文の種類(order_kind) = 物品(goods) | 役務(service)
+enum 大きさ(size) = 小(small) | 中(medium) | 大(large)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=90円
+  種類(kind)   : 注文の種類
+
+outputs
+  答え(x) : 選択
+
+table 区分の表(band_of)
+policy first
+| 金額  | 種類 | -> 区分(band) : 大きさ |
+| <46円 | 物品 | 小                     |
+| <46円 | 役務 | 中                     |
+| -     | -    | 大                     |
+
+table 選ぶ(pick)
+| 金額   | 区分 | -> 答え |
+| <46円  | 小   | 一      |
+| <46円  | 中   | 二      |
+| >=46円 | 大   | 一      |

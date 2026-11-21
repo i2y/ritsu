@@ -1,0 +1,25 @@
+rule net_of_two_roundings v1
+description "A rebate of 1% rounded down less a charge of 2% rounded up: the net is -1 yen up to 50 yen and at 100 yen, and -2 yen otherwise. The tier table reads only the net, and the check cuts the amount into pieces to show which net each piece gives"
+
+enum choice = one | two
+enum tier = shallow | deep
+
+inputs
+  amount : money[JPY]  range >=1JPY <=105JPY
+
+define net : money[JPY] = down(amount * 1%, 1JPY) - up(amount * 2%, 1JPY)
+
+outputs
+  x : choice
+
+table tier_of
+| net   | -> tier : tier |
+| -2JPY | deep           |
+| -1JPY | shallow        |
+
+table pick
+| amount        | net   | tier    | -> x |
+| <=6JPY        | -1JPY | shallow | one  |
+| >=7JPY <47JPY | -1JPY | shallow | two  |
+| >46JPY        | -2JPY | deep    | one  |
+| >46JPY        | -1JPY | shallow | two  |

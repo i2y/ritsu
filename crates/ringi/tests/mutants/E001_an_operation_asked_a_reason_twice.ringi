@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval     not allowed
+  send back         to the requester, at most 2 times
+  comment required  for reject, send back, reject

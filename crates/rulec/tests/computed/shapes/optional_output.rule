@@ -1,0 +1,20 @@
+rule optional_output v1
+description "An optional truth value of an applied rule, absent on the smallest band, read with the amount"
+
+enum choice = one | two | three
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+apply t = "shared/tier.rule" meaning:8c5e54b1fadce0b7
+  amount = amount
+  flag -> t_flag
+
+outputs
+  x : choice
+
+table pick
+| amount                  | t_flag | -> x  |
+| <=10_000JPY             | none   | one   |
+| >10_000JPY <=100_000JPY | false  | two   |
+| >100_000JPY             | true   | three |

@@ -1,0 +1,25 @@
+request rewritten v1 "Parts request"
+description "A stage due by a plant's days, five hours behind UTC, and reminded by the head office's days in Tokyo's time, paused in the head office's days (fictional rules). The same request is in `before/` and in `after/`; its calendars in `after/` close days the ones in `before/` keep open, as calendars written again under a ticket in progress do"
+
+use organization org from "../../../examples/shared/company.ringi"
+use calendar west from "west.cal"
+use calendar office from "office.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  decide  manager
+
+who
+  manager = manager of requester
+
+every stage
+  due in 3 business days in west at 12:00
+  remind after 1 business day in office at 09:00
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+  pause          at most 2 business days in office

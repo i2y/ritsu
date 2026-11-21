@@ -1,0 +1,28 @@
+rule 渡した段階(handed_tier) v1
+description "一つの表がほかの表から渡す段階。シルバーかゴールドで一般にはならず、それを読む準用の最初の行は一般をとる（架空）"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  特別(vip) : bool
+  会員(member) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+table 特別で決める基準(base_by_vip)
+policy unique
+| 特別  | -> 基準(base) : 段階 |
+| true  | ゴールド             |
+| false | シルバー             |
+
+# 低い段階は基準をとる。基準はシルバーかゴールド
+table 会員で決める引き上げ(lift_by_member)
+policy unique
+| 会員               | -> 引き上げ(lift) : 段階 |
+| 一般, シルバー     | 基準                     |
+| ゴールド, プラチナ | ゴールド                 |
+
+apply 引き上げから(lifted) = "一般から読む値引き.rule" meaning:32fe498486d05d88
+  段階 = 引き上げ
+  値引き -> 値引き

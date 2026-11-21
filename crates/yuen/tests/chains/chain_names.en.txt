@@ -1,0 +1,5 @@
+error[E008]: chain_names.req:10:9: The role accounting is not declared
+    10 |   owner accounting
+  = Declare a role with `role legal "decides how the articles read"` before it is used; that stops a misspelling (`Legal` for `legal`).
+  = `accounting` is written on lines 11, 16 and 17 too.
+chain_names.req: 1 error

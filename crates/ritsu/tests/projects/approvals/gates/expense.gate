@@ -1,0 +1,53 @@
+gate expense v1
+description "Who may answer a stage of an expense request: a manager or a director answers the stage that waits for them, never on their own request, and the approvals workflow passes a request on to its next stage"
+namespace Expense
+
+role manager
+  description "Answers the stages of the requests of their team"
+role director
+  description "Decides the requests the managers have approved"
+
+principal User
+  description "A member of the staff, signed in"
+  roles manager, director
+
+workflow approvals from "../flows/approvals.flow"
+  description "Runs the stages of one expense request"
+
+resource ExpenseRequest
+  description "An expense request, waiting at one of its stages"
+  attributes
+    requester : User
+    amount    : money[JPY]  range >=1JPY <=10_000_000JPY
+
+action answer
+  description "Approve, send back or reject the stage of a request that waits for the caller"
+  principal User
+  resource ExpenseRequest
+
+action pass_on
+  description "Pass a request on to its next stage"
+  principal Workflow
+  resource ExpenseRequest
+
+permit approvers_answer
+  description "A manager or a director answers the stage that waits for them"
+  principal in manager, director
+  action answer
+
+permit the_workflow_passes_requests_on
+  description "The approvals workflow passes a request on"
+  principal is workflow approvals
+  action pass_on
+
+forbid no_one_answers_their_own_request
+  description "No one answers their own request"
+  principal is User
+  action answer
+  when resource.requester is principal
+
+expect deny requesters_never_answer_their_own
+  description "Whatever their roles, a requester never answers their own request"
+  principal is User
+  action answer
+  when resource.requester is principal

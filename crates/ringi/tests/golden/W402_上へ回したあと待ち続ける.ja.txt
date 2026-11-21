@@ -1,0 +1,5 @@
+警告[W402]: tests/mutants/W402_上へ回したあと待ち続ける.ringi:12:5: ステップ `決裁` は、期限を過ぎても待ち続けます（`when late escalate, then stay`）。チケットが終わらないことがあります
+    12 |     when late escalate, then stay
+  = 待ってよいなら、そのままでかまいません。終わらせるなら、`stay` を `expire` か `escalate` にしてください。
+ok tests/mutants/W402_上へ回したあと待ち続ける.ringi: 申請の種類、フィールド 1 個、ステップ 2 個
+  終わらないことがあります: ステップ `決裁` は、期限を過ぎても待ち続けます（`when late escalate, then stay`）

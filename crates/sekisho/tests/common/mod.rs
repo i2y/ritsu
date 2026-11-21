@@ -14,7 +14,7 @@ use std::sync::Arc;
 /// The ports as ritsu-project's `Joined::sekisho` makes them: rulec, koyomi, chobo and dandori,
 /// each through its own engine (rulec reads the days of a koyomi date through koyomi's).
 pub fn ports() -> ritsu_ports::GatePorts {
-    let dandori = Rc::new(dandori::ports::Engine);
+    let dandori = Rc::new(dandori::ports::Engine::default());
     ritsu_ports::GatePorts {
         rules: Rc::new(rulec::ports::Engine::with_dates(Arc::new(koyomi::ports::Engine))),
         dates: Rc::new(koyomi::ports::Engine),

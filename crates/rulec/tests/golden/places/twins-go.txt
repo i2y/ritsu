@@ -1,0 +1,2 @@
+error: `size_label.rule` and `sizeLabel.rule` both write into the Go package out/go/sizelabel/ (out/go/sizelabel/size_label.go and out/go/sizelabel/sizeLabel.go), which then declares the same names twice and does not build; give one of them another alias
+エラー: `size_label.rule` と `sizeLabel.rule` が、どちらも Go のパッケージ out/go/sizelabel/ に書きます（out/go/sizelabel/size_label.go と out/go/sizelabel/sizeLabel.go）。一つのパッケージで同じ名前を二度宣言するので組めません。どちらかの別名を変えてください

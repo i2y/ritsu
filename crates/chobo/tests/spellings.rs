@@ -577,11 +577,11 @@ fn the_schema_postgresql_has_itself_stops_a_role_that_is_no_superuser() {
     let file = work.path().join("information_schema.sql");
     std::fs::write(&file, sql).unwrap();
     // a role that may create in the database, so that only the schema is what stops it
-    let _ = pg.db().args(["-c", "create role chobo_application nosuperuser"]).output();
-    let grant = pg.db().args(["-c", "do $$ begin execute format('grant all on database %I to chobo_application', current_database()); end $$"]).output().unwrap();
-    assert!(grant.status.success(), "{}", String::from_utf8_lossy(&grant.stderr));
-    let out = pg.db().args(["-c", "set role chobo_application"]).arg("-f").arg(&file).output().unwrap();
-    let said = String::from_utf8_lossy(&out.stderr).to_string();
+    let _ = finish(pg.db().args(["-c", "create role chobo_application nosuperuser"]), SQL_LIMIT, "psql creating the role chobo_application");
+    let grant = finish(pg.db().args(["-c", "do $$ begin execute format('grant all on database %I to chobo_application', current_database()); end $$"]), SQL_LIMIT, "psql granting the database to chobo_application");
+    assert!(grant.ok, "{}", grant.stderr);
+    let out = finish(pg.db().args(["-c", "set role chobo_application"]).arg("-f").arg(&file), SQL_LIMIT, "psql loading a book into information_schema as chobo_application");
+    let said = out.stderr.to_string();
     assert!(said.contains("permission denied for schema information_schema"), "{said}");
     eprintln!("compared: the schema information_schema stops PostgreSQL, as a role that is no superuser");
 }
@@ -975,10 +975,10 @@ fn the_sql_of_postgresql_breaks_where_w108_says() {
         let (rel, sql) = f.files(Target::Postgres).remove(0);
         let file = work.path().join(format!("{i}-{rel}"));
         std::fs::write(&file, sql).unwrap();
-        let out = pg.db().arg("-f").arg(&file).output().unwrap();
+        let out = finish(pg.db().arg("-f").arg(&file), SQL_LIMIT, "psql loading a book of the spellings into PostgreSQL");
         // psql names the file and the line before what PostgreSQL said: only the latter is kept
-        let said = String::from_utf8_lossy(&out.stderr).to_string();
-        let mut why = (!out.status.success()).then(|| said.lines().filter_map(|l| l.split_once("ERROR:").map(|(_, e)| format!("ERROR:{e}"))).collect::<Vec<_>>().join("\n")).map(|e| if e.is_empty() { said.clone() } else { e });
+        let said = out.stderr.to_string();
+        let mut why = (!out.ok).then(|| said.lines().filter_map(|l| l.split_once("ERROR:").map(|(_, e)| format!("ERROR:{e}"))).collect::<Vec<_>>().join("\n")).map(|e| if e.is_empty() { said.clone() } else { e });
         if why.is_none() {
             // the functions W108 says are one: an account's balance, called as an untyped driver calls
             for found in chobo::spellings::find(&f.book).into_iter().filter(|x| x.said.iter().any(|s| s.lang == target::Lang::Sql)) {

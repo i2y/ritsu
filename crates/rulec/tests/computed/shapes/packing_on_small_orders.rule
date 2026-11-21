@@ -1,0 +1,26 @@
+rule packing_on_small_orders v1
+description "A fee of 10% of the amount plus a packing charge. An order under 50 yen with a fee of 8 yen or more is in the high tier, which a packing charge of 2 yen or less never brings: the check works the fee out again with the amount held to what that row of the tier table takes"
+
+enum choice = one | two
+enum tier = low | mid | high
+
+inputs
+  amount  : money[JPY]  range >=0JPY <=100JPY
+  packing : money[JPY]  range >=0JPY <=10JPY
+
+define fee : money[JPY] = down(amount * 10%, 1JPY) + packing
+
+outputs
+  x : choice
+
+table tier_of
+| amount  | fee     | -> tier : tier |
+| <50JPY  | <8JPY   | low            |
+| <50JPY  | >=8JPY  | high           |
+| >=50JPY | -       | mid            |
+
+table pick
+| packing | tier | -> x |
+| <=2JPY  | low  | one  |
+| <=2JPY  | mid  | two  |
+| >2JPY   | -    | two  |

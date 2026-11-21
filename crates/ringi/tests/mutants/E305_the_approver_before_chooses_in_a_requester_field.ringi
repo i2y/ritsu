@@ -1,0 +1,16 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  reviewer : person "Reviewer"
+
+route
+  check   finance
+  review  chosen_reviewer
+
+who
+  finance         = team finance
+  chosen_reviewer = chosen by previous approver in reviewer
+
+ticket
+  self approval  not allowed

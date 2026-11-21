@@ -1,0 +1,16 @@
+rule 三枚の行(odd_cell_ja) v1
+description "三枚のときの行。枚数は二枚ずつ増えるので、三枚にはならない"
+
+inputs
+  贈り物の数(gifts) : number  range >=0 <=5
+
+define 枚数(sheets) : number = 贈り物の数 * 2
+
+outputs
+  注記(note) : bool
+
+table 注記の判定(note_of)
+policy first
+| 枚数 | -> 注記 |
+| 3    | true    |
+| -    | false   |

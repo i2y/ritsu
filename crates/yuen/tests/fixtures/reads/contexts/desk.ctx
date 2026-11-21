@@ -1,0 +1,13 @@
+context RefundDesk(refund_desk) v1
+description "Takes refunds and says who may give them: written for the tests of yuen affected"
+owner "Refund desk"
+
+owns
+  dir "../rules", "../dates", "../gates", "../api", "../proto", "../app"
+
+published language rulec.refund_band.v1
+  rulec "../rules/refund_band.rule"
+
+terms
+  band "How large a refund is, by the items sent back"
+    means rulec "../rules/refund_band.rule" output band

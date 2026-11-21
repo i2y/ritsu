@@ -1,0 +1,8 @@
+ok refund_route.rule
+refund.flow: ok
+error[ritsu E201]: refund.flow:22:1: The call of the rule check can give it values that break its precondition `never express = true, shipped >= 50`
+    22 |   let decision = check(shipped: 60, asked: asked, express: true)
+  = at express = true, shipped = 60 the values are the combination of `never express = true, shipped >= 50`
+  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, from what the runs that reach this call last put in the values.
+  = The values the call gives, `express: true` and `shipped: 60`, are the combination `never express = true, shipped >= 50` refuses. With `express` given `false`, or `shipped` given a value `< 50`, the line holds.
+ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided

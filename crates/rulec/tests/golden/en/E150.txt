@@ -1,0 +1,8 @@
+error[E150]: The range of the definition does not meet the values it can reach
+  --> tests/mutants/m_e150.rule:9 definition fee
+  |
+9 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=40_000JPY
+  |                                                    ^^^^^^^^^^^^^^^^^ fee can only be >=0JPY <=30_000JPY
+  |
+ fee takes no value in this range (>=40_000JPY) on any input, so the generated code would refuse every call where it works fee out.
+ Hint: write ends that meet the reachable values >=0JPY <=30_000JPY. Without the range, fee takes every value it reaches.

@@ -120,15 +120,9 @@ fn under(p: &Project, fi: usize, lines: Vec<Text>, out: &mut Vec<Text>) {
 
 fn write_file(dest: &Path, bytes: &[u8], p: &Project) -> Result<(), Text> {
     if let Some(parent) = dest.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            let d = shown_abs(p, parent);
-            tr!("{d} を作れません: {e}", "Cannot make {d}: {e}")
-        })?;
+        ritsu_base::fs::create_dir_all(parent).map_err(|e| ritsu_base::cli::cannot_create(&shown_abs(p, parent), &e))?;
     }
-    std::fs::write(dest, bytes).map_err(|e| {
-        let d = shown_abs(p, dest);
-        tr!("{d} に書けません: {e}", "Cannot write {d}: {e}")
-    })
+    ritsu_base::fs::write(dest, bytes).map_err(|e| ritsu_base::cli::cannot_write(&shown_abs(p, dest), &e))
 }
 
 /// An absolute path under the root, as the text of a command shows it (DESIGN 2.2).

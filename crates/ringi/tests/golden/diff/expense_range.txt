@@ -1,0 +1,6 @@
+  The request `expense` (v1 → v2): `expense_old.ringi` → `expense_new.ringi`
+Form:
+    Items › Price — Accepts: from 1 JPY to 1,000,000 JPY → from 1 JPY to 2,000,000 JPY
+    Amount — Accepts: from 1 JPY to 10,000,000 JPY (worked out, it can be from 1 JPY to 20,000,000 JPY) → from 1 JPY to 10,000,000 JPY (worked out, it can be from 1 JPY to 40,000,000 JPY)
+Tickets in progress:
+  A ticket finishes with the version of the request it was submitted with: tickets submitted with version 1 finish as version 1 says, and what changes here applies to requests submitted with version 2.

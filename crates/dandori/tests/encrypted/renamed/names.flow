@@ -4,24 +4,25 @@ description "The names the client of an encrypted history declares, given to rec
 
 use proto calls from "protos/calls.proto"
 
-# names.flow with the names W105 says of it changed: the names its client can keep.
+# names.flow with the names W105 says of it changed. CodecFailureConverter and CodecDataConverter,
+# which Go's client.go declares for itself alone, keep theirs: the package gives its own others.
 record Reached
   answer : string
 
 record PickedUp
   answered : bool
 
-record Confirmed
+record CodecFailureConverter
   note : string
 
 record Pause
   reason : string
 
-enum LineKind = landline | mobile
+enum CodecDataConverter = landline | mobile
 
 inputs
   number : string  secret
-  line   : LineKind
+  line   : CodecDataConverter
 
 outputs
   receipt : string
@@ -40,7 +41,7 @@ task call(number: string) -> Reached
   callback
   timeout 1 day
 
-task confirm(answer: string) -> Confirmed
+task confirm(answer: string) -> CodecFailureConverter
   callback
   timeout 1 day
 

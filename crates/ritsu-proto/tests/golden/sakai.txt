@@ -306,146 +306,146 @@ message Status 69
 == tests/encrypted/protos/calls.ja.proto
 syntax proto3
 package calls.ja.v1
-import dandori/v1/options.proto 8:1 public=false weak=false
-message Connection 38
-  field number 1 None Scalar("string") json=Some("番号") oneof=None line=39
-  field line 2 None Named("Line") json=Some("回線") oneof=None line=40
-message NewType 48
-  field memo 1 None Scalar("string") json=Some("記録") oneof=None line=49
-message PayloadCodec 52
-  field answered 1 None Scalar("bool") json=Some("出た") oneof=None line=53
-message ClientOptions 56
-  field reason 1 None Scalar("string") json=Some("理由") oneof=None line=57
-message DataConverter 60
-  field answer 1 None Scalar("string") json=Some("答え") oneof=None line=61
-message CodecDataConverter 64
-  field note 1 None Scalar("string") json=Some("確認") oneof=None line=65
-message Ack 68
-message StatusRequest 70
-enum Line 43
-  value landline 0 44
-  value mobile 1 45
-service CallService 10
+import dandori/v1/options.proto 10:1 public=false weak=false
+message Connection 40
+  field number 1 None Scalar("string") json=Some("番号") oneof=None line=41
+  field line 2 None Named("Line") json=Some("回線") oneof=None line=42
+message NewType 50
+  field memo 1 None Scalar("string") json=Some("記録") oneof=None line=51
+message PayloadCodec 54
+  field answered 1 None Scalar("bool") json=Some("出た") oneof=None line=55
+message ClientOptions 58
+  field reason 1 None Scalar("string") json=Some("理由") oneof=None line=59
+message DataConverter 62
+  field answer 1 None Scalar("string") json=Some("答え") oneof=None line=63
+message CodecDataConverter 66
+  field note 1 None Scalar("string") json=Some("確認") oneof=None line=67
+message Ack 70
+message StatusRequest 72
+enum Line 45
+  value landline 0 46
+  value mobile 1 47
+service CallService 12
   option (dandori.v1.workflow) = {name: "名前の重なり", version: 1}
-  method Connect Connection NewType false false 13
+  method Connect Connection NewType false false 15
     option (dandori.v1.start) = {fails: ["出ない", "確かめられない"]}
-  method EncryptedClient PayloadCodec Ack false false 17
+  method EncryptedClient PayloadCodec Ack false false 19
     option (dandori.v1.event) = {task: "出る"}
-  method Encrypted ClientOptions Ack false false 21
+  method Encrypted ClientOptions Ack false false 23
     option (dandori.v1.event) = {task: "待たせる"}
-  method Dial DataConverter Ack false false 25
+  method Dial DataConverter Ack false false 27
     option (dandori.v1.answer) = {task: "かける"}
-  method CodecFailureConverter CodecDataConverter Ack false false 29
+  method CodecFailureConverter CodecDataConverter Ack false false 31
     option (dandori.v1.answer) = {task: "確かめる"}
-  method GetStatus StatusRequest dandori.v1.Status false false 33
+  method GetStatus StatusRequest dandori.v1.Status false false 35
     option (dandori.v1.status) = {}
 == tests/encrypted/protos/calls.proto
 syntax proto3
 package calls.v1
-import dandori/v1/options.proto 13:1 public=false weak=false
-message Connection 43
-  field number 1 None Scalar("string") json=None oneof=None line=44
-  field line 2 None Named("Line") json=None oneof=None line=45
-message NewType 53
-  field receipt 1 None Scalar("string") json=None oneof=None line=54
-message PayloadCodec 57
-  field answered 1 None Scalar("bool") json=None oneof=None line=58
-message ClientOptions 61
-  field reason 1 None Scalar("string") json=None oneof=None line=62
-message DataConverter 65
-  field answer 1 None Scalar("string") json=None oneof=None line=66
-message CodecDataConverter 69
-  field note 1 None Scalar("string") json=None oneof=None line=70
-message Ack 73
-message StatusRequest 75
-enum Line 48
-  value landline 0 49
-  value mobile 1 50
-service CallService 15
+import dandori/v1/options.proto 17:1 public=false weak=false
+message Connection 47
+  field number 1 None Scalar("string") json=None oneof=None line=48
+  field line 2 None Named("Line") json=None oneof=None line=49
+message NewType 57
+  field receipt 1 None Scalar("string") json=None oneof=None line=58
+message PayloadCodec 61
+  field answered 1 None Scalar("bool") json=None oneof=None line=62
+message ClientOptions 65
+  field reason 1 None Scalar("string") json=None oneof=None line=66
+message DataConverter 69
+  field answer 1 None Scalar("string") json=None oneof=None line=70
+message CodecDataConverter 73
+  field note 1 None Scalar("string") json=None oneof=None line=74
+message Ack 77
+message StatusRequest 79
+enum Line 52
+  value landline 0 53
+  value mobile 1 54
+service CallService 19
   option (dandori.v1.workflow) = {name: "names", version: 1}
-  method Connect Connection NewType false false 18
+  method Connect Connection NewType false false 22
     option (dandori.v1.start) = {fails: ["NoAnswer", "Unconfirmed"]}
-  method EncryptedClient PayloadCodec Ack false false 22
+  method EncryptedClient PayloadCodec Ack false false 26
     option (dandori.v1.event) = {task: "pick_up"}
-  method Encrypted ClientOptions Ack false false 26
+  method Encrypted ClientOptions Ack false false 30
     option (dandori.v1.event) = {task: "hold"}
-  method Dial DataConverter Ack false false 30
+  method Dial DataConverter Ack false false 34
     option (dandori.v1.answer) = {task: "call"}
-  method CodecFailureConverter CodecDataConverter Ack false false 34
+  method CodecFailureConverter CodecDataConverter Ack false false 38
     option (dandori.v1.answer) = {task: "confirm"}
-  method GetStatus StatusRequest dandori.v1.Status false false 38
+  method GetStatus StatusRequest dandori.v1.Status false false 42
     option (dandori.v1.status) = {}
 == tests/encrypted/renamed/protos/calls.ja.proto
 syntax proto3
 package calls.ja.v1
-import dandori/v1/options.proto 6:1 public=false weak=false
-message CallRequest 36
-  field number 1 None Scalar("string") json=Some("番号") oneof=None line=37
-  field line 2 None Named("Line") json=Some("回線") oneof=None line=38
-message Receipt 46
-  field memo 1 None Scalar("string") json=Some("記録") oneof=None line=47
-message PickUpNote 50
-  field answered 1 None Scalar("bool") json=Some("出た") oneof=None line=51
-message HoldNote 54
-  field reason 1 None Scalar("string") json=Some("理由") oneof=None line=55
-message ReplyNote 58
-  field answer 1 None Scalar("string") json=Some("答え") oneof=None line=59
-message ConfirmNote 62
-  field note 1 None Scalar("string") json=Some("確認") oneof=None line=63
-message Ack 66
-message StatusRequest 68
-enum Line 41
-  value landline 0 42
-  value mobile 1 43
-service CallService 8
+import dandori/v1/options.proto 7:1 public=false weak=false
+message Connection 37
+  field number 1 None Scalar("string") json=Some("番号") oneof=None line=38
+  field line 2 None Named("Line") json=Some("回線") oneof=None line=39
+message NewType 47
+  field memo 1 None Scalar("string") json=Some("記録") oneof=None line=48
+message PayloadCodec 51
+  field answered 1 None Scalar("bool") json=Some("出た") oneof=None line=52
+message ClientOptions 55
+  field reason 1 None Scalar("string") json=Some("理由") oneof=None line=56
+message DataConverter 59
+  field answer 1 None Scalar("string") json=Some("答え") oneof=None line=60
+message ConfirmNote 63
+  field note 1 None Scalar("string") json=Some("確認") oneof=None line=64
+message Ack 67
+message StatusRequest 69
+enum Line 42
+  value landline 0 43
+  value mobile 1 44
+service CallService 9
   option (dandori.v1.workflow) = {name: "名前の重なり", version: 1}
-  method Begin CallRequest Receipt false false 11
+  method Begin Connection NewType false false 12
     option (dandori.v1.start) = {fails: ["出ない", "確かめられない"]}
-  method PickUp PickUpNote Ack false false 15
+  method PickUp PayloadCodec Ack false false 16
     option (dandori.v1.event) = {task: "出る"}
-  method Hold HoldNote Ack false false 19
+  method Encrypted ClientOptions Ack false false 20
     option (dandori.v1.event) = {task: "待たせる"}
-  method Reply ReplyNote Ack false false 23
+  method Reply DataConverter Ack false false 24
     option (dandori.v1.answer) = {task: "かける"}
-  method Confirm ConfirmNote Ack false false 27
+  method Confirm ConfirmNote Ack false false 28
     option (dandori.v1.answer) = {task: "確かめる"}
-  method GetStatus StatusRequest dandori.v1.Status false false 31
+  method GetStatus StatusRequest dandori.v1.Status false false 32
     option (dandori.v1.status) = {}
 == tests/encrypted/renamed/protos/calls.proto
 syntax proto3
 package calls.v1
-import dandori/v1/options.proto 6:1 public=false weak=false
-message CallRequest 36
-  field number 1 None Scalar("string") json=None oneof=None line=37
-  field line 2 None Named("Line") json=None oneof=None line=38
-message Receipt 46
-  field receipt 1 None Scalar("string") json=None oneof=None line=47
-message PickUpNote 50
-  field answered 1 None Scalar("bool") json=None oneof=None line=51
-message HoldNote 54
-  field reason 1 None Scalar("string") json=None oneof=None line=55
-message ReplyNote 58
-  field answer 1 None Scalar("string") json=None oneof=None line=59
-message ConfirmNote 62
-  field note 1 None Scalar("string") json=None oneof=None line=63
-message Ack 66
-message StatusRequest 68
-enum Line 41
-  value landline 0 42
-  value mobile 1 43
-service CallService 8
+import dandori/v1/options.proto 7:1 public=false weak=false
+message Connection 37
+  field number 1 None Scalar("string") json=None oneof=None line=38
+  field line 2 None Named("Line") json=None oneof=None line=39
+message NewType 47
+  field receipt 1 None Scalar("string") json=None oneof=None line=48
+message PayloadCodec 51
+  field answered 1 None Scalar("bool") json=None oneof=None line=52
+message ClientOptions 55
+  field reason 1 None Scalar("string") json=None oneof=None line=56
+message DataConverter 59
+  field answer 1 None Scalar("string") json=None oneof=None line=60
+message ConfirmNote 63
+  field note 1 None Scalar("string") json=None oneof=None line=64
+message Ack 67
+message StatusRequest 69
+enum Line 42
+  value landline 0 43
+  value mobile 1 44
+service CallService 9
   option (dandori.v1.workflow) = {name: "names", version: 1}
-  method Begin CallRequest Receipt false false 11
+  method Begin Connection NewType false false 12
     option (dandori.v1.start) = {fails: ["NoAnswer", "Unconfirmed"]}
-  method PickUp PickUpNote Ack false false 15
+  method PickUp PayloadCodec Ack false false 16
     option (dandori.v1.event) = {task: "pick_up"}
-  method Hold HoldNote Ack false false 19
+  method Encrypted ClientOptions Ack false false 20
     option (dandori.v1.event) = {task: "hold"}
-  method Reply ReplyNote Ack false false 23
+  method Reply DataConverter Ack false false 24
     option (dandori.v1.answer) = {task: "call"}
-  method Confirm ConfirmNote Ack false false 27
+  method Confirm ConfirmNote Ack false false 28
     option (dandori.v1.answer) = {task: "confirm"}
-  method GetStatus StatusRequest dandori.v1.Status false false 31
+  method GetStatus StatusRequest dandori.v1.Status false false 32
     option (dandori.v1.status) = {}
 == tests/fixtures/apis/warehouse.proto
 syntax proto3
@@ -481,6 +481,24 @@ enum Currency 8
   value CURRENCY_UNSPECIFIED 0 9
   value CURRENCY_JPY 1 10
   value CURRENCY_USD 2 11
+== tests/fixtures/protos/dates.proto
+syntax proto3
+package days.v1
+import google/type/date.proto 8:1 public=false weak=false
+message ShiftRequest 14
+  field day 1 None Named("google.type.Date") json=None oneof=None line=15
+  field by 2 None Scalar("int32") json=None oneof=None line=16
+message Ymd 19
+  field year 1 None Scalar("int32") json=None oneof=None line=20
+  field month 2 None Scalar("int32") json=None oneof=None line=21
+  field day 3 None Scalar("int32") json=None oneof=None line=22
+message ShiftResponse 25
+  field day 1 None Named("google.type.Date") json=None oneof=None line=26
+  field also 2 None Named("google.type.Date") json=None oneof=None line=27
+  field more 3 Repeated Named("google.type.Date") json=None oneof=None line=28
+  field own 4 None Named("Ymd") json=None oneof=None line=29
+service DayService 10
+  method Shift ShiftRequest ShiftResponse false false 11
 == tests/fixtures/protos/shop/v1/order.proto
 syntax proto3
 package shop.v1
@@ -690,6 +708,32 @@ message Receipt 9
   field amount 2 None Scalar("int32") json=None oneof=None line=11
 service ReceiptService 14
   method GetReceipt GetReceiptRequest Receipt false false 15
+== tests/fixtures/services/dates.proto
+syntax proto3
+package dates.v1
+import dandori/v1/options.proto 8:1 public=false weak=false
+import google/protobuf/struct.proto 9:1 public=false weak=false
+import google/type/date.proto 10:1 public=false weak=false
+message BookRequest 29
+  field id 1 None Scalar("string") json=None oneof=None line=30
+  field since 2 None Named("google.type.Date") json=None oneof=None line=31
+  field closed 3 Repeated Named("google.type.Date") json=None oneof=None line=32
+  field extra 4 None Named("google.protobuf.Value") json=None oneof=None line=33
+message Span 36
+  field first 1 None Named("google.type.Date") json=None oneof=None line=37
+message BookResponse 40
+  field booked_on 1 None Named("google.type.Date") json=None oneof=None line=41
+  field span 2 None Named("Span") json=None oneof=None line=42
+  field days 3 Repeated Named("google.type.Date") json=None oneof=None line=43
+  field note 4 None Scalar("string") json=None oneof=None line=44
+service BookingService 12
+  option (dandori.v1.workflow) = {name: "service_date_outputs", version: 1}
+  method Book BookRequest BookResponse false false 15
+    option (dandori.v1.start) = {}
+service BookingServiceJa 21
+  option (dandori.v1.workflow) = {name: "予約の日付の出力", version: 1}
+  method Book BookRequest BookResponse false false 24
+    option (dandori.v1.start) = {}
 == tests/fixtures/services/methods.proto
 syntax proto3
 package shop.v1
@@ -840,6 +884,38 @@ service ApprovalService 12
     option (dandori.v1.event) = {task: "承認の知らせ"}
   method GetStatus GetStatusRequest dandori.v1.Status false false 23
     option (dandori.v1.status) = {}
+== tests/flows/protos/date_names.proto
+syntax proto3
+package date_names.v1
+import dandori/v1/options.proto 9:1 public=false weak=false
+import google/type/date.proto 10:1 public=false weak=false
+message RentRequest 37
+  field car 1 None Scalar("string") json=None oneof=None line=38
+  field pickup 2 None Named("google.type.Date") json=None oneof=None line=39
+  field dropoff 3 None Named("google.type.Date") json=None oneof=None line=40
+  field closed 4 Repeated Named("google.type.Date") json=None oneof=None line=41
+  field driver 5 None Named("Driver") json=None oneof=None line=42
+  field others 6 Repeated Named("Driver") json=None oneof=None line=43
+message Driver 46
+  field name 1 None Scalar("string") json=None oneof=None line=47
+  field licensed_on 2 None Named("google.type.Date") json=None oneof=None line=48
+message RentResponse 51
+message AnswerReturnRequest 53
+  field returned_on 1 None Named("google.type.Date") json=None oneof=None line=54
+  field km 2 None Scalar("int32") json=None oneof=None line=55
+message AnswerReturnResponse 58
+service DateNames 12
+  option (dandori.v1.workflow) = {name: "service_date_names", version: 1}
+  method Rent RentRequest RentResponse false false 15
+    option (dandori.v1.start) = {fails: ["late"]}
+  method AnswerReturn AnswerReturnRequest AnswerReturnResponse false false 19
+    option (dandori.v1.answer) = {task: "wait_for_return"}
+service DateNamesJa 25
+  option (dandori.v1.workflow) = {name: "日付の名前のサービス", version: 1}
+  method Rent RentRequest RentResponse false false 28
+    option (dandori.v1.start) = {fails: ["返却の遅れ"]}
+  method AnswerReturn AnswerReturnRequest AnswerReturnResponse false false 32
+    option (dandori.v1.answer) = {task: "返却を待つ"}
 == tests/flows/protos/order.proto
 syntax proto3
 package order.v1
@@ -877,6 +953,38 @@ service OrderService 12
   method Get GetRequest Order false false 14
   method Ship ShipRequest Order false false 16
   method Pick PickRequest PickResponse false false 18
+== tests/flows/protos/rentals.proto
+syntax proto3
+package rentals.v1
+import dandori/v1/options.proto 11:1 public=false weak=false
+import google/type/date.proto 12:1 public=false weak=false
+message RentRequest 39
+  field car 1 None Scalar("string") json=None oneof=None line=40
+  field pickup 2 None Named("google.type.Date") json=None oneof=None line=41
+  field dropoff 3 None Named("google.type.Date") json=None oneof=None line=42
+  field closed 4 Repeated Named("google.type.Date") json=None oneof=None line=43
+  field driver 5 None Named("Driver") json=None oneof=None line=44
+  field others 6 Repeated Named("Driver") json=None oneof=None line=45
+message Driver 48
+  field name 1 None Scalar("string") json=None oneof=None line=49
+  field licensed_on 2 None Named("google.type.Date") json=None oneof=None line=50
+message RentResponse 53
+message AnswerReturnRequest 55
+  field returned_on 1 None Named("google.type.Date") json=None oneof=None line=56
+  field km 2 None Scalar("int32") json=None oneof=None line=57
+message AnswerReturnResponse 60
+service RentalService 14
+  option (dandori.v1.workflow) = {name: "service_dates", version: 1}
+  method Rent RentRequest RentResponse false false 17
+    option (dandori.v1.start) = {fails: ["late"]}
+  method AnswerReturn AnswerReturnRequest AnswerReturnResponse false false 21
+    option (dandori.v1.answer) = {task: "wait_for_return"}
+service RentalServiceJa 27
+  option (dandori.v1.workflow) = {name: "貸し出しの日付", version: 1}
+  method Rent RentRequest RentResponse false false 30
+    option (dandori.v1.start) = {fails: ["返却の遅れ"]}
+  method AnswerReturn AnswerReturnRequest AnswerReturnResponse false false 34
+    option (dandori.v1.answer) = {task: "返却を待つ"}
 == tests/flows/protos/shelf.proto
 syntax proto3
 package shelf.v1
@@ -952,6 +1060,36 @@ service ShippingService 14
     option (dandori.v1.start) = {fails: ["梱包の遅れ", "検品漏れ"]}
   method AnswerPacking AnswerPackingRequest AnswerPackingResponse false false 21
     option (dandori.v1.answer) = {task: "梱包を待つ"}
+== tests/flows/protos/trips.proto
+syntax proto3
+package trips.v1
+import buf/validate/validate.proto 10:1 public=false weak=false
+import google/type/date.proto 11:1 public=false weak=false
+message PlanRequest 18
+  field traveller 1 None Scalar("string") json=None oneof=None line=19
+  field start 2 None Named("google.type.Date") json=None oneof=None line=20
+message Stop 23
+  field city 1 None Scalar("string") json=None oneof=None line=24
+  field day 2 None Named("google.type.Date") json=None oneof=None line=25
+message PlanResponse 28
+  field id 1 None Scalar("string") json=None oneof=None line=29
+  field start 2 None Named("google.type.Date") json=None oneof=None line=31
+  field end 3 None Named("google.type.Date") json=None oneof=None line=32
+  field rest_days 4 Repeated Named("google.type.Date") json=None oneof=None line=33
+  field first 5 None Named("Stop") json=None oneof=None line=34
+  field stops 6 Repeated Named("Stop") json=None oneof=None line=35
+message BookRequest 38
+  field id 1 None Scalar("string") json=None oneof=None line=39
+  field start 2 None Named("google.type.Date") json=None oneof=None line=40
+  field rest_days 3 Repeated Named("google.type.Date") json=None oneof=None line=41
+  field first 4 None Named("Stop") json=None oneof=None line=42
+  field stops 5 Repeated Named("Stop") json=None oneof=None line=43
+message BookResponse 46
+  field booking_id 1 None Scalar("string") json=None oneof=None line=47
+  field booked_on 2 None Named("google.type.Date") json=None oneof=None line=48
+service TripService 13
+  method Plan PlanRequest PlanResponse false false 14
+  method Book BookRequest BookResponse false false 15
 == tests/spellings/protos/client_answer.proto
 syntax proto3
 package client_answer.v1
@@ -1032,6 +1170,26 @@ service Svc 7
     option (dandori.v1.event) = {task: "wait"}
   method Histories StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
+== tests/spellings/protos/client_keyword.proto
+syntax proto3
+package client_keyword.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message number 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message Sent 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "client_keyword", version: 1}
+  method Begin number Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method Delete Sent Ack false false 14
+    option (dandori.v1.event) = {task: "wait"}
+  method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
 == tests/spellings/protos/client_message.proto
 syntax proto3
 package client_message.v1
@@ -1051,6 +1209,26 @@ service Svc 7
   method Tell Client Ack false false 14
     option (dandori.v1.event) = {task: "wait"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
+== tests/spellings/protos/client_module.proto
+syntax proto3
+package client_module.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message Sent 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "client_module", version: 1}
+  method Require Order Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method Exports Sent Ack false false 14
+    option (dandori.v1.event) = {task: "wait"}
+  method GlobalThis StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
 == tests/spellings/protos/client_run_status.proto
 syntax proto3
@@ -1172,6 +1350,26 @@ service Svc 7
     option (dandori.v1.event) = {task: "wait"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
+== tests/spellings/protos/client_sent_error.proto
+syntax proto3
+package client_sent_error.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message SentWithAnotherValueError 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "client_sent_error", version: 1}
+  method Begin Order Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method Tell SentWithAnotherValueError Ack false false 14
+    option (dandori.v1.event) = {task: "wait"}
+  method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
 == tests/spellings/protos/client_shared.proto
 syntax proto3
 package client_shared.v1
@@ -1272,6 +1470,16 @@ service Svc 7
     option (dandori.v1.event) = {task: "wait"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
+== tests/spellings/protos/proto_type_name.proto
+syntax proto3
+package shop.v1
+message Line 7
+  field sku 1 None Scalar("string") json=None oneof=None line=8
+== tests/spellings/protos/protoの型の名前.proto
+syntax proto3
+package shop.ja.v1
+message Item 7
+  field sku 1 None Scalar("string") json=Some("品番") oneof=None line=8
 == tests/spellings/protos/クライアントのAnswerCallback.proto
 syntax proto3
 package client_answer_callback.ja.v1
@@ -1349,6 +1557,26 @@ service Svc 7
   method Begin Order Reply false false 10
     option (dandori.v1.start) = {fails: ["Late"]}
   method SendOnce Sent Ack false false 14
+    option (dandori.v1.event) = {task: "待つ"}
+  method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
+== tests/spellings/protos/クライアントのSentWithAnotherValueError.proto
+syntax proto3
+package client_sent_error.ja.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message SentWithAnotherValueError 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "クライアントのSentWithAnotherValueError", version: 1}
+  method Begin Order Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method Tell SentWithAnotherValueError Ack false false 14
     option (dandori.v1.event) = {task: "待つ"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
@@ -1492,6 +1720,26 @@ service Svc 7
     option (dandori.v1.event) = {task: "待つ"}
   method Status StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
+== tests/spellings/protos/クライアントのキーワード.proto
+syntax proto3
+package client_keyword.ja.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message number 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message Sent 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "クライアントのキーワード", version: 1}
+  method Begin number Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method Delete Sent Ack false false 14
+    option (dandori.v1.event) = {task: "待つ"}
+  method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
 == tests/spellings/protos/クライアントのグローバル.proto
 syntax proto3
 package client_global.ja.v1
@@ -1531,6 +1779,26 @@ service Svc 7
   method Tell Client Ack false false 14
     option (dandori.v1.event) = {task: "待つ"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
+== tests/spellings/protos/クライアントのモジュール.proto
+syntax proto3
+package client_module.ja.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message Sent 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "クライアントのモジュール", version: 1}
+  method Require Order Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method Exports Sent Ack false false 14
+    option (dandori.v1.event) = {task: "待つ"}
+  method GlobalThis StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
 == tests/spellings/protos/クライアントの二つの型.proto
 syntax proto3
@@ -1632,26 +1900,6 @@ service Svc 7
     option (dandori.v1.answer) = {task: "wait"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
-== tests/spellings/renamed/protos/client_global.proto
-syntax proto3
-package client_global.v1
-import dandori/v1/options.proto 5:1 public=false weak=false
-message Order 23
-  field id 1 None Scalar("string") json=None oneof=None line=24
-message Reply 27
-  field id 1 None Scalar("string") json=None oneof=None line=28
-message Sent 31
-  field note 1 None Scalar("string") json=None oneof=None line=32
-message Ack 35
-message StatusRequest 37
-service Svc 7
-  option (dandori.v1.workflow) = {name: "client_global", version: 1}
-  method Begin Order Reply false false 10
-    option (dandori.v1.start) = {fails: ["Late"]}
-  method Tell Sent Ack false false 14
-    option (dandori.v1.event) = {task: "wait"}
-  method GetStatus StatusRequest dandori.v1.Status false false 18
-    option (dandori.v1.status) = {}
 == tests/spellings/renamed/protos/client_histories_status.proto
 syntax proto3
 package client_histories_status.v1
@@ -1672,23 +1920,23 @@ service Svc 7
     option (dandori.v1.event) = {task: "wait"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
-== tests/spellings/renamed/protos/client_message.proto
+== tests/spellings/renamed/protos/client_keyword.proto
 syntax proto3
-package client_message.v1
+package client_keyword.v1
 import dandori/v1/options.proto 5:1 public=false weak=false
-message Order 23
+message Amount 23
   field id 1 None Scalar("string") json=None oneof=None line=24
 message Reply 27
   field id 1 None Scalar("string") json=None oneof=None line=28
-message Customer 31
+message Sent 31
   field note 1 None Scalar("string") json=None oneof=None line=32
 message Ack 35
 message StatusRequest 37
 service Svc 7
-  option (dandori.v1.workflow) = {name: "client_message", version: 1}
-  method Begin Order Reply false false 10
+  option (dandori.v1.workflow) = {name: "client_keyword", version: 1}
+  method Begin Amount Reply false false 10
     option (dandori.v1.start) = {fails: ["Late"]}
-  method Tell Customer Ack false false 14
+  method Remove Sent Ack false false 14
     option (dandori.v1.event) = {task: "wait"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
@@ -1769,6 +2017,26 @@ service Svc 7
   method Begin Order Reply false false 10
     option (dandori.v1.start) = {fails: ["Late"]}
   method Tell Sent Ack false false 14
+    option (dandori.v1.event) = {task: "wait"}
+  method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
+== tests/spellings/renamed/protos/client_sent_error.proto
+syntax proto3
+package client_sent_error.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message Told 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "client_sent_error", version: 1}
+  method Begin Order Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method Tell Told Ack false false 14
     option (dandori.v1.event) = {task: "wait"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
@@ -1872,6 +2140,26 @@ service Svc 7
     option (dandori.v1.event) = {task: "待つ"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
+== tests/spellings/renamed/protos/クライアントのSentWithAnotherValueError.proto
+syntax proto3
+package client_sent_error.ja.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message Told 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "クライアントのSentWithAnotherValueError", version: 1}
+  method Begin Order Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method Tell Told Ack false false 14
+    option (dandori.v1.event) = {task: "待つ"}
+  method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
 == tests/spellings/renamed/protos/クライアントのStatusのレコード.proto
 syntax proto3
 package client_status_type.ja.v1
@@ -1972,11 +2260,11 @@ service Svc 7
     option (dandori.v1.event) = {task: "待つ"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
-== tests/spellings/renamed/protos/クライアントのグローバル.proto
+== tests/spellings/renamed/protos/クライアントのキーワード.proto
 syntax proto3
-package client_global.ja.v1
+package client_keyword.ja.v1
 import dandori/v1/options.proto 5:1 public=false weak=false
-message Order 23
+message Amount 23
   field id 1 None Scalar("string") json=None oneof=None line=24
 message Reply 27
   field id 1 None Scalar("string") json=None oneof=None line=28
@@ -1985,30 +2273,10 @@ message Sent 31
 message Ack 35
 message StatusRequest 37
 service Svc 7
-  option (dandori.v1.workflow) = {name: "クライアントのグローバル", version: 1}
-  method Begin Order Reply false false 10
+  option (dandori.v1.workflow) = {name: "クライアントのキーワード", version: 1}
+  method Begin Amount Reply false false 10
     option (dandori.v1.start) = {fails: ["Late"]}
-  method Tell Sent Ack false false 14
-    option (dandori.v1.event) = {task: "待つ"}
-  method GetStatus StatusRequest dandori.v1.Status false false 18
-    option (dandori.v1.status) = {}
-== tests/spellings/renamed/protos/クライアントのメッセージ.proto
-syntax proto3
-package client_message.ja.v1
-import dandori/v1/options.proto 5:1 public=false weak=false
-message Order 23
-  field id 1 None Scalar("string") json=None oneof=None line=24
-message Reply 27
-  field id 1 None Scalar("string") json=None oneof=None line=28
-message Customer 31
-  field note 1 None Scalar("string") json=None oneof=None line=32
-message Ack 35
-message StatusRequest 37
-service Svc 7
-  option (dandori.v1.workflow) = {name: "クライアントのメッセージ", version: 1}
-  method Begin Order Reply false false 10
-    option (dandori.v1.start) = {fails: ["Late"]}
-  method Tell Customer Ack false false 14
+  method Remove Sent Ack false false 14
     option (dandori.v1.event) = {task: "待つ"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
@@ -2033,10 +2301,15 @@ service Svc 7
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
 == together
+not found tests/fixtures/protos/dates.proto google/type/date.proto 8:1 tried tests/fixtures/protos/google/type/date.proto
 not found tests/fixtures/protos/unread.proto google/api/annotations.proto 7:1 tried tests/fixtures/protos/google/api/annotations.proto
 not found tests/fixtures/protos/unread.proto google/type/money.proto 8:1 tried tests/fixtures/protos/google/type/money.proto
 not found tests/fixtures/protos/unread.proto shop/v2/cancel.proto 10:1 tried tests/fixtures/protos/shop/v2/cancel.proto
+not found tests/fixtures/services/dates.proto google/type/date.proto 10:1 tried tests/fixtures/services/google/type/date.proto
 not found tests/fixtures/services/unread.proto shop/v2/start.proto 8:1 tried tests/fixtures/services/shop/v2/start.proto
+not found tests/flows/protos/date_names.proto google/type/date.proto 10:1 tried tests/flows/protos/google/type/date.proto
+not found tests/flows/protos/rentals.proto google/type/date.proto 12:1 tried tests/flows/protos/google/type/date.proto
+not found tests/flows/protos/trips.proto google/type/date.proto 11:1 tried tests/flows/protos/google/type/date.proto
 examples/fulfillment/specs/fulfillment.ja.proto sees examples/fulfillment/specs/warehouse.proto
   FulfillRequest.order: shop.ja.v1.Order (examples/fulfillment/specs/fulfillment.ja.proto)
   Order.lines: shop.ja.v1.Line (examples/fulfillment/specs/fulfillment.ja.proto)
@@ -2082,19 +2355,19 @@ tests/encrypted/protos/calls.proto sees
   CallService.CodecFailureConverter: calls.v1.CodecDataConverter (tests/encrypted/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/protos/calls.proto)
   CallService.GetStatus: calls.v1.StatusRequest (tests/encrypted/protos/calls.proto) -> known dandori.v1.Status
 tests/encrypted/renamed/protos/calls.ja.proto sees 
-  CallRequest.line: calls.ja.v1.Line (tests/encrypted/renamed/protos/calls.ja.proto, enum)
-  CallService.Begin: calls.ja.v1.CallRequest (tests/encrypted/renamed/protos/calls.ja.proto) -> calls.ja.v1.Receipt (tests/encrypted/renamed/protos/calls.ja.proto)
-  CallService.PickUp: calls.ja.v1.PickUpNote (tests/encrypted/renamed/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/renamed/protos/calls.ja.proto)
-  CallService.Hold: calls.ja.v1.HoldNote (tests/encrypted/renamed/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/renamed/protos/calls.ja.proto)
-  CallService.Reply: calls.ja.v1.ReplyNote (tests/encrypted/renamed/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/renamed/protos/calls.ja.proto)
+  Connection.line: calls.ja.v1.Line (tests/encrypted/renamed/protos/calls.ja.proto, enum)
+  CallService.Begin: calls.ja.v1.Connection (tests/encrypted/renamed/protos/calls.ja.proto) -> calls.ja.v1.NewType (tests/encrypted/renamed/protos/calls.ja.proto)
+  CallService.PickUp: calls.ja.v1.PayloadCodec (tests/encrypted/renamed/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/renamed/protos/calls.ja.proto)
+  CallService.Encrypted: calls.ja.v1.ClientOptions (tests/encrypted/renamed/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/renamed/protos/calls.ja.proto)
+  CallService.Reply: calls.ja.v1.DataConverter (tests/encrypted/renamed/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/renamed/protos/calls.ja.proto)
   CallService.Confirm: calls.ja.v1.ConfirmNote (tests/encrypted/renamed/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/renamed/protos/calls.ja.proto)
   CallService.GetStatus: calls.ja.v1.StatusRequest (tests/encrypted/renamed/protos/calls.ja.proto) -> known dandori.v1.Status
 tests/encrypted/renamed/protos/calls.proto sees 
-  CallRequest.line: calls.v1.Line (tests/encrypted/renamed/protos/calls.proto, enum)
-  CallService.Begin: calls.v1.CallRequest (tests/encrypted/renamed/protos/calls.proto) -> calls.v1.Receipt (tests/encrypted/renamed/protos/calls.proto)
-  CallService.PickUp: calls.v1.PickUpNote (tests/encrypted/renamed/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/renamed/protos/calls.proto)
-  CallService.Hold: calls.v1.HoldNote (tests/encrypted/renamed/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/renamed/protos/calls.proto)
-  CallService.Reply: calls.v1.ReplyNote (tests/encrypted/renamed/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/renamed/protos/calls.proto)
+  Connection.line: calls.v1.Line (tests/encrypted/renamed/protos/calls.proto, enum)
+  CallService.Begin: calls.v1.Connection (tests/encrypted/renamed/protos/calls.proto) -> calls.v1.NewType (tests/encrypted/renamed/protos/calls.proto)
+  CallService.PickUp: calls.v1.PayloadCodec (tests/encrypted/renamed/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/renamed/protos/calls.proto)
+  CallService.Encrypted: calls.v1.ClientOptions (tests/encrypted/renamed/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/renamed/protos/calls.proto)
+  CallService.Reply: calls.v1.DataConverter (tests/encrypted/renamed/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/renamed/protos/calls.proto)
   CallService.Confirm: calls.v1.ConfirmNote (tests/encrypted/renamed/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/renamed/protos/calls.proto)
   CallService.GetStatus: calls.v1.StatusRequest (tests/encrypted/renamed/protos/calls.proto) -> known dandori.v1.Status
 tests/fixtures/apis/warehouse.proto sees 
@@ -2103,6 +2376,13 @@ tests/fixtures/apis/warehouse.proto sees
   StockService.Reserve: warehouse.v1.ReserveRequest (tests/fixtures/apis/warehouse.proto) -> warehouse.v1.ReserveResponse (tests/fixtures/apis/warehouse.proto)
   StockService.Watch: warehouse.v1.WatchRequest (tests/fixtures/apis/warehouse.proto) -> warehouse.v1.ReserveResponse (tests/fixtures/apis/warehouse.proto)
 tests/fixtures/protos/common/v1/money.proto sees 
+tests/fixtures/protos/dates.proto sees 
+  ShiftRequest.day: unknown
+  ShiftResponse.day: unknown
+  ShiftResponse.also: unknown
+  ShiftResponse.more: unknown
+  ShiftResponse.own: days.v1.Ymd (tests/fixtures/protos/dates.proto)
+  DayService.Shift: days.v1.ShiftRequest (tests/fixtures/protos/dates.proto) -> days.v1.ShiftResponse (tests/fixtures/protos/dates.proto)
 tests/fixtures/protos/shop/v1/order.proto sees tests/fixtures/protos/common/v1/money.proto
   Order.total: common.v1.Money (tests/fixtures/protos/common/v1/money.proto)
   Order.currency: common.v1.Currency (tests/fixtures/protos/common/v1/money.proto, enum)
@@ -2161,6 +2441,16 @@ tests/fixtures/secrets/bank/v1/bank.proto sees tests/fixtures/secrets/acme/v1/se
   PayoutService.Pay: bank.v1.PayRequest (tests/fixtures/secrets/bank/v1/bank.proto) -> bank.v1.PayResponse (tests/fixtures/secrets/bank/v1/bank.proto)
 tests/fixtures/secrets/receipts.proto sees 
   ReceiptService.GetReceipt: receipts.v1.GetReceiptRequest (tests/fixtures/secrets/receipts.proto) -> receipts.v1.Receipt (tests/fixtures/secrets/receipts.proto)
+tests/fixtures/services/dates.proto sees 
+  BookRequest.since: unknown
+  BookRequest.closed: unknown
+  BookRequest.extra: known google.protobuf.Value
+  Span.first: unknown
+  BookResponse.booked_on: unknown
+  BookResponse.span: dates.v1.Span (tests/fixtures/services/dates.proto)
+  BookResponse.days: unknown
+  BookingService.Book: dates.v1.BookRequest (tests/fixtures/services/dates.proto) -> dates.v1.BookResponse (tests/fixtures/services/dates.proto)
+  BookingServiceJa.Book: dates.v1.BookRequest (tests/fixtures/services/dates.proto) -> dates.v1.BookResponse (tests/fixtures/services/dates.proto)
 tests/fixtures/services/methods.proto sees 
   MethodsService.Fulfill: shop.v1.FulfillRequest (tests/fixtures/services/methods.proto) -> shop.v1.FulfillResponse (tests/fixtures/services/methods.proto)
   MethodsService.Begin: shop.v1.BeginRequest (tests/fixtures/services/methods.proto) -> shop.v1.BeginResponse (tests/fixtures/services/methods.proto)
@@ -2191,6 +2481,18 @@ tests/flows/protos/approvals.proto sees
   ApprovalService.Start: approvals.v1.StartRequest (tests/flows/protos/approvals.proto) -> approvals.v1.StartResponse (tests/flows/protos/approvals.proto)
   ApprovalService.Approve: approvals.v1.ApproveRequest (tests/flows/protos/approvals.proto) -> approvals.v1.ApproveResponse (tests/flows/protos/approvals.proto)
   ApprovalService.GetStatus: approvals.v1.GetStatusRequest (tests/flows/protos/approvals.proto) -> known dandori.v1.Status
+tests/flows/protos/date_names.proto sees 
+  RentRequest.pickup: unknown
+  RentRequest.dropoff: unknown
+  RentRequest.closed: unknown
+  RentRequest.driver: date_names.v1.Driver (tests/flows/protos/date_names.proto)
+  RentRequest.others: date_names.v1.Driver (tests/flows/protos/date_names.proto)
+  Driver.licensed_on: unknown
+  AnswerReturnRequest.returned_on: unknown
+  DateNames.Rent: date_names.v1.RentRequest (tests/flows/protos/date_names.proto) -> date_names.v1.RentResponse (tests/flows/protos/date_names.proto)
+  DateNames.AnswerReturn: date_names.v1.AnswerReturnRequest (tests/flows/protos/date_names.proto) -> date_names.v1.AnswerReturnResponse (tests/flows/protos/date_names.proto)
+  DateNamesJa.Rent: date_names.v1.RentRequest (tests/flows/protos/date_names.proto) -> date_names.v1.RentResponse (tests/flows/protos/date_names.proto)
+  DateNamesJa.AnswerReturn: date_names.v1.AnswerReturnRequest (tests/flows/protos/date_names.proto) -> date_names.v1.AnswerReturnResponse (tests/flows/protos/date_names.proto)
 tests/flows/protos/order.proto sees 
   Order.state: order.v1.OrderState (tests/flows/protos/order.proto, enum)
   Order.lines: order.v1.Line (tests/flows/protos/order.proto)
@@ -2198,6 +2500,18 @@ tests/flows/protos/order.proto sees
   OrderService.Get: order.v1.GetRequest (tests/flows/protos/order.proto) -> order.v1.Order (tests/flows/protos/order.proto)
   OrderService.Ship: order.v1.ShipRequest (tests/flows/protos/order.proto) -> order.v1.Order (tests/flows/protos/order.proto)
   OrderService.Pick: order.v1.PickRequest (tests/flows/protos/order.proto) -> order.v1.PickResponse (tests/flows/protos/order.proto)
+tests/flows/protos/rentals.proto sees 
+  RentRequest.pickup: unknown
+  RentRequest.dropoff: unknown
+  RentRequest.closed: unknown
+  RentRequest.driver: rentals.v1.Driver (tests/flows/protos/rentals.proto)
+  RentRequest.others: rentals.v1.Driver (tests/flows/protos/rentals.proto)
+  Driver.licensed_on: unknown
+  AnswerReturnRequest.returned_on: unknown
+  RentalService.Rent: rentals.v1.RentRequest (tests/flows/protos/rentals.proto) -> rentals.v1.RentResponse (tests/flows/protos/rentals.proto)
+  RentalService.AnswerReturn: rentals.v1.AnswerReturnRequest (tests/flows/protos/rentals.proto) -> rentals.v1.AnswerReturnResponse (tests/flows/protos/rentals.proto)
+  RentalServiceJa.Rent: rentals.v1.RentRequest (tests/flows/protos/rentals.proto) -> rentals.v1.RentResponse (tests/flows/protos/rentals.proto)
+  RentalServiceJa.AnswerReturn: rentals.v1.AnswerReturnRequest (tests/flows/protos/rentals.proto) -> rentals.v1.AnswerReturnResponse (tests/flows/protos/rentals.proto)
 tests/flows/protos/shelf.proto sees 
   Item.state: shelf.v1.State (tests/flows/protos/shelf.proto, enum)
   CountResponse.items: shelf.v1.Item (tests/flows/protos/shelf.proto)
@@ -2215,6 +2529,21 @@ tests/flows/protos/shipping.proto sees
   Box.items: shipping.v1.Item (tests/flows/protos/shipping.proto)
   ShippingService.Ship: shipping.v1.ShipRequest (tests/flows/protos/shipping.proto) -> shipping.v1.ShipResponse (tests/flows/protos/shipping.proto)
   ShippingService.AnswerPacking: shipping.v1.AnswerPackingRequest (tests/flows/protos/shipping.proto) -> shipping.v1.AnswerPackingResponse (tests/flows/protos/shipping.proto)
+tests/flows/protos/trips.proto sees 
+  PlanRequest.start: unknown
+  Stop.day: unknown
+  PlanResponse.start: unknown
+  PlanResponse.end: unknown
+  PlanResponse.rest_days: unknown
+  PlanResponse.first: trips.v1.Stop (tests/flows/protos/trips.proto)
+  PlanResponse.stops: trips.v1.Stop (tests/flows/protos/trips.proto)
+  BookRequest.start: unknown
+  BookRequest.rest_days: unknown
+  BookRequest.first: trips.v1.Stop (tests/flows/protos/trips.proto)
+  BookRequest.stops: trips.v1.Stop (tests/flows/protos/trips.proto)
+  BookResponse.booked_on: unknown
+  TripService.Plan: trips.v1.PlanRequest (tests/flows/protos/trips.proto) -> trips.v1.PlanResponse (tests/flows/protos/trips.proto)
+  TripService.Book: trips.v1.BookRequest (tests/flows/protos/trips.proto) -> trips.v1.BookResponse (tests/flows/protos/trips.proto)
 tests/spellings/protos/client_answer.proto sees 
   Svc.Begin: client_answer.v1.Order (tests/spellings/protos/client_answer.proto) -> client_answer.v1.Reply (tests/spellings/protos/client_answer.proto)
   Svc.Answer: client_answer.v1.Sent (tests/spellings/protos/client_answer.proto) -> client_answer.v1.Ack (tests/spellings/protos/client_answer.proto)
@@ -2231,10 +2560,18 @@ tests/spellings/protos/client_histories_status.proto sees
   Svc.Begin: client_histories_status.v1.Order (tests/spellings/protos/client_histories_status.proto) -> client_histories_status.v1.Reply (tests/spellings/protos/client_histories_status.proto)
   Svc.Tell: client_histories_status.v1.Sent (tests/spellings/protos/client_histories_status.proto) -> client_histories_status.v1.Ack (tests/spellings/protos/client_histories_status.proto)
   Svc.Histories: client_histories_status.v1.StatusRequest (tests/spellings/protos/client_histories_status.proto) -> known dandori.v1.Status
+tests/spellings/protos/client_keyword.proto sees 
+  Svc.Begin: client_keyword.v1.number (tests/spellings/protos/client_keyword.proto) -> client_keyword.v1.Reply (tests/spellings/protos/client_keyword.proto)
+  Svc.Delete: client_keyword.v1.Sent (tests/spellings/protos/client_keyword.proto) -> client_keyword.v1.Ack (tests/spellings/protos/client_keyword.proto)
+  Svc.GetStatus: client_keyword.v1.StatusRequest (tests/spellings/protos/client_keyword.proto) -> known dandori.v1.Status
 tests/spellings/protos/client_message.proto sees 
   Svc.Begin: client_message.v1.Order (tests/spellings/protos/client_message.proto) -> client_message.v1.Reply (tests/spellings/protos/client_message.proto)
   Svc.Tell: client_message.v1.Client (tests/spellings/protos/client_message.proto) -> client_message.v1.Ack (tests/spellings/protos/client_message.proto)
   Svc.GetStatus: client_message.v1.StatusRequest (tests/spellings/protos/client_message.proto) -> known dandori.v1.Status
+tests/spellings/protos/client_module.proto sees 
+  Svc.Require: client_module.v1.Order (tests/spellings/protos/client_module.proto) -> client_module.v1.Reply (tests/spellings/protos/client_module.proto)
+  Svc.Exports: client_module.v1.Sent (tests/spellings/protos/client_module.proto) -> client_module.v1.Ack (tests/spellings/protos/client_module.proto)
+  Svc.GlobalThis: client_module.v1.StatusRequest (tests/spellings/protos/client_module.proto) -> known dandori.v1.Status
 tests/spellings/protos/client_run_status.proto sees 
   Svc.Begin: client_run_status.v1.Order (tests/spellings/protos/client_run_status.proto) -> client_run_status.v1.Reply (tests/spellings/protos/client_run_status.proto)
   Svc.Tell: client_run_status.v1.Sent (tests/spellings/protos/client_run_status.proto) -> client_run_status.v1.Ack (tests/spellings/protos/client_run_status.proto)
@@ -2259,6 +2596,10 @@ tests/spellings/protos/client_send_starts.proto sees
   Svc.Send: client_send_starts.v1.Order (tests/spellings/protos/client_send_starts.proto) -> client_send_starts.v1.Reply (tests/spellings/protos/client_send_starts.proto)
   Svc.Tell: client_send_starts.v1.Sent (tests/spellings/protos/client_send_starts.proto) -> client_send_starts.v1.Ack (tests/spellings/protos/client_send_starts.proto)
   Svc.GetStatus: client_send_starts.v1.StatusRequest (tests/spellings/protos/client_send_starts.proto) -> known dandori.v1.Status
+tests/spellings/protos/client_sent_error.proto sees 
+  Svc.Begin: client_sent_error.v1.Order (tests/spellings/protos/client_sent_error.proto) -> client_sent_error.v1.Reply (tests/spellings/protos/client_sent_error.proto)
+  Svc.Tell: client_sent_error.v1.SentWithAnotherValueError (tests/spellings/protos/client_sent_error.proto) -> client_sent_error.v1.Ack (tests/spellings/protos/client_sent_error.proto)
+  Svc.GetStatus: client_sent_error.v1.StatusRequest (tests/spellings/protos/client_sent_error.proto) -> known dandori.v1.Status
 tests/spellings/protos/client_shared.proto sees 
   Svc.Begin: client_shared.v1.Order (tests/spellings/protos/client_shared.proto) -> client_shared.v1.Reply (tests/spellings/protos/client_shared.proto)
   Svc.Tell: client_shared.v1.Sent (tests/spellings/protos/client_shared.proto) -> client_shared.v1.Ack (tests/spellings/protos/client_shared.proto)
@@ -2280,6 +2621,8 @@ tests/spellings/protos/client_two_types.proto sees
   Svc.Begin: client_two_types.v1.Order (tests/spellings/protos/client_two_types.proto) -> client_two_types.v1.Order (tests/spellings/protos/client_two_types.proto)
   Svc.Tell: client_two_types.v1.Sent (tests/spellings/protos/client_two_types.proto) -> client_two_types.v1.Ack (tests/spellings/protos/client_two_types.proto)
   Svc.GetStatus: client_two_types.v1.StatusRequest (tests/spellings/protos/client_two_types.proto) -> known dandori.v1.Status
+tests/spellings/protos/proto_type_name.proto sees 
+tests/spellings/protos/protoの型の名前.proto sees 
 tests/spellings/protos/クライアントのAnswerCallback.proto sees 
   Svc.Begin: client_answer_callback.ja.v1.Order (tests/spellings/protos/クライアントのAnswerCallback.proto) -> client_answer_callback.ja.v1.Reply (tests/spellings/protos/クライアントのAnswerCallback.proto)
   Svc.AnswerCallback: client_answer_callback.ja.v1.Sent (tests/spellings/protos/クライアントのAnswerCallback.proto) -> client_answer_callback.ja.v1.Ack (tests/spellings/protos/クライアントのAnswerCallback.proto)
@@ -2296,6 +2639,10 @@ tests/spellings/protos/クライアントのSendOnce.proto sees
   Svc.Begin: client_send_once.ja.v1.Order (tests/spellings/protos/クライアントのSendOnce.proto) -> client_send_once.ja.v1.Reply (tests/spellings/protos/クライアントのSendOnce.proto)
   Svc.SendOnce: client_send_once.ja.v1.Sent (tests/spellings/protos/クライアントのSendOnce.proto) -> client_send_once.ja.v1.Ack (tests/spellings/protos/クライアントのSendOnce.proto)
   Svc.GetStatus: client_send_once.ja.v1.StatusRequest (tests/spellings/protos/クライアントのSendOnce.proto) -> known dandori.v1.Status
+tests/spellings/protos/クライアントのSentWithAnotherValueError.proto sees 
+  Svc.Begin: client_sent_error.ja.v1.Order (tests/spellings/protos/クライアントのSentWithAnotherValueError.proto) -> client_sent_error.ja.v1.Reply (tests/spellings/protos/クライアントのSentWithAnotherValueError.proto)
+  Svc.Tell: client_sent_error.ja.v1.SentWithAnotherValueError (tests/spellings/protos/クライアントのSentWithAnotherValueError.proto) -> client_sent_error.ja.v1.Ack (tests/spellings/protos/クライアントのSentWithAnotherValueError.proto)
+  Svc.GetStatus: client_sent_error.ja.v1.StatusRequest (tests/spellings/protos/クライアントのSentWithAnotherValueError.proto) -> known dandori.v1.Status
 tests/spellings/protos/クライアントのStatusと並ぶレコード.proto sees 
   Svc.Begin: client_status_beside.ja.v1.Order (tests/spellings/protos/クライアントのStatusと並ぶレコード.proto) -> client_status_beside.ja.v1.Reply (tests/spellings/protos/クライアントのStatusと並ぶレコード.proto)
   Svc.Tell: client_status_beside.ja.v1.Sent (tests/spellings/protos/クライアントのStatusと並ぶレコード.proto) -> client_status_beside.ja.v1.Ack (tests/spellings/protos/クライアントのStatusと並ぶレコード.proto)
@@ -2324,6 +2671,10 @@ tests/spellings/protos/クライアントのstatus.proto sees
   Svc.Begin: client_status.ja.v1.Order (tests/spellings/protos/クライアントのstatus.proto) -> client_status.ja.v1.Reply (tests/spellings/protos/クライアントのstatus.proto)
   Svc.Tell: client_status.ja.v1.Sent (tests/spellings/protos/クライアントのstatus.proto) -> client_status.ja.v1.Ack (tests/spellings/protos/クライアントのstatus.proto)
   Svc.Status: client_status.ja.v1.StatusRequest (tests/spellings/protos/クライアントのstatus.proto) -> known dandori.v1.Status
+tests/spellings/protos/クライアントのキーワード.proto sees 
+  Svc.Begin: client_keyword.ja.v1.number (tests/spellings/protos/クライアントのキーワード.proto) -> client_keyword.ja.v1.Reply (tests/spellings/protos/クライアントのキーワード.proto)
+  Svc.Delete: client_keyword.ja.v1.Sent (tests/spellings/protos/クライアントのキーワード.proto) -> client_keyword.ja.v1.Ack (tests/spellings/protos/クライアントのキーワード.proto)
+  Svc.GetStatus: client_keyword.ja.v1.StatusRequest (tests/spellings/protos/クライアントのキーワード.proto) -> known dandori.v1.Status
 tests/spellings/protos/クライアントのグローバル.proto sees 
   Svc.Begin: client_global.ja.v1.Promise (tests/spellings/protos/クライアントのグローバル.proto) -> client_global.ja.v1.Reply (tests/spellings/protos/クライアントのグローバル.proto)
   Svc.Tell: client_global.ja.v1.Sent (tests/spellings/protos/クライアントのグローバル.proto) -> client_global.ja.v1.Ack (tests/spellings/protos/クライアントのグローバル.proto)
@@ -2332,6 +2683,10 @@ tests/spellings/protos/クライアントのメッセージ.proto sees
   Svc.Begin: client_message.ja.v1.Order (tests/spellings/protos/クライアントのメッセージ.proto) -> client_message.ja.v1.Reply (tests/spellings/protos/クライアントのメッセージ.proto)
   Svc.Tell: client_message.ja.v1.Client (tests/spellings/protos/クライアントのメッセージ.proto) -> client_message.ja.v1.Ack (tests/spellings/protos/クライアントのメッセージ.proto)
   Svc.GetStatus: client_message.ja.v1.StatusRequest (tests/spellings/protos/クライアントのメッセージ.proto) -> known dandori.v1.Status
+tests/spellings/protos/クライアントのモジュール.proto sees 
+  Svc.Require: client_module.ja.v1.Order (tests/spellings/protos/クライアントのモジュール.proto) -> client_module.ja.v1.Reply (tests/spellings/protos/クライアントのモジュール.proto)
+  Svc.Exports: client_module.ja.v1.Sent (tests/spellings/protos/クライアントのモジュール.proto) -> client_module.ja.v1.Ack (tests/spellings/protos/クライアントのモジュール.proto)
+  Svc.GlobalThis: client_module.ja.v1.StatusRequest (tests/spellings/protos/クライアントのモジュール.proto) -> known dandori.v1.Status
 tests/spellings/protos/クライアントの二つの型.proto sees 
   Svc.Begin: client_two_types.ja.v1.Order (tests/spellings/protos/クライアントの二つの型.proto) -> client_two_types.ja.v1.Order (tests/spellings/protos/クライアントの二つの型.proto)
   Svc.Tell: client_two_types.ja.v1.Sent (tests/spellings/protos/クライアントの二つの型.proto) -> client_two_types.ja.v1.Ack (tests/spellings/protos/クライアントの二つの型.proto)
@@ -2353,18 +2708,14 @@ tests/spellings/renamed/protos/client_answer_callback.proto sees
   Svc.Begin: client_answer_callback.v1.Order (tests/spellings/renamed/protos/client_answer_callback.proto) -> client_answer_callback.v1.Reply (tests/spellings/renamed/protos/client_answer_callback.proto)
   Svc.AnswerPacking: client_answer_callback.v1.Sent (tests/spellings/renamed/protos/client_answer_callback.proto) -> client_answer_callback.v1.Ack (tests/spellings/renamed/protos/client_answer_callback.proto)
   Svc.GetStatus: client_answer_callback.v1.StatusRequest (tests/spellings/renamed/protos/client_answer_callback.proto) -> known dandori.v1.Status
-tests/spellings/renamed/protos/client_global.proto sees 
-  Svc.Begin: client_global.v1.Order (tests/spellings/renamed/protos/client_global.proto) -> client_global.v1.Reply (tests/spellings/renamed/protos/client_global.proto)
-  Svc.Tell: client_global.v1.Sent (tests/spellings/renamed/protos/client_global.proto) -> client_global.v1.Ack (tests/spellings/renamed/protos/client_global.proto)
-  Svc.GetStatus: client_global.v1.StatusRequest (tests/spellings/renamed/protos/client_global.proto) -> known dandori.v1.Status
 tests/spellings/renamed/protos/client_histories_status.proto sees 
   Svc.Begin: client_histories_status.v1.Order (tests/spellings/renamed/protos/client_histories_status.proto) -> client_histories_status.v1.Reply (tests/spellings/renamed/protos/client_histories_status.proto)
   Svc.Tell: client_histories_status.v1.Sent (tests/spellings/renamed/protos/client_histories_status.proto) -> client_histories_status.v1.Ack (tests/spellings/renamed/protos/client_histories_status.proto)
   Svc.GetStatus: client_histories_status.v1.StatusRequest (tests/spellings/renamed/protos/client_histories_status.proto) -> known dandori.v1.Status
-tests/spellings/renamed/protos/client_message.proto sees 
-  Svc.Begin: client_message.v1.Order (tests/spellings/renamed/protos/client_message.proto) -> client_message.v1.Reply (tests/spellings/renamed/protos/client_message.proto)
-  Svc.Tell: client_message.v1.Customer (tests/spellings/renamed/protos/client_message.proto) -> client_message.v1.Ack (tests/spellings/renamed/protos/client_message.proto)
-  Svc.GetStatus: client_message.v1.StatusRequest (tests/spellings/renamed/protos/client_message.proto) -> known dandori.v1.Status
+tests/spellings/renamed/protos/client_keyword.proto sees 
+  Svc.Begin: client_keyword.v1.Amount (tests/spellings/renamed/protos/client_keyword.proto) -> client_keyword.v1.Reply (tests/spellings/renamed/protos/client_keyword.proto)
+  Svc.Remove: client_keyword.v1.Sent (tests/spellings/renamed/protos/client_keyword.proto) -> client_keyword.v1.Ack (tests/spellings/renamed/protos/client_keyword.proto)
+  Svc.GetStatus: client_keyword.v1.StatusRequest (tests/spellings/renamed/protos/client_keyword.proto) -> known dandori.v1.Status
 tests/spellings/renamed/protos/client_run_status_starts.proto sees 
   Svc.Begin: client_run_status_starts.v1.Order (tests/spellings/renamed/protos/client_run_status_starts.proto) -> client_run_status_starts.v1.Reply (tests/spellings/renamed/protos/client_run_status_starts.proto)
   Svc.Tell: client_run_status_starts.v1.Sent (tests/spellings/renamed/protos/client_run_status_starts.proto) -> client_run_status_starts.v1.Ack (tests/spellings/renamed/protos/client_run_status_starts.proto)
@@ -2381,6 +2732,10 @@ tests/spellings/renamed/protos/client_send_starts.proto sees
   Svc.Begin: client_send_starts.v1.Order (tests/spellings/renamed/protos/client_send_starts.proto) -> client_send_starts.v1.Reply (tests/spellings/renamed/protos/client_send_starts.proto)
   Svc.Tell: client_send_starts.v1.Sent (tests/spellings/renamed/protos/client_send_starts.proto) -> client_send_starts.v1.Ack (tests/spellings/renamed/protos/client_send_starts.proto)
   Svc.GetStatus: client_send_starts.v1.StatusRequest (tests/spellings/renamed/protos/client_send_starts.proto) -> known dandori.v1.Status
+tests/spellings/renamed/protos/client_sent_error.proto sees 
+  Svc.Begin: client_sent_error.v1.Order (tests/spellings/renamed/protos/client_sent_error.proto) -> client_sent_error.v1.Reply (tests/spellings/renamed/protos/client_sent_error.proto)
+  Svc.Tell: client_sent_error.v1.Told (tests/spellings/renamed/protos/client_sent_error.proto) -> client_sent_error.v1.Ack (tests/spellings/renamed/protos/client_sent_error.proto)
+  Svc.GetStatus: client_sent_error.v1.StatusRequest (tests/spellings/renamed/protos/client_sent_error.proto) -> known dandori.v1.Status
 tests/spellings/renamed/protos/client_status_type.proto sees 
   Svc.Begin: client_status_type.v1.Order (tests/spellings/renamed/protos/client_status_type.proto) -> client_status_type.v1.Reply (tests/spellings/renamed/protos/client_status_type.proto)
   Svc.Tell: client_status_type.v1.Sent (tests/spellings/renamed/protos/client_status_type.proto) -> client_status_type.v1.Ack (tests/spellings/renamed/protos/client_status_type.proto)
@@ -2401,6 +2756,10 @@ tests/spellings/renamed/protos/クライアントのSendOnce.proto sees
   Svc.Begin: client_send_once.ja.v1.Order (tests/spellings/renamed/protos/クライアントのSendOnce.proto) -> client_send_once.ja.v1.Reply (tests/spellings/renamed/protos/クライアントのSendOnce.proto)
   Svc.DeliverOnce: client_send_once.ja.v1.Sent (tests/spellings/renamed/protos/クライアントのSendOnce.proto) -> client_send_once.ja.v1.Ack (tests/spellings/renamed/protos/クライアントのSendOnce.proto)
   Svc.GetStatus: client_send_once.ja.v1.StatusRequest (tests/spellings/renamed/protos/クライアントのSendOnce.proto) -> known dandori.v1.Status
+tests/spellings/renamed/protos/クライアントのSentWithAnotherValueError.proto sees 
+  Svc.Begin: client_sent_error.ja.v1.Order (tests/spellings/renamed/protos/クライアントのSentWithAnotherValueError.proto) -> client_sent_error.ja.v1.Reply (tests/spellings/renamed/protos/クライアントのSentWithAnotherValueError.proto)
+  Svc.Tell: client_sent_error.ja.v1.Told (tests/spellings/renamed/protos/クライアントのSentWithAnotherValueError.proto) -> client_sent_error.ja.v1.Ack (tests/spellings/renamed/protos/クライアントのSentWithAnotherValueError.proto)
+  Svc.GetStatus: client_sent_error.ja.v1.StatusRequest (tests/spellings/renamed/protos/クライアントのSentWithAnotherValueError.proto) -> known dandori.v1.Status
 tests/spellings/renamed/protos/クライアントのStatusのレコード.proto sees 
   Svc.Begin: client_status_type.ja.v1.Order (tests/spellings/renamed/protos/クライアントのStatusのレコード.proto) -> client_status_type.ja.v1.Reply (tests/spellings/renamed/protos/クライアントのStatusのレコード.proto)
   Svc.Tell: client_status_type.ja.v1.Sent (tests/spellings/renamed/protos/クライアントのStatusのレコード.proto) -> client_status_type.ja.v1.Ack (tests/spellings/renamed/protos/クライアントのStatusのレコード.proto)
@@ -2421,14 +2780,10 @@ tests/spellings/renamed/protos/クライアントのsendで始める.proto sees
   Svc.Begin: client_send_starts.ja.v1.Order (tests/spellings/renamed/protos/クライアントのsendで始める.proto) -> client_send_starts.ja.v1.Reply (tests/spellings/renamed/protos/クライアントのsendで始める.proto)
   Svc.Tell: client_send_starts.ja.v1.Sent (tests/spellings/renamed/protos/クライアントのsendで始める.proto) -> client_send_starts.ja.v1.Ack (tests/spellings/renamed/protos/クライアントのsendで始める.proto)
   Svc.GetStatus: client_send_starts.ja.v1.StatusRequest (tests/spellings/renamed/protos/クライアントのsendで始める.proto) -> known dandori.v1.Status
-tests/spellings/renamed/protos/クライアントのグローバル.proto sees 
-  Svc.Begin: client_global.ja.v1.Order (tests/spellings/renamed/protos/クライアントのグローバル.proto) -> client_global.ja.v1.Reply (tests/spellings/renamed/protos/クライアントのグローバル.proto)
-  Svc.Tell: client_global.ja.v1.Sent (tests/spellings/renamed/protos/クライアントのグローバル.proto) -> client_global.ja.v1.Ack (tests/spellings/renamed/protos/クライアントのグローバル.proto)
-  Svc.GetStatus: client_global.ja.v1.StatusRequest (tests/spellings/renamed/protos/クライアントのグローバル.proto) -> known dandori.v1.Status
-tests/spellings/renamed/protos/クライアントのメッセージ.proto sees 
-  Svc.Begin: client_message.ja.v1.Order (tests/spellings/renamed/protos/クライアントのメッセージ.proto) -> client_message.ja.v1.Reply (tests/spellings/renamed/protos/クライアントのメッセージ.proto)
-  Svc.Tell: client_message.ja.v1.Customer (tests/spellings/renamed/protos/クライアントのメッセージ.proto) -> client_message.ja.v1.Ack (tests/spellings/renamed/protos/クライアントのメッセージ.proto)
-  Svc.GetStatus: client_message.ja.v1.StatusRequest (tests/spellings/renamed/protos/クライアントのメッセージ.proto) -> known dandori.v1.Status
+tests/spellings/renamed/protos/クライアントのキーワード.proto sees 
+  Svc.Begin: client_keyword.ja.v1.Amount (tests/spellings/renamed/protos/クライアントのキーワード.proto) -> client_keyword.ja.v1.Reply (tests/spellings/renamed/protos/クライアントのキーワード.proto)
+  Svc.Remove: client_keyword.ja.v1.Sent (tests/spellings/renamed/protos/クライアントのキーワード.proto) -> client_keyword.ja.v1.Ack (tests/spellings/renamed/protos/クライアントのキーワード.proto)
+  Svc.GetStatus: client_keyword.ja.v1.StatusRequest (tests/spellings/renamed/protos/クライアントのキーワード.proto) -> known dandori.v1.Status
 tests/spellings/renamed/protos/クライアントの二つの型.proto sees 
   Svc.Begin: client_two_types.ja.v1.Order (tests/spellings/renamed/protos/クライアントの二つの型.proto) -> client_two_types.ja.v1.Reply (tests/spellings/renamed/protos/クライアントの二つの型.proto)
   Svc.Tell: client_two_types.ja.v1.Sent (tests/spellings/renamed/protos/クライアントの二つの型.proto) -> client_two_types.ja.v1.Ack (tests/spellings/renamed/protos/クライアントの二つの型.proto)
@@ -2708,6 +3063,258 @@ service StockService 8
   method Post PostRequest PostResponse false false 11
 service PackingService 14
   method GetPacking GetPackingRequest GetPackingResponse false false 15
+== tests/chains/names/proto/shop/common/v1/money.proto
+syntax proto3
+package shop.common.v1
+message Money 6
+  field amount_jpy 1 None Scalar("int64") json=None oneof=None line=7
+== tests/chains/names/proto/shop/ordering/v1/fulfillment_lite.proto
+syntax proto3
+package shop.ordering.v1
+import warehouse/v1/stock.proto 5:1 public=false weak=false
+message FulfillResponse 8
+  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=None oneof=None line=9
+== tests/chains/names/proto/shop/ordering/v1/order.proto
+syntax proto3
+package shop.ordering.v1
+message Order 18
+  field id 1 None Scalar("string") json=None oneof=None line=19
+  field status 2 None Named("OrderStatus") json=None oneof=None line=20
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=21
+message GetOrderRequest 24
+  field id 1 None Scalar("string") json=None oneof=None line=25
+message GetOrderResponse 28
+  field order 1 None Named("Order") json=None oneof=None line=29
+enum OrderStatus 10
+  value ORDER_STATUS_UNSPECIFIED 0 11
+  value ORDER_STATUS_RECEIVED 1 12
+  value ORDER_STATUS_PAID 2 13
+  value ORDER_STATUS_SHIPPED 3 14
+  value ORDER_STATUS_CANCELLED 4 15
+service OrderService 6
+  method GetOrder GetOrderRequest GetOrderResponse false false 7
+== tests/chains/names/proto/warehouse/v1/stock.proto
+syntax proto3
+package warehouse.v1
+import shop/common/v1/money.proto 5:1 public=false weak=false
+message ReserveRequest 17
+  field sku 1 None Scalar("string") json=None oneof=None line=18
+  field quantity 2 None Scalar("int32") json=None oneof=None line=19
+message ReserveResponse 28
+  field sku 1 None Scalar("string") json=None oneof=None line=29
+  field stock 2 None Named("Stock") json=None oneof=None line=30
+  field id 3 Optional Scalar("string") json=None oneof=None line=31
+  field price 4 None Named("shop.common.v1.Money") json=None oneof=None line=32
+message ReleaseRequest 35
+  field id 1 None Scalar("string") json=None oneof=None line=36
+message ReleaseResponse 39
+message GetPackingRequest 48
+  field order_id 1 None Scalar("string") json=None oneof=None line=49
+message GetPackingResponse 52
+  field status 1 None Named("PackingStatus") json=None oneof=None line=53
+enum Stock 22
+  value STOCK_UNSPECIFIED 0 23
+  value STOCK_SECURED 1 24
+  value STOCK_SHORT 2 25
+enum PackingStatus 41
+  value PACKING_STATUS_UNSPECIFIED 0 42
+  value PACKING_STATUS_WAITING 1 43
+  value PACKING_STATUS_PACKED 2 44
+  value PACKING_STATUS_SHORT 3 45
+service StockService 8
+  method Reserve ReserveRequest ReserveResponse false false 9
+  method Release ReleaseRequest ReleaseResponse false false 10
+service PackingService 13
+  method GetPacking GetPackingRequest GetPackingResponse false false 14
+== tests/chains/names.ja/proto/shop/common/v1/money.proto
+syntax proto3
+package shop.common.v1
+message Money 6
+  field amount_jpy 1 None Scalar("int64") json=None oneof=None line=7
+== tests/chains/names.ja/proto/shop/ordering/v1/fulfillment_lite.proto
+syntax proto3
+package shop.ordering.v1
+import warehouse/v1/stock.proto 5:1 public=false weak=false
+message FulfillResponse 8
+  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=None oneof=None line=9
+== tests/chains/names.ja/proto/shop/ordering/v1/order.proto
+syntax proto3
+package shop.ordering.v1
+message Order 18
+  field id 1 None Scalar("string") json=None oneof=None line=19
+  field status 2 None Named("OrderStatus") json=None oneof=None line=20
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=21
+message GetOrderRequest 24
+  field id 1 None Scalar("string") json=None oneof=None line=25
+message GetOrderResponse 28
+  field order 1 None Named("Order") json=None oneof=None line=29
+enum OrderStatus 10
+  value ORDER_STATUS_UNSPECIFIED 0 11
+  value ORDER_STATUS_RECEIVED 1 12
+  value ORDER_STATUS_PAID 2 13
+  value ORDER_STATUS_SHIPPED 3 14
+  value ORDER_STATUS_CANCELLED 4 15
+service OrderService 6
+  method GetOrder GetOrderRequest GetOrderResponse false false 7
+== tests/chains/names.ja/proto/warehouse/v1/stock.proto
+syntax proto3
+package warehouse.v1
+import shop/common/v1/money.proto 5:1 public=false weak=false
+message ReserveRequest 17
+  field sku 1 None Scalar("string") json=None oneof=None line=18
+  field quantity 2 None Scalar("int32") json=None oneof=None line=19
+message ReserveResponse 28
+  field sku 1 None Scalar("string") json=None oneof=None line=29
+  field stock 2 None Named("Stock") json=None oneof=None line=30
+  field id 3 Optional Scalar("string") json=None oneof=None line=31
+  field price 4 None Named("shop.common.v1.Money") json=None oneof=None line=32
+message ReleaseRequest 35
+  field id 1 None Scalar("string") json=None oneof=None line=36
+message ReleaseResponse 39
+message GetPackingRequest 48
+  field order_id 1 None Scalar("string") json=None oneof=None line=49
+message GetPackingResponse 52
+  field status 1 None Named("PackingStatus") json=None oneof=None line=53
+enum Stock 22
+  value STOCK_UNSPECIFIED 0 23
+  value STOCK_SECURED 1 24
+  value STOCK_SHORT 2 25
+enum PackingStatus 41
+  value PACKING_STATUS_UNSPECIFIED 0 42
+  value PACKING_STATUS_WAITING 1 43
+  value PACKING_STATUS_PACKED 2 44
+  value PACKING_STATUS_SHORT 3 45
+service StockService 8
+  method Reserve ReserveRequest ReserveResponse false false 9
+  method Release ReleaseRequest ReleaseResponse false false 10
+service PackingService 13
+  method GetPacking GetPackingRequest GetPackingResponse false false 14
+== tests/chains/published/proto/shop/common/v1/money.proto
+syntax proto3
+package shop.common.v1
+message Money 6
+  field amount_jpy 1 None Scalar("int64") json=None oneof=None line=7
+== tests/chains/published/proto/shop/ordering/v1/fulfillment_lite.proto
+syntax proto3
+package shop.ordering.v1
+import warehouse/v1/stock.proto 5:1 public=false weak=false
+message FulfillResponse 8
+  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=None oneof=None line=9
+== tests/chains/published/proto/shop/ordering/v1/order.proto
+syntax proto3
+package shop.ordering.v1
+message Order 18
+  field id 1 None Scalar("string") json=None oneof=None line=19
+  field status 2 None Named("OrderStatus") json=None oneof=None line=20
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=21
+message GetOrderRequest 24
+  field id 1 None Scalar("string") json=None oneof=None line=25
+message GetOrderResponse 28
+  field order 1 None Named("Order") json=None oneof=None line=29
+enum OrderStatus 10
+  value ORDER_STATUS_UNSPECIFIED 0 11
+  value ORDER_STATUS_RECEIVED 1 12
+  value ORDER_STATUS_PAID 2 13
+  value ORDER_STATUS_SHIPPED 3 14
+  value ORDER_STATUS_CANCELLED 4 15
+service OrderService 6
+  method GetOrder GetOrderRequest GetOrderResponse false false 7
+== tests/chains/published/proto/warehouse/v1/stock.proto
+syntax proto3
+package warehouse.v1
+import shop/common/v1/money.proto 5:1 public=false weak=false
+message ReserveRequest 17
+  field sku 1 None Scalar("string") json=None oneof=None line=18
+  field quantity 2 None Scalar("int32") json=None oneof=None line=19
+message ReserveResponse 28
+  field sku 1 None Scalar("string") json=None oneof=None line=29
+  field stock 2 None Named("Stock") json=None oneof=None line=30
+  field id 3 Optional Scalar("string") json=None oneof=None line=31
+  field price 4 None Named("shop.common.v1.Money") json=None oneof=None line=32
+message ReleaseRequest 35
+  field id 1 None Scalar("string") json=None oneof=None line=36
+message ReleaseResponse 39
+message GetPackingRequest 48
+  field order_id 1 None Scalar("string") json=None oneof=None line=49
+message GetPackingResponse 52
+  field status 1 None Named("PackingStatus") json=None oneof=None line=53
+enum Stock 22
+  value STOCK_UNSPECIFIED 0 23
+  value STOCK_SECURED 1 24
+  value STOCK_SHORT 2 25
+enum PackingStatus 41
+  value PACKING_STATUS_UNSPECIFIED 0 42
+  value PACKING_STATUS_WAITING 1 43
+  value PACKING_STATUS_PACKED 2 44
+  value PACKING_STATUS_SHORT 3 45
+service StockService 8
+  method Reserve ReserveRequest ReserveResponse false false 9
+  method Release ReleaseRequest ReleaseResponse false false 10
+service PackingService 13
+  method GetPacking GetPackingRequest GetPackingResponse false false 14
+== tests/chains/published.ja/proto/shop/common/v1/money.proto
+syntax proto3
+package shop.common.v1
+message Money 6
+  field amount_jpy 1 None Scalar("int64") json=None oneof=None line=7
+== tests/chains/published.ja/proto/shop/ordering/v1/fulfillment_lite.proto
+syntax proto3
+package shop.ordering.v1
+import warehouse/v1/stock.proto 5:1 public=false weak=false
+message FulfillResponse 8
+  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=None oneof=None line=9
+== tests/chains/published.ja/proto/shop/ordering/v1/order.proto
+syntax proto3
+package shop.ordering.v1
+message Order 18
+  field id 1 None Scalar("string") json=None oneof=None line=19
+  field status 2 None Named("OrderStatus") json=None oneof=None line=20
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=21
+message GetOrderRequest 24
+  field id 1 None Scalar("string") json=None oneof=None line=25
+message GetOrderResponse 28
+  field order 1 None Named("Order") json=None oneof=None line=29
+enum OrderStatus 10
+  value ORDER_STATUS_UNSPECIFIED 0 11
+  value ORDER_STATUS_RECEIVED 1 12
+  value ORDER_STATUS_PAID 2 13
+  value ORDER_STATUS_SHIPPED 3 14
+  value ORDER_STATUS_CANCELLED 4 15
+service OrderService 6
+  method GetOrder GetOrderRequest GetOrderResponse false false 7
+== tests/chains/published.ja/proto/warehouse/v1/stock.proto
+syntax proto3
+package warehouse.v1
+import shop/common/v1/money.proto 5:1 public=false weak=false
+message ReserveRequest 17
+  field sku 1 None Scalar("string") json=None oneof=None line=18
+  field quantity 2 None Scalar("int32") json=None oneof=None line=19
+message ReserveResponse 28
+  field sku 1 None Scalar("string") json=None oneof=None line=29
+  field stock 2 None Named("Stock") json=None oneof=None line=30
+  field id 3 Optional Scalar("string") json=None oneof=None line=31
+  field price 4 None Named("shop.common.v1.Money") json=None oneof=None line=32
+message ReleaseRequest 35
+  field id 1 None Scalar("string") json=None oneof=None line=36
+message ReleaseResponse 39
+message GetPackingRequest 48
+  field order_id 1 None Scalar("string") json=None oneof=None line=49
+message GetPackingResponse 52
+  field status 1 None Named("PackingStatus") json=None oneof=None line=53
+enum Stock 22
+  value STOCK_UNSPECIFIED 0 23
+  value STOCK_SECURED 1 24
+  value STOCK_SHORT 2 25
+enum PackingStatus 41
+  value PACKING_STATUS_UNSPECIFIED 0 42
+  value PACKING_STATUS_WAITING 1 43
+  value PACKING_STATUS_PACKED 2 44
+  value PACKING_STATUS_SHORT 3 45
+service StockService 8
+  method Reserve ReserveRequest ReserveResponse false false 9
+  method Release ReleaseRequest ReleaseResponse false false 10
+service PackingService 13
+  method GetPacking GetPackingRequest GetPackingResponse false false 14
 == tests/contract/proto/shop/pricing/v1/pricing.proto
 syntax proto3
 package shop.pricing.v1
@@ -3634,6 +4241,62 @@ examples/shop/proto/warehouse/v1/stock.proto sees
   StockService.Release: warehouse.v1.ReleaseRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (examples/shop/proto/warehouse/v1/stock.proto)
   StockService.Post: warehouse.v1.PostRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.PostResponse (examples/shop/proto/warehouse/v1/stock.proto)
   PackingService.GetPacking: warehouse.v1.GetPackingRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (examples/shop/proto/warehouse/v1/stock.proto)
+tests/chains/names.ja/proto/shop/common/v1/money.proto sees 
+tests/chains/names.ja/proto/shop/ordering/v1/fulfillment_lite.proto sees tests/chains/names.ja/proto/warehouse/v1/stock.proto
+  FulfillResponse.reservations: warehouse.v1.ReserveResponse (tests/chains/names.ja/proto/warehouse/v1/stock.proto)
+tests/chains/names.ja/proto/shop/ordering/v1/order.proto sees 
+  Order.status: shop.ordering.v1.OrderStatus (tests/chains/names.ja/proto/shop/ordering/v1/order.proto, enum)
+  GetOrderResponse.order: shop.ordering.v1.Order (tests/chains/names.ja/proto/shop/ordering/v1/order.proto)
+  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/chains/names.ja/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/chains/names.ja/proto/shop/ordering/v1/order.proto)
+tests/chains/names.ja/proto/warehouse/v1/stock.proto sees tests/chains/names.ja/proto/shop/common/v1/money.proto
+  ReserveResponse.stock: warehouse.v1.Stock (tests/chains/names.ja/proto/warehouse/v1/stock.proto, enum)
+  ReserveResponse.price: shop.common.v1.Money (tests/chains/names.ja/proto/shop/common/v1/money.proto)
+  GetPackingResponse.status: warehouse.v1.PackingStatus (tests/chains/names.ja/proto/warehouse/v1/stock.proto, enum)
+  StockService.Reserve: warehouse.v1.ReserveRequest (tests/chains/names.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/chains/names.ja/proto/warehouse/v1/stock.proto)
+  StockService.Release: warehouse.v1.ReleaseRequest (tests/chains/names.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/chains/names.ja/proto/warehouse/v1/stock.proto)
+  PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/chains/names.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/chains/names.ja/proto/warehouse/v1/stock.proto)
+tests/chains/names/proto/shop/common/v1/money.proto sees 
+tests/chains/names/proto/shop/ordering/v1/fulfillment_lite.proto sees tests/chains/names/proto/warehouse/v1/stock.proto
+  FulfillResponse.reservations: warehouse.v1.ReserveResponse (tests/chains/names/proto/warehouse/v1/stock.proto)
+tests/chains/names/proto/shop/ordering/v1/order.proto sees 
+  Order.status: shop.ordering.v1.OrderStatus (tests/chains/names/proto/shop/ordering/v1/order.proto, enum)
+  GetOrderResponse.order: shop.ordering.v1.Order (tests/chains/names/proto/shop/ordering/v1/order.proto)
+  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/chains/names/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/chains/names/proto/shop/ordering/v1/order.proto)
+tests/chains/names/proto/warehouse/v1/stock.proto sees tests/chains/names/proto/shop/common/v1/money.proto
+  ReserveResponse.stock: warehouse.v1.Stock (tests/chains/names/proto/warehouse/v1/stock.proto, enum)
+  ReserveResponse.price: shop.common.v1.Money (tests/chains/names/proto/shop/common/v1/money.proto)
+  GetPackingResponse.status: warehouse.v1.PackingStatus (tests/chains/names/proto/warehouse/v1/stock.proto, enum)
+  StockService.Reserve: warehouse.v1.ReserveRequest (tests/chains/names/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/chains/names/proto/warehouse/v1/stock.proto)
+  StockService.Release: warehouse.v1.ReleaseRequest (tests/chains/names/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/chains/names/proto/warehouse/v1/stock.proto)
+  PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/chains/names/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/chains/names/proto/warehouse/v1/stock.proto)
+tests/chains/published.ja/proto/shop/common/v1/money.proto sees 
+tests/chains/published.ja/proto/shop/ordering/v1/fulfillment_lite.proto sees tests/chains/published.ja/proto/warehouse/v1/stock.proto
+  FulfillResponse.reservations: warehouse.v1.ReserveResponse (tests/chains/published.ja/proto/warehouse/v1/stock.proto)
+tests/chains/published.ja/proto/shop/ordering/v1/order.proto sees 
+  Order.status: shop.ordering.v1.OrderStatus (tests/chains/published.ja/proto/shop/ordering/v1/order.proto, enum)
+  GetOrderResponse.order: shop.ordering.v1.Order (tests/chains/published.ja/proto/shop/ordering/v1/order.proto)
+  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/chains/published.ja/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/chains/published.ja/proto/shop/ordering/v1/order.proto)
+tests/chains/published.ja/proto/warehouse/v1/stock.proto sees tests/chains/published.ja/proto/shop/common/v1/money.proto
+  ReserveResponse.stock: warehouse.v1.Stock (tests/chains/published.ja/proto/warehouse/v1/stock.proto, enum)
+  ReserveResponse.price: shop.common.v1.Money (tests/chains/published.ja/proto/shop/common/v1/money.proto)
+  GetPackingResponse.status: warehouse.v1.PackingStatus (tests/chains/published.ja/proto/warehouse/v1/stock.proto, enum)
+  StockService.Reserve: warehouse.v1.ReserveRequest (tests/chains/published.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/chains/published.ja/proto/warehouse/v1/stock.proto)
+  StockService.Release: warehouse.v1.ReleaseRequest (tests/chains/published.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/chains/published.ja/proto/warehouse/v1/stock.proto)
+  PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/chains/published.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/chains/published.ja/proto/warehouse/v1/stock.proto)
+tests/chains/published/proto/shop/common/v1/money.proto sees 
+tests/chains/published/proto/shop/ordering/v1/fulfillment_lite.proto sees tests/chains/published/proto/warehouse/v1/stock.proto
+  FulfillResponse.reservations: warehouse.v1.ReserveResponse (tests/chains/published/proto/warehouse/v1/stock.proto)
+tests/chains/published/proto/shop/ordering/v1/order.proto sees 
+  Order.status: shop.ordering.v1.OrderStatus (tests/chains/published/proto/shop/ordering/v1/order.proto, enum)
+  GetOrderResponse.order: shop.ordering.v1.Order (tests/chains/published/proto/shop/ordering/v1/order.proto)
+  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/chains/published/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/chains/published/proto/shop/ordering/v1/order.proto)
+tests/chains/published/proto/warehouse/v1/stock.proto sees tests/chains/published/proto/shop/common/v1/money.proto
+  ReserveResponse.stock: warehouse.v1.Stock (tests/chains/published/proto/warehouse/v1/stock.proto, enum)
+  ReserveResponse.price: shop.common.v1.Money (tests/chains/published/proto/shop/common/v1/money.proto)
+  GetPackingResponse.status: warehouse.v1.PackingStatus (tests/chains/published/proto/warehouse/v1/stock.proto, enum)
+  StockService.Reserve: warehouse.v1.ReserveRequest (tests/chains/published/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/chains/published/proto/warehouse/v1/stock.proto)
+  StockService.Release: warehouse.v1.ReleaseRequest (tests/chains/published/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/chains/published/proto/warehouse/v1/stock.proto)
+  PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/chains/published/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/chains/published/proto/warehouse/v1/stock.proto)
 tests/contract/proto/shop/pricing/v1/pricing.proto sees 
   ShippingResponse.trace: shop.pricing.v1.Fired (tests/contract/proto/shop/pricing/v1/pricing.proto)
   TaxResponse.trace: shop.pricing.v1.Fired (tests/contract/proto/shop/pricing/v1/pricing.proto)

@@ -1,0 +1,6 @@
+error[E401]: tests/mutants/E401_短すぎる主張.ringi:27:3: The claim `期限のうちに終わる` says every ticket ends within 30 business days, and a ticket can take 56
+    27 |   期限のうちに終わる : every ticket ends within 30 business days
+  = A round takes 14 business days at the most: `確かめ` 7 and `決裁` 7.
+  = `確かめ` and `決裁`: `due in 3 business days at end of day`; late, it goes up on the next day, and is due again counted from there (`when late escalate, then expire`): 3 + 1 + 3 = 7.
+  = The ticket goes back 2 times at the most (`send back … at most 2 times`), for 3 rounds, and its requester has 5 business days each time (`resubmit within 5 business days`); it is paused for 4 business days at the most (`pause at most 4 business days`): 3 × 14 + 2 × 5 + 4 = 56.
+  = Write 56 business days in the claim, or shorten the deadlines, the times it goes back or the pause.

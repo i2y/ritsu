@@ -1,0 +1,218 @@
+$ rulec check case1.rule
+error[E061]: The range is empty
+  --> case1.rule:5
+  |
+5 |   amount : money[JPY]  range >0JPY <1JPY
+  |                        ^^^^^^^^^^^^^^^^^ no value lies in this range
+  |
+ The value is on a step of 1JPY, and no value of it lies between the two ends: `>` and `<` do not take the value they write. With no value to take, the completeness proof answers "complete" over nothing, and the generated code's entry refuses every call.
+
+
+$ rulec check case2.rule
+ok case2.rule
+
+$ rulec check case3.rule
+error[E061]: The range is empty
+  --> case3.rule:5
+  |
+5 |   share : rate[step 1%]  range >=0.2% <=0.8%
+  |                          ^^^^^^^^^^^^^^^^^^^ no value lies in this range
+  |
+ The value is on a step of 1%, and no value of it lies between the two ends: `>` and `<` do not take the value they write. With no value to take, the completeness proof answers "complete" over nothing, and the generated code's entry refuses every call.
+
+
+$ rulec check case4.rule
+error[E061]: The range is empty
+  --> case4.rule:5
+  |
+5 |   day : date  range >2026-01-01 <2026-01-02
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no value lies in this range
+  |
+ No day lies between the two ends: `>` and `<` do not take the day they write. With no value to take, the completeness proof answers "complete" over nothing, and the generated code's entry refuses every call.
+
+
+$ rulec check case5.rule
+error[E112]: The range of the derived value does not contain the values it can actually reach
+  --> case5.rule:7 derived value twice
+  |
+7 | derive twice : money[JPY] = amount * 2  range >0JPY <200JPY
+  |                                         ^^^^^^^^^^^^^^^^^^^ the reachable interval is >=0JPY <=200JPY
+  |
+ With a range that is too narrow, the completeness check answers "complete" without ever seeing the values that actually occur.
+ Hint: widen the range to >=0JPY <=200JPY. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.
+
+
+$ rulec check case6.rule
+error[E112]: The range of the derived value does not contain the values it can actually reach
+  --> case6.rule:7 derived value twice
+  |
+7 | derive twice : money[JPY] = amount * 2  range >=0JPY <200JPY
+  |                                         ^^^^^^^^^^^^^^^^^^^^ the reachable interval is >=0JPY <=200JPY
+  |
+ With a range that is too narrow, the completeness check answers "complete" without ever seeing the values that actually occur.
+ Hint: widen the range to >=0JPY <=200JPY. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.
+
+
+$ rulec check case7.rule
+error[E112]: The range of the derived value does not contain the values it can actually reach
+  --> case7.rule:7 derived value twice
+  |
+7 | derive twice : money[JPY] = amount * 2  range >0JPY <=200JPY
+  |                                         ^^^^^^^^^^^^^^^^^^^^ the reachable interval is >=0JPY <=200JPY
+  |
+ With a range that is too narrow, the completeness check answers "complete" without ever seeing the values that actually occur.
+ Hint: widen the range to >=0JPY <=200JPY. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.
+
+
+$ rulec check case8.rule
+error[E112]: The range of a `max` does not contain the values it can actually take
+  --> case8.rule:7 max top
+  |
+7 | max top over lines of price empty 0JPY  range >=0JPY <100JPY
+  |                                         ^^^^^^^^^^^^^^^^^^^^ the reachable interval is >=0JPY <=100JPY
+  |
+ What a `max` answers is a value of price, or the `empty` value. With a range that is too narrow, the completeness check answers "complete" without ever seeing the values that actually occur.
+
+
+$ rulec check case9.rule
+error[E112]: The range of a `max` does not contain the values it can actually take
+  --> case9.rule:7 max top
+  |
+7 | max top over lines of price empty 0JPY  range >0JPY <=100JPY
+  |                                         ^^^^^^^^^^^^^^^^^^^^ the reachable interval is >=0JPY <=100JPY
+  |
+ What a `max` answers is a value of price, or the `empty` value. With a range that is too narrow, the completeness check answers "complete" without ever seeing the values that actually occur.
+
+
+$ rulec check case10.rule
+ok case10.rule
+
+$ rulec check case11.rule
+error[E140]: The range of the output out does not hold the values it can take
+  --> case11.rule:8 output out
+  |
+8 |   out : money[JPY]  round down(1JPY)  range >0JPY <=200JPY
+  |                                       ^^^^^^^^^^^^^^^^^^^^ it can take >=0JPY <=200JPY
+  |
+ out is decided by the `result`, and takes what its expression reaches under the inputs' ranges and the `constraint` lines, with both ends rounded the way the output rounds.
+ An output's range is the range other languages read the rule's answer in. One too narrow would let their checks of ranges pass over values the rule really returns.
+
+
+$ rulec check case12.rule
+error[E140]: The range of the output out does not hold the values it can take
+  --> case12.rule:8 output out
+  |
+8 |   out : money[JPY]  round down(1JPY)  range >=0JPY <200JPY
+  |                                       ^^^^^^^^^^^^^^^^^^^^ it can take >=0JPY <=200JPY
+  |
+ out is decided by the `result`, and takes what its expression reaches under the inputs' ranges and the `constraint` lines, with both ends rounded the way the output rounds.
+ An output's range is the range other languages read the rule's answer in. One too narrow would let their checks of ranges pass over values the rule really returns.
+
+
+$ rulec check case13.rule
+ok case13.rule
+
+$ rulec check case14.rule
+error[E102]: Unreachable row: row 1 never matches
+  --> case14.rule:15 table many_of
+   |
+15 | | 0    | false   |
+   | ^^^^^^^^^^^^^^^^^^ row 1: no input reaches here
+   |
+ No input satisfies all of this row's conditions at once.
+ hint: if this is a new specification, move it up; if it is not needed, delete it.
+
+
+$ rulec check case15.rule
+ok case15.rule
+
+$ rulec check case16.rule
+error[E102]: Unreachable row: row 2 never matches
+  --> case16.rule:16 table many_of
+   |
+16 | | 500JPY   | true    |
+   | ^^^^^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+   |
+ No input satisfies all of this row's conditions at once.
+ hint: if this is a new specification, move it up; if it is not needed, delete it.
+
+
+$ rulec check case17.rule
+error[E019]: On an example's inputs, a `count` comes in under its declared range
+  --> case17.rule:20 examples
+   |
+20 | | none_ | false   |
+   | ^^^^^^^^^^^^^^^^^^^ hits is out of range
+   |
+ A `count` is held to its declared range once the walk is over, and the generated code refuses a call that comes in under the bottom of it; an empty sequence comes to 0. The example claims an answer for an input it refuses.
+ Correct the example's sequence, or lower the bottom of the range of the `count` if that value really comes.
+
+
+$ rulec check case18.rule
+error[E043]: A value passed to `amount` leaves the callee's range
+  --> case18.rule:11 apply fee
+   |
+11 |   amount = total
+   |   ^^^^^^^^^^^^^^ what is passed: 0JPY .. 100JPY
+   |
+ For example amount = 0JPY is outside range >0JPY <100JPY of `amount` in `entry_fee.rule`.
+ The callee's completeness was proved over that range; outside it there is no definition. Narrow the range on this side, or define that region in a clause of this rule. Which is a business decision.
+
+
+$ rulec check case19.rule
+error[E043]: A value passed to `amount` leaves the callee's range
+  --> case19.rule:11 apply fee
+   |
+11 |   amount = total
+   |   ^^^^^^^^^^^^^^ what is passed: 0JPY .. 99JPY
+   |
+ For example amount = 0JPY is outside range >0JPY <100JPY of `amount` in `entry_fee.rule`.
+ The callee's completeness was proved over that range; outside it there is no definition. Narrow the range on this side, or define that region in a clause of this rule. Which is a business decision.
+
+
+$ rulec check case20.rule
+error[E043]: A value passed to `amount` leaves the callee's range
+  --> case20.rule:11 apply fee
+   |
+11 |   amount = total
+   |   ^^^^^^^^^^^^^^ what is passed: 1JPY .. 100JPY
+   |
+ For example amount = 100JPY is outside range >0JPY <100JPY of `amount` in `entry_fee.rule`.
+ The callee's completeness was proved over that range; outside it there is no definition. Narrow the range on this side, or define that region in a clause of this rule. Which is a business decision.
+
+
+$ rulec check case21.rule
+ok case21.rule
+
+$ rulec check case22.rule
+ok case22.rule
+
+$ rulec check case23.rule
+error[E131]: The open value stackable can leave the range it declares
+  --> case23.rule:16
+   |
+16 | open stackable : money[USD]  combine sum  range >0USD <=5USD
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ range: 1USD .. 5USD
+   |
+ An input that takes it out of the range: member = false
+ Its terms together come to 0USD .. 5USD.
+   member_off: 0USD .. 5USD (this rule)
+ The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it. Widen it (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision.
+
+
+$ rulec check case24.rule
+error[E131]: The open value stackable can leave the range it declares
+  --> case24.rule:16
+   |
+16 | open stackable : money[USD]  combine sum  range >=0USD <5USD
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ range: 0USD .. 4USD
+   |
+ An input that takes it out of the range: member = true
+ Its terms together come to 0USD .. 5USD.
+   member_off: 0USD .. 5USD (this rule)
+ The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it. Widen it (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision.
+
+
+$ rulec check case25.rule
+ok case25.rule
+

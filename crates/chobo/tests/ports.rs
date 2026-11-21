@@ -290,3 +290,28 @@ fn refusals_with_every_amount_0_come_at_once() {
         }
     }
 }
+
+/// A book is one file however its path is written (ritsu's DESIGN 4.15): asked under four spellings
+/// of its path in a run, it is checked once, and what the port says of one that does not pass names
+/// it one way. Written otherwise, the book is checked again, once, whichever way it is asked.
+#[test]
+fn a_book_is_one_file_however_its_path_is_written() {
+    let t = ritsu_testkit::TempDir::new("chobo-port-spelled");
+    let text = std::fs::read_to_string(root().join("examples/refunds/refunds.book")).unwrap();
+    t.write("refunds.book", &text);
+    t.write("wrong.book", text.replace("from sales to refundable(order)", "from nowhere to refundable(order)"));
+    let _run = ritsu_base::paths::run_from(".");
+    let before = Engine.checks();
+    let facts: Vec<_> = t.spellings("refunds.book").iter().map(|p| Engine.facts(p).unwrap_or_else(|s| panic!("{}: {s:?}", p.display()))).collect();
+    assert!(facts.windows(2).all(|w| w[0] == w[1]));
+    assert_eq!(Engine.checks() - before, 1, "one check for every spelling");
+    let said: Vec<_> = t.spellings("wrong.book").iter().map(|p| Engine.facts(p).unwrap_err()).collect();
+    assert!(!said[0].is_empty() && said[0].iter().all(|s| !s.code.is_empty()), "{:?}", said[0]);
+    assert!(said.windows(2).all(|w| w[0] == w[1]), "{said:?}");
+    assert_eq!(Engine.checks() - before, 2);
+    t.write("refunds.book", format!("{text}\n# the book written otherwise\n"));
+    for p in t.spellings("refunds.book") {
+        Engine.facts(&p).unwrap_or_else(|s| panic!("{}: {s:?}", p.display()));
+    }
+    assert_eq!(Engine.checks() - before, 3);
+}

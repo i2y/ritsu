@@ -11,9 +11,11 @@
   (`x2`). A precondition that a date input takes only the days of a koyomi date (`range from
   koyomi`) is decided over the days the value given can be: the days of the koyomi dates it can be
   the day of, and the days of the ranges the `.flow` writes it can be in, each of which must be one
-  of the rule's (`daysKept`). A bound on a list's total or length, and a field no two of its
-  elements share (`unique`), are not decided at the call: dandori knows neither a list's length
-  nor what it holds.
+  of the rule's (`daysKept`). A bound on a list's total (its top, and its bottom where the rule's
+  range for the total starts above zero), on how many of its elements the rule counts (the bottom
+  of a `count`, where it starts above zero) or on its length, and a field no two of its elements
+  share (`unique`), are not decided at the call: dandori knows neither a list's length nor what it
+  holds.
 
   A wire integer `n` of an input that travels at the scale `s` stands for `n / s` (rulec's
   `wire_scale`: 1, or for a rate the number of its steps in 1). So `l op r` between two wire
@@ -236,8 +238,12 @@ structure Arg where
 inductive Pre where
   /-- `constraint <left> <op> <right>`. -/
   | relation (op : Op) (left right : String)
-  /-- A bound on the total of a column over the list the rule walks. -/
+  /-- A bound on the total of a column over the list the rule walks: its top, and its bottom where
+      the rule's range for the total starts above zero (rulec's §15.314). -/
   | sum
+  /-- A bound from below on how many elements of the list the rule counts under a name, where the
+      range of the `count` starts above zero (rulec's §15.314). Its top is `length`. -/
+  | count
   /-- A bound on how many elements the list may have. -/
   | length
   /-- No two elements of the list with the same value of a field (rulec's `unique`, §15.290). -/
@@ -296,6 +302,7 @@ def x2 (p : Pre) (arg : String → Option Arg) (scale : String → Nat) : Answer
         | _, _ => .undecided
     | _, _ => .undecided
   | .sum => .undecided
+  | .count => .undecided
   | .length => .undecided
   | .unique => .undecided
   | .days input days =>
@@ -393,9 +400,9 @@ theorem x2_fails {op : Op} {left right : String} {arg : String → Option Arg} {
 /-- The preconditions the call cannot decide: dandori knows neither a list's length nor what it
     holds. -/
 theorem x2_undecided_on_lists {arg : String → Option Arg} {scale : String → Nat} :
-    x2 .sum arg scale = .undecided ∧ x2 .length arg scale = .undecided ∧
-      x2 .unique arg scale = .undecided :=
-  ⟨rfl, rfl, rfl⟩
+    x2 .sum arg scale = .undecided ∧ x2 .count arg scale = .undecided ∧
+      x2 .length arg scale = .undecided ∧ x2 .unique arg scale = .undecided :=
+  ⟨rfl, rfl, rfl, rfl⟩
 
 /-- A kind of place the days of which are all among `days`: a koyomi date's that koyomi counts, or a
     range's. -/

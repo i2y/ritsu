@@ -1,0 +1,22 @@
+requirements fees v1
+description "What a refund costs: written for the tests of yuen affected, which follow a contribution to the rule it adds to and back"
+
+role finance "Decides what a refund costs"
+
+requirement fee_by_way
+  text "A refund by post costs 5, and one at the counter costs nothing"
+  owner finance
+  decided 2026-11-02 by finance "Written for this test"
+  satisfied by rulec "rules/fee.rule" table fee
+    reviewed 2026-11-02 by finance sha256:36509a7968106301 -> sha256:18069f1e91a0822f
+  not verified "The tests of affected read no claim"
+    approved 2026-11-02 by finance sha256:36509a7968106301
+
+requirement courier_fee
+  text "A refund picked up by a courier costs 8"
+  owner finance
+  decided 2026-11-02 by finance "Written for this test"
+  satisfied by rulec "rules/extra/courier.rule" clause courier_fee
+    reviewed 2026-11-02 by finance sha256:2d713f8824b20d14 -> sha256:d6dbbb15f1e24a20
+  not verified "The tests of affected read no claim"
+    approved 2026-11-02 by finance sha256:2d713f8824b20d14

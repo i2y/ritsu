@@ -362,17 +362,13 @@ impl<'a> Gen<'a> {
             .iter()
             .find(|p| p.kind == EnumSource::Proto && p.target.text == ty)?;
         // `check` has read the contract whole before anything is generated from the rule
-        let read = crate::vfs::follow(&self.dir(), &im.file).ok().and_then(|p| ritsu_base::fs::read_to_string(p).ok()).and_then(|s| ritsu_proto::read(&im.file, &s).ok());
-        let pkg = read.as_ref().map(|f| f.package.clone()).filter(|p| !p.is_empty());
-        // The rule names the enum by its own name, and one nested in a message is named from the
-        // package with the message before it: the type a field of the `.proto` writes, and the
-        // class protobuf-py nests it in.
-        let found = read.as_ref().and_then(|f| f.enums.iter().find(|e| e.name.rsplit('.').next() == Some(im.source.as_str())));
-        let local = found.map(|e| e.name.clone()).unwrap_or_else(|| im.source.clone());
-        let decl = found.map(|e| crate::proto::Enum {
-            name: im.source.clone(),
-            values: e.values.iter().map(|v| crate::proto::Value { name: v.name.clone(), number: v.number }).collect(),
-        });
+        let read = crate::vfs::follow(&self.dir(), &im.file).ok().and_then(|p| ritsu_base::fs::read_to_string(p).ok()).and_then(|s| crate::proto::read(&im.file, &s).ok());
+        let pkg = read.as_ref().and_then(|f| f.package.clone());
+        // The rule names the enum as `check` found it (its own name, or the messages it is nested
+        // in before it), and one nested in a message is named from the package with the message
+        // before it: the type a field of the `.proto` writes, and the class protobuf-py nests it in.
+        let decl = read.as_ref().and_then(|f| f.enum_named(&im.source).ok()).cloned();
+        let local = decl.as_ref().map(|e| e.path.clone()).unwrap_or_else(|| im.source.clone());
         Some(Foreign { file: im.file.clone(), local, import: import_path(&im.file, pkg.as_deref()), pkg, decl })
     }
 
@@ -397,7 +393,8 @@ impl<'a> Gen<'a> {
     fn wire_enum_type(&self, n: &str) -> String {
         match self.foreign(n) {
             Some(fr) => self.contract_type(fr.pkg.as_deref(), &fr.local),
-            None => self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n)),
+            // the `.proto`'s, which the module's own type may not be (§15.326)
+            None => self.proto_type(n),
         }
     }
 
@@ -412,26 +409,28 @@ impl<'a> Gen<'a> {
         let values = self.c.enums.get(ty).cloned().unwrap_or_default();
         match self.foreign(ty) {
             Some(fr) => {
-                let named = fr.decl.as_ref().map(|d| d.named()).unwrap_or_default();
+                let names = fr.decl.as_ref().map(|d| d.names()).unwrap_or_default();
                 let decl = self.f.enums.iter().find(|e| e.name.text == ty);
+                // a value of the rule's is the contract's value it names by any of its names, and
+                // travels under the value's first name, which protojson writes
                 let values = values
                     .iter()
                     .filter_map(|v| {
                         let n = decl?.values.iter().find(|n| n.text == *v)?;
                         let ascii = n.ascii.clone().unwrap_or_else(|| n.text.clone());
-                        let (_, pv) = named.iter().find(|(a, _)| *a == ascii)?;
-                        Some((v.clone(), pv.name.clone(), pv.number))
+                        let pv = names.values.iter().find(|pv| pv.is(&ascii))?;
+                        Some((v.clone(), pv.written().to_string(), pv.number))
                     })
                     .collect();
                 WireEnum {
                     ty: self.contract_type(fr.pkg.as_deref(), &fr.local),
-                    unset: fr.decl.as_ref().and_then(|d| d.unset()).map(|v| v.name.clone()),
+                    unset: names.unset.as_ref().map(|v| v.written().to_string()),
                     contract: Some((fr.file, fr.import)),
                     values,
                 }
             }
             None => {
-                let name = self.enum_names.get(ty).cloned().unwrap_or_else(|| pascal(ty));
+                let name = self.proto_type(ty);
                 let prefix = crate::proto::upper_snake(&name);
                 let values = values
                     .iter()
@@ -709,16 +708,23 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("  repeated Fired trace = {TRACE_FIELD};\n}}\n"));
 
         let ins: Vec<String> = self.f.inputs.iter().map(|i| i.name.text.clone()).collect();
+        // A rule that reads sequences alone decides from them (§15.330).
+        let ins = if ins.is_empty() { self.f.elements.iter().map(|el| el.name.text.clone()).collect() } else { ins };
         let outs: Vec<String> = self.f.outputs.iter().map(|x| x.name.text.clone()).collect();
         let sep = if crate::i18n::ja() { "・" } else { ", " };
+        // What it decides from: its inputs, or for a rule that reads none, nothing (§15.330).
+        let decides = if ins.is_empty() {
+            tr!("入力を読まずに {} を決める。", "Decides {} without reading an input.", outs.join(sep))
+        } else {
+            tr!("{} から {} を決める。", "Decides {1} from {0}.", ins.join(sep), outs.join(sep))
+        };
         o.push_str(&tr!(
-            "\n// 規則 {} v{}。\nservice {} {{\n  // {} から {} を決める。\n  // 規則は純関数なので、この手続きには副作用が無く、GET でも呼べる。\n",
-            "\n// Rule {} v{}.\nservice {} {{\n  // Decides {4} from {3}.\n  // The rule is a pure function, so this method has no side effects and can be\n  // called with GET.\n",
+            "\n// 規則 {} v{}。\nservice {} {{\n  // {}\n  // 規則は純関数なので、この手続きには副作用が無く、GET でも呼べる。\n",
+            "\n// Rule {} v{}.\nservice {} {{\n  // {}\n  // The rule is a pure function, so this method has no side effects and can be\n  // called with GET.\n",
             self.f.name.text,
             self.f.version,
             self.proto_service(),
-            ins.join(sep),
-            outs.join(sep)
+            decides
         ));
         o.push_str("  rpc Decide(DecideRequest) returns (DecideResponse) {\n    option idempotency_level = NO_SIDE_EFFECTS;\n  }\n}\n");
         o
@@ -852,7 +858,9 @@ impl<'a> Gen<'a> {
             // imported, so they are read from the module the plugin wrote for **that** file.
             let qual: String = match self.foreign(&ty) {
                 Some(fr) => format!("{}.{}", self.py_module(&fr.import), pb_class(&fr.local)),
-                None => format!("pb.{cls}"),
+                // the class protobuf-py writes for the `.proto`'s type, which the module's own
+                // class may not be named as (§15.326)
+                None => format!("pb.{}", self.proto_type(&ty)),
             };
             // Each value is taken by its number, with its name beside it. The plugin names a
             // member after the value with the enum's prefix taken off, but not always — a name
@@ -880,16 +888,31 @@ impl<'a> Gen<'a> {
 
     /// One input, read off the request message as the module's argument.
     fn from_request(&self, name: &str, alias: &str, ty: &Ty) -> String {
-        let src = format!("request.{}", pb_attr(alias));
+        self.from_request_as(&format!("{name:?}"), name, alias, ty, "request", "\"\"")
+    }
+
+    /// [`Self::from_request`], of the field `alias` of the message `msg`, with the name a sentence
+    /// says the value under given as the Python expression `said`: a string, or for a field of an
+    /// element the f-string of its place (§15.324), which `at` is the start of. A field the rule
+    /// needs is refused where it is read when the request left it out, and then for its kind, before
+    /// the field after it is read: every door looks at the arguments in that order (§15.328).
+    fn from_request_as(&self, said: &str, name: &str, alias: &str, ty: &Ty, msg: &str, at: &str) -> String {
+        let src = format!("{msg}.{}", pb_attr(alias));
         match ty {
-            Ty::Opt(inner) => {
-                format!("None if not request.has_field({alias:?}) else {}", self.from_request(name, alias, inner))
-            }
+            Ty::Opt(inner) => format!("None if not {msg}.has_field({alias:?}) else {}", self.read_field(said, inner, src)),
+            _ => self.read_field(said, ty, format!("_set({msg}, {alias:?}, {name:?}, {at}, {src})")),
+        }
+    }
+
+    /// The value `src` of a field as the module takes it: an enum's member, a date's day number,
+    /// a number in its brand.
+    fn read_field(&self, said: &str, ty: &Ty, src: String) -> String {
+        match ty {
             Ty::Enum(n) => {
                 let cls = self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n));
-                format!("_member({name:?}, {n:?}, ENUM_{}, {src})", crate::proto::upper_snake(&cls))
+                format!("_member({said}, {n:?}, ENUM_{}, {src})", crate::proto::upper_snake(&cls))
             }
-            Ty::Date => format!("_ord({name:?}, {src})"),
+            Ty::Date => format!("_ord({said}, {src})"),
             Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}({src})", brand_of(ty)),
             _ => src,
         }
@@ -943,16 +966,24 @@ impl<'a> Gen<'a> {
             .map(|i| format!("        {},\n", self.from_request(&i.name.text, &pub_name(&i.name), &self.ty_of(&i.name.text))))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
+            // A sentence about a field of an element names it by its place, `lines[2].tier`
+            // (§15.324): the index `i` goes into the name the reader is handed.
+            let at = format!("f{:?}", format!("{}.", crate::door::place(&el.name.text, "{i}")));
             let fields: Vec<String> = el
                 .fields
                 .iter()
-                .map(|fd| self.from_request(&fd.name.text, &pub_name(&fd.name), &self.ty_of(&fd.name.text)).replace("request.", "e."))
+                .map(|fd| {
+                    let said = format!("f{:?}", crate::door::element(&el.name.text, "{i}", &fd.name.text));
+                    self.from_request_as(&said, &fd.name.text, &pub_name(&fd.name), &self.ty_of(&fd.name.text), "e", &at)
+                })
                 .collect();
+            let each = if fields.iter().any(|x| x.contains("{i}")) { "i, e in enumerate(" } else { "e in " };
+            let close = if each.ends_with('(') { ")" } else { "" };
             args.push(format!(
-                "        [m.{}({}) for e in request.{}],\n",
+                "        [m.{}({}) for {each}request.{}{close}],\n",
                 self.element_type(s),
                 fields.join(", "),
-                pub_name(&el.name)
+                pb_attr(&pub_name(&el.name))
             ));
         }
         // A tuple of one is written on its line, comma and all; the formatter would fold a
@@ -962,44 +993,6 @@ impl<'a> Gen<'a> {
         } else {
             format!("    args = (\n{}    )\n", args.concat())
         };
-        // The fields a request has to set (§15.160): every input that is not `T?`, by the
-        // name the message has it under and the rule's own, and the same for one element.
-        let table = |pairs: Vec<(String, String)>| -> String {
-            match pairs.len() {
-                0 => "()".to_string(),
-                1 => format!("(({:?}, {:?}),)", pairs[0].0, pairs[0].1),
-                _ => format!("(\n{})", pairs.iter().map(|(f, n)| format!("    ({f:?}, {n:?}),\n")).collect::<String>()),
-            }
-        };
-        let needed = |names: Vec<&crate::ast::Name>| -> Vec<(String, String)> {
-            names
-                .into_iter()
-                .filter(|n| !matches!(self.ty_of(&n.text), Ty::Opt(_)))
-                .map(|n| (pub_name(n), n.text.clone()))
-                .collect()
-        };
-        let mut fields = format!(
-            "\n\n# {}\nREQUIRED: tuple[tuple[str, str], ...] = {}\n",
-            tr!(
-                "リクエストが必ず入れるフィールドを、メッセージでの名前と規則での名前で。省いたことが分かるように、\n# .proto ではどのフィールドも optional にしてある。",
-                "The fields a request has to set, by the name the message has each under and the\n# rule's own. The .proto marks every field optional, so that one left out is seen."
-            ),
-            table(needed(self.f.inputs.iter().map(|i| &i.name).collect()))
-        );
-        let mut required = "    _required(request, REQUIRED)\n".to_string();
-        for (s, el) in self.f.elements.iter().enumerate() {
-            let table_name = if s == 0 { "ELEMENT_REQUIRED".to_string() } else { format!("ELEMENT_REQUIRED_{}", s + 1) };
-            fields.push_str(&format!(
-                "{table_name}: tuple[tuple[str, str], ...] = {}\n",
-                table(needed(el.fields.iter().map(|fd| &fd.name).collect()))
-            ));
-            required.push_str(&format!(
-                "    for i, e in enumerate(request.{}):\n        _required(e, {table_name}, f\" ({}[{{i}}])\")\n",
-                pub_name(&el.name),
-                el.name.text
-            ));
-        }
-        fields.push_str(PY_SERVICE_REQUIRED);
         let outs: String = if self.f.outputs.len() == 1 {
             let o = &self.f.outputs[0];
             self.into_response(&pub_name(&o.name), &self.ty_of(&o.name.text), "out")
@@ -1026,7 +1019,14 @@ impl<'a> Gen<'a> {
             self.f.version,
             alias = alias
         );
-        PY_SERVICE
+        // What the service imports, under the names it reads them by beside the rule's class
+        // (§15.336).
+        let imp = super::apart::connect_imports(self);
+        let imported = |n: &str| match imp.get(n) {
+            Some(to) => format!(", {n} as {to}"),
+            None => format!(", {n}"),
+        };
+        py_apart(PY_SERVICE, &imp)
             .replace("@HEADER@", self.header("#").trim_end())
             .replace("@DOC@", &doc)
             .replace("@ALIAS@", &alias)
@@ -1045,7 +1045,7 @@ impl<'a> Gen<'a> {
                 &if self.wire_enums().is_empty() {
                     String::new()
                 } else {
-                    PY_SERVICE_MEMBER.replace("@MAPS@", self.enum_maps().trim_end())
+                    py_apart(PY_SERVICE_MEMBER, &imp).replace("@MAPS@", self.enum_maps().trim_end())
                 },
             )
             .replace(
@@ -1058,25 +1058,36 @@ impl<'a> Gen<'a> {
                     if self.has_date(Dir::In) || self.has_date(Dir::Out) {
                         v.push("import datetime\n");
                     }
+                    // A builtin the class has the name of is read through the module (§15.336).
+                    if imp.values().any(|to| to.starts_with("builtins.")) {
+                        v.push("import builtins\n");
+                    }
                     let mut s: Vec<&str> = v.clone();
                     s.sort_unstable();
                     s.concat()
                 },
             )
-            .replace("@TYPEVAR@", if self.wire_enums().is_empty() { "" } else { ", TypeVar" })
-            .replace("@MAPPING@", if self.wire_enums().is_empty() { "" } else { ", Mapping" })
-            .replace("@FIELDS@", &fields)
-            .replace("@REQUIRED@", &required)
+            .replace("@TYPEVAR@", &imported("TypeVar"))
+            .replace("@MAPPING@", &if self.wire_enums().is_empty() { String::new() } else { imported("Mapping") })
+            // A field a request has to set — every input that is not `T?`, and the same of an
+            // element — is read through `_set`, which refuses it where the request left it out
+            // (§15.160).
+            .replace("@FIELDS@", &py_apart(PY_SERVICE_REQUIRED, &imp))
             .replace("@ARGS@", &args)
             .replace("@OUTS@", &outs)
             .replace(
                 "@DATES@",
-                if self.has_date(Dir::In) || self.has_date(Dir::Out) { PY_SERVICE_DATES } else { "" },
+                &if self.has_date(Dir::In) || self.has_date(Dir::Out) { py_apart(PY_SERVICE_DATES, &imp) } else { String::new() },
             )
             .replace("@D_CODECS@", &tr!("JSON のパーサーは、知らないフィールドと列挙の値を受け付けない。Connect の既定はそれを捨てるので、\n# 綴りを誤った入力が、ゼロ値として判断されてしまう。", "The JSON reader refuses a field or an enum value it does not know. Connect's default\n# drops it, and a misspelt input would then be decided as if it were zero."))
             .replace("@D_REQUIRED@", &tr!("規則が要るフィールドが省かれていたら、リクエストを受け付けない。proto3 は省かれたフィールドをゼロ値として\n    読むので、これが無いと、何も指定しなかったリクエストが、0 と false を指定したものとして判断される。", "Refuse a request that left out a field the rule needs. proto3 reads a field left out\n    as its zero, so without this a request that named nothing would be decided as 0 and false."))
-            // The sentences every door says (§15.204), the place of an element after it.
-            .replace("@M_REQUIRED@", &crate::door::missing("{name}"))
+            // The sentences every door says (§15.204). A field of an element is named by its place,
+            // `lines[2].amount`, which `at` holds (§15.324); a rule with no sequence has no `at` but
+            // the empty one.
+            .replace(
+                "@M_REQUIRED@",
+                &if self.f.elements.is_empty() { format!("{}{{at}}", crate::door::missing("{name}")) } else { crate::door::missing("{at}{name}") },
+            )
             .replace("@D_SHA@", &tr!("どの版の表が答えたか。答えを保存しておく呼び出し側のために、レスポンスのヘッダーに入れる。", "Which version of the table answered; it goes in a response header for a caller that keeps the answer."))
             .replace("@D_MEMBER@", &tr!("列挙の値一つ。契約に無い番号は、呼び出し側の契約違反である。", "One value of an enum. A number the contract does not have is a contract violation by the caller."))
             .replace("@M_MEMBER@", &format!("{}: {{v}}", crate::door::not_in_enum("{name}", "{ty}")))
@@ -1128,14 +1139,18 @@ fn stub_module(import: &str) -> (String, String) {
     }
 }
 
-/// The one check of a request's fields: each the rule needs is there (§15.160).
+/// The one check of a request's fields: each the rule needs is there, looked at as the field is
+/// read (§15.160, §15.328).
 const PY_SERVICE_REQUIRED: &str = r#"
 
-def _required(message: Any, fields: tuple[tuple[str, str], ...], at: str = "") -> None:
+V = TypeVar("V")
+
+
+def _set(message: Any, field: str, name: str, at: str, v: V) -> V:
     """@D_REQUIRED@"""
-    for field, name in fields:
-        if not message.has_field(field):
-            raise ConnectError(Code.INVALID_ARGUMENT, f"@M_REQUIRED@{at}")
+    if not message.has_field(field):
+        raise ConnectError(Code.INVALID_ARGUMENT, f"@M_REQUIRED@")
+    return v
 "#;
 
 /// The enum tables and the one reader of them, for a rule that has an enum on the wire.
@@ -1213,7 +1228,7 @@ def decide(
     record: str | None = None,
 ) -> @MSG_RES@:
     """@D_DECIDE@"""
-@REQUIRED@@ARGS@    try:
+@ARGS@    try:
         out, trace = m.@ALIAS@_traced(*args)
     except m.RuleInputError as e:
         # @D_INVALID@
@@ -1338,18 +1353,30 @@ if __name__ == "__main__":
 impl<'a> Gen<'a> {
     /// One value of the request message, built from a line of the vectors.
     fn to_request(&self, name: &str, ty: &Ty) -> String {
+        self.to_request_at(name, ty, None)
+    }
+
+    /// [`Gen::to_request`], for a field of an element of the sequence `at`: its sentences say the
+    /// element by the index `i` the comprehension that builds the elements binds (§15.324).
+    fn to_request_at(&self, name: &str, ty: &Ty, at: Option<&str>) -> String {
         let src = format!("d[{name:?}]");
+        let said = |s: fn(&str) -> String| -> String {
+            match at {
+                Some(seq) => super::py_said(&s(&crate::door::element(seq, crate::door::HERE, name)), "i", ""),
+                None => format!("{:?}", s(name)),
+            }
+        };
         match ty {
-            Ty::Opt(inner) => self.to_request(name, inner),
+            Ty::Opt(inner) => self.to_request_at(name, inner, at),
             Ty::Enum(n) => {
                 let cls = self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n));
                 format!("_PB_{}[m.{cls}({src})]", crate::proto::upper_snake(&cls))
             }
             // `bool("false")` is true; a truth value is JSON's and nothing else (§15.203).
-            Ty::Bool => format!("_bool({src}, {:?})", not_bool(name)),
+            Ty::Bool => format!("_bool({src}, {})", said(not_bool)),
             Ty::Date | Ty::Str => format!("str({src})"),
             // Every number goes as an int64, which holds nothing past 64 bits (§15.298).
-            _ => format!("_int64(int({src}), {:?})", crate::door::out_of_range(name)),
+            _ => format!("_int64(int({src}), {})", said(crate::door::out_of_range)),
         }
     }
 
@@ -1396,7 +1423,7 @@ impl<'a> Gen<'a> {
                 .fields
                 .iter()
                 .map(|fd| {
-                    let one = self.to_request(&fd.name.text, &self.ty_of(&fd.name.text)).replace("d[", "e[");
+                    let one = self.to_request_at(&fd.name.text, &self.ty_of(&fd.name.text), Some(&el.name.text)).replace("d[", "e[");
                     if matches!(self.ty_of(&fd.name.text), Ty::Opt(_)) {
                         format!("{}=(None if e[{:?}] is None else {one})", pb_attr(&pub_name(&fd.name)), fd.name.text)
                     } else {
@@ -1410,19 +1437,16 @@ impl<'a> Gen<'a> {
             } else {
                 format!("{ty}({})", fields.join(", "))
             };
-            kw.push_str(&format!("    kw[{:?}] = [{element} for e in d[{:?}]]\n", pb_attr(&pub_name(&el.name)), el.name.text));
+            // The index of the element, where a sentence of it says it (§15.324).
+            let seq = format!("d[{:?}]", el.name.text);
+            let each = if fields.iter().any(|x| x.contains("{i}")) { format!("i, e in enumerate({seq})") } else { format!("e in {seq}") };
+            kw.push_str(&format!("    kw[{:?}] = [{element} for {each}]\n", pb_attr(&pub_name(&el.name))));
         }
         // The arguments are read from the same line the request was built from, because the
         // record names its inputs as the rule does and the message names them by their alias.
         // Read the way the runner beside it reads them, so a refusal is the same line (§15.204);
         // the request is built only from a line that was read.
-        let mut args: Vec<String> = self.f.inputs.iter().map(|i| self.py_read(&self.ty_of(&i.name.text), "d", &i.name.text)).collect();
-        let mut prelude = String::new();
-        for s in 0..self.f.elements.len() {
-            let rows = if s == 0 { "rows".to_string() } else { format!("rows{}", s + 1) };
-            prelude.push_str(&format!("                {rows} = {}\n", self.py_read_elements(s)));
-            args.push(rows);
-        }
+        let mut ins: Vec<String> = self.f.inputs.iter().map(|i| self.py_read(&self.ty_of(&i.name.text), "d", &i.name.text)).collect();
         let out = if self.f.outputs.len() == 1 {
             let o = &self.f.outputs[0];
             self.from_response(&pub_name(&o.name), &self.ty_of(&o.name.text))
@@ -1443,7 +1467,7 @@ impl<'a> Gen<'a> {
         if let (Some((en, _, _)), Some((cin, _)), Some(oa)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
-                args[k] = format!("(state if \"step\" in v else {})", args[k]);
+                ins[k] = format!("(state if \"step\" in v else {})", ins[k]);
             }
             // The values carried along with the state (§15.217), held in the wire's form — what
             // a request is built from — and handed on from the response as the record reads it.
@@ -1486,6 +1510,8 @@ impl<'a> Gen<'a> {
                 self.from_response(&oa, &self.ty_of(&o.name.text))
             );
         }
+        // The inputs and then the sequences, in the order every reader takes them (§15.328).
+        let (prelude, args) = self.py_call(&ins, "                ");
         let tables: Vec<String> = self
             .wire_enums()
             .iter()
@@ -1919,6 +1945,8 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
     let outs: Vec<String> = f.outputs.iter().map(|o| o.name.text.clone()).collect();
     let pairs = outs.iter().map(|n| format!("{n:?}: got")).collect::<Vec<_>>().join(", ");
     let sep = if crate::i18n::ja() { "・" } else { ", " };
+    // A rule that reads no input is said to read none (§15.330).
+    let listed = if ins.is_empty() { tr!("なし", "none") } else { ins.join(sep) };
     // An optional output answers that there is no value as `null` (§15.249).
     let optional: Vec<String> = f.outputs.iter().filter(|o| o.ty.optional).map(|o| o.name.text.clone()).collect();
     let none = match (optional.len(), outs.len()) {
@@ -1993,10 +2021,61 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
                  print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{}}}}}, ensure_ascii=False), flush=True)\n",
         f.name.text,
         pub_name(&f.name),
-        ins.join(sep),
+        listed,
         outs.join(sep),
         pairs
     )
+}
+
+/// `text`, Python the service writes of its own, with each name `to` has a key for read under the
+/// name `to` gives it, and imported as that name where a line imports it (§15.336). A word after
+/// `.` (an attribute) or `@` (a mark the text is filled in at) stays.
+fn py_apart(text: &str, to: &std::collections::BTreeMap<String, String>) -> String {
+    if to.is_empty() {
+        return text.to_string();
+    }
+    let words = |line: &str, each: &dyn Fn(&str) -> Option<String>| -> String {
+        let mut out = String::with_capacity(line.len() + 8);
+        let mut word = String::new();
+        let mut before = ' ';
+        let put = |word: &mut String, out: &mut String, before: char| {
+            if !word.is_empty() {
+                match each(word.as_str()).filter(|_| !matches!(before, '.' | '@')) {
+                    Some(t) => out.push_str(&t),
+                    None => out.push_str(word),
+                }
+                word.clear();
+            }
+        };
+        let mut last = ' ';
+        for ch in line.chars() {
+            if ch.is_alphanumeric() || ch == '_' {
+                if word.is_empty() {
+                    before = last;
+                }
+                word.push(ch);
+            } else {
+                put(&mut word, &mut out, before);
+                out.push(ch);
+            }
+            last = ch;
+        }
+        put(&mut word, &mut out, before);
+        out
+    };
+    let mut out = String::with_capacity(text.len() + 32);
+    for line in text.split_inclusive('\n') {
+        let t = line.trim_start();
+        match line.split_once(" import ") {
+            Some((head, list)) if t.starts_with("from ") => {
+                out.push_str(head);
+                out.push_str(" import ");
+                out.push_str(&words(list, &|w| to.get(w).map(|y| format!("{w} as {y}"))));
+            }
+            _ => out.push_str(&words(line, &|w| to.get(w).cloned())),
+        }
+    }
+    out
 }
 
 /// The attribute protobuf-py gives a field of a message (`escape_message_attr`): its name, with

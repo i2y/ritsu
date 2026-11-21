@@ -1,0 +1,26 @@
+rule weighed_order v1
+description "Whether an order is large and whether it is heavy. An order weighs 20 kg or more, and a line 50 kg at most: a line or two of little weight reach the bottom only with heavier lines beside them"
+
+# A line of the order
+elements lines
+  price  : money[JPY]  range >=1JPY <=100JPY
+  weight : mass[kg]  range >=1kg <=50kg
+
+sum total over lines of price  range >=0JPY <=1_000JPY
+sum load over lines of weight  range >=20kg <=200kg
+
+outputs
+  large : bool
+  heavy : bool
+
+table large_of
+policy unique
+| total    | -> large |
+| <150JPY  | false    |
+| >=150JPY | true     |
+
+table heavy_of
+policy unique
+| load    | -> heavy |
+| <100kg  | false    |
+| >=100kg | true     |

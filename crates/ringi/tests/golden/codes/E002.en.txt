@@ -1,0 +1,2 @@
+error[E002]: example.ringi:4:3: `ticket` is what an expression reads (`ticket.…`), and cannot be a field's name
+     4 |   ticket : text "Ticket number"  count <=20

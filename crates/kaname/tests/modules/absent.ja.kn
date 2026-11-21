@@ -1,0 +1,47 @@
+module 無いことがある数(absent_ja) v1
+description "値が無いことのある数を、値が無いことのある規則の入力に渡す。引数から、関数を呼んだ答えから、let から、レコードのフィールドから、none と書いて、値のある数から渡す。absent.kn の日本語の版"
+
+use rule 宿泊 from "tests/rules/stay.rule"
+
+record 滞在(Stay)
+  泊数(nights) : number?  range >=0 <=60
+  会員(member) : bool
+
+# 引数を、規則が渡すとおりに返す
+fn 数えた泊数(counted)(泊数(nights): number?  range >=0 <=60, 会員(member): bool) -> number? total
+  宿泊(nights: 泊数, member: 会員).counted
+
+# 引数を、規則の表が読む。表の値に none がある
+fn 長い(long)(泊数(nights): number?  range >=0 <=60) -> bool total
+  宿泊(nights: 泊数, member: true).long
+
+# 規則の範囲に入る泊数か、none
+fn 範囲の中(within)(値(v): number?) -> number?  range >=0 <=60 total
+  match 値
+    none => none
+    some y =>
+      if y < 0 or y > 60
+        none
+      else
+        y
+
+# 関数を呼んだ答えを、そのまま渡す
+fn 範囲の中で長い(long_within)(値(v): number?) -> bool total
+  宿泊(nights: 範囲の中(値: 値), member: false).long
+
+# let が持つ値
+fn 範囲の中で数えた泊数(counted_within)(値(v): number?) -> number? total
+  let n = 範囲の中(値: 値)
+  宿泊(nights: n, member: true).counted
+
+# レコードのフィールド
+fn 長い滞在(long_stay)(s: 滞在) -> bool total
+  宿泊(nights: s.泊数, member: s.会員).long
+
+# none と書く
+fn 分からない(unknown)(会員(member): bool) -> number? total
+  宿泊(nights: none, member: 会員).counted
+
+# 値のある数を、値が無いことのある数を受ける規則に渡す
+fn 分かっている(known)(泊数(nights): number  range >=0 <=60) -> bool total
+  宿泊(nights: 泊数, member: true).long

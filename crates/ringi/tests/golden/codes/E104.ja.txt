@@ -1,0 +1,4 @@
+エラー[E104]: example.ringi:5:33: `手数料` の計算に丸め方がありません
+     5 |   手数料(fee)   : money[円] "手数料" = 金額 * 3%
+  = `金額 * 3%` は端数が出ることがあります。`round down(1円)` のように、丸め方と刻みを書いてください（`up`、`down`、`half_up`、`half_down`、`half_even`）。
+  = 直した行: 手数料(fee)   : money[円] "手数料" = 金額 * 3%  round down(1円)

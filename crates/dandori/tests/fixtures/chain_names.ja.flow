@@ -1,0 +1,28 @@
+workflow 名前の誤り v1
+description "いくつもの行に書いた、書き誤った名前。最初に書いた所で一度だけ言い、ほかに書いた行を添える。chain_names.flow の日本語の版"
+
+record 見積
+  合計 : int
+
+inputs
+  ID   : string
+  # 二つの宣言に書いた、型の書き誤り
+  種類 : strng
+
+outputs
+  札   : strng
+  合計 : int
+
+task 取得(ID: string) -> 見積
+task 知らせる(ID: string)
+
+flow
+  # 三度呼んで、どこにも宣言していないタスク
+  知らせろ(ID: ID)
+  let 見 = 取得(ID: ID)
+  知らせろ(ID: 種類)
+  知らせろ(ID: ID)
+  # 値を与えるものが無く、二つの行で読む名前
+  知らせる(ID: 役割)
+  知らせる(ID: 役割)
+  succeed 札 = 種類, 合計 = 見.合計

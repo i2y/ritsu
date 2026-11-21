@@ -1,0 +1,6 @@
+gen --target asl:
+error[E050]: tests/fixtures/settling_handed_over.flow:20:1: `approve` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions
+    20 | task approve(order: string)
+gen --target argo:
+error[E050]: tests/fixtures/settling_handed_over.flow:20:1: `approve` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows
+    20 | task approve(order: string)

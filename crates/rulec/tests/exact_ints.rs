@@ -8,6 +8,12 @@
 use ritsu_testkit::{Need, TempDir, ready, skip};
 use std::path::Path;
 use std::process::Command;
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 /// A boundary one past 2^53, which a float64 reads as 2^53, and an upper end at 10^16, whose one
 /// above a float64 reads as the end itself.
@@ -110,14 +116,9 @@ fn generate(dir: &Path, out: &Path, rules: &[(&str, &str)], targets: &[&str], ex
 /// `rule lang/via`. A language whose toolchain is missing is a SKIP line, as `rulec test` says it.
 fn agree(out: &Path) -> Vec<String> {
     let tmp = TempDir::new("exact-ints-tmp");
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmp.path())
-        .args(["test", &out.to_string_lossy(), "--format", "json"])
-        .output()
-        .expect("cannot start rulec");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned();
-    let j = rulec::json::parse(said.lines().next().unwrap_or_else(|| panic!("no result: {}", String::from_utf8_lossy(&o.stderr)))).unwrap_or_else(|x| panic!("{x}: {said}"));
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp.path()).args(["test", &out.to_string_lossy(), "--format", "json"]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone();
+    let j = rulec::json::parse(said.lines().next().unwrap_or_else(|| panic!("no result: {}", o.stderr))).unwrap_or_else(|x| panic!("{x}: {said}"));
     for why in j.get("skipped").and_then(|v| v.as_arr()).unwrap_or_default() {
         skip(&format!("rulec test: {}", why.as_str().unwrap_or_default()));
     }

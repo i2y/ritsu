@@ -1,2 +1,1 @@
-error[E080]: `--out` is not an option of `geas affected`
-  = it takes: --json, --lang, --root, --map
+error[E080]: unknown flag `--out` (did you mean `--root`?); run `geas affected --help`

@@ -179,7 +179,8 @@ machine flow over step
   final   final
   never   initial after held
 ";
-    assert_eq!(codes(src), Vec::<String>::new());
+    // `final` is a PHP keyword: the notice that the generated code writes it `FINAL_` (§15.344).
+    assert_eq!(codes(src), vec!["W121".to_string()]);
 }
 
 /// The eleven words a value's own position reads as something else stay out of reach.

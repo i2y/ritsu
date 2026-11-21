@@ -1,0 +1,42 @@
+gate 図書室(library_ja) v1
+description "図書室の文書を読むこと、棚の中身を見ることを、だれがしてよいか。forbid が、一度も当てはまらない action を挙げている"
+namespace LibraryJa
+
+role 職員(staff)
+  description "図書室で働く"
+
+principal 利用者(User)
+  description "図書室の職員"
+  roles 職員
+  attributes
+    停止中(suspended) : bool
+
+resource 文書(Doc)
+  description "文書"
+  attributes
+    だれでも読める(open_to_all) : bool
+
+resource 棚(Folder)
+  description "文書を入れた棚"
+
+action 文書を読む(read_doc)
+  description "文書を読む"
+  principal 利用者
+  resource 文書
+
+action 棚を見る(list_folder)
+  description "棚の中身を見る"
+  principal 利用者
+  resource 棚
+
+permit 職員は読めて見られる(staff_read_and_list)
+  description "職員は文書を読め、棚の中身を見られる"
+  principal in 職員
+  action 文書を読む, 棚を見る
+
+forbid 停止中の職員はだれでも読める物を見ない(suspended_staff_see_nothing_open)
+  description "停止中の職員は、だれでも読める物を見ない"
+  principal in 職員
+  action 文書を読む, 棚を見る
+  when resource.だれでも読める
+  when principal.停止中

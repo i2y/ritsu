@@ -1,0 +1,17 @@
+rule square_rooms v1
+description "Two sheets of paper to each tile of two square rooms: a row for fourteen sheets, which no two whole squares give, and the check does not decide it (W128)"
+
+inputs
+  side   : number  range >=0 <=5
+  second : number  range >=0 <=5
+
+define sheets : number = (side * side + second * second) * 2
+
+outputs
+  note : bool
+
+table note_of
+policy first
+| sheets | -> note |
+| 14     | true    |
+| -      | false   |

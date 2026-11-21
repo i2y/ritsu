@@ -1,0 +1,88 @@
+== go/cardfee/card_fee.go
+	fee := (roundDown((int64(in.Amount)*3), 100) / 100) // definition
+	if fee > 20000 {
+		return Output{}, nil, &RuleInputError{What: "fee is out of range", Value: fee, HasValue: true}
+== go/orderlinesubtotals/order_line_subtotals.go
+		subtotal := (int64(elem.Quantity) * int64(elem.Price)) // definition
+		if subtotal > 10000000 {
+			return Output{}, nil, &RuleInputError{What: fmt.Sprintf("lines[%d].subtotal is out of range", index), Value: subtotal, HasValue: true}
+== java/CardFee.java
+        long fee = roundDown((amount * 3L), 100L) / 100L;  // definition
+        if (fee > 20000L) {
+            throw new RuleInputError("fee is out of range", fee);
+== java/OrderLineSubtotals.java
+            long subtotal = elem.quantity() * elem.price();  // definition
+            if (subtotal > 10000000L) {
+                throw new RuleInputError("lines[" + index + "].subtotal is out of range", subtotal);
+== javascript/card_fee.mjs
+  const fee = _roundDown((amount * 3n), 100n) / 100n; // definition
+  if (fee > 20000n) {
+    throw new RuleInputError(`fee is out of range`, fee);
+== javascript/order_line_subtotals.mjs
+    const subtotal = elem.quantity * elem.price; // definition
+    if (subtotal > 10000000n) {
+      throw new RuleInputError(`lines[${index}].subtotal is out of range`, subtotal);
+== numpy/card_fee.json
+"accept":{"max":20000,"what":"fee is out of range"}
+== php/card_fee.php
+    $fee = intdiv(_round_down(($amount * 3), 100), 100);  // definition
+    if ($fee > 20000) {
+        throw new RuleInputError('fee is out of range', $fee);
+== php/order_line_subtotals.php
+        $subtotal = $elem->quantity * $elem->price;  // definition
+        if ($subtotal > 10000000) {
+            throw new RuleInputError('lines[' . $index . '].subtotal is out of range', $subtotal);
+== python/card_fee.py
+    fee = _round_down((amount * 3), 100) // 100  # definition
+    if fee > 20000:
+        raise RuleInputError("fee is out of range", _repr(fee))
+== python/order_line_subtotals.py
+        subtotal = elem.quantity * elem.price  # definition
+        if subtotal > 10000000:
+            raise RuleInputError(f"lines[{index}].subtotal is out of range", _repr(subtotal))
+== ruby/card_fee.rb
+    fee = _round_down((amount * 3), 100) / 100  # definition
+    raise RuleInputError.new("fee is out of range", fee) if fee > 20000
+== ruby/order_line_subtotals.rb
+        subtotal = elem.quantity * elem.price  # definition
+        raise RuleInputError.new("lines[#{index}].subtotal is out of range", subtotal) if subtotal > 10000000
+== rust/card_fee.rs
+    let fee = round_down((amount.0 * 3), 100) / 100; // definition
+    if fee > 20000 {
+        return Err(RuleError::Input { what: Said::of("fee is out of range"), value: Some(fee) });
+== rust/card_fee_proof.rs
+        kani::assume(!matches!(answer, Err(RuleError::Input { what, value: Some(refused) }) if what.words().len() == 1 && said::<19>(what.words()[0], "fee is out of range") && (refused > 20000)));
+== rust/order_line_subtotals.rs
+        let subtotal = elem.quantity * elem.price.0; // definition
+        if subtotal > 10000000 {
+            return Err(RuleError::Input { what: Said::at("lines[", index, "].subtotal is out of range"), value: Some(subtotal) });
+== rust/order_line_subtotals_proof.rs
+        kani::assume(!matches!(answer, Err(RuleError::Input { what, value: Some(refused) }) if what.words().len() == 2 && said::<6>(what.words()[0], "lines[") && said::<26>(what.words()[1], "].subtotal is out of range") && (refused > 10000000)));
+== sql/card_fee.sql
+  COALESCE("_input_error", CASE WHEN "fee" > 20000 THEN 'fee is out of range' ELSE NULL END) AS "_input_error"
+== sql/card_fee_function.sql
+  COALESCE("_input_error", CASE WHEN "fee" > 20000 THEN 'fee is out of range' ELSE NULL END) AS "_input_error"
+== swift/card_fee.swift
+    let fee = _roundDown((amount.value * 3), 100) / 100  // definition
+    if fee > 20000 {
+        throw RuleError.input(what: "fee is out of range", value: Int64(fee))
+== swift/order_line_subtotals.swift
+        let subtotal = elem.quantity * elem.price.value  // definition
+        if subtotal > 10000000 {
+            throw RuleError.input(what: "lines[\(index)].subtotal is out of range", value: Int64(subtotal))
+== typescript/card_fee.ts
+  const fee = _roundDown((amount * 3n), 100n) / 100n; // definition
+  if (fee > 20000n) {
+    throw new RuleInputError(`fee is out of range`, fee);
+== typescript/order_line_subtotals.ts
+    const subtotal = elem.quantity * elem.price; // definition
+    if (subtotal > 10000000n) {
+      throw new RuleInputError(`lines[${index}].subtotal is out of range`, subtotal);
+== wasm/card_fee.rs
+    let fee = round_down((amount.0 * 3), 100) / 100; // definition
+    if fee > 20000 {
+        return Err(RuleError::Input { what: Said::of("fee is out of range"), value: Some(fee) });
+== wasm/order_line_subtotals.rs
+        let subtotal = elem.quantity * elem.price.0; // definition
+        if subtotal > 10000000 {
+            return Err(RuleError::Input { what: Said::at("lines[", index, "].subtotal is out of range"), value: Some(subtotal) });

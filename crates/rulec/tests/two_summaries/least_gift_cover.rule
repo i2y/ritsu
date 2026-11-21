@@ -1,0 +1,21 @@
+rule least_gift_cover v1
+description "What a parcel is insured for: three times the total of its lines, and the price of its cheapest line wrapped as a gift (0 yen where no line is wrapped). The insurer insures a parcel from 9,999 yen"
+
+# one line of the parcel
+elements lines
+  price : money[JPY]  range >=0JPY <=9_999JPY
+  gift  : bool
+
+sum total over lines of price  range >=0JPY <=100_000JPY
+min cheapest_gift over lines of price where gift empty 0JPY
+
+define cover : money[JPY] = total * 3 + cheapest_gift
+
+outputs
+  insured : bool
+
+table insure
+policy unique
+| cover      | -> insured |
+| <9_999JPY  | false      |
+| >=9_999JPY | true       |

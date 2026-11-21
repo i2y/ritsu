@@ -1,0 +1,4 @@
+エラー[E202]: tests/mutants/E202_a_broken_calendar.ringi:3:26: `shared/broken_office.cal` は koyomi の検査を通りません
+     3 | use calendar office from "shared/broken_office.cal"
+  = E002: 曜日は `mon` `tue` `wed` `thu` `fri` `sat` `sun` で書いてください（書かれているのは `sunday` です）（`tests/mutants/shared/broken_office.cal:5`）
+  = そのファイルを、koyomi の検査が通るように直してください。

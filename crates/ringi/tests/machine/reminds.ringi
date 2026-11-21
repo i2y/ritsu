@@ -1,0 +1,105 @@
+request reminds v1 "Reminded request"
+description "A request whose stages remind (fictional rules): the reminder of a stage and of the ones it goes up to each time it is late, for a stage with the reminder of every stage, one with a reminder of its own, one that goes up its own number of times, one with a deadline of its own, and one whose reminder does not come before its deadline"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  plain   manager
+  own     manager
+    remind after 2 business days at 15:00
+  once    manager
+    when late escalate, then expire
+  timed   manager
+    due in 2 business days at 17:00
+  tight   manager
+    due in 1 business day at 09:00
+
+who
+  manager = manager of requester
+
+every stage
+  due in 3 business days at end of day
+  remind after 1 business day at 10:00
+  when late escalate, then escalate
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+
+# the reminder of every stage: one business day after the stage starts, and one business day after
+# each time it goes up (at 00:00 of the day after the deadline, which is the day counted from)
+scenario reminded_each_time_it_goes_up
+  requester e1201
+  form what = "A new chair"
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit | e1201 | plain    | in progress |
+| 2026-11-17 10:00 | remind |       | plain    | in progress |
+| 2026-11-20 00:00 | late   |       | plain    | in progress |
+| 2026-11-23 10:00 | remind |       | plain    | in progress |
+| 2026-11-26 00:00 | late   |       | plain    | in progress |
+| 2026-11-27 10:00 | remind |       | plain    | in progress |
+| 2026-12-02 00:00 | late   |       |          | expired     |
+
+# a reminder of the stage's own, with the deadline of every stage: two business days after each
+# time it goes up, at its own time
+scenario a_reminder_of_its_own
+  requester e1201
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | plain    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | own      | in progress |
+| 2026-11-18 15:00 | remind  |       | own      | in progress |
+| 2026-11-20 00:00 | late    |       | own      | in progress |
+| 2026-11-24 15:00 | remind  |       | own      | in progress |
+| 2026-11-26 00:00 | late    |       | own      | in progress |
+| 2026-11-30 15:00 | remind  |       | own      | in progress |
+| 2026-12-02 00:00 | late    |       |          | expired     |
+
+# a stage that goes up once where every stage goes up twice: reminded after the one time it does
+scenario a_way_up_of_its_own
+  requester e1201
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | plain    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | own      | in progress |
+| 2026-11-16 12:00 | approve | e1101 | once     | in progress |
+| 2026-11-17 10:00 | remind  |       | once     | in progress |
+| 2026-11-20 00:00 | late    |       | once     | in progress |
+| 2026-11-23 10:00 | remind  |       | once     | in progress |
+| 2026-11-26 00:00 | late    |       |          | expired     |
+
+# a deadline of the stage's own, at a time of day: the stage goes up at that time, and the
+# reminder of every stage is counted from that day
+scenario a_deadline_of_its_own
+  requester e1201
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | plain    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | own      | in progress |
+| 2026-11-16 12:00 | approve | e1101 | once     | in progress |
+| 2026-11-16 13:00 | approve | e1101 | timed    | in progress |
+| 2026-11-17 10:00 | remind  |       | timed    | in progress |
+| 2026-11-18 17:00 | late    |       | timed    | in progress |
+| 2026-11-19 10:00 | remind  |       | timed    | in progress |
+| 2026-11-20 17:00 | late    |       | timed    | in progress |
+| 2026-11-23 10:00 | remind  |       | timed    | in progress |
+| 2026-11-24 17:00 | late    |       |          | expired     |
+
+# a reminder that does not come before its deadline (10:00 of the day the stage is due at 09:00)
+# is not set, where the stage starts or where it goes up
+scenario no_reminder_at_or_after_the_deadline
+  requester e1201
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | plain    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | own      | in progress |
+| 2026-11-16 12:00 | approve | e1101 | once     | in progress |
+| 2026-11-16 13:00 | approve | e1101 | timed    | in progress |
+| 2026-11-16 14:00 | approve | e1101 | tight    | in progress |
+| 2026-11-17 09:00 | late    |       | tight    | in progress |
+| 2026-11-18 09:00 | late    |       | tight    | in progress |
+| 2026-11-19 09:00 | late    |       |          | expired     |

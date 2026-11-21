@@ -1,0 +1,16 @@
+rule delivery_charge v1
+description "The charge for a delivery: a base charge by the subtotal, and what each contribution adds (fictional)"
+
+inputs
+  subtotal : money[円]  range >=0円 <=100_000円
+
+outputs
+  charge : money[円]  round down(1円)
+
+table base
+| subtotal   | -> base_charge : money[円] |
+| >=5_000円  | 0円                        |
+| <5_000円   | 500円                      |
+
+open charge : money[円]  combine sum  range >=0円 <=10_000円
+  base_charge

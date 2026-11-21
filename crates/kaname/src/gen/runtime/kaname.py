@@ -26,17 +26,25 @@ Q = Fraction
 class KanameError(Exception):
     """What a function of kaname raises: the kind, the module and the line of the `.kn`, and why."""
 
-    def __init__(self, kind: Kind, module: str, line: int, message: str) -> None:
+    def __init__(self, kind: Kind, module: str, line: int, message: str, path: str | None = None) -> None:
         self.kind: Kind = kind
         self.module = module
         self.line = line
         self.message = _spaced(message)
+        # for the kind `input`, the place of what is not taken, from the argument's name:
+        # `submit.form.days`, `organization.people[0]`, `now`; None for the other kinds
+        self.path: str | None = path
         super().__init__(self.message)
 
 
 def fail(kind: Kind, module: str, line: int, message: str) -> NoReturn:
     """Raise the error of `kind` at `line` of `module`."""
     raise KanameError(kind, module, line, message)
+
+
+def fail_input(module: str, line: int, path: str, message: str) -> NoReturn:
+    """Raise the error of the kind `input` at `line` of `module`: the argument is not taken at `path`."""
+    raise KanameError("input", module, line, message, path)
 
 
 def _spaced(s: str) -> str:
@@ -240,15 +248,48 @@ def rat_text(x: Fraction) -> str:
 
 
 def num_text(x: Fraction, unit: str) -> str:
-    """A number as a literal of its unit writes it: `1150GBPc`, `0.5%`, `30`."""
+    """A number as `text` writes it, a literal of its unit with its digits as they are: `1150GBPc`,
+    `100000000GBPc`, `30` (a rate as a percentage, `0.5%`)."""
     if unit == "%":
         return rat_text(x * 100) + "%"
     return rat_text(x) + unit
 
 
+def num_shown(x: Fraction, unit: str) -> str:
+    """A number as a message writes it, as the languages write numbers: a literal of its unit with
+    its whole part's digits grouped by `_` from five on: `100_000_000GBPc`, `5000JPY`, `0.5%`, `30`."""
+    return _grouped(rat_text(x * 100) if unit == "%" else rat_text(x)) + unit
+
+
+def _grouped(t: str) -> str:
+    """A number `rat_text` writes, with the digits of its whole part grouped by `_` from five on
+    (`12_345.5`); a fraction (`1/3`) as it is."""
+    sign = "-" if t.startswith("-") else ""
+    whole, dot, frac = t[len(sign) :].partition(".")
+    if len(whole) < 5 or not all("0" <= c <= "9" for c in whole):
+        return t
+    return sign + f"{int(whole):_}" + dot + frac
+
+
 def date_text(d: datetime.date) -> str:
     """A date as kaname writes it, `YYYY-MM-DD`."""
     return f"{d.year:04d}-{d.month:02d}-{d.day:02d}"
+
+
+def day_text(z: int) -> str:
+    """The date of a day number as kaname writes it, `YYYY-MM-DD`, of any year (civil_from_days): a
+    rule holds the date of a field of its element as a count of days, which a host can give past the
+    days Python's date holds."""
+    z += 719468
+    era = z // 146097
+    doe = z - era * 146097
+    yoe = (doe - doe // 1460 + doe // 36524 - doe // 146096) // 365
+    doy = doe - (365 * yoe + yoe // 4 - yoe // 100)
+    mp = (5 * doy + 2) // 153
+    d = doy - (153 * mp + 2) // 5 + 1
+    m = mp + 3 if mp < 10 else mp - 9
+    y = yoe + era * 400 + (1 if m <= 2 else 0)
+    return f"{y:04d}-{m:02d}-{d:02d}"
 
 
 def eq(a: object, b: object) -> bool:
@@ -379,9 +420,9 @@ def mod_of(x: Fraction, n: int, zero: At | None) -> int:
 
 
 def itoa(n: int | None) -> str:
-    """A whole number in decimal: what a message says a count is, where a parameter of the function
-    may have the name of Python's `str`. The check that finds a count outside sets it."""
-    return str(n)
+    """A count as a message writes it (`12`, `5000`, `10_000`), where a parameter of the function may
+    have the name of Python's `str`. The check that finds a count outside sets it."""
+    return _grouped(str(n))
 
 
 @dataclass(frozen=True)

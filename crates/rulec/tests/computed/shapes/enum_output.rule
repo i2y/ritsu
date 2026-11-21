@@ -1,0 +1,20 @@
+rule enum_output v1
+description "An enum output of an applied rule, read with the amount it is decided from"
+
+enum choice = one | two | three
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+apply t = "shared/tier.rule" meaning:8c5e54b1fadce0b7
+  amount = amount
+  band -> t_band
+
+outputs
+  x : choice
+
+table pick
+| amount                  | t_band | -> x  |
+| <=10_000JPY             | small  | one   |
+| >10_000JPY <=100_000JPY | medium | two   |
+| >100_000JPY             | large  | three |

@@ -8,7 +8,12 @@
 //
 //	[ { "key": the name the binary knows the flow by, "dir": the generated package's directory,
 //	    "patch": "full" | "limits" | "continue" | "none",
-//	    "callbacks": [the function of each task that hands on a callback's id] } ]
+//	    "callbacks": [the function of each task that hands on a callback's id],
+//	    "names": {each of the package's own names that a name of the flow takes: the name the
+//	              package gives its own instead (dandori's temporal_go::renamed)} } ]
+//
+// main.go reads the worker's parts (WorkflowType, TaskQueue, Events, BuildID, RegisterWorkflow,
+// RegisterActivities, OwnTasksBy, WorkerOptions) by the names "names" gives, and the others by theirs.
 //
 // It makes a module of its own in a temporary directory (go.mod, go.sum and harness/ of this one),
 // copies each package's Go files to flows/<the key made safe for an import path>/, patching them,
@@ -59,11 +64,16 @@ import (
 )
 
 type entry struct {
-	Key       string   `json:"key"`
-	Dir       string   `json:"dir"`
-	Patch     string   `json:"patch"`
-	Callbacks []string `json:"callbacks"`
+	Key       string            `json:"key"`
+	Dir       string            `json:"dir"`
+	Patch     string            `json:"patch"`
+	Callbacks []string          `json:"callbacks"`
+	Names     map[string]string `json:"names"`
 }
+
+// workerParts are the package's own names main.go reads, which a name of the flow may take: the
+// package then gives its own another (entry.Names).
+var workerParts = []string{"WorkflowType", "TaskQueue", "Events", "BuildID", "RegisterWorkflow", "RegisterActivities", "OwnTasksBy", "WorkerOptions"}
 
 func main() {
 	if len(os.Args) != 3 {
@@ -158,7 +168,14 @@ func build(out, manifestFile string) error {
 			}
 		}
 		_, books := files["io_books.go"]
-		flows = append(flows, flowRef{Key: e.Key, Alias: fmt.Sprintf("f%d", i), Import: "temporalgo/flows/" + dir, Books: books})
+		names := map[string]string{}
+		for _, n := range workerParts {
+			names[n] = n
+			if to, ok := e.Names[n]; ok {
+				names[n] = to
+			}
+		}
+		flows = append(flows, flowRef{Key: e.Key, Alias: fmt.Sprintf("f%d", i), Import: "temporalgo/flows/" + dir, Books: books, N: names})
 	}
 	var main strings.Builder
 	if err := mainTemplate.Execute(&main, map[string]any{"Flows": flows, "Timeout": timeout}); err != nil {
@@ -190,6 +207,8 @@ type flowRef struct {
 	Import string
 	// the package runs the operations of books (io_books.go)
 	Books bool
+	// the worker's parts by the names the package gives them (workerParts)
+	N map[string]string
 }
 
 // safe is a key made into a directory name that an import path can hold: ASCII letters and
@@ -359,6 +378,8 @@ func atStart(text, read, by string) (string, error) {
 // nowHooks is a file the build adds to each package: the moments `now` reads in each run, which
 // the harness gives (Flow.SetNows), and the read of them that the patched ddNow makes.
 const nowHooks = `// Written by tools/temporal-go/build, for the runner: the moments ` + "`now`" + ` reads in each run.
+// Its exported name ends in _, which no name of a flow's can be, so a type of the flow's may
+// have the name without it.
 
 package {{PKG}}
 
@@ -372,8 +393,8 @@ import (
 // for the check of the period there, and the one of every later read.
 var ddTestNows sync.Map
 
-// DDSetNows gives the run of the workflow's id its moments.
-func DDSetNows(id string, nows [2]string) {
+// DDSetNows_ gives the run of the workflow's id its moments.
+func DDSetNows_(id string, nows [2]string) {
 	ddTestNows.Store(id, nows)
 }
 
@@ -394,7 +415,8 @@ func ddTestNow(ctx workflow.Context, start bool) string {
 
 // checksHooks is a file the build adds to each package: its own readings of a rule's answer from
 // the rule's Connect service and of Jev's answer, which the checks call (--connect-read, --jev).
-const checksHooks = `// Written by tools/temporal-go/build, for the checks.
+const checksHooks = `// Written by tools/temporal-go/build, for the checks. Its exported names end
+// in _, which no name of a flow's can be, so types of the flow's may have them.
 
 package {{PKG}}
 
@@ -403,13 +425,13 @@ import (
 	"errors"
 )
 
-// DDReadRule reads body as the answer of a rule's Connect service, as wire says.
-func DDReadRule(wire, body any) (any, error) {
+// DDReadRule_ reads body as the answer of a rule's Connect service, as wire says.
+func DDReadRule_(wire, body any) (any, error) {
 	return ddConnectRule(context.Background(), ddBody{body}, wire, map[string]any{})
 }
 
-// DDJev reads body as Jev's answer, as spec says.
-func DDJev(body, spec any) (any, error) {
+// DDJev_ reads body as Jev's answer, as spec says.
+func DDJev_(body, spec any) (any, error) {
 	return ddJev(body, spec)
 }
 
@@ -540,17 +562,17 @@ func (a {{.Alias}}Default) Agent(ctx context.Context, call harness.AgentCall) (a
 
 func {{.Alias}}Flow() harness.Flow {
 	return harness.Flow{
-		WorkflowType:     {{.Alias}}.WorkflowType,
-		TaskQueue:        {{.Alias}}.TaskQueue,
-		Events:           {{.Alias}}.Events,
-		BuildID:          {{.Alias}}.BuildID,
-		RegisterWorkflow: {{.Alias}}.RegisterWorkflow,
+		WorkflowType:     {{.Alias}}.{{.N.WorkflowType}},
+		TaskQueue:        {{.Alias}}.{{.N.TaskQueue}},
+		Events:           {{.Alias}}.{{.N.Events}},
+		BuildID:          {{.Alias}}.{{.N.BuildID}},
+		RegisterWorkflow: {{.Alias}}.{{.N.RegisterWorkflow}},
 		RegisterActivities: func(r worker.ActivityRegistry, own harness.OwnFunc, t harness.Transport) {
-			{{.Alias}}.RegisterActivities(r, {{.Alias}}.OwnTasksBy(own), {{.Alias}}TransportOf(t))
+			{{.Alias}}.{{.N.RegisterActivities}}(r, {{.Alias}}.{{.N.OwnTasksBy}}(own), {{.Alias}}TransportOf(t))
 		},
-		WorkerOptions: {{.Alias}}.WorkerOptions,
+		WorkerOptions: {{.Alias}}.{{.N.WorkerOptions}},
 		NewWorker: func(c client.Client, own harness.OwnFunc, t harness.Transport, deployment string) worker.Worker {
-			return {{.Alias}}.NewWorker(c, {{.Alias}}.OwnTasksBy(own), {{.Alias}}TransportOf(t), deployment)
+			return {{.Alias}}.NewWorker(c, {{.Alias}}.{{.N.OwnTasksBy}}(own), {{.Alias}}TransportOf(t), deployment)
 		},
 		Replay: func(histories []harness.History) []harness.ReplayFailure {
 			in := make([]{{.Alias}}.RunHistory, len(histories))
@@ -564,8 +586,10 @@ func {{.Alias}}Flow() harness.Flow {
 			}
 			return out
 		},
-		Start:   {{.Alias}}.Start,
-		SetNows: {{.Alias}}.DDSetNows,
+		// the package's Start takes its WorkflowInput; a run's input that the type cannot carry
+		// starts without it (harness.StartOf)
+		Start:   harness.StartOf({{.Alias}}.Start, {{.Alias}}.{{.N.WorkflowType}}, {{.Alias}}.{{.N.TaskQueue}}),
+		SetNows: {{.Alias}}.DDSetNows_,
 		Answer: func(ctx context.Context, c client.Client, callbackID string, a harness.CallbackAnswer) error {
 			return {{.Alias}}.AnswerCallback(ctx, c, callbackID, {{.Alias}}.CallbackAnswer(a))
 		},
@@ -598,10 +622,10 @@ func main() {
 {{range .Flows}}		{{printf "%q" .Key}}: {{.Alias}}Flow(),
 {{end}}	}
 	readRule := map[string]func(wire, body any) (any, error){
-{{range .Flows}}		{{printf "%q" .Key}}: {{.Alias}}.DDReadRule,
+{{range .Flows}}		{{printf "%q" .Key}}: {{.Alias}}.DDReadRule_,
 {{end}}	}
 	jev := map[string]func(body, spec any) (any, error){
-{{range .Flows}}		{{printf "%q" .Key}}: {{.Alias}}.DDJev,
+{{range .Flows}}		{{printf "%q" .Key}}: {{.Alias}}.DDJev_,
 {{end}}	}
 	if checks.Run(flows, readRule, jev, os.Args[1:]) {
 		return

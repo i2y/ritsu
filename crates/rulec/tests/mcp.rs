@@ -3,10 +3,10 @@
 //! reaches the command with the arguments the table validates, the exit code comes back, and
 //! the documents are served as resources with their links pointing at each other.
 
-use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use ritsu_testkit::TempDir;
+use ritsu_testkit::run::finish_with_input;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -17,32 +17,27 @@ fn talk(requests: &[&str]) -> Vec<rulec::json::Json> {
     talk_with(&[], requests)
 }
 
+/// How long a session of `rulec mcp` may take, from the first request to its end once its input
+/// is closed: it waits for nothing but its calls, a moment each. Past it, rulec is stopped, and
+/// the test fails saying what it waited for and what rulec printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 /// `talk`, with flags for `rulec mcp` itself.
 fn talk_with(flags: &[&str], requests: &[&str]) -> Vec<rulec::json::Json> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "ja")
-        .current_dir(root())
-        .arg("mcp")
-        .args(flags)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("rulec mcp を起動できない");
-    {
-        let mut stdin = child.stdin.take().unwrap();
-        for r in requests {
-            writeln!(stdin, "{r}").unwrap();
-        }
-    }
-    let out = BufReader::new(child.stdout.take().unwrap());
-    let answers: Vec<rulec::json::Json> = out
+    let input: String = requests.iter().map(|r| format!("{r}\n")).collect();
+    let o = finish_with_input(
+        Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).arg("mcp").args(flags),
+        Some(input.as_bytes()),
+        RULEC_LIMIT,
+        "rulec mcp answering the requests",
+    );
+    let answers: Vec<rulec::json::Json> = o
+        .stdout
         .lines()
-        .map(|l| l.unwrap())
         .filter(|l| !l.trim().is_empty())
-        .map(|l| rulec::json::parse(&l).unwrap_or_else(|e| panic!("JSON として読めない: {e}\n{l}")))
+        .map(|l| rulec::json::parse(l).unwrap_or_else(|e| panic!("JSON として読めない: {e}\n{l}")))
         .collect();
-    assert!(child.wait().unwrap().success());
+    assert!(o.ok);
     answers
 }
 

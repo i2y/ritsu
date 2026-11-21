@@ -1,0 +1,3 @@
+error[E704]: example.ringi:6:1: The range of `amount` reaches `10_000_000_000_000_000JPY`, past what a screen holds exactly (`9_007_199_254_740_991JPY`)
+     6 |   amount : money[JPY] "Amount"  range >=1JPY <=10_000_000_000_000_000JPY
+  = A screen holds a number as JavaScript does, exactly only from `-9_007_199_254_740_991JPY` to `9_007_199_254_740_991JPY`: a value past it would be rounded, and checked and sent as another. Narrow the range to within it.

@@ -366,6 +366,32 @@ fn a_file_is_checked_once_while_nothing_it_read_changes() {
     assert_eq!(Engine.checks() - before, 2);
 }
 
+/// A dates file is one file however its path is written (ritsu's DESIGN 4.15): asked under four
+/// spellings of its path in a run, it is checked once, and what the port says of one that does not
+/// pass names it one way. Written otherwise, it is checked again, whichever way it is asked.
+#[test]
+fn a_dates_file_is_one_file_however_its_path_is_written() {
+    let dir = ritsu_testkit::TempDir::new("koyomi-port-spelled");
+    for f in NET30 {
+        dir.write(f, std::fs::read(root().join("examples").join(f)).unwrap());
+    }
+    dir.write("bad.cal", "dates broken v1\n\ninputs\n  invoice_date : date  range >=2026-01-01 <=2026-12-31\n\ndate due = invoice_date\n  + 1 fortnight\n");
+    let _run = ritsu_base::paths::run_from(".");
+    let before = Engine.checks();
+    let sums: Vec<String> = dir.spellings("net30.cal").iter().map(|p| Engine.facts(p).unwrap().sha256).collect();
+    assert!(sums.windows(2).all(|w| w[0] == w[1]), "{sums:?}");
+    assert_eq!(Engine.checks() - before, 1, "one check for every spelling");
+    let said: Vec<_> = dir.spellings("bad.cal").iter().map(|p| Engine.facts(p).unwrap_err()).collect();
+    assert!(!said[0].is_empty() && said[0].iter().all(|s| !s.code.is_empty()), "{:?}", said[0]);
+    assert!(said.windows(2).all(|w| w[0] == w[1]), "{said:?}");
+    assert_eq!(Engine.checks() - before, 2);
+    let text = std::fs::read_to_string(dir.path().join("net30.cal")).unwrap();
+    dir.write("net30.cal", format!("{text}\n# the file written otherwise\n"));
+    let after: Vec<String> = dir.spellings("net30.cal").iter().map(|p| Engine.facts(p).unwrap().sha256).collect();
+    assert!(after.windows(2).all(|w| w[0] == w[1]) && after[0] != sums[0], "{after:?}");
+    assert_eq!(Engine.checks() - before, 3);
+}
+
 /// What a file's answers rest on is the same for a copy at another place, and with a comment or
 /// another description; it is not with a file it reads changed.
 #[test]

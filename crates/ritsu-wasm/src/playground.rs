@@ -13,8 +13,14 @@
 //!   --target <t>`, `sekisho gen --target <t>`, `sakai export cml`, `yuen export reqif|prov` (the
 //!   last three given the project's root, as `ritsu check` gives it them). A target's library is
 //!   what is written, with nothing `--extra` asks for. geas and `.proto` files generate nothing.
+//!   A file of ringi has what its command prints or writes of it in place of a generator's targets,
+//!   by its kind: `ringi api` of every kind; of a request, `ringi run` (every scenario), `ringi
+//!   extract --out generated` (the rules and the dates files it is lowered to) and `ringi vectors`;
+//!   of a shared route, `ringi extract` too. What `ritsu gen` writes of a request is not on the
+//!   page: it writes a package of every language of the project at once.
 //! - [`doc`]: one file's page for the people who read it, as HTML and as Markdown: `rulec doc`,
-//!   `koyomi doc`, `chobo doc`, `dandori doc`, `sekisho doc`.
+//!   `koyomi doc`, `chobo doc`, `dandori doc`, `sekisho doc`, `ringi doc` (given the project's
+//!   root, so a shared route's page lists the requests that take it).
 //!
 //! Each answer is what the command prints (`out`, `err`), its exit code, and what it writes. Where
 //! a language's command takes the writers it prints to (ritsu's `check`, rulec's `gen`, dandori,
@@ -24,6 +30,7 @@
 //! the command calls, in its order, and say what it says. crates/ritsu/tests/playground.rs holds
 //! every answer to what the `ritsu` binary prints and writes in a directory holding the same files.
 
+use ritsu_base::cli::{cannot_create, cannot_read, cannot_write, refusal};
 use ritsu_base::fs::{self, Memory};
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
@@ -131,12 +138,12 @@ fn ran(shown: String, f: impl FnOnce(&mut Vec<u8>, &mut Vec<u8>) -> u8) -> Ran {
 /// `ritsu check .`: the text, and the JSON (`--format json`) the page marks the files with.
 pub fn check(r: &Request) -> Value {
     fs::with(r.memory(), || {
+        // the text and the JSON from one check: the question checks each file once (DESIGN 4.15)
         let (args, shown) = words(&["check", "."], r.lang);
-        let text = ran(shown, |o, e| ritsu::check::run(&args[1..], r.lang, o, e));
-        let (args, shown) = words(&["check", ".", "--format", "json"], r.lang);
-        let json = ran(shown, |o, e| ritsu::check::run(&args[1..], r.lang, o, e));
+        let mut json = Vec::new();
+        let text = ran(shown, |o, e| ritsu::check::run_both(&args[1..], r.lang, o, &mut json, e));
         let mut v = text.json();
-        v["json"] = serde_json::from_str(&json.out).unwrap_or(Value::Null);
+        v["json"] = serde_json::from_str(&utf8(json)).unwrap_or(Value::Null);
         v
     })
 }
@@ -149,8 +156,9 @@ fn tool_of(path: &str) -> Option<Tool> {
 /// The targets of the generators that take one, in the order of the command's own list, the first
 /// the one a file opens on (rulec's `python`, koyomi's `typescript`, sekisho's `cedar`). chobo's are
 /// its pairs of a database and a language by their names (`tigerbeetle-go`), each the flags
-/// `--target <language> --books <database>` of `chobo gen` ([`chobo_build`]).
-fn targets(t: Tool) -> Vec<&'static str> {
+/// `--target <language> --books <database>` of `chobo gen` ([`chobo_build`]). ringi's are its
+/// commands that print or write what is made of a file of the kind `text` is ([`ringi_targets`]).
+fn targets(t: Tool, text: &[u8]) -> Vec<&'static str> {
     match t {
         Tool::Rulec => rulec::targets::target_names().to_vec(),
         Tool::Koyomi => koyomi::naming::TARGETS.iter().map(|t| t.key()).collect(),
@@ -158,7 +166,23 @@ fn targets(t: Tool) -> Vec<&'static str> {
         Tool::Dandori => dandori::commands::TARGETS.to_vec(),
         Tool::Sekisho => sekisho::r#gen::TARGETS.to_vec(),
         Tool::Yuen => vec!["reqif", "prov"],
+        Tool::Ringi => ringi_targets(text),
         _ => vec![],
+    }
+}
+
+/// What the page offers of a file of ringi, each a command of `ritsu ringi`, by the kind its first
+/// word says (a line that is blank or a `#` comment is not read): `api` of every kind; `run`,
+/// `extract` and `vectors` of a request, which has the scenarios and the ticket; `extract` of a
+/// shared route, which lowers its table to a rule. A file that names no kind is read as a request,
+/// whose commands say what is wrong with it.
+fn ringi_targets(text: &[u8]) -> Vec<&'static str> {
+    let text = String::from_utf8_lossy(text);
+    let first = text.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#')).and_then(|l| l.split_whitespace().next());
+    match first {
+        Some("route") => vec!["api", "extract"],
+        Some("organization" | "masters") => vec!["api"],
+        _ => vec!["api", "run", "extract", "vectors"],
     }
 }
 
@@ -169,7 +193,7 @@ pub fn generate(r: &Request) -> Value {
     let Some(tool) = tool_of(&r.path) else {
         return json!({ "tool": Value::Null, "none": true });
     };
-    let ts = targets(tool);
+    let ts = targets(tool, r.files.iter().find(|(p, _)| *p == r.path).map(|(_, b)| b.as_slice()).unwrap_or_default());
     let target = r.target.clone().filter(|t| ts.contains(&t.as_str())).or_else(|| ts.first().map(|t| t.to_string()));
     let m = r.memory();
     let p = r.path.as_str();
@@ -205,6 +229,17 @@ pub fn generate(r: &Request) -> Value {
                 let (args, shown) = words(&["sekisho", "gen", p, "--target", t, "--root", ".", "--out", OUT], l);
                 ran(shown, |o, e| sekisho::run::run(&args[1..], joined.sekisho().into(), o, e))
             }
+            // a request's description, its scenarios run, the files it is lowered to, or its vectors,
+            // as `ritsu ringi` prints or writes them, with the calendars, books, flows and gate it
+            // reads joined
+            Tool::Ringi => {
+                let w: Vec<&str> = match t {
+                    "extract" => vec!["ringi", "extract", p, "--out", OUT],
+                    _ => vec!["ringi", t, p],
+                };
+                let (args, shown) = words(&w, l);
+                ran(shown, |o, e| ritsu::languages::ringi(&args[1..], o, e))
+            }
             // kaname writes into a package of ritsu gen only, and is not on the page yet (kaname's
             // DESIGN 19)
             Tool::Geas | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Kaname | Tool::Jsonschema => return None,
@@ -231,28 +266,36 @@ pub fn doc(r: &Request) -> Value {
     };
     let p = r.path.as_str();
     let l = r.lang;
+    // both pages from one check of the file: the question checks each file once (DESIGN 4.15)
     let pages = fs::with(r.memory(), || -> Option<(Ran, Ran)> {
-        let one = |html: bool| -> Ran {
-            match tool {
-                Tool::Rulec => rulec_doc(p, l, html),
-                Tool::Koyomi => koyomi_doc(p, l, html),
-                Tool::Chobo => chobo_doc(p, l, html),
-                Tool::Sekisho => {
-                    let w: &[&str] = if html { &["sekisho", "doc", p, "--root", ".", "--format", "html"] } else { &["sekisho", "doc", p, "--root", "."] };
-                    let (args, shown) = words(w, l);
-                    ran(shown, |o, e| sekisho::run::run(&args[1..], Joined::new().sekisho().into(), o, e))
-                }
-                _ => {
-                    let w: &[&str] = if html { &["dandori", "doc", p, "--format", "html"] } else { &["dandori", "doc", p] };
-                    let (args, shown) = words(w, l);
-                    ran(shown, |o, e| ritsu::languages::dandori(&args[1..], o, e))
-                }
+        Some(match tool {
+            Tool::Rulec => rulec_docs(p, l),
+            Tool::Koyomi => koyomi_docs(p, l),
+            Tool::Chobo => chobo_docs(p, l),
+            Tool::Sekisho => {
+                let (args, md) = words(&["sekisho", "doc", p, "--root", "."], l);
+                let (_, html) = words(&["sekisho", "doc", p, "--root", ".", "--format", "html"], l);
+                let [h, m] = sekisho::run::doc_pages(&args[1..], Joined::new().sekisho().into());
+                let as_ran = |command: String, (code, out, err): (u8, String, String)| Ran { command, code, out, err };
+                (as_ran(html, h), as_ran(md, m))
             }
-        };
-        match tool {
-            Tool::Rulec | Tool::Koyomi | Tool::Chobo | Tool::Dandori | Tool::Sekisho => Some((one(true), one(false))),
-            _ => None,
-        }
+            Tool::Dandori => {
+                let j = Joined::new();
+                let one = |w: &[&str]| -> Ran {
+                    let (args, shown) = words(w, l);
+                    ran(shown, |o, e| ritsu::languages::dandori_in(&j, &args[1..], o, e))
+                };
+                (one(&["dandori", "doc", p, "--format", "html"]), one(&["dandori", "doc", p]))
+            }
+            Tool::Ringi => {
+                let one = |w: &[&str]| -> Ran {
+                    let (args, shown) = words(w, l);
+                    ran(shown, |o, e| ritsu::languages::ringi(&args[1..], o, e))
+                };
+                (one(&["ringi", "doc", p, "--root", ".", "--format", "html"]), one(&["ringi", "doc", p, "--root", "."]))
+            }
+            _ => return None,
+        })
     });
     match pages {
         Some((html, md)) => json!({ "tool": tool.word(), "html": html.json(), "markdown": md.json() }),
@@ -288,18 +331,28 @@ fn rulec_lang<R>(l: Lang, f: impl FnOnce() -> R) -> R {
     rulec::days::with(Some(Joined::dates()), || rulec::i18n::with(if l == Lang::Ja { rulec::i18n::Lang::Ja } else { rulec::i18n::Lang::En }, f))
 }
 
-/// `rulec doc <path> [--format html]` (rulec's `cli::doc`, one file, no `--out`): nothing is
-/// rendered from a rule that does not pass check (rulec's §1.6).
-fn rulec_doc(path: &str, l: Lang, html: bool) -> Ran {
-    let w: &[&str] = if html { &["rulec", "doc", path, "--format", "html"] } else { &["rulec", "doc", path] };
-    let (_, shown) = words(w, l);
-    let say = |t: Text| format!("{}\n", t.get(l));
+/// The two command lines of a file's page, `<tool> doc <path> --format html` and `<tool> doc
+/// <path>`, and what each printed: `r` for both when the file has no page.
+fn pages_of(tool: &str, path: &str, l: Lang, r: Ran) -> (Ran, Ran) {
+    let (_, html) = words(&[tool, "doc", path, "--format", "html"], l);
+    let (_, md) = words(&[tool, "doc", path], l);
+    (Ran { command: html, ..r.clone() }, Ran { command: md, ..r })
+}
+
+/// `rulec doc <path>` as HTML (`--format html`) and as Markdown (rulec's `cli::doc`, one file, no
+/// `--out`), both from one check of the rule: nothing is rendered from a rule that does not pass
+/// check (rulec's §1.6).
+fn rulec_docs(path: &str, l: Lang) -> (Ran, Ran) {
+    let say = |t: Text| format!("{}\n", refusal(t.get(l), l));
     rulec_lang(l, || {
-        let mut r = Ran { command: shown, ..Ran::default() };
-        let Ok(src) = fs::read_to_string(path) else {
-            r.err = say(tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            r.code = 2;
-            return r;
+        let mut r = Ran::default();
+        let src = match fs::read_to_string(path) {
+            Ok(src) => src,
+            Err(e) => {
+                r.err = say(cannot_read(path, &e));
+                r.code = 2;
+                return pages_of("rulec", path, l, r);
+            }
         };
         let rep = rulec::report(&src, path);
         if rulec::has_error(&rep.diags) {
@@ -309,32 +362,24 @@ fn rulec_doc(path: &str, l: Lang, html: bool) -> Ran {
                 r.out.push('\n');
             }
             r.err = say(tr!(
-                "error: `{path}` は検査を通っていないので資料を書き出しません",
-                "error: `{path}` does not pass check, so it is not rendered"
+                "`{path}` は検査を通っていないので資料を書き出しません",
+                "`{path}` does not pass check, so it is not rendered"
             ));
             r.code = 1;
-            return r;
+            return pages_of("rulec", path, l, r);
         }
         let Ok((f, c)) = rulec::prepare(&src, path) else {
-            r.err = say(tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
+            r.err = say(tr!("`{path}` は検査を通っていません", "`{path}` does not pass check"));
             r.code = 1;
-            return r;
+            return pages_of("rulec", path, l, r);
         };
-        r.out = if html {
-            let js = rulec::codegen::Gen::new(&f, &c, &src, path).javascript();
-            rulec::doc::render_html(&f, &c, &src, path, &js)
-        } else {
-            rulec::doc::render(&f, &c, &src, path)
-        };
-        r
+        let js = rulec::codegen::Gen::new(&f, &c, &src, path).page_javascript();
+        let (html, md) = pages_of("rulec", path, l, r);
+        (Ran { out: rulec::doc::render_html(&f, &c, &src, path, &js), ..html }, Ran { out: rulec::doc::render(&f, &c, &src, path), ..md })
     })
 }
 
 // ── koyomi ───────────────────────────────────────────────────────────────────────────────────
-
-fn head(l: Lang) -> &'static str {
-    if l == Lang::Ja { "エラー" } else { "error" }
-}
 
 /// `koyomi gen <path> --target <target> --out generated`, the library of the target the page picked
 /// (koyomi's `run::gen_cmd`, one file and one target, into a `generated/` the project has no file
@@ -348,19 +393,19 @@ fn koyomi_gen(path: &str, l: Lang, target: &str) -> Ran {
     };
     let mut r = Ran { command: shown, ..Ran::default() };
     let refuse = |mut r: Ran, t: Text| {
-        r.err.push_str(&format!("{}: {}\n", head(l), t.get(l)));
+        r.err.push_str(&format!("{}\n", refusal(t.get(l), l)));
         r.code = 2;
         r
     };
     let mut loader = Loader::default();
-    let o = match check::check_file(path, &Options::default(), &mut loader) {
+    let o = match check::check_given(path, &Options::default(), &mut loader) {
         Ok(o) => o,
-        Err(e) => return refuse(r, tr!("`{path}` を読めません: {e}", "cannot read `{path}`: {e}")),
+        Err(e) => return refuse(r, cannot_read(path, &e)),
     };
     let Some(checked) = o.checked.as_ref().filter(|_| !o.has_errors()) else {
         r.out.push_str(&check::render(&o, l));
         let why = tr!("`{path}` は検査を通らないので、生成しません", "`{path}` does not pass check, so nothing is generated from it");
-        r.err.push_str(&format!("{}: {}\n", head(l), why.get(l)));
+        r.err.push_str(&format!("{}\n", refusal(why.get(l), l)));
         r.code = 1;
         return r;
     };
@@ -377,7 +422,7 @@ fn koyomi_gen(path: &str, l: Lang, target: &str) -> Ran {
             }
             r.out.push_str(&stops.iter().map(|d| d.render(l)).collect::<String>());
             let why = tr!("`{path}` からは `{target}` のコードを生成できないので、何も生成しません", "`{path}` cannot be made into the code of `{target}`, so nothing is generated");
-            r.err.push_str(&format!("{}: {}\n", head(l), why.get(l)));
+            r.err.push_str(&format!("{}\n", refusal(why.get(l), l)));
             r.code = 1;
             return r;
         }
@@ -386,47 +431,48 @@ fn koyomi_gen(path: &str, l: Lang, target: &str) -> Ran {
         let p = Path::new(OUT).join(&rel);
         let shown = p.to_string_lossy().to_string();
         if let Some(dir) = p.parent()
-            && fs::create_dir_all(dir).is_err()
+            && let Err(e) = fs::create_dir_all(dir)
         {
-            return refuse(r, tr!("`{}` を作れません", "cannot create `{}`", dir.display()));
+            return refuse(r, cannot_create(&dir.display().to_string(), &e));
         }
-        if fs::write(&p, body).is_err() {
-            return refuse(r, tr!("`{shown}` に書けません", "cannot write `{shown}`"));
+        if let Err(e) = fs::write(&p, body) {
+            return refuse(r, cannot_write(&shown, &e));
         }
         r.out.push_str(&format!("{}\n", tr!("生成しました: {shown}", "generated: {shown}").get(l)));
     }
     r
 }
 
-/// `koyomi doc <path> [--format html]` (koyomi's `run::doc_cmd`, the months the file decides).
-fn koyomi_doc(path: &str, l: Lang, html: bool) -> Ran {
+/// `koyomi doc <path>` as HTML (`--format html`) and as Markdown (koyomi's `run::doc_cmd`, the
+/// months the file decides), both from one check of the file.
+fn koyomi_docs(path: &str, l: Lang) -> (Ran, Ran) {
     use koyomi::calendar::Loader;
     use koyomi::check::{self, Options};
-    let w: &[&str] = if html { &["koyomi", "doc", path, "--format", "html"] } else { &["koyomi", "doc", path] };
-    let (_, shown) = words(w, l);
-    let mut r = Ran { command: shown, ..Ran::default() };
-    let format = if html { koyomi::doc::Format::Html } else { koyomi::doc::Format::Markdown };
+    let mut r = Ran::default();
     let mut loader = Loader::default();
-    let o = match check::check_file(path, &Options::default(), &mut loader) {
+    let o = match check::check_given(path, &Options::default(), &mut loader) {
         Ok(o) => o,
         Err(e) => {
-            r.err = format!("{}: {}\n", head(l), tr!("`{path}` を読めません: {e}", "cannot read `{path}`: {e}").get(l));
+            r.err = format!("{}\n", refusal(cannot_read(path, &e).get(l), l));
             r.code = 2;
-            return r;
+            return pages_of("koyomi", path, l, r);
         }
     };
     match koyomi::doc::page(&o, l, &koyomi::doc::Options { months: None }) {
-        Ok(p) => r.out = koyomi::doc::render(&p, format),
+        Ok(p) => {
+            let (html, md) = pages_of("koyomi", path, l, r);
+            (Ran { out: koyomi::doc::render(&p, koyomi::doc::Format::Html), ..html }, Ran { out: koyomi::doc::render(&p, koyomi::doc::Format::Markdown), ..md })
+        }
         Err(ds) => {
             for d in &ds {
                 r.err.push_str(&d.render(l));
             }
             let msg = tr!("`{path}` にはページを作れないエラーがあるので、ページを出しません", "`{path}` has errors that keep its page from being made");
-            r.err.push_str(&format!("{}: {}\n", head(l), msg.get(l)));
+            r.err.push_str(&format!("{}\n", refusal(msg.get(l), l)));
             r.code = 1;
+            pages_of("koyomi", path, l, r)
         }
     }
-    r
 }
 
 // ── chobo ────────────────────────────────────────────────────────────────────────────────────
@@ -438,7 +484,7 @@ fn chobo_load(path: &str, l: Lang, r: &mut Ran) -> Option<(String, chobo::model:
     let (src, c) = match chobo::check::check_file(Path::new(path)) {
         Ok(x) => x,
         Err(e) => {
-            r.err.push_str(&format!("{}: {e}\n", head(l)));
+            r.err.push_str(&format!("{}\n", refusal(cannot_read(path, &e).get(l), l)));
             r.code = 2;
             return None;
         }
@@ -497,7 +543,7 @@ fn chobo_build(path: &str, l: Lang, target: &str) -> Ran {
     for (rel, text) in &files {
         let p = Path::new(OUT).join(t.lang().key()).join(rel);
         if let Err(e) = p.parent().map(fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| fs::write(&p, text)) {
-            r.err.push_str(&format!("{}: {}: {e}\n", head(l), p.display()));
+            r.err.push_str(&format!("{}\n", refusal(cannot_write(&p.display().to_string(), &e).get(l), l)));
             r.code = 2;
             return r;
         }
@@ -507,14 +553,13 @@ fn chobo_build(path: &str, l: Lang, target: &str) -> Ran {
     r
 }
 
-/// `chobo doc <path> [--format html]` (chobo's `run::cmd_doc`, no `--out`).
-fn chobo_doc(path: &str, l: Lang, html: bool) -> Ran {
-    let w: &[&str] = if html { &["chobo", "doc", path, "--format", "html"] } else { &["chobo", "doc", path] };
-    let (_, shown) = words(w, l);
-    let mut r = Ran { command: shown, ..Ran::default() };
-    let Some((src, book, c)) = chobo_load(path, l, &mut r) else { return r };
+/// `chobo doc <path>` as HTML (`--format html`) and as Markdown (chobo's `run::cmd_doc`, no
+/// `--out`), both from one check of the book.
+fn chobo_docs(path: &str, l: Lang) -> (Ran, Ran) {
+    let mut r = Ran::default();
+    let Some((src, book, c)) = chobo_load(path, l, &mut r) else { return pages_of("chobo", path, l, r) };
     let rep = c.report.unwrap_or_else(|| chobo::check::report(&book));
     let input = chobo::doc::Input { book: &book, file: path, src: &src, diags: &c.diags, report: &rep, lang: l };
-    r.out = if html { chobo::doc::html(&input) } else { chobo::doc::markdown(&input) };
-    r
+    let (html, md) = pages_of("chobo", path, l, r);
+    (Ran { out: chobo::doc::html(&input), ..html }, Ran { out: chobo::doc::markdown(&input), ..md })
 }

@@ -1,0 +1,8 @@
+エラー[E016]: tests/fixtures/date_messages.ja.flow:22:1: 引数 `day` は、`日` の DayService/Shift が受け取るものと合いません。`int` で、日付ではありません。`date` にしてください
+    22 | task ずらす(day: int, by: int) -> ずらした日
+エラー[E016]: tests/fixtures/date_messages.ja.flow:22:1: `日` の DayService/Shift のレスポンスは `ずらした日` に合いません。`day` は、日付で、`年月日` ではありません。`date` にしてください
+    22 | task ずらす(day: int, by: int) -> ずらした日
+エラー[E016]: tests/fixtures/date_messages.ja.flow:22:1: `日` の DayService/Shift のレスポンスは `ずらした日` に合いません。`also` は、日付で、`int` ではありません。`date` にしてください
+    22 | task ずらす(day: int, by: int) -> ずらした日
+エラー[E016]: tests/fixtures/date_messages.ja.flow:22:1: `日` の DayService/Shift のレスポンスは `ずらした日` に合いません。`more` は、日付で、`int` ではありません。`date` にしてください
+    22 | task ずらす(day: int, by: int) -> ずらした日

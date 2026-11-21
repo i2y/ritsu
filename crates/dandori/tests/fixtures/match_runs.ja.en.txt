@@ -1,0 +1,140 @@
+error[E010]: tests/fixtures/match_runs.ja.flow:37:1: `match` has no arm for ゴールド, プラチナ, which `段1` can be here
+    37 |   match 段1
+  the run that gets there:
+      31  段1 = 狭い
+      34  match 内密: false
+      35  段1 = 広い
+error[E010]: tests/fixtures/match_runs.ja.flow:43:1: `match` has no arm for ゴールド, プラチナ, which `段2` can be here
+    43 |     match 段2
+  the run that gets there:
+      31  段1 = 狭い
+      33  match 内密: true
+      38  match 段1: 一般
+      41  段2 = 狭い
+      42  repeat (at most 3 times)
+      44  match 段2: 一般
+      46  段2 = 広い
+      47  返り = 挨拶(…)
+      50  match 返り.済み: false
+error[E010]: tests/fixtures/match_runs.ja.flow:61:1: `match` has no arm for ゴールド, プラチナ, which `取り出した段` can be here
+    61 |       match 取り出した段
+  the run that gets there:
+      31  段1 = 狭い
+      34  match 内密: false
+      35  段1 = 広い
+      38  match 段1: 一般
+      41  段2 = 狭い
+      42  repeat (at most 3 times)
+      44  match 段2: 一般
+      46  段2 = 広い
+      47  返り = 挨拶(…)
+      50  match 返り.済み: false
+      52  段3 = 狭い
+      55  match 内密: false
+      56  段3 = あれば
+      60  match 段3: ゴールド
+error[E010]: tests/fixtures/match_runs.ja.flow:71:1: `match` has no arm for ゴールド, プラチナ, which `段4` can be here
+    71 |   match 段4
+  the run that gets there:
+      31  段1 = 狭い
+      34  match 内密: false
+      35  段1 = 広い
+      38  match 段1: 一般
+      41  段2 = 狭い
+      42  repeat (at most 3 times)
+      44  match 段2: 一般
+      46  段2 = 広い
+      47  返り = 挨拶(…)
+      50  match 返り.済み: false
+      52  段3 = 狭い
+      55  match 内密: false
+      56  段3 = あれば
+      59  match 段3: none
+      65  段4 = 狭い
+      68  match 内密: false
+      69  段4 = 選ぶ(…)
+error[E010]: tests/fixtures/match_runs.ja.flow:78:1: `match` has no arm for ゴールド, プラチナ, which `段5` can be here
+    78 |   match 段5
+  the run that gets there:
+      31  段1 = 狭い
+      33  match 内密: true
+      38  match 段1: 一般
+      41  段2 = 狭い
+      42  repeat (at most 3 times)
+      44  match 段2: 一般
+      46  段2 = 広い
+      47  返り = 挨拶(…)
+      50  match 返り.済み: false
+      52  段3 = 狭い
+      54  match 内密: true
+      59  match 段3: none
+      65  段4 = 狭い
+      67  match 内密: true
+      72  match 段4: 一般
+      75  段5 = 狭い
+      76  for 段 in 段階表 (at most 3)
+      77  段5 = 段
+error[E010]: tests/fixtures/match_runs.ja.flow:85:1: `match` has no arm for ゴールド, プラチナ, which `段6` can be here
+    85 |     match 段6
+  the run that gets there:
+      31  段1 = 狭い
+      33  match 内密: true
+      38  match 段1: 一般
+      41  段2 = 狭い
+      42  repeat (at most 3 times)
+      44  match 段2: 一般
+      46  段2 = 広い
+      47  返り = 挨拶(…)
+      50  match 返り.済み: false
+      52  段3 = 狭い
+      54  match 内密: true
+      59  match 段3: none
+      65  段4 = 狭い
+      67  match 内密: true
+      72  match 段4: 一般
+      75  段5 = 狭い
+      76  for 段 in 段階表 (at most 3)
+      79  match 段5: 一般
+      82  段6 = 狭い
+      83  段7 = 狭い
+      84  repeat (at most 3 times)
+      86  match 段6: 一般
+      88  段6 = 段7
+      89  段7 = 広い
+      86  match 段6: 一般
+      88  段6 = 段7
+      89  段7 = 広い
+error[E010]: tests/fixtures/match_runs.ja.flow:98:1: `match` has no arm for ゴールド, プラチナ, which `段9` can be here
+    98 |   match 段9
+  the run that gets there:
+      31  段1 = 狭い
+      34  match 内密: false
+      35  段1 = 広い
+      38  match 段1: 一般
+      41  段2 = 狭い
+      42  repeat (at most 3 times)
+      44  match 段2: 一般
+      46  段2 = 広い
+      47  返り = 挨拶(…)
+      50  match 返り.済み: false
+      52  段3 = 狭い
+      55  match 内密: false
+      56  段3 = あれば
+      59  match 段3: none
+      65  段4 = 狭い
+      68  match 内密: false
+      69  段4 = 選ぶ(…)
+      72  match 段4: 一般
+      75  段5 = 狭い
+      76  for 段 in 段階表 (at most 3)
+      79  match 段5: 一般
+      82  段6 = 狭い
+      83  段7 = 狭い
+      84  repeat (at most 3 times)
+      86  match 段6: 一般
+      88  段6 = 段7
+      89  段7 = 広い
+      91  段8 = 狭い
+      94  match 内密: false
+      95  段8 = 広い
+      97  段9 = 段8

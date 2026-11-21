@@ -1,0 +1,47 @@
+request held v1 "Equipment request"
+description "A hold made by the requester's department, whoever asks (fictional rules): the ones above every department have no department to name a budget by, and their request is refused when it is submitted"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+use book budget from "../../examples/shared/budget.book"
+
+form
+  what   : text "What"  count >=1 <=100
+  amount : money[JPY] "Amount"  range >=1JPY <=1_000_000JPY
+
+route
+  decide  manager
+
+who
+  manager = manager of requester
+  board   = team board
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then board
+
+ticket
+  self approval  not allowed
+  withdraw       until decide
+  on submitted   hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: requester.department, amount: amount)
+  on approved    post budget.reserve(request: ticket.id, attempt: ticket.attempt)
+  on rejected, withdrawn, expired  void budget.reserve(request: ticket.id, attempt: ticket.attempt)
+
+# the hold is made of the budget of the requester's department, and posted when the request is approved
+scenario held_and_posted
+  requester e1201
+  given budget.allocate(dept: "sales1", period: "2026", amount: 500_000JPY)
+  form what = "A monitor", amount = 60_000JPY
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | decide   | in progress |
+| 2026-11-16 11:00 | approve | e1101 |          | approved    |
+
+# a rejection gives the amount back to the department
+scenario held_and_voided
+  requester e1201
+  given budget.allocate(dept: "sales1", period: "2026", amount: 500_000JPY)
+  form what = "A monitor", amount = 60_000JPY
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit | e1201 | decide   | in progress |
+| 2026-11-16 11:00 | reject | e1101 |          | rejected    |

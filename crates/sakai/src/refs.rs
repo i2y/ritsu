@@ -624,7 +624,7 @@ pub fn rule_package(read: &Read, rule: &str) -> Option<String> {
 }
 
 /// Hold every crossing to the map (DESIGN 3.3, 4.7): fill `allowed`, and say what is not allowed.
-pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::contracts::Contracts, arts: &[Artifact]) -> Vec<Diag> {
+pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::contracts::Contracts, arts: &[Artifact], doubt: &crate::patterns::Doubt) -> Vec<Diag> {
     let mut diags = Vec::new();
     for c in crossings.iter_mut() {
         let (x, y) = (c.from_ctx, c.to_ctx);
@@ -932,6 +932,10 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
         let r = &m.contexts[x].rels[ri];
         let RelK::Upstream { through, layer, .. } = &r.kind else { unreachable!() };
         let rel_ref = Ref::line(Some(&xn), &m.contexts[x].file, r.pos.line, Text::same(m.rel_line(x, r)));
+        // a language whose heading its files gainsay is said once, at the language (E302)
+        if !through.iter().any(|(t, _)| *t == k) && doubt.contains(&(y, k.clone())) {
+            continue;
+        }
         if !through.iter().any(|(t, _)| *t == k) {
             let now: Vec<&str> = through.iter().map(|(t, _)| t.as_str()).collect();
             let fix = format!("through {}, {k}", now.join(", "));

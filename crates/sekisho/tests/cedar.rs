@@ -22,15 +22,26 @@
 //! Then the generated text is changed at one place at a time (a constant moved by one, a `has`
 //! taken away, a forbid made a permit, a role, an action or a type put in another's place, …),
 //! each change read and written back with ritsu-base's Cedar, so every one is Cedar the CLI reads
-//! and lays out as it would: every change must fail one of the checks. (That the English and the
-//! Japanese versions of a gate write the same Cedar but for the names is `tests/gen.rs`'s.)
+//! and lays out as it would: every change that changes the answer of a combination the check
+//! walks must fail one of the checks. A change no check fails is shown to answer every such
+//! combination as before, and said apart: the vectors hold every combination the check walks
+//! (their count is the walk's), a number at both ends of its cell, and either the change compares
+//! no number or time with a constant the policies did not compare it with (so no cell has another
+//! answer between its two ends than at them), or it compares one number of the principal, the
+//! resource or the context so, and answers as the generated Cedar does where that number is put at
+//! each such constant and one either side of it, in every test of the vectors (the CLI's answers
+//! for the generated Cedar there are what it is held to): the new cuts split a cell into parts,
+//! and each part then holds a number it is tried at. A change that cannot be shown so fails the
+//! test.
+//! (That the English and the Japanese versions of a gate write the same Cedar but for the names
+//! is `tests/gen.rs`'s.)
 //!
 //! The CLI is found by ritsu-testkit (`RITSU_CEDAR`, or `cedar` on the PATH, at 4.13.0); without
 //! it, a test that runs it says SKIP and passes.
 
 mod common;
 
-use common::cedar_cli::{Change, Cli, each_on_threads, gates, policy_changes};
+use common::cedar_cli::{At, Change, Cli, each_on_threads, gates, policy_changes};
 use ritsu_base::cedar::{self, Effect, EntityKind, Name, PolicySet, Schema, Type};
 use ritsu_base::json::{self, Json};
 use ritsu_testkit::TempDir;
@@ -369,7 +380,7 @@ fn parented(cases: &[Case]) -> std::collections::BTreeSet<String> {
 /// principal or resource type taken out of an action's.
 fn schema_changes(schema: &Schema, parented: &std::collections::BTreeSet<String>) -> Vec<Change> {
     let mut out = Vec::new();
-    let mut push = |what: String, s: Schema| out.push(Change { what, policies: None, schema: Some(s) });
+    let mut push = |what: String, s: Schema| out.push(Change { what, policies: None, schema: Some(s), at: At::Whole });
     for (n, ns) in schema.namespaces.iter().enumerate() {
         for (e, et) in ns.entity_types.iter().enumerate() {
             let EntityKind::Standard { member_of, shape, tags } = &et.kind else { continue };
@@ -496,17 +507,247 @@ fn same_but_for_names(w: &Written, v: &Vectors) -> String {
 }
 
 /// What the changes of one `.gate`'s Cedar came to: how many each check failed first, the
-/// changes only the run of each policy alone failed, and how many changes were not Cedar
-/// ritsu-base writes (none is expected).
+/// changes only the run of each policy alone failed, the changes no check failed that answer
+/// every combination the check walks as before, and how many changes were not Cedar ritsu-base
+/// writes (none is expected).
 struct Failed {
     counts: Vec<(&'static str, usize)>,
     alone: Vec<String>,
+    /// The changes that answer every combination as before: what each is, and where.
+    same: Vec<(String, At)>,
     not_cedar: usize,
 }
 
+/// Each comparison of the policies that reads a number or a time against a constant, as written
+/// (`context.amount >= 4`, `context.day.lessThan(datetime("2026-01-01"))`), with the comparison:
+/// the walk cuts a number at each constant the conditions compare it with, and a cell's two ends
+/// are where the vectors try it.
+fn compares(set: &PolicySet) -> Vec<(String, cedar::Expr)> {
+    fn constant(e: &cedar::Expr) -> bool {
+        match &e.kind {
+            cedar::ExprKind::Long(_) => true,
+            cedar::ExprKind::Neg(x) => constant(x),
+            cedar::ExprKind::Call { func, .. } => ["datetime", "duration", "decimal"].contains(&func.to_string().as_str()),
+            _ => false,
+        }
+    }
+    let mut out = Vec::new();
+    for p in &set.policies {
+        for c in &p.conditions {
+            cedar::walk(&c.body, &mut |e| {
+                let compares = match &e.kind {
+                    cedar::ExprKind::Binary { op, left, right } => {
+                        matches!(op, cedar::BinOp::Eq | cedar::BinOp::NotEq | cedar::BinOp::Less | cedar::BinOp::LessEq | cedar::BinOp::Greater | cedar::BinOp::GreaterEq) && (constant(left) || constant(right))
+                    }
+                    cedar::ExprKind::Method { name, args, .. } => ["lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual"].contains(&name.as_str()) && args.iter().any(constant),
+                    _ => false,
+                };
+                if compares {
+                    out.push((cedar::write_expr(e), e.clone()));
+                }
+            });
+        }
+    }
+    out
+}
+
+/// The comparisons of [`compares`], as written.
+fn cuts(set: &PolicySet) -> std::collections::BTreeSet<String> {
+    compares(set).into_iter().map(|(w, _)| w).collect()
+}
+
+/// What a comparison of a whole number with a constant reads, for the requests near its cut: a
+/// number of the principal, the resource or the context (`resource.amount > 1001`), and the
+/// constant. None for any other comparison the walk cuts at (a time, a duration, a decimal, an
+/// attribute of an attribute).
+fn compared(e: &cedar::Expr) -> Option<(cedar::Var, String, i128)> {
+    fn long(e: &cedar::Expr) -> Option<i128> {
+        match &e.kind {
+            cedar::ExprKind::Long(n) => Some(i128::from(*n)),
+            cedar::ExprKind::Neg(x) => long(x).map(|n| -n),
+            _ => None,
+        }
+    }
+    fn number(e: &cedar::Expr) -> Option<(cedar::Var, String)> {
+        let cedar::ExprKind::GetAttr { expr, attr } = &e.kind else { return None };
+        match &expr.kind {
+            cedar::ExprKind::Var(v @ (cedar::Var::Principal | cedar::Var::Resource | cedar::Var::Context)) => Some((*v, attr.clone())),
+            _ => None,
+        }
+    }
+    let cedar::ExprKind::Binary { left, right, .. } = &e.kind else { return None };
+    match (number(left), long(right), long(left), number(right)) {
+        (Some((v, a)), Some(n), _, _) | (_, _, Some(n), Some((v, a))) => Some((v, a, n)),
+        _ => None,
+    }
+}
+
+/// The type and the id of an entity a request names (`Shop::Order::"order1"`).
+fn uid_of(s: &str) -> Option<(&str, &str)> {
+    let i = s.rfind("::\"")?;
+    Some((&s[..i], s[i + 3..].strip_suffix('"')?))
+}
+
+/// The number `attr` of `var` in a test of the vectors: the type of what holds it (the entity's,
+/// or the action's for the context), and its value. None where the test holds no whole number
+/// there (the entity of another type, an attribute left out).
+fn number_in(t: &Json, var: cedar::Var, attr: &str) -> Option<(String, i128)> {
+    let request = t.get("request")?;
+    if var == cedar::Var::Context {
+        let n = request.get("context")?.get(attr)?.as_int()?;
+        return Some((request.get("action")?.as_str()?.to_string(), n));
+    }
+    let (ty, id) = uid_of(request.get(var.as_str())?.as_str()?)?;
+    let e = t.get("entities")?.as_arr()?.iter().find(|e| e.get("uid").is_some_and(|u| u.get("type").and_then(Json::as_str) == Some(ty) && u.get("id").and_then(Json::as_str) == Some(id)))?;
+    Some((ty.to_string(), e.get("attrs")?.get(attr)?.as_int()?))
+}
+
+/// A test of the vectors with the number `attr` of `var` put at `n`, and named after the test it
+/// is made from.
+fn with_number(t: &Json, var: cedar::Var, attr: &str, n: i128) -> Json {
+    let name = format!("{} [{}.{attr} {n}]", t.get("name").and_then(Json::as_str).unwrap_or_default(), var.as_str());
+    let request = t.get("request").cloned().unwrap_or(Json::Null);
+    let t = with(t, "name", Json::str(name));
+    if var == cedar::Var::Context {
+        let context = request.get("context").cloned().unwrap_or(Json::Null);
+        return with(&t, "request", with(&request, "context", with(&context, attr, Json::int(n))));
+    }
+    let Some((ty, id)) = request.get(var.as_str()).and_then(Json::as_str).and_then(uid_of) else { return t };
+    let entities = t.get("entities").and_then(Json::as_arr).unwrap_or_default();
+    let entities = entities.iter().map(|e| {
+        let is = e.get("uid").is_some_and(|u| u.get("type").and_then(Json::as_str) == Some(ty) && u.get("id").and_then(Json::as_str) == Some(id));
+        if is { with(e, "attrs", with(e.get("attrs").unwrap_or(&Json::Null), attr, Json::int(n))) } else { e.clone() }
+    });
+    with(&t, "entities", Json::arr(entities))
+}
+
+/// The requests near the cuts a change adds (comparisons of [`compares`] the generated Cedar does
+/// not make): each test of the vectors with the number such a comparison reads put at its constant
+/// and at one either side of it, within the values the vectors give that number for the type that
+/// holds it (they try every cell of it at both ends, so they span its range); none where every
+/// new cut is past the ends of that range, and so splits no cell. None when a new cut is of
+/// anything but one whole number of the principal, the resource or the context, or of a number no
+/// test holds: the parts of the cells the cuts of two numbers make together would want the
+/// requests of every pair, and the cuts of a time or a decimal are not one whole number apart.
+fn near_new_cuts(set: &PolicySet, changed: &PolicySet, cases: &[Case]) -> Option<Vec<Json>> {
+    let made = cuts(set);
+    let mut new = Vec::new();
+    for (w, e) in compares(changed) {
+        if !made.contains(&w) {
+            new.push(compared(&e)?);
+        }
+    }
+    let (var, attr) = match new.first() {
+        Some((v, a, _)) => (*v, a.clone()),
+        None => return Some(Vec::new()),
+    };
+    if new.iter().any(|(v, a, _)| (*v, a.as_str()) != (var, attr.as_str())) {
+        return None;
+    }
+    let mut span: std::collections::BTreeMap<String, (i128, i128)> = std::collections::BTreeMap::new();
+    for c in cases {
+        if let Some((ty, n)) = number_in(&c.json, var, &attr) {
+            let s = span.entry(ty).or_insert((n, n));
+            *s = (s.0.min(n), s.1.max(n));
+        }
+    }
+    if span.is_empty() {
+        return None;
+    }
+    let mut out = Vec::new();
+    for c in cases {
+        let Some((ty, _)) = number_in(&c.json, var, &attr) else { continue };
+        let (lo, hi) = span[&ty];
+        let mut at: Vec<i128> = new.iter().flat_map(|(_, _, k)| [k - 1, *k, k + 1]).filter(|n| (lo..=hi).contains(n)).collect();
+        at.sort();
+        at.dedup();
+        out.extend(at.into_iter().map(|n| with_number(&c.json, var, &attr, n)));
+    }
+    Some(out)
+}
+
+/// Whether `policies` allows each of `tests`, as the CLI answers: each is run as a test that
+/// expects an allow for no reason, which `run-tests` passes where the policies allow it and fails
+/// with `expected Allow, got Deny` where they deny it. An error for any other answer.
+fn cli_allows(cli: &Cli, dir: &Path, policies: &str, schema: &str, tests: &[Json], file: &str) -> Result<Vec<bool>, String> {
+    let asked: Vec<Json> = tests.iter().map(|t| with(&with(t, "decision", Json::str("allow")), "reason", Json::Arr(Vec::new()))).collect();
+    std::fs::write(dir.join(file), Json::arr(asked).compact()).unwrap();
+    let r = cli.run(dir, &["run-tests", "--policies", policies, "--schema", schema, "--tests", file]);
+    let mut out = Vec::new();
+    for t in tests {
+        let name = t.get("name").and_then(Json::as_str).unwrap_or_default();
+        let said = r.stdout.lines().find_map(|l| l.strip_prefix("  test ").and_then(|x| x.strip_prefix(name)).and_then(|x| x.strip_prefix(" ... ")));
+        out.push(match said {
+            Some("ok") => true,
+            Some("fail: expected Allow, got Deny") => false,
+            other => return Err(format!("cedar run-tests --policies {policies} --tests {file}: `{name}` {}", other.map_or_else(|| "is not answered".to_string(), |s| format!("answers `{s}`")))),
+        });
+    }
+    Ok(out)
+}
+
+/// The generated Cedar's answers on `tests`, as the CLI gives them: whether each is allowed, and the
+/// determining policies, the permits that hold where it allows and the forbids that hold where it
+/// denies (each policy run alone, made a permit, says where it holds), as `run-tests` and each
+/// policy alone hold them. An error where the two do not agree.
+fn cli_answers(cli: &Cli, dir: &Path, set: &PolicySet, schema: &str, tests: &[Json]) -> Result<Vec<Case>, String> {
+    let text = cedar::write_policies(set).map_err(|e| format!("ritsu-base does not write the policies: {e:?}"))?;
+    std::fs::write(dir.join("before.cedar"), text).unwrap();
+    let allows = cli_allows(cli, dir, "before.cedar", schema, tests, "before.tests.json")?;
+    let mut holds = Vec::new();
+    for (i, p) in set.policies.iter().enumerate() {
+        let mut alone = p.clone();
+        alone.effect = Effect::Permit;
+        let text = cedar::write_policies(&PolicySet { policies: vec![alone] }).map_err(|e| format!("{}: ritsu-base does not write it: {e:?}", p.id))?;
+        let (pf, tf) = (format!("before-alone-{i}.cedar"), format!("before-alone-{i}.tests.json"));
+        std::fs::write(dir.join(&pf), text).unwrap();
+        holds.push(cli_allows(cli, dir, &pf, schema, tests, &tf)?);
+    }
+    let mut out = Vec::new();
+    for (j, t) in tests.iter().enumerate() {
+        let held = |effect: Effect| -> Vec<String> { set.policies.iter().zip(&holds).filter(|(p, h)| p.effect == effect && h[j]).map(|(p, _)| p.id.clone()).collect() };
+        let (forbids, permits) = (held(Effect::Forbid), held(Effect::Permit));
+        let allow = forbids.is_empty() && !permits.is_empty();
+        let name = t.get("name").and_then(Json::as_str).unwrap_or_default().to_string();
+        if allow != allows[j] {
+            return Err(format!("`{name}`: the CLI {} it, and the policies that hold alone say otherwise", if allows[j] { "allows" } else { "denies" }));
+        }
+        let reason = if allow { permits } else { forbids };
+        let json = with(&with(t, "decision", Json::str(if allow { "allow" } else { "deny" })), "reason", Json::arr(reason.iter().map(Json::str)));
+        out.push(Case { json, name, allow, reason });
+    }
+    Ok(out)
+}
+
+/// Whether a change no check fails answers every combination the check walks as the generated
+/// Cedar does: the vectors hold every combination the check walks (`whole`), with a number at both
+/// ends of its cell, and on every one the change answers as before (no check failed it, `run-tests`
+/// and each policy alone among them: the same decision and the same determining policies); and
+/// either it compares no number or time with a constant the policies did not compare it with, so
+/// that no cell has an answer between its ends other than at them, or it compares one number of
+/// the principal, the resource or the context so, and answers as before near each such constant
+/// ([`near_new_cuts`]; the CLI's answers for the generated Cedar there are what it is held to, by
+/// `run-tests` and each policy alone): each part a new cut leaves of a cell then holds a number it
+/// is tried at. A change of the schema is not said so. `dir`: where the change was written
+/// ([`caught_by`]: `p.cedar` and `s.cedarschema`).
+fn same_answers(cli: &Cli, dir: &Path, whole: bool, set: &PolicySet, c: &Change, cases: &[Case]) -> Result<bool, String> {
+    let (Some(p), None, true) = (&c.policies, &c.schema, whole) else { return Ok(false) };
+    if cuts(p).is_subset(&cuts(set)) {
+        return Ok(true);
+    }
+    let Some(near) = near_new_cuts(set, p, cases) else { return Ok(false) };
+    if near.is_empty() {
+        return Ok(true);
+    }
+    let before = cli_answers(cli, dir, set, "s.cedarschema", &near).map_err(|e| format!("{}: near its new cuts: {e}", c.what))?;
+    std::fs::write(dir.join("near.tests.json"), Json::arr(before.iter().map(|t| t.json.clone())).compact()).unwrap();
+    Ok(cli.run_tests(dir, "p.cedar", "s.cedarschema", "near.tests.json", before.len(), false).is_ok() && each_alone(cli, dir, p, "s.cedarschema", &before).is_ok())
+}
+
 /// Every change of what was written for one `.gate`, each held to the checks; an error names the
-/// changes no check failed.
-fn changes_fail(cli: &Cli, w: &Written, v: &Vectors, scratch: &Path) -> Result<Failed, String> {
+/// changes no check failed that are not shown to answer every combination the check walks as
+/// before ([`same_answers`]; `whole`: the vectors hold every combination the check walks).
+fn changes_fail(cli: &Cli, w: &Written, v: &Vectors, scratch: &Path, whole: bool) -> Result<Failed, String> {
     let set = cedar::parse_policies(&w.policies).map_err(|e| format!("ritsu-base does not read the policies: {e:?}"))?;
     let schema = cedar::parse_schema(&w.schema).map_err(|e| format!("ritsu-base does not read the schema: {e:?}"))?;
     let schema_text = cedar::write_schema(&schema).map_err(|e| format!("ritsu-base does not write the schema: {e:?}"))?;
@@ -539,10 +780,20 @@ fn changes_fail(cli: &Cli, w: &Written, v: &Vectors, scratch: &Path) -> Result<F
         }
     }
     let found = each_on_threads(&changes, |i, (c, p, s)| caught_by(cli, &scratch.join(format!("c{i}")), c.policies.as_ref().unwrap_or(&set), p, s, &cases, &lacking));
-    let missed: Vec<&str> = changes.iter().zip(&found).filter(|(_, f)| f.is_none()).map(|((c, _, _), _)| c.what.as_str()).collect();
-    if !missed.is_empty() {
-        return Err(format!("{} of {} changes fail no check:\n  {}", missed.len(), changes.len(), missed.join("\n  ")));
+    // a change no check fails: one shown to answer every combination the check walks as before is
+    // said apart; any other is a change the checks let through
+    let (mut same, mut missed): (Vec<&Change>, Vec<&Change>) = (Vec::new(), Vec::new());
+    for (i, ((c, _, _), f)) in changes.iter().zip(&found).enumerate() {
+        if f.is_none() {
+            if same_answers(cli, &scratch.join(format!("c{i}")), whole, &set, c, &cases)? { same.push(c) } else { missed.push(c) }
+        }
     }
+    if !missed.is_empty() {
+        let missed: Vec<&str> = missed.iter().map(|c| c.what.as_str()).collect();
+        let why = if whole { "" } else { " (the vectors do not hold every combination the check walks)" };
+        return Err(format!("{} of {} changes fail no check, and are not shown to answer every combination as before{why}:\n  {}", missed.len(), changes.len(), missed.join("\n  ")));
+    }
+    let same: Vec<(String, At)> = same.iter().map(|c| (c.what.clone(), c.at.clone())).collect();
     let mut counts: Vec<(&'static str, usize)> = Vec::new();
     for f in found.iter().flatten() {
         match counts.iter_mut().find(|(k, _)| k == f) {
@@ -552,7 +803,60 @@ fn changes_fail(cli: &Cli, w: &Written, v: &Vectors, scratch: &Path) -> Result<F
     }
     counts.sort();
     let alone = changes.iter().zip(&found).filter(|(_, f)| **f == Some("each policy alone")).map(|((c, _, _), _)| c.what.clone()).collect();
-    Ok(Failed { counts, alone, not_cedar })
+    Ok(Failed { counts, alone, same, not_cedar })
+}
+
+/// What the check of a `.gate` says of a change of its Cedar that answers every combination the
+/// check walks as before (DESIGN 4.3): the warning at the place the change is (W305 or W306 at the
+/// policy, naming the action taken out of its list; W307 or W308 at the line the changed condition
+/// is written from), or why none is said there: an action taken out of a policy of `action any`,
+/// which is written for every action whatever it applies to, or a `has` gen writes before what a
+/// line reads, which is no line of the `.gate`. An error: a change that is neither, which the
+/// checks of sekisho let by without a word.
+fn said_of(o: &sekisho::check::Outcome, set: &PolicySet, at: &At) -> Result<String, String> {
+    let Some(w) = &o.walked else { return Err("the names of the .gate do not hold".into()) };
+    let g = &w.gate;
+    let policy = |i: usize| (0..g.policies.len()).find(|&pi| sekisho::cedar::policy_id(g, pi) == set.policies[i].id).ok_or(format!("no policy of the .gate is written as `{}`", set.policies[i].id));
+    let said = |codes: &[&str], line: usize, also: &dyn Fn(&sekisho::diag::Diag) -> bool| o.diags.iter().find(|d| codes.contains(&d.code) && d.line == Some(line) && also(d)).map(|d| format!("{} at line {line}", d.code));
+    match at {
+        At::Whole => Err("the change is of a policy whole or of the schema".into()),
+        At::Action { policy: i, action } => {
+            let p = &g.policies[policy(*i)?];
+            let a = g.actions.iter().find(|a| a.named.alias == *action).ok_or(format!("no action of the .gate is written as `{action}`"))?;
+            let named = format!("`{}`", a.named.name);
+            match said(&["W305", "W306"], p.named.line, &|d| d.message.en.contains(&named)) {
+                Some(s) => Ok(s),
+                None if p.any => Ok("not said: the policy is on `action any`".into()),
+                None => Err(format!("no W305 or W306 names {named} of `{}`", p.named.name)),
+            }
+        }
+        At::Condition { policy: i, condition, has } => {
+            let p = &g.policies[policy(*i)?];
+            // the condition of a `principal in` line of two roles or more is written first
+            let first = usize::from(matches!(&p.who, sekisho::model::Who::InRoles(rs) if rs.len() > 1));
+            let Some(c) = condition.checked_sub(first).and_then(|j| p.conds.get(j)) else { return Err(format!("condition {condition} of `{}` is no line of it", p.named.name)) };
+            match said(&["W307", "W308"], c.line, &|_| true) {
+                Some(s) => Ok(s),
+                None if *has => Ok("not said: the `has` gen writes before what the line reads".into()),
+                None => Err(format!("no W307 or W308 at the line `{}` of `{}`", c.text, p.named.name)),
+            }
+        }
+    }
+}
+
+/// Whether the vectors of a `.gate` hold every combination its check walks: as many
+/// combinations, and as many allowed.
+fn vectors_whole(gate: &str, v: &Vectors) -> Result<bool, String> {
+    let checked = sekisho::check::check_file(gate, &common::joined(), &sekisho::check::Options::default()).map_err(|e| format!("{gate}: {e}"))?;
+    let Some(walked) = checked.walked.as_ref() else { return Ok(false) };
+    let cases = cases(&v.text)?;
+    let mut combos: Vec<(&str, bool)> = cases.iter().map(|c| (c.combination(), c.allow)).collect();
+    combos.sort();
+    combos.dedup();
+    let allowed = combos.iter().filter(|(_, a)| *a).count();
+    let n: u128 = walked.report.actions.iter().map(|a| a.combinations).sum();
+    let k: u128 = walked.report.actions.iter().map(|a| a.allowed).sum();
+    Ok((combos.len() as u128, allowed as u128) == (n, k))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -626,6 +930,41 @@ fn every_gate_that_passes_its_check_is_held_to_the_cli() {
     }
 }
 
+/// A change that compares a number with a constant the generated Cedar does not compare it with,
+/// and answers otherwise only inside a cell (between the two ends the vectors try it at), fails no
+/// check and is not shown to answer as before: the requests near its new cut find where it differs.
+/// A change of the same shape that answers alike there is shown so.
+#[test]
+fn a_change_that_answers_otherwise_inside_a_cell_is_not_shown_to_answer_alike() {
+    let Some(cli) = Cli::find() else { return };
+    // the permit allows a clerk an amount of 10,000 yen and more, and its line `> 1000` adds
+    // nothing: the cells of the amount are 1 to 1,000, 1,001 to 9,999 and 10,000 to 100,000
+    let gate = "tests/mutants/W308_a_numeric_line_that_leaves_out_no_combination.gate";
+    let (t, w) = generate(gate, "en").unwrap().expect("the mutant passes its check");
+    let v = vectors(gate, t.path()).unwrap();
+    assert!(vectors_whole(gate, &v).unwrap(), "{gate}: the vectors hold every combination the check walks");
+    let set = cedar::parse_policies(&w.policies).unwrap();
+    let schema = cedar::parse_schema(&w.schema).unwrap();
+    let schema_text = cedar::write_schema(&schema).unwrap();
+    let cases = cases(&v.text).unwrap();
+    let scratch = t.path().join("changes");
+    std::fs::create_dir_all(&scratch).unwrap();
+    std::fs::write(scratch.join("vectors.json"), &v.text).unwrap();
+    let (_, lacking) = write_lacking(&scratch, &lacking(&schema, &cases));
+    // `!= 50000` denies 50,000 yen, inside the last cell; `!= 5000`, an amount the permit's other
+    // line never lets through
+    for (i, (line, alike)) in [("resource.amount != 50000", false), ("resource.amount != 5000", true)].into_iter().enumerate() {
+        let text = w.policies.replace("resource.amount > 1000", line);
+        assert_ne!(text, w.policies, "the generated Cedar no longer has `resource.amount > 1000`");
+        let p = cedar::parse_policies(&text).unwrap();
+        let dir = scratch.join(format!("c{i}"));
+        let written = cedar::write_policies(&p).unwrap();
+        assert_eq!(caught_by(&cli, &dir, &p, &written, &schema_text, &cases, &lacking), None, "`{line}` fails a check of the vectors");
+        let c = Change { what: format!("`resource.amount > 1000` made `{line}`"), policies: Some(p), schema: None, at: At::Whole };
+        assert_eq!(same_answers(&cli, &dir, true, &set, &c, &cases), Ok(alike), "{}", c.what);
+    }
+}
+
 /// What gen writes for every `.gate` that passes its check, changed at one place at a time: every
 /// change fails one of the checks. The changes only the run of each policy alone fails are the
 /// ones `run-tests` alone would pass.
@@ -634,6 +973,9 @@ fn every_change_of_the_generated_cedar_fails_a_check() {
     let Some(cli) = Cli::find() else { return };
     let mut wrong = Vec::new();
     let (mut gates_changed, mut changes) = (0, 0);
+    let (mut gates_same, mut same) = (0, 0);
+    // what the check says of the changes that answer as before, by warning or by why it says none
+    let mut shapes: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     let gates = gates();
     let generated = each_on_threads(&gates, |_, g| generate(g, "en"));
     // a file whose Cedar and vectors are another's but for the names, as the Japanese version of a
@@ -655,22 +997,44 @@ fn every_change_of_the_generated_cedar_fails_a_check() {
         seen.push((key, gate.clone()));
         let scratch = t.path().join("changes");
         std::fs::create_dir_all(&scratch).unwrap();
-        match changes_fail(&cli, &w, &v, &scratch) {
+        let whole = vectors_whole(gate, &v).unwrap_or_else(|e| panic!("{e}"));
+        match changes_fail(&cli, &w, &v, &scratch, whole) {
             Ok(f) => {
                 let n: usize = f.counts.iter().map(|(_, n)| n).sum();
                 let counts: Vec<String> = f.counts.iter().map(|(k, n)| format!("{k} {n}")).collect();
                 let left_out = if f.not_cedar > 0 { format!("; {} more are not Cedar, and are left out", f.not_cedar) } else { String::new() };
-                println!("{gate}: {n} changes, each failing a check (the first to fail: {}){left_out}", counts.join(", "));
+                let apart = if f.same.is_empty() { String::new() } else { format!("; {} more answer every combination the check walks as before", f.same.len()) };
+                println!("{gate}: {n} changes, each failing a check (the first to fail: {}){apart}{left_out}", counts.join(", "));
                 for a in &f.alone {
                     println!("  only each policy alone fails: {a}");
                 }
+                let o = sekisho::check::check_file(gate, &common::joined(), &sekisho::check::Options::default()).unwrap_or_else(|e| panic!("{gate}: {e:?}"));
+                let set = cedar::parse_policies(&w.policies).unwrap_or_else(|e| panic!("{gate}: {e:?}"));
+                for (a, at) in &f.same {
+                    match said_of(&o, &set, at) {
+                        Ok(s) => {
+                            println!("  answers every combination as before: {a} ({s})");
+                            *shapes.entry(s.split(" at line").next().unwrap_or_default().to_string()).or_default() += 1;
+                        }
+                        Err(e) => wrong.push(format!("{gate}: {a} answers every combination as before, and the check says nothing of it: {e}")),
+                    }
+                }
                 gates_changed += 1;
                 changes += n;
+                if !f.same.is_empty() {
+                    gates_same += 1;
+                    same += f.same.len();
+                }
             }
             Err(e) => wrong.push(format!("{gate}: {e}")),
         }
     }
     println!("{changes} changes of the Cedar of {gates_changed} .gate files, every one failing a check");
+    if same > 0 {
+        println!("{same} more changes, of the Cedar of {gates_same} .gate files, fail no check and answer every combination the check walks as before (each named above)");
+        let by: Vec<String> = shapes.iter().map(|(k, n)| format!("{k} {n}")).collect();
+        println!("  of them: {}", by.join(", "));
+    }
     assert!(wrong.is_empty(), "{}", wrong.join("\n\n"));
     assert!(gates_changed >= 2, "the two versions of the example are changed");
 }

@@ -1,0 +1,16 @@
+rule steps v1
+description "Whether an amount is a small one: another rule that reads the amount sizes reads, and cuts it elsewhere"
+
+enum step = small | large
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  step : step
+
+table decide
+policy unique
+| amount   | -> step |
+| <=300JPY | small   |
+| >300JPY  | large   |

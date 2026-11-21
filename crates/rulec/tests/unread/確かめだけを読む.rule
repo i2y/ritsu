@@ -1,0 +1,20 @@
+rule 確かめだけを読む(review_only) v1
+description "手数料に確かめが要るかを、手数料を result で決める規則から読む（架空）"
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100_000円
+
+apply 手数料(fee) = "共有/手数料.rule" meaning:5c3a161a81b9acf2
+  金額 = 金額
+
+outputs
+  確かめが要る(needs_review) : bool
+
+table 確かめが要る(needs_review)
+| -> 確かめが要る |
+| 確かめ          |
+
+examples
+| 金額     | -> 確かめが要る |
+| 1_000円  | false           |
+| 50_000円 | true            |

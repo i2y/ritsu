@@ -1,0 +1,40 @@
+gate 店(shop) v1
+description "店の注文をだれが急がせられるか、だれが止められるか"
+namespace ShopJa
+
+use rule 大きさの段階 from "read/大きさの段階.rule"
+use rule 自分の段階 from "read/自分の段階.rule"
+
+role 係(clerk)
+  description "お客さまに答える"
+  can 注文を急がせる, 注文を止める
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    大口(large) : bool
+    急ぎ(rush)  : bool
+
+action 注文を急がせる(rush_order)
+  description "注文をほかより先に送る"
+  principal 職員
+  resource 注文
+  context
+    段階(tier) = 大きさの段階(大口: resource.大口, 急ぎ: resource.急ぎ).段階
+
+action 注文を止める(hold_order)
+  description "注文を止めておく"
+  principal 職員
+  resource 注文
+  context
+    段階(tier) = 自分の段階(大口: resource.大口, 急ぎ: resource.急ぎ).段階
+
+permit 係は金の段階の注文を扱う(clerks_act_on_gold_orders)
+  description "係は、金の段階の注文を急がせるか止める"
+  principal in 係
+  action 注文を急がせる, 注文を止める
+  when 段階 is 金

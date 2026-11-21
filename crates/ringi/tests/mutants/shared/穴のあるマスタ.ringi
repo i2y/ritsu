@@ -1,0 +1,9 @@
+masters 会社のマスタ(company_masters) v1
+description "申請が選ぶ勘定科目（架空）。2026 年 7 月に効く行が無い"
+
+master 勘定科目(accounts) "勘定科目"
+  key 番号
+  fields
+    番号(code)  : text "番号"  count <=10
+    名前(label) : text "名前"  count <=60
+  data "穴のある勘定科目.csv"

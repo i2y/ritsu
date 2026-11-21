@@ -1,0 +1,6 @@
+エラー[E405]: tests/mutants/E405_a_hold_of_a_sum_approvers_edit.ringi:26:104: 仮押さえ `budget.reserve` が、承認者の直せるフィールド `items` を読みます
+    26 |   on submitted    hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)
+  = 仮押さえの引数 `amount` が `amount` を読み、`amount` は `items` から計算します。25 行目の `approvers edit` が、承認者に `items` を直させます。
+  = 仮押さえは、申請を出したときの値で一度だけ行い、承認者が直しても押さえ直しません。
+  = 確定されるのは押さえたときの値で、直したあとの申請の値と食い違います。
+  = `approvers edit` から `items` を外してください（ほかのフィールドが無ければ、行ごと）。

@@ -14,6 +14,7 @@
 //! claims.
 
 pub mod modules;
+pub mod waiting;
 
 use crate::cli;
 use ritsu_base::diag::Severity;
@@ -32,6 +33,8 @@ use std::path::Path;
 enum Status {
     Passes,
     Fails,
+    /// Every error of it is a line that reads a file that does not pass ([`waiting`]).
+    Waiting,
     Unchecked,
 }
 
@@ -55,15 +58,36 @@ pub struct Report<'a> {
     pub claims_not_run: Vec<(String, usize)>,
     /// The tree of modules could not be read: no file was checked.
     pub unread: bool,
+    /// The lines that wait for a file that does not pass, and the files that wait.
+    pub waiting: waiting::Waiting,
 }
 
 /// The languages whose `check` takes one file at a time: whatever their check of a file comes
 /// to is that file's.
-const ONE_FILE: [Tool; 7] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Kaname, Tool::Dandori, Tool::Sekisho];
+pub const ONE_FILE: [Tool; 8] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Kaname, Tool::Dandori, Tool::Sekisho, Tool::Ringi];
 
 impl Report<'_> {
     fn findings(&self) -> impl Iterator<Item = (&str, &Finding)> {
         self.units.iter().flat_map(|(t, u)| u.findings().map(move |f| (t.word(), f))).chain(self.ours.iter().map(|f| ("ritsu", f)))
+    }
+
+    /// Each finding with the line that waits it is, if it is one ([`waiting`]).
+    fn keyed(&self) -> impl Iterator<Item = (&str, &Finding, Option<&waiting::Wait>)> {
+        self.units
+            .iter()
+            .enumerate()
+            .flat_map(move |(i, (t, u))| {
+                u.parts.iter().enumerate().filter_map(move |(j, p)| match p {
+                    Part::Finding(f) => Some((t.word(), f, self.waiting.at(i, j))),
+                    Part::Text(_) => None,
+                })
+            })
+            .chain(self.ours.iter().map(|f| ("ritsu", f, None)))
+    }
+
+    /// The findings counted as errors and warnings: every finding but the lines that wait.
+    fn counted(&self) -> impl Iterator<Item = (&str, &Finding)> {
+        self.keyed().filter(|(_, _, w)| w.is_none()).map(|(t, f, _)| (t, f))
     }
 
     /// Whether this is a check of a whole module that has dependencies (DESIGN 17.8): the files of
@@ -95,11 +119,35 @@ impl Report<'_> {
             && ritsu_base::paths::from_root(&self.project.root, Path::new(&u.label)).is_some_and(|r| self.project.dependency_of(&r).is_some())
     }
 
+    /// yuen's line after its findings (`requirements/expense.req: 3 errors`), at part `j` of unit
+    /// `i`, when lines of the unit wait for a file that does not pass (DESIGN 8.3): counted again
+    /// without them, in yuen's words, and empty when no error is left. The lines that wait are said
+    /// under the file they wait for, and are no errors of the unit's own. None for every other part.
+    fn recounted(&self, i: usize, j: usize, lang: Lang) -> Option<String> {
+        let (t, u) = &self.units[i];
+        if *t != Tool::Yuen || j + 1 != u.parts.len() || !self.waiting.lines.iter().any(|w| w.at.0 == i) {
+            return None;
+        }
+        let said = u.parts.iter().enumerate().filter_map(|(k, p)| match p {
+            Part::Finding(f) if self.waiting.at(i, k).is_none() => Some(f.severity),
+            _ => None,
+        });
+        let (e, w) = said.fold((0, 0), |(e, w), s| match s {
+            Severity::Error => (e + 1, w),
+            Severity::Warning => (e, w + 1),
+            _ => (e, w),
+        });
+        Some(if e == 0 { String::new() } else { format!("{}\n", yuen::check::count_line(&u.label, e, w).get(lang).trim_end()) })
+    }
+
     fn status(&self, f: &File) -> Status {
         let unit = |t: Tool| self.units.iter().filter(move |(ut, _)| *ut == t).map(|(_, u)| u);
         let own = ONE_FILE.contains(&f.tool);
         if (own && unit(f.tool).any(|u| u.label == f.shown && u.verdict == Verdict::Unchecked)) || (!own && unit(f.tool).any(|u| u.verdict == Verdict::Unchecked)) {
             return Status::Unchecked;
+        }
+        if self.waiting.files.contains_key(&f.rel) {
+            return Status::Waiting;
         }
         let error_in_it = self.findings().any(|(_, x)| x.severity == Severity::Error && x.file.as_deref() == Some(f.rel.as_str()));
         // A file of a dependency whose check failed only for what a contribution of another file
@@ -129,16 +177,17 @@ impl Report<'_> {
         }
     }
 
-    /// What a person reads: each language's text, ritsu's own findings, the notes, the lines of
-    /// the dependencies, and the line that sums them up.
+    /// What a person reads: each language's text, ritsu's own findings, the lines that wait for a
+    /// file that does not pass, the notes, the lines of the dependencies, and the line that sums
+    /// them up.
     pub fn text(&self, lang: Lang) -> String {
         let mut out = String::new();
-        for (t, u) in &self.units {
+        for (i, (t, u)) in self.units.iter().enumerate() {
             let quiet = self.quiet(u);
-            for p in &u.parts {
+            for (j, p) in u.parts.iter().enumerate() {
                 match p {
-                    Part::Finding(f) if !self.hidden(f) => out.push_str(&f.text_of(t.word())),
-                    Part::Text(s) if !quiet => out.push_str(s),
+                    Part::Finding(f) if !self.hidden(f) && self.waiting.at(i, j).is_none() => out.push_str(&f.text_of(t.word())),
+                    Part::Text(s) if !quiet => out.push_str(self.recounted(i, j, lang).as_deref().unwrap_or(s)),
                     _ => {}
                 }
             }
@@ -146,6 +195,8 @@ impl Report<'_> {
         for f in self.ours.iter().filter(|f| !self.hidden(f)) {
             out.push_str(&f.text_of("ritsu"));
         }
+        let ours: Vec<(&str, &Finding)> = self.ours.iter().map(|f| ("ritsu", f)).collect();
+        out.push_str(&self.waiting.text(self.project, &self.units, &ours, lang));
         for line in self.notes.iter().chain(&self.dependency_line()).chain(&self.claims_line()) {
             out.push_str(line.get(lang));
             out.push('\n');
@@ -156,7 +207,8 @@ impl Report<'_> {
     }
 
     /// How the files `files` came out, with the findings `pick` takes counted, in both languages:
-    /// `all pass (2 warnings)`, `1 fail (1 error), 1 pass (2 warnings)`.
+    /// `all pass (2 warnings)`, `1 fail (1 error), 1 pass (2 warnings)`, `2 fail (2 errors), 6
+    /// waiting`.
     ///
     /// Each finding is counted with the files that came out as the file it is about did: a warning
     /// of a file that passes is counted with the files that pass, whether or not another file fails
@@ -164,18 +216,22 @@ impl Report<'_> {
     /// warnings)`). A finding of no file of the project is counted with the ones that fail: when
     /// every file passes and such a finding is an error (a name that starts with `@` right under the
     /// root of a module, E307), the files do not all pass as the check goes, and the count is said
-    /// bare (`1 error`), with the files that pass after it if they have findings of their own.
+    /// bare (`1 error`), with the files that pass after it if they have findings of their own. The
+    /// files that wait for a file that does not pass are counted apart, after the ones that fail:
+    /// their lines that wait are no errors of their own and are not counted, their warnings are
+    /// (`6 waiting (1 warning)`).
     fn came_out(&self, files: &[&File], pick: &dyn Fn(&Finding) -> bool) -> (String, String) {
         let statuses: Vec<Status> = files.iter().map(|f| self.status(f)).collect();
-        let fails = statuses.iter().filter(|s| **s == Status::Fails).count();
-        let unchecked = statuses.iter().filter(|s| **s == Status::Unchecked).count();
-        let passes = statuses.iter().filter(|s| **s == Status::Passes).count();
-        let passing: Vec<&str> = files.iter().zip(&statuses).filter(|(_, s)| **s == Status::Passes).map(|(f, _)| f.rel.as_str()).collect();
+        let count = |s: Status| statuses.iter().filter(|x| **x == s).count();
+        let (fails, waits, unchecked, passes) = (count(Status::Fails), count(Status::Waiting), count(Status::Unchecked), count(Status::Passes));
+        let with = |s: Status| -> Vec<&str> { files.iter().zip(&statuses).filter(|(_, x)| **x == s).map(|(f, _)| f.rel.as_str()).collect() };
+        let (passing, waiting) = (with(Status::Passes), with(Status::Waiting));
         let of_passing = |x: &Finding| x.file.as_deref().is_some_and(|p| passing.contains(&p));
+        let of_waiting = |x: &Finding| x.file.as_deref().is_some_and(|p| waiting.contains(&p));
         // The counts of the findings `also` takes, in both languages: `(ja, en)`, empty for none.
         let counts = |also: &dyn Fn(&Finding) -> bool| -> (Vec<String>, Vec<String>) {
-            let errors = self.findings().filter(|(_, f)| f.severity == Severity::Error && pick(f) && also(f)).count();
-            let warnings = self.findings().filter(|(_, f)| f.severity == Severity::Warning && pick(f) && also(f)).count();
+            let errors = self.counted().filter(|(_, f)| f.severity == Severity::Error && pick(f) && also(f)).count();
+            let warnings = self.counted().filter(|(_, f)| f.severity == Severity::Warning && pick(f) && also(f)).count();
             let mut ja = Vec::new();
             let mut en = Vec::new();
             if errors > 0 {
@@ -188,13 +244,13 @@ impl Report<'_> {
             }
             (ja, en)
         };
-        let error_of_no_file = self.findings().any(|(_, x)| x.severity == Severity::Error && pick(x) && !of_passing(x));
-        if fails == 0 && unchecked == 0 && !error_of_no_file {
+        let error_of_no_file = self.counted().any(|(_, x)| x.severity == Severity::Error && pick(x) && !of_passing(x) && !of_waiting(x));
+        if fails == 0 && waits == 0 && unchecked == 0 && !error_of_no_file {
             return in_brackets("どれも検査を通りました", "all pass", &counts(&|_| true));
         }
         let mut ja = Vec::new();
         let mut en = Vec::new();
-        let elsewhere = counts(&|x| !of_passing(x));
+        let elsewhere = counts(&|x| !of_passing(x) && !of_waiting(x));
         if fails > 0 {
             let (j, e) = in_brackets(&format!("検査を通らないもの {fails} 個"), &format!("{fails} fail"), &elsewhere);
             ja.push(j);
@@ -202,6 +258,11 @@ impl Report<'_> {
         } else if !elsewhere.0.is_empty() {
             ja.push(elsewhere.0.join("、"));
             en.push(elsewhere.1.join(", "));
+        }
+        if waits > 0 {
+            let (j, e) = in_brackets(&format!("待っているもの {waits} 個"), &format!("{waits} waiting"), &counts(&of_waiting));
+            ja.push(j);
+            en.push(e);
         }
         let theirs = counts(&of_passing);
         if passes > 0 && !theirs.0.is_empty() {
@@ -239,8 +300,8 @@ impl Report<'_> {
 
     /// The counts of the errors and the warnings `pick` takes, in both languages.
     fn counts_of(&self, pick: &dyn Fn(&Finding) -> bool) -> (Vec<String>, Vec<String>) {
-        let errors = self.findings().filter(|(_, f)| f.severity == Severity::Error && pick(f)).count();
-        let warnings = self.findings().filter(|(_, f)| f.severity == Severity::Warning && pick(f)).count();
+        let errors = self.counted().filter(|(_, f)| f.severity == Severity::Error && pick(f)).count();
+        let warnings = self.counted().filter(|(_, f)| f.severity == Severity::Warning && pick(f)).count();
         let mut ja = Vec::new();
         let mut en = Vec::new();
         if errors > 0 {
@@ -322,10 +383,13 @@ impl Report<'_> {
             let mut o: Vec<(String, Json)> = vec![("tool".into(), Json::str(f.tool.word())), ("file".into(), Json::str(&f.rel))];
             o.extend(dependency(Some(&f.rel)).map(|d| ("dependency".to_string(), d)));
             o.push(("ok".into(), Json::Bool(self.status(f) == Status::Passes)));
+            if let Some(roots) = self.waiting.files.get(&f.rel).filter(|_| self.status(f) == Status::Waiting) {
+                o.push(("waits_for".into(), Json::arr(roots.iter().map(Json::str))));
+            }
             o.push(("check".into(), self.check_of(f)));
             Json::Obj(o)
         });
-        let diagnostics = self.findings().filter(|(_, f)| !self.hidden(f)).map(|(t, f)| entry_in(t, f, dependency(f.file.as_deref())));
+        let diagnostics = self.keyed().filter(|(_, f, _)| !self.hidden(f)).map(|(t, f, w)| with_wait(entry_in(t, f, dependency(f.file.as_deref())), w));
         let mut o: Vec<(String, Json)> = vec![
             ("ritsu".into(), Json::str(env!("CARGO_PKG_VERSION"))),
             ("root".into(), Json::str(self.project.root_shown())),
@@ -475,6 +539,22 @@ pub fn entry(tool: &str, f: &Finding) -> Json {
     entry_in(tool, f, None)
 }
 
+/// [`entry`], with what the line reads and the files it waits for after the rest, when it is a line
+/// that waits for a file that does not pass (DESIGN 8.3): `reads`, `waits_for`.
+pub fn entry_waiting(tool: &str, f: &Finding, w: Option<&waiting::Wait>) -> Json {
+    with_wait(entry_in(tool, f, None), w)
+}
+
+/// The JSON of a diagnostic with `reads` and `waits_for` put after the rest, when it is a line that
+/// waits.
+fn with_wait(mut o: Json, w: Option<&waiting::Wait>) -> Json {
+    if let (Some(w), Json::Obj(kv)) = (w, &mut o) {
+        kv.push(("reads".into(), Json::str(&w.reads)));
+        kv.push(("waits_for".into(), Json::arr(w.roots.iter().map(Json::str))));
+    }
+    o
+}
+
 /// [`entry`], with the dependency the file is in right after the file (DESIGN 17.21), when there
 /// is one to write (`Some(null)` for a file of the module at hand).
 fn entry_in(tool: &str, f: &Finding, dependency: Option<Json>) -> Json {
@@ -512,13 +592,13 @@ fn entry_in(tool: &str, f: &Finding, dependency: Option<Json>) -> Json {
     Json::Obj(o)
 }
 
+/// What stops the command before its work, in the words of every command of the toolchain (DESIGN
+/// 6.2, item 10), and 2.
 fn refuse(msg: Text, lang: Lang, err: &mut dyn Write) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    let _ = writeln!(err, "{head}: {}", msg.get(lang));
-    2
+    ritsu_base::cli::refuse(err, &msg, lang)
 }
 
-/// `ritsu check [<path>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--no-claims] [--lean]`: the exit
+/// `ritsu check [<path>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--no-claims] [--lean] [--through <date>]`: the exit
 /// code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
     let code = run(args, lang, &mut std::io::stdout(), &mut std::io::stderr());
@@ -529,11 +609,35 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
 /// [`command`], writing what it prints to `out` and `err`: what the binary runs, and the page in
 /// the browser on the files it holds in memory (ritsu-wasm).
 pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
-    let table = cli::table();
-    let cmd = table.command("check").expect("check is in the table");
+    // a line that asks for JSON is answered in JSON when the command stops before its work too:
+    // `{"error": …}` on the standard output (DESIGN 6.2, item 10)
+    ritsu_base::cli::answering(args, out, |out| run_with(args, lang, out, None, err))
+}
+
+/// [`run`], and the same report's JSON (what `--format json` prints) to `json` as well: the page's
+/// one question, which shows both, checks each file once (DESIGN 4.15). A check that stops before
+/// its work has the JSON `--format json` prints then, `{"error": …}` (DESIGN 6.2, item 10).
+pub fn run_both(args: &[String], lang: Lang, out: &mut dyn Write, json: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let as_json = ["--format", "json"].map(String::from);
+    ritsu_base::cli::answering(&as_json, json, |json| run_with(args, lang, out, Some(json), err))
+}
+
+fn run_with(args: &[String], lang: Lang, out: &mut dyn Write, also: Option<&mut dyn Write>, err: &mut dyn Write) -> u8 {
     // `--lang` anywhere on the line is ritsu's, decided before anything is said
     let asked = args.iter().enumerate().find_map(|(i, x)| if x == "--lang" { args.get(i + 1).cloned() } else { x.strip_prefix("--lang=").map(str::to_string) });
     let lang = if asked.is_some() { Lang::pick(asked.as_deref(), "RITSU_LANG") } else { lang };
+    // rulec reads in the run's language on this thread, whatever the process's is: what the run asks
+    // of a rule after its check (the claims across the languages, the claims ringi asks of the files
+    // a request is lowered to) reads the `enums` files the rule imports from what the check kept in
+    // that language, and each is checked once (DESIGN 4.15)
+    let rl = if lang == Lang::Ja { rulec::i18n::Lang::Ja } else { rulec::i18n::Lang::En };
+    rulec::i18n::with(rl, || run_in(args, lang, out, also, err))
+}
+
+/// [`run_with`], in the run's language.
+fn run_in(args: &[String], lang: Lang, out: &mut dyn Write, mut also: Option<&mut dyn Write>, err: &mut dyn Write) -> u8 {
+    let table = cli::table();
+    let cmd = table.command("check").expect("check is in the table");
     let a = match table.parse(cmd, args) {
         Ok(a) => a,
         Err(e) => return refuse(e, lang, err),
@@ -548,14 +652,23 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
         None => None,
         Some(v) => match v.parse::<u64>() {
             Ok(n) if n > 0 => Some(n),
-            _ => return refuse(Text::new(format!("`--budget {v}` は正の整数ではありません"), format!("`--budget {v}` is not a positive integer")), lang, err),
+            _ => return refuse(ritsu_base::cli::not_positive("--budget", v), lang, err),
         },
     };
+    // the paths the run holds are written the way the first path given was (DESIGN 4.15)
+    let _way = ritsu_base::paths::run_from(a.pos.first().map_or(".", String::as_str));
     let mut project = match Project::load(&a.pos, a.get("--root")) {
         Ok(p) => p,
         Err(e) => return refuse(e, lang, err),
     };
     project.run_claims = !a.has("--no-claims");
+    // `--through`: the day every request of ringi's is to be usable through
+    if let Some(v) = a.get("--through") {
+        match ritsu_ports::day_of(v) {
+            Some(d) => project.ringi.through = Some(d),
+            None => return refuse(Text::new(format!("`--through {v}` は 2027-04-01 の形の日付ではありません"), format!("`--through {v}` is not a date such as 2027-04-01")), lang, err),
+        }
+    }
     // `--lean` needs Lean before anything is checked (kaname's DESIGN 38.3)
     if a.has("--lean") {
         if kaname::lean::find_lake().is_none() {
@@ -569,15 +682,28 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
     // (exit 2); the tree's errors are said with no language's check run (exit 1).
     match project.tree.clone().as_deref() {
         Some(Err(Problem::Stop(said))) => {
-            let head = if lang == Lang::Ja { "エラー" } else { "error" };
             for t in said {
-                let _ = writeln!(err, "{head}: {}", t.get(lang));
+                refuse(t.clone(), lang, err);
             }
             return 2;
         }
         Some(Err(Problem::Diags(ds))) => {
             let ours = ds.iter().map(|d| modules::finding(&project, d, lang)).collect();
-            let report = Report { project: &project, units: Vec::new(), ours, borders: Borders::default(), notes: Vec::new(), crossings: Vec::new(), deps_warnings, claims_not_run: Vec::new(), unread: true };
+            let report = Report {
+                project: &project,
+                units: Vec::new(),
+                ours,
+                borders: Borders::default(),
+                notes: Vec::new(),
+                crossings: Vec::new(),
+                deps_warnings,
+                claims_not_run: Vec::new(),
+                unread: true,
+                waiting: waiting::Waiting::default(),
+            };
+            if let Some(j) = also.as_deref_mut() {
+                print(&report, true, lang, j);
+            }
             return print(&report, json, lang, out);
         }
         _ => {}
@@ -597,9 +723,11 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
     // their calls (kaname's DESIGN 4.3), and ritsu says those checks with the same decisions
     let verdicts = std::rc::Rc::new(ritsu_cross::ProgramVerdicts::new(&joined));
     let mut units = project.check_with(&joined, Some(verdicts.clone()), lang);
-    if project.tree.is_some() {
-        project.place_findings(&mut units, lang);
-    }
+    // A finding rulec made in the check of one file about a line of another — a rule's line,
+    // found with a contribution merged in — is filed under the file the line is in, in a module
+    // and out of one: the `file` and the `line` of the JSON are then of one file, the one its
+    // `where` names.
+    project.place_findings(&mut units, lang);
     let crossed = ritsu_cross::check_with(&project, &joined, &verdicts, lang);
     let mut ours = crossed.findings;
     if let Some(Ok(tree)) = project.tree.as_deref() {
@@ -613,7 +741,13 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
         .iter()
         .map(|f| (f.rel.clone(), ritsu_ports::Claims::claims(&*joined.geas, &ritsu_base::paths::on_disk(&project.root, &f.rel)).map(|c| c.len()).unwrap_or(0)))
         .collect();
-    let report = Report { project: &project, units, ours, borders: crossed.borders, notes, crossings, deps_warnings, claims_not_run, unread: false };
+    // the lines that read a file that does not pass, said under it once (DESIGN 8.3)
+    let others: Vec<&Finding> = ours.iter().collect();
+    let waiting = waiting::Waiting::of(&project, &units, &others, &joined, &ONE_FILE);
+    let report = Report { project: &project, units, ours, borders: crossed.borders, notes, crossings, deps_warnings, claims_not_run, unread: false, waiting };
+    if let Some(j) = also {
+        print(&report, true, lang, j);
+    }
     print(&report, json, lang, out)
 }
 

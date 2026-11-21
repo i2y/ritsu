@@ -1,0 +1,18 @@
+rule cap_under_amount v1
+description "A cap that never passes the amount: no row takes a cap above 500 yen, and a cap is above 500 yen only where the amount is too"
+
+enum band = low | high
+
+inputs
+  cap    : money[JPY]  range >=0JPY <=1_000JPY
+  amount : money[JPY]  range >=0JPY <=1_000JPY
+
+constraint cap <= amount
+
+outputs
+  band : band
+
+table bands
+| cap      | amount   | -> band |
+| <=500JPY | <=500JPY | low     |
+| <=500JPY | >500JPY  | high    |

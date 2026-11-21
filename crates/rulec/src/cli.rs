@@ -100,6 +100,22 @@ fn every_code() -> Vec<&'static str> {
     v
 }
 
+/// The commands that write what others keep (the code, a page, the JSON of `api`, the vectors, the
+/// schema, the adapter's template): what they write is in the language `--lang` alone gives,
+/// English without it, whatever the environment says (ritsu's DESIGN 4.1).
+const MADE: [&str; 6] = ["gen", "doc", "api", "vectors", "schema", "adapter"];
+
+/// The help of `--lang` on the page of command `cmd`, where `global` is the help every command
+/// shares: a command that writes what others keep says that the flag alone gives the language of
+/// what it writes, and the variables only that of the text it prints, in the words of ritsu-base's
+/// `made_lang_flag`.
+pub(crate) fn lang_help(cmd: &str, global: &str) -> String {
+    match MADE.contains(&cmd) {
+        true => crate::i18n::text(&ritsu_base::cli::made_lang_flag("RULEC_LANG").help),
+        false => global.to_string(),
+    }
+}
+
 /// `--lang` and `--help` work everywhere, so they are appended to every command rather
 /// than repeated in the table.
 fn global_flags() -> Vec<Flag> {
@@ -166,14 +182,17 @@ fn commands() -> Vec<Cmd> {
         },
         Cmd {
             name: "explain",
-            args: "<CODE>",
+            args: "<CODE>... | --all",
             purpose: tr!(
-                "診断コードを一つ引く。いつ出るか、どう直すか、最小の再現",
-                "look one diagnostic code up: when it appears, how to fix it, the smallest reproduction"
+                "診断コードを引く。いつ出るか、どう直すか、最小の再現",
+                "look diagnostic codes up: when each appears, how to fix it, the smallest reproduction"
             ),
             params: vec![(
-                "<CODE>",
-                tr!("`E101` のような診断コード。`--all` なら要らない", "a diagnostic code such as `E101`; not needed with `--all`"),
+                "<CODE>...",
+                tr!(
+                    "`E101` のような診断コード。いくつでも渡せて、渡した順に出す。`--all` とは一緒に渡さない",
+                    "diagnostic codes such as `E101`, any number, printed in the order given; not given with `--all`"
+                ),
             )],
             flags: vec![
                 flag("--all", None, tr!("全部のコードを出す", "print every code")),
@@ -242,6 +261,14 @@ fn commands() -> Vec<Cmd> {
                 )
                 .choices(crate::targets::EXTRAS)
                 .repeat(),
+                flag(
+                    ritsu_emit::package::PYTHON_PACKAGE,
+                    None,
+                    tr!(
+                        "Python のモジュールを、パッケージの中に置くものとして書く（dandori が書くワークフローのパッケージの rulec/python など）。規則のモジュールは、読む enums のファイルのモジュールを相対の import で読み、横の runner と MCP のサーバーは、自分の置き場を一つのパッケージとして読む。--target python が要り、--extra connect とは一緒に使えない",
+                        "write the Python modules to be put inside a package (such as rulec/python in the package of a workflow dandori writes): a rule's module reads the module of each enums file it reads by a relative import, and the runner and the MCP server beside it read their directory as a package. Needs --target python, and does not go with --extra connect"
+                    ),
+                ),
                 out_flag(&tr!("生成物", "generated files")).default("generated"),
                 flag("--check", None, tr!("書き換えず、同じ --target と --extra で書くはずのファイルが古いか無ければ 1 で落ちる（CI 用）", "write nothing, and exit 1 if a file the same --target and --extra write is stale or missing (for CI)")),
                 flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
@@ -250,8 +277,9 @@ fn commands() -> Vec<Cmd> {
                 (0, tr!("生成した、または --check が一致を確かめた", "generated, or --check found everything up to date")),
                 (1, tr!("--check でずれがある、または規則が検査を通らない", "--check found a difference, or the rule does not pass check")),
                 (2, tr!(
-                    "引数の誤り（`--target` が無い、出力先の持たない付属物を頼んだ、も含む）、書けないファイル、ritsu のモジュールの中で、生成するモジュールの一つのパスに入る中身の違う二つの契約か、二つの名前で import される依存の契約",
-                    "bad arguments (no `--target`, or an extra none of the targets has, among them), a file that cannot be written, or in a module of ritsu's, two different contracts for one path of the module generated, or a contract of a dependency imported by two names"
+                    "引数の誤り（`--target` が無い、出力先の持たない付属物を頼んだ、`{}` に `--target python` が無いか、`--extra connect` を一緒に頼んだ、も含む）、書けないファイル、ritsu のモジュールの中で、生成するモジュールの一つのパスに入る中身の違う二つの契約か、二つの名前で import される依存の契約",
+                    "bad arguments (no `--target`, an extra none of the targets has, or `{}` with no `--target python` or beside `--extra connect`, among them), a file that cannot be written, or in a module of ritsu's, two different contracts for one path of the module generated, or a contract of a dependency imported by two names",
+                    ritsu_emit::package::PYTHON_PACKAGE
                 )),
             ],
             examples: vec![
@@ -345,8 +373,8 @@ fn commands() -> Vec<Cmd> {
             name: "run",
             args: "<file.rule> [name=value]...",
             purpose: tr!(
-                "規則に入力を一つ渡して、答えを聞く。生成したコードと突き合わせている参照インタプリタが答える。範囲の外、`constraint` が断る、列挙にない値は、生成したコードの入口と同じ理由で断る",
-                "give a rule one input and ask for its answer, in the reference evaluator the generated code is held to; an input out of range, ruled out by a `constraint`, or naming a value the enum does not have is refused for the reason the door of the generated code gives"
+                "規則に入力を一つ渡して、答えを聞く。生成したコードと突き合わせている参照インタプリタが答える。範囲の外、`constraint` が断る、計算した値が `define` の受け付ける範囲の外になる、列挙にない値は、生成したコードと同じ理由で断る",
+                "give a rule one input and ask for its answer, in the reference evaluator the generated code is held to; an input out of range, ruled out by a `constraint`, working out a value outside the range a `define` accepts, or naming a value the enum does not have is refused for the reason the generated code gives"
             ),
             params: vec![
                 ("<file.rule>", tr!("検査を通る規則ファイル", "a rule file that passes check")),
@@ -586,7 +614,8 @@ fn commands() -> Vec<Cmd> {
                     "the command that starts the legacy implementation; everything after it is that command's own arguments"
                 ),
             )
-            .rest(),
+            .rest()
+            .required(),
             ],
             exits: vec![
                 (0, tr!("全件一致した", "every record agreed")),
@@ -637,7 +666,7 @@ fn commands() -> Vec<Cmd> {
             ),
             params: vec![("<file.rule>", tr!("規則ファイル、または 送料@v3 や rules/送料.rule@origin/main（git の中の版）", "the rule file, or shipping_fee@v3 or rules/shipping_fee.rule@origin/main (a version inside git)"))],
             flags: vec![
-                flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録（必須）", "the past records (required)")),
+                flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録（必須）", "the past records (required)")).required(),
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言", "the declaration of the default values used for filling")),
                 flag("--fill", Some(if crate::i18n::ja() { "<フィールド=値>" } else { "<field=value>" }), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
                 flag("--read-as", Some("<file.rule[@rev]>"), tr!("記録を、この版の規則の刻みと単位で読む（送料@v3 のような git の版も書ける）。刻みや単位を変える前に書いた記録を読み直すため", "read the records at the steps and units of this version of the rule (a git version such as shipping_fee@v3 works too): for records written before a step or a unit changed")),
@@ -786,17 +815,21 @@ fn commands() -> Vec<Cmd> {
 
 fn usage_line(c: &Cmd) -> String {
     let mut o = format!("rulec {} {}", c.name, c.args).trim_end().to_string();
-    for f in &c.flags {
+    // a flag the arguments already name is one way to call the command (`<CODE>... | --all`), not
+    // said again
+    for f in c.flags.iter().filter(|f| !c.args.split_whitespace().any(|w| w == f.name)) {
         o.push_str(&if f.required { format!(" {}", f.shown()) } else { format!(" [{}]", f.shown()) });
     }
     o
 }
 
-/// `rulec <cmd> --help` and `rulec help <cmd>`.
+/// `rulec <cmd> --help` and `rulec help <cmd>`. The commands it names are named the way the person
+/// ran this one: `ritsu rulec check …` through `ritsu` (ritsu's DESIGN 6.2, item 10).
 fn help_cmd(c: &Cmd) -> String {
-    let mut o = format!("rulec {} — {}\n\n", c.name, c.purpose);
+    let run = ritsu_base::cli::command_name("rulec");
+    let mut o = format!("{run} {} — {}\n\n", c.name, c.purpose);
     o.push_str(&tr!("使い方:\n", "Usage:\n"));
-    o.push_str(&format!("  {}\n", usage_line(c)));
+    o.push_str(&format!("  {}\n", ritsu_base::cli::as_run(&usage_line(c))));
 
     if !c.params.is_empty() {
         o.push_str(&tr!("\n引数:\n", "\nArguments:\n"));
@@ -816,7 +849,8 @@ fn help_cmd(c: &Cmd) -> String {
             Some(d) => tr!(" (既定 {d})", " (default {d})"),
             None => String::new(),
         };
-        o.push_str(&format!("  {s}{pad}  {}{d}\n", f.help));
+        let help = if f.name == "--lang" { lang_help(c.name, &f.help) } else { f.help.clone() };
+        o.push_str(&format!("  {s}{pad}  {help}{d}\n"));
     }
 
     o.push_str(&tr!("\nexit code:\n", "\nExit codes:\n"));
@@ -826,13 +860,13 @@ fn help_cmd(c: &Cmd) -> String {
 
     o.push_str(&tr!("\n例:\n", "\nExamples:\n"));
     for e in &c.examples {
-        o.push_str(&format!("  $ {e}\n"));
+        o.push_str(&format!("  $ {}\n", ritsu_base::cli::as_run_of("rulec", e)));
     }
 
     if !c.codes.is_empty() {
         o.push_str(&tr!(
-            "\n出しうる診断（`rulec explain <CODE>` で一つずつ説明を読めます）:\n  ",
-            "\nDiagnostics it can print (`rulec explain <CODE>` looks one up):\n  "
+            "\n出しうる診断（`{run} explain <CODE>` で一つずつ説明を読めます）:\n  ",
+            "\nDiagnostics it can print (`{run} explain <CODE>` looks one up):\n  "
         ));
         o.push_str(&c.codes.join(" "));
         o.push('\n');
@@ -852,17 +886,18 @@ fn help_all() -> String {
     ));
     o.push_str(&tr!("使い方:\n", "Usage:\n"));
     let w = cs.iter().map(|c| c.name.len() + c.args.len()).max().unwrap_or(0);
+    let run = ritsu_base::cli::command_name("rulec");
     for c in &cs {
         let head = format!("{} {}", c.name, c.args);
-        o.push_str(&format!("  rulec {head:w$}  {}\n", c.purpose, w = w));
+        o.push_str(&format!("  {run} {head:w$}  {}\n", c.purpose, w = w));
     }
     o.push_str(&tr!(
-        "\n一つのコマンドの詳しい説明は `rulec <cmd> --help`（`rulec help <cmd>` も同じ）。\n",
-        "\nFor one command in detail: `rulec <cmd> --help` (`rulec help <cmd>` is the same page).\n"
+        "\n一つのコマンドの詳しい説明は `{run} <cmd> --help`（`{run} help <cmd>` も同じ）。\n",
+        "\nFor one command in detail: `{run} <cmd> --help` (`{run} help <cmd>` is the same page).\n"
     ));
     o.push_str(&tr!(
-        "どのコマンドにも --lang ja|en を付けられます（既定は en、環境変数 RULEC_LANG か RITSU_LANG でも指定できます）。\n",
-        "Every command accepts --lang ja|en (default en; the RULEC_LANG or RITSU_LANG environment variable works too).\n"
+        "どのコマンドにも --lang ja|en を付けられます（既定は en、環境変数 RULEC_LANG か RITSU_LANG でも指定できます）。環境変数が決めるのは出す文の言語だけで、gen・doc・api・vectors・schema・adapter が書く物の言語は --lang だけで決まります（無ければ en）。\n",
+        "Every command accepts --lang ja|en (default en; the RULEC_LANG or RITSU_LANG environment variable works too). The variables choose only the language of the text a command prints: what gen, doc, api, vectors, schema and adapter write is in the language of --lang alone, en without it.\n"
     ));
     o.push_str(&tr!(
         "exit code: 0 注記のみ / 1 エラーあり / 2 引数の誤りか、読めないファイル\n",
@@ -932,69 +967,39 @@ fn parse(c: &Cmd, argv: &[String]) -> Result<Args, String> {
             Some((k, v)) => (k.to_string(), Some(v.to_string())),
             None => (a.clone(), None),
         };
-        let Some(f) = find(&name) else {
+        // what stops the line, in the words of every command of ritsu (ritsu-base's table)
+        let misuse = |m: ritsu_base::cli::Misuse| {
             let names: Vec<&str> = c.flags.iter().chain(globals.iter()).map(|f| f.name).collect();
-            let hint = match nearest_flag(&name, &names) {
-                Some(n) => tr!("（`{n}` のことですか）", " (did you mean `{n}`?)"),
-                None if !name.starts_with("--") => tr!("（rulec のフラグは長い形だけです）", " (rulec spells every flag out in full)"),
-                None => String::new(),
-            };
-            return Err(tr!(
-                "`{name}` というフラグはありません{hint}。`rulec {} --help` を読んでください",
-                "unknown flag `{name}`{hint}; run `rulec {} --help`",
-                c.name
-            ));
+            crate::i18n::text(&m.text_among(&ritsu_base::cli::command_name("rulec"), c.name, &names))
+        };
+        let Some(f) = find(&name) else {
+            return Err(misuse(ritsu_base::cli::Misuse::UnknownFlag(name)));
         };
         if f.rest {
             out.got.push((f.name, String::new()));
             out.rest = argv[i + 1..].to_vec();
             if out.rest.is_empty() {
-                return Err(tr!(
-                    "`{}` にはコマンドが要ります",
-                    "`{}` needs a command",
-                    f.spelled()
-                ));
+                return Err(misuse(ritsu_base::cli::Misuse::MissingValue { flag: f.name, placeholder: f.value.unwrap_or("<cmd>") }));
             }
             return Ok(out);
         }
         let v = match (f.value, inline) {
-            (None, Some(v)) => {
-                return Err(tr!(
-                    "`{}` は値を取りません（`={v}` が付いています）",
-                    "`{}` takes no value (it was given `={v}`)",
-                    f.name
-                ));
-            }
+            (None, Some(v)) => return Err(misuse(ritsu_base::cli::Misuse::TakesNoValue { flag: f.name, value: v })),
             (None, None) => String::new(),
             (Some(_), Some(v)) => v,
-            (Some(_), None) => {
+            (Some(placeholder), None) => {
                 i += 1;
                 match argv.get(i) {
                     Some(v) => v.clone(),
-                    None => {
-                        return Err(tr!(
-                            "`{}` に値がありません",
-                            "`{}` is missing its value",
-                            f.spelled()
-                        ));
-                    }
+                    None => return Err(misuse(ritsu_base::cli::Misuse::MissingValue { flag: f.name, placeholder })),
                 }
             }
         };
         if !f.choices.is_empty() && !f.choices.contains(&v.as_str()) {
-            return Err(tr!(
-                "`{}` に `{v}` は使えません。書けるのは {} だけです",
-                "`{} {v}` is not a value this flag takes; it takes only {}",
-                f.name,
-                f.choices.join(" | ")
-            ));
+            return Err(misuse(ritsu_base::cli::Misuse::NotAChoice { flag: f.name, value: v, choices: f.choices }));
         }
         if !f.repeat && out.has(f.name) {
-            return Err(tr!(
-                "`{}` が二度書かれています",
-                "`{}` is given twice",
-                f.name
-            ));
+            return Err(misuse(ritsu_base::cli::Misuse::Twice(f.name)));
         }
         out.got.push((f.name, v));
         i += 1;
@@ -1002,41 +1007,31 @@ fn parse(c: &Cmd, argv: &[String]) -> Result<Args, String> {
     Ok(out)
 }
 
-/// The flag an unknown one was most likely meant to be. `-o` is taken as the start of a long
-/// name (`--out`); `--outt` as a slip of at most two letters. Only an answer that is the one
-/// best is given — two equally near would be a guess.
-fn nearest_flag<'a>(typed: &str, names: &[&'a str]) -> Option<&'a str> {
-    if !typed.starts_with("--") {
-        let head = typed.trim_start_matches('-');
-        let hits: Vec<&str> = names.iter().copied().filter(|n| n.trim_start_matches('-').starts_with(head)).collect();
-        return (hits.len() == 1).then(|| hits[0]);
-    }
-    fn distance(a: &str, b: &str) -> usize {
-        let b: Vec<char> = b.chars().collect();
-        let mut row: Vec<usize> = (0..=b.len()).collect();
-        for (i, ca) in a.chars().enumerate() {
-            let mut prev = row[0];
-            row[0] = i + 1;
-            for (j, cb) in b.iter().enumerate() {
-                let here = row[j + 1];
-                row[j + 1] = (prev + usize::from(ca != *cb)).min(row[j] + 1).min(here + 1);
-                prev = here;
-            }
-        }
-        row[b.len()]
-    }
-    let mut best: Vec<(usize, &str)> = names.iter().map(|n| (distance(typed, n), *n)).filter(|(d, _)| *d <= 2).collect();
-    best.sort();
-    match best.as_slice() {
-        [(d, n), rest @ ..] if rest.first().is_none_or(|(e, _)| e > d) => Some(n),
-        _ => None,
-    }
+/// The language rulec prints in, as ritsu-base names it.
+fn lang() -> ritsu_base::text::Lang {
+    crate::i18n::base()
 }
 
-/// Stop before doing anything, and say which command's help explains it.
+/// Stop before doing the work: `error: <msg>` in the language of the run, as every command of ritsu
+/// says it (ritsu's DESIGN 6.2, item 10), kept for the JSON of a line that asks for it, and 2.
 fn refuse(msg: String) -> ExitCode {
-    eprintln!("error: {msg}");
-    ExitCode::from(2)
+    ExitCode::from(ritsu_base::cli::refuse_said(&mut std::io::stderr(), &msg, lang()))
+}
+
+/// [`refuse`] of one of ritsu-base's sentences.
+fn refuse_text(t: ritsu_base::text::Text) -> ExitCode {
+    refuse(crate::i18n::text(&t))
+}
+
+/// A file given to the command, or to a flag of it, read; Err is the command stopping in the words
+/// every command of ritsu says it in (not there, not UTF-8, or the system's reason).
+fn read_given(path: &str) -> Result<String, ExitCode> {
+    ritsu_base::fs::read_to_string(path).map_err(|e| refuse_text(ritsu_base::cli::cannot_read(path, &e)))
+}
+
+/// [`read_given`] in a function that says what stops it as a sentence.
+fn read_said(path: &str) -> Result<String, String> {
+    ritsu_base::fs::read_to_string(path).map_err(|e| crate::i18n::text(&ritsu_base::cli::cannot_read(path, &e)))
 }
 
 /// `rulec source fetch|pin|outdated <file.rule>` (§15.68). `fetch` and `outdated` are the
@@ -1045,11 +1040,12 @@ fn refuse(msg: String) -> ExitCode {
 fn source_cmd(files: &[&String], via: &[String]) -> ExitCode {
     let verb = files.first().map(|s| s.as_str()).unwrap_or("");
     if !matches!(verb, "fetch" | "pin" | "outdated") || files.len() != 2 {
-        return refuse(tr!("書き方は `rulec source fetch|pin|outdated <file.rule>` です", "it is `rulec source fetch|pin|outdated <file.rule>`"));
+        return takes("source");
     }
     let path = files[1];
-    let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-        return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
+    let src = match read_given(path) {
+        Ok(s) => s,
+        Err(c) => return c,
     };
     let parsed = crate::parse::parse(&src, path);
     let Some(f) = parsed.file.filter(|_| parsed.diags.is_empty()) else {
@@ -1066,8 +1062,10 @@ fn source_cmd(files: &[&String], via: &[String]) -> ExitCode {
         }
         return match crate::link::pin::pin_contribution(&f, path, &src) {
             Ok((text, said)) => {
-                if text != src && ritsu_base::fs::write(path, &text).is_err() {
-                    return refuse(tr!("`{path}` に書けません", "cannot write `{path}`"));
+                if text != src
+                    && let Err(e) = ritsu_base::fs::write(path, &text)
+                {
+                    return refuse_text(ritsu_base::cli::cannot_write(path, &e));
                 }
                 for l in &said {
                     println!("{l}");
@@ -1082,7 +1080,7 @@ fn source_cmd(files: &[&String], via: &[String]) -> ExitCode {
         "outdated" => crate::sources::outdated(&f, path),
         _ => crate::sources::pin(&f, path, &src).and_then(|(text, o)| {
             if text != src {
-                ritsu_base::fs::write(path, &text).map_err(|e| tr!("`{path}` に書けません: {e}", "cannot write `{path}`: {e}"))?;
+                ritsu_base::fs::write(path, &text).map_err(|e| crate::i18n::text(&ritsu_base::cli::cannot_write(path, &e)))?;
             }
             Ok(o)
         }),
@@ -1109,35 +1107,56 @@ fn terse_with_json() -> ExitCode {
     ))
 }
 
-/// A command that needs files but was given none.
+/// A command given arguments other than it takes, or none: what it takes, and its usage line, in the
+/// words of every command of ritsu.
 fn need_args(c: &Cmd) -> ExitCode {
-    refuse(tr!(
-        "`rulec {}` には引数が要ります: {}。`rulec {} --help` を読んでください",
-        "`rulec {}` needs arguments: {}; run `rulec {} --help`",
-        c.name,
-        c.args,
-        c.name
-    ))
+    refuse_text(ritsu_base::cli::takes(&format!("{} {}", ritsu_base::cli::command_name("rulec"), c.name), c.args, &usage_line(c)))
+}
+
+/// [`need_args`] of the command named `name`.
+fn takes(name: &str) -> ExitCode {
+    need_args(&commands().into_iter().find(|c| c.name == name).expect("the command is in the table"))
+}
+
+/// What stops the command named `name` without the flag `flag` (`--fixtures <f.jsonl>`) it cannot
+/// run without, and its usage line (ritsu's DESIGN 6.2, item 10).
+fn needs(name: &str, flag: &str) -> ExitCode {
+    let c = commands().into_iter().find(|c| c.name == name).expect("the command is in the table");
+    refuse_text(ritsu_base::cli::needs(&format!("{} {name}", ritsu_base::cli::command_name("rulec")), flag, &usage_line(&c)))
+}
+
+/// What stops a `--lang` without a language it knows: `value`, or none.
+fn lang_misuse(value: Option<String>) -> ritsu_base::text::Text {
+    let m = match value {
+        Some(value) if !value.starts_with("--") => ritsu_base::cli::Misuse::NotAChoice { flag: "--lang", value, choices: &["ja", "en"] },
+        _ => ritsu_base::cli::Misuse::MissingValue { flag: "--lang", placeholder: "ja|en" },
+    };
+    m.text(&ritsu_base::cli::command_name("rulec"), "")
 }
 
 /// The `rulec` command, on `args` (the words after the program's name), printing to standard
 /// output and standard error: the exit code. The binary of this crate and `ritsu rulec` (ritsu's
 /// DESIGN 8.2) run it, so the two are the same command.
-pub fn run(mut args: Vec<String>) -> ExitCode {
+pub fn run(args: Vec<String>) -> ExitCode {
+    let typed = args.clone();
+    // a line that asks for JSON is answered in JSON when the command stops before its work too: the
+    // last line on standard output is `{"error": …}` (ritsu's DESIGN 6.2, item 10)
+    ritsu_base::cli::answering(&typed, &mut std::io::stdout(), |_| command(args))
+}
+
+fn command(mut args: Vec<String>) -> ExitCode {
     let typed = args.clone();
     // `--lang ja|en` (or `--lang=en`) decides the output language before anything
     // is printed; `RULEC_LANG`, then `RITSU_LANG`, is the fallback, English the default (i18n.rs).
     if let Some(i) = args.iter().position(|a| a == "--lang") {
         let Some(v) = args.get(i + 1).and_then(|v| crate::i18n::Lang::parse(v)) else {
-            eprintln!("error: --lang ja|en");
-            return ExitCode::from(2);
+            return refuse_text(lang_misuse(args.get(i + 1).cloned()));
         };
         crate::i18n::set(v);
         args.drain(i..i + 2);
     } else if let Some(i) = args.iter().position(|a| a.starts_with("--lang=")) {
         let Some(v) = crate::i18n::Lang::parse(&args[i]["--lang=".len()..]) else {
-            eprintln!("error: --lang ja|en");
-            return ExitCode::from(2);
+            return refuse_text(lang_misuse(Some(args[i]["--lang=".len()..].to_string())));
         };
         crate::i18n::set(v);
         args.remove(i);
@@ -1167,19 +1186,12 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
                     print!("{}", help_cmd(c));
                     ExitCode::from(0)
                 }
-                None => refuse(tr!(
-                    "rulec に `{n}` というコマンドはありません。`rulec --help` に一覧があります",
-                    "unknown command `{n}`; `rulec --help` lists them"
-                )),
+                None => refuse_text(ritsu_base::cli::no_command("rulec", n)),
             },
         };
     }
     let Some(cmd) = cmds.iter().find(|c| c.name == args[0].as_str()) else {
-        let n = &args[0];
-        return refuse(tr!(
-            "rulec に `{n}` というコマンドはありません。`rulec --help` に一覧があります",
-            "unknown command `{n}`; `rulec --help` lists them"
-        ));
+        return refuse_text(ritsu_base::cli::no_command("rulec", &args[0]));
     };
     let mut a = match parse(cmd, &args[1..]) {
         Ok(a) => a,
@@ -1197,6 +1209,30 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
     {
         return refuse(crate::i18n::text(&t));
     }
+    // The word a command takes before its paths (`source fetch`, `fixtures lint`, `import csv`), the
+    // code `explain` takes and the `name=value` of `run` are no paths; every other positional
+    // argument is one.
+    let (first, end) = match cmd.name {
+        "source" | "fixtures" | "import" => (1, a.pos.len()),
+        "explain" => (0, 0),
+        "run" => (0, a.pos.len().min(1)),
+        _ => (0, a.pos.len()),
+    };
+    // the paths the run holds are written the way the first path given was (ritsu's DESIGN 4.15),
+    // and so are the paths given: `./fee.rule` and `x/../fee.rule` are `fee.rule` (6.2 item 8),
+    // and `--out ./generated` is `generated`. A side of `diff` and what `--read-as` takes may be a
+    // rule at a git revision.
+    let _way = ritsu_base::paths::run_from(a.pos.get(first).filter(|_| first < end).map_or(".", String::as_str));
+    for p in a.pos.iter_mut().take(end).skip(first) {
+        *p = if cmd.name == "diff" { given_side(p, ritsu_base::paths::show_given) } else { ritsu_base::paths::show_given(p) };
+    }
+    for (flag, v) in &mut a.got {
+        match *flag {
+            "--out" | "--input" | "--fixtures" | "--manifest" | "--other" => *v = ritsu_base::paths::fold_given(v),
+            "--read-as" => *v = given_side(v, ritsu_base::paths::fold_given),
+            _ => {}
+        }
+    }
 
     if cmd.name == "run" {
         return run_rule(&a);
@@ -1209,7 +1245,14 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
     let expanded: Vec<String> = if cmd.name == "test" {
         a.pos.clone()
     } else {
-        a.pos.iter().flat_map(|x| expand(x, cmd.name)).collect()
+        let mut all = Vec::new();
+        for x in &a.pos {
+            match expand(x, cmd.name) {
+                Ok(fs) => all.extend(fs),
+                Err(t) => return refuse_text(t),
+            }
+        }
+        all
     };
     let files: Vec<&String> = expanded.iter().collect();
     if files.is_empty() && !cmd.args.is_empty() && !a.has("--all") {
@@ -1225,17 +1268,19 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
     let about_a_decision = matches!(cmd.name, "schema" | "adapter" | "verify" | "replay" | "diff" | "fixtures" | "strength")
         || (cmd.name == "doc" && (a.get("--format") == Some("html") || a.get("--audience") == Some("customer")));
     if about_a_decision {
+        // the commands named the way the person ran this one (ritsu's DESIGN 6.2, item 10)
+        let run = ritsu_base::cli::command_name("rulec");
         if let Some(p) = files.iter().find(|p| crate::enums::is_enums_file(p)) {
             let name = cmd.name;
             return refuse(if name == "doc" {
                 tr!(
-                    "`{p}` は enums のファイルで、何も決めません。事例を試すページも、お客さま向けのページもありません。ページは `rulec doc {p}` が書きます",
-                    "`{p}` is an enums file and decides nothing, so it has no page to try a case on and none for customers; `rulec doc {p}` writes its page"
+                    "`{p}` は enums のファイルで、何も決めません。事例を試すページも、お客さま向けのページもありません。ページは `{run} doc {p}` が書きます",
+                    "`{p}` is an enums file and decides nothing, so it has no page to try a case on and none for customers; `{run} doc {p}` writes its page"
                 )
             } else {
                 tr!(
-                    "`{p}` は enums のファイルで、何も決めません。`rulec {name}` が扱うものが無いので、それを読む規則に使ってください",
-                    "`{p}` is an enums file and decides nothing, so `rulec {name}` has nothing to work on; run it on a rule that reads it"
+                    "`{p}` は enums のファイルで、何も決めません。`{run} {name}` が扱うものが無いので、それを読む規則に使ってください",
+                    "`{p}` is an enums file and decides nothing, so `{run} {name}` has nothing to work on; run it on a rule that reads it"
                 )
             });
         }
@@ -1248,13 +1293,13 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
             let name = cmd.name;
             return refuse(if name == "doc" {
                 tr!(
-                    "`{c}` は enums のファイル `{p}` への寄与で、そのファイルは何も決めません。事例を試すページも、お客さま向けのページもありません。ページは `rulec doc {c}` が書きます",
-                    "`{c}` adds to `{p}`, an enums file that decides nothing, so it has no page to try a case on and none for customers; `rulec doc {c}` writes its page"
+                    "`{c}` は enums のファイル `{p}` への寄与で、そのファイルは何も決めません。事例を試すページも、お客さま向けのページもありません。ページは `{run} doc {c}` が書きます",
+                    "`{c}` adds to `{p}`, an enums file that decides nothing, so it has no page to try a case on and none for customers; `{run} doc {c}` writes its page"
                 )
             } else {
                 tr!(
-                    "`{c}` は enums のファイル `{p}` への寄与で、そのファイルは何も決めません。`rulec {name}` が扱うものが無いので、それを読む規則に使ってください",
-                    "`{c}` adds to `{p}`, an enums file that decides nothing, so `rulec {name}` has nothing to work on; run it on a rule that reads it"
+                    "`{c}` は enums のファイル `{p}` への寄与で、そのファイルは何も決めません。`{run} {name}` が扱うものが無いので、それを読む規則に使ってください",
+                    "`{c}` adds to `{p}`, an enums file that decides nothing, so `{run} {name}` has nothing to work on; run it on a rule that reads it"
                 )
             });
         }
@@ -1274,12 +1319,16 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
 
 fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -> ExitCode {
     let files = files.to_vec();
+    // What `gen`, `doc`, `api`, `vectors`, `schema` and `adapter` write for others to keep is in the
+    // language `--lang` alone gives, English without it, whatever the environment says (ritsu's
+    // DESIGN 4.1); what they print for the person running them stays in the language of the run.
+    let made = crate::i18n::made(ritsu_base::text::Lang::flag_of(&a.typed).as_deref());
     match cmd.name {
         "check" => {
             let budget = match a.get("--budget") {
                 Some(v) => match v.parse::<i64>() {
                     Ok(n) if n > 0 => n,
-                    _ => return refuse(tr!("`--budget {v}` は正の整数ではありません", "`--budget {v}` is not a positive integer")),
+                    _ => return refuse_text(ritsu_base::cli::not_positive("--budget", v)),
                 },
                 None => crate::region::DEFAULT_BUDGET,
             };
@@ -1292,18 +1341,18 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
         "fmt" => fmt(&files, a.has("--check"), json),
         "schema" => {
             let alias = a.get("--keys") == Some("alias");
-            one(&files, move |f, c, _| Some(crate::verify::schema(f, c, alias)))
+            one(&files, made, move |f, c, _| Some(crate::verify::schema(f, c, alias)))
         }
         // `api` needs the source text (the generator stamps its hash), so it does not go
         // through `one`.
-        "api" => api(&files),
+        "api" => api(&files, made),
         "certificate" => certificate(&files),
         "graph" => graph(&files),
         "adapter" => {
             let lang = a.get("--template").unwrap_or("python").to_string();
             // The extraction adapter is about a document, not about this rule, so it needs
             // nothing from the file — but it is asked for the same way, beside its twin.
-            one(&files, move |f, _, path| {
+            one(&files, made, move |f, _, path| {
                 Some(match lang.as_str() {
                     // The extraction adapter is about the rule's documents rather than about
                     // its inputs, but it is asked for the same way, beside its twin.
@@ -1314,23 +1363,17 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
         }
         "verify" => {
             if a.rest.is_empty() {
-                return refuse(tr!(
-                    "`--adapter <cmd>` が要ります。`rulec verify --help` を読んでください",
-                    "`--adapter <cmd>` is required; run `rulec verify --help`"
-                ));
+                return needs("verify", "--adapter <cmd>");
             }
             verify(&files, &a.rest, json)
         }
         "coverage" => coverage(&files, json),
-        "doc" => doc(&files, a.get("--out"), a.get("--format") == Some("html"), a.get("--audience") == Some("customer")),
+        "doc" => doc(&files, a.get("--out"), a.get("--format") == Some("html"), a.get("--audience") == Some("customer"), made),
         "source" => source_cmd(&files, &a.rest),
         "fixtures" => {
             // `rulec fixtures lint <jsonl> <rule>`
             if files.first().map(|s| s.as_str()) != Some("lint") {
-                return refuse(tr!(
-                    "いまあるのは `rulec fixtures lint` だけです",
-                    "only `rulec fixtures lint` exists for now"
-                ));
+                return takes("fixtures");
             }
             fixtures_lint(&files[1..], &a, json)
         }
@@ -1338,7 +1381,7 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
         "diff" => diff_cmd(&files, &a, markdown, json),
         "strength" => strength_cmd(&files, &a, json),
         "test" => {
-            let Some(dir) = files.first() else { return need_args(cmd) };
+            let [dir] = files.as_slice() else { return need_args(cmd) };
             match crate::runtest::run_with(std::path::Path::new(dir.as_str()), a.has("--proofs")) {
                 Ok(r) => {
                     if json {
@@ -1353,29 +1396,22 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
                     ExitCode::from(u8::from(!r.ok() || short))
                 }
                 Err(e) => {
-                    eprintln!("error: {e}");
-                    ExitCode::from(2)
+                    refuse(e)
                 }
             }
         }
-        "vectors" => vectors(&files, a.get("--out")),
+        "vectors" => vectors(&files, a.get("--out"), made),
         "mcp" => {
             let t = a.get("--timeout").unwrap_or("600");
             match t.parse::<u64>() {
                 Ok(n) if n > 0 => mcp::serve(std::time::Duration::from_secs(n)),
-                _ => refuse(tr!(
-                    "`--timeout {t}` は秒数ではありません。1 以上の整数で書いてください",
-                    "`--timeout {t}` is not a number of seconds; write a whole number of 1 or more"
-                )),
+                _ => refuse_text(ritsu_base::cli::not_positive("--timeout", t)),
             }
         }
         "import" => {
             let kind = files.first().map(|s| s.as_str()).unwrap_or("");
             if !matches!(kind, "csv" | "xlsx") || files.len() != 2 {
-                return refuse(tr!(
-                    "書き方は `rulec import csv <file.csv>` か `rulec import xlsx <file.xlsx>` です",
-                    "it is `rulec import csv <file.csv>` or `rulec import xlsx <file.xlsx>`"
-                ));
+                return takes("import");
             }
             let path = files[1];
             let stem = std::path::Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -1387,13 +1423,15 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
             // The draft names its source by the file's name, not by wherever it was read from.
             let base = std::path::Path::new(path).file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string());
             let drafted = if kind == "csv" {
-                let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-                    return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
+                let src = match read_given(path) {
+                    Ok(s) => s,
+                    Err(c) => return c,
                 };
                 crate::import::draft(&src, &name, &base, n)
             } else {
-                let Ok(bytes) = ritsu_base::fs::read(path) else {
-                    return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
+                let bytes = match ritsu_base::fs::read(path) {
+                    Ok(b) => b,
+                    Err(e) => return refuse_text(ritsu_base::cli::cannot_read(path, &e)),
                 };
                 // A workbook has several sheets; the draft says which one it came from,
                 // because "the tariff.xlsx" is not an answer to "which table is this".
@@ -1415,17 +1453,34 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
         }
         "gen" => {
             // It writes only what it is given (§15.277): with no target, nothing, and the command
-            // line that writes what 0.40.0 wrote.
+            // line that writes what 0.40.0 wrote — which cannot carry `--python-package` (§15.319).
             let targets = a.all("--target");
             if targets.is_empty() {
+                if a.has(ritsu_emit::package::PYTHON_PACKAGE) {
+                    return refuse(crate::targets::no_python_for_package());
+                }
                 return refuse(crate::targets::no_target(&a.typed));
             }
-            let asked = match crate::targets::Asked::new(&targets, &a.all("--extra")) {
+            let asked = crate::targets::Asked::new(&targets, &a.all("--extra"));
+            // The Python modules put inside a package (§15.319).
+            let asked = if a.has(ritsu_emit::package::PYTHON_PACKAGE) { asked.and_then(crate::targets::Asked::in_python_package) } else { asked };
+            let asked = match asked {
                 Ok(x) => x,
                 Err(e) => return refuse(e),
             };
             let files: Vec<&str> = files.iter().map(|f| f.as_str()).collect();
-            ExitCode::from(crate::codegen::generate(&files, a.get("--out").unwrap_or("generated"), &asked, a.has("--check"), json, &mut std::io::stdout(), &mut std::io::stderr()))
+            let out_dir = a.get("--out").unwrap_or("generated");
+            // What stops the run before it writes anything: a name the code of a target it writes
+            // cannot take (E153, §15.335), two files that write one place (§15.334).
+            let asked = match crate::places::stopped(&files, out_dir, &asked, &mut std::io::stdout(), &mut std::io::stderr()) {
+                crate::places::Stops::Halt(code) => return ExitCode::from(code),
+                crate::places::Stops::Rest(asked, code) => {
+                    let rc = crate::i18n::making(made, || crate::codegen::generate(&files, out_dir, &asked, a.has("--check"), json, &mut std::io::stdout(), &mut std::io::stderr()));
+                    return ExitCode::from(if rc == 0 { code } else { rc });
+                }
+                crate::places::Stops::Go => asked,
+            };
+            ExitCode::from(crate::i18n::making(made, || crate::codegen::generate(&files, out_dir, &asked, a.has("--check"), json, &mut std::io::stdout(), &mut std::io::stderr())))
         }
         _ => unreachable!("the table and the dispatch are the same list"),
     }
@@ -1437,6 +1492,10 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
 fn explain(files: &[&String], a: &Args) -> ExitCode {
     let fmt = a.get("--format");
     if a.has("--all") {
+        // codes and `--all` are the two ways to call it, not one: what it takes
+        if !files.is_empty() {
+            return takes("explain");
+        }
         print!(
             "{}",
             match fmt {
@@ -1447,24 +1506,25 @@ fn explain(files: &[&String], a: &Args) -> ExitCode {
         );
         return ExitCode::from(0);
     }
-    let Some(code) = files.first() else {
-        return refuse(tr!(
-            "書き方は `rulec explain <CODE>` か `rulec explain --all` です",
-            "it is `rulec explain <CODE>` or `rulec explain --all`"
-        ));
-    };
-    let Some(e) = crate::codes::find(code) else {
-        return refuse(tr!(
-            "`{code}` というコードはありません。`rulec explain --all` に全部あります",
-            "There is no code `{code}`; `rulec explain --all` lists every one"
-        ));
-    };
+    if files.is_empty() {
+        return takes("explain");
+    }
+    // every code it does not have, named in one sentence before anything is printed
+    let unknown: Vec<String> = files.iter().filter(|c| crate::codes::find(c).is_none()).map(|c| c.to_string()).collect();
+    if !unknown.is_empty() {
+        return refuse_text(ritsu_base::cli::no_codes("rulec", &unknown));
+    }
+    let entries: Vec<crate::codes::Entry> = files.iter().filter_map(|c| crate::codes::find(c)).collect();
+    // one code as it is written alone; several in the order given, as `--all` writes every code
     print!(
         "{}",
-        match fmt {
-            Some("markdown") => crate::codes::render_markdown(&e),
-            Some("json") => format!("{}\n", crate::codes::render_json(&e)),
-            _ => crate::codes::render_text(&e),
+        match (entries.as_slice(), fmt) {
+            ([e], Some("markdown")) => crate::codes::render_markdown(e),
+            ([e], Some("json")) => crate::codes::json_one(e),
+            ([e], _) => crate::codes::render_text(e),
+            (_, Some("markdown")) => crate::codes::markdown_of(&entries),
+            (_, Some("json")) => crate::codes::json_of(&entries),
+            _ => crate::codes::text_of(&entries),
         }
     );
     ExitCode::from(0)
@@ -1476,9 +1536,9 @@ fn fmt(files: &[&String], check_only: bool, json: bool) -> ExitCode {
     let mut dirty = 0u8;
     let (mut unformatted, mut formatted): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
     for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return ExitCode::from(2);
+        let src = match read_given(path) {
+            Ok(s) => s,
+            Err(c) => return c,
         };
         let out = crate::fmt::format(&src);
         if out == src {
@@ -1490,9 +1550,8 @@ fn fmt(files: &[&String], check_only: bool, json: bool) -> ExitCode {
                 println!("{}", tr!("整形されていません: {path}", "not formatted: {path}"));
             }
             dirty = 1;
-        } else if ritsu_base::fs::write(path, &out).is_err() {
-            eprintln!("{}", tr!("error: `{path}` に書けません", "error: cannot write `{path}`"));
-            return ExitCode::from(2);
+        } else if let Err(e) = ritsu_base::fs::write(path, &out) {
+            return refuse_text(ritsu_base::cli::cannot_write(path, &e));
         } else {
             formatted.push((*path).clone());
             if !json {
@@ -1512,16 +1571,23 @@ fn fmt(files: &[&String], check_only: bool, json: bool) -> ExitCode {
     ExitCode::from(dirty)
 }
 
-/// Fetch the same file at the base revision. None when it is absent (the file is new). Err when
-/// git cannot start where no program can (ritsu built for WASI, its npm package), rather than
-/// every finding read as new.
-fn base_source(rev: &str, path: &str) -> Result<Option<String>, ritsu_base::text::Text> {
-    let out = match std::process::Command::new("git").args(["show", &format!("{rev}:{path}")]).output() {
-        Ok(o) => o,
+/// Fetch the same file at the base revision ([`crate::vfs::git_show_at`]). None when it is absent
+/// (the file is new). Err, rather than every finding read as new, when there is no revision to read
+/// it at: the file is in no git repository, git does not know the revision, or git cannot start (as
+/// where no program can, ritsu built for WASI and its npm package) — in the words `ritsu impact
+/// --base` says them in. `opened` is whether the revision was found to be one already.
+fn base_source(rev: &str, path: &str, opened: &mut bool) -> Result<Option<String>, ritsu_base::text::Text> {
+    match std::process::Command::new("git").args(crate::vfs::git_show_at(path, rev)).output() {
+        Ok(o) if o.status.success() => return Ok(Some(String::from_utf8_lossy(&o.stdout).into_owned())),
         Err(e) if ritsu_base::wasi::unsupported(&e) => return Err(ritsu_base::wasi::cannot_start("git")),
-        Err(_) => return Ok(None),
-    };
-    Ok(out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned()))
+        _ => {}
+    }
+    if !*opened {
+        let dir = std::path::Path::new(path).parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(std::path::Path::new("."));
+        ritsu_base::fs::GitRevision::open(dir, rev)?;
+        *opened = true;
+    }
+    Ok(None)
 }
 
 fn check(
@@ -1539,10 +1605,11 @@ fn check(
     // contribution to it are checked each in its own scope, and what they share comes up in both
     // (§15.231).
     let mut said: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut opened = false;
     for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return ExitCode::from(2);
+        let src = match read_given(path) {
+            Ok(s) => s,
+            Err(c) => return c,
         };
         let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
         let r = crate::report_with(&src, path, budget);
@@ -1555,7 +1622,7 @@ fn check(
         // single row would make everything new.
         let mut suppressed = 0usize;
         if let Some(rev) = diff_base {
-            let known: std::collections::HashSet<String> = match base_source(rev, path) {
+            let known: std::collections::HashSet<String> = match base_source(rev, path, &mut opened) {
                 Ok(Some(b)) => match crate::vfs::with_git_rev(rev, || match ritsu_base::modules::address::stopped(path) {
                     // a dependency the base's lock pins that the store does not have
                     Some(t) => Err(crate::i18n::text(&t)),
@@ -1564,14 +1631,12 @@ fn check(
                 .and_then(|r| r) {
                     Ok(r) => r.diags.iter().filter_map(|d| d.key.clone()).collect(),
                     Err(e) => {
-                        eprintln!("error: {e}");
-                        return ExitCode::from(2);
+                        return refuse(e);
                     }
                 },
                 Ok(None) => Default::default(),
                 Err(t) => {
-                    eprintln!("error: {}", crate::i18n::text(&t));
-                    return ExitCode::from(2);
+                    return refuse_text(t);
                 }
             };
             let before = diags.len();
@@ -1634,20 +1699,24 @@ fn check(
     ExitCode::from(worst)
 }
 
-/// If the argument is a directory, collect the `.rule` files under it; a file is returned as
-/// is. A directory that does not exist does not become an empty list: its name is returned
-/// unchanged so that "cannot read" stops the run (never a silent success with 0 files).
-fn expand(arg: &str, command: &str) -> Vec<String> {
+/// If the argument is a directory, collect the `.rule` files under it, each as the run writes it
+/// (`.` gives `fee.rule`, not `./fee.rule`; ritsu's DESIGN 4.15); a file is returned as is. A
+/// directory that does not exist does not become an empty list: its name is returned unchanged so
+/// that "cannot read" stops the run (never a silent success with 0 files). Err, what stops the run
+/// before it reads anything, for a directory with no `.rule` under it.
+fn expand(arg: &str, command: &str) -> Result<Vec<String>, ritsu_base::text::Text> {
     let p = std::path::Path::new(arg);
     if !ritsu_base::fs::is_dir(p) {
-        return vec![arg.to_string()];
+        return Ok(vec![arg.to_string()]);
     }
     let mut out = Vec::new();
     let mut modules = Vec::new();
     collect_rules(p, &mut out, &mut modules);
+    let mut out: Vec<String> = out.iter().map(|f| ritsu_base::paths::show_given(f)).collect();
+    let mut modules: Vec<String> = modules.iter().map(|m| ritsu_base::paths::show_given(m)).collect();
     out.sort();
     if out.is_empty() {
-        eprintln!("{}", tr!("注意: `{arg}` の下に .rule がありません", "warning: no .rule files under `{arg}`"));
+        return Err(ritsu_base::cli::no_files_under(arg, &[".rule"]));
     }
     // Another module below is not entered; when the walk did not start in a module, one line says
     // so (DESIGN 17.6 of ritsu).
@@ -1655,10 +1724,10 @@ fn expand(arg: &str, command: &str) -> Vec<String> {
         let lang = if crate::i18n::ja() { ritsu_base::text::Lang::Ja } else { ritsu_base::text::Lang::En };
         modules.sort();
         for m in modules {
-            eprintln!("{}", ritsu_base::paths::other_module_note(&m, &format!("rulec {command}")).get(lang));
+            eprintln!("{}", ritsu_base::paths::other_module_note(&m, &format!("{} {command}", ritsu_base::cli::command_name("rulec"))).get(lang));
         }
     }
-    out
+    Ok(out)
 }
 
 /// The `.rule` files under `dir`, every directory down, but for those a walk does not enter (another
@@ -1683,15 +1752,14 @@ fn collect_rules(dir: &std::path::Path, out: &mut Vec<String>, modules: &mut Vec
 /// direction. **Not treated as a generated file** — it is never committed; CI renders it and
 /// pastes it into the PR. The biggest danger is a stale rendering that lingers looking
 /// authoritative, so no long-lived artifact is produced.
-fn doc(files: &[&String], out_dir: Option<&str>, html: bool, customer: bool) -> ExitCode {
+fn doc(files: &[&String], out_dir: Option<&str>, html: bool, customer: bool, made: crate::i18n::Lang) -> ExitCode {
     if html && customer {
-        eprintln!("{}", tr!("error: 顧客向けの案内は markdown だけです。--format html と --audience customer は同時に指定できません", "error: the customer rendering is markdown only; --format html and --audience customer cannot be combined"));
-        return ExitCode::from(2);
+        return refuse(tr!("顧客向けの案内は markdown だけです。--format html と --audience customer は同時に指定できません", "the customer rendering is markdown only; --format html and --audience customer cannot be combined"));
     }
     for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return ExitCode::from(2);
+        let src = match read_given(path) {
+            Ok(s) => s,
+            Err(c) => return c,
         };
         // A pretty rendering of a broken rule is a lie. Nothing is rendered unless check
         // passes (§1.6).
@@ -1702,34 +1770,38 @@ fn doc(files: &[&String], out_dir: Option<&str>, html: bool, customer: bool) -> 
                 print!("{}", render(d, &lines));
                 println!();
             }
-            eprintln!("{}", tr!("error: `{path}` は検査を通っていないので資料を書き出しません", "error: `{path}` does not pass check, so it is not rendered"));
+            eprintln!("{}", ritsu_base::cli::refusal(&tr!("`{path}` は検査を通っていないので資料を書き出しません", "`{path}` does not pass check, so it is not rendered"), lang()));
             return ExitCode::from(1);
         }
         let Ok((f, c)) = crate::prepare(&src, path) else {
-            eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
+            eprintln!("{}", ritsu_base::cli::refusal(&tr!("`{path}` は検査を通っていません", "`{path}` does not pass check"), lang()));
             return ExitCode::from(1);
         };
-        let body = if html {
-            // The page runs the generated JavaScript — the same code `rulec gen` writes.
-            let js = crate::codegen::Gen::new(&f, &c, &src, path).javascript();
-            crate::doc::render_html(&f, &c, &src, path, &js)
-        } else if customer {
-            crate::doc::render_customer(&f, &c, &src, path)
-        } else {
-            crate::doc::render(&f, &c, &src, path)
-        };
+        let body = crate::i18n::with(made, || {
+            if html {
+                // The page runs the generated JavaScript — the same code `rulec gen` writes, with the
+                // modules of the `enums` files it reads put inside it (§15.319).
+                let js = crate::codegen::Gen::new(&f, &c, &src, path).page_javascript();
+                crate::doc::render_html(&f, &c, &src, path, &js)
+            } else if customer {
+                crate::doc::render_customer(&f, &c, &src, path)
+            } else {
+                crate::doc::render(&f, &c, &src, path)
+            }
+        });
         match out_dir {
             Some(d) => {
                 // `--out docs/` is `--out docs`: the path is not said with two slashes (§15.277).
                 let d = d.trim_end_matches('/');
                 let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
                 let p = format!("{d}/{alias}.{}", if html { "html" } else if customer { "customer.md" } else { "md" });
-                if let Some(dir) = std::path::Path::new(&p).parent() {
-                    let _ = std::fs::create_dir_all(dir);
+                if let Some(dir) = std::path::Path::new(&p).parent()
+                    && let Err(e) = ritsu_base::fs::create_dir_all(dir)
+                {
+                    return refuse_text(ritsu_base::cli::cannot_create(&dir.to_string_lossy(), &e));
                 }
-                if std::fs::write(&p, &body).is_err() {
-                    eprintln!("{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
-                    return ExitCode::from(2);
+                if let Err(e) = ritsu_base::fs::write(&p, &body) {
+                    return refuse_text(ritsu_base::cli::cannot_write(&p, &e));
                 }
                 println!("{}", tr!("書き出しました: {p}", "rendered: {p}"));
             }
@@ -1740,6 +1812,20 @@ fn doc(files: &[&String], out_dir: Option<&str>, html: bool, customer: bool) -> 
 }
 
 // ── M3 replay ────────────────────────────────────────────────────────────
+
+/// A side of `diff`, or what `--read-as` takes, as the run holds it (ritsu's DESIGN 4.15): a file is
+/// the path `hold` holds; a rule's path at a git revision (`rules/送料.rule@v3`) is that path, held
+/// so, at the same revision; a rule's name at a revision (`送料@v3`) is no path, and is kept as
+/// written, and so is a dependency's file (`@pricing@1.0.0/…`).
+fn given_side(spec: &str, hold: fn(&str) -> String) -> String {
+    if !spec.starts_with('@')
+        && !std::path::Path::new(spec).exists()
+        && let Some((left, rev)) = spec.split_once('@')
+    {
+        return if left.ends_with(".rule") { format!("{}@{rev}", hold(left)) } else { spec.to_string() };
+    }
+    hold(spec)
+}
 
 /// Load a rule and run it through check. A spelling with `@` reads the rule out of git rather
 /// than the working tree (§1.4, §15.42): `送料@v3` is the tag `rules/送料/v3`, or failing that
@@ -1763,7 +1849,7 @@ fn load_rule_with(spec: &str, lenient: bool) -> Result<(String, crate::ast::Rule
             if let Some(t) = ritsu_base::modules::address::stopped(&side.path) {
                 return Err(crate::i18n::text(&t));
             }
-            let src = ritsu_base::fs::read_to_string(&side.path).map_err(|_| tr!("`{spec}` を読めません", "cannot read `{spec}`"))?;
+            let src = ritsu_base::fs::read_to_string(&side.path).map_err(|e| crate::i18n::text(&ritsu_base::cli::cannot_read(spec, &e)))?;
             let (f, c) = prep(&src, &side.path).map_err(|_| not_checked())?;
             Ok((src, f, c))
         });
@@ -1782,7 +1868,7 @@ fn load_rule_with(spec: &str, lenient: bool) -> Result<(String, crate::ast::Rule
             Ok((src, f, c))
         }
         _ => {
-            let src = ritsu_base::fs::read_to_string(spec).map_err(|_| tr!("`{spec}` を読めません", "cannot read `{spec}`"))?;
+            let src = read_said(spec)?;
             let (f, c) = prep(&src, spec).map_err(|_| not_checked())?;
             Ok((src, f, c))
         }
@@ -1795,27 +1881,35 @@ fn git(args: &[&str]) -> Result<Option<String>, String> {
     let o = std::process::Command::new("git")
         .args(args)
         .output()
-        .map_err(|e| if ritsu_base::wasi::unsupported(&e) { crate::i18n::text(&ritsu_base::wasi::cannot_start("git")) } else { tr!("git を起動できません: {e}", "cannot run git: {e}") })?;
+        .map_err(|e| crate::i18n::text(&ritsu_base::cli::cannot_start("git", &e)))?;
     Ok(o.status.success().then(|| String::from_utf8_lossy(&o.stdout).into_owned()))
 }
 
 /// The text of a rule at a revision, and the revision it was read at, which the rules it applies
-/// are read at too. `left` is either a path (it ends in `.rule`), read as `git show <rev>:<path>`,
-/// or a rule's name, looked up first in the tag `rules/<name>/<rev>` and then in `<rev>` itself.
+/// are read at too. `left` is either a path (it ends in `.rule`), the file it names in the working
+/// tree read at `rev` ([`crate::vfs::git_show_at`]), or a rule's name, looked up first in the tag
+/// `rules/<name>/<rev>` and then in `<rev>` itself.
 fn git_source(left: &str, rev: &str) -> Result<(String, String), String> {
     if left.ends_with(".rule") {
-        let src = git(&["show", &format!("{rev}:{left}")])?.ok_or_else(|| {
-            tr!("`{rev}` に `{left}` が無いか、`{rev}` が見つかりません", "no `{left}` at `{rev}`, or `{rev}` cannot be resolved")
-        })?;
-        return Ok((src, rev.to_string()));
+        let show = crate::vfs::git_show_at(left, rev);
+        if let Some(src) = git(&show.iter().map(String::as_str).collect::<Vec<_>>())? {
+            return Ok((src, rev.to_string()));
+        }
+        // no revision to read it at, in the words `ritsu impact --base` says it in; else the file is
+        // not there at the revision
+        let dir = std::path::Path::new(left).parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(std::path::Path::new("."));
+        ritsu_base::fs::GitRevision::open(dir, rev).map_err(|t| crate::i18n::text(&t))?;
+        return Err(tr!("`{rev}` に `{left}` がありません", "no `{left}` at `{rev}`"));
     }
     let file = format!("{left}.rule");
     let tag = format!("rules/{left}/{rev}");
     for r in [tag.as_str(), rev] {
-        // Which path the rule lives at is looked up inside the tree. `-z` makes the listing
+        // Which path the rule lives at is looked up inside the tree, the whole of it wherever the
+        // run is (`--full-tree`: else git lists only what is below the directory the run is in,
+        // from there, and `<rev>:<path>` reads a path from the top). `-z` makes the listing
         // NUL-separated: by default git quotes non-ASCII paths in octal, so a file with a
         // Japanese name would not be found by plain string comparison.
-        let Some(listing) = git(&["ls-tree", "-r", "-z", "--name-only", r])? else { continue };
+        let Some(listing) = git(&["ls-tree", "-r", "-z", "--full-tree", "--name-only", r])? else { continue };
         let path = listing
             .split('\0')
             .find(|p| *p == file || p.ends_with(&format!("/{file}")))
@@ -1858,7 +1952,7 @@ fn manifest_of(
 ) -> Result<crate::fixtures::Manifest, String> {
     let mut m = match a.get("--manifest") {
         Some(path) => {
-            let src = ritsu_base::fs::read_to_string(path).map_err(|_| tr!("`{path}` を読めません", "cannot read `{path}`"))?;
+            let src = read_said(path)?;
             match new {
                 Some(new) => crate::fixtures::Manifest::load_two(&src, read, new)?,
                 None => crate::fixtures::Manifest::load(&src, read.0, read.1)?,
@@ -1875,43 +1969,39 @@ fn manifest_of(
     Ok(m)
 }
 
+/// The records `--fixtures` names, read: the command asked for them before (`replay`, which needs
+/// them, and `diff`, which reads them only when given).
 fn fixtures_arg(a: &Args) -> Result<(String, String), String> {
-    let path = a
-        .get("--fixtures")
-        .ok_or_else(|| tr!("--fixtures <file.jsonl> が要ります", "--fixtures <file.jsonl> is required"))?;
-    let src = ritsu_base::fs::read_to_string(path).map_err(|_| tr!("`{path}` を読めません", "cannot read `{path}`"))?;
+    let path = a.get("--fixtures").expect("the command asked for `--fixtures` before");
+    let src = read_said(path)?;
     Ok((path.to_string(), src))
 }
 
 /// §10.2: only the validation of types and ranges is done here. ETL is the user's job.
 fn fixtures_lint(files: &[&String], a: &Args, json: bool) -> ExitCode {
     let (Some(jsonl), Some(rule), None) = (files.first(), files.get(1), files.get(2)) else {
-        eprintln!("error: `rulec fixtures lint <file.jsonl> <file.rule>`");
-        return ExitCode::from(2);
+        return takes("fixtures");
     };
     let (_, f, c) = match load_rule(rule) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(2);
+            return refuse(e);
         }
     };
     let m = match build_manifest(a, &f, &c) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(2);
+            return refuse(e);
         }
     };
-    let Ok(src) = ritsu_base::fs::read_to_string(jsonl.as_str()) else {
-        eprintln!("{}", tr!("error: `{jsonl}` を読めません", "error: cannot read `{jsonl}`"));
-        return ExitCode::from(2);
+    let src = match read_given(jsonl.as_str()) {
+        Ok(s) => s,
+        Err(c) => return c,
     };
     let then = match read_as(a, &f) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(2);
+            return refuse(e);
         }
     };
     let l = crate::fixtures::load_as(&src, &f, &c, &m, then.as_ref());
@@ -1941,16 +2031,11 @@ fn read_as(a: &Args, f: &crate::ast::RuleFile) -> Result<Option<crate::types::Ch
 
 /// §10.3: apply the rule to past records and compare against the values produced at the time.
 fn replay_cmd(files: &[&String], a: &Args, md: bool, json: bool) -> ExitCode {
-    let Some(rule) = files.first() else { return refuse(tr!("規則が要ります", "a rule is required")) };
-    // The records are one rule's. A second rule, or a directory that holds several, used to be
-    // dropped without a word, and the records were read against whichever came first.
-    if files.len() > 1 {
-        return refuse(tr!(
-            "`rulec replay` に渡す規則は一つです（{} 個ありました: {}）。記録は一つの規則のものです",
-            "`rulec replay` takes one rule ({} were given: {}); the records are one rule's",
-            files.len(),
-            files.iter().map(|p| p.as_str()).collect::<Vec<_>>().join(", ")
-        ));
+    // The records are one rule's: a second rule, or a directory that holds several, is not dropped
+    // without a word with the records read against whichever came first.
+    let [rule] = files else { return takes("replay") };
+    if a.get("--fixtures").is_none() {
+        return needs("replay", "--fixtures <f.jsonl>");
     }
     let terse = a.has("--terse");
     if json && terse {
@@ -1966,8 +2051,7 @@ fn replay_cmd(files: &[&String], a: &Args, md: bool, json: bool) -> ExitCode {
     let (then, f, c, m, path, src) = match r {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(2);
+            return refuse(e);
         }
     };
     let l = crate::fixtures::load_as(&src, &f, &c, &m, then.as_ref());
@@ -2058,40 +2142,30 @@ fn vdiff_cmd(a: &String, b: &String, opts: &Args, md: bool, json: bool) -> ExitC
     // whole CLI draws around an unknown flag, held to a known one in the wrong mode (§12.1).
     for f in ["--manifest", "--fill"] {
         if opts.has(f) {
-            eprintln!(
-                "{}",
-                tr!(
-                    "error: {} は --fixtures と一緒にしか使えません。補完は、記録に規則を当てるときにだけ使います",
-                    "error: {} needs --fixtures: filling is about records",
-                    f
-                )
-            );
-            return ExitCode::from(2);
+            return refuse(tr!(
+                "`{}` は `--fixtures` と一緒にしか使えません。補完は、記録に規則を当てるときにだけ使います",
+                "`{}` needs `--fixtures`: filling is about records",
+                f
+            ));
         }
     }
     if opts.has("--read-as") {
-        eprintln!(
-            "{}",
-            tr!(
-                "error: --read-as は --fixtures と一緒にしか使えません。記録の読み方を指定する引数です",
-                "error: --read-as needs --fixtures: it says how to read records"
-            )
-        );
-        return ExitCode::from(2);
+        return refuse(tr!(
+            "`--read-as` は `--fixtures` と一緒にしか使えません。記録の読み方を指定する引数です",
+            "`--read-as` needs `--fixtures`: it says how to read records"
+        ));
     }
     let (of, oc, nf, nc) = match two_versions(a, b) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(2);
+            return refuse(e);
         }
     };
     let budget = match opts.get("--budget") {
         Some(v) => match v.parse::<usize>() {
             Ok(n) => n,
             Err(_) => {
-                eprintln!("{}", tr!("error: --budget には正の整数を書いてください", "error: --budget takes a positive integer"));
-                return ExitCode::from(2);
+                return refuse(tr!("--budget には正の整数を書いてください", "--budget takes a positive integer"));
             }
         },
         None => crate::vdiff::DEFAULT_BUDGET,
@@ -2108,17 +2182,13 @@ fn vdiff_cmd(a: &String, b: &String, opts: &Args, md: bool, json: bool) -> ExitC
 }
 
 fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
-    let (Some(a), Some(b)) = (files.first(), files.get(1)) else {
-        eprintln!("{}", tr!("error: 書き方は `rulec diff <旧> <新> --fixtures <f.jsonl>` です", "error: `rulec diff <old> <new> --fixtures <f.jsonl>`"));
-        return ExitCode::from(2);
-    };
+    let (Some(a), Some(b), None) = (files.first(), files.get(1), files.get(2)) else { return takes("diff") };
     let terse = opts.has("--terse");
     if json && terse {
         return terse_with_json();
     }
     if opts.get("--budget").is_some() && opts.get("--fixtures").is_some() {
-        eprintln!("{}", tr!("error: --budget は --fixtures と一緒には使えません", "error: --budget cannot be used with --fixtures"));
-        return ExitCode::from(2);
+        return refuse(tr!("--budget は --fixtures と一緒には使えません", "--budget cannot be used with --fixtures"));
     }
     // With no records to replay against, the two versions are compared over the whole input
     // space instead: which inputs get a different answer, and the claim that outside them
@@ -2144,15 +2214,13 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
     let (of, oc, nf, nc, m, path, src) = match r {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(2);
+            return refuse(e);
         }
     };
     let then = match read_as(opts, &of) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(2);
+            return refuse(e);
         }
     };
     // §15.197: the records are the old version's — its system wrote them — so they are read
@@ -2174,24 +2242,18 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
 
 /// `rulec strength` (§15.288).
 fn strength_cmd(files: &[&String], a: &Args, json: bool) -> ExitCode {
-    let [path] = files else {
-        return refuse(tr!(
-            "`rulec strength` は一度に一つのファイルを読みます（{} 個渡されました）",
-            "`rulec strength` reads one file at a time ({} were given)",
-            files.len()
-        ));
-    };
+    let [path] = files else { return takes("strength") };
     let budget = match a.get("--budget") {
         Some(v) => match v.parse::<i64>() {
             Ok(n) if n > 0 => n,
-            _ => return refuse(tr!("`--budget {v}` は正の整数ではありません", "`--budget {v}` is not a positive integer")),
+            _ => return refuse_text(ritsu_base::cli::not_positive("--budget", v)),
         },
         None => crate::region::DEFAULT_BUDGET,
     };
     let at_most = match a.get("--at-most") {
         Some(v) => match v.parse::<usize>() {
             Ok(n) => Some(n),
-            Err(_) => return refuse(tr!("`--at-most {v}` は 0 以上の整数ではありません", "`--at-most {v}` is not a whole number of 0 or more")),
+            Err(_) => return refuse_text(ritsu_base::cli::not_whole("--at-most", v)),
         },
         None => None,
     };
@@ -2199,8 +2261,9 @@ fn strength_cmd(files: &[&String], a: &Args, json: bool) -> ExitCode {
     if other.as_deref().is_some_and(|o| std::path::Path::new(o) == std::path::Path::new(path.as_str())) {
         return refuse(tr!("`--other` が `{path}` そのものです。元のファイルには書きません", "`--other` is `{path}` itself; the file is not written over"));
     }
-    let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-        return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
+    let src = match read_given(path) {
+        Ok(s) => s,
+        Err(c) => return c,
     };
     let opts = crate::strength::Options { budget, claims_only: a.has("--claims-only"), other: other.clone() };
     let s = match crate::strength::measure(&src, path, &opts) {
@@ -2223,7 +2286,7 @@ fn strength_cmd(files: &[&String], a: &Args, json: bool) -> ExitCode {
     let written = match (&other, &s.other.text) {
         (Some(p), Some(t)) => {
             if let Err(e) = ritsu_base::fs::write(p, t) {
-                return refuse(tr!("`{p}` に書けません: {e}", "cannot write `{p}`: {e}"));
+                return refuse_text(ritsu_base::cli::cannot_write(p, &e));
             }
             Some(p.as_str())
         }
@@ -2247,9 +2310,9 @@ fn strength_cmd(files: &[&String], a: &Args, json: bool) -> ExitCode {
 fn coverage(files: &[&String], json: bool) -> ExitCode {
     let mut worst = 0u8;
     for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return ExitCode::from(2);
+        let src = match read_given(path) {
+            Ok(s) => s,
+            Err(c) => return c,
         };
         let (f, c) = match checked(&src, path) {
             Ok(x) => x,
@@ -2271,44 +2334,43 @@ fn coverage(files: &[&String], json: bool) -> ExitCode {
 
 /// §9: build the vectors from the boundaries. The reference evaluator attaches the expected
 /// values and the fired rows.
-fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
+fn vectors(files: &[&String], out_dir: Option<&str>, made: crate::i18n::Lang) -> ExitCode {
     for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return ExitCode::from(2);
+        let src = match read_given(path) {
+            Ok(s) => s,
+            Err(c) => return c,
         };
         let (f, c) = match checked(&src, path) {
             Ok(x) => x,
             Err(e) => return e,
         };
-        let vs = crate::vectors::generate(&f, &c);
-        let body: String = vs
-            .iter()
-            .map(|v| crate::vectors::to_json(&f, &c, v))
-            .collect::<Vec<_>>()
-            .join("\n")
-            + "\n";
+        let (vs, body, traces) = crate::i18n::with(made, || {
+            let vs = crate::vectors::generate(&f, &c);
+            let body: String = vs.iter().map(|v| crate::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
+            let traces = crate::vectors::machine_traces(&f, &c).map(|t| (t.traces.len(), crate::vectors::traces_json(&f, &c, &t)));
+            (vs, body, traces)
+        });
         match out_dir {
             Some(d) => {
                 // `--out vectors/` is `--out vectors`: the path is not said with two slashes (§15.277).
                 let d = d.trim_end_matches('/');
                 let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
                 let p = format!("{d}/{alias}.jsonl");
-                let _ = std::fs::create_dir_all(d);
-                if std::fs::write(&p, &body).is_err() {
-                    eprintln!("{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
-                    return ExitCode::from(2);
+                if let Err(e) = ritsu_base::fs::create_dir_all(d) {
+                    return refuse_text(ritsu_base::cli::cannot_create(d, &e));
+                }
+                if let Err(e) = ritsu_base::fs::write(&p, &body) {
+                    return refuse_text(ritsu_base::cli::cannot_write(&p, &e));
                 }
                 println!("{}", tr!("ベクタ {} 件: {p}", "{} vectors: {p}", vs.len()));
                 // A machine's sequences of calls go beside it, as `gen` writes them (§15.148);
                 // on stdout they would be mixed into a stream of single calls.
-                if let Some(t) = crate::vectors::machine_traces(&f, &c) {
+                if let Some((n, traces)) = &traces {
                     let p = format!("{d}/{alias}.traces.jsonl");
-                    if std::fs::write(&p, crate::vectors::traces_json(&f, &c, &t)).is_err() {
-                        eprintln!("{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
-                        return ExitCode::from(2);
+                    if let Err(e) = ritsu_base::fs::write(&p, traces) {
+                        return refuse_text(ritsu_base::cli::cannot_write(&p, &e));
                     }
-                    println!("{}", tr!("手順 {} 本: {p}", "{} sequences of calls: {p}", t.traces.len()));
+                    println!("{}", tr!("手順 {} 本: {p}", "{} sequences of calls: {p}", n));
                 }
             }
             None => print!("{body}"),
@@ -2330,23 +2392,23 @@ fn run_rule(a: &Args) -> ExitCode {
         return refuse(crate::i18n::text(&t));
     }
     let assigns = &a.pos[1..];
-    let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-        eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-        return ExitCode::from(2);
+    let src = match read_given(path) {
+        Ok(s) => s,
+        Err(c) => return c,
     };
     // The input is read before the rule is checked, so that a bad command line is 2 whatever the rule is.
     let mut given: Vec<(String, Json)> = Vec::new();
     if let Some(at) = a.get("--input") {
         let text = if at == "-" {
             let mut s = String::new();
-            if std::io::Read::read_to_string(&mut std::io::stdin(), &mut s).is_err() {
-                return refuse(tr!("標準入力を読めません", "cannot read standard input"));
+            if let Err(e) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut s) {
+                return refuse_text(ritsu_base::cli::cannot_read_stdin(&e));
             }
             s
         } else {
             match ritsu_base::fs::read_to_string(at) {
                 Ok(s) => s,
-                Err(_) => return refuse(tr!("`{at}` を読めません", "cannot read `{at}`")),
+                Err(e) => return refuse_text(ritsu_base::cli::cannot_read(at, &e)),
             }
         };
         match crate::json::parse(&text) {
@@ -2484,17 +2546,17 @@ fn run_rule(a: &Args) -> ExitCode {
 /// §6 of the plan: the API inventory of the generated code. An agent that has to integrate
 /// the output should not have to read it first, and a human-written note about the calling
 /// convention rots; this is built from the same names the generator emits.
-fn api(files: &[&String]) -> ExitCode {
+fn api(files: &[&String], made: crate::i18n::Lang) -> ExitCode {
     for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return ExitCode::from(2);
+        let src = match read_given(path) {
+            Ok(s) => s,
+            Err(c) => return c,
         };
         let (f, c) = match checked(&src, path) {
             Ok(x) => x,
             Err(e) => return e,
         };
-        println!("{}", crate::codegen::Gen::new(&f, &c, &src, path).api());
+        println!("{}", crate::i18n::with(made, || crate::codegen::Gen::new(&f, &c, &src, path).api()));
     }
     ExitCode::from(0)
 }
@@ -2503,9 +2565,9 @@ fn api(files: &[&String]) -> ExitCode {
 /// implementation. The source's digest goes in it, because a certificate is about one text.
 fn certificate(files: &[&String]) -> ExitCode {
     for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return ExitCode::from(2);
+        let src = match read_given(path) {
+            Ok(s) => s,
+            Err(c) => return c,
         };
         let (f, c) = match checked(&src, path) {
             Ok(x) => x,
@@ -2533,11 +2595,11 @@ fn checked(src: &str, path: &str) -> Result<(crate::ast::RuleFile, crate::types:
             eprint!("{}", render(d, &lines));
             eprintln!();
         }
-        eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
+        eprintln!("{}", ritsu_base::cli::refusal(&tr!("`{path}` は検査を通っていません", "`{path}` does not pass check"), lang()));
         return Err(ExitCode::from(1));
     }
     crate::prepare(src, path).map_err(|_| {
-        eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
+        eprintln!("{}", ritsu_base::cli::refusal(&tr!("`{path}` は検査を通っていません", "`{path}` does not pass check"), lang()));
         ExitCode::from(1)
     })
 }
@@ -2546,39 +2608,53 @@ fn checked(src: &str, path: &str) -> Result<(crate::ast::RuleFile, crate::types:
 /// place — so that the shape of a rule can be seen rather than read a table at a time.
 fn graph(files: &[&String]) -> ExitCode {
     for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return ExitCode::from(2);
+        let src = match read_given(path) {
+            Ok(s) => s,
+            Err(c) => return c,
         };
-        let Ok((f, c)) = crate::prepare(&src, path) else {
-            eprintln!("{}", tr!("error: `{path}` の名前か型が解決しません", "error: a name or a type in `{path}` does not resolve"));
-            return ExitCode::from(1);
+        let (f, c) = match crate::prepare(&src, path) {
+            Ok(x) => x,
+            Err(ds) => return unresolved(path, &src, &ds),
         };
         print!("{}", crate::graph::json(&f, &c, &src, &ritsu_base::fed::hash(&src)));
     }
     ExitCode::from(0)
 }
 
+/// What stops a command that reads only a rule's names and types (`graph`, `schema`, `adapter`):
+/// the errors that keep them from resolving, as `check` says them (an empty file's E003 among
+/// them), then the line that says so.
+fn unresolved(path: &str, src: &str, ds: &[crate::diag::Diag]) -> ExitCode {
+    let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+    for d in ds.iter().filter(|d| d.severity == crate::diag::Severity::Error) {
+        eprint!("{}", render(d, &lines));
+        eprintln!();
+    }
+    eprintln!("{}", ritsu_base::cli::refusal(&tr!("`{path}` の名前か型が解決しません", "a name or a type in `{path}` does not resolve"), lang()));
+    ExitCode::from(1)
+}
+
 /// A subcommand that only emits a string for a single rule.
 fn one(
     files: &[&String],
+    made: crate::i18n::Lang,
     f: impl Fn(&crate::ast::RuleFile, &crate::types::Checked, &str) -> Option<String>,
 ) -> ExitCode {
     for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return ExitCode::from(2);
+        let src = match read_given(path) {
+            Ok(s) => s,
+            Err(c) => return c,
         };
         // **Not `checked`.** These two are the shape of the rule, not its proof, and they
         // are wanted while it is still being made — `adapter --template` is what produces
         // the extractor a source needs, and a source not yet fetched is exactly why the
         // rule does not pass check yet. Gating them on the proofs would be a loop with no
         // way in (§15.120).
-        let Ok((rf, c)) = crate::prepare(&src, path) else {
-            eprintln!("{}", tr!("error: `{path}` の名前か型が解決しません", "error: a name or a type in `{path}` does not resolve"));
-            return ExitCode::from(1);
+        let (rf, c) = match crate::prepare(&src, path) {
+            Ok(x) => x,
+            Err(ds) => return unresolved(path, &src, &ds),
         };
-        if let Some(s) = f(&rf, &c, path) {
+        if let Some(s) = crate::i18n::with(made, || f(&rf, &c, path)) {
             print!("{s}");
         }
     }
@@ -2589,12 +2665,12 @@ fn one(
 fn verify(files: &[&String], adapter: &[String], json: bool) -> ExitCode {
     let mut worst = 0u8;
     for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return ExitCode::from(2);
+        let src = match read_given(path) {
+            Ok(s) => s,
+            Err(c) => return c,
         };
         let Ok((f, c)) = crate::prepare(&src, path) else {
-            eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
+            eprintln!("{}", ritsu_base::cli::refusal(&tr!("`{path}` は検査を通っていません", "`{path}` does not pass check"), lang()));
             return ExitCode::from(1);
         };
         let vs = crate::vectors::generate(&f, &c);
@@ -2610,8 +2686,7 @@ fn verify(files: &[&String], adapter: &[String], json: bool) -> ExitCode {
                 }
             }
             Err(e) => {
-                eprintln!("error: {e}");
-                return ExitCode::from(2);
+                return refuse(e);
             }
         }
     }

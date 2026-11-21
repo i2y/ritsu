@@ -1,0 +1,10 @@
+calendar office v1
+description "The days the office is open: written for the tests of yuen affected"
+offset +00:00
+
+source closures = file "../data/closures.csv" sha256:c3e308e099ceebbf
+  format csv
+  covers 2027-01-01..2027-12-31
+
+closed weekly sat, sun
+closed closures

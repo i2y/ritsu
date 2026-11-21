@@ -62,12 +62,12 @@ exit 1
 # in en
 
 $ koyomi check .
-error[E015]: ./loose/net10.cal:5:14: The calendar @lib/calendars/office.cal cannot be read (loose/@lib/calendars/office.cal)
+error[E015]: loose/net10.cal:5:14: The calendar @lib/calendars/office.cal cannot be read (loose/@lib/calendars/office.cal)
      5 | use calendar "@lib/calendars/office.cal"
   = The path is relative to the directory this .cal is in.
   = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
-note: `./app` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check ./app` to read it
-note: `./base` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check ./base` to read it
-note: `./lib` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check ./lib` to read it
+note: `app` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check app` to read it
+note: `base` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check base` to read it
+note: `lib` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check lib` to read it
 exit 1
 

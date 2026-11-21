@@ -1,0 +1,2 @@
+エラー[E007]: tests/mutants/E007_a_label_for_a_stage_not_there.ringi:18:3: `stage approve` の文言が指すものがありません。`approve` というステップは経路にありません
+    18 |   stage approve  "承認"

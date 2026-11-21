@@ -1,0 +1,11 @@
+エラー[E002]: tests/fixtures/chain_names.ja.flow:10:8: 型 `strng` はありません
+    10 |   種類 : strng
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+  = `strng` は 13 行目にも書かれています
+エラー[E002]: tests/fixtures/chain_names.ja.flow:21:3: タスクか規則 `知らせろ` はありません
+    21 |   知らせろ(ID: ID)
+  = `知らせろ` は 23、24 行目にも書かれています
+エラー[E002]: tests/fixtures/chain_names.ja.flow:26:12: 変数や値 `役割` はありません
+    26 |   知らせる(ID: 役割)
+  = 値は変数・そのフィールド・文字列・数・true・false のどれかです
+  = `役割` は 27 行目にも書かれています

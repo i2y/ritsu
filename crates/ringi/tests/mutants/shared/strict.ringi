@@ -1,0 +1,9 @@
+route strict v1 "Strict approval"
+
+route
+  check  finance
+  head   heads
+
+who
+  finance = team finance
+  heads   = team finance_heads

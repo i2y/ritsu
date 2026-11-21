@@ -38,7 +38,7 @@ These are all the words that may start a line.
 | `elements` | the fields of one element of a sequence the rule walks |
 | `outputs` | its results |
 | `derive` | a value computed from the inputs, with a declared range — **it can sit in a table column while still being a quantity** |
-| `define` | a boolean, or a computed intermediate |
+| `define` | a boolean, or a computed intermediate — with `range`, **the values the rule accepts for it** |
 | `constraint` | a relation between inputs: which combinations **cannot happen** |
 | `never` | a combination that **cannot happen**, written out: `never has_tool = true, all_parts = true` |
 | `possible` | what **is to happen**: `possible approved = true`, in a `machine` `possible delivered`. rulec shows the shortest calls that make it happen |
@@ -179,15 +179,18 @@ differ as written can be one identifier in one of them: `base_fee` and
 `baseFee` are both `baseFee` in Swift and Java, and SQLite reads `afee`
 and `aFee` as one column.
 
-A language can refuse a name, too: Ruby reads `READ_CREDIT` as a
-constant. And the generated code has names of its own: an output called
-`trace` is the field of the `.proto`'s answer that carries the rows that
-matched, and an enum called `output` is the type of the answer of a rule
-of two outputs. `rulec check` warns of each (W121) and says which
-languages; an alias on the name, or on one of the two, settles it. Where
-every language that writes the name spells the two alike — the types of
-the enums `tier_level` and `tierLevel` are `TierLevel` in all of them —
-it stops (E034).
+A language can refuse a name, too: the answer of a rule of two outputs is
+a `NamedTuple` in Python, which takes no field that starts with `_`. And
+the generated code has names of its own: an output called `trace` is the
+field of the `.proto`'s answer that carries the rows that matched, and an
+enum called `output` is the type of the answer of a rule of two outputs.
+`rulec check` warns of each (W121) and says which languages; an alias on
+the name, or on one of the two, settles it. A name the code keeps inside
+its functions, a helper's or a local's, it writes apart from the rule's
+in the language where the two meet, and nothing is said. Where every
+language that writes the name spells the two alike — the types of the
+enums `tier_level` and `tierLevel` are `TierLevel` in all of them — it
+stops (E034).
 
 ## Types
 
@@ -277,6 +280,12 @@ enum member_tier = basic | gold | platinum default
 The `.proto` owns **which values exist**; the `.rule` owns **what they
 are called here and how each one is treated**. Every `rulec check` reads
 that file and holds the two together.
+
+A value of the contract is read with the enum's own name taken off the
+front and the rest in lower case: `MEMBER_TIER_GOLD` is `gold`. Two names
+of one number (`allow_alias`) are one value, which the rule writes by
+either of them. The whole table of readings is in
+[the reference](reference.md#an-enum-a-proto-owns).
 
 - A value on one side only is **E032**. It is usually the proto that
   gained one, and **on the wire that is a compatible change**.
@@ -369,7 +378,7 @@ else does.
 
 ### `round`, on every numeric output
 
-Without it, the generated code would settle fractions on its own. Four
+Without it, the generated code would settle fractions on its own. Five
 modes, each **pinned down for negative values too**.
 
 | mode | direction | at grid 1 yen |
@@ -381,7 +390,9 @@ modes, each **pinned down for negative values too**.
 | `half_even` | an exact half goes to the even neighbour | 2.5 → 2, 3.5 → 4 |
 
 What is in the parentheses is the **grid**: `up(10USDc)` rounds to a
-multiple of ten cents, so −4.2 cents becomes −10 cents.
+multiple of ten cents, so −4.2 cents becomes −10 cents. A word that is
+none of the five stops the check (E154), which names the nearest:
+`round half(1USDc)` is told `half_up`.
 
 The negative direction is pinned because **integer division in Python and
 Ruby rounds toward −∞ while in Rust, Swift, Go, Java, TypeScript, JavaScript, NumPy,
@@ -485,7 +496,11 @@ policy unique
 
 Left of `->` are input columns, right of it output columns. A column may
 name an input, a `derive`, a boolean or enum intermediate, **or an output
-of an earlier table**.
+of an earlier table**. The heading needs its `->`: without it every column
+is read as a condition and the table decides nothing (E152). Every output
+is decided by something: a table, a `derive`, a `define`, `result`, or a
+summary of a sequence such as `sum` (further on). One that nothing decides,
+or that something reads above what decides it, is E151.
 
 That last one is how tables stack, and stacking is how a complicated rule
 gets written: in the rule above, `table size_of` produces `size`, which is
@@ -571,6 +586,22 @@ comparison of **two values whose difference cannot be subtracted** (two
 dates, say). Comparing two numbers directly is refused, with a message
 asking you to declare the difference as a `derive` — that way the
 analysis is exact.
+
+**A define of a number can say what the rule accepts for it.** `range` at
+the end of its line is not what the value can come to but the values the
+rule takes:
+
+```rule
+define fee : money[USD] = down(amount * 3%, 1USD)  range <=200USD
+```
+
+A call whose fee works out past 200 dollars is refused where the fee is
+worked out (`fee is out of range`), and every table that reads `fee` is
+checked over the fees the rule accepts. A `derive`'s range is the other
+kind: a claim the check verifies (E112), which refuses nothing. A relation
+between inputs is a `constraint`; a cap on something worked out from them
+— a product, a rate of an amount — is the range of a `define`
+([the grammar](reference.md#range-on-a-define--the-values-the-rule-accepts)).
 
 **A result** assembles an output.
 

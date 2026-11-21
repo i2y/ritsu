@@ -45,7 +45,7 @@ Every code chobo prints, when it appears, and how to fix it. For one of them: `c
 
 `error` — **A line that does not read**
 
-**When.** A word chobo does not know, an indentation that does not line up, a string left open, or a line that is not in one of the forms. A byte order mark, a tab and a combining mark (a voiced sound mark or an accent written as a character of its own) stop here too. With a line it cannot read, anything after would be a guess, so the names are not resolved and nothing else is checked.
+**When.** A word chobo does not know, an indentation that does not line up, a string left open, or a line that is not in one of the forms. A byte order mark, a tab and a combining mark (a voiced sound mark or an accent written as a character of its own) stop here too. With a line it cannot read, anything after would be a guess, so the names are not resolved and nothing else is checked. A line of an account or a transfer that is not indented is said once, and read as the block's; the lines under an `account` or a `transfer` heading that cannot be read say nothing.
 
 **Fix.** Rewrite the line in the form the message gives. Under an account go `description`, `at least` and `at most`; under a transfer go `description`, `key`, `pending` and `move`. Write a letter with a combining mark as the one precomposed character.
 
@@ -65,7 +65,7 @@ Related codes: [E002](#e002)
 
 `error` — **A name that is not declared**
 
-**When.** A unit, an account, a type or a parameter of the transfer is named that nothing declares. Names are compared exactly as written.
+**When.** A unit, an account, a type or a parameter of the transfer is named that nothing declares. Names are compared exactly as written. A name written in several places is said once, where it is first written, and the note gives the lines of the others (a parameter's name, once in each transfer).
 
 **Fix.** Declare it, or correct the name to one that is declared. An account for the world outside the book (a supplier, the customers) is declared too: `account supplier : pcs outside`.
 
@@ -327,7 +327,7 @@ account stock(sku: string) : pcs
 
 `error` — **A transfer with no key**
 
-**When.** A transfer has no `key` line, or the key names something that is not one of its parameters. Every transfer needs an idempotency key: a second call with the same key and the same content does nothing, and one with other content is refused.
+**When.** A transfer has no `key` line, or the key names something that is not one of its parameters. Every transfer needs an idempotency key: a second call with the same key and the same content does nothing, and one with other content is refused. A name that is no parameter, written in the key and on other lines, is said once, at the first, and the note gives the lines of the others.
 
 **Fix.** List the parameters it is to happen once for: once per order and SKU is `key order, sku`.
 

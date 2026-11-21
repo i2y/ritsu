@@ -1,0 +1,3 @@
+error[E407]: example.ringi:19:16: The ticket is never `withdrawn`: there is no `withdraw` line and no `send back` line
+    19 |   on rejected, withdrawn  void budget.reserve(request: ticket.id, attempt: ticket.attempt)
+  = Take the line out, or write the line that allows that ending.

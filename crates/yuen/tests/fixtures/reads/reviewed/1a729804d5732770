@@ -1,0 +1,2 @@
+区分 "返品の点数で決める返金の大きさ"
+means rulec "../rules/refund_band.ja.rule" output 区分

@@ -16,7 +16,7 @@ Node 22 では、パッケージを読み込むと、プロセス全体で V8 �
 
 ## コマンド
 
-パッケージは `node_modules/.bin` に十のコマンドを置きます。`ritsu` と、言語の名前の `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`、`kaname` です。言語の名前のコマンドは、リリースのアーカイブのリンクと同じく、`ritsu <言語> …` と同じものです。規則、カレンダー、日付のファイル、帳簿、ワークフローが一つずつあるプロジェクトで走らせると、次のようになります。
+パッケージは `node_modules/.bin` に十一のコマンドを置きます。`ritsu` と、言語の名前の `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`、`kaname`、`ringi` です。言語の名前のコマンドは、リリースのアーカイブのリンクと同じく、`ritsu <言語> …` と同じものです。規則、カレンダー、日付のファイル、帳簿、ワークフローが一つずつあるプロジェクトで走らせると、次のようになります。
 
 <!-- run in crates/ritsu/tests/projects/stockroom -->
 ```console
@@ -72,7 +72,7 @@ $ npx ritsu gen --target typescript --check --format json --lang ja
 }
 ```
 
-最初の三つのキーは `ritsu check --format json` と同じで、バージョン、ルート、問題が無いか（終了コードが 0 か）です。そのあとに、`--check` を付けたか、`--out`、頼んだ言語が続きます。`files` には、ファイルごとに、パッケージの言語（ゲートの Cedar なら `cedar`）、テキストの出力と同じ書き方のパス、生成のもとになったプロジェクトのファイル（インデックスや依存を書くファイルのように、パッケージそのものの部分なら null）、状態が入ります。状態は、書いたときは `written`、`same`、`removed` のどれか、`--check` のときは `same`、`missing`、`stale`、`left` のどれかです。何も生成しなかったときは、`files` が空になり、`error` にその理由と終了コードが入り、`diagnostics` に検査を通らなかったファイルの診断が `ritsu check --format json` と同じ形で入ります。この JSON は、パッケージでなくネイティブのバイナリでも同じものが出ます。
+最初の三つのキーは `ritsu check --format json` と同じで、バージョン、ルート、問題が無いか（終了コードが 0 か）です。そのあとに、`--check` を付けたか、`--out`、頼んだ言語が続きます。`files` には、ファイルごとに、パッケージの言語（ゲートの Cedar なら `cedar`）、テキストの出力と同じ書き方のパス、生成のもとになったプロジェクトのファイル（インデックスや依存を書くファイルのように、パッケージそのものの部分なら null）、状態が入ります。状態は、書いたときは `written`、`same`、`removed` のどれか、`--check` のときは `same`、`missing`、`stale`、`left` のどれかです。何も生成しなかったときは、`files` が空になり、`error` にその理由と終了コードが入り、`diagnostics` に、止めた診断（検査を通らなかったファイルの診断、言語をまたぐ検査とモジュールの検査のエラー、パッケージに入るファイルから地図の境界を越える参照についての sakai のエラー）が `ritsu check --format json` と同じ形で入ります。yuen のエラー、geas の主張、検査が決められない警告では止まりません。この JSON は、パッケージでなくネイティブのバイナリでも同じものが出ます。
 
 ## JavaScript から呼ぶ
 
@@ -110,7 +110,7 @@ WASI 向けの WebAssembly のモジュールは、ほかのプログラムを�
 | `geas check`、`geas snap`、`geas drift`、`geas map` | 主張が動かすプログラム |
 | `code rust` を書いた地図の `sakai check`（と `ritsu check`） | `cargo metadata`。sakai は E107 を出し、ほかの検査は続ける |
 
-ほかのコマンドは、ネイティブのバイナリと同じに動きます。各言語の `check`、言語をまたぐ `ritsu check`、`ritsu gen` と `ritsu run`、すべての `doc`、`api`、`vectors`、`export`、`trace`、`affected`、`scenarios`、`explain`、それに `ritsu skills install` です。リリースのたびに、九つの言語の例、ritsu のテストのプロジェクト、[ブラウザで試すページ](playground.md)のプロジェクトで、そこで走らせるコマンドを英語と日本語で、パッケージとネイティブのバイナリの両方で走らせ、出力、終了コード、書いたファイルが一字も違わないことを確かめています。
+ほかのコマンドは、ネイティブのバイナリと同じに動きます。各言語の `check`、言語をまたぐ `ritsu check`、`ritsu gen` と `ritsu run`、すべての `doc`、`api`、`vectors`、`export`、`trace`、`affected`、`scenarios`、`explain`、それに `ritsu skills install` です。リリースのたびに、十の言語の例、ritsu のテストのプロジェクト、[ブラウザで試すページ](playground.md)のプロジェクトで、そこで走らせるコマンドを英語と日本語で、パッケージとネイティブのバイナリの両方で走らせ、出力、終了コード、書いたファイルが一字も違わないことを確かめています。
 
 Windows では、パッケージはすぐに理由を言って止まります。作業するディレクトリとパスを、そのままの形では WebAssembly のモジュールに渡せないからです。ネイティブの ritsu か、WSL を使ってください。
 

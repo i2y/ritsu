@@ -1,0 +1,42 @@
+workflow look_again v1
+description "Cancel a paid order, and when the warehouse refuses the cancellation, look at the order again to say where it is. The warehouse keeps the order's state, which moves as the rule order_state says: the cancellation of a paid order is refused only when the order was cancelled on the way"
+
+use rule order_state from "rules/order_state.rule"
+
+record Order
+  id    : string
+  state : order_state.state
+
+inputs
+  order_id : string
+
+outputs
+  state : order_state.state
+
+task get_order(id: string) -> Order
+  http GET "https://warehouse.example.com/v1/orders/{id}"
+  observes
+  idempotent
+
+task request_cancel(id: string) -> Order
+  http POST "https://warehouse.example.com/v1/orders/{id}/cancellations"
+  sends cancel
+  errors conflict = 409
+  refused as conflict
+  key
+
+case order : Order follows order_state.order
+  external pay, deliver, cancel
+  refused when accepted = false
+
+flow
+  order <- get_order(id: order_id)
+  match order.state
+    paid =>
+      order <- request_cancel(id: order.id)
+        on conflict =>
+          order <- get_order(id: order.id)
+          fail NotCancelled "Order {order.id} was not cancelled by this request: it is {order.state}"
+        on failure => fail CancelFailed "Could not cancel order {order.id}" leaving order
+    received, shipped, delivered, cancelled => fail NotPaid "Order {order.id} is not paid" leaving order
+  succeed state = order.state

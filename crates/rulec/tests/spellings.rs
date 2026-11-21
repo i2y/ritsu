@@ -10,18 +10,23 @@
 //!
 //! The check now holds the author's identifiers to the spellings of the languages: W121 names the
 //! two names, the languages that write them as one, the identifier each writes, and why; a name a
-//! language cannot take is said with that language. The identifiers stay as the author wrote them.
+//! language cannot take is said with that language, and the warning's targets are what `rulec gen`
+//! then refuses to write (E153). The identifiers stay as the author wrote them. A name Ruby read as
+//! a constant is the generator's to keep apart now: Ruby's function holds the value under another
+//! name, and nothing is said (§15.336). An enum read with `import enum` is held to the constants of
+//! Go's package as the rule's own are, since the package hands it on under the file's names.
 //! Where every language that writes a kind of name spells two as one — the types of two enums, two
 //! values of one enum, the functions of two prerequisites blocks, the element types of two
 //! sequences, a shape and an input of one identifier — the check stops at them with E034, and their
 //! materials are with the other names written twice, in `tests/names`.
 //!
 //! The materials are in `tests/spellings`, English first, with a Japanese version beside each: one
-//! rule for each way two names meet, and for each name a language cannot take. What `rulec check`
-//! prints for each is its golden file in `tests/golden/spellings` (`RULEC_BLESS=1 cargo test --test
-//! spellings` writes them again). Their generated code answers as the reference evaluator does in
-//! every language the warning does not name; and given an alias where the warning says, it does in
-//! every language, as do the rules of `tests/names` that E034 stops at.
+//! rule for each way two names meet, for each name a language cannot take, and for each name the
+//! code keeps apart. What `rulec check` prints for each is its golden file in `tests/golden/spellings`
+//! (`RULEC_BLESS=1 cargo test --test spellings` writes them again). Generated without the targets the
+//! warning names, their code answers as the reference evaluator does in every language; and given an
+//! alias where the warning says, it does in every language, generated for all of them, as do the
+//! rules of `tests/names` that E034 stops at.
 
 use ritsu_testkit::tmp::tmpdir_in;
 use ritsu_testkit::{Need, TempDir, ready, side_by_side, skip};
@@ -29,6 +34,7 @@ use rulec::i18n::{self, Lang};
 use rulec::json::Json;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -61,13 +67,29 @@ const FORMS: &[(&str, &str, &str)] = &[
     ("groups_spelled_alike", "綴りが重なるグループ", "Go and Swift"),
     ("blocks_in_camel_case", "キャメルケースで重なる前提のつながり", "TypeScript, JavaScript, Go, Swift and Java"),
     // a name a language cannot take
-    ("ruby_constant", "大文字で始まる定義", "Ruby"),
-    ("ruby_constant_shape", "大文字で始まるshape", "Ruby"),
     ("python_underscore_output", "下線で始まる出力", "Python and Connect"),
     ("python_underscore_field", "下線で始まるフィールド", "Python and Connect"),
     ("postgresql_long_output", "63バイトより長い出力", "SQL (PostgreSQL)"),
     ("postgresql_long_table", "63バイトより長い表", "SQL (PostgreSQL)"),
 ];
+
+/// The forms whose warning names the `.proto` beside the service: protoc refuses the `.proto`, which
+/// `--target proto` writes (two fields, or two values of an enum, of one name), and the warning's
+/// targets are `proto` and `connect`.
+const WIRE: &[&str] = &[
+    "inputs_spelled_alike",
+    "outputs_spelled_alike",
+    "fields_spelled_alike",
+    "input_and_sequence_in_go",
+    "outputs_with_a_trailing_underscore",
+    "wire_enum_types_in_upper_snake",
+    "enum_values_in_upper_case",
+    "enum_values_in_swift",
+];
+
+/// Names Ruby read as constants, which its function now keeps apart (§15.336): nothing is said of
+/// them, and every language answers as the reference evaluator does.
+const APART: &[(&str, &str)] = &[("ruby_constant", "大文字で始まる定義"), ("ruby_constant_shape", "大文字で始まるshape")];
 
 /// The rules of `tests/names` that every language spells two names of as one, which E034 stops at
 /// (`tests/names.rs` holds what is said for each).
@@ -116,13 +138,43 @@ fn every_rule_here_is_one_of_the_forms() {
         .filter(|n| n.ends_with(".rule"))
         .collect();
     names.sort();
-    let mut listed: Vec<String> = FORMS.iter().flat_map(|(en, ja, _)| [format!("{en}.rule"), format!("{ja}.rule")]).collect();
+    let mut listed: Vec<String> = FORMS
+        .iter()
+        .map(|(en, ja, _)| (*en, *ja))
+        .chain(APART.iter().copied())
+        .flat_map(|(en, ja)| [format!("{en}.rule"), format!("{ja}.rule")])
+        .collect();
     listed.sort();
-    assert_eq!(names, listed, "every rule of tests/spellings is listed in FORMS, with its Japanese version");
+    assert_eq!(names, listed, "every rule of tests/spellings is listed in FORMS or APART, with its Japanese version");
 }
 
-/// Each form is said once, by W121, with the languages it meets in, in both versions; the English
-/// and the Japanese wording are their golden files.
+/// The names `--target` and `--extra` take of the languages an English title lists, as a W121's
+/// targets name them (`Diag::targets`).
+fn ids(langs: &str) -> Vec<&'static str> {
+    langs
+        .replace(" and ", ", ")
+        .split(", ")
+        .map(|l| match l {
+            "Python" => "python",
+            "TypeScript" => "typescript",
+            "JavaScript" => "javascript",
+            "Rust" => "rust",
+            "Ruby" => "ruby",
+            "PHP" => "php",
+            "Go" => "go",
+            "Swift" => "swift",
+            "Java" => "java",
+            "Wasm" => "wasm",
+            "Connect" => "connect",
+            "SQL (SQLite)" | "SQL (PostgreSQL)" => "sql",
+            other => panic!("no target is named {other}"),
+        })
+        .collect()
+}
+
+/// Each form is said once, by W121, with the languages it meets in, in both versions, and the
+/// warning's targets are those languages; the English and the Japanese wording are their golden
+/// files.
 #[test]
 fn each_form_is_said_once_with_the_languages_it_meets_in() {
     let mut failures = Vec::new();
@@ -143,6 +195,36 @@ fn each_form_is_said_once_with_the_languages_it_meets_in() {
             match named(&ds[0].title) {
                 Some(l) if l == *langs => {}
                 other => failures.push(format!("{rel}: names {other:?}, not {langs}: {}", ds[0].title)),
+            }
+            let mut want = ids(langs);
+            if WIRE.contains(en) {
+                want.push("proto");
+            }
+            want.sort();
+            let mut got = ds[0].targets.clone();
+            got.sort();
+            if got != want {
+                failures.push(format!("{rel}: the targets are {got:?}, not {want:?}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+/// Nothing is said of a name the code keeps apart, in either version; the English and the Japanese
+/// wording are their golden files.
+#[test]
+fn nothing_is_said_of_a_name_kept_apart() {
+    let mut failures = Vec::new();
+    for (en, ja) in APART {
+        for (stem, lang, tag) in [(*en, Lang::En, "en"), (*ja, Lang::Ja, "ja")] {
+            let (rel, src) = source("spellings", stem);
+            let (text, ds) = printed(&rel, &src, lang);
+            if !ds.is_empty() {
+                failures.push(format!("{rel}: {:?}\n{text}", ds.iter().map(|d| d.code).collect::<Vec<_>>()));
+            }
+            if let Err(e) = ritsu_testkit::golden::check(&root().join(format!("tests/golden/spellings/{stem}.{tag}.txt")), &text) {
+                failures.push(e);
             }
         }
     }
@@ -245,6 +327,52 @@ fn an_enum_read_with_import_enum_is_held_to_the_types_of_the_rule() {
     }
 }
 
+/// An enum read with `import enum` is handed on in Go's package of the rule under its file's names,
+/// beside the constants of the rule's own enums: a value of the rule's own that comes to the type or
+/// to a constant of the enum read is W121, naming Go, in English and in Japanese, the rule's own
+/// name second, as the one to give an alias. Generated without Go, every language answers as the
+/// reference evaluator does; with the aliases, nothing is said, and every language does.
+#[test]
+fn an_enum_read_with_import_enum_is_held_to_the_constants_of_go() {
+    let sides = "enums sides v1\ndescription \"Side plans several rules share\"\n\nenum plan_gold = plus | base\n";
+    let rule = |plus: &str, gold: &str| {
+        format!(
+            "rule plan_fee v1\ndescription \"A fee by the plan and the side plan, an enum read from a file beside one of its own\"\n\nimport enum plan_gold from \"sides.rule\"\n\nenum plan = {plus} | {gold}\n\ninputs\n  main : plan\n  side : plan_gold\n\noutputs\n  fee : number  round down(1)\n\ntable fee_by_plan\npolicy unique\n| main      | side | -> fee |\n| gold_plus | -    | 3      |\n| gold      | plus | 2      |\n| gold      | base | 1      |\n"
+        )
+    };
+    let read = rule("gold_plus", "gold");
+    for (lang, want) in [
+        ("en", ["`plan_gold` and `gold` are one identifier in the code generated for Go", "`plus` and `gold_plus` are one identifier in the code generated for Go"]),
+        ("ja", ["`plan_gold` と `gold` は、Go の生成コードで同じ識別子になります", "`plus` と `gold_plus` は、Go の生成コードで同じ識別子になります"]),
+    ] {
+        let t = written(&[("sides.rule", sides), ("plan_fee.rule", &read)]);
+        let mut got = found(t.path(), &["plan_fee.rule"], lang);
+        got.sort();
+        let mut want: Vec<(String, String)> = want.iter().map(|w| ("W121".to_string(), w.to_string())).collect();
+        want.sort();
+        assert_eq!(got, want, "{lang}");
+    }
+    let t = written(&[("sides.rule", sides), ("plan_fee.rule", &read)]);
+    let path = t.path().join("plan_fee.rule").to_string_lossy().into_owned();
+    let ds = i18n::with(Lang::En, || rulec::check_source(&read, &path));
+    assert_eq!(ds.len(), 2, "{:?}", ds.iter().map(|d| d.title.as_str()).collect::<Vec<_>>());
+    for d in &ds {
+        assert_eq!(d.targets, ["go"], "{}", d.title);
+        assert!(d.notes.iter().any(|n| n.contains("of `sides.rule` (the rule's package hands it on under its name)")), "{:?}", d.notes);
+        assert_eq!(d.marks.last().map(|m| m.span.line), Some(6), "{}: the rule's own name is marked last", d.title);
+    }
+    let aliased = rule("gold_plus(premium)", "gold(standard)");
+    let t = written(&[("sides.rule", sides), ("plan_fee.rule", &aliased)]);
+    assert!(found(t.path(), &["plan_fee.rule"], "en").is_empty());
+    if !ready(Need::Python, have_python, "python3 is not here") {
+        return;
+    }
+    for (src, without, what) in [(&read, vec!["go"], "the rule beside an enum read, without Go"), (&aliased, Vec::new(), "the rule with the aliases")] {
+        let r = Run { file: "plan_fee.rule".to_string(), src: src.clone(), without, beside: vec![("sides.rule".to_string(), sides.to_string())] };
+        runs_alike(&[r], what);
+    }
+}
+
 /// A value a contribution adds to an open enum is held to the members of the enum: `Web` beside
 /// `web` is E034, said for the contribution, in English and in Japanese, and with an alias of its
 /// own the rule and its contribution pass.
@@ -287,37 +415,62 @@ fn with_an_alias(src: &str, d: &rulec::diag::Diag) -> String {
     lines.join("\n") + "\n"
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 fn rulec(cwd: &Path, tmp: &Path, args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp).current_dir(cwd).args(args).output().expect("cannot start rulec");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp).current_dir(cwd).args(args), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 fn have_python() -> bool {
     Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success())
 }
 
-/// One rule to generate and run: its file name, its text, and the languages whose results do not
-/// count (those the warning names), by how `rulec test` reports a result.
+/// One rule to generate and run: its file name, its text, the targets its warnings name
+/// (`Diag::targets`), which it is generated without, and the files it reads beside it.
 struct Run {
     file: String,
     src: String,
-    excused: String,
+    without: Vec<&'static str>,
+    beside: Vec<(String, String)>,
 }
 
-/// Whether a result of `rulec test` is of a language the warning names: `Connect` is the Python
-/// service's passes, `SQL (SQLite)` the query's run and `SQL (PostgreSQL)` the function's, and a
-/// language the rest of it, the rounding helpers too (Go's are in the rule's package).
-fn excused(langs: &str, lang: &str, via: &str) -> bool {
-    langs.replace(" and ", ", ").split(", ").any(|l| match l {
-        "Connect" => lang == "python" && via.starts_with("connect"),
-        "SQL (SQLite)" => lang == "sql" && via == "runner",
-        "SQL (PostgreSQL)" => lang == "sql" && via == "function",
-        other => lang == other.to_ascii_lowercase(),
-    })
+impl Run {
+    /// The rule of `file`, generated without the targets the check of `src` names, as read at `rel`.
+    fn of(file: String, src: String, rel: &str) -> Run {
+        let mut without: Vec<&'static str> = i18n::with(Lang::En, || rulec::check_source(&src, rel)).iter().filter(|d| d.code == "W121").flat_map(|d| d.targets.clone()).collect();
+        without.sort();
+        without.dedup();
+        Run { file, src, without, beside: Vec::new() }
+    }
 }
 
-/// Generate the rules into one directory and run what was generated: every result that is of no
-/// language a rule's warning names answers as the reference evaluator does, Python among them.
+/// The flags of every target and extra of 0.40.0 but those `without` names, and but the extras that
+/// are then left with none of the targets they are written beside (`targets::Asked::new`).
+fn flags_without(without: &[&str]) -> Vec<&'static str> {
+    let mut targets: Vec<&'static str> = Vec::new();
+    let mut extras: Vec<&'static str> = Vec::new();
+    for pair in rulec::targets::UP_TO_0_40.chunks(2) {
+        match pair {
+            ["--target", t] if !without.contains(t) => targets.push(*t),
+            ["--extra", e] if !without.contains(e) => extras.push(*e),
+            _ => {}
+        }
+    }
+    extras.retain(|e| match *e {
+        "connect" => targets.contains(&"python") && targets.contains(&"proto"),
+        "runner" | "round-test" | "vectors" => true,
+        e => targets.iter().any(|t| rulec::targets::has_extra(t, e)),
+    });
+    targets.iter().flat_map(|t| ["--target", *t]).chain(extras.iter().flat_map(|e| ["--extra", *e])).collect()
+}
+
+/// Generate the rules into one directory, without the targets their warnings name, which are the
+/// same for each of them, and run what was generated: every result answers as the reference
+/// evaluator does, Python's among them where Python is generated.
 fn runs_alike(runs: &[Run], what: &str) {
     let t = TempDir::new("spellings");
     let tmp = tmpdir_in(t.path());
@@ -327,14 +480,18 @@ fn runs_alike(runs: &[Run], what: &str) {
     std::fs::copy(root().join("tests/spellings/orders.schema.json"), dir.join("orders.schema.json")).unwrap();
     for r in runs {
         std::fs::write(dir.join(&r.file), &r.src).unwrap();
+        for (name, text) in &r.beside {
+            std::fs::write(dir.join(name), text).unwrap();
+        }
     }
+    let without = &runs[0].without;
     let mut args: Vec<&str> = vec!["gen"];
     args.extend(runs.iter().map(|r| r.file.as_str()));
     let o = out.to_string_lossy().into_owned();
     args.extend(["--out", o.as_str()]);
-    args.extend(rulec::targets::UP_TO_0_40);
+    args.extend(flags_without(without));
     let (code, said, e) = rulec(&dir, &tmp, &args);
-    assert_eq!(code, 0, "{what}: {said}{e}");
+    assert_eq!(code, 0, "{what} (without {without:?}): {said}{e}");
     let (_, said, e) = rulec(&dir, &tmp, &["test", o.as_str(), "--format", "json"]);
     let j = rulec::json::parse(said.lines().next().unwrap_or_else(|| panic!("{what}: no result\n{e}"))).unwrap_or_else(|x| panic!("{what}: {x}: {said}"));
     for why in j.get("skipped").and_then(Json::as_arr).unwrap_or_default() {
@@ -342,54 +499,55 @@ fn runs_alike(runs: &[Run], what: &str) {
     }
     let results = j.get("results").and_then(Json::as_arr).unwrap_or_default();
     let field = |r: &Json, k: &str| r.get(k).and_then(Json::as_str).unwrap_or_default().to_string();
-    // What one rule's warning names reaches the others of the directory in two ways: the `.proto`
-    // files of every rule are one buf module, which buf builds whole for each rule's Connect pass,
-    // and the rounding helpers run once for each language, Go's built in a rule's package.
-    let any_excused = |lang: &str, via: &str| runs.iter().any(|r| excused(&r.excused, lang, via));
     let broken: Vec<String> = results
         .iter()
         .filter(|r| r.get("ok").and_then(|v| v.as_bool()) != Some(true))
-        .filter(|r| {
-            let (rule, lang, via) = (field(r, "rule"), field(r, "lang"), field(r, "via"));
-            if via.starts_with("connect") && any_excused(&lang, &via) {
-                return false;
-            }
-            match runs.iter().find(|x| x.src.lines().next().is_some_and(|l| rule_alias(l) == rule)) {
-                Some(x) => !excused(&x.excused, &lang, &via),
-                None => !(rule == "_round" && any_excused(&lang, &via)),
-            }
-        })
         .map(|r| format!("{} {}/{}: {}", field(r, "rule"), field(r, "lang"), field(r, "via"), field(r, "error")))
         .collect();
-    assert!(broken.is_empty(), "{what}: these did not run or did not agree:\n{}", broken.join("\n"));
+    assert!(broken.is_empty(), "{what} (without {without:?}): these did not run or did not agree:\n{}", broken.join("\n"));
     let ran: Vec<String> = results.iter().filter(|r| r.get("ran").and_then(|v| v.as_bool()) == Some(true)).map(|r| field(r, "lang")).collect();
-    assert!(ran.iter().any(|l| l == "python"), "{what}: Python did not run: {ran:?}");
-}
-
-/// The identifier of the rule a heading line declares: `rule 定額の送料(flat_fee) v1` is `flat_fee`.
-fn rule_alias(heading: &str) -> String {
-    let name = heading.strip_prefix("rule ").unwrap_or(heading).split(' ').next().unwrap_or_default();
-    match name.split_once('(') {
-        Some((_, a)) => a.trim_end_matches(')').to_string(),
-        None => name.to_string(),
+    if !without.contains(&"python") {
+        assert!(ran.iter().any(|l| l == "python"), "{what}: Python did not run: {ran:?}");
+    } else {
+        assert!(!ran.is_empty(), "{what}: nothing ran");
     }
 }
 
-/// The runs, dealt into as many directories as there are cores, the English rules in some and the
-/// Japanese versions, which share their aliases, in others.
+/// The runs, one directory for each set of targets they are generated without, and those of one set
+/// dealt into as many directories as there are cores, at most four; the English rules in some and
+/// the Japanese versions, which share their aliases, in others.
 fn deal(runs: Vec<Run>) -> Vec<Vec<Run>> {
     let n = std::thread::available_parallelism().map_or(1, |n| n.get()).clamp(1, 4);
-    let mut dirs: Vec<Vec<Run>> = (0..n).map(|_| Vec::new()).collect();
-    for (i, r) in runs.into_iter().enumerate() {
-        dirs[i % n].push(r);
+    let mut sets: Vec<(Vec<&'static str>, Vec<Run>)> = Vec::new();
+    for r in runs {
+        match sets.iter_mut().find(|(w, _)| *w == r.without) {
+            Some((_, rs)) => rs.push(r),
+            None => sets.push((r.without.clone(), vec![r])),
+        }
     }
-    dirs.retain(|d| !d.is_empty());
+    let mut dirs: Vec<Vec<Run>> = Vec::new();
+    for (_, rs) in sets {
+        let mut part: Vec<Vec<Run>> = (0..n.min(rs.len())).map(|_| Vec::new()).collect();
+        let k = part.len();
+        for (i, r) in rs.into_iter().enumerate() {
+            part[i % k].push(r);
+        }
+        dirs.extend(part);
+    }
     dirs
 }
 
+/// Each directory run as [`runs_alike`] runs it, four at a time at most.
+fn run_dirs(dirs: &[Vec<Run>], what: &str) {
+    for some in dirs.chunks(4) {
+        side_by_side(some, |runs| runs_alike(runs, what));
+    }
+}
+
 /// The generated code of every rule here answers as the reference evaluator does in every
-/// language its warning does not name: the warning names each language where the code it wrote
-/// does not build or answers otherwise.
+/// language its warning does not name, generated without those, and the names kept apart answer so
+/// in every language: the warning names each language where the code it wrote does not build or
+/// answers otherwise.
 #[test]
 fn the_generated_code_agrees_in_every_language_the_warning_does_not_name() {
     if !ready(Need::Python, have_python, "python3 is not here") {
@@ -398,14 +556,15 @@ fn the_generated_code_agrees_in_every_language_the_warning_does_not_name() {
     for ja in [false, true] {
         let runs: Vec<Run> = FORMS
             .iter()
-            .map(|(en, j, langs)| {
+            .map(|(en, j, _)| (*en, *j))
+            .chain(APART.iter().copied())
+            .map(|(en, j)| {
                 let stem = if ja { j } else { en };
-                let (_, src) = source("spellings", stem);
-                Run { file: format!("{stem}.rule"), src, excused: langs.to_string() }
+                let (rel, src) = source("spellings", stem);
+                Run::of(format!("{stem}.rule"), src, &rel)
             })
             .collect();
-        let dirs = deal(runs);
-        side_by_side(&dirs, |runs| runs_alike(runs, if ja { "the Japanese versions" } else { "the English rules" }));
+        run_dirs(&deal(runs), if ja { "the Japanese versions" } else { "the English rules" });
     }
 }
 
@@ -436,10 +595,9 @@ fn an_alias_where_the_finding_says_makes_every_language_agree() {
                 failures.push(format!("{rel} with an alias:\n{}\n{fixed}", after.join("\n")));
                 continue;
             }
-            runs.push(Run { file: format!("{stem}.rule"), src: fixed, excused: String::new() });
+            runs.push(Run::of(format!("{stem}.rule"), fixed, &rel));
         }
-        let dirs = deal(runs);
-        side_by_side(&dirs, |runs| runs_alike(runs, if ja { "the Japanese versions with an alias" } else { "the English rules with an alias" }));
+        run_dirs(&deal(runs), if ja { "the Japanese versions with an alias" } else { "the English rules with an alias" });
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }

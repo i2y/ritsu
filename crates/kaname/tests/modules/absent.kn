@@ -1,0 +1,47 @@
+module absent v1
+description "A number that may be absent, given to a rule's input that may be absent: from a parameter, from what a call answers, from a let, from a field of a record, as none written out, and a number that is there"
+
+use rule stay from "tests/rules/stay.rule"
+
+record Stay
+  nights : number?  range >=0 <=60
+  member : bool
+
+# a parameter, passed on as the rule passes it
+fn counted(nights: number?  range >=0 <=60, member: bool) -> number? total
+  stay(nights: nights, member: member).counted
+
+# a parameter, read by the rule's table, none among its values
+fn long(nights: number?  range >=0 <=60) -> bool total
+  stay(nights: nights, member: true).long
+
+# the nights within the rule's range, or none
+fn within(v: number?) -> number?  range >=0 <=60 total
+  match v
+    none => none
+    some y =>
+      if y < 0 or y > 60
+        none
+      else
+        y
+
+# what a call answers, given as it is
+fn long_within(v: number?) -> bool total
+  stay(nights: within(v: v), member: false).long
+
+# what a let holds
+fn counted_within(v: number?) -> number? total
+  let n = within(v: v)
+  stay(nights: n, member: true).counted
+
+# a field of a record
+fn long_stay(s: Stay) -> bool total
+  stay(nights: s.nights, member: s.member).long
+
+# none written out
+fn unknown(member: bool) -> number? total
+  stay(nights: none, member: member).counted
+
+# a number that is there, where the rule takes one that may be absent
+fn known(nights: number  range >=0 <=60) -> bool total
+  stay(nights: nights, member: true).long

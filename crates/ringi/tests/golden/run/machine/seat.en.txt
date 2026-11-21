@@ -1,0 +1,6 @@
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> middle (dept_head: e3101; accounting: one of e1001, e1002), due 2026-11-19 end of day
+2026-11-16 12:00  approve  by e3101  -> middle (accounting: one of e1001, e1002), due 2026-11-19 end of day
+2026-11-16 13:00  approve  by e1001  -> decide (e0101), due 2026-11-19 end of day
+2026-11-16 14:00  approve  by e0101  -> approved
+scenario `a_joint_stage_after_the_manager`: as written (5 rows)

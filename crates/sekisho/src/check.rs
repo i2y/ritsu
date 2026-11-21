@@ -34,7 +34,7 @@ impl Default for Options {
 /// the first path given that holds `.git` or `ritsu.mod`, else the directory of that file.
 pub fn root_of(root: Option<&Path>, first: &str) -> PathBuf {
     match root {
-        Some(r) => ritsu_base::paths::absolute(r),
+        Some(r) => ritsu_base::paths::opened(r),
         None => ritsu_base::paths::find_root(Path::new(first)),
     }
 }
@@ -78,6 +78,7 @@ impl Outcome {
 
 /// Check the text of `path`, with the languages `suite` joins.
 pub fn check_text(path: &str, src: &str, suite: &Suite, opts: &Options) -> Outcome {
+    ritsu_base::tally::count("sekisho", std::path::Path::new(path));
     let parsed = crate::parse::parse(path, src);
     let mut diags = parsed.diags;
     // a key in the file is in the repository whether the file reads or not (W901)
@@ -113,8 +114,8 @@ pub fn check_text(path: &str, src: &str, suite: &Suite, opts: &Options) -> Outco
 
 /// Check the file at `path`; Err when it cannot be read. It is read through ritsu-base's `fs`, the
 /// disk or the files a page in the browser holds (ritsu's DESIGN 4.15).
-pub fn check_file(path: &str, suite: &Suite, opts: &Options) -> Result<Outcome, String> {
-    let src = ritsu_base::fs::read_to_string(path).map_err(|e| e.to_string())?;
+pub fn check_file(path: &str, suite: &Suite, opts: &Options) -> Result<Outcome, std::io::Error> {
+    let src = ritsu_base::fs::read_to_string(path)?;
     Ok(check_text(path, &src, suite, opts))
 }
 
@@ -165,12 +166,12 @@ pub fn to_json(o: &Outcome, lang: Lang) -> Json {
 /// keeps each check for the questions asked of the gate after it.
 pub fn checked(root: &Path, files: &[String], suite: &Suite, lang: Lang) -> Vec<ritsu_ports::Checked> {
     let opts = Options { root: Some(root.to_path_buf()), ..Options::default() };
-    files.iter().map(|f| unit(root, f, check_file(f, suite, &opts).as_ref().map_err(|e| e.clone()), lang)).collect()
+    files.iter().map(|f| unit(root, f, check_file(f, suite, &opts).as_ref(), lang)).collect()
 }
 
 /// What `ritsu check` prints of one file (`f`, as the person gave it) that `check` came to, or
 /// could not read.
-pub fn unit(root: &Path, f: &str, checked: Result<&Outcome, String>, lang: Lang) -> ritsu_ports::Checked {
+pub fn unit(root: &Path, f: &str, checked: Result<&Outcome, &std::io::Error>, lang: Lang) -> ritsu_ports::Checked {
     use ritsu_ports::{Checked, Finding, Part, Verdict};
     match checked {
         Ok(o) => {
@@ -187,15 +188,12 @@ pub fn unit(root: &Path, f: &str, checked: Result<&Outcome, String>, lang: Lang)
             };
             Checked { label: f.to_string(), parts, verdict, json: to_json(o, lang) }
         }
-        Err(e) => {
-            let msg = tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}");
-            let head = if lang == Lang::Ja { "エラー" } else { "error" };
-            Checked::unchecked(f, format!("{head}: {}\n", msg.get(lang)))
-        }
+        // in the words every command of ritsu says it in
+        Err(e) => Checked::unchecked(f, format!("{}\n", ritsu_base::cli::refusal(ritsu_base::cli::cannot_read(f, e).get(lang), lang))),
     }
 }
 
 /// Shorthand for a test or a tool: the file at `path` with no other language joined.
 pub fn check(path: &str) -> Result<Outcome, String> {
-    check_file(path, &Suite::default(), &Options::default())
+    check_file(path, &Suite::default(), &Options::default()).map_err(|e| e.to_string())
 }

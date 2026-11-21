@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_unknown_attribute_under_a_workflow.gate:11:5: The resource `Claim` has no attribute `total`
+    11 |     total = amount
+  = The attributes there are `amount`.

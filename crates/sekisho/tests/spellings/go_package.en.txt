@@ -1,0 +1,5 @@
+warning[W402]: tests/spellings/go_package.gate:1:1: The file `select` is written `select` in the code of Go, a reserved word of the language
+     1 | gate select v1
+  = Go (`--target go`): the file `select` is written `select` as the name of its package, and `select` is a reserved word of Go: the package does not compile (`syntax error`).
+  = For a target you do not build, leave it as it is. For one you do, change its alias. The alias of the file also names the files, the module and the package the code is written to, so change what reads them with it.
+tests/spellings/go_package.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

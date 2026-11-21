@@ -1,0 +1,3 @@
+error[E308]: tests/mutants/E308_withdraw_until_a_stage_not_there.ringi:14:24: The route has no stage `counsel`
+    14 |   withdraw       until counsel
+  = The stages declared: `check`

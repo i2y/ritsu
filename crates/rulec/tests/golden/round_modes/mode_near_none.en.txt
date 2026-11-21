@@ -1,0 +1,8 @@
+error[E154]: There is no rounding mode `sideways`
+  --> tests/round_modes/mode_near_none.rule:8
+  |
+8 |   fee : money[USD]  round sideways(1USD)
+  |                     ^^^^^^^^^^^^^^^^^^^^ a rounding mode is one of `down`, `up`, `half_up`, `half_down` and `half_even`
+  |
+ `down` rounds toward zero and `up` away from it, onto a multiple of the grid; `half_up`, `half_down` and `half_even` round to the nearest multiple, and part only on an exact half, which goes away from zero, toward zero and to the even neighbour.
+

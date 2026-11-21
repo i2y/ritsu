@@ -1,0 +1,249 @@
+module clash v1
+description "Names of the generated code that would hide each other, moved aside by the generator: a function whose name a type or a constant has in Go, the module's own names that hide a builtin of a target (the functions len, BigInt, dataclass and _MODULE, the enums Map and Mapping, the fields int and str, the records Literal, Any and ReadonlyMap), the locals that hide one in their function (map, sorted, dataclasses, frozenset, dict, ord), the parameters and the locals that hide a name of the module in the function a host calls (_claim, o_x, _outside1), a field and a function named as a check is, the inner functions named as a function a host calls or one the code makes (_step, _outside1, _rank1, _cmp1, _key1, _module), the names the code imports a module as (mod_lib, Python's _dt, the module units in Go), the type of the kinds a function fails with (XFails), the parameters and the locals named as a type parameter (T, t), and the type parameters named as a function of the module or a word of TypeScript's types (V, bigint, never)"
+
+use module lib from "tests/modules/lib.kn"
+use module units from "tests/modules/units.kn"
+
+enum way = ab | cd
+
+# Go: the value's constant is WayAb, and the function moves aside (WayAbFn)
+fn way_ab(w: way) -> number
+  if w = way.ab then 1 else 2
+
+record Given
+  n : number  range >=0 <=9
+
+# Go: given_fn is GivenFn, and given, which the type Given moves aside, takes the next (GivenFn2)
+fn given(g: Given) -> number
+  g.n + 1
+
+fn given_fn(n: number range >=0 <=9) -> number
+  n * 2
+
+# Python: a function len hides the builtin the code counts with
+fn len(xs: list[number] count <=3 range >=0 <=9) -> number
+  xs.count()
+
+# TypeScript: a function BigInt hides the global the code makes a whole number with
+fn BigInt(xs: list[string] count <=3) -> number
+  xs.count()
+
+# Python: a function dataclass hides the decorator of the module's classes
+fn dataclass(n: number range >=0 <=9) -> number
+  n + 1
+
+# Python and Rust: a function _MODULE has the name of the constant of the module's name, and its
+# parameter, which a host gives by its name, too
+fn _MODULE(_MODULE: number range >=0 <=9) -> number
+  _MODULE + 1
+
+# TypeScript: an enum Map hides the global the code makes a dict with (merged, below)
+enum Map = one | two
+
+# Python: an enum Mapping hides the type of typing a dict's annotation names
+enum Mapping = left | right
+
+fn stock_of(stock: dict[string, number] count <=3 range >=0 <=9, sku: string count <=3) -> number
+  match stock.get(sku)
+    none => 0
+    some q => q
+
+# Python: the fields int and str hide the builtins in their class's annotations
+record Form
+  int : number  range >=0 <=9
+  str : string  count <=3
+
+fn form_size(f: Form) -> number
+  f.int + f.str.count()
+
+# Python: a local hides a builtin in its whole function, which the code reaches past it
+fn shifted(s: string count <=3, by: number range >=0 <=2) -> string?
+  let map = by
+  s.code_points().map(c => c + map).to_text()
+
+fn top(xs: list[number] count <=3 range >=0 <=9) -> list[number]
+  let sorted = xs.sort()
+  sorted
+
+record Item
+  qty : number  range >=0 <=9
+
+fn bumped(i: Item) -> Item
+  let dataclasses = min(i.qty + 1, 9)
+  Item { ..i, qty: dataclasses }
+
+fn as_set(xs: list[number] count <=3 range >=0 <=9) -> set[number]
+  let frozenset = xs.count()
+  xs.map(x => x + frozenset).to_set()
+
+fn merged(a: dict[string, number] count <=2 range >=0 <=9, b: dict[string, number] count <=2 range >=0 <=9) -> dict[string, number]
+  let dict = 1
+  a.merge_with(b, (x, y) => x + y + dict)
+
+# Python: a parameter a host gives by its name hides the module's names in the function a host calls
+fn claim(_claim: number range >=0 <=9) -> number
+  _claim + 1
+
+fn entry_names(x: number range >=1 <=9, o_x: number range >=1 <=9) -> number
+  x + o_x
+
+fn helper_named(_outside1: number range >=0 <=9) -> number
+  _outside1 + 1
+
+# Go: a field kaname_outside has the name of its type's check (KanameOutside), which moves aside
+record Probe
+  kaname_outside : number  range >=0 <=9
+
+fn probe(p: Probe) -> number
+  p.kaname_outside
+
+# Go and Rust: a function check_claim has the name of claim's check, which moves aside
+fn check_claim(n: number range >=0 <=9) -> number
+  n + 3
+
+# Every target: the inner function step is written _step, the name of the function _step a host
+# calls, and takes the next number
+fn _step(n: number range >=0 <=8) -> number
+  step(n: n)
+
+private fn step(n: number range >=0 <=8) -> number
+  n + 1
+
+# Every target: the inner function outside1 is written _outside1, the name the first check of what a
+# host gives would take. TypeScript, Python and Go: the inner functions rank1, cmp1 and key1 are
+# written _rank1, _cmp1 and _key1, the names the order of an enum's values and the order of a record
+# (by_job, below; Python's is a key) would take first. The checks and the orders take the next number
+private fn outside1(n: number range >=0 <=9) -> number
+  n + 1
+
+fn shown(n: number range >=0 <=9) -> number
+  outside1(n: n)
+
+enum lvl = low < mid < high
+
+private fn rank1(a: lvl) -> bool
+  a = lvl.low
+
+fn lower(a: lvl, b: lvl) -> bool
+  rank1(a: a) or a < b
+
+record Job
+  pri : number  range >=0 <=9
+
+private fn cmp1(n: number range >=0 <=9) -> number
+  n
+
+private fn key1(n: number range >=0 <=9) -> number
+  n
+
+fn by_pri(js: list[Job] count <=3) -> list[Job]
+  js.sort_by(j => cmp1(n: j.pri) + key1(n: j.pri))
+
+fn by_job(js: list[Job] count <=3) -> list[Job]
+  js.sort_by(j => j)
+
+# TypeScript and Go: the inner function module is written _module, the name of the constant of the
+# module's name, which moves aside
+private fn module(n: number range >=0 <=9) -> number
+  n * 2
+
+fn doubled(n: number range >=0 <=9) -> number
+  module(n: n)
+
+# TypeScript and Python: a function mod_lib has the name the code imports the module lib as (Python's
+# inner function _mod_lib), which moves aside
+fn mod_lib(a: lib.size, b: lib.size) -> lib.size
+  lib.bigger(a: a, b: b)
+
+# Python: the inner function dt is written _dt, the name the code imports the module of dates as,
+# which moves aside
+private fn dt(d: date) -> date
+  d
+
+fn day_of(d: date range >=2026-01-01 <=2026-12-31) -> date
+  dt(d: d)
+
+# Go: the module units has the name of the package of units the code imports, and takes units2
+fn priced(n: number range >=0 <=9, m: money[JPY] range >=0JPY <=9JPY) -> money[JPY]
+  m * units.three(n: n)
+
+# TypeScript and Python: a record XFails has the name of the type of the kinds the function x fails
+# with, which moves aside
+record XFails
+  a : bool
+
+fn x(f: XFails) -> number
+  if f.a then 1 else 2
+
+# Python and Go: a parameter and a local named as a type parameter (T, t) move aside in the code of
+# the function, where a type names the type parameter
+fn wrap[T](T: T) -> list[T]
+  let xs : list[T] = []
+  xs.append(T)
+
+fn same_t[t](t: t) -> t
+  t
+
+fn loc[t](x: t) -> t
+  let t = x
+  t
+
+fn wrapped(n: number range >=0 <=9) -> list[number]
+  wrap(T: same_t(t: loc(x: n)))
+
+# Python: the type parameter V has the name of the function V, which the declaration of the type
+# parameter would hide, and moves aside (V_; TypeScript's V_ and Go's V2 too)
+fn V(n: number range >=0 <=9) -> number
+  n
+
+fn same_v[V](x: V) -> V
+  x
+
+fn v_of(n: number range >=0 <=9) -> number
+  V(n: same_v(x: n))
+
+# TypeScript: the type parameters bigint and never are words of TypeScript's types, which move aside
+fn keep[bigint](x: bigint) -> bigint
+  x
+
+fn keep_never[never](x: never) -> never
+  x
+
+fn kept(n: number range >=0 <=9) -> number
+  keep(x: keep_never(x: n))
+
+# Python: a record Literal has the name of typing's Literal, and TypeScript: a record ReadonlyMap has
+# the name of the type of a dict; the code reaches both past them
+record Literal
+  a : bool
+
+record ReadonlyMap
+  b : bool
+
+fn flags(l: Literal, r: ReadonlyMap) -> bool
+  l.a and r.b
+
+# Python: a record Any has the name of typing's Any, which the order of a record (by_job, above) and
+# the order a generic function is given name; the code reaches it past the record
+record Any
+  v : number  range >=0 <=9
+
+fn any_v(a: Any) -> number
+  a.v
+
+fn least[T: key](xs: list[T] count <=3) -> T?
+  xs.sort().first()
+
+fn least_lvl(xs: list[lvl] count <=3) -> lvl?
+  least(xs: xs)
+
+# Python: a local ord hides the builtin the code takes a string's code points with
+fn points(s: string count <=3) -> list[number]
+  let ord = 1
+  s.code_points().append(ord)
+
+# TypeScript, Python and Rust: a local _outside1 has the name of the first check of what a host gives,
+# which takes the next number
+fn with_local(n: number range >=0 <=9, m: number range >=0 <=9) -> number
+  let _outside1 = m
+  n + _outside1

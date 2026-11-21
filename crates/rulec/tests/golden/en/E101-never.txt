@@ -4,9 +4,16 @@ error[E101]: Completeness gap: some input matches no row
 13 | table handling
    |       ^^^^^^^^ the input space is not fully covered
    |
+ No row matches these 2 parts of the input:
+   has_fragile = true, none_fragile = true
+   has_fragile = false, none_fragile = false
  An input that matches no row: has_fragile = true, none_fragile = true
  This combination never comes out of the definitions (`has_fragile` is `any order.lines where fragile = true`, `none_fragile` is `all order.lines where fragile = false`).
  A row is still asked for because a call that does not read through `from` reaches it: the code generated for NumPy, Rust, Go, Swift, Java, SQL and Wasm does not read `from`, and takes whatever the caller worked out.
- hint: a combination that does not happen comes out of the tables with this line, and no row: `never has_fragile = true, none_fragile = true`
- hint: add a row that matches this input.
- The shape of the row to add: `| true | true | 5USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
+ hint: the combinations that do not happen come out of the tables with these lines, and no rows:
+   never has_fragile = true, none_fragile = true
+   never has_fragile = false, none_fragile = false
+ hint: add these rows, with what each answers written in place of `?`:
+   | true | true | ? |
+   | false | false | ? |
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.

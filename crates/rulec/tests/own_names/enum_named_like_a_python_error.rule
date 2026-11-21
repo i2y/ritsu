@@ -1,0 +1,16 @@
+rule fee_by_slot v1
+description "An enum named like an error Python raises, which the stubs the service of Connect reads name its field by"
+
+enum value_error = late | missing
+
+inputs
+  problem : value_error
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_problem
+policy unique
+| problem | -> fee |
+| late    | 5USD   |
+| missing | 9USD   |

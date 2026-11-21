@@ -1,0 +1,4 @@
+error[E116]: example.kn:5:12: The parameter `t` of `kept`, a function a host calls, takes a transfer of a book (ledger.capture.do)
+     5 | fn kept(t: ledger.capture.do) -> ledger.capture.do
+  = The value is one another language works out and makes: a rule's answer keeps the ranges the rule shows and the steps it rounds to, and a transfer is checked as it is built. The entry of the function cannot make those promises again of a value a host puts together.
+  = Call the rule inside the function; or take what the host gives in a record of your own with its ranges written; or, if no host calls the function, make it `private`.

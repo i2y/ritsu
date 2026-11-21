@@ -1,0 +1,10 @@
+警告[W121]: `begin` は、Ruby の生成コードでは使えません
+  --> tests/own_names/beginという列挙の値.rule:4
+  |
+4 | enum 段階(step) = 始め(begin) | 途中(middle) | 終わり(finish)
+  |                   ^^^^ 列挙の値の別名
+  |
+ Ruby: 列挙の値は大文字の名前の定数になり、`begin` は `BEGIN` になります。`BEGIN` は予約語で、定数の名前にならないので、生成したモジュールは組めません。
+ 使わない生成先なら、このままで構いません。使うなら、別名を変えてください。
+
+ok tests/own_names/beginという列挙の値.rule

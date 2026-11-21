@@ -1,0 +1,45 @@
+rule 贈り物のかご(gift_basket_ja) v1
+description "贈り物のかごの送料が無料になるか、カードを入れるか。かごには包装した品が一つ以上あり、金額は 500 円以上になる。包装した品が無いかご、500 円に届かないかごは、明細を読み終えたところで受け付けない。10 万円を超えるかごと同じ扱いである。空のかごは、数が 0、金額が 0 円になる"
+
+# かごの明細の一件ぶん。呼び出し側は 5 件まで渡す
+elements 明細(lines)
+  価格(price)   : money[円]  range >=0円 <=50000円
+  包装(wrapped) : bool
+
+count 包装した品(wrapped_items) over 明細 where 包装  range >=1 <=5
+sum 金額(amount) over 明細 of 価格  range >=500円 <=100000円
+
+outputs
+  送料無料(free_shipping) : bool
+  カード(card)            : bool
+
+table 送料(shipping)
+policy unique
+| 金額     | -> 送料無料 |
+| <5000円  | false       |
+| >=5000円 | true        |
+
+table カードの判定(card_of)
+policy unique
+| 包装した品 | -> カード |
+| 1          | false     |
+| >=2        | true      |
+
+examples
+| 明細 | -> 送料無料 | カード |
+| 最小 | false       | false  |
+| 五件 | true        | true   |
+
+# かごのいちばん小さい形。包装した品が一つ、500 円
+sequence 最小(one_small)
+| 価格  | 包装 |
+| 500円 | true |
+
+# いちばん大きい形。五件、10 万円
+sequence 五件(five_lines)
+| 価格    | 包装  |
+| 20000円 | true  |
+| 20000円 | true  |
+| 20000円 | false |
+| 20000円 | false |
+| 20000円 | false |

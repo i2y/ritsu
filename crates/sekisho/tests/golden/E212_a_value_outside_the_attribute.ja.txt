@@ -1,0 +1,5 @@
+エラー[E212]: tests/mutants/E212_a_value_outside_the_attribute.gate:11:1: フローの `amount` は、属性 `amount` の範囲（1JPY〜5000JPY）の外になりえます
+    11 |     amount = amount
+  = 例：`amount` が 10_000JPY のとき。
+  = フローの 30 行目の `pay_claim` の呼び出しに、そういう値が届きます。
+  = フローの値がとりうるものを属性の範囲の中に狭めるか（フローの入力やレコードのフィールドの `range`）、属性の範囲を広げてください。

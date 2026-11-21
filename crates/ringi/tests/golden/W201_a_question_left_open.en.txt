@@ -1,0 +1,6 @@
+warning[W201]: tests/mutants/W201_a_question_left_open.ringi:8:45: Whether the field note may be asked for while it is hidden cannot be settled
+     8 |   note   : attachment "Note"  required when spread > 15 and spread < 17  shown when asked >= 4 or left >= 4
+  = Whether there is a request where `required when` holds and `shown when` does not, rulec could not settle. This can happen when the two conditions read a computed value and a value the computation reads, one each.
+  = If both conditions can be written over the same value (the value the computation reads, instead of the computed value), rewrite them so.
+ok tests/mutants/W201_a_question_left_open.ringi: a request, 4 fields, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered

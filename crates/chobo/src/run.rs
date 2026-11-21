@@ -9,8 +9,8 @@
 use crate::check;
 use crate::codes;
 use crate::diag::{self, Show};
-use ritsu_base::cli::{Cmd, Flag, Misuse, Reading, Table, flag, help_flag, lang_flag};
-use ritsu_base::text::Lang;
+use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag, made_lang_flag};
+use ritsu_base::text::{Lang, Text};
 use crate::render;
 use crate::scenario;
 use crate::target::{BOOKS, Backend, LANGS, Lang as Language, RENAMED, Target};
@@ -40,7 +40,7 @@ fn commands() -> Vec<Cmd> {
         Cmd {
             name: "check",
             usage: Some("chobo check <file.book>... [--format json] [--diff-base <rev>]"),
-            args: "",
+            args: "<file.book>...",
             purpose: tr!(
                 "帳簿を検査する。書き方の誤り、呼ぶと分かること（そうなる例つき）、使われない宣言と効かない境界。そのあと、振替の種類と操作ごとに拒否されうる理由を並べる",
                 "check a book: how it is written, what only shows when it is called (with the operations that get there), what is never used and what never matters; then list what each operation of each transfer can be refused with"
@@ -61,7 +61,7 @@ fn commands() -> Vec<Cmd> {
         Cmd {
             name: "run",
             usage: Some("chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle|mysql] [--format json]"),
-            args: "",
+            args: "<file.book>",
             purpose: tr!(
                 "シナリオを参照インタプリタで流し、操作ごとの結果と、終わりの残高と仮押さえを出す。together があれば、とりうる結果を全部出す",
                 "run a scenario in the reference interpreter, and print what each operation answered and the balances and holds at the end; with together, every way it can come out"
@@ -91,7 +91,7 @@ fn commands() -> Vec<Cmd> {
         Cmd {
             name: "scenarios",
             usage: Some("chobo scenarios <file.book> [--out <dir>]"),
-            args: "",
+            args: "<file.book>",
             purpose: tr!(
                 "帳簿からシナリオを作る。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、移動の途中での拒否、二つの呼び出し元の取り合い",
                 "write scenarios for a book: each bound just before, at and past it, each key used twice, every way a hold ends, a refusal partway through the moves, and two callers after the last of something"
@@ -105,7 +105,7 @@ fn commands() -> Vec<Cmd> {
         Cmd {
             name: "gen",
             usage: Some("chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]"),
-            args: "",
+            args: "<file.book>",
             purpose: tr!(
                 "帳簿を、指定した言語のコードにする。SQL は PostgreSQL のスキーマと関数か MySQL の系統のテーブル、TypeScript・Python・Go・Rust は `--books` のデータベース（PostgreSQL、TigerBeetle、MySQL の系統）を呼ぶクライアント",
                 "build the book into the code of each language given: SQL is PostgreSQL's schema and functions or the MySQL family's tables, and TypeScript, Python, Go and Rust are clients that call the database of `--books` (PostgreSQL, TigerBeetle or the MySQL family)"
@@ -160,7 +160,7 @@ fn commands() -> Vec<Cmd> {
         Cmd {
             name: "doc",
             usage: Some("chobo doc <file.book> [--format html] [--out <dir>]"),
-            args: "",
+            args: "<file.book>",
             purpose: tr!(
                 "帳簿を、経理や運用の人が読むページにする。勘定と境界、勘定のあいだの流れの図、振替ごとの移動とキーと拒否されうる理由（そうなる例つき）、仮押さえのライフサイクルの図、シナリオとステップごとの残高",
                 "write the book as a page for the people who keep the accounts and run the operations: the accounts and their bounds, a chart of how things move between them, each transfer's moves, key and what it can be refused with (with the operations that get there), the life of a hold as a chart, and the scenarios with the balances after each step"
@@ -169,6 +169,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--format", Some("html"), tr!("Mermaid の図を入れた Markdown の代わりに、一つの HTML を書く（図は chobo が描き、シナリオを一つずつ進めて見られる）", "write one HTML page instead of Markdown with Mermaid charts (chobo draws the charts, and a scenario can be stepped through)")).choices(&["html"]),
                 flag("--out", Some("<dir>"), tr!("<ファイル名>.md か <ファイル名>.html を書く先のディレクトリ。無ければ標準出力に出す", "the directory to write <file>.md or <file>.html into; without it, standard output")),
+                made_lang_flag("CHOBO_LANG"),
             ],
             exits: vec![(0, tr!("書いた", "written")), (1, tr!("帳簿にエラーがある", "the book has errors")), (2, usage_exit.clone())],
             examples: vec!["chobo doc inventory.book > inventory.md", "chobo doc inventory.book --format html --out site/ --lang ja"],
@@ -177,7 +178,7 @@ fn commands() -> Vec<Cmd> {
         Cmd {
             name: "api",
             usage: Some("chobo api <file.book>"),
-            args: "",
+            args: "<file.book>",
             purpose: tr!(
                 "呼び方、操作ごとに拒否されうる理由、仮押さえのステートマシン、ID の決め方を JSON で出す（dandori のようなツールが読む）",
                 "print how to call the book, what each operation can be refused with, the life of a hold as a state machine, and how IDs are made, as JSON (for tools such as dandori)"
@@ -190,16 +191,16 @@ fn commands() -> Vec<Cmd> {
         },
         Cmd {
             name: "explain",
-            usage: Some("chobo explain <code> | --all [--format markdown]"),
-            args: "",
+            usage: Some("chobo explain <code>... | --all [--format markdown|json]"),
+            args: "<code>... | --all",
             purpose: tr!(
                 "診断のコードを説明する。いつ出るか、どう直すか、最小の再現",
-                "explain a diagnostic code: when it appears, how to fix it, and the smallest book that shows it"
+                "explain diagnostic codes: when each appears, how to fix it, and the smallest book that shows it"
             ),
-            params: vec![("<code>", tr!("E020 のようなコード", "a code such as E020"))],
+            params: vec![("<code>...", tr!("E020 のようなコード。いくつでも渡せて、渡した順に説明する。`--all` とは一緒に渡さない", "codes such as E020, any number, explained in the order given; not given with `--all`"))],
             flags: vec![
                 flag("--all", None, tr!("全部のコードを出す", "every code")),
-                flag("--format", Some("markdown"), tr!("Markdown で出す", "print Markdown")).choices(&["markdown"]),
+                flag("--format", Some("markdown|json"), tr!("Markdown か JSON で出す", "print Markdown or JSON")).choices(&["markdown", "json"]),
             ],
             exits: vec![(0, tr!("出せた", "printed")), (2, tr!("知らないコード、使い方の誤り", "a code chobo does not have, or a mistake in how the command is called"))],
             examples: vec!["chobo explain E020", "chobo explain --all --format markdown --lang ja"],
@@ -231,8 +232,9 @@ fn top_help(lang: Lang) -> String {
     o.push_str(&format!("chobo — {}\n\n", t.summary.get(lang)));
     o.push_str(tr!("使い方:\n", "Usage:\n").get(lang));
     let cmds = &t.commands;
+    // the commands named the way the person ran this one: `ritsu chobo check …` through `ritsu`
     for c in cmds {
-        o.push_str(&format!("  {}\n", t.usage_line(c)));
+        o.push_str(&format!("  {}\n", ritsu_base::cli::as_run(&t.usage_line(c))));
     }
     o.push_str(tr!("\nコマンド:\n", "\nCommands:\n").get(lang));
     let w = cmds.iter().map(|c| c.name.len()).max().unwrap_or(0);
@@ -244,9 +246,10 @@ fn top_help(lang: Lang) -> String {
         o.push_str(&format!("  {:14} {}\n", f.spelled(), f.help.get(lang)));
     }
     o.push_str(&format!("  {:14} {}\n", "--version", tr!("バージョンを出す", "print the version").get(lang)));
+    let run = ritsu_base::cli::command_name("chobo");
     o.push_str(tr!(
-        "\nコマンドごとの説明は `chobo <コマンド> --help`。\n終了コード: 0 問題なし（警告だけ）/ 1 エラー / 2 使い方の誤り、読めないファイル\n",
-        "\nFor one command: `chobo <command> --help`.\nExit codes: 0 no errors (warnings only) / 1 errors / 2 a mistake in how chobo is called, or a file it cannot read\n"
+        "\nコマンドごとの説明は `{run} <コマンド> --help`。\n終了コード: 0 問題なし（警告だけ）/ 1 エラー / 2 使い方の誤り、読めないファイル\n",
+        "\nFor one command: `{run} <command> --help`.\nExit codes: 0 no errors (warnings only) / 1 errors / 2 a mistake in how chobo is called, or a file it cannot read\n"
     )
     .get(lang));
     o
@@ -254,13 +257,15 @@ fn top_help(lang: Lang) -> String {
 
 fn cmd_help(c: &Cmd, lang: Lang) -> String {
     let t = table();
-    let mut o = format!("{}\n\n{}\n", t.usage_line(c), c.purpose.get(lang));
+    let mut o = format!("{}\n\n{}\n", ritsu_base::cli::as_run(&t.usage_line(c)), c.purpose.get(lang));
     o.push_str(tr!("\n引数:\n", "\nArguments:\n").get(lang));
     for (p, h) in &c.params {
         o.push_str(&format!("  {:16} {}\n", p, h.get(lang)));
     }
     o.push_str(tr!("\nフラグ:\n", "\nFlags:\n").get(lang));
-    for f in c.flags.iter().chain(t.globals.iter()) {
+    // a flag every command takes, which the command takes in a form of its own (the `--lang` of
+    // `doc`, which writes what others keep), is said once, as its own (as ritsu-base's `help_cmd`)
+    for f in c.flags.iter().chain(t.globals.iter().filter(|g| !c.flags.iter().any(|f| f.name == g.name))) {
         let mut h = f.help.get(lang).to_string();
         if let Some(d) = &f.default {
             h.push_str(&tr!("（既定: {d}）", " (default: {d})").get(lang).to_string());
@@ -276,7 +281,7 @@ fn cmd_help(c: &Cmd, lang: Lang) -> String {
     }
     o.push_str(tr!("\n例:\n", "\nExamples:\n").get(lang));
     for e in &c.examples {
-        o.push_str(&format!("  {e}\n"));
+        o.push_str(&format!("  {}\n", ritsu_base::cli::as_run_of("chobo", e)));
     }
     if !c.codes.is_empty() {
         o.push_str(&format!("{}{}\n", tr!("\n出しうる診断: ", "\nDiagnostics it can print: ").get(lang), c.codes.join(" ")));
@@ -294,6 +299,12 @@ struct Args {
 }
 
 impl Args {
+    /// The language of what the command writes for others to keep (a page): `--lang`, else English,
+    /// whatever the environment says (ritsu's DESIGN 4.1); `lang` is what the run prints.
+    fn made(&self) -> Lang {
+        Lang::made(self.flags.get("--lang").and_then(|v| v.as_deref()))
+    }
+
     fn all(&self, flag: &str) -> Vec<&str> {
         self.all.iter().filter(|(k, _)| k == flag).map(|(_, v)| v.as_str()).collect()
     }
@@ -303,6 +314,18 @@ impl Args {
 enum Parsed {
     Run(Args),
     Print(String, u8, bool),
+    /// What stops the line, said in the words of every command of ritsu ([`refuse`]).
+    Stop(Text, Lang),
+}
+
+/// What stops the command, as every command of ritsu says it (ritsu's DESIGN 6.2, item 10), and 2.
+fn refuse(msg: Text, lang: Lang) -> u8 {
+    ritsu_base::cli::refuse(&mut std::io::stderr(), &msg, lang)
+}
+
+/// What stops a command given other books than it takes, or none: what it takes, and its usage line.
+fn usage(a: &Args) -> u8 {
+    refuse(table().takes_of(&a.cmd), a.lang)
 }
 
 fn parse(argv: Vec<String>) -> Parsed {
@@ -327,7 +350,10 @@ fn parse(argv: Vec<String>) -> Parsed {
     let until = rest.iter().position(|x| x == "--help" || x == "-h").unwrap_or(rest.len());
     let got = match t.read(c, &rest[..until]) {
         Ok(g) => g,
-        Err(m) => return Parsed::Print(format!("{}: {}", stop_head(lang), misuse(&m, &cmd, c, lang)), 2, true),
+        Err(m) => {
+            let names: Vec<&str> = c.flags.iter().chain(t.globals.iter()).map(|f| f.name).collect();
+            return Parsed::Stop(m.text_among(&ritsu_base::cli::command_name("chobo"), &cmd, &names), lang);
+        }
     };
     if until < rest.len() {
         return Parsed::Print(cmd_help(c, lang), 0, false);
@@ -341,10 +367,6 @@ fn parse(argv: Vec<String>) -> Parsed {
     Parsed::Run(a)
 }
 
-/// The head of a line that stops a command, as every language's command writes it (DESIGN 19).
-fn stop_head(lang: Lang) -> &'static str {
-    if lang == Lang::Ja { "エラー" } else { "error" }
-}
 
 /// `chobo help [<command>]`: the page of the command named, or of them all, as dandori and sakai
 /// read it; `--lang` is not the command named.
@@ -372,37 +394,22 @@ fn help_of(words: &[String], lang: Lang) -> Parsed {
 /// A word that is no command of chobo's: the verb up to 0.40.0 is not read as the new one (ritsu's
 /// DESIGN 9.6), and says it.
 fn no_command(cmd: &str, lang: Lang) -> Parsed {
-    let head = stop_head(lang);
     if cmd == "build" {
-        return Parsed::Print(format!("{head}: {}\n", ritsu_base::cli::renamed("chobo build", "chobo gen", "0.41.0").get(lang)), 2, true);
+        return Parsed::Stop(ritsu_base::cli::renamed("chobo build", "chobo gen", "0.41.0"), lang);
     }
-    let msg = tr!("知らないコマンド `{cmd}` です\n\n", "unknown command `{cmd}`\n\n");
-    Parsed::Print(format!("{head}: {}{}", msg.get(lang), top_help(lang)), 2, true)
-}
-
-/// What stopped a command line, in chobo's words; a flag it does not know is followed by the
-/// command's help.
-fn misuse(m: &Misuse, cmd: &str, c: &Cmd, lang: Lang) -> String {
-    match m {
-        Misuse::UnknownFlag(x) => tr!("`chobo {cmd}` に `{x}` というフラグはありません\n\n", "`chobo {cmd}` has no flag `{x}`\n\n").get(lang).to_string() + &cmd_help(c, lang),
-        Misuse::TakesNoValue { flag, value } => {
-            let x = format!("{flag}={value}");
-            tr!("`chobo {cmd}` に `{x}` というフラグはありません\n\n", "`chobo {cmd}` has no flag `{x}`\n\n").get(lang).to_string() + &cmd_help(c, lang)
-        }
-        Misuse::Twice(x) => tr!("`{x}` が二度あります\n", "`{x}` is given twice\n").get(lang).to_string(),
-        Misuse::SameTwice { flag: x, value: v } => tr!("`{x} {v}` が二度あります\n", "`{x} {v}` is given twice\n").get(lang).to_string(),
-        Misuse::Renamed { .. } => format!("{}\n", m.text("chobo", cmd).get(lang)),
-        Misuse::NotAChoice { flag: x, value: v, choices } => {
-            let ch = choices.join(", ");
-            tr!("`{x}` に渡せるのは {ch} です（`{v}` ではなく）\n", "`{x}` takes {ch}, not `{v}`\n").get(lang).to_string()
-        }
-        Misuse::MissingValue { flag: x, placeholder: ph } => tr!("`{x}` には値 {ph} が要ります\n", "`{x}` needs a value: {ph}\n").get(lang).to_string(),
-    }
+    Parsed::Stop(ritsu_base::cli::no_command("chobo", cmd), lang)
 }
 
 /// The `chobo` command, on `argv` (the words after the program's name), printing to standard
-/// output and standard error: the exit code.
+/// output and standard error: the exit code. A line that asks for JSON is answered in JSON when the
+/// command stops before its work too (ritsu's DESIGN 6.2, item 10): `check` puts `error` in its
+/// document, and every other command writes `{"error": …}` as the last value on standard output.
 pub fn run(argv: Vec<String>) -> ExitCode {
+    let line = argv.clone();
+    ritsu_base::cli::answering(&line, &mut std::io::stdout(), |_| run_line(argv))
+}
+
+fn run_line(argv: Vec<String>) -> ExitCode {
     let a = match parse(argv) {
         Parsed::Run(a) => a,
         Parsed::Print(text, code, to_err) => {
@@ -413,12 +420,32 @@ pub fn run(argv: Vec<String>) -> ExitCode {
             }
             return ExitCode::from(code);
         }
+        Parsed::Stop(t, lang) => return ExitCode::from(refuse(t, lang)),
     };
     // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN 17.6)
     if let Err(t) = ritsu_base::modules::given_all(&a.positional) {
-        let head = if a.lang == Lang::Ja { "エラー" } else { "error" };
-        eprintln!("{head}: {}", t.get(a.lang));
-        return ExitCode::from(2);
+        return ExitCode::from(refuse(t, a.lang));
+    }
+    // the paths the run holds are written the way the first path given was (ritsu's DESIGN 4.15),
+    // and so are the books given: `./stock.book` and `x/../stock.book` are `stock.book` (6.2 item
+    // 8); the code `explain` takes is no path
+    let _way = ritsu_base::paths::run_from(a.positional.first().filter(|_| a.cmd != "explain").map_or(".", String::as_str));
+    let mut a = a;
+    if a.cmd != "explain" {
+        for p in &mut a.positional {
+            *p = ritsu_base::paths::show_given(p);
+        }
+    }
+    // and so are the paths the flags take: `--out ./generated` is `generated`
+    for flag in ["--out", "--scenario"] {
+        if let Some(Some(v)) = a.flags.get_mut(flag) {
+            *v = ritsu_base::paths::fold_given(v);
+        }
+    }
+    for (k, v) in &mut a.all {
+        if k == "--out" || k == "--scenario" {
+            *v = ritsu_base::paths::fold_given(v);
+        }
     }
     let code = match a.cmd.as_str() {
         "check" => cmd_check(&a),
@@ -433,14 +460,6 @@ pub fn run(argv: Vec<String>) -> ExitCode {
     ExitCode::from(code)
 }
 
-fn usage(a: &Args) -> u8 {
-    let t = table();
-    if let Some(c) = t.command(&a.cmd) {
-        eprintln!("{}", t.usage_line(c));
-    }
-    2
-}
-
 fn one_book(a: &Args) -> Option<PathBuf> {
     match a.positional.as_slice() {
         [f] => Some(PathBuf::from(f)),
@@ -453,10 +472,7 @@ fn one_book(a: &Args) -> Option<PathBuf> {
 fn load(path: &Path, lang: Lang) -> Result<(String, crate::model::Book, check::Checked), u8> {
     let (src, c) = match check::check_file(path) {
         Ok(x) => x,
-        Err(e) => {
-            eprintln!("{}: {e}", stop_head(lang));
-            return Err(2);
-        }
+        Err(e) => return Err(refuse(ritsu_base::cli::cannot_read(&path.display().to_string(), &e), lang)),
     };
     let file = path.display().to_string();
     for d in &c.diags {
@@ -485,8 +501,7 @@ fn cmd_check(a: &Args) -> u8 {
         let (src, mut c) = match check::check_file(path) {
             Ok(x) => x,
             Err(e) => {
-                eprintln!("{}: {e}", stop_head(a.lang));
-                worst = 2;
+                worst = refuse(ritsu_base::cli::cannot_read(f, &e), a.lang);
                 continue;
             }
         };
@@ -503,10 +518,7 @@ fn cmd_check(a: &Args) -> u8 {
                     }
                     note = n;
                 }
-                Err(e) => {
-                    eprintln!("{}: {}", stop_head(a.lang), e.get(a.lang));
-                    return 2;
-                }
+                Err(e) => return refuse(e, a.lang),
             }
         }
         if diag::has_errors(&c.diags) {
@@ -528,7 +540,13 @@ fn cmd_check(a: &Args) -> u8 {
     if json_out {
         // 2: the diagnostics have ritsu's keys (`col`, `message`, `fix`) since chobo moved onto
         // ritsu-base; 1 had `v`, `column` and `title` in each (DESIGN 8.1)
-        println!("{}", serde_json::to_string_pretty(&json!({"v": 2, "files": files})).unwrap());
+        let mut doc = json!({"v": 2, "files": files});
+        // a book it could not read: the document says so as every command's JSON does (ritsu's
+        // DESIGN 6.2, item 10), beside the books it read
+        if let Some(said) = ritsu_base::cli::take_refusal() {
+            doc["error"] = json!({"code": 2, "message": said});
+        }
+        println!("{}", serde_json::to_string_pretty(&doc).unwrap());
     }
     worst
 }
@@ -536,19 +554,15 @@ fn cmd_check(a: &Args) -> u8 {
 fn cmd_run(a: &Args) -> u8 {
     let Some(path) = one_book(a) else { return usage(a) };
     let Some(Some(sc)) = a.flags.get("--scenario") else {
-        eprintln!("{}: {}", stop_head(a.lang), tr!("`--scenario <file.json>` が要ります", "`--scenario <file.json>` is required").get(a.lang));
-        return 2;
+        return refuse(table().needs_of("run", "--scenario <file.json>"), a.lang);
     };
     let (_, book, _) = match load(&path, a.lang) {
         Ok(x) => x,
         Err(c) => return c,
     };
-    let v: Value = match ritsu_base::fs::read_to_string(sc).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string())) {
+    let v: Value = match ritsu_base::fs::read_to_string(sc).map_err(|e| ritsu_base::cli::cannot_read(sc, &e)).and_then(|t| serde_json::from_str(&t).map_err(|e| ritsu_base::cli::not_json(sc, &e.to_string()))) {
         Ok(v) => v,
-        Err(e) => {
-            eprintln!("{}: {sc}: {e}", stop_head(a.lang));
-            return 2;
-        }
+        Err(e) => return refuse(e, a.lang),
     };
     let list: Vec<Value> = match v {
         Value::Array(xs) => xs,
@@ -559,19 +573,21 @@ fn cmd_run(a: &Args) -> u8 {
     let mut outs = Vec::new();
     let mut text = String::new();
     for (i, x) in list.iter().enumerate() {
+        // what is wrong with a scenario, after the file and, of a list of them, which one
+        let wrong = |e: Text| match list.len() > 1 {
+            true => {
+                let n = i + 1;
+                tr!("`{sc}`: シナリオ {n}: {}", "`{sc}`: scenario {n}: {}", e.ja; e.en)
+            }
+            false => tr!("`{sc}`: {}", "`{sc}`: {}", e.ja; e.en),
+        };
         let s = match scenario::from_json(&book, x) {
             Ok(s) => s,
-            Err(e) => {
-                eprintln!("{}: {sc}: {}{e}", stop_head(a.lang), if list.len() > 1 { format!("scenario {}: ", i + 1) } else { String::new() });
-                return 2;
-            }
+            Err(e) => return refuse(wrong(e), a.lang),
         };
         let runs = match scenario::run(&book, &s) {
             Ok(r) => r,
-            Err(e) => {
-                eprintln!("{}: {sc}: {e}", stop_head(a.lang));
-                return 2;
-            }
+            Err(e) => return refuse(wrong(e), a.lang),
         };
         if let Some(target) = &show {
             if a.flags.contains_key("--format") {
@@ -593,10 +609,7 @@ fn cmd_run(a: &Args) -> u8 {
         if a.flags.contains_key("--format") {
             match scenario::run_json(&book, &s) {
                 Ok(r) => outs.push(r),
-                Err(e) => {
-                    eprintln!("{}: {sc}: {e}", stop_head(a.lang));
-                    return 2;
-                }
+                Err(e) => return refuse(wrong(e), a.lang),
             }
         } else {
             text.push_str(&scenario::render(&book, &file, &s, &runs, a.lang));
@@ -621,15 +634,13 @@ fn cmd_scenarios(a: &Args) -> u8 {
     match a.flags.get("--out").cloned().flatten() {
         Some(dir) => {
             let dir = PathBuf::from(dir);
-            if let Err(e) = std::fs::create_dir_all(&dir) {
-                eprintln!("{}: {}: {e}", stop_head(a.lang), dir.display());
-                return 2;
+            if let Err(e) = ritsu_base::fs::create_dir_all(&dir) {
+                return refuse(ritsu_base::cli::cannot_create(&dir.display().to_string(), &e), a.lang);
             }
             for (i, s) in list.iter().enumerate() {
                 let p = dir.join(format!("{:03}.json", i + 1));
-                if let Err(e) = std::fs::write(&p, serde_json::to_string_pretty(s).unwrap() + "\n") {
-                    eprintln!("{}: {}: {e}", stop_head(a.lang), p.display());
-                    return 2;
+                if let Err(e) = ritsu_base::fs::write(&p, serde_json::to_string_pretty(s).unwrap() + "\n") {
+                    return refuse(ritsu_base::cli::cannot_write(&p.display().to_string(), &e), a.lang);
                 }
             }
             let (n, d) = (list.len(), dir.display());
@@ -645,15 +656,9 @@ fn cmd_scenarios(a: &Args) -> u8 {
 /// the book stops the run, and nothing is written.
 fn cmd_gen(a: &Args) -> u8 {
     let Some(path) = one_book(a) else { return usage(a) };
-    let head = if a.lang == Lang::Ja { "エラー" } else { "error" };
     let given = a.all("--target");
     if given.is_empty() {
-        let msg = tr!(
-            "`chobo gen` には `--target sql|typescript|python|go|rust` が一つ以上要ります。どのデータベースのためのものかは `--books postgres|tigerbeetle|mysql` で指定します（無ければ postgres）",
-            "`chobo gen` needs one or more `--target sql|typescript|python|go|rust`; `--books postgres|tigerbeetle|mysql` says which database they are for (postgres if it is not given)"
-        );
-        eprintln!("{head}: {}", msg.get(a.lang));
-        return 2;
+        return refuse(table().needs_of("gen", "--target sql|typescript|python|go|rust"), a.lang);
     }
     let books = Backend::parse(a.flags.get("--books").cloned().flatten().as_deref().unwrap_or("postgres")).expect("the choices of --books are the databases");
     // in the order of the languages, not of the flags
@@ -667,8 +672,7 @@ fn cmd_gen(a: &Args) -> u8 {
                     "`--books tigerbeetle` には `--target sql` がありません。TigerBeetle は SQL を受け取りません。クライアントは `--target typescript|python|go|rust` で書きます",
                     "there is no `--target sql` for `--books tigerbeetle`: TigerBeetle takes no SQL; its clients are `--target typescript|python|go|rust`"
                 );
-                eprintln!("{head}: {}", msg.get(a.lang));
-                return 2;
+                return refuse(msg, a.lang);
             }
         }
     }
@@ -726,9 +730,13 @@ fn cmd_gen(a: &Args) -> u8 {
         return u8::from(differs);
     }
     for (p, text) in &planned {
-        if let Err(e) = p.parent().map(std::fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| std::fs::write(p, text)) {
-            eprintln!("{}: {}: {e}", stop_head(a.lang), p.display());
-            return 2;
+        if let Some(dir) = p.parent()
+            && let Err(e) = ritsu_base::fs::create_dir_all(dir)
+        {
+            return refuse(ritsu_base::cli::cannot_create(&dir.display().to_string(), &e), a.lang);
+        }
+        if let Err(e) = ritsu_base::fs::write(p, text) {
+            return refuse(ritsu_base::cli::cannot_write(&p.display().to_string(), &e), a.lang);
         }
         let shown = p.display();
         eprintln!("{}", tr!("{shown} を書きました", "wrote {shown}").get(a.lang));
@@ -744,16 +752,20 @@ fn cmd_doc(a: &Args) -> u8 {
     };
     let rep = c.report.unwrap_or_else(|| check::report(&book));
     let file = path.display().to_string();
-    let input = crate::doc::Input { book: &book, file: &file, src: &src, diags: &c.diags, report: &rep, lang: a.lang };
+    let input = crate::doc::Input { book: &book, file: &file, src: &src, diags: &c.diags, report: &rep, lang: a.made() };
     let html = a.flags.contains_key("--format");
     let page = if html { crate::doc::html(&input) } else { crate::doc::markdown(&input) };
     match a.flags.get("--out").cloned().flatten() {
         Some(dir) => {
             let stem = path.file_name().map(|f| f.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
             let p = PathBuf::from(dir).join(format!("{stem}.{}", if html { "html" } else { "md" }));
-            if let Err(e) = p.parent().map(std::fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| std::fs::write(&p, &page)) {
-                eprintln!("{}: {}: {e}", stop_head(a.lang), p.display());
-                return 2;
+            if let Some(dir) = p.parent()
+                && let Err(e) = ritsu_base::fs::create_dir_all(dir)
+            {
+                return refuse(ritsu_base::cli::cannot_create(&dir.display().to_string(), &e), a.lang);
+            }
+            if let Err(e) = ritsu_base::fs::write(&p, &page) {
+                return refuse(ritsu_base::cli::cannot_write(&p.display().to_string(), &e), a.lang);
             }
             let shown = p.display();
             eprintln!("{}", tr!("{shown} を書きました", "wrote {shown}").get(a.lang));
@@ -776,23 +788,31 @@ fn cmd_api(a: &Args) -> u8 {
 }
 
 fn cmd_explain(a: &Args) -> u8 {
-    let md = a.flags.contains_key("--format");
+    let format = a.flags.get("--format").cloned().flatten();
+    let (md, json) = (format.as_deref() == Some("markdown"), format.as_deref() == Some("json"));
     if a.flags.contains_key("--all") {
         if !a.positional.is_empty() {
             return usage(a);
         }
-        print!("{}", if md { codes::markdown_all(a.lang) } else { codes::text_all(a.lang) });
+        print!("{}", if json { codes::json_of(&codes::ledger(), true, a.lang) } else if md { codes::markdown_all(a.lang) } else { codes::text_all(a.lang) });
         return 0;
     }
-    let [code] = a.positional.as_slice() else { return usage(a) };
-    match codes::find(code) {
-        Some(e) => {
-            print!("{}", if md { codes::render_markdown(&e, a.lang) } else { codes::render_text(&e, a.lang) });
-            0
-        }
-        None => {
-            eprintln!("{}: {}", stop_head(a.lang), tr!("`{code}` というコードはありません。一覧は `chobo explain --all` で出ます", "there is no code `{code}`; `chobo explain --all` lists them").get(a.lang));
-            2
-        }
+    if a.positional.is_empty() {
+        return usage(a);
     }
+    // every code it does not have, named in one sentence before anything is printed
+    let unknown: Vec<String> = a.positional.iter().filter(|c| codes::find(c).is_none()).cloned().collect();
+    if !unknown.is_empty() {
+        return refuse(ritsu_base::cli::no_codes("chobo", &unknown), a.lang);
+    }
+    // one code as it is written alone; several in the order given, as `--all` writes every code
+    // (in Markdown, each code's section without the page's head)
+    let entries: Vec<codes::Entry> = a.positional.iter().filter_map(|c| codes::find(c)).collect();
+    if json {
+        print!("{}", codes::json_of(&entries, false, a.lang));
+        return 0;
+    }
+    let shown: Vec<String> = entries.iter().map(|e| if md { codes::render_markdown(e, a.lang) } else { codes::render_text(e, a.lang) }).collect();
+    print!("{}", shown.join("\n"));
+    0
 }

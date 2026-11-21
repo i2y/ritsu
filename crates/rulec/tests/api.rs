@@ -24,6 +24,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
         .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
+        .args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] })
         .output()
         .expect("rulec を起動できない");
     (

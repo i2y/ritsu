@@ -1,0 +1,5 @@
+警告[W402]: tests/spellings/Pythonのモジュール.gate:1:1: ファイル `class` は、Python のコードで `class` と書かれ、その言語の予約語です
+     1 | gate 等級(class) v1
+  = Python（`--target python`）: ファイル `class` をモジュールの名前として `class` と書きますが、`class` は Python の予約語です。`import` でモジュール（`authz/class.py`）を読めず、`ritsu gen` がパッケージに書く `__init__.py` の `from . import class as class` も読み込めません（`SyntaxError`）。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。ファイルの別名は、生成するファイルとモジュールとパッケージの名前でもあるので、それを読むコードも合わせて直してください。
+tests/spellings/Pythonのモジュール.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

@@ -61,6 +61,8 @@ pub struct Checked {
 }
 
 fn sorted(mut ds: Vec<Diag>) -> Vec<Diag> {
+    // a name written in a file and declared nowhere is said once in the file (ritsu's DESIGN 8.3)
+    ritsu_base::diag::once(&mut ds);
     ds.sort_by(|a, b| (&a.file, a.line, a.col).cmp(&(&b.file, b.line, b.col)));
     ds
 }
@@ -184,6 +186,7 @@ pub fn check_map(root: &Path, map: &str) -> Result<Outcome, Text> {
 
 /// [`check_map`], reading what the other languages hold through the ports `suite` joins.
 pub fn check_map_with(root: &Path, map: &str, suite: &crate::suite::Suite) -> Result<Outcome, Text> {
+    ritsu_base::tally::count("sakai", &ritsu_base::paths::on_disk(root, map));
     crate::contracts::forget();
     let out = check_map_once(root, map, suite);
     crate::contracts::forget();
@@ -222,7 +225,8 @@ fn check_map_once(root: &Path, map: &str, suite: &crate::suite::Suite) -> Result
     let (el, d3) = elements::resolve(&m, &ps, &cs, &arts, &read);
     diags.extend(sorted(d3));
     // 4. The patterns.
-    diags.extend(sorted(patterns::check(&m, &ps, &cs, &arts, &read, crates.as_ref())));
+    let (d4, doubt) = patterns::check(&m, &ps, &cs, &arts, &read, crates.as_ref());
+    diags.extend(sorted(d4));
     // 5. The crossings.
     let mut crossings = refs::proto_crossings(&ps, &arts);
     crossings.extend(refs::contract_crossings(&cs, &arts));
@@ -232,7 +236,7 @@ fn check_map_once(root: &Path, map: &str, suite: &crate::suite::Suite) -> Result
     crossings.extend(more);
     let mut d5 = d5;
     d5.extend(d5c);
-    d5.extend(refs::check(&m, &mut crossings, &read, &cs, &arts));
+    d5.extend(refs::check(&m, &mut crossings, &read, &cs, &arts, &doubt));
     d5.extend(refs::implements(&m, &arts, &read));
     diags.extend(sorted(d5));
     // 6. The mappings and the glossaries.
@@ -288,21 +292,13 @@ pub fn check_args_with(root: &Path, args: &[String], suite: &crate::suite::Suite
         if ritsu_base::fs::is_dir(&disk) {
             let files = ctx_files(root, a);
             if files.is_empty() {
-                let sa = shown(a);
-                return Err(if sa == "." {
-                    tr!("このディレクトリの下に .ctx のファイルがありません", "there is no .ctx file under this directory")
-                } else {
-                    tr!("{sa} の下に .ctx のファイルがありません", "there is no .ctx file under {sa}")
-                });
+                return Err(ritsu_base::cli::no_files_under(&shown(a), &[".ctx"]));
             }
             let mut maps = Vec::new();
             let mut contexts = Vec::new();
             let mut neither = Vec::new();
             for f in &files {
-                let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(root, f)).map_err(|e| {
-                    let (e, sf) = (e.to_string(), shown(f));
-                    tr!("{sf} を読めません: {e}", "{sf} cannot be read: {e}")
-                })?;
+                let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(root, f)).map_err(|e| ritsu_base::cli::cannot_read(&shown(f), &e))?;
                 match crate::parse::kind_of(&src) {
                     Some("map") => maps.push(f.clone()),
                     Some(_) => contexts.push((f.clone(), src)),
@@ -339,10 +335,7 @@ pub fn check_args_with(root: &Path, args: &[String], suite: &crate::suite::Suite
             }
         } else {
             let sa = shown(a);
-            let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| {
-                let e = e.to_string();
-                tr!("{sa} を読めません: {e}", "{sa} cannot be read: {e}")
-            })?;
+            let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| ritsu_base::cli::cannot_read(&sa, &e))?;
             match crate::parse::kind_of(&src) {
                 Some("map") => out.push(check_map_with(root, a, suite)?),
                 Some(_) => return Err(tr!("{sa} は context のファイルです。map のファイルかディレクトリを渡してください", "{sa} is a context file; give a map file, or a directory")),

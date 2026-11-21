@@ -2,7 +2,7 @@
 
 Pays a refund out of what is left of the order
 
-`examples/refund_request/refund_request.flow` を `dandori doc` で描いたものです。入力は `amount: money[USDc] range >=1 <=1000000`・`reason: string`・`balance: Balance`、出力は `paid: bool` です。`amount`: 出どころ: `openapi "specs/refunds.json" schema RefundCreate property amount`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。`reason`: 出どころ: `openapi "specs/refunds.json" schema RefundCreate property reason`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。`Balance.left`: 出どころ: `chobo "books/refunds.book" account remaining`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。
+`examples/refund_request/refund_request.flow` を `dandori doc` で描いたものです。入力は `amount: money[USDc] range >=1USDc <=1_000_000USDc`・`reason: string`・`balance: Balance`、出力は `paid: bool` です。`amount`: 出どころ: `openapi "specs/refunds.json" schema RefundCreate property amount`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。`reason`: 出どころ: `openapi "specs/refunds.json" schema RefundCreate property reason`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。`Balance.left`: 出どころ: `chobo "books/refunds.book" account remaining`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。
 
 ## flow
 

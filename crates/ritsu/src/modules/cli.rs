@@ -4,7 +4,7 @@
 //! stage fills its function and touches neither the table nor how a command line is read.
 
 use super::{Ctx, diff, edit, fetch, list, lock, push, registry, report, site, vendor};
-use ritsu_base::cli::{Args, Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
+use ritsu_base::cli::{Args, Cmd, Flag, Reading, Table, flag, help_flag, lang_flag, made_lang_flag};
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
 
@@ -299,7 +299,7 @@ pub fn commands() -> Vec<Cmd> {
             ),
             vec![],
             vec![
-                flag("--base", Some("<revision>"), tr!("比べる前の git の版（要る）", "the git revision to compare with (required)")),
+                flag("--base", Some("<revision>"), tr!("比べる前の git の版（要る）", "the git revision to compare with (required)")).needed(),
                 flag("--head", Some("<revision>"), tr!("比べるあとの git の版。無ければ作業ツリー", "the git revision compared; else the working tree")),
                 format_markdown(),
                 flag("--fail-on-change", None, tr!("振る舞いに違いが見つかったときも 1 で終わる", "exit 1 when a difference is shown in behavior too")),
@@ -321,6 +321,7 @@ pub fn commands() -> Vec<Cmd> {
                 flag("--out", Some("<dir>"), tr!("サイトを書く先（要る）", "where the site goes (required)")),
                 flag("--playground", Some("<URL>"), tr!("ブラウザで試すページの URL", "the URL of the page that runs ritsu in the browser")),
                 flag("--alternate", Some("<lang>=<path>"), tr!("同じサイトのほかの言語の版（このサイトのルートからのパス）", "the same site in another language, by the path from this site's root")),
+                made_lang_flag("RITSU_LANG"),
             ],
             vec![
                 (0, tr!("書いた", "written")),
@@ -407,10 +408,9 @@ fn lang_in(args: &[String]) -> Option<String> {
     args.iter().enumerate().find_map(|(i, x)| if x == "--lang" { args.get(i + 1).cloned() } else { x.strip_prefix("--lang=").map(str::to_string) })
 }
 
+/// What stops the command, as every command of the toolchain says it (DESIGN 6.2, item 10), and 2.
 fn refuse(t: Text, lang: Lang) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    eprintln!("{head}: {}", t.get(lang));
-    2
+    ritsu_base::cli::refuse(&mut std::io::stderr(), &t, lang)
 }
 
 /// `ritsu mod <command> …`, on the words after `mod`: the exit code.
@@ -438,7 +438,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         eprint!("{}", table.help_all(lang));
         return 2;
     };
-    let no_command = |c: &str| refuse(tr!("`{c}` というコマンドはありません。`ritsu mod --help` を読んでください", "there is no command `{c}`; run `ritsu mod --help`"), lang);
+    let no_command = |c: &str| refuse(ritsu_base::cli::no_command("ritsu mod", c), lang);
     match first.as_str() {
         "--help" | "-h" => {
             print!("{}", table.help_all(lang));
@@ -470,9 +470,16 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
             }
             let (least, most) = arity(cmd.name);
             if a.pos.len() < least || a.pos.len() > most {
-                eprintln!("{}", table.usage_line(cmd));
-                return 2;
+                return refuse(table.takes(cmd), lang);
             }
+            // the list `site` reads, the directory it writes and the locks `clean` keeps, as the run
+            // holds a path a flag takes (DESIGN 4.15): `--out ./site` is `site`. The source of `add`
+            // is a directory by its `./` (17.19), and is kept as written.
+            let mut a = a;
+            if cmd.name == "site" {
+                a.pos[0] = ritsu_base::paths::fold_given(&a.pos[0]);
+            }
+            a.fold_paths(&["--out", "--keep"]);
             let ctx = Ctx { command: cmd.name, lang, format: a.get("--format").unwrap_or("text").to_string(), root_flag: a.get("--root").map(str::to_string) };
             run(&ctx, &a)
         }

@@ -1,0 +1,362 @@
+request expense v1 "Expense, approved once at the last stage"
+description "An expense one person may come to answer at two or more stages (fictional rules): `same approver approves once, at the last stage`, where a stage waits for a later one, where it is done with the approval given there, and where it is started after all"
+
+use organization org from "../../examples/shared/company.ringi"
+use masters m from "../../examples/shared/masters.ringi"
+use calendar office from "../../examples/shared/office.cal"
+use flow precheck_agent from "precheck.flow"
+
+form
+  what   : text "What"  count >=1 <=100
+  shape  : choice "Shape of the route"
+    plain   "Manager, head of department, head of division"
+    between "Accounting between the manager and the head of department"
+    joint   "The manager and accounting together, then the head of department"
+    later   "The manager, then the head of department and accounting together"
+    agent   "An agent between the manager and the head of department"
+    three   "The manager, the head of department, accounting, then the head of department again"
+    voted   "The manager, every director, then the president"
+    owned   "The manager, accounting, then the owner of a system"
+    short   "The manager, accounting, then the head of division"
+    seats   "The manager, the head of department, then both together"
+    gone    "The manager, accounting, then the head of department where there is one"
+    twice   "The manager, accounting, the head of department, then the head of department again"
+    both    "The manager and the head of department together, accounting, then each of the two again"
+  system : choice from m.systems "System"  optional
+
+route
+| shape   | -> first               | middle       | second                   | decide        |
+| plain   | manager                |              | dept_head                | division_head |
+| between | manager                | accounting   | dept_head                | division_head |
+| joint   | manager and accounting |              | dept_head                | division_head |
+| later   | manager                |              | dept_head and accounting | division_head |
+| agent   | manager                | check        | dept_head                | division_head |
+| three   | manager                | dept_head    | accounting               | chief         |
+| voted   | manager                | all of board |                          | president     |
+| owned   | manager                | accounting   | system_owner             | division_head |
+| short   | manager                | accounting   |                          | division_head |
+| seats   | manager                | dept_head    | manager_too and chief    | division_head |
+| gone    | manager                | accounting   | dept_head                |               |
+| twice   | manager                | accounting   | dept_head                | chief         |
+| both    | manager and dept_head  | accounting   | manager_too              | chief         |
+
+who
+  manager       = manager of requester
+  manager_too   = manager of requester
+  dept_head     = head of requester.department
+  chief         = nearest dept_head above requester
+  division_head = nearest division_head above requester
+  president     = nearest president above requester
+  accounting    = team accounting
+  board         = team board
+  system_owner  = lookup m.systems.owner by system
+  check         = agent precheck_agent, else manager
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval     not allowed
+  same approver     approves once, at the last stage
+  send back         to any earlier stage, at most 2 times
+  resubmit          within 3 business days
+  withdraw          until first
+  retract approval  until the next stage answers
+  pause             at most 5 business days
+  approvers edit    shape, system
+
+# the head of the department is the manager's manager too: the first stage waits for the second,
+# and one approval there does both
+scenario one_answer_at_the_later_of_two_stages
+  requester e1101
+  form what = "A projector", shape = plain
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | second   | in progress |
+| 2026-11-16 11:00 | approve | e3101 | decide   | in progress |
+| 2026-11-16 12:00 | approve | e0101 |          | approved    |
+
+# accounting answers between the two: the head of the department answers after it, once
+scenario one_answer_after_the_stage_between
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | approve | e1001 | second   | in progress |
+| 2026-11-16 12:00 | approve | e3101 | decide   | in progress |
+| 2026-11-16 13:00 | approve | e0101 |          | approved    |
+
+# three stages come to the head of the department: the first two wait for the last
+scenario three_stages_one_answer_at_the_last
+  requester e1101
+  form what = "A projector", shape = three
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | second   | in progress |
+| 2026-11-16 11:00 | approve | e1002 | decide   | in progress |
+| 2026-11-16 12:00 | approve | e3101 |          | approved    |
+
+# every director answers the stage between, the president among them: they answer it there, and
+# the first stage, which is theirs alone, is still done at the last
+scenario a_stage_between_that_takes_their_answer_too
+  requester e0101
+  form what = "A projector", shape = voted
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e0101 | middle   | in progress |
+| 2026-11-16 11:00 | approve | e0001 | middle   | in progress |
+| 2026-11-16 11:10 | approve | e0201 | middle   | in progress |
+| 2026-11-16 11:20 | approve | e0202 | middle   | in progress |
+| 2026-11-16 11:30 | approve | e0203 | middle   | in progress |
+| 2026-11-16 11:40 | approve | e0204 | decide   | in progress |
+| 2026-11-16 12:00 | approve | e0001 |          | approved    |
+
+# a joint stage: the manager's part waits for the later stage, and accounting's is answered there
+scenario one_part_of_a_joint_stage_waits
+  requester e1101
+  form what = "A projector", shape = joint
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | first    | in progress |
+| 2026-11-16 11:00 | approve | e1002 | second   | in progress |
+| 2026-11-16 12:00 | approve | e3101 | decide   | in progress |
+
+# the later stage is a joint one: the approval of the head of the department there does the first
+scenario waits_for_a_part_of_a_joint_stage
+  requester e1101
+  form what = "A projector", shape = later
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | second   | in progress |
+| 2026-11-16 11:00 | approve | e3101 | second   | in progress |
+| 2026-11-16 12:00 | approve | e1001 | decide   | in progress |
+
+# an agent's stage is waited for by nobody: the first stage waits for the second, past it
+scenario past_an_agent
+  requester e1101
+  form what = "A projector", shape = agent
+| at               | event                       | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                      | e1101 | middle   | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: ok) |       | second   | in progress |
+| 2026-11-16 12:00 | approve                     | e3101 | decide   | in progress |
+
+# the agent doubts: the manager answers its stage, and the later one too
+scenario the_agent_doubts
+  requester e1101
+  form what = "A projector", shape = agent
+| at               | event                                                 | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                | e1101 | middle   | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: doubt, reason: "No receipt")  |       | middle   | in progress |
+| 2026-11-16 11:00 | approve                                               | e3101 | second   | in progress |
+| 2026-11-16 12:00 | approve                                               | e3101 | decide   | in progress |
+
+# rejected at the later stage: the ticket ends, the first stage never answered
+scenario rejected_at_the_later_stage
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | approve | e1001 | second   | in progress |
+| 2026-11-16 12:00 | reject  | e3101 |          | rejected    |
+
+# sent back to the requester from the later stage, and made again: the first stage waits again
+scenario made_again_after_the_later_stage_sent_it_back
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event     | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit    | e1101 | middle   | in progress    |
+| 2026-11-16 11:00 | approve   | e1001 | second   | in progress    |
+| 2026-11-16 12:00 | send back | e3101 |          | with requester |
+| 2026-11-17 10:00 | resubmit  | e1101 | middle   | in progress    |
+| 2026-11-17 11:00 | approve   | e1001 | second   | in progress    |
+| 2026-11-17 12:00 | approve   | e3101 | decide   | in progress    |
+
+# sent back to the stage that waited: it is answered there this time, and the later stage again
+scenario sent_back_to_the_stage_that_waited
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event                | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit               | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | approve              | e1001 | second   | in progress |
+| 2026-11-16 12:00 | approve              | e3101 | decide   | in progress |
+| 2026-11-16 13:00 | send back(to: first) | e0101 | first    | in progress |
+| 2026-11-16 14:00 | approve              | e3101 | middle   | in progress |
+| 2026-11-16 15:00 | approve              | e1001 | second   | in progress |
+| 2026-11-16 16:00 | approve              | e3101 | decide   | in progress |
+
+# sent back to the stage between: the approval the first stage was done with is gone, and it
+# waits for the later stage again
+scenario sent_back_to_the_stage_between
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event                 | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | approve               | e1001 | second   | in progress |
+| 2026-11-16 12:00 | approve               | e3101 | decide   | in progress |
+| 2026-11-16 13:00 | send back(to: middle) | e0101 | middle   | in progress |
+| 2026-11-16 15:00 | approve               | e1001 | second   | in progress |
+| 2026-11-16 16:00 | approve               | e3101 | decide   | in progress |
+
+# the approval at the later stage taken back: the stage it did waits again
+scenario taken_back_with_the_stage_it_did
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | approve | e1001 | second   | in progress |
+| 2026-11-16 12:00 | approve | e3101 | decide   | in progress |
+| 2026-11-16 13:00 | retract | e3101 | second   | in progress |
+| 2026-11-16 14:00 | approve | e3101 | decide   | in progress |
+
+# paused at the later stage by the one both stages wait for, and resumed
+scenario paused_at_the_later_stage
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | approve | e1001 | second   | in progress |
+| 2026-11-17 10:00 | pause   | e3101 | second   | paused      |
+| 2026-11-18 10:00 | resume  | e3101 | second   | in progress |
+| 2026-11-18 11:00 | approve | e3101 | decide   | in progress |
+
+# `withdraw until first`: the first stage waits, and has not answered while the ticket is at the
+# stage between
+scenario withdrawn_while_the_stage_waits
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event    | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit   | e1101 | middle   | in progress    |
+| 2026-11-16 11:00 | approve  | e1001 | second   | in progress    |
+| 2026-11-16 12:00 | withdraw | e1101 |          | with requester |
+
+# the later stage is late and goes up: the one it went up to approves it, and the stage that
+# waited starts then, with a deadline of its own
+scenario late_and_approved_where_it_went_up_to
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | approve | e1001 | second   | in progress |
+| 2026-11-18 09:00 | remind  |       | second   | in progress |
+| 2026-11-20 00:00 | late    |       | second   | in progress |
+| 2026-11-20 10:00 | approve | e0101 | first    | in progress |
+| 2026-11-20 11:00 | approve | e3101 | decide   | in progress |
+| 2026-11-20 12:00 | approve | e0101 |          | approved    |
+
+# the later stage handed over to another: their approval is not the one the first stage waits for
+scenario handed_over_at_the_later_stage
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event                                                 | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | approve                                               | e1001 | second   | in progress |
+| 2026-11-16 12:00 | hand over(from: person "e3101", to: person "e0102")   |       | second   | in progress |
+| 2026-11-16 13:00 | approve                                               | e0102 | first    | in progress |
+| 2026-11-16 14:00 | approve                                               | e3101 | decide   | in progress |
+
+# an approver added at the later stage answers it: the first stage starts then
+scenario an_added_approver_answers_the_later_stage
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event                                  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                 | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | approve                                | e1001 | second   | in progress |
+| 2026-11-16 12:00 | add approver(approver: person "e0102") |       | second   | in progress |
+| 2026-11-16 13:00 | approve                                | e0102 | first    | in progress |
+| 2026-11-16 14:00 | approve                                | e3101 | decide   | in progress |
+
+# an approver is added at the later stage, and the one both stages wait for answers it all the same
+scenario an_approver_is_added_and_the_one_who_waited_answers
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event                                  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                 | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | approve                                | e1001 | second   | in progress |
+| 2026-11-16 12:00 | add approver(approver: person "e0102") |       | second   | in progress |
+| 2026-11-16 13:00 | approve                                | e3101 | decide   | in progress |
+
+# an approver's edit takes the later stage off the route: the stage that waited starts then
+scenario the_later_stage_leaves_the_route
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event              | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit             | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | edit(shape: short) | e1001 | middle   | in progress |
+| 2026-11-16 12:00 | approve            | e1001 | first    | in progress |
+| 2026-11-16 13:00 | approve            | e3101 | decide   | in progress |
+
+# an approver's edit gives the later stage to another: the stage that waited starts before it
+scenario the_later_stage_comes_to_another
+  requester e1101
+  form what = "A projector", shape = owned, system = crm
+| at               | event              | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit             | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | edit(system: wiki) | e1001 | middle   | in progress |
+| 2026-11-16 12:00 | approve            | e1001 | first    | in progress |
+| 2026-11-16 13:00 | approve            | e3101 | second   | in progress |
+| 2026-11-16 14:00 | approve            | e7001 | decide   | in progress |
+
+# two ways of one stage wait, each for a later stage of its own: each is done where its approver
+# answers
+scenario two_ways_wait_for_two_stages
+  requester e1201
+  form what = "A projector", shape = both
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | middle   | in progress |
+| 2026-11-16 11:00 | approve | e1001 | second   | in progress |
+| 2026-11-16 12:00 | approve | e1101 | decide   | in progress |
+| 2026-11-16 13:00 | approve | e3101 |          | approved    |
+
+# the stage one of the two ways waits for is answered by another: that way starts then, and the
+# other waits on, for its own stage, which comes after
+scenario one_of_two_ways_starts_and_the_other_waits_on
+  requester e1201
+  form what = "A projector", shape = both
+| at               | event                                                 | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                | e1201 | middle   | in progress |
+| 2026-11-16 11:00 | approve                                               | e1001 | second   | in progress |
+| 2026-11-16 12:00 | hand over(from: person "e1101", to: person "e0102")   |       | second   | in progress |
+| 2026-11-16 13:00 | approve                                               | e0102 | first    | in progress |
+| 2026-11-16 14:00 | approve                                               | e1101 | decide   | in progress |
+| 2026-11-16 15:00 | approve                                               | e3101 |          | approved    |
+
+# an approver's edit gives the stage that decides to the head of the department too: the later
+# stage waits for it, and the stage that waited for the later stage waits on with it
+scenario the_later_stage_waits_too
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event              | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit             | e1101 | middle   | in progress |
+| 2026-11-16 11:00 | edit(shape: twice) | e1001 | middle   | in progress |
+| 2026-11-16 12:00 | approve            | e1001 | decide   | in progress |
+| 2026-11-16 13:00 | approve            | e3101 |          | approved    |
+
+# the version of the organization changes while a stage waits: the head of the department is gone,
+# and both stages go up to the head of the division, who decides too. One answer does all three
+scenario the_organization_changes_while_a_stage_waits
+  requester e9002
+  form what = "A projector", shape = between
+| at               | event   | by    | -> stage | status      |
+| 2027-03-30 10:00 | submit  | e9002 | middle   | in progress |
+| 2027-04-01 09:00 | remind  |       | middle   | in progress |
+| 2027-04-01 11:00 | approve | e1001 | decide   | in progress |
+| 2027-04-01 12:00 | approve | e0102 |          | approved    |
+
+# a proxy answers the last stage for the head of the department: it is the head's approval, and
+# does the stage of theirs that waited
+scenario a_proxy_answers_the_later_stage
+  requester e1201
+  form what = "A projector", shape = three
+| at               | event   | by    | -> stage | status      |
+| 2026-12-28 10:00 | submit  | e1201 | first    | in progress |
+| 2026-12-28 11:00 | approve | e1101 | second   | in progress |
+| 2026-12-28 12:00 | approve | e1002 | decide   | in progress |
+| 2026-12-28 13:00 | approve | e1101 |          | approved    |
+
+# a proxy with a part of their own at the later stage, whose own earlier stage waited for it too:
+# the first answer is their own and does their stage, the second is for the one they stand in for
+scenario a_proxy_with_a_stage_of_their_own
+  requester e1201
+  form what = "A projector", shape = seats
+| at               | event   | by    | -> stage | status      |
+| 2026-12-28 10:00 | submit  | e1201 | second   | in progress |
+| 2026-12-28 11:00 | approve | e1101 | second   | in progress |
+| 2026-12-28 12:00 | approve | e1101 | decide   | in progress |

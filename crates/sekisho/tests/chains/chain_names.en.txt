@@ -1,0 +1,8 @@
+error[E101]: chain_names.gate:10:7: There is no action `refund_order`
+    10 |   can refund_order
+  = The actions there are `refund_ordr`.
+  = `refund_order` is written on line 32 too.
+error[E101]: chain_names.gate:14:9: There is no role `clerk`
+    14 |   roles clerk
+  = The roles there are `clrk`.
+  = `clerk` is written on line 31 too.

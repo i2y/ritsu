@@ -11,7 +11,7 @@
 use crate::check;
 use crate::commands::{self, RENAMED, TARGETS};
 use crate::diag::{self, Lang, Text};
-use ritsu_base::cli::{flag, help_flag, lang_flag, Cmd, Flag, Reading, Table};
+use ritsu_base::cli::{flag, help_flag, lang_flag, made_lang_flag, Cmd, Flag, Reading, Table};
 use ritsu_ports::Rules;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -34,9 +34,14 @@ fn diagnostics_format() -> Flag {
 }
 
 fn exits(done: ritsu_base::text::Text) -> Vec<(u8, ritsu_base::text::Text)> {
+    exits_with(done, tr!("エラーがある", "errors found"))
+}
+
+/// The same, with what 1 says.
+fn exits_with(done: ritsu_base::text::Text, one: ritsu_base::text::Text) -> Vec<(u8, ritsu_base::text::Text)> {
     vec![
         (0, done),
-        (1, tr!("エラーがある", "errors found")),
+        (1, one),
         (2, tr!("引数が正しくないか、ファイルが読めない。規則、日付のファイル、帳簿を使うフローを、それらを読めないこの dandori で走らせた（E018）", "bad arguments, or a file that cannot be read; a flow that uses rules, dates files or books, run with this dandori, which reads none of them (E018)")),
     ]
 }
@@ -94,7 +99,13 @@ pub fn commands() -> Vec<Cmd> {
                 flag("--target", Some("<target>"), tr!("呼び出しをどのターゲットの形で出すか", "the target whose calls the trace shows")).choices(RUN_TARGETS).default("reference").renamed(&RENAMED),
                 diagnostics_format(),
             ],
-            exits: exits(tr!("最後まで動いた", "the run went to its end")),
+            exits: exits_with(
+                tr!("最後まで動き、シナリオの結果を全部使った", "the run went to its end and took every answer of the scenario"),
+                tr!(
+                    "エラーがある。流れが途中で止まった（シナリオに結果が足りないなど）か、シナリオの結果を使い残した（流れは最後まで出す）",
+                    "errors found; or the run could not go on (the scenario ran out of answers, say), or did not take every answer of the scenario (the run is printed to its end)"
+                ),
+            ),
             examples: vec!["dandori run examples/hotel/temporal/hotel.flow --scenario scenarios/001.json --target temporal-typescript"],
             codes: vec![],
         },
@@ -127,6 +138,7 @@ pub fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--format", Some("html|md"), tr!("html は HTML のページ一枚。md は Markdown", "html is one HTML page; md is Markdown")).choices(&["html", "md"]).default("md"),
                 flag("--out", Some("<dir>"), tr!("そこに `<名前>.md` か `<名前>.html` を書く。無ければ標準出力に出す", "write `<name>.md` or `<name>.html` there; without it, on standard output")),
+                made_lang_flag("DANDORI_LANG"),
             ],
             exits: exits(tr!("ページを出した", "the page is out")),
             examples: vec!["dandori doc examples/hotel/temporal/hotel.flow --format html --out site"],
@@ -147,16 +159,16 @@ pub fn commands() -> Vec<Cmd> {
             codes: vec![],
         },
         Cmd {
-            usage: Some("dandori explain <CODE> | --all [--format markdown|json]"),
+            usage: Some("dandori explain <CODE>... | --all [--format markdown|json]"),
             name: "explain",
-            args: "<CODE>",
-            purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look a diagnostic code up: when it comes, how to fix it, the smallest example"),
-            params: vec![("<CODE>", tr!("`E014` のような診断のコード。`--all` なら要らない", "a diagnostic code such as `E014`; not needed with `--all`"))],
+            args: "<CODE>... | --all",
+            purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look diagnostic codes up: when each comes, how to fix it, the smallest example"),
+            params: vec![("<CODE>...", tr!("`E014` のような診断のコード。いくつでも渡せて、渡した順に出す。`--all` とは一緒に渡さない", "diagnostic codes such as `E014`, any number, printed in the order given; not given with `--all`"))],
             flags: vec![
                 flag("--all", None, tr!("全部のコードを出す", "print every code")),
                 flag("--format", Some("markdown|json"), tr!("Markdown か、ツール向けの JSON で出す", "print Markdown, or the machine-facing JSON")).choices(&["markdown", "json"]),
             ],
-            exits: vec![(0, tr!("引けた", "found")), (2, tr!("そのコードが無いか、引数の誤り", "no such code, or bad arguments"))],
+            exits: vec![(0, tr!("引けた", "found")), (2, tr!("無いコードがあるか、引数の誤り", "a code it does not have, or bad arguments"))],
             examples: vec!["dandori explain E014", "dandori explain --all --format markdown --lang ja"],
             codes: vec![],
         },
@@ -174,8 +186,8 @@ pub fn table() -> Table {
         commands: commands(),
         footer: vec![
             tr!(
-                "どのコマンドにも --lang ja|en を付けられます（既定は en。環境変数 DANDORI_LANG か RITSU_LANG でも指定できます）。",
-                "Every command takes --lang ja|en (default en; the DANDORI_LANG or RITSU_LANG environment variable works too)."
+                "どのコマンドにも --lang ja|en を付けられます（既定は en。環境変数 DANDORI_LANG か RITSU_LANG は出す文の言語を決め、doc が書くページは --lang だけで決まります）。",
+                "Every command takes --lang ja|en (default en; the DANDORI_LANG or RITSU_LANG environment variable sets the language of the text printed, and the page doc writes follows --lang alone)."
             ),
             tr!(
                 "規則、日付のファイル、帳簿（`use rule`、`use dates`、`use book`）を使うワークフローは、`ritsu dandori` で走らせてください。`ritsu dandori` は、それらを同じプロセスの中で読みます。",
@@ -196,6 +208,9 @@ struct Asked {
     format_json: bool,
     format_html: bool,
     lang: Lang,
+    /// The language of what the command writes for others to keep (a page): `--lang`, else English,
+    /// whatever the environment says (ritsu's DESIGN 4.1).
+    made: Lang,
     target: Option<String>,
     /// every `--target` of `gen`, as given
     targets: Vec<String>,
@@ -205,25 +220,30 @@ struct Asked {
 }
 
 impl Asked {
+    /// The command line read once the run's way of writing paths is set (ritsu's DESIGN 4.15): the
+    /// flows given, and the paths `--out` and `--scenario` take, as the run writes them, so that
+    /// `./order.flow` and `x/../order.flow` are `order.flow` (6.2 item 8), and `--out ./generated`
+    /// is `generated`.
     fn from(a: &Args, lang: Lang) -> Asked {
+        let held = |p: &str| PathBuf::from(ritsu_base::paths::fold_given(p));
         Asked {
-            files: a.pos.iter().map(PathBuf::from).collect(),
+            files: a.pos.iter().map(|p| PathBuf::from(ritsu_base::paths::show_given(p))).collect(),
             format_json: a.get("--format") == Some("json"),
             format_html: a.get("--format") == Some("html"),
             lang,
+            made: Lang::made(a.get("--lang")),
             target: a.get("--target").map(str::to_string),
             targets: a.all("--target").into_iter().map(str::to_string).collect(),
             check: a.has("--check"),
-            out: a.get("--out").map(PathBuf::from),
-            scenario: a.get("--scenario").map(PathBuf::from),
+            out: a.get("--out").map(held),
+            scenario: a.get("--scenario").map(held),
         }
     }
 }
 
+/// What stops the command, as every command of ritsu says it (ritsu's DESIGN 6.2, item 10), and 2.
 fn refuse(msg: Text, lang: Lang, err: &mut dyn Write) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    let _ = writeln!(err, "{head}: {}", msg.get(lang));
-    2
+    ritsu_base::cli::refuse(err, &msg, lang)
 }
 
 /// `--lang ja`, `--lang=ja`, anywhere on the line: decided before anything is printed.
@@ -298,7 +318,13 @@ pub fn run_with_ports(args: &[String], rules: Rc<dyn Rules>, dates: Rc<dyn ritsu
     code
 }
 
+/// A line that asks for JSON is answered in JSON when the command stops before its work too: the
+/// last value on standard output is `{"error": …}` (ritsu's DESIGN 6.2, item 10).
 fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    ritsu_base::cli::answering(args, out, |out| command(args, out, err))
+}
+
+fn command(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let lang = Lang::pick(lang_asked(args).as_deref(), "DANDORI_LANG");
     let table = table();
     let Some(first) = args.first() else {
@@ -338,7 +364,7 @@ fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
                         0
                     }
                     None if n == "build" => refuse(ritsu_base::cli::renamed("dandori build", "dandori gen", "0.41.0"), lang, err),
-                    None => refuse(tr!("`{n}` というコマンドはありません。`dandori --help` を読んでください", "there is no command `{n}`; run `dandori --help`"), lang, err),
+                    None => refuse(ritsu_base::cli::no_command("dandori", n), lang, err),
                 },
             };
         }
@@ -349,7 +375,7 @@ fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         if first == "build" {
             return refuse(ritsu_base::cli::renamed("dandori build", "dandori gen", "0.41.0"), lang, err);
         }
-        return refuse(tr!("`{first}` というコマンドはありません。`dandori --help` を読んでください", "there is no command `{first}`; run `dandori --help`"), lang, err);
+        return refuse(ritsu_base::cli::no_command("dandori", first), lang, err);
     };
     let parsed = match table.parse(cmd, &args[1..]) {
         Ok(a) => a,
@@ -363,6 +389,8 @@ fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if let Err(t) = ritsu_base::modules::given_all(&parsed.pos) {
         return refuse(t, lang, err);
     }
+    // the paths the run holds are written the way the first path given was (ritsu's DESIGN 4.15)
+    let _way = ritsu_base::paths::run_from(parsed.pos.first().map_or(".", String::as_str));
     let a = Asked::from(&parsed, lang);
     match cmd.name {
         "check" => cmd_check(&a, out, err),
@@ -376,13 +404,15 @@ fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     }
 }
 
-/// `dandori explain`: one code of the ledger (crate::codes), or every one, as text, Markdown or JSON.
+/// `dandori explain`: the codes of the ledger (crate::codes) given, in the order given, or every one,
+/// as text, Markdown or JSON.
 fn cmd_explain(a: &Args, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let ledger = crate::codes::ledger();
     let format = a.get("--format");
     if a.has("--all") {
+        // codes and `--all` are the two ways to call it, not one: what it takes
         if !a.pos.is_empty() {
-            return refuse(tr!("`--all` とコードは一緒に書けません", "`--all` takes no code"), lang, err);
+            return refuse(table().takes_of("explain"), lang, err);
         }
         match format {
             Some("markdown") => {
@@ -402,46 +432,45 @@ fn cmd_explain(a: &Args, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -
         }
         return 0;
     }
-    let [code] = a.pos.as_slice() else {
-        return refuse(tr!("`dandori explain <CODE>` か `dandori explain --all` と書いてください", "it is `dandori explain <CODE>` or `dandori explain --all`"), lang, err);
-    };
-    match ledger.find(code) {
-        Some(e) => {
-            match format {
-                Some("markdown") => {
-                    let _ = write!(out, "{}", ledger.render_markdown_one(e, lang));
-                }
-                Some(_) => {
-                    let _ = writeln!(out, "{}", ledger.to_json(e, lang).pretty());
-                }
-                None => {
-                    let _ = write!(out, "{}", ledger.render_text(e, lang));
-                }
-            }
-            0
-        }
-        None => refuse(tr!("診断のコード `{code}` はありません。`dandori explain --all` で一覧が出ます", "there is no diagnostic code `{code}`; `dandori explain --all` lists them"), lang, err),
+    if a.pos.is_empty() {
+        return refuse(table().takes_of("explain"), lang, err);
     }
+    let entries = match ledger.look_up(&a.pos) {
+        Ok(entries) => entries,
+        Err(unknown) => return refuse(ritsu_base::cli::no_codes("dandori", &unknown), lang, err),
+    };
+    let shape = match format {
+        Some("markdown") => ritsu_base::ledger::Shape::Markdown,
+        Some(_) => ritsu_base::ledger::Shape::Json,
+        None => ritsu_base::ledger::Shape::Text,
+    };
+    let _ = write!(out, "{}", ledger.explained(&entries, shape, lang));
+    0
 }
 
-/// The line `dandori <cmd> --help` begins its usage with, for a command given the wrong number
-/// of files.
-fn usage(name: &str) -> String {
-    let table = table();
-    table.command(name).map(|c| table.usage_line(c)).unwrap_or_default()
+/// What stops a command given other files than it takes, or none: what it takes, and its usage line.
+fn takes(name: &str, lang: Lang, err: &mut dyn Write) -> u8 {
+    refuse(table().takes_of(name), lang, err)
+}
+
+/// What `gen`, `scenarios` and `doc` say of a directory of `--out` they cannot make.
+fn cannot_create(dir: &Path, e: &std::io::Error) -> Text {
+    ritsu_base::cli::cannot_create(&dir.display().to_string(), e)
+}
+
+/// What they say of a file they cannot write.
+fn cannot_write(p: &Path, e: &std::io::Error) -> Text {
+    ritsu_base::cli::cannot_write(&p.display().to_string(), e)
 }
 
 /// Check one file and print its diagnostics; the model when it passes. `print_ok` is `check`'s: it
 /// says a file passes, and leaves the preconditions ritsu could not decide out of the model, which
 /// the other commands put in as checks (DESIGN 1.17).
 fn load(path: &Path, a: &Asked, print_ok: bool, out: &mut dyn Write, err: &mut dyn Write) -> Result<Option<crate::model::Model>, u8> {
-    let read = if print_ok { check::check_file(path) } else { check::built(path) };
+    let read = if print_ok { check::check_kept(path) } else { check::built(path) };
     let (src, checked) = match read {
         Ok(x) => x,
-        Err(msg) => {
-            let _ = writeln!(err, "{msg}");
-            return Err(2);
-        }
+        Err(msg) => return Err(refuse(msg, a.lang, err)),
     };
     let file = path.display().to_string();
     if a.format_json {
@@ -465,8 +494,7 @@ fn load(path: &Path, a: &Asked, print_ok: bool, out: &mut dyn Write, err: &mut d
 
 fn cmd_check(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.files.is_empty() {
-        let _ = writeln!(err, "{}", usage("check"));
-        return 2;
+        return takes("check", a.lang, err);
     }
     let mut worst = 0;
     for f in &a.files {
@@ -483,14 +511,11 @@ fn cmd_check(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
 fn cmd_gen(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
-        _ => {
-            let _ = writeln!(err, "{}", usage("gen"));
-            return 2;
-        }
+        _ => return takes("gen", a.lang, err),
     };
     if a.targets.is_empty() {
         let names = TARGETS.join("|");
-        return refuse(tr!("`dandori gen` には `--target {names}` が一つ以上要ります", "`dandori gen` needs one or more `--target {names}`"), a.lang, err);
+        return refuse(table().needs_of("gen", &format!("--target {names}")), a.lang, err);
     }
     let model = match load(&file, a, false, out, err) {
         Ok(Some(m)) => m,
@@ -541,13 +566,11 @@ fn cmd_gen(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     for (p, text) in planned {
         if let Some(parent) = p.parent() {
             if let Err(e) = ritsu_base::fs::create_dir_all(parent) {
-                let _ = writeln!(err, "cannot create {}: {e}", parent.display());
-                return 2;
+                return refuse(cannot_create(parent, &e), a.lang, err);
             }
         }
         if let Err(e) = ritsu_base::fs::write(&p, text) {
-            let _ = writeln!(err, "cannot write {}: {e}", p.display());
-            return 2;
+            return refuse(cannot_write(&p, &e), a.lang, err);
         }
         let _ = writeln!(out, "{}", p.display());
     }
@@ -557,10 +580,7 @@ fn cmd_gen(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
 fn cmd_run(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
-        _ => {
-            let _ = writeln!(err, "{}", usage("run"));
-            return 2;
-        }
+        _ => return takes("run", a.lang, err),
     };
     let model = match load(&file, a, false, out, err) {
         Ok(Some(m)) => m,
@@ -568,17 +588,13 @@ fn cmd_run(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         Err(c) => return c,
     };
     let sc = match &a.scenario {
-        Some(p) => match ritsu_base::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string())) {
+        Some(p) => match ritsu_base::fs::read_to_string(p).map_err(|e| ritsu_base::cli::cannot_read(&p.display().to_string(), &e)).and_then(|t| {
+            serde_json::from_str(&t).map_err(|e| ritsu_base::cli::not_json(&p.display().to_string(), &e.to_string()))
+        }) {
             Ok(v) => v,
-            Err(e) => {
-                let _ = writeln!(err, "cannot read the scenario: {e}");
-                return 2;
-            }
+            Err(e) => return refuse(e, a.lang, err),
         },
-        None => {
-            let _ = writeln!(err, "--scenario <file.json> is required");
-            return 2;
-        }
+        None => return refuse(table().needs_of("run", "--scenario <file.json>"), a.lang, err),
     };
     let view = match a.target.as_deref() {
         None | Some("reference") | Some("asl") => crate::render::View::Asl,
@@ -587,25 +603,42 @@ fn cmd_run(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         Some("durable") => crate::render::View::Durable,
         Some("argo") => crate::render::View::Argo,
         Some("pydantic-graph") => crate::render::View::Graph,
-        Some(o) => {
-            let _ = writeln!(err, "unknown target {o}");
-            return 2;
-        }
+        // the table takes nothing else (RUN_TARGETS), and refuses another value before the run
+        Some(o) => unreachable!("`--target {o}` is not one of RUN_TARGETS, which the table refuses"),
     };
-    // A scenario whose calls of rules are rulec's (`ritsu dandori scenarios`) is run with them
-    // computed through the port of rules, as `ritsu run` computes them.
-    let ran = if crate::computed::rules_computed(&sc) {
-        crate::interp::run_answered(&model, &sc, view, &mut crate::computed::RulesComputed).map(|(t, _)| t)
-    } else {
-        crate::interp::run(&model, &sc, view)
+    // The run's clock moves on as time goes by in the run, and `now` reads it (DESIGN 5). A scenario
+    // that says its calls of rules, of dates or of books are computed (`ritsu dandori scenarios`
+    // writes `"rules": "rulec"`, `"dates": "koyomi"` and `books`) is run with them computed through
+    // the ports, as `ritsu run` computes them; a program that joins rulec only computes the rules.
+    let ran = match crate::computed::said_ports(&sc) {
+        Some((rules, dates, books)) => match crate::computed::run_said(&model, &sc, view, rules, dates, books) {
+            Ok(ran) => Ok((ran.trace.clone(), ran.unused.clone(), ran.computes())),
+            // as `ritsu run` says it
+            Err(crate::computed::Stopped::Scenario(t)) => {
+                let sc = a.scenario.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+                return refuse(tr!("シナリオ `{sc}` を流せません: {}", "the scenario `{sc}` cannot be run: {}", t.ja; t.en), a.lang, err);
+            }
+            Err(crate::computed::Stopped::Run(e)) => Err(e),
+        },
+        None => crate::interp::run_moving(&model, &sc, view).map(|(trace, unused)| (trace, unused, false)),
     };
     match ran {
-        Ok(trace) => {
+        Ok((trace, unused, computes)) => {
             let _ = writeln!(out, "{}", serde_json::to_string_pretty(&trace).unwrap());
-            0
+            // the run is shown to its end; answers it did not take are the scenario's error, and the
+            // run ends as one that runs out of answers does (DESIGN 36)
+            match unused {
+                Some(left) => {
+                    for (i, line) in left.said(computes).iter().enumerate() {
+                        let _ = if i == 0 { writeln!(err, "{}", ritsu_base::cli::refusal(line.get(a.lang), a.lang)) } else { writeln!(err, "  {}", line.get(a.lang)) };
+                    }
+                    1
+                }
+                None => 0,
+            }
         }
         Err(e) => {
-            let _ = writeln!(err, "{e}");
+            let _ = writeln!(err, "{}", e.get(a.lang));
             1
         }
     }
@@ -614,35 +647,45 @@ fn cmd_run(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
 fn cmd_scenarios(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
-        _ => {
-            let _ = writeln!(err, "{}", usage("scenarios"));
-            return 2;
-        }
+        _ => return takes("scenarios", a.lang, err),
     };
     let model = match load(&file, a, false, out, err) {
         Ok(Some(m)) => m,
         Ok(None) => return 1,
         Err(c) => return c,
     };
-    // The calls of rules are rulec's, as `ritsu run` answers them (§15.209 of rulec's DESIGN).
-    let list = crate::scenarios::generate_computed(&model);
+    // The calls of rules are rulec's, as `ritsu run` answers them (§15.209 of rulec's DESIGN). What
+    // no scenario takes is said after the scenarios, and why where rulec says (DESIGN 36). Both ask
+    // the ports many times, with the disk asked each question once (DESIGN 36.3).
+    let (list, untaken) = ritsu_base::fs::steady(|| {
+        let list = crate::scenarios::generate_computed(&model);
+        let untaken = crate::scenarios::untaken(&model, &list);
+        (list, untaken)
+    });
+    let note = ritsu_base::diag::Severity::Note.word(a.lang);
+    let say_untaken = |err: &mut dyn Write| {
+        for u in &untaken {
+            let _ = writeln!(err, "{note}: {}", u.said().get(a.lang));
+        }
+    };
     match &a.out {
         Some(dir) => {
-            if let Err(e) = std::fs::create_dir_all(dir) {
-                let _ = writeln!(err, "cannot create {}: {e}", dir.display());
-                return 2;
+            if let Err(e) = ritsu_base::fs::create_dir_all(dir) {
+                return refuse(cannot_create(dir, &e), a.lang, err);
             }
             for (i, s) in list.iter().enumerate() {
                 let p = dir.join(format!("{:03}.json", i + 1));
-                if let Err(e) = std::fs::write(&p, serde_json::to_string_pretty(s).unwrap()) {
-                    let _ = writeln!(err, "cannot write {}: {e}", p.display());
-                    return 2;
+                if let Err(e) = ritsu_base::fs::write(&p, serde_json::to_string_pretty(s).unwrap()) {
+                    return refuse(cannot_write(&p, &e), a.lang, err);
                 }
             }
-            let _ = writeln!(err, "{} scenario(s) written to {}", list.len(), dir.display());
+            let (n, d) = (list.len(), dir.display());
+            let _ = writeln!(err, "{}", ritsu_base::tr!("{d} にシナリオを {n} 本書きました", "{n} scenario(s) written to {d}").get(a.lang));
+            say_untaken(err);
         }
         None => {
             let _ = writeln!(out, "{}", serde_json::to_string_pretty(&list).unwrap());
+            say_untaken(err);
         }
     }
     0
@@ -653,17 +696,11 @@ fn cmd_scenarios(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
 fn cmd_api(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
-        _ => {
-            let _ = writeln!(err, "{}", usage("api"));
-            return 2;
-        }
+        _ => return takes("api", a.lang, err),
     };
-    let (src, checked) = match check::check_file(&file) {
+    let (src, checked) = match check::check_kept(&file) {
         Ok(x) => x,
-        Err(msg) => {
-            let _ = writeln!(err, "{msg}");
-            return 2;
-        }
+        Err(msg) => return refuse(msg, a.lang, err),
     };
     let shown = file.display().to_string();
     if a.format_json && checked.model.is_none() {
@@ -683,36 +720,28 @@ fn cmd_api(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
 fn cmd_doc(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
-        _ => {
-            let _ = writeln!(err, "{}", usage("doc"));
-            return 2;
-        }
+        _ => return takes("doc", a.lang, err),
     };
     let (src, drawn) = match check::drawable(&file) {
         Ok(x) => x,
-        Err(msg) => {
-            let _ = writeln!(err, "{msg}");
-            return 2;
-        }
+        Err(msg) => return refuse(msg, a.lang, err),
     };
     let shown = file.display().to_string();
     let _ = write!(err, "{}", commands::render(&drawn.diags, &shown, &src, a.lang));
     // a workflow whose names or types do not resolve has nothing to draw; nor has one whose rules
     // this dandori cannot read (E018), which is where it runs, not what the flow says
     let Some(model) = &drawn.model else { return if drawn.diags.iter().any(|d| d.code == "E018") { 2 } else { 1 } };
-    let input = crate::doc::Input { m: model, src: &src, file: &shown, facts: &drawn.facts, diags: &drawn.diags, lang: a.lang };
+    let input = crate::doc::Input { m: model, src: &src, file: &shown, facts: &drawn.facts, diags: &drawn.diags, lang: a.made };
     let page = if a.format_html { crate::doc::html(&input) } else { crate::doc::markdown(&input) };
     match &a.out {
         Some(dir) => {
             if let Err(e) = ritsu_base::fs::create_dir_all(dir) {
-                let _ = writeln!(err, "cannot create {}: {e}", dir.display());
-                return 2;
+                return refuse(cannot_create(dir, &e), a.lang, err);
             }
             let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| model.name.clone());
             let p = dir.join(format!("{stem}.{}", if a.format_html { "html" } else { "md" }));
             if let Err(e) = ritsu_base::fs::write(&p, page) {
-                let _ = writeln!(err, "cannot write {}: {e}", p.display());
-                return 2;
+                return refuse(cannot_write(&p, &e), a.lang, err);
             }
             let _ = writeln!(out, "{}", p.display());
         }

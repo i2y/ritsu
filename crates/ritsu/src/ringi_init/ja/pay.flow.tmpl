@@ -1,0 +1,27 @@
+workflow expense_payment v1
+description "承認された経費の精算の支払い。申請者に払い戻し、そのことを知らせる。精算が承認されると始まる。タスクはプロジェクトが書く（payments.go）"
+
+inputs
+  request_id : string
+  requester  : string
+  amount     : money[JPY]  range >=1JPY <=1_000_000JPY
+  purpose    : string
+
+outputs
+  reference : string
+
+record Payment
+  reference : string
+
+task pay_requester(request_id: string, requester: string, amount: money[JPY], purpose: string) -> Payment
+  timeout 1 day
+  retry 3 times every 10 minutes
+  idempotent
+
+task tell_requester(request_id: string, text: string)
+  idempotent
+
+flow
+  let p = pay_requester(request_id: request_id, requester: requester, amount: amount, purpose: purpose)
+  tell_requester(request_id: request_id, text: "申請 {request_id} の支払いが済みました（{p.reference}）")
+  succeed reference = p.reference

@@ -16,6 +16,9 @@
 //!   whether a dimension is ordered only ([`Dim::compares_only`]), the table's own spelling
 //!   ([`Unit::canonical`]), the spelling the table gives the unit first ([`Unit::first_spelling`]:
 //!   `mL` is `cm3`), and the name of its type in generated code ([`Unit::type_name`]).
+//! - [`written`]: a number as the languages write it, for a message to say: a whole number on the
+//!   wire in its unit (`10_000_000JPY`, `0.5%`), a book's amount with its decimal places
+//!   (`12.50USD`), and a range with its ends so written (`>=1JPY <=100_000JPY`).
 //!
 //! The rules of arithmetic on units — that grams are not added to yen, that a date takes no sum,
 //! that an output is rounded — are each language's checks, and stay with the languages.
@@ -24,6 +27,7 @@ pub mod chars;
 mod rat;
 pub mod table;
 mod unit;
+pub mod written;
 
 pub use rat::Rat;
 pub use unit::{Dim, Problem, Tax, Unit};

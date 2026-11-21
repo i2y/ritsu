@@ -186,7 +186,7 @@ pub fn dependency_note(m: &Model, p: &str) -> Option<Text> {
     let sp = paths::shown(p);
     Some(tr!(
         "{sp} は依存 `{dep}` のファイルです。それを持つ依存のコンテキストを `use context \"{dep}/…\"` で地図に入れるか、`covers` に `\"{dep}\"` を書き、地図のどれかのコンテキストに持たせてください。",
-        "{sp} is a file of the dependency `{dep}`: bring the dependency's context that owns it into the map with `use context \"{dep}/…\"`, or write `\"{dep}\"` in `covers` and own the file in a context of the map."
+        "The file {sp} belongs to the dependency `{dep}`: bring the dependency's context that owns it into the map with `use context \"{dep}/…\"`, or write `\"{dep}\"` in `covers` and own the file in a context of the map."
     ))
 }
 

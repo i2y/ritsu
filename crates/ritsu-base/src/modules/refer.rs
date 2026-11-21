@@ -379,10 +379,33 @@ pub fn given_all<S: AsRef<str>>(paths: &[S]) -> Result<(), Text> {
 /// to: what the ports of the languages called [`crate::paths::join`] for. Outside a module, that,
 /// byte for byte (M14); in a module, the canonical form, from the root.
 pub fn join(root: &Path, from: &str, written: &str) -> Result<String, Refused> {
+    joined(root, from, written, false)
+}
+
+/// [`join`], for a path a file reads the file it names by (DESIGN 4.15): where a `..` of the path
+/// crosses a symbolic link, the path from the root of the file the system opens there, and refused
+/// as one that goes outside the root when that file is outside it. A path that crosses no link with
+/// `..` is [`join`]'s, byte for byte, and so is every path in a module, which [`join`] reads through
+/// the tree. What rulec, dandori, koyomi, sekisho, kaname and ringi name the files they read by; a path a
+/// `.req`, a `.ctx` or a `.geas` writes is a reference, which [`join`] folds by its letters (DESIGN
+/// 6.2, item 3).
+pub fn join_opened(root: &Path, from: &str, written: &str) -> Result<String, Refused> {
+    joined(root, from, written, true)
+}
+
+fn joined(root: &Path, from: &str, written: &str, opened: bool) -> Result<String, Refused> {
     let dir = paths::parent(from);
     let disk = paths::on_disk(root, &dir);
     let Some(m) = module_of(&disk) else {
-        return paths::join(&dir, written).map_err(|e| Refused::Path(e, written.to_string()));
+        let by_letters = paths::join(&dir, written).map_err(|e| Refused::Path(e, written.to_string()));
+        if !opened || written.is_empty() || paths::is_absolute(written) {
+            return by_letters;
+        }
+        let target = disk.join(written);
+        if paths::folds_by_letters(&target) {
+            return by_letters;
+        }
+        return paths::from_root(root, &target).ok_or_else(|| Refused::Path(PathError::Outside, written.to_string()));
     };
     let target = resolve(&graph::fold(&paths::absolute(&disk)), &m, written)?;
     match paths::from_root(root, &target) {

@@ -16,6 +16,8 @@
 //!   the dependency comes out in `diff`, `check --diff-base` and `replay`, and a version the store
 //!   does not have says `ritsu mod fetch --rev <revision>` (exit 2).
 
+mod common;
+
 use ritsu_testkit::TempDir;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -27,7 +29,7 @@ fn crates() -> PathBuf {
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "KOYOMI_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -159,7 +161,7 @@ fn here() -> PathBuf {
 fn ritsu_with(dir: &Path, store: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args).env(store::VARIABLE, store);
-    for v in ["RITSU_LANG", "RULEC_LANG", "KOYOMI_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -276,9 +278,9 @@ fn a_dependency_s_file_at_a_version_of_the_store() {
         let (code, text, err) = ritsu_with(&shop, &store, &["rulec", "diff", &old, &new, "--lang", n.lang]);
         assert_eq!(code, 1, "{}: {text}{err}", n.lang);
         let said: &[&str] = if n.lang == "en" {
-            &["  an enum gained a value: region.eu\n", "  region = domestic  and  weight >=2001g <=2500g\n    fee: 695 → 395\n"]
+            &["  an enum gained a value: region.eu\n", "  region = domestic  and  weight >=2001g <=2500g\n    fee: 695GBPc → 395GBPc\n"]
         } else {
-            &["  列挙に値が増えた: 地域.EU\n", "  地域 = 国内  かつ  重さ >=2001g <=2500g\n    料金: 695 → 395\n"]
+            &["  列挙に値が増えた: 地域.EU\n", "  地域 = 国内  かつ  重さ >=2001g <=2500g\n    料金: 695GBPc → 395GBPc\n"]
         };
         for s in said {
             assert!(text.contains(s), "{}: {text}", n.lang);

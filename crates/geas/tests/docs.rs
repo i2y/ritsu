@@ -204,7 +204,7 @@ fn codes() -> Vec<String> {
     let s = Scratch::new("docs-codes");
     let (out, _, code) = run(s.path(), &["explain", "--all", "--json"], &[]);
     assert_eq!(code, 0);
-    out.lines().map(|l| json(l).get("code").str().to_string()).collect()
+    json(&out).arr().iter().map(|e| e.get("code").str().to_string()).collect()
 }
 
 #[test]

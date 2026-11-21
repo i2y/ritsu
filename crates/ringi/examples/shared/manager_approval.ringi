@@ -1,0 +1,30 @@
+route manager_approval v1 "Approval by the manager"
+description "A route several requests share (fictional rules): the requester's manager approves, and the head of the department too when the request says it is long"
+
+use organization org from "company.ringi"
+use calendar office from "office.cal"
+
+inputs
+  long : bool
+
+route
+  manager  manager
+  head     dept_head  when long
+
+who
+  manager   = manager of requester
+  dept_head = head of requester.department
+
+every stage
+  due in 2 business days at end of day
+  remind after 1 business day at 09:00
+  when late escalate, then expire
+  # This route asks the line above the requester. The person at the top of the organization has
+  # nobody above to ask, and the stages are skipped for them.
+  when empty escalate, then skip
+
+labels ja
+  stage manager  "上長"
+  stage head     "部長"
+  who manager    "上長"
+  who dept_head  "部長"

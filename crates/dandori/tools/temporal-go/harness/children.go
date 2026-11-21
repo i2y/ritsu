@@ -23,6 +23,8 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
@@ -82,14 +84,29 @@ func children(parent, child Flow, runsFile, outFile string) error {
 	}
 	defer func() { _ = server.Stop() }()
 	c := server.Client()
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	var elsewhere *exec.Cmd
 	var elsewhereIn io.WriteCloser
 	// where the other language's runner makes its temporary files (TMPDIR): a directory of this
 	// runner's, removed however that runner ended, killed too
 	var elsewhereTmp string
+	// once it serves, the runner is waited for once, when its output has ended; it is gone when it
+	// ends before its input is closed: nothing else serves the child, and a run would wait without end
+	var waited chan struct{}
+	var waitErr, gone error
+	var closing atomic.Bool
+	var mu sync.Mutex
 	defer func() {
-		if elsewhere != nil && elsewhere.ProcessState == nil {
+		switch {
+		case waited != nil:
+			select {
+			case <-waited:
+			default:
+				_ = elsewhere.Process.Kill()
+				<-waited
+			}
+		case elsewhere != nil && elsewhere.ProcessState == nil:
 			_ = elsewhere.Process.Kill()
 			_ = elsewhere.Wait()
 		}
@@ -126,7 +143,19 @@ func children(parent, child Flow, runsFile, outFile string) error {
 				return fmt.Errorf("the child's runner exited with %d", elsewhere.ProcessState.ExitCode())
 			}
 		}
-		go func() { _, _ = io.Copy(io.Discard, lines) }()
+		// the rest of what it prints goes on to this runner's standard error, read to its end
+		waited = make(chan struct{})
+		go func() {
+			_, _ = io.Copy(os.Stderr, lines)
+			waitErr = elsewhere.Wait()
+			close(waited)
+			if !closing.Load() {
+				mu.Lock()
+				gone = fmt.Errorf("the child's runner exited before the runs were over (%v)", elsewhere.ProcessState)
+				mu.Unlock()
+				cancel()
+			}
+		}()
 	}
 	workers := []worker.Worker{buildWorker(c, parent)}
 	if childBy == nil {
@@ -153,7 +182,14 @@ func children(parent, child Flow, runsFile, outFile string) error {
 		var out any
 		var end map[string]any
 		var failed *temporal.WorkflowExecutionError
-		if err := handle.Get(ctx, &out); err == nil {
+		err = handle.Get(ctx, &out)
+		mu.Lock()
+		lost := gone
+		mu.Unlock()
+		if lost != nil {
+			return lost
+		}
+		if err == nil {
 			end = map[string]any{"succeed": out}
 		} else if errors.As(err, &failed) {
 			end = map[string]any{"fail": failure(err)}
@@ -164,8 +200,10 @@ func children(parent, child Flow, runsFile, outFile string) error {
 	}
 	stop()
 	if elsewhere != nil {
+		closing.Store(true)
 		_ = elsewhereIn.Close()
-		if err := elsewhere.Wait(); err != nil {
+		<-waited
+		if waitErr != nil {
 			return fmt.Errorf("the child's runner exited with %d", elsewhere.ProcessState.ExitCode())
 		}
 	}

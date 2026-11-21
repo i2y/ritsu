@@ -1,0 +1,20 @@
+rule 手数料と区分(fee_band) v1
+description "金額の 3% のカード手数料（2 万円まで受け付ける）と、金額の区分"
+
+enum 区分(band) = 小(small) | 大(large)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+define 手数料(fee) : money[円] = down(金額 * 3%, 1円)  range >=0円 <=20_000円
+
+outputs
+  請求額(charged) : money[円]  round down(1円)
+  区分(band)      : 区分
+
+table 区分の表(bands)
+| 金額       | -> 区分 |
+| <=30_000円 | 小      |
+| >30_000円  | 大      |
+
+result 請求額 = 手数料

@@ -103,8 +103,8 @@ fn input(backend: &str, conn: Value, combo: &str, cases: &[Case], clients: &[Str
 fn postgres(pg: &Postgres, cases: &[Case], work: &std::path::Path, go: Option<&GoRunner>, rust: Option<&RustRunner>, failures: &mut Vec<String>) {
     let sql = work.join("sql");
     for (c, f) in cases.iter().zip(build_all(cases, chobo::target::Target::Postgres, &sql)) {
-        let out = pg.db().arg("-f").arg(&f).output().unwrap();
-        assert!(out.status.success(), "{}: the SQL does not load:\n{}", c.stem, String::from_utf8_lossy(&out.stderr));
+        let out = finish(pg.db().arg("-f").arg(&f), SQL_LIMIT, "psql loading a book's SQL into PostgreSQL");
+        assert!(out.ok, "{}: the SQL does not load:\n{}", c.stem, out.stderr);
     }
     let started = Instant::now();
     run_and_check(cases, "postgres", "postgres", false, failures, &|only, combo| Ok(run_sql_of(pg, cases, combo, only)));

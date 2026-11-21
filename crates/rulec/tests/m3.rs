@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready, skip};
 use ritsu_testkit::tmp::tmpdir_in;
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -22,6 +23,7 @@ fn rulec_in(cwd: &Path, args: &[&str]) -> (i32, String, String) {
         .env("RULEC_LANG", "ja")
         .current_dir(cwd)
         .args(args)
+        .args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] })
         .output()
         .expect("rulec を起動できない");
     (
@@ -31,22 +33,17 @@ fn rulec_in(cwd: &Path, args: &[&str]) -> (i32, String, String) {
     )
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 /// `rulec`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
 /// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
 /// with that.
 fn rulec_tmp(tmp: &Path, args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "ja")
-        .env("TMPDIR", tmp)
-        .current_dir(root())
-        .args(args)
-        .output()
-        .expect("rulec を起動できない");
-    (
-        o.status.code().unwrap_or(-1),
-        String::from_utf8_lossy(&o.stdout).into_owned(),
-        String::from_utf8_lossy(&o.stderr).into_owned(),
-    )
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args).args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] }), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 fn rulec(args: &[&str]) -> (i32, String, String) {
@@ -294,6 +291,21 @@ fn 値の変更は発火行を動かさない() {
     assert!(!out.contains("→行"), "行は動いていないのに遷移を出している: {out}");
 }
 
+/// A difference is said with its sign and its digits grouped by `_` from five on, as a rule writes
+/// a number, and with no unit (§15.333): seven records moved by 1450円 each come to `+10_150`.
+#[test]
+fn 差は五桁から区切って言う() {
+    let (_tmp, dir) = setup("grouped");
+    let src = std::fs::read_to_string(root().join(RULE)).unwrap();
+    let v2 = dir.join("v2.rule");
+    std::fs::write(&v2, tweak(&src, "| 沖縄       | S60    | 1450円", "| 沖縄       | S60    | 2900円", 1)).unwrap();
+    let (c, out, _) = rulec(&["diff", RULE, v2.to_str().unwrap(), "--fixtures", dir.join("fx.jsonl").to_str().unwrap()]);
+    assert_eq!(c, 1, "差があれば 1 で終わる: {out}");
+    assert!(out.contains("影響 7 件"), "{out}");
+    assert!(out.contains("差の合計 +10_150"), "五桁の差の合計を区切っていない: {out}");
+    assert!(out.contains("差 +1450 一様"), "四桁の差は区切らない: {out}");
+}
+
 /// §10.4: a version where a boundary moved shows up as a transition of firing rows.
 #[test]
 fn 境界の変更は発火行の遷移として出る() {
@@ -394,6 +406,23 @@ fn 版の参照はgitタグを引く() {
     let (c, out, e) = rulec_in(&repo, &["diff", "rules/ゆうパック運賃.rule@HEAD~1", rel, "--fixtures", "fx.jsonl"]);
     assert_eq!(c, 1, "{out}{e}");
     assert!(out.contains("影響 7 件"), "{out}");
+    // ritsu's DESIGN 4.15: run in a directory below the top, a path at a revision is the file it
+    // names from there, however it is written, not a file of that path from the top
+    std::fs::create_dir_all(repo.join("rules/x")).unwrap();
+    let said: Vec<(i32, String)> = ["ゆうパック運賃.rule@HEAD~1", "./ゆうパック運賃.rule@HEAD~1", "x/../ゆうパック運賃.rule@HEAD~1"]
+        .iter()
+        .map(|old| {
+            let (c, out, e) = rulec_in(&repo.join("rules"), &["diff", old, "ゆうパック運賃.rule", "--fixtures", "../fx.jsonl"]);
+            (c, format!("{out}{e}"))
+        })
+        .collect();
+    assert_eq!(said[0].0, 1, "{}", said[0].1);
+    assert!(said[0].1.contains("影響 7 件"), "{}", said[0].1);
+    assert!(said.iter().all(|s| *s == said[0]), "書き方で変わる: {said:#?}");
+    // and a rule's name at a tag is looked for in the whole tree there, as at the top
+    let (c, out, e) = rulec_in(&repo.join("rules"), &["diff", "ゆうパック運賃@v1", "ゆうパック運賃@v2", "--fixtures", "../fx.jsonl"]);
+    assert_eq!(c, 1, "{out}{e}");
+    assert!(out.contains("ゆうパック運賃@v1 → ゆうパック運賃@v2") && out.contains("影響 7 件"), "{out}");
     let (c, out, e) = rulec_in(&repo, &["diff", "ゆうパック運賃@HEAD~1", "ゆうパック運賃@HEAD", "--fixtures", "fx.jsonl"]);
     assert_eq!(c, 1, "{out}{e}");
     assert!(out.contains("影響 7 件"), "{out}");
@@ -403,7 +432,7 @@ fn 版の参照はgitタグを引く() {
     assert!(e.contains("rules/ゆうパック運賃/v9") && e.contains("リビジョン `v9`"), "{e}");
     let (c, _, e) = rulec_in(&repo, &["diff", "rules/なし.rule@HEAD", rel, "--fixtures", "fx.jsonl"]);
     assert_eq!(c, 2, "{e}");
-    assert!(e.contains("`HEAD` に `rules/なし.rule` が無い"), "{e}");
+    assert!(e.contains("`HEAD` に `rules/なし.rule` がありません"), "{e}");
 
     // Trying to compare two different rules is stopped.
     std::fs::write(repo.join("other.rule"), std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap()).unwrap();

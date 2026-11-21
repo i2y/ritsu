@@ -1,0 +1,93 @@
+request supplies v1 "Supplies"
+description "Supplies for a team (fictional rules): fields shown on a condition, given again and edited, and fields made empty"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  kind     : choice "Kind"
+    goods   "Goods"
+    service "Service"
+  price    : money[JPY] "Price"  range >=1JPY <=1_000_000JPY
+  quantity : number "Quantity"  range >=1 <=100
+  total    : money[JPY] "Total" = price * quantity  range >=1JPY <=100_000_000JPY
+  vendor   : text "Vendor"  count <=100  optional  shown when kind is goods
+  contact  : text "Vendor's contact"  count <=100  shown when vendor is not none
+  note     : long text "Note"  count <=200  optional
+  label    : text "Asset label"  count <=20  approvers only  optional  shown when kind is goods
+  checked  : text "Checked by"  count <=40  approvers only  optional
+
+route
+  first  manager
+  check  accounting  when vendor is not none
+
+who
+  manager    = manager of requester
+  accounting = team accounting
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval   not allowed
+  send back       to the requester, at most 3 times
+  resubmit        within 3 business days
+  approvers edit  kind, vendor, note
+
+# the kind changed on a resubmit: the vendor is no longer shown, and its value is dropped; the
+# contact, shown where a vendor is named, is dropped with it, and accounting, who checks a vendor,
+# does not answer
+scenario a_kind_changed_on_resubmit
+  requester e1201
+  form kind = goods, price = 30_000JPY, quantity = 2, vendor = "Kato Trading", contact = "sales@example.com"
+| at               | event                   | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit                  | e1201 | first    | in progress    |
+| 2026-11-16 11:00 | send back               | e1101 |          | with requester |
+| 2026-11-16 13:00 | resubmit(kind: service) | e1201 | first    | in progress    |
+| 2026-11-16 14:00 | approve                 | e1101 |          | approved       |
+
+# `none` in a resubmit's cell makes the field empty
+scenario a_note_made_empty
+  requester e1201
+  form kind = service, price = 30_000JPY, quantity = 1, note = "Before the end of the month"
+| at               | event                | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit               | e1201 | first    | in progress    |
+| 2026-11-16 11:00 | send back            | e1101 |          | with requester |
+| 2026-11-16 13:00 | resubmit(note: none) | e1201 | first    | in progress    |
+| 2026-11-16 14:00 | approve              | e1101 |          | approved       |
+
+# a field made empty that the resubmit hides is dropped all the same, and one that holds no value
+# stays empty
+scenario made_empty_where_it_is_hidden_or_empty
+  requester e1201
+  form kind = goods, price = 30_000JPY, quantity = 1, vendor = "Kato Trading", contact = "sales@example.com"
+| at               | event                                         | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit                                        | e1201 | first    | in progress    |
+| 2026-11-16 11:00 | send back                                     | e1101 |          | with requester |
+| 2026-11-16 13:00 | resubmit(kind: service, vendor: none, note: none) | e1201 | first | in progress  |
+| 2026-11-16 14:00 | approve                                       | e1101 |          | approved       |
+
+# an approver gives the label and who checked it, then changes the kind and makes the note empty:
+# the vendor, its contact and the label, shown for goods, are dropped; then they make what they
+# checked empty
+scenario edited_by_an_approver
+  requester e1201
+  form kind = goods, price = 30_000JPY, quantity = 1, vendor = "Kato Trading", contact = "sales@example.com", note = "Urgent"
+| at               | event                                 | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                | e1201 | first    | in progress |
+| 2026-11-16 11:00 | edit(label: "A-12", checked: "e1101") | e1101 | first    | in progress |
+| 2026-11-16 12:00 | edit(kind: service, note: none)       | e1101 | first    | in progress |
+| 2026-11-16 13:00 | edit(checked: none)                   | e1101 | first    | in progress |
+| 2026-11-16 14:00 | approve                               | e1101 |          | approved    |
+
+# the vendor made empty by an approver: the contact is dropped with it, and the stages after this
+# one are read again, as for a value an approver changes; accounting no longer answers
+scenario the_vendor_made_empty_by_an_approver
+  requester e1201
+  form kind = goods, price = 30_000JPY, quantity = 1, vendor = "Kato Trading", contact = "sales@example.com"
+| at               | event              | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit             | e1201 | first    | in progress |
+| 2026-11-16 11:00 | edit(vendor: none) | e1101 | first    | in progress |
+| 2026-11-16 13:00 | approve            | e1101 |          | approved    |

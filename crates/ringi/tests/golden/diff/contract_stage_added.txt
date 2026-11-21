@@ -1,0 +1,23 @@
+  The request `contract` (v1): `contract_old.ringi` → `contract_new.ringi`
+Route:
+  Requests where “Contract value” is from 5,000,001 JPY to 1,000,000,000 JPY: the stage “second” (at least 2 of legal) comes.
+  In the organization from 2026-04-01, the approvers change for 24 of 24 requesters.
+    e0001 (President (fictional)), second: does not come → legal: 2 of e9001 (General counsel), e9002 (Lawyer 2), e9003 (Lawyer 3)
+    e0101 (Head of Sales Division), second: does not come → legal: 2 of e9001 (General counsel), e9002 (Lawyer 2), e9003 (Lawyer 3)
+    e0102 (Head of Corporate Division), second: does not come → legal: 2 of e9001 (General counsel), e9002 (Lawyer 2), e9003 (Lawyer 3)
+    e0201 (Director 1), second: does not come → legal: 2 of e9001 (General counsel), e9002 (Lawyer 2), e9003 (Lawyer 3)
+    e0202 (Director 2), second: does not come → legal: 2 of e9001 (General counsel), e9002 (Lawyer 2), e9003 (Lawyer 3)
+    e0203 (Director 3), second: does not come → legal: 2 of e9001 (General counsel), e9002 (Lawyer 2), e9003 (Lawyer 3)
+    e0204 (Director 4), second: does not come → legal: 2 of e9001 (General counsel), e9002 (Lawyer 2), e9003 (Lawyer 3)
+    e1001 (Head of Accounting), second: does not come → legal: 2 of e9001 (General counsel), e9002 (Lawyer 2), e9003 (Lawyer 3)
+    e1002 (Accountant), second: does not come → legal: 2 of e9001 (General counsel), e9002 (Lawyer 2), e9003 (Lawyer 3)
+    e1101 (Manager of Section 1A), second: does not come → legal: 2 of e9001 (General counsel), e9002 (Lawyer 2), e9003 (Lawyer 3)
+  And 14 more: `--format json` lists them all.
+  Every other request comes to the same stages.
+Deadlines and reminders:
+    second: — → Reminder: 2026-04-07 (Tue) 09:00; Due: 2026-04-08 (Wed), at the end of the day; Due after going up: 2026-04-14 (Tue), at the end of the day
+    A ticket ends within 164 business days at the most (4 × 31 at its stages, 3 × 10 with the requester, 10 paused). `ritsu ringi doc --longest` shows the dates of the longest. → A ticket ends within 192 business days at the most (4 × 38 at its stages, 3 × 10 with the requester, 10 paused). `ritsu ringi doc --longest` shows the dates of the longest.
+Claims:
+    `ends_in_time`: every ticket ends within 192 business days; at the most it takes 164. → `ends_in_time`: every ticket ends within 192 business days; at the most it takes 192.
+Tickets in progress:
+  Both are version 1. A ticket in progress is told from the requests submitted after the change only by the version it was submitted with: raise the version, so that the tickets in progress finish as they were submitted.

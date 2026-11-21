@@ -10,11 +10,12 @@ ends. When an article is amended, a rule is rewritten or a line of code moves, t
 match and the check stops on that link, with the difference from what was looked at, until someone
 looks again.
 
-yuen is one of the nine languages of [ritsu](https://github.com/i2y/ritsu), and reads what the other languages
+yuen is one of the ten languages of [ritsu](https://github.com/i2y/ritsu), and reads what the other languages
 hold through them, in the same process: the tables of a rulec rule, the dates and claims of a
 koyomi calendar, the accounts and transfers of a chobo book, the claims of a geas spec, the tasks of
 a dandori workflow, the terms of a sakai map, the policies and expectations of a sekisho gate, the
-functions of a kaname module, and the services and messages of a `.proto`. It reads
+functions of a kaname module, the tables, stages and deadlines of a ringi request, and the services
+and messages of a `.proto`. It reads
 the operations and schemas of OpenAPI and AsyncAPI documents and the policies and actions of
 [Cedar](https://www.cedarpolicy.com/) itself, an element at a time, and the requirements of an
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec as sources, a requirement at a time.
@@ -99,6 +100,30 @@ requirements touched:
 4 requirements touched; ask api
 ```
 
+A change can reach a requirement with no line of the file the link names changed. `affected`
+follows what the linked files read, through every level, each language saying what its files
+read: among them a rule another rule applies, the calendar a dates file uses and the table the
+calendar is made of, the rule and the dates a gate uses, the organization, the masters, the routes,
+the calendars and the rules a request uses, the other file a document's `$ref` reaches, the file a
+`.proto` imports. What a file only points at is not read: a copy of a document it pins, the code a
+context owns, the place a value comes from. A file that no file declares is not followed either: a
+change to a file no language's file names, such as a data file the code opens when it runs,
+reaches no requirement. Here the office closes for summer holidays, in the calendar the dates file
+uses:
+
+```console
+$ ritsu yuen affected examples/payment_terms/payment_terms.req --root examples/payment_terms --diff examples/payment_terms/changes/closed.diff
+diff: examples/payment_terms/changes/closed.diff
+files read by the files that requirements name, that the diff touches:
+  examples/payment_terms/calendars/tokyo_business_days.cal
+    koyomi "payment_20th_close_next_10th.cal" line 3 (use calendar): met by payment_day, business_days; checked by payment_day, business_days
+changes no requirement reaches: none
+requirements touched:
+  payment_day (examples/payment_terms/payment_terms.req:11): owner accounting; decided 2026-10-04 by accounting: "Closing on the 20th and paying on the 10th of the next month keeps every payment within 60 days of receipt. Decided for this example"
+  business_days (examples/payment_terms/payment_terms.req:23): owner accounting; from holidays
+2 requirements touched; ask accounting
+```
+
 In a module, these reasons reach whoever reads a new version: `ritsu mod diff` and the Changes tab of
 a list give a requirement's text before and now, the `decided` lines the new version adds, and who
 looked. They are the words of the file: the check says what they were written against has not moved
@@ -170,13 +195,13 @@ diff from the block that was looked at. `openspec_greeter_archived` is the examp
 
 ```console
 $ ritsu yuen check examples/openspec_greeter_archived/greeter.req --root examples/openspec_greeter_archived
-warning[W102]: examples/openspec_greeter_archived/greeter.req:7:8: A requirement of the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md is pinned by no source of the project: "Health check"
+warning[W102]: examples/openspec_greeter_archived/greeter.req:7:8: A requirement of the spec openspec/specs/greeting/spec.md is pinned by no source of the project: "Health check"
      7 | source greeting = openspec "openspec/specs/greeting/spec.md"
   = Pin each one and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval.
 error[E103]: examples/openspec_greeter_archived/greeter.req:8:3: greeting "Greeting by name" does not match its pin (pinned sha256:1c3d865f4a521275, the requirement is sha256:228485bfce459383)
      8 |   "Greeting by name" sha256:1c3d865f4a521275
   = The requirement changed in the spec after it was pinned (an archived change, or an edit). Read what changed, then pin it again (`yuen source pin`).
-  what changed in the requirement since it was pinned (the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md):
+  what changed in the requirement since it was pinned (the spec openspec/specs/greeting/spec.md):
       @@ -1,4 +1,4 @@
         ### Requirement: Greeting by name
       - The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.
@@ -268,6 +293,13 @@ A kaname module is named the same way, through kaname: a function meets a requir
 values its calls pass, the effects it writes and its examples, and fails when one does not hold. A
 function's end is its lines, from its heading to the last line of its body.
 
+A ringi request is named the same way, through ringi: a table of its route, a stage or a deadline
+meets a requirement (`satisfied by ringi "expense.ringi" table route`), and a claim, an example or a
+scenario of the file, which ringi holds, checks it
+(`verified by ringi "expense.ringi" claim reminder_before_due`); the file itself, named with no kind
+(`verified by ringi "expense.ringi"`), is ringi's check of it. The end is the thing's lines, so a
+change to another stage of the route stops neither link.
+
 ## What it checks, and what it does not
 
 yuen checks the links, the hashes and the periods: that every name resolves, that every copy of a
@@ -331,6 +363,8 @@ $ ritsu yuen source outdated examples/osha/osha.req
 $ ritsu yuen explain E303
 ```
 
+`ritsu yuen explain` takes any number of codes and explains them in the order given; for two or
+more it writes what `--all` writes, with only those codes.
 Every command takes `--lang ja|en` and `--root <dir>`; `ritsu yuen <command> --help` gives each
 one's flags and exit codes. The whole language and every command are in
 [docs/reference.md](docs/reference.md), and the 48 diagnostic codes (two of them retired) in

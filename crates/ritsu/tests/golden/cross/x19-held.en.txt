@@ -1,0 +1,13 @@
+office.cal: ok — calendar office: no table, so the data range is 0001-01-01..9999-12-31
+budget.book: ok
+  allocate.do   may be refused: key_conflict
+  reserve.hold  may be refused: over_budget (dept_budget(dept) at least 0), key_conflict, already_refused
+  reserve.post  may be refused: key_conflict, already_voided, expired, over_hold, no_such_hold
+  reserve.void  may be refused: already_posted, expired, no_such_hold
+  key: allocate once per dept, period; a second call that differs only in amount is refused with key_conflict
+  key: reserve once per request, attempt; a second call that differs only in dept or amount is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+ok purchase.ringi: a request, 2 fields, 1 stage
+  used from 2026-04-01: `effective from`
+  used with no end: no data it reads ends
+  ends within 10 business days at the most
+ritsu check: 3 files (koyomi 1, chobo 1, ringi 1): all pass; borders between the languages: 1 checked, 0 undecided

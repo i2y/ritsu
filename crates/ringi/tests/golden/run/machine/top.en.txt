@@ -1,0 +1,28 @@
+2026-11-16 10:00  submit              by e0001  -> turned (one of e0201, e0202, e0203, e0204), due 2026-11-19 end of day; skipped skipped (no head is above the requester; nobody is above to go up to); turned went to e0201, e0202, e0203, e0204 (no head is above the requester; nobody is above to go up to: board)
+2026-11-16 11:00  approve             by e0201  -> stopped (nobody, until an administrator adds an approver), due 2026-11-19 end of day; stopped has nobody (no head is above the requester; nobody is above to go up to)
+2026-11-16 12:00  add approver e0101            -> stopped (e0101), due 2026-11-19 end of day
+2026-11-16 13:00  approve             by e0101  -> nobody (nobody, until an administrator adds an approver), due 2026-11-19 end of day; nobody has nobody (no head is above the requester; nobody is above to go up to, and dept_head has nobody: no team of the kind department is above the requester)
+2026-11-16 14:00  add approver e0102            -> nobody (e0102), due 2026-11-19 end of day
+2026-11-16 15:00  approve             by e0102  -> stays (nobody, until an administrator adds an approver), due 2026-11-19 end of day; stays has nobody (no head is above the requester)
+2026-11-16 16:00  add approver e0101            -> stays (e0101), due 2026-11-19 end of day
+2026-11-16 17:00  approve             by e0101  -> last (one of e0201, e0202, e0203, e0204), due 2026-11-19 end of day
+2026-11-17 10:00  approve             by e0202  -> approved
+scenario `the_president_asks`: as written (9 rows)
+
+2026-11-16 10:00  submit   by e0001  -> turned (one of e0201, e0202, e0203, e0204), due 2026-11-19 end of day; skipped skipped (no head is above the requester; nobody is above to go up to); turned went to e0201, e0202, e0203, e0204 (no head is above the requester; nobody is above to go up to: board)
+2026-11-16 11:00  approve  by e0201  -> stopped (nobody, until an administrator adds an approver), due 2026-11-19 end of day; stopped has nobody (no head is above the requester; nobody is above to go up to)
+2026-11-20 00:00  late               -> expired; expired (late; nowhere to go up)
+scenario `nobody_is_added`: as written (3 rows)
+
+2026-11-16 10:00  submit  by e0001  -> turned (one of e0201, e0202, e0203, e0204), due 2026-11-19 end of day; skipped skipped (no head is above the requester; nobody is above to go up to); turned went to e0201, e0202, e0203, e0204 (no head is above the requester; nobody is above to go up to: board)
+2026-11-20 00:00  late              -> expired; expired (late; nowhere to go up)
+scenario `the_board_is_late`: as written (2 rows)
+
+2026-11-16 10:00  submit   by e1201  -> skipped (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> turned (e1101), due 2026-11-19 end of day
+2026-11-16 11:01  approve  by e1101  -> stopped (e1101), due 2026-11-19 end of day
+2026-11-16 11:02  approve  by e1101  -> nobody (e1101), due 2026-11-19 end of day
+2026-11-16 11:03  approve  by e1101  -> stays (e1101), due 2026-11-19 end of day
+2026-11-16 11:04  approve  by e1101  -> last (one of e0001, e0201, e0202, e0203, e0204), due 2026-11-19 end of day
+2026-11-16 12:00  approve  by e0001  -> approved
+scenario `a_member_of_the_staff_asks`: as written (7 rows)

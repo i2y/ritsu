@@ -108,6 +108,10 @@ pub struct Diag<X: Extra = ()> {
     /// Whether the text shows the fix on a line of its own; not when a note already says it.
     pub show_fix: bool,
     pub extra: X,
+    /// The name the diagnostic says is declared nowhere, and where it is looked for (a transfer's
+    /// parameters, a function's): the diagnostics of one file that say so of one name in one place
+    /// are one ([`once`]). Not printed.
+    pub same: Option<(String, String)>,
 }
 
 impl<X: Extra + Default> Diag<X> {
@@ -127,6 +131,7 @@ impl<X: Extra + Default> Diag<X> {
             fix: None,
             show_fix: true,
             extra: X::default(),
+            same: None,
         }
     }
 
@@ -191,6 +196,31 @@ impl<X: Extra> Diag<X> {
     /// The language's own part.
     pub fn with(mut self, extra: X) -> Diag<X> {
         self.extra = extra;
+        self
+    }
+
+    /// The diagnostic says that `name` is declared nowhere in the file ([`once`]).
+    pub fn same(mut self, name: impl Into<String>) -> Diag<X> {
+        self.same = Some((String::new(), name.into()));
+        self
+    }
+
+    /// [`Diag::same`] for a diagnostic already pushed.
+    pub fn same_mut(&mut self, name: impl Into<String>) -> &mut Diag<X> {
+        self.same = Some((String::new(), name.into()));
+        self
+    }
+
+    /// [`Diag::same_in`] for a diagnostic already pushed.
+    pub fn same_in_mut(&mut self, scope: impl Into<String>, name: impl Into<String>) -> &mut Diag<X> {
+        self.same = Some((scope.into(), name.into()));
+        self
+    }
+
+    /// The diagnostic says that `name` is declared nowhere in `scope` (a transfer's parameters, a
+    /// function's): the same name missing from another is another mistake ([`once`]).
+    pub fn same_in(mut self, scope: impl Into<String>, name: impl Into<String>) -> Diag<X> {
+        self.same = Some((scope.into(), name.into()));
         self
     }
 
@@ -294,4 +324,62 @@ pub fn count<X: Extra>(diags: &[Diag<X>]) -> Counts {
 
 pub fn has_errors<X: Extra>(diags: &[Diag<X>]) -> bool {
     diags.iter().any(Diag::is_error)
+}
+
+/// One name declared nowhere is one diagnostic (DESIGN 8.3): of the diagnostics of one file that
+/// say so of one name ([`Diag::same`]), the first in the file is kept, with a note of the other
+/// lines the name is written on, and the others are dropped. The reader fixes the declaration, or
+/// the lines the note lists.
+pub fn once<X: Extra>(diags: &mut Vec<Diag<X>>) {
+    once_with(diags, written_too);
+}
+
+/// [`once`], with the note a language writes: [`written_too`], or, where notes end with no stop
+/// (chobo, geas), [`written_too`] through [`unstopped`].
+pub fn once_with<X: Extra>(diags: &mut Vec<Diag<X>>, note: impl Fn(&str, &[usize]) -> Text) {
+    let mut order: Vec<usize> = (0..diags.len()).collect();
+    order.sort_by_key(|&i| (diags[i].line.unwrap_or(usize::MAX), diags[i].col.unwrap_or(0)));
+    let mut firsts: Vec<((String, String, String), usize, Vec<usize>)> = Vec::new();
+    let mut drop = vec![false; diags.len()];
+    for i in order {
+        let Some((scope, name)) = diags[i].same.clone() else { continue };
+        let key = (diags[i].file.clone(), scope, name);
+        match firsts.iter_mut().find(|(k, ..)| *k == key) {
+            Some((_, _, lines)) => {
+                drop[i] = true;
+                lines.extend(diags[i].line);
+            }
+            None => firsts.push((key, i, Vec::new())),
+        }
+    }
+    for ((_, _, name), i, mut lines) in firsts {
+        lines.retain(|l| Some(*l) != diags[i].line);
+        lines.sort_unstable();
+        lines.dedup();
+        if !lines.is_empty() {
+            diags[i].notes.push(note(&name, &lines));
+        }
+    }
+    let mut k = 0;
+    diags.retain(|_| {
+        k += 1;
+        !drop[k - 1]
+    });
+}
+
+/// The note [`once`] adds: `` `x` is written on line 12 too. ``, `` `x` is written on lines 12 and
+/// 15 too. ``
+pub fn written_too(name: &str, lines: &[usize]) -> Text {
+    let ja = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("、");
+    let en = match lines {
+        [l] => format!("line {l}"),
+        [rest @ .., last] => format!("lines {} and {last}", rest.iter().map(|l| l.to_string()).collect::<Vec<_>>().join(", ")),
+        [] => String::new(),
+    };
+    Text::new(format!("`{name}` は {ja} 行目にも書かれています。"), format!("`{name}` is written on {en} too."))
+}
+
+/// A note as the languages whose notes end with no stop write it: the last `.` and `。` dropped.
+pub fn unstopped(t: Text) -> Text {
+    Text::new(t.ja.strip_suffix('。').unwrap_or(&t.ja).to_string(), t.en.strip_suffix('.').unwrap_or(&t.en).to_string())
 }

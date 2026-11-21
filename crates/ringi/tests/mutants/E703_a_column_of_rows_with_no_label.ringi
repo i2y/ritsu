@@ -1,0 +1,32 @@
+request outlay v1 "Outlay"
+
+use organization org from "shared/small.ringi"
+
+form
+  category : choice "Category"
+    travel   "Travel"
+    supplies "Supplies"
+  items : rows "Items"  count >=1 <=10
+    what  : text "What"  count <=100
+    price : money[JPY] "Price"  range >=1JPY <=100_000JPY
+  amount : money[JPY] "Amount" = sum(items.price)  range >=1JPY <=1_000_000JPY
+
+route
+  check  manager
+
+who
+  manager = manager of requester
+
+ticket
+  self approval  not allowed
+
+labels ja
+  request            "支出"
+  category           "種別"
+  category.travel    "出張"
+  category.supplies  "備品"
+  items              "明細"
+  items.what         "品目"
+  amount             "合計"
+  stage check        "確かめ"
+  who manager        "上長"

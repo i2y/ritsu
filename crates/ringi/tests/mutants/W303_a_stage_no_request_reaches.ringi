@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+  head   heads  when amount > 200_000JPY
+
+who
+  finance = team finance
+  heads   = team heads
+
+ticket
+  self approval  not allowed

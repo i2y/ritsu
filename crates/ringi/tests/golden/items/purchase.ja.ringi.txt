@@ -1,0 +1,176 @@
+14-17 ringi "examples/purchase.ja.ringi" field 種類
+    種類(kind) : choice from 権限表.kind "種類"
+    goods "物品・サービス"
+    capex "設備投資"
+    software "ソフトウェア"
+18-18 ringi "examples/purchase.ja.ringi" field 取引先
+    取引先(vendor) : choice from マスタ.vendors "取引先"
+19-23 ringi "examples/purchase.ja.ringi" field 明細
+    明細(lines) : rows "明細" count >=1 <=30
+    品目(item) : text "品目" count <=100
+    数量(quantity) : number "数量" range >=1 <=10_000
+    単価(price) : money[円] "単価" range >=1円 <=50_000_000円
+    小計(subtotal) : money[円] "小計" = 数量 * 単価 range >=1円 <=100_000_000円
+20-20 ringi "examples/purchase.ja.ringi" field 明細.品目
+    品目(item) : text "品目" count <=100
+21-21 ringi "examples/purchase.ja.ringi" field 明細.数量
+    数量(quantity) : number "数量" range >=1 <=10_000
+22-22 ringi "examples/purchase.ja.ringi" field 明細.単価
+    単価(price) : money[円] "単価" range >=1円 <=50_000_000円
+23-23 ringi "examples/purchase.ja.ringi" field 明細.小計
+    小計(subtotal) : money[円] "小計" = 数量 * 単価 range >=1円 <=100_000_000円
+24-24 ringi "examples/purchase.ja.ringi" field 合計
+    合計(amount) : money[円] "合計" = sum(明細.小計) range >=1円 <=100_000_000円
+25-25 ringi "examples/purchase.ja.ringi" field 用途
+    用途(summary) : long text "何に使うか" count >=1 <=1000
+26-26 ringi "examples/purchase.ja.ringi" field 見積書
+    見積書(quote) : attachment "見積書"
+27-27 ringi "examples/purchase.ja.ringi" field 前払い
+    前払い(advance) : rate[step 5%] "前払いの割合" range >=0% <=100%
+28-30 ringi "examples/purchase.ja.ringi" field 相見積もり
+    相見積もり(others) : rows "相見積もり" count >=0 <=3
+    会社(company) : text "会社" count >=1 <=100
+    金額(bid) : money[円] "見積もりの金額" range >=1円 <=100_000_000円
+29-29 ringi "examples/purchase.ja.ringi" field 相見積もり.会社
+    会社(company) : text "会社" count >=1 <=100
+30-30 ringi "examples/purchase.ja.ringi" field 相見積もり.金額
+    金額(bid) : money[円] "見積もりの金額" range >=1円 <=100_000_000円
+31-31 ringi "examples/purchase.ja.ringi" field 技術の確認者
+    技術の確認者(reviewer) : person "技術の確認者" optional
+35-36 ringi "examples/purchase.ja.ringi" stage 一次
+    一次(first) 上長
+    when empty escalate, then skip
+37-37 ringi "examples/purchase.ja.ringi" stage 技術
+    技術(technical) 確認者 when 技術の確認者 is not none
+39-39 ringi "examples/purchase.ja.ringi" stage 財務
+    財務(finance) 財務部 when 権限表.finance or 前払い > 30%
+40-42 ringi "examples/purchase.ja.ringi" stage 取締役会
+    取締役会(board) at least 60% of 取締役 when 権限表.board
+    due in 10 business days at end of day
+    when late expire
+45-46 ringi "examples/purchase.ja.ringi" stage 決裁
+    決裁(decide) 権限表.decider
+    when empty escalate, then 取締役
+47-47 ringi "examples/purchase.ja.ringi" stage 回覧
+    回覧(inform) circulate to 総務部
+50-50 ringi "examples/purchase.ja.ringi" who 上長
+    上長(manager) = manager of requester
+51-51 ringi "examples/purchase.ja.ringi" who 確認者
+    確認者(reviewer) = chosen by requester in 技術の確認者
+52-52 ringi "examples/purchase.ja.ringi" who 財務部
+    財務部(finance) = team finance
+53-53 ringi "examples/purchase.ja.ringi" who 取締役
+    取締役(board) = team board
+54-54 ringi "examples/purchase.ja.ringi" who 総務部
+    総務部(general_affairs) = team general_affairs
+55-55 ringi "examples/purchase.ja.ringi" who 部長
+    部長(dept_head) = head of requester.department
+56-56 ringi "examples/purchase.ja.ringi" who 本部長
+    本部長(division_head) = nearest division_head above requester
+57-57 ringi "examples/purchase.ja.ringi" who 社長
+    社長(president) = nearest president above requester
+59-63 ringi "examples/purchase.ja.ringi" deadline every_stage
+    every stage
+    due in 5 business days at end of day
+    remind after 3 business days at 09:00
+    when late escalate, then expire
+    when empty escalate
+36-36 ringi "examples/purchase.ja.ringi" deadline 一次
+    when empty escalate, then skip
+41-42 ringi "examples/purchase.ja.ringi" deadline 取締役会
+    due in 10 business days at end of day
+    when late expire
+46-46 ringi "examples/purchase.ja.ringi" deadline 決裁
+    when empty escalate, then 取締役
+66-66 ringi "examples/purchase.ja.ringi" ticket self_approval
+    self approval not allowed
+69-69 ringi "examples/purchase.ja.ringi" ticket same_approver
+    same approver approves once, at the last stage
+70-70 ringi "examples/purchase.ja.ringi" ticket send_back
+    send back to any earlier stage, at most 3 times
+71-71 ringi "examples/purchase.ja.ringi" ticket resubmit
+    resubmit within 10 business days
+72-72 ringi "examples/purchase.ja.ringi" ticket withdraw
+    withdraw until 決裁
+73-73 ringi "examples/purchase.ja.ringi" ticket retract
+    retract approval until the next stage answers
+74-74 ringi "examples/purchase.ja.ringi" ticket approvers_edit
+    approvers edit 用途
+76-76 ringi "examples/purchase.ja.ringi" ticket hold_予算.reserve
+    on submitted hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: requester.department, amount: 合計) when requester.department is not none
+77-77 ringi "examples/purchase.ja.ringi" ticket post_予算.reserve
+    on approved post 予算.reserve(request: ticket.id, attempt: ticket.attempt)
+78-78 ringi "examples/purchase.ja.ringi" ticket launch_発注
+    on approved launch 発注(request_id: ticket.id, vendor: 取引先, amount: 合計, summary: 用途)
+79-79 ringi "examples/purchase.ja.ringi" ticket void_予算.reserve
+    on sent back, rejected, withdrawn, expired void 予算.reserve(request: ticket.id, attempt: ticket.attempt)
+82-82 ringi "examples/purchase.ja.ringi" claim 大きな購買は取締役会で決議する場合がある
+    大きな購買は取締役会で決議する場合がある : possible 取締役会 is at least 60% of 取締役
+83-83 ringi "examples/purchase.ja.ringi" claim 期限内に終わる
+    期限内に終わる : every ticket ends within 246 business days
+85-96 ringi "examples/purchase.ja.ringi" scenario 取締役会で決議する購買
+    scenario 取締役会で決議する購買
+    requester e1201
+    given 予算.allocate(dept: "sales1", period: "2026", amount: 10_000_000円)
+    form 種類 = capex, 取引先 = "V-0031", 明細 = [{品目: "プレスのライン", 数量: 1, 単価: 8_000_000円}], 用途 = "工場の二本目のプレスのライン", 見積書 = "quote.pdf", 前払い = 20%, 相見積もり = [{会社: "サンプルプレス（架空）", 金額: 8_600_000円}]
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | 一次 | in progress |
+    | 2026-11-16 14:00 | approve | e1101 | 財務 | in progress |
+    | 2026-11-17 10:00 | approve | e4001 | 取締役会 | in progress |
+    | 2026-11-18 10:00 | approve | e0201 | 取締役会 | in progress |
+    | 2026-11-18 11:00 | approve | e0202 | 取締役会 | in progress |
+    | 2026-11-18 15:00 | approve | e0203 | 決裁 | in progress |
+    | 2026-11-19 10:00 | approve | e0001 | | approved |
+99-107 ringi "examples/purchase.ja.ringi" scenario 半分を前払いする購買
+    scenario 半分を前払いする購買
+    requester e1201
+    given 予算.allocate(dept: "sales1", period: "2026", amount: 10_000_000円)
+    form 種類 = goods, 取引先 = "V-0012", 明細 = [{品目: "展示会のブース", 数量: 1, 単価: 400_000円}], 用途 = "春の展示会のブース", 見積書 = "quote.pdf", 前払い = 50%, 相見積もり = []
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | 一次 | in progress |
+    | 2026-11-16 11:00 | approve | e1101 | 財務 | in progress |
+    | 2026-11-16 14:00 | approve | e4001 | 決裁 | in progress |
+    | 2026-11-17 10:00 | approve | e3101 | | approved |
+110-117 ringi "examples/purchase.ja.ringi" scenario 上長が財務のあとに決裁する
+    scenario 上長が財務のあとに決裁する
+    requester e3101
+    given 予算.allocate(dept: "sales1", period: "2026", amount: 10_000_000円)
+    form 種類 = goods, 取引先 = "V-0012", 明細 = [{品目: "デモ機", 数量: 4, 単価: 500_000円}], 用途 = "営業所に置くデモ機", 見積書 = "quote.pdf", 前払い = 0%, 相見積もり = []
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e3101 | 財務 | in progress |
+    | 2026-11-16 14:00 | approve | e4001 | 決裁 | in progress |
+    | 2026-11-17 10:00 | approve | e0101 | | approved |
+121-131 ringi "examples/purchase.ja.ringi" scenario 決裁が上へ回り上長はあとで答える
+    scenario 決裁が上へ回り上長はあとで答える
+    requester e3101
+    given 予算.allocate(dept: "sales1", period: "2026", amount: 10_000_000円)
+    form 種類 = goods, 取引先 = "V-0012", 明細 = [{品目: "デモ機", 数量: 4, 単価: 500_000円}], 用途 = "営業所に置くデモ機", 見積書 = "quote.pdf", 前払い = 0%, 相見積もり = []
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e3101 | 財務 | in progress |
+    | 2026-11-16 14:00 | approve | e4001 | 決裁 | in progress |
+    | 2026-11-19 09:00 | remind | | 決裁 | in progress |
+    | 2026-11-24 00:00 | late | | 決裁 | in progress |
+    | 2026-11-24 10:00 | approve | e0001 | 一次 | in progress |
+    | 2026-11-24 15:00 | approve | e0101 | | approved |
+136-143 ringi "examples/purchase.ja.ringi" scenario 上長が待つあいだに組織が変わる
+    scenario 上長が待つあいだに組織が変わる
+    requester e9002
+    given 予算.allocate(dept: "legal", period: "2026", amount: 3_000_000円)
+    form 種類 = goods, 取引先 = "V-0012", 明細 = [{品目: "書類のスキャナ", 数量: 1, 単価: 300_000円}], 用途 = "契約書の保管に使うスキャナ", 見積書 = "quote.pdf", 前払い = 0%, 相見積もり = [], 技術の確認者 = person "e7201"
+    | at | event | by | -> stage | status |
+    | 2027-03-30 10:00 | submit | e9002 | 技術 | in progress |
+    | 2027-04-01 11:00 | approve | e7201 | 決裁 | in progress |
+    | 2027-04-01 15:00 | approve | e0102 | | approved |
+147-158 ringi "examples/purchase.ja.ringi" scenario 取締役会が否決する購買
+    scenario 取締役会が否決する購買
+    requester e1201
+    given 予算.allocate(dept: "sales1", period: "2026", amount: 10_000_000円)
+    form 種類 = capex, 取引先 = "V-0031", 明細 = [{品目: "梱包のラインのロボットアーム", 数量: 2, 単価: 3_500_000円}], 用途 = "梱包のラインに置く 2 台のロボットアーム", 見積書 = "quote.pdf", 前払い = 0%, 相見積もり = []
+    | at | event | by | comment | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | | 一次 | in progress |
+    | 2026-11-16 14:00 | approve | e1101 | | 財務 | in progress |
+    | 2026-11-17 10:00 | approve | e4001 | | 取締役会 | in progress |
+    | 2026-11-18 10:00 | approve | e0201 | | 取締役会 | in progress |
+    | 2026-11-18 11:00 | reject | e0202 | "梱包のラインは、能力の半分しか使っていない" | 取締役会 | in progress |
+    | 2026-11-18 13:00 | reject | e0203 | "ラインに 2 台は多い" | 取締役会 | in progress |
+    | 2026-11-18 15:00 | reject | e0204 | "1 台の見積もりで、改めて申請してほしい" | | rejected |

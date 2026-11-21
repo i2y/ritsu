@@ -1,0 +1,47 @@
+rule 明細の項目(line_fields) v1
+description "注文の明細。明細が持てる種類の項目を一つずつ持ち、いくつかは無いことがあり、二つは組み込みと同じ名前を持つ。手当てが要る明細の数、いちばん早い日、明細から引くいちばん大きい率、品物の数、明細の代金を出す（架空）"
+
+enum 大きさ(size) = 小(small) | 大(large)
+
+# 注文の明細の一行。呼ぶ側は三行まで渡す
+elements 明細(lines)
+  品名(label) : string
+  メモ(note)  : string?
+  大きさ(size) : 大きさ
+  箱(wrap)     : 大きさ?
+  数量(qty)   : number          range >=1 <=9
+  予備(spare) : number?         range >=0 <=9
+  長さ(len)   : number?         range >=0 <=99
+  単価(price) : money[USDc]     range >=0USDc <=900USDc
+  心付け(tip) : money[USDc]?    range >=0USDc <=900USDc
+  別額(abs)   : money[USDc]?    range >=0USDc <=900USDc
+  値引き(off) : rate[step 1%]   range >=0% <=50%
+  追加(extra) : rate[step 1%]?  range >=0% <=50%
+  日付(on)    : date            range >=2026-01-01 <=2027-12-31
+  期限(upto)  : date?
+  贈り物(gift) : bool
+  急ぎ(rush)  : bool?
+
+# 明細に手当てが要るか：大きい物か箱に入れる物、予備や長さや心付けや別額がある物、追加で引く物、
+# 期限のある物、急ぎの物
+table 手当て(care_of)
+policy first
+| 大きさ | 箱   | 予備 | 長さ | 心付け | 別額 | 追加 | 期限 | 急ぎ | -> 要る(care) : bool |
+| 大     | -    | -    | -    | -      | -    | -    | -    | -    | true                 |
+| 小     | none | none | none | none   | none | none | none | none | false                |
+| -      | -    | -    | -    | -      | -    | -    | -    | -    | true                 |
+
+count 贈り物の数 over 明細 where 贈り物  range >=0 <=3
+count 手当ての数 over 明細 where 要る  range >=0 <=3
+min 最初の日 over 明細 of 日付 empty 2027-12-31
+max 最大の値引き over 明細 of 値引き empty 0%
+sum 品物の数 over 明細 of 数量  range >=0 <=27
+sum 代金 over 明細 of 単価  range >=0USDc <=2_700USDc
+
+outputs
+  贈り物の数(gifts)      : number  round down(1)
+  手当ての数(cared)      : number  round down(1)
+  最初の日(first)        : date
+  最大の値引き(most_off) : rate[step 1%]  round down(1%)
+  品物の数(items)        : number  round down(1)
+  代金(spent)            : money[USDc]  round down(1USDc)

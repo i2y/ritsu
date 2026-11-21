@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_a_position_submitted_by_does_not_know.ringi:15:27: `manager` is not a position of the organization
+    15 |   submitted by   position manager or higher
+  = The positions declared: `staff`, `dept_head` and `president`

@@ -1,0 +1,2 @@
+エラー[E212]: tests/mutants/E212_a_value_of_another_type.gate:12:1: フローの `claim_id` は文字列で、属性 `urgent` は真偽です
+    12 |     urgent = claim_id

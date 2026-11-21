@@ -1,0 +1,190 @@
+scenario 管理者の権限の申請, line 59: submit by e1201 at 2026-11-16 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, line 60: approve by e1101 at 2026-11-16 11:00 -> 持ち主, in progress
+scenario 管理者の権限の申請, line 61: approve by e3101 at 2026-11-16 16:00 -> セキュリティ, in progress
+scenario 管理者の権限の申請, line 62: remind at 2026-11-17 09:00 -> セキュリティ, in progress
+scenario 管理者の権限の申請, line 63: approve by e7102 at 2026-11-17 15:00 -> approved
+scenario 管理者の権限の申請, after it ended: comment by e1201 at 2026-11-17 15:00 -> refused (state)
+scenario 管理者の権限の申請, after line 59: approvals: approve by e1101 at 2026-11-16 10:00 -> 持ち主, in progress
+scenario 管理者の権限の申請, after line 59: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario 管理者の権限の申請, after line 59: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario 管理者の権限の申請, after line 59: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario 管理者の権限の申請, after line 59: the requester: comment by e1201 at 2026-11-16 10:00 -> with requester
+scenario 管理者の権限の申請, after line 59: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario 管理者の権限の申請, after line 59: sent back: resubmit by e1201 at 2026-11-17 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 管理者の権限の申請, after line 59: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 管理者の権限の申請, after line 59: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 管理者の権限の申請, after line 59: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 管理者の権限の申請, after line 59: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 管理者の権限の申請, after line 59: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 管理者の権限の申請, after line 59: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 管理者の権限の申請, after line 59: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario 管理者の権限の申請, after line 59: sent back: comment by e1101 at 2026-11-16 10:00 -> with requester
+scenario 管理者の権限の申請, after line 59: sent back: comment by e1201 at 2026-11-16 10:00 -> with requester
+scenario 管理者の権限の申請, after line 59: sent back: resubmit late at 2026-11-24 00:00 -> expired
+scenario 管理者の権限の申請, after line 59: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario 管理者の権限の申請, after line 59: an administrator: add approver at 2026-11-16 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: an administrator: hand over at 2026-11-16 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: an administrator, by name: add approver by e0101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: an administrator, by name: hand over by e0101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: clocks: remind at 2026-11-17 09:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: clocks: late at 2026-11-19 00:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: clocks: remind at 2026-11-20 09:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: clocks: late at 2026-11-24 00:00 -> expired
+scenario 管理者の権限の申請, after line 59: clocks: remind at 2026-11-17 08:59 -> refused (clock)
+scenario 管理者の権限の申請, after line 59: clocks: approve by e1101 at 2026-11-17 09:00 -> refused (clock)
+scenario 管理者の権限の申請, after line 59: clocks: comment by e1101 at 2026-11-17 09:00 -> refused (clock)
+scenario 管理者の権限の申請, after line 59: comments: comment by e1101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: comments: comment by e1201 at 2026-11-16 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario 管理者の権限の申請, after line 59: comments: comment by e1101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario 管理者の権限の申請, after line 59: comments: approve by e1101 at 2026-11-16 10:00 -> 持ち主, in progress
+scenario 管理者の権限の申請, after line 59: comments: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario 管理者の権限の申請, after line 59: comments: approve by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario 管理者の権限の申請, after line 59: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario 管理者の権限の申請, after line 59: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 59: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> refused (limit)
+scenario 管理者の権限の申請, after line 60: approvals: approve by e3101 at 2026-11-16 11:00 -> セキュリティ, in progress
+scenario 管理者の権限の申請, after line 60: rejections: reject by e3101 at 2026-11-16 11:00 -> rejected
+scenario 管理者の権限の申請, after line 60: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
+scenario 管理者の権限の申請, after line 60: the requester: withdraw by e1201 at 2026-11-16 11:00 -> with requester
+scenario 管理者の権限の申請, after line 60: sent back: send back by e3101 at 2026-11-16 11:00 -> with requester
+scenario 管理者の権限の申請, after line 60: sent back: resubmit by e1201 at 2026-11-17 11:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 60: sent back: discard by e1201 at 2026-11-16 11:00 -> withdrawn
+scenario 管理者の権限の申請, after line 60: sent back: resubmit late at 2026-11-24 00:00 -> expired
+scenario 管理者の権限の申請, after line 60: sent back: send back by e3101 at 2026-11-16 11:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 60: retracted: retract by e1101 at 2026-11-16 11:00 -> refused (event)
+scenario 管理者の権限の申請, after line 60: clocks: remind at 2026-11-17 09:00 -> 持ち主, in progress
+scenario 管理者の権限の申請, after line 60: clocks: late at 2026-11-19 00:00 -> 持ち主, in progress
+scenario 管理者の権限の申請, after line 60: clocks: remind at 2026-11-20 09:00 -> 持ち主, in progress
+scenario 管理者の権限の申請, after line 60: clocks: late at 2026-11-24 00:00 -> expired
+scenario 管理者の権限の申請, after line 61: approvals: approve by e7101 at 2026-11-16 16:00 -> approved
+scenario 管理者の権限の申請, after line 61: rejections: reject by e7101 at 2026-11-16 16:00 -> セキュリティ, in progress
+scenario 管理者の権限の申請, after line 61: rejections: reject by e7102 at 2026-11-16 16:00 -> rejected
+scenario 管理者の権限の申請, after line 61: the requester: approve by e1201 at 2026-11-16 16:00 -> refused (person)
+scenario 管理者の権限の申請, after line 61: the requester: withdraw by e1201 at 2026-11-16 16:00 -> with requester
+scenario 管理者の権限の申請, after line 61: sent back: send back by e7101 at 2026-11-16 16:00 -> with requester
+scenario 管理者の権限の申請, after line 61: sent back: resubmit by e1201 at 2026-11-17 16:00 -> 上長, in progress
+scenario 管理者の権限の申請, after line 61: sent back: discard by e1201 at 2026-11-16 16:00 -> withdrawn
+scenario 管理者の権限の申請, after line 61: sent back: resubmit late at 2026-11-24 00:00 -> expired
+scenario 管理者の権限の申請, after line 61: sent back: send back by e7101 at 2026-11-16 16:00 -> 持ち主, in progress
+scenario 管理者の権限の申請, after line 61: clocks: late at 2026-11-19 00:00 -> セキュリティ, in progress
+scenario 管理者の権限の申請, after line 61: clocks: remind at 2026-11-20 09:00 -> セキュリティ, in progress
+scenario 管理者の権限の申請, after line 61: clocks: late at 2026-11-24 00:00 -> expired
+scenario 上長がセキュリティで一度だけ答える, line 71: submit by e7102 at 2026-11-16 10:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, line 72: approve by e7001 at 2026-11-16 11:00 -> セキュリティ, in progress
+scenario 上長がセキュリティで一度だけ答える, line 73: approve by e7101 at 2026-11-16 15:00 -> approved
+scenario 上長がセキュリティで一度だけ答える, after line 71: approvals: approve by e7001 at 2026-11-16 10:00 -> セキュリティ, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: rejections: reject by e7001 at 2026-11-16 10:00 -> rejected
+scenario 上長がセキュリティで一度だけ答える, after line 71: the requester: approve by e7102 at 2026-11-16 10:00 -> refused (person)
+scenario 上長がセキュリティで一度だけ答える, after line 71: the requester: withdraw by e7102 at 2026-11-16 10:00 -> with requester
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back: send back by e7001 at 2026-11-16 10:00 -> with requester
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back: resubmit by e7102 at 2026-11-17 10:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back: discard by e7102 at 2026-11-16 10:00 -> withdrawn
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back: resubmit late at 2026-11-24 00:00 -> expired
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back: send back by e7001 at 2026-11-16 10:00 -> 上長, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back: approve by e7101 at 2026-11-16 10:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back: approve by e7001 at 2026-11-16 10:00 -> セキュリティ, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back: approve by e7101 at 2026-11-16 10:00 -> approved
+scenario 上長がセキュリティで一度だけ答える, after line 71: paused: pause by e7001 at 2026-11-16 10:00 -> refused (event)
+scenario 上長がセキュリティで一度だけ答える, after line 71: an administrator: add approver at 2026-11-16 10:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: an administrator: hand over at 2026-11-16 10:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: clocks: remind at 2026-11-17 09:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: clocks: late at 2026-11-19 00:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: clocks: remind at 2026-11-20 09:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: clocks: late at 2026-11-24 00:00 -> expired
+scenario 上長がセキュリティで一度だけ答える, after line 71: clocks: remind at 2026-11-17 08:59 -> refused (clock)
+scenario 上長がセキュリティで一度だけ答える, after line 71: clocks: approve by e7001 at 2026-11-17 09:00 -> refused (clock)
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back to the limit: send back by e7001 at 2026-11-17 10:00 -> with requester
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back to the limit: resubmit by e7102 at 2026-11-18 10:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 71: sent back to the limit: send back by e7001 at 2026-11-18 10:00 -> refused (limit)
+scenario 上長がセキュリティで一度だけ答える, after line 72: approvals: approve by e7101 at 2026-11-16 11:00 -> approved
+scenario 上長がセキュリティで一度だけ答える, after line 72: rejections: reject by e7101 at 2026-11-16 11:00 -> rejected
+scenario 上長がセキュリティで一度だけ答える, after line 72: the requester: approve by e7102 at 2026-11-16 11:00 -> refused (person)
+scenario 上長がセキュリティで一度だけ答える, after line 72: the requester: withdraw by e7102 at 2026-11-16 11:00 -> with requester
+scenario 上長がセキュリティで一度だけ答える, after line 72: sent back: send back by e7101 at 2026-11-16 11:00 -> with requester
+scenario 上長がセキュリティで一度だけ答える, after line 72: sent back: resubmit by e7102 at 2026-11-17 11:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: sent back: discard by e7102 at 2026-11-16 11:00 -> withdrawn
+scenario 上長がセキュリティで一度だけ答える, after line 72: sent back: resubmit late at 2026-11-24 00:00 -> expired
+scenario 上長がセキュリティで一度だけ答える, after line 72: sent back: send back by e7101 at 2026-11-16 11:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: sent back: send back by e7101 at 2026-11-16 11:00 -> 上長, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: sent back: approve by e7101 at 2026-11-16 11:00 -> 持ち主, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: sent back: approve by e7001 at 2026-11-16 11:00 -> セキュリティ, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: sent back: approve by e7101 at 2026-11-16 11:00 -> approved
+scenario 上長がセキュリティで一度だけ答える, after line 72: retracted: retract by e7001 at 2026-11-16 11:00 -> refused (event)
+scenario 上長がセキュリティで一度だけ答える, after line 72: an administrator: add approver at 2026-11-16 11:00 -> セキュリティ, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: an administrator: hand over at 2026-11-16 11:00 -> セキュリティ, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: an administrator: approve by e0001 at 2026-11-16 11:00 -> 上長, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: an administrator: approve by e7101 at 2026-11-16 11:00 -> approved
+scenario 上長がセキュリティで一度だけ答える, after line 72: an administrator: approve by e0001 at 2026-11-16 11:00 -> 上長, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: an administrator: approve by e7101 at 2026-11-16 11:00 -> approved
+scenario 上長がセキュリティで一度だけ答える, after line 72: clocks: remind at 2026-11-17 09:00 -> セキュリティ, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: clocks: late at 2026-11-19 00:00 -> セキュリティ, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: clocks: remind at 2026-11-20 09:00 -> セキュリティ, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: clocks: late at 2026-11-24 00:00 -> expired
+scenario 上長がセキュリティで一度だけ答える, after line 72: late, and approved where it went up to: approve by e7001 at 2026-11-19 01:00 -> 上長, in progress
+scenario 上長がセキュリティで一度だけ答える, after line 72: late, and approved where it went up to: approve by e7101 at 2026-11-19 01:00 -> approved
+scenario 管理者の権限の申請, after line 60: made on the revision before: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: reject by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: send back by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: retract by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: pause by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: resume by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: edit by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: withdraw by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: discard by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: resubmit by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: add approver at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: hand over at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: agent answered at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: note ready at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: made on the revision before: flow failed at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: no revision: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, after line 60: a comment, which says no revision: comment by e1101 at 2026-11-16 11:00 -> 持ち主, in progress
+scenario 管理者の権限の申請, after line 60: made on the revision before, with a comment too long: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 管理者の権限の申請, made on 2026-11-20 (closed from 2026-11-21): submit by e1201 at 2026-11-20 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, made on 2026-11-20 (closed from 2026-11-21): remind at 2026-11-23 09:00 -> 上長, in progress
+scenario 管理者の権限の申請, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-25 00:00 -> 上長, in progress
+scenario 管理者の権限の申請, made on 2026-11-20 (closed from 2026-11-21): remind at 2026-11-26 09:00 -> 上長, in progress
+scenario 管理者の権限の申請, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-28 00:00 -> expired
+scenario 管理者の権限の申請, made on 2026-12-28 (closed from 2026-12-29): submit by e1201 at 2026-12-28 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, made on 2026-12-28 (closed from 2026-12-29): remind at 2027-01-04 09:00 -> 上長, in progress
+scenario 管理者の権限の申請, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-06 00:00 -> 上長, in progress
+scenario 管理者の権限の申請, made on 2026-12-28 (closed from 2026-12-29): remind at 2027-01-07 09:00 -> 上長, in progress
+scenario 管理者の権限の申請, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-09 00:00 -> expired
+scenario 管理者の権限の申請, made with a comment: submit by e1201 at 2026-11-16 10:00 -> 上長, in progress
+scenario 管理者の権限の申請, made with a comment: submit by e1201 at 2026-11-16 10:00 -> refused (comment)
+requester e0001: submit by e0001 at 2026-11-16 10:00 -> 持ち主, in progress
+requester e0101: submit by e0101 at 2026-11-16 10:00 -> 上長, in progress
+requester e0102: submit by e0102 at 2026-11-16 10:00 -> 上長, in progress
+requester e0201: submit by e0201 at 2026-11-16 10:00 -> 上長, in progress
+requester e0202: submit by e0202 at 2026-11-16 10:00 -> 上長, in progress
+requester e0203: submit by e0203 at 2026-11-16 10:00 -> 上長, in progress
+requester e0204: submit by e0204 at 2026-11-16 10:00 -> 上長, in progress
+requester e1001: submit by e1001 at 2026-11-16 10:00 -> 上長, in progress
+requester e1002: submit by e1002 at 2026-11-16 10:00 -> 上長, in progress
+requester e1101: submit by e1101 at 2026-11-16 10:00 -> 持ち主, in progress
+requester e1203: submit by e1203 at 2026-11-16 10:00 -> 上長, in progress
+requester e3101: submit by e3101 at 2026-11-16 10:00 -> 持ち主, in progress
+requester e4001: submit by e4001 at 2026-11-16 10:00 -> 上長, in progress
+requester e5001: submit by e5001 at 2026-11-16 10:00 -> 上長, in progress
+requester e6001: submit by e6001 at 2026-11-16 10:00 -> 上長, in progress
+requester e7001: submit by e7001 at 2026-11-16 10:00 -> 上長, in progress
+requester e7101: submit by e7101 at 2026-11-16 10:00 -> 上長, in progress
+requester e7102: submit by e7102 at 2026-11-16 10:00 -> 持ち主, in progress
+requester e7201: submit by e7201 at 2026-11-16 10:00 -> 上長, in progress
+requester e7202: submit by e7202 at 2026-11-16 10:00 -> 上長, in progress
+requester e9001: submit by e9001 at 2026-11-16 10:00 -> 上長, in progress
+requester e9002: submit by e9002 at 2026-11-16 10:00 -> 上長, in progress
+requester e9003: submit by e9003 at 2026-11-16 10:00 -> 上長, in progress
+proxy e0001 for e1201: submit by e0001 at 2026-11-16 10:00 -> refused (person)
+across the versions of the organization: submit by e1201 at 2027-03-31 10:00 -> 上長, in progress
+across the versions of the organization: remind at 2027-04-01 09:00 -> 上長, in progress
+across the versions of the organization: approve by e1101 at 2027-04-01 10:00 -> 持ち主, in progress
+across the versions of the organization: approve by e3101 at 2027-04-01 10:00 -> セキュリティ, in progress
+across the versions of the organization: approve by e7101 at 2027-04-01 10:00 -> approved
+across the versions of the organization: send back by e1101 at 2027-03-31 10:00 -> with requester
+across the versions of the organization: resubmit by e1201 at 2027-04-01 10:00 -> 持ち主, in progress

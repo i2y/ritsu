@@ -1,0 +1,1375 @@
+scenario one_answer_at_the_later_of_two_stages, line 77: submit by e1101 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, line 78: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, line 79: approve by e0101 at 2026-11-16 12:00 -> approved
+scenario one_answer_at_the_later_of_two_stages, after it ended: comment by e1101 at 2026-11-16 12:00 -> refused (state)
+scenario one_answer_at_the_later_of_two_stages, after line 77: approvals: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: rejections: reject by e3101 at 2026-11-16 10:00 -> rejected
+scenario one_answer_at_the_later_of_two_stages, after line 77: the requester: approve by e1101 at 2026-11-16 10:00 -> refused (person)
+scenario one_answer_at_the_later_of_two_stages, after line 77: the requester: withdraw by e1101 at 2026-11-16 10:00 -> with requester
+scenario one_answer_at_the_later_of_two_stages, after line 77: the requester: comment by e1101 at 2026-11-16 10:00 -> with requester
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back: send back by e3101 at 2026-11-16 10:00 -> with requester
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back: resubmit by e1101 at 2026-11-17 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> refused (form)
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> refused (form)
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> refused (form)
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> refused (form)
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> middle, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> first, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> middle, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> first, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> first, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> first, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> middle, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> middle, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: made again, with fields made empty: resubmit by e1101 at 2026-11-17 10:00 -> middle, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back: discard by e1101 at 2026-11-16 10:00 -> withdrawn
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back: comment by e3101 at 2026-11-16 10:00 -> with requester
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back: comment by e1101 at 2026-11-16 10:00 -> with requester
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back: send back by e3101 at 2026-11-16 10:00 -> first, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back: approve by e3101 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back: approve by e0101 at 2026-11-16 10:00 -> approved
+scenario one_answer_at_the_later_of_two_stages, after line 77: edited, with fields made empty: edit by e3101 at 2026-11-16 10:00 -> refused (form)
+scenario one_answer_at_the_later_of_two_stages, after line 77: edited, with fields made empty: edit by e3101 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: edited, with fields made empty: edit by e3101 at 2026-11-16 10:00 -> refused (form)
+scenario one_answer_at_the_later_of_two_stages, after line 77: edited, with fields made empty: edit by e3101 at 2026-11-16 10:00 -> refused (form)
+scenario one_answer_at_the_later_of_two_stages, after line 77: edited, with fields made empty: edit by e3101 at 2026-11-16 10:00 -> refused (form)
+scenario one_answer_at_the_later_of_two_stages, after line 77: paused: pause by e3101 at 2026-11-16 10:00 -> second, paused
+scenario one_answer_at_the_later_of_two_stages, after line 77: paused: resume by e3101 at 2026-11-17 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: paused: comment by e1101 at 2026-11-16 10:00 -> second, paused
+scenario one_answer_at_the_later_of_two_stages, after line 77: paused: pause ends at 2026-11-24 00:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: an administrator: add approver at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: an administrator: hand over at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: an administrator: approve by e0001 at 2026-11-16 10:00 -> first, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: an administrator: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: an administrator: approve by e0101 at 2026-11-16 10:00 -> approved
+scenario one_answer_at_the_later_of_two_stages, after line 77: an administrator: approve by e0001 at 2026-11-16 10:00 -> first, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: an administrator: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: an administrator: approve by e0101 at 2026-11-16 10:00 -> approved
+scenario one_answer_at_the_later_of_two_stages, after line 77: an administrator, by name: add approver by e0101 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: an administrator, by name: hand over by e0101 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: clocks: remind at 2026-11-18 09:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: clocks: late at 2026-11-20 00:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: clocks: remind at 2026-11-24 09:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: clocks: late at 2026-11-26 00:00 -> expired
+scenario one_answer_at_the_later_of_two_stages, after line 77: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> first, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> approved
+scenario one_answer_at_the_later_of_two_stages, after line 77: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario one_answer_at_the_later_of_two_stages, after line 77: clocks: approve by e3101 at 2026-11-18 09:00 -> refused (clock)
+scenario one_answer_at_the_later_of_two_stages, after line 77: clocks: comment by e3101 at 2026-11-18 09:00 -> refused (clock)
+scenario one_answer_at_the_later_of_two_stages, after line 77: comments: comment by e3101 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: comments: comment by e1101 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: comments: comment by e3101 at 2026-11-16 10:00 -> refused (comment)
+scenario one_answer_at_the_later_of_two_stages, after line 77: comments: comment by e3101 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: comments: comment by e3101 at 2026-11-16 10:00 -> refused (comment)
+scenario one_answer_at_the_later_of_two_stages, after line 77: comments: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: comments: send back by e3101 at 2026-11-16 10:00 -> with requester
+scenario one_answer_at_the_later_of_two_stages, after line 77: comments: approve by e3101 at 2026-11-16 10:00 -> refused (comment)
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back to the limit: send back by e3101 at 2026-11-17 10:00 -> with requester
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back to the limit: resubmit by e1101 at 2026-11-18 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 77: sent back to the limit: send back by e3101 at 2026-11-18 10:00 -> refused (limit)
+scenario one_answer_at_the_later_of_two_stages, after line 78: approvals: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario one_answer_at_the_later_of_two_stages, after line 78: rejections: reject by e0101 at 2026-11-16 11:00 -> rejected
+scenario one_answer_at_the_later_of_two_stages, after line 78: the requester: approve by e1101 at 2026-11-16 11:00 -> refused (person)
+scenario one_answer_at_the_later_of_two_stages, after line 78: the requester: withdraw by e1101 at 2026-11-16 11:00 -> refused (state)
+scenario one_answer_at_the_later_of_two_stages, after line 78: sent back: send back by e0101 at 2026-11-16 11:00 -> with requester
+scenario one_answer_at_the_later_of_two_stages, after line 78: sent back: resubmit by e1101 at 2026-11-17 11:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 78: sent back: discard by e1101 at 2026-11-16 11:00 -> withdrawn
+scenario one_answer_at_the_later_of_two_stages, after line 78: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario one_answer_at_the_later_of_two_stages, after line 78: sent back: send back by e0101 at 2026-11-16 11:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 78: paused: pause by e0101 at 2026-11-16 11:00 -> decide, paused
+scenario one_answer_at_the_later_of_two_stages, after line 78: paused: resume by e0101 at 2026-11-17 11:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 78: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 78: retracted: retract by e3101 at 2026-11-16 11:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 78: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 78: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 78: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 78: clocks: late at 2026-11-26 00:00 -> expired
+scenario one_answer_after_the_stage_between, line 86: submit by e1101 at 2026-11-16 10:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, line 87: approve by e1001 at 2026-11-16 11:00 -> second, in progress
+scenario one_answer_after_the_stage_between, line 88: approve by e3101 at 2026-11-16 12:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, line 89: approve by e0101 at 2026-11-16 13:00 -> approved
+scenario one_answer_after_the_stage_between, after line 86: approvals: approve by e1001 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 86: rejections: reject by e1001 at 2026-11-16 10:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: rejections: reject by e1002 at 2026-11-16 10:00 -> rejected
+scenario one_answer_after_the_stage_between, after line 86: the requester: approve by e1101 at 2026-11-16 10:00 -> refused (person)
+scenario one_answer_after_the_stage_between, after line 86: the requester: withdraw by e1101 at 2026-11-16 10:00 -> with requester
+scenario one_answer_after_the_stage_between, after line 86: sent back: send back by e1001 at 2026-11-16 10:00 -> with requester
+scenario one_answer_after_the_stage_between, after line 86: sent back: resubmit by e1101 at 2026-11-17 10:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: sent back: discard by e1101 at 2026-11-16 10:00 -> withdrawn
+scenario one_answer_after_the_stage_between, after line 86: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario one_answer_after_the_stage_between, after line 86: sent back: send back by e1001 at 2026-11-16 10:00 -> first, in progress
+scenario one_answer_after_the_stage_between, after line 86: sent back: approve by e3101 at 2026-11-16 10:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: sent back: approve by e1001 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 86: sent back: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 86: sent back: approve by e0101 at 2026-11-16 10:00 -> approved
+scenario one_answer_after_the_stage_between, after line 86: paused: pause by e1001 at 2026-11-16 10:00 -> middle, paused
+scenario one_answer_after_the_stage_between, after line 86: paused: resume by e1001 at 2026-11-17 10:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: paused: pause ends at 2026-11-24 00:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: an administrator: add approver at 2026-11-16 10:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: an administrator: hand over at 2026-11-16 10:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: clocks: remind at 2026-11-18 09:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: clocks: late at 2026-11-20 00:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: clocks: remind at 2026-11-24 09:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: clocks: late at 2026-11-26 00:00 -> expired
+scenario one_answer_after_the_stage_between, after line 86: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario one_answer_after_the_stage_between, after line 86: clocks: approve by e1001 at 2026-11-18 09:00 -> refused (clock)
+scenario one_answer_after_the_stage_between, after line 86: sent back to the limit: send back by e1001 at 2026-11-17 10:00 -> with requester
+scenario one_answer_after_the_stage_between, after line 86: sent back to the limit: resubmit by e1101 at 2026-11-18 10:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 86: sent back to the limit: send back by e1001 at 2026-11-18 10:00 -> refused (limit)
+scenario one_answer_after_the_stage_between, after line 87: approvals: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 87: rejections: reject by e3101 at 2026-11-16 11:00 -> rejected
+scenario one_answer_after_the_stage_between, after line 87: the requester: approve by e1101 at 2026-11-16 11:00 -> refused (person)
+scenario one_answer_after_the_stage_between, after line 87: the requester: withdraw by e1101 at 2026-11-16 11:00 -> with requester
+scenario one_answer_after_the_stage_between, after line 87: sent back: send back by e3101 at 2026-11-16 11:00 -> with requester
+scenario one_answer_after_the_stage_between, after line 87: sent back: resubmit by e1101 at 2026-11-17 11:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 87: sent back: discard by e1101 at 2026-11-16 11:00 -> withdrawn
+scenario one_answer_after_the_stage_between, after line 87: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario one_answer_after_the_stage_between, after line 87: sent back: send back by e3101 at 2026-11-16 11:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 87: sent back: send back by e3101 at 2026-11-16 11:00 -> first, in progress
+scenario one_answer_after_the_stage_between, after line 87: sent back: approve by e3101 at 2026-11-16 11:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 87: sent back: approve by e1001 at 2026-11-16 11:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 87: sent back: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 87: sent back: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario one_answer_after_the_stage_between, after line 87: paused: pause by e3101 at 2026-11-16 11:00 -> second, paused
+scenario one_answer_after_the_stage_between, after line 87: paused: resume by e3101 at 2026-11-17 11:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 87: paused: pause ends at 2026-11-24 00:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 87: retracted: retract by e1001 at 2026-11-16 11:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 87: an administrator: add approver at 2026-11-16 11:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 87: an administrator: hand over at 2026-11-16 11:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 87: an administrator: approve by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario one_answer_after_the_stage_between, after line 87: an administrator: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 87: an administrator: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario one_answer_after_the_stage_between, after line 87: an administrator: approve by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario one_answer_after_the_stage_between, after line 87: an administrator: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 87: an administrator: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario one_answer_after_the_stage_between, after line 87: clocks: remind at 2026-11-18 09:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 87: clocks: late at 2026-11-20 00:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 87: clocks: remind at 2026-11-24 09:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 87: clocks: late at 2026-11-26 00:00 -> expired
+scenario one_answer_after_the_stage_between, after line 87: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> first, in progress
+scenario one_answer_after_the_stage_between, after line 87: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 87: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> approved
+scenario one_answer_after_the_stage_between, after line 88: approvals: approve by e0101 at 2026-11-16 12:00 -> approved
+scenario one_answer_after_the_stage_between, after line 88: rejections: reject by e0101 at 2026-11-16 12:00 -> rejected
+scenario one_answer_after_the_stage_between, after line 88: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
+scenario one_answer_after_the_stage_between, after line 88: the requester: withdraw by e1101 at 2026-11-16 12:00 -> refused (state)
+scenario one_answer_after_the_stage_between, after line 88: sent back: send back by e0101 at 2026-11-16 12:00 -> with requester
+scenario one_answer_after_the_stage_between, after line 88: sent back: resubmit by e1101 at 2026-11-17 12:00 -> middle, in progress
+scenario one_answer_after_the_stage_between, after line 88: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
+scenario one_answer_after_the_stage_between, after line 88: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario one_answer_after_the_stage_between, after line 88: sent back: send back by e0101 at 2026-11-16 12:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 88: paused: pause by e0101 at 2026-11-16 12:00 -> decide, paused
+scenario one_answer_after_the_stage_between, after line 88: paused: resume by e0101 at 2026-11-17 12:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 88: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 88: retracted: retract by e3101 at 2026-11-16 12:00 -> second, in progress
+scenario one_answer_after_the_stage_between, after line 88: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 88: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 88: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario one_answer_after_the_stage_between, after line 88: clocks: late at 2026-11-26 00:00 -> expired
+scenario three_stages_one_answer_at_the_last, line 96: submit by e1101 at 2026-11-16 10:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, line 97: approve by e1002 at 2026-11-16 11:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, line 98: approve by e3101 at 2026-11-16 12:00 -> approved
+scenario three_stages_one_answer_at_the_last, after line 96: approvals: approve by e1001 at 2026-11-16 10:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: rejections: reject by e1001 at 2026-11-16 10:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: rejections: reject by e1002 at 2026-11-16 10:00 -> rejected
+scenario three_stages_one_answer_at_the_last, after line 96: the requester: approve by e1101 at 2026-11-16 10:00 -> refused (person)
+scenario three_stages_one_answer_at_the_last, after line 96: the requester: withdraw by e1101 at 2026-11-16 10:00 -> with requester
+scenario three_stages_one_answer_at_the_last, after line 96: sent back: send back by e1001 at 2026-11-16 10:00 -> with requester
+scenario three_stages_one_answer_at_the_last, after line 96: sent back: resubmit by e1101 at 2026-11-17 10:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: sent back: discard by e1101 at 2026-11-16 10:00 -> withdrawn
+scenario three_stages_one_answer_at_the_last, after line 96: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario three_stages_one_answer_at_the_last, after line 96: sent back: send back by e1001 at 2026-11-16 10:00 -> first, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: sent back: approve by e3101 at 2026-11-16 10:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: sent back: approve by e1001 at 2026-11-16 10:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: sent back: approve by e3101 at 2026-11-16 10:00 -> approved
+scenario three_stages_one_answer_at_the_last, after line 96: paused: pause by e1001 at 2026-11-16 10:00 -> second, paused
+scenario three_stages_one_answer_at_the_last, after line 96: paused: resume by e1001 at 2026-11-17 10:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: paused: pause ends at 2026-11-24 00:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: an administrator: add approver at 2026-11-16 10:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: an administrator: hand over at 2026-11-16 10:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: clocks: remind at 2026-11-18 09:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: clocks: late at 2026-11-20 00:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: clocks: remind at 2026-11-24 09:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: clocks: late at 2026-11-26 00:00 -> expired
+scenario three_stages_one_answer_at_the_last, after line 96: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario three_stages_one_answer_at_the_last, after line 96: clocks: approve by e1001 at 2026-11-18 09:00 -> refused (clock)
+scenario three_stages_one_answer_at_the_last, after line 96: sent back to the limit: send back by e1001 at 2026-11-17 10:00 -> with requester
+scenario three_stages_one_answer_at_the_last, after line 96: sent back to the limit: resubmit by e1101 at 2026-11-18 10:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 96: sent back to the limit: send back by e1001 at 2026-11-18 10:00 -> refused (limit)
+scenario three_stages_one_answer_at_the_last, after line 97: approvals: approve by e3101 at 2026-11-16 11:00 -> approved
+scenario three_stages_one_answer_at_the_last, after line 97: rejections: reject by e3101 at 2026-11-16 11:00 -> rejected
+scenario three_stages_one_answer_at_the_last, after line 97: the requester: approve by e1101 at 2026-11-16 11:00 -> refused (person)
+scenario three_stages_one_answer_at_the_last, after line 97: the requester: withdraw by e1101 at 2026-11-16 11:00 -> with requester
+scenario three_stages_one_answer_at_the_last, after line 97: sent back: send back by e3101 at 2026-11-16 11:00 -> with requester
+scenario three_stages_one_answer_at_the_last, after line 97: sent back: resubmit by e1101 at 2026-11-17 11:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: sent back: discard by e1101 at 2026-11-16 11:00 -> withdrawn
+scenario three_stages_one_answer_at_the_last, after line 97: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario three_stages_one_answer_at_the_last, after line 97: sent back: send back by e3101 at 2026-11-16 11:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: sent back: send back by e3101 at 2026-11-16 11:00 -> first, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: sent back: approve by e3101 at 2026-11-16 11:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: sent back: approve by e1001 at 2026-11-16 11:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: sent back: approve by e3101 at 2026-11-16 11:00 -> approved
+scenario three_stages_one_answer_at_the_last, after line 97: paused: pause by e3101 at 2026-11-16 11:00 -> decide, paused
+scenario three_stages_one_answer_at_the_last, after line 97: paused: resume by e3101 at 2026-11-17 11:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: retracted: retract by e1002 at 2026-11-16 11:00 -> second, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: an administrator: add approver at 2026-11-16 11:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: an administrator: hand over at 2026-11-16 11:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: an administrator: approve by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: an administrator: approve by e3101 at 2026-11-16 11:00 -> middle, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: an administrator: approve by e3101 at 2026-11-16 11:00 -> approved
+scenario three_stages_one_answer_at_the_last, after line 97: an administrator: approve by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: an administrator: approve by e3101 at 2026-11-16 11:00 -> middle, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: an administrator: approve by e3101 at 2026-11-16 11:00 -> approved
+scenario three_stages_one_answer_at_the_last, after line 97: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: clocks: late at 2026-11-26 00:00 -> expired
+scenario three_stages_one_answer_at_the_last, after line 97: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> first, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> middle, in progress
+scenario three_stages_one_answer_at_the_last, after line 97: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> approved
+scenario a_stage_between_that_takes_their_answer_too, line 106: submit by e0101 at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, line 107: approve by e0001 at 2026-11-16 11:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, line 108: approve by e0201 at 2026-11-16 11:10 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, line 109: approve by e0202 at 2026-11-16 11:20 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, line 110: approve by e0203 at 2026-11-16 11:30 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, line 111: approve by e0204 at 2026-11-16 11:40 -> decide, in progress
+scenario a_stage_between_that_takes_their_answer_too, line 112: approve by e0001 at 2026-11-16 12:00 -> approved
+scenario a_stage_between_that_takes_their_answer_too, after line 106: approvals: approve by e0001 at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: approvals: approve by e0201 at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: approvals: approve by e0202 at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: approvals: approve by e0203 at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: approvals: approve by e0204 at 2026-11-16 10:00 -> decide, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: rejections: reject by e0001 at 2026-11-16 10:00 -> rejected
+scenario a_stage_between_that_takes_their_answer_too, after line 106: the requester: approve by e0101 at 2026-11-16 10:00 -> refused (person)
+scenario a_stage_between_that_takes_their_answer_too, after line 106: the requester: withdraw by e0101 at 2026-11-16 10:00 -> with requester
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: send back by e0001 at 2026-11-16 10:00 -> with requester
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: resubmit by e0101 at 2026-11-17 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: discard by e0101 at 2026-11-16 10:00 -> withdrawn
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: send back by e0001 at 2026-11-16 10:00 -> first, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: approve by e0001 at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: approve by e0001 at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: approve by e0201 at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: approve by e0202 at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: approve by e0203 at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: approve by e0204 at 2026-11-16 10:00 -> decide, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back: approve by e0001 at 2026-11-16 10:00 -> approved
+scenario a_stage_between_that_takes_their_answer_too, after line 106: paused: pause by e0001 at 2026-11-16 10:00 -> middle, paused
+scenario a_stage_between_that_takes_their_answer_too, after line 106: paused: resume by e0001 at 2026-11-17 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: paused: pause ends at 2026-11-24 00:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: an administrator: add approver at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: an administrator: hand over at 2026-11-16 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: clocks: remind at 2026-11-18 09:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: clocks: late at 2026-11-20 00:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: clocks: remind at 2026-11-24 09:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_stage_between_that_takes_their_answer_too, after line 106: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario a_stage_between_that_takes_their_answer_too, after line 106: clocks: approve by e0001 at 2026-11-18 09:00 -> refused (clock)
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back to the limit: send back by e0001 at 2026-11-17 10:00 -> with requester
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back to the limit: resubmit by e0101 at 2026-11-18 10:00 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 106: sent back to the limit: send back by e0001 at 2026-11-18 10:00 -> refused (limit)
+scenario a_stage_between_that_takes_their_answer_too, after line 111: approvals: approve by e0001 at 2026-11-16 11:40 -> approved
+scenario a_stage_between_that_takes_their_answer_too, after line 111: rejections: reject by e0001 at 2026-11-16 11:40 -> rejected
+scenario a_stage_between_that_takes_their_answer_too, after line 111: the requester: approve by e0101 at 2026-11-16 11:40 -> refused (person)
+scenario a_stage_between_that_takes_their_answer_too, after line 111: the requester: withdraw by e0101 at 2026-11-16 11:40 -> with requester
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: send back by e0001 at 2026-11-16 11:40 -> with requester
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: resubmit by e0101 at 2026-11-17 11:40 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: discard by e0101 at 2026-11-16 11:40 -> withdrawn
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: send back by e0001 at 2026-11-16 11:40 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: send back by e0001 at 2026-11-16 11:40 -> first, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: approve by e0001 at 2026-11-16 11:40 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: approve by e0001 at 2026-11-16 11:40 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: approve by e0201 at 2026-11-16 11:40 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: approve by e0202 at 2026-11-16 11:40 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: approve by e0203 at 2026-11-16 11:40 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: approve by e0204 at 2026-11-16 11:40 -> decide, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: sent back: approve by e0001 at 2026-11-16 11:40 -> approved
+scenario a_stage_between_that_takes_their_answer_too, after line 111: paused: pause by e0001 at 2026-11-16 11:40 -> decide, paused
+scenario a_stage_between_that_takes_their_answer_too, after line 111: paused: resume by e0001 at 2026-11-17 11:40 -> decide, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: retracted: retract by e0204 at 2026-11-16 11:40 -> middle, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: an administrator: add approver at 2026-11-16 11:40 -> decide, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: an administrator: hand over at 2026-11-16 11:40 -> decide, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: an administrator: approve by e0102 at 2026-11-16 11:40 -> first, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: an administrator: approve by e0001 at 2026-11-16 11:40 -> approved
+scenario a_stage_between_that_takes_their_answer_too, after line 111: an administrator: approve by e0102 at 2026-11-16 11:40 -> first, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: an administrator: approve by e0001 at 2026-11-16 11:40 -> approved
+scenario a_stage_between_that_takes_their_answer_too, after line 111: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario a_stage_between_that_takes_their_answer_too, after line 111: clocks: late at 2026-11-20 00:00 -> expired
+scenario one_part_of_a_joint_stage_waits, line 119: submit by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, line 120: approve by e1002 at 2026-11-16 11:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, line 121: approve by e3101 at 2026-11-16 12:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: approvals: approve by e1001 at 2026-11-16 10:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: rejections: reject by e1001 at 2026-11-16 10:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: rejections: reject by e1002 at 2026-11-16 10:00 -> rejected
+scenario one_part_of_a_joint_stage_waits, after line 119: the requester: approve by e1101 at 2026-11-16 10:00 -> refused (person)
+scenario one_part_of_a_joint_stage_waits, after line 119: the requester: withdraw by e1101 at 2026-11-16 10:00 -> with requester
+scenario one_part_of_a_joint_stage_waits, after line 119: sent back: send back by e1001 at 2026-11-16 10:00 -> with requester
+scenario one_part_of_a_joint_stage_waits, after line 119: sent back: resubmit by e1101 at 2026-11-17 10:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: sent back: discard by e1101 at 2026-11-16 10:00 -> withdrawn
+scenario one_part_of_a_joint_stage_waits, after line 119: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario one_part_of_a_joint_stage_waits, after line 119: paused: pause by e1001 at 2026-11-16 10:00 -> first, paused
+scenario one_part_of_a_joint_stage_waits, after line 119: paused: resume by e1001 at 2026-11-17 10:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: paused: pause ends at 2026-11-24 00:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: clocks: remind at 2026-11-18 09:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: clocks: remind at 2026-11-24 09:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: clocks: late at 2026-11-26 00:00 -> expired
+scenario one_part_of_a_joint_stage_waits, after line 119: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario one_part_of_a_joint_stage_waits, after line 119: clocks: approve by e1001 at 2026-11-18 09:00 -> refused (clock)
+scenario one_part_of_a_joint_stage_waits, after line 119: sent back to the limit: send back by e1001 at 2026-11-17 10:00 -> with requester
+scenario one_part_of_a_joint_stage_waits, after line 119: sent back to the limit: resubmit by e1101 at 2026-11-18 10:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 119: sent back to the limit: send back by e1001 at 2026-11-18 10:00 -> refused (limit)
+scenario one_part_of_a_joint_stage_waits, after line 120: approvals: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: rejections: reject by e3101 at 2026-11-16 11:00 -> rejected
+scenario one_part_of_a_joint_stage_waits, after line 120: the requester: approve by e1101 at 2026-11-16 11:00 -> refused (person)
+scenario one_part_of_a_joint_stage_waits, after line 120: the requester: withdraw by e1101 at 2026-11-16 11:00 -> with requester
+scenario one_part_of_a_joint_stage_waits, after line 120: sent back: send back by e3101 at 2026-11-16 11:00 -> with requester
+scenario one_part_of_a_joint_stage_waits, after line 120: sent back: resubmit by e1101 at 2026-11-17 11:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: sent back: discard by e1101 at 2026-11-16 11:00 -> withdrawn
+scenario one_part_of_a_joint_stage_waits, after line 120: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario one_part_of_a_joint_stage_waits, after line 120: sent back: send back by e3101 at 2026-11-16 11:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: sent back: approve by e3101 at 2026-11-16 11:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: sent back: approve by e1001 at 2026-11-16 11:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: sent back: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: sent back: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario one_part_of_a_joint_stage_waits, after line 120: paused: pause by e3101 at 2026-11-16 11:00 -> second, paused
+scenario one_part_of_a_joint_stage_waits, after line 120: paused: resume by e3101 at 2026-11-17 11:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: paused: pause ends at 2026-11-24 00:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: retracted: retract by e1002 at 2026-11-16 11:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: an administrator: add approver at 2026-11-16 11:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: an administrator: hand over at 2026-11-16 11:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: an administrator: approve by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: an administrator: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: an administrator: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario one_part_of_a_joint_stage_waits, after line 120: an administrator: approve by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: an administrator: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: an administrator: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario one_part_of_a_joint_stage_waits, after line 120: clocks: remind at 2026-11-18 09:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: clocks: late at 2026-11-20 00:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: clocks: remind at 2026-11-24 09:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: clocks: late at 2026-11-26 00:00 -> expired
+scenario one_part_of_a_joint_stage_waits, after line 120: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 120: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> approved
+scenario one_part_of_a_joint_stage_waits, after line 121: approvals: approve by e0101 at 2026-11-16 12:00 -> approved
+scenario one_part_of_a_joint_stage_waits, after line 121: rejections: reject by e0101 at 2026-11-16 12:00 -> rejected
+scenario one_part_of_a_joint_stage_waits, after line 121: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
+scenario one_part_of_a_joint_stage_waits, after line 121: the requester: withdraw by e1101 at 2026-11-16 12:00 -> refused (state)
+scenario one_part_of_a_joint_stage_waits, after line 121: sent back: send back by e0101 at 2026-11-16 12:00 -> with requester
+scenario one_part_of_a_joint_stage_waits, after line 121: sent back: resubmit by e1101 at 2026-11-17 12:00 -> first, in progress
+scenario one_part_of_a_joint_stage_waits, after line 121: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
+scenario one_part_of_a_joint_stage_waits, after line 121: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario one_part_of_a_joint_stage_waits, after line 121: sent back: send back by e0101 at 2026-11-16 12:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 121: paused: pause by e0101 at 2026-11-16 12:00 -> decide, paused
+scenario one_part_of_a_joint_stage_waits, after line 121: paused: resume by e0101 at 2026-11-17 12:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 121: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 121: retracted: retract by e3101 at 2026-11-16 12:00 -> second, in progress
+scenario one_part_of_a_joint_stage_waits, after line 121: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 121: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 121: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario one_part_of_a_joint_stage_waits, after line 121: clocks: late at 2026-11-26 00:00 -> expired
+scenario waits_for_a_part_of_a_joint_stage, line 128: submit by e1101 at 2026-11-16 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, line 129: approve by e3101 at 2026-11-16 11:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, line 130: approve by e1001 at 2026-11-16 12:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: approvals: approve by e3101 at 2026-11-16 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: approvals: approve by e1001 at 2026-11-16 10:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: rejections: reject by e3101 at 2026-11-16 10:00 -> rejected
+scenario waits_for_a_part_of_a_joint_stage, after line 128: the requester: approve by e1101 at 2026-11-16 10:00 -> refused (person)
+scenario waits_for_a_part_of_a_joint_stage, after line 128: the requester: withdraw by e1101 at 2026-11-16 10:00 -> with requester
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back: send back by e3101 at 2026-11-16 10:00 -> with requester
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back: resubmit by e1101 at 2026-11-17 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back: discard by e1101 at 2026-11-16 10:00 -> withdrawn
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back: send back by e3101 at 2026-11-16 10:00 -> first, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back: approve by e3101 at 2026-11-16 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back: approve by e3101 at 2026-11-16 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back: approve by e1001 at 2026-11-16 10:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back: approve by e0101 at 2026-11-16 10:00 -> approved
+scenario waits_for_a_part_of_a_joint_stage, after line 128: paused: pause by e3101 at 2026-11-16 10:00 -> second, paused
+scenario waits_for_a_part_of_a_joint_stage, after line 128: paused: resume by e3101 at 2026-11-17 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: paused: pause ends at 2026-11-24 00:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: an administrator: add approver at 2026-11-16 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: an administrator: hand over at 2026-11-16 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: an administrator: approve by e0001 at 2026-11-16 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: an administrator: approve by e1001 at 2026-11-16 10:00 -> first, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: an administrator: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: an administrator: approve by e0101 at 2026-11-16 10:00 -> approved
+scenario waits_for_a_part_of_a_joint_stage, after line 128: an administrator: approve by e0001 at 2026-11-16 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: an administrator: approve by e1001 at 2026-11-16 10:00 -> first, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: an administrator: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: an administrator: approve by e0101 at 2026-11-16 10:00 -> approved
+scenario waits_for_a_part_of_a_joint_stage, after line 128: clocks: remind at 2026-11-18 09:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: clocks: late at 2026-11-20 00:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: clocks: remind at 2026-11-24 09:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: clocks: late at 2026-11-26 00:00 -> expired
+scenario waits_for_a_part_of_a_joint_stage, after line 128: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: late, and approved where it went up to: approve by e0102 at 2026-11-20 01:00 -> first, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> approved
+scenario waits_for_a_part_of_a_joint_stage, after line 128: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario waits_for_a_part_of_a_joint_stage, after line 128: clocks: approve by e3101 at 2026-11-18 09:00 -> refused (clock)
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back to the limit: send back by e3101 at 2026-11-17 10:00 -> with requester
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back to the limit: resubmit by e1101 at 2026-11-18 10:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 128: sent back to the limit: send back by e3101 at 2026-11-18 10:00 -> refused (limit)
+scenario waits_for_a_part_of_a_joint_stage, after line 130: approvals: approve by e0101 at 2026-11-16 12:00 -> approved
+scenario waits_for_a_part_of_a_joint_stage, after line 130: rejections: reject by e0101 at 2026-11-16 12:00 -> rejected
+scenario waits_for_a_part_of_a_joint_stage, after line 130: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
+scenario waits_for_a_part_of_a_joint_stage, after line 130: the requester: withdraw by e1101 at 2026-11-16 12:00 -> refused (state)
+scenario waits_for_a_part_of_a_joint_stage, after line 130: sent back: send back by e0101 at 2026-11-16 12:00 -> with requester
+scenario waits_for_a_part_of_a_joint_stage, after line 130: sent back: resubmit by e1101 at 2026-11-17 12:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 130: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
+scenario waits_for_a_part_of_a_joint_stage, after line 130: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario waits_for_a_part_of_a_joint_stage, after line 130: sent back: send back by e0101 at 2026-11-16 12:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 130: paused: pause by e0101 at 2026-11-16 12:00 -> decide, paused
+scenario waits_for_a_part_of_a_joint_stage, after line 130: paused: resume by e0101 at 2026-11-17 12:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 130: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 130: retracted: retract by e1001 at 2026-11-16 12:00 -> second, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 130: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 130: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 130: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario waits_for_a_part_of_a_joint_stage, after line 130: clocks: late at 2026-11-26 00:00 -> expired
+scenario past_an_agent, line 137: submit by e1101 at 2026-11-16 10:00 -> middle, in progress
+scenario past_an_agent, line 138: agent answered at 2026-11-16 10:01 -> second, in progress
+scenario past_an_agent, line 139: approve by e3101 at 2026-11-16 12:00 -> decide, in progress
+scenario past_an_agent, after line 137: the requester: approve by e1101 at 2026-11-16 10:00 -> refused (person)
+scenario past_an_agent, after line 137: the requester: withdraw by e1101 at 2026-11-16 10:00 -> with requester
+scenario past_an_agent, after line 137: flows: agent answered at 2026-11-16 10:00 -> second, in progress
+scenario past_an_agent, after line 137: flows: agent answered at 2026-11-16 10:00 -> middle, in progress
+scenario past_an_agent, after line 137: flows: flow failed at 2026-11-16 10:00 -> middle, in progress
+scenario past_an_agent, after line 137: an administrator: add approver at 2026-11-16 10:00 -> refused (event)
+scenario past_an_agent, after line 137: clocks: remind at 2026-11-18 09:00 -> middle, in progress
+scenario past_an_agent, after line 137: clocks: late at 2026-11-20 00:00 -> middle, in progress
+scenario past_an_agent, after line 137: clocks: remind at 2026-11-24 09:00 -> middle, in progress
+scenario past_an_agent, after line 137: clocks: late at 2026-11-26 00:00 -> expired
+scenario past_an_agent, after line 137: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario past_an_agent, after line 138: approvals: approve by e3101 at 2026-11-16 10:01 -> decide, in progress
+scenario past_an_agent, after line 138: rejections: reject by e3101 at 2026-11-16 10:01 -> rejected
+scenario past_an_agent, after line 138: the requester: approve by e1101 at 2026-11-16 10:01 -> refused (person)
+scenario past_an_agent, after line 138: the requester: withdraw by e1101 at 2026-11-16 10:01 -> with requester
+scenario past_an_agent, after line 138: sent back: send back by e3101 at 2026-11-16 10:01 -> with requester
+scenario past_an_agent, after line 138: sent back: resubmit by e1101 at 2026-11-17 10:01 -> middle, in progress
+scenario past_an_agent, after line 138: sent back: discard by e1101 at 2026-11-16 10:01 -> withdrawn
+scenario past_an_agent, after line 138: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario past_an_agent, after line 138: sent back: send back by e3101 at 2026-11-16 10:01 -> middle, in progress
+scenario past_an_agent, after line 138: sent back: send back by e3101 at 2026-11-16 10:01 -> first, in progress
+scenario past_an_agent, after line 138: sent back: approve by e3101 at 2026-11-16 10:01 -> middle, in progress
+scenario past_an_agent, after line 138: paused: pause by e3101 at 2026-11-16 10:01 -> second, paused
+scenario past_an_agent, after line 138: paused: resume by e3101 at 2026-11-17 10:01 -> second, in progress
+scenario past_an_agent, after line 138: paused: pause ends at 2026-11-24 00:00 -> second, in progress
+scenario past_an_agent, after line 138: an administrator: add approver at 2026-11-16 10:01 -> second, in progress
+scenario past_an_agent, after line 138: an administrator: hand over at 2026-11-16 10:01 -> second, in progress
+scenario past_an_agent, after line 138: an administrator: approve by e0001 at 2026-11-16 10:01 -> first, in progress
+scenario past_an_agent, after line 138: an administrator: approve by e3101 at 2026-11-16 10:01 -> decide, in progress
+scenario past_an_agent, after line 138: an administrator: approve by e0101 at 2026-11-16 10:01 -> approved
+scenario past_an_agent, after line 138: an administrator: approve by e0001 at 2026-11-16 10:01 -> first, in progress
+scenario past_an_agent, after line 138: an administrator: approve by e3101 at 2026-11-16 10:01 -> decide, in progress
+scenario past_an_agent, after line 138: an administrator: approve by e0101 at 2026-11-16 10:01 -> approved
+scenario past_an_agent, after line 138: clocks: remind at 2026-11-18 09:00 -> second, in progress
+scenario past_an_agent, after line 138: clocks: late at 2026-11-20 00:00 -> second, in progress
+scenario past_an_agent, after line 138: clocks: remind at 2026-11-24 09:00 -> second, in progress
+scenario past_an_agent, after line 138: clocks: late at 2026-11-26 00:00 -> expired
+scenario past_an_agent, after line 138: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> first, in progress
+scenario past_an_agent, after line 138: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> decide, in progress
+scenario past_an_agent, after line 138: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> approved
+scenario past_an_agent, after line 139: approvals: approve by e0101 at 2026-11-16 12:00 -> approved
+scenario past_an_agent, after line 139: rejections: reject by e0101 at 2026-11-16 12:00 -> rejected
+scenario past_an_agent, after line 139: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
+scenario past_an_agent, after line 139: the requester: withdraw by e1101 at 2026-11-16 12:00 -> refused (state)
+scenario past_an_agent, after line 139: sent back: send back by e0101 at 2026-11-16 12:00 -> with requester
+scenario past_an_agent, after line 139: sent back: resubmit by e1101 at 2026-11-17 12:00 -> middle, in progress
+scenario past_an_agent, after line 139: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
+scenario past_an_agent, after line 139: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario past_an_agent, after line 139: sent back: send back by e0101 at 2026-11-16 12:00 -> second, in progress
+scenario past_an_agent, after line 139: paused: pause by e0101 at 2026-11-16 12:00 -> decide, paused
+scenario past_an_agent, after line 139: paused: resume by e0101 at 2026-11-17 12:00 -> decide, in progress
+scenario past_an_agent, after line 139: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario past_an_agent, after line 139: retracted: retract by e3101 at 2026-11-16 12:00 -> second, in progress
+scenario past_an_agent, after line 139: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario past_an_agent, after line 139: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario past_an_agent, after line 139: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario past_an_agent, after line 139: clocks: late at 2026-11-26 00:00 -> expired
+scenario the_agent_doubts, line 147: agent answered at 2026-11-16 10:01 -> middle, in progress
+scenario the_agent_doubts, line 148: approve by e3101 at 2026-11-16 11:00 -> second, in progress
+scenario the_agent_doubts, line 149: approve by e3101 at 2026-11-16 12:00 -> decide, in progress
+scenario the_agent_doubts, after line 148: approvals: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario the_agent_doubts, after line 148: rejections: reject by e3101 at 2026-11-16 11:00 -> rejected
+scenario the_agent_doubts, after line 148: the requester: approve by e1101 at 2026-11-16 11:00 -> refused (person)
+scenario the_agent_doubts, after line 148: the requester: withdraw by e1101 at 2026-11-16 11:00 -> with requester
+scenario the_agent_doubts, after line 148: sent back: send back by e3101 at 2026-11-16 11:00 -> with requester
+scenario the_agent_doubts, after line 148: sent back: resubmit by e1101 at 2026-11-17 11:00 -> middle, in progress
+scenario the_agent_doubts, after line 148: sent back: discard by e1101 at 2026-11-16 11:00 -> withdrawn
+scenario the_agent_doubts, after line 148: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_agent_doubts, after line 148: sent back: send back by e3101 at 2026-11-16 11:00 -> middle, in progress
+scenario the_agent_doubts, after line 148: sent back: send back by e3101 at 2026-11-16 11:00 -> first, in progress
+scenario the_agent_doubts, after line 148: sent back: approve by e3101 at 2026-11-16 11:00 -> middle, in progress
+scenario the_agent_doubts, after line 148: paused: pause by e3101 at 2026-11-16 11:00 -> second, paused
+scenario the_agent_doubts, after line 148: paused: resume by e3101 at 2026-11-17 11:00 -> second, in progress
+scenario the_agent_doubts, after line 148: paused: pause ends at 2026-11-24 00:00 -> second, in progress
+scenario the_agent_doubts, after line 148: retracted: retract by e3101 at 2026-11-16 11:00 -> middle, in progress
+scenario the_agent_doubts, after line 148: an administrator: add approver at 2026-11-16 11:00 -> second, in progress
+scenario the_agent_doubts, after line 148: an administrator: hand over at 2026-11-16 11:00 -> second, in progress
+scenario the_agent_doubts, after line 148: an administrator: approve by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario the_agent_doubts, after line 148: an administrator: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario the_agent_doubts, after line 148: an administrator: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario the_agent_doubts, after line 148: an administrator: approve by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario the_agent_doubts, after line 148: an administrator: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario the_agent_doubts, after line 148: an administrator: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario the_agent_doubts, after line 148: clocks: remind at 2026-11-18 09:00 -> second, in progress
+scenario the_agent_doubts, after line 148: clocks: late at 2026-11-20 00:00 -> second, in progress
+scenario the_agent_doubts, after line 148: clocks: remind at 2026-11-24 09:00 -> second, in progress
+scenario the_agent_doubts, after line 148: clocks: late at 2026-11-26 00:00 -> expired
+scenario the_agent_doubts, after line 148: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> first, in progress
+scenario the_agent_doubts, after line 148: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> decide, in progress
+scenario the_agent_doubts, after line 148: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> approved
+scenario the_agent_doubts, after line 149: approvals: approve by e0101 at 2026-11-16 12:00 -> approved
+scenario the_agent_doubts, after line 149: rejections: reject by e0101 at 2026-11-16 12:00 -> rejected
+scenario the_agent_doubts, after line 149: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
+scenario the_agent_doubts, after line 149: the requester: withdraw by e1101 at 2026-11-16 12:00 -> refused (state)
+scenario the_agent_doubts, after line 149: sent back: send back by e0101 at 2026-11-16 12:00 -> with requester
+scenario the_agent_doubts, after line 149: sent back: resubmit by e1101 at 2026-11-17 12:00 -> middle, in progress
+scenario the_agent_doubts, after line 149: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
+scenario the_agent_doubts, after line 149: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_agent_doubts, after line 149: sent back: send back by e0101 at 2026-11-16 12:00 -> second, in progress
+scenario the_agent_doubts, after line 149: paused: pause by e0101 at 2026-11-16 12:00 -> decide, paused
+scenario the_agent_doubts, after line 149: paused: resume by e0101 at 2026-11-17 12:00 -> decide, in progress
+scenario the_agent_doubts, after line 149: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario the_agent_doubts, after line 149: retracted: retract by e3101 at 2026-11-16 12:00 -> second, in progress
+scenario the_agent_doubts, after line 149: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario the_agent_doubts, after line 149: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario the_agent_doubts, after line 149: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario the_agent_doubts, after line 149: clocks: late at 2026-11-26 00:00 -> expired
+scenario rejected_at_the_later_stage, line 158: reject by e3101 at 2026-11-16 12:00 -> rejected
+scenario made_again_after_the_later_stage_sent_it_back, line 167: send back by e3101 at 2026-11-16 12:00 -> with requester
+scenario made_again_after_the_later_stage_sent_it_back, line 168: resubmit by e1101 at 2026-11-17 10:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, line 169: approve by e1001 at 2026-11-17 11:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, line 170: approve by e3101 at 2026-11-17 12:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: approvals: approve by e1001 at 2026-11-17 10:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: rejections: reject by e1001 at 2026-11-17 10:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: rejections: reject by e1002 at 2026-11-17 10:00 -> rejected
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: the requester: approve by e1101 at 2026-11-17 10:00 -> refused (person)
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: the requester: withdraw by e1101 at 2026-11-17 10:00 -> with requester
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: sent back: send back by e1001 at 2026-11-17 10:00 -> with requester
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: sent back: resubmit by e1101 at 2026-11-18 10:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: sent back: discard by e1101 at 2026-11-17 10:00 -> withdrawn
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: sent back: resubmit late at 2026-11-21 00:00 -> expired
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: sent back: send back by e1001 at 2026-11-17 10:00 -> first, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: sent back: approve by e3101 at 2026-11-17 10:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: sent back: approve by e1001 at 2026-11-17 10:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: sent back: approve by e3101 at 2026-11-17 10:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: sent back: approve by e0101 at 2026-11-17 10:00 -> approved
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: paused: pause by e1001 at 2026-11-17 10:00 -> middle, paused
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: paused: resume by e1001 at 2026-11-18 10:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: paused: pause ends at 2026-11-25 00:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: clocks: remind at 2026-11-19 09:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: clocks: late at 2026-11-21 00:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: clocks: remind at 2026-11-24 09:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 168: clocks: late at 2026-11-26 00:00 -> expired
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: approvals: approve by e3101 at 2026-11-17 11:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: rejections: reject by e3101 at 2026-11-17 11:00 -> rejected
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: the requester: approve by e1101 at 2026-11-17 11:00 -> refused (person)
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: the requester: withdraw by e1101 at 2026-11-17 11:00 -> with requester
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: sent back: send back by e3101 at 2026-11-17 11:00 -> with requester
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: sent back: resubmit by e1101 at 2026-11-18 11:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: sent back: discard by e1101 at 2026-11-17 11:00 -> withdrawn
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: sent back: resubmit late at 2026-11-21 00:00 -> expired
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: sent back: send back by e3101 at 2026-11-17 11:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: sent back: send back by e3101 at 2026-11-17 11:00 -> first, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: sent back: approve by e3101 at 2026-11-17 11:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: sent back: approve by e1001 at 2026-11-17 11:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: sent back: approve by e3101 at 2026-11-17 11:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: sent back: approve by e0101 at 2026-11-17 11:00 -> approved
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: paused: pause by e3101 at 2026-11-17 11:00 -> second, paused
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: paused: resume by e3101 at 2026-11-18 11:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: paused: pause ends at 2026-11-25 00:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: retracted: retract by e1001 at 2026-11-17 11:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: an administrator: add approver at 2026-11-17 11:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: an administrator: hand over at 2026-11-17 11:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: an administrator: approve by e0001 at 2026-11-17 11:00 -> first, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: an administrator: approve by e3101 at 2026-11-17 11:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: an administrator: approve by e0101 at 2026-11-17 11:00 -> approved
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: an administrator: approve by e0001 at 2026-11-17 11:00 -> first, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: an administrator: approve by e3101 at 2026-11-17 11:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: an administrator: approve by e0101 at 2026-11-17 11:00 -> approved
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: clocks: remind at 2026-11-19 09:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: clocks: late at 2026-11-21 00:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: clocks: remind at 2026-11-24 09:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: clocks: late at 2026-11-26 00:00 -> expired
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: late, and approved where it went up to: approve by e0101 at 2026-11-21 01:00 -> first, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: late, and approved where it went up to: approve by e3101 at 2026-11-21 01:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 169: late, and approved where it went up to: approve by e0101 at 2026-11-21 01:00 -> approved
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: approvals: approve by e0101 at 2026-11-17 12:00 -> approved
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: rejections: reject by e0101 at 2026-11-17 12:00 -> rejected
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: the requester: approve by e1101 at 2026-11-17 12:00 -> refused (person)
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: the requester: withdraw by e1101 at 2026-11-17 12:00 -> refused (state)
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: sent back: send back by e0101 at 2026-11-17 12:00 -> with requester
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: sent back: resubmit by e1101 at 2026-11-18 12:00 -> middle, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: sent back: discard by e1101 at 2026-11-17 12:00 -> withdrawn
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: sent back: resubmit late at 2026-11-21 00:00 -> expired
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: sent back: send back by e0101 at 2026-11-17 12:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: paused: pause by e0101 at 2026-11-17 12:00 -> decide, paused
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: paused: resume by e0101 at 2026-11-18 12:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: paused: pause ends at 2026-11-25 00:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: retracted: retract by e3101 at 2026-11-17 12:00 -> second, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: clocks: remind at 2026-11-19 09:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: clocks: late at 2026-11-21 00:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario made_again_after_the_later_stage_sent_it_back, after line 170: clocks: late at 2026-11-26 00:00 -> expired
+scenario sent_back_to_the_stage_that_waited, line 180: send back by e0101 at 2026-11-16 13:00 -> first, in progress
+scenario sent_back_to_the_stage_that_waited, line 181: approve by e3101 at 2026-11-16 14:00 -> middle, in progress
+scenario sent_back_to_the_stage_that_waited, line 182: approve by e1001 at 2026-11-16 15:00 -> second, in progress
+scenario sent_back_to_the_stage_that_waited, line 183: approve by e3101 at 2026-11-16 16:00 -> decide, in progress
+scenario sent_back_to_the_stage_that_waited, after line 180: approvals: approve by e3101 at 2026-11-16 13:00 -> middle, in progress
+scenario sent_back_to_the_stage_that_waited, after line 180: rejections: reject by e3101 at 2026-11-16 13:00 -> rejected
+scenario sent_back_to_the_stage_that_waited, after line 180: the requester: approve by e1101 at 2026-11-16 13:00 -> refused (person)
+scenario sent_back_to_the_stage_that_waited, after line 180: the requester: withdraw by e1101 at 2026-11-16 13:00 -> with requester
+scenario sent_back_to_the_stage_that_waited, after line 180: sent back: send back by e3101 at 2026-11-16 13:00 -> with requester
+scenario sent_back_to_the_stage_that_waited, after line 180: sent back: resubmit by e1101 at 2026-11-17 13:00 -> middle, in progress
+scenario sent_back_to_the_stage_that_waited, after line 180: sent back: discard by e1101 at 2026-11-16 13:00 -> withdrawn
+scenario sent_back_to_the_stage_that_waited, after line 180: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario sent_back_to_the_stage_that_waited, after line 180: paused: pause by e3101 at 2026-11-16 13:00 -> first, paused
+scenario sent_back_to_the_stage_that_waited, after line 180: paused: resume by e3101 at 2026-11-17 13:00 -> first, in progress
+scenario sent_back_to_the_stage_that_waited, after line 180: paused: pause ends at 2026-11-24 00:00 -> first, in progress
+scenario sent_back_to_the_stage_that_waited, after line 180: clocks: remind at 2026-11-18 09:00 -> first, in progress
+scenario sent_back_to_the_stage_that_waited, after line 180: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario sent_back_to_the_stage_that_waited, after line 180: clocks: remind at 2026-11-24 09:00 -> first, in progress
+scenario sent_back_to_the_stage_that_waited, after line 180: clocks: late at 2026-11-26 00:00 -> expired
+scenario sent_back_to_the_stage_between, line 194: send back by e0101 at 2026-11-16 13:00 -> middle, in progress
+scenario sent_back_to_the_stage_between, line 195: approve by e1001 at 2026-11-16 15:00 -> second, in progress
+scenario sent_back_to_the_stage_between, line 196: approve by e3101 at 2026-11-16 16:00 -> decide, in progress
+scenario taken_back_with_the_stage_it_did, line 206: retract by e3101 at 2026-11-16 13:00 -> second, in progress
+scenario taken_back_with_the_stage_it_did, line 207: approve by e3101 at 2026-11-16 14:00 -> decide, in progress
+scenario paused_at_the_later_stage, line 216: pause by e3101 at 2026-11-17 10:00 -> second, paused
+scenario paused_at_the_later_stage, line 217: resume by e3101 at 2026-11-18 10:00 -> second, in progress
+scenario paused_at_the_later_stage, line 218: approve by e3101 at 2026-11-18 11:00 -> decide, in progress
+scenario paused_at_the_later_stage, after line 218: approvals: approve by e0101 at 2026-11-18 11:00 -> approved
+scenario paused_at_the_later_stage, after line 218: rejections: reject by e0101 at 2026-11-18 11:00 -> rejected
+scenario paused_at_the_later_stage, after line 218: the requester: approve by e1101 at 2026-11-18 11:00 -> refused (person)
+scenario paused_at_the_later_stage, after line 218: the requester: withdraw by e1101 at 2026-11-18 11:00 -> refused (state)
+scenario paused_at_the_later_stage, after line 218: sent back: send back by e0101 at 2026-11-18 11:00 -> with requester
+scenario paused_at_the_later_stage, after line 218: sent back: resubmit by e1101 at 2026-11-19 11:00 -> middle, in progress
+scenario paused_at_the_later_stage, after line 218: sent back: discard by e1101 at 2026-11-18 11:00 -> withdrawn
+scenario paused_at_the_later_stage, after line 218: sent back: resubmit late at 2026-11-24 00:00 -> expired
+scenario paused_at_the_later_stage, after line 218: sent back: send back by e0101 at 2026-11-18 11:00 -> second, in progress
+scenario paused_at_the_later_stage, after line 218: paused: pause by e0101 at 2026-11-18 11:00 -> decide, paused
+scenario paused_at_the_later_stage, after line 218: paused: resume by e0101 at 2026-11-19 11:00 -> decide, in progress
+scenario paused_at_the_later_stage, after line 218: paused: pause ends at 2026-11-25 00:00 -> decide, in progress
+scenario paused_at_the_later_stage, after line 218: retracted: retract by e3101 at 2026-11-18 11:00 -> second, in progress
+scenario paused_at_the_later_stage, after line 218: clocks: remind at 2026-11-20 09:00 -> decide, in progress
+scenario paused_at_the_later_stage, after line 218: clocks: late at 2026-11-24 00:00 -> decide, in progress
+scenario paused_at_the_later_stage, after line 218: clocks: remind at 2026-11-26 09:00 -> decide, in progress
+scenario paused_at_the_later_stage, after line 218: clocks: late at 2026-11-28 00:00 -> expired
+scenario withdrawn_while_the_stage_waits, line 228: withdraw by e1101 at 2026-11-16 12:00 -> with requester
+scenario late_and_approved_where_it_went_up_to, line 240: approve by e0101 at 2026-11-20 10:00 -> first, in progress
+scenario late_and_approved_where_it_went_up_to, line 241: approve by e3101 at 2026-11-20 11:00 -> decide, in progress
+scenario late_and_approved_where_it_went_up_to, line 242: approve by e0101 at 2026-11-20 12:00 -> approved
+scenario late_and_approved_where_it_went_up_to, after line 240: approvals: approve by e3101 at 2026-11-20 10:00 -> decide, in progress
+scenario late_and_approved_where_it_went_up_to, after line 240: rejections: reject by e3101 at 2026-11-20 10:00 -> rejected
+scenario late_and_approved_where_it_went_up_to, after line 240: the requester: approve by e1101 at 2026-11-20 10:00 -> refused (person)
+scenario late_and_approved_where_it_went_up_to, after line 240: the requester: withdraw by e1101 at 2026-11-20 10:00 -> with requester
+scenario late_and_approved_where_it_went_up_to, after line 240: sent back: send back by e3101 at 2026-11-20 10:00 -> with requester
+scenario late_and_approved_where_it_went_up_to, after line 240: sent back: resubmit by e1101 at 2026-11-21 10:00 -> middle, in progress
+scenario late_and_approved_where_it_went_up_to, after line 240: sent back: discard by e1101 at 2026-11-20 10:00 -> withdrawn
+scenario late_and_approved_where_it_went_up_to, after line 240: sent back: resubmit late at 2026-11-26 00:00 -> expired
+scenario late_and_approved_where_it_went_up_to, after line 240: sent back: send back by e3101 at 2026-11-20 10:00 -> second, in progress
+scenario late_and_approved_where_it_went_up_to, after line 240: paused: pause by e3101 at 2026-11-20 10:00 -> first, paused
+scenario late_and_approved_where_it_went_up_to, after line 240: paused: resume by e3101 at 2026-11-21 10:00 -> first, in progress
+scenario late_and_approved_where_it_went_up_to, after line 240: paused: pause ends at 2026-11-28 00:00 -> first, in progress
+scenario late_and_approved_where_it_went_up_to, after line 240: retracted: retract by e0101 at 2026-11-20 10:00 -> second, in progress
+scenario late_and_approved_where_it_went_up_to, after line 240: clocks: remind at 2026-11-24 09:00 -> first, in progress
+scenario late_and_approved_where_it_went_up_to, after line 240: clocks: late at 2026-11-26 00:00 -> first, in progress
+scenario late_and_approved_where_it_went_up_to, after line 240: clocks: remind at 2026-11-30 09:00 -> first, in progress
+scenario late_and_approved_where_it_went_up_to, after line 240: clocks: late at 2026-12-02 00:00 -> expired
+scenario late_and_approved_where_it_went_up_to, after line 241: approvals: approve by e0101 at 2026-11-20 11:00 -> approved
+scenario late_and_approved_where_it_went_up_to, after line 241: rejections: reject by e0101 at 2026-11-20 11:00 -> rejected
+scenario late_and_approved_where_it_went_up_to, after line 241: the requester: approve by e1101 at 2026-11-20 11:00 -> refused (person)
+scenario late_and_approved_where_it_went_up_to, after line 241: the requester: withdraw by e1101 at 2026-11-20 11:00 -> refused (state)
+scenario late_and_approved_where_it_went_up_to, after line 241: sent back: send back by e0101 at 2026-11-20 11:00 -> with requester
+scenario late_and_approved_where_it_went_up_to, after line 241: sent back: resubmit by e1101 at 2026-11-21 11:00 -> middle, in progress
+scenario late_and_approved_where_it_went_up_to, after line 241: sent back: discard by e1101 at 2026-11-20 11:00 -> withdrawn
+scenario late_and_approved_where_it_went_up_to, after line 241: sent back: resubmit late at 2026-11-26 00:00 -> expired
+scenario late_and_approved_where_it_went_up_to, after line 241: sent back: send back by e0101 at 2026-11-20 11:00 -> first, in progress
+scenario late_and_approved_where_it_went_up_to, after line 241: paused: pause by e0101 at 2026-11-20 11:00 -> decide, paused
+scenario late_and_approved_where_it_went_up_to, after line 241: paused: resume by e0101 at 2026-11-21 11:00 -> decide, in progress
+scenario late_and_approved_where_it_went_up_to, after line 241: paused: pause ends at 2026-11-28 00:00 -> decide, in progress
+scenario late_and_approved_where_it_went_up_to, after line 241: retracted: retract by e3101 at 2026-11-20 11:00 -> first, in progress
+scenario late_and_approved_where_it_went_up_to, after line 241: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario late_and_approved_where_it_went_up_to, after line 241: clocks: late at 2026-11-26 00:00 -> decide, in progress
+scenario late_and_approved_where_it_went_up_to, after line 241: clocks: remind at 2026-11-30 09:00 -> decide, in progress
+scenario late_and_approved_where_it_went_up_to, after line 241: clocks: late at 2026-12-02 00:00 -> expired
+scenario handed_over_at_the_later_stage, line 251: hand over at 2026-11-16 12:00 -> second, in progress
+scenario handed_over_at_the_later_stage, line 252: approve by e0102 at 2026-11-16 13:00 -> first, in progress
+scenario handed_over_at_the_later_stage, line 253: approve by e3101 at 2026-11-16 14:00 -> decide, in progress
+scenario handed_over_at_the_later_stage, after line 252: approvals: approve by e3101 at 2026-11-16 13:00 -> decide, in progress
+scenario handed_over_at_the_later_stage, after line 252: rejections: reject by e3101 at 2026-11-16 13:00 -> rejected
+scenario handed_over_at_the_later_stage, after line 252: the requester: approve by e1101 at 2026-11-16 13:00 -> refused (person)
+scenario handed_over_at_the_later_stage, after line 252: the requester: withdraw by e1101 at 2026-11-16 13:00 -> with requester
+scenario handed_over_at_the_later_stage, after line 252: sent back: send back by e3101 at 2026-11-16 13:00 -> with requester
+scenario handed_over_at_the_later_stage, after line 252: sent back: resubmit by e1101 at 2026-11-17 13:00 -> middle, in progress
+scenario handed_over_at_the_later_stage, after line 252: sent back: discard by e1101 at 2026-11-16 13:00 -> withdrawn
+scenario handed_over_at_the_later_stage, after line 252: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario handed_over_at_the_later_stage, after line 252: sent back: send back by e3101 at 2026-11-16 13:00 -> second, in progress
+scenario handed_over_at_the_later_stage, after line 252: paused: pause by e3101 at 2026-11-16 13:00 -> first, paused
+scenario handed_over_at_the_later_stage, after line 252: paused: resume by e3101 at 2026-11-17 13:00 -> first, in progress
+scenario handed_over_at_the_later_stage, after line 252: paused: pause ends at 2026-11-24 00:00 -> first, in progress
+scenario handed_over_at_the_later_stage, after line 252: retracted: retract by e0102 at 2026-11-16 13:00 -> second, in progress
+scenario handed_over_at_the_later_stage, after line 252: clocks: remind at 2026-11-18 09:00 -> first, in progress
+scenario handed_over_at_the_later_stage, after line 252: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario handed_over_at_the_later_stage, after line 252: clocks: remind at 2026-11-24 09:00 -> first, in progress
+scenario handed_over_at_the_later_stage, after line 252: clocks: late at 2026-11-26 00:00 -> expired
+scenario handed_over_at_the_later_stage, after line 253: approvals: approve by e0101 at 2026-11-16 14:00 -> approved
+scenario handed_over_at_the_later_stage, after line 253: rejections: reject by e0101 at 2026-11-16 14:00 -> rejected
+scenario handed_over_at_the_later_stage, after line 253: the requester: approve by e1101 at 2026-11-16 14:00 -> refused (person)
+scenario handed_over_at_the_later_stage, after line 253: the requester: withdraw by e1101 at 2026-11-16 14:00 -> refused (state)
+scenario handed_over_at_the_later_stage, after line 253: sent back: send back by e0101 at 2026-11-16 14:00 -> with requester
+scenario handed_over_at_the_later_stage, after line 253: sent back: resubmit by e1101 at 2026-11-17 14:00 -> middle, in progress
+scenario handed_over_at_the_later_stage, after line 253: sent back: discard by e1101 at 2026-11-16 14:00 -> withdrawn
+scenario handed_over_at_the_later_stage, after line 253: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario handed_over_at_the_later_stage, after line 253: sent back: send back by e0101 at 2026-11-16 14:00 -> first, in progress
+scenario handed_over_at_the_later_stage, after line 253: paused: pause by e0101 at 2026-11-16 14:00 -> decide, paused
+scenario handed_over_at_the_later_stage, after line 253: paused: resume by e0101 at 2026-11-17 14:00 -> decide, in progress
+scenario handed_over_at_the_later_stage, after line 253: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario handed_over_at_the_later_stage, after line 253: retracted: retract by e3101 at 2026-11-16 14:00 -> first, in progress
+scenario handed_over_at_the_later_stage, after line 253: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario handed_over_at_the_later_stage, after line 253: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario handed_over_at_the_later_stage, after line 253: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario handed_over_at_the_later_stage, after line 253: clocks: late at 2026-11-26 00:00 -> expired
+scenario an_added_approver_answers_the_later_stage, line 262: add approver at 2026-11-16 12:00 -> second, in progress
+scenario an_added_approver_answers_the_later_stage, line 263: approve by e0102 at 2026-11-16 13:00 -> first, in progress
+scenario an_added_approver_answers_the_later_stage, line 264: approve by e3101 at 2026-11-16 14:00 -> decide, in progress
+scenario an_added_approver_answers_the_later_stage, after line 263: approvals: approve by e3101 at 2026-11-16 13:00 -> decide, in progress
+scenario an_added_approver_answers_the_later_stage, after line 263: rejections: reject by e3101 at 2026-11-16 13:00 -> rejected
+scenario an_added_approver_answers_the_later_stage, after line 263: the requester: approve by e1101 at 2026-11-16 13:00 -> refused (person)
+scenario an_added_approver_answers_the_later_stage, after line 263: the requester: withdraw by e1101 at 2026-11-16 13:00 -> with requester
+scenario an_added_approver_answers_the_later_stage, after line 263: sent back: send back by e3101 at 2026-11-16 13:00 -> with requester
+scenario an_added_approver_answers_the_later_stage, after line 263: sent back: resubmit by e1101 at 2026-11-17 13:00 -> middle, in progress
+scenario an_added_approver_answers_the_later_stage, after line 263: sent back: discard by e1101 at 2026-11-16 13:00 -> withdrawn
+scenario an_added_approver_answers_the_later_stage, after line 263: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario an_added_approver_answers_the_later_stage, after line 263: sent back: send back by e3101 at 2026-11-16 13:00 -> second, in progress
+scenario an_added_approver_answers_the_later_stage, after line 263: paused: pause by e3101 at 2026-11-16 13:00 -> first, paused
+scenario an_added_approver_answers_the_later_stage, after line 263: paused: resume by e3101 at 2026-11-17 13:00 -> first, in progress
+scenario an_added_approver_answers_the_later_stage, after line 263: paused: pause ends at 2026-11-24 00:00 -> first, in progress
+scenario an_added_approver_answers_the_later_stage, after line 263: retracted: retract by e0102 at 2026-11-16 13:00 -> second, in progress
+scenario an_added_approver_answers_the_later_stage, after line 263: clocks: remind at 2026-11-18 09:00 -> first, in progress
+scenario an_added_approver_answers_the_later_stage, after line 263: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario an_added_approver_answers_the_later_stage, after line 263: clocks: remind at 2026-11-24 09:00 -> first, in progress
+scenario an_added_approver_answers_the_later_stage, after line 263: clocks: late at 2026-11-26 00:00 -> expired
+scenario an_added_approver_answers_the_later_stage, after line 264: approvals: approve by e0101 at 2026-11-16 14:00 -> approved
+scenario an_added_approver_answers_the_later_stage, after line 264: rejections: reject by e0101 at 2026-11-16 14:00 -> rejected
+scenario an_added_approver_answers_the_later_stage, after line 264: the requester: approve by e1101 at 2026-11-16 14:00 -> refused (person)
+scenario an_added_approver_answers_the_later_stage, after line 264: the requester: withdraw by e1101 at 2026-11-16 14:00 -> refused (state)
+scenario an_added_approver_answers_the_later_stage, after line 264: sent back: send back by e0101 at 2026-11-16 14:00 -> with requester
+scenario an_added_approver_answers_the_later_stage, after line 264: sent back: resubmit by e1101 at 2026-11-17 14:00 -> middle, in progress
+scenario an_added_approver_answers_the_later_stage, after line 264: sent back: discard by e1101 at 2026-11-16 14:00 -> withdrawn
+scenario an_added_approver_answers_the_later_stage, after line 264: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario an_added_approver_answers_the_later_stage, after line 264: sent back: send back by e0101 at 2026-11-16 14:00 -> first, in progress
+scenario an_added_approver_answers_the_later_stage, after line 264: paused: pause by e0101 at 2026-11-16 14:00 -> decide, paused
+scenario an_added_approver_answers_the_later_stage, after line 264: paused: resume by e0101 at 2026-11-17 14:00 -> decide, in progress
+scenario an_added_approver_answers_the_later_stage, after line 264: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario an_added_approver_answers_the_later_stage, after line 264: retracted: retract by e3101 at 2026-11-16 14:00 -> first, in progress
+scenario an_added_approver_answers_the_later_stage, after line 264: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario an_added_approver_answers_the_later_stage, after line 264: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario an_added_approver_answers_the_later_stage, after line 264: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario an_added_approver_answers_the_later_stage, after line 264: clocks: late at 2026-11-26 00:00 -> expired
+scenario an_approver_is_added_and_the_one_who_waited_answers, line 274: approve by e3101 at 2026-11-16 13:00 -> decide, in progress
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: approvals: approve by e0101 at 2026-11-16 13:00 -> approved
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: rejections: reject by e0101 at 2026-11-16 13:00 -> rejected
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: the requester: approve by e1101 at 2026-11-16 13:00 -> refused (person)
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: the requester: withdraw by e1101 at 2026-11-16 13:00 -> refused (state)
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: sent back: send back by e0101 at 2026-11-16 13:00 -> with requester
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: sent back: resubmit by e1101 at 2026-11-17 13:00 -> middle, in progress
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: sent back: discard by e1101 at 2026-11-16 13:00 -> withdrawn
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: sent back: send back by e0101 at 2026-11-16 13:00 -> second, in progress
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: paused: pause by e0101 at 2026-11-16 13:00 -> decide, paused
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: paused: resume by e0101 at 2026-11-17 13:00 -> decide, in progress
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: retracted: retract by e3101 at 2026-11-16 13:00 -> second, in progress
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario an_approver_is_added_and_the_one_who_waited_answers, after line 274: clocks: late at 2026-11-26 00:00 -> expired
+scenario the_later_stage_leaves_the_route, line 282: edit by e1001 at 2026-11-16 11:00 -> middle, in progress
+scenario the_later_stage_leaves_the_route, line 283: approve by e1001 at 2026-11-16 12:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, line 284: approve by e3101 at 2026-11-16 13:00 -> decide, in progress
+scenario the_later_stage_leaves_the_route, after line 283: approvals: approve by e3101 at 2026-11-16 12:00 -> decide, in progress
+scenario the_later_stage_leaves_the_route, after line 283: rejections: reject by e3101 at 2026-11-16 12:00 -> rejected
+scenario the_later_stage_leaves_the_route, after line 283: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
+scenario the_later_stage_leaves_the_route, after line 283: the requester: withdraw by e1101 at 2026-11-16 12:00 -> with requester
+scenario the_later_stage_leaves_the_route, after line 283: sent back: send back by e3101 at 2026-11-16 12:00 -> with requester
+scenario the_later_stage_leaves_the_route, after line 283: sent back: resubmit by e1101 at 2026-11-17 12:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, after line 283: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
+scenario the_later_stage_leaves_the_route, after line 283: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_later_stage_leaves_the_route, after line 283: sent back: send back by e3101 at 2026-11-16 12:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, after line 283: paused: pause by e3101 at 2026-11-16 12:00 -> first, paused
+scenario the_later_stage_leaves_the_route, after line 283: paused: resume by e3101 at 2026-11-17 12:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, after line 283: paused: pause ends at 2026-11-24 00:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, after line 283: retracted: retract by e1001 at 2026-11-16 12:00 -> middle, in progress
+scenario the_later_stage_leaves_the_route, after line 283: clocks: remind at 2026-11-18 09:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, after line 283: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, after line 283: clocks: remind at 2026-11-24 09:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, after line 283: clocks: late at 2026-11-26 00:00 -> expired
+scenario the_later_stage_leaves_the_route, after line 284: approvals: approve by e0101 at 2026-11-16 13:00 -> approved
+scenario the_later_stage_leaves_the_route, after line 284: rejections: reject by e0101 at 2026-11-16 13:00 -> rejected
+scenario the_later_stage_leaves_the_route, after line 284: the requester: approve by e1101 at 2026-11-16 13:00 -> refused (person)
+scenario the_later_stage_leaves_the_route, after line 284: the requester: withdraw by e1101 at 2026-11-16 13:00 -> refused (state)
+scenario the_later_stage_leaves_the_route, after line 284: sent back: send back by e0101 at 2026-11-16 13:00 -> with requester
+scenario the_later_stage_leaves_the_route, after line 284: sent back: resubmit by e1101 at 2026-11-17 13:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, after line 284: sent back: discard by e1101 at 2026-11-16 13:00 -> withdrawn
+scenario the_later_stage_leaves_the_route, after line 284: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_later_stage_leaves_the_route, after line 284: sent back: send back by e0101 at 2026-11-16 13:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, after line 284: paused: pause by e0101 at 2026-11-16 13:00 -> decide, paused
+scenario the_later_stage_leaves_the_route, after line 284: paused: resume by e0101 at 2026-11-17 13:00 -> decide, in progress
+scenario the_later_stage_leaves_the_route, after line 284: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario the_later_stage_leaves_the_route, after line 284: retracted: retract by e3101 at 2026-11-16 13:00 -> first, in progress
+scenario the_later_stage_leaves_the_route, after line 284: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario the_later_stage_leaves_the_route, after line 284: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario the_later_stage_leaves_the_route, after line 284: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario the_later_stage_leaves_the_route, after line 284: clocks: late at 2026-11-26 00:00 -> expired
+scenario the_later_stage_comes_to_another, line 291: submit by e1101 at 2026-11-16 10:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, line 292: edit by e1001 at 2026-11-16 11:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, line 293: approve by e1001 at 2026-11-16 12:00 -> first, in progress
+scenario the_later_stage_comes_to_another, line 294: approve by e3101 at 2026-11-16 13:00 -> second, in progress
+scenario the_later_stage_comes_to_another, line 295: approve by e7001 at 2026-11-16 14:00 -> decide, in progress
+scenario the_later_stage_comes_to_another, after line 291: approvals: approve by e1001 at 2026-11-16 10:00 -> second, in progress
+scenario the_later_stage_comes_to_another, after line 291: rejections: reject by e1001 at 2026-11-16 10:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: rejections: reject by e1002 at 2026-11-16 10:00 -> rejected
+scenario the_later_stage_comes_to_another, after line 291: the requester: approve by e1101 at 2026-11-16 10:00 -> refused (person)
+scenario the_later_stage_comes_to_another, after line 291: the requester: withdraw by e1101 at 2026-11-16 10:00 -> with requester
+scenario the_later_stage_comes_to_another, after line 291: sent back: send back by e1001 at 2026-11-16 10:00 -> with requester
+scenario the_later_stage_comes_to_another, after line 291: sent back: resubmit by e1101 at 2026-11-17 10:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: sent back: discard by e1101 at 2026-11-16 10:00 -> withdrawn
+scenario the_later_stage_comes_to_another, after line 291: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_later_stage_comes_to_another, after line 291: sent back: send back by e1001 at 2026-11-16 10:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 291: sent back: approve by e3101 at 2026-11-16 10:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: sent back: approve by e1001 at 2026-11-16 10:00 -> second, in progress
+scenario the_later_stage_comes_to_another, after line 291: sent back: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
+scenario the_later_stage_comes_to_another, after line 291: sent back: approve by e0101 at 2026-11-16 10:00 -> approved
+scenario the_later_stage_comes_to_another, after line 291: paused: pause by e1001 at 2026-11-16 10:00 -> middle, paused
+scenario the_later_stage_comes_to_another, after line 291: paused: resume by e1001 at 2026-11-17 10:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: paused: pause ends at 2026-11-24 00:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: an administrator: add approver at 2026-11-16 10:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: an administrator: hand over at 2026-11-16 10:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: clocks: remind at 2026-11-18 09:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: clocks: late at 2026-11-20 00:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: clocks: remind at 2026-11-24 09:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: clocks: late at 2026-11-26 00:00 -> expired
+scenario the_later_stage_comes_to_another, after line 291: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario the_later_stage_comes_to_another, after line 291: clocks: approve by e1001 at 2026-11-18 09:00 -> refused (clock)
+scenario the_later_stage_comes_to_another, after line 291: sent back to the limit: send back by e1001 at 2026-11-17 10:00 -> with requester
+scenario the_later_stage_comes_to_another, after line 291: sent back to the limit: resubmit by e1101 at 2026-11-18 10:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 291: sent back to the limit: send back by e1001 at 2026-11-18 10:00 -> refused (limit)
+scenario the_later_stage_comes_to_another, after line 293: approvals: approve by e3101 at 2026-11-16 12:00 -> second, in progress
+scenario the_later_stage_comes_to_another, after line 293: rejections: reject by e3101 at 2026-11-16 12:00 -> rejected
+scenario the_later_stage_comes_to_another, after line 293: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
+scenario the_later_stage_comes_to_another, after line 293: the requester: withdraw by e1101 at 2026-11-16 12:00 -> with requester
+scenario the_later_stage_comes_to_another, after line 293: sent back: send back by e3101 at 2026-11-16 12:00 -> with requester
+scenario the_later_stage_comes_to_another, after line 293: sent back: resubmit by e1101 at 2026-11-17 12:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 293: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
+scenario the_later_stage_comes_to_another, after line 293: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_later_stage_comes_to_another, after line 293: sent back: send back by e3101 at 2026-11-16 12:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 293: paused: pause by e3101 at 2026-11-16 12:00 -> first, paused
+scenario the_later_stage_comes_to_another, after line 293: paused: resume by e3101 at 2026-11-17 12:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 293: paused: pause ends at 2026-11-24 00:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 293: retracted: retract by e1001 at 2026-11-16 12:00 -> middle, in progress
+scenario the_later_stage_comes_to_another, after line 293: clocks: remind at 2026-11-18 09:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 293: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 293: clocks: remind at 2026-11-24 09:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 293: clocks: late at 2026-11-26 00:00 -> expired
+scenario the_later_stage_comes_to_another, after line 294: approvals: approve by e7001 at 2026-11-16 13:00 -> decide, in progress
+scenario the_later_stage_comes_to_another, after line 294: rejections: reject by e7001 at 2026-11-16 13:00 -> rejected
+scenario the_later_stage_comes_to_another, after line 294: the requester: approve by e1101 at 2026-11-16 13:00 -> refused (person)
+scenario the_later_stage_comes_to_another, after line 294: the requester: withdraw by e1101 at 2026-11-16 13:00 -> refused (state)
+scenario the_later_stage_comes_to_another, after line 294: sent back: send back by e7001 at 2026-11-16 13:00 -> with requester
+scenario the_later_stage_comes_to_another, after line 294: sent back: resubmit by e1101 at 2026-11-17 13:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 294: sent back: discard by e1101 at 2026-11-16 13:00 -> withdrawn
+scenario the_later_stage_comes_to_another, after line 294: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_later_stage_comes_to_another, after line 294: sent back: send back by e7001 at 2026-11-16 13:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 294: paused: pause by e7001 at 2026-11-16 13:00 -> second, paused
+scenario the_later_stage_comes_to_another, after line 294: paused: resume by e7001 at 2026-11-17 13:00 -> second, in progress
+scenario the_later_stage_comes_to_another, after line 294: paused: pause ends at 2026-11-24 00:00 -> second, in progress
+scenario the_later_stage_comes_to_another, after line 294: retracted: retract by e3101 at 2026-11-16 13:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 294: clocks: remind at 2026-11-18 09:00 -> second, in progress
+scenario the_later_stage_comes_to_another, after line 294: clocks: late at 2026-11-20 00:00 -> second, in progress
+scenario the_later_stage_comes_to_another, after line 294: clocks: remind at 2026-11-24 09:00 -> second, in progress
+scenario the_later_stage_comes_to_another, after line 294: clocks: late at 2026-11-26 00:00 -> expired
+scenario the_later_stage_comes_to_another, after line 295: approvals: approve by e0101 at 2026-11-16 14:00 -> approved
+scenario the_later_stage_comes_to_another, after line 295: rejections: reject by e0101 at 2026-11-16 14:00 -> rejected
+scenario the_later_stage_comes_to_another, after line 295: the requester: approve by e1101 at 2026-11-16 14:00 -> refused (person)
+scenario the_later_stage_comes_to_another, after line 295: the requester: withdraw by e1101 at 2026-11-16 14:00 -> refused (state)
+scenario the_later_stage_comes_to_another, after line 295: sent back: send back by e0101 at 2026-11-16 14:00 -> with requester
+scenario the_later_stage_comes_to_another, after line 295: sent back: resubmit by e1101 at 2026-11-17 14:00 -> first, in progress
+scenario the_later_stage_comes_to_another, after line 295: sent back: discard by e1101 at 2026-11-16 14:00 -> withdrawn
+scenario the_later_stage_comes_to_another, after line 295: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_later_stage_comes_to_another, after line 295: sent back: send back by e0101 at 2026-11-16 14:00 -> second, in progress
+scenario the_later_stage_comes_to_another, after line 295: paused: pause by e0101 at 2026-11-16 14:00 -> decide, paused
+scenario the_later_stage_comes_to_another, after line 295: paused: resume by e0101 at 2026-11-17 14:00 -> decide, in progress
+scenario the_later_stage_comes_to_another, after line 295: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario the_later_stage_comes_to_another, after line 295: retracted: retract by e7001 at 2026-11-16 14:00 -> second, in progress
+scenario the_later_stage_comes_to_another, after line 295: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario the_later_stage_comes_to_another, after line 295: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario the_later_stage_comes_to_another, after line 295: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario the_later_stage_comes_to_another, after line 295: clocks: late at 2026-11-26 00:00 -> expired
+scenario two_ways_wait_for_two_stages, line 303: submit by e1201 at 2026-11-16 10:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, line 304: approve by e1001 at 2026-11-16 11:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, line 305: approve by e1101 at 2026-11-16 12:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, line 306: approve by e3101 at 2026-11-16 13:00 -> approved
+scenario two_ways_wait_for_two_stages, after line 303: approvals: approve by e1001 at 2026-11-16 10:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 303: rejections: reject by e1001 at 2026-11-16 10:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: rejections: reject by e1002 at 2026-11-16 10:00 -> rejected
+scenario two_ways_wait_for_two_stages, after line 303: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario two_ways_wait_for_two_stages, after line 303: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario two_ways_wait_for_two_stages, after line 303: sent back: send back by e1001 at 2026-11-16 10:00 -> with requester
+scenario two_ways_wait_for_two_stages, after line 303: sent back: resubmit by e1201 at 2026-11-17 10:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario two_ways_wait_for_two_stages, after line 303: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario two_ways_wait_for_two_stages, after line 303: sent back: send back by e1001 at 2026-11-16 10:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 303: sent back: approve by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 303: sent back: approve by e3101 at 2026-11-16 10:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: sent back: approve by e1001 at 2026-11-16 10:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 303: sent back: approve by e1101 at 2026-11-16 10:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 303: sent back: approve by e3101 at 2026-11-16 10:00 -> approved
+scenario two_ways_wait_for_two_stages, after line 303: paused: pause by e1001 at 2026-11-16 10:00 -> middle, paused
+scenario two_ways_wait_for_two_stages, after line 303: paused: resume by e1001 at 2026-11-17 10:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: paused: pause ends at 2026-11-24 00:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: an administrator: add approver at 2026-11-16 10:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: an administrator: hand over at 2026-11-16 10:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: clocks: remind at 2026-11-18 09:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: clocks: late at 2026-11-20 00:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: clocks: remind at 2026-11-24 09:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: clocks: late at 2026-11-26 00:00 -> expired
+scenario two_ways_wait_for_two_stages, after line 303: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario two_ways_wait_for_two_stages, after line 303: clocks: approve by e1001 at 2026-11-18 09:00 -> refused (clock)
+scenario two_ways_wait_for_two_stages, after line 303: sent back to the limit: send back by e1001 at 2026-11-17 10:00 -> with requester
+scenario two_ways_wait_for_two_stages, after line 303: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 303: sent back to the limit: send back by e1001 at 2026-11-18 10:00 -> refused (limit)
+scenario two_ways_wait_for_two_stages, after line 304: approvals: approve by e1101 at 2026-11-16 11:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 304: rejections: reject by e1101 at 2026-11-16 11:00 -> rejected
+scenario two_ways_wait_for_two_stages, after line 304: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
+scenario two_ways_wait_for_two_stages, after line 304: the requester: withdraw by e1201 at 2026-11-16 11:00 -> with requester
+scenario two_ways_wait_for_two_stages, after line 304: sent back: send back by e1101 at 2026-11-16 11:00 -> with requester
+scenario two_ways_wait_for_two_stages, after line 304: sent back: resubmit by e1201 at 2026-11-17 11:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 304: sent back: discard by e1201 at 2026-11-16 11:00 -> withdrawn
+scenario two_ways_wait_for_two_stages, after line 304: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario two_ways_wait_for_two_stages, after line 304: sent back: send back by e1101 at 2026-11-16 11:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 304: sent back: send back by e1101 at 2026-11-16 11:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 304: sent back: approve by e1101 at 2026-11-16 11:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 304: sent back: approve by e3101 at 2026-11-16 11:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 304: sent back: approve by e1001 at 2026-11-16 11:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 304: sent back: approve by e1101 at 2026-11-16 11:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 304: sent back: approve by e3101 at 2026-11-16 11:00 -> approved
+scenario two_ways_wait_for_two_stages, after line 304: paused: pause by e1101 at 2026-11-16 11:00 -> second, paused
+scenario two_ways_wait_for_two_stages, after line 304: paused: resume by e1101 at 2026-11-17 11:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 304: paused: pause ends at 2026-11-24 00:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 304: retracted: retract by e1001 at 2026-11-16 11:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 304: an administrator: add approver at 2026-11-16 11:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 304: an administrator: hand over at 2026-11-16 11:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 304: an administrator: approve by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 304: an administrator: approve by e1101 at 2026-11-16 11:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 304: an administrator: approve by e3101 at 2026-11-16 11:00 -> approved
+scenario two_ways_wait_for_two_stages, after line 304: an administrator: approve by e0001 at 2026-11-16 11:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 304: an administrator: approve by e1101 at 2026-11-16 11:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 304: an administrator: approve by e3101 at 2026-11-16 11:00 -> approved
+scenario two_ways_wait_for_two_stages, after line 304: clocks: remind at 2026-11-18 09:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 304: clocks: late at 2026-11-20 00:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 304: clocks: remind at 2026-11-24 09:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 304: clocks: late at 2026-11-26 00:00 -> expired
+scenario two_ways_wait_for_two_stages, after line 304: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 304: late, and approved where it went up to: approve by e1101 at 2026-11-20 01:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 304: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> approved
+scenario two_ways_wait_for_two_stages, after line 305: approvals: approve by e3101 at 2026-11-16 12:00 -> approved
+scenario two_ways_wait_for_two_stages, after line 305: rejections: reject by e3101 at 2026-11-16 12:00 -> rejected
+scenario two_ways_wait_for_two_stages, after line 305: the requester: approve by e1201 at 2026-11-16 12:00 -> refused (person)
+scenario two_ways_wait_for_two_stages, after line 305: the requester: withdraw by e1201 at 2026-11-16 12:00 -> with requester
+scenario two_ways_wait_for_two_stages, after line 305: sent back: send back by e3101 at 2026-11-16 12:00 -> with requester
+scenario two_ways_wait_for_two_stages, after line 305: sent back: resubmit by e1201 at 2026-11-17 12:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 305: sent back: discard by e1201 at 2026-11-16 12:00 -> withdrawn
+scenario two_ways_wait_for_two_stages, after line 305: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario two_ways_wait_for_two_stages, after line 305: sent back: send back by e3101 at 2026-11-16 12:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 305: sent back: send back by e3101 at 2026-11-16 12:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 305: sent back: approve by e1101 at 2026-11-16 12:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 305: sent back: approve by e3101 at 2026-11-16 12:00 -> middle, in progress
+scenario two_ways_wait_for_two_stages, after line 305: sent back: approve by e1001 at 2026-11-16 12:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 305: sent back: approve by e1101 at 2026-11-16 12:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 305: sent back: approve by e3101 at 2026-11-16 12:00 -> approved
+scenario two_ways_wait_for_two_stages, after line 305: paused: pause by e3101 at 2026-11-16 12:00 -> decide, paused
+scenario two_ways_wait_for_two_stages, after line 305: paused: resume by e3101 at 2026-11-17 12:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 305: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 305: retracted: retract by e1101 at 2026-11-16 12:00 -> second, in progress
+scenario two_ways_wait_for_two_stages, after line 305: an administrator: add approver at 2026-11-16 12:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 305: an administrator: hand over at 2026-11-16 12:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 305: an administrator: approve by e0001 at 2026-11-16 12:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 305: an administrator: approve by e3101 at 2026-11-16 12:00 -> approved
+scenario two_ways_wait_for_two_stages, after line 305: an administrator: approve by e0001 at 2026-11-16 12:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 305: an administrator: approve by e3101 at 2026-11-16 12:00 -> approved
+scenario two_ways_wait_for_two_stages, after line 305: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 305: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 305: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario two_ways_wait_for_two_stages, after line 305: clocks: late at 2026-11-26 00:00 -> expired
+scenario two_ways_wait_for_two_stages, after line 305: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> first, in progress
+scenario two_ways_wait_for_two_stages, after line 305: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> approved
+scenario one_of_two_ways_starts_and_the_other_waits_on, line 316: hand over at 2026-11-16 12:00 -> second, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, line 317: approve by e0102 at 2026-11-16 13:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, line 318: approve by e1101 at 2026-11-16 14:00 -> decide, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, line 319: approve by e3101 at 2026-11-16 15:00 -> approved
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: approvals: approve by e1101 at 2026-11-16 13:00 -> decide, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: rejections: reject by e1101 at 2026-11-16 13:00 -> rejected
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: the requester: approve by e1201 at 2026-11-16 13:00 -> refused (person)
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: the requester: withdraw by e1201 at 2026-11-16 13:00 -> with requester
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: sent back: send back by e1101 at 2026-11-16 13:00 -> with requester
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: sent back: resubmit by e1201 at 2026-11-17 13:00 -> middle, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: sent back: discard by e1201 at 2026-11-16 13:00 -> withdrawn
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: sent back: send back by e1101 at 2026-11-16 13:00 -> second, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: paused: pause by e1101 at 2026-11-16 13:00 -> first, paused
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: paused: resume by e1101 at 2026-11-17 13:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: paused: pause ends at 2026-11-24 00:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: retracted: retract by e0102 at 2026-11-16 13:00 -> second, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: clocks: remind at 2026-11-18 09:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: clocks: remind at 2026-11-24 09:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 317: clocks: late at 2026-11-26 00:00 -> expired
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: approvals: approve by e3101 at 2026-11-16 14:00 -> approved
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: rejections: reject by e3101 at 2026-11-16 14:00 -> rejected
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: the requester: approve by e1201 at 2026-11-16 14:00 -> refused (person)
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: the requester: withdraw by e1201 at 2026-11-16 14:00 -> with requester
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: sent back: send back by e3101 at 2026-11-16 14:00 -> with requester
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: sent back: resubmit by e1201 at 2026-11-17 14:00 -> middle, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: sent back: discard by e1201 at 2026-11-16 14:00 -> withdrawn
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: sent back: send back by e3101 at 2026-11-16 14:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: sent back: approve by e1101 at 2026-11-16 14:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: sent back: approve by e3101 at 2026-11-16 14:00 -> middle, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: sent back: approve by e1001 at 2026-11-16 14:00 -> second, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: sent back: approve by e1101 at 2026-11-16 14:00 -> decide, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: sent back: approve by e3101 at 2026-11-16 14:00 -> approved
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: paused: pause by e3101 at 2026-11-16 14:00 -> decide, paused
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: paused: resume by e3101 at 2026-11-17 14:00 -> decide, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: retracted: retract by e1101 at 2026-11-16 14:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: an administrator: add approver at 2026-11-16 14:00 -> decide, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: an administrator: hand over at 2026-11-16 14:00 -> decide, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: an administrator: approve by e0001 at 2026-11-16 14:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: an administrator: approve by e3101 at 2026-11-16 14:00 -> approved
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: an administrator: approve by e0001 at 2026-11-16 14:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: an administrator: approve by e3101 at 2026-11-16 14:00 -> approved
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: clocks: late at 2026-11-26 00:00 -> expired
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> first, in progress
+scenario one_of_two_ways_starts_and_the_other_waits_on, after line 318: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> approved
+scenario the_later_stage_waits_too, line 328: edit by e1001 at 2026-11-16 11:00 -> middle, in progress
+scenario the_later_stage_waits_too, line 329: approve by e1001 at 2026-11-16 12:00 -> decide, in progress
+scenario the_later_stage_waits_too, line 330: approve by e3101 at 2026-11-16 13:00 -> approved
+scenario the_later_stage_waits_too, after line 329: approvals: approve by e3101 at 2026-11-16 12:00 -> approved
+scenario the_later_stage_waits_too, after line 329: rejections: reject by e3101 at 2026-11-16 12:00 -> rejected
+scenario the_later_stage_waits_too, after line 329: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
+scenario the_later_stage_waits_too, after line 329: the requester: withdraw by e1101 at 2026-11-16 12:00 -> with requester
+scenario the_later_stage_waits_too, after line 329: sent back: send back by e3101 at 2026-11-16 12:00 -> with requester
+scenario the_later_stage_waits_too, after line 329: sent back: resubmit by e1101 at 2026-11-17 12:00 -> middle, in progress
+scenario the_later_stage_waits_too, after line 329: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
+scenario the_later_stage_waits_too, after line 329: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario the_later_stage_waits_too, after line 329: sent back: send back by e3101 at 2026-11-16 12:00 -> middle, in progress
+scenario the_later_stage_waits_too, after line 329: sent back: send back by e3101 at 2026-11-16 12:00 -> first, in progress
+scenario the_later_stage_waits_too, after line 329: sent back: approve by e3101 at 2026-11-16 12:00 -> middle, in progress
+scenario the_later_stage_waits_too, after line 329: sent back: approve by e1001 at 2026-11-16 12:00 -> decide, in progress
+scenario the_later_stage_waits_too, after line 329: sent back: approve by e3101 at 2026-11-16 12:00 -> approved
+scenario the_later_stage_waits_too, after line 329: paused: pause by e3101 at 2026-11-16 12:00 -> decide, paused
+scenario the_later_stage_waits_too, after line 329: paused: resume by e3101 at 2026-11-17 12:00 -> decide, in progress
+scenario the_later_stage_waits_too, after line 329: paused: pause ends at 2026-11-24 00:00 -> decide, in progress
+scenario the_later_stage_waits_too, after line 329: retracted: retract by e1001 at 2026-11-16 12:00 -> middle, in progress
+scenario the_later_stage_waits_too, after line 329: an administrator: add approver at 2026-11-16 12:00 -> decide, in progress
+scenario the_later_stage_waits_too, after line 329: an administrator: hand over at 2026-11-16 12:00 -> decide, in progress
+scenario the_later_stage_waits_too, after line 329: an administrator: approve by e0001 at 2026-11-16 12:00 -> first, in progress
+scenario the_later_stage_waits_too, after line 329: an administrator: approve by e3101 at 2026-11-16 12:00 -> second, in progress
+scenario the_later_stage_waits_too, after line 329: an administrator: approve by e3101 at 2026-11-16 12:00 -> approved
+scenario the_later_stage_waits_too, after line 329: an administrator: approve by e0001 at 2026-11-16 12:00 -> first, in progress
+scenario the_later_stage_waits_too, after line 329: an administrator: approve by e3101 at 2026-11-16 12:00 -> second, in progress
+scenario the_later_stage_waits_too, after line 329: an administrator: approve by e3101 at 2026-11-16 12:00 -> approved
+scenario the_later_stage_waits_too, after line 329: clocks: remind at 2026-11-18 09:00 -> decide, in progress
+scenario the_later_stage_waits_too, after line 329: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario the_later_stage_waits_too, after line 329: clocks: remind at 2026-11-24 09:00 -> decide, in progress
+scenario the_later_stage_waits_too, after line 329: clocks: late at 2026-11-26 00:00 -> expired
+scenario the_later_stage_waits_too, after line 329: late, and approved where it went up to: approve by e0101 at 2026-11-20 01:00 -> first, in progress
+scenario the_later_stage_waits_too, after line 329: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> second, in progress
+scenario the_later_stage_waits_too, after line 329: late, and approved where it went up to: approve by e3101 at 2026-11-20 01:00 -> approved
+scenario the_organization_changes_while_a_stage_waits, line 338: submit by e9002 at 2027-03-30 10:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, line 339: remind at 2027-04-01 09:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, line 340: approve by e1001 at 2027-04-01 11:00 -> decide, in progress
+scenario the_organization_changes_while_a_stage_waits, line 341: approve by e0102 at 2027-04-01 12:00 -> approved
+scenario the_organization_changes_while_a_stage_waits, after line 338: approvals: approve by e1001 at 2027-03-30 10:00 -> second, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: rejections: reject by e1001 at 2027-03-30 10:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: rejections: reject by e1002 at 2027-03-30 10:00 -> rejected
+scenario the_organization_changes_while_a_stage_waits, after line 338: the requester: approve by e9002 at 2027-03-30 10:00 -> refused (person)
+scenario the_organization_changes_while_a_stage_waits, after line 338: the requester: withdraw by e9002 at 2027-03-30 10:00 -> with requester
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back: send back by e1001 at 2027-03-30 10:00 -> with requester
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back: resubmit by e9002 at 2027-03-31 10:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back: discard by e9002 at 2027-03-30 10:00 -> withdrawn
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back: resubmit late at 2027-04-03 00:00 -> expired
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back: send back by e1001 at 2027-03-30 10:00 -> first, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back: approve by e9001 at 2027-03-30 10:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back: approve by e1001 at 2027-03-30 10:00 -> second, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back: approve by e9001 at 2027-03-30 10:00 -> decide, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back: approve by e0102 at 2027-03-30 10:00 -> approved
+scenario the_organization_changes_while_a_stage_waits, after line 338: paused: pause by e1001 at 2027-03-30 10:00 -> middle, paused
+scenario the_organization_changes_while_a_stage_waits, after line 338: paused: resume by e1001 at 2027-03-31 10:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: paused: pause ends at 2027-04-07 00:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: an administrator: add approver at 2027-03-30 10:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: an administrator: hand over at 2027-03-30 10:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: clocks: late at 2027-04-03 00:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: clocks: remind at 2027-04-06 09:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: clocks: late at 2027-04-08 00:00 -> expired
+scenario the_organization_changes_while_a_stage_waits, after line 338: clocks: remind at 2027-04-01 08:59 -> refused (clock)
+scenario the_organization_changes_while_a_stage_waits, after line 338: clocks: approve by e1001 at 2027-04-01 09:00 -> refused (clock)
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back to the limit: send back by e1001 at 2027-03-31 10:00 -> with requester
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back to the limit: resubmit by e9002 at 2027-04-01 10:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 338: sent back to the limit: send back by e1001 at 2027-04-01 10:00 -> refused (limit)
+scenario the_organization_changes_while_a_stage_waits, after line 340: approvals: approve by e0102 at 2027-04-01 11:00 -> approved
+scenario the_organization_changes_while_a_stage_waits, after line 340: rejections: reject by e0102 at 2027-04-01 11:00 -> rejected
+scenario the_organization_changes_while_a_stage_waits, after line 340: the requester: approve by e9002 at 2027-04-01 11:00 -> refused (person)
+scenario the_organization_changes_while_a_stage_waits, after line 340: the requester: withdraw by e9002 at 2027-04-01 11:00 -> with requester
+scenario the_organization_changes_while_a_stage_waits, after line 340: sent back: send back by e0102 at 2027-04-01 11:00 -> with requester
+scenario the_organization_changes_while_a_stage_waits, after line 340: sent back: resubmit by e9002 at 2027-04-02 11:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: sent back: discard by e9002 at 2027-04-01 11:00 -> withdrawn
+scenario the_organization_changes_while_a_stage_waits, after line 340: sent back: resubmit late at 2027-04-07 00:00 -> expired
+scenario the_organization_changes_while_a_stage_waits, after line 340: sent back: send back by e0102 at 2027-04-01 11:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: sent back: send back by e0102 at 2027-04-01 11:00 -> first, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: sent back: approve by e0102 at 2027-04-01 11:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: sent back: approve by e1001 at 2027-04-01 11:00 -> decide, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: sent back: approve by e0102 at 2027-04-01 11:00 -> approved
+scenario the_organization_changes_while_a_stage_waits, after line 340: paused: pause by e0102 at 2027-04-01 11:00 -> decide, paused
+scenario the_organization_changes_while_a_stage_waits, after line 340: paused: resume by e0102 at 2027-04-02 11:00 -> decide, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: paused: pause ends at 2027-04-09 00:00 -> decide, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: retracted: retract by e1001 at 2027-04-01 11:00 -> middle, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: an administrator: add approver at 2027-04-01 11:00 -> decide, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: an administrator: hand over at 2027-04-01 11:00 -> decide, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: an administrator: approve by e0001 at 2027-04-01 11:00 -> first, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: an administrator: approve by e0102 at 2027-04-01 11:00 -> second, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: an administrator: approve by e0102 at 2027-04-01 11:00 -> approved
+scenario the_organization_changes_while_a_stage_waits, after line 340: an administrator: approve by e0001 at 2027-04-01 11:00 -> first, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: an administrator: approve by e0102 at 2027-04-01 11:00 -> second, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: an administrator: approve by e0102 at 2027-04-01 11:00 -> approved
+scenario the_organization_changes_while_a_stage_waits, after line 340: clocks: remind at 2027-04-05 09:00 -> decide, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: clocks: late at 2027-04-07 00:00 -> decide, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: clocks: remind at 2027-04-09 09:00 -> decide, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: clocks: late at 2027-04-13 00:00 -> expired
+scenario the_organization_changes_while_a_stage_waits, after line 340: late, and approved where it went up to: approve by e0001 at 2027-04-07 01:00 -> first, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: late, and approved where it went up to: approve by e0102 at 2027-04-07 01:00 -> second, in progress
+scenario the_organization_changes_while_a_stage_waits, after line 340: late, and approved where it went up to: approve by e0102 at 2027-04-07 01:00 -> approved
+scenario a_proxy_answers_the_later_stage, line 349: submit by e1201 at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, line 350: approve by e1101 at 2026-12-28 11:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, line 351: approve by e1002 at 2026-12-28 12:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, line 352: approve by e1101 at 2026-12-28 13:00 -> approved
+scenario a_proxy_answers_the_later_stage, after line 349: approvals: approve by e1101 at 2026-12-28 10:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 349: rejections: reject by e1101 at 2026-12-28 10:00 -> rejected
+scenario a_proxy_answers_the_later_stage, after line 349: the requester: approve by e1201 at 2026-12-28 10:00 -> refused (person)
+scenario a_proxy_answers_the_later_stage, after line 349: the requester: withdraw by e1201 at 2026-12-28 10:00 -> with requester
+scenario a_proxy_answers_the_later_stage, after line 349: sent back: send back by e1101 at 2026-12-28 10:00 -> with requester
+scenario a_proxy_answers_the_later_stage, after line 349: sent back: resubmit by e1201 at 2026-12-29 10:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 349: sent back: discard by e1201 at 2026-12-28 10:00 -> withdrawn
+scenario a_proxy_answers_the_later_stage, after line 349: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario a_proxy_answers_the_later_stage, after line 349: paused: pause by e1101 at 2026-12-28 10:00 -> first, paused
+scenario a_proxy_answers_the_later_stage, after line 349: paused: resume by e1101 at 2026-12-29 10:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 349: paused: pause ends at 2027-01-09 00:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 349: an administrator: add approver at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 349: an administrator: hand over at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 349: clocks: remind at 2027-01-05 09:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 349: clocks: late at 2027-01-07 00:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 349: clocks: remind at 2027-01-11 09:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 349: clocks: late at 2027-01-13 00:00 -> expired
+scenario a_proxy_answers_the_later_stage, after line 349: clocks: remind at 2027-01-05 08:59 -> refused (clock)
+scenario a_proxy_answers_the_later_stage, after line 349: clocks: approve by e1101 at 2027-01-05 09:00 -> refused (clock)
+scenario a_proxy_answers_the_later_stage, after line 349: sent back to the limit: send back by e1101 at 2026-12-29 10:00 -> with requester
+scenario a_proxy_answers_the_later_stage, after line 349: sent back to the limit: resubmit by e1201 at 2026-12-30 10:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 349: sent back to the limit: send back by e1101 at 2026-12-30 10:00 -> refused (limit)
+scenario a_proxy_answers_the_later_stage, after line 350: approvals: approve by e1001 at 2026-12-28 11:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: rejections: reject by e1001 at 2026-12-28 11:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: rejections: reject by e1002 at 2026-12-28 11:00 -> rejected
+scenario a_proxy_answers_the_later_stage, after line 350: the requester: approve by e1201 at 2026-12-28 11:00 -> refused (person)
+scenario a_proxy_answers_the_later_stage, after line 350: the requester: withdraw by e1201 at 2026-12-28 11:00 -> refused (state)
+scenario a_proxy_answers_the_later_stage, after line 350: sent back: send back by e1001 at 2026-12-28 11:00 -> with requester
+scenario a_proxy_answers_the_later_stage, after line 350: sent back: resubmit by e1201 at 2026-12-29 11:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: sent back: discard by e1201 at 2026-12-28 11:00 -> withdrawn
+scenario a_proxy_answers_the_later_stage, after line 350: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario a_proxy_answers_the_later_stage, after line 350: sent back: send back by e1001 at 2026-12-28 11:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: sent back: send back by e1001 at 2026-12-28 11:00 -> middle, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: sent back: approve by e3101 at 2026-12-28 11:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: sent back: approve by e1001 at 2026-12-28 11:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: sent back: approve by e3101 at 2026-12-28 11:00 -> approved
+scenario a_proxy_answers_the_later_stage, after line 350: paused: pause by e1001 at 2026-12-28 11:00 -> second, paused
+scenario a_proxy_answers_the_later_stage, after line 350: paused: resume by e1001 at 2026-12-29 11:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: paused: pause ends at 2027-01-09 00:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: retracted: retract by e1101 at 2026-12-28 11:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: clocks: remind at 2027-01-05 09:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: clocks: late at 2027-01-07 00:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: clocks: remind at 2027-01-11 09:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 350: clocks: late at 2027-01-13 00:00 -> expired
+scenario a_proxy_answers_the_later_stage, after line 351: approvals: approve by e3101 at 2026-12-28 12:00 -> approved
+scenario a_proxy_answers_the_later_stage, after line 351: rejections: reject by e3101 at 2026-12-28 12:00 -> rejected
+scenario a_proxy_answers_the_later_stage, after line 351: the requester: approve by e1201 at 2026-12-28 12:00 -> refused (person)
+scenario a_proxy_answers_the_later_stage, after line 351: the requester: withdraw by e1201 at 2026-12-28 12:00 -> refused (state)
+scenario a_proxy_answers_the_later_stage, after line 351: sent back: send back by e3101 at 2026-12-28 12:00 -> with requester
+scenario a_proxy_answers_the_later_stage, after line 351: sent back: resubmit by e1201 at 2026-12-29 12:00 -> first, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: sent back: discard by e1201 at 2026-12-28 12:00 -> withdrawn
+scenario a_proxy_answers_the_later_stage, after line 351: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario a_proxy_answers_the_later_stage, after line 351: sent back: send back by e3101 at 2026-12-28 12:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: sent back: send back by e3101 at 2026-12-28 12:00 -> middle, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: sent back: approve by e3101 at 2026-12-28 12:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: sent back: approve by e1001 at 2026-12-28 12:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: sent back: approve by e3101 at 2026-12-28 12:00 -> approved
+scenario a_proxy_answers_the_later_stage, after line 351: paused: pause by e3101 at 2026-12-28 12:00 -> decide, paused
+scenario a_proxy_answers_the_later_stage, after line 351: paused: resume by e3101 at 2026-12-29 12:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: paused: pause ends at 2027-01-09 00:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: retracted: retract by e1002 at 2026-12-28 12:00 -> second, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: an administrator: add approver at 2026-12-28 12:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: an administrator: hand over at 2026-12-28 12:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: an administrator: approve by e0001 at 2026-12-28 12:00 -> middle, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: an administrator: approve by e3101 at 2026-12-28 12:00 -> approved
+scenario a_proxy_answers_the_later_stage, after line 351: an administrator: approve by e0001 at 2026-12-28 12:00 -> middle, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: an administrator: approve by e3101 at 2026-12-28 12:00 -> approved
+scenario a_proxy_answers_the_later_stage, after line 351: clocks: remind at 2027-01-05 09:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: clocks: late at 2027-01-07 00:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: clocks: remind at 2027-01-11 09:00 -> decide, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: clocks: late at 2027-01-13 00:00 -> expired
+scenario a_proxy_answers_the_later_stage, after line 351: late, and approved where it went up to: approve by e0101 at 2027-01-07 01:00 -> middle, in progress
+scenario a_proxy_answers_the_later_stage, after line 351: late, and approved where it went up to: approve by e3101 at 2027-01-07 01:00 -> approved
+scenario a_proxy_with_a_stage_of_their_own, line 360: submit by e1201 at 2026-12-28 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, line 361: approve by e1101 at 2026-12-28 11:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, line 362: approve by e1101 at 2026-12-28 12:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: approvals: approve by e1101 at 2026-12-28 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: approvals: approve by e3101 at 2026-12-28 10:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: rejections: reject by e1101 at 2026-12-28 10:00 -> rejected
+scenario a_proxy_with_a_stage_of_their_own, after line 360: the requester: approve by e1201 at 2026-12-28 10:00 -> refused (person)
+scenario a_proxy_with_a_stage_of_their_own, after line 360: the requester: withdraw by e1201 at 2026-12-28 10:00 -> with requester
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back: send back by e1101 at 2026-12-28 10:00 -> with requester
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back: resubmit by e1201 at 2026-12-29 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back: discard by e1201 at 2026-12-28 10:00 -> withdrawn
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back: send back by e1101 at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back: approve by e1101 at 2026-12-28 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back: approve by e1101 at 2026-12-28 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back: approve by e3101 at 2026-12-28 10:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back: approve by e0101 at 2026-12-28 10:00 -> approved
+scenario a_proxy_with_a_stage_of_their_own, after line 360: paused: pause by e1101 at 2026-12-28 10:00 -> second, paused
+scenario a_proxy_with_a_stage_of_their_own, after line 360: paused: resume by e1101 at 2026-12-29 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: paused: pause ends at 2027-01-09 00:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: an administrator: add approver at 2026-12-28 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: an administrator: hand over at 2026-12-28 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: an administrator: approve by e0001 at 2026-12-28 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: an administrator: approve by e3101 at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: an administrator: approve by e1101 at 2026-12-28 10:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: an administrator: approve by e0101 at 2026-12-28 10:00 -> approved
+scenario a_proxy_with_a_stage_of_their_own, after line 360: an administrator: approve by e0001 at 2026-12-28 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: an administrator: approve by e3101 at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: an administrator: approve by e1101 at 2026-12-28 10:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: an administrator: approve by e0101 at 2026-12-28 10:00 -> approved
+scenario a_proxy_with_a_stage_of_their_own, after line 360: clocks: remind at 2027-01-05 09:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: clocks: late at 2027-01-07 00:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: clocks: remind at 2027-01-11 09:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: clocks: late at 2027-01-13 00:00 -> expired
+scenario a_proxy_with_a_stage_of_their_own, after line 360: late, and approved where it went up to: approve by e3101 at 2027-01-07 01:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: late, and approved where it went up to: approve by e0101 at 2027-01-07 01:00 -> first, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: late, and approved where it went up to: approve by e1101 at 2027-01-07 01:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: late, and approved where it went up to: approve by e0101 at 2027-01-07 01:00 -> approved
+scenario a_proxy_with_a_stage_of_their_own, after line 360: clocks: remind at 2027-01-05 08:59 -> refused (clock)
+scenario a_proxy_with_a_stage_of_their_own, after line 360: clocks: approve by e1101 at 2027-01-05 09:00 -> refused (clock)
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back to the limit: send back by e1101 at 2026-12-29 10:00 -> with requester
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back to the limit: resubmit by e1201 at 2026-12-30 10:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 360: sent back to the limit: send back by e1101 at 2026-12-30 10:00 -> refused (limit)
+scenario a_proxy_with_a_stage_of_their_own, after line 362: approvals: approve by e0101 at 2026-12-28 12:00 -> approved
+scenario a_proxy_with_a_stage_of_their_own, after line 362: rejections: reject by e0101 at 2026-12-28 12:00 -> rejected
+scenario a_proxy_with_a_stage_of_their_own, after line 362: the requester: approve by e1201 at 2026-12-28 12:00 -> refused (person)
+scenario a_proxy_with_a_stage_of_their_own, after line 362: the requester: withdraw by e1201 at 2026-12-28 12:00 -> refused (state)
+scenario a_proxy_with_a_stage_of_their_own, after line 362: sent back: send back by e0101 at 2026-12-28 12:00 -> with requester
+scenario a_proxy_with_a_stage_of_their_own, after line 362: sent back: resubmit by e1201 at 2026-12-29 12:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 362: sent back: discard by e1201 at 2026-12-28 12:00 -> withdrawn
+scenario a_proxy_with_a_stage_of_their_own, after line 362: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario a_proxy_with_a_stage_of_their_own, after line 362: sent back: send back by e0101 at 2026-12-28 12:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 362: paused: pause by e0101 at 2026-12-28 12:00 -> decide, paused
+scenario a_proxy_with_a_stage_of_their_own, after line 362: paused: resume by e0101 at 2026-12-29 12:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 362: paused: pause ends at 2027-01-09 00:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 362: retracted: retract by e1101 at 2026-12-28 12:00 -> second, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 362: clocks: remind at 2027-01-05 09:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 362: clocks: late at 2027-01-07 00:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 362: clocks: remind at 2027-01-11 09:00 -> decide, in progress
+scenario a_proxy_with_a_stage_of_their_own, after line 362: clocks: late at 2027-01-13 00:00 -> expired
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: approve by e3101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: reject by e3101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: send back by e3101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: retract by e3101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: pause by e3101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: resume by e3101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: edit by e3101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: withdraw by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: discard by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: resubmit by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: add approver at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: hand over at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: agent answered at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: note ready at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before: flow failed at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: no revision: approve by e3101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, after line 78: a comment, which says no revision: comment by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario one_answer_at_the_later_of_two_stages, after line 78: made on the revision before, with a comment too long: approve by e3101 at 2026-11-16 11:00 -> refused (stale)
+scenario one_answer_at_the_later_of_two_stages, made on 2026-11-20 (closed from 2026-11-21): submit by e1101 at 2026-11-20 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, made on 2026-11-20 (closed from 2026-11-21): remind at 2026-11-24 09:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-26 00:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, made on 2026-11-20 (closed from 2026-11-21): remind at 2026-11-30 09:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, made on 2026-11-20 (closed from 2026-11-21): late at 2026-12-02 00:00 -> expired
+scenario one_answer_at_the_later_of_two_stages, made on 2026-12-28 (closed from 2026-12-29): submit by e1101 at 2026-12-28 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, made on 2026-12-28 (closed from 2026-12-29): remind at 2027-01-05 09:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-07 00:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, made on 2026-12-28 (closed from 2026-12-29): remind at 2027-01-11 09:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-13 00:00 -> expired
+scenario one_answer_at_the_later_of_two_stages, made with a comment: submit by e1101 at 2026-11-16 10:00 -> second, in progress
+scenario one_answer_at_the_later_of_two_stages, made with a comment: submit by e1101 at 2026-11-16 10:00 -> refused (comment)
+requester e0001: submit by e0001 at 2026-11-16 10:00 -> approved
+requester e0101: submit by e0101 at 2026-11-16 10:00 -> decide, in progress
+requester e0102: submit by e0102 at 2026-11-16 10:00 -> decide, in progress
+requester e0201: submit by e0201 at 2026-11-16 10:00 -> decide, in progress
+requester e0202: submit by e0202 at 2026-11-16 10:00 -> decide, in progress
+requester e0203: submit by e0203 at 2026-11-16 10:00 -> decide, in progress
+requester e0204: submit by e0204 at 2026-11-16 10:00 -> decide, in progress
+requester e1001: submit by e1001 at 2026-11-16 10:00 -> decide, in progress
+requester e1002: submit by e1002 at 2026-11-16 10:00 -> second, in progress
+requester e1201: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+requester e1203: submit by e1203 at 2026-11-16 10:00 -> first, in progress
+requester e3101: submit by e3101 at 2026-11-16 10:00 -> decide, in progress
+requester e4001: submit by e4001 at 2026-11-16 10:00 -> decide, in progress
+requester e5001: submit by e5001 at 2026-11-16 10:00 -> decide, in progress
+requester e6001: submit by e6001 at 2026-11-16 10:00 -> decide, in progress
+requester e7001: submit by e7001 at 2026-11-16 10:00 -> decide, in progress
+requester e7101: submit by e7101 at 2026-11-16 10:00 -> second, in progress
+requester e7102: submit by e7102 at 2026-11-16 10:00 -> first, in progress
+requester e7201: submit by e7201 at 2026-11-16 10:00 -> second, in progress
+requester e7202: submit by e7202 at 2026-11-16 10:00 -> first, in progress
+requester e9001: submit by e9001 at 2026-11-16 10:00 -> decide, in progress
+requester e9002: submit by e9002 at 2026-11-16 10:00 -> second, in progress
+requester e9003: submit by e9003 at 2026-11-16 10:00 -> second, in progress
+proxy e0001 for e1101: submit by e0001 at 2026-11-16 10:00 -> refused (person)
+proxy e1101 for e3101: submit by e1201 at 2026-12-28 10:00 -> middle, in progress
+proxy e1101 for e3101: approve by e1001 at 2026-12-28 10:00 -> second, in progress
+proxy e1101 for e3101: approve by e1101 at 2026-12-28 10:00 -> decide, in progress
+proxy e1101 for e3101: approve by e1101 at 2026-12-28 10:00 -> approved
+proxy e1101 for e3101: sent back by the proxy: send back by e1101 at 2026-12-28 10:00 -> with requester
+proxy e1101 for e3101: rejected by the proxy: reject by e1101 at 2026-12-28 10:00 -> rejected
+proxy e1101 for e3101: paused by the proxy: pause by e1101 at 2026-12-28 10:00 -> decide, paused
+proxy e1101 for e3101: paused by the proxy: resume by e1101 at 2026-12-28 10:00 -> decide, in progress
+proxy e1101 for e3101: edited by the proxy: edit by e1101 at 2026-12-28 10:00 -> decide, in progress
+across the versions of the organization: submit by e1101 at 2027-03-31 10:00 -> second, in progress
+across the versions of the organization: approve by e3101 at 2027-04-01 10:00 -> decide, in progress
+across the versions of the organization: approve by e0101 at 2027-04-01 10:00 -> approved
+across the versions of the organization: send back by e3101 at 2027-03-31 10:00 -> with requester
+across the versions of the organization: resubmit by e1101 at 2027-04-01 10:00 -> second, in progress

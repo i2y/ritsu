@@ -1,0 +1,38 @@
+2026-11-16 10:00  submit   by e1201  -> waits (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> twice (e1101), due 2026-11-19 end of day
+2026-11-20 00:00  late               -> twice (e3101), due 2026-11-25 end of day; twice went up to e3101
+2026-11-26 00:00  late               -> twice (e0101), due 2026-12-01 end of day; twice went up to e0101
+2026-12-02 00:00  late               -> expired; expired (late)
+scenario `up_twice`: as written (5 rows)
+
+2026-11-16 10:00  submit   by e1201  -> waits (e1101), due 2026-11-19 end of day
+2026-11-20 00:00  late               -> waits (e3101), due 2026-11-25 end of day; waits went up to e3101
+2026-11-26 00:00  late               -> waits (e3101); waits is late (it waits on)
+2026-12-10 10:00  approve  by e3101  -> twice (e1101), due 2026-12-15 end of day
+scenario `up_once_and_waits`: as written (4 rows); the ticket is left `in progress`; the clocks set: late 2026-12-16 00:00 (twice)
+
+2026-11-16 10:00  submit   by e0101  -> waits (e0001), due 2026-11-19 end of day
+2026-11-20 00:00  late               -> waits (e0001); waits is late (nowhere to go up; it waits on)
+2026-11-24 10:00  approve  by e0001  -> twice (e0001), due 2026-11-27 end of day
+2026-11-28 00:00  late               -> expired; expired (late; nowhere to go up)
+scenario `nowhere_to_go_up`: as written (4 rows)
+
+2026-11-16 10:00  submit   by e3101  -> waits (e0101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e0101  -> twice (e0101), due 2026-11-19 end of day
+2026-11-20 00:00  late               -> twice (e0001), due 2026-11-25 end of day; twice went up to e0001
+2026-11-26 00:00  late               -> expired; expired (late; nowhere to go up)
+scenario `nowhere_the_second_time`: as written (4 rows)
+
+2026-11-16 10:00  submit   by e1201  -> waits (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> twice (e1101), due 2026-11-19 end of day
+2026-11-16 12:00  approve  by e1101  -> timed (e1101), due 2026-11-18 17:00
+2026-11-18 17:00  late               -> expired; expired (late)
+scenario `a_deadline_at_a_time`: as written (4 rows)
+
+2026-11-16 10:00  submit   by e3101  -> waits (e0101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e0101  -> twice (e0101), due 2026-11-19 end of day
+2026-11-16 12:00  approve  by e0101  -> timed (e0101), due 2026-11-18 17:00
+2026-11-16 13:00  approve  by e0101  -> alone (e0101), due 2026-11-19 end of day; alone went up to e0101 (it comes to the requester alone)
+2026-11-20 00:00  late               -> alone (e0001), due 2026-11-25 end of day; alone went up to e0001
+2026-11-26 00:00  late               -> expired; expired (late)
+scenario `late_where_it_went_up_to`: as written (6 rows)

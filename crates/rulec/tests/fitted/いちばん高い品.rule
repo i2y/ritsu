@@ -1,0 +1,18 @@
+rule いちばん高い品(dearest_line_ja) v1
+description "注文に高い品があるか。注文は 150 円以上で、一件は 100 円まで。いちばん高い品は、それより高くないほかの明細と一緒でないと下の端に届かない"
+
+# 注文の明細の一件ぶん
+elements 明細(lines)
+  価格(price) : money[円]  range >=1円 <=100円
+
+max 最高値(dearest) over 明細 of 価格 empty 0円
+sum 金額(total) over 明細 of 価格  range >=150円 <=500円
+
+outputs
+  高い品(pricey) : bool
+
+table 高い品の判定(pricey_of)
+policy unique
+| 最高値 | -> 高い品 |
+| <50円  | false     |
+| >=50円 | true      |

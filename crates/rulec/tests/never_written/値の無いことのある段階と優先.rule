@@ -1,0 +1,26 @@
+rule 値の無いことのある段階と優先(absent_lifted) v1
+description "表が書く段階と優先。どちらの値も無いことがあり、準用で読む規則の最初の行は、その二つがとらない値をとる（架空）"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  段階の値引き(tier_credit) : money[USD]  round down(1USD)
+  優先の値引き(priority_credit) : money[USD]  round down(1USD)
+
+# 段階はシルバーかゴールドか無しで、一般にはならない。優先は true か無しで、false にはならない
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員     | -> 引き上げ先(lift) : 段階? | 優先(priority) : bool? |
+| 一般     | シルバー                    | none                   |
+| シルバー | none                        | true                   |
+| ゴールド | ゴールド                    | true                   |
+
+# 元の規則の一般の行と false の行が先にあり、どちらもとるものが無い
+apply 引き上げ(lifted) = "段階と優先の値引き.rule" meaning:b6423489db1491ca
+  段階 = 引き上げ先
+  優先 = 優先
+  段階の値引き -> 段階の値引き
+  優先の値引き -> 優先の値引き

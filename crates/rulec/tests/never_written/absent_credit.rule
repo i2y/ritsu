@@ -1,0 +1,26 @@
+rule absent_credit v1
+description "Two credits, for a tier and for a priority, either of which may be absent: the rule absent_lifted.rule reads with an apply (fictional)"
+
+enum tier = basic < silver < gold
+
+inputs
+  tier : tier?
+  priority : bool?
+
+outputs
+  tier_credit : money[USD]  round down(1USD)
+  priority_credit : money[USD]  round down(1USD)
+
+table credit_by_tier
+policy unique
+| tier         | -> tier_credit |
+| basic        | 0USD           |
+| silver, gold | 5USD           |
+| none         | 1USD           |
+
+table credit_by_priority
+policy unique
+| priority | -> priority_credit |
+| false    | 0USD               |
+| true     | 5USD               |
+| none     | 1USD               |

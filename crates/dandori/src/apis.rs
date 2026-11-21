@@ -50,20 +50,28 @@ pub struct Api {
     pub url: Option<String>,
 }
 
-pub fn load(kind: ApiKind, path: &Path) -> Result<ApiDoc, String> {
+/// The document of an API, or why it cannot be read, in both languages (what the system or the JSON
+/// reader says is in its own words in both).
+pub fn load(kind: ApiKind, path: &Path) -> Result<ApiDoc, Text> {
     match kind {
         ApiKind::Proto => crate::proto::load(path).map(|pf| ApiDoc::Proto(Arc::new(pf))),
         _ => {
-            let text = crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-            let v: Value = serde_json::from_str(&text).map_err(|e| format!("{} is not JSON ({e}); dandori reads an OpenAPI document or a Smithy model written as JSON", path.display()))?;
+            let shown = ritsu_base::paths::show(path);
+            let text = crate::sources::read(path).map_err(|e| ritsu_base::tr!("{shown} を読めません: {e}", "cannot read {shown}: {e}"))?;
+            let v: Value = serde_json::from_str(&text).map_err(|e| {
+                ritsu_base::tr!(
+                    "{shown} は JSON ではありません（{e}）。dandori が読むのは、JSON で書いた OpenAPI の文書か Smithy のモデルです",
+                    "{shown} is not JSON ({e}); dandori reads an OpenAPI document or a Smithy model written as JSON"
+                )
+            })?;
             if kind == ApiKind::OpenApi {
                 if !v["openapi"].as_str().is_some_and(|s| s.starts_with('3')) {
-                    return Err(format!("{} is not an OpenAPI 3 document", path.display()));
+                    return Err(ritsu_base::tr!("{shown} は OpenAPI 3 の文書ではありません", "{shown} is not an OpenAPI 3 document"));
                 }
                 Ok(ApiDoc::OpenApi(v))
             } else {
                 if !v["shapes"].is_object() {
-                    return Err(format!("{} is not a Smithy model in the JSON AST", path.display()));
+                    return Err(ritsu_base::tr!("{shown} は、JSON AST で書いた Smithy のモデルではありません", "{shown} is not a Smithy model in the JSON AST"));
                 }
                 Ok(ApiDoc::Smithy(v))
             }
@@ -173,7 +181,14 @@ enum Shape {
     Int { text: bool, min: Option<i64>, max: Option<i64> },
     Float,
     Bool,
-    Timestamp,
+    /// a moment: OpenAPI's `date-time`, Smithy's `timestamp`, protobuf's `Timestamp`; `text`: the
+    /// description's own rules make it a JSON string (OpenAPI's and protobuf's), which a `string`
+    /// reads as well. A Smithy timestamp goes as its protocol and `@timestampFormat` say, which may
+    /// be a number of seconds.
+    Timestamp { text: bool },
+    /// a day of the calendar, `2026-11-16`: OpenAPI's `date` (RFC 3339's full-date), which is a
+    /// flow's `date` as it goes and as it comes
+    Date,
     Bytes,
     List(Node),
     Map(Node),
@@ -198,14 +213,53 @@ struct Member {
     node: Node,
 }
 
+/// A parameter of an OpenAPI operation (DESIGN 43): where it goes (`in`), and how it is written
+/// there as the description says it (`style` and `explode` as written; none for the place's own).
+#[derive(Clone, Debug)]
+struct Param {
+    member: Member,
+    place: Place,
+    style: Option<String>,
+    explode: Option<bool>,
+    /// the description says how it is written with `content` (a media type), not with `schema`
+    content: bool,
+}
+
+/// Header parameters OpenAPI says are left out (3.1.1, Parameter Object): the request's own.
+const HEADERS_LEFT_OUT: [&str; 3] = ["Accept", "Content-Type", "Authorization"];
+
+/// The headers each language's HTTP client writes itself, which a parameter cannot set.
+const HEADERS_OF_THE_CLIENT: [&str; 10] = ["Host", "Content-Length", "Transfer-Encoding", "Connection", "Keep-Alive", "Proxy-Connection", "TE", "Trailer", "Upgrade", "Expect"];
+
+/// Whether `name` is a token of HTTP (RFC 9110's `token`), which a header's and a cookie's name is.
+fn is_token(name: &str) -> bool {
+    !name.is_empty() && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b))
+}
+
+/// Whether a parameter's name in the flow is the name a description gives it at `place`: `-` and `_`
+/// are one character on either side, and a header's name is the same in any case (a cookie's and
+/// the others' are not).
+pub fn same_name(place: Place, described: &str, param: &str) -> bool {
+    let a = described.replace('-', "_");
+    let b = param.replace('-', "_");
+    if place == Place::Header {
+        a.eq_ignore_ascii_case(&b)
+    } else {
+        a == b
+    }
+}
+
 /// One operation of an API: what it takes and answers, and how it fails.
 pub struct Op<'a> {
     api: &'a Api,
     /// how a message names it: `POST /v1/payment_intents`, `Publish`, `StockService/Reserve`
     pub label: String,
-    /// the query parameters and the path's, for OpenAPI; the body's, or the input's
+    /// the body's, or the input's
     input: Node,
-    query: Vec<Member>,
+    /// OpenAPI: the parameters of the path, the query, the headers and the cookies
+    params: Vec<Param>,
+    /// OpenAPI: the Encoding Objects of a URL-encoded body, by its properties
+    encodings: Value,
     output: Option<Node>,
     /// OpenAPI: the statuses it answers with ("4XX", "default" too); Smithy: its errors' names
     errors: Vec<String>,
@@ -239,26 +293,46 @@ pub fn openapi_op<'a>(api: &'a Api, method: &str, path: &str) -> Result<Op<'a>, 
         let Text { en: hint_en, ja: hint_ja } = if near.is_empty() { Text::default() } else { tr!("（あるのは {}）", " (it has {})", near.join("・"); near.join(", ")) };
         return Err(tr!("`{}` に {label} はありません{hint_ja}", "`{}` has no {label}{hint_en}", api.name));
     }
-    let mut query = Vec::new();
-    let params = item["parameters"].as_array().into_iter().flatten().chain(op["parameters"].as_array().into_iter().flatten());
-    for p in params {
+    // the parameters of the path item and of the operation; the operation's take the place of the
+    // path item's of the same name and place
+    let mut params: Vec<Param> = Vec::new();
+    for p in item["parameters"].as_array().into_iter().flatten().chain(op["parameters"].as_array().into_iter().flatten()) {
         let p = resolve(doc, p);
-        if matches!(p["in"].as_str(), Some("query") | Some("path")) {
-            query.push(Member {
-                name: p["name"].as_str().unwrap_or_default().to_string(),
+        let place = match p["in"].as_str() {
+            Some("path") => Place::Path,
+            Some("query") => Place::Query,
+            Some("header") => Place::Header,
+            Some("cookie") => Place::Cookie,
+            _ => continue,
+        };
+        let name = p["name"].as_str().unwrap_or_default().to_string();
+        let content = p.get("content").is_some_and(|c| c.is_object()) && p.get("schema").is_none();
+        let param = Param {
+            member: Member {
+                name: name.clone(),
                 alias: None,
-                required: p["required"].as_bool().unwrap_or(false),
+                // a parameter of the path is always needed (OpenAPI: its `required` is true)
+                required: place == Place::Path || p["required"].as_bool().unwrap_or(false),
                 nullable: false,
                 optional_out: true,
                 node: Node::Json(p["schema"].clone()),
-            });
+            },
+            place,
+            style: p["style"].as_str().map(String::from),
+            explode: p["explode"].as_bool(),
+            content,
+        };
+        let same = |q: &Param| q.place == place && if place == Place::Header { q.member.name.eq_ignore_ascii_case(&name) } else { q.member.name == name };
+        match params.iter().position(same) {
+            Some(i) => params[i] = param,
+            None => params.push(param),
         }
     }
     let content = &resolve(doc, &op["requestBody"])["content"];
-    let (input, form) = match (content.get("application/json"), content.get("application/x-www-form-urlencoded")) {
-        (Some(c), _) => (Node::Json(c["schema"].clone()), false),
-        (None, Some(c)) => (Node::Json(c["schema"].clone()), true),
-        _ => (Node::Any, false),
+    let (input, form, encodings) = match (content.get("application/json"), content.get("application/x-www-form-urlencoded")) {
+        (Some(c), _) => (Node::Json(c["schema"].clone()), false, Value::Null),
+        (None, Some(c)) => (Node::Json(c["schema"].clone()), true, c["encoding"].clone()),
+        _ => (Node::Any, false, Value::Null),
     };
     let responses = op["responses"].as_object().cloned().unwrap_or_default();
     let ok = responses.iter().find(|(s, _)| s.starts_with('2')).map(|(_, r)| resolve(doc, r));
@@ -266,7 +340,7 @@ pub fn openapi_op<'a>(api: &'a Api, method: &str, path: &str) -> Result<Op<'a>, 
         Some(c) => Node::Json(c["schema"].clone()),
         None => Node::Any,
     });
-    Ok(Op { api, label, input, query, output, errors: responses.keys().cloned().collect(), token: None, form, procedure: None, streams: false, presence_free: false, noun: an_answer })
+    Ok(Op { api, label, input, params, encodings, output, errors: responses.keys().cloned().collect(), token: None, form, procedure: None, streams: false, presence_free: false, noun: an_answer })
 }
 
 /// The Smithy operation that Step Functions names `action` (`publish` for `Publish`).
@@ -284,7 +358,139 @@ pub fn smithy_op<'a>(api: &'a Api, action: &str) -> Result<Op<'a>, Words> {
     let token = op["input"]["target"].as_str().and_then(|t| shapes.get(t)).and_then(|s| s["members"].as_object()).and_then(|ms| {
         ms.iter().find(|(_, m)| m["traits"].get("smithy.api#idempotencyToken").is_some()).map(|(n, _)| n.clone())
     });
-    Ok(Op { api, label: local(id).to_string(), input, query: vec![], output, errors, token, form: false, procedure: None, streams: false, presence_free: false, noun: an_answer })
+    Ok(Op { api, label: local(id).to_string(), input, params: vec![], encodings: Value::Null, output, errors, token, form: false, procedure: None, streams: false, presence_free: false, noun: an_answer })
+}
+
+/// The protocols of AWS's Smithy models, by the forms a timestamp takes in them.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Protocol {
+    /// awsJson1_0 and awsJson1_1: the input is a JSON body
+    AwsJson,
+    /// restJson1: a JSON body, and the members bound to the headers, the query and the path
+    RestJson,
+    /// restXml: an XML body, and the bound members
+    RestXml,
+    /// awsQuery and ec2Query: the input is a URL-encoded body
+    Query,
+    /// rpcv2Cbor: a CBOR body
+    Cbor,
+}
+
+/// The protocol a Smithy model's service names by its trait. A service that names several is read
+/// by the first of these.
+fn smithy_protocol(doc: &Value) -> Option<Protocol> {
+    let service = doc["shapes"].as_object()?.values().find(|s| s["type"] == "service")?;
+    let traits = service["traits"].as_object()?;
+    [
+        ("aws.protocols#restJson1", Protocol::RestJson),
+        ("aws.protocols#awsJson1_0", Protocol::AwsJson),
+        ("aws.protocols#awsJson1_1", Protocol::AwsJson),
+        ("aws.protocols#restXml", Protocol::RestXml),
+        ("aws.protocols#awsQuery", Protocol::Query),
+        ("aws.protocols#ec2Query", Protocol::Query),
+        ("smithy.protocols#rpcv2Cbor", Protocol::Cbor),
+    ]
+    .into_iter()
+    .find(|(t, _)| traits.contains_key(*t))
+    .map(|(_, p)| p)
+}
+
+/// Where a member of an operation's input goes: the body, or the header, the query or the path a
+/// protocol of HTTP bindings (restJson1, restXml) binds it to.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Bound {
+    Body,
+    Header,
+    Query,
+    Label,
+}
+
+/// The form a timestamp takes where it goes when the model's `@timestampFormat` does not say:
+/// `http-date` in a header, `date-time` in the query and the path, and in the body the protocol's
+/// own, `epoch-seconds` in JSON and CBOR, `date-time` in XML and in a URL-encoded body. Under a
+/// protocol dandori does not know, `timestamp`: the SDK that calls it knows.
+fn timestamp_form(protocol: Option<Protocol>, place: Bound) -> &'static str {
+    match (protocol, place) {
+        (_, Bound::Header) => "http-date",
+        (_, Bound::Query | Bound::Label) => "date-time",
+        (Some(Protocol::AwsJson | Protocol::RestJson | Protocol::Cbor), Bound::Body) => "epoch-seconds",
+        (Some(Protocol::RestXml | Protocol::Query), Bound::Body) => "date-time",
+        (None, Bound::Body) => "timestamp",
+    }
+}
+
+/// The timestamps inside a member of a Smithy model, each with its form: `"epoch-seconds"` for a
+/// timestamp, `{"Time": …}` for those of a structure's members, `{"*": …}` for those of each item
+/// of a list or each value of a map; none when it holds no timestamp. `seen`: the structures on the
+/// way down, so that a structure that holds itself ends there.
+fn smithy_times(doc: &Value, protocol: Option<Protocol>, member: &Value, place: Bound, seen: &mut Vec<String>) -> Option<Value> {
+    let target = member["target"].as_str()?;
+    let shape = &doc["shapes"][target];
+    let kind = match target.strip_prefix("smithy.api#") {
+        Some("Timestamp") => "timestamp",
+        Some(_) => return None,
+        None => shape["type"].as_str()?,
+    };
+    match kind {
+        // the member's own @timestampFormat, else the shape's, else the protocol's for the place
+        "timestamp" => {
+            let said = |v: &Value| v["traits"]["smithy.api#timestampFormat"].as_str().map(String::from);
+            Some(Value::String(said(member).or_else(|| said(shape)).unwrap_or_else(|| timestamp_form(protocol, place).to_string())))
+        }
+        "structure" | "union" => {
+            if seen.iter().any(|s| s == target) {
+                return None;
+            }
+            seen.push(target.to_string());
+            let mut out = Map::new();
+            for (name, m) in shape["members"].as_object().into_iter().flatten() {
+                if let Some(v) = smithy_times(doc, protocol, m, Bound::Body, seen) {
+                    out.insert(name.clone(), v);
+                }
+            }
+            seen.pop();
+            (!out.is_empty()).then_some(Value::Object(out))
+        }
+        "list" | "set" => smithy_times(doc, protocol, &shape["member"], place, seen).map(|v| json!({ "*": v })),
+        "map" => smithy_times(doc, protocol, &shape["value"], Bound::Body, seen).map(|v| json!({ "*": v })),
+        _ => None,
+    }
+}
+
+impl Op<'_> {
+    /// The timestamps in what a task sends this operation of a Smithy model, by the members the
+    /// task gives (`params`), each with the form the model sends it in (`smithy_times`):
+    /// `{"StartingPositionTimestamp": "epoch-seconds"}`. None when there is none, or the API is
+    /// not a Smithy model. The default Transport in TypeScript hands them to the AWS SDK as Dates,
+    /// which the SDK sends in that form (DESIGN 42).
+    pub fn timestamps(&self, params: &[String]) -> Option<Value> {
+        let ApiDoc::Smithy(doc) = &self.api.doc else { return None };
+        let Node::Shape(input) = &self.input else { return None };
+        let protocol = smithy_protocol(doc);
+        let binds = matches!(protocol, Some(Protocol::RestJson | Protocol::RestXml));
+        let mut out = Map::new();
+        for (name, m) in doc["shapes"][input.as_str()]["members"].as_object().into_iter().flatten() {
+            if !params.iter().any(|p| p == name) {
+                continue;
+            }
+            let t = &m["traits"];
+            let place = if !binds {
+                Bound::Body
+            } else if t.get("smithy.api#httpHeader").is_some() {
+                Bound::Header
+            } else if t.get("smithy.api#httpQuery").is_some() {
+                Bound::Query
+            } else if t.get("smithy.api#httpLabel").is_some() {
+                Bound::Label
+            } else {
+                Bound::Body
+            };
+            if let Some(v) = smithy_times(doc, protocol, m, place, &mut vec![input.clone()]) {
+                out.insert(name.clone(), v);
+            }
+        }
+        (!out.is_empty()).then_some(Value::Object(out))
+    }
 }
 
 /// The method of a `.proto`'s service, written `Service/Method`.
@@ -298,7 +504,8 @@ pub fn proto_op<'a>(api: &'a Api, method: &str) -> Result<Op<'a>, Words> {
         api,
         label: format!("{}/{}", service.name.rsplit('.').next().unwrap_or(&service.name), found.name),
         input: Node::Proto(PType::Named(found.input.clone()), FieldRules::default()),
-        query: vec![],
+        params: vec![],
+        encodings: Value::Null,
         output: Some(Node::Proto(PType::Named(found.output.clone()), FieldRules::default())),
         errors: vec![],
         token: None,
@@ -428,17 +635,16 @@ pub fn proto_marks(api: &Api, method: &str, m: &Model, task: &TaskDef) -> (Vec<(
 }
 
 /// The marks of the OpenAPI operation at `method` and `path` on what `task` gives it and reads from
-/// it: for each parameter, those of the parameter of the path or the query, or of the body's property,
-/// it is sent as; and those of the answer. Read as far as the task's types go.
+/// it: for each parameter, those of the parameter of the path, the query, a header or a cookie, or of
+/// the body's property, it is sent as (`TaskDef::wire`); and those of the answer. Read as far as the
+/// task's types go.
 pub fn openapi_marks(api: &Api, method: &str, path: &str, m: &Model, task: &TaskDef) -> (Vec<(String, DocMark)>, Vec<DocMark>) {
     let ApiDoc::OpenApi(doc) = &api.doc else { return (vec![], vec![]) };
     let op_at = format!("/paths/{}/{}", pointer_key(path), method.to_ascii_lowercase());
     let item = &doc["paths"][path];
     let op = &item[method.to_ascii_lowercase()];
     let (mut params, mut answer) = (Vec::new(), Vec::new());
-    let get = method == "GET" || method == "DELETE";
-    let in_path = crate::lower::placeholders(path);
-    // the parameters of the path and the query, behind their `$ref`
+    // the parameters of the four places, behind their `$ref`
     let mut listed: Vec<(Value, String)> = Vec::new();
     for (list, at) in [(&item["parameters"], format!("/paths/{}/parameters", pointer_key(path))), (&op["parameters"], format!("{op_at}/parameters"))] {
         for (i, p) in list.as_array().into_iter().flatten().enumerate() {
@@ -459,8 +665,11 @@ pub fn openapi_marks(api: &Api, method: &str, path: &str, m: &Model, task: &Task
     let body_schema = ["application/json", "application/x-www-form-urlencoded"].iter().find_map(|ct| body["content"].get(*ct).map(|c| (c["schema"].clone(), format!("{body_at}/content/{}/schema", pointer_key(ct)))));
     for (p, pt) in &task.params {
         let mut found = Vec::new();
-        if in_path.contains(p) || get {
-            if let Some((q, at)) = listed.iter().find(|(q, _)| q["name"] == **p && matches!(q["in"].as_str(), Some("query") | Some("path"))) {
+        let w = task.wire.iter().find(|w| w.param == *p);
+        if let Some(w) = w.filter(|w| w.place != Place::Body) {
+            let same = |q: &Value| q["in"] == w.place.word() && q["name"].as_str().is_some_and(|n| if w.place == Place::Header { n.eq_ignore_ascii_case(&w.name) } else { n == w.name });
+            // the operation's take the place of the path item's of the same name and place
+            if let Some((q, at)) = listed.iter().rev().find(|(q, _)| same(q)) {
                 marks_in(doc, &q["schema"], &format!("{at}/schema"), m, pt, &mut vec![], &mut vec![], &mut found);
             }
         } else if let Some((s, at)) = &body_schema {
@@ -522,8 +731,113 @@ impl<'a> Op<'a> {
         }
     }
 
+    /// Where each parameter of `task` goes and how it is written there (DESIGN 43), as the
+    /// operation's description says: a parameter the description has in the path, the query, a
+    /// header or a cookie goes there by the description's name (`same_name`), a property of the body
+    /// to the body; one the description has nowhere goes where it went before, to the URL's
+    /// `{placeholder}` of its name, to the query of a `GET` or a `DELETE` and to the body of the other
+    /// methods, where `check` says the operation does not take it. With what the description says
+    /// cannot be sent as it says, in both languages (E016).
+    pub fn placement(&self, m: &Model, task: &TaskDef, path_params: &[String]) -> (Vec<WireParam>, Vec<Words>) {
+        let (api, op) = (&self.api.name, &self.label);
+        let mut out = Vec::new();
+        let mut said = Vec::new();
+        let get = matches!(task.binding, Some(Binding::Http { ref method, .. }) if method == "GET" || method == "DELETE");
+        let body_members = match self.shape(&self.input) {
+            Shape::Object(ms) => ms,
+            _ => vec![],
+        };
+        let left_out = |d: &Param| d.place == Place::Header && HEADERS_LEFT_OUT.iter().any(|h| h.eq_ignore_ascii_case(&d.member.name));
+        // the description's parameters the flow's go to: which, and from which
+        let mut taken: Vec<(usize, &String)> = Vec::new();
+        for (p, t) in &task.params {
+            // where the description has it: its parameters of the four places, or else the body's
+            // property (a parameter the URL's path takes went there before, whatever the body had)
+            let mut found: Vec<(Option<usize>, Place, String)> = self.params.iter().enumerate().filter(|(_, d)| !left_out(d) && same_name(d.place, &d.member.name, p)).map(|(i, d)| (Some(i), d.place, d.member.name.clone())).collect();
+            if found.is_empty() && !get {
+                if let Some(mb) = body_members.iter().find(|x| x.name == *p || x.alias.as_deref() == Some(p)) {
+                    found.push((None, Place::Body, mb.name.clone()));
+                }
+            }
+            if found.len() > 1 {
+                let (ja, en): (Vec<String>, Vec<String>) = found.iter().map(|(_, place, name)| { let Text { ja, en } = crate::wire::place_words(*place, self.form); (format!("{ja}の `{name}`"), format!("`{name}` in {en}")) }).unzip();
+                said.push(tr!("引数 `{p}` は、`{api}` の {op} の{} のどれにも当たるので、どこに送るかが決まりません。記述の名前のどれか一つにだけ当たる名前にしてください", "the parameter `{p}` matches {} of `{api}` {op}, so where it goes cannot be told; give it a name that matches only one of them", ja.join(" と"); en.join(" and ")));
+            }
+            let w = match found.first().cloned() {
+                Some((Some(i), place, name)) => {
+                    let d = &self.params[i];
+                    if let Some((_, other)) = taken.iter().find(|(j, _)| *j == i) {
+                        let Text { ja, en } = crate::wire::place_words(place, self.form);
+                        said.push(tr!("引数 `{other}` と `{p}` が、どちらも `{api}` の {op} の{ja}の `{name}` に当たります", "the parameters `{other}` and `{p}` both go to `{name}` in {en} of `{api}` {op}"));
+                    }
+                    taken.push((i, p));
+                    let style = match d.style.as_deref() {
+                        None => Style::default_at(place),
+                        Some(s) => match Style::read(s) {
+                            Some(s) => s,
+                            None => {
+                                said.push(tr!("`{api}` の {op} の `{name}` の style `{s}` は、OpenAPI に無い書き方です", "`{api}` {op} writes `{name}` in the style `{s}`, which OpenAPI does not have"));
+                                Style::default_at(place)
+                            }
+                        },
+                    };
+                    let w = WireParam { param: p.clone(), place, name: name.clone(), style, explode: d.explode.unwrap_or(style == Style::Form) };
+                    if d.content {
+                        said.push(tr!("`{api}` の {op} は、`{name}` の書き方を `content`（メディアタイプ）で言っています。dandori が書くのは `schema` と `style` で言う書き方です", "`{api}` {op} says how `{name}` is written with `content` (a media type); dandori writes what `schema` and `style` say"));
+                    } else if matches!(place, Place::Header | Place::Cookie) && !is_token(&name) {
+                        let Text { ja, en } = crate::wire::place_words(place, self.form);
+                        said.push(tr!("`{name}` は{ja}の名前に書けません（HTTP の名前に使える字は、英数字と `!#$%&'*+-.^_`|~` です）", "`{name}` cannot be the name of {en} (HTTP's names are letters, digits and `!#$%&'*+-.^_`|~`)"));
+                    } else if place == Place::Header && HEADERS_OF_THE_CLIENT.iter().any(|h| h.eq_ignore_ascii_case(&name)) {
+                        said.push(tr!("ヘッダー `{name}` は、HTTP のクライアントが自分で書くので、引数からは送れません", "the header `{name}` is one the HTTP client writes itself, which a parameter cannot set"));
+                    } else if place == Place::Header && name.eq_ignore_ascii_case("Cookie") {
+                        said.push(tr!("クッキーは、ヘッダー `Cookie` でなく、記述の `in: cookie` の引数として送ります", "a cookie goes as a parameter that is `in: cookie`, not as the header `Cookie`"));
+                    } else if place == Place::Header && name.eq_ignore_ascii_case("Idempotency-Key") && task.key {
+                        said.push(tr!("ヘッダー `{name}` には、`key` の冪等キーを dandori が入れます。引数 `{p}` を外してください", "dandori puts the idempotency key of `key` in the header `{name}`; leave out the parameter `{p}`"));
+                    } else if let Some(why) = crate::wire::unwritable(m, &w, t, self.form) {
+                        said.push(self.param_words(p, &why));
+                    } else if t.inner() == &Ty::Json && matches!(self.shape(&d.member.node), Shape::List(_) | Shape::Object(_) | Shape::Map(_)) {
+                        said.push(self.param_words(p, &tr!("`json` の値は JSON の文字列で送るので、`{name}` のリストやオブジェクトの書き方になりません。リストかレコードの型にしてください", "a `json` value goes as its JSON text, which is not how the list or the object `{name}` is written; declare it a list or a record")));
+                    }
+                    w
+                }
+                Some((None, _, name)) if self.form => {
+                    // a property of a URL-encoded body, written as its Encoding Object says
+                    let e = &self.encodings[name.as_str()];
+                    let style = match e["style"].as_str() {
+                        None => Style::Form,
+                        Some(s) => match Style::read(s) {
+                            Some(s) => s,
+                            None => {
+                                said.push(tr!("`{api}` の {op} の `{name}` の style `{s}` は、OpenAPI に無い書き方です", "`{api}` {op} writes `{name}` in the style `{s}`, which OpenAPI does not have"));
+                                Style::Form
+                            }
+                        },
+                    };
+                    let w = WireParam { param: p.clone(), place: Place::Body, name: name.clone(), style, explode: e["explode"].as_bool().unwrap_or(style == Style::Form) };
+                    let plain_text = e["contentType"].as_str().map_or(true, |c| c.trim().starts_with("text/plain"));
+                    if !plain_text && e.get("style").is_none() && e.get("explode").is_none() {
+                        let c = e["contentType"].as_str().unwrap_or_default();
+                        said.push(tr!("`{api}` の {op} は、URL エンコードの本文の `{name}` を `{c}` で書くと言っています。dandori がそこに書くのは、style と explode で言う書き方です", "`{api}` {op} says `{name}` of the URL-encoded body is written as `{c}`; dandori writes there what style and explode say"));
+                    } else if let Some(why) = crate::wire::unwritable(m, &w, t, true) {
+                        said.push(self.param_words(p, &why));
+                    }
+                    w
+                }
+                Some((None, _, name)) => WireParam::plain(p, Place::Body, &name),
+                // not in the description: where it went before, which `check` says the operation does not take
+                None => match path_params.iter().find(|ph| same_name(Place::Path, ph, p)) {
+                    Some(ph) => WireParam::plain(p, Place::Path, ph),
+                    None if get => WireParam::plain(p, Place::Query, p),
+                    None => WireParam::plain(p, Place::Body, p),
+                },
+            };
+            out.push(w);
+        }
+        (out, said)
+    }
+
     /// What the operation says of the task (E016): each difference, in both languages.
-    pub fn check(&self, m: &Model, task: &TaskDef, path_params: &[String]) -> Vec<Words> {
+    pub fn check(&self, m: &Model, task: &TaskDef) -> Vec<Words> {
         let mut out = Vec::new();
         let api = &self.api.name;
         let op = &self.label;
@@ -541,7 +855,6 @@ impl<'a> Op<'a> {
             Shape::Object(ms) => Some(ms),
             _ => None,
         };
-        let get = matches!(task.binding, Some(Binding::Http { ref method, .. }) if method == "GET" || method == "DELETE");
         for (p, pt) in &task.params {
             if task.callback && p == "MessageBody" && self.label == "SendMessage" {
                 // the token goes in the message, which Step Functions writes out as JSON text
@@ -550,26 +863,58 @@ impl<'a> Op<'a> {
                 }
                 continue;
             }
-            let in_query = path_params.contains(p) || get;
-            let found = if in_query { self.query.iter().find(|q| q.name == *p).cloned() } else { body_members.as_ref().and_then(|ms| ms.iter().find(|x| x.name == *p || x.alias.as_deref() == Some(p)).cloned()) };
+            // where it goes (DESIGN 43): a parameter of the description's, or a property of the body
+            let w = task.wire.iter().find(|w| w.param == *p);
+            let place = w.map_or(Place::Body, |w| w.place);
+            let found = match w {
+                Some(w) if w.place != Place::Body => self.params.iter().find(|d| d.place == w.place && d.member.name == w.name).map(|d| d.member.clone()),
+                _ => body_members.as_ref().and_then(|ms| ms.iter().find(|x| x.name == *p || x.alias.as_deref() == Some(p)).cloned()),
+            };
             let Some(mb) = found else {
-                if !in_query && body_members.is_none() && matches!(self.input, Node::Any) {
+                if place == Place::Body && body_members.is_none() && matches!(self.input, Node::Any) {
                     continue;
                 }
                 out.push(tr!("`{api}` の {op} は `{p}` を受け取りません", "`{api}` {op} takes no `{p}`"));
                 continue;
             };
             if mb.required && matches!(pt, Ty::Opt(_)) {
-                out.push(tr!("`{api}` の {op} には `{p}` が要りますが、引数は無いことがあります", "`{api}` {op} needs `{p}`, and the parameter may be absent"));
+                match place {
+                    Place::Header | Place::Cookie => {
+                        let Text { ja, en } = crate::wire::place_words(place, self.form);
+                        out.push(tr!("`{api}` の {op} には{ja} `{}` が要りますが、引数 `{p}` は無いことがあります", "`{api}` {op} needs {en} `{}`, and the parameter `{p}` may be absent", mb.name; mb.name));
+                    }
+                    _ => out.push(tr!("`{api}` の {op} には `{p}` が要りますが、引数は無いことがあります", "`{api}` {op} needs `{p}`, and the parameter may be absent")),
+                }
                 continue;
             }
             if let Err(w) = self.sends(m, pt, task.param_ranges.get(p).copied(), &mb.node, &mut vec![]) {
                 out.push(self.param_words(p, &w));
             }
         }
+        // what it needs: each parameter of the four places that some parameter goes to (an
+        // `Idempotency-Key` header the key of `key` fills), and each property of the body
+        for d in self.params.iter().filter(|d| d.member.required) {
+            if d.place == Place::Header && HEADERS_LEFT_OUT.iter().any(|h| h.eq_ignore_ascii_case(&d.member.name)) {
+                continue;
+            }
+            let passed = task.wire.iter().any(|w| w.place == d.place && w.name == d.member.name) || (d.place == Place::Header && d.member.name.eq_ignore_ascii_case("Idempotency-Key") && task.key);
+            if passed {
+                continue;
+            }
+            match d.place {
+                Place::Header if d.member.name.eq_ignore_ascii_case("Idempotency-Key") => {
+                    let Text { ja, en } = crate::wire::place_words(d.place, self.form);
+                    out.push(tr!("`{api}` の {op} には{ja} `{}` が要りますが、`{}` はそれを渡しません。タスクに `key` を書けば、dandori が冪等キーをそこに入れます", "`{api}` {op} needs {en} `{}`, which `{}` does not pass; write `key` on the task and dandori puts its idempotency key there", d.member.name, task.name));
+                }
+                Place::Header | Place::Cookie => {
+                    let Text { ja, en } = crate::wire::place_words(d.place, self.form);
+                    out.push(tr!("`{api}` の {op} には{ja} `{}` が要りますが、`{}` はそれを渡しません", "`{api}` {op} needs {en} `{}`, which `{}` does not pass", d.member.name, task.name));
+                }
+                _ => out.push(tr!("`{api}` の {op} には `{}` が要りますが、`{}` はそれを渡しません", "`{api}` {op} needs `{}`, which `{}` does not pass", d.member.name, task.name)),
+            }
+        }
         let givens: Vec<&String> = task.params.iter().map(|(p, _)| p).chain(task.key_param.iter()).collect();
-        let wanted: Vec<Member> = self.query.iter().filter(|q| q.required).cloned().chain(body_members.iter().flatten().filter(|x| x.required).cloned()).collect();
-        for w in wanted {
+        for w in body_members.iter().flatten().filter(|x| x.required) {
             if !givens.iter().any(|g| **g == w.name || w.alias.as_deref() == Some(g.as_str())) {
                 out.push(tr!("`{api}` の {op} には `{}` が要りますが、`{}` はそれを渡しません", "`{api}` {op} needs `{}`, which `{}` does not pass", w.name, task.name));
             }
@@ -640,18 +985,38 @@ impl<'a> Op<'a> {
             (Ty::Json, _) => Ok(()),
             (_, Shape::Unread(u)) => Err(unknown_type(u)),
             (Ty::Str, Shape::Str(None)) | (Ty::Str, Shape::Bytes) => Ok(()),
+            // a day goes as its text, `2026-11-16`: what a date takes, and what any string does
+            (Ty::Date, Shape::Date | Shape::Str(None)) => Ok(()),
+            // a string goes to a date as it is, as it did before a date was read as one
+            (Ty::Str, Shape::Date) => Ok(()),
             // protobuf's JSON takes a 64-bit integer as a string, which is how a flow has it from an answer
             (Ty::Str, Shape::Int { text: true, .. }) => Ok(()),
-            (Ty::Str, Shape::Str(Some(vs))) => Err(tr!("受け取るのは {} のどれかですが、`string` はどんな値にもなりえます。列挙にしてください", "`{}` takes one of {}, and `string` can be anything; give it an enum", vs.join("・"); m.ty_name(t), vs.join(", "))),
+            (Ty::Str, Shape::Str(Some(vs))) => Err(match days_hint(vs) {
+                // no enum of a flow has a day for a value; a date held to the days does
+                Some(Text { en, ja }) => tr!("受け取るのは {} のどれかですが、`string` はどんな値にもなりえます。{ja}", "it takes one of {}, and `string` can be anything; {en}", vs.join("・"); vs.join(", ")),
+                None => tr!("受け取るのは {} のどれかですが、`string` はどんな値にもなりえます。列挙にしてください", "`{}` takes one of {}, and `string` can be anything; give it an enum", vs.join("・"); m.ty_name(t), vs.join(", ")),
+            }),
             // what the flow sends: the values of the enum its range lets in, every value without one
             (Ty::Enum(e), Shape::Str(vs)) => match (vs, m.values_in(*e, rg).into_iter().find(|v| vs.as_ref().is_some_and(|vs| !vs.contains(v)))) {
                 (_, Some(v)) => Err(tr!("`{}` の `{v}` が、受け取る値（{}）にありません", "`{v}` of `{}` is not one of the values it takes ({})", m.enums[*e].name, vs.as_ref().unwrap().join("・"); m.enums[*e].name, vs.as_ref().unwrap().join(", "))),
                 _ => Ok(()),
             },
-            (Ty::Int | Ty::Num(_), Shape::Int { min, max, .. }) => within(rg, *min, *max),
+            // the days an API lists take a day held to a range of them; a range with more days than
+            // the list has one it does not list among its first few, which is where the search stops
+            (Ty::Date, Shape::Str(Some(vs))) => match rg.and_then(|r| Some((r.lo?, r.hi?))) {
+                Some((lo, hi)) => match (lo..=hi).map(crate::model::day_text).find(|d| !vs.contains(d)) {
+                    Some(d) => Err(tr!("`{d}` のことがあり、受け取る値（{}）にありません", "it may be `{d}`, which is not one of the values it takes ({})", vs.join("・"); vs.join(", "))),
+                    None => Ok(()),
+                },
+                None => Err(match days_hint(vs) {
+                    Some(Text { en, ja }) => tr!("`date` で、{} のどれかではありません。{ja}", "`date` is not one of {}; {en}", vs.join("・"); vs.join(", ")),
+                    None => differ(),
+                }),
+            },
+            (Ty::Int | Ty::Num(_), Shape::Int { min, max, .. }) => within(m, t, rg, *min, *max),
             (Ty::Int | Ty::Num(_), Shape::Float) => Ok(()),
             (Ty::Bool, Shape::Bool) => Ok(()),
-            (Ty::Timestamp, Shape::Timestamp) | (Ty::Timestamp, Shape::Str(None)) => Ok(()),
+            (Ty::Timestamp, Shape::Timestamp { .. }) | (Ty::Timestamp, Shape::Str(None)) => Ok(()),
             (Ty::List(x), Shape::List(y)) => self.sends(m, x, rg, y, seen),
             (Ty::Record(r), Shape::Map(y)) => {
                 for (f, ft) in &m.records[*r].fields {
@@ -680,6 +1045,9 @@ impl<'a> Op<'a> {
                 seen.pop();
                 Ok(())
             }
+            // a day and a moment are different texts: `2026-11-16` is not `2026-11-16T09:00:00Z`
+            (_, Shape::Date) => Err(tr!("`{}` で、日付ではありません。`date` にしてください", "`{}` is not a date; declare it `date`", m.ty_name(t))),
+            (_, Shape::Timestamp { .. }) => Err(tr!("`{}` で、日時ではありません。`timestamp` にしてください", "`{}` is not a date and time; declare it `timestamp`", m.ty_name(t))),
             _ => Err(differ()),
         }
     }
@@ -700,6 +1068,21 @@ impl<'a> Op<'a> {
             (Shape::Any, _) => Err(tr!("どんな値にもなりえますが、`{}` はそうではありません。`json` にしてください", "it can be anything, which `{}` is not; declare it `json`", m.ty_name(t))),
             (Shape::Unread(u), _) => Err(unknown_type(u)),
             (Shape::Str(_), Ty::Str) | (Shape::Bytes, Ty::Str) | (Shape::Int { text: true, .. }, Ty::Str) => Ok(()),
+            // a day comes as its text, and so does a moment a description writes as a string
+            (Shape::Date, Ty::Str) | (Shape::Timestamp { text: true }, Ty::Str) => Ok(()),
+            (Shape::Date, Ty::Date) => Ok(()),
+            // the days or the moments an API lists: each one the type takes, in its range
+            (Shape::Str(Some(vs)), Ty::Date | Ty::Timestamp) => {
+                let fits = |v: &str, rg: Option<Range>| crate::render::value_fits(m, &Value::String(v.to_string()), t, rg);
+                match vs.iter().find(|v| !fits(v.as_str(), rg)) {
+                    Some(v) if fits(v.as_str(), None) => {
+                        let w = rg.map(|r| m.range_text(t, &r)).unwrap_or_default();
+                        Err(tr!("`{v}` のことがあり、範囲 `{w}` の外です", "it may be `{v}`, outside `{w}`"))
+                    }
+                    Some(v) => Err(tr!("`{v}` のことがあり、`{}` はそれを受け取りません", "it may be `{v}`, which `{}` does not take", m.ty_name(t))),
+                    None => Ok(()),
+                }
+            }
             (Shape::Str(Some(vs)), Ty::Enum(e)) => {
                 let zero = self.proto_zero(n);
                 // what the flow takes: the values of the enum its range lets in, every value without one
@@ -716,17 +1099,22 @@ impl<'a> Op<'a> {
             (Shape::Str(None), Ty::Enum(e)) => Err(tr!("どんな文字列でもありえますが、`{}` は自分の値しか取りません。`string` にしてください", "it is any string, and `{}` takes only its values; declare it `string`", m.enums[*e].name)),
             (Shape::Int { text: true, .. }, Ty::Int | Ty::Num(_)) => Err(tr!("64 ビットの整数で、protobuf の JSON では文字列で届きます。`string` にしてください", "a 64-bit integer comes as a string in protobuf's JSON; declare it `string`")),
             (Shape::Int { min, max, .. }, Ty::Int | Ty::Num(_)) => match rg {
-                Some(want) if (min.is_some() || max.is_some()) && !(Range { lo: *min, hi: *max }).within(&want) => Err(tr!("`{}` の外の `{}` になりえます", "it can be `{}`, outside `{}`", want.show(), Range { lo: *min, hi: *max }.show(); Range { lo: *min, hi: *max }.show(), want.show())),
+                Some(want) if (min.is_some() || max.is_some()) && !(Range { lo: *min, hi: *max }).within(&want) => {
+                    let (w, a) = (m.range_text(t, &want), m.range_text(t, &Range { lo: *min, hi: *max }));
+                    Err(tr!("`{w}` の外の `{a}` になりえます", "it can be `{a}`, outside `{w}`"))
+                }
                 _ => Ok(()),
             },
             (Shape::Float, Ty::Int | Ty::Num(_)) => Err(tr!("小数のことがあり、dandori にはその型がありません。`json` にしてください", "it may have a fraction, which dandori has no type for; declare it `json`")),
-            (Shape::Bool, Ty::Bool) | (Shape::Timestamp, Ty::Timestamp) => Ok(()),
+            (Shape::Bool, Ty::Bool) | (Shape::Timestamp { .. }, Ty::Timestamp) => Ok(()),
             (Shape::List(x), Ty::List(y)) => self.reads(x, m, y, rg, seen),
             (Shape::Object(ms), Ty::Record(r)) => match self.fields(ms, m, *r, seen).into_iter().next() {
                 Some(w) => Err(w),
                 None => Ok(()),
             },
             (Shape::Map(_), Ty::Record(_)) => Err(differ()),
+            (Shape::Date, _) => Err(tr!("日付で、`{}` ではありません。`date` にしてください", "a date is not `{}`; declare it `date`", m.ty_name(t))),
+            (Shape::Timestamp { .. }, _) => Err(tr!("日時で、`{}` ではありません。`timestamp` にしてください", "a date and time is not `{}`; declare it `timestamp`", m.ty_name(t))),
             _ => Err(differ()),
         }
     }
@@ -779,12 +1167,21 @@ impl<'a> Op<'a> {
         let (ApiDoc::Proto(pf), Some(Node::Proto(PType::Named(msg), _))) = (&self.api.doc, &self.output) else { return None };
         Some(zeros_of(pf, msg))
     }
+
+    /// For `connect`: where the request holds a `google.type.Date` (`days_of`), to which a flow's
+    /// `date` goes as protobuf's JSON writes it; None when it holds none.
+    pub fn request_days(&self) -> Option<Value> {
+        let (ApiDoc::Proto(pf), Node::Proto(PType::Named(msg), _)) = (&self.api.doc, &self.input) else { return None };
+        let t = days_of(pf, msg);
+        has_days(&t).then_some(t)
+    }
 }
 
 /// The zero values of the fields of the message `msg` that protobuf leaves out of JSON when they
-/// are at them, and the same for the messages inside it: `{"f": {key: zero}, "m": {key: …}, "l": {key: …}}`.
-/// The names are the fields' JSON names. `fill` puts them back; it is what reading a message of
-/// `msg` from JSON does.
+/// are at them, and the same for the messages inside it: `{"f": {key: zero}, "m": {key: …}, "l": {key: …}}`,
+/// with `"d": [key]` for the fields that are `google.type.Date`s, one or a list of them.
+/// The names are the fields' JSON names. `fill` puts them back and reads the dates; it is what
+/// reading a message of `msg` from JSON does.
 pub fn zeros_of(pf: &ProtoFile, msg: &str) -> Value {
     zeros_in(pf, msg, &mut vec![])
 }
@@ -793,13 +1190,19 @@ fn zeros_in(pf: &ProtoFile, msg: &str, within: &mut Vec<String>) -> Value {
     let mut f = Map::new();
     let mut ms = Map::new();
     let mut ls = Map::new();
+    let mut ds = Vec::new();
     if within.iter().any(|x| x == msg) {
         return json!({});
     }
     within.push(msg.to_string());
     for fl in pf.messages.get(msg).into_iter().flatten() {
+        // a date is read as one, whatever a file of it that was read says
+        let date = matches!(&fl.ty, PType::Named(n) if n == crate::proto::DATE);
+        if date {
+            ds.push(json!(fl.json));
+        }
         let message = match &fl.ty {
-            PType::Named(n) if pf.messages.contains_key(n) => Some(n.clone()),
+            PType::Named(n) if pf.messages.contains_key(n) && !date => Some(n.clone()),
             _ => None,
         };
         if fl.repeated {
@@ -832,6 +1235,142 @@ fn zeros_in(pf: &ProtoFile, msg: &str, within: &mut Vec<String>) -> Value {
     if !ls.is_empty() {
         out.insert("l".into(), Value::Object(ls));
     }
+    if !ds.is_empty() {
+        out.insert("d".into(), Value::Array(ds));
+    }
+    Value::Object(out)
+}
+
+/// Where the message `msg` holds a `google.type.Date`, as `zeros_of` says it, with nothing else:
+/// `{"d": [key], "m": {key: …}, "l": {key: …}}`, and `{}` when it holds none. What `wire_days`
+/// writes a flow's dates by. A map's values are not looked into: a flow reads a `map` as `json`.
+pub fn days_of(pf: &ProtoFile, msg: &str) -> Value {
+    days_in(pf, msg, &mut vec![])
+}
+
+fn days_in(pf: &ProtoFile, msg: &str, within: &mut Vec<String>) -> Value {
+    if within.iter().any(|x| x == msg) {
+        return json!({});
+    }
+    within.push(msg.to_string());
+    let (mut ds, mut ms, mut ls) = (Vec::new(), Map::new(), Map::new());
+    for fl in pf.messages.get(msg).into_iter().flatten() {
+        match &fl.ty {
+            PType::Named(n) if n == crate::proto::DATE => ds.push(json!(fl.json)),
+            PType::Named(n) if pf.messages.contains_key(n) => {
+                let sub = days_in(pf, n, within);
+                if has_days(&sub) {
+                    if fl.repeated {
+                        ls.insert(fl.json.clone(), sub);
+                    } else {
+                        ms.insert(fl.json.clone(), sub);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    within.pop();
+    let mut out = Map::new();
+    if !ds.is_empty() {
+        out.insert("d".into(), Value::Array(ds));
+    }
+    if !ms.is_empty() {
+        out.insert("m".into(), Value::Object(ms));
+    }
+    if !ls.is_empty() {
+        out.insert("l".into(), Value::Object(ls));
+    }
+    Value::Object(out)
+}
+
+/// Whether `z` (`zeros_of`, `days_of`) names a `google.type.Date`, here or in a message inside.
+pub fn has_days(z: &Value) -> bool {
+    z["d"].as_array().is_some_and(|d| !d.is_empty()) || ["m", "l"].iter().any(|k| z[*k].as_object().is_some_and(|s| s.values().any(has_days)))
+}
+
+/// `z` without what it says of dates: the zero values alone.
+pub fn without_days(z: &Value) -> Value {
+    let Some(o) = z.as_object() else { return z.clone() };
+    let mut out = Map::new();
+    for (k, v) in o {
+        match k.as_str() {
+            "d" => {}
+            "m" | "l" => {
+                out.insert(k.clone(), Value::Object(v.as_object().into_iter().flatten().map(|(f, s)| (f.clone(), without_days(s))).collect()));
+            }
+            _ => {
+                out.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    Value::Object(out)
+}
+
+/// A `google.type.Date` as protobuf's JSON writes it, `{"year": 2026, "month": 11, "day": 16}`, read
+/// as a flow's `date`, `2026-11-16`; a list of them item by item. A date short of its year, its month
+/// or its day (protobuf's JSON leaves a 0 out: a card's month, a birthday without its year), one with
+/// a field of another name, a number that is not whole or not in its range (a year from 1 to 9999, a
+/// month to 12, a day to 31), and what is not an object, is left as it is, for the check that reads
+/// it to refuse (DESIGN 44).
+pub fn day_read(v: &Value) -> Value {
+    match v {
+        Value::Array(a) => Value::Array(a.iter().map(day_read).collect()),
+        Value::Object(o) => {
+            let part = |k: &str, hi: i64| o.get(k).and_then(whole).filter(|n| (1..=hi).contains(n));
+            match (part("year", 9999), part("month", 12), part("day", 31)) {
+                (Some(y), Some(m), Some(d)) if o.keys().all(|k| matches!(k.as_str(), "year" | "month" | "day")) => json!(format!("{y:04}-{m:02}-{d:02}")),
+                _ => v.clone(),
+            }
+        }
+        _ => v.clone(),
+    }
+}
+
+/// A JSON number that is a whole number (`16`, and `16.0` as JavaScript reads it).
+fn whole(v: &Value) -> Option<i64> {
+    v.as_i64().or_else(|| v.as_f64().filter(|f| f.fract() == 0.0 && f.abs() < 1e15).map(|f| f as i64))
+}
+
+/// A flow's `date`, `2026-11-16`, as protobuf's JSON writes a `google.type.Date`: `{"year": 2026,
+/// "month": 11, "day": 16}`; a list of them item by item. What is not four, two and two digits
+/// between hyphens is left as it is, for the service to refuse (DESIGN 44).
+pub fn day_wire(v: &Value) -> Value {
+    match v {
+        Value::Array(a) => Value::Array(a.iter().map(day_wire).collect()),
+        Value::String(s) => {
+            let b = s.as_bytes();
+            let digits = |r: std::ops::Range<usize>| s.get(r).filter(|t| t.bytes().all(|c| c.is_ascii_digit())).and_then(|t| t.parse::<i64>().ok());
+            match (b.len() == 10 && b[4] == b'-' && b[7] == b'-', digits(0..4), digits(5..7), digits(8..10)) {
+                (true, Some(y), Some(m), Some(d)) => json!({ "year": y, "month": m, "day": d }),
+                _ => v.clone(),
+            }
+        }
+        _ => v.clone(),
+    }
+}
+
+/// `v` with the dates where `t` says (`days_of`, or `zeros_of`, whose zero values it passes over)
+/// written as protobuf's JSON writes `google.type.Date` (`day_wire`), in it, in its messages and in
+/// the messages of its lists: what a `connect` task sends. A field that is not there stays out.
+pub fn wire_days(v: &Value, t: &Value) -> Value {
+    let Some(o) = v.as_object() else { return v.clone() };
+    let mut out = o.clone();
+    for k in t["d"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        if let Some(x) = out.get(k).cloned() {
+            out.insert(k.to_string(), day_wire(&x));
+        }
+    }
+    for (k, sub) in t["m"].as_object().into_iter().flatten() {
+        if let Some(x) = out.get(k).filter(|x| x.is_object()).cloned() {
+            out.insert(k.clone(), wire_days(&x, sub));
+        }
+    }
+    for (k, sub) in t["l"].as_object().into_iter().flatten() {
+        if let Some(a) = out.get(k).and_then(|x| x.as_array()).cloned() {
+            out.insert(k.clone(), Value::Array(a.iter().map(|x| wire_days(x, sub)).collect()));
+        }
+    }
     Value::Object(out)
 }
 
@@ -850,13 +1389,19 @@ fn zero(pf: &ProtoFile, t: &PType) -> Value {
 }
 
 /// Fill in the zero values `zeros` names (`Op::zeros`), as protobuf reads a message whose JSON
-/// leaves them out: in the answer, in its messages, and in the messages of its lists.
+/// leaves them out, and read the `google.type.Date`s it names as dates (`day_read`; a date that is
+/// one already stays): in the answer, in its messages, and in the messages of its lists.
 pub fn fill(v: &Value, zeros: &Value) -> Value {
     let Some(o) = v.as_object() else { return v.clone() };
     let mut out = o.clone();
     for (k, z) in zeros["f"].as_object().into_iter().flatten() {
         if out.get(k).is_none_or(|x| x.is_null()) {
             out.insert(k.clone(), z.clone());
+        }
+    }
+    for k in zeros["d"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        if let Some(x) = out.get(k).cloned() {
+            out.insert(k.to_string(), day_read(&x));
         }
     }
     for (k, sub) in zeros["m"].as_object().into_iter().flatten() {
@@ -875,12 +1420,18 @@ pub fn fill(v: &Value, zeros: &Value) -> Value {
 /// The answer as a Connect server sends it when every field that `zeros` names is at its zero
 /// value: those fields left out of the JSON, in the answer, in its messages and in the messages
 /// of its lists. The lists and the maps stay, so that there are messages inside to leave fields out of.
+/// A date is written as `{year, month, day}` (`day_wire`).
 pub fn sparse(v: &Value, zeros: &Value) -> Value {
     let Some(o) = v.as_object() else { return v.clone() };
     let mut out = o.clone();
     for (k, z) in zeros["f"].as_object().into_iter().flatten() {
         if !z.is_array() && !z.is_object() {
             out.remove(k);
+        }
+    }
+    for k in zeros["d"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        if let Some(x) = out.get(k).cloned() {
+            out.insert(k.to_string(), day_wire(&x));
         }
     }
     for (k, sub) in zeros["m"].as_object().into_iter().flatten() {
@@ -897,14 +1448,20 @@ pub fn sparse(v: &Value, zeros: &Value) -> Value {
 }
 
 /// The message as protobuf's JSON writes it: each field that `zeros` names left out when it holds
-/// its zero value, in the message, in its messages and in the messages of its lists. What `fill`
-/// reads back: `fill(&omit_zeros(v, z), z)` is `v` when `v` has every field `z` names.
+/// its zero value, in the message, in its messages and in the messages of its lists, and a date as
+/// `{year, month, day}` (`day_wire`). What `fill` reads back: `fill(&omit_zeros(v, z), z)` is `v`
+/// when `v` has every field `z` names.
 pub fn omit_zeros(v: &Value, zeros: &Value) -> Value {
     let Some(o) = v.as_object() else { return v.clone() };
     let mut out = o.clone();
     for (k, z) in zeros["f"].as_object().into_iter().flatten() {
         if out.get(k) == Some(z) {
             out.remove(k);
+        }
+    }
+    for k in zeros["d"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        if let Some(x) = out.get(k).cloned() {
+            out.insert(k.to_string(), day_wire(&x));
         }
     }
     for (k, sub) in zeros["m"].as_object().into_iter().flatten() {
@@ -945,15 +1502,37 @@ pub fn unread_note(pf: &ProtoFile) -> Option<Words> {
     Some(tr!("{ja_list} を読めなかったので、そこにある型は使えません", "{en_list} could not be read, so the types in {en_them} cannot be used"))
 }
 
-fn within(rg: Option<Range>, min: Option<i64>, max: Option<i64>) -> Result<(), Words> {
+/// What to declare where an API lists the days it takes (`vs`, when each is a day): a `date` held
+/// to them when they follow one another, else to a run of them.
+fn days_hint(vs: &[String]) -> Option<Words> {
+    let mut ds: Vec<i64> = vs.iter().map(|v| crate::computed::day_of(v)).collect::<Option<_>>()?;
+    ds.sort_unstable();
+    ds.dedup();
+    let (lo, hi) = (*ds.first()?, *ds.last()?);
+    Some(if hi - lo + 1 == ds.len() as i64 {
+        let (a, b) = (crate::model::day_text(lo), crate::model::day_text(hi));
+        tr!("`date  range >={a} <={b}` にしてください", "declare it `date  range >={a} <={b}`")
+    } else {
+        tr!("挙げた日のうち、続いている日だけを範囲にした `date` にしてください", "declare it `date` held to a range of days it lists, one after another")
+    })
+}
+
+/// Whether the numbers a flow sends in `rg` (of the type `t`) are all in what the API takes, from
+/// `min` to `max`. Both ranges are said in `t`'s unit: the API takes the whole numbers the flow
+/// sends on the wire.
+fn within(m: &Model, t: &Ty, rg: Option<Range>, min: Option<i64>, max: Option<i64>) -> Result<(), Words> {
     if min.is_none() && max.is_none() {
         return Ok(());
     }
     let want = Range { lo: min, hi: max };
+    let w = m.range_text(t, &want);
     match rg {
         Some(h) if h.within(&want) => Ok(()),
-        Some(h) => Err(tr!("`{}` で、受け取るのは `{}` です", "it is `{}`, and `{}` is taken", h.show(), want.show())),
-        None => Err(tr!("範囲が書かれていませんが、受け取るのは `{}` です", "it has no range, and `{}` is taken", want.show())),
+        Some(h) => {
+            let h = m.range_text(t, &h);
+            Err(tr!("`{h}` で、受け取るのは `{w}` です", "it is `{h}`, and `{w}` is taken"))
+        }
+        None => Err(tr!("範囲が書かれていませんが、受け取るのは `{w}` です", "it has no range, and `{w}` is taken")),
     }
 }
 
@@ -966,7 +1545,8 @@ fn describe(s: &Shape) -> String {
         Shape::Int { .. } => "an integer".into(),
         Shape::Float => "a number".into(),
         Shape::Bool => "true or false".into(),
-        Shape::Timestamp => "a date and time".into(),
+        Shape::Timestamp { .. } => "a date and time".into(),
+        Shape::Date => "a date".into(),
         Shape::Bytes => "bytes".into(),
         Shape::List(_) => "a list".into(),
         Shape::Map(_) => "a map".into(),
@@ -985,7 +1565,8 @@ fn describe_ja(s: &Shape) -> String {
         Shape::Int { .. } => "整数".into(),
         Shape::Float => "数".into(),
         Shape::Bool => "真偽値".into(),
-        Shape::Timestamp => "日時".into(),
+        Shape::Timestamp { .. } => "日時".into(),
+        Shape::Date => "日付".into(),
         Shape::Bytes => "バイト列".into(),
         Shape::List(_) => "リスト".into(),
         Shape::Map(_) => "マップ".into(),
@@ -1024,8 +1605,11 @@ fn openapi_shape(doc: &Value, schema: &Value) -> Shape {
         t => t.as_str().unwrap_or("").to_string(),
     };
     match ty.as_str() {
-        "string" if s["format"] == "date-time" => Shape::Timestamp,
-        "string" => Shape::Str(s["enum"].as_array().map(|vs| vs.iter().filter_map(|v| v.as_str().map(String::from)).collect())),
+        // a string that lists its values takes those, whatever its format says of them
+        "string" if s["enum"].is_array() => Shape::Str(s["enum"].as_array().map(|vs| vs.iter().filter_map(|v| v.as_str().map(String::from)).collect())),
+        "string" if s["format"] == "date-time" => Shape::Timestamp { text: true },
+        "string" if s["format"] == "date" => Shape::Date,
+        "string" => Shape::Str(None),
         "integer" => Shape::Int { text: false, min: s["minimum"].as_i64(), max: s["maximum"].as_i64() },
         "number" => Shape::Float,
         "boolean" => Shape::Bool,
@@ -1059,7 +1643,7 @@ fn smithy_shape(doc: &Value, id: &str) -> Shape {
             "Integer" | "PrimitiveInteger" | "Long" | "PrimitiveLong" | "Short" | "PrimitiveShort" | "Byte" | "PrimitiveByte" | "BigInteger" => Shape::Int { text: false, min: None, max: None },
             "Float" | "PrimitiveFloat" | "Double" | "PrimitiveDouble" | "BigDecimal" => Shape::Float,
             "Boolean" | "PrimitiveBoolean" => Shape::Bool,
-            "Timestamp" => Shape::Timestamp,
+            "Timestamp" => Shape::Timestamp { text: false },
             "Blob" => Shape::Bytes,
             "Document" => Shape::Any,
             _ => return None,
@@ -1081,7 +1665,7 @@ fn smithy_shape(doc: &Value, id: &str) -> Shape {
         }
         "float" | "double" | "bigDecimal" => Shape::Float,
         "boolean" => Shape::Bool,
-        "timestamp" => Shape::Timestamp,
+        "timestamp" => Shape::Timestamp { text: false },
         "blob" => Shape::Bytes,
         "document" => Shape::Any,
         "list" | "set" => Shape::List(Node::Shape(s["member"]["target"].as_str().unwrap_or_default().to_string())),
@@ -1120,7 +1704,9 @@ fn proto_shape(pf: &ProtoFile, t: &PType, rules: &FieldRules) -> Shape {
         },
         PType::Map(_, v) => Shape::Map(Node::Proto((**v).clone(), FieldRules::default())),
         PType::Named(n) => match n.as_str() {
-            "google.protobuf.Timestamp" => Shape::Timestamp,
+            "google.protobuf.Timestamp" => Shape::Timestamp { text: true },
+            // `{year, month, day}` in protobuf's JSON, which the generated code reads as a date and writes from one
+            crate::proto::DATE => Shape::Date,
             "google.protobuf.Duration" | "google.protobuf.FieldMask" | "google.protobuf.StringValue" => Shape::Str(None),
             "google.protobuf.Struct" | "google.protobuf.Value" | "google.protobuf.Any" | "google.protobuf.NullValue" => Shape::Any,
             "google.protobuf.ListValue" => Shape::List(Node::Any),
@@ -1173,6 +1759,8 @@ pub enum MadeTy {
     Str,
     Bool,
     Timestamp,
+    /// `google.type.Date`, which protobuf's JSON writes as `{year, month, day}` (DESIGN 44)
+    Date,
     Json,
     /// a message, by its full name; `google.protobuf.Empty` too, which has no fields
     Message(String),
@@ -1207,6 +1795,7 @@ fn made_elem(pf: &ProtoFile, t: &PType, range: Option<Range>) -> MadeTy {
         PType::Map(..) => MadeTy::Json,
         PType::Named(n) => match n.as_str() {
             "google.protobuf.Timestamp" => MadeTy::Timestamp,
+            crate::proto::DATE => MadeTy::Date,
             "google.protobuf.Duration" | "google.protobuf.FieldMask" | "google.protobuf.StringValue" | "google.protobuf.BytesValue" => MadeTy::Str,
             "google.protobuf.Struct" | "google.protobuf.Value" | "google.protobuf.ListValue" | "google.protobuf.Any" | "google.protobuf.NullValue" => MadeTy::Json,
             "google.protobuf.Int32Value" | "google.protobuf.UInt32Value" => MadeTy::Int(range),
@@ -1282,7 +1871,7 @@ pub fn made_enum_values(pf: &ProtoFile, en: &str) -> Vec<String> {
 pub fn made_fits(api: &Api, full: &str, m: &Model, t: &Ty) -> Vec<Words> {
     let ApiDoc::Proto(_) = &api.doc else { return vec![] };
     let node = Node::Proto(PType::Named(full.to_string()), FieldRules::default());
-    let op = Op { api, label: full.to_string(), input: node.clone(), query: vec![], output: Some(node.clone()), errors: vec![], token: None, form: false, procedure: None, streams: false, presence_free: false, noun: an_answer };
+    let op = Op { api, label: full.to_string(), input: node.clone(), params: vec![], encodings: Value::Null, output: Some(node.clone()), errors: vec![], token: None, form: false, procedure: None, streams: false, presence_free: false, noun: an_answer };
     let mut out = Vec::new();
     if let Err(w) = op.sends(m, t, None, &node, &mut vec![]) {
         out.push(w);
@@ -1343,7 +1932,7 @@ impl<'a> MessageView<'a> {
     fn op(&self, presence_free: bool) -> Op<'a> {
         let node = Node::Proto(PType::Named(self.name.clone()), FieldRules::default());
         let label = self.simple().to_string();
-        Op { api: self.api, label, input: node.clone(), query: vec![], output: Some(node), errors: vec![], token: None, form: false, procedure: None, streams: false, presence_free, noun: a_message }
+        Op { api: self.api, label, input: node.clone(), params: vec![], encodings: Value::Null, output: Some(node), errors: vec![], token: None, form: false, procedure: None, streams: false, presence_free, noun: a_message }
     }
 
     fn members(&self, op: &Op) -> Vec<Member> {
@@ -1357,6 +1946,13 @@ impl<'a> MessageView<'a> {
     /// it is set (`optional`, a message, a member of a `oneof`) and is not `required`.
     pub fn fields(&self) -> Vec<(String, bool)> {
         self.members(&self.op(false)).into_iter().map(|mb| (mb.name, mb.optional_out)).collect()
+    }
+
+    /// Whether the field `json` is a `google.type.Date`, or a message that holds one at any depth
+    /// (`days_of`): a list of them too.
+    pub fn holds_day(&self, json: &str) -> bool {
+        let t = days_of(self.pf(), &self.name);
+        t["d"].as_array().is_some_and(|d| d.iter().any(|x| x == json)) || ["m", "l"].iter().any(|k| t[*k].get(json).is_some())
     }
 
     /// What the field `json` says of being set: whether it is `required`, and whether it is a list
@@ -1498,7 +2094,7 @@ mod tests {
     }
 
     fn load(text: &str) -> ProtoFile {
-        crate::proto::load_text("t.proto", text).unwrap_or_else(|e| panic!("{e}"))
+        crate::proto::load_text("t.proto", text).unwrap_or_else(|e| panic!("{}", e.en))
     }
 
     #[test]
@@ -1586,6 +2182,39 @@ mod tests {
     }
 
     #[test]
+    fn a_string_is_a_day_or_a_moment_as_its_format_says() {
+        let doc = json!({"components": {"schemas": {"Day": {"type": "string", "format": "date"}}}});
+        let shape = |s: Value| openapi_shape(&doc, &s);
+        assert!(matches!(shape(json!({"type": "string", "format": "date"})), Shape::Date));
+        assert!(matches!(shape(json!({"type": ["string", "null"], "format": "date"})), Shape::Date));
+        assert!(matches!(shape(json!({"$ref": "#/components/schemas/Day"})), Shape::Date));
+        assert!(matches!(shape(json!({"type": "string", "format": "date-time"})), Shape::Timestamp { text: true }));
+        // the values it lists are the ones it takes, whatever its format says of them
+        assert!(matches!(shape(json!({"type": "string", "format": "date", "enum": ["2026-12-28"]})), Shape::Str(Some(vs)) if vs == ["2026-12-28"]));
+        // a format dandori has no type for is any string: a time of day, an address
+        assert!(matches!(shape(json!({"type": "string", "format": "time"})), Shape::Str(None)));
+        assert!(matches!(shape(json!({"type": "string", "format": "email"})), Shape::Str(None)));
+        // protobuf's JSON writes a Timestamp as RFC 3339's text; a Smithy timestamp goes as its protocol says
+        let pf = load(r#"syntax = "proto3"; package a.v1; import "google/protobuf/timestamp.proto"; message M { google.protobuf.Timestamp at = 1; }"#);
+        assert!(matches!(proto_shape(&pf, &PType::Named("google.protobuf.Timestamp".into()), &FieldRules::default()), Shape::Timestamp { text: true }));
+        assert!(matches!(smithy_shape(&json!({"shapes": {}}), "smithy.api#Timestamp"), Shape::Timestamp { text: false }));
+        assert!(matches!(smithy_shape(&json!({"shapes": {"a#At": {"type": "timestamp"}}}), "a#At"), Shape::Timestamp { text: false }));
+    }
+
+    #[test]
+    fn listed_days_are_sent_as_a_date_held_to_them() {
+        let days = |vs: &[&str]| days_hint(&vs.iter().map(|v| v.to_string()).collect::<Vec<_>>()).map(|w| w.en);
+        // days one after another, in any order and once each: the range of them
+        assert_eq!(days(&["2026-12-29", "2026-12-28", "2026-12-28"]).as_deref(), Some("declare it `date  range >=2026-12-28 <=2026-12-29`"));
+        assert_eq!(days(&["2026-12-31"]).as_deref(), Some("declare it `date  range >=2026-12-31 <=2026-12-31`"));
+        // days with a gap: a run of them
+        assert_eq!(days(&["2026-12-28", "2026-12-31"]).as_deref(), Some("declare it `date` held to a range of days it lists, one after another"));
+        // a list with a value that is no day, or a day no month has, is no list of days
+        assert_eq!(days(&["2026-12-28", "closed"]), None);
+        assert_eq!(days(&["2026-02-30"]), None);
+    }
+
+    #[test]
     fn the_zero_values_are_those_of_the_fields_json_leaves_out() {
         let pf = load(r#"syntax = "proto3"; package a.v1; message M { string s = 1; optional string o = 2; int32 n = 3; M inner = 4; repeated M more = 5; }"#);
         let z = zeros_of(&pf, "a.v1.M");
@@ -1610,5 +2239,173 @@ mod tests {
         let empty = json!({"id": "x", "amount": 1, "lines": [], "note": null, "tags": {"a": "b"}});
         assert_eq!(omit_zeros(&empty, &z), json!({"id": "x", "amount": 1, "note": null, "tags": {"a": "b"}}));
         assert_eq!(fill(&omit_zeros(&empty, &z), &z), empty);
+    }
+
+    /// A trip with `google.type.Date`s in it: one, a list, in a message, in a list of messages, and
+    /// as a map's values, which a flow reads as `json`. `Plain` holds a message, and no date.
+    const TRIP: &str = r#"syntax = "proto3"; package a.v1; import "google/type/date.proto";
+        message Leg { google.type.Date day = 1; string note = 2; }
+        message Trip { google.type.Date start = 1; repeated google.type.Date stops = 2; Leg first = 3; repeated Leg legs = 4; map<string, google.type.Date> by_name = 5; string id = 6; }
+        message Note { string text = 1; }
+        message Plain { string id = 1; Note none = 2; }
+        service Trips { rpc Book(Trip) returns (Trip); rpc Name(Plain) returns (Plain); }"#;
+
+    #[test]
+    fn a_google_type_date_is_a_flows_date() {
+        let pf = load(TRIP);
+        let made = made_fields(&pf, "a.v1.Trip");
+        let ty = |name: &str| made.iter().find(|f| f.name == name).unwrap_or_else(|| panic!("no field {name}")).ty.clone();
+        assert_eq!(ty("start"), MadeTy::Opt(Box::new(MadeTy::Date)));
+        assert_eq!(ty("stops"), MadeTy::List(Box::new(MadeTy::Date)));
+        assert_eq!(ty("byName"), MadeTy::Json);
+        assert!(matches!(proto_shape(&pf, &PType::Named(crate::proto::DATE.into()), &FieldRules::default()), Shape::Date));
+        // where the dates are, and the zero values beside them; a map's values are not looked into
+        let z = zeros_of(&pf, "a.v1.Trip");
+        assert_eq!(z["d"], json!(["start", "stops"]));
+        assert_eq!(z["m"]["first"], json!({"f": {"note": ""}, "d": ["day"]}));
+        assert_eq!(z["l"]["legs"], json!({"f": {"note": ""}, "d": ["day"]}));
+        let days = days_of(&pf, "a.v1.Trip");
+        assert_eq!(days, json!({"d": ["start", "stops"], "m": {"first": {"d": ["day"]}}, "l": {"legs": {"d": ["day"]}}}));
+        assert_eq!(days_of(&pf, "a.v1.Plain"), json!({}));
+        assert!(has_days(&z) && !has_days(&zeros_of(&pf, "a.v1.Plain")));
+        assert_eq!(without_days(&z), json!({"f": {"stops": [], "legs": [], "byName": {}, "id": ""}, "m": {"first": {"f": {"note": ""}}}, "l": {"legs": {"f": {"note": ""}}}}));
+        // what the service writes reads as the flow's dates, and the flow's dates go out as it writes them
+        let wire = json!({"start": {"year": 2026, "month": 11, "day": 16}, "stops": [{"year": 2026, "month": 1, "day": 2}], "first": {"day": {"year": 2026, "month": 12, "day": 31}}, "legs": [{"day": {"year": 1, "month": 1, "day": 1}, "note": "x"}], "id": "t"});
+        let flow = json!({"start": "2026-11-16", "stops": ["2026-01-02"], "first": {"day": "2026-12-31", "note": ""}, "legs": [{"day": "0001-01-01", "note": "x"}], "byName": {}, "id": "t"});
+        assert_eq!(fill(&wire, &z), flow);
+        // the zero values left out, the dates as the service writes them
+        assert_eq!(omit_zeros(&flow, &z), wire);
+        assert_eq!(fill(&omit_zeros(&flow, &z), &z), flow);
+        assert_eq!(wire_days(&flow, &days), json!({"start": {"year": 2026, "month": 11, "day": 16}, "stops": [{"year": 2026, "month": 1, "day": 2}], "first": {"day": {"year": 2026, "month": 12, "day": 31}, "note": ""}, "legs": [{"day": {"year": 1, "month": 1, "day": 1}, "note": "x"}], "byName": {}, "id": "t"}));
+        // a date that is one already stays, and a field that is not there stays out
+        assert_eq!(fill(&json!({"start": "2026-11-16"}), &z)["start"], json!("2026-11-16"));
+        assert_eq!(wire_days(&json!({"id": "t"}), &days), json!({"id": "t"}));
+        // what a `connect` task sends: where its request holds a date, and nothing for one that holds none
+        let api = Api { name: "trips".into(), doc: ApiDoc::Proto(Arc::new(pf)), url: None };
+        assert_eq!(proto_op(&api, "Trips/Book").unwrap().request_days(), Some(days));
+        assert_eq!(proto_op(&api, "Trips/Name").unwrap().request_days(), None);
+        let trip = message(&api, "a.v1.Trip");
+        assert!(trip.holds_day("start") && trip.holds_day("stops") && trip.holds_day("first") && trip.holds_day("legs"));
+        assert!(!trip.holds_day("by_name") && !trip.holds_day("byName") && !trip.holds_day("id"));
+        assert!(!message(&api, "a.v1.Plain").holds_day("none"));
+    }
+
+    #[test]
+    fn a_date_short_of_a_part_is_left_for_the_check_to_refuse() {
+        let read = |v: Value| day_read(&v);
+        assert_eq!(read(json!({"year": 2026, "month": 11, "day": 16})), json!("2026-11-16"));
+        assert_eq!(read(json!({"year": 9999, "month": 12, "day": 31})), json!("9999-12-31"));
+        // a whole number as JavaScript writes it, and the fields in another order
+        assert_eq!(read(json!({"day": 16.0, "year": 2026.0, "month": 11})), json!("2026-11-16"));
+        // protobuf's JSON leaves a 0 out: a card's month without its day, a birthday without its year, no day at all
+        for partial in [json!({"year": 2026, "month": 11}), json!({"month": 12, "day": 25}), json!({"year": 2026}), json!({})] {
+            assert_eq!(read(partial.clone()), partial);
+        }
+        // a 0 written out, a number out of its range or not whole, a field of another name, what is not a number
+        for odd in [
+            json!({"year": 0, "month": 11, "day": 16}),
+            json!({"year": 2026, "month": 13, "day": 1}),
+            json!({"year": 2026, "month": 11, "day": 32}),
+            json!({"year": 10000, "month": 1, "day": 1}),
+            json!({"year": 2026, "month": 11.5, "day": 1}),
+            json!({"year": 2026, "month": 11, "day": 16, "era": 1}),
+            json!({"year": "2026", "month": 11, "day": 16}),
+            json!({"year": true, "month": 11, "day": 16}),
+            json!("2026-11-16"),
+            json!(null),
+        ] {
+            assert_eq!(read(odd.clone()), odd);
+        }
+        // a list item by item
+        assert_eq!(read(json!([{"year": 2026, "month": 2, "day": 3}, {"month": 2}])), json!(["2026-02-03", {"month": 2}]));
+        // a day a month does not have is the check's to refuse, as for any date
+        assert_eq!(read(json!({"year": 2026, "month": 2, "day": 30})), json!("2026-02-30"));
+        // and the other way: four, two and two digits between hyphens, and nothing else
+        let wire = |v: Value| day_wire(&v);
+        assert_eq!(wire(json!("2026-11-16")), json!({"year": 2026, "month": 11, "day": 16}));
+        assert_eq!(wire(json!("0001-01-01")), json!({"year": 1, "month": 1, "day": 1}));
+        for odd in [json!("2026-1-16"), json!("2026/11/16"), json!("2026-11-16T00:00:00Z"), json!("２０２６-11-16"), json!(16), json!(null)] {
+            assert_eq!(wire(odd.clone()), odd);
+        }
+    }
+
+    /// A Smithy model of one service under `protocol`, with the operation `Put` that takes `members`
+    /// (`Entry` holds a timestamp and a list of itself; `Stamp` is a timestamp that says its form).
+    fn smithy(protocol: &str, members: Value) -> Api {
+        let doc = json!({"smithy": "2.0", "shapes": {
+            "a#Service": {"type": "service", "operations": [{"target": "a#Put"}], "traits": {protocol: {}}},
+            "a#Put": {"type": "operation", "input": {"target": "a#PutInput"}},
+            "a#PutInput": {"type": "structure", "members": members},
+            "a#Time": {"type": "timestamp"},
+            "a#Stamp": {"type": "timestamp", "traits": {"smithy.api#timestampFormat": "http-date"}},
+            "a#Entry": {"type": "structure", "members": {"At": {"target": "a#Time"}, "Note": {"target": "smithy.api#String"}, "More": {"target": "a#Entries"}}},
+            "a#Entries": {"type": "list", "member": {"target": "a#Entry"}},
+            "a#Times": {"type": "list", "member": {"target": "smithy.api#Timestamp"}},
+            "a#ByName": {"type": "map", "key": {"target": "smithy.api#String"}, "value": {"target": "a#Time"}},
+            "a#Plain": {"type": "structure", "members": {"Note": {"target": "smithy.api#String"}}}
+        }});
+        Api { name: "a".into(), doc: ApiDoc::Smithy(doc), url: None }
+    }
+
+    fn times(api: &Api, params: &[&str]) -> Option<Value> {
+        smithy_op(api, "put").unwrap().timestamps(&params.iter().map(|p| p.to_string()).collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn a_timestamp_goes_in_the_form_its_model_says() {
+        let members = json!({
+            "At": {"target": "a#Time"},
+            "Since": {"target": "a#Time", "traits": {"smithy.api#httpHeader": "X-Since"}},
+            "From": {"target": "a#Time", "traits": {"smithy.api#httpQuery": "from"}},
+            "Day": {"target": "a#Time", "traits": {"smithy.api#httpLabel": {}}},
+            "Kept": {"target": "a#Time", "traits": {"smithy.api#timestampFormat": "date-time"}},
+            "Stamp": {"target": "a#Stamp"},
+            "Plain": {"target": "smithy.api#Timestamp"},
+            "Note": {"target": "smithy.api#String"}
+        });
+        let all = ["At", "Since", "From", "Day", "Kept", "Stamp", "Plain", "Note"];
+        // the body takes the protocol's form; the headers, the query and the path theirs, under a
+        // protocol that binds members there; the member's or the shape's @timestampFormat wins
+        assert_eq!(
+            times(&smithy("aws.protocols#restJson1", members.clone()), &all),
+            Some(json!({"At": "epoch-seconds", "Since": "http-date", "From": "date-time", "Day": "date-time", "Kept": "date-time", "Stamp": "http-date", "Plain": "epoch-seconds"}))
+        );
+        assert_eq!(
+            times(&smithy("aws.protocols#restXml", members.clone()), &all),
+            Some(json!({"At": "date-time", "Since": "http-date", "From": "date-time", "Day": "date-time", "Kept": "date-time", "Stamp": "http-date", "Plain": "date-time"}))
+        );
+        // a protocol without bindings sends every member in the body
+        for (protocol, body) in [("aws.protocols#awsJson1_0", "epoch-seconds"), ("aws.protocols#awsJson1_1", "epoch-seconds"), ("aws.protocols#awsQuery", "date-time"), ("aws.protocols#ec2Query", "date-time"), ("smithy.protocols#rpcv2Cbor", "epoch-seconds")] {
+            assert_eq!(
+                times(&smithy(protocol, members.clone()), &all),
+                Some(json!({"At": body, "Since": body, "From": body, "Day": body, "Kept": "date-time", "Stamp": "http-date", "Plain": body})),
+                "{protocol}"
+            );
+        }
+        // under a protocol dandori does not know, the SDK says
+        assert_eq!(times(&smithy("a#another", members.clone()), &["At", "Kept"]), Some(json!({"At": "timestamp", "Kept": "date-time"})));
+        // only the members the task gives
+        assert_eq!(times(&smithy("aws.protocols#restJson1", members.clone()), &["From", "Note"]), Some(json!({"From": "date-time"})));
+        assert_eq!(times(&smithy("aws.protocols#restJson1", members), &["Note"]), None);
+    }
+
+    #[test]
+    fn the_timestamps_inside_a_member_are_found_where_they_are() {
+        let members = json!({
+            "Entries": {"target": "a#Entries"},
+            "Entry": {"target": "a#Entry"},
+            "Times": {"target": "a#Times", "traits": {"smithy.api#httpQuery": "t"}},
+            "ByName": {"target": "a#ByName"},
+            "Plain": {"target": "a#Plain"}
+        });
+        // in each item of a list (`*`), in a structure, and in a structure that holds itself, once;
+        // in each value of a map; a list in the query takes the query's form
+        assert_eq!(
+            times(&smithy("aws.protocols#restJson1", members), &["Entries", "Entry", "Times", "ByName", "Plain"]),
+            Some(json!({"Entries": {"*": {"At": "epoch-seconds"}}, "Entry": {"At": "epoch-seconds"}, "Times": {"*": "date-time"}, "ByName": {"*": "epoch-seconds"}}))
+        );
+        // a model other than Smithy's has none
+        let api = Api { name: "o".into(), doc: ApiDoc::OpenApi(json!({"paths": {"/x": {"post": {"responses": {"200": {}}}}}})), url: None };
+        assert_eq!(openapi_op(&api, "POST", "/x").unwrap().timestamps(&["x".into()]), None);
     }
 }

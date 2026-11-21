@@ -1,0 +1,4 @@
+enums ways v1
+description "The ways a request can go, of which there is one (fictional)"
+
+enum route = direct "Straight to the approver"

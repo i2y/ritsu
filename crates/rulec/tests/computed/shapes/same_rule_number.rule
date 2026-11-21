@@ -1,0 +1,20 @@
+rule same_rule_number v1
+description "A number a table of the same rule writes, read with the amount it is decided from"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+outputs
+  x : choice
+
+table fee_of
+| amount       | -> fee : money[JPY] |
+| <=100_000JPY | 100JPY              |
+| >100_000JPY  | 900JPY              |
+
+table pick
+| amount       | fee    | -> x |
+| <=100_000JPY | 100JPY | one  |
+| >100_000JPY  | 900JPY | two  |

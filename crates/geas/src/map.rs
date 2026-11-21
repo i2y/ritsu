@@ -115,7 +115,7 @@ impl Record {
                 continue;
             }
             let v = json::parse(line)
-                .map_err(|e| (n, tr!("この行は JSON ではありません", "the line is not JSON: {e}")))?;
+                .map_err(|e| (n, tr!("この行は JSON ではありません", "the line is not JSON: {}", ; e.en)))?;
             let Some(r) = rec.as_mut() else {
                 rec = Some(header(&v).map_err(|why| (n, why))?);
                 continue;
@@ -156,7 +156,7 @@ fn string(v: &J, key: &str) -> Result<String, Text> {
 }
 
 fn ranges(s: &str) -> Result<Lines, Text> {
-    lines::from_ranges(s).map_err(|why| tr!("`{s}` は行番号の範囲として読めません", "`{s}` is not a list of line ranges: {why}"))
+    lines::from_ranges(s).map_err(|why| tr!("`{s}` は行番号の範囲として読めません: {}", "`{s}` is not a list of line ranges: {}", why.ja; why.en))
 }
 
 fn header(v: &J) -> Result<Record, Text> {
@@ -235,20 +235,11 @@ fn ran_entry(v: &J, r: &Record) -> Result<RecRan, Text> {
 /// above the spec holding `.git` or `ritsu.mod`, else the spec's own directory; and
 /// the spec's path relative to it.
 pub fn root_and_spec(file: &str, root_flag: Option<&str>) -> Result<(PathBuf, String), Diag> {
-    let spec_abs = ritsu_base::fs::canonicalize(file).map_err(|e| {
-        diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"))
-    })?;
+    let spec_abs = ritsu_base::fs::canonicalize(file).map_err(|e| diag::named("E081", ritsu_base::cli::cannot_read(file, &e)))?;
     let spec_dir = spec_abs.parent().expect("a file is in a directory");
     let root = match root_flag {
         Some(r) => {
-            let p = ritsu_base::fs::canonicalize(r).map_err(|e| {
-                diag::error(
-                    "E081",
-                    0,
-                    0,
-                    tr!("ルート `{r}` を読めません: {e}", "cannot read the root `{r}`: {e}"),
-                )
-            })?;
+            let p = ritsu_base::fs::canonicalize(r).map_err(|e| diag::named("E081", ritsu_base::cli::cannot_read(r, &e)))?;
             if !p.is_dir() {
                 return Err(diag::error(
                     "E080",
@@ -470,10 +461,7 @@ fn no_record(
 /// The record: every source file under the root with its blob hash and its code
 /// lines, and every claim's lines per target and file.
 fn build(spec: &Spec, place: &Place, results: &[ClaimResult], slices: &[BTreeMap<String, Report>]) -> Result<Record, Diag> {
-    let e081 = |what: String, e: std::io::Error| {
-        diag::error("E081", 0, 0, tr!("{what} を読めません: {e}", "cannot read {what}: {e}"))
-    };
-    let sources = tree::sources(place.root).map_err(|e| e081("the tree under the root".into(), e))?;
+    let sources = tree::sources(place.root).map_err(|e| diag::error("E081", 0, 0, tr!("ルートの下のファイルを一覧できません: {e}", "cannot list the files under the root: {e}")))?;
     let mut code: BTreeMap<&str, Lines> = BTreeMap::new();
     for s in slices {
         for rep in s.values() {
@@ -484,7 +472,7 @@ fn build(spec: &Spec, place: &Place, results: &[ClaimResult], slices: &[BTreeMap
     }
     let mut files = Vec::new();
     for path in &sources {
-        let bytes = ritsu_base::fs::read(place.root.join(path)).map_err(|e| e081(path.clone(), e))?;
+        let bytes = ritsu_base::fs::read(place.root.join(path)).map_err(|e| diag::named("E081", ritsu_base::cli::cannot_read(path, &e)))?;
         files.push(RecFile {
             path: path.clone(),
             blob: hash::blob(&bytes),

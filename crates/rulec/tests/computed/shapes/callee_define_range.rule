@@ -1,0 +1,20 @@
+rule callee_define_range v1
+description "An applied fee a `define` works out under a range, read with the amount: the fee is 900 yen from 30,001 yen to 30,033 yen, and the third row takes those amounts"
+
+enum verdict = ok | check
+
+inputs
+  amount : money[JPY]  range >=1JPY <=600_000JPY
+
+apply f = "shared/fee_band.rule" meaning:bad106738838022d
+  amount = amount
+  charged -> f_fee
+
+outputs
+  v : verdict
+
+table pick
+| amount      | f_fee   | -> v  |
+| <=30_000JPY | -       | ok    |
+| >30_000JPY  | >900JPY | check |
+| >30_000JPY  | 900JPY  | ok    |

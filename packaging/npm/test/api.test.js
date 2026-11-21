@@ -325,22 +325,25 @@ test("dirs: the module opens those directories alone, each at its own path", { s
       assert.match(both(r), /outside\.proto/, `${args.join(" ")} says which file it could not read`);
       assert.notEqual(r.code, 0);
     }
+    // the refusal is the loader's ENOTCAPABLE, the same answer uvwasi gives its own escapes, so
+    // the sentence is the same on every Node: the command's `cannot read <file>: <reason>`
+    const refused = ": Capabilities insufficient (os error 76)";
     for (const file of ["linked.rule", "relinked.rule"]) {
       const r = runSync(["rulec", "check", file], narrowed);
       assert.doesNotMatch(both(r), /outside_secret_word/, file);
-      assert.deepEqual(r, { code: 2, stdout: "", stderr: `error: cannot read \`${file}\`\n` });
+      assert.deepEqual(r, { code: 2, stdout: "", stderr: `error: cannot read \`${file}\`${refused}\n` });
     }
     assert.match(both(runSync(["rulec", "check", "etc/hosts"], { cwd: project, env })), /error\[E003\]/);
     for (const file of ["hosts.rule", "etc/hosts"]) {
       const r = runSync(["rulec", "check", file], narrowed);
-      assert.deepEqual(r, { code: 2, stdout: "", stderr: `error: cannot read \`${file}\`\n` });
+      assert.deepEqual(r, { code: 2, stdout: "", stderr: `error: cannot read \`${file}\`${refused}\n` });
     }
     // with two directories, a path is followed from the directory it is opened from, in either order
     const other = join(s.dir, "other");
     mkdirSync(join(other, "etc"), { recursive: true });
     writeFileSync(join(other, "etc", "hosts"), "rule other_hosts v1\n");
     for (const dirs of [[project, other], [other, project]]) {
-      assert.deepEqual(runSync(["rulec", "check", "etc/hosts"], { cwd: project, env, dirs }), { code: 2, stdout: "", stderr: "error: cannot read `etc/hosts`\n" });
+      assert.deepEqual(runSync(["rulec", "check", "etc/hosts"], { cwd: project, env, dirs }), { code: 2, stdout: "", stderr: `error: cannot read \`etc/hosts\`${refused}\n` });
     }
     for (const file of ["urgency.rule", "ordering-rules/urgency.rule", "ordering-again/rules/urgency.rule"]) {
       const r = runSync(["rulec", "check", file], narrowed);
@@ -352,7 +355,7 @@ test("dirs: the module opens those directories alone, each at its own path", { s
     mkdirSync(join(s.dir, "elsewhere"));
     symlinkSync(join(s.dir, "elsewhere"), join(stock, "elsewhere"));
     const out = runSync(["gen", "--target", "typescript", "--out", "elsewhere/generated"], { cwd: stock, env, dirs: [stock] });
-    assert.deepEqual(out, { code: 2, stdout: "", stderr: "error: cannot create `elsewhere/generated/typescript/rules`\n" });
+    assert.deepEqual(out, { code: 2, stdout: "", stderr: `error: cannot create \`elsewhere/generated/typescript/rules\`${refused}\n` });
     assert.deepEqual(readdirSync(join(s.dir, "elsewhere")), []);
     // in a worker too, and the same as the whole filesystem gives where nothing outside is read
     assert.deepEqual(await run(["rulec", "check", "billing/rules/billing_need.rule"], narrowed), runSync(["rulec", "check", "billing/rules/billing_need.rule"], narrowed));

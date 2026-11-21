@@ -1,0 +1,13 @@
+route 上限つき(capped) v1 "上限つきの承認"
+
+inputs
+  長い(long) : bool
+  上限(cap)  : money[円] "上限"  range >=1円 <=100_000円  optional
+
+route
+  確かめ(check)  経理
+  部長(head)     部長の人  when 長い or 上限 > 50_000円
+
+who
+  経理(finance)     = team finance
+  部長の人(heads)   = team finance_heads

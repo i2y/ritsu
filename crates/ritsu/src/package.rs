@@ -63,6 +63,8 @@
 //! submodule [`library`]): named and versioned by the module's `ritsu.mod`, with what it depends on
 //! as ranges, reading the parts of a dependency that is a library from that library.
 
+mod kinds;
+mod laid;
 mod library;
 mod rust;
 
@@ -135,13 +137,23 @@ pub const CEDAR: &str = "cedar";
 /// the dates a module calls are given to it from outside (`Inner`).
 pub const LEAN: &str = "lean";
 
+/// The third target that is no language: the project's kinds of request apart from any language
+/// (ringi's DESIGN 12.2), written once into `<out>/requests/`: the description of each kind
+/// (`types/`), the server's API (`openapi.json`), an agent's tools (`mcp/tools.json`), the schema and
+/// the columns of the organization's data (`organization/`), each kind's vectors (`vectors/`) and
+/// those of its entry `worked` (`vectors/worked/`), the vectors of finding a person, a team or a row
+/// of a master (`organization/find.jsonl`, apart from any kind), and each kind's screens with their
+/// catalog and functions (`a2ui/`, ringi's DESIGN 13). The kinds are the requests whose code the
+/// packages hold.
+pub const REQUESTS: &str = "requests";
+
 /// The names `--target` takes, in the order `ritsu gen` writes them whatever the order they are
-/// given in (DESIGN 9.6): each language's, in [`Target::ALL`]'s order, then `cedar` and `lean`. They
-/// are the words of the `target` line of a ritsu.mod (ritsu-base's `TARGET_WORDS`, which the table
-/// of `gen` takes its choices from): ritsu-base cannot read [`Target`], so a test holds the two to
-/// each other.
+/// given in (DESIGN 9.6): each language's, in [`Target::ALL`]'s order, then `cedar`, `lean` and
+/// `requests`. They are the words of the `target` line of a ritsu.mod (ritsu-base's `TARGET_WORDS`,
+/// which the table of `gen` takes its choices from): ritsu-base cannot read [`Target`], so a test
+/// holds the two to each other.
 pub fn target_names() -> Vec<&'static str> {
-    Target::ALL.iter().map(|t| t.key()).chain([CEDAR, LEAN]).collect()
+    Target::ALL.iter().map(|t| t.key()).chain([CEDAR, LEAN, REQUESTS]).collect()
 }
 
 /// The names given, in the order of [`target_names`]: the order they are written in, and said in.
@@ -212,9 +224,17 @@ pub struct Options {
     pub books: Books,
     /// Where the code of the gates asks: Cedar in the process, or Verified Permissions.
     pub authorizer: sekisho::r#gen::Authorizer,
+    /// The language of what the package's code says (its comments, and the sentences it answers
+    /// with): `--lang`, else English, whatever the environment says (`Lang::made`, DESIGN 4.1).
     pub lang: Lang,
+    /// The language of what the run prints while it makes the package (a refusal, the diagnostics
+    /// that stop it): `--lang`, else the environment's (`Lang::pick`).
+    pub said: Lang,
     /// The package as a library (`--library`, DESIGN 17.16): None for the app form.
     pub library: Option<library::Library>,
+    /// The kinds of request whose code the package holds, for its list of them (ringi's DESIGN
+    /// 12.2): none in a project with no request.
+    pub kinds: Vec<ritsu_project::requests::Kind>,
 }
 
 /// The versions the dependencies of a package are written with: the ones the generated code is
@@ -285,9 +305,8 @@ pub struct Refusal {
 }
 
 fn refusal(code: u8, said: Text, lang: Lang) -> Refusal {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
     let message = said.get(lang).to_string();
-    Refusal { said: format!("{head}: {message}\n"), code, message, diagnostics: Vec::new() }
+    Refusal { said: format!("{}\n", ritsu_base::cli::refusal(&message, lang)), code, message, diagnostics: Vec::new() }
 }
 
 /// A generator's own diagnostics, which stop it after the files passed their checks: printed as
@@ -320,22 +339,21 @@ fn place_of(project: &Project, rel: &str) -> Place {
     Place::of(&project.root, rel, module)
 }
 
-/// Whether every file of the languages a package is made of passes its language's check (kaname's
-/// with what the checks across the borders came to at its calls, as `ritsu check` checks it); the
-/// diagnostics of those that do not, as `ritsu check` prints them, when one does not. In a module,
-/// what rulec says of a line of a contribution is filed under the contribution, as `ritsu check`
-/// files it ([`Project::place_findings`], with the files `ritsu check` reads for the same paths,
+/// Whether `ritsu check` finds nothing that makes the code of the package wrong (DESIGN 9.3): every
+/// file of the languages a package is made of passes its language's check (a flow's with the rules,
+/// the dates files and the books joined, kaname's with what the checks across the borders came to at
+/// its calls, as `ritsu check` checks them), and the checks across the languages, of the modules and
+/// sakai's of the references that cross a boundary find no error; else the diagnostics of what does
+/// not pass, as `ritsu check` prints them. yuen's errors and geas's claims do not stop it. What
+/// rulec says in the check of one file of a line of another is filed under the file the line is in,
+/// as `ritsu check` files it, in a module and out of one ([`Project::place_findings`], with the files `ritsu check` reads for the same paths,
 /// `whole`), and a file an error is filed under does not pass either (DESIGN 17.8); a rule of a
 /// dependency that fails only for such errors is not named among the files that fail
 /// ([`Project::failed_for_others`]), as the line of the dependencies of `ritsu check` does not count
 /// it.
-fn checked(project: &Project, whole: &Project, joined: &Joined, verdicts: &Rc<ritsu_cross::ProgramVerdicts>, lang: Lang) -> Result<(), Refusal> {
-    let mut said = String::new();
-    let mut found: Vec<Json> = Vec::new();
-    let mut worst = 0u8;
-    let mut failing: Vec<String> = Vec::new();
+fn checked(project: &Project, whole: &Project, joined: &Joined, verdicts: &Rc<ritsu_cross::ProgramVerdicts>, laid: Option<&ritsu_project::requests::Laid>, screens: Option<&ringi::screens::Given>, lang: Lang) -> Result<(), Refusal> {
     let mut all: Vec<(Tool, ritsu_ports::Checked)> = Vec::new();
-    for tool in [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Kaname, Tool::Sekisho] {
+    for tool in MADE_FROM {
         let files: Vec<String> = project.of(tool).iter().map(|f| f.shown.clone()).collect();
         if files.is_empty() {
             continue;
@@ -347,21 +365,71 @@ fn checked(project: &Project, whole: &Project, joined: &Joined, verdicts: &Rc<ri
                 let v: Rc<dyn ritsu_ports::Verdicts> = verdicts.clone();
                 joined.kaname.checked_with(&project.root, &files, &joined.ports(), Some(v), lang)
             }
-            Tool::Sekisho => sekisho::check::checked(&project.root, &files, &joined.sekisho().into(), lang),
+            Tool::Sekisho => joined.sekisho.checked(&project.root, &files, lang),
+            // with the rules, the dates files and the books joined, as `ritsu check` checks a flow
+            Tool::Dandori => joined.dandori.checked_with(&project.root, &files, &joined.ports(), lang),
             _ => joined.chobo.checked(&project.root, &files, lang),
         };
         all.extend(units.into_iter().map(|u| (tool, u)));
     }
-    if project.tree.is_some() {
-        whole.place_findings(&mut all, lang);
+    // the requests, whose lowered files and glue go into the package (ringi's DESIGN 12.3): one that
+    // does not pass stops the run as any file the package is made from does
+    let requests: Vec<String> = project.of(Tool::Ringi).iter().map(|f| f.shown.clone()).collect();
+    if !requests.is_empty() {
+        all.extend(joined.ringi.checked_with(&project.root, &requests, &project.ringi, lang).into_iter().map(|u| (Tool::Ringi, u)));
     }
-    for (tool, u) in all.into_iter().filter(|(_, u)| u.verdict != Verdict::Passes) {
+    whole.place_findings(&mut all, lang);
+    // What else `ritsu check` finds that makes the code wrong (DESIGN 9.3): ritsu's own errors,
+    // across the languages and of the modules, and sakai's references that cross a boundary the map
+    // does not let them (its E2xx) from a file the package is made from: a workflow that calls a
+    // service the other side does not open, a gate that guards another context's operation, whose
+    // code would make that call. sakai's other errors are of the map, the contexts, the documents
+    // and the settings, which no package holds, or say again what a language's check says (E105).
+    // Each is said as `ritsu check` says it, and the file it is at does not pass.
+    let mut theirs: Vec<(&str, Finding)> = Vec::new();
+    if !project.of(Tool::Sakai).is_empty() {
+        let mut args = project.given_for(Tool::Sakai);
+        args.extend(project.dependency_dirs(Tool::Sakai));
+        let made_from = |f: &Finding| f.file.as_deref().and_then(|r| project.holds(r)).is_some_and(|x| MADE_FROM.contains(&x.tool));
+        let crosses = |f: &Finding| f.code.starts_with("E2");
+        for u in sakai::run::checked(&args, Some(&project.root_arg()), &joined.sakai(), lang) {
+            theirs.extend(u.findings().filter(|f| f.severity == Severity::Error && crosses(f) && made_from(f)).map(|f| ("sakai", f.clone())));
+        }
+    }
+    let mut crossed = ritsu_cross::check_with(project, joined, verdicts, lang);
+    // what kaname says of the code ringi lays for the requests is ringi's bug, said at the request
+    // (ringi's DESIGN 9.2): a warning stops the package too
+    let mut screens_refused = Vec::new();
+    if let Some(laid) = laid {
+        laid::said_as_ringi(project, laid, joined, &mut all, &mut crossed.findings, lang);
+        // what the screens of the kinds say before they are written (ringi's DESIGN 13.3, 4.8)
+        if let Some(given) = screens {
+            screens_refused = laid::screens_said(project, laid, joined, given, &mut all, lang);
+        }
+    }
+    theirs.extend(crossed.findings.into_iter().filter(|f| f.severity == Severity::Error).map(|f| ("ritsu", f)));
+    if let Some(Ok(tree)) = project.tree.as_deref() {
+        let of_modules = tree.found.iter().map(|d| crate::check::modules::finding(project, d, lang)).chain(crate::check::modules::uses(project, joined, tree, lang));
+        theirs.extend(of_modules.filter(|f| f.severity == Severity::Error).map(|f| ("ritsu", f)));
+    }
+    // a line that reads a file that does not pass is said under that file, after the rest, as
+    // `ritsu check` says it (DESIGN 8.3)
+    let others: Vec<&Finding> = theirs.iter().map(|(_, f)| f).collect();
+    let waiting = crate::check::waiting::Waiting::of(project, &all, &others, joined, &crate::check::ONE_FILE);
+    let mut said = String::new();
+    let mut found: Vec<Json> = Vec::new();
+    let mut worst = 0u8;
+    let mut failing: Vec<String> = Vec::new();
+    for (i, (tool, u)) in all.iter().enumerate().filter(|(_, (_, u))| u.verdict != Verdict::Passes) {
         worst = worst.max(if u.verdict == Verdict::Unchecked { 2 } else { 1 });
-        for p in &u.parts {
+        for (j, p) in u.parts.iter().enumerate() {
             match p {
                 Part::Finding(f) => {
-                    said.push_str(&f.text_of(tool.word()));
-                    found.push(crate::check::entry(tool.word(), f));
+                    let w = waiting.at(i, j);
+                    if w.is_none() {
+                        said.push_str(&f.text_of(tool.word()));
+                    }
+                    found.push(crate::check::entry_waiting(tool.word(), f, w));
                 }
                 Part::Text(s) => said.push_str(s),
             }
@@ -380,9 +448,9 @@ fn checked(project: &Project, whole: &Project, joined: &Joined, verdicts: &Rc<ri
         };
         // a rule of a dependency that fails only for what a contribution of another file adds to it
         // is not the file that fails: the contribution is (as `ritsu check` counts it)
-        let for_others = project.tree.is_some() && ritsu_base::paths::from_root(&whole.root, Path::new(&u.label)).is_some_and(|r| whole.failed_for_others(&r, &u));
+        let for_others = project.tree.is_some() && ritsu_base::paths::from_root(&whole.root, Path::new(&u.label)).is_some_and(|r| whole.failed_for_others(&r, u));
         if !for_others && !failing.contains(&u.label) {
-            failing.push(u.label);
+            failing.push(u.label.clone());
         }
         for s in others {
             if !failing.contains(&s) {
@@ -390,43 +458,63 @@ fn checked(project: &Project, whole: &Project, joined: &Joined, verdicts: &Rc<ri
             }
         }
     }
-    // dandori with the dates and the books joined too, which its check of a project does not pass on
-    for f in project.of(Tool::Dandori) {
-        let got = with_ports(joined, || dandori::check::check_file(Path::new(&f.shown)));
-        match got {
-            Err(e) => {
-                worst = 2;
-                said.push_str(&format!("{e}\n"));
-                failing.push(f.shown.clone());
-            }
-            Ok((src, c)) if dandori::diag::has_errors(&c.diags) => {
-                worst = worst.max(if c.diags.iter().any(|d| d.code == "E018") { 2 } else { 1 });
-                for d in &c.diags {
-                    let text = dandori::commands::render(std::slice::from_ref(d), &f.shown, &src, lang);
-                    let tag = format!("[{}]", d.code);
-                    said.push_str(&match text.find(&tag) {
-                        Some(at) => format!("{}[dandori {}]{}", &text[..at], d.code, &text[at + tag.len()..]),
-                        None => text,
-                    });
-                    found.push(diagnostic("dandori", Some(f.rel.clone()), from_serde(&d.to_json(lang))));
-                }
-                failing.push(f.shown.clone());
-            }
-            Ok(_) => {}
+    for (tool, f) in &theirs {
+        worst = worst.max(1);
+        said.push_str(&f.text_of(tool));
+        found.push(crate::check::entry(tool, f));
+        let shown = f.file.as_deref().map(|r| project.holds(r).map_or_else(|| r.to_string(), |x| x.shown.clone()));
+        if let Some(s) = shown
+            && !failing.contains(&s)
+        {
+            failing.push(s);
         }
     }
-    if failing.is_empty() {
+    let theirs_said: Vec<(&str, &Finding)> = theirs.iter().map(|(t, f)| (*t, f)).collect();
+    said.push_str(&waiting.text(project, &all, &theirs_said, lang));
+    if failing.is_empty() && theirs.is_empty() {
         return Ok(());
     }
-    let n = failing.len();
-    let list = failing.join(", ");
-    let r = refusal(
-        worst,
-        tr!("検査を通らないファイルが {n} 個あるので、何も生成しません: {list}", "{n} file(s) do not pass check, so nothing is generated: {list}"),
-        lang,
-    );
+    // the files that wait are named apart from the ones that do not pass of their own
+    let waits = |shown: &String| project.files.iter().find(|f| f.shown == *shown).is_some_and(|f| waiting.files.contains_key(&f.rel));
+    let (waiting_files, failing): (Vec<String>, Vec<String>) = failing.into_iter().partition(waits);
+    // a request whose screens alone do not pass passes its check: it cannot be made into
+    // `requests`, as a file a target cannot be made from is said (ringi's DESIGN 13.3)
+    let only_screens = |shown: &String| {
+        screens_refused.contains(shown) && all.iter().filter(|(_, u)| u.label == *shown && u.verdict != Verdict::Passes).count() == 1 && !theirs.iter().any(|(_, f)| f.file.as_deref().and_then(|r| project.holds(r)).is_some_and(|x| x.shown == *shown))
+    };
+    let (for_requests, failing): (Vec<String>, Vec<String>) = failing.into_iter().partition(only_screens);
+    let r = refusal(worst, nothing_generated(&failing, &for_requests, &waiting_files), lang);
     Err(Refusal { said: format!("{said}{}", r.said), diagnostics: found, ..r })
 }
+
+/// The last line of a check that stops `ritsu gen`: the files that do not pass check; the requests
+/// that pass it and whose screens alone cannot be made (ringi's DESIGN 13.3), said as a file a
+/// target cannot be made from is said; and the files that wait for them.
+fn nothing_generated(failing: &[String], for_requests: &[String], waiting: &[String]) -> Text {
+    let (n, list) = (failing.len(), failing.join(", "));
+    let named = Text::list(&for_requests.iter().map(|s| Text::same(format!("`{s}`"))).collect::<Vec<_>>());
+    let mut why = if n > 0 {
+        tr!("検査を通らないファイルが {n} 個あるので、何も生成しません: {list}", "{n} file(s) do not pass check, so nothing is generated: {list}")
+    } else if !for_requests.is_empty() {
+        tr!("{} からは {REQUESTS} のパッケージを生成できません", "{} cannot be made into the {REQUESTS} package", named.ja; named.en)
+    } else {
+        tr!("検査のエラーがあるので、何も生成しません", "the check finds errors, so nothing is generated")
+    };
+    if n > 0 && !for_requests.is_empty() {
+        why.ja.push_str(&format!("。{} からは {REQUESTS} のパッケージを生成できません", named.ja));
+        why.en.push_str(&format!("; {} cannot be made into the {REQUESTS} package", named.en));
+    }
+    if !waiting.is_empty() {
+        let (k, wlist) = (waiting.len(), waiting.join(", "));
+        why.ja.push_str(&format!("。それを待っているファイル {k} 個: {wlist}"));
+        why.en.push_str(&format!("; {k} file(s) wait for them: {wlist}"));
+    }
+    why
+}
+
+/// The languages a package is made from, in the order `ritsu check` checks them: their own checks,
+/// and sakai's references across a boundary from their files, stop `ritsu gen` (DESIGN 9.3).
+const MADE_FROM: [Tool; 6] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Kaname, Tool::Dandori, Tool::Sekisho];
 
 /// The modules of kaname of the project, as they go into a package: each checked with the ports of
 /// the rules, the dates and the books joined and with what the checks across the borders came to at
@@ -445,7 +533,7 @@ pub fn kaname_modules(project: &Project, joined: &Joined, verdicts: &Rc<ritsu_cr
     let mut out = Vec::new();
     for f in files {
         let shown = &f.shown;
-        let o = run.file(shown).map_err(|e| refusal(2, tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}"), lang))?;
+        let o = run.file(shown).map_err(|e| refusal(2, ritsu_base::cli::cannot_read(shown, &e), lang))?;
         let Some(c) = o.checked.clone() else {
             return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
         };
@@ -455,7 +543,11 @@ pub fn kaname_modules(project: &Project, joined: &Joined, verdicts: &Rc<ritsu_cr
         for path in read {
             let rel = ritsu_base::paths::from_root(&project.root, &path);
             if rel.as_ref().and_then(|r| project.holds(r)).is_none() {
-                let other = rel.unwrap_or_else(|| path.display().to_string());
+                // the glue of a request reads what the request reads (`use rule`): said of the request
+                let lowered = Path::new(&f.rel).parent();
+                let request = project.of(Tool::Ringi).into_iter().find(|r| lowered == Some(ringi::lower::dir_of(&r.rel).as_path()));
+                let shown = request.map_or(shown, |r| &r.shown);
+                let other = rel.unwrap_or_else(|| ritsu_base::paths::show(&path));
                 return Err(refusal(
                     1,
                     tr!(
@@ -479,11 +571,12 @@ fn with_ports<R>(joined: &Joined, f: impl FnOnce() -> R) -> R {
 }
 
 /// The package of `target`, made from the project's files (which pass their checks) and its modules
-/// of kaname as [`kaname_modules`] checks them, the rules with the contributions of the files
-/// `contributions` merged (the rulec files `ritsu check` reads for the same paths). What stops it for
-/// the modules' sake is made sure of before, by [`modules_hold`].
-pub fn package(project: &Project, contributions: &[String], joined: &Joined, modules: &[(Rc<kaname::check::Checked>, String)], target: Target, o: &Options) -> Result<Package, Refusal> {
+/// of kaname as [`kaname_modules`] checks them, the rules with the contributions the engine of rules
+/// was given merged (the rulec files `ritsu check` reads for the same paths, chosen once for the
+/// run). What stops it for the modules' sake is made sure of before, by [`modules_hold`].
+pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check::Checked>, String)], target: Target, o: &Options) -> Result<Package, Refusal> {
     let lang = o.lang;
+    let said = o.said;
     // where each file's parts go; a library reads the parts of the modules its libraries hold from
     // them, and holds none of them (DESIGN 17.16)
     let at = |rel: &str| -> Place {
@@ -507,35 +600,52 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
     let rulec_lang = if lang == Lang::Ja { rulec::i18n::Lang::Ja } else { rulec::i18n::Lang::En };
     // The contributions are merged from the files `ritsu check` reads (rulec's §15.231, DESIGN 17.8):
     // each rule's module is the rule with every contribution that reaches it, and a contribution has
-    // no module of its own.
-    let rule_files = contributions;
+    // no module of its own. The engine chose them once for the run, and no file is read to choose
+    // them again for each rule.
+    let chosen = joined.rulec.contributions();
     // the units the rules and the books take amounts in, for the package's `units` module
     let mut units = Vec::new();
     for f in project.of(Tool::Rulec) {
         if rulec::link::is_contribution_file(&f.shown) {
             continue;
         }
-        let src = read(project, f, lang)?;
         let place = at(&f.rel);
         if place.read_from_library(&place.dir) {
             continue;
         }
+        // the rule as the check of the run kept it (DESIGN 4.15), merged with the contributions the
+        // engine was given, which are `chosen`
+        let refused = || {
+            let shown = &f.shown;
+            refusal(1, tr!("`{shown}` は検査を通っていないので生成しません", "`{shown}` does not pass check, so nothing is generated"), said)
+        };
+        let (path, src, kept) = joined.rulec.prepared(Path::new(&f.shown)).map_err(|_| refused())?;
+        let Ok((rf, rc)) = kept.as_ref() else { return Err(refused()) };
+        // a name the code of the target cannot take stops its package, and the run writes nothing
+        // (rulec's E153, §15.335)
+        let stops = joined.rulec.stops(Path::new(&f.shown), target.key(), &project.root, said);
+        if !stops.is_empty() {
+            let text: String = stops.iter().map(|s| s.text.as_str()).collect();
+            let json = stops.iter().map(|s| crate::check::entry("rulec", s)).collect();
+            let (shown, to) = (&f.shown, target.key());
+            return Err(stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, said));
+        }
         // A file of enums is the module of its types, beside the rules that read them (rulec's
         // §15.212).
-        let (rel, body, used) = rulec::link::with_set(rule_files, || rulec::i18n::with(rulec_lang, || rulec::codegen::package_parts_at(&src, &f.shown, &f.rel, target.key(), &o.module, place.clone())))
-            .map_err(|e| refusal(1, Text::new(e.clone(), e), lang))?;
+        let (rel, body, used) = rulec::link::with_contributions(chosen.clone(), || rulec::i18n::with(rulec_lang, || rulec::codegen::package_parts_of(rf, rc, &src, &path, &f.rel, target.key(), &o.module, place.clone())))
+            .map_err(|e| refusal(1, Text::new(e.clone(), e), said))?;
         units.extend(used);
         named.push(("rules", module_of(&rel), f.rel.clone()));
         kinds.entry(place.dir.clone()).or_default().entry("rules").or_default().push(module_of(&rel));
         files.push((format!("{base}{}rules/{rel}", place.dir), body, Some(f.rel.clone())));
     }
     // koyomi: each dates file's and calendar's module
-    let mut loader = koyomi::calendar::Loader::default();
     for f in project.of(Tool::Koyomi) {
-        let outcome = koyomi::check::check_file(&f.shown, &koyomi::check::Options::default(), &mut loader).map_err(|e| refusal(2, Text::new(e.clone(), e), lang))?;
+        // the file as the check of the run kept it (DESIGN 4.15)
+        let outcome = joined.koyomi.outcome(Path::new(&f.shown)).map_err(|e| refusal(2, ritsu_base::cli::cannot_read(&f.shown, &e), said))?;
         let Some(checked) = outcome.checked.as_ref().filter(|_| !outcome.has_errors()) else {
             let shown = &f.shown;
-            return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
+            return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), said));
         };
         let place = at(&f.rel);
         if place.read_from_library(&place.dir) {
@@ -549,10 +659,10 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             Target::Rust => koyomi::naming::Target::Rust,
         };
         let body = koyomi::codegen::package_module(&outcome, &u, t).map_err(|ds| {
-            let text: String = ds.iter().map(|d| d.render(lang)).collect();
-            let json = ds.iter().map(|d| diagnostic("koyomi", Some(f.rel.clone()), d.to_json(lang))).collect();
+            let text: String = ds.iter().map(|d| d.render(said)).collect();
+            let json = ds.iter().map(|d| diagnostic("koyomi", Some(f.rel.clone()), d.to_json(said))).collect();
             let (shown, to) = (&f.shown, target.key());
-            stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang)
+            stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, said)
         })?;
         // koyomi gen's own path, under its target's directory
         let rel = t.file(&u.alias).split_once('/').map(|(_, r)| r.to_string()).unwrap_or_default();
@@ -563,10 +673,11 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
     // chobo: each book's client, and on PostgreSQL the schema and the functions it calls, on the
     // MySQL family the tables its calls run on
     for f in project.of(Tool::Chobo) {
-        let (src, c) = chobo::check::check_file(Path::new(&f.shown)).map_err(|e| refusal(2, Text::new(e.clone(), e), lang))?;
+        // the book as the check of the run kept it (DESIGN 4.15)
+        let (src, c) = joined.chobo.kept(Path::new(&f.shown)).map_err(|t| refusal(2, t, said))?;
         let Some(book) = c.book.as_ref() else {
             let shown = &f.shown;
-            return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
+            return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), said));
         };
         let stem = Path::new(&f.rel).file_name().map(|n| n.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
         let place = at(&f.rel);
@@ -580,10 +691,10 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
         wanted.extend(o.books.sql());
         for ct in wanted {
             let built = chobo::target::build_in(book, &stem, ct, &origin, Some(&in_package)).map_err(|ds| {
-                let text: String = ds.iter().map(|d| chobo::diag::Show::shown(d, &f.shown, &src, lang)).collect();
-                let json = ds.iter().map(|d| diagnostic("chobo", Some(f.rel.clone()), from_serde(&chobo::diag::Show::json_in(d, &f.shown, &src, lang)))).collect();
+                let text: String = ds.iter().map(|d| chobo::diag::Show::shown(d, &f.shown, &src, said)).collect();
+                let json = ds.iter().map(|d| diagnostic("chobo", Some(f.rel.clone()), from_serde(&chobo::diag::Show::json_in(d, &f.shown, &src, said)))).collect();
                 let (shown, to) = (&f.shown, target.key());
-                stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang)
+                stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, said)
             })?;
             for (rel, body) in built {
                 if Some(ct) != o.books.sql() {
@@ -604,24 +715,26 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             continue;
         }
         let built = with_ports(joined, || -> Result<(Vec<(String, String)>, String), Refusal> {
-            let (src, c) = dandori::check::check_file(Path::new(&f.shown)).map_err(|e| refusal(2, Text::new(e.clone(), e), lang))?;
-            let Some(mut m) = c.model else {
+            // the flow as the check of the run kept it (DESIGN 4.15)
+            let kept = joined.dandori.kept_check(Path::new(&f.shown), &joined.ports()).map_err(|e| refusal(2, e, said))?;
+            let (src, c) = &*kept;
+            let Some(mut m) = c.model.clone() else {
                 let shown = &f.shown;
-                return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
+                return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), said));
             };
             // what the workflow reads beside its own code has to be the project's, for the package to hold it
             let read: Vec<PathBuf> = m.rules.iter().map(|r| r.info.path.clone()).chain(m.books.iter().map(|b| b.path.clone())).collect();
             for p in read {
                 let rel = ritsu_base::paths::from_root(&project.root, &p);
                 if rel.as_ref().and_then(|r| project.holds(r)).is_none() {
-                    let (shown, other) = (&f.shown, rel.unwrap_or_else(|| p.display().to_string()));
+                    let (shown, other) = (&f.shown, rel.unwrap_or_else(|| ritsu_base::paths::show(&p)));
                     return Err(refusal(
                         1,
                         tr!(
                             "`{shown}` が読む {other} が、プロジェクトのファイルにありません。パッケージはプロジェクトのファイルから作るので、そのファイルも ritsu gen に渡してください",
                             "`{shown}` reads {other}, which is not one of the project's files; a package is made of the project's files, so give ritsu gen that file too"
                         ),
-                        lang,
+                        said,
                     ));
                 }
             }
@@ -634,9 +747,9 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             match target.dandori().and_then(|to| dandori::commands::build(&m, to)) {
                 Some(Ok(files)) => Ok((files, dir)),
                 Some(Err(diags)) => {
-                    let json = diags.iter().map(|d| diagnostic("dandori", Some(f.rel.clone()), from_serde(&d.to_json(lang)))).collect();
+                    let json = diags.iter().map(|d| diagnostic("dandori", Some(f.rel.clone()), from_serde(&d.to_json(said)))).collect();
                     let (shown, to) = (&f.shown, target.key());
-                    Err(stopped(dandori::commands::render(&diags, &f.shown, &src, lang), 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang))
+                    Err(stopped(dandori::commands::render(&diags, &f.shown, src, said), 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, said))
                 }
                 None => unreachable!("the targets that hold workflows are dandori's"),
             }
@@ -651,22 +764,22 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
     // sekisho: each gate's code of the requests, which reads the package's rules/ and dates/
     let gates: sekisho::suite::Suite = joined.sekisho().into();
     for f in held(Tool::Sekisho) {
-        let outcome = gate(project, &gates, f, lang)?;
+        let outcome = gate(project, joined, f, said)?;
         let place = at(&f.rel);
         if place.read_from_library(&place.dir) {
             continue;
         }
         let stops = sekisho::spellings::stops(&outcome, target.key());
         if !stops.is_empty() {
-            let text: String = stops.iter().map(|d| d.render(lang)).collect();
-            let json = stops.iter().map(|d| diagnostic("sekisho", Some(f.rel.clone()), d.to_json(lang))).collect();
+            let text: String = stops.iter().map(|d| d.render(said)).collect();
+            let json = stops.iter().map(|d| diagnostic("sekisho", Some(f.rel.clone()), d.to_json(said))).collect();
             let (shown, to) = (&f.shown, target.key());
-            return Err(stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang));
+            return Err(stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, said));
         }
         let to = sekisho::r#gen::Target { name: target.key(), authorizer: o.authorizer, go_module: o.module.clone(), place: place.clone() };
         let made = sekisho::r#gen::generate(&outcome, &to, &f.rel, lang, &gates).map_err(|e| {
             let shown = &f.shown;
-            refusal(2, tr!("`{shown}` から生成できません（{e}）。sekisho の不具合です", "cannot generate from `{shown}` ({e}): a bug in sekisho"), lang)
+            refusal(2, tr!("`{shown}` から生成できません（{e}）。sekisho の不具合です", "cannot generate from `{shown}` ({e}): a bug in sekisho"), said)
         })?;
         for (rel, body) in made {
             // `typescript/authz/refunds.ts` as the package holds it: `authz/refunds.ts`, under its
@@ -687,10 +800,10 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
         for (c, rel, _) in &placed {
             let ds = kaname::r#gen::stops(c, kt);
             if !ds.is_empty() {
-                let text: String = ds.iter().map(|d| d.render(lang)).collect();
-                let json = ds.iter().map(|d| diagnostic("kaname", Some(rel.clone()), d.to_json(lang))).collect();
+                let text: String = ds.iter().map(|d| d.render(said)).collect();
+                let json = ds.iter().map(|d| diagnostic("kaname", Some(rel.clone()), d.to_json(said))).collect();
                 let (shown, to) = (&c.path, target.key());
-                return Err(stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang));
+                return Err(stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, said));
             }
         }
         let made = kaname::r#gen::package_for(&placed, kt, lang, &o.module, o.books.store());
@@ -706,6 +819,11 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
         if target == Target::Rust {
             files.extend(rust::wasm_files(project, &placed, &o.name, lang));
         }
+        // the list of the kinds of request, with their entries that take JSON (ringi's DESIGN 12.2)
+        let listed: Vec<(Rc<kaname::check::Checked>, String)> = placed.iter().map(|(c, rel, _)| (c.clone(), rel.clone())).collect();
+        if let Some((rel, body)) = kinds::file(target, &listed, &o.kinds, o) {
+            files.push((rel, body, None));
+        }
     }
     // the package's one type of each unit they take amounts in (rulec's §15.248); a library's is the
     // type of the library it reads the unit's amounts from, when there is one (DESIGN 17.16)
@@ -718,7 +836,7 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
                     first.type_name().map(|b| (b, first.to_string()))
                 })
                 .collect();
-            l.units.shared(&brands, lang)?
+            l.units.shared(&brands, said)?
         }
         None => BTreeMap::new(),
     };
@@ -758,7 +876,7 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
                 "`{from}` のモジュールの名前 `{name}` は {language} が予約している語なので、パッケージの {kind}/ に置けません。別の名前（別名）にしてください",
                 "`{from}` makes the module `{name}`, a word {language} keeps, which the package cannot hold in its {kind}/; give it another name (an alias)"
             ),
-            lang,
+            said,
         ));
     }
     files.extend(around(target, o, &kinds, &files));
@@ -781,7 +899,7 @@ pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], neit
     // of two modules that make one type would be one workflow
     let mut types: Vec<(String, String, &str)> = Vec::new();
     for f in if neither { Vec::new() } else { project.of(Tool::Dandori) } {
-        let Some(m) = with_ports(joined, || dandori::check::check_file(Path::new(&f.shown)).ok().and_then(|(_, c)| c.model)) else {
+        let Some(m) = joined.dandori.kept_check(Path::new(&f.shown), &joined.ports()).ok().and_then(|kept| kept.1.model.clone()) else {
             continue;
         };
         let (ty, dir) = (dandori::temporal::workflow_type(&m), place_of(project, &f.rel).dir);
@@ -799,8 +917,7 @@ pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], neit
         types.push((ty, dir, &f.shown));
     }
     // what each gate's Cedar declares, each name with the file that declares it
-    let gates: sekisho::suite::Suite = joined.sekisho().into();
-    let declared: Vec<Vec<(String, String)>> = if neither { Vec::new() } else { project.of(Tool::Sekisho).into_iter().filter_map(|f| gate(project, &gates, f, lang).ok()).map(|o| sekisho::r#gen::cedar_names(&o)).collect() };
+    let declared: Vec<Vec<(String, String)>> = if neither { Vec::new() } else { project.of(Tool::Sekisho).into_iter().filter_map(|f| gate(project, joined, f, lang).ok()).map(|o| sekisho::r#gen::cedar_names(&o)).collect() };
     cedar_names_hold(project, &declared, lang)?;
     // a dependency's name is the name of a Python package of the package's (DESIGN 17.3), which a
     // word Python keeps cannot be, and of a module of Rust's, which a word no file can be the module of
@@ -892,21 +1009,34 @@ fn cedar_names_hold(project: &Project, gates: &[Vec<(String, String)>], lang: La
     Ok(())
 }
 
-/// A gate of the project, checked with every language joined: Err when it does not pass, or when
-/// it reads a rule, a dates file or a calendar the project does not hold (the code of its requests
-/// reads them from the package).
-fn gate(project: &Project, suite: &sekisho::suite::Suite, f: &File, lang: Lang) -> Result<sekisho::check::Outcome, Refusal> {
+/// A gate's check, as the engine keeps it, of a gate that could be read.
+struct Gate(Rc<Result<sekisho::check::Outcome, std::io::Error>>);
+
+impl std::ops::Deref for Gate {
+    type Target = sekisho::check::Outcome;
+    fn deref(&self) -> &sekisho::check::Outcome {
+        self.0.as_ref().as_ref().expect("a gate that could be read")
+    }
+}
+
+/// A gate of the project, checked with every language joined, as the check of the run kept it
+/// (DESIGN 4.15): Err when it does not pass, or when it reads a rule, a dates file or a calendar
+/// the project does not hold (the code of its requests reads them from the package).
+fn gate(project: &Project, joined: &Joined, f: &File, lang: Lang) -> Result<Gate, Refusal> {
     let shown = &f.shown;
     // the project's root, which the references of `@guards` are written from (as `ritsu check` gives it)
-    let opts = sekisho::check::Options { root: Some(project.root.clone()), ..sekisho::check::Options::default() };
-    let o = sekisho::check::check_file(shown, suite, &opts).map_err(|e| refusal(2, tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}"), lang))?;
+    let kept = joined.sekisho.outcome_of(&project.root, Path::new(shown));
+    let o = match kept.as_ref() {
+        Ok(o) => o,
+        Err(e) => return Err(refusal(2, ritsu_base::cli::cannot_read(shown, e), lang)),
+    };
     let Some(checked) = o.walked.as_ref().filter(|_| !o.has_errors()) else {
         return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
     };
     for u in checked.gate.uses.iter().filter(|u| matches!(u.kind, sekisho::model::UseKind::Rule | sekisho::model::UseKind::Dates | sekisho::model::UseKind::Calendar)) {
         let rel = ritsu_base::paths::from_root(&project.root, &u.file);
         if rel.as_ref().and_then(|r| project.holds(r)).is_none() {
-            let other = rel.unwrap_or_else(|| u.file.display().to_string());
+            let other = rel.unwrap_or_else(|| ritsu_base::paths::show(&u.file));
             return Err(refusal(
                 1,
                 tr!(
@@ -917,30 +1047,31 @@ fn gate(project: &Project, suite: &sekisho::suite::Suite, f: &File, lang: Lang) 
             ));
         }
     }
-    Ok(o)
+    Ok(Gate(kept.clone()))
 }
 
 /// The Cedar of the project's gates, written once beside the packages (`<out>/cedar/`; sekisho's
 /// DESIGN 5.6): each file by its path under that directory; and, for Verified Permissions, what of
-/// it is over a quota (W401), as `sekisho gen --authorizer avp` says it, and in JSON.
-pub fn cedar(project: &Project, joined: &Joined, authorizer: sekisho::r#gen::Authorizer, lang: Lang) -> Result<(Package, String, Vec<Json>), Refusal> {
+/// it is over a quota (W401), as `sekisho gen --authorizer avp` says it, and in JSON. The Cedar's
+/// `@doc` and heads are in `lang` (`Options::lang`); what the run says, in `in_said`.
+pub fn cedar(project: &Project, joined: &Joined, authorizer: sekisho::r#gen::Authorizer, lang: Lang, in_said: Lang) -> Result<(Package, String, Vec<Json>), Refusal> {
     let gates: sekisho::suite::Suite = joined.sekisho().into();
     let mut files = Vec::new();
     let mut said = String::new();
     let mut warned = Vec::new();
     for f in project.of(Tool::Sekisho) {
-        let outcome = gate(project, &gates, f, lang)?;
+        let outcome = gate(project, joined, f, in_said)?;
         if authorizer == sekisho::r#gen::Authorizer::Avp {
-            for d in sekisho::r#gen::quotas(&outcome, lang) {
-                said.push_str(&d.render(lang));
-                warned.push(diagnostic("sekisho", Some(f.rel.clone()), d.to_json(lang)));
+            for d in sekisho::r#gen::quotas(&outcome, in_said) {
+                said.push_str(&d.render(in_said));
+                warned.push(diagnostic("sekisho", Some(f.rel.clone()), d.to_json(in_said)));
             }
         }
         let place = place_of(project, &f.rel);
         let to = sekisho::r#gen::Target { name: "cedar", authorizer, go_module: String::new(), place: place.clone() };
         let made = sekisho::r#gen::generate(&outcome, &to, &f.rel, lang, &gates).map_err(|e| {
             let shown = &f.shown;
-            refusal(2, tr!("`{shown}` から生成できません（{e}）。sekisho の不具合です", "cannot generate from `{shown}` ({e}): a bug in sekisho"), lang)
+            refusal(2, tr!("`{shown}` から生成できません（{e}）。sekisho の不具合です", "cannot generate from `{shown}` ({e}): a bug in sekisho"), in_said)
         })?;
         // a dependency's under `deps/<name>/` beside the packages too
         for (rel, body) in made {
@@ -948,15 +1079,6 @@ pub fn cedar(project: &Project, joined: &Joined, authorizer: sekisho::r#gen::Aut
         }
     }
     Ok((Package { files }, said, warned))
-}
-
-/// The file of the project, read.
-fn read(project: &Project, f: &File, lang: Lang) -> Result<String, Refusal> {
-    let p = ritsu_base::paths::on_disk(&project.root, &f.rel);
-    ritsu_base::fs::read_to_string(&p).map_err(|e| {
-        let shown = &f.shown;
-        refusal(2, tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}"), lang)
-    })
 }
 
 /// The name a module goes by in an index: its file's name without the extension, or a package's
@@ -1087,6 +1209,9 @@ fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec
                 }
                 out.push((format!("{kind}/index.ts"), sub, None));
             }
+            if files.iter().any(|(p, _, _)| p == "ticket_kinds.ts") {
+                index.push_str("export * as ticket_kinds from \"./ticket_kinds\";\n");
+            }
             if files.iter().any(|(p, _, _)| p == "units.ts") {
                 index.push_str("export * as units from \"./units\";\n");
             }
@@ -1146,6 +1271,9 @@ fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec
             let mut init = format!("{}\"\"\"{what}\"\"\"\n\n", head(Comment::Hash));
             for kind in top(kinds, deps) {
                 init.push_str(&format!("from . import {kind} as {kind}\n"));
+            }
+            if files.iter().any(|(p, _, _)| *p == format!("{n}/ticket_kinds.py")) {
+                init.push_str("from . import ticket_kinds as ticket_kinds\n");
             }
             if files.iter().any(|(p, _, _)| *p == format!("{n}/units.py")) {
                 init.push_str("from . import units as units\n");
@@ -1238,6 +1366,9 @@ fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec
             if files.iter().any(|(p, _, _)| p == "units/units.go") {
                 doc.push_str("//\n// The types of the units its rules and books take amounts in are in units/, one of each unit.\n");
             }
+            if files.iter().any(|(p, _, _)| p == "ticketkinds/ticketkinds.go") {
+                doc.push_str("//\n// The kinds of request of its requests, each with its entries that take the JSON of the contract, are\n// in ticketkinds/.\n");
+            }
             if !imported.is_empty() && o.library.is_none() {
                 doc.push_str("//\n// It imports these modules, which the go.mod of the module it is in requires (`go mod tidy`); these are\n// the versions it is tested with:\n//\n");
                 for m in &imported {
@@ -1290,7 +1421,7 @@ fn top<'a>(kinds: &BTreeMap<&'a str, Vec<String>>, deps: bool) -> Vec<&'a str> {
 /// it is, would be `package go`, which no Go compiler takes. The package then takes the package's
 /// name (`name`, the `--name` of every language), or, when Go keeps that too, the last part with
 /// a `p` before it, as a last part that does not begin with a letter has.
-fn go_package_name(module: &str, name: &str) -> String {
+pub(crate) fn go_package_name(module: &str, name: &str) -> String {
     let last = module.rsplit('/').next().unwrap_or(module);
     let s: String = last.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect();
     let kept = |n: &str| ritsu_emit::words::go::KEYWORDS.contains(&n);
@@ -1307,7 +1438,7 @@ fn good_name(n: &str) -> bool {
 }
 
 /// A Go import path, as a go.mod takes one.
-fn good_module(m: &str) -> bool {
+pub(crate) fn good_module(m: &str) -> bool {
     !m.is_empty() && !m.starts_with('/') && !m.ends_with('/') && m.split('/').all(|p| !p.is_empty() && p != "." && p != ".." && p.chars().all(|c| c.is_ascii_alphanumeric() || "-._~".contains(c)))
 }
 
@@ -1381,24 +1512,80 @@ fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>, library: bool) -> Vec<Path
     out
 }
 
-/// That no two files of the project write one file of the package of `target`.
+/// That no two files of the project write one file of the package of `target` (rulec's §15.334):
+/// one path, two paths that differ only in the case of their letters (one file where the file system
+/// does not tell upper from lower case), or, in Go, one directory, which is one package that would
+/// declare the names of both. A file the package writes for itself (an index, the manifest) is one
+/// of the two where a file of the project writes the same.
 fn written_once(p: &Package, target: &str, lang: Lang) -> Result<(), Refusal> {
-    let mut by: BTreeMap<&str, &Option<String>> = BTreeMap::new();
+    // each path in lower case, and each directory of Go's, with the first file that writes it
+    let mut by: BTreeMap<String, (&str, &Option<String>)> = BTreeMap::new();
+    let mut dirs: BTreeMap<&str, (&str, &Option<String>)> = BTreeMap::new();
     for (rel, _, from) in &p.files {
-        if let Some(prev) = by.insert(rel.as_str(), from) {
-            let (a1, b1) = (prev.clone().unwrap_or_default(), from.clone().unwrap_or_default());
-            let at = format!("{target}/{rel}");
-            return Err(refusal(
-                2,
-                tr!(
-                    "`{a1}` と `{b1}` が、パッケージの同じ {at} を書きます。どちらかの名前を変えてください（規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で）",
-                    "`{a1}` and `{b1}` both write {at} of the package; give one of them another name (a rule or a dates file another alias, a book another name, a workflow a name or a file name in ASCII)"
-                ),
-                lang,
-            ));
+        if let Some(prev) = by.insert(rel.to_lowercase(), (rel.as_str(), from)) {
+            return Err(refusal(2, twice(target, prev, (rel.as_str(), from), None), lang));
+        }
+        if target != "go" || !rel.ends_with(".go") {
+            continue;
+        }
+        let dir = rel.rsplit_once('/').map_or("", |(d, _)| d);
+        match dirs.get(dir) {
+            Some(&prev) if prev.1 != from => return Err(refusal(2, twice(target, prev, (rel.as_str(), from), Some(dir)), lang)),
+            Some(_) => {}
+            None => {
+                dirs.insert(dir, (rel, from));
+            }
         }
     }
     Ok(())
+}
+
+/// How each kind of file of a project takes another name, for a sentence that asks for one.
+const NAMES_JA: &str = "規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で";
+const NAMES_EN: &str = "a rule or a dates file another alias, a book another name, a workflow a name or a file name in ASCII";
+
+/// What [`written_once`] says of two writers of the package of `target`, each as (its path in the
+/// package, the file of the project it is made from, None for the package's own): of one path, of two
+/// that differ only in the case of their letters, or, with `dir`, of two files of one Go package.
+fn twice(target: &str, (p, a): (&str, &Option<String>), (q, b): (&str, &Option<String>), dir: Option<&str>) -> Text {
+    let (at, other) = (format!("{target}/{p}"), format!("{target}/{q}"));
+    if let Some(dir) = dir {
+        let d = if dir.is_empty() { format!("{target}/") } else { format!("{target}/{dir}/") };
+        return match (a, b) {
+            (Some(a), Some(b)) => tr!(
+                "`{a}` と `{b}` が、どちらも Go のパッケージ {d} に書きます（{at} と {other}）。一つのパッケージで同じ名前を二度宣言するので組めません。どちらかの名前を変えてください（{NAMES_JA}）",
+                "`{a}` and `{b}` both write into the Go package {d} of the package ({at} and {other}), which then declares the same names twice and does not build; give one of them another name ({NAMES_EN})"
+            ),
+            (Some(a), None) | (None, Some(a)) => tr!(
+                "`{a}` が、パッケージが自分で書く Go のパッケージ {d} に書きます（{at} と {other}）。`{a}` の名前を変えてください（{NAMES_JA}）",
+                "`{a}` writes into {d}, a Go package the package writes for itself ({at} and {other}); give `{a}` another name ({NAMES_EN})"
+            ),
+            (None, None) => tr!("パッケージが {d} に二度書きます。ritsu の不具合です。報告してください", "the package writes into {d} twice: a bug in ritsu, please report it"),
+        };
+    }
+    match (a, b, p == q) {
+        (Some(a), Some(b), true) => tr!(
+            "`{a}` と `{b}` が、パッケージの同じ {at} を書きます。どちらかの名前を変えてください（{NAMES_JA}）",
+            "`{a}` and `{b}` both write {at} of the package; give one of them another name ({NAMES_EN})"
+        ),
+        (Some(a), None, true) | (None, Some(a), true) => tr!(
+            "`{a}` が、パッケージが自分で書く {at} を書きます。`{a}` の名前を変えてください（{NAMES_JA}）",
+            "`{a}` writes {at}, which the package writes for itself; give `{a}` another name ({NAMES_EN})"
+        ),
+        (Some(a), Some(b), false) => tr!(
+            "`{a}` の {at} と `{b}` の {other} は、大文字と小文字だけが違います。大文字と小文字を区別しないファイルシステムでは一つのファイルなので、どちらかの名前を変えてください（{NAMES_JA}）",
+            "`{a}` writes {at} and `{b}` writes {other} of the package, which differ only in the case of their letters and are one file where the file system does not tell upper from lower case; give one of them another name ({NAMES_EN})"
+        ),
+        (Some(a), None, false) | (None, Some(a), false) => {
+            // the project's file, and the package's own
+            let (mine, own) = if b.is_none() { (&at, &other) } else { (&other, &at) };
+            tr!(
+                "`{a}` の {mine} と、パッケージが自分で書く {own} は、大文字と小文字だけが違います。大文字と小文字を区別しないファイルシステムでは一つのファイルなので、`{a}` の名前を変えてください（{NAMES_JA}）",
+                "`{a}` writes {mine}, which differs only in the case of its letters from {own}, a file the package writes for itself, and is one file with it where the file system does not tell upper from lower case; give `{a}` another name ({NAMES_EN})"
+            )
+        }
+        (None, None, _) => tr!("パッケージが {at} を二度書きます。ritsu の不具合です。報告してください", "the package writes {at} twice: a bug in ritsu, please report it"),
+    }
 }
 
 /// The Lean of the project's modules of kaname (kaname's DESIGN 38.4), for `<out>/lean/` at `dir`:
@@ -1415,15 +1602,46 @@ fn lean(project: &Project, modules: &[(Rc<kaname::check::Checked>, String)], dir
     Package { files: files.into_iter().map(|(p, text, from)| (p.to_string_lossy().replace('\\', "/"), text, from)).collect() }
 }
 
+/// What `--target requests` writes for the project's kinds of request (ringi's DESIGN 12.2): the
+/// requests whose code the packages hold, each described by ringi; nothing when there is none.
+fn requests(project: &Project, joined: &Joined, laid: &ritsu_project::requests::Laid, screens: Option<&ringi::screens::Given>, lang: Lang) -> Result<Package, Refusal> {
+    let files: Vec<PathBuf> = laid.kinds.iter().map(|k| PathBuf::from(&k.request.shown)).collect();
+    joined.ringi.requests_with(&files, &project.root, screens).map(|files| Package { files }).map_err(|e| {
+        let (why_ja, why_en) = (e.ja, e.en);
+        refusal(2, tr!("申請の種類を書き出せません（{why_ja}）。ringi の不具合です", "cannot describe the kinds of request ({why_en}): a bug in ringi"), lang)
+    })
+}
+
+/// Each laid kind's `values.rule` as rulec writes it in JavaScript for a page (one module, with the
+/// enums it reads inside it), by the kind's ASCII name: what the screens' `functions.js` holds
+/// (ringi's DESIGN 13.7). Made after the laid files are checked, from what rulec kept of their
+/// checks, so that no file is checked again (DESIGN 4.15); in English whatever the run's language,
+/// as the screens' files are the same in every run. A kind whose form works out nothing has no
+/// `values.rule`.
+fn rules_in_javascript(joined: &Joined, laid: &ritsu_project::requests::Laid) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for k in &laid.kinds {
+        let values = ringi::lower::dir_of(&k.request.shown).join("values.rule");
+        if !laid.files.iter().any(|f| f.tool == Tool::Rulec && Path::new(&f.shown) == values) {
+            continue;
+        }
+        let Ok(js) = joined.rulec.page_javascript(&values, Lang::En) else { continue };
+        out.push((k.name.clone(), js));
+    }
+    out
+}
+
 /// Whether the directory of a package is a crate's: the `target/` of what cargo writes beside it.
 fn target_of_a_crate(dir: &Path) -> bool {
     dir.join("Cargo.toml").is_file()
 }
 
 /// Whether a file begins with the head of a file ritsu's generators write (DESIGN 9.2): in a
-/// comment, or in the `"//"` key of a library's package.json (DESIGN 17.16), JSON having no
-/// comment; or a package.json of the app's form (9.3), whose `description`, on its fourth line,
-/// ends with the head.
+/// comment (Markdown's too), or as the string of a key on one of the first lines of a JSON file,
+/// JSON having no comment (the `"//"` of a library's package.json, DESIGN 17.16; the `"//"`,
+/// `"$comment"`, `"x-ritsu-generated"` or, for the screens' catalog, `"description"` of what
+/// `--target requests` writes); or a package.json of
+/// the app's form (9.3), whose `description`, on its fourth line, ends with the head.
 fn generated_here(p: &Path) -> bool {
     /// The string of a key on a line of its own, `"<key>": "<string>"`, with or without a comma after.
     fn string<'a>(line: &'a str, key: &str) -> Option<&'a str> {
@@ -1433,7 +1651,10 @@ fn generated_here(p: &Path) -> bool {
     let Ok(text) = std::fs::read_to_string(p) else { return false };
     let head = |l: &str| ["rulec", "koyomi", "chobo", "dandori", "kaname", "sekisho", "ritsu"].iter().any(|t| l.contains(&format!("Code generated by {t} ")) && l.ends_with("DO NOT EDIT."));
     let lines: Vec<&str> = text.lines().take(4).collect();
-    lines.iter().take(3).any(|l| head(string(l, "//").unwrap_or(l))) || (p.file_name().is_some_and(|n| n == "package.json") && lines.get(3).and_then(|l| string(l, "description")).is_some_and(head))
+    let markdown = |l: &str| l.trim().strip_prefix("<!-- ").and_then(|x| x.strip_suffix(" -->")).map(str::to_string);
+    let keyed = |l: &str| ["//", "$comment", "x-ritsu-generated", "description"].iter().find_map(|k| string(l, k)).map(str::to_string);
+    lines.iter().take(3).any(|l| head(&keyed(l).or_else(|| markdown(l)).unwrap_or_else(|| l.to_string())))
+        || (p.file_name().is_some_and(|n| n == "package.json") && lines.get(3).and_then(|l| string(l, "description")).is_some_and(head))
 }
 
 /// Write the package into `dir`, or under `check` say what differs from it.
@@ -1458,18 +1679,30 @@ fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: boo
             continue;
         }
         if let Some(parent) = path.parent()
-            && std::fs::create_dir_all(parent).is_err()
+            && let Err(e) = ritsu_base::fs::create_dir_all(parent)
         {
-            let d = parent.display().to_string();
-            return Err(refusal(2, tr!("`{d}` を作れません", "cannot create `{d}`"), lang));
+            return Err(refusal(2, ritsu_base::cli::cannot_create(&parent.display().to_string(), &e), lang));
         }
-        if std::fs::write(&path, body).is_err() {
-            return Err(refusal(2, tr!("`{shown}` に書けません", "cannot write `{shown}`"), lang));
+        if let Err(e) = ritsu_base::fs::write(&path, body) {
+            return Err(refusal(2, ritsu_base::cli::cannot_write(&shown, &e), lang));
         }
         st.note(target, &shown, from, "written");
         st.written.push(shown);
     }
-    for p in leftovers(dir, &planned, library) {
+    let mut left = leftovers(dir, &planned, library);
+    if target == REQUESTS {
+        // a kind's vectors, and those of its entry `worked`, have no head to tell them by: they go
+        // with the kind's description
+        let theirs: Vec<PathBuf> = left
+            .iter()
+            .filter_map(|p| Some(p.strip_prefix(dir.join("types")).ok()?.to_str()?.strip_suffix(".json")?.to_string()))
+            .flat_map(|stem| [dir.join("vectors").join(format!("{stem}.jsonl")), dir.join("vectors").join("worked").join(format!("{stem}.jsonl"))])
+            .filter(|v| v.is_file() && !planned.contains(v))
+            .collect();
+        left.extend(theirs);
+        left.sort();
+    }
+    for p in left {
         let shown = p.display().to_string();
         if check {
             st.note(target, &shown, &None, "left");
@@ -1477,6 +1710,13 @@ fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: boo
         } else if std::fs::remove_file(&p).is_ok() {
             st.note(target, &shown, &None, "removed");
             st.removed.push(shown);
+            // the screens of a kind no longer given have a directory of their own
+            // (`a2ui/<name>/`): it goes with its last file
+            if target == REQUESTS
+                && let Some(parent) = p.parent().filter(|d| d.parent() == Some(dir.join("a2ui").as_path()))
+            {
+                let _ = std::fs::remove_dir(parent);
+            }
         }
     }
     Ok(())
@@ -1556,18 +1796,19 @@ fn for_target(o: &Options, libraries: &[(Target, library::Library)], t: Target) 
     }
 }
 
-/// `ritsu gen [<path>...] [--target typescript|python|go|rust|cedar|lean]... [--out <dir>] [--check]
+/// `ritsu gen [<path>...] [--target typescript|python|go|rust|cedar|lean|requests]... [--out <dir>] [--check]
 /// [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>]
 /// [--library [--embed <name>]...] [--root <dir>] [--format json]`: the exit code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
     let table = cli::table();
     let cmd = table.command("gen").expect("gen is in the table");
-    let asked = args.iter().enumerate().find_map(|(i, x)| if x == "--lang" { args.get(i + 1).cloned() } else { x.strip_prefix("--lang=").map(str::to_string) });
+    let asked = Lang::flag_of(args);
     let lang = if asked.is_some() { Lang::pick(asked.as_deref(), "RITSU_LANG") } else { lang };
+    // what the packages say is in `--lang`, else English, whatever the environment says (DESIGN 4.1)
+    let made = Lang::made(asked.as_deref());
     let json = asks_json(args);
     let mut answer = Answer { root: None, check: args.iter().any(|a| a == "--check"), out: "generated".to_string(), targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
-    // A rule's `range from koyomi` is read through koyomi's port here too, as in `ritsu rulec` (DESIGN 7.5).
-    let code = rulec::days::with(Some(ritsu_project::Joined::dates()), || generate(args, &table, cmd, lang, json, &mut answer));
+    let code = run_of(args, &table, cmd, lang, made, json, &mut answer);
     if json && !answer.silent {
         println!("{}", answer.json(code).pretty());
     }
@@ -1575,7 +1816,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
 }
 
 /// What `ritsu gen --check` comes to for the module whose root is `root`, for `ritsu impact`.
-pub(crate) enum Fresh {
+pub enum Fresh {
     /// Every file of the targets of its `target` line is what `ritsu gen` writes.
     Same,
     /// Those that are not, as the run writes them.
@@ -1585,15 +1826,19 @@ pub(crate) enum Fresh {
 }
 
 /// `ritsu gen --check`, with its `target` line and every default, of the module whose root is `root`
-/// (the packages under `<root>/generated`), on the disk. Nothing is written.
-pub(crate) fn fresh(root: &Path, lang: Lang) -> Fresh {
+/// (the packages under `<root>/generated`), on the disk. Nothing is written. A package's comments
+/// are in the language of the run that wrote it, so it is held to what a run in that language writes
+/// ([`written_in`]); where that cannot be told, to what `ritsu gen` with no `--lang` writes,
+/// English, whatever the environment says. `lang` is the language of what it says.
+pub fn fresh(root: &Path, lang: Lang) -> Fresh {
+    let made = written_in(&root.join("generated")).unwrap_or_else(|| Lang::made(None));
     let table = cli::table();
     let cmd = table.command("gen").expect("gen is in the table");
     let at = root.to_string_lossy().into_owned();
     let out = root.join("generated").to_string_lossy().into_owned();
     let args: Vec<String> = vec![at.clone(), "--root".into(), at, "--check".into(), "--out".into(), out.clone(), "--format".into(), "json".into()];
     let mut answer = Answer { root: None, check: true, out, targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
-    let code = generate(&args, &table, cmd, lang, true, &mut answer);
+    let code = run_of(&args, &table, cmd, lang, made, true, &mut answer);
     match (code, answer.error) {
         (0, _) => Fresh::Same,
         (_, Some((_, why))) => Fresh::Unknown(Text::same(why)),
@@ -1602,11 +1847,87 @@ pub(crate) fn fresh(root: &Path, lang: Lang) -> Fresh {
     }
 }
 
+/// The language the generated files under `dir` were written in, by the line of what each is made
+/// from (the second, ritsu-emit's `header`): Japanese where one says it in Japanese (`もと:`), else
+/// English where one says it in English (`Source:`). A run in Japanese writes some files' line in
+/// English (a workflow's), one in English none in Japanese. None where no file says it.
+fn written_in(dir: &Path) -> Option<Lang> {
+    let mut en = false;
+    let mut dirs = vec![dir.to_path_buf()];
+    while let Some(d) = dirs.pop() {
+        let Ok(entries) = ritsu_base::fs::read_dir(&d) else { continue };
+        for e in entries.flatten() {
+            let Ok(kind) = e.file_type() else { continue };
+            if kind.is_dir() {
+                dirs.push(e.path());
+                continue;
+            }
+            if !kind.is_file() {
+                continue;
+            }
+            let Ok(bytes) = ritsu_base::fs::read(e.path()) else { continue };
+            let text = String::from_utf8_lossy(&bytes[..bytes.len().min(4096)]).into_owned();
+            let Some(second) = text.lines().nth(1) else { continue };
+            // after the comment's mark: `//`, `#`, `--`, ` *`
+            let said = second.trim_start_matches(['/', '#', '-', '*', ' ']);
+            if said.starts_with("もと: ") {
+                return Some(Lang::Ja);
+            }
+            en |= said.starts_with("Source: ");
+        }
+    }
+    en.then_some(Lang::En)
+}
+
+/// `ritsu gen` with `args`, printing nothing, for `ritsu ringi init`, which writes what it writes
+/// once beside its own files: Err with why nothing was written.
+pub(crate) fn quietly(args: &[String], lang: Lang) -> Result<(), Text> {
+    let table = cli::table();
+    let cmd = table.command("gen").expect("gen is in the table");
+    // `--lang` of the arguments is the run's language, and the language of what it writes, as in
+    // [`command`]
+    let asked = Lang::flag_of(args);
+    let lang = if asked.is_some() { Lang::pick(asked.as_deref(), "RITSU_LANG") } else { lang };
+    let mut answer = Answer { root: None, check: false, out: String::new(), targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
+    match (run_of(args, &table, cmd, lang, Lang::made(asked.as_deref()), true, &mut answer), answer.error) {
+        (0, _) => Ok(()),
+        (_, Some((_, why))) => Err(Text::same(why)),
+        _ => Err(tr!("`ritsu gen` が生成できませんでした", "`ritsu gen` could not generate")),
+    }
+}
+
+/// The version of the Go module `m` tested here, and the `go` line of its go.mod at that version
+/// (`GO_MODULES`), for the go.mod `ritsu ringi init` writes; None for a module not listed.
+pub(crate) fn go_module(m: &str) -> Option<(&'static str, &'static str)> {
+    GO_MODULES.iter().find(|(name, ..)| *name == m).map(|(_, v, go)| (*v, *go))
+}
+
+/// The `go` line of a module whose requirements' go.mod files have the `go` lines `asked`: the
+/// latest of them, and no earlier than the oldest Go release supported (`GO_FLOOR`).
+pub(crate) fn go_line_of<'a>(asked: impl IntoIterator<Item = &'a str>) -> &'a str {
+    library::go_line(GO_FLOOR, asked)
+}
+
+/// [`generate`] as a run of ritsu's, for [`command`] and [`fresh`] alike: a rule's `range from
+/// koyomi` is read through koyomi's port, as in `ritsu rulec` (DESIGN 7.5), and rulec reads in the
+/// run's language, as in `ritsu check` (`check::run_with`), so the checks the run keeps answer what
+/// is asked of the rules after them, and each file is checked once. `lang` is the language of what
+/// the run prints, `made_lang` the language of what the packages say (DESIGN 4.1).
+fn run_of(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::cli::Cmd, lang: Lang, made_lang: Lang, json: bool, answer: &mut Answer) -> u8 {
+    let rl = if lang == Lang::Ja { rulec::i18n::Lang::Ja } else { rulec::i18n::Lang::En };
+    rulec::days::with(Some(ritsu_project::Joined::dates()), || rulec::i18n::with(rl, || generate(args, table, cmd, lang, made_lang, json, answer)))
+}
+
 /// [`command`], the answer kept for the JSON as it goes.
-fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::cli::Cmd, lang: Lang, json: bool, answer: &mut Answer) -> u8 {
+fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::cli::Cmd, lang: Lang, made_lang: Lang, json: bool, answer: &mut Answer) -> u8 {
     // Nothing generated: the text says why on the standard error; the JSON keeps it.
+    // What stops the run before its work (2) is said on the standard error with JSON too, as every
+    // command of the toolchain says it (DESIGN 6.2, item 10).
     let say = |r: Refusal, answer: &mut Answer| -> u8 {
         if json {
+            if r.code == 2 {
+                eprint!("{}", r.said);
+            }
             answer.diagnostics.extend(r.diagnostics);
             answer.error = Some((r.code, r.message));
         } else {
@@ -1622,7 +1943,8 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         print!("{}", table.help_cmd(cmd, lang));
         return 0;
     }
-    answer.out = a.get("--out").unwrap_or("generated").to_string();
+    // the directory as the run holds a path a flag takes (DESIGN 4.15): `--out ./generated` is `generated`
+    answer.out = ritsu_base::paths::fold_given(a.get("--out").unwrap_or("generated"));
     // `--library` (DESIGN 17.16): the whole module, named by its ritsu.mod
     let library = a.has("--library");
     let embed: Vec<String> = a.all("--embed").into_iter().map(str::to_string).collect();
@@ -1671,7 +1993,7 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     }
     let module = a.get("--module").unwrap_or(&name).to_string();
     if !good_module(&module) {
-        return say(refusal(2, tr!("`--module {module}` は Go の import のパスになりません", "`--module {module}` is not a Go import path"), lang), answer);
+        return say(refusal(2, tr!("`--module {module}` は Go のモジュールのパスにできません。`/` で区切った、英数字と `-._~` だけの部分で書きます（`example.com/acme/approvals`）", "`--module {module}` cannot be a Go module's path: write it as parts of letters, digits and `-._~`, between `/` (`example.com/acme/approvals`)"), lang), answer);
     }
     let books = match a.get("--books") {
         Some("tigerbeetle") => Books::TigerBeetle,
@@ -1682,6 +2004,8 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     // the targets (DESIGN 9.6): `--target`'s, else the `target` line of the module's ritsu.mod
     let given = in_order(&a.all("--target"));
     answer.targets = given.clone();
+    // the paths the run holds are written the way the first path given was (DESIGN 4.15)
+    let _way = ritsu_base::paths::run_from(a.pos.first().map_or(".", String::as_str));
     let project = match Project::load(&a.pos, a.get("--root")) {
         Ok(p) => p,
         Err(e) => return say(refusal(2, e, lang), answer),
@@ -1692,9 +2016,8 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     // generated (exit 1).
     match project.tree.clone().as_deref() {
         Some(Err(Problem::Stop(said))) => {
-            let head = if lang == Lang::Ja { "エラー" } else { "error" };
             for t in said {
-                eprintln!("{head}: {}", t.get(lang));
+                eprintln!("{}", ritsu_base::cli::refusal(t.get(lang), lang));
             }
             answer.silent = true;
             return 2;
@@ -1729,6 +2052,36 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     answer.targets = names.clone();
     let cedar_given = names.contains(&CEDAR);
     let lean_given = names.contains(&LEAN);
+    let requests_given = names.contains(&REQUESTS);
+    // the screens' catalog (ringi's DESIGN 13.2): its ID is a name for the project's catalog, written
+    // as a URL the project owns, the same in every environment, which only the project knows:
+    // `--catalog`'s, else the `catalog` line of the module's ritsu.mod; with neither, `requests`
+    // writes nothing
+    let catalog_line = match project.tree.as_deref() {
+        Some(Ok(tree)) => tree.main().manifest.catalog.as_ref().map(|c| c.value.clone()),
+        _ => None,
+    };
+    let catalog_given = a.get("--catalog").map(str::to_string);
+    if catalog_given.is_some() && !requests_given {
+        return say(refusal(2, tr!("`--catalog` は `--target requests` と一緒に使います", "`--catalog` goes with `--target requests`"), lang), answer);
+    }
+    if let Some(t) = catalog_given.as_deref().and_then(ritsu_base::modules::manifest::catalog_problem) {
+        return say(refusal(2, tr!("`--catalog` の値が使えません: ", "`--catalog` cannot be used: ").then(&t), lang), answer);
+    }
+    let catalog = catalog_given.or(catalog_line).filter(|_| requests_given);
+    if requests_given && catalog.is_none() {
+        return say(
+            refusal(
+                2,
+                tr!(
+                    "`requests` は画面のテンプレートも書くので、テンプレートが指すカタログの ID が要ります。`--catalog <url>` か、モジュールなら ritsu.mod の `catalog \"<url>\"` の行で渡してください。ID は、このプロジェクトのカタログを指す名前で、自分の持つ URL の形で書きます。`requests/a2ui/catalog.json` を配る場所と同じにしておくと分かりやすいですが、同じである要はありません。環境が変わっても同じ値を使ってください（生成物は環境ごとに作り分けません）",
+                    "`requests` writes the screens too, which need the ID of the catalog they name: give it with `--catalog <url>`, or in a module with the line `catalog \"<url>\"` of its ritsu.mod. The ID is a name for this project's catalog, written as a URL you own. The place `requests/a2ui/catalog.json` is served at is the easiest to follow, but the two need not be the same. Use the same value in every environment (what is generated is not made apart for each)"
+                ),
+                lang,
+            ),
+            answer,
+        );
+    }
     let targets: Vec<Target> = names.iter().filter_map(|n| Target::parse(n)).collect();
     // a library of Rust has three things to decide first (DESIGN 17.16): `--target`'s and the line's alike
     if library && targets.contains(&Target::Rust) {
@@ -1744,35 +2097,63 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     } else {
         project
     };
-    if [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Kaname, Tool::Sekisho].iter().all(|t| project.of(*t).is_empty()) {
-        let given = project.given.join(" ");
-        return say(
-            refusal(
-                2,
-                tr!(
-                    "{given} には、パッケージにするファイル（.rule、.cal、.book、.flow、.kn、.gate）がありません",
-                    "there is no file to make a package of (.rule, .cal, .book, .flow, .kn, .gate) in {given}"
-                ),
-                lang,
-            ),
-            answer,
-        );
+    if [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Kaname, Tool::Sekisho, Tool::Ringi].iter().all(|t| project.of(*t).is_empty()) {
+        // in the words every command of the toolchain says a path with none of its files under it
+        // (DESIGN 6.2, item 10): the files a package is made of
+        let given = project.given.join("`, `");
+        return say(refusal(2, ritsu_base::cli::no_files_under(&given, &[".rule", ".cal", ".book", ".flow", ".kn", ".gate", ".ringi"]), lang), answer);
     }
     let joined = Joined::new();
+    // the lists of each version of the organization do not stop a package (ringi's DESIGN 12.3): its
+    // code takes the organization at each event; what they say is said in a line for each request
+    joined.ringi.keep_listing_apart();
+    // the server's API the run writes is written again from the requests as they are: a flow that
+    // reads it is not held to it as it was (X20, ringi's DESIGN 9.3), or the run that brings it up
+    // to date would stop for its being out of date. It is held to the API the run writes instead,
+    // laid where the run writes it before the check ([`api_laid`])
+    let api_doc = ritsu_base::paths::absolute(&Path::new(&answer.out).join(REQUESTS).join("openapi.json"));
+    if requests_given {
+        joined.ringi.set_writes_api(&api_doc);
+    }
+    // the files the requests are lowered to are asked of rulec and koyomi in the run's language
+    // first, as the run asks of them later: each is checked once
+    joined.ringi.set_lang(lang);
     // The contributions are merged from the rulec files `ritsu check` reads for the same paths: in a
     // check of a whole module, every module's of the tree (DESIGN 17.8). They are set before any
     // rule is read.
     let whole = project.clone().with_dependencies();
     let contributions: Vec<String> = whole.of(Tool::Rulec).iter().map(|f| f.shown.clone()).collect();
     joined.rulec.set_project(contributions.clone());
+    // the API `requests` writes, laid where it writes it for every check and every target made
+    // (not for what is written): a flow that reads it is held to it as it is written. It is made
+    // before the run reads anything else: what a gate names is what its check found, and its check
+    // reads the flows of its workflows, which the run reads on the API laid
+    let api = if requests_given { api_laid(&project, &joined, &api_doc) } else { None };
     // In a module, the files of the dependencies the files given reach go into the package with them.
-    let project = project.reached(&joined);
+    let project = within(&api, || project.reached(&joined));
     // what the checks across the borders come to at the calls of the modules of kaname, once
     let verdicts = Rc::new(ritsu_cross::ProgramVerdicts::new(&joined));
-    if let Err(r) = checked(&project, &whole, &joined, &verdicts, lang) {
+    if let Err(r) = within(&api, || checked(&project, &whole, &joined, &verdicts, None, None, lang)) {
         return say(r, answer);
     }
-    let modules = match kaname_modules(&project, &joined, &verdicts, lang) {
+    // the files the requests are lowered to, the glue of each and the machine of their tickets, laid
+    // over the files the languages read (ringi's DESIGN 12.3): checked as the project's own files
+    // are, then made into the packages with them
+    let laid = within(&api, || project.laid(&joined));
+    // what the screens of the kinds are made with (ringi's DESIGN 13): the catalog's ID, which their
+    // check reads, and each kind's `values.rule` in JavaScript, made once the laid files are checked
+    let screens = catalog.map(|catalog| ringi::screens::Given { catalog, rules: Vec::new() });
+    let project = if laid.files.is_empty() {
+        project
+    } else {
+        let only = project.only_laid(&laid);
+        if let Err(r) = over(&laid, &api, || checked(&only, &only, &joined, &verdicts, Some(&laid), screens.as_ref(), lang)) {
+            return say(r, answer);
+        }
+        project.with_laid(&laid)
+    };
+    let screens = screens.map(|given| ringi::screens::Given { rules: over(&laid, &api, || rules_in_javascript(&joined, &laid)), ..given });
+    let modules = match over(&laid, &api, || kaname_modules(&project, &joined, &verdicts, lang)) {
         Ok(m) => m,
         Err(r) => return say(r, answer),
     };
@@ -1780,19 +2161,19 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     // the workflows' and the gates' names only when a target given holds them (neither Rust's crate
     // nor the Lean does)
     let neither = !cedar_given && targets.iter().all(|t| !t.holds_flows_and_gates());
-    if let Err(r) = modules_hold(&project, &joined, &targets, neither, lang) {
+    if let Err(r) = over(&laid, &api, || modules_hold(&project, &joined, &targets, neither, lang)) {
         return say(r, answer);
     }
     // each language's library: where it reads each module, and what it says it depends on
     let libraries = if library {
-        match library::plan(&project, &whole, &joined, &verdicts, &contributions, &targets, &embed, lang) {
+        match over(&laid, &api, || library::plan(&project, &whole, &joined, &verdicts, &contributions, &targets, &embed, lang)) {
             Ok(l) => l,
             Err(r) => return say(r, answer),
         }
     } else {
         Vec::new()
     };
-    let o = Options { name, module, books, authorizer, lang, library: None };
+    let o = Options { name, module, books, authorizer, lang: made_lang, said: lang, library: None, kinds: laid.kinds.clone() };
     let out = PathBuf::from(&answer.out);
     let check = a.has("--check");
     // Every target given is made before any is written (DESIGN 9.6): one that cannot be made stops
@@ -1801,7 +2182,7 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     let mut made: Vec<(PathBuf, &'static str, Package, bool)> = Vec::new();
     for t in targets.iter().copied() {
         let o = for_target(&o, &libraries, t);
-        let p = match package(&project, &contributions, &joined, &modules, t, &o) {
+        let p = match over(&laid, &api, || package(&project, &joined, &modules, t, &o)) {
             Ok(p) => p,
             Err(r) => return say(r, answer),
         };
@@ -1812,7 +2193,7 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     }
     // the gates' Cedar, once beside the packages, when `cedar` is given (DESIGN 9.6)
     if cedar_given {
-        let (p, warnings, warned) = match cedar(&project, &joined, authorizer, lang) {
+        let (p, warnings, warned) = match cedar(&project, &joined, authorizer, made_lang, lang) {
             Ok(p) => p,
             Err(r) => return say(r, answer),
         };
@@ -1825,13 +2206,39 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     }
     // the Lean of the modules of kaname, once beside the packages, when `lean` is given
     if lean_given {
-        let p = lean(&project, &modules, &out.join(LEAN));
+        let p = over(&laid, &api, || lean(&project, &modules, &out.join(LEAN)));
         if let Err(r) = written_once(&p, LEAN, lang) {
             return say(r, answer);
         }
         made.push((out.join(LEAN), LEAN, p, false));
     }
-    // what a package of Rust leaves out, said once the run is sure to write it
+    // the kinds of request apart from any language, once beside the packages, when `requests` is
+    // given (ringi's DESIGN 12.2)
+    if requests_given {
+        let p = match over(&laid, &api, || requests(&project, &joined, &laid, screens.as_ref(), lang)) {
+            Ok(p) => p,
+            Err(r) => return say(r, answer),
+        };
+        made.push((out.join(REQUESTS), REQUESTS, p, false));
+    }
+    // the requests whose lists of the versions of the organization have errors, and a request whose
+    // code is not written yet, said once the run is sure to write the rest
+    if !targets.is_empty() {
+        let (said, warned) = listings_said(&project, &joined, &laid, lang);
+        if json {
+            answer.diagnostics.extend(warned);
+        } else {
+            print!("{said}");
+        }
+    }
+    if !laid.left.is_empty() && (!targets.is_empty() || requests_given) {
+        let (said, warned) = requests_left_out(&laid, !targets.is_empty(), requests_given, lang);
+        if json {
+            answer.diagnostics.extend(warned);
+        } else {
+            print!("{said}");
+        }
+    }
     if targets.contains(&Target::Rust) {
         let (said, warned) = rust::left_out(&project, lang);
         if json {
@@ -1913,6 +2320,186 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     u8::from(check && !(st.missing.is_empty() && st.stale.is_empty() && st.left.is_empty()))
 }
 
+/// `f`, with the files the requests are lowered to laid over the files the languages read
+/// ([`ritsu_project::requests::Laid`]); as it is when none is laid, so that a project with no request
+/// reads its files as it did before there were requests.
+fn over<R>(laid: &ritsu_project::requests::Laid, api: &Option<Rc<dyn ritsu_base::fs::Files>>, f: impl FnOnce() -> R) -> R {
+    if !laid.files.is_empty() {
+        // laid over the API the run writes, when it is laid ([`api_laid`])
+        ritsu_base::fs::with(laid.overlay.clone(), f)
+    } else {
+        within(api, f)
+    }
+}
+
+/// `f`, with the API the run writes laid where it writes it ([`api_laid`]); as it is when none is.
+fn within<R>(api: &Option<Rc<dyn ritsu_base::fs::Files>>, f: impl FnOnce() -> R) -> R {
+    match api {
+        Some(files) => ritsu_base::fs::with(files.clone(), f),
+        None => f(),
+    }
+}
+
+/// The server's API `--target requests` writes (`<out>/requests/openapi.json`, ringi's DESIGN
+/// 9.3), made from the requests before the check and laid where the run writes it, so that what
+/// reads it (`use openapi`: a flow, a gate) is checked against the API the run writes, on the first
+/// run too, when it is not written yet. The API holds what the requests take (their forms, the
+/// operations of their tickets) and nothing of their flows and gates: it is made with every flow
+/// and every gate taken to pass, unread (ringi's `Engine::set_unread`), as one that reads it
+/// cannot pass before it is there: a flow a request reads (`use flow`), a gate it reads (`use
+/// gate`), and a workflow such a gate names (`workflow … from`). They are checked on it once it is
+/// laid. It is made by the run's own ringi, which keeps what it checks so: a request and the data it
+/// reads are checked once in the run (DESIGN 4.15), and again only where a flow or a gate it reads
+/// does not pass. None when nothing the project reaches reads the API the run writes
+/// ([`reads_the_api`]), or no request passes.
+fn api_laid(project: &Project, joined: &Joined, doc: &Path) -> Option<Rc<dyn ritsu_base::fs::Files>> {
+    if !reads_the_api(project, joined, doc) {
+        return None;
+    }
+    let files: Vec<PathBuf> = project.of(Tool::Ringi).iter().map(|f| PathBuf::from(&f.shown)).collect();
+    // the run's ringi, told the run's language, the API it writes and to keep the lists apart before
+    // (`generate`), reading no flow and no gate until the API is made
+    joined.ringi.set_unread(true);
+    let requests: &dyn ritsu_ports::Requests = joined.ringi.as_ref();
+    let passing: Vec<PathBuf> = files.iter().filter(|f| matches!(requests.openapi(std::slice::from_ref(*f), &project.root), Ok(ritsu_ports::Found::Value(_)))).cloned().collect();
+    let made = if passing.is_empty() { None } else { requests.openapi(&passing, &project.root).ok() };
+    joined.ringi.set_unread(false);
+    let Some(ritsu_ports::Found::Value(api)) = made else { return None };
+    let mut ov = ritsu_base::fs::Overlay::new(ritsu_base::fs::current());
+    ov.put(doc, api);
+    Some(Rc::new(ov))
+}
+
+/// Whether a flow or a gate the project reaches reads the API the run writes (`doc`, by `use
+/// openapi`): one of the project, a flow a request or a shared route reads (`use flow`), a gate they
+/// read (`use gate`, and the gates it reads), a workflow such a gate names (`workflow … from`), or a
+/// flow such a flow runs as its child. One that reads another API leaves the run as it is. They are
+/// read as each file is written (ringi's and dandori's references, a flow's and a gate's `use` lines
+/// with their parsers), with no file checked: a check of what reads the API the run writes, before
+/// the API is laid, would be kept for the run.
+fn reads_the_api(project: &Project, joined: &Joined, doc: &Path) -> bool {
+    let root = &project.root;
+    let doc = ritsu_base::paths::opened(doc);
+    // the file a `use` line of the file at `rel` writes, as the system opens it (the root aside: a
+    // flow may read the API where the run writes it outside the root)
+    let is_doc = |rel: &str, written: &str| {
+        let from = ritsu_base::paths::on_disk(root, rel);
+        ritsu_base::paths::opened(&from.parent().unwrap_or(root).join(written)) == doc
+    };
+    let tools = [Tool::Ringi, Tool::Dandori, Tool::Sekisho];
+    let mut todo: Vec<(Tool, String)> = tools.iter().flat_map(|t| project.of(*t)).map(|f| (f.tool, f.rel.clone())).collect();
+    let mut seen: BTreeSet<(Tool, String)> = BTreeSet::new();
+    while let Some((tool, rel)) = todo.pop() {
+        if !seen.insert((tool, rel.clone())) {
+            continue;
+        }
+        if tool == Tool::Sekisho {
+            let (apis, next) = gate_reads(root, &rel);
+            if apis.iter().any(|w| is_doc(&rel, w)) {
+                return true;
+            }
+            todo.extend(next);
+            continue;
+        }
+        if tool == Tool::Dandori && flow_apis(root, &rel).iter().any(|w| is_doc(&rel, w)) {
+            return true;
+        }
+        let Some(Ok(named)) = joined.index.references(tool, root, &rel) else { continue };
+        todo.extend(named.into_iter().filter(|r| tools.contains(&r.target.tool) && r.target.items.is_empty()).map(|r| (r.target.tool, r.target.path)));
+    }
+    false
+}
+
+/// The OpenAPI documents the flow at `rel` reads (`use openapi`), as written, read with dandori's
+/// parser.
+fn flow_apis(root: &Path, rel: &str) -> Vec<String> {
+    let Ok(src) = ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(root, rel)) else { return Vec::new() };
+    let Ok(prog) = dandori::syntax::parse(&src) else { return Vec::new() };
+    prog.apis.into_iter().filter(|a| matches!(a.kind, dandori::apis::ApiKind::OpenApi)).map(|a| a.path).collect()
+}
+
+/// The OpenAPI documents the gate at `rel` reads (`use openapi`), as written; and the gates it reads
+/// (`use gate`) and the `.flow` of each workflow it names (`workflow … from`), from the root. Read
+/// with sekisho's parser, as the gate is written: sekisho's references are what its check found,
+/// and its check reads those flows.
+fn gate_reads(root: &Path, rel: &str) -> (Vec<String>, Vec<(Tool, String)>) {
+    let disk = ritsu_base::paths::on_disk(root, rel);
+    let Ok(src) = ritsu_base::fs::read_to_string(&disk) else { return (Vec::new(), Vec::new()) };
+    let parsed = sekisho::parse::parse(&ritsu_base::paths::show(&disk), &src);
+    let Some(f) = parsed.file.filter(|_| !sekisho::diag::has_errors(&parsed.diags)) else { return (Vec::new(), Vec::new()) };
+    let apis = f.uses.iter().filter(|u| matches!(u.kind, sekisho::ast::UseKind::Openapi)).map(|u| u.path.0.clone()).collect();
+    let from_root = |written: &str| ritsu_base::modules::join_opened(root, rel, written).ok();
+    let gates = f.uses.iter().filter(|u| matches!(u.kind, sekisho::ast::UseKind::Gate)).filter_map(|u| from_root(&u.path.0)).map(|p| (Tool::Sekisho, p));
+    let flows = f.workflows.iter().filter_map(|w| from_root(&w.flow.0)).map(|p| (Tool::Dandori, p));
+    (apis, gates.chain(flows).collect())
+}
+
+/// The requests whose code the packages leave out, and which `requests` leaves out of the kinds of
+/// request it describes, as `ritsu gen` says them (a warning each, the other parts are written):
+/// what of each the glue that joins it to the machine of its tickets does not lower yet (ringi's
+/// DESIGN 12.1). `languages` and `requests` are whether the run writes the packages of languages,
+/// and the kinds of request apart from any language: either says the request it leaves out.
+fn requests_left_out(laid: &ritsu_project::requests::Laid, languages: bool, requests: bool, lang: Lang) -> (String, Vec<Json>) {
+    let head = if lang == Lang::Ja { "警告" } else { "warning" };
+    let mut said = String::new();
+    let mut warned = Vec::new();
+    for (f, why) in &laid.left {
+        let shown = &f.shown;
+        let (wja, wen) = (&why.ja, &why.en);
+        let message = match (languages, requests) {
+            (true, false) => tr!("`{shown}` のチケットのコードは書きません（{wja}）。ほかの部分は書きます", "The code of the tickets of `{shown}` is not written ({wen}); the other parts are written"),
+            (false, _) => tr!("`{shown}` は `requests` の説明に入りません（{wja}）。ほかの部分は書きます", "`requests` does not describe `{shown}` ({wen}); the other parts are written"),
+            (true, true) => tr!(
+                "`{shown}` のチケットのコードは書かず、`requests` の説明にも入りません（{wja}）。ほかの部分は書きます",
+                "The code of the tickets of `{shown}` is not written, nor does `requests` describe it ({wen}); the other parts are written"
+            ),
+        };
+        let message = message.get(lang);
+        said.push_str(&format!("{head}: {message}\n"));
+        let json = Json::obj([("code", Json::Null), ("severity", Json::str(Severity::Warning.key())), ("line", Json::Null), ("message", Json::str(message))]);
+        warned.push(crate::check::entry(Tool::Ringi.word(), &Finding { code: String::new(), severity: Severity::Warning, file: Some(f.rel.clone()), line: None, text: String::new(), json }));
+    }
+    (said, warned)
+}
+
+/// The requests whose lists of the versions of the organization have errors (ringi's E502–E504,
+/// E508, E509), as `ritsu gen` says them: a warning each, with the codes and how many of each. They
+/// do not stop the package, whose code takes the organization at each event (ringi's DESIGN 12.3);
+/// `ritsu check` says what they are.
+fn listings_said(project: &Project, joined: &Joined, laid: &ritsu_project::requests::Laid, lang: Lang) -> (String, Vec<Json>) {
+    let head = if lang == Lang::Ja { "警告" } else { "warning" };
+    let mut said = String::new();
+    let mut warned = Vec::new();
+    for f in project.of(Tool::Ringi) {
+        let errors = joined.ringi.listing_errors(Path::new(&f.shown));
+        if errors.is_empty() {
+            continue;
+        }
+        let shown = &f.shown;
+        let ja: Vec<String> = errors.iter().map(|(c, n)| format!("{c} が {n} 件")).collect();
+        let en: Vec<String> = errors.iter().map(|(c, n)| format!("{c}: {n}")).collect();
+        // a request whose code is left out for what its glue does not lower yet is said so apart
+        let written = !laid.left.iter().any(|(l, _)| l.rel == f.rel);
+        let (ja, en) = (ja.join("、"), en.join(", "));
+        let message = if written {
+            tr!(
+                "`{shown}` の、組織の版ごとの承認者と申請者の一覧に誤りがあります（{ja}）。中身は `ritsu check` が言います。コードは組織をイベントごとに受け取るので、書きます",
+                "The lists of the approvers and the requesters of each version of the organization of `{shown}` have errors ({en}), which `ritsu check` says; its code is written, as it takes the organization at each event"
+            )
+        } else {
+            tr!(
+                "`{shown}` の、組織の版ごとの承認者と申請者の一覧に誤りがあります（{ja}）。中身は `ritsu check` が言います。コードは組織をイベントごとに受け取るので、この一覧ではパッケージを止めません",
+                "The lists of the approvers and the requesters of each version of the organization of `{shown}` have errors ({en}), which `ritsu check` says; they do not stop the package, whose code takes the organization at each event"
+            )
+        };
+        let message = message.get(lang);
+        said.push_str(&format!("{head}: {message}\n"));
+        let json = Json::obj([("code", Json::Null), ("severity", Json::str(Severity::Warning.key())), ("line", Json::Null), ("message", Json::str(message))]);
+        warned.push(crate::check::entry(Tool::Ringi.word(), &Finding { code: String::new(), severity: Severity::Warning, file: Some(f.rel.clone()), line: None, text: String::new(), json }));
+    }
+    (said, warned)
+}
+
 /// What stops `ritsu gen` given no target and no `target` line (DESIGN 9.6): that it writes only the
 /// targets given, and the line that writes what 0.40.0 wrote with no `--target` — the words given
 /// (`typed`, the words after `gen`), then `--target` of each of [`UP_TO_0_40`], and of `cedar` when
@@ -1968,6 +2555,29 @@ fn no_target(typed: &[String], project: &Project, library: bool, out: &Path, lan
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The last line of a check that stops `ritsu gen` names the files by why they stop it: a
+    /// request whose screens alone cannot be made passes check, and is said as a file a target
+    /// cannot be made from is said (ringi's DESIGN 13.3).
+    #[test]
+    fn what_stops_gen_is_named_by_why_it_stops() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let said = |failing: &[&str], screens: &[&str], waiting: &[&str]| {
+            let t = nothing_generated(&s(failing), &s(screens), &s(waiting));
+            (t.en, t.ja)
+        };
+        assert_eq!(said(&[], &[], &[]).0, "the check finds errors, so nothing is generated");
+        assert_eq!(said(&["a.ringi"], &[], &[]).0, "1 file(s) do not pass check, so nothing is generated: a.ringi");
+        assert_eq!(said(&[], &["b.ringi"], &[]), ("`b.ringi` cannot be made into the requests package".into(), "`b.ringi` からは requests のパッケージを生成できません".into()));
+        assert_eq!(said(&[], &["b.ringi", "c.ringi"], &[]).0, "`b.ringi` and `c.ringi` cannot be made into the requests package");
+        assert_eq!(
+            said(&["a.ringi"], &["b.ringi"], &["w.flow"]),
+            (
+                "1 file(s) do not pass check, so nothing is generated: a.ringi; `b.ringi` cannot be made into the requests package; 1 file(s) wait for them: w.flow".into(),
+                "検査を通らないファイルが 1 個あるので、何も生成しません: a.ringi。`b.ringi` からは requests のパッケージを生成できません。それを待っているファイル 1 個: w.flow".into()
+            )
+        );
+    }
 
     /// The names `--target` takes are the words of the `target` line of a ritsu.mod (DESIGN 17.3),
     /// in the order they are written in: ritsu-base reads the line, and cannot read [`Target`].

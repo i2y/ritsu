@@ -1,0 +1,40 @@
+gate sums v1
+description "Two values of the sum of two numbers: which pairs of them happen does not show along one number alone, so a pair no input was found for is counted in case"
+namespace Docs
+
+use rule sums from "sums.rule"
+
+principal User
+  description "A person with two scores"
+  attributes
+    first  : number  range >=0 <=100
+    second : number  range >=0 <=100
+
+resource Doc
+  description "A document"
+
+action read_doc
+  description "Read a document"
+  principal User
+  resource Doc
+  context
+    x = sums(a: principal.first, b: principal.second).x
+    y = sums(a: principal.first, b: principal.second).y
+
+permit low_x_reads
+  description "A person whose x is low reads"
+  principal is User
+  action read_doc
+  when x is low
+
+permit high_y_reads
+  description "A person whose y is high reads"
+  principal is User
+  action read_doc
+  when y is high
+
+expect deny a_low_x_never_has_a_high_y
+  description "A sum of 100 or less is not over 150, so nobody has a low x and a high y"
+  principal is User
+  action read_doc
+  when x is low and y is high

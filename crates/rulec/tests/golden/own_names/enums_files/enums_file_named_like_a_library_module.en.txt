@@ -1,0 +1,12 @@
+warning[W121]: `time` takes a name the code generated for Python, Ruby, Go and Connect uses itself
+  --> tests/own_names/enums_files/enums_file_named_like_a_library_module.rule:1
+  |
+1 | enums time v1
+  |       ^^^^ the enums file's name
+  |
+ Python and Connect: the standard library has a module `time`, and the rule's module imports the enums file's module by the same name (`from time import …`), so the two cannot be told apart: where the library's is loaded first, the rule's module does not load.
+ Ruby: the language has `Time` built in, and the enums file's module is a constant of the same name (`module Time`), which opens it again: a class is no module, and the generated module does not load; a module takes the enums' types into the language's own.
+ Go: the standard library has a package `time`, and the rule's package imports the enums file's package by the path `time`, which the go command cannot tell from the library's: it does not build.
+ For a target you do not generate, leave it. For one you do, give it an alias (`time(<alias>)`).
+
+ok tests/own_names/enums_files/enums_file_named_like_a_library_module.rule

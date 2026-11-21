@@ -1,0 +1,5 @@
+error[E302]: tests/mutants/E302_two_rows_from_100000_to_200000_yen.ringi:8:1: Two rows of the route take one request (lines 8, 9)
+     8 | | <=200_000JPY  | manager   |
+  = The requests both rows take: amount from 100_000JPY to 200_000JPY
+  = A request both rows take: amount = 100_000JPY
+  = Decide which row is right, and correct the bounds so that they do not overlap.

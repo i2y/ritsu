@@ -1,0 +1,27 @@
+gate go_authorize_renamed v1
+description "go_authorize.gate with the type renamed Slip, as its note says"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can reply
+
+principal Clerk
+  description "The one who asks"
+  roles clerk
+
+resource Slip
+  description "A slip that lets its holder be answered"
+  attributes
+    open : bool
+
+action reply
+  description "Reply to a request"
+  principal Clerk
+  resource Slip
+
+permit clerks_reply
+  description "A clerk can: Reply to a request"
+  principal in clerk
+  action reply
+  when resource.open

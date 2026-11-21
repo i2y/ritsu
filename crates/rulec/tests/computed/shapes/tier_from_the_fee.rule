@@ -1,0 +1,23 @@
+rule tier_from_the_fee v1
+description "A tier the fee decides, read beside the amount the fee is worked out from: the fee is 0 yen up to 33 yen and 1 yen above, so no small amount comes with the paid tier, and the check works the fee out again on the amounts of each row"
+
+enum choice = one | two
+enum tier = free | paid
+
+inputs
+  amount : money[JPY]  range >=1JPY <=61JPY
+
+define fee : money[JPY] = min(down(amount * 3%, 1JPY), 26JPY)
+
+outputs
+  x : choice
+
+table tier_of
+| fee  | -> tier : tier |
+| 0JPY | free           |
+| 1JPY | paid           |
+
+table pick
+| amount  | fee          | tier | -> x |
+| <=33JPY | >-1JPY <3JPY | free | one  |
+| >33JPY  | >-1JPY <3JPY | paid | two  |

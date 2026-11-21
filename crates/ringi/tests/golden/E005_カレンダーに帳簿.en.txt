@@ -1,0 +1,2 @@
+error[E005]: tests/mutants/E005_カレンダーに帳簿.ringi:3:30: `use calendar` reads a `.cal` file, which `予算.book` is not
+     3 | use calendar 本社(office) from "予算.book"

@@ -1,0 +1,11 @@
+error[E002]: tests/fixtures/chain_names.flow:10:10: there is no type `strng`
+    10 |   kind : strng
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+  = `strng` is written on line 13 too
+error[E002]: tests/fixtures/chain_names.flow:21:3: there is no task or rule `notfy`
+    21 |   notfy(id: id)
+  = `notfy` is written on lines 23 and 24 too
+error[E002]: tests/fixtures/chain_names.flow:26:14: there is no variable or value `rle`
+    26 |   notify(id: rle)
+  = a value is a variable, a field of one, a string, a number, true or false
+  = `rle` is written on line 27 too

@@ -1,0 +1,45 @@
+request 一度だけ言う名前(chain_names_ja) v1 "一度だけ言う名前"
+description "数行が読む名前が、どこにも宣言されていないフォーム（架空の決まり）。どれも、ファイルが最初に書いた所で一度だけ言い、同じ名前を書いたほかの行を添える"
+
+use organization 組織(org) from "../../examples/shared/company.ringi"
+use calendar 本社(office) from "../../examples/shared/office.cal"
+
+form
+  明細(lines)      : rows "明細"  count >=1 <=10
+    品目(item)     : text "品目"  count <=100
+    単価(price)    : money[円] "単価"  range >=1円 <=100_000円
+  手数料(fees)     : rows "手数料"  count <=10
+    品目(item)     : text "品目"  count <=100
+    料金(fee)      : money[円] "料金"  range >=1円 <=100_000円
+  # どちらの明細にも無い列：明細ごとに一つずつ、二つの誤り
+  金額(amount)     : money[円] "金額" = sum(明細.費用)  range >=1円 <=1_000_000円
+  請求額(charged)  : money[円] "請求額" = sum(手数料.費用)  range >=1円 <=1_000_000円
+  # 宣言の綴りを誤った：経路、`who`、シナリオは `確認者` を読む
+  確認社(reviewer) : person "技術の確認者"  optional
+
+route
+  # 宣言の綴りを誤ったステップ：チケットとシナリオは `最初` と書く
+  最所(first)      上長
+  技術(technical)  確認する人  when 確認者 is not none
+  # どこにも宣言の無い承認者の決め方を、二つのステップが書く
+  財務(finance)    財務部      when 金額 > 100_000円
+  監査(audit)      財務部      when 金額 > 500_000円
+
+who
+  上長(manager)          = manager of requester
+  確認する人(checker)    = chosen by requester in 確認者
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+  withdraw       until 最初
+
+scenario 確認あり
+  requester e1201
+  form 明細 = [{品目: "机", 単価: 50_000円}], 手数料 = [], 確認者 = person "e7201"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 最初     | in progress |

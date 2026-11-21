@@ -1,0 +1,3 @@
+error[E005]: tests/mutants/E005_ワークフローの下のfromが無い.gate:10:15: The resource type is followed by `from` and the value of the flow that is its id (found `請求番号`)
+    10 |   resource 請求 請求番号
+  = Write the resource type and the value of the flow that is its id (an input, a variable, or a field of one), like `resource Order from order.id`; under it, indented one step further, each attribute with the value of the flow it is, like `amount = order.total`.

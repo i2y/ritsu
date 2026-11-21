@@ -1,0 +1,18 @@
+rule 刻みの間の手数料(fee_between_two_steps) v1
+description "金額の 10% を 10 円に切り上げた手数料を、それだけで読む。手数料は 10 円の倍数にしかならないので、15 円の手数料の行にはどの入力も届かない"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=300円
+
+define 手数料(fee) : money[円] = up(金額 * 10%, 10円)
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 手数料 | -> 答え |
+| <=10円 | 一      |
+| 15円   | 二      |
+| >10円  | 一      |

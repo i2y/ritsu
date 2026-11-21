@@ -1,0 +1,6 @@
+warning[W201]: tests/mutants/W201_決められない問い.ringi:8:50: Whether the field 添付 may be asked for while it is hidden cannot be settled
+     8 |   添付(note)      : attachment "添付"  required when 二乗の和 > 15 and 二乗の和 < 17  shown when 日数 >= 4 or 残り >= 4
+  = Whether there is a request where `required when` holds and `shown when` does not, rulec could not settle. This can happen when the two conditions read a computed value and a value the computation reads, one each.
+  = If both conditions can be written over the same value (the value the computation reads, instead of the computed value), rewrite them so.
+ok tests/mutants/W201_決められない問い.ringi: a request, 4 fields, 1 stage
+  may never end: the stage `確かめ` has no deadline (`due in …`), and waits until it is answered

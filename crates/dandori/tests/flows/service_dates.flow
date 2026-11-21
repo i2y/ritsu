@@ -1,0 +1,48 @@
+# protobuf's `google.type.Date` coming into a workflow that implements a service (DESIGN 44).
+# protobuf's JSON writes a date as `{"year": 2026, "month": 11, "day": 16}`; a run reads it as
+# `2026-11-16`, in the request that starts it (at the top, in a list, in a message and in a list of
+# messages) and in the answer of a callback, on every platform, and hands the days on as dates. The
+# run ends with `{}`: a date in its output would go as the flow holds it, not as protobuf's JSON
+# writes one, and E017 refuses an output that goes to a date.
+workflow service_dates v1 implements rentals.RentalService
+description "Rent a car through a service that holds its days as google.type.Date: the run reads the days of the rental and of the drivers' licences as dates, hands them to the desk, and waits for the desk to answer with the day the car came back"
+
+use proto rentals from "protos/rentals.proto"
+
+record Driver
+  name       : string
+  licensedOn : date
+
+record Returned
+  returnedOn : date
+  km         : int
+
+inputs
+  car     : string
+  pickup  : date
+  dropoff : date
+  closed  : list[date]
+  driver  : Driver
+  others  : list[Driver]
+
+task hand_over(car: string, pickup: date, dropoff: date, closed: list[date], licensed: date)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-desk"
+  idempotent
+
+# The desk gets the car and the callback's id, and answers when the car is back.
+task wait_for_return(car: string, dropoff: date) -> Returned
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-return"
+  callback
+  timeout 7 days
+
+task close(car: string, returned: date, km: int)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-close"
+  idempotent
+
+flow
+  hand_over(car: car, pickup: pickup, dropoff: dropoff, closed: closed, licensed: driver.licensedOn)
+  for o in others at most 3
+    hand_over(car: car, pickup: pickup, dropoff: dropoff, closed: closed, licensed: o.licensedOn)
+  let back = wait_for_return(car: car, dropoff: dropoff)
+    on timeout => fail late "the car was not back within 7 days"
+  close(car: car, returned: back.returnedOn, km: back.km)

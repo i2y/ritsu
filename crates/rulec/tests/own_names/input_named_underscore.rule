@@ -1,0 +1,14 @@
+rule fee_by_count v1
+description "An input named by an underscore alone, a field of Go's Input and a label of Swift's arguments"
+
+inputs
+  _ : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_qty
+policy unique
+| _   | -> fee |
+| <=5 | 3USD   |
+| >5  | 2USD   |

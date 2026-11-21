@@ -1,0 +1,8 @@
+ok card_fee.rule
+ok pay.kn: 1 function, fails rule
+error[ritsu E201]: pay.kn:7:3: The call of the rule card_fee can give it values that break its precondition `fee range >=0 <=20_000`
+     7 |   card_fee(amount: amount).fee
+  = For example, `fee_of(amount: 1_000_000)` gives the rule amount = 1_000_000.
+  = Where the rule's generated code works the value out, it refuses a call whose value falls outside the range, and the kaname function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or correct the ranges of the values given.
+ritsu check: 2 files (rulec 1, kaname 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

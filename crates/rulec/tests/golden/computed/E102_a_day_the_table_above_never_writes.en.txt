@@ -1,0 +1,9 @@
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/computed/shapes/E102_a_day_the_table_above_never_writes.rule:20 table pick
+   |
+20 | | 2026-07-02 | middle    |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+   |
+ The upstream table never produces the values this row names.
+ hint: make the upstream table produce this value, or delete this row.
+

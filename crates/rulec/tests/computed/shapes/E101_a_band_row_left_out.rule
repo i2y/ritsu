@@ -1,0 +1,21 @@
+rule band_row_left_out v1
+description "The same table without its second row: from 51 yen to 80 yen the band is small, and no row takes those amounts"
+
+enum size = small | large
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=1JPY <=300JPY
+
+outputs
+  x : choice
+
+table band_of
+| amount  | -> band : size |
+| <=50JPY | large          |
+| >50JPY  | small          |
+
+table pick
+| amount  | band  | -> x |
+| <=50JPY | large | one  |
+| >80JPY  | small | two  |

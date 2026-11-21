@@ -1,0 +1,14 @@
+rule 個数ごとの手数料(fee_by_count) v1
+description "下線だけの名前の入力（Go では Input のフィールド、Swift では引数のラベルになる）"
+
+inputs
+  _ : number  range >=0 <=10
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 個数ごとの手数料表(fee_by_qty)
+policy unique
+| _   | -> 手数料 |
+| <=5 | 3USD      |
+| >5  | 2USD      |

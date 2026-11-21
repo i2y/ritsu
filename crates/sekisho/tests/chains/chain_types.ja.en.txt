@@ -1,0 +1,6 @@
+error[E101]: chain_types.ja.gate:24:13: There is no type `利用者`
+    24 |   principal 利用者
+  = The principal types there are `利用`.
+error[E101]: chain_types.ja.gate:25:12: There is no type `注文`
+    25 |   resource 注文
+  = The resource types there are `注`.

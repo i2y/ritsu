@@ -1,0 +1,8 @@
+error[E151]: Nothing decides the output `charged`
+  --> tests/mutants/m_e151.rule:12
+   |
+12 |   charged : money[JPY]  round down(1JPY)
+   |   ^^^^^^^ no table or definition decides it
+   |
+ An output takes its value from what decides it: a table's column after `->`, a `define` or a `derive` of the same name, a `sum`, `count`, `max`, `min` or `fold` that answers it, an output an `apply` brings in, or, for the first output, `result`. Nothing in this rule decides `charged`, so no call is answered with a value for it, and the generated code would return a name it never set.
+ hint: write the table or the definition that decides `charged`, or take `charged` out of `outputs` if the rule does not answer it. An output that may have no value (`?`) is held to the same: decide when it has none with a row (`none`).

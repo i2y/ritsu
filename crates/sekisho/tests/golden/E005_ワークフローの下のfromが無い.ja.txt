@@ -1,0 +1,3 @@
+エラー[E005]: tests/mutants/E005_ワークフローの下のfromが無い.gate:10:15: resource の型のあとに `from` と、その ID になるフローの値を書いてください（書かれているのは `請求番号` です）
+    10 |   resource 請求 請求番号
+  = `resource Order from order.id` のように、resource の型と、その ID になるフローの値（入力、変数、そのフィールド）を書きます。下に一段深く字下げして、`amount = order.total` のように、属性とそれに当たるフローの値を並べます。

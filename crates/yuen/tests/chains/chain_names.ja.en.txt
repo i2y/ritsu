@@ -1,0 +1,5 @@
+error[E008]: chain_names.ja.req:10:9: The role 経理 is not declared
+    10 |   owner 経理
+  = Declare a role with `role legal "decides how the articles read"` before it is used; that stops a misspelling (`Legal` for `legal`).
+  = `経理` is written on lines 11, 16 and 17 too.
+chain_names.ja.req: 1 error

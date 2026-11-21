@@ -1,0 +1,60 @@
+gate 職員の役割(staff_roles_ja) v1
+description "役割を別々に持つ二つの principal の型。全部の役割を運ぶサインインを、その型の役割に絞る。roles_of.gate の日本語の版"
+namespace OfficeJa
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 返信
+
+role 責任者(manager)
+  description "問い合わせに答え、閉じる"
+  includes 係
+  can 返信, 閉じる
+
+role 監査(auditor)
+  description "どの問い合わせも読む"
+  can 読む
+
+principal 職員(Employee)
+  description "事務所で働く人"
+  roles 係, 責任者
+
+principal 検査員(Inspector)
+  description "事務所を確かめに来る人"
+  roles 監査
+
+resource 問い合わせ(Ticket)
+  description "事務所への問い合わせ"
+  attributes
+    受付中(open) : bool
+
+action 返信(reply)
+  description "問い合わせに答える"
+  principal 職員
+  resource 問い合わせ
+
+action 閉じる(close)
+  description "問い合わせを閉じる"
+  principal 職員
+  resource 問い合わせ
+
+action 読む(read)
+  description "問い合わせを読む"
+  principal 検査員
+  resource 問い合わせ
+
+permit 係は受付中に返信できる(clerks_reply)
+  description "係は受付中の問い合わせに答える"
+  principal in 係
+  action 返信
+  when resource.受付中
+
+permit 責任者は閉じられる(managers_close)
+  description "責任者は問い合わせを閉じる"
+  principal in 責任者
+  action 閉じる
+
+permit 監査は読める(auditors_read)
+  description "監査はどの問い合わせも読む"
+  principal in 監査
+  action 読む

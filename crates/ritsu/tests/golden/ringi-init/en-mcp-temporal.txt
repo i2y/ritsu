@@ -1,0 +1,1913 @@
+==> .gitignore <==
+# What go build ./cmd/server writes here.
+/server
+# What go test -c and the coverage write.
+*.test
+*.out
+==> README.md <==
+# approvals
+
+Requests and approvals: the rules are written in ritsu's request language under `project/`, ritsu
+generates the Go code and the contract from them, and the framework serves them, with the pages
+people use in a browser and the API. The framework is the Go module `github.com/i2y/ringi-server`.
+
+`ritsu ringi init` wrote these files as a start: two request types, one of them with a flow, a small
+organization, a gate, a server and a worker. They are yours now: change them into your own rules.
+
+## What is in it
+
+| File | What it is |
+|---|---|
+| `project/purchase.ringi` | A request type: its form, its route of two stages, its deadlines, and scenarios that say what happens |
+| `project/expense.ringi` | A request type with a flow: an expense claim, which the requester's manager approves and the flow `pay` pays back |
+| `project/shared/company.ringi` | The shape of the organization: the positions and the kinds of team |
+| `project/org/2026-04-01/` | The organization's data from that day: its teams, people and members, as CSV |
+| `project/shared/office.cal` | The business days the deadlines count |
+| `project/shared/company.gate` | Who may do what on the tickets |
+| `project/shared/pay.flow` | The flow of the payment, which an expense claim starts once it is approved |
+| `go/`, `requests/` | What ritsu generates from `project/` (do not edit them) |
+| `generate.go` | The line `go generate` runs to generate them again |
+| `approvals.go` | What the project gives the server: its kinds, organization, gate and notifier |
+| `gate.go` | The glue between the server's questions and the generated gate |
+| `notify.go` | A notifier that writes each notice to the log |
+| `tools.go` | The agents' tools at `/mcp` of the server, over MCP |
+| `flows.go` | What starts the flows on Temporal, and the workers that run them |
+| `payments.go` | The tasks of the payment, which the project writes: these write to the log |
+| `cmd/server/` | The server |
+| `cmd/worker/` | The worker that runs the flows |
+| `*_test.go` | The tests |
+
+## Running it
+
+The flows run on Temporal: start its dev server first, with the Temporal CLI's
+`temporal server start-dev`. It listens on `localhost:7233`, where the server and the worker look
+for it (`-temporal` gives them another address). Then run the worker and the server, each in a
+terminal of its own:
+
+```sh
+go mod tidy
+go run ./cmd/worker
+go run ./cmd/server -dev-login
+```
+
+Open http://127.0.0.1:8080/pages/ in a browser and choose who you are. `s1201` (a member of the
+staff of Sales Section 1) makes a purchase request; `s1101`, the section's manager, approves it,
+then `s1001`, the head of the Sales Department. The notices go to the log. `-dev-login` checks no
+one: it serves this computer only.
+
+An expense claim goes to the requester's manager alone. Once it is approved, the server starts its
+payment on Temporal, and the worker runs it with the tasks of `payments.go`, which write `paid` and
+`told` to the worker's log where real ones would pay the requester and tell them.
+
+The agents' tools are at http://127.0.0.1:8080/mcp, over MCP's streamable HTTP. An agent signs in
+as a browser does: with `-dev-login`, it sends the cookie `ringi-dev-person=s1201` (the page `/login`
+sets it in a browser); with no flag of a sign-in, the header `X-Person: s1201`. What it does with the
+tools is asked of the gate, as on the pages.
+
+## Changing the rules
+
+Change the files of `project/`, then check them and generate the code again:
+
+```sh
+ritsu check project
+go generate ./...
+go test ./...
+```
+
+`ritsu check` runs each scenario and checks what the rules claim; `ritsu ringi simulate
+project/purchase.ringi --every-requester` shows where each person's request goes. In CI, run the
+line of `generate.go` with `--check`: it writes nothing, and fails when `go/` or `requests/` is not
+what `project/` makes.
+
+The organization's data is built into the program: a new version of it is a directory
+`project/org/<the day it takes effect>/`, and the server reads it when it starts again. A server that
+runs takes it without starting again, from a person whose sign-in gives them the role
+`system_admin` (with `-dev-login`, chosen on its sign-in page). Check the data with
+`ritsu check project`, put `org/` into a zip archive from `project/`, and upload the archive on the
+page `/pages/admin/organization`:
+
+```sh
+cd project && zip -r ../org.zip org -x '*/.*'
+```
+
+The page shows what the new data changes, day by day, and imports it when you confirm. Add the same
+version to `project/org/` too: a server started again imports the data built in only when it changed
+since the server last imported it. Each import, and each switch of a version of a request type, is
+kept in the record that `/pages/admin/records` shows.
+
+## Tests
+
+`go test ./...` runs five tests:
+
+- `TestVectors` gives the server every vector ritsu wrote in `requests/vectors/` from the rules
+  and the scenarios, and checks its answers.
+- `TestGate` checks `gate.go` on what only the gate decides: who sees a ticket they are not on, and
+  who withdraws one; who may do each of the four operations of the administration, by role and by
+  department; that a person the organization's version does not have, and a request type that names
+  no owner, are of no one's department; and that a role the gate does not declare is left out.
+- `TestPages` makes a request on the pages with the development sign-in, and approves it.
+- `TestTools` serves the project as `cmd/server` does, with the agents' tools at `/mcp`: an agent of
+  `s1201` makes a purchase request with the tools and reads it, and a request with no one signed in
+  is answered 401.
+- `TestFlows` runs the payment of an approved expense claim on Temporal's dev server, with the
+  workers of `cmd/worker`: the requester is paid once, and told. The dev server runs from the
+  Temporal CLI that `TEMPORAL_CLI` names, else from the file the SDK keeps in the system's temporary
+  directory (`temporal-cli-go-sdk-<version>`). The test downloads nothing: without the CLI, it says
+  `SKIP`.
+
+## Running it for people
+
+`go run ./cmd/server -h` lists every flag.
+
+- **Where the tickets are kept**: `-db 'postgres://…'` keeps them in PostgreSQL, in the schema
+  `ringi`, with the attachments. Without `-db`, they are kept in memory and lost when the server
+  stops.
+- **How people sign in**: through an OpenID Connect provider, with `-oidc-issuer`,
+  `-oidc-client-id`, `-oidc-redirect-url https://<the server's host>/login/callback`, and the
+  client's secret and the keys of the session cookies in the environment variables
+  `RINGI_OIDC_CLIENT_SECRET` and `RINGI_SESSION_KEYS` (base64 of 32 bytes each, the newest first).
+  A person is the one of the organization's data with the email address the provider gives. Without
+  these flags, and without `-dev-login`, the person is the header `X-Person`, which a proxy in front
+  of the server sets after it signs people in; the server then listens on a loopback address only.
+- **https**: `-tls-cert` and `-tls-key`, with `-addr` on the address people reach.
+- **The agents' tools**: `/mcp` finds the person as the pages do. With a provider, an agent needs
+  the cookie of a session signed in from a browser. To take bearer tokens instead, serve the tools
+  with `mcp.HTTP{Verify: …}` on a server of your own: the README of the module `github.com/i2y/ringi-server/mcp`
+  shows how.
+- **Temporal**: `-temporal <host:port>`, the same on the server and on each worker. Run the
+  workers beside the server, as many as the flows need. The namespace and TLS are the client's
+  options (`client.Options`) in `cmd/server/main.go` and `cmd/worker/main.go`.
+
+The server refuses settings that would let anyone be anyone: `-dev-login` or the header with
+`-tls-cert`, on an address other computers reach, or where the provider's settings are.
+
+## Adding a request type
+
+Write `project/<name>.ringi` beside `purchase.ringi`, with the same `use` lines for the organization,
+the calendar and the gate, then run `ritsu check project`, `go generate ./...` and `go test ./...`.
+The new type's scenarios become vectors that `TestVectors` runs. A type that reads masters needs
+their data built in too: add their directory to the `//go:embed project/org` line of
+`approvals.go`. `gate.go` asks the gate by the action's name, so an action added to the gate needs
+no change there; an attribute added to a principal or a resource needs its value in `gateStore`. A
+role the gate lets a Staff hold is in `RolesOf`'s answer, so one added to the gate needs no change
+either.
+
+## Adding a flow
+
+A flow is work that runs after a ticket ends or in a stage of it, such as a payment or an agent's
+check: `use flow <name> from "shared/<name>.flow"` in the request type, and `launch` or `ask` it, as
+`expense.ringi` launches `pay` once a claim is approved. `go generate ./...` writes its Go package
+under `go/flows/`. `Flows` in `flows.go` reads the flows the kinds name, so the server starts a new
+one as it is; its worker goes in `Workers`, with the tasks the project writes for it (its package's
+`OwnTasks`, as `Payments` are the payment's). An agent's step needs the keys of its agents'
+providers where its worker runs. The framework's module that runs the flows is
+`github.com/i2y/ringi-server/temporal`: its README says more.
+==> approvals.go <==
+// Package approvals runs the requests of project/ on the framework: the package ritsu generated
+// from them (go/ and requests/, which go generate writes again), with the gate (gate.go) and a
+// notifier that writes to the log (notify.go). cmd/server is the server.
+//
+// The server serves the agents' tools at /mcp too (tools.go).
+//
+// The flows run on Temporal (flows.go), with the tasks the project writes for them (payments.go):
+// the server starts them, and cmd/worker runs them.
+package approvals
+
+import (
+	"embed"
+	"io/fs"
+	"log/slog"
+
+	server "github.com/i2y/ringi-server"
+	"github.com/i2y/ringi-server/orgfiles"
+
+	"example.com/acme/approvals/go/ticketkinds"
+)
+
+//go:embed requests/openapi.json requests/types requests/a2ui requests/mcp
+var requests embed.FS
+
+//go:embed project/org
+var project embed.FS
+
+// Package loads the generated package: the kinds of request, with the files of the contract the
+// server reads, built into the program. The vectors are not built in: they are for the tests.
+func Package() (*server.Package, error) {
+	dir, err := fs.Sub(requests, "requests")
+	if err != nil {
+		return nil, err
+	}
+	return PackageFrom(dir)
+}
+
+// PackageFrom loads the generated package from dir, a directory laid out as requests/ is: the
+// tests load it from the disk, where the vectors are.
+func PackageFrom(dir fs.FS) (*server.Package, error) {
+	return server.Load(ticketkinds.Contract, ticketkinds.Lang, ticketkinds.Kinds, dir)
+}
+
+// Organization reads the organization's data in project/org: a directory for each version, named
+// by the day it takes effect.
+func Organization() server.OrgSource {
+	dir, err := fs.Sub(project, "project")
+	if err != nil {
+		panic(err)
+	}
+	return orgfiles.New(dir)
+}
+
+// Parts are what the project gives the server: its kinds, its organization, its gate and its
+// notifier, which write what they have to say in log. cmd/server adds where the tickets are kept and
+// how people sign in, from its flags. Once the server is made, Started gives the notifier the server.
+func Parts(log *slog.Logger) (server.Config, error) {
+	p, err := Package()
+	if err != nil {
+		return server.Config{}, err
+	}
+	return server.Config{
+		Packages:     []*server.Package{p},
+		Gate:         &Gate{Log: log},
+		Organization: Organization(),
+		Notifier:     &LogNotifier{Log: log, Lang: "en"},
+	}, nil
+}
+
+// Started gives the parts of cfg that read the server the server made from cfg (by server.New, or
+// in the function Serve calls once it is made): the notifier, which says each kind by its title.
+func Started(cfg server.Config, srv *server.Server) {
+	if n, ok := cfg.Notifier.(*LogNotifier); ok {
+		n.Server = srv
+	}
+}
+==> cmd/server/main.go <==
+// Command server serves the requests of the project: the pages people use in a browser, and the
+// API. Where it keeps the tickets and how people sign in come from its flags:
+//
+//	go run ./cmd/server -dev-login
+//
+// lets you choose who you are on a page, on this computer only (-addr stays on 127.0.0.1). Without
+// -dev-login, the person is the header X-Person, which a proxy in front of the server sets after it
+// signs people in; with -oidc-issuer, -oidc-client-id and -oidc-redirect-url, the server signs
+// people in with an OpenID Connect provider. -db keeps the tickets in PostgreSQL; without it, they
+// are kept in memory and lost when the server stops. go run ./cmd/server -h lists every flag.
+//
+// The agents' tools are at /mcp (HandleTools): an agent signs in as a browser does.
+//
+// The flows run on Temporal, at the address -temporal gives (localhost:7233, where Temporal's dev
+// server listens, by default): the server starts them, and cmd/worker runs them. The server stops
+// when it cannot reach Temporal, and warns in its log when no worker runs a flow.
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
+
+	"go.temporal.io/sdk/client"
+	sdklog "go.temporal.io/sdk/log"
+
+	server "github.com/i2y/ringi-server"
+	"github.com/i2y/ringi-server/serve"
+
+	"example.com/acme/approvals"
+)
+
+func main() {
+	var flags serve.Flags
+	flags.Register(flag.CommandLine)
+	temporal := flag.String("temporal", "localhost:7233", "the address of the Temporal server the flows run on")
+	flag.Parse()
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	if err := run(flags, *temporal, log); err != nil {
+		server.LogStop(log, "the server stopped", err)
+		os.Exit(1)
+	}
+}
+
+func run(flags serve.Flags, temporal string, log *slog.Logger) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	stores, err := serve.Open(ctx, flags, log)
+	if err != nil {
+		return err
+	}
+	defer stores.Close()
+	cfg, err := approvals.Parts(log)
+	if err != nil {
+		return err
+	}
+	approvals.HandleTools(stores, log)
+	c, err := client.Dial(client.Options{HostPort: temporal, Logger: sdklog.NewStructuredLogger(log)})
+	if err != nil {
+		return fmt.Errorf("-temporal %s: %w", temporal, err)
+	}
+	defer c.Close()
+	flows, err := approvals.Flows(c, cfg.Packages...)
+	if err != nil {
+		return err
+	}
+	cfg.Flows, cfg.Agents = flows, flows
+	ctx, cancel := context.WithCancelCause(ctx)
+	var running sync.WaitGroup
+	err = stores.Serve(ctx, cfg, func(srv *server.Server) {
+		approvals.Started(cfg, srv)
+		// Beside the server, the worker that gives it the answers of the flows a stage asks (an
+		// agent's step, a note): a worker that cannot go on stops the server.
+		running.Go(func() { cancel(flows.Run(ctx, srv)) })
+		running.Go(func() {
+			ready, stop := context.WithTimeout(ctx, 30*time.Second)
+			defer stop()
+			if err := flows.CheckWorkers(ready); err != nil && ctx.Err() == nil {
+				log.Warn("the flows wait for their workers: go run ./cmd/worker", "err", err)
+			}
+		})
+	})
+	cancel(nil)
+	running.Wait()
+	if cause := context.Cause(ctx); err == nil && !errors.Is(cause, context.Canceled) {
+		err = cause
+	}
+	return err
+}
+==> cmd/worker/main.go <==
+// Command worker runs the flows of the project on Temporal: the payment of an approved expense
+// claim (project/shared/pay.flow), with the tasks the project writes for it (Payments). Run it
+// beside the server, on the same Temporal (-temporal, localhost:7233 by default):
+//
+//	go run ./cmd/worker
+//
+// The server starts the flows; they wait in Temporal until a worker runs them. It runs until it is
+// told to stop.
+package main
+
+import (
+	"flag"
+	"fmt"
+	"log/slog"
+	"os"
+
+	"go.temporal.io/sdk/client"
+	sdklog "go.temporal.io/sdk/log"
+	"go.temporal.io/sdk/worker"
+
+	"example.com/acme/approvals"
+)
+
+func main() {
+	address := flag.String("temporal", "localhost:7233", "the address of the Temporal server the flows run on")
+	flag.Parse()
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	if err := run(*address, log); err != nil {
+		log.Error("the worker stopped", "err", err)
+		os.Exit(1)
+	}
+}
+
+func run(address string, log *slog.Logger) error {
+	c, err := client.Dial(client.Options{HostPort: address, Logger: sdklog.NewStructuredLogger(log)})
+	if err != nil {
+		return fmt.Errorf("-temporal %s: %w", address, err)
+	}
+	defer c.Close()
+	workers := approvals.Workers(c, log)
+	for i, w := range workers {
+		if err := w.Start(); err != nil {
+			for _, started := range workers[:i] {
+				started.Stop()
+			}
+			return err
+		}
+	}
+	<-worker.InterruptCh()
+	for _, w := range workers {
+		w.Stop()
+	}
+	return nil
+}
+==> conformance_test.go <==
+package approvals
+
+import (
+	"os"
+	"testing"
+
+	server "github.com/i2y/ringi-server"
+	"github.com/i2y/ringi-server/conformance"
+	"github.com/i2y/ringi-server/memstore"
+)
+
+// TestVectors gives every vector ritsu wrote in requests/vectors/ (from the scenarios and the rules
+// of project/) to a server through its API, and checks that it answers what they say: the server
+// and the generated package agree on every rule of the kinds.
+func TestVectors(t *testing.T) {
+	p, err := PackageFrom(os.DirFS("requests"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := conformance.Setup{
+		Packages:     []*server.Package{p},
+		Organization: Organization(),
+		Store:        func(testing.TB) server.Store { return memstore.New() },
+	}
+	t.Log("\n" + conformance.Summary(conformance.Vectors(t, s)))
+}
+==> flows.go <==
+package approvals
+
+import (
+	"log/slog"
+
+	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/worker"
+
+	server "github.com/i2y/ringi-server"
+	"github.com/i2y/ringi-server/temporal"
+
+	"example.com/acme/approvals/go/flows/expense_payment"
+)
+
+// Flows makes what starts the flows of the kinds of request on Temporal, through c: the server's
+// Flows and Agents (cmd/server). It reads the flows the kinds name from their descriptions in pkgs
+// (temporal.FlowsOf): here the payment of an approved expense claim.
+func Flows(c client.Client, pkgs ...*server.Package) (*temporal.Runner, error) {
+	listed, err := temporal.FlowsOf(pkgs...)
+	if err != nil {
+		return nil, err
+	}
+	return temporal.New(c, temporal.Config{Flows: listed})
+}
+
+// Workers make the workers that run the flows on Temporal, through c, each with the tasks the
+// project writes for its flow: the payment's are Payments. cmd/worker runs them. A flow added to a
+// kind of request needs its worker here.
+func Workers(c client.Client, log *slog.Logger) []worker.Worker {
+	return []worker.Worker{
+		expense_payment.NewWorker(c, Payments{Log: log}, nil, ""),
+	}
+}
+==> flows_test.go <==
+package approvals
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"go.temporal.io/sdk/client"
+	sdklog "go.temporal.io/sdk/log"
+	sdktemporal "go.temporal.io/sdk/temporal"
+	"go.temporal.io/sdk/testsuite"
+
+	server "github.com/i2y/ringi-server"
+	"github.com/i2y/ringi-server/memstore"
+	"github.com/i2y/ringi-server/servertest"
+)
+
+// TestFlows runs the payment of an approved expense claim on Temporal's dev server, as cmd/server
+// and cmd/worker run it: s1201 claims an expense, the manager approves it, the server starts the
+// payment (Flows), and the worker runs it with the project's tasks (Workers, Payments): the
+// requester is paid once, and told. The dev server runs from the Temporal CLI TEMPORAL_CLI names,
+// else the one the SDK keeps in the system's temporary directory; the test never downloads it, and
+// without it says SKIP.
+func TestFlows(t *testing.T) {
+	cli := os.Getenv("TEMPORAL_CLI")
+	if cli == "" {
+		cli = filepath.Join(os.TempDir(), "temporal-cli-go-sdk-"+sdktemporal.SDKVersion)
+	}
+	if _, err := os.Stat(cli); err != nil {
+		t.Skipf("SKIP: no Temporal CLI at %s (TEMPORAL_CLI names one); the test does not download it", cli)
+	}
+	quiet := sdklog.NewStructuredLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	dev, err := testsuite.StartDevServer(t.Context(), testsuite.DevServerOptions{
+		ExistingPath: cli, LogLevel: "error", ClientOptions: &client.Options{Logger: quiet}, Stdout: io.Discard, Stderr: io.Discard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dev.Stop()
+	c := dev.Client()
+	var log lockedBuffer
+	logger := slog.New(slog.NewTextHandler(&log, nil))
+
+	// What cmd/worker runs.
+	for _, w := range Workers(c, logger) {
+		if err := w.Start(); err != nil {
+			t.Fatal(err)
+		}
+		defer w.Stop()
+	}
+	// What cmd/server runs, with the tickets in memory and the clock on monday.
+	cfg, err := Parts(logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flows, err := Flows(c, cfg.Packages...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Flows, cfg.Agents = flows, flows
+	cfg.Store, cfg.Authenticator, cfg.Clock, cfg.Logger = memstore.New(), servertest.Header{}, servertest.NewClock(monday), logger
+	srv, err := server.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	Started(cfg, srv)
+	if err := srv.ImportOrganization(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	ran := make(chan error, 1)
+	go func() { ran <- flows.Run(ctx, srv) }()
+	defer func() {
+		cancel()
+		<-ran
+	}()
+
+	r := do(t, srv, "s1201", "submit_expense", "", `{"form":{"amount":4800,"purpose":"A taxi to a customer"}}`)
+	var b struct {
+		Ticket ticket `json:"ticket"`
+	}
+	if r.Outcome != server.OK || json.Unmarshal(r.Body, &b) != nil {
+		t.Fatalf("the claim: %s %s %s", r.Outcome, r.Problem, r.Body)
+	}
+	id := b.Ticket.ID
+	if r := do(t, srv, "s1101", "approve", id, `{"revision":`+string(b.Ticket.Revision)+`}`); r.Outcome != server.OK {
+		t.Fatalf("the manager approves: %s %s %s", r.Outcome, r.Problem, r.Body)
+	}
+	// The things to do after the approval: the start of the payment.
+	if _, err := srv.RunToDo(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	told := "msg=told request=" + id + " "
+	for end := time.Now().Add(time.Minute); !strings.Contains(log.String(), told); time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(end) {
+			t.Fatalf("the requester was not told within a minute:\n%s", log.String())
+		}
+	}
+	if n := strings.Count(log.String(), "msg=paid request="+id+" "); n != 1 || !strings.Contains(log.String(), "PAY-"+id) {
+		t.Errorf("the requester was paid %d times:\n%s", n, log.String())
+	}
+	if tk := ticketOf(t, srv, "s1201", id); tk.Status != "approved" {
+		t.Errorf("the claim after the approval: %+v", tk)
+	}
+}
+
+// lockedBuffer is a log the server and the worker write to while the test reads it.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+==> gate.go <==
+package approvals
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"slices"
+	"sync"
+
+	server "github.com/i2y/ringi-server"
+
+	"example.com/acme/approvals/go/authz/company"
+)
+
+// Gate asks the gate ritsu generated from project/shared/company.gate (go/authz/company), with what
+// the framework's question says. The gate's Requesters and Approvers are groups: the person is in
+// them when the question lists them. An attribute added to a principal or a resource needs its
+// value in gateStore; a role the gate lets a Staff hold is in the answer of the generated RolesOf,
+// so one added to the gate needs no change here.
+type Gate struct {
+	// Log is where Gate says a role a sign-in gives that the gate does not declare: once for each
+	// role, for the first hundred of them.
+	Log *slog.Logger
+
+	mu   sync.Mutex
+	told map[string]bool
+}
+
+// gateRoles are the roles a Staff principal of project/shared/company.gate can hold, in the order
+// the gate declares them: the generated package's RolesOf, asked by the principal's type in Cedar.
+// The generated gate refuses a person with a role it does not declare, whatever they ask, so Allow
+// leaves out a role the sign-in gives for something else (a claim of the provider, a header of the
+// proxy).
+func gateRoles() []string {
+	return company.RolesOf("Staff")
+}
+
+// Allow asks the gate by the action's name, with the ID of each resource the framework knows: the
+// ticket, its stage, its kind of request (the version the question is of), and the organization.
+// The gate takes the one its action asks about. An action the gate does not declare is an error;
+// the gate's other refusals are a no, a person it does not read (one with no primary team in the
+// organization's version) among them.
+func (g *Gate) Allow(_ context.Context, q server.Question) (bool, error) {
+	ids := map[string]string{"Ticket": q.Ticket, "Stage": q.Ticket + "/" + q.Stage, "RequestType": q.Kind, "Organization": "organization"}
+	store := gateStore{q: q, roles: g.roles(q.Person)}
+	a := company.Authorize(store, company.Principal{Type: "Staff", ID: q.Person.ID}, q.Action, ids, q.Now)
+	if a.Err != nil && a.Err.Kind == "action" {
+		return false, errors.New(a.Err.Message)
+	}
+	return a.Err == nil && a.Allowed, nil
+}
+
+// roles answers the roles of the person the gate declares, in the order the sign-in gives them:
+// staff when it gives none of them. A role left out is said in the log.
+func (g *Gate) roles(p server.Person) []string {
+	declared := gateRoles()
+	var kept []string
+	for _, r := range p.Roles {
+		switch {
+		case !slices.Contains(declared, r):
+			g.leftOut(r, p.ID)
+		case !slices.Contains(kept, r):
+			kept = append(kept, r)
+		}
+	}
+	if len(kept) == 0 {
+		return []string{"staff"}
+	}
+	return kept
+}
+
+// leftOut says in the log that the gate does not declare role, the first time a sign-in gives it.
+// It keeps the names of a hundred roles at the most, as the names come from outside.
+func (g *Gate) leftOut(role, person string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.told[role] || len(g.told) >= 100 {
+		return
+	}
+	if g.told == nil {
+		g.told = map[string]bool{}
+	}
+	g.told[role] = true
+	if g.Log != nil {
+		g.Log.Warn("the gate does not declare a role the sign-in gives, and is asked without it", "role", role, "person", person)
+	}
+}
+
+// gateStore is what the gate reads, from one question.
+type gateStore struct {
+	q     server.Question
+	roles []string
+}
+
+// Staff answers the person as the gate reads them, or nil for one the organization's version does
+// not have (no primary team in it): the gate refuses them whatever they ask, so that no one outside
+// the organization is taken as one of a department. Their department is their team of the kind of
+// the team that owns the request type, the first team of that kind at or above their primary team:
+// a request type owned by a section, a department or a division is compared at its own level,
+// whatever the organization calls its kinds of team. A question with no owner among the version's
+// teams (one of the organization, or of a request type that names no owner or a team the version
+// does not have) gives their primary team, which owns nothing of it.
+func (s gateStore) Staff(id string) (*company.Staff, error) {
+	kind := ""
+	if owner, ok := teamIn(s.q.Org, s.q.Owner); ok {
+		kind = owner.Kind
+	}
+	department := s.q.Org.TeamOf(id, kind)
+	if department == "" {
+		return nil, nil
+	}
+	st := &company.Staff{Department: department}
+	if id == s.q.Person.ID {
+		st.Roles = s.roles
+		if slices.Contains(s.q.Requesters, id) {
+			st.MemberOfRequesters = []string{"requesters"}
+		}
+		if slices.Contains(s.q.Approvers, id) {
+			st.MemberOfApprovers = []string{"approvers"}
+		}
+	}
+	return st, nil
+}
+
+func (s gateStore) Stage(string) (*company.Stage, error) {
+	return &company.Stage{Requester: s.q.Requester, Requesters: "requesters", Approvers: "approvers", Owner: s.owner(), SelfApproval: s.q.SelfApproval}, nil
+}
+
+func (s gateStore) Ticket(string) (*company.Ticket, error) {
+	return &company.Ticket{Requester: s.q.Requester, Requesters: "requesters", Owner: s.owner()}, nil
+}
+
+func (s gateStore) RequestType(string) (*company.RequestType, error) {
+	return &company.RequestType{Owner: s.owner()}, nil
+}
+
+// owner answers the team that owns the request type. One that names no owner is owned by no team:
+// the gate is given an ID that no team of the organization's version has, so that it is no one's
+// department, and only a rule that reads no department (a system administrator's) allows anything
+// of it.
+func (s gateStore) owner() string {
+	if s.q.Owner != "" {
+		return s.q.Owner
+	}
+	id := "(no owner)"
+	for {
+		if _, ok := teamIn(s.q.Org, id); !ok {
+			return id
+		}
+		id = "(" + id + ")"
+	}
+}
+
+// teamIn answers the team of the version v with the ID id, and whether it has one.
+func teamIn(v *server.OrgVersion, id string) (server.Team, bool) {
+	if v != nil {
+		for _, t := range v.Teams {
+			if t.ID == id {
+				return t, true
+			}
+		}
+	}
+	return server.Team{}, false
+}
+==> generate.go <==
+package approvals
+
+// ritsu writes go/ (the Go package of the project: its kinds of request, their rules and dates, and
+// the gate) and requests/ (what the server reads: openapi.json, types/, a2ui/ and mcp/, and the
+// vectors the tests run) from the files of project/. Run it again after changing them:
+//
+//	go generate ./...
+//
+// The same line with --check writes nothing, and fails when go/ or requests/ is not what project/
+// makes, for CI. --lang is the language of the sentences the generated code says, which the line
+// keeps the same whoever runs it. The catalog's ID is a name for the catalog of the project's
+// screens: write it as a URL you own, and keep it the same in every environment.
+//
+//go:generate ritsu gen project --root project --target go --target requests --catalog https://example.com/acme/approvals/a2ui/catalog.json --module example.com/acme/approvals/go --out . --lang en
+==> go.mod <==
+module example.com/acme/approvals
+
+go 1.26.0
+
+require (
+	github.com/cedar-policy/cedar-go v1.8.0
+	github.com/i2y/ringi-server v0.1.0
+	github.com/i2y/ringi-server/mcp v0.1.0
+	github.com/i2y/ringi-server/temporal v0.1.0
+	go.temporal.io/api v1.63.5
+	go.temporal.io/sdk v1.49.0
+)
+==> notify.go <==
+package approvals
+
+import (
+	"context"
+	"log/slog"
+	"strings"
+
+	server "github.com/i2y/ringi-server"
+)
+
+// LogNotifier writes each notice to the log, where a real one sends a mail or a chat message: the
+// notice names the people to tell, with their addresses from the organization's data. It says the
+// kind by its title in the language it writes in (Server.Title), with the language the title is in:
+// the kind's title as its file writes it where it has none in that language. A real one writes to
+// each person in their own language, and sends each key once: the framework calls it again with the
+// same key after a failure it could not tell from a success.
+type LogNotifier struct {
+	// Server is the server whose kinds the notices are of; Started sets it once the server is made.
+	Server *server.Server
+	Log    *slog.Logger
+	// Lang is the language the notices are written in; "en" when empty.
+	Lang string
+}
+
+// Notify writes the notice.
+func (n *LogNotifier) Notify(_ context.Context, x server.Notice) error {
+	to := make([]string, 0, len(x.To))
+	for _, r := range x.To {
+		to = append(to, r.ID+" "+r.Email)
+	}
+	lang := n.Lang
+	if lang == "" {
+		lang = "en"
+	}
+	title, in := n.Server.Title(x.Kind, x.Version, lang)
+	n.Log.Info("notice", "notice", x.Notice, "to", strings.Join(to, ", "), "kind", x.Kind, "title", title, "title_lang", in, "ticket", x.Ticket, "stage", x.Stage)
+	return nil
+}
+==> pages_test.go <==
+package approvals
+
+import (
+	"bytes"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+
+	"github.com/i2y/ringi-server/devlogin"
+	"github.com/i2y/ringi-server/servertest"
+	"github.com/i2y/ringi-server/web"
+)
+
+// TestPages makes a purchase request on the pages, as people do in a browser with go run
+// ./cmd/server -dev-login: the requester signs in and submits the form, the manager is told and
+// approves, and the head of the department approves.
+func TestPages(t *testing.T) {
+	var log bytes.Buffer
+	dev := &devlogin.SignIn{}
+	srv := newServer(t, dev, &log)
+	h, err := web.New(srv, web.Config{Require: dev.Require, LoginURL: dev.LoginURL, SignOut: devlogin.LogoutPath, Logger: slog.New(slog.NewTextHandler(&log, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dev.Server = srv
+	dev.Mount(h)
+	signIn := func(person string) *servertest.Browser {
+		b := &servertest.Browser{Handler: h}
+		if w := b.Post(devlogin.LoginPath, url.Values{"person": {person}, "return_to": {"/pages/"}}); w.Code != http.StatusSeeOther {
+			t.Fatalf("%s signs in: %d %s", person, w.Code, w.Body)
+		}
+		return b
+	}
+	// press opens a page as a person, and presses a button of its form: the answer is 303, to the
+	// ticket's card.
+	press := func(b *servertest.Browser, page, button string, values map[string]string) string {
+		t.Helper()
+		w := b.Get(page)
+		f, err := servertest.ReadForm(w.Body.Bytes())
+		if w.Code != http.StatusOK || err != nil {
+			t.Fatalf("the page %s: %d %v", page, w.Code, err)
+		}
+		for name, v := range values {
+			if err := f.Set(name, v); err != nil {
+				t.Fatal(err)
+			}
+		}
+		w, err = b.Press(f, button)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("%s on %s: %d %.500s", button, page, w.Code, w.Body)
+		}
+		return w.Header().Get("Location")
+	}
+	card := press(signIn("s1201"), "/pages/requests/purchase/new?lang=en", "button.submit", map[string]string{
+		"f.amount": "120000", "f.purpose": "A laptop for the new member of the section",
+	})
+	id, ok := strings.CutPrefix(card, "/pages/tickets/")
+	id, _, _ = strings.Cut(id, "?")
+	if !ok {
+		t.Fatalf("the request went to %q", card)
+	}
+	// The things to do after the request: the notice to the manager, which notify.go writes to the
+	// log.
+	if _, err := srv.RunToDo(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(log.String(), "msg=notice") || !strings.Contains(log.String(), "s1101@example.com") {
+		t.Errorf("no notice to the manager in the log:\n%s", log.String())
+	}
+	// The notice says the kind by its title in the language notify.go writes in.
+	if title, in := srv.Title("purchase", 1, "en"); in != "en" || !strings.Contains(log.String(), title) || !strings.Contains(log.String(), "title_lang=en") {
+		t.Errorf("the notice does not say the kind by its title in en (%q in %q):\n%s", title, in, log.String())
+	}
+	if again := press(signIn("s1101"), card, "button.approve", nil); again != card {
+		t.Errorf("the manager's approval went to %q", again)
+	}
+	if tk := ticketOf(t, srv, "s1201", id); tk.Status != "in_progress" || tk.Stage == nil || *tk.Stage != "head" {
+		t.Fatalf("after the manager: %+v", tk)
+	}
+	press(signIn("s1001"), card, "button.approve", nil)
+	if tk := ticketOf(t, srv, "s1201", id); tk.Status != "approved" {
+		t.Errorf("after the head of the department: %+v", tk)
+	}
+}
+==> payments.go <==
+package approvals
+
+import (
+	"context"
+	"log/slog"
+)
+
+// Payments are the tasks of the payment flow (project/shared/pay.flow) the project writes. These
+// write to the log, where real ones pay the requester through the accounts system and tell them.
+// The flow says each is idempotent: Temporal may run one again after a failure it could not tell
+// from a success, and a real one pays a request once.
+type Payments struct{ Log *slog.Logger }
+
+// PayRequester pays the requester the amount of the request, and answers the payment's reference.
+func (p Payments) PayRequester(_ context.Context, args map[string]any) (any, error) {
+	id, _ := args["request_id"].(string)
+	p.Log.Info("paid", "request", id, "requester", args["requester"], "amount", args["amount"], "purpose", args["purpose"])
+	return map[string]any{"reference": "PAY-" + id}, nil
+}
+
+// TellRequester tells the requester the text.
+func (p Payments) TellRequester(_ context.Context, args map[string]any) (any, error) {
+	p.Log.Info("told", "request", args["request_id"], "text", args["text"])
+	return nil, nil
+}
+==> project/expense.ringi <==
+request expense v1 "Expense claim"
+description "An expense the requester paid for the company, approved by their manager and then paid back to them. ritsu ringi init wrote it as a start: change it into your own rules"
+owner general_affairs
+
+use organization org from "shared/company.ringi"
+use calendar office from "shared/office.cal"
+use gate "shared/company.gate"
+use flow pay from "shared/pay.flow"
+
+form
+  amount  : money[JPY] "Amount"  range >=1JPY <=1_000_000JPY
+  purpose : long text "Purpose"  count >=1 <=500
+
+route
+  manager  manager
+
+who
+  manager = manager of requester
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late expire
+  when empty escalate
+
+ticket
+  # The president is at the top of the organization, with no manager to approve their claims.
+  submitted by   everyone except position president
+  self approval  not allowed
+  send back      to the requester, at most 2 times
+  resubmit       within 5 business days
+  withdraw       until it is decided
+  # Once the claim is approved, the server starts the payment on Temporal, and cmd/worker runs it.
+  on approved    launch pay(request_id: ticket.id, requester: requester.id, amount: amount, purpose: purpose)
+
+scenario approved_and_paid
+  requester s1201
+  form amount = 4_800JPY, purpose = "A taxi to a customer"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1201 | manager  | in progress |
+| 2026-11-16 15:00 | approve | s1101 |          | approved    |
+
+scenario rejected_by_the_manager
+  requester s1202
+  form amount = 52_000JPY, purpose = "A dinner with the team"
+| at               | event  | by    | comment                         | -> stage | status      |
+| 2026-11-16 10:00 | submit | s1202 |                                 | manager  | in progress |
+| 2026-11-16 15:00 | reject | s1101 | "Team dinners are not expenses" |          | rejected    |
+
+labels ja
+  request        "経費の精算"
+  amount         "金額"
+  purpose        "目的"
+  stage manager  "上長"
+  who manager    "上長"
+==> project/org/2026-04-01/members.csv <==
+person,team,position,primary
+p0001,company,president,yes
+s1001,sales,head,yes
+s1101,sales_1,manager,yes
+s1201,sales_1,staff,yes
+s1202,sales_1,staff,yes
+e1001,engineering,head,yes
+e1101,engineering_1,manager,yes
+e1201,engineering_1,staff,yes
+g1001,general_affairs,head,yes
+g1201,general_affairs,staff,yes
+==> project/org/2026-04-01/people.csv <==
+id,name,name_ja,email
+p0001,President,社長,p0001@example.com
+s1001,Head of Sales,営業部長,s1001@example.com
+s1101,Manager of Sales Section 1,営業一課長,s1101@example.com
+s1201,Sales staff 1,営業担当 1,s1201@example.com
+s1202,Sales staff 2,営業担当 2,s1202@example.com
+e1001,Head of Engineering,開発部長,e1001@example.com
+e1101,Manager of Engineering Section 1,開発一課長,e1101@example.com
+e1201,Engineer 1,開発担当 1,e1201@example.com
+g1001,Head of General Affairs,総務部長,g1001@example.com
+g1201,General affairs staff,総務担当,g1201@example.com
+==> project/org/2026-04-01/teams.csv <==
+id,name,name_ja,kind,parent,head
+company,Example Co.,サンプル株式会社,company,,p0001
+sales,Sales Department,営業部,department,company,s1001
+sales_1,Sales Section 1,営業一課,section,sales,s1101
+engineering,Engineering Department,開発部,department,company,e1001
+engineering_1,Engineering Section 1,開発一課,section,engineering,e1101
+general_affairs,General Affairs Department,総務部,department,company,g1001
+==> project/purchase.ringi <==
+request purchase v1 "Purchase request"
+description "A purchase the requester's manager approves, then the head of their department. ritsu ringi init wrote it as a start: change it into your own rules"
+owner general_affairs
+
+use organization org from "shared/company.ringi"
+use calendar office from "shared/office.cal"
+use gate "shared/company.gate"
+
+form
+  amount  : money[JPY] "Amount"  range >=1JPY <=10_000_000JPY
+  purpose : long text "Purpose"  count >=1 <=500
+
+route
+  manager  manager
+  head     dept_head
+
+who
+  manager   = manager of requester
+  dept_head = head of requester.department
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late expire
+  when empty escalate
+
+ticket
+  # The president is at the top of the organization, with no manager to approve their purchases.
+  submitted by   everyone except position president
+  self approval  not allowed
+  # A manager who is also the head of the department approves once for both stages.
+  same approver  approves once
+  send back      to the requester, at most 2 times
+  resubmit       within 5 business days
+  withdraw       until it is decided
+
+claims
+  ends_in_time : every ticket ends within 28 business days
+
+scenario approved_at_both_stages
+  requester s1201
+  form amount = 120_000JPY, purpose = "A laptop for the new member of the section"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1201 | manager  | in progress |
+| 2026-11-16 15:00 | approve | s1101 | head     | in progress |
+| 2026-11-17 11:00 | approve | s1001 |          | approved    |
+
+# The manager asks what the purchase is for, and the requester says it in the request made again.
+scenario sent_back_and_submitted_again
+  requester s1201
+  form amount = 120_000JPY, purpose = "A laptop"
+| at               | event                                                               | by    | comment                         | -> stage | status         |
+| 2026-11-16 10:00 | submit                                                              | s1201 |                                 | manager  | in progress    |
+| 2026-11-16 15:00 | send back                                                           | s1101 | "Who will use it?"              |          | with requester |
+| 2026-11-17 09:00 | resubmit(purpose: "A laptop for the new member of the section")    | s1201 | "It is for the new member"      | manager  | in progress    |
+| 2026-11-17 10:00 | approve                                                             | s1101 |                                 | head     | in progress    |
+| 2026-11-17 11:00 | approve                                                             | s1001 |                                 |          | approved       |
+
+scenario rejected_by_the_head
+  requester s1202
+  form amount = 9_000_000JPY, purpose = "A car for the section"
+| at               | event   | by    | comment                       | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1202 |                               | manager  | in progress |
+| 2026-11-16 15:00 | approve | s1101 |                               | head     | in progress |
+| 2026-11-17 11:00 | reject  | s1001 | "Not in this year's budget"   |          | rejected    |
+
+# Nobody answers: the manager is reminded after two business days, and the request expires after
+# the third.
+scenario expired_when_no_one_answers
+  requester s1202
+  form amount = 30_000JPY, purpose = "Books for the section"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1202 | manager  | in progress |
+| 2026-11-18 09:00 | remind  |       | manager  | in progress |
+| 2026-11-20 00:00 | late    |       |          | expired     |
+
+labels ja
+  request        "購買の申請"
+  amount         "金額"
+  purpose        "目的"
+  stage manager  "上長"
+  stage head     "部長"
+  who manager    "上長"
+  who dept_head  "部長"
+==> project/shared/company.gate <==
+gate company v1
+description "Who may do what on every request type: only the approvers the route resolved answer a stage, no one decides their own request unless its route allows it, and the department that owns a request type sees its tickets. An administrator of a department administers only the request types it owns, a system administrator administers every one and the organization, and an auditor reads every record and changes nothing"
+namespace Company
+
+role staff
+  description "Anyone on the staff"
+role workflow_admin
+  description "Administers the request types of their own department"
+  includes staff
+role system_admin
+  description "Administers every request type and the organization's data"
+  includes staff
+role auditor
+  description "Reads the record of every request type and of the organization, and changes nothing"
+  includes staff
+
+principal Staff
+  description "A member of the staff, signed in"
+  roles staff, workflow_admin, system_admin, auditor
+  attributes
+    department : Team
+
+resource Team
+  description "A team of the organization, as the data of the version in force has it"
+
+resource Organization
+  description "The organization's data: its versions, with their people and teams, and the masters"
+
+resource Approvers
+  description "The approvers the route resolved for one stage of one ticket, proxies included, or, while the ticket is back with its requester, the one who sent it back; the server passes it as a parent of each of them"
+
+resource Requesters
+  description "The requester's side of one ticket: its requester, the one who made the request for them, and the proxies who may submit it for them that day; the server passes it as a parent of each of them"
+
+resource Stage
+  description "One stage of one ticket, as its approvers answer it"
+  attributes
+    requester     : Staff
+    requesters    : Requesters
+    approvers     : Approvers
+    owner         : Team
+    self_approval : bool
+
+resource Ticket
+  description "One request, as its requester's side handles it, and as others see it"
+  attributes
+    requester  : Staff
+    requesters : Requesters
+    owner      : Team
+
+resource RequestType
+  description "One version of a request type: one .ringi file"
+  attributes
+    owner : Team
+
+action submit
+  description "Submit a request, or submit it again after it was sent back"
+  principal Staff
+  resource Ticket
+
+action withdraw
+  description "Withdraw a request that is not decided, or drop one that came back to its requester"
+  principal Staff
+  resource Ticket
+
+action approve
+  description "Approve the stage that waits for the caller"
+  principal Staff
+  resource Stage
+
+action send_back
+  description "Send the ticket back to the requester or to an earlier stage"
+  principal Staff
+  resource Stage
+
+action reject
+  description "Reject the ticket at the caller's stage"
+  principal Staff
+  resource Stage
+
+action pause
+  description "Pause the stage that waits for the caller, or let it go on"
+  principal Staff
+  resource Stage
+
+action add_approver
+  description "Add an approver to the stage a ticket waits at"
+  principal Staff
+  resource Stage
+
+action hand_over
+  description "Hand what one approver of the stage a ticket waits at has to answer over to another person"
+  principal Staff
+  resource Stage
+
+action retract
+  description "Take back one's approval of a stage while the next stage has not answered"
+  principal Staff
+  resource Stage
+
+action comment
+  description "Write a comment on a ticket, at the stage it is at"
+  principal Staff
+  resource Stage
+
+action see
+  description "See a ticket one is not on: the requester's side and the approvers' side see theirs without asking"
+  principal Staff
+  resource Ticket
+
+action change_request_type
+  description "Decide when a version of a request type takes new requests: from now, from a day, as its file says, or never"
+  principal Staff
+  resource RequestType
+
+action read_audit
+  description "Read the record of a version of a request type: the moves of its tickets, their forms among them, and the switches of the version"
+  principal Staff
+  resource RequestType
+
+action import_organization
+  description "Check a new version of the organization's data, and import it"
+  principal Staff
+  resource Organization
+
+action read_organization_audit
+  description "Read the record of the organization: the imports of its data"
+  principal Staff
+  resource Organization
+
+permit staff_submit
+  description "Anyone on the staff submits a request"
+  principal in staff
+  action submit
+
+permit the_requesters_side_withdraws
+  description "The requester's side withdraws a request: its requester, the one who made it for them, or a proxy who may submit it for them that day"
+  principal is Staff
+  action withdraw
+  when principal in resource.requesters
+
+permit approvers_answer_their_stage
+  description "The approvers the route resolved for a stage answer it"
+  principal is Staff
+  action approve, send_back, reject, pause, retract
+  when principal in resource.approvers
+
+permit the_people_of_a_ticket_comment
+  description "The requester's side, the approvers of the stage a ticket is at (while it is back with the requester, the one who sent it back), and the department that owns its request type write comments on it"
+  principal is Staff
+  action comment
+  when principal in resource.requesters or principal in resource.approvers or resource.owner is principal.department
+
+permit the_owning_department_sees
+  description "The department that owns a request type sees the tickets of it"
+  principal is Staff
+  action see
+  when resource.owner is principal.department
+
+forbid no_one_decides_their_own
+  description "No one approves, sends back or rejects their own request, unless its route allows it"
+  principal is Staff
+  action approve, send_back, reject
+  when resource.requester is principal
+  unless resource.self_approval
+
+permit admins_add_approvers_in_their_department
+  description "An administrator adds an approver to a stage of a request type their department owns"
+  principal in workflow_admin
+  action add_approver
+  when resource.owner is principal.department
+
+permit admins_hand_over_in_their_department
+  description "An administrator hands an approver's part of a stage over to another person, on a request type their department owns"
+  principal in workflow_admin
+  action hand_over
+  when resource.owner is principal.department
+
+permit admins_change_their_own_departments
+  description "An administrator changes the request types their department owns"
+  principal in workflow_admin
+  action change_request_type
+  when resource.owner is principal.department
+
+permit admins_read_their_own_departments
+  description "An administrator reads the record of the request types their department owns"
+  principal in workflow_admin
+  action read_audit
+  when resource.owner is principal.department
+
+permit system_admins_administer_everything
+  description "A system administrator switches every request type, imports the organization's data, and reads every record"
+  principal in system_admin
+  action change_request_type, read_audit, import_organization, read_organization_audit
+
+permit auditors_read_every_record
+  description "An auditor reads the record of every request type and of the organization"
+  principal in auditor
+  action read_audit, read_organization_audit
+
+expect deny requesters_never_approve_on_a_strict_route
+  description "On a route that does not allow it, a requester never approves their own request"
+  principal is Staff
+  action approve
+  when resource.requester is principal
+  unless resource.self_approval
+
+expect deny admins_never_change_other_departments
+  description "An administrator of a department who is no system administrator never changes a request type another department owns"
+  principal in workflow_admin
+  action change_request_type
+  unless principal in system_admin
+  unless resource.owner is principal.department
+
+expect deny admins_never_read_other_departments
+  description "An administrator of a department who is neither a system administrator nor an auditor never reads the record of a request type another department owns"
+  principal in workflow_admin
+  action read_audit
+  unless principal in system_admin
+  unless principal in auditor
+  unless resource.owner is principal.department
+
+expect deny only_system_admins_import_the_organization
+  description "No one but a system administrator imports the organization's data"
+  principal in staff
+  action import_organization
+  unless principal in system_admin
+
+expect deny auditors_change_nothing
+  description "An auditor with no role of an administrator switches no request type, imports nothing, adds no approver and hands no one's part over"
+  principal in auditor
+  action change_request_type, import_organization, add_approver, hand_over
+  unless principal in system_admin
+  unless principal in workflow_admin
+
+expect allow system_admins_import_the_organization
+  description "A system administrator imports the organization's data"
+  principal in system_admin
+  action import_organization
+
+expect allow an_approver_approves
+  description "An approver the route resolved approves a stage of someone else's request"
+  principal in staff
+  action approve
+  unless resource.requester is principal
+  when principal in resource.approvers
+
+expect allow the_requesters_side_withdraws_it
+  description "One on the requester's side, such as the one who made the request for its requester, withdraws it"
+  principal in staff
+  action withdraw
+  when principal in resource.requesters
+
+expect allow the_owning_department_sees_its_tickets
+  description "One of the department that owns a request type sees a ticket of it"
+  principal in staff
+  action see
+  when resource.owner is principal.department
+
+expect deny other_departments_do_not_see
+  description "One of another department does not see a ticket they are not on"
+  principal in staff
+  action see
+  unless resource.owner is principal.department
+==> project/shared/company.ringi <==
+organization company v1 "Company"
+description "The shape of the organization: the positions from the lowest, the kinds of teams from the widest, and the folder that holds the data of each version"
+
+positions
+  staff     "Staff"
+  manager   "Manager"
+  head      "Head of department"
+  president "President"
+
+team kinds
+  company    "Company"
+  department "Department"
+  section    "Section"
+
+data "../org"
+==> project/shared/office.cal <==
+calendar office v1
+description "The business days of the office: Saturdays, Sundays and the New Year break are closed, in the time of Tokyo"
+offset +09:00
+
+closed weekly sat, sun
+closed every 12-29..01-03 "New Year break"
+==> project/shared/pay.flow <==
+workflow expense_payment v1
+description "The payment of an approved expense claim: the requester is paid back, and told. The claim starts it when it is approved; the tasks are the project's own (payments.go)"
+
+inputs
+  request_id : string
+  requester  : string
+  amount     : money[JPY]  range >=1JPY <=1_000_000JPY
+  purpose    : string
+
+outputs
+  reference : string
+
+record Payment
+  reference : string
+
+task pay_requester(request_id: string, requester: string, amount: money[JPY], purpose: string) -> Payment
+  timeout 1 day
+  retry 3 times every 10 minutes
+  idempotent
+
+task tell_requester(request_id: string, text: string)
+  idempotent
+
+flow
+  let p = pay_requester(request_id: request_id, requester: requester, amount: amount, purpose: purpose)
+  tell_requester(request_id: request_id, text: "Request {request_id} was paid: {p.reference}")
+  succeed reference = p.reference
+==> server_test.go <==
+package approvals
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"strings"
+	"testing"
+	"time"
+
+	server "github.com/i2y/ringi-server"
+	"github.com/i2y/ringi-server/memstore"
+	"github.com/i2y/ringi-server/servertest"
+)
+
+// monday is a business day of the office's calendar, at 10:00 in its time.
+var monday = time.Date(2026, 11, 16, 10, 0, 0, 0, time.FixedZone("+09:00", 9*60*60))
+
+// newServer makes the server cmd/server makes, with the parts of the project (Parts), a store in
+// memory and a clock set to monday: sign says who sends each request, and the log goes to log.
+func newServer(t *testing.T, sign server.Authenticator, log *bytes.Buffer) *server.Server {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(log, nil))
+	cfg, err := Parts(logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Store, cfg.Authenticator, cfg.Clock, cfg.Logger = memstore.New(), sign, servertest.NewClock(monday), logger
+	srv, err := server.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	Started(cfg, srv)
+	if err := srv.ImportOrganization(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	return srv
+}
+
+// do does an operation as a person, and answers the reply.
+func do(t *testing.T, srv *server.Server, person, op, ticket, body string) server.Reply {
+	t.Helper()
+	key := person + "." + op + "." + ticket // the operation's idempotency key: visible ASCII
+	r, err := srv.Do(t.Context(), server.Call{Operation: op, Person: server.Person{ID: person}, Ticket: ticket, Body: []byte(body), Key: key})
+	if err != nil {
+		t.Fatalf("%s does %s: %v", person, op, err)
+	}
+	return r
+}
+
+// ticket is what the tests read of a ticket.
+type ticket struct {
+	ID       string          `json:"id"`
+	Status   string          `json:"status"`
+	Stage    *string         `json:"stage"`
+	Revision json.RawMessage `json:"revision"`
+}
+
+// ticketOf reads a ticket as a person who may see it.
+func ticketOf(t *testing.T, srv *server.Server, person, id string) ticket {
+	t.Helper()
+	r := do(t, srv, person, "get_ticket", id, "")
+	var b struct {
+		Ticket ticket `json:"ticket"`
+	}
+	if r.Outcome != server.OK || json.Unmarshal(r.Body, &b) != nil {
+		t.Fatalf("%s reads %s: %s %s %s", person, id, r.Outcome, r.Problem, r.Body)
+	}
+	return b.Ticket
+}
+
+// gateOrg is a version of an organization of two divisions, for the questions the tests ask the gate
+// themselves: a division has departments, a department sections, and the section facilities a unit.
+// Each team has one person, in_<the team>. kind gives the name the data uses for the kind of each
+// team, from the team's place in the list and the kind the organization declares.
+func gateOrg(kind func(place int, declared string) string) *server.OrgVersion {
+	teams := []server.Team{
+		{ID: "acme", Kind: "company"},
+		{ID: "corporate", Kind: "division", Parent: "acme"},
+		{ID: "product", Kind: "division", Parent: "acme"},
+		{ID: "general_affairs", Kind: "department", Parent: "corporate"},
+		{ID: "finance", Kind: "department", Parent: "corporate"},
+		{ID: "engineering", Kind: "department", Parent: "product"},
+		{ID: "front_desk", Kind: "section", Parent: "general_affairs"},
+		{ID: "facilities", Kind: "section", Parent: "general_affairs"},
+		{ID: "mail_room", Kind: "unit", Parent: "facilities"},
+		{ID: "accounting", Kind: "section", Parent: "finance"},
+		{ID: "web", Kind: "section", Parent: "engineering"},
+	}
+	v := &server.OrgVersion{Day: "2026-04-01"}
+	for i, team := range teams {
+		team.Name, team.Kind = team.ID, kind(i, team.Kind)
+		v.Teams = append(v.Teams, team)
+		join(v, "in_"+team.ID, team.ID)
+	}
+	return v
+}
+
+// join adds person to the version, with team their primary team.
+func join(v *server.OrgVersion, person, team string) {
+	v.People = append(v.People, server.OrgPerson{ID: person, Name: person})
+	v.Members = append(v.Members, server.Member{Person: person, Team: team, Primary: true})
+}
+
+// asDeclared names each kind of team as the organization declares it.
+func asDeclared(_ int, declared string) string { return declared }
+
+// question is what the server asks the gate when person does action at monday, with org the version
+// of the organization in effect: of the organization alone for the organization's operations; of
+// purchase (version 1, owned by owner, none for "") for those of a request type; for a submit, of the
+// person's own new ticket; else of the ticket T-1 of someone else, at its stage head.
+func question(org *server.OrgVersion, person server.Person, action, owner string) server.Question {
+	q := server.Question{Action: action, Person: person, Now: monday, Org: org}
+	switch action {
+	case "import_organization", "read_organization_audit":
+		return q
+	}
+	q.Kind, q.Version, q.Owner = "purchase", 1, owner
+	switch action {
+	case "change_request_type", "read_audit":
+	case "submit":
+		q.Ticket, q.Requester, q.Requesters = "T-2", person.ID, []string{person.ID}
+	default:
+		q.Ticket, q.Stage, q.Requester, q.Requesters = "T-1", "head", "the_requester", []string{"the_requester"}
+	}
+	return q
+}
+
+// allows answers whether g allows q. An error of the gate fails the test.
+func allows(t *testing.T, g *Gate, q server.Question) bool {
+	t.Helper()
+	ok, err := g.Allow(t.Context(), q)
+	if err != nil {
+		t.Fatalf("%s asks %s: %v", q.Person.ID, q.Action, err)
+	}
+	return ok
+}
+
+// TestGate checks the gate glue (gate.go) on what only the gate decides. Through the server: the
+// department that owns the request type sees its tickets and another department does not, and the
+// requester withdraws their request, which comes back to them. Asked as the server asks the gate, in
+// an organization of the test's own (gateOrg): who may do each of the four operations of the
+// administration, by role and by department; that a person the organization's version does not
+// have, and a request type that names no owner, are of no one's department; that a person's
+// department is found at the level of the team that owns the request type, whatever the organization
+// calls its kinds of team; and that the roles of a sign-in the gate does not declare are left out.
+func TestGate(t *testing.T) {
+	t.Run("tickets", func(t *testing.T) {
+		var log bytes.Buffer
+		srv := newServer(t, servertest.Header{}, &log)
+		r := do(t, srv, "s1201", "submit_purchase", "", `{"form":{"amount":30000,"purpose":"Books for the section"}}`)
+		var b struct {
+			Ticket ticket `json:"ticket"`
+		}
+		if r.Outcome != server.OK || json.Unmarshal(r.Body, &b) != nil {
+			t.Fatalf("the request: %s %s %s", r.Outcome, r.Problem, r.Body)
+		}
+		id := b.Ticket.ID
+		for person, want := range map[string]server.Outcome{
+			"s1101": server.OK,       // the manager, who answers its first stage
+			"g1201": server.OK,       // general affairs, the department that owns purchase
+			"e1201": server.NotFound, // engineering, who is not on it
+		} {
+			if r := do(t, srv, person, "get_ticket", id, ""); r.Outcome != want {
+				t.Errorf("%s reads the ticket: %s, want %s", person, r.Outcome, want)
+			}
+		}
+		tk := ticketOf(t, srv, "s1201", id)
+		if r := do(t, srv, "s1201", "withdraw", id, `{"revision":`+string(tk.Revision)+`}`); r.Outcome != server.OK {
+			t.Fatalf("the requester withdraws: %s %s %s", r.Outcome, r.Problem, r.Body)
+		}
+		if tk := ticketOf(t, srv, "s1201", id); tk.Status != "with_requester" {
+			t.Errorf("the ticket after the withdrawal: %s", tk.Status)
+		}
+	})
+
+	t.Run("administration", func(t *testing.T) {
+		org, g := gateOrg(asDeclared), &Gate{}
+		// in_front_desk is of general_affairs, which owns purchase in the first of the two answers,
+		// and not of engineering, which owns it in the second
+		for _, c := range []struct {
+			roles  []string
+			action string
+			want   [2]bool
+		}{
+			{nil, "submit", [2]bool{true, true}},
+			{nil, "change_request_type", [2]bool{false, false}},
+			{nil, "read_audit", [2]bool{false, false}},
+			{nil, "import_organization", [2]bool{false, false}},
+			{nil, "read_organization_audit", [2]bool{false, false}},
+			{[]string{"workflow_admin"}, "change_request_type", [2]bool{true, false}},
+			{[]string{"workflow_admin"}, "read_audit", [2]bool{true, false}},
+			{[]string{"workflow_admin"}, "import_organization", [2]bool{false, false}},
+			{[]string{"workflow_admin"}, "read_organization_audit", [2]bool{false, false}},
+			{[]string{"system_admin"}, "change_request_type", [2]bool{true, true}},
+			{[]string{"system_admin"}, "read_audit", [2]bool{true, true}},
+			{[]string{"system_admin"}, "import_organization", [2]bool{true, true}},
+			{[]string{"system_admin"}, "read_organization_audit", [2]bool{true, true}},
+			{[]string{"auditor"}, "change_request_type", [2]bool{false, false}},
+			{[]string{"auditor"}, "read_audit", [2]bool{true, true}},
+			{[]string{"auditor"}, "import_organization", [2]bool{false, false}},
+			{[]string{"auditor"}, "read_organization_audit", [2]bool{true, true}},
+			{[]string{"auditor"}, "add_approver", [2]bool{false, false}},
+		} {
+			for i, owner := range []string{"general_affairs", "engineering"} {
+				p := server.Person{ID: "in_front_desk", Roles: c.roles}
+				if got := allows(t, g, question(org, p, c.action, owner)); got != c.want[i] {
+					t.Errorf("%v: %s, purchase owned by %s: %v, want %v", c.roles, c.action, owner, got, c.want[i])
+				}
+			}
+		}
+	})
+
+	t.Run("no one's department", func(t *testing.T) {
+		// teams with the IDs gate.go would give a request type that names no owner, unless a team
+		// had them
+		org, g := gateOrg(asDeclared), &Gate{}
+		for _, id := range []string{"(no owner)", "((no owner))"} {
+			org.Teams = append(org.Teams, server.Team{ID: id, Name: id, Kind: "department", Parent: "corporate"})
+			join(org, "in_"+id, id)
+		}
+		// someone the version does not have does nothing, whatever their roles, with an owner or none
+		for _, roles := range [][]string{nil, {"workflow_admin"}, {"system_admin"}, {"auditor"}} {
+			p := server.Person{ID: "someone_else", Roles: roles}
+			for _, owner := range []string{"", "general_affairs"} {
+				for _, action := range []string{"submit", "see", "change_request_type", "read_audit", "import_organization", "read_organization_audit"} {
+					if allows(t, g, question(org, p, action, owner)) {
+						t.Errorf("someone_else %v: %s, purchase owned by %q: allowed", roles, action, owner)
+					}
+				}
+			}
+		}
+		// purchase with no owner is of no one's department, the teams above among them: no
+		// administrator of a department switches it or reads its record, a system administrator
+		// does, and an auditor reads it
+		for _, person := range []string{"in_front_desk", "in_(no owner)", "in_((no owner))"} {
+			for _, c := range []struct {
+				roles  []string
+				action string
+				want   bool
+			}{
+				{nil, "see", false},
+				{[]string{"workflow_admin"}, "change_request_type", false},
+				{[]string{"workflow_admin"}, "read_audit", false},
+				{[]string{"system_admin"}, "change_request_type", true},
+				{[]string{"auditor"}, "read_audit", true},
+			} {
+				if got := allows(t, g, question(org, server.Person{ID: person, Roles: c.roles}, c.action, "")); got != c.want {
+					t.Errorf("%s %v: %s, purchase with no owner: %v, want %v", person, c.roles, c.action, got, c.want)
+				}
+			}
+		}
+	})
+
+	t.Run("the owner's level", func(t *testing.T) {
+		// the kinds of team as the organization declares them, as it writes them in its own
+		// language, and both in one version
+		written := map[string]string{"company": "会社", "division": "本部", "department": "部", "section": "課", "unit": "係"}
+		forms := []struct {
+			name string
+			kind func(int, string) string
+		}{
+			{"as declared", asDeclared},
+			{"as written", func(_ int, k string) string { return written[k] }},
+			{"both", func(i int, k string) string {
+				if i%2 == 0 {
+					return k
+				}
+				return written[k]
+			}},
+		}
+		// whether each one sees a ticket of purchase they are not on, owned by the section
+		// facilities, by the department above it, and by the division above that
+		want := map[string][3]bool{
+			"in_facilities":      {true, true, true},
+			"in_mail_room":       {true, true, true},    // in a unit of the section
+			"in_front_desk":      {false, true, true},   // in another section of the department
+			"in_general_affairs": {false, true, true},   // in the department, above the section
+			"in_corporate":       {false, false, true},  // in the division, above the department
+			"in_finance":         {false, false, true},  // in another department of the division
+			"in_accounting":      {false, false, true},  // in a section of that department
+			"in_web":             {false, false, false}, // in another division
+			"in_acme":            {false, false, false}, // above every owner
+		}
+		g := &Gate{}
+		for _, f := range forms {
+			org := gateOrg(f.kind)
+			for person, w := range want {
+				for i, owner := range []string{"facilities", "general_affairs", "corporate"} {
+					if got := allows(t, g, question(org, server.Person{ID: person}, "see", owner)); got != w[i] {
+						t.Errorf("kinds %s: %s sees a ticket of purchase owned by %s: %v, want %v", f.name, person, owner, got, w[i])
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("roles", func(t *testing.T) {
+		org := gateOrg(asDeclared)
+		var log bytes.Buffer
+		g := &Gate{Log: slog.New(slog.NewTextHandler(&log, nil))}
+		// a role the gate does not declare is left out: with none of the gate's, the person is of
+		// the staff; with one of the gate's, they may do what it allows
+		for _, c := range []struct {
+			roles  []string
+			action string
+			want   bool
+		}{
+			{[]string{"employee", "vpn_user"}, "submit", true},
+			{[]string{"employee", "vpn_user"}, "change_request_type", false},
+			{[]string{"employee", "workflow_admin"}, "submit", true},
+			{[]string{"employee", "workflow_admin"}, "change_request_type", true},
+			{[]string{"employee", "workflow_admin"}, "import_organization", false},
+			{[]string{"system_admin", "employee"}, "import_organization", true},
+		} {
+			p := server.Person{ID: "in_front_desk", Roles: c.roles}
+			if got := allows(t, g, question(org, p, c.action, "general_affairs")); got != c.want {
+				t.Errorf("%v: %s: %v, want %v", c.roles, c.action, got, c.want)
+			}
+		}
+		// the log says each of them once
+		for _, role := range []string{"employee", "vpn_user"} {
+			if n := strings.Count(log.String(), "role="+role+" "); n != 1 {
+				t.Errorf("the log says %s %d times:\n%s", role, n, log.String())
+			}
+		}
+		// and the gate keeps a hundred names at the most, as a sign-in may give any number of roles
+		var many []string
+		for i := range 150 {
+			many = append(many, fmt.Sprintf("group_%03d", i))
+		}
+		log.Reset()
+		g = &Gate{Log: slog.New(slog.NewTextHandler(&log, nil))}
+		for range 2 {
+			if !allows(t, g, question(org, server.Person{ID: "in_front_desk", Roles: many}, "submit", "general_affairs")) {
+				t.Errorf("one with %d roles the gate does not declare does not submit", len(many))
+			}
+		}
+		if n := strings.Count(log.String(), "\n"); n != 100 || len(g.told) != 100 {
+			t.Errorf("the log has %d lines and the gate keeps %d names, want 100 of each", n, len(g.told))
+		}
+	})
+}
+==> tools.go <==
+package approvals
+
+import (
+	"log/slog"
+	"net/http"
+
+	server "github.com/i2y/ringi-server"
+	"github.com/i2y/ringi-server/mcp"
+	"github.com/i2y/ringi-server/serve"
+)
+
+// HandleTools puts the agents' tools at /mcp of the server st serves: the tools ritsu wrote for the
+// kinds of request (requests/mcp/tools.json), over MCP. An agent is the person the server's sign-in
+// finds in its requests, as a browser is (serve.Person), and what it does is asked of the gate as
+// the pages' and the API's operations are. A request with no one signed in is answered 401.
+func HandleTools(st *serve.Stores, log *slog.Logger) {
+	st.Handle("/mcp", func(srv *server.Server) (http.Handler, error) {
+		tools, err := mcp.New(srv, mcp.Config{Logger: log})
+		if err != nil {
+			return nil, err
+		}
+		return tools.Handler(mcp.HTTP{Person: serve.Person})
+	})
+}
+==> tools_test.go <==
+package approvals
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	server "github.com/i2y/ringi-server"
+	"github.com/i2y/ringi-server/serve"
+	"github.com/i2y/ringi-server/servertest"
+)
+
+// TestTools serves the project as cmd/server does, with the agents' tools at /mcp (HandleTools) and
+// the person in the header X-Person: a request with no one signed in is answered 401, and an agent
+// of s1201 makes a purchase request with the tools and reads it.
+func TestTools(t *testing.T) {
+	url := servedWithTools(t)
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("no one signed in: %d, want 401", res.StatusCode)
+	}
+
+	agent, err := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "test", Version: "0"}, nil).Connect(t.Context(),
+		&sdkmcp.StreamableClientTransport{Endpoint: url, HTTPClient: &http.Client{Transport: as("s1201")}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer agent.Close()
+	made := callTool(t, agent, "submit_purchase", map[string]any{"idempotency_key": "k1", "form": map[string]any{"amount": 30000, "purpose": "Books for the section"}})
+	read := callTool(t, agent, "get_ticket", map[string]any{"id": made.ID})
+	if read.ID != made.ID || read.Status != "in_progress" || read.Stage == nil || *read.Stage != "manager" {
+		t.Errorf("the request, read with the tools: %+v", read)
+	}
+}
+
+// servedWithTools serves the project with the agents' tools until the test ends, on a loopback
+// address of its own, the tickets in memory and the clock on monday: it answers the URL of /mcp.
+func servedWithTools(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	l.Close()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	st, err := serve.Open(t.Context(), serve.Flags{Addr: addr, Getenv: func(string) string { return "" }}, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	HandleTools(st, log)
+	cfg, err := Parts(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Clock = servertest.NewClock(monday)
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan error, 1)
+	go func() { served <- st.Serve(ctx, cfg, func(srv *server.Server) { Started(cfg, srv) }) }()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-served; err != nil {
+			t.Errorf("Serve: %v", err)
+		}
+	})
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(20 * time.Millisecond) {
+		if c, err := net.Dial("tcp", addr); err == nil {
+			c.Close()
+			return "http://" + addr + "/mcp"
+		}
+	}
+	t.Fatal("the server does not listen")
+	return ""
+}
+
+// as sends each request of an agent as a person, in the header X-Person.
+type as string
+
+func (p as) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("X-Person", string(p))
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+// callTool calls a tool, and answers the ticket of its result.
+func callTool(t *testing.T, agent *sdkmcp.ClientSession, name string, args map[string]any) ticket {
+	t.Helper()
+	r, err := agent.CallTool(t.Context(), &sdkmcp.CallToolParams{Name: name, Arguments: args})
+	if err != nil {
+		t.Fatalf("%s: %v", name, err)
+	}
+	b, err := json.Marshal(r.StructuredContent)
+	var result struct {
+		Ticket ticket `json:"ticket"`
+	}
+	if err != nil || r.IsError || json.Unmarshal(b, &result) != nil {
+		t.Fatalf("%s: %s", name, b)
+	}
+	return result.Ticket
+}

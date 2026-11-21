@@ -1,0 +1,19 @@
+warning[W121]: `self` is a keyword as written in PHP, so the generated code there writes it with `_` after it
+  --> tests/own_names/enum_named_self.rule:4
+  |
+4 | enum self = person | company
+  |      ^^^^ the enum's name
+  |
+ PHP: the enum's class is `Self_`, the name a caller reads it by.
+ The code builds as it is. For a name with no `_` in any language, give it an alias (`self(<alias>)`).
+
+warning[W121]: `self` takes a name the code generated for Rust, Swift and Wasm uses itself
+  --> tests/own_names/enum_named_self.rule:4
+  |
+4 | enum self = person | company
+  |      ^^^^ the enum's name
+  |
+ Rust, Swift and Wasm: `Self` is a keyword of the language, which the enum written so cannot be named: it does not build.
+ For a target you do not generate, leave it. For one you do, give it an alias (`self(<alias>)`).
+
+ok tests/own_names/enum_named_self.rule

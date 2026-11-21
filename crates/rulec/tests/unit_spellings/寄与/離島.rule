@@ -1,0 +1,16 @@
+contribution 離島(remote_island) v1
+description "離島への配送は、1 万円未満なら 1,500 円を足す。この寄与は円と書く（架空）"
+to "../配送料.rule" signature:0d9242fee4859365
+
+inputs
+  小計(subtotal)   : money[円]  range >=0円 <=100_000円
+  離島行き(remote) : bool
+
+table 離島料金表(island)
+| 離島行き | 小計         | -> 離島料金(island_charge) : money[円] |
+| true     | >=10_000円   | 0円                                   |
+| true     | <10_000円    | 1_500円                               |
+| false    | -            | 0円                                   |
+
+into 配送料
+  離島料金

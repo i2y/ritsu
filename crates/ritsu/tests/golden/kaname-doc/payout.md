@@ -75,8 +75,8 @@ The module's decisions are all in tables.
 `kaname check` runs each line of `examples` in the reference interpreter, as a host would call the function, and compares the answer with the one written. The reference interpreter answers these.
 
 ```kn
-settle(payment: Payment { id: "pay_1", seller: "s_1", amount: 10000USDc, international: false })
-  = Settlement { capture: ledger.capture.do(payment: "pay_1", seller: "s_1", amount: 10000USDc), fee: ledger.processing_fee.do(payment: "pay_1", seller: "s_1", fee: 398USDc) }
-settle(payment: Payment { id: "pay_2", seller: "s_1", amount: 10000USDc, international: true })
-  = Settlement { capture: ledger.capture.do(payment: "pay_2", seller: "s_1", amount: 10000USDc), fee: ledger.processing_fee.do(payment: "pay_2", seller: "s_1", fee: 548USDc) }
+settle(payment: Payment { id: "pay_1", seller: "s_1", amount: 10_000USDc, international: false })
+  = Settlement { capture: ledger.capture.do(payment: "pay_1", seller: "s_1", amount: 10_000USDc), fee: ledger.processing_fee.do(payment: "pay_1", seller: "s_1", fee: 398USDc) }
+settle(payment: Payment { id: "pay_2", seller: "s_1", amount: 10_000USDc, international: true })
+  = Settlement { capture: ledger.capture.do(payment: "pay_2", seller: "s_1", amount: 10_000USDc), fee: ledger.processing_fee.do(payment: "pay_2", seller: "s_1", fee: 548USDc) }
 ```

@@ -1,0 +1,9 @@
+エラー[E102]: 行3 はどの入力にも当てはまりません
+  --> tests/computed/shapes/E102_a_row_the_table_above_leaves_out.rule:24 表 pick
+   |
+24 | | -       | medium | one  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行3: ここに到達する入力はありません
+   |
+ この行に当たる入力はありません。この行が求める入力のうち、上にある行が先に取らないものは、上流の表がすべて外しています。この行を削除するか、そういう入力が来るなら上流の表を直してください。
+
+note tests/computed/shapes/E102_a_row_the_table_above_leaves_out.rule: 隠れ 1 対（階段 1、同じ答え 0、要確認 0）

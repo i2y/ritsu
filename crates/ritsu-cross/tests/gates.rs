@@ -5,7 +5,7 @@
 use ritsu_base::naming::{Name, Tool};
 use ritsu_base::text::Text;
 use ritsu_cross::gates::{Called, Opened, judge_call, judge_opened};
-use ritsu_ports::{Allowance, Found, OperationCall, PublishedOperation};
+use ritsu_ports::{AllowedAt, Allowance, Found, OperationCall, PublishedOperation};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn op(context: &str, id: &str, open: bool) -> PublishedOperation {
@@ -35,17 +35,47 @@ fn an_operation_a_context_opens() {
 
 #[test]
 fn a_call_a_workflow_makes() {
-    let call = |denied: Option<&str>| OperationCall { line: 14, task: "refund_order".into(), operation: Name::file(Tool::Openapi, "orders.json").with("operation", "refundOrder"), denied: denied.map(str::to_string) };
-    let sometimes = Found::Value(Allowance::Sometimes { allowed: Text::same("a"), denied: Text::same("d") });
-    let undecided = Found::Undecided(Text::same("why"));
+    let call = |denied: Option<&str>| OperationCall::new(14, "refund_order", Name::file(Tool::Openapi, "orders.json").with("operation", "refundOrder"), denied);
+    let at = |allowance: Found<Allowance>| AllowedAt::of(allowance);
+    let sometimes = || Found::Value(Allowance::Sometimes { allowed: Text::same("a"), denied: Text::same("d") });
+    let undecided = || Found::Undecided(Text::same("why"));
     // allowed in no combination: every run is denied there, handled or not
-    assert_eq!(judge_call(&call(None), &Found::Value(Allowance::Never)), Called::Never);
-    assert_eq!(judge_call(&call(Some("denied")), &Found::Value(Allowance::Never)), Called::Never);
+    assert_eq!(judge_call(&call(None), &at(Found::Value(Allowance::Never))), Called::Never);
+    assert_eq!(judge_call(&call(Some("denied")), &at(Found::Value(Allowance::Never))), Called::Never);
     // allowed in every combination, or handled when it is not
-    assert_eq!(judge_call(&call(None), &Found::Value(Allowance::Always)), Called::Held);
-    assert_eq!(judge_call(&call(Some("denied")), &sometimes), Called::Held);
-    assert_eq!(judge_call(&call(Some("denied")), &undecided), Called::Held);
+    assert_eq!(judge_call(&call(None), &at(Found::Value(Allowance::Always))), Called::Held);
+    assert_eq!(judge_call(&call(Some("denied")), &at(sometimes())), Called::Held);
+    assert_eq!(judge_call(&call(Some("denied")), &at(undecided())), Called::Held);
     // denied in some, and the task says nothing of it
-    assert_eq!(judge_call(&call(None), &sometimes), Called::Unhandled { allowed: Text::same("a"), denied: Text::same("d") });
-    assert_eq!(judge_call(&call(None), &undecided), Called::Undecided(Text::same("why")));
+    assert_eq!(judge_call(&call(None), &at(sometimes())), Called::Unhandled { allowed: Text::same("a"), denied: Text::same("d") });
+    assert_eq!(judge_call(&call(None), &at(undecided())), Called::Undecided(Text::same("why")));
+}
+
+#[test]
+fn a_call_held_to_what_the_flow_holds() {
+    let call = |denied: Option<&str>| OperationCall::new(14, "refund_order", Name::file(Tool::Openapi, "orders.json").with("operation", "refundOrder"), denied);
+    let line = || vec![(Text::same("`amount = order.total` under `resource Order from order.id`"), 9)];
+    let sometimes = || Found::Value(Allowance::Sometimes { allowed: Text::same("a"), denied: Text::same("d") });
+    // allowed in every combination only as the gate's `resource` lines say: a denial is still
+    // the flow's to handle, since nothing checks the lines of the resource the service reads
+    let rests = AllowedAt { rests_on: line(), ..AllowedAt::of(Found::Value(Allowance::Always)) };
+    assert_eq!(judge_call(&call(None), &rests), Called::Rests);
+    assert_eq!(judge_call(&call(Some("denied")), &rests), Called::Held);
+    // in none, whatever it rests on: every run that comes to the call is denied
+    let never = AllowedAt { rests_on: line(), ..AllowedAt::of(Found::Value(Allowance::Never)) };
+    assert_eq!(judge_call(&call(Some("denied")), &never), Called::Never);
+    // in some of the combinations the lines leave: it can be denied
+    let some = AllowedAt { rests_on: line(), ..AllowedAt::of(sometimes()) };
+    assert_eq!(judge_call(&call(None), &some), Called::Unhandled { allowed: Text::same("a"), denied: Text::same("d") });
+    // in some of the gate's, with nothing written of what the flow holds of what the answer
+    // reads, or with something the flow holds that the gate could not be asked with: which of
+    // them the call comes to is not known
+    let unrelated = AllowedAt { unrelated: vec!["resource.status".into()], ..AllowedAt::of(sometimes()) };
+    assert_eq!(judge_call(&call(None), &unrelated), Called::Unsaid { allowed: Text::same("a"), denied: Text::same("d") });
+    assert_eq!(judge_call(&call(Some("denied")), &unrelated), Called::Held);
+    let unheld = AllowedAt { unheld: vec![Text::same("why")], ..AllowedAt::of(sometimes()) };
+    assert_eq!(judge_call(&call(None), &unheld), Called::Unsaid { allowed: Text::same("a"), denied: Text::same("d") });
+    // what is not held changes nothing of an answer that is one for every combination
+    let always = AllowedAt { unrelated: vec!["resource.status".into()], unheld: vec![Text::same("why")], ..AllowedAt::of(Found::Value(Allowance::Always)) };
+    assert_eq!(judge_call(&call(None), &always), Called::Held);
 }

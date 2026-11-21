@@ -1,0 +1,20 @@
+rule 止まるか(lamp_ja) v1
+description "灯りを見て止まるか。読むファイルが、規則の Fired と同じ名前の列挙を持つ（架空）"
+
+import enum 灯り from "信号.rule"
+
+inputs
+  見た灯り(seen) : 灯り
+
+outputs
+  止まる(halt) : bool
+
+table 止まる
+| 見た灯り | -> 止まる |
+| 赤       | true      |
+| 緑       | false     |
+
+examples
+| 見た灯り | -> 止まる |
+| 赤       | true      |
+| 緑       | false     |

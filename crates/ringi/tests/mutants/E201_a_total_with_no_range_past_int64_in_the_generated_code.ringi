@@ -1,0 +1,17 @@
+request example v1 "Example"
+
+form
+  lines  : rows "Lines"  count >=1 <=30
+    quantity : number "Quantity"  range >=1 <=1_000_000
+    price    : money[JPY] "Unit price"  range >=1JPY <=1_000_000_000_000JPY
+    subtotal : money[JPY] "Subtotal" = quantity * price  range >=1JPY <=100_000_000JPY
+  amount : money[JPY] "Amount" = sum(lines.subtotal)
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

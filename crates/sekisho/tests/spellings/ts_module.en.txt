@@ -1,0 +1,5 @@
+warning[W402]: tests/spellings/ts_module.gate:1:1: The file `public` is written `public` in the code of TypeScript, a reserved word of the language
+     1 | gate public v1
+  = TypeScript (`--target typescript`): the file `public` is written `public` as the name of its module, and `public` is a reserved word of TypeScript's strict mode: the index `ritsu gen` writes in a package, `export * as public from …`, does not type-check.
+  = For a target you do not build, leave it as it is. For one you do, change its alias. The alias of the file also names the files, the module and the package the code is written to, so change what reads them with it.
+tests/spellings/ts_module.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

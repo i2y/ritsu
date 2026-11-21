@@ -129,8 +129,8 @@ pub fn ledger() -> Ledger {
                 "The indentation has a tab, the lines of one block are not indented alike, or an indented line follows a line that takes none."
             ),
             tr!(
-                "字下げはスペースで書き、同じブロックの行は同じ幅にしてください。`attributes`、`input`、`context` の下の行は、もう一段深く字下げします。",
-                "Indent with spaces, every line of a block by the same amount; the lines under `attributes`, `input` and `context` one step further."
+                "字下げはスペースで書き、同じブロックの行は同じ幅にしてください。`attributes`、`input`、`context` の下の行と、ワークフローの `resource` の下の行は、もう一段深く字下げします。",
+                "Indent with spaces, every line of a block by the same amount; the lines under `attributes`, `input`, `context` and a workflow's `resource` one step further."
             ),
             "gate t v1\n\nrole clerk\n\tdescription \"Answers customers\"\n",
             "gate t v1\n\nrole 係(clerk)\n\tdescription \"お客さまに応対する\"\n",
@@ -153,8 +153,8 @@ pub fn ledger() -> Ledger {
             "E006",
             tr!("同じ名前を二度宣言しています", "A name is declared twice"),
             tr!(
-                "同じ種類のもの（型と列挙、役割、列挙の値、型の属性、ワークフロー、action、action の入力と計算した値、ポリシー、期待、職務の分離、`use` の名前）のあいだで、名前か別名が重なるとき。`import enum` で読んだ列挙は、`enum` に書いたものと同じに比べます（`-> <名前>` で付けた名前も）。`use gate` で読んだファイルの宣言とも比べます。規則の入力に二度値を渡したとき、`actions` に同じ action を二度並べたときも出ます。",
-                "A name or an alias is declared twice among the things of one kind (the types and the enums, the roles, an enum's values, a type's attributes, the workflows, the actions, an action's inputs and computed values, the policies, the expectations, the separations, the names of the `use` lines), an enum read with `import enum` as one written with `enum` (its name after `->` too), also against what a file read with `use gate` declares; or an input of a rule is given twice, or `actions` lists an action twice."
+                "同じ種類のもの（型と列挙、役割、列挙の値、型の属性、ワークフロー、action、action の入力と計算した値、ポリシー、期待、職務の分離、`use` の名前）のあいだで、名前か別名が重なるとき。`import enum` で読んだ列挙は、`enum` に書いたものと同じに比べます（`-> <名前>` で付けた名前も）。`use gate` で読んだファイルの宣言とも比べます。規則の入力に二度値を渡したとき、`actions` に同じ action を二度並べたとき、ワークフローの下に同じ `resource … from …` か、その下に同じ属性を二度書いたときも出ます。",
+                "A name or an alias is declared twice among the things of one kind (the types and the enums, the roles, an enum's values, a type's attributes, the workflows, the actions, an action's inputs and computed values, the policies, the expectations, the separations, the names of the `use` lines), an enum read with `import enum` as one written with `enum` (its name after `->` too), also against what a file read with `use gate` declares; or an input of a rule is given twice, `actions` lists an action twice, or a workflow says one `resource … from …` twice, or one attribute twice under it."
             ),
             tr!("どちらかの名前か別名を変えてください。", "Rename one of them, or give it another alias."),
             "gate t v1\n\nrole clerk\nrole clerk\n",
@@ -175,15 +175,15 @@ pub fn ledger() -> Ledger {
         ),
         e(
             "E008",
-            tr!("別名が Cedar か生成するコードの予約語です", "An alias is a reserved word of Cedar or of the generated code"),
+            tr!("別名が Cedar の予約語か、Cedar か sekisho が使う型の名前です", "An alias is a reserved word of Cedar, or the name of a type Cedar or sekisho uses"),
             tr!(
-                "別名（別名の無い ASCII の名前も）が、Cedar の予約語（`if`、`then`、`else`、`has`、`like`）か、TypeScript・Python・Go の予約語のとき。型の名前が、Cedar の `Action` と組み込みの型、sekisho が宣言する `Role` と `Workflow` のときも出ます。",
-                "An alias (or an ASCII name with none) is a reserved word of Cedar (`if`, `then`, `else`, `has`, `like`) or of TypeScript, Python or Go; or a type's name is Cedar's `Action` or one of its builtin types, or `Role` or `Workflow`, which sekisho declares."
+                "別名（別名の無い ASCII の名前も）が、Cedar の予約語（`if`、`then`、`else`、`has`、`like`）のとき。型の名前が、Cedar の `Action` と組み込みの型、sekisho が宣言する `Role` と `Workflow` のときも出ます。TypeScript・Python・Go の予約語はここでは言いません。その出力先のコードが名前をその語のまま書く所でだけ W402 になり、ファイルは検査を通ります。",
+                "An alias (or an ASCII name with none) is a reserved word of Cedar (`if`, `then`, `else`, `has`, `like`); or a type's name is Cedar's `Action` or one of its builtin types, or `Role` or `Workflow`, which sekisho declares. A reserved word of TypeScript, Python or Go is not said here: it is W402, only where the code of that target writes the name as that word, and the file passes."
             ),
             tr!("別の別名にしてください。", "Choose another alias."),
             "gate t v1\n\nrole has\n",
             "gate t v1\n\nrole 持つ(has)\n",
-            &["E007"],
+            &["E007", "W402"],
         ),
         e(
             "E009",
@@ -204,8 +204,8 @@ pub fn ledger() -> Ledger {
             "E101",
             tr!("知らない名前です", "A name names nothing"),
             tr!(
-                "参照した役割、型、属性、列挙の値、action、入力、計算した値、`use` の名前、規則の出力と入力、日付の関数、単位が無いとき。`import enum` が読む `enums` ファイルに、その列挙が無いときも出ます。ポリシーと期待が、ほかのファイルの action を書いたときも出ます。",
-                "A role, a type, an attribute, a value of an enum, an action, an input, a computed value, the name of a `use`, a rule's output or input, a date function or a unit that is referred to is not there; an enum an `import enum` reads is not in its `enums` file; or a policy or an expectation names an action of another file."
+                "参照した役割、型、属性、列挙の値、action、入力、計算した値、`use` の名前、規則の出力と入力、日付の関数、単位が無いとき。`import enum` が読む `enums` ファイルに、その列挙が無いときも出ます。ポリシーと期待が、ほかのファイルの action を書いたときも出ます。同じ種類の同じ名前を何か所にも書いたときは、最初に書いた所で一度だけ出て、ほかの行の番号を注に挙げます。型の無い resource の属性を読む条件は、何も言いません。",
+                "A role, a type, an attribute, a value of an enum, an action, an input, a computed value, the name of a `use`, a rule's output or input, a date function or a unit that is referred to is not there; an enum an `import enum` reads is not in its `enums` file; or a policy or an expectation names an action of another file. A name of one kind written in several places is said once, where it is first written, and the note gives the lines of the others. A condition on an attribute of a resource whose type is not there says nothing."
             ),
             tr!(
                 "書き違いを直すか、宣言を足してください。注に、書ける名前が並びます。規則と日付のファイルの名前は、`.gate` に書ける形で並びます（名前を書けないときは別名で）。名前でも別名でも書けないものには、そのファイルの側で別名を付けてください。",
@@ -219,8 +219,8 @@ pub fn ledger() -> Ledger {
             "E102",
             tr!("型が合いません", "A type that does not fit"),
             tr!(
-                "真偽を列挙の値と比べる、列挙を数と比べる、単位の違う数を比べる、真偽でない値を条件にそのまま書く、範囲を書けない型に範囲を書く、規則の入力に型の違う値を渡すとき。",
-                "True or false compared with a value of an enum, an enum with a number, numbers of different units; a value that is not true or false written alone as a condition; a range on a type that takes none; a value of another type given to a rule's input."
+                "真偽を列挙の値と比べる、列挙を数と比べる、単位の違う数を比べる、真偽でない値を条件にそのまま書く、範囲を書けない型に範囲を書く、規則の入力に型の違う値を渡す、ワークフローの `resource` の下で、エンティティを指す属性にフローの値を当てるとき。一つの名前の入力か計算した値が action によって、一つの名前の属性が型によって、違う型であるときも出ます。列挙は、宣言した場所（ファイルとそこでの名前）と値の並びが同じなら、どの名前で読んでも一つの型です（`enums` ファイルの列挙を `import enum` で二つの名前で読むとき、それを読む規則の出力）。別の場所で宣言した列挙は、値が同じでも別の型で、注がそれぞれをどこで宣言したかを言います。",
+                "True or false compared with a value of an enum, an enum with a number, numbers of different units; a value that is not true or false written alone as a condition; a range on a type that takes none; a value of another type given to a rule's input; a value of a flow said, under a workflow's `resource`, for an attribute that points to an entity; an input or a computed value of one name of different types in different actions, or an attribute of one name in different types. An enum is one type by whatever name it is read when it is declared at one place (a file, and its name there) with the same values in the same order: an enum of an `enums` file read twice with `import enum`, or the output of a rule that reads it. Enums declared at two places are two types, even with the same values, and the note says where each is declared."
             ),
             tr!(
                 "比べる値を、左の値の型に合わせてください。数は単位まで同じにします（`JPY` と `円` は同じ、税込と税抜は別）。",
@@ -249,8 +249,8 @@ pub fn ledger() -> Ledger {
             "E104",
             tr!("v1 で書けない関係です", "A relation v1 does not write"),
             tr!(
-                "属性を二段以上たどるとき（`resource.order.customer`）、型の違う二つの属性を同じかで比べるとき、principal の来ない型の属性を principal と比べるとき、数をほかの値と比べるとき。",
-                "An attribute is followed by another (`resource.order.customer`); two attributes of different types are compared; an attribute is compared with the principal when no principal of its type comes; a number is compared with another value."
+                "属性を二段以上たどるとき（`resource.order.customer`）、型の違う二つの属性を同じかで比べるとき、principal の来ない型の属性を principal と比べるとき、数をほかの値と比べるとき。二つの列挙の属性は、宣言した場所と値の並びが同じなら一つの型で、比べられます（E102 と同じ）。",
+                "An attribute is followed by another (`resource.order.customer`); two attributes of different types are compared; an attribute is compared with the principal when no principal of its type comes; a number is compared with another value. Two attributes of enums declared at one place with the same values in the same order are of one type, and compare (as for E102)."
             ),
             tr!(
                 "関係は一段だけにしてください（`resource.customer is principal`、`resource.tenant is principal.tenant`、`principal in resource.team`）。二段たどる答えは、それを計算する規則の真偽の出力にできます。",
@@ -287,8 +287,8 @@ pub fn ledger() -> Ledger {
             "E106",
             tr!("principal の型が action に来ません", "A principal the actions never take"),
             tr!(
-                "ポリシーか期待の `principal` の行（`is <型>`、`is workflow <名前>`、`in <役割>`）に当たる principal が、並べた action に来ないとき。`action any` では、どの action にも来ないとき。",
-                "No principal a policy's or an expectation's `principal` line picks (`is <type>`, `is workflow <name>`, `in <role>`) comes to an action it lists; with `action any`, to no action at all."
+                "ポリシーか期待の `principal` の行（`is <型>`、`is workflow <名前>`、`in <役割>`）に当たる principal が、並べた action に来ないとき。`action any` では、どの action にも来ないとき。action の principal の型が無い（E101）ときは出ません。",
+                "No principal a policy's or an expectation's `principal` line picks (`is <type>`, `is workflow <name>`, `in <role>`) comes to an action it lists; with `action any`, to no action at all. It is not said when the action names a principal type that is not there (E101 says it)."
             ),
             tr!(
                 "`principal` の行を直すか、action の `principal` の行に型を足してください。役割で選ぶなら、その役割を持てる型の `roles` に役割を書きます。",
@@ -363,8 +363,8 @@ pub fn ledger() -> Ledger {
             "E201",
             tr!("`use` のファイルが検査を通らないか、読めないか、ルートの外にあります", "A file a `use` reads does not pass its language's check, cannot be read, or is outside the root"),
             tr!(
-                "`use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`import enum` のファイルが `enums` ファイルでなく規則であるとき、rulec の検査を通らないときも出ます。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use` のファイルがルートの外にあるときも出ます。gate が読むファイルは、ルートからのパスで参照するためです（action が守る操作、生成する Cedar の `@doc` に書く規則と日付とカレンダー、ほかの言語からの参照）。",
-                "A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file an `import enum` reads is a rule and no `enums` file, or does not pass rulec's check; or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use` is outside the root. A file a gate reads is named by a reference whose path is from the root: the operations its actions guard, the rules, dates and calendars the `@doc` of the generated Cedar names, and what the other languages name of it."
+                "`use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`import enum` のファイルが `enums` ファイルでなく規則であるとき、rulec の検査を通らないときも出ます。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use` のファイルがルートの外にあるときも出ます。gate が読むファイルは、ルートからのパスで参照するためです（action が守る操作、生成する Cedar の `@doc` に書く規則と日付とカレンダー、ほかの言語からの参照）。列挙を持ってこなかった `import enum` の名前は、ファイルの中にあるものとして扱います。それを型に書く行には、E101 を重ねません。",
+                "A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file an `import enum` reads is a rule and no `enums` file, or does not pass rulec's check; or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use` is outside the root. A file a gate reads is named by a reference whose path is from the root: the operations its actions guard, the rules, dates and calendars the `@doc` of the generated Cedar names, and what the other languages name of it. The name of an `import enum` that brought no enum is in the file all the same: a type that names it is not said to be missing (E101) too."
             ),
             tr!(
                 "そのファイルを、その言語の検査が通るように直してください。ルートの外にあるファイルなら、そのファイルを含むディレクトリを `--root` でルートにしてください。",
@@ -593,10 +593,10 @@ pub fn ledger() -> Ledger {
         with_ja(
             Entry::new(
                 "E401",
-                tr!("名前がこの出力先のコードで同じ識別子になります", "Names that are one identifier in the code of the target"),
+                tr!("名前がこの出力先のコードで同じ識別子か予約語になります", "Names that are one identifier, or a reserved word, in the code of the target"),
                 tr!(
-                    "`sekisho gen` の `--target typescript`・`python`・`go` で、W402 がその出力先について言うものがあるときに出ます。そのまま書くと、コードをコンパイルできないか型の検査を通らないか、宣言が別の宣言を置き換えるので、何も書きません。生成器は名前を書き換えません。呼び出しは、検査した名前で書きます。",
-                    "With `--target typescript`, `python` or `go` of `sekisho gen`: W402 says of that target. Written as it is, the code does not compile or type-check, or one declaration takes the place of another, so nothing is written. A generator renames nothing: a call is written with the names `check` read."
+                    "`sekisho gen` の `--target typescript`・`python`・`go` で、W402 がその出力先について言うものがあるときに出ます。そのまま書くと、コードをコンパイルできないか型の検査を通らないか、宣言が別の宣言を置き換えるので、何も書きません。`ritsu gen` も、`--target` でその出力先を頼んだときは同じく止まり、1 で終わります。生成器は名前を書き換えません。呼び出しは、検査した名前で書きます。",
+                    "With `--target typescript`, `python` or `go` of `sekisho gen`: W402 says of that target. Written as it is, the code does not compile or type-check, or one declaration takes the place of another, so nothing is written. `ritsu gen` given that target stops the same way, with 1. A generator renames nothing: a call is written with the names `check` read."
                 ),
                 tr!(
                     "注が挙げる別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。",
@@ -609,10 +609,10 @@ pub fn ledger() -> Ledger {
         ),
         e(
             "W402",
-            tr!("生成するコードで同じ識別子になる名前", "Names that are one identifier in the generated code"),
+            tr!("生成するコードで同じ識別子か予約語になる名前", "Names that are one identifier, or a reserved word, in the generated code"),
             tr!(
-                "`--target typescript`・`python`・`go` のコードで、ゲートの二つの名前が同じ識別子になるとき、または名前がコードが自分で使う名前と同じになるときに出ます。モジュールは、読む型のレコード、列挙、自分の型（`Store`、`Request` など）、各 action の入力（`<Action>Input`）を一番上の階層で宣言します。名前は言語ごとの綴りになります（列挙 `order_state` は `OrderState`、action `refund` の入力は `RefundInput`、Go の属性 `order_id` はフィールド `OrderId`）。TypeScript のグローバル（`Date` など）と、Python の語と読み込む名前（`Literal` など）も同じです。Go のレコードでは、属性と、役割とグループのフィールド（`Roles`、`MemberOf<型>`）も同じです。壊れるのは一部の言語のコードで、ほかの言語と Cedar はそのままなので、警告です。壊れる出力先の `sekisho gen` は E401 で止まります。",
-                "In the code of `--target typescript`, `python` or `go`, two names of the gate are one identifier, or a name is one the code uses itself. A module declares the records of the types it reads, the enums, its own types (`Store`, `Request`, …) and the input of each action (`<Action>Input`) at its top level, each name in its language's spelling (the enum `order_state` is `OrderState`, the input of the action `refund` is `RefundInput`, the attribute `order_id` is the field `OrderId` in Go). So are the globals of TypeScript (`Date`, …), and Python's words and what its module imports (`Literal`, …). In a record of Go, so are the attributes and the fields of the roles and the groups (`Roles`, `MemberOf<type>`). It breaks the code of some of the languages, and the others and Cedar stay as they are, so it is a warning, and `sekisho gen` of a target it breaks stops with E401."
+                "`--target typescript`・`python`・`go` のコードで、ゲートの二つの名前が同じ識別子になるとき、名前がコードが自分で使う名前と同じになるとき、または名前がその言語の予約語になるときに出ます。モジュールは、読む型のレコード、列挙、自分の型と関数（`Store`、`Request` など。Go では、action の名前で尋ねる入口の `Authorize` と、役割の一覧の `Roles`・`RolesOf` も）、各 action の入力（`<Action>Input`）を一番上の階層で宣言します。名前は言語ごとの綴りになります（列挙 `order_state` は `OrderState`、action `refund` の入力は `RefundInput`、Go の属性 `order_id` はフィールド `OrderId`）。TypeScript のグローバル（`Date` など）と、Python が読み込む名前（`Literal` など）も同じです。Go のレコードでは、属性と、役割とグループのフィールド（`Roles`、`MemberOf<型>`）も同じです。予約語になるのは、コードが名前をそのまま書く所です。Python は、属性をレコードのフィールドに（属性 `class`）、型を小文字に直して `Store` のメソッドに（型 `Return` は `return`）書きます。ファイルの別名は、Python のモジュールの名前（`pass`）、Go のパッケージの名前（`select`）、`ritsu gen` がパッケージに書く TypeScript の索引の `export * as` の名前（strict モードの予約語、`interface` など）になります。ほかの名前は、プロパティかメソッドか文字列として書くか、前後に何かを付けて書き、Go は大文字で始めて書くので、予約語でも当たりません。壊れるのは一部の言語のコードで、ほかの言語と Cedar はそのままなので、警告です。壊れる出力先の `sekisho gen` と `ritsu gen` は E401 で止まります。",
+                "In the code of `--target typescript`, `python` or `go`, two names of the gate are one identifier, a name is one the code uses itself, or a name is a reserved word of the language. A module declares the records of the types it reads, the enums, its own types and functions (`Store`, `Request`, …; in Go, also `Authorize`, the entry by the action's name, and `Roles` and `RolesOf`, the lists of the roles) and the input of each action (`<Action>Input`) at its top level, each name in its language's spelling (the enum `order_state` is `OrderState`, the input of the action `refund` is `RefundInput`, the attribute `order_id` is the field `OrderId` in Go). So are the globals of TypeScript (`Date`, …), and what Python's module imports (`Literal`, …). In a record of Go, so are the attributes and the fields of the roles and the groups (`Roles`, `MemberOf<type>`). A reserved word is met where the code writes a name as it is: Python writes an attribute as a field of its record (the attribute `class`), and a type in lower case as a method of `Store` (the type `Return` is `return`); and the alias of the file is the name of Python's module (`pass`), of Go's package (`select`), and of the module the TypeScript index of a package of `ritsu gen`'s exports with `export * as` (a reserved word of strict mode, as `interface`). Every other name is written as a property, a method or a string, or with more around it, and Go writes it with a capital, so a reserved word is none there. It breaks the code of some of the languages, and the others and Cedar stay as they are, so it is a warning, and `sekisho gen` and `ritsu gen` of a target it breaks stop with E401."
             ),
             tr!(
                 "使わない出力先なら、このままで構いません。使うなら、注が挙げる別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。",
@@ -620,7 +620,7 @@ pub fn ledger() -> Ledger {
             ),
             X_W402,
             X_W402_JA,
-            &["E401"],
+            &["E401", "E008"],
         ),
         // ── Security (ritsu's DESIGN 16) ──
         e(
@@ -658,7 +658,7 @@ pub fn ledger() -> Ledger {
     ];
     // the codes of the borders, the contracts and the checks of every combination, with their
     // examples, in place of the entries written for later; a code not written here comes after the
-    // last code of its band (W304 after W303)
+    // last code of its band (W202 after W201, W304 to W308 after W303)
     let theirs = crate::repros::entries();
     let mut entries: Vec<Entry> = entries.into_iter().map(|e| if matches!(e.repro, Repro::Later) { theirs.iter().find(|x| x.code == e.code).cloned().unwrap_or(e) } else { e }).collect();
     for x in theirs {

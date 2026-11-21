@@ -1,0 +1,21 @@
+rule with_で読み替えた出力(enum_output_with) v1
+description "同じ出力を with でこの規則の値に読み替えて読む。読み替える表をたどって、取り込んだ表まで行く"
+
+enum 選択(choice) = 一(one) | 二(two) | 三(three)
+enum 水準(level) = 低(low) | 並(mid) | 高(high)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+apply 区分け(t) = "shared/金額の区分.rule" meaning:e7d6953fd795c588
+  金額 = 金額
+  区分 -> 受けた水準 with 小 -> 低, 中 -> 並, 大 -> 高
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 金額                  | 受けた水準 | -> 答え |
+| <=10_000円            | 低         | 一      |
+| >10_000円 <=100_000円 | 並         | 二      |
+| >100_000円            | 高         | 三      |

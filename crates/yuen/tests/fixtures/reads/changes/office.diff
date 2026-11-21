@@ -1,0 +1,11 @@
+diff --git a/dates/office.cal b/dates/office.cal
+index 2bd4393..b692f84 100644
+--- a/dates/office.cal
++++ b/dates/office.cal
+@@ -6,5 +6,5 @@ source closures = file "../data/closures.csv" sha256:c3e308e099ceebbf
+   format csv
+   covers 2027-01-01..2027-12-31
+ 
+-closed weekly sat, sun
++closed weekly sun
+ closed closures

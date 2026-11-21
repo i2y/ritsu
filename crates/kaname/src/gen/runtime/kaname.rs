@@ -9,7 +9,7 @@
 //! where a host gives it an argument outside what its parameters declare; its `check_<name>` says so
 //! first, as an error.
 
-#![allow(dead_code)]
+#![allow(dead_code, clippy::all)]
 
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -67,14 +67,17 @@ impl fmt::Display for Kind {
 }
 
 /// Why a function of kaname stops: its kind, where in the `.kn` it stopped (the module and the
-/// line), the message, and what the code of a rule or of a date returned, when it is that code's
-/// refusal.
+/// line), the message, for the kind `Input` the place of what is not taken, and what the code of a
+/// rule or of a date returned, when it is that code's refusal.
 #[derive(Debug)]
 pub struct KanameError {
     pub kind: Kind,
     pub module: &'static str,
     pub line: u32,
     pub message: String,
+    /// For the kind `Input`, the place of what is not taken, from the argument's name:
+    /// `submit.form.days`, `organization.people[0]`, `now`; None for the other kinds.
+    pub path: Option<String>,
     pub cause: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
@@ -95,7 +98,12 @@ impl std::error::Error for KanameError {
 
 /// The error of `kind` at `line` of `module`.
 pub fn fail(kind: &str, module: &'static str, line: u32, message: impl AsRef<str>) -> KanameError {
-    KanameError { kind: Kind::parse(kind).unwrap_or(Kind::Input), module, line, message: spaced(message.as_ref()), cause: None }
+    KanameError { kind: Kind::parse(kind).unwrap_or(Kind::Input), module, line, message: spaced(message.as_ref()), path: None, cause: None }
+}
+
+/// The error of the kind `Input` at `line` of `module`: the argument is not taken at `path`.
+pub fn fail_input(module: &'static str, line: u32, path: impl Into<String>, message: impl AsRef<str>) -> KanameError {
+    KanameError { path: Some(path.into()), ..fail("input", module, line, message) }
 }
 
 /// The error of `kind` at `line` of `module`, returned: a place that fails whatever it is given.
@@ -510,7 +518,8 @@ pub fn rat_text(x: Q) -> String {
     format!("{sign}{num}/{den}")
 }
 
-/// A number as a literal of its unit: 1150GBPc, 0.5%, 30.
+/// A number as `text` writes it, a literal of its unit with its digits as they are: 1150GBPc,
+/// 100000000GBPc, 30 (a rate as a percentage, 0.5%).
 pub fn num_text(x: Q, unit: &str) -> String {
     if unit == "%" {
         return format!("{}%", rat_text(q_mul(x, of(100))));
@@ -518,9 +527,40 @@ pub fn num_text(x: Q, unit: &str) -> String {
     format!("{}{unit}", rat_text(x))
 }
 
-/// A whole number with its unit.
-pub fn int_text(x: i64, unit: &str) -> String {
-    num_text(of(x), unit)
+/// A number as a message writes it, as the languages write numbers: a literal of its unit with its
+/// whole part's digits grouped by `_` from five on: 100_000_000GBPc, 5000JPY, 0.5%, 30.
+pub fn num_shown(x: Q, unit: &str) -> String {
+    if unit == "%" {
+        return format!("{}%", grouped(&rat_text(q_mul(x, of(100)))));
+    }
+    format!("{}{unit}", grouped(&rat_text(x)))
+}
+
+/// A whole number with its unit, as [`num_shown`] writes it.
+pub fn int_shown(x: i64, unit: &str) -> String {
+    num_shown(of(x), unit)
+}
+
+/// A number [`rat_text`] writes, with the digits of its whole part grouped by `_` from five on
+/// (12_345.5); a fraction (1/3) as it is.
+fn grouped(t: &str) -> String {
+    let (sign, body) = match t.strip_prefix('-') {
+        Some(b) => ("-", b),
+        None => ("", t),
+    };
+    let (whole, frac) = body.split_at(body.find('.').unwrap_or(body.len()));
+    if whole.len() < 5 || !whole.bytes().all(|b| b.is_ascii_digit()) {
+        return t.to_string();
+    }
+    let mut out = String::from(sign);
+    for (i, c) in whole.chars().enumerate() {
+        if i > 0 && (whole.len() - i) % 3 == 0 {
+            out.push('_');
+        }
+        out.push(c);
+    }
+    out.push_str(frac);
+    out
 }
 
 /// true or false.
@@ -556,9 +596,9 @@ pub fn outside_chars(path: impl Into<String>, n: i64, range: &str) -> Outside {
     Outside { path: path.into(), shown: String::new(), range: range.to_string(), count: Some(n), chars: true }
 }
 
-/// A count as a message writes it.
+/// A count as a message writes it: 12, 5000, 10_000.
 pub fn itoa(n: Option<i64>) -> String {
-    n.map(|n| n.to_string()).unwrap_or_default()
+    n.map(|n| grouped(&n.to_string())).unwrap_or_default()
 }
 
 /// The path of the i-th element of `what`: what[i].

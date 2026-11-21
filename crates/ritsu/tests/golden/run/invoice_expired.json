@@ -145,10 +145,7 @@
       {
         "call": {
           "http": "GET",
-          "url": "https://payments.example.com/orders/A-1/payment",
-          "query": {
-            "due": "2026-06-10"
-          }
+          "url": "https://payments.example.com/orders/A-1/payment?due=2026-06-10"
         },
         "answer": {
           "ok": {
@@ -245,19 +242,6 @@
         "member": true,
         "amount": 120
       }
-    },
-    "books": {
-      "stock": [
-        {
-          "op": "do",
-          "kind": "receive",
-          "args": {
-            "delivery": "D-1",
-            "sku": "pen",
-            "qty": 10
-          }
-        }
-      ]
     },
     "answers": [
       {

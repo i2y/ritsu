@@ -1,0 +1,19 @@
+rule 二段の取り込み(two_levels) v1
+description "規則を取り込む規則の出力。値の来る道は、二つの表を通る"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+apply 外(w) = "shared/二段.rule" meaning:7008c04e021eb37c
+  金額 = 金額
+  大きい -> 受けた大きさ
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 金額        | 受けた大きさ | -> 答え |
+| <=100_000円 | false        | 一      |
+| >100_000円  | true         | 二      |

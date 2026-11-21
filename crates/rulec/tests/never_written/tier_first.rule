@@ -1,0 +1,18 @@
+rule tier_first v1
+description "A credit for a tier, the row for basic first, which the rules beside it read through applies (fictional)"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  tier : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table credit_by_tier
+policy unique
+| tier     | -> credit |
+| basic    | 0USD      |
+| silver   | 3USD      |
+| gold     | 5USD      |
+| platinum | 8USD      |

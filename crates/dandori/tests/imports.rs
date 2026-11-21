@@ -2,7 +2,9 @@
 //! writes with `enum`. What reads (a type of a record, an input, a `match`, a range), what the names
 //! come to (a rename with `->`, the names of a Japanese file, the order rulec keeps), the mistakes
 //! the line can make, the references and the page, and that the code every platform gets is the
-//! code of the same enum written in the flow.
+//! code of the same enum written in the flow. An enum of one `enums` file is one type by every name
+//! the flow reads it by, the names the rules it calls read it by too (DESIGN 28); two enums declared
+//! at two places are two types, and the error says where each is declared.
 
 use dandori::check::{check_source, Checked};
 use dandori::diag::Lang;
@@ -123,12 +125,12 @@ fn a_reference_names_the_enum_of_the_file() {
     let t = TempDir::new("dandori-import-enum-refs");
     t.write("states.rule", STATES);
     t.write("t.flow", &flow(&format!("{IMPORT}import enum tier from \"states.rule\" -> grade\n")));
-    let refs = dandori::ports::Engine.references(t.path(), "t.flow").unwrap();
+    let refs = dandori::ports::Engine::default().references(t.path(), "t.flow").unwrap();
     let got: Vec<(usize, String, String)> = refs.iter().filter(|r| r.how == "import enum").map(|r| (r.line, r.target.text(), r.how.clone())).collect();
     assert_eq!(got, [(3, "rulec \"states.rule\" enum order_state".to_string(), "import enum".to_string()), (4, "rulec \"states.rule\" enum tier".to_string(), "import enum".to_string())]);
     // and the items leave the enum to the file that declares it
     use ritsu_ports::Items;
-    let items = dandori::ports::Engine.items(t.path(), "t.flow").unwrap();
+    let items = dandori::ports::Engine::default().items(t.path(), "t.flow").unwrap();
     assert!(!items.iter().any(|i| i.kind() == "enum"), "{items:?}");
 }
 
@@ -176,4 +178,113 @@ fn the_code_of_every_platform_is_that_of_an_enum_written_in_the_flow() {
         }
         assert_eq!(x.len(), y.len(), "{target}");
     }
+}
+
+/// The categories every file of the next tests reads, and two rules that read them with `import
+/// enum`, as the skill on the relations between languages says to (`skills/ritsu/between.md`).
+const SHARED: &str = "enums shared(sh) v1\ndescription \"The categories every file reads\"\n\nenum category = travel \"Travel\" | purchase \"Purchase\"\n";
+
+fn needs(rule: &str, alias: &str, output: &str) -> String {
+    format!("rule {rule}({alias}) v1\ndescription \"Whether a category needs the {output}\"\nimport enum category from \"shared.rule\"\n\ninputs\n  category : category\n\noutputs\n  {output} : bool\n\ntable t\n| category | -> {output} |\n| travel   | false |\n| purchase | true  |\n\nexamples\n| category | -> {output} |\n| travel   | false |\n")
+}
+
+fn shared_files() -> Vec<(&'static str, String)> {
+    vec![("rules/shared.rule", SHARED.to_string()), ("rules/r1.rule", needs("first_rule", "r1", "manager")), ("rules/r2.rule", needs("second_rule", "r2", "accounting"))]
+}
+
+/// A flow that takes a category of the type `ty` and hands it to both rules.
+fn hands_on(head: &str, ty: &str) -> String {
+    format!("workflow hands_on v1\ndescription \"Hands one category to two rules that read it from one enums file\"\n\n{head}use rule r1 from \"rules/r1.rule\"\nuse rule r2 from \"rules/r2.rule\"\n\ninputs\n  category : {ty}\n\noutputs\n  manager    : bool\n  accounting : bool\n\nflow\n  let m = r1(category: category)\n  let a = r2(category: category)\n  succeed manager = m.manager, accounting = a.accounting\n")
+}
+
+/// The three ways a flow can write the type of the categories: the `enums` file read with `use
+/// rule` (`sh.category`) or with `import enum` (`category`), or one rule's (`r1.category`). The value
+/// goes to both rules, which read the enum from the same file: one type by every name.
+#[test]
+fn an_enum_of_one_enums_file_is_one_type_by_every_name() {
+    let files = shared_files();
+    let files: Vec<(&str, &str)> = files.iter().map(|(f, b)| (*f, b.as_str())).collect();
+    for (head, ty) in [("use rule sh from \"rules/shared.rule\"\n", "sh.category"), ("import enum category from \"rules/shared.rule\"\n", "category"), ("", "r1.category")] {
+        let (_, c) = checked(&files, &hands_on(head, ty));
+        assert!(codes(&c).is_empty(), "{ty}: {}", said(&c));
+        let m = c.model.unwrap();
+        let id = |n: &str| m.enums.iter().position(|e| e.name == n).unwrap_or_else(|| panic!("no enum {n}"));
+        assert!(m.same_enum(id(ty), id("r1.category")) && m.same_enum(id("r1.category"), id("r2.category")), "{ty}");
+        // each name stays as it is written, for the code every target writes and the messages
+        assert!(m.enums.iter().any(|e| e.name == ty) && m.enums.iter().any(|e| e.name == "r2.category"), "{ty}");
+    }
+    // a variable set to a value of each name, a field of one name given a value of another, an
+    // output of one name given a variable of the other
+    let src = "workflow mixes v1\n\nimport enum category from \"rules/shared.rule\"\nuse rule r1 from \"rules/r1.rule\"\n\nrecord Claim\n  kind : r1.category\n\ninputs\n  category : category\n  claim    : Claim\n\noutputs\n  kind  : category\n  claim : Claim\n\nflow\n  match claim.kind\n    travel => let k = category\n    purchase => let k = claim.kind\n  let back : Claim = {kind: category}\n  succeed kind = k, claim = back\n";
+    let (_, c) = checked(&files, src);
+    assert!(codes(&c).is_empty(), "{}", said(&c));
+}
+
+/// Two rules that each declare an enum of their own hold two types, whatever their names and values,
+/// and so does an enum the flow declares: the error says where each enum is declared, and how to
+/// make them one.
+#[test]
+fn enums_declared_at_two_places_are_two_types_and_the_error_says_where() {
+    let own = |rule: &str, alias: &str| format!("rule {rule}({alias}) v1\ndescription \"Declares a category of its own\"\n\nenum category = travel | purchase\n\ninputs\n  category : category\n\noutputs\n  ok : bool\n\ntable t\n| category | -> ok  |\n| travel   | false |\n| purchase | true  |\n\nexamples\n| category | -> ok  |\n| travel   | false |\n");
+    let (r3, r4) = (own("own_r3", "r3"), own("own_r4", "r4"));
+    let src = "workflow own v1\n\nuse rule r3 from \"r3.rule\"\nuse rule r4 from \"r4.rule\"\n\nenum category = travel | purchase\n\ninputs\n  kind : r3.category\n  mine : category\n\noutputs\n  ok : bool\n\nflow\n  let a = r3(category: kind)\n  let b = r4(category: kind)\n  let c = r4(category: mine)\n  succeed ok = b.ok\n";
+    let (_, c) = checked(&[("r3.rule", &r3), ("r4.rule", &r4)], src);
+    assert_eq!(codes(&c), [("E003", 17), ("E003", 18)], "{}", said(&c));
+    let notes = |lang: Lang| c.diags.iter().map(|d| d.render("t.flow", src, lang)).collect::<String>();
+    let en = notes(Lang::En);
+    assert!(en.contains("error[E003]: t.flow:17:24: expected `r4.category` here, but this is `r3.category`"), "{en}");
+    assert!(en.contains("  = `r4.category` is the enum `category` that the rule `r4` (`r4.rule`) declares itself; `r3.category` is the enum `category` that the rule `r3` (`r3.rule`) declares itself. Enums declared at two places are two types, even with the same values; to make them one, put the enum in an `enums` file and read it with `import enum` in each rule and in the flow."), "{en}");
+    assert!(en.contains("`category` is an enum this flow declares."), "{en}");
+    let ja = notes(Lang::Ja);
+    assert!(ja.contains("  = `r4.category` は、規則 `r4`（`r4.rule`）が自分で宣言した列挙 `category` です。`r3.category` は、規則 `r3`（`r3.rule`）が自分で宣言した列挙 `category` です。別の場所で宣言した列挙は、値が同じでも別の型です。一つの型にするには、列挙を `enums` ファイルに置き、規則とフローのそれぞれで `import enum` で読んでください。"), "{ja}");
+    assert!(ja.contains("`category` は、このフローが宣言した列挙です。"), "{ja}");
+    // the same file read by two names is one place: one type
+    let src = "workflow twice v1\n\nuse rule r3 from \"r3.rule\"\nuse rule again from \"r3.rule\"\n\ninputs\n  kind : r3.category\n\noutputs\n  ok : bool\n\nflow\n  let b = again(category: kind)\n  succeed ok = b.ok\n";
+    let (_, c) = checked(&[("r3.rule", &r3)], src);
+    assert!(codes(&c).is_empty(), "{}", said(&c));
+}
+
+/// `dandori api` gives each name the other names of its type (`same_as`), and the page has a section
+/// of the names of one enum, only when a flow reads one by two names or more.
+#[test]
+fn the_json_and_the_page_say_the_names_of_one_enum() {
+    let t = TempDir::new("dandori-one-enum");
+    for (f, body) in shared_files() {
+        t.write(f, body);
+    }
+    t.write("t.flow", hands_on("import enum category from \"rules/shared.rule\"\n", "category"));
+    let path = t.path().join("t.flow");
+    let (src, d) = dandori::sources::with_rules(Rc::new(rulec::ports::Engine::new()), || dandori::check::drawable(&path).unwrap());
+    let m = d.model.as_ref().unwrap();
+    let json = dandori::api::json(m);
+    let field = |e: &ritsu_base::json::Json, k: &str| e.get(k).cloned().unwrap_or_else(|| panic!("no {k}"));
+    let enums = json.get("enums").and_then(|e| e.as_arr()).unwrap().to_vec();
+    let names: Vec<(String, Vec<String>)> = enums.iter().map(|e| (field(e, "name").as_str().unwrap().to_string(), field(e, "same_as").as_arr().unwrap().iter().map(|n| n.as_str().unwrap().to_string()).collect())).collect();
+    assert_eq!(
+        names,
+        [
+            ("r1.category".to_string(), vec!["r2.category".to_string(), "category".to_string()]),
+            ("r2.category".to_string(), vec!["r1.category".to_string(), "category".to_string()]),
+            ("category".to_string(), vec!["r1.category".to_string(), "r2.category".to_string()]),
+        ]
+    );
+    for (lang, head, row) in [
+        (Lang::En, "## Names of one enum", "| `r1.category`, `r2.category`, `category` | `rules/shared.rule` | `category` | `travel`, `purchase` |"),
+        (Lang::Ja, "## 一つの列挙の名前", "| `r1.category`・`r2.category`・`category` | `rules/shared.rule` | `category` | `travel`・`purchase` |"),
+    ] {
+        let i = dandori::doc::Input { m, src: &src, file: "t.flow", facts: &d.facts, diags: &d.diags, lang };
+        let page = dandori::doc::markdown(&i);
+        assert!(page.contains(head) && page.contains(row), "{page}");
+        assert!(dandori::doc::html(&i).contains("<code>rules/shared.rule</code>"), "the page of {lang:?} does not say the file");
+    }
+    // a flow that reads each enum by one name has no such section, and an empty `same_as`
+    t.write("one.flow", &flow(IMPORT));
+    t.write("states.rule", STATES);
+    let path = t.path().join("one.flow");
+    let (src, d) = dandori::sources::with_rules(Rc::new(rulec::ports::Engine::new()), || dandori::check::drawable(&path).unwrap());
+    let m = d.model.as_ref().unwrap();
+    let json = dandori::api::json(m);
+    assert!(json.get("enums").and_then(|e| e.as_arr()).unwrap().iter().all(|e| e.get("same_as").and_then(|a| a.as_arr()).is_some_and(|a| a.is_empty())));
+    let i = dandori::doc::Input { m, src: &src, file: "one.flow", facts: &d.facts, diags: &d.diags, lang: Lang::En };
+    assert!(!dandori::doc::markdown(&i).contains("Names of one enum"));
 }

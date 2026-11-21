@@ -1,0 +1,24 @@
+id,name,name_ja,email,language
+e0001,President (fictional),社長（架空）,e0001@example.com,
+e0101,Head of Sales Division,営業本部長,e0101@example.com,
+e0102,Head of Corporate Division,管理本部長,e0102@example.com,
+e0201,Director 1,取締役 1,e0201@example.com,
+e0202,Director 2,取締役 2,e0202@example.com,
+e0203,Director 3,取締役 3,e0203@example.com,
+e0204,Director 4,取締役 4,e0204@example.com,
+e1001,Head of Accounting,経理部長,e1001@example.com,
+e1002,Accountant,経理担当,e1002@example.com,
+e1101,Manager of Section 1A,営業一課長,e1101@example.com,ja
+e1201,Sales staff 1,営業担当 1,e1201@example.com,ja
+e1203,Sales staff 3,営業担当 3,e1203@example.com,en
+e3101,Head of Sales Department 1,営業一部長,e3101@example.com,ja
+e4001,Head of Finance,財務部長,e4001@example.com,
+e5001,Head of General Affairs,総務部長,e5001@example.com,
+e6001,Head of Human Resources,人事部長,e6001@example.com,
+e7001,Head of Information Systems,情報システム部長,e7001@example.com,
+e7101,Manager of IT Security,情報セキュリティ課長,e7101@example.com,
+e7102,Security engineer,セキュリティ技術者,e7102@example.com,en
+e7201,Manager of IT Operations,運用課長,e7201@example.com,
+e7202,Operator,運用担当,e7202@example.com,
+e9002,Lawyer 2,弁護士 2,e9002@example.com,en
+e9003,Lawyer 3,弁護士 3,e9003@example.com,

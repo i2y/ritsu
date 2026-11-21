@@ -1,0 +1,19 @@
+calendars/office.cal: ok — カレンダー office。表を使わないので、データの範囲は 0001-01-01〜9999-12-31 です
+エラー[koyomi E301]: dates/approval_terms.cal:19:3: 条件「due_within_eleven_days」が、received 730 日のうち 3 日で成り立ちません
+    19 |   due_within_eleven_days : due <= received + 10 days
+  = 成り立たない日: 2026-12-24〜2026-12-25（2 日）、2027-12-24
+  = いちばん外れるのは received 2026-12-24 のときで、due 2027-01-04 は received の 11 日後
+  そうなる例（最初の入力）:
+      received  2026-12-24（木）
+      due       2027-01-04（月）  3 営業日後: 数えない休み: 2026-12-26 は土曜、2026-12-27 は日曜、2026-12-29〜2027-01-01 は New Year break、2027-01-02 は土曜と New Year break、2027-01-03 は日曜と New Year break
+                時刻 2027-01-05T00:00:00+09:00（UTC で 2027-01-04T15:00:00Z）
+                due は received の 11 日後で、条件は 10 日後まで
+dates/approval_terms.cal（koyomi E301、19 行目）が通るのを待っています:
+  flows/approvals.flow:24: [dandori E015] flow "joint.flow"
+  flows/approvals.flow:29: [dandori E015] flow "stage.flow"
+  flows/joint.flow:20: [dandori E015] flow "stage.flow"
+  flows/stage.flow:5: [dandori E005] use dates terms from "../dates/approval_terms.cal"
+  gates/expense.gate:14: [sekisho E208] workflow approvals from "../flows/approvals.flow"
+  requirements/expense.req:13: [yuen E203] satisfied by koyomi "../dates/approval_terms.cal" date due
+  requirements/expense.req:19: [yuen E203] verified by koyomi "../dates/approval_terms.cal" claim due_is_open
+ritsu check: ファイル 7 個（koyomi 2、dandori 3、sekisho 1、yuen 1）。検査を通らないもの 1 個（エラー 1 件）、待っているもの 5 個。言語の境目: 確かめた 0 か所、決められない 0 か所

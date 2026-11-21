@@ -1,0 +1,45 @@
+rule シーズン券(season_ticket_ja) v1
+description "シーズン券に付くもの。範囲はどれも、書いた値を含まない端で書いてある。価格は 0 円より大きく 10 万円より小さい。割引率は 0% より大きく 50% より小さい。日付はシーズンが始まる前日より後で、終わった翌日より前。年齢は省ける。席は立ち見より上。`>` や `<` で書いた端は、その値を持つ刻みで一つ内側に読む"
+
+enum 席(seat) = 立ち見(standing) < 指定席(reserved) < 特別席(premium)
+enum 料金区分(fare) = 子供(child) | 大人(adult)
+
+inputs
+  価格(price)      : money[円]      range >0円 <100000円
+  割引率(discount) : rate[step 1%]  range >0% <50%
+  日付(day)        : date           range >2026-03-31 <2026-10-01
+  年齢(age)        : number?        range >5 <120
+  席(seat)         : 席             range >立ち見
+
+outputs
+  請求額(charged)   : money[円]  round down(1円)
+  早期(early)       : bool
+  料金区分(fare)    : 料金区分
+  ラウンジ(lounge)  : bool
+
+result 請求額 = 価格 - down(価格 * 割引率, 1円)
+
+table 早期の判定(early_of)
+policy unique
+| 日付         | -> 早期 |
+| <2026-07-01  | true    |
+| >=2026-07-01 | false   |
+
+table 料金区分の判定(fare_of)
+policy unique
+| 年齢 | -> 料金区分 |
+| none | 大人        |
+| <13  | 子供        |
+| >=13 | 大人        |
+
+table ラウンジの判定(lounge_of)
+policy unique
+| 席     | -> ラウンジ |
+| 指定席 | false       |
+| 特別席 | true        |
+
+examples
+| 価格    | 割引率 | 日付       | 年齢 | 席     | -> 請求額 | 早期  | 料金区分 | ラウンジ |
+| 1円     | 1%     | 2026-04-01 | none | 指定席 | 1円       | true  | 大人     | false    |
+| 99999円 | 49%    | 2026-09-30 | 119  | 特別席 | 51000円   | false | 大人     | true     |
+| 2000円  | 10%    | 2026-07-01 | 6    | 指定席 | 1800円    | false | 子供     | false    |

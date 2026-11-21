@@ -282,8 +282,8 @@ impl Named {
     }
 
     /// Its spelling `at`, as the name and the alias beside it. After the form's own come, for a word
-    /// of the sheet, the word with its leading capitals in lower case, as W121 asks of a name that
-    /// starts with one (`Zone(zone)`, `URLPath(urlPath)`), and that with `_` after it, the identifier
+    /// of the sheet, the word with its leading capitals in lower case (`URLPath(urlPath)`), for a
+    /// check that asks it of a name that starts with one, and that with `_` after it, the identifier
     /// the generated code writes for a word some language keeps (`type(type_)`); and then the alias of
     /// its kind, numbered from the second on (`c1`, `c1_2`, `c1_3` …), as rulec numbers an identifier
     /// it makes itself (§15.260). Which of them the generated code can take is not known here: `check`
@@ -324,7 +324,7 @@ impl Named {
         self.alias.as_deref().unwrap_or(&self.name)
     }
 
-    /// What its declaration writes: `重量(c2)`, `count_(count)`, `Zone(zone)`, `weight`, or a name of
+    /// What its declaration writes: `重量(c2)`, `count_(count)`, `type(type_)`, `weight`, or a name of
     /// its own.
     fn decl(&self) -> String {
         match &self.alias {

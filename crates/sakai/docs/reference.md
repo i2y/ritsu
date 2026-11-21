@@ -76,7 +76,7 @@ owns
   dir "../py/inventory", "../py/warehouse", "../ts/inventory", "../ts/warehouse"
 ```
 
-`owns` lists directories (`dir "…"`) and files, a file named by the tool that reads it (`rulec "…"`, `koyomi "…"`, `dandori "…"`, `chobo "…"`, `sekisho "…"`, `kaname "…"`, `proto "…"`), or for an OpenAPI or AsyncAPI document by its kind (`openapi "…"`, `asyncapi "…"`).
+`owns` lists directories (`dir "…"`) and files, a file named by the tool that reads it (`rulec "…"`, `koyomi "…"`, `dandori "…"`, `chobo "…"`, `sekisho "…"`, `kaname "…"`, `ringi "…"`, `proto "…"`), or for an OpenAPI or AsyncAPI document by its kind (`openapi "…"`, `asyncapi "…"`).
 An artifact belongs to the context that wrote the deepest entry holding it; an entry that names the file is deeper than any directory.
 That lets a map give most of a repository to one context and carve a directory out of it for another.
 An artifact no entry holds is E101; two contexts writing entries of the same depth for it is E102; an entry that holds no artifact is W101.
@@ -285,9 +285,9 @@ A context file names a file or a thing in it in one form, the same in yuen and i
 <tool> "<path>" [<kind> <name>]...
 ```
 
-The tools are `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `openapi`, `asyncapi`, `cedar`, `file`, `yuen`, `sakai`, `sekisho`, `kaname` and `jsonschema`.
+The tools are `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `openapi`, `asyncapi`, `cedar`, `file`, `yuen`, `sakai`, `sekisho`, `kaname`, `jsonschema` and `ringi`.
 A kind can hold another only as its tool nests them: `def D property p` for a JSON Schema, `service S method M`, `message M field f`, `enum E value V` for a `.proto`, `enum E value V` for a rule, `record R field f` and `enum E value V` for a workflow, `transfer T operation O` for a book, `schema S property P` and `schema S value V` for an OpenAPI or AsyncAPI document, `channel C message M` for an AsyncAPI one, `principal P attribute a`, `resource R attribute a`, `enum E value V`, `action A input i` and `action A context c` for a gate, `record R field f` and `enum E value V` for a module of kaname.
-The kinds are those of each tool: rulec's `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`; koyomi's `input`, `date`, `claim`, `source`; chobo's `unit`, `account`, `transfer`, `operation`; geas's `claim`; dandori's `task`, `case`, `record`, `field`, `enum`, `value`, `input`, `output`; the `.proto`'s `service`, `method`, `message`, `field`, `enum`, `value`; OpenAPI's `schema`, `property`, `value`, `operation`, `pointer`; AsyncAPI's `channel`, `message`, `operation`, `schema`, `property`, `value`, `pointer`; Cedar's `policy`, `action`, `entity`; yuen's `requirement`, `source`; sakai's `context`, `term`; sekisho's `principal`, `resource`, `attribute`, `role`, `workflow`, `enum`, `value`, `action`, `input`, `context`, `policy`, `expect`, `separate`; kaname's `function`, `record`, `field`, `enum`, `value`; JSON Schema's `def`, `property`, `pointer`.
+The kinds are those of each tool: rulec's `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`; koyomi's `input`, `date`, `claim`, `source`; chobo's `unit`, `account`, `transfer`, `operation`; geas's `claim`; dandori's `task`, `case`, `record`, `field`, `enum`, `value`, `input`, `output`; the `.proto`'s `service`, `method`, `message`, `field`, `enum`, `value`; OpenAPI's `schema`, `property`, `value`, `operation`, `pointer`; AsyncAPI's `channel`, `message`, `operation`, `schema`, `property`, `value`, `pointer`; Cedar's `policy`, `action`, `entity`; yuen's `requirement`, `source`; sakai's `context`, `term`; sekisho's `principal`, `resource`, `attribute`, `role`, `workflow`, `enum`, `value`, `action`, `input`, `context`, `policy`, `expect`, `separate`; kaname's `function`, `record`, `field`, `enum`, `value`; ringi's `field`, `input`, `table`, `stage`, `who`, `deadline`, `ticket`, `claim`, `example`, `scenario`, `position`, `team_kind`, `master`; JSON Schema's `def`, `property`, `pointer`.
 A name is a word (no space, `"` or `#`) or a string in `"…"` with `\"` and `\\` as its only escapes.
 A path is from the directory of the file it is written in, `/` between its parts; an absolute path, or one that leaves the root, is E012.
 In JSON, a path is from the root: the nearest directory above the first path given that holds `.git` or `ritsu.mod`, or `--root`.
@@ -302,7 +302,7 @@ A gate (`.gate`) is an artifact wherever it is, as the files of the other langua
 
 1. The words, the sections, the names, the aliases and the paths (E001 to E012), and the keys written in the map and its context files (W901).
 2. Who owns what: every artifact covered belongs to exactly one context (E101 to E103, W101, W103).
-3. What the artifacts say: the `.proto` files, what rulec, koyomi, dandori, sekisho and kaname answer of their files through ritsu's ports, the crates of the Rust code as Cargo says them, the OpenAPI and AsyncAPI documents and their `$ref`s, with their servers and how they ask a client to prove who it is; then the elements the map names (E104 to E108, W102, W104, W902, W903, E007, E011).
+3. What the artifacts say: the `.proto` files, what rulec, koyomi, dandori, sekisho, kaname and ringi answer of their files through ritsu's ports, the crates of the Rust code as Cargo says them, the OpenAPI and AsyncAPI documents and their `$ref`s, with their servers and how they ask a client to prove who it is; then the elements the map names (E104 to E108, W102, W104, W902, W903, E007, E011).
 4. The patterns agree with each other (E301 to E313, W301).
 5. The references that cross a boundary (E201 to E211): a document's `$ref` to another context's, an AsyncAPI operation on another context's channel, and a gate's `guards` (or a Cedar schema's `@guards`) on another context's operation, among them.
 6. The mappings and the glossaries (E401 to E410, W401, W402).
@@ -328,8 +328,8 @@ Every keyword has one English spelling and no synonym.
 | map file | `map`, `description`, `use context`, `covers`, `except`, `proto root`, `code`, `python`, `typescript`, `java`, `go`, `rust`, `test` |
 | context file | `context`, `description`, `owner`, `also`, `owns`, `dir`, `published language`, `crate`, `openapi`, `asyncapi`, `open host service`, `generated dir`, `terms`, `means`, `as` |
 | relationship | `upstream`, `downstream`, `conformist`, `anticorruption layer`, `customer`, `supplier`, `through`, `layer`, `enum`, `term`, `refuse`, `shared kernel with`, `partnership with`, `separate ways from` |
-| tool | `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `openapi`, `asyncapi`, `cedar`, `file`, `yuen`, `sakai`, `sekisho`, `kaname`, `jsonschema` |
-| kind | `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`, `date`, `claim`, `unit`, `account`, `transfer`, `service`, `method`, `message`, `field`, `requirement`, `context`, `term`, `task`, `case`, `record`, `schema`, `channel`, `operation`, `property`, `pointer`, `policy`, `action`, `entity`, `principal`, `resource`, `attribute`, `role`, `workflow`, `expect`, `separate`, `function`, `def` |
+| tool | `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `openapi`, `asyncapi`, `cedar`, `file`, `yuen`, `sakai`, `sekisho`, `kaname`, `jsonschema`, `ringi` |
+| kind | `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`, `date`, `claim`, `unit`, `account`, `transfer`, `service`, `method`, `message`, `field`, `requirement`, `context`, `term`, `task`, `case`, `record`, `schema`, `channel`, `operation`, `property`, `pointer`, `policy`, `action`, `entity`, `principal`, `resource`, `attribute`, `role`, `workflow`, `expect`, `separate`, `function`, `def`, `stage`, `who`, `deadline`, `ticket`, `example`, `scenario`, `position`, `team_kind`, `master` |
 
 ## Commands
 
@@ -341,8 +341,9 @@ Every keyword has one English spelling and no synonym.
 | `sakai doc <map.ctx> [--format markdown\|html] [--out <dir>]` | write the map's page: the context map, each context's artifacts and glossary, the relationships and what crosses them, the mappings |
 | `sakai api <map.ctx>` | print the map, the owners and the crossings as JSON |
 | `sakai vectors <map.ctx> [--root <dir>]` | print what each anticorruption layer's mappings say, one JSON line for every value of every upstream enum, for the tests of the layer's code ([Vectors](#vectors-for-the-code-of-a-layer)) |
-| `sakai explain <code>`, `sakai explain --all [--format markdown]` | look a diagnostic up |
+| `sakai explain <code>...`, `sakai explain --all [--format markdown\|json]` | look diagnostics up, in the order given |
 
-Every command takes `--lang ja|en` (else `SAKAI_LANG`, then `RITSU_LANG`, else English).
+Every command takes `--lang ja|en`. Without it, the text a command prints follows `SAKAI_LANG`, then `RITSU_LANG`, else English, and what `gen`, `export` and `doc` write is in English, whatever the environment says.
 The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file that cannot be read, or an artifact of a language that is not joined (E104).
+With `--format json` anywhere on the line, a run that stops before its work (exit 2: a file that is not there or not UTF-8, a flag it does not take, an argument missing) writes the sentence it says on stderr in JSON on stdout as well, `{"error": {"code": 2, "message": "…"}}`, without its `error: ` head.
 `ritsu sakai …` (or `sakai`, the link of that name to ritsu) joins every language sakai reads; the binary of sakai's own crate joins none, and stops with E104 at a map that holds rules, calendars or workflows.

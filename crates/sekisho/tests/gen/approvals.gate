@@ -1,0 +1,40 @@
+gate approvals v1
+description "Types whose names end in s, and one whose name begins with a vowel: the comments of the generated code name each type as the gate names it"
+namespace Lab
+
+role clerk
+  description "Files and approves claims"
+
+principal User
+  description "A person who works on claims"
+  roles clerk
+  attributes
+    editor : Editor
+
+resource Approvers
+  description "A group that approves claims"
+
+resource Owners
+  description "A group that owns claims"
+
+resource Editor
+  description "Someone who edits claims"
+
+resource Claim
+  description "A claim for expenses"
+  attributes
+    approvers : Approvers
+    owners    : Owners
+    editor    : Editor
+
+action approve
+  description "Approve a claim"
+  principal User
+  resource Claim
+
+permit members_approve
+  description "A clerk among the approvers or the owners of a claim approves it, when the claim's editor is the clerk's"
+  principal in clerk
+  action approve
+  when principal in resource.approvers or principal in resource.owners
+  when resource.editor is principal.editor

@@ -17,15 +17,18 @@ website/
 ├── serve.sh            # previews build/ under /ritsu/, with caching off
 ├── docs/               # the English pages: index.md, playground.md, sekisho.md, node.md, libraries.md
 │   ├── kaname/         # kaname's pages: index.md, language.md, examples.md, checks.md, together.md
+│   ├── ringi/          # ringi's pages: index.md, language.md, checks.md, reading.md, together.md,
+│   │                   #   server.md, and doc/, the pages `ringi doc --format html` draws of the examples
 │   ├── ns/             # what a namespace IRI opens: yuen.md (see below)
 │   ├── play/           # index.html: the playground alone, filling the window (published as it is)
 │   └── playground/     # the playground: playground.js and .css, worker.js, libraries.js, ritsu.wasm,
 │                       #   projects.json, words.json
-├── docs-ja/            # the Japanese pages (kaname/, ns/yuen.md and play/index.html too)
+├── docs-ja/            # the Japanese pages (kaname/, ringi/, ns/yuen.md and play/index.html too)
 ├── docs-zh/            # index.md alone: the home page in Simplified Chinese
 ├── playground/         # the shop the playground opens; projects.json is written from it, rulec's corpus and dandori's examples
 ├── tools/
 │   ├── knlexer.py      # colours the ```kn blocks (see below)
+│   ├── ringilexer.py   # colours the ```ringi blocks
 │   ├── gatelexer.py    # colours the ```gate blocks
 │   ├── cedarlexer.py   # colours Cedar's ```cedar and ```cedarschema blocks
 │   ├── make_wasm.sh    # builds docs/playground/ritsu.wasm
@@ -49,11 +52,18 @@ project of the site's language, as chobo's does on its examples.
 A language with no site of its own can have pages among ritsu's. sekisho's, `sekisho.md`, follows
 its example from the answer of a rule a gate reads to the Cedar and the code generated from it,
 with the dates, the contract, the workflow and the map around it; the nav lists it after the
-playground, and the home page's table of the languages links to it. kaname's are five, in
+playground, and the home page's table of the languages links to it. kaname's are six, in
 `kaname/`: what it is, how a module is written, the four functional cores of its examples with
-their hosts in TypeScript, Python and Go (in tabs, `pymdownx.tabbed`), what the check guarantees,
-and the calls of rules, dates and books; the nav lists them after sekisho's, and the home page
-links to each. The table links the languages with neither a site nor a page to their READMEs.
+their hosts in TypeScript, Python and Go (in tabs, `pymdownx.tabbed`), the properties a function
+holds and their statements for Lean, what the check guarantees, and the calls of rules, dates and
+books; the nav lists them after sekisho's, and the home page
+links to each. ringi's are six, in `ringi/`, one for each reader: what it is; how a request type is
+written and what the check guarantees, for the agent that writes one and the engineer who asks it
+to; how a person reads one, for the administrator and the approver; how it reads the files of the
+other languages; and what is generated and what the server does. Its pages for people, as `ritsu
+ringi doc --format html` draws the examples, are in `ringi/doc/`, in English there and in Japanese
+in `docs-ja/ringi/doc/`; `crates/ritsu/tests/website.rs` holds each to what the command draws now
+(`RITSU_BLESS=1` draws them again). The nav lists them after kaname's. The table links the languages with neither a site nor a page to their READMEs.
 `libraries.md` says how `ritsu gen --library` writes a module as libraries and how to publish
 them; `crates/ritsu/tests/library.rs` runs its commands and holds the files it shows to what ritsu
 writes, marked by the comment above each block.
@@ -72,12 +82,12 @@ language's home page; the sites of the languages switch between English and Japa
 
 Pygments colours the code of the languages when the site is built, as it colours every other block:
 the theme's light and dark palettes are written against Pygments' classes, so nothing runs in the
-browser. Three lexers are in `tools/`: `knlexer.py` reads the `kn` fences, `gatelexer.py` the `gate`
-fences, and `cedarlexer.py` Cedar's, `cedar` for policies and `cedarschema` for a schema (Pygments
+browser. Four lexers are in `tools/`: `knlexer.py` reads the `kn` fences, `ringilexer.py` the `ringi`
+fences, `gatelexer.py` the `gate` fences, and `cedarlexer.py` Cedar's, `cedar` for policies and `cedarschema` for a schema (Pygments
 has no lexer of Cedar's). ritsu's pages use the lexers of the languages' sites as they are, not
 copies of them: `rulec/tools/rulelexer.py` for `rule`, `dandori/tools/flowlexer.py` for `flow` and
 `chobo/tools/booklexer.py` for `book`. A lexer is imported only by being named as a Markdown
-extension, so both configurations name the six, and `build.sh` puts the four directories on
+extension, so both configurations name the seven, and `build.sh` puts the four directories on
 `PYTHONPATH`; it also clears Zensical's page cache, which is keyed on the Markdown and would keep a
 page as it was after a change to a lexer. A language's site is built by its own `build.sh`, with its
 own `tools/` on `PYTHONPATH`; chobo's, whose pages show a gate, names `gatelexer` too, and its
@@ -86,7 +96,8 @@ as plain text: chobo's site names none for `flow`, and yuen's `req` has none.
 
 Each lexer keeps the words of its language a second time, in Python, and the tests of what it copies
 hold them to the lists they copy: kaname's `tests/docs.rs` holds `knlexer.py` to `src/kw.rs`, and the
-characters it reads a number with to `src/lex.rs`; sekisho's `tests/docs.rs` holds `gatelexer.py` to
+characters it reads a number with to `src/lex.rs`, and ringi's `tests/docs.rs` holds `ringilexer.py`
+to its `src/kw.rs` and `src/lex.rs` the same way; sekisho's `tests/docs.rs` holds `gatelexer.py` to
 `src/kw.rs`, to the characters `src/lex.rs` reads a number with and to the words of ritsu-units in a
 type's brackets; ritsu-base's `tests/cedar.rs` holds `cedarlexer.py` to the words, the reserved words
 and the punctuation `ritsu_base::cedar` reads, which are those of Cedar 4.13.0; and rulec's

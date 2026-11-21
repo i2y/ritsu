@@ -2,7 +2,7 @@
 
 Pays a refund back at once or sends it to review, and settles it on a payment day. ritsu cannot decide the rules' preconditions here (the amount asked and the day come from tasks with no range), so the workflow checks each as soon as its values are made: right after the task that answers them, at the start of the arm that calls the rule, at the start of each round. Runs on every platform
 
-`tests/flows/preconditions.flow`, drawn by `dandori doc`. Inputs: `order: string`, `paid: int range >=0 <=10000`.
+`tests/flows/preconditions.flow`, drawn by `dandori doc`. Inputs: `order: string`, `paid: int range >=0 <=10_000`.
 
 ## flow
 
@@ -200,10 +200,10 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 What `dandori check` says of this workflow, each with the run that gets there.
 
 ```text
-warning[W104]: tests/flows/preconditions.flow:41:1: nothing says what range `asked` is in (the answer of `ask_amount` has no range), and `asked` of the rule `check` takes `>=0 <=10000`
+warning[W104]: tests/flows/preconditions.flow:41:1: nothing says what range `asked` is in (the answer of `ask_amount` has no range), and `asked` of the rule `check` takes `>=0 <=10_000`
     41 |   let decision = check(paid: paid, asked: asked)
-warning[W104]: tests/flows/preconditions.flow:52:1: nothing says what range `claim.asked` is in (the field `asked` of `Claim` has no range), and `asked` of the rule `check` takes `>=0 <=10000`
+warning[W104]: tests/flows/preconditions.flow:52:1: nothing says what range `claim.asked` is in (the field `asked` of `Claim` has no range), and `asked` of the rule `check` takes `>=0 <=10_000`
     52 |     let one = check(paid: paid, asked: claim.asked)
-warning[W104]: tests/flows/preconditions.flow:54:1: nothing says what range `item.asked` is in (the field `asked` of `Claim` has no range), and `asked` of the rule `check` takes `>=0 <=10000`
+warning[W104]: tests/flows/preconditions.flow:54:1: nothing says what range `item.asked` is in (the field `asked` of `Claim` has no range), and `asked` of the rule `check` takes `>=0 <=10_000`
     54 |     let each = check(paid: paid, asked: item.asked)
 ```

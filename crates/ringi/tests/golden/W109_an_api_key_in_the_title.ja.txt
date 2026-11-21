@@ -1,0 +1,5 @@
+警告[W109]: tests/mutants/W109_an_api_key_in_the_title.ringi:5:3: `access` は秘密の値（api key）を入れさせるフィールドです
+     5 |   access : text "API key"  count <=80
+  = 入れた値はチケットの履歴に残り、承認者と、ページとログを読める人に見えます。秘密の値は申請で渡さず、それを扱う仕組み（鍵の置き場、本人が入れる画面）で渡してください。
+ok tests/mutants/W109_an_api_key_in_the_title.ringi: 申請の種類、フィールド 2 個、ステップ 1 個
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます

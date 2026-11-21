@@ -1,0 +1,10 @@
+company.gate: ok — action 11、ポリシー 4（permit 3、forbid 1）、期待 0、職務の分離 0
+ok purchase.ringi: 申請の種類、フィールド 1 個、ステップ 1 個
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます
+エラー[ritsu E911]: purchase.ringi:3: ゲート company.gate の action 2 個（`approve`、`comment`）が自分の入力を受け取りますが、`purchase` のチケットの操作でゲートに尋ねるサーバーには、渡す値がありません
+     3 | use gate "company.gate"
+  = `approve` の入力は `urgent` です。
+  = `comment` の入力は `length`、`shared` です。
+  = サーバーがゲートに渡すのは、人と、resource（チケット、ステップか申請の種類と、ringi が決めた属性）と、時刻だけです。自分の入力を受け取る action は、どのチケットでも拒まれます（種類 `input` の断り）。
+  = company.gate の `approve`、`comment` から `input` の行を外してください。自分の入力が要る決まりは別の action に書き、プログラムからその action の関数で尋ねます。
+ritsu check: ファイル 2 個（sekisho 1、ringi 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 3 か所、決められない 0 か所

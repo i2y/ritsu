@@ -1,0 +1,46 @@
+rule top_up_tier_by_items v1
+description "A top-up to a minimum charge of 17 yen, a tier by the top-up and the number of items, and a choice read off the amount, the top-up and the tier. From 5 yen to 30 yen the top-up is 12 yen at most, so the third tier, which the tier table gives one or three items from a top-up of 14 yen, never comes there with a top-up of 2 yen or more. Read over all those amounts at once, the top-up comes out anywhere from -13 yen to 24 yen; read below 19 yen and from 19 yen apart, both parts stay under 14 yen"
+
+enum choice = one | two
+enum tier = first | second | third
+
+inputs
+  amount : money[JPY]  range >=0JPY <=68JPY
+  items  : number      range >=1 <=4
+
+define top_up : money[JPY] = max(amount, 17JPY) - amount
+
+outputs
+  x : choice
+
+table tier_of
+| top_up       | items | -> tier : tier |
+| <=0JPY       | 1     | second         |
+| <=0JPY       | 2     | second         |
+| <=0JPY       | 3     | second         |
+| <=0JPY       | 4     | third          |
+| >0JPY <14JPY | 1     | first          |
+| >0JPY <14JPY | 2     | second         |
+| >0JPY <14JPY | 3     | first          |
+| >0JPY <14JPY | 4     | first          |
+| >=14JPY      | 1     | third          |
+| >=14JPY      | 2     | second         |
+| >=14JPY      | 3     | third          |
+| >=14JPY      | 4     | first          |
+
+table pick
+| amount        | top_up        | tier   | -> x |
+| <5JPY         | >5JPY         | first  | one  |
+| <5JPY         | >5JPY         | second | two  |
+| <5JPY         | >5JPY         | third  | one  |
+| >=5JPY <31JPY | <=1JPY        | first  | two  |
+| >=5JPY <31JPY | <=1JPY        | second | one  |
+| >=5JPY <31JPY | <=1JPY        | third  | two  |
+| >=5JPY <31JPY | >=2JPY <=3JPY | first  | one  |
+| >=5JPY <31JPY | >=2JPY <=3JPY | second | two  |
+| >=5JPY <31JPY | >=4JPY <=5JPY | first  | one  |
+| >=5JPY <31JPY | >=4JPY <=5JPY | second | two  |
+| >=5JPY <31JPY | >5JPY         | first  | one  |
+| >=5JPY <31JPY | >5JPY         | second | two  |
+| >=31JPY       | <=1JPY        | second | one  |
+| >=31JPY       | <=1JPY        | third  | two  |

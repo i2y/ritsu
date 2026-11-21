@@ -6,7 +6,11 @@
 //! --input -` on the row's `in` answers the row's `out`; for every refused input `gen` writes,
 //! it refuses for the kind and the sentence the file gives. The materials have a machine, a
 //! sequence read by a walk and by a count, `apply`, a `constraint`, `never` lines, a fold that
-//! contradicts itself, and a plain table, English first with the Japanese versions of four of them.
+//! contradicts itself, a plain table, and a value the rule works out and accepts only inside a
+//! range — once for a call, on each element, and from random inputs (§15.313), whose vectors put
+//! it at the ends of the range and whose refused inputs one step past them — and ranges whose
+//! ends do not take the value they write, on inputs and on a walk, beside a sum and a count held
+//! to a bottom above zero (§15.314), English first with the Japanese versions of ten of them.
 
 use rulec::json::Json;
 use std::io::Write;
@@ -17,7 +21,7 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-const RULES: [&str; 13] = [
+const RULES: [&str; 25] = [
     "tests/corpus/member_tier_shipping.rule",
     "tests/corpus/order_lifecycle.rule",
     "tests/corpus/one_time_perk.rule",
@@ -27,10 +31,22 @@ const RULES: [&str; 13] = [
     "tests/corpus/express_delivery_quote.rule",
     "tests/corpus/nationwide_freight.rule",
     "tests/corpus/order_fee.rule",
+    "tests/corpus/card_fee.rule",
+    "tests/corpus/order_line_subtotals.rule",
+    "tests/corpus/dice_total.rule",
+    "tests/corpus/season_ticket.rule",
+    "tests/corpus/gift_basket.rule",
+    "tests/corpus/parcel_batch.rule",
     "tests/corpus/注文の状態.rule",
     "tests/corpus/注文の手数料.rule",
     "tests/corpus/買物かごの送料.rule",
     "tests/corpus/全国運賃.rule",
+    "tests/corpus/カード手数料.rule",
+    "tests/corpus/明細の小計.rule",
+    "tests/corpus/さいころの合計.rule",
+    "tests/corpus/シーズン券.rule",
+    "tests/corpus/贈り物のかご.rule",
+    "tests/corpus/小包のまとめ出荷.rule",
 ];
 
 fn rulec(args: &[&str], stdin: Option<&str>) -> (i32, String, String) {

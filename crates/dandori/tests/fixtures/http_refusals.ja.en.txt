@@ -1,0 +1,56 @@
+error[E016]: tests/fixtures/http_refusals.ja.flow:27:1: the parameter `x_id` matches `x_id` in the query and `X-Id` in a header of `場所` GET /either, so where it goes cannot be told; give it a name that matches only one of them
+    27 | task どちらにも(x_id: string) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:31:1: the parameters `x_key` and `X_Key` both go to `X-Key` in a header of `場所` GET /keys
+    31 | task 二つの鍵(x_key: string, X_Key: string) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:35:1: `場所` GET /tabs writes `days` in the style `tabDelimited`, which OpenAPI does not have
+    35 | task タブ区切り(days: list[string]) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:39:1: `場所` GET /content says how `filter` is written with `content` (a media type); dandori writes what `schema` and `style` say
+    39 | task メディアタイプで(filter: 年の幅) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:43:1: the header `Host` is one the HTTP client writes itself, which a parameter cannot set
+    43 | task ホストを渡す(host: string) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:46:1: a cookie goes as a parameter that is `in: cookie`, not as the header `Cookie`
+    46 | task クッキーのヘッダーを渡す(cookie: string) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:50:1: `X-印` cannot be the name of a header (HTTP's names are letters, digits and `!#$%&'*+-.^_`|~`)
+    50 | task 書けない名前(x_印: string, セッション: string) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:50:1: `セッション` cannot be the name of a cookie (HTTP's names are letters, digits and `!#$%&'*+-.^_`|~`)
+    50 | task 書けない名前(x_印: string, セッション: string) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:54:1: the parameter `x_tags` is not what `場所` GET /header-form takes: a header takes the style simple, not form
+    54 | task ヘッダーをformで(x_tags: list[string]) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:57:1: the parameter `ids` is not what `場所` GET /path-form/{ids} takes: the path takes the style simple, label or matrix, not form
+    57 | task パスをformで(ids: list[string]) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:60:1: the parameter `prefs` is not what `場所` GET /cookie-simple takes: a cookie takes the style form, not simple
+    60 | task クッキーをsimpleで(prefs: list[string]) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:65:1: the parameter `prefs` is not what `場所` GET /cookie-list takes: form with explode: true does not write a list or a record as a cookie; it takes explode: false
+    65 | task クッキーのリスト(prefs: list[string]) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:68:1: the parameter `ids` is not what `場所` GET /deep-list takes: deepObject writes an object, and has no form for a list
+    68 | task deepObjectのリスト(ids: list[string]) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:71:1: the parameter `codes` is not what `場所` GET /pipes takes: pipeDelimited with explode: true is a form OpenAPI does not define; it takes explode: false
+    71 | task 縦棒で区切る(codes: list[string]) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:74:1: the parameter `sort` is not what `場所` GET /deep-false takes: deepObject with explode: false is a form OpenAPI does not define; it takes explode: true
+    74 | task deepObjectをfalseで(sort: 並び順) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:78:1: the parameter `filter` is not what `場所` GET /deep-json takes: a `json` value goes as its JSON text, which deepObject does not write; declare it a list or a record
+    78 | task deepObjectにjson(filter: json) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:81:1: the parameter `tags` is not what `場所` GET /json-list takes: a `json` value goes as its JSON text, which is not how the list or the object `tags` is written; declare it a list or a record
+    81 | task リストにjson(tags: json) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:85:1: the parameter `ranges` is not what `場所` GET /nested takes: no style writes a list or a record that holds a list or a record in the query
+    85 | task 入れ子(ranges: list[年の幅]) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:89:1: `場所` GET /needs needs a header `X-Board-Key`, and the parameter `x_board_key` may be absent
+    89 | task 無いことがある(x_board_key: string?, session: string) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:92:1: `場所` GET /needs needs a cookie `session`, which `渡していない` does not pass
+    92 | task 渡していない(x_board_key: string) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:96:1: `years` and `first` both put a value under `first` in the query, where the other side cannot tell them apart
+    96 | task 名前が重なる(years: 年の幅, first: int) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:100:1: dandori puts the idempotency key of `key` in the header `Idempotency-Key`; leave out the parameter `idempotency_key`
+   100 | task 注文する(item: string, idempotency_key: string) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:105:1: `場所` POST /orders needs a header `Idempotency-Key`, which `もう一度注文する` does not pass; write `key` on the task and dandori puts its idempotency key there
+   105 | task もう一度注文する(item: string) -> 済み
+error[E016]: tests/fixtures/http_refusals.ja.flow:109:1: `場所` POST /notes says `meta` of the URL-encoded body is written as `application/json`; dandori writes there what style and explode say
+   109 | task メモを書く(text: string, meta: 年の幅) -> 済み
+error[E003]: tests/fixtures/http_refusals.ja.flow:115:3: the parameter `範囲` cannot be sent: no style writes a list or a record that holds a list or a record in the query
+   115 |   http GET "https://places.example.com/plain"
+error[E003]: tests/fixtures/http_refusals.ja.flow:118:3: `年` and `最初` both put a value under `最初` in the query, where the other side cannot tell them apart
+   118 |   http GET "https://places.example.com/plain"
+error[E003]: tests/fixtures/http_refusals.ja.flow:121:3: the parameter `範囲` cannot be sent: no style writes a list or a record that holds a list or a record in the URL-encoded body
+   121 |   http POST "https://places.example.com/plain" form
+error[E003]: tests/fixtures/http_refusals.ja.flow:121:3: `置き場所` and `部屋` both put a value under `部屋` in the URL-encoded body, where the other side cannot tell them apart
+   121 |   http POST "https://places.example.com/plain" form

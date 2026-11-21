@@ -1,0 +1,10 @@
+service refunds.v1.RefundService
+rpc refunds.v1.RefundService.Refund(refunds.v1.RefundRequest) returns (refunds.v1.RefundReply)
+message refunds.v1.Money
+  string currency = 1
+  int64 units = 2
+message refunds.v1.RefundReply
+  bool accepted = 1
+message refunds.v1.RefundRequest
+  string order = 1
+  refunds.v1.Money amount = 2

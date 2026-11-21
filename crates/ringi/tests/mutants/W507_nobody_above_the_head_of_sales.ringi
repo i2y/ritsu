@@ -1,0 +1,20 @@
+request example v1 "Example"
+
+use organization org from "shared/no_president.ringi"
+use calendar office from "shared/office.cal"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  decide  sales_head
+
+who
+  sales_head = person "e02"
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+
+ticket
+  self approval  allowed

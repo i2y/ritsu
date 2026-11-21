@@ -1,0 +1,5 @@
+error[E302]: tests/mutants/E302_10万円から20万円で重なる二つの行.ringi:8:1: Two rows of the route take one request (lines 8, 9)
+     8 | | <=200_000円  | 上長            |
+  = The requests both rows take: 金額 from 100_000円 to 200_000円
+  = A request both rows take: 金額 = 100_000円
+  = Decide which row is right, and correct the bounds so that they do not overlap.

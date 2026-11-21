@@ -26,10 +26,8 @@ const STACK: usize = 256 << 20;
 fn main() -> ExitCode {
     restore_sigpipe();
     // A panic is a bug in kaname: exit 2, as the other exits that are not the file's fault, rather
-    // than Rust's 101.
-    std::panic::set_hook(Box::new(|info| {
-        eprintln!("kaname: a bug in kaname, please report it: {info}");
-    }));
+    // than Rust's 101, in the words of every binary of the toolchain.
+    ritsu_base::cli::on_panic("kaname");
     let args: Vec<String> = std::env::args().skip(1).collect();
     let worker = std::thread::Builder::new().stack_size(STACK).spawn(move || {
         std::panic::catch_unwind(|| {

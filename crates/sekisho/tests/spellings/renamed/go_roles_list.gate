@@ -1,0 +1,27 @@
+gate go_roles_list_renamed v1
+description "go_roles_list.gate with the type renamed Duties, as its note says"
+namespace Shop
+
+role manager
+  description "Says who holds which duty"
+  can edit_duties
+
+principal Staff
+  description "One who works in the shop"
+  roles manager
+
+resource Duties
+  description "Who holds which duty in the shop"
+  attributes
+    editable : bool
+
+action edit_duties
+  description "Change who holds which duty"
+  principal Staff
+  resource Duties
+
+permit managers_edit_duties
+  description "A manager can: Change who holds which duty"
+  principal in manager
+  action edit_duties
+  when resource.editable

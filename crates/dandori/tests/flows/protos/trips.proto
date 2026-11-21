@@ -1,0 +1,49 @@
+// The trip service of tests/flows/proto_dates.flow and of its Japanese version (DESIGN 44):
+// google.type.Date in the requests and in the answers, one, a list of them, one in a message and
+// those in a list of messages. protobuf's JSON writes a date as {"year": 2026, "month": 11,
+// "day": 16}, and a flow holds it as 2026-11-16. google/type/date.proto is not kept here: dandori
+// knows the type by its name, as it knows the well-known types.
+syntax = "proto3";
+
+package trips.v1;
+
+import "buf/validate/validate.proto";
+import "google/type/date.proto";
+
+service TripService {
+  rpc Plan(PlanRequest) returns (PlanResponse);
+  rpc Book(BookRequest) returns (BookResponse);
+}
+
+message PlanRequest {
+  string traveller = 1;
+  google.type.Date start = 2;
+}
+
+message Stop {
+  string city = 1;
+  google.type.Date day = 2 [(buf.validate.field).required = true];
+}
+
+message PlanResponse {
+  string id = 1;
+  // every plan has its first day; the last one may not be fixed yet
+  google.type.Date start = 2 [(buf.validate.field).required = true];
+  google.type.Date end = 3;
+  repeated google.type.Date rest_days = 4;
+  Stop first = 5 [(buf.validate.field).required = true];
+  repeated Stop stops = 6;
+}
+
+message BookRequest {
+  string id = 1;
+  google.type.Date start = 2;
+  repeated google.type.Date rest_days = 3;
+  Stop first = 4;
+  repeated Stop stops = 5;
+}
+
+message BookResponse {
+  string booking_id = 1;
+  google.type.Date booked_on = 2 [(buf.validate.field).required = true];
+}

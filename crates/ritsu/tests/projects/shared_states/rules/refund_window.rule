@@ -1,0 +1,21 @@
+rule refund_window v1
+description "How many days after its last change an order of a state may still be refunded"
+import enum order_state from "order_states.rule"
+
+inputs
+  state : order_state
+
+outputs
+  days : number  round down(1)
+
+table window
+| state    | -> days |
+| paid     | 30      |
+| shipped  | 14      |
+| returned | 7       |
+| refunded | 0       |
+
+examples
+| state    | -> days |
+| shipped  | 14      |
+| refunded | 0       |

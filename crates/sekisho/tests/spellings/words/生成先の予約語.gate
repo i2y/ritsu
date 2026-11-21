@@ -1,0 +1,74 @@
+gate 生成先の予約語(target_words_ja) v1
+description "TypeScript・Python・Go の予約語を別名にした名前。どの言語のコードも、その名前をそのままでは書かないので、どの出力先のコードも書け、動く"
+namespace Depot
+
+today range >=2026-10-01 <=2027-03-31 offset +00:00
+
+enum 区分(switch) = 新規(new) | 返送(return) | 取り込み(import) | 書き出し(export) | 既定(default) | 無名(lambda) | 関数(func)
+
+role 窓口(public)
+  description "窓口で働く"
+  can 調べる
+
+role 全店(global)
+  description "どの店でも働く"
+  includes 窓口
+  can 調べる, 消す, 返す
+
+principal 店員(Clerk)
+  description "店で働く人"
+  roles 窓口, 全店
+  attributes
+    既定(default) : bool
+    種類(type)    : 区分
+
+resource 荷物(Package)
+  description "店が預かる荷物"
+  attributes
+    段階(state)  : 区分
+    期日(due_on) : date  range >=2026-10-01 <=2027-03-31
+    保留(var)    : bool
+
+action 調べる(track)
+  description "荷物を調べる"
+  principal 店員
+  resource 荷物
+
+action 消す(delete)
+  description "荷物を一覧から消す"
+  principal 店員
+  resource 荷物
+  input
+    確認(class) : bool
+  context
+    期日後(finally) = today > resource.期日
+
+action 返す(return)
+  description "荷物を送り返す"
+  principal 店員
+  resource 荷物
+
+permit 窓口は調べられる(continue)
+  description "窓口の人は荷物を調べる"
+  principal in 窓口
+  action 調べる
+
+permit 全店は期日後に消せる(default)
+  description "どの店でも働く人は、期日の過ぎた荷物を、頼まれたら一覧から消す"
+  principal in 全店
+  action 消す
+  when 期日後
+  when 確認
+
+permit 全店は返送を返せる(try)
+  description "どの店でも働く人は、返送の荷物を送り返す。既定の店員でなければ"
+  principal in 全店
+  action 返す
+  when resource.段階 is 返送
+  unless principal.既定
+
+forbid 保留は触れない(with)
+  description "保留の荷物には、だれも触れない"
+  principal is 店員
+  action any
+  when resource.保留

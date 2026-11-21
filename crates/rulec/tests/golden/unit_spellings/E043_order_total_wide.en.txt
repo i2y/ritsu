@@ -1,0 +1,9 @@
+error[E043]: A value passed to `subtotal` leaves the callee's range
+  --> E043_order_total_wide.rule:10 apply shipping
+   |
+10 |   subtotal = subtotal
+   |   ^^^^^^^^^^^^^^^^^^^ what is passed: 0JPY .. 200_000JPY
+   |
+ For example subtotal = 200_000円 is outside range >=0円 <=100_000円 of `subtotal` in `shared/shipping_fee.rule`.
+ The callee's completeness was proved over that range; outside it there is no definition. Narrow the range on this side, or define that region in a clause of this rule. Which is a business decision.
+

@@ -3,13 +3,13 @@
 //! A `sorry` would make every theorem above it worth nothing, and it is the one thing a reader
 //! cannot see from the outside. Two tests hold `proofs/` to that. One reads every `.lean` of it for
 //! `sorry`, `axiom`, `native_decide` and `implemented_by`. The other asks Lean: every declaration of
-//! every library — `RulecCert`, `ChoboModel`, `KoyomiModel`, `DandoriCore`, `RitsuCross` and
-//! `KanameCore`, every theorem, and every definition the theorems, `rulec-recheck` and
-//! `ritsu-model` stand on — is put to `collectAxioms`, what `#print axioms` prints, and may stand
-//! only on the three axioms Lean itself stands on: `propext`, `Classical.choice`, `Quot.sound`. A
-//! `sorry` shows there as `sorryAx`, a `native_decide` as `Lean.ofReduceBool`, an `axiom` by its
-//! name, wherever a tactic hid it. rulec's `tests/lean.rs` asks the same of the theorems a
-//! certificate's claims rest on.
+//! every library — `RulecCert`, `ChoboModel`, `KoyomiModel`, `DandoriCore`, `RitsuCross`,
+//! `KanameCore` and `RingiCore`, every theorem, and every definition the theorems, `rulec-recheck`
+//! and `ritsu-model` stand on — is put to `collectAxioms`, what `#print axioms` prints, and may
+//! stand only on the three axioms Lean itself stands on: `propext`, `Classical.choice` and
+//! `Quot.sound`. A `sorry` shows there as `sorryAx`, a `native_decide` as `Lean.ofReduceBool`, an
+//! `axiom` by its name, wherever a tactic hid it. rulec's `tests/lean.rs` asks the same of the
+//! theorems a certificate's claims rest on.
 
 use ritsu_testkit::{Need, TempDir, ready, skip};
 use std::path::{Path, PathBuf};
@@ -20,7 +20,15 @@ fn proofs() -> PathBuf {
 }
 
 /// The libraries of the Lean layer, and the theorems each one exists for.
-const LIBRARIES: &[&str] = &["RulecCert", "ChoboModel", "KoyomiModel", "DandoriCore", "RitsuCross", "KanameCore"];
+const LIBRARIES: &[&str] = &[
+    "RulecCert",
+    "ChoboModel",
+    "KoyomiModel",
+    "DandoriCore",
+    "RitsuCross",
+    "KanameCore",
+    "RingiCore",
+];
 const THEOREMS: &[&str] = &[
     "RulecCert.Certified.complete",
     "RulecCert.Certified.reached",
@@ -164,6 +172,60 @@ const THEOREMS: &[&str] = &[
     "KanameCore.total_with_sound",
     "KanameCore.callRels_sound",
     "KanameCore.kept_holds",
+    "RingiCore.next_ended",
+    "RingiCore.next_ended_state",
+    "RingiCore.next_rung_first",
+    "RingiCore.next_comment_ticket",
+    "RingiCore.next_comment_same",
+    "RingiCore.next_comment_effects",
+    "RingiCore.next_stale",
+    "RingiCore.seats_self",
+    "RingiCore.approver_self",
+    "RingiCore.answer_self",
+    "RingiCore.next_approve_self",
+    "RingiCore.next_reject_self",
+    "RingiCore.may_answer_submit_proxy",
+    "RingiCore.solve_kept",
+    "RingiCore.solve_not_self",
+    "RingiCore.up_from_kept",
+    "RingiCore.up_from_not_self",
+    "RingiCore.left_out_iff",
+    "RingiCore.left_out_allowed",
+    "RingiCore.chain_eq_ancestors",
+    "RingiCore.chain_climbs",
+    "RingiCore.chain_length_le",
+    "RingiCore.nearest_way_people",
+    "RingiCore.manager_of_people",
+    "RingiCore.head_of_kind_people",
+    "RingiCore.up_from_at_found",
+    "RingiCore.up_from_above_found",
+    "RingiCore.rank_eq_some",
+    "RingiCore.passes_append",
+    "RingiCore.needed_mono",
+    "RingiCore.needed_percent_ceil",
+    "RingiCore.needed_percent_least",
+    "RingiCore.answered_parts_grown",
+    "RingiCore.answer_grows",
+    "RingiCore.stage_in_at",
+    "RingiCore.retract_answers",
+    "RingiCore.retract_rewaits",
+    "RingiCore.retract_keeps_before",
+    "RingiCore.part_done_once",
+    "RingiCore.done_before_answers",
+    "RingiCore.answered_at_seat",
+    "RingiCore.back_step_once",
+    "RingiCore.on_ending_closes",
+    "RingiCore.on_ending_ok",
+    "RingiCore.on_ending_ok_closes",
+    "RingiCore.on_ending_refused",
+    "RingiCore.on_ending_on_refused",
+    "RingiCore.end_ticket_closes",
+    "RingiCore.end_ticket_ok",
+    "RingiCore.end_ticket_ok_closes",
+    "RingiCore.finish_closes",
+    "RingiCore.finish_ok",
+    "RingiCore.to_requester_closes",
+    "RingiCore.to_requester_refused",
 ];
 
 fn lean_files(dir: &Path, out: &mut Vec<PathBuf>) {

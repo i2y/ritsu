@@ -1,0 +1,18 @@
+rule gold_lines_top v1
+description "The highest tier of the gold lines, or else basic, read through an apply whose second row takes silver, which it never is (fictional)"
+
+enum tier = basic < silver < gold < platinum
+
+# One line of an order
+elements lines
+  tier : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# Only the gold lines are looked at, so the highest is gold, or basic where there is none
+max top over lines of tier where tier = gold empty basic
+
+apply lifted = "tier_first.rule" meaning:4c5a5a77c8f14e12
+  tier = top
+  credit -> credit

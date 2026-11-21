@@ -36,10 +36,11 @@ const TEXT = {
     failed: "could not load ritsu",
     broken: "ritsu stopped on this input and was loaded again; please report the project that did it",
     status: (version, ms, ...what) => [`ritsu ${version}`, `${ms} ms`, ...what].join(" · "),
-    counts: (e, w) => (e || w ? `${e} error${e === 1 ? "" : "s"}, ${w} warning${w === 1 ? "" : "s"}` : "all pass"),
+    counts: (e, w, n) => (e || w || n ? `${e} error${e === 1 ? "" : "s"}, ${w} warning${w === 1 ? "" : "s"}${n ? `, ${n} waiting` : ""}` : "all pass"),
+    waitsFor: (roots) => `It waits for ${roots.join(" and ")} to pass.`,
     files: (n) => `${n} file${n === 1 ? "" : "s"}`,
-    projects: { shop: "A small shop", "shop.ja": "A small shop, in Japanese", modules: "A shop that reads two modules", "modules.ja": "A shop that reads two modules, in Japanese", empty: "An empty project", "sekisho/refunds": "Who may refund an order of a shop" },
-    groups: { ritsu: "ritsu: every language in one project", modules: "modules: a project and the modules it requires", own: "Start from one file", rulec: "rulec: one rule", dandori: "dandori: a flow and the files it reads", chobo: "chobo: one book", sekisho: "sekisho: a gate and the files it reads" },
+    projects: { shop: "A small shop", "shop.ja": "A small shop, in Japanese", modules: "A shop that reads two modules", "modules.ja": "A shop that reads two modules, in Japanese", empty: "An empty project", "sekisho/refunds": "Who may refund an order of a shop", "ringi/leave": "A leave request, its route and its organization" },
+    groups: { ritsu: "ritsu: every language in one project", modules: "modules: a project and the modules it requires", own: "Start from one file", rulec: "rulec: one rule", dandori: "dandori: a flow and the files it reads", chobo: "chobo: one book", sekisho: "sekisho: a gate and the files it reads", ringi: "ringi: a request type and the files it reads" },
     rules: { gap: "The table with a row missing", full: "The whole table", multi: "Tables in stages", big: "A bigger rule", walk: "Walking a list" },
     books: { inventory: "Stock held for an order", points: "Loyalty points", refunds: "Refunds that never exceed the sale", marketplace: "A sale split between a shop and its fee" },
     draft: "A first draft of the hotel booking, with errors",
@@ -48,7 +49,7 @@ const TEXT = {
     versions: { temporal: "for Temporal", aws: "for AWS", "pydantic-graph": "for pydantic-graph", argo: "for Argo Workflows" },
     everywhere: "for every platform",
     beside: (name) => `${name}, the child flow, for every platform`,
-    empty: "This project has no file yet. Press “add a file”, give the file a path that ends in the extension of its language (fee.rule, order.flow, days.cal, stock.book, needs.req, shop.ctx, refunds.gate, greeter.geas, order.proto), and write or paste the file in the editor. A file it reads, such as a rule a flow calls, is one more file of the project, at the path the first one names.",
+    empty: "This project has no file yet. Press “add a file”, give the file a path that ends in the extension of its language (fee.rule, order.flow, days.cal, stock.book, needs.req, shop.ctx, refunds.gate, greeter.geas, order.proto, leave.ringi), and write or paste the file in the editor. A file it reads, such as a rule a flow calls, is one more file of the project, at the path the first one names.",
     share: "copy a link",
     shared: "a link to this is copied, and in the address bar",
     sharedHere: "a link to this is in the address bar",
@@ -99,7 +100,7 @@ const TEXT = {
     first: (where, what) => `${where}: ${what}`,
     line: (n) => `line ${n}`,
     goTo: "go to the problem",
-    severity: { error: "error", warning: "warning", info: "note" },
+    severity: { error: "error", warning: "warning", info: "note", waiting: "waiting" },
     gen: {
       geas: "it holds the code it names to the claims a person has read, by running it, which a page cannot",
       proto: "a .proto is a contract the languages read",
@@ -145,6 +146,10 @@ const TEXT = {
       "pydantic-graph": "pydantic-graph",
       reqif: "ReqIF",
       prov: "W3C PROV",
+      api: "what the request type declares (ringi api)",
+      run: "its scenarios, run (ringi run)",
+      extract: "the rules and dates it is lowered to (ringi extract)",
+      vectors: "the vectors a server is tested with (ringi vectors)",
     },
     phrases: {},
   },
@@ -153,10 +158,11 @@ const TEXT = {
     failed: "ritsu を読み込めませんでした",
     broken: "この入力で ritsu が止まったので、読み込み直しました。このプロジェクトを報告してください",
     status: (version, ms, ...what) => [`ritsu ${version}`, `${ms} ms`, ...what].join(" ・ "),
-    counts: (e, w) => (e || w ? `エラー ${e} 件、警告 ${w} 件` : "どれも検査を通りました"),
+    counts: (e, w, n) => (e || w || n ? `エラー ${e} 件、警告 ${w} 件${n ? `、待っている行 ${n} 件` : ""}` : "どれも検査を通りました"),
+    waitsFor: (roots) => `${roots.join(" と ")} が通るのを待っています。`,
     files: (n) => `${n} ファイル`,
-    projects: { shop: "小さな通販（英語）", "shop.ja": "小さな通販（日本語）", modules: "モジュールを二つ読む店（英語）", "modules.ja": "モジュールを二つ読む店（日本語）", empty: "空のプロジェクト", "sekisho/refunds.ja": "店の注文を返金してよい人" },
-    groups: { ritsu: "ritsu（全部の言語がそろうプロジェクト）", modules: "モジュール（プロジェクトと、それが読むモジュール）", own: "ファイル一つから始める", rulec: "rulec（規則一つ）", dandori: "dandori（フローと、フローが読むファイル）", chobo: "chobo（帳簿一つ）", sekisho: "sekisho（ゲートと、ゲートが読むファイル）" },
+    projects: { shop: "小さな通販（英語）", "shop.ja": "小さな通販（日本語）", modules: "モジュールを二つ読む店（英語）", "modules.ja": "モジュールを二つ読む店（日本語）", empty: "空のプロジェクト", "sekisho/refunds.ja": "店の注文を返金してよい人", "ringi/leave.ja": "休暇の申請と、その経路と組織" },
+    groups: { ritsu: "ritsu（全部の言語がそろうプロジェクト）", modules: "モジュール（プロジェクトと、それが読むモジュール）", own: "ファイル一つから始める", rulec: "rulec（規則一つ）", dandori: "dandori（フローと、フローが読むファイル）", chobo: "chobo（帳簿一つ）", sekisho: "sekisho（ゲートと、ゲートが読むファイル）", ringi: "ringi（申請の種類と、それが読むファイル）" },
     rules: { gap: "一行足りない表", full: "そろった表", multi: "表をつなぐ", big: "大きい規則", walk: "並びを歩く" },
     books: { inventory: "注文のために押さえる在庫", points: "ポイント", refunds: "売上を超えない返金", marketplace: "店の取り分と手数料に分ける売上" },
     draft: "ホテルの予約の最初の下書き（エラーあり）",
@@ -165,7 +171,7 @@ const TEXT = {
     versions: { temporal: "Temporal 版", aws: "AWS 版", "pydantic-graph": "pydantic-graph 版", argo: "Argo Workflows 版" },
     everywhere: "どのプラットフォームでもそのまま動く版",
     beside: (name) => `${name}（子のフロー。どのプラットフォームでもそのまま動く）`,
-    empty: "このプロジェクトには、まだファイルがありません。「ファイルを足す」を押して、言語の拡張子で終わるパス（fee.rule、order.flow、days.cal、stock.book、needs.req、shop.ctx、refunds.gate、greeter.geas、order.proto）を付け、エディターにファイルの中身を書くか貼り付けてください。フローが呼ぶ規則のように、そのファイルが読むファイルは、そこに書いてあるパスに、もう一つのファイルとして足してください。",
+    empty: "このプロジェクトには、まだファイルがありません。「ファイルを足す」を押して、言語の拡張子で終わるパス（fee.rule、order.flow、days.cal、stock.book、needs.req、shop.ctx、refunds.gate、greeter.geas、order.proto、leave.ringi）を付け、エディターにファイルの中身を書くか貼り付けてください。フローが呼ぶ規則のように、そのファイルが読むファイルは、そこに書いてあるパスに、もう一つのファイルとして足してください。",
     share: "リンクをコピー",
     shared: "この状態へのリンクをコピーしました。アドレスバーにも入っています",
     sharedHere: "この状態へのリンクをアドレスバーに入れました",
@@ -216,7 +222,7 @@ const TEXT = {
     first: (where, what) => `${where}：${what}`,
     line: (n) => `${n} 行目`,
     goTo: "問題の行へ移る",
-    severity: { error: "エラー", warning: "警告", info: "注" },
+    severity: { error: "エラー", warning: "警告", info: "注", waiting: "待ち" },
     gen: {
       geas: "geas は、人が読んだ主張にコードを従わせる言語で、コードを走らせて確かめます。ページの中では走らせられません",
       proto: ".proto は、言語どうしが読む契約です",
@@ -259,6 +265,10 @@ const TEXT = {
       "pydantic-graph": "pydantic-graph",
       reqif: "ReqIF",
       prov: "W3C PROV",
+      api: "申請の種類が宣言していること（ringi api）",
+      run: "シナリオを動かした結果（ringi run）",
+      extract: "下ろした先の規則と日付のファイル（ringi extract）",
+      vectors: "サーバーを試すベクタ（ringi vectors）",
     },
     // The words of the editor's own panels: its search, its list of problems, its marks.
     phrases: {
@@ -298,6 +308,7 @@ const KINDS = [
   [".gate", "sekisho"],
   [".req", "yuen"],
   [".ctx", "sakai"],
+  [".ringi", "ringi"],
 ];
 const kind = (p) => (KINDS.find(([ext]) => p.endsWith(ext)) || [])[1] || null;
 const extension = (p) => (p.match(/\.([A-Za-z0-9]+)$/) || [])[1] || "";
@@ -619,7 +630,7 @@ function start(root, bundle, words, worker) {
   let project = projects[0];
   let files = []; // [path, text], in the order the tabs show them
   let open = null; // the path of the file in the editor
-  let marks = new Map(); // path -> "err" | "warn", from the last check
+  let marks = new Map(); // path -> "err" | "wait" | "warn", from the last check
   let targets = new Map(); // language -> the target its generator is asked for in this project
   let unread = false; // the edits of the link the page opened on could not be read
   let mdRaw = false; // the Markdown shows its text rather than what it renders
@@ -702,7 +713,9 @@ function start(root, bundle, words, worker) {
   }
 
   // The findings of a check, each where it is: the file, the line, and the column and the length
-  // where the language gives them, in the units it counts them in.
+  // where the language gives them, in the units it counts them in. A line that reads a file which does
+  // not pass waits for it (`waits_for`, DESIGN 8.3): it is not a mistake of its own, and it goes when
+  // the files it waits for pass, so it is counted, marked and listed apart from the errors.
   function findings(a) {
     const out = [];
     for (const x of (a && a.json && a.json.diagnostics) || []) {
@@ -716,10 +729,13 @@ function start(root, bundle, words, worker) {
         col: Number((span && span.column) || x.column || x.col) || 0,
         len: Number(span && span.length) || 0,
         message: x.title || x.message || "",
+        waits: Array.isArray(x.waits_for) && x.waits_for.length ? x.waits_for.map(String) : null,
       });
     }
     return out;
   }
+  // A finding as the page draws it: an error, a warning, a note, or a line that waits.
+  const kindOf = (f) => (f.waits ? "waiting" : f.severity === "warning" ? "warning" : f.severity === "error" ? "error" : "info");
 
   // A finding's place in a line of the editor: the column (and the length) counted in characters
   // or in bytes, as an offset in the line's UTF-16.
@@ -756,7 +772,15 @@ function start(root, bundle, words, worker) {
       }
       if (to <= from) to = Math.min(line.to, from + 1);
       if (to <= from) from = Math.max(line.from, to - 1);
-      list.push({ from, to, severity: f.severity === "warning" ? "warning" : f.severity === "error" ? "error" : "info", source: `${f.tool} ${f.code}`.trim(), message: f.message });
+      // a line that waits is not wrong: it is underlined as a note, and says what it waits for
+      const k = kindOf(f);
+      list.push({
+        from,
+        to,
+        severity: k === "waiting" ? "info" : k,
+        source: `${f.tool} ${f.code}`.trim(),
+        message: f.waits ? `${f.message} ${t.waitsFor(f.waits)}` : f.message,
+      });
     }
     editor.dispatch(cm.setDiagnostics(editor.state, list));
   }
@@ -1106,10 +1130,13 @@ function start(root, bundle, words, worker) {
   }
 
   // The first problem a reader has to put right before the page is drawn again: the first error of
-  // the open file, else the first of the project, by where it is.
+  // the open file, else, when the open file only waits, the first error of a file it waits for, else
+  // the first of the project, by where it is. A line that waits is not one to put right.
   function firstProblem() {
-    const all = findings(cache.check).filter((f) => f.severity === "error");
-    return all.find((f) => f.file === open) || all[0] || null;
+    const d = findings(cache.check);
+    const all = d.filter((f) => kindOf(f) === "error");
+    const waits = d.find((f) => f.file === open && f.waits);
+    return all.find((f) => f.file === open) || (waits && all.find((f) => waits.waits.includes(f.file))) || all[0] || null;
   }
   function drawBand(stale) {
     const f = stale ? firstProblem() : null;
@@ -1133,36 +1160,43 @@ function start(root, bundle, words, worker) {
       return;
     }
     const d = findings(a);
-    const errors = d.filter((x) => x.severity === "error").length;
-    const warnings = d.filter((x) => x.severity === "warning").length;
-    // the marks on the tabs, and on the lines of the open file
+    const errors = d.filter((x) => kindOf(x) === "error").length;
+    const warnings = d.filter((x) => kindOf(x) === "warning").length;
+    const waiting = d.filter((x) => kindOf(x) === "waiting").length;
+    // the marks on the tabs, and on the lines of the open file: a file with an error of its own, a
+    // file that only waits for others, a file with warnings
+    const MARK = { error: "err", waiting: "wait", warning: "warn" };
+    const RANK = { err: 3, wait: 2, warn: 1 };
+    const mark = (file, m) => {
+      if (m && (RANK[marks.get(file)] || 0) < RANK[m]) marks.set(file, m);
+    };
     marks = new Map();
-    for (const x of d) {
-      if (x.severity === "error") marks.set(x.file, "err");
-      else if (x.severity === "warning" && marks.get(x.file) !== "err") marks.set(x.file, "warn");
-    }
-    for (const f of (a && a.json && a.json.files) || []) if (!f.ok && !marks.has(f.file)) marks.set(f.file, "err");
+    for (const x of d) mark(x.file, MARK[kindOf(x)]);
+    for (const f of (a && a.json && a.json.files) || []) if (!f.ok && !marks.has(f.file)) mark(f.file, f.waits_for ? "wait" : "err");
     drawTabs();
     underline(open, { ...a, at: cache.at });
     count.textContent = d.length ? String(d.length) : "";
-    count.className = "pg-count" + (errors ? " err" : warnings ? " warn" : "");
-    // the problems
+    count.className = "pg-count" + (errors ? " err" : waiting ? " wait" : warnings ? " warn" : "");
+    // the problems: the errors and the rest where the check puts them, then the lines that wait, as
+    // what `ritsu check` prints puts them after all the rest
+    const CLASS = { error: "err", warning: "warn", info: "info", waiting: "wait" };
     problems.replaceChildren(
-      ...d.map((x) => {
+      ...d.filter((x) => !x.waits).concat(d.filter((x) => x.waits)).map((x) => {
+        const k = kindOf(x);
         const b = element(
           "button",
-          { type: "button", className: `pg-problem ${x.severity === "error" ? "err" : x.severity === "warning" ? "warn" : "info"}` },
-          element("span", { className: "pg-sev", textContent: t.severity[x.severity] || x.severity }),
+          { type: "button", className: `pg-problem ${CLASS[k]}` },
+          element("span", { className: "pg-sev", textContent: t.severity[k] || x.severity }),
           element("code", { textContent: `${x.tool} ${x.code}`.trim() }),
           element("span", { className: "pg-where", textContent: x.line ? `${x.file}:${x.line}` : x.file }),
-          element("span", { className: "pg-msg", textContent: x.message })
+          element("span", { className: "pg-msg", textContent: x.waits ? `${x.message} ${t.waitsFor(x.waits)}` : x.message })
         );
         b.addEventListener("click", () => go(x.file, x.line));
         return element("li", {}, b);
       })
     );
     checkOut.replaceChildren(said(a));
-    let what = [t.counts(errors, warnings)];
+    let what = [t.counts(errors, warnings, waiting)];
 
     if (view === "doc" || view === "markdown") what = what.concat(drawDoc());
     if (view === "gen") what = what.concat(drawGen());

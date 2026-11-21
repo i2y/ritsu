@@ -1,0 +1,3 @@
+error[E601]: tests/mutants/E601_成り立たない例.ringi:20:1: An example of the route does not hold
+    20 | | 50_000円  | 部長    |
+  = As rulec says it: Example does not hold: decide should be head but came out as manager

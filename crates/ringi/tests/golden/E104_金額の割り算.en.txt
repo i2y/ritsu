@@ -1,0 +1,4 @@
+error[E104]: tests/mutants/E104_金額の割り算.ringi:6:39: `一日あたり` is computed with no rounding
+     6 |   一日あたり(per_day) : money[円] "一日あたり" = 金額 / 日数
+  = `金額 / 日数` can leave a fraction: say how it rounds and to what, as in `round down(1円)` (`up`, `down`, `half_up`, `half_down`, `half_even`).
+  = The line, fixed: 一日あたり(per_day) : money[円] "一日あたり" = 金額 / 日数  round down(1円)

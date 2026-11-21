@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_a_cell_not_in_who.ringi:7:10: `accounting` is not declared in `who`
+     7 |   check  accounting
+  = The ways to choose an approver declared: `finance`

@@ -1,0 +1,13 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  review  at least 120% of legal
+
+who
+  legal = team legal
+
+ticket
+  self approval  not allowed

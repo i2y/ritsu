@@ -133,7 +133,7 @@ impl Cdp {
         let Some(text) = self.ws.recv_text(deadline).map_err(|e| CdpError::Failed(e.to_string()))? else {
             return Ok(None);
         };
-        let j = json::parse(&text).map_err(|e| CdpError::Failed(format!("Chrome sent something that is not JSON: {e}")))?;
+        let j = json::parse(&text).map_err(|e| CdpError::Failed(format!("Chrome sent something that is not JSON: {}", e.en)))?;
         match text_of(member(&j, "method")).as_str() {
             "Emulation.virtualTimeBudgetExpired" => self.events.push(j.clone()),
             "Page.javascriptDialogOpening" => {

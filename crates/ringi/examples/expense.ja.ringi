@@ -1,0 +1,161 @@
+request 経費(expense_ja) v1 "経費の申請"
+description "経費・出張・購買の申請。種別と金額に応じて、決裁権限規程（架空）第 12 条の別表 2 が定める役が、確かめ、承認し、決裁する"
+owner accounting
+
+use organization 組織(org) from "shared/company.ringi"
+use masters マスタ(m) from "shared/masters.ringi"
+use calendar 本社(office) from "shared/office.cal"
+use book 予算(budget) from "shared/budget.book"
+use gate "shared/company.gate"
+use flow 事前の確かめ(precheck_agent) from "shared/precheck.flow"
+use flow 出張の決裁(travel_decision) from "shared/travel_decision.flow"
+use flow 支払い(pay) from "shared/pay.flow"
+
+form
+  種別(category) : choice "種別"
+    出張(travel)   "出張"
+    経費(expense)  "経費"
+    購買(purchase) "購買"
+  明細(items) : rows "明細"  count >=1 <=20
+    品目(what)  : text "品目"  count <=100
+    金額(price) : money[円] "金額"  range >=1円 <=1_000_000円
+  合計(amount)      : money[円] "合計" = sum(明細.金額)  range >=1円 <=10_000_000円
+  目的(purpose)     : long text "目的"  count >=1 <=200
+  使った日(used_on) : date "使った日"  range >=2026-01-01 <=2027-12-31
+  行き先(trip_to)   : text "行き先"  count <=100  shown when 種別 is 出張
+  領収書(receipt)   : attachment "領収書"  required when 合計 > 30_000円
+  勘定科目(account) : choice from マスタ.accounts "勘定科目"  approvers only
+
+route
+| 種別 | 合計                     | -> 確かめ(precheck) | 一次(first) | 二次(second)    | 決裁(decide)   |
+| 出張 | <=30_000円               |                    |             |                 | エージェント決裁 |
+| 出張 | >30_000円 <=100_000円    |                    |             |                 | 上長           |
+| 出張 | >100_000円               |                    | 上長        |                 | 部長           |
+| 経費 | <=100_000円              | エージェント確認    |             |                 | 上長           |
+| 経費 | >100_000円 <=1_000_000円 | エージェント確認    | 上長        |                 | 部長           |
+| 経費 | >1_000_000円             |                    | 上長        | 部長            | 本部長         |
+| 購買 | <=1_000_000円            |                    | 上長        | 経理            | 部長           |
+| 購買 | >1_000_000円             |                    | 上長        | 部長 and 経理   | 本部長         |
+
+who
+  上長(manager)                 = manager of requester
+  部長(dept_head)               = head of requester.department
+  経理(accounting)              = team accounting
+  本部長(division_head)         = nearest division_head above requester
+  エージェント確認(check)        = agent 事前の確かめ, else 上長
+  エージェント決裁(travel_agent) = agent 出張の決裁, else 上長
+  取締役(board)                 = team board
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late escalate by 一段上, then expire
+  # 社長の上にはだれもいないので、社長の申請では、上の人に聞くステップを取締役会へ回し、
+  # 取締役のだれかが答える。
+  when empty escalate, then 取締役
+
+table 一段上(next_up)
+| 承認者(approver) | -> 回す先(goes_to) |
+| エージェント確認  | 上長              |
+| エージェント決裁  | 上長              |
+| 上長             | 部長              |
+| 部長             | 本部長            |
+| 経理             | 本部長            |
+| 本部長           | 本部長            |
+| 取締役           | 取締役            |
+
+ticket
+  self approval  not allowed
+  # 同じ人がすぐ前のステップを承認していれば、そのステップは済む。待たせる書き方にはしない。上長の確認は、経理より前に要る。
+  same approver  approves once
+  send back      to the requester, at most 3 times
+  resubmit       within 3 business days
+  withdraw       until 決裁
+  # 社長、本部長、取締役は部の上にいるので、その人の申請は部の予算を押さえない。
+  on submitted   hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: requester.department, amount: 合計)  when requester.department is not none
+  on approved    post 予算.reserve(request: ticket.id, attempt: ticket.attempt)
+  on approved    launch 支払い(request_id: ticket.id, requester: requester.id, amount: 合計, purpose: 目的)
+  on sent back, rejected, withdrawn, expired  void 予算.reserve(request: ticket.id, attempt: ticket.attempt)
+
+claims
+  エージェントが決裁するのは3万円まで : 決裁 is エージェント決裁 only when 合計 <= 30_000円
+  二次承認を部長と経理でする場合がある : possible 二次 is 部長 and 経理
+  催促は期限より前                   : every stage reminds before it is due
+  期限内に終わる                     : every ticket ends within 93 business days
+
+examples
+| 種別 | 合計         | -> 確かめ        | 一次 | 二次          | 決裁            |
+| 出張 | 30_000円     |                  |      |               | エージェント決裁 |
+| 出張 | 30_001円     |                  |      |               | 上長            |
+| 経費 | 100_000円    | エージェント確認  |      |               | 上長            |
+| 経費 | 100_001円    | エージェント確認  | 上長 |               | 部長            |
+| 購買 | 1_000_001円  |                  | 上長 | 部長 and 経理 | 本部長          |
+
+scenario 部長と経理で二次承認をする購買
+  requester e1201
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 5_000_000円)
+  form 種別 = 購買, 明細 = [{品目: "サーバー", 金額: 800_000円}, {品目: "ストレージ", 金額: 400_000円}], 目的 = "検証用のサーバーとストレージ", 使った日 = 2026-11-16, 領収書 = "receipt.pdf"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 一次     | in progress |
+| 2026-11-16 15:00 | approve | e1101 | 二次     | in progress |
+| 2026-11-17 11:00 | approve | e1001 | 二次     | in progress |
+| 2026-11-17 16:00 | approve | e3101 | 決裁     | in progress |
+| 2026-11-18 09:30 | approve | e0101 |          | approved    |
+
+# 3 万円までの日帰りの出張。エージェントが決裁し、だれも待たない。
+scenario エージェントが決裁する日帰りの出張
+  requester e1201
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 5_000_000円)
+  form 種別 = 出張, 明細 = [{品目: "大阪までの往復の電車", 金額: 28_000円}], 目的 = "大阪の取引先の訪問", 使った日 = 2026-11-20, 行き先 = "大阪", 領収書 = "receipt.pdf"
+| at               | event                       | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                      | e1201 | 決裁     | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: ok) |       |          | approved    |
+
+# エージェントが決めきれない出張。上長が代わりに決裁する。
+scenario エージェントが決めきれない出張
+  requester e1201
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 5_000_000円)
+  form 種別 = 出張, 明細 = [{品目: "札幌までの往復の航空券", 金額: 29_500円}], 目的 = "札幌の取引先の訪問", 使った日 = 2026-11-27, 行き先 = "札幌", 領収書 = "receipt.pdf"
+| at               | event                                                      | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                     | e1201 | 決裁     | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: doubt, reason: "運賃がいつもより高い") |       | 決裁     | in progress |
+| 2026-11-16 14:00 | approve                                                    | e1101 |          | approved    |
+
+# 取引先が訪問を延ばす。決裁を待っているあいだに、申請者が理由を書いて取り下げ、そのまま申請をやめる。
+# 押さえた予算は、取り下げたときに戻る。
+scenario 取りやめた出張
+  requester e1201
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 5_000_000円)
+  form 種別 = 出張, 明細 = [{品目: "福岡までの往復の航空券", 金額: 64_000円}, {品目: "ホテルの三泊", 金額: 54_000円}], 目的 = "福岡の取引先の訪問", 使った日 = 2026-12-02, 行き先 = "福岡", 領収書 = "receipt.pdf"
+| at               | event    | by    | comment                      | -> stage | status         |
+| 2026-11-16 10:00 | submit   | e1201 |                              | 一次     | in progress    |
+| 2026-11-16 15:00 | approve  | e1101 |                              | 決裁     | in progress    |
+| 2026-11-17 09:00 | withdraw | e1201 | "取引先が訪問を春に延ばした" |          | with requester |
+| 2026-11-17 09:05 | discard  | e1201 |                              |          | withdrawn      |
+
+labels en
+  request               "Expense request"
+  種別                  "Category"
+  種別.出張             "Travel"
+  種別.経費             "Expenses"
+  種別.購買             "Purchase"
+  明細                  "Items"
+  明細.品目             "What"
+  明細.金額             "Price"
+  合計                  "Amount"
+  目的                  "Purpose"
+  使った日              "Date of use"
+  行き先                "Destination"
+  領収書                "Receipt"
+  勘定科目              "Account code"
+  stage 確かめ          "Precheck"
+  stage 一次            "First approval"
+  stage 二次            "Second approval"
+  stage 決裁            "Decision"
+  who 上長              "Manager"
+  who 部長              "Head of the department"
+  who 経理              "Accounting"
+  who 本部長            "Head of the division"
+  who エージェント確認  "Checking agent"
+  who エージェント決裁  "Deciding agent"
+  who 取締役            "Board"

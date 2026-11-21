@@ -1,0 +1,15 @@
+rule contract_form v1
+description "What ringi writes from the form of contract.ringi: the totals and computations, and when a field is shown and asked for"
+
+import enum kind from "choices.rule"
+
+inputs
+  kind : kind
+
+outputs
+  risks_shown : bool
+
+table risks_shown
+| kind     | -> risks_shown |
+| nda      | false          |
+| not: nda | true           |

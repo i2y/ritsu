@@ -1,0 +1,19 @@
+rule 幅(span) v1
+description "幅が広いかを両端から決める。両端の順は constraint が守る"
+
+enum 広さ(width) = 狭い(narrow) | 広い(wide)
+
+inputs
+  下端(lo) : number  range >=0 <=100
+  上端(hi) : number  range >=0 <=100
+
+constraint 下端 <= 上端
+
+outputs
+  幅の広さ(size) : 広さ
+
+table 幅の表(size)
+| 下端 | 上端 | -> 幅の広さ |
+| <=50 | <=50 | 狭い        |
+| <=50 | >50  | 広い        |
+| >50  | >50  | 狭い        |

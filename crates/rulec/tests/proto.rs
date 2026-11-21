@@ -26,6 +26,7 @@ fn run(args: &[&str]) -> (i32, String) {
         .current_dir(root())
         .env("RULEC_LANG", "ja")
         .args(args)
+        .args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] })
         .output()
         .expect("rulec を起動できない");
     let mut s = String::from_utf8_lossy(&o.stdout).into_owned();
@@ -292,4 +293,139 @@ fn 契約のファイルの名前の記号はstubの名前で下線になる() {
     assert!(svc.contains("from stubs.shop.v1 import member_tier_pb as shop_v1_member_tier_pb\n"), "{svc}");
     assert!(svc.contains("shop_v1_member_tier_pb.Tier(1): m.Tier.BASIC,"), "{svc}");
     assert!(!svc.contains("member-tier_pb"), "{svc}");
+}
+
+/// Runs `rulec` in `dir` with the output in `lang`.
+fn run_in(lang: &str, dir: &std::path::Path, args: &[&str]) -> (i32, String) {
+    let written_in = if args.contains(&"--lang") { vec![] } else { vec!["--lang", lang] };
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(dir).env("RULEC_LANG", lang).args(args).args(written_in).output().expect("rulec を起動できない");
+    let mut s = String::from_utf8_lossy(&o.stdout).into_owned();
+    s.push_str(&String::from_utf8_lossy(&o.stderr));
+    (o.status.code().unwrap_or(-1), s)
+}
+
+/// A rule that reads the enum `source` of `contract.proto` into `kind`, with `values`, and answers
+/// for each of them.
+fn kind_rule(source: &str, values: &[&str]) -> String {
+    let rows: String = values.iter().map(|v| format!("| {v} | false |\n")).collect();
+    format!(
+        "rule pay(pay) v1\n\nimport proto \"contract.proto\" {source} -> kind\nenum kind = {}\n\ninputs\n  k : kind\n\noutputs\n  due : bool\n\ntable dues\n| k | -> due |\n{rows}",
+        values.join(" | ")
+    )
+}
+
+/// Writes `contract.proto` and `pay.rule` into a new directory, and checks the rule in English and
+/// in Japanese.
+fn check_pair(tag: &str, proto: &str, rule: &str) -> (TempDir, i32, String, String) {
+    let (t, d) = dir(tag);
+    std::fs::write(d.join("contract.proto"), proto).unwrap();
+    std::fs::write(d.join("pay.rule"), rule).unwrap();
+    let (code, en) = run_in("en", &d, &["check", "pay.rule"]);
+    let (_, ja) = run_in("ja", &d, &["check", "pay.rule"]);
+    (t, code, en, ja)
+}
+
+const ALIASED: &str = "syntax = \"proto3\";\npackage claims.v1;\n\nenum Category {\n  option allow_alias = true;\n  CATEGORY_UNSPECIFIED = 0;\n  CATEGORY_TRAVEL = 1;\n  CATEGORY_TRIP = 1;\n  CATEGORY_PURCHASE = 2;\n}\n";
+
+/// Under `allow_alias` the names of one number are one value (§15.59): a rule writes it by any of
+/// them, and by one only. The reading counted each name as a value, so a rule had to declare both
+/// and treat one value as two.
+#[test]
+fn the_names_of_one_number_are_one_value() {
+    for values in [["travel", "purchase"], ["trip", "purchase"]] {
+        let (_t, code, en, _) = check_pair("alias", ALIASED, &kind_rule("Category", &values));
+        assert_eq!(code, 0, "{values:?}: {en}");
+    }
+    let (_t, code, en, ja) = check_pair("alias-twice", ALIASED, &kind_rule("Category", &["travel", "trip", "purchase"]));
+    assert_eq!(code, 1, "{en}");
+    assert!(en.contains("error[E032]: Enum kind does not agree with Category in contract.proto"), "{en}");
+    assert!(en.contains("`travel` and `trip` of this enum are one value in contract.proto, the number 1 (`CATEGORY_TRAVEL`, `CATEGORY_TRIP`). Keep one of them."), "{en}");
+    assert!(ja.contains("この列挙の `travel` と `trip` は、contract.proto では番号 1 の一つの値です（`CATEGORY_TRAVEL`、`CATEGORY_TRIP`）。どれか一つにしてください。"), "{ja}");
+    let (_t, code, en, ja) = check_pair("alias-none", ALIASED, &kind_rule("Category", &["purchase"]));
+    assert_eq!(code, 1, "{en}");
+    assert!(en.contains("In contract.proto but not in this enum: travel\n"), "{en}");
+    assert!(en.contains("`CATEGORY_TRAVEL` and `CATEGORY_TRIP` in contract.proto are one value, the number 1; a rule may write it as any of `travel`, `trip`."), "{en}");
+    assert!(ja.contains("contract.proto の `CATEGORY_TRAVEL` と `CATEGORY_TRIP` は番号 1 の一つの値で、規則には `travel`、`trip` のどれで書いてもかまいません。"), "{ja}");
+}
+
+/// The service a rule is generated as sends and reads the value by its number, under the first name
+/// the contract gives it, whichever name the rule writes it by.
+#[test]
+fn the_service_carries_a_value_of_two_names_by_its_number() {
+    let (_t, d) = dir("alias-gen");
+    std::fs::write(d.join("contract.proto"), ALIASED).unwrap();
+    std::fs::write(d.join("pay.rule"), kind_rule("Category", &["trip", "purchase"])).unwrap();
+    let (code, said) = run_in("en", &d, &rulec::targets::up_to_0_40(&["gen", "pay.rule", "--out", "out"]));
+    assert_eq!(code, 0, "{said}");
+    let svc = std::fs::read_to_string(d.join("out/python/pay_service.py")).unwrap();
+    assert!(svc.contains("claims_v1_contract_pb.Category(1): m.Kind.TRIP,"), "{svc}");
+    let (code, api) = run_in("en", &d, &["api", "pay.rule"]);
+    assert_eq!(code, 0, "{api}");
+    assert!(api.contains("\"name\":\"trip\",\"alias\":\"CATEGORY_TRAVEL\",\"number\":1"), "{api}");
+}
+
+/// A prefix in other cases, or with its `_`s elsewhere, is dropped as buf's form is; a name the
+/// enum's name runs on into keeps it. E032 says how the contract's names were read, and a rule
+/// written to the whole names is told the names to write (§15.59).
+#[test]
+fn a_prefix_is_read_whatever_its_case_and_where_a_word_ends() {
+    let mixed = "syntax = \"proto3\";\npackage claims.v1;\n\nenum Category {\n  Category_Unspecified = 0;\n  Category_Food = 1;\n  CATEGORYDRINK_SET = 2;\n}\n";
+    let (_t, code, en, _) = check_pair("mixed", mixed, &kind_rule("Category", &["food", "categorydrink_set"]));
+    assert_eq!(code, 0, "{en}");
+    let (_t, code, en, ja) = check_pair("mixed-whole", mixed, &kind_rule("Category", &["category_unspecified", "category_food", "drink_set"]));
+    assert_eq!(code, 1, "{en}");
+    for said in [
+        "`category_unspecified` of this enum is `Category_Unspecified` in contract.proto, the number 0: what proto3 reads as not set, and not a value a rule answers for. Take it out of this enum.",
+        "`category_food` of this enum is the whole name of `Category_Food` in contract.proto, which is read as `food`: write `food`.",
+        "`Category_Food` in contract.proto is read as `food`, without the enum's name (`Category`) at its front.",
+        "In contract.proto but not in this enum: categorydrink_set\n",
+        "In this enum but not in contract.proto: drink_set\n",
+        "`CATEGORYDRINK_SET` in contract.proto is read whole, as `categorydrink_set`: the `Category` it begins with runs on into a word, with no `_` or capital after it.",
+    ] {
+        assert!(en.contains(said), "{said}\n{en}");
+    }
+    for said in [
+        "この列挙の `category_unspecified` は contract.proto の `Category_Unspecified` で、番号 0 です。",
+        "この列挙の `category_food` は、contract.proto の `Category_Food` の名前をそのまま書いたものです。その値は `food` と読むので、`food` と書いてください。",
+        "contract.proto の `Category_Food` は、頭にある列挙の名前（`Category`）を落として `food` と読みます。",
+        "contract.proto の `CATEGORYDRINK_SET` は、頭の `Category` のあとが語の切れ目（`_` か大文字）でないので、列挙の名前を落とさずに `categorydrink_set` と読みます。",
+    ] {
+        assert!(ja.contains(said), "{said}\n{ja}");
+    }
+    // without its prefix, `COLOR_RED` would be read as `RED` is
+    let colors = "syntax = \"proto3\";\npackage claims.v1;\n\nenum Color {\n  COLOR_UNSPECIFIED = 0;\n  COLOR_RED = 1;\n  RED = 2;\n}\n";
+    let (_t, code, en, ja) = check_pair("kept", colors, &kind_rule("Color", &["red"]));
+    assert_eq!(code, 1, "{en}");
+    assert!(en.contains("`COLOR_RED` in contract.proto is read whole, as `color_red`: without the enum's name (`Color`) it would be `red`, which `RED` is read as."), "{en}");
+    assert!(ja.contains("contract.proto の `COLOR_RED` は、列挙の名前（`Color`）を落とすと `red` になり、`RED` の読みと同じになるので、落とさずに `color_red` と読みます。"), "{ja}");
+}
+
+const TWO_STATUSES: &str = "syntax = \"proto3\";\npackage shop.v1;\n\nmessage Order {\n  enum Status {\n    STATUS_UNSPECIFIED = 0;\n    STATUS_OPEN = 1;\n    STATUS_PAID = 2;\n  }\n  Status status = 1;\n}\n\nmessage Line {\n  enum Status {\n    STATUS_UNSPECIFIED = 0;\n    STATUS_PICKED = 1;\n    STATUS_PACKED = 2;\n  }\n  Status status = 1;\n}\n";
+
+/// Two messages may each nest an enum of one name. The line names one by the messages it is nested
+/// in, as a `shape` line names a message; a name that could be either is E013. The first of the two
+/// was read, whichever the rule meant.
+#[test]
+fn an_enum_name_two_messages_nest_is_named_with_its_message() {
+    let (_t, code, en, ja) = check_pair("two-status", TWO_STATUSES, &kind_rule("Status", &["open", "paid"]));
+    assert_eq!(code, 1, "{en}");
+    assert!(en.contains("error[E013]: `contract.proto` has more than one enum named `Status`"), "{en}");
+    assert!(en.contains("Say which, by the messages it is nested in: `Order.Status`, `Line.Status`"), "{en}");
+    assert!(ja.contains("エラー[E013]: `contract.proto` に、`Status` という名前の列挙が複数あります"), "{ja}");
+    for source in ["Order.Status", "shop.v1.Order.Status", "\"Order.Status\""] {
+        let (_t, code, en, _) = check_pair("order-status", TWO_STATUSES, &kind_rule(source, &["open", "paid"]));
+        assert_eq!(code, 0, "{source}: {en}");
+    }
+    let (_t, code, en, _) = check_pair("line-status", TWO_STATUSES, &kind_rule("Line.Status", &["picked", "packed"]));
+    assert_eq!(code, 0, "{en}");
+    // the generated `.proto` names the one the line names
+    let (_t, d) = dir("line-gen");
+    std::fs::write(d.join("contract.proto"), TWO_STATUSES).unwrap();
+    std::fs::write(d.join("pay.rule"), kind_rule("Line.Status", &["picked", "packed"])).unwrap();
+    let (code, said) = run_in("en", &d, &rulec::targets::up_to_0_40(&["gen", "pay.rule", "--out", "out"]));
+    assert_eq!(code, 0, "{said}");
+    let body = std::fs::read_to_string(d.join("out/proto/rulec/pay/v1/pay.proto")).unwrap();
+    assert!(body.contains("  optional shop.v1.Line.Status k = 1;\n"), "{body}");
+    let svc = std::fs::read_to_string(d.join("out/python/pay_service.py")).unwrap();
+    assert!(svc.contains("shop_v1_contract_pb.Line.Status(1): m.Kind.PICKED,"), "{svc}");
 }

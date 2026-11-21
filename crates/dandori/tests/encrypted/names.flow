@@ -4,8 +4,10 @@ description "The names the client of an encrypted history declares, given to rec
 
 use proto calls from "protos/calls.proto"
 
-# Go's client.go declares Dial, EncryptedClient, CodecFailureConverter and CodecDataConverter when
-# the history is encrypted, so check says W105 of these types and Go's gen stops (E051).
+# Go's client.go declares Dial and EncryptedClient for a caller when the history is encrypted, so
+# check says W105 of these types and Go's gen stops (E051). It declares CodecFailureConverter and
+# CodecDataConverter for itself alone, and gives them other names where a type takes them; the
+# service's method and message of those names are names of the flow too, and one with these in Go.
 record Dial
   answer : string
 

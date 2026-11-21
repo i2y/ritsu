@@ -1,0 +1,4 @@
+enums 選択肢(choices_ja) v1
+description "注文書の選択肢。横の規則が読む（架空）"
+
+enum 大きさ(size_ja) = 小(small) "小" < 大(large) "大"

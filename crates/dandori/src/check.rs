@@ -29,7 +29,16 @@ pub fn child(path: &Path) -> Result<Model, ChildTrouble> {
     if let Some(at) = chain.iter().position(|p| *p == me) {
         return Err(ChildTrouble::Cycle(chain[at..].iter().cloned().chain(std::iter::once(me)).collect()));
     }
-    let src = crate::sources::read(path).map_err(ChildTrouble::Unreadable)?;
+    // checked by the engine that is checking, when one is: a flow is checked once in a run
+    // (ritsu's DESIGN 4.15), however many flows run it as their child
+    if let Some(kept) = crate::ports::child(path) {
+        let kept = kept.map_err(|e| ChildTrouble::Unreadable(e.to_string()))?;
+        return match &kept.1.model {
+            Some(m) => Ok(m.clone()),
+            None => Err(ChildTrouble::Refused(kept.1.diags.iter().filter(|d| crate::flow::severity_is_error(d)).cloned().collect())),
+        };
+    }
+    let src = crate::sources::read(path).map_err(|e| ChildTrouble::Unreadable(e.to_string()))?;
     let checked = check_source(&src, path);
     match checked.model {
         Some(m) => Ok(m),
@@ -42,17 +51,36 @@ pub struct Checked {
     pub diags: Vec<Diag>,
 }
 
-pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
-    let src = crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+pub fn check_file(path: &Path) -> Result<(String, Checked), Text> {
+    let src = crate::sources::read(path).map_err(|why| cannot_read(path, &why))?;
     let checked = check_source(&src, path);
     Ok((src, checked))
+}
+
+/// What a check says of a flow it cannot read, in the words every command of ritsu says it in: it is
+/// not there, it is not UTF-8, or the system's reason (ritsu's DESIGN 6.2, item 10).
+pub fn cannot_read(path: &Path, e: &std::io::Error) -> Text {
+    ritsu_base::cli::cannot_read(&path.display().to_string(), e)
+}
+
+/// Why a flow cannot be checked: the system's answer to reading it, kept with the checks of the run.
+pub type Unread = std::rc::Rc<std::io::Error>;
+
+/// [`check_file`], asked of the engine whose keeping the program running dandori lends the thread
+/// ([`crate::ports::Engine::lending`]), when it does: the check the program's other questions about
+/// the flow are answered from (ritsu's DESIGN 4.15); else checked here.
+pub fn check_kept(path: &Path) -> Result<(String, Checked), Text> {
+    match crate::ports::child(path) {
+        Some(kept) => kept.map(|k| (k.0.clone(), Checked { model: k.1.model.clone(), diags: k.1.diags.clone() })).map_err(|why| cannot_read(path, &why)),
+        None => check_file(path),
+    }
 }
 
 /// `check_file`, and in the model, a check of each precondition of a rule that the program running
 /// dandori says ritsu could not decide at a call (`sources::undecided`; DESIGN 1.17): what `gen`,
 /// `run` and `scenarios` read.
-pub fn built(path: &Path) -> Result<(String, Checked), String> {
-    let (src, mut checked) = check_file(path)?;
+pub fn built(path: &Path) -> Result<(String, Checked), Text> {
+    let (src, mut checked) = check_kept(path)?;
     if let Some(m) = &mut checked.model {
         crate::prechecks::insert(m, &crate::sources::undecided(path));
     }
@@ -60,6 +88,7 @@ pub fn built(path: &Path) -> Result<(String, Checked), String> {
 }
 
 pub fn check_source(src: &str, path: &Path) -> Checked {
+    ritsu_base::tally::count("dandori", path);
     let (model, _, diags) = checked_parts(src, path);
     let ok = !crate::diag::has_errors(&diags);
     Checked { model: if ok { model } else { None }, diags }
@@ -74,8 +103,8 @@ pub struct Drawable {
     pub diags: Vec<Diag>,
 }
 
-pub fn drawable(path: &Path) -> Result<(String, Drawable), String> {
-    let src = crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+pub fn drawable(path: &Path) -> Result<(String, Drawable), Text> {
+    let src = crate::sources::read(path).map_err(|e| cannot_read(path, &e))?;
     let (mut model, facts, diags) = checked_parts(&src, path);
     // the checks of the preconditions ritsu could not decide are drawn where they go, when the flow passes
     if let (Some(m), false) = (&mut model, crate::diag::has_errors(&diags)) {
@@ -95,6 +124,8 @@ fn check_one(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<
     let (model, facts, mut diags) = checked_text(src, path);
     // a key written in the file is said whatever else the file has (W901)
     diags.extend(crate::secrets::keys(src));
+    // a name declared nowhere is said once, where it is first written (ritsu's DESIGN 8.3)
+    crate::diag::once(&mut diags);
     diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
     (model, facts, diags)
 }
@@ -145,6 +176,7 @@ fn checked_text(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, V
     diags.extend(crate::ranges::check(&model));
     diags.extend(crate::service::check(&model));
     diags.extend(crate::secrets::check(&model));
+    diags.extend(crate::crossings::check(&model));
     // what a target's code cannot keep (W105), of a flow that passes
     if !crate::diag::has_errors(&diags) {
         diags.extend(crate::spellings::warnings(&model));
@@ -218,8 +250,11 @@ fn whole(m: &Model) -> Vec<Diag> {
 /// A platform's refusal of a workflow whose execution can outgrow the platform (E040): the
 /// history of Step Functions and Temporal, the nodes of an Argo Workflow, the operations of a
 /// durable execution. On Temporal, a loop at the top of the flow continues as new once the
-/// history is long, so a run's history is bounded by one round of it past `CONTINUE_AT`.
+/// history is long, so a run's history is bounded by one round of it past `CONTINUE_AT`. The counts
+/// are said as ritsu's languages say a number, in threes from five digits (`80_010`, `3000`; ritsu's
+/// DESIGN 6.2, 8).
 pub fn history_limit(m: &Model, p: Platform) -> Option<Diag> {
+    let said = |n: u64| ritsu_units::written::digits(i128::from(n));
     let message = match p {
         Platform::StepFunctions if m.kind == Kind::Express => return None,
         Platform::StepFunctions | Platform::Temporal => {
@@ -227,6 +262,7 @@ pub fn history_limit(m: &Model, p: Platform) -> Option<Diag> {
             if n <= limit {
                 return None;
             }
+            let (n, limit) = (said(n), said(limit));
             let Text { en: more_en, ja: more_ja } = match p {
                 Platform::Temporal if m.flow.iter().any(continues_as_new) => tr!("。フローの一番外のループは、履歴が長くなると新しい実行に引き継ぐ（Continue-As-New）ので、長すぎるのは、ループの外の部分か、ループのイテレーション一つです", "; the loops at the top of the flow go on in a new run (Continue-As-New) as the history grows, so what is too long is the rest of the flow, or one round of such a loop"),
                 Platform::Temporal => tr!("。フローの一番外に置いた `repeat` や並列でない `for` なら、履歴が長くなると新しい実行に引き継ぎます（Continue-As-New）", "; a `repeat`, or a `for` that is not parallel, at the top of the flow would go on in a new run (Continue-As-New) as the history grows"),
@@ -239,14 +275,16 @@ pub fn history_limit(m: &Model, p: Platform) -> Option<Diag> {
             if n <= ARGO_LIMIT {
                 return None;
             }
-            tr!("Argo Workflows では、このワークフローの一回の実行がノードを最大でおよそ {n} 個作ります。目安の {ARGO_LIMIT} 個を超えます。Workflow はノードをすべて持ち、圧縮しても 1 MiB を超えると、ノードの状態を置くデータベースなしには保存できません。ループの回数を減らすか、続きを新しい実行で始めてください", "on Argo Workflows, an execution of this workflow can make up to about {n} nodes, past {ARGO_LIMIT}; the Workflow keeps every node, and past 1 MiB even compressed it cannot be stored without a database for the node status; lower the loop counts, or start a new execution to continue")
+            let (n, limit) = (said(n), said(ARGO_LIMIT));
+            tr!("Argo Workflows では、このワークフローの一回の実行がノードを最大でおよそ {n} 個作ります。目安の {limit} 個を超えます。Workflow はノードをすべて持ち、圧縮しても 1 MiB を超えると、ノードの状態を置くデータベースなしには保存できません。ループの回数を減らすか、続きを新しい実行で始めてください", "on Argo Workflows, an execution of this workflow can make up to about {n} nodes, past {limit}; the Workflow keeps every node, and past 1 MiB even compressed it cannot be stored without a database for the node status; lower the loop counts, or start a new execution to continue")
         }
         Platform::Durable => {
             let n = bound(m, &DURABLE_COST);
             if n <= DURABLE_LIMIT {
                 return None;
             }
-            tr!("Lambda durable functions では、このワークフローの一回の実行が durable の操作を最大でおよそ {n} 回使います。上限の {DURABLE_LIMIT} 回を超えます。ループの回数を減らすか、続きを新しい実行で始めてください", "on Lambda durable functions, an execution of this workflow can take up to about {n} durable operations, past the limit of {DURABLE_LIMIT}; lower the loop counts, or start a new execution to continue")
+            let (n, limit) = (said(n), said(DURABLE_LIMIT));
+            tr!("Lambda durable functions では、このワークフローの一回の実行が durable の操作を最大でおよそ {n} 回使います。上限の {limit} 回を超えます。ループの回数を減らすか、続きを新しい実行で始めてください", "on Lambda durable functions, an execution of this workflow can take up to about {n} durable operations, past the limit of {limit}; lower the loop counts, or start a new execution to continue")
         }
         Platform::Graph => return None,
     };
@@ -355,6 +393,10 @@ pub struct Cost {
     /// Functions, the Pass that reads the clock, the Choice that tests it, and the Pass or the Fail
     /// it may go to; on Argo, the template that tests it
     pub period: u64,
+    /// a check that the variables a statement reads, or a round yields, have values where they
+    /// must (DESIGN 38): on Step Functions, the Choice that tests them, which ends the run where
+    /// one has none; nothing on the platforms whose code tests it as it reads
+    pub have: u64,
 }
 
 /// Step Functions: a task is entered, scheduled, started, succeeds and is exited (5); a
@@ -364,8 +406,8 @@ pub struct Cost {
 /// keeps it and one that raises the task's error (4). A workflow that implements a service starts
 /// with a Pass that fills in the input's zero values (2). A check of a rule's precondition is a Choice
 /// and the Fail it may end at (4); a check of the period, a Pass, a Choice and the state it may go
-/// to (6).
-pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 6, local_retry: 3, jev: 4, fill: 2, clock: 0, precheck: 4, until: 0, period: 6 };
+/// to (6); a check that the variables a statement reads have values, a Choice (2).
+pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 6, local_retry: 3, jev: 4, fill: 2, clock: 0, precheck: 4, until: 0, period: 6, have: 2 };
 
 /// Temporal: an activity is scheduled, started, completed, and a workflow task follows
 /// (6); a retry, done in the workflow's code so that it matches Step Functions, adds a
@@ -375,7 +417,7 @@ pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice:
 /// case, the search attribute's upsert (1). A local activity leaves a marker, and a workflow
 /// task may follow (4); its retry, a timer and another (9). A check of a rule's precondition is code
 /// in the workflow, and costs nothing.
-pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 7, arm: 0, brk: 0, case_call: 1, local_call: 4, local_retry: 9, jev: 0, fill: 0, clock: 0, precheck: 0, until: 0, period: 0 };
+pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 7, arm: 0, brk: 0, case_call: 1, local_call: 4, local_retry: 9, jev: 0, fill: 0, clock: 0, precheck: 0, until: 0, period: 0, have: 0 };
 
 /// Lambda durable functions: a task is one step, or a callback and its submit step (2), and a
 /// callback with `timeout until` reads the clock in a step first (1); a rule is one step; a retry
@@ -383,7 +425,7 @@ pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, c
 /// step first (2), and so does a statement that reads `now` (1); a map is one operation, and each round
 /// runs in a child context of its own (1). The limit is 3,000 operations an execution and
 /// cannot be raised.
-pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 2, local_retry: 3, jev: 0, fill: 0, clock: 1, precheck: 0, until: 1, period: 0 };
+pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 2, local_retry: 3, jev: 0, fill: 0, clock: 1, precheck: 0, until: 1, period: 0, have: 0 };
 pub const DURABLE_LIMIT: u64 = 3_000;
 
 /// Argo Workflows: the nodes in the Workflow's status. A statement is a step group of its
@@ -402,7 +444,7 @@ pub const DURABLE_LIMIT: u64 = 3_000;
 /// check and frame. In the runs of tests/flows/edges.flow, a node took 510 to 612 bytes,
 /// about 60 compressed; the template, which Argo keeps twice in the Workflow, took 240 KB
 /// of it in the runs of examples/hotel.
-pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4, case_call: 0, local_call: 13, local_retry: 2, jev: 0, fill: 0, clock: 4, precheck: 4, until: 4, period: 4 };
+pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4, case_call: 0, local_call: 13, local_retry: 2, jev: 0, fill: 0, clock: 4, precheck: 4, until: 4, period: 4, have: 0 };
 /// Argo stores a Workflow of up to 1 MiB, compressing the node status when it is larger
 /// (MAX_WORKFLOW_SIZE), unless the status goes to a database. At about 60 bytes a node, that
 /// is some 15,000 nodes; values larger than the tests' leave fewer, so the check stops at 10,000.
@@ -416,6 +458,9 @@ pub fn bound(m: &Model, c: &Cost) -> u64 {
 }
 
 fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
+    // the check before what reads a variable that must have a value (DESIGN 38)
+    let have = |es: &[&TExpr]| if crate::model::must_haves(m, es).is_empty() { 0 } else { c.have };
+    let yielded = |result: &Option<(String, TExpr)>| result.as_ref().map(|(_, y)| have(&[y])).unwrap_or(0);
     let mut total: u64 = 0;
     for s in ss {
         let here = match &s.kind {
@@ -444,8 +489,8 @@ fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
                 call + waits + retries * (retry + waits) + after + shown + read
             }
             TK::Assign { .. } => c.assign,
-            TK::For { max, parallel: None, body, .. } => 2 * c.choice + *max as u64 * (cost(m, body, c) + c.loop_iter),
-            TK::For { max, body, .. } => c.map_start + c.choice + *max as u64 * (cost(m, body, c) + c.map_iter),
+            TK::For { max, parallel: None, body, result, .. } => 2 * c.choice + *max as u64 * (cost(m, body, c) + c.loop_iter + yielded(result)),
+            TK::For { max, body, result, .. } => c.map_start + c.choice + *max as u64 * (cost(m, body, c) + c.map_iter + yielded(result)),
             TK::Match { arms, .. } => c.choice + arms.len() as u64 * c.arm + arms.iter().map(|a| cost(m, &a.body, c)).max().unwrap_or(0),
             TK::Wait { .. } | TK::WaitUntil { .. } => c.wait,
             TK::Repeat { times, body } => c.choice + *times as u64 * (cost(m, body, c) + c.loop_iter),
@@ -455,7 +500,7 @@ fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
             TK::Check(_) => c.precheck,
             TK::Period { .. } => c.period,
         };
-        let here = here + if s.kind.reads_now() { c.clock } else { 0 };
+        let here = here + if s.kind.reads_now() { c.clock } else { 0 } + have(&s.kind.reads_first(m));
         total = total.saturating_add(here);
     }
     total

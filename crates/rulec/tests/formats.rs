@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need, ready};
 use ritsu_testkit::tmp::tmpdir_in;
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -24,18 +25,18 @@ fn run(args: &[&str]) -> (i32, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and `rulec verify` to the adapter, and both wait for their answers without a limit of their
+/// own. Past it, rulec is stopped with every process it started, and the test fails saying what
+/// it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 /// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
 /// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
 /// with that.
 fn run_tmp(tmp: &std::path::Path, args: &[&str]) -> (i32, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "ja")
-        .env("TMPDIR", tmp)
-        .current_dir(root())
-        .args(args)
-        .output()
-        .expect("rulec を起動できない");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout)
 }
 
 fn obj(line: &str) -> rulec::json::Json {
@@ -310,15 +311,8 @@ fn adapter_dir() -> Option<(TempDir, PathBuf)> {
 }
 
 fn verify_json(dir: &PathBuf, bug: &str) -> (i32, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "ja")
-        .current_dir(root())
-        .args(["verify", "tests/corpus/ゆうパック運賃.rule", "--format", "json", "--adapter", "python3"])
-        .arg(dir.join("adapter.py"))
-        .env("BUG", bug)
-        .output()
-        .unwrap();
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(["verify", "tests/corpus/ゆうパック運賃.rule", "--format", "json", "--adapter", "python3"]).arg(dir.join("adapter.py")).env("BUG", bug), RULEC_LIMIT, "rulec verify asking the adapter");
+    (o.code.unwrap_or(-1), o.stdout.clone())
 }
 
 #[test]
@@ -349,8 +343,9 @@ fn 鍵は言語で変わらない() {
         let (_, a) = go(&ja);
         let (_, b) = go(&en);
         let shape = |s: &str| -> Vec<Vec<String>> {
-            objects(s)
-                .iter()
+            // `explain` writes one indented array; the others, one object a line
+            let docs = if case[0] == "explain" { obj(s).as_arr().map(<[_]>::to_vec).unwrap_or_default() } else { objects(s) };
+            docs.iter()
                 .map(|j| match j {
                     rulec::json::Json::Obj(_) => rulec::json::members(j).unwrap_or_default().into_keys().map(str::to_string).collect(),
                     _ => Vec::new(),

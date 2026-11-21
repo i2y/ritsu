@@ -1,0 +1,24 @@
+2026-11-16 10:00  submit             e1201  -> first（check: flow precheck_agent; dept_head: e3101）、期限は 2026-11-19 の終わり; flow precheck_agent に頼んだ
+2026-11-16 10:01  agent answered ok         -> first（dept_head: e3101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  approve            e3101  -> decide（e0101）、期限は 2026-11-19 の終わり
+シナリオ `the_agent_and_a_person`: 書いたとおり（3 行）。チケットは `in progress` のままです。置いてある時計: late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit             e1201  -> first（check: flow precheck_agent; dept_head: e3101）、期限は 2026-11-19 の終わり; flow precheck_agent に頼んだ
+2026-11-16 11:00  approve            e3101  -> first（check: flow precheck_agent）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  pause              e3101  -> first（check: flow precheck_agent）で保留、2026-11-23 の終わりまで
+2026-11-17 13:00  agent answered ok         -> decide（e0101）、期限は 2026-11-20 の終わり
+シナリオ `paused_while_the_agent_checks`: 書いたとおり（4 行）。チケットは `in progress` のままです。置いてある時計: late 2026-11-21 00:00（decide）
+
+2026-11-16 10:00  submit                                      e1201  -> first（check: flow precheck_agent; dept_head: e3101）、期限は 2026-11-19 の終わり; flow precheck_agent に頼んだ
+2026-11-16 12:00  pause                                       e3101  -> first（check: flow precheck_agent; dept_head: e3101）で保留、2026-11-23 の終わりまで
+2026-11-16 13:00  agent answered doubt "No budget line fits"         -> first（check: e1101; dept_head: e3101）で保留、2026-11-23 の終わりまで
+2026-11-17 09:00  resume                                      e3101  -> first（check: e1101; dept_head: e3101）、期限は 2026-11-20 の終わり
+2026-11-17 10:00  approve                                     e1101  -> first（dept_head: e3101）、期限は 2026-11-20 の終わり
+2026-11-17 11:00  approve                                     e3101  -> decide（e0101）、期限は 2026-11-20 の終わり
+シナリオ `a_doubt_while_paused`: 書いたとおり（6 行）。チケットは `in progress` のままです。置いてある時計: late 2026-11-21 00:00（decide）
+
+2026-11-16 10:00  submit       e1201  -> first（check: flow precheck_agent; dept_head: e3101）、期限は 2026-11-19 の終わり; flow precheck_agent に頼んだ
+2026-11-16 12:00  pause        e3101  -> first（check: flow precheck_agent; dept_head: e3101）で保留、2026-11-23 の終わりまで
+2026-11-16 13:00  flow failed         -> first（check: e1101; dept_head: e3101）で保留、2026-11-23 の終わりまで
+2026-11-24 00:00  pause ends          -> first（check: e1101; dept_head: e3101）、期限は 2026-11-26 の終わり
+シナリオ `the_flow_fails_while_paused`: 書いたとおり（4 行）。チケットは `in progress` のままです。置いてある時計: late 2026-11-27 00:00（first）

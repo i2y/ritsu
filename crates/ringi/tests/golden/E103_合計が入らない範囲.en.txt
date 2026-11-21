@@ -1,0 +1,4 @@
+error[E103]: tests/mutants/E103_合計が入らない範囲.ringi:6:43: The range `>=20_000円 <=30_000円` of the field 合計 holds no value its computation comes to
+     6 |   合計(total)    : money[円] "合計" = 単価 * 数量  range >=20_000円 <=30_000円
+  = The computation comes to `>=1円 <=10_000円` (from the ranges of what it reads). With this range no request can be made.
+  = Correct the range so that it meets what the computation comes to. A request whose value falls outside the range is refused; a range wider or narrower than that is no mistake.

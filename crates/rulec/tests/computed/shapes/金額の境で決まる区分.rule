@@ -1,0 +1,23 @@
+rule 金額の境で決まる区分(tier_from_a_threshold) v1
+description "金額が 33 円を超えるかで決まる区分を、金額と一緒に読む。少ない金額で有料の区分になることはない。検査は、比べた結果の真偽を、行ごとの金額で読む"
+
+enum 選択(choice) = 一(one) | 二(two)
+enum 区分(tier) = 無料(free) | 有料(paid)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=61円
+
+define 多い(large) : bool = 金額 > 33円
+
+outputs
+  答え(x) : 選択
+
+table 区分の表(tier_of)
+| 多い  | -> 区分(tier) : 区分 |
+| false | 無料                 |
+| true  | 有料                 |
+
+table 選ぶ(pick)
+| 金額   | 区分 | -> 答え |
+| <=33円 | 無料 | 一      |
+| >33円  | 有料 | 二      |

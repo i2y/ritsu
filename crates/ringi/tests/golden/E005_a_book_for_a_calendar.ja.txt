@@ -1,0 +1,2 @@
+エラー[E005]: tests/mutants/E005_a_book_for_a_calendar.ringi:3:26: `use calendar` が読むのは `.cal` のファイルです。`budget.book` はそうではありません
+     3 | use calendar office from "budget.book"

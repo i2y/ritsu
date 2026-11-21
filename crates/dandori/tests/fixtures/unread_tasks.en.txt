@@ -1,0 +1,7 @@
+error[E005]: tests/fixtures/unread_tasks.flow:4:10: could not read the rule `rules/broken_quote.rule`
+     4 | use rule quote from "rules/broken_quote.rule"
+  = E101: Completeness gap: some input matches no row (tests/fixtures/rules/broken_quote.rule, line 13)
+error[E007]: tests/fixtures/unread_tasks.flow:31:10: Jev answers a choice among an enum's values, a place on a scale of them (`score`), yes or no (`bool`), or a record of such answers; it writes no text; the field `note` is `string`
+    31 |     note "What does the sender say of it?"
+error[E002]: tests/fixtures/unread_tasks.flow:49:20: `Parcel` has no field `code` (id, weight)
+    49 |   tag(text: parcel.code)

@@ -1,0 +1,17 @@
+rule amount_read_twice v1
+description "What the amount falls short of 30 yen by, read with the amount: the define reads the amount twice, and from 30 yen it comes to 0 yen and to nothing else"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=0JPY <=40JPY
+
+define shortfall : money[JPY] = max(amount, 30JPY) - amount
+
+outputs
+  x : choice
+
+table pick
+| amount  | shortfall | -> x |
+| <30JPY  | >0JPY     | one  |
+| >=30JPY | 0JPY      | two  |

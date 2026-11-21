@@ -1,0 +1,15 @@
+office.cal: ok — カレンダー office。表を使わないので、データの範囲は 0001-01-01〜9999-12-31 です
+budget.book: ok
+  allocate.do   拒否されうる理由: key_conflict
+  reserve.hold  拒否されうる理由: over_budget（dept_budget(dept) at least 0）、key_conflict、already_refused
+  reserve.post  拒否されうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
+  reserve.void  拒否されうる理由: already_posted、expired、no_such_hold
+  キー: allocate は、dept と period の組ごとに一度だけ動きます。キーが同じで amount が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: reserve は、request と attempt の組ごとに一度だけ動きます。キーが同じで dept、amount のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
+ok company.ringi: 組織、役職 3 個、チームの種類 2 個
+  データ `org`: 版 1 個（2026-04-01）、チーム 3 個と 5 人、代理無し
+ok purchase.ringi: 申請の種類、フィールド 1 個、ステップ 1 個
+  2026-04-01 から使えます: `effective from`
+  終わり無く使えます: 読むデータに終わりがありません
+  長くても 10 営業日で終わります
+ritsu check: ファイル 4 個（koyomi 1、chobo 1、ringi 2）。どれも検査を通りました。言語の境目: 確かめた 1 か所、決められない 0 か所

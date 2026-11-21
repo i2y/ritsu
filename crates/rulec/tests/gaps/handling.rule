@@ -1,0 +1,20 @@
+rule handling v1
+description "A handling fee by amount, kind and rush, with gaps in three places: a kind no row names above 100 yen, one kind's unhurried orders in the middle band, and the hurried orders of the top band"
+
+enum kind = letter | parcel | pallet
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000JPY
+  kind   : kind
+  rush   : bool
+
+outputs
+  fee  : money[JPY]  round down(1JPY)
+  desk : kind
+
+table fees
+| amount           | kind           | rush  | -> fee | desk   |
+| <=100JPY         | -              | -     | 100JPY | letter |
+| >100JPY <=500JPY | letter         | -     | 200JPY | letter |
+| >100JPY <=500JPY | parcel         | true  | 300JPY | parcel |
+| >500JPY          | letter, parcel | false | 400JPY | parcel |

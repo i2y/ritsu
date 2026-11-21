@@ -17,7 +17,11 @@ pub fn root() -> PathBuf {
 }
 
 /// The words after the opening fence of a block that hold the lines of one language.
-pub const CODE: [&str; 9] = ["rule", "flow", "cal", "book", "geas", "req", "ctx", "gate", "kn"];
+pub const CODE: [&str; 10] = ["rule", "flow", "cal", "book", "geas", "req", "ctx", "gate", "kn", "ringi"];
+
+/// The variables that ask a tool of the toolchain for a language: tests clear them all, so that a
+/// language the environment holds changes nothing a command says.
+pub const LANG_VARS: [&str; 11] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG", "RINGI_LANG"];
 
 pub struct Block {
     pub info: String,
@@ -108,7 +112,7 @@ pub fn sh(links: &Path, dir: &Path, command: &str) -> String {
     let path = format!("{}:{}", links.display(), std::env::var("PATH").unwrap_or_default());
     let mut c = Command::new("sh");
     c.arg("-c").arg(format!("{command} 2>&1")).current_dir(dir).env("PATH", path).env(ritsu_base::modules::store::VARIABLE, links.join("store"));
-    for var in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
+    for var in LANG_VARS {
         c.env_remove(var);
     }
     String::from_utf8_lossy(&c.output().expect("could not run sh").stdout).into_owned()

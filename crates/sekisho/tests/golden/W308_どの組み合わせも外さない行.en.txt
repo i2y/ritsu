@@ -1,0 +1,5 @@
+warning[W308]: tests/mutants/W308_どの組み合わせも外さない行.gate:28:1: The line `unless resource.状態 is 返金済` of the permit `係は支払済の注文を返金できる` leaves out no combination that can happen
+    28 |   unless resource.状態 is 返金済
+  = It is met on the 1 combination its `principal` line and its other lines are met on.
+  = Remove the line, or correct it so that it leaves out what it is meant to.
+tests/mutants/W308_どの組み合わせも外さない行.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

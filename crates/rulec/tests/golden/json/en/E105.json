@@ -22,7 +22,13 @@ Obj(
         "notes": Arr(
             [
                 Str(
+                    "The cells of the two rows take the same inputs.",
+                ),
+                Str(
                     "Both rows match: あて先 = 青森県, サイズ = S60",
+                ),
+                Str(
+                    "An input producing this example: あて先 = 青森県, 三辺合計 = 1cm, 重量 = 1g",
                 ),
                 Str(
                     "`policy unique` does not allow overlapping rows. Decide which row is right, or declare `policy first` if the order is meant to matter.",

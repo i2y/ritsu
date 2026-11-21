@@ -1,0 +1,24 @@
+workflow chain_fields v1
+description "Fields read of values whose type is not known, where a record has a field of that name whose type is a rule's that cannot be read"
+
+use rule zones from "rules/missing_zones.rule"
+
+record Parcel
+  id   : string
+  zone : zones.zone
+
+inputs
+  parcel : Parcel
+  id     : string
+
+outputs
+  label : string
+  other : string
+
+task locate(id: string) -> string
+
+flow
+  # the task is not there, so `where` has no type: what reads it says nothing
+  let where = locat(id: id)
+  # no line sets `nowhere`: it is not there, whatever records have a field `zone`
+  succeed label = where.zone, other = nowhere.zone

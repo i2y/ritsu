@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package refunds.v1;
+
+import "money.proto";
+
+service RefundService {
+  rpc Refund(RefundRequest) returns (RefundReply);
+}
+
+message RefundRequest {
+  string order = 1;
+  Money amount = 2;
+}
+
+message RefundReply {
+  bool accepted = 1;
+}

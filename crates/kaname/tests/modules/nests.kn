@@ -1,0 +1,18 @@
+module nests v1
+description "Values of a type that holds itself inside the records the built-in functions answer: a category given as an indexed item, as the value of an entry and as the item of a running total, each held to how deep a host may nest it"
+
+record Category
+  name     : string          count <=20
+  children : list[Category]  count <=3
+
+# the categories right under an indexed item
+fn under_indexed(x: indexed[Category]) -> number total
+  x.item.children.count()
+
+# the categories right under the value of an entry
+fn under_entry(e: entry[string, Category]) -> number total
+  e.value.children.count()
+
+# the categories right under the item of a running total
+fn under_running(r: running[Category, number]) -> number total
+  r.item.children.count()

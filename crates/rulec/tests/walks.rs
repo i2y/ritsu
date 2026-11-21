@@ -18,6 +18,7 @@ use rulec::types::Stage;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -34,10 +35,15 @@ fn run(args: &[&str]) -> (i32, String, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 /// `run`, with `tmp` as rulec's TMPDIR (swiftc leaves a directory there).
 fn run_tmp(tmp: &Path, args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp).current_dir(root()).args(args).output().expect("cannot start rulec");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp).current_dir(root()).args(args), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 fn write(d: &Path, name: &str, body: &str) -> String {
@@ -540,7 +546,7 @@ fn 文書は集計を一文で言い_歩きの順を言う() {
     ] {
         assert!(en.contains(want), "`{want}` is not in:\n{en}");
     }
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(["doc", "tests/corpus/注文の精算.rule"]).output().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(["doc", "tests/corpus/注文の精算.rule", "--lang", "ja"]).output().unwrap();
     let ja = String::from_utf8_lossy(&o.stdout).into_owned();
     for want in [
         "## 並びをたどって求める値",

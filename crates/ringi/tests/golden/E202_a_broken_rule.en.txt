@@ -1,0 +1,4 @@
+error[E202]: tests/mutants/E202_a_broken_rule.ringi:3:25: `shared/broken_authority.rule` does not pass rulec's check
+     3 | use rule authority from "shared/broken_authority.rule"
+  = E101: Completeness gap: some input matches no row (tests/mutants/shared/broken_authority.rule:12)
+  = Correct that file until rulec's check passes.

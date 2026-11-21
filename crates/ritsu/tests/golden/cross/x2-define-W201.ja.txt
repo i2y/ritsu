@@ -1,0 +1,9 @@
+ok card_fee.rule
+警告[dandori W104]: pay.flow:20:1: `amount` の範囲が分かりません（`amount_of` の結果に範囲がありません）。規則 `card_fee` の `amount` が受け取るのは `>=1 <=1_000_000` です
+    20 |   let worked = card_fee(amount: amount)
+pay.flow: 検査を通りました（警告 1 件）
+警告[ritsu W201]: pay.flow:20:1: 規則 card_fee を呼ぶところで、前提 `fee range >=0 <=20_000` が保たれるかを決められません
+    20 |   let worked = card_fee(amount: amount)
+  = `amount` の範囲が分かりません（`amount_of` の結果に範囲がありません）
+  = ワークフローのコードは、規則が計算する値までは計算しません。計算した値が範囲の外になる呼び出しは、規則から生成したコードが、その値を計算したところで受け付けません。
+ritsu check: ファイル 2 個（rulec 1、dandori 1）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 1 か所、決められない 1 か所

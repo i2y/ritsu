@@ -1,0 +1,22 @@
+rule 半分の上乗せ率(half_markup_ja) v1
+description "セールの品物の値段。種類ごとの上乗せ率の半分を上乗せする。半分の上乗せ率の型は 1% の刻みだが、5% の半分は 2.5%"
+
+enum 種類(kind) = 本(books) | 音楽(music) | おもちゃ(toys)
+
+inputs
+  品目(item_kind) : 種類
+  定価(list_price) : money[円]  range >=0円 <=100000円
+
+outputs
+  値段(price) : money[円]  round half_up(1円)
+
+table 上乗せ率の判定(markup_of)
+policy unique
+| 品目     | -> 上乗せ率(markup) : rate[step 1%] |
+| 本       | 5%                                  |
+| 音楽     | 10%                                 |
+| おもちゃ | 20%                                 |
+
+define セールの上乗せ率(sale_markup) : rate[step 1%] = 上乗せ率 / 2
+
+define 値段(price) : money[円] = 定価 + 定価 * セールの上乗せ率

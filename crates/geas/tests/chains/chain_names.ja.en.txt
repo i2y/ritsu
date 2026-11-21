@@ -1,0 +1,8 @@
+error[E002]: chain_names.ja.geas:12:8: there is no target `api`
+    12 |   when api.post("/tickets", body: "{\"title\":\"プリンター\"}", header "authorization": "Bearer {token}")
+  = the targets in this file: apii
+  = `api` is written on lines 15, 17 and 22 too
+warning[W016]: chain_names.ja.geas:12:92: `{token}` is not a name this claim keeps, so it stays as written
+    12 |   when api.post("/tickets", body: "{\"title\":\"プリンター\"}", header "authorization": "Bearer {token}")
+  = the names it keeps: tokn, id
+  = `{token}` is written on lines 15 and 17 too

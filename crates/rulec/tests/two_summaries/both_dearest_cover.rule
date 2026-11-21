@@ -1,0 +1,22 @@
+rule both_dearest_cover v1
+description "What a parcel is insured for: the price of its dearest line wrapped as a gift, twice the total of its lines, and twice the price of its dearest line not wrapped (0 yen where there is none). The insurer insures a parcel from 10,000 yen, and takes none insured for less than 999 yen"
+
+# one line of the parcel
+elements lines
+  price : money[JPY]  range >=0JPY <=1_000JPY
+  gift  : bool
+
+max dearest_gift over lines of price where gift empty 0JPY
+sum total over lines of price  range >=0JPY <=100_000JPY
+max dearest_plain over lines of price where gift = false empty 0JPY
+
+define cover : money[JPY] = dearest_gift + total * 2 + dearest_plain * 2  range >=999JPY <=200_000JPY
+
+outputs
+  insured : bool
+
+table insure
+policy unique
+| cover       | -> insured |
+| <10_000JPY  | false      |
+| >=10_000JPY | true       |

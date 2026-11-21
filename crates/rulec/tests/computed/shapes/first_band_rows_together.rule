@@ -1,0 +1,26 @@
+rule first_band_rows_together v1
+description "A band a policy first table writes from the kind of an order and its amount, read with the amount alone: under 46 yen, goods are small and services medium, so the two rows take every order under 46 yen before the last row can write large, and no row is asked for large under 46 yen"
+
+enum choice = one | two
+enum order_kind = goods | service
+enum size = small | medium | large
+
+inputs
+  amount : money[JPY]  range >=1JPY <=90JPY
+  kind   : order_kind
+
+outputs
+  x : choice
+
+table band_of
+policy first
+| amount | kind    | -> band : size |
+| <46JPY | goods   | small          |
+| <46JPY | service | medium         |
+| -      | -       | large          |
+
+table pick
+| amount  | band   | -> x |
+| <46JPY  | small  | one  |
+| <46JPY  | medium | two  |
+| >=46JPY | large  | one  |

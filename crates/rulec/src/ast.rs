@@ -585,6 +585,11 @@ pub struct DefineDecl {
     pub name: Name,
     pub ty: TypeRef,
     pub expr: Expr,
+    /// `range >=… <=…` at the end of the line: the values the rule **accepts** for it (§15.313).
+    /// A call whose value of it falls outside is refused where the value is worked out, and what
+    /// reads it reads only what it reaches inside. Not what a `derive`'s range is, which the
+    /// check holds what it reaches to (E112).
+    pub range: Option<Range>,
     pub span: Span,
     pub cite: Option<Cite>,
 }
@@ -722,6 +727,11 @@ pub struct CalleeInput {
     pub name: String,
     pub ty: crate::types::Ty,
     pub range: Option<Range>,
+    /// The two ends the range writes, as the callee's own check read them: each included, on the
+    /// step the input is held at (`Checked::declared`, §15.314). What E043 holds the values passed
+    /// to, so a caller and the callee's door read one range one way. None for an input with no
+    /// range of bounds.
+    pub ends: Option<(Option<crate::num::Rat>, Option<crate::num::Rat>)>,
     /// The values the `range` of an input of an ordered enum lets in, in the callee's order and
     /// spelling (`Checked::enum_ranges`, §15.210): what E043 holds the values passed to (§15.252).
     /// None for an input with no such range, and for a field of an element, whose enum takes none

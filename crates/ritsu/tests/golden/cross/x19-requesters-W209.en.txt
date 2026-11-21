@@ -1,0 +1,21 @@
+office.cal: ok — calendar office: no table, so the data range is 0001-01-01..9999-12-31
+budget.book: ok
+  allocate.do   may be refused: key_conflict
+  reserve.hold  may be refused: over_budget (dept_budget(dept) at least 0), key_conflict, already_refused
+  reserve.post  may be refused: key_conflict, already_voided, expired, over_hold, no_such_hold
+  reserve.void  may be refused: already_posted, expired, no_such_hold
+  key: allocate once per dept, period; a second call that differs only in amount is refused with key_conflict
+  key: reserve once per request, attempt; a second call that differs only in dept or amount is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+ok company.ringi: an organization, 3 positions, 2 kinds of team
+  data `org`: 1 version (2026-04-01), 3 teams and 5 people, no proxies
+ok purchase.ringi: a request, 1 field, 1 stage
+  used from 2026-04-01: `effective from`
+  used with no end: no data it reads ends
+  ends within 10 business days at the most
+warning[ritsu W209]: purchase.ringi:22:88: Some requesters of `purchase` have no value for `dept`, an argument of the hold `budget.reserve`
+    22 |   on submitted  hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: requester.department, amount: amount)
+  = In the organization from 2026-04-01, 1 of the 5 people who may submit the request has no `requester.department`: e0001 (President (fictional)).
+  = The hold cannot be made without it: their `submit` is refused.
+  = Who they are: `ritsu ringi simulate purchase.ringi --every-requester`.
+  = If they do not submit the request, leave them out (`submitted by … except …`). If they do, give the hold a value every requester has, or write `when requester.department is not none` on the line, so that their requests hold nothing.
+ritsu check: 4 files (koyomi 1, chobo 1, ringi 2): all pass (1 warning); borders between the languages: 2 checked, 1 undecided

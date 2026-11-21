@@ -346,10 +346,7 @@ impl Keys {
             }
         };
         let f = store_write::unique(&dir, "key");
-        std::fs::write(&f, bytes).map_err(|e| {
-            let d = f.display();
-            Stop::Cannot(tr!("{d} に書けません（{e}）", "cannot write {d} ({e})"))
-        })?;
+        std::fs::write(&f, bytes).map_err(|e| Stop::Cannot(ritsu_base::cli::cannot_write(&ritsu_base::paths::show(&f), &e)))?;
         self.written.push(f.clone());
         Ok(ritsu_base::paths::absolute(&f))
     }
@@ -495,12 +492,11 @@ fn stopped(ctx: &Ctx, root: Option<&Path>, s: Stop) -> u8 {
             ("ritsu", Json::str(env!("CARGO_PKG_VERSION"))),
             ("fetched", Json::arr([])),
             ("present", Json::arr([])),
-            ("error", Json::str(ctx.say(&said))),
+            ("error", Json::obj([("code", Json::int(i128::from(code))), ("message", Json::str(ctx.say(&said)))])),
         ]);
         println!("{}", o.pretty());
     } else {
-        let h = if ctx.lang == ritsu_base::text::Lang::Ja { "エラー" } else { "error" };
-        eprintln!("{h}: {}", ctx.say(&said));
+        eprintln!("{}", ritsu_base::cli::refusal(&ctx.say(&said), ctx.lang));
     }
     code
 }
@@ -775,7 +771,7 @@ pub fn fetch(ctx: &Ctx, a: &Args) -> u8 {
         }
         Err(Halt::NoMod(e)) => ctx.refuse(match rev {
             Some(rev) => tr!("git の版 `{rev}` に、このモジュールの `ritsu.mod` がありません", "the git revision `{rev}` has no `ritsu.mod` of this module"),
-            None => tr!("ritsu.mod を読めません（{e}）", "cannot read ritsu.mod ({e})"),
+            None => ritsu_base::cli::cannot_read(&ritsu_base::paths::show(&root.join(ritsu_base::modules::manifest::FILE)), &e),
         }),
         Err(Halt::Diags(ds)) => super::stopped(ctx, &root, &Problem::Diags(ds)),
         Err(Halt::NoLock) => stopped(ctx, Some(&root), Stop::Cannot(tr!(

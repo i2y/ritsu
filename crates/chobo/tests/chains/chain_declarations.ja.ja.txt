@@ -1,0 +1,8 @@
+エラー[E002]: chain_declarations.ja.book:8:26: 単位 `円` が宣言されていません
+     8 | account 売上金(店: string) : 円
+  = `円` は 11、12、15 行目にも書かれています
+エラー[E030]: chain_declarations.ja.book:17:7: キーの `支払い` は振替 `売上` の引数にありません
+    17 |   key 支払い
+エラー[E002]: chain_declarations.ja.book:21:45: 型 `ドル` がありません。型は string か、宣言した単位の名前です
+    21 | transfer 決済手数料(支払い: string, 店: string, 手数料: ドル)
+chain_declarations.ja.book: エラー 3 件、警告 0 件

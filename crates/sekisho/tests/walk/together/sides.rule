@@ -1,0 +1,19 @@
+rule same_side v1
+description "Whether two amounts are on the same side of 500 yen"
+
+enum side = same | apart
+
+inputs
+  first  : money[JPY]  range >=1JPY <=1_000JPY
+  second : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  side : side
+
+table decide
+policy unique
+| first    | second   | -> side |
+| <=500JPY | <=500JPY | same    |
+| >500JPY  | >500JPY  | same    |
+| <=500JPY | >500JPY  | apart   |
+| >500JPY  | <=500JPY | apart   |

@@ -1,0 +1,4 @@
+エラー[E007]: ctx/ordering.ctx:18:10: コンテキスト「Inventory」は地図にありません
+    18 | upstream Inventory conformist
+  = 地図が読むコンテキストは「Ordering」「Inventry」です。
+  = `Inventory` は 21 行目にも書かれています。

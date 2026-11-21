@@ -1,0 +1,13 @@
+organization company v1 "Company"
+description "A small company (fictional): the president, a sales department of two and a finance department of one"
+
+positions
+  staff     "Staff"
+  dept_head "Head of department"
+  president "President"
+
+team kinds
+  company    "Company"
+  department "Department"
+
+data "org-small"

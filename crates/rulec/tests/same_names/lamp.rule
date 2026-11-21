@@ -1,0 +1,20 @@
+rule lamp v1
+description "Whether to stop at a light: the file the rule reads declares an enum named like the rule's Fired (fictional)"
+
+import enum light from "signals.rule"
+
+inputs
+  seen : light
+
+outputs
+  halt : bool
+
+table halt
+| seen  | -> halt |
+| red   | true    |
+| green | false   |
+
+examples
+| seen  | -> halt |
+| red   | true    |
+| green | false   |

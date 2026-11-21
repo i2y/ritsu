@@ -1,0 +1,10 @@
+rule reads_itself v1
+description "A definition of the fee whose expression reads the fee"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  fee : money[JPY]  round down(1JPY)
+
+define fee : money[JPY] = fee + down(amount * 3%, 1JPY)

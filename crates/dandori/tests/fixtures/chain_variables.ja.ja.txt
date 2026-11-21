@@ -1,0 +1,10 @@
+エラー[E002]: tests/fixtures/chain_variables.ja.flow:26:13: `段` にフィールド `承認社` はありません（あるのは 承認者）
+    26 |     yield 段.承認社
+エラー[E002]: tests/fixtures/chain_variables.ja.flow:28:11: タスクか規則 `取特` はありません
+    28 |   let 見 = 取特(ID: ID)
+エラー[E003]: tests/fixtures/chain_variables.ja.flow:30:11: レコードの型を `let 記: <レコード> = {…}` のように書いてください
+    30 |   let 記 = {合計: 3}
+エラー[E003]: tests/fixtures/chain_variables.ja.flow:32:21: `for` で回せるのはリストです。これは `string` です
+    32 |   let 名前 = for 名 in ID at most 3
+エラー[E009]: tests/fixtures/chain_variables.ja.flow:35:9: `match` に渡せるのは列挙・bool・オプショナルな値（`T?`）です。これは `string` です
+    35 |   match ID

@@ -1,0 +1,33 @@
+gate 注文の窓口(order_desk) v1
+description "宣言で名前を書き誤った物と、それを使う行。どの名前も最初に書いた所で一度だけ言う。chain_names.gate の日本語の版"
+namespace OrderDesk
+
+enum 返金の理由(refund_reason) = 破損(damaged) | 遅延(late)
+
+# 役割の名前を宣言で書き誤った。principal と permit は `窓口係` と書いたまま
+role 窓口(clerk)
+  description "窓口で客に応対する"
+  can 返金する
+
+principal 利用者(User)
+  description "店の職員"
+  roles 窓口係
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    金額(amount) : money[USDc]  range >=1USDc <=1000000USDc
+
+# action の名前を宣言で書き誤った。役割と permit は `返金する` と書いたまま
+action 返金(refund_order)
+  description "注文を返金する"
+  principal 利用者
+  resource 注文
+  input
+    理由(reason) : 返金の理由
+
+permit 小さい注文は窓口で返金する(clerks_refund_small_orders)
+  description "100 ドル以下の注文は窓口係が返金する"
+  principal in 窓口係
+  action 返金する
+  when resource.金額 <= 10000USDc

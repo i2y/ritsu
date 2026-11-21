@@ -1,0 +1,4 @@
+error[E309]: example.ringi:9:24: The route cannot compare `amount` with `limit`
+     9 |   audit  board    when amount > limit
+  = A condition of the route reads the fields of the form whose values a table can hold (a choice of its own values or of a rule's values, a number, an amount, a date, yes or no), the outputs of the rules the request uses, and the inputs of a shared route: the route is lowered to a table of them, which rulec checks.
+  = Add a computed field for the difference, and compare it with a value: `difference : money[JPY] = amount - limit`, then `when difference > 0JPY`.

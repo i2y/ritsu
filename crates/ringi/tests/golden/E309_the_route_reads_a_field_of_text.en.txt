@@ -1,0 +1,4 @@
+error[E309]: tests/mutants/E309_the_route_reads_a_field_of_text.ringi:9:24: The route cannot read `place`, a field of `text`
+     9 |   audit  board    when place is "Osaka"
+  = A condition of the route reads the fields of the form whose values a table can hold (a choice of its own values or of a rule's values, a number, an amount, a date, yes or no), the outputs of the rules the request uses, and the inputs of a shared route: the route is lowered to a table of them, which rulec checks.
+  = To decide by it, make it a `choice` of the values the route tells apart.

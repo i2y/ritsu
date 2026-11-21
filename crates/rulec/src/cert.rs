@@ -422,6 +422,22 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
             ts.finish()
         })
         .raw("ranges", ranges.finish())
+        // The range the rule accepts for a `define` (§15.313), on the scale of `ranges`, an open
+        // end `null`: the generated code refuses a call whose value falls outside where it works the
+        // value out, so what reads the value reads it inside, and `ranges` states the part of what
+        // it reaches that lies there. The value's own entry in `values` keeps what it reaches
+        // before the door, which its int64 claim is about. Written only for a rule that has one,
+        // so no other certificate changes.
+        .opt_raw("accepts", (!c.accepts.is_empty()).then(|| {
+            let mut o = Obj::new();
+            let mut names: Vec<&String> = c.accepts.keys().collect();
+            names.sort();
+            for n in names {
+                let (lo, hi) = c.accepts[n];
+                o = o.raw(n, format!("[{},{}]", end(&lo), end(&hi)));
+            }
+            o.finish()
+        }))
         // The scale every name is stored at (§7.1): its value is a whole number of `1/scale`.
         // A re-checker works out from these and from the values' expressions the step each
         // column's values sit on, and holds the step an axis is cut at to it (§15.190).
@@ -751,7 +767,7 @@ pub fn machine_facts(f: &RuleFile, c: &Checked) -> Option<Result<ritsu_ports::Ma
         finals,
         held: m.held.iter().map(|x| x.text.clone()).collect(),
         policy: ct.policy.to_string(),
-        axes: ct.axes.iter().map(|a| ritsu_ports::Axis { column: a.name.clone(), coords: a.coords.clone() }).collect(),
+        axes: ct.axes.iter().map(|a| ritsu_ports::Axis { column: a.name.clone(), coords: a.coords.clone(), ends: a.ends.clone() }).collect(),
         state_axis: axis,
         decides: ct.decides.clone(),
         rows: ct.rows.iter().map(|r| ritsu_ports::MachineRow { row: r.row, accepts: r.accepts.clone(), to: moves.get(&r.row).copied().flatten(), produces: r.produces.clone() }).collect(),
@@ -2694,6 +2710,37 @@ fn table_json(t: CertTable, main_src: &str, rule_path: &str) -> String {
                 .collect::<Vec<_>>()),
         )
     };
+    // What a `define` comes to with the axes it reads held to one coordinate each (§15.322): the
+    // define's axis, the coordinates held, and the coordinates of the define's axis that leaves
+    // out — and, where the held coordinate of one axis is cut into pieces, that axis and where each
+    // piece after the first starts. Each is worked out again by a re-checker from the define's
+    // expression, the grid its values sit on among it. Written only for a table that has them, so
+    // no other certificate changes.
+    let o = if t.narrowed.is_empty() {
+        o
+    } else {
+        o.raw(
+            "narrowed",
+            arr(&t
+                .narrowed
+                .iter()
+                .map(|n| {
+                    let o = Obj::new()
+                        .int("axis", n.axis as i128)
+                        .raw("by", arr(&n.by.iter().map(|(j, x)| Obj::new().int("axis", *j as i128).int("coord", *x as i128).finish()).collect::<Vec<_>>()))
+                        .raw("coords", arr(&(0..n.out.len()).filter(|&x| n.out[x]).map(|x| x.to_string()).collect::<Vec<_>>()));
+                    let at = |at: &[Rat]| arr(&at.iter().map(|v| crate::json::quote(&rat(v))).collect::<Vec<_>>());
+                    match &n.cuts {
+                        Some((crate::region::CutOn::Axis(j), cs)) => o.raw("cuts", Obj::new().int("axis", *j as i128).raw("at", at(cs)).finish()).finish(),
+                        // An input the table has no axis for, cut over the whole of the interval the
+                        // int64 claim reads it in (§15.325).
+                        Some((crate::region::CutOn::Input(name), cs)) => o.raw("cuts", Obj::new().str("name", name).raw("at", at(cs)).finish()).finish(),
+                        None => o.finish(),
+                    }
+                })
+                .collect::<Vec<_>>()),
+        )
+    };
     let o = if t.above_apart.is_empty() {
         o
     } else {
@@ -2828,7 +2875,7 @@ fn cover_json(c: &Cover, model: &[crate::fourier::Origin]) -> String {
         Cover::ByNever(k) => Obj::new().int("never", *k as i128).finish(),
         Cover::ByDerived(ai) => Obj::new().int("derived_axis", *ai as i128).finish(),
         Cover::ByUpstream(what, _) => Obj::new().str("upstream", what).finish(),
-        Cover::ByPoints => Obj::new().bool("every_point_ruled_out", true).finish(),
+        Cover::ByPoints(_) => Obj::new().bool("every_point_ruled_out", true).finish(),
         Cover::ByDays(ai) => Obj::new().int("days_axis", *ai as i128).finish(),
         Cover::ByDefine(ai) => Obj::new().int("define_axis", *ai as i128).finish(),
         Cover::ByTruth(ai) => Obj::new().int("truth_axis", *ai as i128).finish(),
@@ -2837,6 +2884,8 @@ fn cover_json(c: &Cover, model: &[crate::fourier::Origin]) -> String {
         // the box: an axis of this table on which the box takes none of the words the row lets
         // in, or the multipliers of a refutation (§15.195).
         Cover::ByAboveRows(a) => Obj::new().raw("above_rows", above_rows_json(a, model)).finish(),
+        // A fact of the table's `narrowed`, by its place there (§15.322).
+        Cover::ByNarrowed(k) => Obj::new().int("narrowed", *k as i128).finish(),
     }
 }
 
@@ -2844,18 +2893,73 @@ fn cover_json(c: &Cover, model: &[crate::fourier::Origin]) -> String {
 /// why it fires nowhere in the box: a cover's leaf, and each value of a pair the rows part
 /// (§15.195, §15.196).
 fn above_rows_json(a: &crate::region::AboveRows, model: &[crate::fourier::Origin]) -> String {
-    Obj::new()
-        .int("axis", a.axis as i128)
-        .str("column", &a.column)
-        .str("value", &a.value)
-        .raw(
+    let o = Obj::new().int("axis", a.axis as i128).str("column", &a.column).str("value", &a.value);
+    // The ways joined besides through the columns the deciding table reads that this table reads too,
+    // written only where they are (§15.325).
+    let o = if a.through { o.bool("through", true) } else { o };
+    o.raw(
             "rows",
             arr(&a
                 .rows
                 .iter()
-                .map(|(ri, o)| match o {
-                    crate::region::RowOut::Clash(aj) => Obj::new().int("row", *ri as i128 + 1).int("clash", *aj as i128).finish(),
-                    crate::region::RowOut::Farkas(r) => Obj::new().int("row", *ri as i128 + 1).raw("farkas", farkas_json(r, model)).finish(),
+                .map(|(ri, via, o)| {
+                    let row = Obj::new().int("row", *ri as i128 + 1);
+                    // The rows of the tables above it the way joins, where it joins any (§15.322).
+                    let row = if via.is_empty() {
+                        row
+                    } else {
+                        row.raw("via", arr(&via.iter().map(|(t, r)| format!("[{},{r}]", crate::json::quote(t))).collect::<Vec<_>>()))
+                    };
+                    match o {
+                        crate::region::RowOut::Clash(aj) => row.int("clash", *aj as i128).finish(),
+                        crate::region::RowOut::Farkas(r) => row.raw("farkas", farkas_json(r, model)).finish(),
+                        // The step of the way whose row takes nothing of the box on some column both
+                        // tables cut (§15.325).
+                        crate::region::RowOut::Misses { step } => row.raw("misses", Obj::new().int("step", *step as i128).finish()).finish(),
+                        // The step of the way, the axis of its table whose value the rule works out,
+                        // the axes of this table held while it is worked out again, and where one of
+                        // them is cut into pieces, that axis and where each piece after the first
+                        // starts (§15.325).
+                        crate::region::RowOut::Reach { step, axis, by, row_by, cuts } => {
+                            let o = Obj::new().int("step", *step as i128).int("axis", *axis as i128).raw("by", arr(&by.iter().map(|a| a.to_string()).collect::<Vec<_>>()));
+                            // The axes of the row's own table held to what the row takes there, written
+                            // only where there are some.
+                            let o = if row_by.is_empty() { o } else { o.raw("row_by", arr(&row_by.iter().map(|a| a.to_string()).collect::<Vec<_>>())) };
+                            let o = match cuts {
+                                Some((j, at)) => o.raw("cuts", Obj::new().int("axis", *j as i128).raw("at", arr(&at.iter().map(|v| crate::json::quote(&rat(v))).collect::<Vec<_>>())).finish()),
+                                None => o,
+                            };
+                            row.raw("reach", o.finish()).finish()
+                        }
+                        // The step of the way, and this table's axis of the column its table decides,
+                        // where what the row writes stands on none of the box's coordinates (§15.325).
+                        crate::region::RowOut::Writes { step, axis } => {
+                            row.raw("writes", Obj::new().int("step", *step as i128).int("axis", *axis as i128).finish()).finish()
+                        }
+                        // The two steps of the way and the axes of their tables that cut one column,
+                        // where the two rows take no value of it together (§15.325).
+                        crate::region::RowOut::Disjoint { steps: (s1, s2), axes: (a1, a2) } => row
+                            .raw(
+                                "disjoint",
+                                Obj::new()
+                                    .raw("steps", arr(&[s1.to_string(), s2.to_string()]))
+                                    .raw("axes", arr(&[a1.to_string(), a2.to_string()]))
+                                    .finish(),
+                            )
+                            .finish(),
+                        // The step of the way in a `policy first` table, and the rows above it
+                        // there, by their numbers, whose boxes take all of what its box leaves in
+                        // this one (§15.325).
+                        crate::region::RowOut::Earlier { step, rows } => row
+                            .raw(
+                                "earlier",
+                                Obj::new()
+                                    .int("step", *step as i128)
+                                    .raw("rows", arr(&rows.iter().map(|r| (r + 1).to_string()).collect::<Vec<_>>()))
+                                    .finish(),
+                            )
+                            .finish(),
+                    }
                 })
                 .collect::<Vec<_>>()),
         )

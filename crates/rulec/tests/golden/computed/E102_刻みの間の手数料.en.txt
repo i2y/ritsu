@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/computed/shapes/E102_刻みの間の手数料.rule:17 table 選ぶ
+   |
+17 | | 15円   | 二      |
+   | ^^^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+ 9 | define 手数料(fee) : money[円] = up(金額 * 10%, 10円)
+   |                                  ^^^^^^^^^^^^^^^^^^^^ only multiples of 10円
+   |
+ `手数料` only comes to multiples of 10円, and this row asks for none of them.
+ hint: compare the expression with this row's conditions. No input reaches this row, so if it is not needed, delete it.
+

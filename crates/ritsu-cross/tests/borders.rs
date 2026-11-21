@@ -46,7 +46,8 @@ fn x3a_the_days_of_a_koyomi_date_against_a_rules_range() {
     std::fs::write(t.path().join("payment_terms.cal"), std::fs::read(payment_terms()).unwrap()).unwrap();
     std::fs::write(t.path().join("plain.rule"), "rule plain v1\n\nenum run = early | late\n\ninputs\n  pay_day : date  range >=2026-03-01 <=2027-01-31\n\noutputs\n  batch : run\n\ntable pick\npolicy unique\n| pay_day      | -> batch : run |\n| <=2026-06-30 | early          |\n| >=2026-07-01 | late           |\n").unwrap();
     let r = rulec::ports::Engine::new();
-    let range = r.date_range(&t.path().join("plain.rule"), "pay_day").unwrap();
+    let facts = r.facts(&t.path().join("plain.rule")).unwrap();
+    let range = facts.inputs.iter().find(|c| c.name == "pay_day").and_then(|c| c.ty.date_range()).unwrap();
     assert_eq!(range, (Some(20513), Some(20849)));
     assert!(matches!(days_fit(&days, range), Answer::Fails(20494)));
 }
@@ -304,7 +305,7 @@ fn the_borders_are_counted_from_their_records_in_their_order() {
     );
     // the words are the order's, and each is one of a check's own; a new one comes last
     let words: Vec<&str> = Check::ALL.iter().map(|c| c.word()).collect();
-    assert_eq!(words.last(), Some(&"fed_by"), "{words:?}");
+    assert_eq!(words[words.len() - 4..], ["fed_by", "ticket_gate", "ticket_hold", "ticket_flow"], "{words:?}");
     assert!(Check::ALL.windows(2).all(|w| w[0] < w[1]), "{words:?}");
     assert_eq!(words.iter().collect::<std::collections::BTreeSet<_>>().len(), Check::ALL.len());
     assert!(words.iter().all(|w| w.chars().all(|c| c.is_ascii_lowercase() || c == '_')), "{words:?}");

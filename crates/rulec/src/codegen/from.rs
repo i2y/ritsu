@@ -6,12 +6,13 @@
 //! integer as when the contract is a `.proto`), JSON's `true` or `false`, a string, a
 //! `YYYY-MM-DD` string of a day the calendar has, a value of the rule's enum. A field a `where`
 //! tests is held to what the contract carries there. A value that is not is refused with the
-//! module's `RuleInputError`, and the sentence names its path as the rule writes it —
-//! `order.lines[].amount_usd is not an integer` — with the value beside it where the language's
-//! error carries one; a place on the way that is not an object, a value that is not there, and a
-//! collection that is not an array are refused the same way. Before, the value was read the way
-//! the language reads it: `int(1.5)` is 1, `"abc".to_i` is 0, `BigInt(true)` is `1n`, and the rule
-//! answered for a value it does not take.
+//! module's `RuleInputError`, and the sentence names its path as the rule writes it, with the
+//! index of the element where the path goes through one, counted from 0 as the rule's own door
+//! counts the elements of a sequence (§15.324) — `order.lines[1].amount_usd is not an integer` —
+//! and the value beside it where the language's error carries one; a place on the way that is not
+//! an object, a value that is not there, and a collection that is not an array are refused the
+//! same way. Before, the value was read the way the language reads it: `int(1.5)` is 1,
+//! `"abc".to_i` is 0, `BigInt(true)` is `1n`, and the rule answered for a value it does not take.
 //!
 //! The five read in one order, so that one object stops at the same value in each: the inputs in
 //! the order the rule declares them, then the sequences; along a collection, element by element,
@@ -24,6 +25,71 @@ use super::{Gen, Proj, SeqProj, Syn, brand_of, cell_whole, elem_cond_with, pb_ze
 use crate::ast::{Cell, Lit, ProjKind};
 use crate::projection::{At, Zero};
 use crate::types::Ty;
+use std::collections::BTreeMap;
+
+/// The helpers Python's projection function may declare beside it, by their names.
+const PY_FROM_HELPERS: &[&str] = &[
+    "_at", "_opt", "_pget", "_seq_of", "_int_pb", "_int_of", "_bool_of", "_str_of", "_num_of", "_date_of", "_int_at", "_bool_at", "_str_at", "_date_at", "_num_at",
+    "_seq_at", "_proto", "_days", "_largest", "_smallest",
+];
+
+/// The helpers the projection function of TypeScript and JavaScript may declare beside it.
+const TS_FROM_HELPERS: &[&str] = &[
+    "_at", "_opt", "_pget", "_intAt", "_boolAt", "_strAt", "_dateAt", "_numAt", "_seqAt", "_intPb", "_intOf", "_boolOf", "_strOf", "_dateOf", "_numOf", "_seqOf",
+    "_enumOf", "_proto", "_days", "_largest", "_smallest",
+];
+
+/// The methods Ruby's projection method may declare beside it on the module.
+const RB_FROM_HELPERS: &[&str] = &[
+    "_at", "_opt", "_pget", "_int_at", "_bool_at", "_str_at", "_date_at", "_num_at", "_seq_at", "_int_pb", "_int_of", "_bool_of", "_str_of", "_date_of", "_num_of",
+    "_seq_of", "_enum_of", "_proto", "_days",
+];
+
+/// `text`, code of the projection function of `lang` and of its helpers, with each helper `to`
+/// names written under its other name where it is declared or called: a word with `(` after it,
+/// outside the strings and the comments, and not read off an object with `.` (Ruby declares a
+/// method on `self.`). A field of the caller's object, a key and a parameter keep their names.
+fn rename_calls(text: &str, to: &BTreeMap<String, String>, lang: &str) -> String {
+    if to.is_empty() {
+        return text.to_string();
+    }
+    let hash = matches!(lang, "python" | "ruby");
+    let b = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        let start = i;
+        if c == b'"' || c == b'\'' || c == b'`' {
+            i += 1;
+            while i < b.len() && b[i] != c {
+                i += if b[i] == b'\\' { 2 } else { 1 };
+            }
+            i = (i + 1).min(b.len());
+        } else if (hash && c == b'#') || (!hash && c == b'/' && b.get(i + 1) == Some(&b'/')) {
+            while i < b.len() && b[i] != b'\n' {
+                i += 1;
+            }
+        } else if !hash && c == b'/' && b.get(i + 1) == Some(&b'*') {
+            i = text[i + 2..].find("*/").map(|k| i + 2 + k + 2).unwrap_or(b.len());
+        } else if c.is_ascii_alphanumeric() || c == b'_' || c >= 0x80 {
+            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || b[i] >= 0x80) {
+                i += 1;
+            }
+            let before = &text[..start];
+            let dotted = before.ends_with('.') && !(lang == "ruby" && before.ends_with("self."));
+            match to.get(&text[start..i]) {
+                Some(n) if b.get(i) == Some(&b'(') && !dotted => out.push_str(n),
+                _ => out.push_str(&text[start..i]),
+            }
+            continue;
+        } else {
+            i += 1;
+        }
+        out.push_str(&text[start..i.min(b.len())]);
+    }
+    out
+}
 
 /// What a value read out of the object is held to (§15.234).
 #[derive(Clone, Debug, PartialEq)]
@@ -151,19 +217,177 @@ fn dq(s: &str) -> String {
     format!("{s:?}")
 }
 
+/// The text of `s` between double quotes, as `dq` writes it, without the quotes.
+fn dq_inner(s: &str) -> String {
+    let q = dq(s);
+    q[1..q.len() - 1].to_string()
+}
+
+/// A path, or a sentence that names one, as a Python string. Where it is a path in an element
+/// (`order.lines[1].amount_usd`), an f-string that puts in the index `_i` of the element the
+/// comprehension is at, counted from 0 as the rule's own door counts it (§15.234, §15.324); a
+/// plain string otherwise.
+fn py_q(s: &str) -> String {
+    if !super::names_element(s) {
+        return dq(s);
+    }
+    let body: String = super::pieces(s)
+        .into_iter()
+        .map(|p| match p {
+            super::Piece::Text(t) => dq_inner(t).replace('{', "{{").replace('}', "}}"),
+            _ => "{_i}".to_string(),
+        })
+        .collect();
+    format!("f\"{body}\"")
+}
+
+/// The same as a template literal of TypeScript, the index `_i` put in as `${_i}`.
+fn ts_q(s: &str) -> String {
+    if !super::names_element(s) {
+        return dq(s);
+    }
+    let body: String = super::pieces(s)
+        .into_iter()
+        .map(|p| match p {
+            super::Piece::Text(t) => dq_inner(t).replace('`', "\\`").replace("${", "\\${"),
+            _ => "${_i}".to_string(),
+        })
+        .collect();
+    format!("`{body}`")
+}
+
+/// The same as a Ruby string, the index `i` put in as `#{i}`.
+fn rb_q(s: &str) -> String {
+    if !super::names_element(s) {
+        return dq(s);
+    }
+    let body: String = super::pieces(s)
+        .into_iter()
+        .map(|p| match p {
+            super::Piece::Text(t) => dq_inner(t).replace("#{", "\\#{"),
+            _ => "#{i}".to_string(),
+        })
+        .collect();
+    format!("\"{body}\"")
+}
+
+/// The `for` of a Python comprehension over the elements of `seq`: the index `_i` beside the
+/// element `_e` where an expression of `inner`, written for each element, names the element by it.
+fn py_for(seq: &str, inner: &[&str]) -> String {
+    if inner.iter().any(|t| t.contains("{_i}")) {
+        format!("for _i, _e in _enumerate({seq})")
+    } else {
+        format!("for _e in {seq}")
+    }
+}
+
+/// The parameters of a TypeScript arrow function over the elements of a collection: the element
+/// `_e`, and the index `_i` after it where an expression of `inner` names the element by it.
+fn ts_params(inner: &[&str]) -> &'static str {
+    if inner.iter().any(|t| t.contains("${_i}")) { "_e, _i" } else { "_e" }
+}
+
+/// Whether a Ruby block over the elements of a collection is handed the index `i` beside the
+/// element `e`: where an expression of `inner` names the element by it. The block is then one of
+/// `each_with_index`.
+fn rb_indexed(inner: &[&str]) -> bool {
+    inner.iter().any(|t| t.contains("#{i}"))
+}
+
 /// Whether `body` calls `name` (a whole name, not a part of a longer one).
 pub(super) fn calls(body: &str, name: &str) -> bool {
     let part = |c: char| c.is_alphanumeric() || c == '_';
     body.match_indices(&format!("{name}(")).any(|(i, _)| !body[..i].chars().next_back().is_some_and(part))
 }
 
-/// The path of the object a `where` and an `of` read a field of: `order.lines[]`.
+/// Whether TypeScript `text` reads the helper `name`: calls it, or hands it on as an argument
+/// (`JSON.parse(line, _exact)`), as a word of its own. Not a property of something (`.name`), nor
+/// the word after the mark, which is the rule's function's (§15.336), nor a key or a string.
+pub(super) fn ts_reads(text: &str, name: &str) -> bool {
+    let before = |c: char| c.is_alphanumeric() || matches!(c, '_' | '$' | '.') || c == super::clash::MARK;
+    text.match_indices(name)
+        .any(|(i, _)| !text[..i].chars().next_back().is_some_and(before) && matches!(text[i + name.len()..].chars().next(), Some('(' | ',' | ')')))
+}
+
+/// `text`, TypeScript, without the helpers of `names` nothing else in it reads, and without what
+/// only those read in turn (§15.342): `tsc --noUnusedLocals` refuses a function or a type nothing
+/// reads. Each is a `function` or a `type` at the head of a line, with the comment lines right
+/// over it; a function ends at the first `}` at the head of a line after it. Where one goes from
+/// between two blank lines, one of them goes with it.
+pub(super) fn ts_without_unread(text: &str, names: &[&str]) -> String {
+    let mut text = text.to_string();
+    loop {
+        let mut dropped = false;
+        for name in names {
+            let Some((start, end, function)) = ts_declared(&text, name) else { continue };
+            let rest = format!("{}{}", &text[..start], &text[end..]);
+            let read = if function {
+                ts_reads(&rest, name)
+            } else {
+                let part = |c: char| c.is_alphanumeric() || matches!(c, '_' | '$' | '.');
+                rest.match_indices(name).any(|(i, _)| !rest[..i].chars().next_back().is_some_and(part) && !rest[i + name.len()..].chars().next().is_some_and(part))
+            };
+            if !read {
+                ts_drop(&mut text, start, end);
+                dropped = true;
+            }
+        }
+        if !dropped {
+            return text;
+        }
+    }
+}
+
+/// `text`, TypeScript, without the helpers of `names`, read or not ([`ts_without_unread`]).
+pub(super) fn ts_without(text: &str, names: &[&str]) -> String {
+    let mut text = text.to_string();
+    for name in names {
+        if let Some((start, end, _)) = ts_declared(&text, name) {
+            ts_drop(&mut text, start, end);
+        }
+    }
+    text
+}
+
+/// Whether TypeScript `text` declares the helper `name` ([`ts_without_unread`]).
+pub(super) fn ts_declares(text: &str, name: &str) -> bool {
+    ts_declared(text, name).is_some()
+}
+
+/// Takes `start..end` out of `text`, and one of the blank lines around it where it stood between two.
+fn ts_drop(text: &mut String, start: usize, end: usize) {
+    let end = if text[..start].ends_with("\n\n") && text[end..].starts_with('\n') { end + 1 } else { end };
+    text.replace_range(start..end, "");
+}
+
+/// Where the helper `name` is declared in TypeScript `text` ([`ts_without_unread`]): from the first
+/// of the comment lines right over it to the end of its last line, and whether it is a function.
+fn ts_declared(text: &str, name: &str) -> Option<(usize, usize, bool)> {
+    let at_head = |i: usize| i == 0 || text[..i].ends_with('\n');
+    let (at, function) = [(format!("function {name}("), true), (format!("type {name} ="), false)]
+        .into_iter()
+        .find_map(|(head, function)| text.match_indices(&head).map(|(i, _)| i).find(|&i| at_head(i)).map(|i| (i, function)))?;
+    let end = if function { at + text[at..].find("\n}\n")? + 3 } else { at + text[at..].find('\n')? + 1 };
+    let mut start = at;
+    while start > 0 {
+        let line = text[..start - 1].rfind('\n').map_or(0, |n| n + 1);
+        let l = &text[line..start - 1];
+        if !(l.starts_with("//") || l.starts_with("/**") || l.starts_with(" *")) {
+            break;
+        }
+        start = line;
+    }
+    Some((start, end, function))
+}
+
+/// The path of the object a `where` and an `of` read a field of: `order.lines[1]`, the index of
+/// the element left open (`door::HERE`) for the generated code to put in (§15.324).
 pub(super) fn elem_at(p: &Proj) -> String {
-    format!("{}[]", p.shown)
+    format!("{}[{}]", p.shown, crate::door::HERE)
 }
 
 /// The path of the object the last step of `p`'s path is read from, and the steps before it are
-/// read from: `order` for `order.shipping.zone`, `order.lines[]` for a field of an element.
+/// read from: `order` for `order.shipping.zone`, `order.lines[1]` for a field of an element.
 pub(super) fn base_of(p: &Proj) -> String {
     let tail = format!(".{}", p.path.join("."));
     p.shown.strip_suffix(&tail).unwrap_or(&p.shown).to_string()
@@ -203,10 +427,10 @@ impl Gen<'_> {
 
     /// A value read out of the object `o` at the key `k`, `at` naming `o`, held to `kind` (Python).
     fn py_obj_at(&self, kind: &Kind, o: &str, k: &str, at: &str) -> String {
-        let (kq, aq) = (dq(k), dq(at));
+        let (kq, aq) = (dq(k), py_q(at));
         match kind {
             Kind::Int => format!("_int_at({o}, {kq}, {aq})"),
-            Kind::IntPb => format!("_int_pb(_at({o}, {kq}, {aq}), {})", dq(&format!("{at}.{k}"))),
+            Kind::IntPb => format!("_int_pb(_at({o}, {kq}, {aq}), {})", py_q(&format!("{at}.{k}"))),
             Kind::Bool => format!("_bool_at({o}, {kq}, {aq})"),
             Kind::Str => format!("_str_at({o}, {kq}, {aq})"),
             Kind::Date => format!("_date_at({o}, {kq}, {aq})"),
@@ -214,14 +438,14 @@ impl Gen<'_> {
             Kind::Enum(n) => format!(
                 "{}(_at({o}, {kq}, {aq}), {})",
                 self.py_enum_reader(n),
-                dq(&crate::door::not_in_enum(&format!("{at}.{k}"), n))
+                py_q(&crate::door::not_in_enum(&format!("{at}.{k}"), n))
             ),
         }
     }
 
     /// A value already read, `at` naming it, held to `kind` (Python).
     fn py_obj_of(&self, kind: &Kind, v: &str, at: &str) -> String {
-        let aq = dq(at);
+        let aq = py_q(at);
         match kind {
             Kind::Int => format!("_int_of({v}, {aq})"),
             Kind::IntPb => format!("_int_pb({v}, {aq})"),
@@ -229,7 +453,7 @@ impl Gen<'_> {
             Kind::Str => format!("_str_of({v}, {aq})"),
             Kind::Date => format!("_date_of({v}, {aq})"),
             Kind::Num => format!("_num_of({v}, {aq})"),
-            Kind::Enum(n) => format!("{}({v}, {})", self.py_enum_reader(n), dq(&crate::door::not_in_enum(at, n))),
+            Kind::Enum(n) => format!("{}({v}, {})", self.py_enum_reader(n), py_q(&crate::door::not_in_enum(at, n))),
         }
     }
 
@@ -246,6 +470,8 @@ impl Gen<'_> {
         taken.extend(super::PY_HELPERS.iter().map(|h| h.to_string()));
         taken.extend(self.f.groups.iter().map(|g| self.py_group(&g.name.text)));
         taken.extend(self.plain_from_params());
+        // the rule's functions and the parameters as Python names them, beside the reader (§15.336)
+        taken.extend(self.from_beside("python"));
         let mut readers: Vec<(String, String)> = Vec::new();
         for en in &self.c.enum_order {
             let ty = self.enum_type(en);
@@ -297,7 +523,7 @@ impl Gen<'_> {
                 let (j, n, z) = pp.elem.clone().unwrap_or((field.text.clone(), field.text.clone(), Zero::Str));
                 let kind = test_kind(cell, None, Some(&z));
                 let zero = pb_zero(&z, "False", &dq);
-                (kind.clone(), self.py_obj_of(&kind, &format!("_pget(_e, {}, {}, {zero}, {})", dq(&j), dq(&n), dq(&elem_at(p))), &format!("{}.{}", elem_at(p), field.text)))
+                (kind.clone(), self.py_obj_of(&kind, &format!("_pget(_e, {}, {}, {zero}, {})", dq(&j), dq(&n), py_q(&elem_at(p))), &format!("{}.{}", elem_at(p), field.text)))
             }
             None => {
                 let kind = test_kind(cell, p.test_kind.as_ref(), None);
@@ -314,7 +540,7 @@ impl Gen<'_> {
             (Some(_), Some((j, n, z))) => {
                 let kind = if matches!(p.ty, Ty::Date) { Kind::Date } else { Kind::IntPb };
                 let zero = pb_zero(z, "False", &dq);
-                self.py_obj_of(&kind, &format!("_pget(_e, {}, {}, {zero}, {})", dq(j), dq(n), dq(&elem_at(p))), &at)
+                self.py_obj_of(&kind, &format!("_pget(_e, {}, {}, {zero}, {})", dq(j), dq(n), py_q(&elem_at(p))), &at)
             }
             _ => {
                 let kind = if matches!(p.ty, Ty::Date) { Kind::Date } else { Kind::Int };
@@ -329,11 +555,11 @@ impl Gen<'_> {
             Some(pp) => {
                 let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("({}, {})", dq(j), dq(n))).collect();
                 let tuple = if steps.len() == 1 { format!("({},)", steps[0]) } else { format!("({})", steps.join(", ")) };
-                format!("_seq_of(_proto({root}, {tuple}, [], [], {}), {})", dq(&base_of(p)), dq(&p.shown))
+                format!("_seq_of(_proto({root}, {tuple}, [], [], {}), {})", py_q(&base_of(p)), py_q(&p.shown))
             }
             None => {
-                let (o, at) = self.walk_to_last(p, root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), dq(at)));
-                format!("_seq_at({o}, {}, {})", dq(p.path.last().map(String::as_str).unwrap_or("")), dq(&at))
+                let (o, at) = self.walk_to_last(p, root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), py_q(at)));
+                format!("_seq_at({o}, {}, {})", dq(p.path.last().map(String::as_str).unwrap_or("")), py_q(&at))
             }
         }
     }
@@ -354,17 +580,17 @@ impl Gen<'_> {
                         let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("({}, {})", dq(j), dq(n))).collect();
                         let tuple = if steps.len() == 1 { format!("({},)", steps[0]) } else { format!("({})", steps.join(", ")) };
                         let (absent, unset) = self.proto_defaults(p, pp, &lit, "None");
-                        let walk = format!("_proto({root}, {tuple}, {absent}, {unset}, {})", dq(&base_of(p)));
+                        let walk = format!("_proto({root}, {tuple}, {absent}, {unset}, {})", py_q(&base_of(p)));
                         if opt { format!("(None if {walk} is None else {})", self.py_obj_branded(&p.ty, self.py_obj_of(&kind, &walk, &p.shown))) } else { self.py_obj_branded(&p.ty, self.py_obj_of(&kind, &walk, &p.shown)) }
                     }
                     None if opt => {
                         let keys: Vec<String> = p.path.iter().map(|s| dq(s)).collect();
                         let tuple = if keys.len() == 1 { format!("({},)", keys[0]) } else { format!("({})", keys.join(", ")) };
-                        let walk = format!("_opt({root}, {tuple}, {})", dq(&base_of(p)));
+                        let walk = format!("_opt({root}, {tuple}, {})", py_q(&base_of(p)));
                         format!("(None if {walk} is None else {})", self.py_obj_branded(&p.ty, self.py_obj_of(&kind, &walk, &p.shown)))
                     }
                     None => {
-                        let (o, at) = self.walk_to_last(p, &root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), dq(at)));
+                        let (o, at) = self.walk_to_last(p, &root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), py_q(at)));
                         self.py_obj_branded(&p.ty, self.py_obj_at(&kind, &o, p.path.last().map(String::as_str).unwrap_or(""), &at))
                     }
                 };
@@ -373,17 +599,18 @@ impl Gen<'_> {
             ProjKind::Any(..) | ProjKind::All(..) | ProjKind::Count(_) | ProjKind::Sum(..) | ProjKind::Max(..) | ProjKind::Min(..) => {
                 let seq = self.py_obj_collection(p, &root);
                 let test = p.kind.test().map(|t| self.py_obj_test(p, t));
+                let t = test.clone().unwrap_or_else(|| "True".into());
                 match p.kind {
-                    ProjKind::Any(..) => format!("_any([{} for _e in {seq}])", test.unwrap_or_else(|| "True".into())),
-                    ProjKind::All(..) => format!("_all([{} for _e in {seq}])", test.unwrap_or_else(|| "True".into())),
+                    ProjKind::Any(..) => format!("_any([{t} {}])", py_for(&seq, &[&t])),
+                    ProjKind::All(..) => format!("_all([{t} {}])", py_for(&seq, &[&t])),
                     ProjKind::Count(None) => format!("_len({seq})"),
-                    ProjKind::Count(Some(_)) => format!("_sum(1 for _e in {seq} if {})", test.unwrap_or_else(|| "True".into())),
+                    ProjKind::Count(Some(_)) => format!("_sum(1 {} if {t})", py_for(&seq, &[&t])),
                     _ => {
                         let Some(of) = p.kind.of().cloned() else { return "0".into() };
                         let each = self.py_obj_of_field(p, &of);
                         let tail = match &test {
-                            Some(t) => format!(" for _e in {seq} if {t}"),
-                            None => format!(" for _e in {seq}"),
+                            Some(t) => format!(" {} if {t}", py_for(&seq, &[&each, t])),
+                            None => format!(" {}", py_for(&seq, &[&each])),
                         };
                         match p.kind {
                             ProjKind::Sum(..) => self.py_obj_branded(&p.ty, format!("_sum({each}{tail})")),
@@ -409,14 +636,15 @@ impl Gen<'_> {
                 let mut o = root;
                 let mut at: String = q.shown.split('.').next().unwrap_or_default().to_string();
                 for s in &q.path[..q.path.len().saturating_sub(1)] {
-                    o = format!("_at({o}, {}, {})", dq(s), dq(&at));
+                    o = format!("_at({o}, {}, {})", dq(s), py_q(&at));
                     at = format!("{at}.{s}");
                 }
-                format!("_seq_at({o}, {}, {})", dq(q.path.last().map(String::as_str).unwrap_or("")), dq(&at))
+                format!("_seq_at({o}, {}, {})", dq(q.path.last().map(String::as_str).unwrap_or("")), py_q(&at))
             }
         };
         let fields: Vec<String> = q.fields.iter().map(|p| format!("{}={}", self.elem_field_alias(q.s, &p.jp), self.py_obj_read(p))).collect();
-        format!("[{}({}) for _e in {seq}]", self.element_type(q.s), fields.join(", "))
+        let fields = fields.join(", ");
+        format!("[{}({fields}) {}]", self.element_type(q.s), py_for(&seq, &[&fields]))
     }
 
     /// The helpers the Python projection function calls, the ones `body` uses and what they call.
@@ -534,14 +762,16 @@ impl Gen<'_> {
         o
     }
 
-    /// The Python projection function itself, with no helper.
-    fn py_from_body(&self) -> String {
+    /// The Python projection function itself, with no helper: each helper `apart` names called
+    /// under its other name.
+    fn py_from_body(&self, apart: &BTreeMap<String, String>) -> String {
         let alias = pub_name(&self.f.name);
-        let mut o = format!("def {alias}_from({}) -> {}:\n    \"\"\"{}\"\"\"\n    return {alias}(\n", self.py_from_params().join(", "), self.py_ret(), self.proj_doc());
+        // the rule's function, marked while the module is written apart (§15.336)
+        let mut o = format!("def {alias}_from({}) -> {}:\n    \"\"\"{}\"\"\"\n    return {}(\n", self.py_from_params().join(", "), self.py_ret(), self.proj_doc(), self.fam(&alias));
         let projs = self.projections();
         for i in &self.f.inputs {
             let e = match projs.iter().find(|p| p.jp == i.name.text) {
-                Some(p) => self.py_obj_read(p),
+                Some(p) => rename_calls(&self.py_obj_read(p), apart, "python"),
                 None => pub_name(&i.name),
             };
             o.push_str(&format!("        {e},\n"));
@@ -549,7 +779,7 @@ impl Gen<'_> {
         let seqs = self.seq_projections("_e");
         for (s, el) in self.f.elements.iter().enumerate() {
             let e = match seqs.iter().find(|q| q.s == s) {
-                Some(q) => self.py_obj_sequence(q),
+                Some(q) => rename_calls(&self.py_obj_sequence(q), apart, "python"),
                 None => pub_name(&el.name),
             };
             o.push_str(&format!("        {e},\n"));
@@ -563,7 +793,7 @@ impl Gen<'_> {
         if !self.projects() {
             return String::new();
         }
-        let body = self.py_from_body();
+        let body = self.py_from_body(&BTreeMap::new());
         let mut o = String::new();
         if calls(&body, "_proto") {
             // A place on the way that is not an object is refused, as `_at` refuses it; one that
@@ -604,6 +834,13 @@ impl Gen<'_> {
         if calls(&body, "_smallest") {
             o.push_str("def _smallest(vs: list[int], empty: int) -> int:\n    return min(vs) if len(vs) > 0 else empty\n\n\n");
         }
+        // A helper a name of the rule's would meet is declared and called under another (§15.336).
+        let apart = self.from_apart("python");
+        if !apart.is_empty() {
+            o = rename_calls(&o, &apart, "python");
+            o.push_str(&self.py_from_body(&apart));
+            return o;
+        }
         o.push_str(&body);
         o
     }
@@ -612,24 +849,24 @@ impl Gen<'_> {
 
     /// A value read out of the object `o` at the key `k`, `at` naming `o`, held to `kind`.
     fn ts_obj_at(&self, kind: &Kind, o: &str, k: &str, at: &str) -> String {
-        let (kq, aq) = (dq(k), dq(at));
+        let (kq, aq) = (dq(k), ts_q(at));
         match kind {
             Kind::Int => format!("_intAt({o}, {kq}, {aq})"),
-            Kind::IntPb => format!("_intPb(_at({o}, {kq}, {aq}), {})", dq(&format!("{at}.{k}"))),
+            Kind::IntPb => format!("_intPb(_at({o}, {kq}, {aq}), {})", ts_q(&format!("{at}.{k}"))),
             Kind::Bool => format!("_boolAt({o}, {kq}, {aq})"),
             Kind::Str => format!("_strAt({o}, {kq}, {aq})"),
             Kind::Date => format!("_dateAt({o}, {kq}, {aq})"),
             Kind::Num => format!("_numAt({o}, {kq}, {aq})"),
             Kind::Enum(n) => {
                 let ty = self.read_enum_ty(n);
-                format!("(_enumOf(Object.values({ty}), _at({o}, {kq}, {aq}), {}) as {ty})", dq(&crate::door::not_in_enum(&format!("{at}.{k}"), n)))
+                format!("(_enumOf(Object.values({ty}), _at({o}, {kq}, {aq}), {}) as {ty})", ts_q(&crate::door::not_in_enum(&format!("{at}.{k}"), n)))
             }
         }
     }
 
     /// A value already read, `at` naming it, held to `kind` (TypeScript).
     fn ts_obj_of(&self, kind: &Kind, v: &str, at: &str) -> String {
-        let aq = dq(at);
+        let aq = ts_q(at);
         match kind {
             Kind::Int => format!("_intOf({v}, {aq})"),
             Kind::IntPb => format!("_intPb({v}, {aq})"),
@@ -639,7 +876,7 @@ impl Gen<'_> {
             Kind::Num => format!("_numOf({v}, {aq})"),
             Kind::Enum(n) => {
                 let ty = self.read_enum_ty(n);
-                format!("(_enumOf(Object.values({ty}), {v}, {}) as {ty})", dq(&crate::door::not_in_enum(at, n)))
+                format!("(_enumOf(Object.values({ty}), {v}, {}) as {ty})", ts_q(&crate::door::not_in_enum(at, n)))
             }
         }
     }
@@ -661,7 +898,7 @@ impl Gen<'_> {
                 let (j, n, z) = pp.elem.clone().unwrap_or((field.text.clone(), field.text.clone(), Zero::Str));
                 let kind = test_kind(cell, None, Some(&z));
                 let zero = pb_zero(&z, "false", &dq);
-                (kind.clone(), self.ts_obj_of(&kind, &format!("_pget(_e, {}, {}, {zero}, {})", dq(&j), dq(&n), dq(&elem_at(p))), &format!("{}.{}", elem_at(p), field.text)))
+                (kind.clone(), self.ts_obj_of(&kind, &format!("_pget(_e, {}, {}, {zero}, {})", dq(&j), dq(&n), ts_q(&elem_at(p))), &format!("{}.{}", elem_at(p), field.text)))
             }
             None => {
                 let kind = test_kind(cell, p.test_kind.as_ref(), None);
@@ -683,7 +920,7 @@ impl Gen<'_> {
             Some((j, n, z)) => {
                 let kind = if matches!(p.ty, Ty::Date) { Kind::Date } else { Kind::IntPb };
                 let zero = pb_zero(&z, "false", &dq);
-                self.ts_obj_of(&kind, &format!("_pget(_e, {}, {}, {zero}, {})", dq(&j), dq(&n), dq(&elem_at(p))), &at)
+                self.ts_obj_of(&kind, &format!("_pget(_e, {}, {}, {zero}, {})", dq(&j), dq(&n), ts_q(&elem_at(p))), &at)
             }
             None => {
                 let kind = if matches!(p.ty, Ty::Date) { Kind::Date } else { Kind::Int };
@@ -697,11 +934,11 @@ impl Gen<'_> {
         match &p.proto {
             Some(pp) => {
                 let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", dq(j), dq(n))).collect();
-                format!("_seqOf(_proto({root}, [{}], [], [], {}), {})", steps.join(", "), dq(&base_of(p)), dq(&p.shown))
+                format!("_seqOf(_proto({root}, [{}], [], [], {}), {})", steps.join(", "), ts_q(&base_of(p)), ts_q(&p.shown))
             }
             None => {
-                let (o, at) = self.walk_to_last(p, root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), dq(at)));
-                format!("_seqAt({o}, {}, {})", dq(p.path.last().map(String::as_str).unwrap_or("")), dq(&at))
+                let (o, at) = self.walk_to_last(p, root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), ts_q(at)));
+                format!("_seqAt({o}, {}, {})", dq(p.path.last().map(String::as_str).unwrap_or("")), ts_q(&at))
             }
         }
     }
@@ -719,17 +956,17 @@ impl Gen<'_> {
                         let lit = |z: &Zero| pb_zero(z, "false", &dq);
                         let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", dq(j), dq(n))).collect();
                         let (absent, unset) = self.proto_defaults(p, pp, &lit, "null");
-                        let walk = format!("_proto({root}, [{}], {absent}, {unset}, {})", steps.join(", "), dq(&base_of(p)));
+                        let walk = format!("_proto({root}, [{}], {absent}, {unset}, {})", steps.join(", "), ts_q(&base_of(p)));
                         let read = self.ts_obj_branded(&p.ty, self.ts_obj_of(&kind, &walk, &p.shown));
                         if opt { format!("({walk} == null ? null : {read})") } else { read }
                     }
                     None if opt => {
                         let keys: Vec<String> = p.path.iter().map(|s| dq(s)).collect();
-                        let walk = format!("_opt({root}, [{}], {})", keys.join(", "), dq(&base_of(p)));
+                        let walk = format!("_opt({root}, [{}], {})", keys.join(", "), ts_q(&base_of(p)));
                         format!("({walk} == null ? null : {})", self.ts_obj_branded(&p.ty, self.ts_obj_of(&kind, &walk, &p.shown)))
                     }
                     None => {
-                        let (o, at) = self.walk_to_last(p, &root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), dq(at)));
+                        let (o, at) = self.walk_to_last(p, &root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), ts_q(at)));
                         self.ts_obj_branded(&p.ty, self.ts_obj_at(&kind, &o, p.path.last().map(String::as_str).unwrap_or(""), &at))
                     }
                 }
@@ -742,16 +979,16 @@ impl Gen<'_> {
                     // Every element is tested, so that a value of the wrong kind after the one that
                     // settles it is refused here as in every other language.
                     // (`reduce` over `unknown[]` answers `unknown` to the type checker.)
-                    ProjKind::Any(..) => format!("({seq}.reduce((_a, _e) => ({}) || _a, false) as boolean)", t()),
-                    ProjKind::All(..) => format!("({seq}.reduce((_a, _e) => ({}) && _a, true) as boolean)", t()),
+                    ProjKind::Any(..) => format!("({seq}.reduce((_a, {}) => ({}) || _a, false) as boolean)", ts_params(&[&t()]), t()),
+                    ProjKind::All(..) => format!("({seq}.reduce((_a, {}) => ({}) && _a, true) as boolean)", ts_params(&[&t()]), t()),
                     ProjKind::Count(None) => format!("BigInt({seq}.length)"),
-                    ProjKind::Count(Some(_)) => format!("BigInt({seq}.filter((_e) => {}).length)", t()),
+                    ProjKind::Count(Some(_)) => format!("BigInt({seq}.filter(({}) => {}).length)", ts_params(&[&t()]), t()),
                     _ => {
                         let Some(of) = p.kind.of().cloned() else { return "0".into() };
                         let each = self.ts_obj_of_field(p, &of);
                         let vals = match &test {
-                            Some(c) => format!("{seq}.flatMap((_e) => ({c} ? [{each}] : []))"),
-                            None => format!("{seq}.map((_e) => {each})"),
+                            Some(c) => format!("{seq}.flatMap(({}) => ({c} ? [{each}] : []))", ts_params(&[c, &each])),
+                            None => format!("{seq}.map(({}) => {each})", ts_params(&[&each])),
                         };
                         match p.kind {
                             ProjKind::Sum(..) => self.ts_obj_branded(&p.ty, format!("{vals}.reduce((_s, _v) => _s + _v, 0n)")),
@@ -775,14 +1012,15 @@ impl Gen<'_> {
                 let mut o = root;
                 let mut at: String = q.shown.split('.').next().unwrap_or_default().to_string();
                 for s in &q.path[..q.path.len().saturating_sub(1)] {
-                    o = format!("_at({o}, {}, {})", dq(s), dq(&at));
+                    o = format!("_at({o}, {}, {})", dq(s), ts_q(&at));
                     at = format!("{at}.{s}");
                 }
-                format!("_seqAt({o}, {}, {})", dq(q.path.last().map(String::as_str).unwrap_or("")), dq(&at))
+                format!("_seqAt({o}, {}, {})", dq(q.path.last().map(String::as_str).unwrap_or("")), ts_q(&at))
             }
         };
         let fields: Vec<String> = q.fields.iter().map(|p| format!("{}: {}", self.elem_field_alias(q.s, &p.jp), self.ts_obj_read(p))).collect();
-        format!("{seq}.map((_e) => ({{ {} }}))", fields.join(", "))
+        let fields = fields.join(", ");
+        format!("{seq}.map(({}) => ({{ {fields} }}))", ts_params(&[&fields]))
     }
 
     /// The helpers the TypeScript projection function calls: the ones `body` uses and what they
@@ -894,24 +1132,33 @@ impl Gen<'_> {
         let fname = self.ident(&alias);
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 { self.ts_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
-        let mut body = format!("/** {} */\nexport function {fname}_from({}): {ret} {{\n  return {fname}(\n", self.proj_doc(), self.ts_from_params().join(", "));
+        let head = format!("/** {} */\nexport function {fname}_from({}): {ret} {{\n  return {}(\n", self.proj_doc(), self.ts_from_params().join(", "), self.fam(&fname));
+        // What the function passes on: a value read out of the object, or a parameter under the
+        // identifier it is bound under (§15.336).
         let projs = self.projections();
+        let mut args: Vec<String> = Vec::new();
         for i in &self.f.inputs {
-            let e = match projs.iter().find(|p| p.jp == i.name.text) {
+            args.push(match projs.iter().find(|p| p.jp == i.name.text) {
                 Some(p) => self.ts_obj_read(p),
-                None => pub_name(&i.name),
-            };
-            body.push_str(&format!("    {e},\n"));
+                None => self.held(&i.name),
+            });
         }
         let seqs = self.seq_projections("_e");
         for (s, el) in self.f.elements.iter().enumerate() {
-            let e = match seqs.iter().find(|q| q.s == s) {
+            args.push(match seqs.iter().find(|q| q.s == s) {
                 Some(q) => self.ts_obj_sequence(q),
-                None => pub_name(&el.name),
-            };
-            body.push_str(&format!("    {e},\n"));
+                None => self.held(&el.name),
+            });
         }
-        body.push_str("  );\n}\n");
+        let lines = |apart: &BTreeMap<String, String>| -> String {
+            let mut b = head.clone();
+            for e in &args {
+                b.push_str(&format!("    {},\n", rename_calls(e, apart, "typescript")));
+            }
+            b.push_str("  );\n}\n");
+            b
+        };
+        let body = lines(&BTreeMap::new());
         let mut o = String::new();
         // The caller's object is read, never named: a type for it would be a domain object
         // model, and this tool does not make one (§15-6).
@@ -969,6 +1216,13 @@ impl Gen<'_> {
                 ));
             }
         }
+        // A helper a name of the rule's would meet is declared and called under another (§15.336).
+        let apart = self.from_apart("typescript");
+        if !apart.is_empty() {
+            o = rename_calls(&o, &apart, "typescript");
+            o.push_str(&lines(&apart));
+            return o;
+        }
         o.push_str(&body);
         o
     }
@@ -977,10 +1231,10 @@ impl Gen<'_> {
 
     /// A value read out of the object `o` at the key `k`, `at` naming `o`, held to `kind` (Ruby).
     fn rb_obj_at(&self, kind: &Kind, o: &str, k: &str, at: &str) -> String {
-        let (kq, aq) = (dq(k), dq(at));
+        let (kq, aq) = (dq(k), rb_q(at));
         match kind {
             Kind::Int => format!("_int_at({o}, {kq}, {aq})"),
-            Kind::IntPb => format!("_int_pb(_at({o}, {kq}, {aq}), {})", dq(&format!("{at}.{k}"))),
+            Kind::IntPb => format!("_int_pb(_at({o}, {kq}, {aq}), {})", rb_q(&format!("{at}.{k}"))),
             Kind::Bool => format!("_bool_at({o}, {kq}, {aq})"),
             Kind::Str => format!("_str_at({o}, {kq}, {aq})"),
             Kind::Date => format!("_date_at({o}, {kq}, {aq})"),
@@ -988,14 +1242,14 @@ impl Gen<'_> {
             Kind::Enum(n) => format!(
                 "_enum_of({}::ALL, _at({o}, {kq}, {aq}), {})",
                 super::rb_const(&self.read_enum_ty(n)),
-                dq(&crate::door::not_in_enum(&format!("{at}.{k}"), n))
+                rb_q(&crate::door::not_in_enum(&format!("{at}.{k}"), n))
             ),
         }
     }
 
     /// A value already read, `at` naming it, held to `kind` (Ruby).
     fn rb_obj_of(&self, kind: &Kind, v: &str, at: &str) -> String {
-        let aq = dq(at);
+        let aq = rb_q(at);
         match kind {
             Kind::Int => format!("_int_of({v}, {aq})"),
             Kind::IntPb => format!("_int_pb({v}, {aq})"),
@@ -1003,7 +1257,7 @@ impl Gen<'_> {
             Kind::Str => format!("_str_of({v}, {aq})"),
             Kind::Date => format!("_date_of({v}, {aq})"),
             Kind::Num => format!("_num_of({v}, {aq})"),
-            Kind::Enum(n) => format!("_enum_of({}::ALL, {v}, {})", super::rb_const(&self.read_enum_ty(n)), dq(&crate::door::not_in_enum(at, n))),
+            Kind::Enum(n) => format!("_enum_of({}::ALL, {v}, {})", super::rb_const(&self.read_enum_ty(n)), rb_q(&crate::door::not_in_enum(at, n))),
         }
     }
 
@@ -1016,7 +1270,7 @@ impl Gen<'_> {
                 let (j, n, z) = pp.elem.clone().unwrap_or((field.text.clone(), field.text.clone(), Zero::Str));
                 let kind = test_kind(cell, None, Some(&z));
                 let zero = pb_zero(&z, "false", &dq);
-                (kind.clone(), self.rb_obj_of(&kind, &format!("_pget(e, {}, {}, {zero}, {})", dq(&j), dq(&n), dq(&elem_at(p))), &format!("{}.{}", elem_at(p), field.text)))
+                (kind.clone(), self.rb_obj_of(&kind, &format!("_pget(e, {}, {}, {zero}, {})", dq(&j), dq(&n), rb_q(&elem_at(p))), &format!("{}.{}", elem_at(p), field.text)))
             }
             None => {
                 let kind = test_kind(cell, p.test_kind.as_ref(), None);
@@ -1033,7 +1287,7 @@ impl Gen<'_> {
             Some((j, n, z)) => {
                 let kind = if matches!(p.ty, Ty::Date) { Kind::Date } else { Kind::IntPb };
                 let zero = pb_zero(&z, "false", &dq);
-                self.rb_obj_of(&kind, &format!("_pget(e, {}, {}, {zero}, {})", dq(&j), dq(&n), dq(&elem_at(p))), &at)
+                self.rb_obj_of(&kind, &format!("_pget(e, {}, {}, {zero}, {})", dq(&j), dq(&n), rb_q(&elem_at(p))), &at)
             }
             None => {
                 let kind = if matches!(p.ty, Ty::Date) { Kind::Date } else { Kind::Int };
@@ -1047,11 +1301,11 @@ impl Gen<'_> {
         match &p.proto {
             Some(pp) => {
                 let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", dq(j), dq(n))).collect();
-                format!("_seq_of(_proto({root}, [{}], Array.new, Array.new, {}), {})", steps.join(", "), dq(&base_of(p)), dq(&p.shown))
+                format!("_seq_of(_proto({root}, [{}], Array.new, Array.new, {}), {})", steps.join(", "), rb_q(&base_of(p)), rb_q(&p.shown))
             }
             None => {
-                let (o, at) = self.walk_to_last(p, root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), dq(at)));
-                format!("_seq_at({o}, {}, {})", dq(p.path.last().map(String::as_str).unwrap_or("")), dq(&at))
+                let (o, at) = self.walk_to_last(p, root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), rb_q(at)));
+                format!("_seq_at({o}, {}, {})", dq(p.path.last().map(String::as_str).unwrap_or("")), rb_q(&at))
             }
         }
     }
@@ -1072,17 +1326,17 @@ impl Gen<'_> {
                         };
                         let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", dq(j), dq(n))).collect();
                         let (absent, unset) = self.proto_defaults(p, pp, &lit, "nil");
-                        let walk = format!("_proto({root}, [{}], {absent}, {unset}, {})", steps.join(", "), dq(&base_of(p)));
+                        let walk = format!("_proto({root}, [{}], {absent}, {unset}, {})", steps.join(", "), rb_q(&base_of(p)));
                         let read = self.rb_obj_of(&kind, &walk, &p.shown);
                         if opt { format!("({walk}.nil? ? nil : {read})") } else { read }
                     }
                     None if opt => {
                         let keys: Vec<String> = p.path.iter().map(|s| dq(s)).collect();
-                        let walk = format!("_opt({root}, [{}], {})", keys.join(", "), dq(&base_of(p)));
+                        let walk = format!("_opt({root}, [{}], {})", keys.join(", "), rb_q(&base_of(p)));
                         format!("({walk}.nil? ? nil : {})", self.rb_obj_of(&kind, &walk, &p.shown))
                     }
                     None => {
-                        let (o, at) = self.walk_to_last(p, &root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), dq(at)));
+                        let (o, at) = self.walk_to_last(p, &root, &|o, k, at| format!("_at({o}, {}, {})", dq(k), rb_q(at)));
                         self.rb_obj_at(&kind, &o, p.path.last().map(String::as_str).unwrap_or(""), &at)
                     }
                 }
@@ -1091,18 +1345,39 @@ impl Gen<'_> {
                 let seq = self.rb_obj_collection(p, &root);
                 let test = p.kind.test().map(|t| self.rb_obj_test(p, t));
                 let t = || test.clone().unwrap_or_else(|| "true".into());
+                // The collection a block goes over, and the block's parameters after `reduce`'s
+                // accumulator and without one: with the index `i` beside the element where the
+                // block names the element by it.
+                let over = |inner: &[&str]| -> (String, &'static str, &'static str) {
+                    if rb_indexed(inner) { (format!("{seq}.each_with_index"), "a, (e, i)", "e, i") } else { (seq.clone(), "a, e", "e") }
+                };
                 match p.kind {
                     // Every element is tested, as in every other language.
-                    ProjKind::Any(..) => format!("{seq}.reduce(false) {{ |a, e| ({}) || a }}", t()),
-                    ProjKind::All(..) => format!("{seq}.reduce(true) {{ |a, e| ({}) && a }}", t()),
+                    ProjKind::Any(..) => {
+                        let (seq, ps, _) = over(&[&t()]);
+                        format!("{seq}.reduce(false) {{ |{ps}| ({}) || a }}", t())
+                    }
+                    ProjKind::All(..) => {
+                        let (seq, ps, _) = over(&[&t()]);
+                        format!("{seq}.reduce(true) {{ |{ps}| ({}) && a }}", t())
+                    }
                     ProjKind::Count(None) => format!("{seq}.length"),
-                    ProjKind::Count(Some(_)) => format!("{seq}.count {{ |e| {} }}", t()),
+                    ProjKind::Count(Some(_)) => {
+                        let (seq, _, ps) = over(&[&t()]);
+                        format!("{seq}.count {{ |{ps}| {} }}", t())
+                    }
                     _ => {
                         let Some(of) = p.kind.of().cloned() else { return "0".into() };
                         let each = self.rb_obj_of_field(p, &of);
                         let vals = match &test {
-                            Some(c) => format!("{seq}.flat_map {{ |e| {c} ? [{each}] : [] }}"),
-                            None => format!("{seq}.map {{ |e| {each} }}"),
+                            Some(c) => {
+                                let (seq, _, ps) = over(&[c, &each]);
+                                format!("{seq}.flat_map {{ |{ps}| {c} ? [{each}] : [] }}")
+                            }
+                            None => {
+                                let (seq, _, ps) = over(&[&each]);
+                                format!("{seq}.map {{ |{ps}| {each} }}")
+                            }
                         };
                         match p.kind {
                             ProjKind::Sum(..) => format!("{vals}.sum"),
@@ -1127,14 +1402,19 @@ impl Gen<'_> {
                 let mut o = root;
                 let mut at: String = q.shown.split('.').next().unwrap_or_default().to_string();
                 for s in &q.path[..q.path.len().saturating_sub(1)] {
-                    o = format!("_at({o}, {}, {})", dq(s), dq(&at));
+                    o = format!("_at({o}, {}, {})", dq(s), rb_q(&at));
                     at = format!("{at}.{s}");
                 }
-                format!("_seq_at({o}, {}, {})", dq(q.path.last().map(String::as_str).unwrap_or("")), dq(&at))
+                format!("_seq_at({o}, {}, {})", dq(q.path.last().map(String::as_str).unwrap_or("")), rb_q(&at))
             }
         };
         let fields: Vec<String> = q.fields.iter().map(|p| self.rb_obj_read(p)).collect();
-        format!("{seq}.map {{ |e| {}.new({}) }}", self.element_type(q.s), fields.join(", "))
+        let fields = fields.join(", ");
+        if rb_indexed(&[&fields]) {
+            format!("{seq}.each_with_index.map {{ |e, i| {}.new({fields}) }}", self.element_type(q.s))
+        } else {
+            format!("{seq}.map {{ |e| {}.new({fields}) }}", self.element_type(q.s))
+        }
     }
 
     /// The names of the Ruby helpers `body` calls and the ones they call, in the order written.
@@ -1226,14 +1506,17 @@ impl Gen<'_> {
 
     /// The signatures of the Ruby projection method's helpers, for the module's `.rbs`.
     pub(super) fn rbs_from_helpers(&self) -> String {
-        let body = self.rb_from_body();
+        let body = self.rb_from_body(&BTreeMap::new());
+        // under the names the methods are declared under (§15.336)
+        let apart = self.from_apart("ruby");
+        let named = |n: &str| apart.get(n).cloned().unwrap_or_else(|| n.to_string());
         let mut o = String::new();
         if calls(&body, "_proto") {
-            o.push_str("  private def self._proto: (untyped, Array[[String, String]], untyped, untyped, String) -> untyped\n");
+            o.push_str(&format!("  private def self.{}: (untyped, Array[[String, String]], untyped, untyped, String) -> untyped\n", named("_proto")));
         }
         let helpers = self.rb_from_helpers(&body);
         if calls(&helpers, "_days") {
-            o.push_str("  private def self._days: (String) -> Integer\n");
+            o.push_str(&format!("  private def self.{}: (String) -> Integer\n", named("_days")));
         }
         for n in Self::rb_from_wanted(&body) {
             let sig = match n {
@@ -1253,29 +1536,31 @@ impl Gen<'_> {
                 "_enum_of" => "(Array[untyped], untyped, String) -> untyped",
                 _ => continue,
             };
-            o.push_str(&format!("  private def self.{n}: {sig}\n"));
+            o.push_str(&format!("  private def self.{}: {sig}\n", named(n)));
         }
         o
     }
 
-    /// The Ruby projection method itself, with no helper.
-    fn rb_from_body(&self) -> String {
+    /// The Ruby projection method itself, with no helper: each helper `apart` names called under
+    /// its other name.
+    fn rb_from_body(&self, apart: &BTreeMap<String, String>) -> String {
         let alias = pub_name(&self.f.name);
         let fname = self.ident(&alias);
-        let mut o = format!("  # {}\n  def self.{fname}_from({})\n    {fname}(\n", self.proj_doc(), self.plain_from_params().join(", "));
+        let mut o = format!("  # {}\n  def self.{fname}_from({})\n    {}(\n", self.proj_doc(), self.plain_from_params().join(", "), self.fam(&fname));
+        // a parameter, under the identifier it is bound under (§15.336)
         let projs = self.projections();
         let mut args: Vec<String> = Vec::new();
         for i in &self.f.inputs {
             args.push(match projs.iter().find(|p| p.jp == i.name.text) {
-                Some(p) => self.rb_obj_read(p),
-                None => pub_name(&i.name),
+                Some(p) => rename_calls(&self.rb_obj_read(p), apart, "ruby"),
+                None => self.held(&i.name),
             });
         }
         let seqs = self.seq_projections("e");
         for (s, el) in self.f.elements.iter().enumerate() {
             args.push(match seqs.iter().find(|q| q.s == s) {
-                Some(q) => self.rb_obj_sequence(q),
-                None => pub_name(&el.name),
+                Some(q) => rename_calls(&self.rb_obj_sequence(q), apart, "ruby"),
+                None => self.held(&el.name),
             });
         }
         for a in &args {
@@ -1290,7 +1575,7 @@ impl Gen<'_> {
         if !self.projects() {
             return String::new();
         }
-        let body = self.rb_from_body();
+        let body = self.rb_from_body(&BTreeMap::new());
         let mut o = String::new();
         if calls(&body, "_proto") {
             // A place on the way that is not an object is refused, as `_at` refuses it; one that
@@ -1323,7 +1608,61 @@ impl Gen<'_> {
             );
         }
         o.push_str(&helpers);
+        // A helper a name of the rule's would meet is declared and called under another (§15.336).
+        let apart = self.from_apart("ruby");
+        if !apart.is_empty() {
+            o = rename_calls(&o, &apart, "ruby");
+            o.push_str(&self.rb_from_body(&apart));
+            return o;
+        }
         o.push_str(&body);
         o
+    }
+
+    /// The names the module of `lang` holds at its top beside the projection function's helpers,
+    /// which a caller reads: the rule's functions and its groups' constants, and, where a parameter
+    /// hides a function of the module's inside the function, the function's parameters.
+    fn from_beside(&self, lang: &str) -> Vec<String> {
+        let id = if lang == "python" { pub_name(&self.f.name) } else { self.ident(&pub_name(&self.f.name)) };
+        let mut out: Vec<String> = vec![id.clone(), format!("{id}_traced"), format!("{id}_record"), format!("{id}_from"), self.chances_name(lang), self.walked_fn(lang)];
+        match lang {
+            "python" => {
+                out.extend(self.f.groups.iter().map(|g| self.py_group(&g.name.text)));
+                out.extend(self.proj_params());
+                out.extend(self.proj_rest().iter().map(|i| pub_name(&i.name)));
+                out.extend(self.proj_seq_rest().into_iter().map(|s| pub_name(&self.f.elements[s].name)));
+            }
+            // Ruby calls a method with `(` whatever a local of its name holds.
+            "ruby" => {}
+            _ => {
+                out.extend(self.f.groups.iter().map(|g| format!("_{}", self.ident(&g.name.text))));
+                out.extend(self.plain_from_params());
+            }
+        }
+        out
+    }
+
+    /// Each helper of the projection function of `lang` whose name one of the names beside it has
+    /// (`from_beside`), with the name it is declared and called under instead: `_` after it, as
+    /// many as it takes (§15.336). The helpers are the code's own, which no caller reads.
+    fn from_apart(&self, lang: &str) -> BTreeMap<String, String> {
+        let mut out = BTreeMap::new();
+        if !self.projects() {
+            return out;
+        }
+        let beside = self.from_beside(lang);
+        let helpers: &[&str] = match lang {
+            "python" => PY_FROM_HELPERS,
+            "ruby" => RB_FROM_HELPERS,
+            _ => TS_FROM_HELPERS,
+        };
+        for h in helpers.iter().filter(|h| beside.iter().any(|b| b == *h)) {
+            let mut n = format!("{h}_");
+            while beside.contains(&n) || helpers.contains(&n.as_str()) || out.values().any(|v: &String| *v == n) {
+                n.push('_');
+            }
+            out.insert(h.to_string(), n);
+        }
+        out
     }
 }

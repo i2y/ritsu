@@ -1,0 +1,21 @@
+rule 返金の手数料(refund_fee) v1
+description "返品の戻し方で決まる返金の手数料。yuen affected の試験のために書いた。店の部門が、自分のファイルから戻し方を足す"
+
+enum 戻し方(way) = 郵送(post) "郵送" | 窓口(counter) "窓口"  open
+
+inputs
+  戻し方(way) : 戻し方
+
+outputs
+  手数料(fee) : number  round down(1)
+
+table 手数料(fee) open
+policy unique
+| 戻し方 | -> 手数料 : number |
+| 郵送   | 5                  |
+| 窓口   | 0                  |
+
+examples
+| 戻し方 | -> 手数料 |
+| 郵送   | 5         |
+| 窓口   | 0         |

@@ -46,12 +46,14 @@ fn the_error(src: &str, rel: &str, lang: Lang) -> (rulec::diag::Diag, rulec::jso
     })
 }
 
-/// The input a note hands over, `name = value, …`, as numbers.
+/// The input a note hands over, `name = value, …`, as numbers. The value may carry its unit
+/// (`11GBP`, `11円`), which the number is read without.
 fn input_of(note: &str) -> Vec<(String, i128)> {
     note.split(", ")
         .map(|p| {
             let (n, v) = p.split_once(" = ").unwrap_or_else(|| panic!("not `name = value`: {p}"));
-            (n.to_string(), v.parse().unwrap_or_else(|_| panic!("not a whole number: {v}")))
+            let n_part: String = v.chars().take_while(|c| c.is_ascii_digit() || *c == '-' || *c == '_').collect();
+            (n.to_string(), n_part.parse().unwrap_or_else(|_| panic!("not a whole number: {v}")))
         })
         .collect()
 }
@@ -73,7 +75,7 @@ fn a_gap_between_whole_units_is_e101_with_the_input_behind_it() {
             let input = d.notes.iter().find_map(|n| n.strip_prefix(said)).unwrap_or_else(|| panic!("{rel}: no input behind the example: {:?}", d.notes));
             assert_eq!(input_of(input), [(amount.to_string(), 11)], "{rel}");
             let fix = json.get("fix").and_then(|f| f.get("text")).and_then(|t| t.as_str());
-            assert_eq!(fix, Some(format!("| >1{unit} <2{unit} | false |").as_str()), "{rel}");
+            assert_eq!(fix, Some(format!("| >1{unit} <2{unit} | ? |").as_str()), "{rel}");
         }
     }
     // on the table's heading, line 12 of both
@@ -124,7 +126,8 @@ fn the_generated_code_stops_on_the_input_check_hands_over() {
         assert_eq!(said, format!("10 False\n{at} stopped: unreachable: completeness was statically checked by rulec\n20 True\n"), "{rel}");
 
         // The row `check` suggests, added under the header, makes the rule pass and the code answer.
-        let row = json.get("fix").and_then(|f| f.get("text")).and_then(|t| t.as_str()).unwrap().to_string();
+        // Its `?` is where a person settles the answer; here the row answers what the row under it does.
+        let row = json.get("fix").and_then(|f| f.get("text")).and_then(|t| t.as_str()).unwrap().replace(" ? ", " false ");
         let mut lines: Vec<&str> = src.lines().collect();
         let head = lines.iter().position(|l| l.starts_with("| ") && l.contains("->")).unwrap();
         lines.insert(head + 1, &row);

@@ -1,0 +1,35 @@
+gate claims v1
+description "claims.gate saying a value of the flow is an attribute that points to an entity"
+namespace Claims
+
+use rule who_pays from "../../examples/claims/rules/who_pays.rule"
+use openapi desk from "../../examples/claims/api/desk.json"
+
+principal Customer
+  description "Whoever made the claim"
+
+workflow pay from "../../examples/claims/flows/pay.flow"
+  description "Pays a claim the rule leaves to the desk, and hands the others to a person"
+  resource Claim from claim_id
+    amount = amount
+    claimant = claim_id
+
+resource Claim
+  description "A claim"
+  attributes
+    amount : money[JPY]  range >=1JPY <=10_000JPY
+    claimant : Customer
+
+action pay_claim
+  description "Pay a claim"
+  guards desk payClaim
+  principal Workflow
+  resource Claim from claimId
+  context
+    payer = who_pays(amount: resource.amount).who
+
+permit the_workflow_pays_the_desks_claims
+  description "The workflow pays the claims the rule leaves to the desk"
+  principal is workflow pay
+  action pay_claim
+  when payer is desk

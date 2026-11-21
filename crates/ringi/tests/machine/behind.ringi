@@ -1,0 +1,76 @@
+request behind v1 "Tool request"
+description "A stage due by the head office's days, in Tokyo's time, and reminded by a plant's days five hours behind UTC (fictional rules): each calendar counts its business days from its own day of an event, read in its offset, and rings its clocks at their times there. The end of a pause and of the requester's turn are counted in the plant's days"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+use calendar west from "west.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  decide  manager
+
+who
+  manager = manager of requester
+
+every stage
+  due in 2 business days in office at end of day
+  remind after 1 business day in west at 09:00
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+  send back      to the requester, at most 2 times
+  resubmit       within 2 business days in west
+  pause          at most 3 business days in west
+
+# submitted at 10:00 on Monday in Tokyo, 20:00 on Sunday at the plant. The reminder is counted from
+# the plant's Sunday, one business day to Monday, and rings at 09:00 there: 23:00 on Monday in
+# Tokyo, after a comment at noon. Sent back at 11:00 on Wednesday in Tokyo, still Tuesday at the
+# plant, the request is made again within two of the plant's business days from that Tuesday, by
+# the end of Thursday there: 14:00 on Friday in Tokyo
+scenario two_offsets
+  requester e1201
+  form what = "A drill"
+| at               | event     | by    | comment        | -> stage | status         |
+| 2026-11-16 10:00 | submit    | e1201 |                | decide   | in progress    |
+| 2026-11-16 12:00 | comment   | e1101 | "Which drill?" | decide   | in progress    |
+| 2026-11-16 23:00 | remind    |       |                | decide   | in progress    |
+| 2026-11-18 11:00 | send back | e1101 |                |          | with requester |
+| 2026-11-20 13:00 | resubmit  | e1201 |                | decide   | in progress    |
+| 2026-11-20 23:00 | remind    |       |                | decide   | in progress    |
+| 2026-11-24 10:00 | approve   | e1101 |                |          | approved       |
+
+# paused at 11:00 on Monday in Tokyo, still Sunday at the plant, for the three business days the
+# plant allows, counted from that Sunday: to the end of Wednesday there, 14:00 on Thursday in Tokyo.
+# Resumed an hour before, the three days are used, and the clocks count from three days after the
+# stage started: the reminder from the plant's Wednesday, at 09:00 on Thursday there, 23:00 in Tokyo
+scenario paused_in_the_plants_days
+  requester e1201
+  form what = "A lathe"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | decide   | in progress |
+| 2026-11-16 11:00 | pause   | e1101 | decide   | paused      |
+| 2026-11-19 13:00 | resume  | e1101 | decide   | in progress |
+| 2026-11-19 23:00 | remind  |       | decide   | in progress |
+| 2026-11-20 10:00 | approve | e1101 |          | approved    |
+
+# paused at 11:00 on Monday 30 November in Tokyo, still Sunday at the plant, for the three business
+# days the plant allows. The plant closes on Wednesday 2 December for its inventory, and the head
+# office is open that day, so the three days are the plant's Monday, Tuesday and Thursday: to the end
+# of its Thursday, 14:00 on Friday in Tokyo. Resumed an hour before, the three days are used, and
+# they take four days of the plant's calendar: every clock counts from four days after the stage
+# started, the head office's deadline too, as the clocks of a stage submitted four days later. The
+# reminder is counted from the plant's Thursday, at 09:00 on Friday there, 23:00 in Tokyo; the
+# deadline is the end of Tuesday 8 December, a day later than three days would make it
+scenario paused_over_the_plants_inventory
+  requester e1201
+  form what = "A press"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-30 10:00 | submit  | e1201 | decide   | in progress |
+| 2026-11-30 11:00 | pause   | e1101 | decide   | paused      |
+| 2026-12-04 13:00 | resume  | e1101 | decide   | in progress |
+| 2026-12-04 23:00 | remind  |       | decide   | in progress |
+| 2026-12-07 10:00 | approve | e1101 |          | approved    |

@@ -183,15 +183,17 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
                 }
                 Contract::Proto(pf, ps) => {
                     let (svc, m) = gd.operation.rsplit_once('/').unwrap_or(("", gd.operation.as_str()));
-                    let svc_short = svc.rsplit('.').next().unwrap_or(svc);
-                    let hit = pf.services.iter().find(|s| s.name == svc_short || pf.full(&s.name) == svc).and_then(|s| s.methods.iter().find(|x| x.name == m).map(|x| (s, x)));
+                    // a service by its name, or by its name in the file's package: one of another
+                    // package is not this file's, whatever its last name
+                    let svc = svc.strip_prefix('.').unwrap_or(svc);
+                    let hit = pf.services.iter().find(|s| s.name == svc || pf.full(&s.name) == svc).and_then(|s| s.methods.iter().find(|x| x.name == m).map(|x| (s, x)));
                     match hit {
                         // a service by its name in the file's package
                         Some((s, x)) => (Name::file(Tool::Proto, rel.clone()).with("service", s.name.clone()).with("method", x.name.clone()), Found::Method { file: pf, method: x, rel, protos: ps }),
                         None => {
                             let names: Vec<Text> = pf.services.iter().flat_map(|s| s.methods.iter().map(move |x| operation_word(&format!("{}/{}", s.name, x.name)))).take(12).collect();
                             let l = Text::list(&names);
-                            let items: Vec<(&str, &str)> = if svc.is_empty() { vec![("method", m)] } else { vec![("service", svc_short), ("method", m)] };
+                            let items: Vec<(&str, &str)> = if svc.is_empty() { vec![("method", m)] } else { vec![("service", svc), ("method", m)] };
                             diags.push(at("E202", g, gd.line, has_no(rel, &items)).note(tr!("メソッドは {} です。", "Its methods are {}.", l.ja; l.en)));
                             continue;
                         }
@@ -268,10 +270,11 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
     (diags, references)
 }
 
+/// The message an rpc takes, among the messages of the file: its name found as protobuf finds a
+/// name written in the service, whose scope is the package (`ritsu_proto::resolve_name`, which a
+/// field's type is found by too).
 fn message_of<'a>(f: &'a ritsu_proto::ProtoFile, written: &str) -> Option<&'a ritsu_proto::Message> {
-    let short = written.trim_start_matches('.');
-    let short = short.strip_prefix(&format!("{}.", f.package)).unwrap_or(short);
-    f.message(short)
+    ritsu_proto::resolve_name(&f.package, written, |full| f.messages.iter().find(|m| f.full(&m.name) == full))
 }
 
 /// An end of a range a schema writes, as the integer it lets through: `exclusiveMinimum: 0` is 1.
@@ -387,11 +390,19 @@ fn input_fits(g: &Gate, inp: &Field, reference: &Name, f: &Found) -> Option<Diag
             }
             schema_fits(g, inp, schema).map(e203)
         }
-        Found::Method { file, method, .. } => {
+        Found::Method { file, method, rel, protos } => {
             let msg = message_of(file, &method.input)?;
             let Some(fld) = msg.fields.iter().find(|x| x.name == *name || x.json() == *name || x.name == inp.named.alias) else {
                 return Some(at("E203", g, line, tr!("input `{name}` は {r} のリクエストのフィールドにありません", "The input `{name}` is not a field of the request of {r}")));
             };
+            // a list is not one value, whatever its elements are: rulec's `shape` (E120) and the
+            // check across the languages stop it too
+            if fld.label == ritsu_proto::Label::Repeated {
+                return Some(e203(tr!(
+                    "フィールドは `repeated` で値の並びですが、input は一つの値を受け取ります",
+                    "the field is `repeated`, a list of values, and the input takes one value"
+                )));
+            }
             let ints = ["int32", "int64", "uint32", "uint64", "sint32", "sint64", "fixed32", "fixed64", "sfixed32", "sfixed64"];
             let why = match (&inp.ty, &fld.ty) {
                 (FieldType::Num { lo, hi, unit, .. }, ritsu_proto::Type::Scalar(s)) if ints.contains(&s.as_str()) => {
@@ -402,7 +413,29 @@ fn input_fits(g: &Gate, inp: &Field, reference: &Name, f: &Found) -> Option<Diag
                 }
                 (FieldType::Num { .. }, ritsu_proto::Type::Scalar(s)) => Some(tr!("フィールドは `{s}` で、整数ではありません", "the field is `{s}`, not an integer")),
                 (FieldType::Bool, ritsu_proto::Type::Scalar(s)) if s == "bool" => None,
-                (FieldType::Enum(_), ritsu_proto::Type::Named(t)) if file.enumeration(t.trim_start_matches('.')).is_some() || file.enums.iter().any(|e| t.ends_with(&e.name)) => None,
+                (FieldType::Enum(e), ritsu_proto::Type::Named(t)) => match protos.resolve(rel, &file.full(&msg.name), t) {
+                    // the enum the name comes to, as protobuf resolves it from the message: every
+                    // value the field lets through is one of the input's enum
+                    ritsu_proto::Resolved::Found(s) if s.is_enum => {
+                        let en = &g.enums[*e];
+                        let pe = protos.files.get(&s.file).and_then(|x| x.enums.iter().find(|x| x.name == s.name))?;
+                        // read as rulec's `import proto` reads it (rulec's DESIGN §15.59), each
+                        // value taken by any of its names
+                        let missing: Vec<Text> = ritsu_proto::validate::enum_names(pe, &fld.rules.enum_values)
+                            .into_iter()
+                            .filter(|v| !v.names.iter().any(|n| en.values.iter().any(|x| x.is(&n.read))))
+                            .map(|v| Text::same(v.names.iter().map(|n| n.read.as_str()).collect::<Vec<_>>().join(" / ")))
+                            .collect();
+                        (!missing.is_empty()).then(|| {
+                            let l = Text::list(&missing);
+                            tr!("操作が受け取る {} は、列挙 `{}` の値にありません", "the operation takes {}, which the enum `{}` does not have", l.ja, en.named.name; l.en, en.named.name)
+                        })
+                    }
+                    // in a file an import of the request's file reads, which was not read
+                    ritsu_proto::Resolved::Unknown => None,
+                    ritsu_proto::Resolved::Missing => Some(tr!("フィールドの型 `{t}` が、読んだどのファイルにもありません", "the field's type `{t}` is in no file read")),
+                    _ => Some(tr!("フィールドの型 `{t}` は列挙ではありません", "the field's type `{t}` is no enum")),
+                },
                 (FieldType::Date { .. }, _) => None,
                 (_, t) => Some(tr!("フィールドの型 `{}` と合いません", "the field's type `{}` is not the input's", proto_type(t); proto_type(t))),
             };

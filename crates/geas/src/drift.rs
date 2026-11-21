@@ -182,7 +182,7 @@ fn jnum(j: &J, key: &str) -> Result<f64, Text> {
 }
 
 fn base_rec(line: &str) -> Result<BaseRec, Text> {
-    let j = json::parse(line).map_err(|e| tr!("この行は JSON ではありません", "the line is not JSON: {e}"))?;
+    let j = json::parse(line).map_err(|e| tr!("この行は JSON ではありません", "the line is not JSON: {}", ; e.en))?;
     let claim = jstr(&j, "claim")?;
     let order = match jget(&j, "order") {
         Ok(_) => Some(jnum(&j, "order")? as usize),
@@ -634,9 +634,11 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
                 ));
             }
             let Some(b) = base.remove(&key) else {
+                // the command named the way the person ran this one (ritsu's DESIGN 6.2, item 10)
+                let run = ritsu_base::cli::command_name("geas");
                 r.notes.push(tr!(
-                    "{} はベースラインにありません（新しい主張なら `geas snap` を走らせてください）",
-                    "no baseline for {} (new claim? run `geas snap`)",
+                    "{} はベースラインにありません（新しい主張なら `{run} snap` を走らせてください）",
+                    "no baseline for {} (new claim? run `{run} snap`)",
                     at.ja;
                     at.en,
                 ));

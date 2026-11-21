@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_出せる人の役職が無い.ringi:15:27: `課長` is not a position of the organization
+    15 |   submitted by   position 課長 or higher
+  = The positions declared: `担当`, `部長` and `社長`

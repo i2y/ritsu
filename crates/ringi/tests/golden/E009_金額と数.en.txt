@@ -1,0 +1,2 @@
+error[E009]: tests/mutants/E009_金額と数.ringi:5:50: `金額` and `30_000` cannot be compared (`money[円]` and `number`)
+     5 |   領収書(receipt) : attachment "領収書"  required when 金額 > 30_000

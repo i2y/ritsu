@@ -41,7 +41,14 @@
 //!   store full, each version fetched said on stderr, and nothing asked of the registry once the
 //!   store has it. A fetch that stops (an OCI manifest that is not its digest, a registry that does
 //!   not answer) stops the diff (exit 2), in each language.
+//! - A module of requests (ringi): the data of the organization moves a person, and the request whose
+//!   bytes stay answers otherwise, as `ritsu ringi diff` says, as directories and from the store; a
+//!   stage added in the two-file form, said by the route and by the api.
+//! - A line added above a file of each language, and nothing else: the interface does not move. A
+//!   context of sakai's, which has no api of its own, is compared in the api of the map that uses it,
+//!   and a term added to it is said there; the note says so in each language.
 
+mod common;
 #[path = "common/fines.rs"]
 mod fines;
 
@@ -60,7 +67,7 @@ fn here() -> PathBuf {
 fn command(dir: &Path, store: &Path, args: &[&str]) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args).env(store::VARIABLE, store);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     c
@@ -1326,4 +1333,330 @@ fn what_a_diff_reads_is_fetched() {
         assert!(err.starts_with(&head) && err.ends_with(tail) && err.lines().count() == 1, "{err}");
         assert!(!holds_any(&store));
     }
+}
+
+// ── Requests, and a line added above ────────────────────────────────────
+
+/// A request of the test's own (fictional): the requester's manager approves a trip.
+const TRIP: &str = "request trip v1 \"Trip\"
+description \"A trip the requester's manager approves (fictional)\"
+
+use organization org from \"shared/company.ringi\"
+use calendar office from \"shared/office.cal\"
+
+form
+  where_to : text \"Where to\"  count >=1 <=100
+
+route
+  first  manager
+
+who
+  manager = manager of requester
+
+every stage
+  due in 3 business days at end of day
+  when late expire
+  when empty skip
+
+ticket
+  self approval  not allowed
+";
+
+/// A module of requests at `dir`, its version `version`: the trip, and the organization, its data
+/// and the calendar of ringi's examples.
+fn requests(dir: &Path, version: &str) {
+    let examples = here().join("../ringi/examples");
+    std::fs::create_dir_all(dir.join("shared")).unwrap();
+    std::fs::write(dir.join("ritsu.mod"), format!("module example.com/acme/requests\nversion {version}\n")).unwrap();
+    for f in ["company.ringi", "office.cal"] {
+        std::fs::write(dir.join("shared").join(f), std::fs::read(examples.join("shared").join(f)).unwrap()).unwrap();
+    }
+    copy_dir(&examples.join("org"), &dir.join("org"));
+    std::fs::write(dir.join("trip.ringi"), TRIP).unwrap();
+}
+
+/// The file `rel` of `dir` with a line of comment added above it.
+fn above(dir: &Path, rel: &str) {
+    let text = std::fs::read_to_string(dir.join(rel)).unwrap();
+    std::fs::write(dir.join(rel), format!("# A line added above\n{text}")).unwrap();
+}
+
+/// The data of the organization moves a person to another team. The request's bytes are the same,
+/// and it answers otherwise: the person's manager is another, as `ritsu ringi diff` says of the two
+/// files. The organization's file, with a line added above, says what it said: its interface does
+/// not change. From the store, each side read through its own files, the same.
+#[test]
+fn a_request_moves_with_the_data_it_reads() {
+    let t = TempDir::new("mod-diff-requests");
+    let (v1, v2) = (t.path().join("requests-1.0.0"), t.path().join("requests-1.1.0"));
+    requests(&v1, "1.0.0");
+    requests(&v2, "1.1.0");
+    replace(&v2, "org/2026-04-01/members.csv", "e1201,sales1_a,staff,yes", "e1201,accounting,staff,yes");
+    above(&v2, "shared/company.ringi");
+    let store = t.path().join("store");
+    for v in [&v1, &v2] {
+        store::put_directory(&Store::at(&store), v, "2026-10-28", &[]).unwrap_or_else(|e| panic!("{}", e.en));
+    }
+    let (s1, s2) = ("example.com/acme/requests@1.0.0", "example.com/acme/requests@1.1.0");
+    // the result of the request without the names of the two files, which each run gives its own
+    let unnamed = |mut x: serde_json::Value| {
+        for side in ["old", "new"] {
+            x[side].as_object_mut().unwrap().remove("file");
+        }
+        x
+    };
+    let (code, own, err) = ritsu_in(t.path(), &store, &["ringi", "diff", "requests-1.0.0/trip.ringi", "requests-1.1.0/trip.ringi", "--format", "json"]);
+    assert_eq!((code, err.as_str()), (1, ""), "{own}");
+    let (_, own_text, _) = ritsu_in(t.path(), &store, &["ringi", "diff", "requests-1.0.0/trip.ringi", "requests-1.1.0/trip.ringi"]);
+    let mut seen = Vec::new();
+    for (old, new) in [("requests-1.0.0", "requests-1.1.0"), (s1, s2)] {
+        let (code, out, err) = ritsu_in(t.path(), &store, &["mod", "diff", old, new, "--format", "json"]);
+        assert_eq!((code, err.as_str()), (1, ""), "{old} {new}:\n{out}");
+        let v = json(&out);
+        assert_eq!(v["files"]["changed"], serde_json::json!(["org/2026-04-01/members.csv", "ritsu.mod", "shared/company.ringi"]), "{out}");
+        let of = |file: &str| v["behavior"].as_array().unwrap().iter().find(|b| b["file"] == file).unwrap_or_else(|| panic!("{file}: {out}")).clone();
+        // the request: the same bytes, and another manager for the person moved
+        let trip = of("trip.ringi");
+        assert_eq!((trip["tool"].as_str(), &trip["error"], &trip["result"]["differs"], &trip["result"]["route"]), (Some("ringi"), &serde_json::Value::Null, &serde_json::json!(true), &serde_json::json!([])), "{trip}");
+        let moved: Vec<(&str, &str, &str)> = trip["result"]["approvers"].as_array().unwrap().iter().flat_map(|g| g["changes"].as_array().unwrap()).map(|p| (p["requester"].as_str().unwrap(), p["before"].as_str().unwrap(), p["after"].as_str().unwrap())).collect();
+        assert_eq!(moved, [("e1201", "manager: e1101 (Manager of Section 1A)", "manager: e1001 (Head of Accounting)")], "{trip}");
+        assert_eq!(unnamed(trip["result"].clone()), unnamed(json(&own)), "{old} {new}");
+        // the organization: the team of the person, and the members of the two teams
+        let company = of("shared/company.ringi");
+        let sections: Vec<(&str, usize)> = company["result"]["sections"].as_array().unwrap().iter().map(|s| (s["section"].as_str().unwrap(), s["changes"].as_array().unwrap().len())).collect();
+        assert_eq!(sections, [("versions", 3)], "{company}");
+        // a ticket keeps no version of the organization: the change reaches it at the next stage
+        assert_eq!(company["result"]["in_progress"], serde_json::json!(["A change of the organization reaches a ticket in progress at the next stage it starts: a stage whose approvers are decided keeps them."]), "{company}");
+        // the interface: the data by its digest, the organization by its api, which a line above
+        // does not move
+        let iface: Vec<(&str, &str, usize)> = v["interface"].as_array().unwrap().iter().map(|i| (i["file"].as_str().unwrap(), i["how"].as_str().unwrap(), i["changes"].as_array().unwrap().len())).collect();
+        assert_eq!(iface, [("org/2026-04-01/members.csv", "digest", 0), ("shared/company.ringi", "api", 0)], "{out}");
+        // the text holds what `ritsu ringi diff` prints, but for its first line, which names the files
+        let (_, text, _) = ritsu_in(t.path(), &store, &["mod", "diff", old, new]);
+        let indented: String = own_text.lines().skip(1).map(|l| if l.is_empty() { "\n".to_string() } else { format!("    {l}\n") }).collect();
+        assert!(text.contains(&indented), "{text}\n---\n{indented}");
+        // the Markdown holds ringi's page with no comment of its head, which names the files, and
+        // its title folded as the titles of the other languages' diffs are
+        let (_, md, _) = ritsu_in(t.path(), &store, &["mod", "diff", old, new, "--format", "markdown"]);
+        assert!(!md.contains("<!--") && md.contains("**Trip: what changes**") && md.contains("**Company: what changes**"), "{md}");
+        seen.push((unnamed(trip["result"].clone()), v["interface"].clone()));
+    }
+    assert_eq!(seen[0], seen[1], "the store says what the directories say");
+}
+
+/// Two requests, in the spellings of DESIGN 17.9.1. A stage added: the route says it comes for
+/// every request, and the interface says the stage and the way to choose its approver added and
+/// the business days a ticket can take; the claim added is no change of it, nor is the line added
+/// above. The same file with a line above: no difference.
+#[test]
+fn two_requests() {
+    let t = TempDir::new("mod-diff-two-requests");
+    let (v1, v2) = (t.path().join("requests-1.0.0"), t.path().join("requests-1.1.0"));
+    requests(&v1, "1.0.0");
+    requests(&v2, "1.1.0");
+    replace(&v2, "trip.ringi", "  first  manager\n", "  first  manager\n  second dept_head\n");
+    replace(&v2, "trip.ringi", "  manager = manager of requester\n", "  manager   = manager of requester\n  dept_head = head of requester.department\n");
+    std::fs::write(v2.join("trip.ringi"), format!("{}\nclaims\n  ends_in_time : every ticket ends within 10 business days\n", std::fs::read_to_string(v2.join("trip.ringi")).unwrap())).unwrap();
+    above(&v2, "trip.ringi");
+    let store = t.path().join("store");
+    let (old, new) = ("requests-1.0.0/trip.ringi", "requests-1.1.0/trip.ringi");
+    let (code, out, err) = ritsu_in(t.path(), &store, &["mod", "diff", old, new, "--format", "json"]);
+    assert_eq!((code, err.as_str()), (1, ""), "{out}");
+    let v = json(&out);
+    assert_eq!(v["files"], serde_json::json!({"added": [], "removed": [], "changed": [new], "same": 0}));
+    let b = &v["behavior"][0];
+    let route: Vec<&str> = b["result"]["route"].as_array().unwrap().iter().map(|r| r["text"].as_str().unwrap()).collect();
+    assert_eq!((b["tool"].as_str(), route), (Some("ringi"), vec!["Every request: the stage “second” (dept_head) comes."]), "{out}");
+    let i = &v["interface"][0];
+    assert_eq!((i["file"].as_str(), i["how"].as_str()), (Some(new), Some("api")), "{out}");
+    let changes: Vec<(&str, &str)> = i["changes"].as_array().unwrap().iter().map(|c| (c["at"].as_str().unwrap(), c["change"].as_str().unwrap())).collect();
+    assert_eq!(changes, [("/items/stage/second", "added"), ("/items/who/dept_head", "added"), ("/ticket/time/round", "changed"), ("/ticket/time/total", "changed"), ("/ticket/time/held", "changed")], "{i}");
+
+    // a line above, and nothing else
+    let v3 = t.path().join("requests-1.0.0-above");
+    requests(&v3, "1.0.0");
+    above(&v3, "trip.ringi");
+    let (code, out, err) = ritsu_in(t.path(), &store, &["mod", "diff", old, "requests-1.0.0-above/trip.ringi"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.ends_with("\nno difference in behavior or in an interface.\n"), "{out}");
+}
+
+/// A copy of the module `from` of `t` beside it, `<from>-above`, with a line added above each of
+/// `files`, compared with it: nothing differs (exit 0), and the JSON.
+fn with_lines_above(t: &Path, from: &str, files: &[&str]) -> serde_json::Value {
+    let to = format!("{from}-above");
+    copy_dir(&t.join(from), &t.join(&to));
+    for f in files {
+        above(&t.join(&to), f);
+    }
+    let (code, out, err) = ritsu_in(t, &t.join("store"), &["mod", "diff", from, &to, "--format", "json"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{from}:\n{out}");
+    json(&out)
+}
+
+/// The module `from` of `t` one directory deeper in a module of its own (`<from>-deeper/sub/`, its
+/// `ritsu.mod` above), with a line added above each of `files`; each of `compared` against the file
+/// it was, in the two-file form: nothing differs (exit 0), and its api is the same. A path written
+/// from the root of the module moves, and one written from the file does not.
+fn deeper_with_lines_above(t: &Path, from: &str, files: &[&str], compared: &[&str]) {
+    let to = t.join(format!("{from}-deeper"));
+    copy_dir(&t.join(from), &to.join("sub"));
+    std::fs::rename(to.join("sub/ritsu.mod"), to.join("ritsu.mod")).unwrap();
+    for f in files {
+        above(&to.join("sub"), f);
+    }
+    for f in compared {
+        let (old, new) = (format!("{from}/{f}"), format!("{from}-deeper/sub/{f}"));
+        let (code, out, err) = ritsu_in(t, &t.join("store"), &["mod", "diff", &old, &new, "--format", "json"]);
+        assert_eq!((code, err.as_str()), (0, ""), "{old} {new}:\n{out}");
+        same_api(&json(&out), &new);
+    }
+}
+
+/// The interface of `file` in the JSON of a module's diff: compared by its api, and the same.
+fn same_api(v: &serde_json::Value, file: &str) {
+    let i = v["interface"].as_array().unwrap().iter().find(|i| i["file"] == file).unwrap_or_else(|| panic!("{file}: {v}"));
+    assert_eq!((i["how"].as_str(), &i["changes"], &i["breaks"], &i["note"]), (Some("api"), &serde_json::json!([]), &serde_json::json!([]), &serde_json::Value::Null), "{file}: {i}");
+}
+
+/// A line added above a rule (rulec), and the rule one directory deeper in its module: its api
+/// writes no line, and its paths from the rule, and nothing moves.
+#[test]
+fn a_line_above_a_rule_moves_no_interface() {
+    let t = desks(&DESK_EN);
+    let rule = format!("{}/{}", DESK_EN.gates, DESK_EN.rule);
+    same_api(&with_lines_above(t.path(), DESK_EN.desk.0, &[&rule]), &rule);
+    deeper_with_lines_above(t.path(), DESK_EN.desk.0, &[&rule], &[&rule]);
+}
+
+/// A line added above a calendar and a dates file that reads it (koyomi), and the two one directory
+/// deeper in their module: their api writes no line, and no path from the root.
+#[test]
+fn a_line_above_a_calendar_moves_no_interface() {
+    let t = desks(&DESK_EN);
+    let files = [format!("{}/{}", DESK_EN.calendars, DESK_EN.office), format!("{}/{}", DESK_EN.calendars, DESK_EN.payment)];
+    let files: Vec<&str> = files.iter().map(String::as_str).collect();
+    let v = with_lines_above(t.path(), DESK_EN.desk.0, &files);
+    for f in &files {
+        same_api(&v, f);
+    }
+    deeper_with_lines_above(t.path(), DESK_EN.desk.0, &files, &files);
+}
+
+/// A line added above a book (chobo), and the book one directory deeper in its module: its api
+/// writes no line and no path, and its data goes on (no E050).
+#[test]
+fn a_line_above_a_book_moves_no_interface() {
+    let t = desks(&DESK_EN);
+    let book = format!("{}/{}", DESK_EN.books, DESK_EN.book);
+    same_api(&with_lines_above(t.path(), DESK_EN.stock.0, &[&book]), &book);
+    deeper_with_lines_above(t.path(), DESK_EN.stock.0, &[&book], &[&book]);
+}
+
+/// A line added above a gate (sekisho), and the gate and the rule it reads one directory deeper in
+/// their module: the line of each thing its api writes moves, and is left out.
+#[test]
+fn a_line_above_a_gate_moves_no_interface() {
+    let t = desks(&DESK_EN);
+    let gate = format!("{}/{}", DESK_EN.gates, DESK_EN.gate);
+    same_api(&with_lines_above(t.path(), DESK_EN.desk.0, &[&gate]), &gate);
+    deeper_with_lines_above(t.path(), DESK_EN.desk.0, &[&gate], &[&gate]);
+}
+
+/// A line added above two modules of kaname, the English and the Japanese twin of an example, and
+/// the two one directory deeper in their module: the lines its api writes, the module's own path and
+/// those of the rules it uses, written from the root, are left out.
+#[test]
+fn a_line_above_a_module_of_code_moves_no_interface() {
+    let t = TempDir::new("mod-diff-above-kaname");
+    copy_dir(&here().join("../kaname/examples/media_mail"), &t.path().join("mail"));
+    t.write("mail/ritsu.mod", "module example.com/acme/mail\nversion 1.0.0\n");
+    let files = ["media_mail.kn", "media_mail.ja.kn"];
+    let v = with_lines_above(t.path(), "mail", &files);
+    for f in files {
+        same_api(&v, f);
+    }
+    deeper_with_lines_above(t.path(), "mail", &files, &files);
+}
+
+/// The shop of sakai's examples, with a line added above the map and above a context of it: the
+/// lines of what the map's api says each context declares (`contexts/ordering.ctx:23`) are left
+/// out, and the context, which has no api of its own, says that the map's api compares it. One
+/// directory deeper in its module, the paths the map's api writes from the root are written from
+/// the map.
+#[test]
+fn a_line_above_a_map_moves_no_interface() {
+    let t = TempDir::new("mod-diff-above-sakai");
+    copy_dir(&here().join("../sakai/examples/shop"), &t.path().join("shop"));
+    t.write("shop/ritsu.mod", "module example.com/acme/shop\nversion 1.0.0\n");
+    let v = with_lines_above(t.path(), "shop", &["shop.ctx", "contexts/ordering.ctx"]);
+    same_api(&v, "shop.ctx");
+    // one directory deeper: every path the map's api writes from the root moves
+    deeper_with_lines_above(t.path(), "shop", &["shop.ctx", "contexts/ordering.ctx"], &["shop.ctx"]);
+    let context = v["interface"].as_array().unwrap().iter().find(|i| i["file"] == "contexts/ordering.ctx").unwrap_or_else(|| panic!("{v}"));
+    assert_eq!((context["how"].as_str(), &context["changes"]), (Some("digest"), &serde_json::json!([])), "{context}");
+    for (lang, note) in [("en", "a context has no api of its own: what it says is compared in the api of the map that uses it"), ("ja", "コンテキストには自分の api が無く、中身は、それを使う地図の api で比べます")] {
+        let (_, out, _) = ritsu_in(t.path(), &t.path().join("store"), &["mod", "diff", "shop", "shop-above", "--format", "json", "--lang", lang]);
+        let v = json(&out);
+        let context = v["interface"].as_array().unwrap().iter().find(|i| i["file"] == "contexts/ordering.ctx").unwrap();
+        assert_eq!(context["note"].as_str(), Some(note), "{lang}");
+        let (_, text, _) = ritsu_in(t.path(), &t.path().join("store"), &["mod", "diff", "shop", "shop-above", "--lang", lang]);
+        assert!(text.contains(&format!("    {note}\n")), "{lang}: {text}");
+    }
+}
+
+/// A context of the shop that says more (a term added), and the map's bytes the same: the map's api
+/// is compared all the same, and says the term added; the context says that the map's api compares
+/// it, in each language.
+#[test]
+fn a_context_that_moved_is_compared_in_its_map() {
+    let t = TempDir::new("mod-diff-context");
+    copy_dir(&here().join("../sakai/examples/shop"), &t.path().join("shop"));
+    t.write("shop/ritsu.mod", "module example.com/acme/shop\nversion 1.0.0\n");
+    copy_dir(&t.path().join("shop"), &t.path().join("shop-refund"));
+    let cancel = "    means enum OrderStatus value ORDER_STATUS_CANCELLED\n";
+    replace(&t.path().join("shop-refund"), "contexts/ordering.ctx", cancel, &format!("{cancel}  refund \"Money given back to the customer for an order\"\n"));
+    for (lang, note) in [("en", "a context has no api of its own: what it says is compared in the api of the map that uses it"), ("ja", "コンテキストには自分の api が無く、中身は、それを使う地図の api で比べます")] {
+        let (code, out, err) = ritsu_in(t.path(), &t.path().join("store"), &["mod", "diff", "shop", "shop-refund", "--format", "json", "--lang", lang]);
+        assert_eq!((code, err.as_str()), (1, ""), "{lang}: {out}");
+        let v = json(&out);
+        assert_eq!(v["files"]["changed"], serde_json::json!(["contexts/ordering.ctx"]), "{out}");
+        let files: Vec<&str> = v["interface"].as_array().unwrap().iter().map(|i| i["file"].as_str().unwrap()).collect();
+        assert_eq!(files, ["contexts/ordering.ctx", "shop.ctx"], "{out}");
+        let (context, map) = (&v["interface"][0], &v["interface"][1]);
+        assert_eq!((context["how"].as_str(), context["note"].as_str()), (Some("digest"), Some(note)), "{lang}: {context}");
+        assert_eq!(map["how"].as_str(), Some("api"), "{map}");
+        let changes: Vec<(&str, &str)> = map["changes"].as_array().unwrap().iter().map(|c| (c["at"].as_str().unwrap(), c["change"].as_str().unwrap())).collect();
+        assert_eq!(changes, [("/contexts/Ordering/terms/refund", "added")], "{map}");
+    }
+}
+
+/// A line added above two requests of ringi's examples, English and the twin with Japanese names,
+/// and above the shared route, the organization and the masters they read (ringi), and all of them
+/// one directory deeper in their module: the lines its api writes, the paths written from the root
+/// and the lines of the words that say what a flow is given (`where`, `none`) are left out, and
+/// nothing moves.
+#[test]
+fn a_line_above_a_request_moves_no_interface() {
+    let t = TempDir::new("mod-diff-above-ringi");
+    let examples = here().join("../ringi/examples");
+    let dir = t.path().join("requests");
+    for d in ["shared", "org", "masters"] {
+        copy_dir(&examples.join(d), &dir.join(d));
+    }
+    let requests = ["expense.ringi", "expense.ja.ringi", "leave.ringi", "leave.ja.ringi"];
+    for f in requests {
+        std::fs::write(dir.join(f), std::fs::read(examples.join(f)).unwrap()).unwrap();
+    }
+    t.write("requests/ritsu.mod", "module example.com/acme/requests\nversion 1.0.0\n");
+    // the words of what a flow is given name rows of the route, whose lines move
+    let api = json(&ritsu_in(&dir, &t.path().join("store"), &["ringi", "api", "expense.ringi"]).1);
+    assert!(api["ticket"]["flows"][0]["given"].as_array().unwrap().iter().any(|g| g["where"]["lines"].as_array().is_some_and(|l| !l.is_empty())), "{api}");
+    let files: Vec<&str> = requests.into_iter().chain(["shared/manager_approval.ringi", "shared/company.ringi", "shared/masters.ringi"]).collect();
+    let v = with_lines_above(t.path(), "requests", &files);
+    for f in &files {
+        same_api(&v, f);
+    }
+    // one directory deeper: the paths written from the root move, and those from the file do not
+    deeper_with_lines_above(t.path(), "requests", &files, &["expense.ringi", "expense.ja.ringi", "shared/manager_approval.ringi", "shared/company.ringi", "shared/masters.ringi"]);
 }

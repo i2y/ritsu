@@ -1,0 +1,101 @@
+workflow match_runs v1
+description "The run an error of a match shows comes with a value the error says the match has no arm for: through the arm that puts it in, round the loop once, or with the value taken out of one that may be absent"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:member-tier-shipping"
+
+record Reply
+  done : bool
+
+inputs
+  private : bool
+  name    : string
+  narrow  : tiers.tier  range >=basic <=silver
+  wide    : tiers.tier
+  maybe   : tiers.tier?
+  levels  : list[tiers.tier]
+
+outputs
+  done : bool
+
+task greet(text: string) -> Reply
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:greet"
+  idempotent
+
+task pick() -> tiers.tier
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:pick"
+  idempotent
+
+flow
+  # gold and platinum come in on the arm of false only: the run shown takes that arm
+  let w = narrow
+  match private
+    true => pass
+    false =>
+      let w = wide
+      pass
+  match w
+    basic => pass
+    silver => pass
+  # gold and platinum come in from the second round on: the run shown goes round once
+  let u = narrow
+  repeat at most 3 times
+    match u
+      basic => pass
+      silver => pass
+    let u = wide
+    let s = greet(text: name)
+    match s.done
+      true => break
+      false => pass
+  # the value taken out of one that may be absent: the run shown comes with gold
+  let o = narrow
+  match private
+    true => pass
+    false =>
+      let o = maybe
+      pass
+  match o
+    none => pass
+    some x =>
+      match x
+        basic => pass
+        silver => pass
+  # what a task answers: the run shown takes the arm that calls it
+  let p = narrow
+  match private
+    true => pass
+    false =>
+      let p = pick()
+      pass
+  match p
+    basic => pass
+    silver => pass
+  # a value of a list, put in another variable in a round: the run shown goes round
+  let q = narrow
+  for t in levels at most 3
+    let q = t
+  match q
+    basic => pass
+    silver => pass
+  # a value passed back through two variables, one a round: the run shown goes round twice
+  let a = narrow
+  let b = narrow
+  repeat at most 3 times
+    match a
+      basic => pass
+      silver => pass
+    let a = b
+    let b = wide
+  # a value put in another variable: the run shown takes the arm that put it in that one
+  let k = narrow
+  match private
+    true => pass
+    false =>
+      let k = wide
+      pass
+  let j = k
+  match j
+    basic => pass
+    silver => pass
+  succeed done = true

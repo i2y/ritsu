@@ -1,0 +1,62 @@
+# Days and moments through an API's description (DESIGN 39). The description says which of its
+# strings are days (`format: date`) and which are moments (`format: date-time`). A date goes to a day
+# in a record of the body, at the top of the body, in the path and in the query; a time goes to a
+# moment; a string goes to a day as it is. The answers' days are read as dates, a moment as a time
+# and as a string, and a day of the few the description lists as a date in a range. Runs on every
+# platform: each sends a day as `2026-11-16`, and checks the day it reads as a date.
+workflow api_dates v1
+description "Book a leave with an API whose days are dates and whose moments are dates and times: the period goes in the body, its first day in the path and its last in the query, and the days of the answers are read as dates"
+
+use openapi leave from "apis/leave.json"
+
+record Period
+  first_day : date
+  last_day  : date
+
+record Leave
+  id        : string
+  first_day : date
+  booked_at : timestamp
+
+record Moved
+  id        : string
+  first_day : date
+  booked_at : string
+
+enum Kind = working | holiday
+
+record Day
+  day     : date
+  kind    : Kind
+  closing : date  range >=2026-12-01 <=2026-12-31
+
+inputs
+  employee : string
+  period   : Period
+
+outputs
+  first_day : date
+  closing   : date  range >=2026-12-01 <=2026-12-31
+  booked_at : string
+
+# A day in the path, and one in the query.
+task day_off(day: date, until: date?) -> Day
+  http GET leave "/days/{day}"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/leave/0a1b2c3d"
+  idempotent
+
+# The period goes in the body, each of its days as the description's dates.
+task book(employee: string, period: Period) -> Leave
+  http POST leave "/leaves"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/leave/0a1b2c3d"
+
+# A day and a moment at the top of the body, and a string where the description says a day.
+task move(id: string, first_day: date, previous: string, asked_at: timestamp) -> Moved
+  http POST leave "/leaves/{id}/move"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/leave/0a1b2c3d"
+
+flow
+  let day = day_off(day: period.first_day, until: period.last_day)
+  let booked = book(employee: employee, period: period)
+  let moved = move(id: booked.id, first_day: day.day, previous: "{period.first_day}", asked_at: booked.booked_at)
+  succeed first_day = moved.first_day, closing = day.closing, booked_at = moved.booked_at

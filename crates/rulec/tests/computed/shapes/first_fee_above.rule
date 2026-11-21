@@ -1,0 +1,21 @@
+rule first_fee_above v1
+description "A fee a policy first table writes, read with the amount it is decided from: 50 yen comes only below 38 yen, from which the first row of the table above takes the amount, so no row is asked for a fee of 50 yen from 38 yen"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=0JPY <=130JPY
+
+outputs
+  x : choice
+
+table fee_of
+policy first
+| amount  | -> fee : money[JPY] |
+| >=38JPY | 260JPY              |
+| -       | 50JPY               |
+
+table pick
+| amount  | fee     | -> x |
+| <38JPY  | 50JPY   | one  |
+| >=38JPY | 260JPY  | two  |

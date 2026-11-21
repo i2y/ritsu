@@ -1,0 +1,16 @@
+order.flow: ok
+restock.flow: ok
+ok purchase.ringi: a request, 1 field, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+warning[ritsu W210]: purchase.ringi:15: Whether the input `amount` of the flow `order` takes what `purchase` gives it cannot be decided
+    15 |   on approved  launch order(request_id: ticket.id, amount: amount)  when not (amount > 500_000JPY)
+  = Why it cannot be decided: it looks as if it can give 1_000_000JPY (the flow takes 500_000JPY or less); but the `when` of the `on` line may hold the value to less, which ringi does not follow.
+  = `amount` is money[JPY] >=1JPY <=1_000_000JPY.
+  = The input `amount` takes money[JPY] >=1JPY <=500_000JPY (line 6 of "order.flow").
+  = ringi holds a value to less by the rows of the route's table, and by a `when` that compares fields of the form with constants (`amount <= 500_000JPY`, and such comparisons joined with `and`).
+warning[ritsu W210]: restock.flow:28: Whether `submit_supplies` of "requests.json", which the flow calls, is what the request is now cannot be decided
+    28 |   let moved = submit_supplies(form: supplies)
+  = The document says the operation is written from the request `supplies` (version 1), and the project has no request's file `supplies.ringi`.
+  = dandori holds what the flow sends to the document alone.
+  = If the request is in this project, write "requests.json" again with `ritsu gen --target requests` from the project's root; if it is another project's, replace the document with the one that project writes now.
+ritsu check: 3 files (dandori 2, ringi 1): all pass (2 warnings); borders between the languages: 3 checked, 2 undecided

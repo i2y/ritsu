@@ -1,2 +1,3 @@
-error[E080]: `geas affected` takes a spec and a diff, and was given 1 argument(s)
-  = usage: geas affected <spec.geas> <diff|->; `-` reads the diff from stdin
+error[E080]: `geas affected` takes <spec.geas> <diff|->
+  = usage: geas affected <spec.geas> <diff|-> [--root <dir>] [--map <file>]... [--json]
+  = `-` reads the diff from stdin

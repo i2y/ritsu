@@ -1,0 +1,21 @@
+rule manager_approval_route v1
+description "What ringi writes from the route of manager_approval.ringi: one optional output for each stage, whose value is the approver the stage names; a blank cell is none, the stage is not there"
+
+enum manager_by = manager_approver "manager"
+enum head_by = dept_head "dept_head"
+
+inputs
+  long : bool
+
+outputs
+  manager : manager_by
+  head    : head_by?
+
+table manager
+| -> manager       |
+| manager_approver |
+
+table head
+| long  | -> head   |
+| true  | dept_head |
+| false | none      |

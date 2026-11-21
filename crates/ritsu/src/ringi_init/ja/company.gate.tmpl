@@ -1,0 +1,264 @@
+gate company v1
+description "どの申請の種類でも、だれが何をできるか。ステップに答えるのは経路が決めた承認者だけで、経路が許さなければ自分の申請は決めない。申請の種類を受け持つ部はそのチケットを見られる。部の管理する人は自分の部の申請の種類だけを、全体を管理する人はどの申請の種類も組織も管理し、監査する人はどの記録も読むが何も変えない"
+namespace Company
+
+role staff
+  description "社員のだれでも"
+role workflow_admin
+  description "自分の部の申請の種類を管理する人"
+  includes staff
+role system_admin
+  description "どの申請の種類も、組織のデータも管理する人"
+  includes staff
+role auditor
+  description "どの申請の種類の記録も組織の記録も読み、何も変えない人"
+  includes staff
+
+principal Staff
+  description "ログインした社員"
+  roles staff, workflow_admin, system_admin, auditor
+  attributes
+    department : Team
+
+resource Team
+  description "組織のチーム。効いている版のデータのとおり"
+
+resource Organization
+  description "組織のデータ。版ごとの人とチーム、マスタ"
+
+resource Approvers
+  description "経路が一つのチケットの一つのステップに決めた承認者（代理を含む）。チケットが申請者に戻っているあいだは、差し戻した人。サーバーが、その一人一人の親として渡す"
+
+resource Requesters
+  description "一つのチケットの申請者の側。申請者、代わりに申請した人、その日に申請者の代わりに出せる代理。サーバーが、その一人一人の親として渡す"
+
+resource Stage
+  description "一つのチケットの一つのステップ。承認者が答える物"
+  attributes
+    requester     : Staff
+    requesters    : Requesters
+    approvers     : Approvers
+    owner         : Team
+    self_approval : bool
+
+resource Ticket
+  description "一件の申請。申請者の側が扱い、ほかの人が見る物"
+  attributes
+    requester  : Staff
+    requesters : Requesters
+    owner      : Team
+
+resource RequestType
+  description "申請の種類の一つの版。.ringi のファイル一つ"
+  attributes
+    owner : Team
+
+action submit
+  description "申請を出す。差し戻されたあとに出し直す"
+  principal Staff
+  resource Ticket
+
+action withdraw
+  description "決まっていない申請を取り下げる。申請者に戻った申請をやめる"
+  principal Staff
+  resource Ticket
+
+action approve
+  description "自分を待っているステップを承認する"
+  principal Staff
+  resource Stage
+
+action send_back
+  description "チケットを申請者か前のステップに差し戻す"
+  principal Staff
+  resource Stage
+
+action reject
+  description "自分のステップでチケットを却下する"
+  principal Staff
+  resource Stage
+
+action pause
+  description "自分を待っているステップを保留する。保留をやめて進める"
+  principal Staff
+  resource Stage
+
+action add_approver
+  description "チケットが待っているステップに承認者を足す"
+  principal Staff
+  resource Stage
+
+action hand_over
+  description "チケットが待っているステップの承認者の一人が答えることを、ほかの人に渡す"
+  principal Staff
+  resource Stage
+
+action retract
+  description "次のステップが答えるまでのあいだに、自分の承認を取り消す"
+  principal Staff
+  resource Stage
+
+action comment
+  description "チケットに、今のステップでコメントを書く"
+  principal Staff
+  resource Stage
+
+action see
+  description "自分の載っていないチケットを見る。申請者の側と承認者の側は、尋ねなくても自分のチケットを見られる"
+  principal Staff
+  resource Ticket
+
+action change_request_type
+  description "申請の種類の版が新しい申請を受け始める時を決める。今から、ある日から、ファイルに書いたとおり、または受けない"
+  principal Staff
+  resource RequestType
+
+action read_audit
+  description "申請の種類の版の記録を読む。チケットの動き（フォームの値を含む）と、版の切り替え"
+  principal Staff
+  resource RequestType
+
+action import_organization
+  description "組織のデータの新しい版を確かめて取り込む"
+  principal Staff
+  resource Organization
+
+action read_organization_audit
+  description "組織の記録を読む。データの取り込み"
+  principal Staff
+  resource Organization
+
+permit staff_submit
+  description "社員はだれでも申請を出せる"
+  principal in staff
+  action submit
+
+permit the_requesters_side_withdraws
+  description "申請者の側（申請者、代わりに申請した人、その日に代わりに出せる代理）が申請を取り下げる"
+  principal is Staff
+  action withdraw
+  when principal in resource.requesters
+
+permit approvers_answer_their_stage
+  description "経路がステップに決めた承認者が、そのステップに答える"
+  principal is Staff
+  action approve, send_back, reject, pause, retract
+  when principal in resource.approvers
+
+permit the_people_of_a_ticket_comment
+  description "申請者の側、チケットが今いるステップの承認者（申請者に戻っているあいだは差し戻した人）、申請の種類を受け持つ部が、チケットにコメントを書く"
+  principal is Staff
+  action comment
+  when principal in resource.requesters or principal in resource.approvers or resource.owner is principal.department
+
+permit the_owning_department_sees
+  description "申請の種類を受け持つ部は、その種類のチケットを見られる"
+  principal is Staff
+  action see
+  when resource.owner is principal.department
+
+forbid no_one_decides_their_own
+  description "経路が許さなければ、自分の申請を承認も差し戻しも却下もしない"
+  principal is Staff
+  action approve, send_back, reject
+  when resource.requester is principal
+  unless resource.self_approval
+
+permit admins_add_approvers_in_their_department
+  description "管理する人は、自分の部が受け持つ申請の種類のステップに承認者を足す"
+  principal in workflow_admin
+  action add_approver
+  when resource.owner is principal.department
+
+permit admins_hand_over_in_their_department
+  description "管理する人は、自分の部が受け持つ申請の種類のステップで、承認者の一人が答えることをほかの人に渡す"
+  principal in workflow_admin
+  action hand_over
+  when resource.owner is principal.department
+
+permit admins_change_their_own_departments
+  description "管理する人は、自分の部が受け持つ申請の種類を変える"
+  principal in workflow_admin
+  action change_request_type
+  when resource.owner is principal.department
+
+permit admins_read_their_own_departments
+  description "管理する人は、自分の部が受け持つ申請の種類の記録を読む"
+  principal in workflow_admin
+  action read_audit
+  when resource.owner is principal.department
+
+permit system_admins_administer_everything
+  description "全体を管理する人は、どの申請の種類も切り替え、組織のデータを取り込み、どの記録も読む"
+  principal in system_admin
+  action change_request_type, read_audit, import_organization, read_organization_audit
+
+permit auditors_read_every_record
+  description "監査する人は、どの申請の種類の記録も組織の記録も読む"
+  principal in auditor
+  action read_audit, read_organization_audit
+
+expect deny requesters_never_approve_on_a_strict_route
+  description "経路が許さなければ、申請者は自分の申請を承認しない"
+  principal is Staff
+  action approve
+  when resource.requester is principal
+  unless resource.self_approval
+
+expect deny admins_never_change_other_departments
+  description "部の管理する人は、全体を管理する人でなければ、ほかの部が受け持つ申請の種類を変えない"
+  principal in workflow_admin
+  action change_request_type
+  unless principal in system_admin
+  unless resource.owner is principal.department
+
+expect deny admins_never_read_other_departments
+  description "部の管理する人は、全体を管理する人でも監査する人でもなければ、ほかの部が受け持つ申請の種類の記録を読まない"
+  principal in workflow_admin
+  action read_audit
+  unless principal in system_admin
+  unless principal in auditor
+  unless resource.owner is principal.department
+
+expect deny only_system_admins_import_the_organization
+  description "組織のデータを取り込むのは、全体を管理する人だけ"
+  principal in staff
+  action import_organization
+  unless principal in system_admin
+
+expect deny auditors_change_nothing
+  description "監査する人は、管理する役割をほかに持たなければ、申請の種類を切り替えず、組織を取り込まず、承認者を足さず、引き継がせない"
+  principal in auditor
+  action change_request_type, import_organization, add_approver, hand_over
+  unless principal in system_admin
+  unless principal in workflow_admin
+
+expect allow system_admins_import_the_organization
+  description "全体を管理する人は、組織のデータを取り込む"
+  principal in system_admin
+  action import_organization
+
+expect allow an_approver_approves
+  description "経路が決めた承認者は、ほかの人の申請のステップを承認する"
+  principal in staff
+  action approve
+  unless resource.requester is principal
+  when principal in resource.approvers
+
+expect allow the_requesters_side_withdraws_it
+  description "申請者の側の人（申請者の代わりに申請した人など）は、申請を取り下げる"
+  principal in staff
+  action withdraw
+  when principal in resource.requesters
+
+expect allow the_owning_department_sees_its_tickets
+  description "申請の種類を受け持つ部の人は、その種類のチケットを見る"
+  principal in staff
+  action see
+  when resource.owner is principal.department
+
+expect deny other_departments_do_not_see
+  description "ほかの部の人は、自分の載っていないチケットを見ない"
+  principal in staff
+  action see
+  unless resource.owner is principal.department

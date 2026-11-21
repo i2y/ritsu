@@ -1,0 +1,10 @@
+error[E151]: The output `charged` is read before it is decided
+  --> tests/mutants/m_e151result.rule:17 table review_of
+   |
+17 | | charged     | -> review |
+   |   ^^^^^^^ it is read here
+21 | result charged = fee
+   | ^^^^^^^^^^^^^^^^^^^^ this `result` line is what decides `charged`
+   |
+ The `result` line decides the first output after every table and definition, so none of them can read it: the rows that read it match nothing, and the generated code reads a name it has not set.
+ hint: decide `charged` above what reads it, with `define charged : <type> = <expression>` in place of the `result` line.

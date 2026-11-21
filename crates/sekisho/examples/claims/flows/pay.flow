@@ -1,0 +1,35 @@
+workflow pay v1
+description "Pays a claim the rule leaves to the desk, and hands the others to a person. Written for sekisho's example: the workflow calls the desk's API as itself, and the gate claims.gate decides whether it may"
+
+use rule who_pays from "../rules/who_pays.rule"
+use openapi desk from "../api/desk.json"
+
+record Paid
+  paid : bool
+
+inputs
+  claim_id : string
+  amount   : money[JPY]  range >=1JPY <=10_000JPY
+
+outputs
+  paid : bool
+
+task pay_claim(claimId: string) -> Paid
+  http POST desk "/claims/{claimId}/payments"
+  errors denied = 403
+  key
+
+task hand_over(claimId: string)
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:hand-over"
+  idempotent
+
+flow
+  let r = who_pays(amount: amount)
+  match r.who
+    desk =>
+      let p = pay_claim(claimId: claim_id)
+        on denied => fail Denied "The gate did not let the workflow pay this claim"
+      succeed paid = p.paid
+    person =>
+      hand_over(claimId: claim_id)
+      succeed paid = false

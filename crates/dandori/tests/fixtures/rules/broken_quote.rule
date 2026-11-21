@@ -1,0 +1,17 @@
+rule broken_quote v1
+description "A quote of shipping by weight whose table leaves a gap: no row prices a parcel of 5 to 9 kg, so the rule does not pass rulec's check, and a flow that uses it waits for it"
+
+enum band = light | heavy
+
+inputs
+  weight : number  range >=0 <=30
+
+outputs
+  price : money[USD]  round down(1USD)
+  band : band
+
+table quote
+policy unique
+| weight | -> price | band  |
+| <5     | 5USD     | light |
+| >=10   | 12USD    | heavy |

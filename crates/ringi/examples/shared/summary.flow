@@ -1,0 +1,33 @@
+workflow contract_summary v1
+  now range >=2026-01-01 <=2027-12-31 offset +09:00
+description "The agent's summary of a contract for the people who review it: what the contract obliges each side to, the clauses that differ from the company's template, and a risk the reviewers should read first. ringi starts it when the ticket reaches the stage summary and shows its outputs on the approval card; the agent decides nothing"
+
+enum Risk = low | medium | high
+
+record Summary
+  obligations : string
+  differences : string
+  risk        : Risk
+
+inputs
+  request_id   : string
+  counterparty : string
+  kind         : string
+  text         : string
+
+outputs
+  obligations : string
+  differences : string
+  risk        : Risk
+
+task summarize(counterparty: string, kind: string, text: string) -> Summary
+  agent claude "Summarize the contract for the people who review it: what it obliges each side to, the clauses that differ from a usual contract of its kind, and how much risk a reviewer should look for first. Decide nothing; write each part in at most three sentences"
+  model "claude-sonnet-5"
+  effort low
+  timeout 120 seconds
+  retry 2 times every 10 seconds
+
+flow
+  let s = summarize(counterparty: counterparty, kind: kind, text: text)
+    on failure, timeout => let s = {obligations: "", differences: "", risk: high}
+  succeed obligations = s.obligations, differences = s.differences, risk = s.risk

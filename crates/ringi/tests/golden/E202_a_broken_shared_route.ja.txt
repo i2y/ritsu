@@ -1,0 +1,4 @@
+エラー[E202]: tests/mutants/E202_a_broken_shared_route.ringi:3:25: `shared/broken_route.ringi` は ringi の検査を通りません
+     3 | use route standard from "shared/broken_route.ringi"
+  = E004: `heads` は `who` に宣言がありません（`tests/mutants/shared/broken_route.ringi:8:10`）
+  = そのファイルを、検査が通るように直してください。

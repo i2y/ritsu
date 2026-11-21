@@ -1,0 +1,82 @@
+gate サービス(services_ja) v1
+description "人が文書を読み、サービスが索引を作る。どの action にも書いたポリシーが、当てはまる action と当てはまらない action に分かれる"
+namespace LibraryJa
+
+role 職員(staff)
+  description "職員のだれでも"
+
+principal 利用者(User)
+  description "職員"
+  roles 職員
+  attributes
+    停止中(suspended) : bool
+
+principal サービス(Service)
+  description "自分で動くプログラム"
+
+resource 文書(Doc)
+  description "文書"
+  attributes
+    公開(open_to_all) : bool
+
+resource フォルダ(Folder)
+  description "文書を入れるフォルダ"
+
+action 文書を読む(read_doc)
+  description "文書を読む"
+  principal 利用者
+  resource 文書
+
+action 索引を作る(index_doc)
+  description "文書の索引を作る"
+  principal サービス
+  resource 文書
+
+action 文書を消す(purge_doc)
+  description "文書を完全に消す"
+  principal 利用者
+  resource 文書
+  nobody "文書は残しておく"
+
+action フォルダを見る(list_folder)
+  description "フォルダの中身を並べる"
+  principal 利用者
+  resource フォルダ
+
+permit 職員は読めて消せる(staff_read_and_purge)
+  description "職員は文書を読める。消すこともできることにしてある"
+  principal in 職員
+  action 文書を読む, 文書を消す
+
+permit サービスは索引を作れる(services_index)
+  description "サービスは、公開の文書の索引を作れる"
+  principal is サービス
+  action 索引を作る
+  when resource.公開
+
+permit 職員はフォルダを見られる(staff_list)
+  description "職員はフォルダを見られる"
+  principal in 職員
+  action フォルダを見る
+
+forbid 停止中は何もできない(suspended_do_nothing)
+  description "停止中の人は何もできない"
+  action any
+  when principal.停止中
+
+forbid サービスは非公開の文書に触れない(services_skip_closed_docs)
+  description "サービスは、公開でない文書に触れない"
+  principal is サービス
+  action any
+  unless resource.公開
+
+forbid だれも消せない(no_one_purges)
+  description "文書は残しておく"
+  action 文書を消す
+
+forbid 停止中の職員は公開の物を見られない(suspended_staff_see_nothing_open)
+  description "停止中の職員は、公開の物を何も見られない"
+  principal in 職員
+  action 文書を読む, フォルダを見る
+  when resource.公開
+  when principal.停止中

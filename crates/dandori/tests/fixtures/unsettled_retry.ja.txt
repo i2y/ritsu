@@ -1,0 +1,12 @@
+警告[W101]: tests/fixtures/unsettled_retry.flow:33:1: `notify` が失敗すると、案件 `goods` が held のままワークフローが失敗します。そうなる呼び出しは 2 か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください
+    33 |   notify(order: order)
+  = `notify` の `retry` は失敗を無くしません。リトライを使い切ると、呼び出しは失敗します。
+  そうなる例:
+      31  reserve: goods が held で始まる
+      33  notify が失敗する（timeout・failure）
+gen --target asl:
+エラー[E050]: tests/fixtures/unsettled_retry.flow:17:1: `notify` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります
+    17 | task notify(order: string)
+gen --target argo:
+エラー[E050]: tests/fixtures/unsettled_retry.flow:17:1: `notify` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります
+    17 | task notify(order: string)

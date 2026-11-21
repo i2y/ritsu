@@ -1,0 +1,139 @@
+── E006
+エラー[E006]: example.kn:6:12: 生成するコードで、このレコード `明細行` と 3 行目のレコード `明細` が同じ名前になります：`LineItem`（TypeScript、Python、Go、Rust）
+     6 | record 明細行(LineItem)
+  = 生成するコードは、名前をそれぞれの出力先の書き方に直します。型の名前（どの出力先でも）と、Go の関数・フィールド・列挙の値の定数、Rust の列挙の値は、語の頭を大文字にして `_` を除きます（`foo_bar` は `FooBar`）。TypeScript と Python の列挙の値は、すべて大文字にします（`gold` は `GOLD`）。
+  = どちらかの名前か別名を替えてください。
+
+── W002
+警告[W002]: example.kn:6:10: 生成するコードで、この関数 `重量の合計` と 3 行目の関数 `総重量` が同じ名前になります：`TotalWeight`（Go）
+     6 | fn 重量の合計(totalWeight)() -> number
+  = 生成するコードは、名前をそれぞれの出力先の書き方に直します。型の名前（どの出力先でも）と、Go の関数・フィールド・列挙の値の定数、Rust の列挙の値は、語の頭を大文字にして `_` を除きます（`foo_bar` は `FooBar`）。TypeScript と Python の列挙の値は、すべて大文字にします（`gold` は `GOLD`）。
+  = `ritsu gen --target go` はこのモジュールで止まります（E008）。Go を生成しないなら、このままで構いません。生成するなら、どちらかの名前か別名を替えてください。
+ok example.kn: 関数 2 個、total
+
+── W002
+警告[W002]: example.kn:3:30: 生成するコードで、この値 `区分.金色` と 3 行目の値 `区分.金` が同じ名前になります：`GOLD`（TypeScript、Python）
+     3 | enum 区分(tier) = 金(gold) | 金色(GOLD)
+  = 生成するコードは、名前をそれぞれの出力先の書き方に直します。型の名前（どの出力先でも）と、Go の関数・フィールド・列挙の値の定数、Rust の列挙の値は、語の頭を大文字にして `_` を除きます（`foo_bar` は `FooBar`）。TypeScript と Python の列挙の値は、すべて大文字にします（`gold` は `GOLD`）。
+  = `ritsu gen --target typescript` と `ritsu gen --target python` はこのモジュールで止まります（E008）。TypeScript と Python のどちらも生成しないなら、このままで構いません。生成するなら、どちらかの名前か別名を替えてください。
+ok example.kn: 関数 0 個
+
+── W002
+警告[W002]: example.kn:5:10: 生成するコードで、このフィールド `税込みの単価` と 4 行目のフィールド `単価` が同じ名前になります：`UnitPrice`（Go）
+     5 |   税込みの単価(unitPrice) : string
+  = 生成するコードは、名前をそれぞれの出力先の書き方に直します。型の名前（どの出力先でも）と、Go の関数・フィールド・列挙の値の定数、Rust の列挙の値は、語の頭を大文字にして `_` を除きます（`foo_bar` は `FooBar`）。TypeScript と Python の列挙の値は、すべて大文字にします（`gold` は `GOLD`）。
+  = `ritsu gen --target go` はこのモジュールで止まります（E008）。Go を生成しないなら、このままで構いません。生成するなら、どちらかの名前か別名を替えてください。
+ok example.kn: 関数 0 個
+
+── W002
+警告[W002]: example.kn:5:12: 生成するコードで、このレコード `甲の道` と 3 行目の値 `道.甲` が同じ名前になります：`WayAb`（Go）
+     5 | record 甲の道(WayAb)
+  = 生成するコードは、名前をそれぞれの出力先の書き方に直します。型の名前（どの出力先でも）と、Go の関数・フィールド・列挙の値の定数、Rust の列挙の値は、語の頭を大文字にして `_` を除きます（`foo_bar` は `FooBar`）。TypeScript と Python の列挙の値は、すべて大文字にします（`gold` は `GOLD`）。
+  = `ritsu gen --target go` はこのモジュールで止まります（E008）。Go を生成しないなら、このままで構いません。生成するなら、どちらかの名前か別名を替えてください。
+ok example.kn: 関数 0 個
+
+── W002
+警告[W002]: example.kn:6:9: 生成するコードで、この関数 `合計の値` と 3 行目のレコード `合計` が同じ名前になります：`Total`（Python）
+     6 | fn 合計の値(Total)() -> number
+  = 生成するコードは、名前をそれぞれの出力先の書き方に直します。型の名前（どの出力先でも）と、Go の関数・フィールド・列挙の値の定数、Rust の列挙の値は、語の頭を大文字にして `_` を除きます（`foo_bar` は `FooBar`）。TypeScript と Python の列挙の値は、すべて大文字にします（`gold` は `GOLD`）。
+  = `ritsu gen --target python` はこのモジュールで止まります（E008）。Python を生成しないなら、このままで構いません。生成するなら、どちらかの名前か別名を替えてください。
+ok example.kn: 関数 1 個、total
+
+── W002
+警告[W002]: example.kn:5:9: 生成するコードで、この関数 `種類の数` と 3 行目の列挙 `種類` が同じ名前になります：`Kind`（TypeScript、Python）
+     5 | fn 種類の数(Kind)() -> number
+  = 生成するコードは、名前をそれぞれの出力先の書き方に直します。型の名前（どの出力先でも）と、Go の関数・フィールド・列挙の値の定数、Rust の列挙の値は、語の頭を大文字にして `_` を除きます（`foo_bar` は `FooBar`）。TypeScript と Python の列挙の値は、すべて大文字にします（`gold` は `GOLD`）。
+  = `ritsu gen --target typescript` と `ritsu gen --target python` はこのモジュールで止まります（E008）。TypeScript と Python のどちらも生成しないなら、このままで構いません。生成するなら、どちらかの名前か別名を替えてください。
+ok example.kn: 関数 1 個、total
+
+── E007
+エラー[E007]: example.kn:3:11: 生成するコードは、`KanameError` を名前に使えません
+     3 | record 誤り(KanameError)
+  = `KanameError` は、kaname の補助のモジュールの名前です。生成するコードは、どの出力先でも補助をこの名前で読みます。別の名前か別名にしてください。
+
+── W001
+警告[W001]: example.kn:4:6: 生成する Python は、`class` をフィールドの名前に使えません
+     4 |   等級(class) : string
+  = 生成する Python は、フィールドの名前を、データクラスの属性の名前としてそのまま書きます。`class` は Python の予約語です。
+  = `ritsu gen --target python` はこのモジュールで止まります（E008）。Python を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 0 個
+
+── W001
+警告[W001]: example.kn:3:7: 生成する TypeScript は、`delete` を関数の名前に使えません
+     3 | fn 消す(delete)() -> number
+  = `delete` は、TypeScript が名前にできない語です（予約語と、strict mode が名前にしない語）。
+  = `ritsu gen --target typescript` はこのモジュールで止まります（E008）。TypeScript を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 1 個、total
+
+── W001
+警告[W001]: example.kn:3:7: 生成する TypeScript と Python は、`class` を関数の名前に使えません
+     3 | fn 等級(class)() -> number
+  = `class` は、TypeScript が名前にできない語です（予約語と、strict mode が名前にしない語）。
+  = `class` は Python の予約語です。
+  = `ritsu gen --target typescript` と `ritsu gen --target python` はこのモジュールで止まります（E008）。TypeScript と Python のどちらも生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 1 個、total
+
+── W001
+警告[W001]: example.kn:3:17: 生成する Python は、`lambda` を引数の名前に使えません
+     3 | fn 倍(scaled)(係数(lambda): number range >=0 <=9) -> number
+  = 生成する Python の関数は、ホストが引数を名前で渡す形なので、引数の名前をそのまま書きます。`lambda` は Python の予約語です。
+  = `ritsu gen --target python` はこのモジュールで止まります（E008）。Python を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 1 個、total
+
+── W001
+警告[W001]: example.kn:4:6: 生成する Python は、`__sku` をフィールドの名前に使えません
+     4 |   品番(__sku) : string
+  = Python は、クラスの中の `__` で始まる名前を、クラスの名前を前に付けた名前に書き換えます（`__x` は `_Line__x`）。ホストは、フィールドをこの名前で読めません。
+  = `ritsu gen --target python` はこのモジュールで止まります（E008）。Python を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 0 個
+
+── W001
+警告[W001]: example.kn:4:6: 生成する Python は、`__init__` をフィールドの名前に使えません
+     4 |   始め(__init__) : string
+  = Python は、`__x__` の形の名前を言語のために取ってあります（`__init__`、`__eq__` など、クラスの働きを決める名前）。
+  = `ritsu gen --target python` はこのモジュールで止まります（E008）。Python を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 0 個
+
+── W001
+警告[W001]: example.kn:4:6: 生成する TypeScript と Python は、`__proto__` をフィールドの名前に使えません
+     4 |   原型(__proto__) : string
+  = Python は、`__x__` の形の名前を言語のために取ってあります（`__init__`、`__eq__` など、クラスの働きを決める名前）。
+  = TypeScript（JavaScript）は、オブジェクトを書いたときの `__proto__` を、フィールドでなくオブジェクトのプロトタイプとして読みます。
+  = `ritsu gen --target typescript` と `ritsu gen --target python` はこのモジュールで止まります（E008）。TypeScript と Python のどちらも生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 0 個
+
+── W001
+警告[W001]: example.kn:3:19: 生成する Python は、`区分.金` を列挙の値の名前 `_GOLD_` に書けません
+     3 | enum 区分(tier) = 金(_gold_) | 銀(silver)
+  = Python の列挙（`enum.Enum`）は、`_x_` と `__x__` の形の名前を自分のために取ってあり、`__` で始まる名前を値にしません。
+  = `ritsu gen --target python` はこのモジュールで止まります（E008）。Python を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 0 個
+
+── W001
+警告[W001]: example.kn:3:7: 生成する Python は、`__getattr__` を関数の名前に使えません
+     3 | fn 属性(__getattr__)() -> number
+  = Python は、`__x__` の形の名前を言語のために取ってあります（モジュールの `__getattr__` や `__dir__` は、モジュールの働きを変えます）。
+  = `ritsu gen --target python` はこのモジュールで止まります（E008）。Python を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 1 個、total
+
+── W001
+警告[W001]: example.kn:3:10: 生成する TypeScript、Python、Rust は、`_1` を型の名前に書けません
+     3 | record 一(_1)
+  = 型の名前は、語の頭を大文字にして `_` を除いた名前になります（`foo_bar` は `FooBar`）。`_1` からは、空の名前か数字で始まる名前になります。
+  = `ritsu gen --target typescript`、`ritsu gen --target python`、`ritsu gen --target rust` はこのモジュールで止まります（E008）。TypeScript、Python、Rust のどれも生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 0 個
+
+── W001
+警告[W001]: example.kn:3:11: 生成する Python は、`none` を型の名前 `None` に書けません
+     3 | record 無し(none)
+  = 型の名前は、語の頭を大文字にした名前になります。`None` は Python の予約語です。
+  = `ritsu gen --target python` はこのモジュールで止まります（E008）。Python を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 0 個
+
+── W001
+警告[W001]: example.kn:3:19: 生成する Rust は、`_1` を列挙の値の名前に書けません
+     3 | enum 区分(tier) = 一(_1) | 金(gold)
+  = 列挙の値の名前は、語の頭を大文字にして `_` を除いた名前になります（`foo_bar` は `FooBar`）。`_1` からは、空の名前か数字で始まる名前になります。
+  = `ritsu gen --target rust` はこのモジュールで止まります（E008）。Rust を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 0 個
+

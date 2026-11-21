@@ -1,0 +1,20 @@
+rule 支払う人(who_pays_ja) v1
+description "請求をだれが支払うか。500 円までは窓口、それを超えると担当者。窓口の決まりの一例として sekisho の例のために書いたもので、どの文書の転記でもない。who_pays.rule の日本語の版"
+
+enum 支払う人(payer) = 窓口(desk) | 担当者(person)
+
+inputs
+  金額(amount) : money[JPY]  range >=1JPY <=10_000JPY
+
+outputs
+  だれ(who) : 支払う人
+
+table 決める
+| 金額     | -> だれ |
+| <=500JPY | 窓口    |
+| >500JPY  | 担当者  |
+
+examples
+| 金額   | -> だれ |
+| 500JPY | 窓口    |
+| 501JPY | 担当者  |

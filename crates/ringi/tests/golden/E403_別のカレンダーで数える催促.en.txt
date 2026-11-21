@@ -1,0 +1,6 @@
+error[E403]: tests/mutants/E403_別のカレンダーで数える催促.ringi:23:1: A reminder does not come before its deadline
+    23 |   期限の前に催促する : every stage reminds before it is due
+  = Every stage is due after 2 business days in `事務所` at the end of the day, and reminded after 2 business days in `工場` at 09:00.
+  = A stage started on 2000-01-01 is due at the end of 2000-01-04, and its reminder would go on 2000-01-05 at 09:00.
+  = 41,742 of the 146,097 days a stage can start on are so (counted from 2000-01-01 through 2399-12-31), and a stage started on them is set no reminder.
+  = Make the reminder come after fewer business days, or count the reminder and the deadline in one calendar.

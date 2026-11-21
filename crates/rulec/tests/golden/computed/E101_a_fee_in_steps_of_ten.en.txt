@@ -1,0 +1,11 @@
+error[E101]: Completeness gap: some input matches no row
+  --> tests/computed/shapes/E101_a_fee_in_steps_of_ten.rule:14 table pick
+   |
+14 | table pick
+   |       ^^^^ the input space is not fully covered
+   |
+ No row matches: amount from 227JPY to 229JPY, fee 12JPY or more
+ An input that matches no row: amount = 227JPY, fee = 100JPY
+ hint: add this row, with what it answers written in place of `?`: `| >226JPY | >11JPY | ? |`
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.
+

@@ -1,0 +1,18 @@
+rule define_reads_above v1
+description "A definition of the total that reads the fee, which a table below decides"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+  member : bool
+
+outputs
+  fee   : money[JPY]  round down(1JPY)
+  total : money[JPY]  round down(1JPY)
+
+define total : money[JPY] = amount + fee
+
+table fee_of
+policy unique
+| member | -> fee |
+| true   | 0JPY   |
+| false  | 300JPY |

@@ -149,8 +149,10 @@ pub fn to_val_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Check
                     // integer stands for: a rate's range used to come out as `0.01..0.03`
                     // beside a count of steps, two scales in one sentence.
                     let show = |b: &Option<Rat>| b.map(|x| crate::types::fmt_val(x, &inner)).unwrap_or_else(|| "…".into());
+                    // The integer as the record writes it, and beside it what it stands for where
+                    // that says more than its digits grouped (§15.333).
                     let meant = crate::types::fmt_val(v, &inner);
-                    let n = if meant == n.to_string() { tr!("{n} ", "{n}") } else { tr!("{n}（{meant}）", "{n} ({meant})") };
+                    let n = if meant == crate::types::written_num(Rat::int(*n)) { tr!("{n} ", "{n}") } else { tr!("{n}（{meant}）", "{n} ({meant})") };
                     return Err(tr!(
                         "{n}は宣言した範囲 {}..{} の外です",
                         "{n} is outside the declared range {}..{}",
@@ -289,16 +291,33 @@ pub enum Shut {
     Length { name: String, max: i128 },
     /// Two elements of a sequence with the same value of a field marked `unique` (§15.290).
     Unique { name: String, field: String },
-    /// A `sum` over a sequence past the top of the range it declares (§15.100): the sum, the
-    /// sequence it adds up, and the top as the rule writes it.
-    Sum { name: String, over: String, hi: String },
+    /// A `sum` over a sequence outside the range it declares (§15.100, §15.314): the sum, the
+    /// sequence it adds up, and the end it is past as the rule writes it — the top, or, when
+    /// `below`, the bottom.
+    Sum { name: String, over: String, end: String, below: bool },
+    /// A `count` over a sequence under the bottom of the range it declares (§15.314): the count,
+    /// the sequence it counts in, and the bottom. Its top is the most elements the sequence may
+    /// have, which is `Length`.
+    Count { name: String, over: String, lo: String },
     /// The weights of a pick by weight whose total does not fit in int64 (§15.226), by the sequence.
     Weights { name: String },
     /// The drawn value of a pick by weight that is not below the total of the weights (§15.226).
     Draw { name: String },
+    /// A value a `define` works out outside the range the rule accepts for it (§15.313): the
+    /// `define`, and the ends of the range as the rule writes them.
+    Define { name: String, lo: String, hi: String },
 }
 
 impl Shut {
+    /// The same refusal of a field of an element of `seq`: the field named with its sequence,
+    /// `lines[].amount`, as the record holds it.
+    pub fn in_element(mut self, seq: &str) -> Shut {
+        if let Shut::Range { name, .. } | Shut::EnumValue { name, .. } | Shut::NotOptional { name } | Shut::Type { name, .. } | Shut::Step { name, .. } | Shut::Day { name, .. } = &mut self {
+            *name = format!("{seq}[].{name}");
+        }
+        self
+    }
+
     /// A stable identifier for `--format json`: the same words `diff` without records uses for
     /// what a version accepts, where there is one.
     pub fn kind(&self) -> &'static str {
@@ -313,8 +332,10 @@ impl Shut {
             Shut::Length { .. } => "length",
             Shut::Unique { .. } => "unique",
             Shut::Sum { .. } => "sum",
+            Shut::Count { .. } => "count",
             Shut::Weights { .. } => "weights",
             Shut::Draw { .. } => "draw",
+            Shut::Define { .. } => "define",
         }
     }
 
@@ -331,9 +352,11 @@ impl Shut {
             | Shut::Unique { name, .. }
             | Shut::Weights { name }
             | Shut::Draw { name } => name,
-            // A sum is found by the sequence it adds up, which is what the record holds.
-            Shut::Sum { over, .. } => over,
-            Shut::Constraint { .. } | Shut::Never { .. } => "",
+            // A sum is found by the sequence it adds up, which is what the record holds; so is a
+            // count, by the one it counts in.
+            Shut::Sum { over, .. } | Shut::Count { over, .. } => over,
+            // A value worked out is no input, and may be worked out from several.
+            Shut::Constraint { .. } | Shut::Never { .. } | Shut::Define { .. } => "",
         }
     }
 
@@ -352,9 +375,12 @@ impl Shut {
             Shut::Never { said } => tr!("新しい版の `{said}` に当たります", "it falls under the new version's `{said}`"),
             Shut::Length { name, max } => tr!("{name} の要素が、新しい版の上限 {max} 件より多いです", "{name} has more elements than the new version takes (at most {max})"),
             Shut::Unique { name, field } => tr!("{name} に {field} が同じ要素が二つあり、新しい版は受け付けません", "{name} has two elements with the same {field}, which the new version does not take"),
-            Shut::Sum { name, over, hi } => tr!("{over} の合計 {name} が、新しい版の範囲の上限 {hi} を超えます", "the sum {name} over {over} is past the top of the new version's range, {hi}"),
+            Shut::Sum { name, over, end, below: false } => tr!("{over} の合計 {name} が、新しい版の範囲の上限 {end} を超えます", "the sum {name} over {over} is past the top of the new version's range, {end}"),
+            Shut::Sum { name, over, end, below: true } => tr!("{over} の合計 {name} が、新しい版の範囲の下限 {end} に届きません", "the sum {name} over {over} is under the bottom of the new version's range, {end}"),
+            Shut::Count { name, over, lo } => tr!("{over} を数えた {name} が、新しい版の範囲の下限 {lo} に届きません", "the count {name} over {over} is under the bottom of the new version's range, {lo}"),
             Shut::Weights { name } => tr!("{name} の重みの合計が int64 に収まりません", "the total of the weights of {name} does not fit in int64"),
             Shut::Draw { name } => tr!("{name} が、新しい版の重みの合計より小さくありません", "{name} is not below the total of the new version's weights"),
+            Shut::Define { name, lo, hi } => tr!("計算した {name} が、新しい版が受け付ける範囲 {lo}..{hi} の外になります", "the {name} it works out is outside the range the new version accepts for it, {lo}..{hi}"),
         }
     }
 }
@@ -445,7 +471,7 @@ pub fn door(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -> Option<
                 }
             }
         }
-        if let Some(field) = crate::door::repeated(el, xs) {
+        if let Some((field, _, _)) = crate::door::repeated(el, xs) {
             return Some(Shut::Unique { name: seq.clone(), field: field.to_string() });
         }
     }
@@ -455,19 +481,30 @@ pub fn door(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -> Option<
     if let Some(n) = f.door_nevers().find(|n| !crate::vectors::never_clear(n, c, &|m| input.get(m))) {
         return Some(Shut::Never { said: n.said() });
     }
+    let all = || -> std::collections::HashMap<String, Val> { input.iter().map(|(k, v)| (k.clone(), v.clone())).collect() };
+    // A value worked out outside the range the rule accepts for it, refused where it is worked out
+    // (§15.313); in a rule that walks, only when the walk comes to no other refusal first.
+    if let Some(name) = crate::eval::define_outside(f, c, all()) {
+        let ty = c.ty_of(&name).map(|t| t.present().clone()).unwrap_or(Ty::Number);
+        let (lo, hi) = c.accepts.get(&name).copied().unwrap_or((None, None));
+        return Some(Shut::Define { lo: end(lo, &ty), hi: end(hi, &ty), name });
+    }
     if !f.walks() {
         return None;
     }
     // What the walk refuses, in the order the generated code looks (§15.226, §15.100).
-    let all = || -> std::collections::HashMap<String, Val> { input.iter().map(|(k, v)| (k.clone(), v.clone())).collect() };
     if let Some(name) = crate::eval::weights_past(f, c, all()) {
         return Some(Shut::Weights { name });
     }
-    if let Some(name) = crate::eval::sum_past_range(f, c, all()) {
-        let over = f.aggs().find(|d| d.name.text == name).map(|d| d.over.clone()).unwrap_or_default();
+    if let Some(crate::eval::Past { name, below }) = crate::eval::summary_outside(f, c, all()) {
+        let d = f.aggs().find(|d| d.name.text == name);
+        let over = d.map(|d| d.over.clone()).unwrap_or_default();
         let ty = c.ty_of(&name).map(|t| t.present().clone()).unwrap_or(Ty::Number);
-        let hi = end(c.ranges.get(&name).and_then(|(_, hi)| *hi), &ty);
-        return Some(Shut::Sum { name, over, hi });
+        let (lo, hi) = c.ranges.get(&name).copied().unwrap_or((None, None));
+        if below && d.is_some_and(|d| d.kind == crate::ast::AggKind::Count) {
+            return Some(Shut::Count { name, over, lo: end(lo, &ty) });
+        }
+        return Some(Shut::Sum { name, over, end: end(if below { lo } else { hi }, &ty), below });
     }
     crate::eval::drawn_past(f, c, all()).map(|name| Shut::Draw { name })
 }
@@ -911,13 +948,28 @@ fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checke
                     tr!("`in.{name}`: {field} が同じ要素が二つあります", "`in.{name}`: two elements have the same {field}"),
                     tr!("`unique` のフィールドは、要素どうしで同じ値をとりません。", "A field marked `unique` takes no value twice among the elements."),
                 ),
-                Shut::Sum { name, over, hi } => (
-                    tr!("`in.{over}`: 合計 {name} が宣言した範囲の上限 {hi} を超えます", "`in.{over}`: the sum {name} is past the top of its declared range, {hi}"),
+                Shut::Sum { name, over, end, below: false } => (
+                    tr!("`in.{over}`: 合計 {name} が宣言した範囲の上限 {end} を超えます", "`in.{over}`: the sum {name} is past the top of its declared range, {end}"),
+                    range,
+                ),
+                Shut::Sum { name, over, end, below: true } => (
+                    tr!("`in.{over}`: 合計 {name} が宣言した範囲の下限 {end} に届きません", "`in.{over}`: the sum {name} is under the bottom of its declared range, {end}"),
+                    range,
+                ),
+                Shut::Count { name, over, lo } => (
+                    tr!("`in.{over}`: 数えた {name} が宣言した範囲の下限 {lo} に届きません", "`in.{over}`: the count {name} is under the bottom of its declared range, {lo}"),
                     range,
                 ),
                 Shut::Weights { name } => (
                     tr!("`in.{name}`: 重みの合計が int64 に収まりません", "`in.{name}`: the total of the weights does not fit in int64"),
                     range,
+                ),
+                Shut::Define { name, lo, hi } => (
+                    tr!("`in`: この入力から計算した {name} が、受け付ける範囲 {lo}..{hi} の外です", "`in`: the {name} worked out from it is outside the range it accepts, {lo}..{hi}"),
+                    tr!(
+                        "`define` の `range` は、計算した値を受け付ける範囲です。記録の値か、規則の範囲を確かめてください。",
+                        "The `range` of a `define` is where the value it works out is accepted; check the record's values, or the rule's range."
+                    ),
                 ),
                 Shut::Draw { name } => (
                     tr!("`in.{name}`: 重みの合計より小さくありません", "`in.{name}`: not below the total of the weights"),

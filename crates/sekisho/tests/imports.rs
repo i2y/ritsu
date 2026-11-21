@@ -1,6 +1,7 @@
 //! `import enum` (DESIGN 25): an enum read whole from rulec's `enums` file behaves as one the gate
 //! writes with `enum`. What reads, what the names come to (a rename with `->`, an alias, the order
-//! rulec keeps and the gate does not), the five mistakes the line can make, and that the code
+//! rulec keeps and the gate does not), the five mistakes the line can make, that one enum of an
+//! `enums` file is one type by every name the gate reads it by (DESIGN 28), and that the code
 //! generated for the two ways of having the enum is one code.
 
 mod common;
@@ -180,6 +181,60 @@ fn the_page_and_the_api_say_where_the_enum_was_read_from() {
     assert_eq!(e.get("from").unwrap().get("path").unwrap().as_str(), Some("states.rule"));
     assert_eq!(e.get("ordered").and_then(|v| v.as_bool()), Some(false));
     assert_eq!(e.get("values").unwrap().as_arr().unwrap().len(), 4);
+}
+
+/// A rule that gives an order's tier, read whole from the `enums` file `states.rule`.
+fn tier_rule(name: &str) -> String {
+    format!("rule {name} v1\nimport enum tier from \"states.rule\"\n\ninputs\n  large : bool\n\noutputs\n  tier : tier\n\ntable tiers\npolicy unique\n| large | -> tier |\n| false | basic   |\n| true  | gold    |\n")
+}
+
+/// The decision of each vector of a checked gate, with the attributes of its resource: which
+/// combinations the walk allows.
+fn decisions(o: &Outcome) -> Vec<(String, String)> {
+    let (scope, checked) = (o.scope.as_ref().unwrap(), o.walked.as_ref().unwrap());
+    let shape = sekisho::cedar::shape(&checked.gate, scope, checked);
+    sekisho::vectors::tests(&checked.gate, &shape, &checked.report, None)
+        .iter()
+        .map(|t| {
+            let resource = t.get("entities").unwrap().as_arr().unwrap().iter().find(|e| e.get("uid").unwrap().get("type").unwrap().as_str() == Some("Shop::Order")).unwrap();
+            (resource.get("attrs").unwrap().compact(), t.get("decision").unwrap().as_str().unwrap().to_string())
+        })
+        .collect()
+}
+
+/// One enum of an `enums` file is one type by every name the gate reads it by (DESIGN 28): read
+/// twice, once renamed with `->`; read again beside a file read with `use gate` that reads it too;
+/// and given by two rules that read it whole, as the computed values of two actions one policy
+/// names. The two names compare, and the walk counts their values as one enum's.
+#[test]
+fn one_enum_of_an_enums_file_is_one_type_by_every_name() {
+    let two_names = "gate t v1\nnamespace Shop\n\nimport enum order_status from \"states.rule\"\nimport enum order_status from \"states.rule\" -> asked_status\n\nrole clerk\n\nprincipal User\n  roles clerk\n\nresource Order\n  attributes\n    status : order_status\n    asked  : asked_status\n\naction view\n  principal User\n  resource Order\n\npermit clerks_view_orders_in_the_status_asked\n  principal in clerk\n  action view\n  when resource.status is resource.asked\n";
+    let (_, o) = checked(&[("states.rule", STATES)], two_names);
+    assert!(wrong(&o).is_empty(), "{}", said(&o));
+    // allowed exactly where the two attributes hold one value, for the clerk
+    let d = decisions(&o);
+    let allowed: Vec<&String> = d.iter().filter(|(_, x)| x == "allow").map(|(a, _)| a).collect();
+    assert_eq!(allowed.len(), 4, "{d:?}");
+    for a in allowed {
+        let (status, asked) = (a.split("\"status\":").nth(1).unwrap().split('"').nth(1).unwrap(), a.split("\"asked\":").nth(1).unwrap().split('"').nth(1).unwrap());
+        assert_eq!(status, asked, "{a}");
+    }
+    // beside a file read with `use gate` that reads the enum too
+    let t = TempDir::new("sekisho-one-enum-use-gate");
+    t.write("states.rule", STATES);
+    t.write("base.gate", "gate base v1\nnamespace Shop\n\nimport enum order_status from \"states.rule\"\n");
+    t.write("t.gate", &two_names.replace("import enum order_status from \"states.rule\"\nimport", "use gate \"base.gate\"\n\nimport"));
+    let path = t.path().join("t.gate").to_string_lossy().to_string();
+    let o = check_file(&path, &common::joined(), &Options::default()).unwrap();
+    assert!(wrong(&o).is_empty(), "{}", said(&o));
+    // two rules that read it whole give one type to the computed values of two actions
+    let actions = "gate t v1\nnamespace Shop\n\nuse rule first from \"first.rule\"\nuse rule second from \"second.rule\"\n\nrole clerk\n\nprincipal User\n  roles clerk\n\nresource Order\n  attributes\n    large : bool\n\naction rush\n  principal User\n  resource Order\n  context\n    tier = first(large: resource.large).tier\n\naction hold\n  principal User\n  resource Order\n  context\n    tier = second(large: resource.large).tier\n\npermit clerks_act_on_gold_orders\n  principal in clerk\n  action rush, hold\n  when tier is gold\n";
+    let (_, o) = checked(&[("states.rule", STATES), ("first.rule", &tier_rule("first")), ("second.rule", &tier_rule("second"))], actions);
+    assert!(wrong(&o).is_empty(), "{}", said(&o));
+    // an input of one name given to an action's input of the other, with `allowed`
+    let asked = "gate t v1\nnamespace Shop\n\nimport enum order_status from \"states.rule\"\nimport enum order_status from \"states.rule\" -> asked_status\n\nprincipal User\n\nresource Order\n\naction refund\n  principal User\n  resource Order\n  input\n    status : order_status\n\naction ask_refund\n  principal User\n  resource Order\n  input\n    status : asked_status\n\npermit paid_orders_are_refunded\n  action refund\n  when status is paid\n\npermit what_is_refunded_is_asked\n  action ask_refund\n  when allowed refund\n";
+    let (_, o) = checked(&[("states.rule", STATES)], asked);
+    assert!(wrong(&o).is_empty(), "{}", said(&o));
 }
 
 /// The Cedar, the code of the requests and the vectors generated for the gate that imports the enum

@@ -1,0 +1,33 @@
+gate 図書室(library_ja) v1
+description "図書室の文書を読むこと、消すことを、だれがしてよいか。permit が、forbid がだれにも許さない action を挙げている"
+namespace LibraryJa
+
+role 職員(staff)
+  description "図書室で働く"
+
+principal 利用者(User)
+  description "図書室の職員"
+  roles 職員
+
+resource 文書(Doc)
+  description "文書"
+
+action 文書を読む(read_doc)
+  description "文書を読む"
+  principal 利用者
+  resource 文書
+
+action 文書を消す(purge_doc)
+  description "文書をすっかり消す"
+  principal 利用者
+  resource 文書
+  nobody "文書は残す"
+
+permit 職員は読めて消せる(staff_read_and_purge)
+  description "職員は文書を読め、消すこともできるはずだった"
+  principal in 職員
+  action 文書を読む, 文書を消す
+
+forbid だれも消せない(no_one_purges)
+  description "文書は残す"
+  action 文書を消す

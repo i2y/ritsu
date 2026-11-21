@@ -28,7 +28,7 @@ Obj(
                     "Both rows match: 大口 = true, 会員 = プラチナ",
                 ),
                 Str(
-                    "An input producing this example: 会員 = プラチナ, 届け先 = 北海道, 注文金額 = 30000, 重量 = 1",
+                    "An input producing this example: 会員 = プラチナ, 届け先 = 北海道, 注文金額 = 30_000円, 重量 = 1g",
                 ),
                 Str(
                     "Because of `policy first`, row 1 wins. Is this intended?",
@@ -169,7 +169,7 @@ Obj(
                     "Both rows match: 大口 = true, 会員 = 一般",
                 ),
                 Str(
-                    "An input producing this example: 会員 = 一般, 届け先 = 北海道, 注文金額 = 30000, 重量 = 1",
+                    "An input producing this example: 会員 = 一般, 届け先 = 北海道, 注文金額 = 30_000円, 重量 = 1g",
                 ),
                 Str(
                     "Because of `policy first`, row 1 wins. Is this intended?",
@@ -307,10 +307,10 @@ Obj(
         "notes": Arr(
             [
                 Str(
-                    "Both rows match: 大口 = true, 会員 = プラチナ",
+                    "Both rows match: 大口 = false, 会員 = プラチナ",
                 ),
                 Str(
-                    "An input producing this example: 会員 = プラチナ, 届け先 = 北海道, 注文金額 = 0, 重量 = 1",
+                    "An input producing this example: 会員 = プラチナ, 届け先 = 北海道, 注文金額 = 0円, 重量 = 1g",
                 ),
                 Str(
                     "Because of `policy first`, row 2 wins. Is this intended?",
@@ -413,7 +413,7 @@ Obj(
                             "プラチナ",
                         ),
                         "大口": Bool(
-                            true,
+                            false,
                         ),
                     },
                 ),

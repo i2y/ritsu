@@ -1,0 +1,9 @@
+enums refusals v1
+description "An enum of an enums file named like a class of the JDK its Java module reads, a type inside the file's class"
+
+enum refusal(illegal_argument_exception) = soft | firm | last
+
+prerequisites escalation over refusal
+  start soft
+  firm  requires soft
+  last  requires firm

@@ -173,9 +173,9 @@ fn 変異は決めたコードだけを出す() {
         ("m_e031walkja.rule", &[("E031", 1)], "上と同じ規則の日本語の版"),
         ("m_e075.rule", &[("E075", 1)], "列挙の値と同じ名前の入力を足し、出力のセルがどちらにも読めるようになった"),
         ("m_e075ja.rule", &[("E075", 1)], "上と同じ規則の日本語の版"),
-        // §15.209. A row past what the square of a whole side comes to, which neither the
-        // vectors nor the check decide.
-        ("m_w128.rule", &[("W128", 1)], "辺の二乗が 2 になる行を書いた（どの入力も当たらないが、それを示せない）"),
+        // §15.209. A row past what two squares of whole sides add up to, which neither the
+        // vectors nor the check decide. (One square, never 2, the check shows: E102, §15.325.)
+        ("m_w128.rule", &[("W128", 1)], "二つの辺の二乗の和が 7 になる行を書いた（どの入力も当たらないが、それを示せない）"),
         ("m_w128ja.rule", &[("W128", 1)], "上と同じ規則の日本語の版"),
         // §15.148. A rule that is one step of a state machine: the section's shape, and the
         // claims about every sequence of calls, broken the way a revision of the table would.
@@ -258,18 +258,18 @@ fn 変異は決めたコードだけを出す() {
         ("m_e115modja.rule", &[("E115", 1)], "上と同じ規則の日本語の版"),
         ("m_e118.rule", &[("E118", 1), ("W111", 1)], "引数が一つ足りない呼び出し（§15.102）"),
         ("m_w121.rule", &[("W121", 1)], "生成先の予約語と同じ別名（§15.103）"),
-        ("m_w121rule.rule", &[("W121", 1)], "規則の名前を、自分の列挙と同じにした（Go の関数と型、Java のクラスと列挙がぶつかる。§15.239）"),
+        ("m_w121rule.rule", &[("W121", 1)], "規則の名前を、自分の列挙と同じにした（Go と Java は列挙の型を Tier2 と書く。§15.239、§15.337）"),
         ("m_w121ruleja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
         // §15.263: two names some language spells as one identifier, and a name a language cannot
-        // take. The English rule, and its Japanese version beside it.
+        // take (§15.336). The English rule, and its Japanese version beside it.
         ("m_w121camel.rule", &[("W121", 1)], "残余に、Swift と Java が rate_off と同じに綴る別名 rateOff を付けた"),
         ("m_w121camelja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
         ("m_w121case.rule", &[("W121", 1)], "残余に、SQLite が rate_off と同じ列として読む別名 rate_OFF を付けた"),
         ("m_w121caseja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
         ("m_w121long.rule", &[("W121", 1)], "残余と率割引に、PostgreSQL が先頭の 63 バイトで同じ名前に切る長い別名を付けた"),
         ("m_w121longja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
-        ("m_w121ruby.rule", &[("W121", 1)], "残余に、Ruby が定数として読む大文字で始まる別名 Margin を付けた"),
-        ("m_w121rubyja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
+        ("m_w121gofile.rule", &[("W121", 1)], "規則に、go コマンドがパッケージに入れない `_` で始まるファイルの名前になる別名を付けた"),
+        ("m_w121gofileja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
         ("m_e034member.rule", &[("E034", 1)], "額引きに、どの言語でも率引きと同じ名前の値になる別名 Percent を付けた"),
         ("m_e034memberja.rule", &[("E034", 1)], "上と同じ規則の日本語の版"),
         // §15.265: a name the generated code of some language uses itself, and a sequence and a
@@ -278,14 +278,21 @@ fn 変異は決めたコードだけを出す() {
         ("m_w121ownja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
         ("m_w121owntrace.rule", &[("W121", 1)], "素の割引に、`.proto` の答えが当てはまった行を運ぶフィールドと同じ別名 trace を付けた"),
         ("m_w121owntraceja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
+        ("m_w121blank.rule", &[("W121", 1)], "素の割引に、出力の構造体やレコードのフィールドにならない別名 `_` を付けた"),
+        ("m_w121blankja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
+        ("m_w121self.rule", &[("W121", 2)], "クーポンの種別の値 free_ship を、Rust が型そのものを指す予約語の列挙子 `Self` と書く self にした（もう一つの W121 は、PHP がその値を `SELF_` と書くという知らせ。§15.344）"),
+        ("m_w121selfja.rule", &[("W121", 2)], "上と同じ規則の日本語の版（値の別名を self にした。別名も同じ二つの W121 が言う）"),
         ("m_e011seq.rule", &[("E011", 1)], "並びの別名が落ちた（Go の構造体と `.proto` のフィールドが書けない）"),
         ("m_e011seqfield.rule", &[("E011", 1)], "要素のフィールドの別名が落ちた"),
         // §15.92. Five more codes that had no mutant. The syntax errors keep their minimal
         // example in the ledger — a misplaced character has no amount attached — but these
-        // change what a real table answers, or what it is allowed to claim.
-        ("m_e009.rule", &[("E009", 1), ("E012", 2), ("W111", 1)], "入力の名前を言語の語にした"),
+        // change what a real table answers, or what it is allowed to claim. Of `m_e009`, the old
+        // name the table and the example still write is said once, at the table (§15.321).
+        ("m_e009.rule", &[("E009", 1), ("E012", 1), ("W111", 1)], "入力の名前を言語の語にした"),
         ("m_e015.rule", &[("E015", 1), ("E103", 1)], "`result` が最初でない出力を指した"),
         ("m_e047.rule", &[("E047", 1)], "範囲の後ろに税区分を書いた（黙って捨てられていた）"),
+        ("m_e155.rule", &[("E155", 1)], "出力の `round` を二度書いた（前の round だけが効いていた）"),
+        ("m_e155ja.rule", &[("E155", 1)], "上と同じ規則の日本語の版"),
         ("m_e049.rule", &[("E049", 1)], "閾値を文書のとおり桁区切りのカンマつきで転記した（二つの値に読まれていた）"),
         ("m_e048.rule", &[("E048", 1), ("E112", 1), ("W111", 1)], "日付から日付を引いた"),
         ("m_e114.rule", &[("E114", 3)], "率をその列の刻みに載らない値にした"),
@@ -389,6 +396,33 @@ fn 変異は決めたコードだけを出す() {
         ("m_e148ja.rule", &[("E148", 1)], "上と同じ規則の日本語の版"),
         ("m_e149.rule", &[("E149", 1)], "品の個数の範囲の端を消し、`range` だけを残した"),
         ("m_e149ja.rule", &[("E149", 1)], "上と同じ規則の日本語の版"),
+        // §15.313: the range a rule accepts for a value it works out.
+        ("m_e150.rule", &[("E150", 1)], "手数料の範囲を、手数料が届かない 4 万円以上と書いた"),
+        ("m_e150ja.rule", &[("E150", 1)], "上と同じ規則の日本語の版"),
+        // §15.314: the range of a `sum` or a `count` no sequence comes to.
+        ("m_e150sum.rule", &[("E150", 1)], "金額の範囲を 30 万円以上と書いた（明細は 5 件まで、一件 5 万円までで、合計は 25 万円まで）"),
+        ("m_e150sumja.rule", &[("E150", 1)], "上と同じ規則の日本語の版"),
+        ("m_e150top.rule", &[("E150", 1)], "一件の価格を 20 万円以上と書いた（明細は 1 件以上あり、金額の上限の 10 万円を必ず越える）"),
+        ("m_e150topja.rule", &[("E150", 1)], "上と同じ規則の日本語の版"),
+        ("m_e150count.rule", &[("E150", 1)], "包装した品を 6 件以上と書いた（割れ物の数の上限が、明細を 5 件までにする）"),
+        ("m_e150countja.rule", &[("E150", 1)], "上と同じ規則の日本語の版"),
+        ("m_e019define.rule", &[("E019", 1)], "手数料の範囲の上の端を 1 円下げ、例の 666,699 円の手数料 2 万円を受け付けなくした"),
+        ("m_e019defineja.rule", &[("E019", 1)], "上と同じ規則の日本語の版"),
+        ("m_e103define.rule", &[("E103", 2)], "円の手数料の範囲を、ただの数で書いた"),
+        ("m_e103defineja.rule", &[("E103", 2)], "上と同じ規則の日本語の版"),
+        ("m_e102define.rule", &[("E102", 1)], "受け付けない 2 万円を超える手数料の行を足した"),
+        ("m_e102defineja.rule", &[("E102", 1)], "上と同じ規則の日本語の版"),
+        ("m_e133define.rule", &[("E133", 2)], "さいころの合計の範囲を外し、受け付けた 33 通りで数えた確率が合わなくなった"),
+        ("m_e133defineja.rule", &[("E133", 2)], "上と同じ規則の日本語の版"),
+        // §15.323: what decides each output.
+        ("m_e151.rule", &[("E151", 1)], "請求額を決める `result` の行を消した"),
+        ("m_e151ja.rule", &[("E151", 1)], "上と同じ規則の日本語の版"),
+        ("m_e151result.rule", &[("E151", 1)], "確認の要否を、下の `result` の行でしか決まらない請求額から読んだ"),
+        ("m_e151resultja.rule", &[("E151", 1)], "上と同じ規則の日本語の版"),
+        ("m_e152.rule", &[("E152", 1)], "確認の要否の表の見出しから `->` を落とした"),
+        ("m_e152ja.rule", &[("E152", 1)], "上と同じ規則の日本語の版"),
+        ("m_e154.rule", &[("E154", 1)], "素の割引の丸め方を、五つのどれでもない half にした"),
+        ("m_e154ja.rule", &[("E154", 1)], "上と同じ規則の日本語の版（丸め方を、down をよく指す名前の 切り捨て にした）"),
     ];
 
     // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very
@@ -911,6 +945,10 @@ fn 変異はコーパスから作り直せる() {
         "m_e147ja.rule",
         "m_e148.rule",
         "m_e148ja.rule",
+        // §15.314: no corpus rule has two counts over one sequence, and a count that starts above
+        // the top of another takes two. In English and in Japanese.
+        "m_e150count.rule",
+        "m_e150countja.rule",
     ];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let t = TempDir::new("mutants");

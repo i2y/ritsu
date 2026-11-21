@@ -1,0 +1,16 @@
+rule 不備の手数料(fee_by_slot) v1
+description "Python が投げる例外と同じ名前の列挙（Connect のサービスが読む stub は、要求のフィールドをその名前で注釈する）"
+
+enum 不備(value_error) = 遅れ(late) | 欠け(missing)
+
+inputs
+  不備の種類(problem) : 不備
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 不備ごとの手数料(fee_by_problem)
+policy unique
+| 不備の種類 | -> 手数料 |
+| 遅れ       | 5USD      |
+| 欠け       | 9USD      |

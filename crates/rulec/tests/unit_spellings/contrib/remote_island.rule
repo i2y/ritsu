@@ -1,0 +1,16 @@
+contribution remote_island v1
+description "A delivery to a remote island adds 1,500 yen under 10,000 yen, written in JPY (fictional)"
+to "../delivery_charge.rule" signature:273f420bbc7402b7
+
+inputs
+  subtotal : money[JPY]  range >=0JPY <=100_000JPY
+  remote   : bool
+
+table island
+| remote | subtotal     | -> island_charge : money[JPY] |
+| true   | >=10_000JPY  | 0JPY                          |
+| true   | <10_000JPY   | 1_500JPY                      |
+| false  | -            | 0JPY                          |
+
+into charge
+  island_charge

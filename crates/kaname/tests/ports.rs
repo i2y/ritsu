@@ -237,3 +237,40 @@ fn what_a_module_names() {
     t.write("c.kn", "module c\n");
     assert!(Engine.references(t.path(), "c.kn").is_err());
 }
+
+/// A module is one file however its path is written (ritsu's DESIGN 4.15): asked under four
+/// spellings of its path in a run, it is checked once, and what the port says of one that does not
+/// pass names it one way. Written otherwise, it is checked again, whichever way it is asked, and so
+/// is a module whose rule is written otherwise.
+#[test]
+fn a_module_is_one_file_however_its_path_is_written() {
+    let t = TempDir::new("kaname-ports-spelled");
+    ritsu_testkit::tmp::copy_dir(Path::new("examples/payout"), t.path());
+    t.write("main.kn", "module main v1\n\nfn f(n: number range >=0 <=9) -> number\n  m + 1\n");
+    let _run = ritsu_base::paths::run_from(".");
+    let ports = common::ports();
+    let before = Engine.checks();
+    for p in t.spellings("payout.kn") {
+        let x = Engine.crossings(&p, &ports).unwrap_or_else(|e| panic!("{}: {e:?}", p.display()));
+        assert_eq!((x.rules.len(), x.transfers.len()), (1, 2), "{}", p.display());
+    }
+    assert_eq!(Engine.checks() - before, 1, "one check for every spelling");
+    let said: Vec<_> = t.spellings("main.kn").iter().map(|p| Engine.crossings(p, &ports).unwrap_err()).collect();
+    assert_eq!(said[0].iter().map(|s| s.code.as_str()).collect::<Vec<_>>(), ["E101"]);
+    assert!(said.windows(2).all(|w| w[0] == w[1]), "{said:?}");
+    assert_eq!(Engine.checks() - before, 2);
+    let rewrite = |file: &str, more: &str| {
+        let text = std::fs::read_to_string(t.path().join(file)).unwrap();
+        t.write(file, format!("{text}\n{more}\n"));
+    };
+    rewrite("payout.kn", "# the module written otherwise");
+    for p in t.spellings("payout.kn") {
+        assert_eq!(Engine.crossings(&p, &ports).unwrap().rules.len(), 1, "{}", p.display());
+    }
+    assert_eq!(Engine.checks() - before, 3, "the module written otherwise, checked again once");
+    rewrite("rules/card_fee.rule", "# the rule written otherwise");
+    for p in t.spellings("payout.kn") {
+        assert_eq!(Engine.crossings(&p, &ports).unwrap().rules.len(), 1, "{}", p.display());
+    }
+    assert_eq!(Engine.checks() - before, 4, "a file the module read written otherwise, checked again once");
+}

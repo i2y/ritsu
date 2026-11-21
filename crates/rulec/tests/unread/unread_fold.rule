@@ -1,0 +1,36 @@
+rule unread_fold v1
+description "A fee by the amount, with a fold whose answer nothing reads and a count with no range (fictional)"
+
+enum verdict_kind = take | skip
+
+elements lines
+  amt : money[JPY]  range >=0JPY <=1000JPY
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  fee : money[JPY]  round down(1JPY)
+
+table decide
+policy unique
+| amt      | -> verdict : verdict_kind |
+| >=500JPY | take                      |
+| <500JPY  | skip                      |
+
+fold verdict over lines -> first_big : money[JPY]
+  take -> take_first amt
+  skip -> next
+  empty -> 0JPY
+  exhausted -> 0JPY
+
+sum all_amt over lines of amt  range >=0JPY <=100_000JPY
+count takes over lines where verdict = take  range >=0 <=100
+
+define tripled : money[JPY] = amount * 3  range >=3JPY <=300_000JPY
+
+table fee_of
+policy unique
+| amount     | -> fee |
+| <30000JPY  | 100JPY |
+| >=30000JPY | 500JPY |

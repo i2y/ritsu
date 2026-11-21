@@ -1,0 +1,53 @@
+module answers v1
+description "The whole answers of rules a host gets: of rules of one output, a number, an amount, a date, a yes or no, an enum and a string, each the value itself in the code of a rule; of rules of many outputs, an amount, an enum and a yes or no, and an enum and a string; and answers in a list and an answer that may be missing"
+
+use rule part from "tests/rules/part.rule"
+use rule boxes from "tests/rules/one_count.rule"
+use rule ships from "tests/rules/one_day.rule"
+use rule bulk from "tests/rules/one_flag.rule"
+use rule size from "tests/rules/one_size.rule"
+use rule label from "tests/rules/one_label.rule"
+use rule tiers from "../rulec/tests/corpus/member_tier_shipping.rule"
+use rule storage from "../rulec/tests/corpus/food_storage_standard.rule"
+
+# how many boxes a quantity fills
+fn boxes_of(qty: number range >=0 <=99) -> boxes.outputs
+  boxes(qty: qty)
+
+# a tenth of an amount
+fn part_of(amount: money[JPY] range >=0JPY <=1_000_000JPY) -> part.outputs
+  part(share: 10%, amount: amount)
+
+# the day an order ships
+fn ships_of(late: bool) -> ships.outputs
+  ships(late: late)
+
+# whether a quantity is sold in bulk
+fn bulk_of(qty: number range >=0 <=99) -> bulk.outputs
+  bulk(qty: qty)
+
+# the size of box a quantity takes
+fn size_of(qty: number range >=0 <=99) -> size.outputs
+  size(qty: qty)
+
+# what the box of a quantity is labelled
+fn label_of(qty: number range >=0 <=99) -> label.outputs
+  label(qty: qty)
+
+# the shipping of a basic member in a gold campaign: an amount, an enum and a yes or no
+fn tiers_of() -> tiers.outputs
+  tiers(member: tiers.tier.basic, campaign: tiers.tier.gold, subtotal: 10USD)
+
+# what to do with a frozen food kept at a temperature: an enum and a string
+fn storage_of(temp: temperature[℃] range >=-30℃ <=40℃) -> storage.outputs
+  storage(temp: temp, volume: 500mL, label: storage.kind.frozen, recheck: none)
+
+# a tenth of each amount: a list of answers of a rule
+fn parts_of(amounts: list[money[JPY]] count <=3 range >=0JPY <=1_000_000JPY) -> list[part.outputs]
+  amounts.map(a => part(share: 10%, amount: a))
+
+# the size of box a quantity takes, where one is given: an answer of a rule that may be missing
+fn size_if(qty: number? range >=0 <=99) -> size.outputs?
+  match qty
+    none => none
+    some q => size(qty: q)

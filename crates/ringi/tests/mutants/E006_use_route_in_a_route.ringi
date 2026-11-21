@@ -1,0 +1,12 @@
+route example v1 "Example"
+
+use route standard from "shared/standard.ringi"
+
+inputs
+  long : bool
+
+route
+  check  finance
+
+who
+  finance = team finance

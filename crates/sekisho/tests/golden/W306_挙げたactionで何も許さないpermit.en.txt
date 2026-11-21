@@ -1,0 +1,7 @@
+warning[W306]: tests/mutants/W306_挙げたactionで何も許さないpermit.gate:26:1: The permit `職員は読めて消せる` names the action `文書を消す`, and allows nothing of it: a forbid denies every combination it would allow there
+    26 | permit 職員は読めて消せる(staff_read_and_purge)
+  = On `文書を消す` it would allow 1 combination; `だれも消せない` denies it.
+  = For example: 利用者 holding 職員, 文書; denied by `だれも消せない`.
+  = On the other actions it names, it allows 1 combination of `文書を読む`.
+  = Remove `文書を消す` from its `action` line, or narrow the forbid if the permit is meant to allow `文書を消す`.
+tests/mutants/W306_挙げたactionで何も許さないpermit.gate: ok — 2 actions, 2 policies (1 permit, 1 forbid), 0 expectations, 0 separations

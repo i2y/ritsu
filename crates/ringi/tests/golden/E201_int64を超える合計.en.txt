@@ -1,0 +1,6 @@
+error[E201]: tests/mutants/E201_int64を超える合計.ringi:6:1: What the computation of the field `合計` is lowered to does not pass rulec's check: Cannot prove that total fits in int64
+     6 |   合計(total)    : money[円] "合計" = 単価 * 数量
+  = From rulec: E108 at line 8 of the lowered `form.rule`
+  = The reachable interval is 1円 to 90_000_000_000_000_000_000円 and the step is 1/1, so the stored integer reaches 90_000_000_000_000_000_000.
+  = Hint: narrow the input ranges, or insert one rounding step along the way.
+  = Where to round is a business decision that moves yen, so the tool does not decide it on its own.

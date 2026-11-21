@@ -49,6 +49,12 @@ kaname "pricing.kn" enum tier value gold	{"text":"kaname \"pricing.kn\" enum tie
 kaname "glue/late_payment.ja.kn" function 遅れの請求	{"text":"kaname \"glue/late_payment.ja.kn\" function 遅れの請求","tool":"kaname","path":"glue/late_payment.ja.kn","items":[["function","遅れの請求"]]}
 kaname "glue/late_payment.ja.kn" record 請求 field 遅れた日数	{"text":"kaname \"glue/late_payment.ja.kn\" record 請求 field 遅れた日数","tool":"kaname","path":"glue/late_payment.ja.kn","items":[["record","請求"],["field","遅れた日数"]]}
 kaname "orders.kn" enum Order value placed field on	{"text":"kaname \"orders.kn\" enum Order value placed field on","tool":"kaname","path":"orders.kn","items":[["enum","Order"],["value","placed"],["field","on"]]}
+ringi "expense.ringi"	{"text":"ringi \"expense.ringi\"","tool":"ringi","path":"expense.ringi","items":[]}
+ringi "expense.ringi" table route	{"text":"ringi \"expense.ringi\" table route","tool":"ringi","path":"expense.ringi","items":[["table","route"]]}
+ringi "expense.ringi" field items.price	{"text":"ringi \"expense.ringi\" field items.price","tool":"ringi","path":"expense.ringi","items":[["field","items.price"]]}
+ringi "expense.ringi" ticket hold_budget.reserve	{"text":"ringi \"expense.ringi\" ticket hold_budget.reserve","tool":"ringi","path":"expense.ringi","items":[["ticket","hold_budget.reserve"]]}
+ringi "expense.ja.ringi" who 上長	{"text":"ringi \"expense.ja.ringi\" who 上長","tool":"ringi","path":"expense.ja.ringi","items":[["who","上長"]]}
+ringi "shared/company.ringi" position dept_head	{"text":"ringi \"shared/company.ringi\" position dept_head","tool":"ringi","path":"shared/company.ringi","items":[["position","dept_head"]]}
 dandori "hotel.flow" value awaiting_review	ERROR: value only right after enum
 dandori "order.flow" task reserve case payment	ERROR: nothing under task
 dandori "order.flow" record Delivery task reserve	ERROR: only field under record
@@ -75,6 +81,9 @@ kaname "payout.kn" field amount	ERROR: field only right after record or value
 kaname "payout.kn" function settle record Settlement	ERROR: nothing under function
 kaname "payout.kn" record Settlement function settle	ERROR: only field under record (function)
 kaname "orders.kn" enum Order value placed field on field items	ERROR: one child at most (field)
+ringi "expense.ringi" who	ERROR: a kind without a name (who)
+ringi "expense.ringi" table route stage decide	ERROR: ringi has no nested kinds
+ringi "expense.ringi" route expense	ERROR: unknown kind for ringi
 koyomi "支払条件.cal" claim "受領から　60日"	{"text":"koyomi \"支払条件.cal\" claim \"受領から　60日\"","tool":"koyomi","path":"支払条件.cal","items":[["claim","受領から　60日"]]}
 file "."	{"text":"file \".\"","tool":"file","path":".","items":[]}
 file "src/"	{"text":"file \"src\"","tool":"file","path":"src","items":[]}

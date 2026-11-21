@@ -98,8 +98,8 @@ The module's decisions are all in tables.
 `kaname check` runs each line of `examples` in the reference interpreter, as a host would call the function, and compares the answer with the one written. The reference interpreter answers these.
 
 ```kn
-claim(invoice: Invoice { id: "inv_1", invoiced: 2026-03-02, amount: 100000GBPc }, paid_on: 2026-05-20, reference_rate: 0.5%)
+claim(invoice: Invoice { id: "inv_1", invoiced: 2026-03-02, amount: 100_000GBPc }, paid_on: 2026-05-20, reference_rate: 0.5%)
   = Claim { due: 2026-03-31, days_late: 50, compensation: 70GBP, interest: 1150GBPc }
-claim(invoice: Invoice { id: "inv_2", invoiced: 2026-03-02, amount: 100000GBPc }, paid_on: 2026-03-31, reference_rate: 0.5%)
+claim(invoice: Invoice { id: "inv_2", invoiced: 2026-03-02, amount: 100_000GBPc }, paid_on: 2026-03-31, reference_rate: 0.5%)
   = none
 ```

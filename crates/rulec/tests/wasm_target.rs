@@ -6,22 +6,28 @@ use std::path::PathBuf;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready};
 use ritsu_testkit::tmp::tmpdir_in;
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 fn run(args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).output().expect("rulec を起動できない");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] }).output().expect("rulec を起動できない");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 /// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
 /// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
 /// with that.
 fn run_tmp(tmp: &std::path::Path, args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args).output().expect("rulec を起動できない");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args).args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] }), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 fn have(cmd: &str) -> bool {
@@ -191,8 +197,11 @@ examples
 ";
 
 /// Every name a rule may take gives a `.wit` WIT reads (§15.278): the words WIT keeps for itself,
-/// which take a `%`, a run of `_`, which is one `-`, and a `_` at an end, which is none. The words
-/// a rule may not be named (they are rulec's own) are left out.
+/// which take a `%`, a run of `_`, which is one `-`, and a `_` at an end, which is none. Two kinds
+/// of name are left out: the words a rule may not be named, which are rulec's own (E009), and the
+/// words the Rust module a Wasm component is written as keeps for itself (`mod <name>;`, §15.335),
+/// which are a rule's name `gen --target wasm` refuses with E153 rather than write code that does
+/// not build.
 #[test]
 fn 規則の名前はどれもwitが読めるworldになる() {
     if !ready(Need::Rustc, || have("wasm-tools"), "wasm-tools is missing; the worlds of the Wasm target are not read") {
@@ -201,7 +210,7 @@ fn 規則の名前はどれもwitが読めるworldになる() {
     let t = TempDir::new("wasm-target-names");
     let mut names: Vec<String> = ritsu_emit::wasm::WIT_KEYWORDS.iter().map(|k| k.replace('-', "_")).collect();
     names.extend(["a__b", "trailing_", "fee_2nd", "shipping_fee"].map(String::from));
-    let (mut read, mut not_rules) = (Vec::new(), Vec::new());
+    let (mut read, mut not_rules, mut stopped) = (Vec::new(), Vec::new(), Vec::new());
     for name in &names {
         let dir = t.path().join(name);
         std::fs::create_dir_all(&dir).unwrap();
@@ -210,7 +219,11 @@ fn 規則の名前はどれもwitが読めるworldになる() {
         let out = dir.join("out");
         let (c, o, e) = run(&["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap(), "--target", "wasm"]);
         if c == 1 {
-            not_rules.push(name.clone());
+            if format!("{o}{e}").contains("E153") {
+                stopped.push(name.clone());
+            } else {
+                not_rules.push(name.clone());
+            }
             continue;
         }
         assert_eq!(c, 0, "{name}: {o}{e}");
@@ -225,8 +238,15 @@ fn 規則の名前はどれもwitが読めるworldになる() {
     assert_eq!(ritsu_emit::wasm::world("a__b"), "a-b");
     assert_eq!(ritsu_emit::wasm::world("trailing_"), "trailing");
     assert!(read.contains(&"%list".to_string()) && read.contains(&"a-b".to_string()) && read.contains(&"trailing".to_string()), "{read:?}");
-    assert!(read.len() >= 40, "{} worlds read: {read:?}; not names of a rule: {not_rules:?}", read.len());
-    println!("wasm-tools read the worlds of {} rules; {} of the names are not a rule's: {}", read.len(), not_rules.len(), not_rules.join(", "));
+    // `enum`, `import`, `result`, `with` are rulec's own words: E009 says they are not a name a rule
+    // may take. `as`, `async`, `static`, `type`, `use` are a rule's name the Rust module of the
+    // target cannot be written as (§15.336), so `gen --target wasm` writes nothing for them (E153).
+    not_rules.sort();
+    stopped.sort();
+    assert_eq!(not_rules, ["enum", "import", "result", "with"].map(String::from), "規則の名前になれない語: {not_rules:?}");
+    assert_eq!(stopped, ["as", "async", "static", "type", "use"].map(String::from), "Wasm の Rust が書けない規則の名前: {stopped:?}");
+    assert_eq!(read.len(), names.len() - not_rules.len() - stopped.len(), "{} worlds read: {read:?}", read.len());
+    println!("wasm-tools read the worlds of {} rules; {} of the names are not a rule's: {}; {} name a target the code cannot be written for: {}", read.len(), not_rules.len(), not_rules.join(", "), stopped.len(), stopped.join(", "));
 }
 
 #[test]

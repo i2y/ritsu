@@ -598,7 +598,7 @@ pub fn root(u: &Unit) -> String {
     };
     o.push_str(&format!("//! {what}\n\n"));
     o.push_str(&format!(
-        "// {}\n#[allow(dead_code)]\n#[path = \"{a}.rs\"]\nmod k;\n\n{}\n",
+        "// {}\n#![allow(dead_code, clippy::all)]\n#[path = \"{a}.rs\"]\nmod k;\n\n{}\n",
         u.t(tr!("rust/ に書くものと同じモジュール。この入口が使うのは、その一部だけ。", "The module rust/ gets, as it is; the door uses only some of it.")),
         ritsu_emit::wasm::ALLOC_USE
     ));

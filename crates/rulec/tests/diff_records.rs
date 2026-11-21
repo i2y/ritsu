@@ -238,7 +238,7 @@ fn an_input_the_new_version_turns_away_is_a_difference() {
 
         let (_, text, _) = rulec(d, a.lang, &["diff", &old, &format!("capped/{}", a.rule), "--fixtures", "records.jsonl"]);
         let (head, reason) = if a.lang == "ja" {
-            ("新しい版が受け付けない入力 6 件 (42.857%)", "報酬月額 が新しい版の範囲 10万円..40万円 の外です")
+            ("新しい版が受け付けない入力 6 件 (42.857%)", "報酬月額 が新しい版の範囲 100_000円..400_000円 の外です")
         } else {
             ("Not accepted by the new version 6 (42.857%)", "monthly_pay is outside the new version's range 100_000JPY..400_000JPY")
         };
@@ -246,7 +246,7 @@ fn an_input_the_new_version_turns_away_is_a_difference() {
         let (_, md, _) = rulec(d, a.lang, &["diff", &old, &format!("capped/{}", a.rule), "--fixtures", "records.jsonl", "--format", "markdown", "--terse"]);
         let row = if a.lang == "ja" { "| 新しい版が受け付けない | 6 件 |" } else { "| Not accepted by the new version | 6 |" };
         assert!(md.contains(row) && md.contains(&format!("| {reason} | 6 |")), "{}: {md}", a.lang);
-        assert!(!md.contains("499999"), "{}: --terse なのに記録の値が出ている: {md}", a.lang);
+        assert!(!md.contains("499999") && !md.contains("499_999"), "{}: --terse なのに記録の値が出ている: {md}", a.lang);
 
         // The cap alone: every answer under it is the same, and the run still ends with 1.
         let (c, text, _) = rulec(d, a.lang, &["diff", &old, &format!("cap_only/{}", a.rule), "--fixtures", "records.jsonl"]);

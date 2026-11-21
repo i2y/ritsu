@@ -1,0 +1,2 @@
+error[E212]: tests/mutants/E212_型の違う値.gate:12:1: The flow's `請求番号` is a string, and the attribute `至急` is a bool
+    12 |     至急 = 請求番号

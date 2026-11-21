@@ -188,7 +188,7 @@ impl Reader {
 
     fn read_python(&self, p: &Started, dir: &Path, report: &mut Report, problems: &mut Vec<Problem>) {
         for f in files_named(dir, "python-", ".json") {
-            match std::fs::read_to_string(&f).map_err(|e| e.to_string()).and_then(|text| python::read(&text, &self.root)) {
+            match std::fs::read_to_string(&f).map_err(|e| Text::same(e.to_string())).and_then(|text| python::read(&text, &self.root)) {
                 Ok(r) => merge(report, r),
                 Err(why) => problems.push(unreadable(p, &f, &why)),
             }
@@ -198,7 +198,7 @@ impl Reader {
     fn read_node(&self, p: &Started, dir: &Path, report: &mut Report, problems: &mut Vec<Problem>) {
         let source = |path: &Path| std::fs::read_to_string(path).ok();
         for f in files_named(dir, "coverage-", ".json") {
-            match std::fs::read_to_string(&f).map_err(|e| e.to_string()).and_then(|text| node::read(&text, &self.root, &source)) {
+            match std::fs::read_to_string(&f).map_err(|e| Text::same(e.to_string())).and_then(|text| node::read(&text, &self.root, &source)) {
                 Ok(r) => merge(report, r),
                 Err(why) => problems.push(unreadable(p, &f, &why)),
             }
@@ -283,7 +283,7 @@ impl Reader {
                 tr!("`go tool covdata textfmt` が失敗しました", "`go tool covdata textfmt` failed"),
                 tail(&o.stderr),
             )),
-            Ok(_) => match std::fs::read_to_string(&out).map_err(|e| e.to_string()).and_then(|text| go::read(&text, &self.modules)) {
+            Ok(_) => match std::fs::read_to_string(&out).map_err(|e| Text::same(e.to_string())).and_then(|text| go::read(&text, &self.modules)) {
                 Ok(r) => merge(report, r),
                 Err(why) => problems.push(unreadable(p, &out, &why)),
             },
@@ -404,8 +404,9 @@ impl Reader {
                 Err(why) => problems.push(Problem {
                     code: "E065",
                     msg: tr!(
-                        "`llvm-cov export` の出力を読めません: {why}",
-                        "geas cannot read what `llvm-cov export` wrote: {why}",
+                        "`llvm-cov export` の出力を読めません: {}",
+                        "geas cannot read what `llvm-cov export` wrote: {}",
+                        why.ja; why.en
                     ),
                     notes: vec![],
                     target: p.target.clone(),
@@ -571,14 +572,14 @@ fn tail(stderr: &[u8]) -> Vec<Text> {
     lines[from..].iter().map(|l| Text::same(crate::diag::cut(l, 160))).collect()
 }
 
-fn unreadable(p: &Started, file: &Path, why: &str) -> Problem {
+fn unreadable(p: &Started, file: &Path, why: &Text) -> Problem {
     let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     Problem {
         code: "E065",
         msg: tr!(
-            "`{}` が残したカバレッジのファイル {name} を読めません: {why}",
-            "geas cannot read the coverage file {name} that `{}` left: {why}",
-            p.target,
+            "`{}` が残したカバレッジのファイル {name} を読めません: {}",
+            "geas cannot read the coverage file {name} that `{}` left: {}",
+            p.target, why.ja; p.target, why.en
         ),
         notes: vec![command_note(p)],
         target: p.target.clone(),

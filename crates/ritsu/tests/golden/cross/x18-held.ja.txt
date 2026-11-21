@@ -1,0 +1,4 @@
+company.gate: ok — action 11、ポリシー 4（permit 3、forbid 1）、期待 0、職務の分離 0
+ok purchase.ringi: 申請の種類、フィールド 1 個、ステップ 1 個
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます
+ritsu check: ファイル 2 個（sekisho 1、ringi 1）。どれも検査を通りました。言語の境目: 確かめた 3 か所、決められない 0 か所

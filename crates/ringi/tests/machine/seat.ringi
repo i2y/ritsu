@@ -1,0 +1,44 @@
+request expense v1 "Expense, an approval taken back while a stage holds an answer"
+description "A proxy answers a part of a joint stage (fictional rules): while the stage's other part still waits, `retract approval` is refused, as the stage after the approval has an answer"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  first  manager
+  middle dept_head and accounting
+  decide division_head
+
+who
+  manager       = manager of requester
+  dept_head     = head of requester.department
+  division_head = nearest division_head above requester
+  accounting    = team accounting
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval     not allowed
+  same approver     approves once
+  send back         to any earlier stage, at most 2 times
+  resubmit          within 3 business days
+  withdraw          until middle
+  retract approval  until the next stage answers
+
+# a joint stage answered part by part, after the manager's stage: the part of the head of the
+# department is done, and accounting's waits
+scenario a_joint_stage_after_the_manager
+  requester e1201
+  form what = "A projector"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | middle   | in progress |
+| 2026-11-16 12:00 | approve | e3101 | middle   | in progress |
+| 2026-11-16 13:00 | approve | e1001 | decide   | in progress |
+| 2026-11-16 14:00 | approve | e0101 |          | approved    |

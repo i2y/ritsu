@@ -1,1 +1,1 @@
-error[E080]: `--lang` needs a value: en or ja
+error[E080]: `--lang en|ja` is missing its value

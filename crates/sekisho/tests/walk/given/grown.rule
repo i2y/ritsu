@@ -1,0 +1,19 @@
+rule grown v1
+description "Whether an age is grown up: an input that may not be left out, which the gate gives only when the age is there"
+
+inputs
+  age : number  range >=1 <=100
+
+outputs
+  grown : bool
+
+table grown_of
+policy unique
+| age  | -> grown |
+| <18  | false    |
+| >=18 | true     |
+
+examples
+| age | -> grown |
+| 6   | false    |
+| 30  | true     |

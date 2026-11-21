@@ -1,0 +1,19 @@
+rule 三件からの注文(three_or_more_ja) v1
+description "注文が大口か。注文には支払う明細が三件以上あり、一件は 100 円まで。二件で 150 円になる並びは、件数が足りない"
+
+# 注文の明細の一件ぶん
+elements 明細(lines)
+  価格(price) : money[円]  range >=1円 <=100円
+  支払い(paid) : bool
+
+count 支払う明細(paid_lines) over 明細 where 支払い  range >=3 <=5
+sum 金額(total) over 明細 of 価格  range >=0円 <=500円
+
+outputs
+  大口(large) : bool
+
+table 大口の判定(large_of)
+policy unique
+| 金額    | -> 大口 |
+| <150円  | false   |
+| >=150円 | true    |

@@ -1,0 +1,2 @@
+error: `size_label.rule` and `sizeLabel.rule` both write the Ruby module `SizeLabel` (out/ruby/size_label.rb and out/ruby/sizeLabel.rb), so loading the two lets the later file overwrite the methods and constants of the earlier; give one of them another alias
+エラー: `size_label.rule` と `sizeLabel.rule` が、同じ Ruby のモジュール `SizeLabel` を書きます（out/ruby/size_label.rb と out/ruby/sizeLabel.rb）。二つを読み込むと、後のファイルが先のファイルのメソッドと定数を上書きするので、どちらかの別名を変えてください

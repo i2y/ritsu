@@ -1,0 +1,2 @@
+error[E001]: tests/mutants/E001_言葉で書いた期限.ringi:13:10: Expected a number of business days, found `three`
+    13 |   due in three business days at end of day

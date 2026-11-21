@@ -1,0 +1,29 @@
+gate python_field_renamed v1
+description "python_field.gate with the attribute renamed cabin, as its note says"
+namespace Shop
+
+enum seat_class = first | business | economy
+
+role clerk
+  description "Answers requests"
+  can change_seat
+
+principal Clerk
+  description "The one who asks"
+  roles clerk
+
+resource Seat
+  description "A seat of a flight"
+  attributes
+    cabin : seat_class
+
+action change_seat
+  description "Change a seat"
+  principal Clerk
+  resource Seat
+
+permit clerks_change_economy_seats
+  description "A clerk can: Change a seat"
+  principal in clerk
+  action change_seat
+  when resource.cabin is economy

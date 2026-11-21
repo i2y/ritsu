@@ -1,0 +1,18 @@
+rule big_lines v1
+description "How many lines of an order cost 1_000 yen or more, in 円 (fictional)"
+
+elements lines
+  price : money[円]  range >=0円 <=10_000円
+
+outputs
+  big_lines : number  round down(1)
+
+table big_by_price
+policy unique
+| price     | -> big : bool |
+| >=1_000円 | true          |
+| <1_000円  | false         |
+
+count big_count over lines where big  range >=0 <=20
+
+define big_lines : number = big_count

@@ -1,0 +1,38 @@
+package {{package}}
+
+import (
+	"context"
+	"log/slog"
+	"strings"
+
+	server "{{framework}}"
+)
+
+// LogNotifier writes each notice to the log, where a real one sends a mail or a chat message: the
+// notice names the people to tell, with their addresses from the organization's data. It says the
+// kind by its title in the language it writes in (Server.Title), with the language the title is in:
+// the kind's title as its file writes it where it has none in that language. A real one writes to
+// each person in their own language, and sends each key once: the framework calls it again with the
+// same key after a failure it could not tell from a success.
+type LogNotifier struct {
+	// Server is the server whose kinds the notices are of; Started sets it once the server is made.
+	Server *server.Server
+	Log    *slog.Logger
+	// Lang is the language the notices are written in; "en" when empty.
+	Lang string
+}
+
+// Notify writes the notice.
+func (n *LogNotifier) Notify(_ context.Context, x server.Notice) error {
+	to := make([]string, 0, len(x.To))
+	for _, r := range x.To {
+		to = append(to, r.ID+" "+r.Email)
+	}
+	lang := n.Lang
+	if lang == "" {
+		lang = "en"
+	}
+	title, in := n.Server.Title(x.Kind, x.Version, lang)
+	n.Log.Info("notice", "notice", x.Notice, "to", strings.Join(to, ", "), "kind", x.Kind, "title", title, "title_lang", in, "ticket", x.Ticket, "stage", x.Stage)
+	return nil
+}

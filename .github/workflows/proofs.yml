@@ -7,7 +7,10 @@ name: proofs
 # a case is left in, each with its theorems. KanameCore: kaname's evaluation and its analysis of
 # ranges, with the theorems that the analysis is an estimate from above and that a function it
 # finds total does not fail. RitsuCross: the checks across the languages, kaname's calls of rules
-# among them, with the theorems that each settles what it says. `lake build` is what makes
+# among them, with the theorems that each settles what it says. RingiCore: ringi's ticket machine,
+# written as the machine's own code is, with the theorems its design states of it (an ended ticket
+# takes no event, a clock that has rung comes first, holds are closed, a quorum only grows, no one
+# approves their own request, climbing the organization is bounded). `lake build` is what makes
 # "proved" a fact about this commit rather than about a laptop. It makes two programs:
 # rulec-recheck is the certificate's checks themselves, so running it over the corpus is the
 # proofs applied to every document there; ritsu-model runs the models, and is held to each
@@ -16,8 +19,8 @@ name: proofs
 # takes the proofs of the examples' properties and turns away each way of breaking one (kaname's
 # tests/lean.rs and ritsu's). It runs when the proofs change, or what they are about: the sources of
 # the languages and of the checks across them, the base layer's (the digest and the JSON), the
-# corpus, the books, dates files, flows and modules of kaname the comparisons run, and the proofs
-# and tests of `--lean`.
+# corpus, the books, dates files, flows, modules of kaname and requests of ringi the comparisons
+# run, and the proofs and tests of `--lean`.
 
 on:
   push:
@@ -51,6 +54,10 @@ on:
       - "crates/kaname/tests/lean/**"
       - "crates/kaname/tests/properties/**"
       - "crates/kaname/tests/golden/lean/**"
+      - "crates/ringi/src/**"
+      - "crates/ringi/examples/**"
+      - "crates/ringi/tests/machine/**"
+      - "crates/sekisho/src/**"
       - "crates/ritsu/tests/lean.rs"
       - "crates/ritsu/src/check.rs"
       - "crates/ritsu-project/src/check.rs"
@@ -86,6 +93,10 @@ on:
       - "crates/kaname/tests/lean/**"
       - "crates/kaname/tests/properties/**"
       - "crates/kaname/tests/golden/lean/**"
+      - "crates/ringi/src/**"
+      - "crates/ringi/examples/**"
+      - "crates/ringi/tests/machine/**"
+      - "crates/sekisho/src/**"
       - "crates/ritsu/tests/lean.rs"
       - "crates/ritsu/src/check.rs"
       - "crates/ritsu-project/src/check.rs"
@@ -177,9 +188,9 @@ jobs:
 
       # crates/ritsu-model is of the tools level (it runs the program proofs/ builds): every
       # scenario of chobo's books, every line of koyomi's vectors, the scenarios of dandori's core
-      # flows and every vector of every function of kaname's examples and test modules, run by the
-      # language and by its model and compared a line at a time, with kaname's analysis of ranges
-      # held to the model's; the checks
+      # flows, every vector of every function of kaname's examples and test modules and every vector
+      # of ringi's examples and requests of the machine, run by the language and by its model and
+      # compared a line at a time, with kaname's analysis of ranges held to the model's; the checks
       # across the languages over the inputs the tests make, decided by ritsu-cross and by
       # RitsuCross; and every declaration of every library held to the three axioms Lean stands
       # on. A SKIP line here would mean a comparison did not run, so one fails the step.

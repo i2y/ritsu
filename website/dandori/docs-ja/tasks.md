@@ -26,7 +26,7 @@ Temporal の表は TypeScript 版のものです。Python 版は `fetch` と AWS
 
 生成した呼び出しは、どれも `Transport`（`io.ts`、`io.py`、`io.go`）を通ります。HTTP の API のヘッダ、AWS SDK のクライアント、エージェントの API キー、Jev のための TypeSafe の API キーと Decisions API のための OpenAI の API キー、フローが操作する帳簿のクライアントといった認証や接続の設定は、ここで渡します。テストでは、ここを差し替えます。
 
-`http` のタスクの URL の `{id}` には、引数 `id` の値を文字列にして入れます（数・真偽値・レコードは JSON、値が無ければ空の文字列）。このとき JavaScript の `encodeURIComponent` と同じ規則でエスケープするので、値に `/`・`?`・`#`・`%`・空白が入っていても、パスの区切りやクエリの始まりとしては読まれません。URL に入れない引数は、`GET` と `DELETE` ではクエリに、それ以外では本文に入れます。
+`http` のタスクの引数は、URL のパス・クエリ・ヘッダー・クッキー・本文のどれかに、OpenAPI の書き方で入れます（[HTTP の呼び出しの引数の置き場](#http-の呼び出しの引数の置き場)）。
 
 `queue "<名前>"` を書くと、Temporal のアクティビティや子ワークフローを、そのタスクキューへ送ります。そのキューは、三つの言語のどのワーカーでも受け持てます。
 
@@ -37,6 +37,27 @@ Temporal の表は TypeScript 版のものです。Python 版は `fetch` と AWS
 `event` と書いたタスクは、何も呼びません。ワークフローは、自分のワークフロー ID とタスクの名前を宛先にして送られてくる値を待ちます。承認のツールや運送会社の Webhook のように、どの注文についての通知かは分かっていても、コールバックのトークンは持っていない送り手に向いています。ワークフローは、待っているあいだに届いたものだけを受け取り、それ以外は拒否します。送った側は拒否されたことが分かるので、あとで送り直せます。実行に名前で値を送れるのは Temporal だけなので、ほかのプラットフォーム向けにはビルドできません（E050）。
 
 Argo Workflows では、どのタスクもコンテナで動きます。生成した呼び出しは、`caller/` から作るイメージに入ります。`image` を書いたタスクは、そのイメージのコンテナで動きます。コンテナは呼び出しの中身を環境変数 `DANDORI_CALL` から読み、結果を `/tmp/dandori/answer.json` に書きます。宣言したエラーで終えるときは、`{"error", "message"}` を `/tmp/dandori/error.json` に書き、終了コード 3 で終わります。Argo は、失敗した Pod の出力を待ちません。エラーのファイルより先に Pod の終わりがコントローラーに届くと、ファイルを書かなかった呼び出しとして読み、理由が空の `failure` になります。宣言したエラーでも `failure` になります。
+
+## HTTP の呼び出しの引数の置き場
+
+記述の無い `http` のタスクは、OpenAPI の既定どおりに引数を置きます。URL が名前で挙げる引数（`{id}`）はパスに、ほかの引数は、`GET` と `DELETE` ではクエリに、それ以外のメソッドでは本文に入れます。OpenAPI の記述のあるタスクは、記述が言う置き場に、記述の名前で入れます。パス、クエリ（`POST` でも）、ヘッダー、クッキーのどれかで、どれでもなければ本文です。記述の名前の `-` は、タスクの引数では `_` と書きます（`book-id` は `book_id`）。ヘッダーの名前は、大文字と小文字を区別しません。`x_library_key` はヘッダー `X-Library-Key` です。
+
+リストとレコードは、記述がその引数に書いた `style` と `explode`（URL エンコードの本文では `encoding`）で書き、書いていなければ OpenAPI の既定で書きます。
+
+| 置き場 | 既定 | `tags: ["a", "b"]` | `spot: {row: 3, col: 12}` |
+|---|---|---|---|
+| パス | `simple` | `a,b` | `row,3,col,12` |
+| クエリ、URL エンコードの本文 | `form`、`explode: true` | `tags=a&tags=b` | `row=3&col=12` |
+| ヘッダー | `simple` | `X-Tags: a,b` | `X-Spot: row,3,col,12` |
+| クッキー | `form`、`explode: true` | E016。クッキーには `explode: false` が要り、`tags=a,b` | 同じく。`spot=row,3,col,12` |
+
+ほかの書き方も、OpenAPI の例のとおりです。パスでは `label`（`.a.b`）と `matrix`（`;tags=a;tags=b`、`;row=3;col=12`）、クエリと URL エンコードの本文では `spaceDelimited`（`tags=a%20b`）、`pipeDelimited`（`tags=a%7Cb`）、`deepObject`（`spot%5Brow%5D=3&spot%5Bcol%5D=12`）です。値の文字列は、文字列ならそのまま、数と真偽値は JSON の書き方、文字列でない `json` の値は JSON の文字列です。パス・クエリ・クッキーでは、JavaScript の `encodeURIComponent` と同じ規則でエスケープするので、値の中の `/`・`?`・`#`・`%`・`&`・空白は、値の中にとどまります。ヘッダーには文字列をそのまま入れ、ASCII でない文字は UTF-8 で送ります。
+
+値の無いものは、どこにも入りません。値の無い引数、リストの値の無い項目、レコードの値の無いフィールド、項目の無いリスト、フィールドの無いレコードです。クエリに `until=` は付かず、URL エンコードの本文に組は入らず、ヘッダーもクッキーも送りません。JSON の本文には `null` で入れ、パスは空の区切りになります。
+
+記述どおりに書けないものは、別の形で送らずに、タスクの行で止めます（E016。記述の無いタスクでは E003）。OpenAPI が決めていない組み合わせ（`deepObject` のリスト、`explode: true` の `pipeDelimited`、`explode: true` でクッキーに送るリストやレコード）、JSON の本文のほかに送る、リストやレコードを中に持つリストやレコード、同じ名前に値を入れる二つの引数、記述の二つの引数に当たる引数、HTTP のクライアントが自分で書くヘッダー（`Host`、`Content-Length`）、ヘッダー `Cookie` で送るクッキー、ヘッダーやクッキーの名前に書けない名前です。記述が必須と言うヘッダーとクッキーは、値のある型（`T?` でなく `T`）で渡します。
+
+`Transport` には、Step Functions の HTTP Task と同じ形で呼び出しを渡します。パスとクエリを書き入れた URL、クッキーを一つの `Cookie` にまとめたヘッダー、本文です。JSON の本文はそのオブジェクト、URL エンコードの本文は組のオブジェクトで、リストの項目は一つの名前の下に並べます。dandori が自分で入れるヘッダーは、URL エンコードの本文の `Content-Type`、`Connect-Protocol-Version`、`key` の `Idempotency-Key` です。`Transport` のオプションのヘッダーは、呼び出しの同じ名前のヘッダーに代わります（名前の大文字と小文字は区別しません）。オプションの `Cookie` は、そのクッキーを呼び出しのクッキーに足し、同じ名前のクッキーに代わります。状態機械は URL を JSONata で組み、ヘッダーと本文を HTTP Task に渡します。URL エンコードの本文で名前を繰り返すリストには、`ArrayFormat: REPEAT` を付けます。
 
 ## 呼び出しにかけてよい時間
 
@@ -106,6 +127,44 @@ task reserve_stock(sku: string, quantity: int) -> Reservation
 
 検査は、引数が操作と合うか（受け取らない引数を渡していないか、要る引数がそろっているか、型と範囲が合うか）と、結果の型が操作のレスポンスに合うかを確かめます。レスポンスが省くことのあるフィールドや、null になることのあるフィールドは `T?` にし、列挙には、レスポンスに現れうる値をすべて持たせます（範囲を書いた列挙なら、その値がすべて範囲に入るようにします）。宣言するエラーは、操作が実際に返すものに限られます。AWS の API で `key <引数>` に使えるのは、その操作の冪等トークンだけです。
 
+記述が日付や日時だと言う文字列は、フローの日付と日時になります。
+
+| 記述にあるもの | タスクがそこへ送れるもの | タスクが読める型 |
+|---|---|---|
+| `format: date` の文字列（`2026-11-16`） | `date`、`string` | `date`、`string` |
+| `format: date-time` の文字列 | `timestamp` | `timestamp`、`string` |
+| `google.protobuf.Timestamp` | `timestamp` | `timestamp`、`string` |
+| `google.type.Date`（`{"year": 2026, "month": 11, "day": 16}`） | `date`、`string` | `date`、`string` |
+| Smithy の `timestamp` | `timestamp` | `timestamp` |
+
+```flow
+use openapi leave from "apis/leave.json"
+
+record Period
+  first_day : date
+  last_day  : date
+
+task book(employee: string, period: Period) -> Leave
+  http POST leave "/leaves"
+```
+
+`date` は、どのプラットフォームでも `2026-11-16` の形で送り、`timestamp` は UTC の RFC 3339（`2026-11-16T09:00:00Z`）で送ります。そのため、記述が日時と言う所に日付は送れず、日付と言う所に日時は送れません。列挙の値は、どちらにも送れません。`string` は、日付と言う所には送れますが（その文字列が日付かどうかは API が確かめます）、日時と言う所には送れません。記述が値を挙げた文字列（`enum`）は、挙げた値がどれも日付なら `date` で、どれも日時なら `timestamp` で読めます。範囲を書いたなら、どの値もその範囲に入っていなければなりません。
+
+Smithy の timestamp は、記述が言う形で送ります。メンバーに `@timestampFormat` があればその形、無ければ timestamp の型の `@timestampFormat`、それも無ければ、プロトコルと置き場所で決まる形です。awsJson1_0・awsJson1_1・restJson1・rpcv2Cbor の本文では 1970 年からの秒の数、restXml・awsQuery・ec2Query の本文とクエリとパスでは RFC 3339、ヘッダーでは HTTP の日付になります。数で届くこともあるので、`string` では読めません。フローの日時をその形にするのは、各言語の AWS SDK です。TypeScript の既定の `Transport` は、記述が timestamp と言う所の値を `Date` にして SDK に渡し、boto3 と AWS SDK for Go v2 は RFC 3339 の文字列を自分で読みます。日時がどの形で返ってきても、既定の `Transport` はフローに UTC の RFC 3339（`2026-11-16T09:00:00Z`）で渡します。状態機械は、文字列のまま Step Functions に渡します。
+
+`google.type.Date`（`google/type/date.proto`）は、protobuf の JSON ではオブジェクトです（`{"year": 2026, "month": 11, "day": 16}`）。dandori が生成するコードは、どのプラットフォームでも、`date` をこのオブジェクトにして送ります。リクエストのすぐ下でも、リスト、メッセージの中、メッセージのリストの中でも同じです。読むときは `2026-11-16` に直してから、結果の型を確かめます。`string` は、それが持つ日として送ります。日でない文字列はそのまま送り、受け付けるかはサービスが決めます。年・月・日のどれかが無い日付（protobuf の JSON は 0 の部分を省きます。カードの月や、年の無い誕生日がそうです）は、暦の一日ではありません。届いたまま残し、検査が `Dandori.BadResponse` で拒みます。`json` で読むフィールドは、そうした日付も届いたまま受け取ります（年・月・日のそろった日付は `2026-11-16` で届きます）。この型は、protobuf のよく知られた型と同じく、名前で分かります。`google/type/date.proto` はディスクに無くてよく、あっても読みません。
+
+<div class="dd-term" markdown>
+
+```text
+エラー[E016]: tests/fixtures/date_formats.flow:39:1: 引数 `first_day` は、`leave` の POST /leaves/{id}/move が受け取るものと合いません。`timestamp` で、日付ではありません。`date` にしてください
+    39 | task move(id: string, first_day: timestamp, previous: string, asked_at: date) -> Moved
+エラー[E016]: tests/fixtures/date_formats.flow:39:1: 引数 `asked_at` は、`leave` の POST /leaves/{id}/move が受け取るものと合いません。`date` で、日時ではありません。`timestamp` にしてください
+    39 | task move(id: string, first_day: timestamp, previous: string, asked_at: date) -> Moved
+```
+
+</div>
+
 Stripe と在庫のサービスを呼ぶ下書き
 （[tests/fixtures/api_calls.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/api_calls.flow)）を `--lang ja` で検査すると、こうなります。
 
@@ -168,6 +227,7 @@ task reserve_stock(sku: string, quantity: int) -> warehouse.ReserveResponse
 | `repeated T` | `list[T]` |
 | `optional` を付けたフィールド、メッセージ型のフィールド、`oneof` の一つ | `T?` |
 | `google.protobuf.Timestamp` | `timestamp` |
+| `google.type.Date` | `date` |
 | `Struct`、`Value`、`ListValue`、`Any` | `json` |
 | `Empty` | フィールドの無いレコード |
 | `Duration`、`FieldMask` | `string` |
@@ -179,8 +239,8 @@ task reserve_stock(sku: string, quantity: int) -> warehouse.ReserveResponse
 <div class="dd-term" markdown>
 
 ```text
-エラー[E002]: tests/fixtures/proto_types.flow:27:11: 型 `types.Stok` はありません
-    27 |   stock : types.Stok
+エラー[E002]: tests/fixtures/proto_types.flow:23:11: 型 `types.Stok` はありません
+    23 |   stock : types.Stok
   = `types` のメッセージと列挙は Box・Everything・Everything.Nested・GetRequest・Line・Mode・Status・Ticket です
 ```
 
@@ -203,7 +263,7 @@ task reserve_stock(sku: string, quantity: int) -> warehouse.ReserveResponse
 - 値が設定されていない `Value` は、protobuf の JSON から省かれます。そのため、`json` のフィールドは無いことがあります。無ければ、`T?` と同じように null として読み、そのフィールドを引数に取るタスクには `null` を渡します。レコードをそのまま渡すときは、フィールドが無いまま渡ります。ワークフローの `json` の入力も、始めるときに省かれていれば、null として読みます。
 - 生成するコードでは、型の名前の `.` を `_` にします（`warehouse_ReserveResponse`）。フローのほかの型が同じ名前になるときは E006 です。`dandori doc` では、`.flow` に書いたとおりの名前で表示します。
 - `url` が要るのは、タスクがサービスを呼ぶとき（`connect`）だけです。型を作るためだけに読む `.proto` には要りません。
-- `.proto` が、ディスクにないファイルを import していることがあります。たとえば `google/api/annotations.proto` はオプションのために import するもので、フローが使う型は何も持っていません。そのため `.proto` はそのまま読み、そのファイルは飛ばします。飛ばしたファイルだけが持つ型は分かりません。その型のフィールドを持つメッセージから型は作れず（E002）、その型を受け取る、または返すメソッドをタスクと合わせることもできません（E016）。診断には、読めなかったファイルの名前が添えられます。
+- `.proto` が、ディスクにないファイルを import していることがあります。たとえば `google/api/annotations.proto` はオプションのために import するもので、フローが使う型は何も持っていません。そのため `.proto` はそのまま読み、そのファイルは飛ばします。飛ばしたファイルだけが持つ型は分かりません。その型のフィールドを持つメッセージから型は作れず（E002）、その型を受け取る、または返すメソッドをタスクと合わせることもできません（E016）。診断には、読めなかったファイルの名前が添えられます。`google/type/date.proto` は、この読めないファイルには入りません。その日付は名前で分かるからです。
 
 <div class="dd-term" markdown>
 
@@ -303,6 +363,8 @@ import enum 段階 from "rules/注文の状態の列挙.rule" -> 等級
 ```
 
 列挙は、値と、ファイルが `<` で書いていればその順をそのまま持つので、範囲（`range >=基本 <=銀`）も、フローに書いた列挙と同じに書けます。`-> <名前>` で、このフローでの名前を付け替えられます。ファイルが無い、規則である、rulec の検査を通らないときは E005、ファイルにない列挙は E002、フローがすでに持つ名前は E006 です。どのプラットフォームのコードも、同じ列挙をフローに書いたときのコードと同じです。
+
+一つのファイルの同じ列挙は、どの名前で読んでも一つの型です。フローの `import enum` も、同じファイルを `import enum` で読む規則の `<規則>.<列挙>` も、`enums` ファイルを `use rule` で読んだときの `<名前>.<列挙>` も同じ型なので、フローはその値を、同じファイルを読むどの規則にも渡せます。各プラットフォームのコードは、フローと規則が書いた名前のままです。フローが書いた列挙と、規則が自分で宣言した列挙は、値が同じでも別の型です（E003。注がそれぞれの宣言の場所を言います）。共有するなら `enums` ファイルに置いてください。一つの列挙を二つ以上の名前で読むフローでは、`dandori doc` のページがその名前を並べます。
 
 AWS 向けの注文の例は、急ぎの規則をこの形で呼びます（[order.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/order/aws/order.flow)）。`rulec gen` が書くサービスに、dandori が送るものを実際に送って確かめるテストもあります（[どうやって確かめているか](assurance.md)）。
 

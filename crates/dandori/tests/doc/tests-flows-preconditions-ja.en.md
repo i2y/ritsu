@@ -2,7 +2,7 @@
 
 返金をすぐに払うか確かめに回し、支払日に精算する。規則の前提は、ここでは ritsu が決められない（求める額と日が、範囲の無いタスクの結果から来る）ので、ワークフローが値のできたところですぐに確かめる。答えたタスクの直後、規則を呼ぶ分岐の始め、イテレーションの始めで確かめる。どのプラットフォームでも動く
 
-`tests/flows/preconditions.ja.flow`, drawn by `dandori doc`. Inputs: `注文: string`, `払った額: int range >=0 <=10000`.
+`tests/flows/preconditions.ja.flow`, drawn by `dandori doc`. Inputs: `注文: string`, `払った額: int range >=0 <=10_000`.
 
 ## flow
 
@@ -200,10 +200,10 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 What `dandori check` says of this workflow, each with the run that gets there.
 
 ```text
-warning[W104]: tests/flows/preconditions.ja.flow:41:1: nothing says what range `求める額` is in (the answer of `額を聞く` has no range), and `求める額` of the rule `確認` takes `>=0 <=10000`
+warning[W104]: tests/flows/preconditions.ja.flow:41:1: nothing says what range `求める額` is in (the answer of `額を聞く` has no range), and `求める額` of the rule `確認` takes `>=0 <=10_000`
     41 |   let 判断 = 確認(払った額: 払った額, 求める額: 求める額)
-warning[W104]: tests/flows/preconditions.ja.flow:52:1: nothing says what range `一件.求める額` is in (the field `求める額` of `請求` has no range), and `求める額` of the rule `確認` takes `>=0 <=10000`
+warning[W104]: tests/flows/preconditions.ja.flow:52:1: nothing says what range `一件.求める額` is in (the field `求める額` of `請求` has no range), and `求める額` of the rule `確認` takes `>=0 <=10_000`
     52 |     let 一回 = 確認(払った額: 払った額, 求める額: 一件.求める額)
-warning[W104]: tests/flows/preconditions.ja.flow:54:1: nothing says what range `各件.求める額` is in (the field `求める額` of `請求` has no range), and `求める額` of the rule `確認` takes `>=0 <=10000`
+warning[W104]: tests/flows/preconditions.ja.flow:54:1: nothing says what range `各件.求める額` is in (the field `求める額` of `請求` has no range), and `求める額` of the rule `確認` takes `>=0 <=10_000`
     54 |     let 各回 = 確認(払った額: 払った額, 求める額: 各件.求める額)
 ```

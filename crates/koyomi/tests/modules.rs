@@ -72,7 +72,7 @@ fn a_module_in_english() {
     // a walk that starts outside every module does not enter one, and says so in a line each
     transcript(&mut t, "en", &[(&["check", "."], 1)]);
     for said in [
-        "note: `./app` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check ./app` to read it",
+        "note: `app` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check app` to read it",
         "The `@shop` of `@shop/calendars/office.cal` is no dependency",
         "`../../lib/calendars/office.cal` leads outside the module `example.com/acme/app`",
         "`../inner/calendars/office.cal` leads into `inner`, a directory below with a `ritsu.mod` of its own, without an `@`",
@@ -106,7 +106,7 @@ fn a_module_in_japanese() {
     transcript(&mut t, "ja/外", &[(&["check", "--lang", "ja", "十日後払い.cal"], 1), (&["check", "--lang", "ja", "十日後払い.cal", "--format", "json"], 1)]);
     transcript(&mut t, "ja", &[(&["check", "--lang", "ja", "."], 1)]);
     for said in [
-        "備考: `./アプリ` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `koyomi check ./アプリ` を実行してください",
+        "備考: `アプリ` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `koyomi check アプリ` を実行してください",
         "`@shop/カレンダー/事務所.cal` の `@shop` は依存ではありません",
         "`../../部品/カレンダー/事務所.cal` は、モジュール `example.com/acme/app` の外を指します",
         "`../入れ子/カレンダー/事務所.cal` は、`ritsu.mod` を持つ下のディレクトリ `入れ子` の中を、`@` を通らずに指しています",

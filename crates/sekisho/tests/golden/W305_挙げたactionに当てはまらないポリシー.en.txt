@@ -1,0 +1,6 @@
+warning[W305]: tests/mutants/W305_挙げたactionに当てはまらないポリシー.gate:37:1: The forbid `停止中の職員はだれでも読める物を見ない` names the action `棚を見る`, and applies to no combination of it
+    37 | forbid 停止中の職員はだれでも読める物を見ない(suspended_staff_see_nothing_open)
+  = Of the 2 combinations its `principal` line takes, the lines are met: `when resource.だれでも読める` on 0, `when principal.停止中` on 1. A line is met on none.
+  = On the other actions it names, it applies to 1 combination of `文書を読む`.
+  = Remove `棚を見る` from its `action` line, or correct its lines so that it applies to `棚を見る` too.
+tests/mutants/W305_挙げたactionに当てはまらないポリシー.gate: ok — 2 actions, 2 policies (1 permit, 1 forbid), 0 expectations, 0 separations

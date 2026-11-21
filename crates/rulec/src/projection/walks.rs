@@ -653,7 +653,7 @@ fn from_contract(element: Option<&Contract>, field: &str) -> (Dom, bool, Option<
                 Some(crate::proto::Scalar::Bool) => (Dom::Truth, false),
                 // The rules on a `double` are not read at all, so a value cannot be shown to pass.
                 Some(crate::proto::Scalar::Frac) => (Dom::Frac { lo: None, hi: None }, true),
-                None => match econ.enum_of(&fd.ty) {
+                None => match econ.enum_of(&fd) {
                     Some(e) => {
                         let r = &fd.rules.enum_values;
                         let keep = |n: i128| {

@@ -52,7 +52,7 @@ fn pair(tag: &str, contract: &str, rule: &str) -> (TempDir, PathBuf) {
 
 /// rulec run in `dir`, in `lang`: the exit code and what it printed.
 fn rulec(dir: &Path, lang: &str, args: &[&str]) -> (i32, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(dir).env("RULEC_LANG", lang).args(args).output().expect("rulec を起動できない");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(dir).env("RULEC_LANG", lang).args(args).args(["--lang", lang]).output().expect("rulec を起動できない");
     let mut s = String::from_utf8_lossy(&o.stdout).into_owned();
     s.push_str(&String::from_utf8_lossy(&o.stderr));
     (o.status.code().unwrap_or(-1), s)

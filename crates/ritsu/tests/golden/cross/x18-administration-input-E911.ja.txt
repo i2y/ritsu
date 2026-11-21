@@ -1,0 +1,8 @@
+company.gate: ok — action 11、ポリシー 4（permit 3、forbid 1）、期待 0、職務の分離 0
+ok purchase.ringi: 申請の種類、フィールド 1 個、ステップ 1 個
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます
+エラー[ritsu E911]: purchase.ringi:3: ゲート company.gate の action `import_organization` は自分の入力（`dry_run`）を受け取りますが、管理の操作でゲートに尋ねるサーバーには、渡す値がありません
+     3 | use gate "company.gate"
+  = サーバーがゲートに渡すのは、人と、resource（チケット、ステップ、申請の種類か組織と、ringi が決めた属性）と、時刻だけです。自分の入力を受け取る action は、いつも拒まれます（種類 `input` の断り）。
+  = company.gate の `import_organization` から `input` の行を外してください。自分の入力が要る決まりは別の action に書き、プログラムからその action の関数で尋ねます。
+ritsu check: ファイル 2 個（sekisho 1、ringi 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 3 か所、決められない 0 か所

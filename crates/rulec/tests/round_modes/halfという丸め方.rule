@@ -1,0 +1,16 @@
+rule 小包の送料(parcel_fee) v1
+description "丸め方を half と書いた小包の送料。half は五つの丸め方のうち三つの頭で、どれでもない"
+
+inputs
+  個数(qty) : number  range >=1 <=100
+
+outputs
+  送料(fee) : money[円, incl_tax]  round half(10円)
+
+define 個数割(by_qty) : money[円, incl_tax] = 個数 * 75円 / 10
+
+table 個数ごとの送料(fee_by_qty)
+policy unique
+| 個数 | -> 送料 |
+| <=4  | 300円   |
+| >4   | 個数割  |

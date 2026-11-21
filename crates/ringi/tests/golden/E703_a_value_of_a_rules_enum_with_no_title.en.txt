@@ -1,0 +1,3 @@
+error[E703]: tests/mutants/E703_a_value_of_a_rules_enum_with_no_title.ringi:8:1: The screens show 1 thing with no title in the file's language (`en`): `level.cfo`
+     8 |   level  : choice from authority.decider "Who decides"
+  = Title each value under the field, as `goods "Goods and services"`; where the rule is written in the file's language (`en`), the display name it writes for a value titles it too. Without either, a screen would show the value's name as the rule writes it.

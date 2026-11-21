@@ -1,6 +1,8 @@
 //! `ritsu dandori` (DESIGN 8.6): dandori's command, with rulec's answer to the port of rules joined
 //! in, so that a workflow reads its rules in the same process.
 
+mod common;
+
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -10,13 +12,12 @@ fn dandori_dir() -> PathBuf {
 
 /// `ritsu`, run in dandori's directory, with no language asked of the environment.
 fn ritsu(args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_ritsu"))
-        .current_dir(dandori_dir())
-        .env_remove("RITSU_LANG")
-        .env_remove("DANDORI_LANG")
-        .args(args)
-        .output()
-        .expect("could not run ritsu");
+    let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
+    c.current_dir(dandori_dir()).args(args);
+    for v in common::LANG_VARS {
+        c.env_remove(v);
+    }
+    let o = c.output().expect("could not run ritsu");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
@@ -93,7 +94,7 @@ struct EveryUndecided(std::rc::Rc<dyn ritsu_ports::Rules>);
 impl ritsu_ports::Undecided for EveryUndecided {
     fn preconditions(&self, file: &std::path::Path) -> Vec<ritsu_ports::UndecidedPrecondition> {
         use ritsu_ports::Flows;
-        let Ok(calls) = dandori::ports::Engine.rule_calls(file, self.0.clone()) else { return vec![] };
+        let Ok(calls) = dandori::ports::Engine::default().rule_calls(file, self.0.clone()) else { return vec![] };
         let mut out = Vec::new();
         for c in calls {
             for p in self.0.facts(&c.rule).map(|f| f.preconditions).unwrap_or_default() {

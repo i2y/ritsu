@@ -18,3 +18,12 @@ Copied from the other languages of ritsu (`crates/<language>/` in this repositor
 $ ritsu yuen check examples/payment_terms/payment_terms.req
 $ ritsu yuen check examples/payment_terms/payment_terms.ja.req
 ```
+
+`changes/closed.diff` closes the office for summer holidays in the calendar (`changes/closed.ja.diff`
+in the Japanese one). No line of the `.cal` the links name changes; it uses the calendar, and
+`affected` follows its `use calendar` line to the requirements its dates meet:
+
+```console
+$ ritsu yuen affected examples/payment_terms/payment_terms.req --root examples/payment_terms --diff examples/payment_terms/changes/closed.diff
+$ ritsu yuen affected examples/payment_terms/payment_terms.ja.req --root examples/payment_terms --diff examples/payment_terms/changes/closed.ja.diff --lang ja
+```

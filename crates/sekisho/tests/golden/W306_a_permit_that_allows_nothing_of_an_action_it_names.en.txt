@@ -1,0 +1,7 @@
+warning[W306]: tests/mutants/W306_a_permit_that_allows_nothing_of_an_action_it_names.gate:26:1: The permit `staff_read_and_purge` names the action `purge_doc`, and allows nothing of it: a forbid denies every combination it would allow there
+    26 | permit staff_read_and_purge
+  = On `purge_doc` it would allow 1 combination; `no_one_purges` denies it.
+  = For example: User holding staff, Doc; denied by `no_one_purges`.
+  = On the other actions it names, it allows 1 combination of `read_doc`.
+  = Remove `purge_doc` from its `action` line, or narrow the forbid if the permit is meant to allow `purge_doc`.
+tests/mutants/W306_a_permit_that_allows_nothing_of_an_action_it_names.gate: ok — 2 actions, 2 policies (1 permit, 1 forbid), 0 expectations, 0 separations

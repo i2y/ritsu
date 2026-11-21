@@ -1,5 +1,7 @@
 //! Running a program to its end with a time limit: macOS has no `timeout`, so the limit is
-//! kept here and a program that outlives it is killed (koyomi's, sakai's and geas's).
+//! kept here, and a program that outlives it is killed with every process it started — a server
+//! it runs, a runner it hands work to — and what it printed until then is kept (koyomi's, sakai's,
+//! geas's and dandori's runners of the platforms).
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
@@ -47,8 +49,8 @@ pub fn spawn(cmd: &mut Command) -> std::io::Result<Child> {
     }
 }
 
-/// Wait for a child, killing it after `limit`: whether it succeeded, its code, whether the
-/// limit ended it.
+/// Wait for a child, killing it after `limit` with every process it started: whether it
+/// succeeded, its code, whether the limit ended it.
 fn wait_limited(child: Arc<Mutex<Child>>, limit: Duration) -> (bool, Option<i32>, bool) {
     let start = Instant::now();
     loop {
@@ -56,24 +58,104 @@ fn wait_limited(child: Arc<Mutex<Child>>, limit: Duration) -> (bool, Option<i32>
             return (s.success(), s.code(), false);
         }
         if start.elapsed() > limit {
-            let mut c = child.lock().unwrap();
-            let _ = c.kill();
-            let _ = c.wait();
+            kill_tree(&mut child.lock().unwrap());
             return (false, None, true);
         }
         std::thread::sleep(Duration::from_millis(10));
     }
 }
 
-fn drain(mut r: impl Read + Send + 'static) -> std::thread::JoinHandle<Vec<u8>> {
-    std::thread::spawn(move || {
-        let mut v = Vec::new();
-        let _ = r.read_to_end(&mut v);
-        v
-    })
+/// The process `root` and every process under it — its children, theirs, and so on — as `ps`
+/// lists them now; `root` alone where `ps` cannot be run.
+fn tree(root: u32) -> Vec<u32> {
+    let mut found = vec![root];
+    let Ok(out) = Command::new("ps").args(["-A", "-o", "pid=,ppid="]).stdin(Stdio::null()).stderr(Stdio::null()).output() else { return found };
+    let pairs: Vec<(u32, u32)> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| {
+            let mut w = l.split_whitespace();
+            Some((w.next()?.parse().ok()?, w.next()?.parse().ok()?))
+        })
+        .collect();
+    let mut i = 0;
+    while i < found.len() {
+        let p = found[i];
+        for (c, parent) in &pairs {
+            if *parent == p && !found.contains(c) {
+                found.push(*c);
+            }
+        }
+        i += 1;
+    }
+    found
 }
 
-/// Run a command to its end with nothing on its standard input, killing it after `limit`.
+fn signal(sig: &str, pids: &[u32]) {
+    if !pids.is_empty() {
+        let _ = Command::new("kill").arg(sig).args(pids.iter().map(u32::to_string)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    }
+}
+
+/// Kill a child and every process it started, and wait for the child. Each process of the tree
+/// is held where it is first (SIGSTOP), so that none starts another while the tree is read, and
+/// the tree is read again until it has no new process; then every one is killed. A process that
+/// started one of its own and ended before is not in the tree (its children went to the
+/// system's), and neither is one that put itself in a session of its own and left; nothing else
+/// is left running. `kill` and `ps` are the system's; without them, the child alone is killed.
+fn kill_tree(child: &mut Child) {
+    let mut held: Vec<u32> = Vec::new();
+    for _ in 0..8 {
+        let new: Vec<u32> = tree(child.id()).into_iter().filter(|p| !held.contains(p)).collect();
+        if new.is_empty() {
+            break;
+        }
+        signal("-STOP", &new);
+        held.extend(new);
+    }
+    signal("-KILL", &held);
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// How long the output of a program that has ended is read on, both pipes together: what a process
+/// it left behind still holds open is not waited for longer, and the output is what came until then.
+const LEFT_OPEN: Duration = Duration::from_secs(5);
+
+/// A pipe read to its end in a thread of its own, what came kept as it comes.
+struct Drained {
+    bytes: Arc<Mutex<Vec<u8>>>,
+    ended: std::sync::mpsc::Receiver<()>,
+}
+
+impl Drained {
+    /// What came: once the pipe has ended, or at `until` while something still holds it open.
+    fn take(self, until: Instant) -> String {
+        let _ = self.ended.recv_timeout(until.saturating_duration_since(Instant::now()));
+        String::from_utf8_lossy(&self.bytes.lock().unwrap()).to_string()
+    }
+}
+
+fn drain(mut r: impl Read + Send + 'static) -> Drained {
+    let bytes = Arc::new(Mutex::new(Vec::new()));
+    let (done, ended) = std::sync::mpsc::channel();
+    let kept = Arc::clone(&bytes);
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        loop {
+            match r.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => kept.lock().unwrap().extend_from_slice(&buf[..n]),
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            }
+        }
+        let _ = done.send(());
+    });
+    Drained { bytes, ended }
+}
+
+/// Run a command to its end with nothing on its standard input, killing it after `limit` with
+/// every process it started.
 pub fn run(cmd: &mut Command, limit: Duration) -> Ran {
     run_with_input(cmd, None, limit)
 }
@@ -92,13 +174,35 @@ pub fn run_with_input(cmd: &mut Command, input: Option<&[u8]>, limit: Duration) 
     let o = drain(child.stdout.take().unwrap());
     let e = drain(child.stderr.take().unwrap());
     let (ok, code, timed_out) = wait_limited(Arc::new(Mutex::new(child)), limit);
-    Ran {
-        ok,
-        code,
-        stdout: String::from_utf8_lossy(&o.join().unwrap()).to_string(),
-        stderr: String::from_utf8_lossy(&e.join().unwrap()).to_string(),
-        timed_out,
+    let until = Instant::now() + LEFT_OPEN;
+    Ran { ok, code, stdout: o.take(until), stderr: e.take(until), timed_out }
+}
+
+/// Run a command to its end, as `Command::output` does, for no longer than `limit`: past it, the
+/// command is killed with every process it started, and the test fails there, saying `what` it was
+/// and what the command printed until then (the last 300 lines of each output). For a program that
+/// talks to a server or to another program, which can wait without end when the other side does
+/// not answer (dandori's runners of the platforms).
+pub fn finish(cmd: &mut Command, limit: Duration, what: &str) -> Ran {
+    finish_with_input(cmd, None, limit, what)
+}
+
+/// The same, with `input` written to its standard input.
+pub fn finish_with_input(cmd: &mut Command, input: Option<&[u8]>, limit: Duration, what: &str) -> Ran {
+    let ran = run_with_input(cmd, input, limit);
+    if ran.timed_out {
+        let tail = |s: &str| {
+            let lines: Vec<&str> = s.lines().collect();
+            lines[lines.len().saturating_sub(300)..].join("\n")
+        };
+        panic!(
+            "{what}: it did not end within {} seconds, and was stopped with every process it started. What it printed until then:\n--- standard output ---\n{}\n--- standard error ---\n{}",
+            limit.as_secs_f64(),
+            tail(&ran.stdout),
+            tail(&ran.stderr)
+        );
     }
+    ran
 }
 
 /// Run `cmd` with the lines `feed` writes on its standard input, and hand every line it prints

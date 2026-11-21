@@ -15,7 +15,14 @@ use ritsu_base::sha256;
 struct P<'a> {
     m: &'a Model,
     diags: Vec<Diag>,
+    doubt: Doubt,
 }
+
+/// The packages a context's published languages are in doubt about: a heading its files gainsay
+/// (E302 says the heading and what the files declare), each with the context. A `through` that
+/// names one of them, and a reference that lands on such a language, wait for the heading to be
+/// fixed, and are said nothing of: E302 says it once, at the language (ritsu's DESIGN 8.3).
+pub type Doubt = std::collections::BTreeSet<(usize, String)>;
 
 impl P<'_> {
     fn at(&mut self, c: usize, p: Pos, code: &'static str, msg: Text) -> &mut Diag {
@@ -58,8 +65,8 @@ fn kernel(m: &Model, a: usize, b: usize) -> Option<(&Rel, &Vec<Own>)> {
     })
 }
 
-pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[Artifact], read: &crate::suite::Read, crates: Option<&crate::cargo::Crates>) -> Vec<Diag> {
-    let mut p = P { m, diags: Vec::new() };
+pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[Artifact], read: &crate::suite::Read, crates: Option<&crate::cargo::Crates>) -> (Vec<Diag>, Doubt) {
+    let mut p = P { m, diags: Vec::new(), doubt: Doubt::new() };
     let owner = |path: &str| arts.iter().find(|a| a.path == path).and_then(|a| a.ctx());
     // E301 and E302: the published languages.
     for (ci, c) in m.contexts.iter().enumerate() {
@@ -83,6 +90,8 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[A
                     && pf.package != *k
                 {
                     let got = if pf.package.is_empty() { "(none)".to_string() } else { pf.package.clone() };
+                    p.doubt.insert((ci, k.clone()));
+                    p.doubt.insert((ci, pf.package.clone()));
                     let sf = paths::shown(f);
                     p.at(ci, *at, "E302", tr!("{sf} の package は {got} で、見出しの {k} と違います", "The package of {sf} is {got}, not {k} as the heading says"))
                         .notes
@@ -127,6 +136,8 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[A
                 if let Some(got) = crate::refs::rule_package(read, f)
                     && got != *k
                 {
+                    p.doubt.insert((ci, k.clone()));
+                    p.doubt.insert((ci, got.clone()));
                     p.at(ci, *at, "E302", tr!("{sf} の Connect の package は {got} で、見出しの {k} と違います", "The package of the Connect of {sf} is {got}, not {k} as the heading says"))
                         .notes
                         .push(tr!("規則の公表された言語の package は、rulec が規則の別名と版から作る `rulec.<別名>.v<版>` です。`implements` で契約のサービスを実装する規則では、契約の package です。", "The package of a rule's published language is the one rulec makes from the rule's alias and version, `rulec.<alias>.v<version>`, or, for a rule that implements a contract's service with `implements`, the contract's package."));
@@ -173,6 +184,8 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[A
                         }
                         Some(Some(cr)) if cr.name.replace('-', "_") != *k => {
                             let got = &cr.name;
+                            p.doubt.insert((ci, k.clone()));
+                            p.doubt.insert((ci, got.replace('-', "_")));
                             p.at(ci, *at, "E302", tr!("{sd} のクレートの名前は {got} で、見出しの {k} と違います", "The crate at {sd} is named {got}, not {k} as the heading says"))
                                 .notes
                                 .push(tr!("クレートの公表された言語の名前は、コードの中で書くクレートの名前（`-` を `_` にしたもの）です。", "The published language of a crate is named as code writes the crate: its name, with `-` written `_`."));
@@ -278,7 +291,7 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[A
                     }
                     let published: Vec<&str> = m.contexts[r.partner].published.iter().map(|x| x.package.as_str()).collect();
                     for (pkg, at) in through {
-                        if !published.contains(&pkg.as_str()) {
+                        if !published.contains(&pkg.as_str()) && !p.doubt.contains(&(r.partner, pkg.clone())) {
                             let list = if published.is_empty() {
                                 tr!("「{pn}」は何も公表していません。", "{pn} publishes nothing.")
                             } else {
@@ -478,5 +491,5 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[A
             d.extra.0 = refs;
         }
     }
-    p.diags
+    (p.diags, p.doubt)
 }

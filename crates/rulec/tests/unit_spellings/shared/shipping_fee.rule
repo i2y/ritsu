@@ -1,0 +1,21 @@
+rule shipping_fee v1
+description "The shipping fee of an order, by its weight and its subtotal, in yen as a shop in Japan writes it (fictional)"
+
+inputs
+  weight   : mass[g]    range >=1g <=30_000g
+  subtotal : money[円]  range >=0円 <=100_000円
+
+outputs
+  fee : money[円]  round down(1円)
+
+table fee
+| subtotal   | weight    | -> fee   |
+| >=5_000円  | -         | 0円      |
+| <5_000円   | <=2_000g  | 800円    |
+| <5_000円   | >2_000g   | 1_200円  |
+
+examples
+| weight  | subtotal  | -> fee   |
+| 2_000g  | 4_999円   | 800円    |
+| 2_001g  | 4_999円   | 1_200円  |
+| 2_001g  | 5_000円   | 0円      |

@@ -1,0 +1,18 @@
+rule 自分の段階(tier_of_its_own_ja) v1
+description "注文の大きさと急ぎかによる段階。段階は、規則が自分で宣言したもの。テストのために書いた例で、tier_of_its_own.rule の日本語の版"
+
+enum 段階(tier) = 基本(basic) < 銀(silver) < 金(gold)
+
+inputs
+  大口(large) : bool
+  急ぎ(rush)  : bool
+
+outputs
+  段階(tier) : 段階
+
+table 段階の表(tiers)
+policy unique
+| 大口  | 急ぎ  | -> 段階 |
+| false | false | 基本    |
+| true  | false | 銀      |
+| -     | true  | 金      |

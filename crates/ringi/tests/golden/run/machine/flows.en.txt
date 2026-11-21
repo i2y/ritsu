@@ -1,0 +1,24 @@
+2026-11-16 10:00  submit             by e1201  -> first (check: flow precheck_agent; dept_head: e3101), due 2026-11-19 end of day; ask flow precheck_agent
+2026-11-16 10:01  agent answered ok            -> first (dept_head: e3101), due 2026-11-19 end of day
+2026-11-16 11:00  approve            by e3101  -> decide (e0101), due 2026-11-19 end of day
+scenario `the_agent_and_a_person`: as written (3 rows); the ticket is left `in progress`; the clocks set: late 2026-11-20 00:00 (decide)
+
+2026-11-16 10:00  submit             by e1201  -> first (check: flow precheck_agent; dept_head: e3101), due 2026-11-19 end of day; ask flow precheck_agent
+2026-11-16 11:00  approve            by e3101  -> first (check: flow precheck_agent), due 2026-11-19 end of day
+2026-11-16 12:00  pause              by e3101  -> paused at first (check: flow precheck_agent), until 2026-11-23 end of day
+2026-11-17 13:00  agent answered ok            -> decide (e0101), due 2026-11-20 end of day
+scenario `paused_while_the_agent_checks`: as written (4 rows); the ticket is left `in progress`; the clocks set: late 2026-11-21 00:00 (decide)
+
+2026-11-16 10:00  submit                                      by e1201  -> first (check: flow precheck_agent; dept_head: e3101), due 2026-11-19 end of day; ask flow precheck_agent
+2026-11-16 12:00  pause                                       by e3101  -> paused at first (check: flow precheck_agent; dept_head: e3101), until 2026-11-23 end of day
+2026-11-16 13:00  agent answered doubt "No budget line fits"            -> paused at first (check: e1101; dept_head: e3101), until 2026-11-23 end of day
+2026-11-17 09:00  resume                                      by e3101  -> first (check: e1101; dept_head: e3101), due 2026-11-20 end of day
+2026-11-17 10:00  approve                                     by e1101  -> first (dept_head: e3101), due 2026-11-20 end of day
+2026-11-17 11:00  approve                                     by e3101  -> decide (e0101), due 2026-11-20 end of day
+scenario `a_doubt_while_paused`: as written (6 rows); the ticket is left `in progress`; the clocks set: late 2026-11-21 00:00 (decide)
+
+2026-11-16 10:00  submit       by e1201  -> first (check: flow precheck_agent; dept_head: e3101), due 2026-11-19 end of day; ask flow precheck_agent
+2026-11-16 12:00  pause        by e3101  -> paused at first (check: flow precheck_agent; dept_head: e3101), until 2026-11-23 end of day
+2026-11-16 13:00  flow failed            -> paused at first (check: e1101; dept_head: e3101), until 2026-11-23 end of day
+2026-11-24 00:00  pause ends             -> first (check: e1101; dept_head: e3101), due 2026-11-26 end of day
+scenario `the_flow_fails_while_paused`: as written (4 rows); the ticket is left `in progress`; the clocks set: late 2026-11-27 00:00 (first)

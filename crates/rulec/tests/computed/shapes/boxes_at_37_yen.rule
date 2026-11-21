@@ -1,0 +1,23 @@
+rule boxes_at_37_yen v1
+description "A fee of 37 yen a box, and 1% of the amount on top. Under 79 yen the 1% rounds down to nothing, so the fee is a whole number of 37-yen steps there, and never 38 or 39 yen"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=0JPY <=107JPY
+  boxes  : number      range >=1 <=4
+
+define fee : money[JPY] = down(amount * 1%, 1JPY) + boxes * 37JPY
+
+outputs
+  x : choice
+
+table pick
+| amount | fee            | -> x |
+| <79JPY | <=37JPY        | one  |
+| <79JPY | >39JPY <=75JPY | two  |
+| <79JPY | >75JPY         | one  |
+| >78JPY | <=37JPY        | two  |
+| >78JPY | >=38JPY <=39JPY | one |
+| >78JPY | >39JPY <=75JPY | two  |
+| >78JPY | >75JPY         | one  |

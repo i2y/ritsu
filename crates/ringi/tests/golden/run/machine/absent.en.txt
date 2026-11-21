@@ -1,0 +1,16 @@
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> check (one of e1001, e1002), due 2026-11-19 end of day
+2026-11-16 13:00  approve  by e1002  -> approved
+scenario `left_empty`: as written (3 rows)
+
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> check (one of e1001, e1002), due 2026-11-19 end of day
+2026-11-16 13:00  approve  by e1002  -> approved
+scenario `filled_in`: as written (3 rows)
+
+2026-11-16 10:00  submit                by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve               by e1101  -> check (one of e1001, e1002), due 2026-11-19 end of day
+2026-11-16 13:00  send back             by e1002  -> with requester, resubmit by 2026-11-19 end of day
+2026-11-17 10:00  resubmit (left = 10)  by e1201  -> first (e1101), due 2026-11-20 end of day
+2026-11-17 11:00  approve               by e1101  -> approved
+scenario `large_with_no_end`: as written (5 rows)

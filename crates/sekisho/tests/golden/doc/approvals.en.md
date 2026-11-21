@@ -58,7 +58,7 @@ Approve a purchase
 
 - It guards no operation.
 - Principals: `User`. Resources: `Purchase`, the id read from the operation's argument `purchaseId`.
-- Input `amount`: `money[GBP, incl_tax]`, 1GBP to 20,000GBP.
+- Input `amount`: `money[GBP, incl_tax]`, 1GBP to 20_000GBP.
 - Computed: `band` (under Computed values below).
 - 64 combinations, 2 of them allowed.
 
@@ -90,7 +90,7 @@ Ask a higher approver to approve a purchase
 
 - It guards no operation.
 - Principals: `User`. Resources: `Purchase`, the id read from the operation's argument `purchaseId`.
-- Input `amount`: `money[GBP, incl_tax]`, 1GBP to 20,000GBP.
+- Input `amount`: `money[GBP, incl_tax]`, 1GBP to 20_000GBP.
 - Computed: `band` (under Computed values below).
 - Reads `allowed approve(amount: amount)`: whether `approve` is allowed for the same principal and resource, as the table of `approve` on this page says (under Computed values below).
 - 64 combinations, 6 of them allowed.

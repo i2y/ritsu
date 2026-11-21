@@ -1,0 +1,26 @@
+rule 出会わない段階の比べ(compare_never) v1
+description "表が書く二つの段階を比べる導出。二つは同じにならない（架空）"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+# 引き上げ先はシルバーかゴールドで、下限はいつも一般
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員     | -> 引き上げ先(lift) : 段階 | 下限(floor) : 段階 |
+| 一般     | シルバー                   | 一般               |
+| シルバー | ゴールド                   | 一般               |
+| ゴールド | ゴールド                   | 一般               |
+
+derive 下限のまま(at_floor) : bool = 引き上げ先 = 下限
+
+table 下限で決める値引き(credit_by_floor)
+policy unique
+| 下限のまま | -> 値引き |
+| true       | 0USD      |
+| false      | 5USD      |

@@ -1,0 +1,176 @@
+gate together v1
+description "Values that read the same data: two outputs of one call of a rule, outputs of two tables, two rules given one attribute, one attribute given as two inputs (of a rule whose answer changes with it, and of one whose answer does not), an attribute that may be absent. Only the combinations that happen are counted"
+namespace Docs
+
+use rule sizes from "sizes.rule"
+use rule steps from "steps.rule"
+use rule two_amounts from "pairs.rule"
+use rule same_side from "sides.rule"
+
+role staff
+  description "Anyone on the staff"
+
+principal User
+  description "A member of the staff"
+  roles staff
+
+resource Doc
+  description "A document with an amount, and a price it may not have yet"
+  attributes
+    amount : money[JPY]   range >=1JPY <=1_000JPY
+    price  : money[JPY]?  range >=1JPY <=1_000JPY
+
+action read_doc
+  description "Read a document: two outputs of one call, which one table writes together"
+  principal User
+  resource Doc
+  context
+    a = sizes(amount: resource.amount).a
+    b = sizes(amount: resource.amount).b
+
+action file_doc
+  description "File a document: two outputs of one call, each from a table of its own"
+  principal User
+  resource Doc
+  context
+    a = sizes(amount: resource.amount).a
+    c = sizes(amount: resource.amount).c
+
+action send_doc
+  description "Send a document: two rules given the same amount"
+  principal User
+  resource Doc
+  context
+    a    = sizes(amount: resource.amount).a
+    step = steps(amount: resource.amount).step
+
+action weigh_doc
+  description "Weigh a document: one amount given as both inputs of a rule"
+  principal User
+  resource Doc
+  context
+    kind = two_amounts(first: resource.amount, second: resource.amount).kind
+
+action compare_doc
+  description "Compare a document with itself: one amount given as both inputs of a rule that answers the same wherever the two are one amount"
+  principal User
+  resource Doc
+  context
+    side = same_side(first: resource.amount, second: resource.amount).side
+
+action price_doc
+  description "Price a document: two outputs of an amount that may be absent"
+  principal User
+  resource Doc
+  context
+    a = sizes(amount: resource.price).a
+    b = sizes(amount: resource.price).b
+
+permit staff_read_low_a
+  description "Staff read a document whose a is low"
+  principal in staff
+  action read_doc
+  when a is low
+
+permit staff_read_high_b
+  description "Staff read a document whose b is high"
+  principal in staff
+  action read_doc
+  when b is high
+
+permit staff_file_low_a
+  description "Staff file a document whose a is low"
+  principal in staff
+  action file_doc
+  when a is low
+
+permit staff_file_high_c
+  description "Staff file a document whose c is high"
+  principal in staff
+  action file_doc
+  when c is high
+
+permit staff_send_low_a
+  description "Staff send a document whose a is low"
+  principal in staff
+  action send_doc
+  when a is low
+
+permit staff_send_large
+  description "Staff send a document that is a large one"
+  principal in staff
+  action send_doc
+  when step is large
+
+permit staff_weigh_what_is_not_mixed
+  description "Staff weigh a document whose two amounts are on one side"
+  principal in staff
+  action weigh_doc
+  unless kind is mixed
+
+permit staff_compare_what_is_on_one_side
+  description "Staff compare a document whose two amounts are on one side of 500 yen"
+  principal in staff
+  action compare_doc
+  when side is same
+
+permit staff_price_low_a
+  description "Staff price a document whose a is low"
+  principal in staff
+  action price_doc
+  when a is low
+
+permit staff_price_high_b
+  description "Staff price a document whose b is high"
+  principal in staff
+  action price_doc
+  when b is high
+
+expect allow staff_read_every_doc
+  description "a and b are the same value, so one of the two permits always applies"
+  principal in staff
+  action read_doc
+
+expect allow staff_read_small_ones
+  description "Staff read a document of 100 yen or less"
+  principal in staff
+  action read_doc
+  when resource.amount <= 100JPY
+
+expect allow staff_file_every_doc
+  description "c is high wherever a is, so one of the two permits always applies"
+  principal in staff
+  action file_doc
+
+expect allow staff_send_every_doc
+  description "A document over 500 yen is a large one, so one of the two permits always applies"
+  principal in staff
+  action send_doc
+
+expect allow staff_weigh_every_doc
+  description "One amount is never on both sides of 500 yen"
+  principal in staff
+  action weigh_doc
+
+expect allow staff_compare_every_doc
+  description "One amount is on one side of 500 yen, whichever side that is"
+  principal in staff
+  action compare_doc
+
+expect deny a_doc_without_a_price_is_not_priced
+  description "a is not low and b is not high only where neither is there: a document without a price"
+  action price_doc
+  when a is not low
+  when b is not high
+
+expect deny a_and_b_never_differ
+  description "The rule gives a and b the same value, so this picks nothing"
+  principal in staff
+  action read_doc
+  when a is low and b is high
+
+expect deny an_amount_is_not_apart_from_itself
+  description "One amount is never on both sides of 500 yen, so this picks nothing"
+  principal in staff
+  action compare_doc
+  when side is apart

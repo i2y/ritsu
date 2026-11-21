@@ -67,8 +67,9 @@ pub enum Undecided {
     /// The proof file holds no theorem of it: as its text reads without `--lean`, and as Lean reads
     /// the file that builds with it.
     NoTheorem,
-    /// `--lean` ran, and the writer wrote no statement of it (why, as the Lean's comment says it).
-    NotWritten(String),
+    /// `--lean` ran, and the writer wrote no statement of it (why; the Lean's comment says its
+    /// English side, the check's language takes the other).
+    NotWritten(Text),
     /// `--lean` ran, and Lean does not take the proof (E604).
     Rejected(Rejection),
 }
@@ -320,7 +321,7 @@ pub fn diags(c: &Checked, reports: &[PropertyReport]) -> Vec<Diag> {
                 ));
             }
             Outcome::Undecided(Undecided::NotWritten(why)) => {
-                out.push(at("W604", tr!("性質 `{name}` は、{}が、Lean に文を書けません（{why}）", "The property `{name}` {}, but its statement is not written for Lean: {why}", ran.ja; ran.en)));
+                out.push(at("W604", tr!("性質 `{name}` は、{}が、Lean に文を書けません（{}）", "The property `{name}` {}, but its statement is not written for Lean: {}", ran.ja, why.ja; ran.en, why.en)));
             }
             Outcome::Undecided(Undecided::Rejected(x)) if x.of_the_file() => match of_file.iter_mut().find(|(y, _)| y == x) {
                 Some((_, ns)) => ns.push(name.to_string()),
@@ -444,6 +445,10 @@ pub fn diags(c: &Checked, reports: &[PropertyReport]) -> Vec<Diag> {
                 Diag::at("E604", &proof_shown, *line, *col, tr!("証明のファイル {proof_name} はビルドが通らないので、{}", "The proof file {proof_name} does not build, so it {}", none.ja; none.en))
                     .note(tr!("Lean のエラー: {message}", "Lean says: {message}"))
             }
+            Rejection::Written(message) => {
+                Diag::at("E604", &proof_shown, 1, 1, tr!("{kn} から書いた Lean がビルドが通らないので、{}", "The Lean written from {kn} does not build, so it {}", none.ja; none.en))
+                    .note(tr!("Lean のエラー: {message}", "Lean says: {message}"))
+            }
             Rejection::Breach(b) => {
                 let what = &b.what;
                 Diag::at("E604", &proof_shown, b.line, b.col, tr!("証明のファイルには `{what}` を書けないので、{proof_name} はビルドしません。{}", "A proof file may not hold `{what}`: {proof_name} is not built, so it {}", none.ja; none.en))
@@ -462,6 +467,8 @@ pub fn diags(c: &Checked, reports: &[PropertyReport]) -> Vec<Diag> {
                 Diag::at("E604", &proof_shown, line, col, tr!("{proof_name} の宣言をカーネルが受け付けないので、{}", "The kernel does not take what {proof_name} declares, so it {}", none.ja; none.en))
                     .note(tr!("leanchecker: {said}", "leanchecker says: {said}"))
             }
+            Rejection::Unreadable(why) => Diag::at("E604", &proof_shown, 1, 1, tr!("証明のファイル {proof_name} が読めないので、{}", "The proof file {proof_name} cannot be read, so it {}", none.ja; none.en))
+                .note(why.clone()),
             Rejection::Load(said) => Diag::at("E604", &proof_shown, 1, 1, tr!("証明のファイル {proof_name} は、{kn} から書いた Lean と一緒に読めないので、{}", "The proof file {proof_name} cannot be read beside the Lean written from {kn}, so it {}", none.ja; none.en))
                 .note(tr!("Lean のエラー: {said}", "Lean says: {said}"))
                 .note(tr!(

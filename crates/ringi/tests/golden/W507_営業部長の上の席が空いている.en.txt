@@ -1,0 +1,11 @@
+warning[W507]: tests/mutants/W507_営業部長の上の席が空いている.ringi:10:15: In the organization from 2026-04-01, the stage `決裁` has nowhere to go up to when it is late
+    10 |   決裁(decide)  営業部長
+  = Nobody is above the one who is late to go up to.
+  = The head of the team company (Example Co. (fictional)) is empty.
+  = The stage is `when late escalate, then expire`: it cannot go up, and expires at the deadline.
+  = Late with e02 (Head of Sales) for 4 requesters: e01 (President (fictional)), e02 (Head of Sales), e03 (Sales staff) and 1 more.
+  = Correct the data of the version; for it to go to someone else, say where it goes in the table of `when late escalate by <table>`.
+ok tests/mutants/W507_営業部長の上の席が空いている.ringi: a request, 1 field, 1 stage
+  used from 2026-04-01: the first version of the organization `shared/社長の席が空いた会社.ringi` (data `org-no-president`)
+  used with no end: no data it reads ends
+  ends within 7 business days at the most

@@ -1,0 +1,2 @@
+error[E005]: example.ringi:3:26: `use calendar` reads a `.cal` file, which `budget.book` is not
+     3 | use calendar office from "budget.book"

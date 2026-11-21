@@ -1,0 +1,22 @@
+rule 上長の確認(needs_manager_ja) v1
+description "申請を上長が確かめるかと、確かめるときの区分。研修は購入として確かめる。区分は 経費の区分.rule から読む"
+import enum 区分 from "経費の区分.rule"
+
+inputs
+  区分(category) : 区分
+
+outputs
+  上長(manager)           : bool
+  確かめる区分(reviewed_as) : 区分
+
+table 選ぶ(pick)
+policy unique
+| 区分 | -> 上長 | -> 確かめる区分 |
+| 旅費 | false   | 旅費           |
+| 購入 | true    | 購入           |
+| 研修 | true    | 購入           |
+
+examples
+| 区分 | -> 上長 | -> 確かめる区分 |
+| 旅費 | false   | 旅費           |
+| 研修 | true    | 購入           |

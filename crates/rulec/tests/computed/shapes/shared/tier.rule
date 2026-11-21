@@ -1,0 +1,18 @@
+rule tier v1
+description "The band of an amount, with a fee and a flag for each band; the flag of the smallest band is absent"
+
+enum size = small | medium | large
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+outputs
+  band : size
+  fee  : money[JPY]  round down(1JPY)
+  flag : bool?
+
+table bands
+| amount                  | -> band | fee    | flag  |
+| <=10_000JPY             | small   | 100JPY | none  |
+| >10_000JPY <=100_000JPY | medium  | 300JPY | false |
+| >100_000JPY             | large   | 900JPY | true  |

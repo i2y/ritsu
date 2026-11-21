@@ -225,14 +225,6 @@ export class RuleContradictionError extends Error {
   }
 }
 
-function _min(a, b) {
-  return a < b ? a : b;
-}
-
-function _max(a, b) {
-  return a > b ? a : b;
-}
-
 /** Toward zero: -4.8 yen → -4 yen. */
 function _roundDown(x, g) {
   const a = x < 0n ? -x : x;
@@ -240,36 +232,10 @@ function _roundDown(x, g) {
   return x < 0n ? -v : v;
 }
 
-/** Away from zero: -4.2 yen → -5 yen. */
-function _roundUp(x, g) {
-  const a = x < 0n ? -x : x;
-  const v = a % g === 0n ? (a / g) * g : (a / g + 1n) * g;
-  return x < 0n ? -v : v;
-}
-
 /** An exact half goes away from zero. */
 function _roundHalf(x, g) {
   const a = x < 0n ? -x : x;
   const v = 2n * (a % g) >= g ? (a / g + 1n) * g : (a / g) * g;
-  return x < 0n ? -v : v;
-}
-
-/** An exact half goes toward zero. */
-function _roundHalfDown(x, g) {
-  const a = x < 0n ? -x : x;
-  const v = 2n * (a % g) > g ? (a / g + 1n) * g : (a / g) * g;
-  return x < 0n ? -v : v;
-}
-
-/** An exact half goes to the even neighbor. */
-function _roundBankers(x, g) {
-  const a = x < 0n ? -x : x;
-  let q = a / g;
-  const r = a % g;
-  if (2n * r > g || (2n * r === g && q % 2n === 1n)) {
-    q += 1n;
-  }
-  const v = q * g;
   return x < 0n ? -v : v;
 }
 
@@ -300,7 +266,7 @@ export function order_total_traced(subtotal, category, shipping) {
   if (typeof subtotal !== "bigint") {
     throw new RuleInputError(`subtotal is not an integer`, subtotal);
   }
-  if (subtotal < 0n || subtotal > 2000000n) {
+  if (subtotal < -9223372036854775808n || subtotal > 9223372036854775807n) {
     throw new RuleInputError(`subtotal is out of range`, subtotal);
   }
   if (!Object.values(Category).includes(category)) {
@@ -311,6 +277,12 @@ export function order_total_traced(subtotal, category, shipping) {
   }
   if (typeof shipping !== "bigint") {
     throw new RuleInputError(`shipping is not an integer`, shipping);
+  }
+  if (shipping < -9223372036854775808n || shipping > 9223372036854775807n) {
+    throw new RuleInputError(`shipping is out of range`, shipping);
+  }
+  if (subtotal < 0n || subtotal > 2000000n) {
+    throw new RuleInputError(`subtotal is out of range`, subtotal);
   }
   if (shipping < 0n || shipping > 10000n) {
     throw new RuleInputError(`shipping is out of range`, shipping);
@@ -521,11 +493,24 @@ function fromWire(inp, el, v) {
       el.value = v;
   }
 }
+// A number as the rule writes it, its digits grouped by `_` from five (§15.333), as the page says
+// the ends of its ranges. The fields are typed into, so they keep the plain digits.
+function grouped(t) {
+  const m = /^(-?)([0-9]+)(\.[0-9]+)?$/.exec(t);
+  if (!m || m[2].length < 5) return t;
+  let w = "";
+  for (let i = 0; i < m[2].length; i++) {
+    if (i > 0 && (m[2].length - i) % 3 === 0) w += "_";
+    w += m[2][i];
+  }
+  return m[1] + w + (m[3] || "");
+}
 function shown(o, v) {
   if (v === null) return "none";
-  if (o.kind === "rate") return String((Number(v) * 100) / o.scale) + "%";
+  if (o.kind === "rate") return grouped(String((Number(v) * 100) / o.scale)) + "%";
   if (o.kind === "bool") return v ? "true" : "false";
   if (o.kind === "date") return dateOf(v);
+  if (o.kind === "number") return grouped(String(v)) + (o.unit ? o.unit : "");
   return String(v) + (o.unit ? o.unit : "");
 }
 // The last answer, kept because the board is built after the first run: a page opened on

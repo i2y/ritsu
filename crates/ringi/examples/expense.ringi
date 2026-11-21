@@ -1,0 +1,162 @@
+request expense v1 "Expense request"
+description "An expense, a trip or a purchase, checked, approved and decided by the roles the Authority Rules (fictional), Article 12, Appendix 2 give its category and amount"
+owner accounting
+
+use organization org from "shared/company.ringi"
+use masters m from "shared/masters.ringi"
+use calendar office from "shared/office.cal"
+use book budget from "shared/budget.book"
+use gate "shared/company.gate"
+use flow precheck_agent from "shared/precheck.flow"
+use flow travel_decision from "shared/travel_decision.flow"
+use flow pay from "shared/pay.flow"
+
+form
+  category : choice "Category"
+    travel   "Travel"
+    expense  "Expenses"
+    purchase "Purchase"
+  items : rows "Items"  count >=1 <=20
+    what  : text "What"  count <=100
+    price : money[JPY] "Price"  range >=1JPY <=1_000_000JPY
+  amount  : money[JPY] "Amount" = sum(items.price)  range >=1JPY <=10_000_000JPY
+  purpose : long text "Purpose"  count >=1 <=200
+  used_on : date "Date of use"  range >=2026-01-01 <=2027-12-31
+  trip_to : text "Destination"  count <=100  shown when category is travel
+  receipt : attachment "Receipt"  required when amount > 30_000JPY
+  account : choice from m.accounts "Account code"  approvers only
+
+route
+| category | amount                     | -> precheck | first   | second                   | decide        |
+| travel   | <=30_000JPY                |             |         |                          | travel_agent  |
+| travel   | >30_000JPY <=100_000JPY    |             |         |                          | manager       |
+| travel   | >100_000JPY                |             | manager |                          | dept_head     |
+| expense  | <=100_000JPY               | check       |         |                          | manager       |
+| expense  | >100_000JPY <=1_000_000JPY | check       | manager |                          | dept_head     |
+| expense  | >1_000_000JPY              |             | manager | dept_head                | division_head |
+| purchase | <=1_000_000JPY             |             | manager | accounting               | dept_head     |
+| purchase | >1_000_000JPY              |             | manager | dept_head and accounting | division_head |
+
+who
+  manager       = manager of requester
+  dept_head     = head of requester.department
+  accounting    = team accounting
+  division_head = nearest division_head above requester
+  check         = agent precheck_agent, else manager
+  travel_agent  = agent travel_decision, else manager
+  board         = team board
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late escalate by next_up, then expire
+  # The president has nobody above: for their own requests, a stage that asks the line above goes
+  # to the board, and one of the directors answers it.
+  when empty escalate, then board
+
+table next_up
+| approver      | -> goes_to    |
+| check         | manager       |
+| travel_agent  | manager       |
+| manager       | dept_head     |
+| dept_head     | division_head |
+| accounting    | division_head |
+| division_head | division_head |
+| board         | board         |
+
+ticket
+  self approval  not allowed
+  # A stage right after one the same person approved is done with that approval. No stage waits: the manager answers before accounting.
+  same approver  approves once
+  send back      to the requester, at most 3 times
+  resubmit       within 3 business days
+  withdraw       until decide
+  # The president, the heads of divisions and the directors are above every department: their
+  # requests hold no department's budget.
+  on submitted   hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: requester.department, amount: amount)  when requester.department is not none
+  on approved    post budget.reserve(request: ticket.id, attempt: ticket.attempt)
+  on approved    launch pay(request_id: ticket.id, requester: requester.id, amount: amount, purpose: purpose)
+  on sent back, rejected, withdrawn, expired  void budget.reserve(request: ticket.id, attempt: ticket.attempt)
+
+claims
+  the_agent_decides_up_to_30000_yen : decide is travel_agent only when amount <= 30_000JPY
+  a_joint_second_stage              : possible second is dept_head and accounting
+  reminder_before_due               : every stage reminds before it is due
+  ends_in_time                      : every ticket ends within 93 business days
+
+examples
+| category | amount       | -> precheck | first   | second                   | decide        |
+| travel   | 30_000JPY    |             |         |                          | travel_agent  |
+| travel   | 30_001JPY    |             |         |                          | manager       |
+| expense  | 100_000JPY   | check       |         |                          | manager       |
+| expense  | 100_001JPY   | check       | manager |                          | dept_head     |
+| purchase | 1_000_001JPY |             | manager | dept_head and accounting | division_head |
+
+scenario a_joint_purchase
+  requester e1201
+  given budget.allocate(dept: "sales1", period: "2026", amount: 5_000_000JPY)
+  form category = purchase, items = [{what: "Server", price: 800_000JPY}, {what: "Storage", price: 400_000JPY}], purpose = "A server and its storage for the test lab", used_on = 2026-11-16, receipt = "receipt.pdf"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 15:00 | approve | e1101 | second   | in progress |
+| 2026-11-17 11:00 | approve | e1001 | second   | in progress |
+| 2026-11-17 16:00 | approve | e3101 | decide   | in progress |
+| 2026-11-18 09:30 | approve | e0101 |          | approved    |
+
+# A day trip under 30,000 yen: the agent decides it, and nobody waits.
+scenario a_day_trip_the_agent_decides
+  requester e1201
+  given budget.allocate(dept: "sales1", period: "2026", amount: 5_000_000JPY)
+  form category = travel, items = [{what: "Train to Osaka and back", price: 28_000JPY}], purpose = "A visit to a customer in Osaka", used_on = 2026-11-20, trip_to = "Osaka", receipt = "receipt.pdf"
+| at               | event                       | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                      | e1201 | decide   | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: ok) |       |          | approved    |
+
+# The agent is not sure of a trip: the manager decides it in its place.
+scenario a_trip_the_agent_doubts
+  requester e1201
+  given budget.allocate(dept: "sales1", period: "2026", amount: 5_000_000JPY)
+  form category = travel, items = [{what: "Flight to Sapporo and back", price: 29_500JPY}], purpose = "A visit to a customer in Sapporo", used_on = 2026-11-27, trip_to = "Sapporo", receipt = "receipt.pdf"
+| at               | event                                                                    | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                                   | e1201 | decide   | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: doubt, reason: "The fare is above the usual one") |       | decide   | in progress |
+| 2026-11-16 14:00 | approve                                                                  | e1101 |          | approved    |
+
+# The customer puts the visit off. While the request waits for the decision, the requester takes it
+# back, saying why, and drops it. The budget it held is let go when it is taken back.
+scenario a_trip_called_off
+  requester e1201
+  given budget.allocate(dept: "sales1", period: "2026", amount: 5_000_000JPY)
+  form category = travel, items = [{what: "Flight to Fukuoka and back", price: 64_000JPY}, {what: "Hotel, three nights", price: 54_000JPY}], purpose = "A visit to a customer in Fukuoka", used_on = 2026-12-02, trip_to = "Fukuoka", receipt = "receipt.pdf"
+| at               | event    | by    | comment                                        | -> stage | status         |
+| 2026-11-16 10:00 | submit   | e1201 |                                                | first    | in progress    |
+| 2026-11-16 15:00 | approve  | e1101 |                                                | decide   | in progress    |
+| 2026-11-17 09:00 | withdraw | e1201 | "The customer has put the visit off to spring" |          | with requester |
+| 2026-11-17 09:05 | discard  | e1201 |                                                |          | withdrawn      |
+
+labels ja
+  request            "経費の申請"
+  category           "種別"
+  category.travel    "出張"
+  category.expense   "経費"
+  category.purchase  "購買"
+  items              "明細"
+  items.what         "品目"
+  items.price        "金額"
+  amount             "合計"
+  purpose            "目的"
+  used_on            "使った日"
+  trip_to            "行き先"
+  receipt            "領収書"
+  account            "勘定科目"
+  stage precheck     "事前の確かめ"
+  stage first        "一次承認"
+  stage second       "二次承認"
+  stage decide       "決裁"
+  who manager        "上長"
+  who dept_head      "部長"
+  who accounting     "経理"
+  who division_head  "本部長"
+  who check          "エージェントの確かめ"
+  who travel_agent   "エージェントの決裁"
+  who board          "取締役会"

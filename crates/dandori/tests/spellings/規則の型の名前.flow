@@ -1,0 +1,25 @@
+workflow 規則の型の名前 v1
+description "TypeScript と Python のコードで、規則の列挙と同じ名前になるレコードです。"
+
+use rule 急ぎ from "../../examples/order/rules/出荷の急ぎ.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
+
+record 急ぎ_便
+  注記 : string
+
+inputs
+  番号 : string
+  会員 : bool
+  金額 : money[円, incl_tax]  range >=0 <=1000000
+
+outputs
+  便   : 急ぎ.便
+  注記 : string
+
+task 注記を探す(番号: string) -> 急ぎ_便
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:find-note"
+
+flow
+  let 判定 = 急ぎ(会員: 会員, 金額: 金額)
+  let n = 注記を探す(番号: 番号)
+  succeed 便 = 判定.便, 注記 = n.注記

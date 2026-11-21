@@ -1,0 +1,4 @@
+error[E401]: tests/mutants/E401_a_claim_with_no_deadline.ringi:18:3: The claim `ends_in_time` says every ticket ends within 30 business days, and a ticket may never end
+    18 |   ends_in_time : every ticket ends within 30 business days
+  = Line 7: the stages `check` and `decide` have no deadline (`due in …`), and wait until they are answered.
+  = For it to end, write a deadline (`due in …`); if it may wait, take the claim out.

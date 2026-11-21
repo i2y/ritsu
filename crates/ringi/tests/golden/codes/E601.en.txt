@@ -1,0 +1,3 @@
+error[E601]: example.ringi:20:1: An example of the route does not hold
+    20 | | 50_000JPY | head      |
+  = As rulec says it: Example does not hold: decide should be head but came out as manager

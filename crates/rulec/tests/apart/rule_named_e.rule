@@ -1,0 +1,18 @@
+rule e v1
+description "A rule named like a type the Java runner declares and a name the service of Connect imports"
+
+enum tier = basic | gold
+
+inputs
+  member : tier
+  qty    : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_member
+policy unique
+| member | qty | -> fee |
+| basic  | <=5 | 3USD   |
+| basic  | >5  | 2USD   |
+| gold   | -   | 1USD   |

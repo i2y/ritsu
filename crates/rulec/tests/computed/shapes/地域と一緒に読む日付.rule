@@ -1,0 +1,20 @@
+rule 地域と一緒に読む日付(date_with_zone) v1
+description "取り込んだ表が書く日付を、それを決める地域と一緒に読む。行はそれぞれ自分の地域の日を求め、その間の日はどちらの行のものでもない"
+
+enum 地域(zone) = 県内(local) | 県外(national)
+enum 時期(timing) = 早い(early) | 遅い(late)
+
+inputs
+  地域(zone) : 地域
+
+apply 出荷(s) = "shared/出荷日.rule" meaning:4829fabdcc60ee01
+  地域 = 地域
+  出荷日 -> 受けた出荷日
+
+outputs
+  答え(x) : 時期
+
+table 選ぶ(pick)
+| 地域 | 受けた出荷日 | -> 答え |
+| 県内 | <=2026-07-02 | 早い    |
+| 県外 | >=2026-07-02 | 遅い    |

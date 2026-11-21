@@ -1,0 +1,24 @@
+rule 書かない判定の行き先(fold_arm_never) v1
+description "表が書かない判定の行き先を、書く判定の行き先より前に持つ畳み込み（架空）"
+
+enum 判定(verdict_kind) = 飛ばす(skip) | 打ち切る(halt) | 取る(take)
+
+elements 明細(lines)
+  額(amt) : money[円]  range >=0円 <=1000円
+
+outputs
+  手数料(fee) : money[円]  round down(1円)
+
+# どの明細も、取るか打ち切るかで、飛ばすにはならない
+table 判定する(decide)
+policy unique
+| 額      | -> 判定(verdict) : 判定 |
+| >=500円 | 取る                    |
+| <500円  | 打ち切る                |
+
+fold 判定 over 明細 -> 手数料
+  飛ばす -> next
+  打ち切る -> stop with 0円
+  取る -> take_first 額
+  empty -> 0円
+  exhausted -> held

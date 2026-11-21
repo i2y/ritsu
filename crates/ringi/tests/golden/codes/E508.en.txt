@@ -1,0 +1,3 @@
+error[E508]: example.ringi:15:30: In the organization from 2026-04-01, `submitted by` names the team `legal`, which is not there
+    15 |   submitted by   everyone in legal
+  = Correct the ID, or add the team to the data of the version.

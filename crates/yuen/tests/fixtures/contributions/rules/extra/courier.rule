@@ -1,0 +1,13 @@
+contribution courier v1
+description "The courier line: items picked up by a courier, at the fee of the courier"
+to "../fee.rule" signature:7bc82bc475271a49
+
+extend way with courier "Picked up by a courier"
+
+clause courier_fee -> fee
+  when way courier
+  then 8
+
+examples
+| way     | -> fee |
+| courier | 8      |

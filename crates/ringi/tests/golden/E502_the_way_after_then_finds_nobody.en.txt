@@ -1,0 +1,6 @@
+error[E502]: tests/mutants/E502_the_way_after_then_finds_nobody.ringi:9:10: In the organization from 2026-04-01, the stage `check` has no approver
+     9 |   check  manager
+  = `manager` finds no head above the requester.
+  = For 1 requester: e01 (President (fictional)).
+  = The stage is `when empty escalate, then auditor`, and nobody is above (the top of the organization): it goes to `auditor`, but `auditor` names e09, who is not in the organization from 2026-04-01. A ticket that comes to it waits there until an administrator adds an approver.
+  = Correct the data of the version, or write after `then` a way that has someone in every version.

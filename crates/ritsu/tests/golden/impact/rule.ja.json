@@ -331,6 +331,7 @@
           "inputs": [],
           "types": []
         },
+        "workflow_lines": [],
         "total": {
           "gained": 1,
           "lost": 0,
@@ -399,7 +400,8 @@
           "date": "2027-01-04",
           "by": "経理",
           "why": "この例のために書いた"
-        }
+        },
+        "only_through_reads": false
       },
       {
         "name": "返金できる人",
@@ -412,7 +414,8 @@
           "date": "2027-01-04",
           "by": "経理",
           "why": "この例のために書いた"
-        }
+        },
+        "only_through_reads": false
       }
     ],
     "owners": [
@@ -492,11 +495,13 @@
     "allow_lost": 0,
     "policies_moved": 2,
     "book_changes": 0,
+    "request_changes": 0,
     "interface_changes": 0,
     "interface_breaks": 0,
     "undecided": 0,
     "opaque_specs": 0,
     "requirements_moved": 2,
+    "requirements_read": 0,
     "requirements_unknown": 0,
     "claims_touched": 0,
     "unclaimed_lines": 0,
@@ -512,5 +517,5 @@
       "person_reads": true
     }
   },
-  "markdown": "## ritsu impact：`base` → 作業ツリー\n\n答えが動きました（`rule_changes 1`、`allow_gained 1`、`policies_moved 2`）。行き先は `経路 = 持ち主が読む`、`人が読む = true`。持ち主は `経理`。\n\n| 行き先 | 値 |\n|---|---|\n| `経路` | `持ち主が読む` |\n| `人が読む` | `true` |\n\n| 検査 | エラー | 警告 |\n|---|---|---|\n| `base` | 0 | 0 |\n| 作業ツリー | 0 | 0 |\n\n### 変わったファイル\n\n6 個（仕様 2、生成物 0、手書きのコード 0、文書 0、その他 4）。手書きのコードの変わった行 0\n\n<details><summary>一覧</summary>\n\n| 変わり方 | ファイル | 種類 |\n|---|---|---|\n| 変えた | `refund_band.ja.rule` | 仕様, rulec |\n| 変えた | `refunds.ja.req` | 仕様, yuen |\n| 消した | `reviewed/065045fbdf8715b9` | その他 |\n| 消した | `reviewed/0c9a511a604558c8` | その他 |\n| 足した | `reviewed/50d530478e548bef` | その他 |\n| 足した | `reviewed/cc1f64aeed4a0e68` | その他 |\n\n</details>\n\n### 振る舞い\n\n<details><summary><code>refund_band.ja.rule</code> (rulec)：答えが変わります</summary>\n\n**版の差分（入力の全体で比べたもの）**\n\n`base/refund_band.ja.rule` → `refund_band.ja.rule`\n\n| 違いが出る入力 | 答え | 例 | 通り |\n|---|---|---|---|\n| 点数 >=21 <=30 | 区分: 多数 → 少数 | 点数=21 | 2 |\n\nここに挙げた入力のほかでは、二つの版は同じ答えを返します。\n\n</details>\n\n<details><summary><code>refunds.ja.gate</code> (sekisho)：答えが変わります</summary>\n\n**sekisho diff：ゲート `返金` v1 → v1**\n\n- 古い版：`base/refunds.ja.gate`\n- 新しい版：`refunds.ja.gate`\n\n**`返金する`**\n\n両方の版を合わせて 32 通りをたどりました。\n\n| 変わり方 | 通り | 古い版で効いたポリシー | 新しい版で効いたポリシー | 例 |\n|---|---|---|---|---|\n| 許可が増えた（拒否 → 許可） | 1 | なし | 係は期間内に少数を返金できる | 係を持つ職員、注文、大きさ：少数、期間内：はい（古い版では大きさ：多数） |\n| 答えは同じで、効いたポリシーが変わった | 2 | 責任者は期間内に返金できる | 係は期間内に少数を返金できる、責任者は期間内に返金できる | 責任者を持つ職員、注文、大きさ：少数、期間内：はい（古い版では大きさ：多数） |\n\nほかの組み合わせでは、どの action も同じ決定になります。\n\n</details>\n\n### インターフェース\n\n- `refund_band.ja.rule` のインターフェースは変わりません\n\n### 要件\n\n- **`返金の区分`** (`refunds.ja.req`)：変わった\n  - 20 点までの返金は少数、それより多いものは多数\n  - 満たすもの `rulec \"refund_band.ja.rule\" table 区分を決める`\n  - 確かめるもの `rulec \"refund_band.ja.rule\"`：変わった\n  - 確認（2027-01-05、開発）\n\nこれはモジュールの要件のファイルの言葉です。ritsu が確かめるのは、書かれた相手が確認のあとで動いていないことで、書かれたことが正しいかどうかではありません。\n\nほかの 3 個のファイルは答えが同じです。\n\n### 要件と持ち主\n\n- `返金の区分 v1` (`refunds.ja.req:7`), 持ち主 `経理`\n- `返金できる人 v1` (`refunds.ja.req:16`), 持ち主 `経理`\n\n### 主張\n\n- 分かりません：このプロジェクトに `.geas` はありません\n\n**生成物**：`ritsu.mod` に `target` の行が無いので、確かめていません\n\n<details><summary>事実</summary>\n\n| 名前 | 値 |\n|---|---|\n| `spec_files` | 2 |\n| `generated_files` | 0 |\n| `code_files` | 0 |\n| `doc_files` | 0 |\n| `other_files` | 4 |\n| `code_lines` | 0 |\n| `new_errors` | 0 |\n| `new_warnings` | 0 |\n| `rule_changes` | 1 |\n| `date_changes` | 0 |\n| `allow_gained` | 1 |\n| `allow_lost` | 0 |\n| `policies_moved` | 2 |\n| `book_changes` | 0 |\n| `interface_changes` | 0 |\n| `interface_breaks` | 0 |\n| `undecided` | 0 |\n| `opaque_specs` | 0 |\n| `requirements_moved` | 2 |\n| `requirements_unknown` | 0 |\n| `claims_touched` | 0 |\n| `unclaimed_lines` | 0 |\n| `claims_known` | false |\n| `generated_stale` | false |\n| `generated_checked` | false |\n| `generated_unchecked` | 0 |\n\n</details>\n\n新しいエラーはなく、決められなかったものもありません。\n"
+  "markdown": "## ritsu impact：`base` → 作業ツリー\n\n答えが動きました（`rule_changes 1`、`allow_gained 1`、`policies_moved 2`）。行き先は `経路 = 持ち主が読む`、`人が読む = true`。持ち主は `経理`。\n\n| 行き先 | 値 |\n|---|---|\n| `経路` | `持ち主が読む` |\n| `人が読む` | `true` |\n\n| 検査 | エラー | 警告 |\n|---|---|---|\n| `base` | 0 | 0 |\n| 作業ツリー | 0 | 0 |\n\n### 変わったファイル\n\n6 個（仕様 2、生成物 0、手書きのコード 0、文書 0、その他 4）。手書きのコードの変わった行 0\n\n<details><summary>一覧</summary>\n\n| 変わり方 | ファイル | 種類 |\n|---|---|---|\n| 変えた | `refund_band.ja.rule` | 仕様, rulec |\n| 変えた | `refunds.ja.req` | 仕様, yuen |\n| 消した | `reviewed/065045fbdf8715b9` | その他 |\n| 消した | `reviewed/0c9a511a604558c8` | その他 |\n| 足した | `reviewed/50d530478e548bef` | その他 |\n| 足した | `reviewed/cc1f64aeed4a0e68` | その他 |\n\n</details>\n\n### 振る舞い\n\n<details><summary><code>refund_band.ja.rule</code> (rulec)：答えが変わります</summary>\n\n**版の差分（入力の全体で比べたもの）**\n\n`base/refund_band.ja.rule` → `refund_band.ja.rule`\n\n| 違いが出る入力 | 答え | 例 | 通り |\n|---|---|---|---|\n| 点数 >=21 <=30 | 区分: 多数 → 少数 | 点数=21 | 2 |\n\nここに挙げた入力のほかでは、二つの版は同じ答えを返します。\n\n</details>\n\n<details><summary><code>refunds.ja.gate</code> (sekisho)：答えが変わります</summary>\n\n**sekisho diff：ゲート `返金` v1 → v1**\n\n- 古い版：`base/refunds.ja.gate`\n- 新しい版：`refunds.ja.gate`\n\n**`返金する`**\n\n両方の版を合わせて 32 通りをたどりました。\n\n| 変わり方 | 通り | 古い版で効いたポリシー | 新しい版で効いたポリシー | 例 |\n|---|---|---|---|---|\n| 許可が増えた（拒否 → 許可） | 1 | なし | 係は期間内に少数を返金できる | 係を持つ職員、注文、大きさ：少数、期間内：はい（古い版では大きさ：多数） |\n| 答えは同じで、効いたポリシーが変わった | 2 | 責任者は期間内に返金できる | 係は期間内に少数を返金できる、責任者は期間内に返金できる | 責任者を持つ職員、注文、大きさ：少数、期間内：はい（古い版では大きさ：多数） |\n\nほかの組み合わせでは、どの action も同じ決定になります。\n\n</details>\n\n### インターフェース\n\n- `refund_band.ja.rule` のインターフェースは変わりません\n\n### 要件\n\n- **`返金の区分`** (`refunds.ja.req`)：変わった\n  - 20 点までの返金は少数、それより多いものは多数\n  - 満たすもの `rulec \"refund_band.ja.rule\" table 区分を決める`\n  - 確かめるもの `rulec \"refund_band.ja.rule\"`：変わった\n  - 確認（2027-01-05、開発）\n\nこれはモジュールの要件のファイルの言葉です。ritsu が確かめるのは、書かれた相手が確認のあとで動いていないことで、書かれたことが正しいかどうかではありません。\n\nほかの 3 個のファイルは答えが同じです。\n\n### 要件と持ち主\n\n- `返金の区分 v1` (`refunds.ja.req:7`), 持ち主 `経理`\n- `返金できる人 v1` (`refunds.ja.req:16`), 持ち主 `経理`\n\n### 主張\n\n- 分かりません：このプロジェクトに `.geas` はありません\n\n**生成物**：`ritsu.mod` に `target` の行が無いので、確かめていません\n\n<details><summary>事実</summary>\n\n| 名前 | 値 |\n|---|---|\n| `spec_files` | 2 |\n| `generated_files` | 0 |\n| `code_files` | 0 |\n| `doc_files` | 0 |\n| `other_files` | 4 |\n| `code_lines` | 0 |\n| `new_errors` | 0 |\n| `new_warnings` | 0 |\n| `rule_changes` | 1 |\n| `date_changes` | 0 |\n| `allow_gained` | 1 |\n| `allow_lost` | 0 |\n| `policies_moved` | 2 |\n| `book_changes` | 0 |\n| `request_changes` | 0 |\n| `interface_changes` | 0 |\n| `interface_breaks` | 0 |\n| `undecided` | 0 |\n| `opaque_specs` | 0 |\n| `requirements_moved` | 2 |\n| `requirements_read` | 0 |\n| `requirements_unknown` | 0 |\n| `claims_touched` | 0 |\n| `unclaimed_lines` | 0 |\n| `claims_known` | false |\n| `generated_stale` | false |\n| `generated_checked` | false |\n| `generated_unchecked` | 0 |\n\n</details>\n\n新しいエラーはなく、決められなかったものもありません。\n"
 }

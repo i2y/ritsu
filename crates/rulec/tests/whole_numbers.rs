@@ -22,6 +22,7 @@ use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -47,14 +48,19 @@ fn have(cmd: &str, arg: &str) -> bool {
     Command::new(cmd).arg(arg).output().map(|o| o.status.success()).unwrap_or(false)
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 fn rulec(lang: &str, tmp: Option<&Path>, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_rulec"));
-    c.env("RULEC_LANG", lang).current_dir(root()).args(args);
+    c.env("RULEC_LANG", lang).current_dir(root()).args(args).args(["--lang", lang]);
     if let Some(t) = tmp {
         c.env("TMPDIR", t);
     }
-    let o = c.output().expect("cannot start rulec");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    let o = finish(&mut c, RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 /// `rulec gen` of a set of rules into one directory, in a language.
@@ -199,7 +205,12 @@ fn every_way_answers_a_whole_number_in_any_spelling_as_the_integer() {
     });
 }
 
-/// Send the requests one line at a time and collect one answer per request that has an id.
+/// How long a generated server may take to answer a request, or to end once its input is closed:
+/// a moment each. Past it, the server is stopped, and the test fails saying what it waited for.
+const SERVER_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Send the requests one line at a time and collect one answer per request that has an id, each
+/// waited for no longer than [`SERVER_LIMIT`].
 fn talk(cwd: &Path, cmd: &str, args: &[&str], reqs: &[String]) -> Vec<Json> {
     let mut child = Command::new(cmd)
         .current_dir(cwd)
@@ -210,7 +221,24 @@ fn talk(cwd: &Path, cmd: &str, args: &[&str], reqs: &[String]) -> Vec<Json> {
         .spawn()
         .expect("cannot start the server");
     let mut si = child.stdin.take().unwrap();
-    let mut so = BufReader::new(child.stdout.take().unwrap());
+    // its lines and its standard error, read in threads of their own, so that each wait has a limit
+    let so = child.stdout.take().unwrap();
+    let (sent, lines) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(so).lines() {
+            let Ok(line) = line else { break };
+            if sent.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    let mut se = child.stderr.take().unwrap();
+    let said = std::thread::spawn(move || {
+        let mut s = String::new();
+        let _ = std::io::Read::read_to_string(&mut se, &mut s);
+        s
+    });
+    let server = format!("{cmd} {}", args.join(" "));
     let mut out = Vec::new();
     for r in reqs {
         writeln!(si, "{r}").unwrap();
@@ -218,13 +246,31 @@ fn talk(cwd: &Path, cmd: &str, args: &[&str], reqs: &[String]) -> Vec<Json> {
         if !r.contains("\"id\"") {
             continue;
         }
-        let mut line = String::new();
-        assert!(so.read_line(&mut line).unwrap() > 0, "ended without an answer: {r}");
+        let line = match lines.recv_timeout(SERVER_LIMIT) {
+            Ok(line) => line,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => panic!("ended without an answer: {r}"),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("{server}: no answer within {} seconds, and it was stopped: {r}", SERVER_LIMIT.as_secs());
+            }
+        };
         out.push(rulec::json::parse(line.trim()).unwrap_or_else(|e| panic!("not JSON: {e}\n{line}")));
     }
     drop(si);
-    let o = child.wait_with_output().unwrap();
-    assert!(o.status.success(), "the server failed:\n{}", String::from_utf8_lossy(&o.stderr));
+    let until = std::time::Instant::now() + SERVER_LIMIT;
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if std::time::Instant::now() > until {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{server}: it did not end within {} seconds of its input closing, and was stopped", SERVER_LIMIT.as_secs());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    assert!(status.success(), "the server failed:\n{}", said.join().unwrap());
     out
 }
 

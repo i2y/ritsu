@@ -1,0 +1,19 @@
+rule authority v1
+description "Who reviews and decides a purchase, by its kind and amount (fictional)"
+
+enum kind = goods "Goods and services" | software "Software"
+enum decider = dept_head "Head of department" | division_head "Head of division"
+
+inputs
+  kind   : kind
+  amount : money[JPY]  range >=1JPY <=10_000_000JPY
+
+outputs
+  finance : bool
+  decider : decider
+
+table authority
+| kind     | amount         | -> finance | decider       |
+| goods    | <=1_000_000JPY | false      | dept_head     |
+| goods    | >1_000_000JPY  | true       | division_head |
+| software | -              | true       | division_head |

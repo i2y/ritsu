@@ -1,0 +1,60 @@
+workflow ts_names v1
+description "Types named as the global types of TypeScript: the ones types.ts reads, which it then reads through globalThis, and the ones no file of the code reads. The flow runs on every platform"
+
+# what types.ts reads as a type of the language
+record Array
+  first : string
+
+record Record
+  key : string
+
+# the types of the language no file of the code reads
+enum Partial = one | two
+enum Required = one | two
+enum Readonly = one | two
+enum Pick = one | two
+enum Omit = one | two
+enum Exclude = one | two
+enum Extract = one | two
+enum NonNullable = one | two
+enum Parameters = one | two
+enum ReturnType = one | two
+enum Awaited = one | two
+enum Iterable = one | two
+enum AsyncIterable = one | two
+enum PromiseLike = one | two
+enum ReadonlyArray = one | two
+
+record Everything
+  the_array          : Array
+  the_record         : Record
+  the_partial        : Partial
+  the_required       : Required
+  the_readonly       : Readonly
+  the_pick           : Pick
+  the_omit           : Omit
+  the_exclude        : Exclude
+  the_extract        : Extract
+  the_non_nullable   : NonNullable
+  the_parameters     : Parameters
+  the_return_type    : ReturnType
+  the_awaited        : Awaited
+  the_iterable       : Iterable
+  the_async_iterable : AsyncIterable
+  the_promise_like   : PromiseLike
+  the_readonly_array : ReadonlyArray
+  arrays             : list[Array]
+
+inputs
+  id : string
+
+outputs
+  everything : Everything
+
+task gather(id: string) -> Everything
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:gather"
+  idempotent
+
+flow
+  let everything = gather(id: id)
+  succeed everything = everything

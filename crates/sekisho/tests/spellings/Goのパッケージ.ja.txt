@@ -1,0 +1,5 @@
+警告[W402]: tests/spellings/Goのパッケージ.gate:1:1: ファイル `switch` は、Go のコードで `switch` と書かれ、その言語の予約語です
+     1 | gate 席替え(switch) v1
+  = Go（`--target go`）: ファイル `switch` をパッケージの名前として `switch` と書きますが、`switch` は Go の予約語です。パッケージをコンパイルできません（`syntax error`）。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。ファイルの別名は、生成するファイルとモジュールとパッケージの名前でもあるので、それを読むコードも合わせて直してください。
+tests/spellings/Goのパッケージ.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

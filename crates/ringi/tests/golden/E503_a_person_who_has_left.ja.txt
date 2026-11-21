@@ -1,0 +1,5 @@
+エラー[E503]: tests/mutants/E503_a_person_who_has_left.ringi:12:3: 2026-04-01 からの組織では、`counsel` が指す人かチームがありません
+    12 |   counsel = person "e09"
+  = `counsel` が指す e09 は、2026-04-01 からの組織にいません。
+  = ステップ `decide` は `when empty escalate` ですが、組織にいない人やチームからは上へ回せません（`then` のあとに書いたことが効くのは、上に人がいないときだけです）。
+  = ID を直すか、その版のデータに人かチームを足してください。

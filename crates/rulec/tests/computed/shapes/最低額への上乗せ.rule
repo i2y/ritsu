@@ -1,0 +1,18 @@
+rule 最低額への上乗せ(top_up_to_minimum) v1
+description "小さな注文は最低額の 25 円まで上乗せし、表は上乗せを金額と一緒に読む。25 円を超えると上乗せは 0 円で、検査はそれを、二つの値の幅の差としてではなく、金額から同じ金額を引いた物として読む"
+
+enum 扱い(handling) = 通常(standard) | 小口(small_order)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=351円
+
+define 上乗せ(top_up) : money[円] = max(金額, 25円) - 金額
+
+outputs
+  扱い(handling) : 扱い
+
+table 扱いの表(handling_of)
+| 金額   | 上乗せ      | -> 扱い |
+| <=58円 | <=3円       | 通常    |
+| <=58円 | >3円 <=24円 | 小口    |
+| >58円  | <=3円       | 通常    |

@@ -5,6 +5,12 @@
 //! `rulec.txt` and `dandori.txt`. The three readers were compared here, live, until each language
 //! read with ritsu-proto (sakai in C.9, rulec and dandori in D.10); the goldens are what is left
 //! of that comparison (DESIGN 3.3). A change to what ritsu-proto reads shows in them.
+//!
+//! The files read are every `.proto` under the three crates, but the tools a crate installs
+//! (`tools/`), and under this crate's `tests/fixtures/`, the materials of the tests among them —
+//! the mutants (`tests/mutants/`) and the mistakes other lines hang on (`tests/chains/`) too, as
+//! the other sweeps of the tree read them — and a file added under them later is held to what
+//! ritsu-proto read of it when it was added.
 
 use ritsu_base::text::{Lang, Text};
 use ritsu_proto::validate::Rules;

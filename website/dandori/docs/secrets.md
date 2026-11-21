@@ -59,8 +59,10 @@ A value is secret when it is read from a place marked secret. There are three wa
 A record holds the secrets of its fields, a list those of its items, a string with values put in is
 secret when one of them is, and a `json` value made from a secret is secret as a whole. What a rule
 answers is a decision, and holds none; neither does the answer of a task with no mark. What a
-variable holds is gathered from every value put in it anywhere in the flow, as its
-[range](tour.md#ranges) is.
+variable holds where it is read is what the runs that reach that place last put in it: a secret put
+in it on one way counts where that way leads, also after it joins another, and not where no run
+that puts it in comes, nor after a value with no mark replaces it. In a loop, a secret put in on one
+round counts on the rounds after it.
 
 ## Kept in the history (W904)
 

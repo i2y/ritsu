@@ -137,7 +137,7 @@ See also: [E009](#e009)
 
 ## E008 — A name that is not declared
 
-**When**: The role of an `owner`, a `decided … by`, the `by` of a record or `review --by` is not declared, or the requirement of a `from` or `replaces` is not in the project.
+**When**: The role of an `owner`, a `decided … by`, the `by` of a record or `review --by` is not declared, or the requirement of a `from` or `replaces` is not in the project. A role or a requirement written in several places is said once, where it is first written, and the note gives the lines of the others.
 
 **Fix**: Declare the role with `role legal "…"`, or correct the misspelling.
 
@@ -200,9 +200,9 @@ requirement r1
 
 ## E011 — A tool that does not exist
 
-**When**: The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai, sekisho, kaname and jsonschema (`dir` is not a word of a naming either).
+**When**: The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai, sekisho, kaname, jsonschema and ringi (`dir` is not a word of a naming either).
 
-**Fix**: Write one of the fifteen; name any other file with `file "…"`.
+**Fix**: Write one of the sixteen; name any other file with `file "…"`.
 
 **Example**:
 
@@ -383,7 +383,7 @@ See also: [E101](#e101)
 
 ## E105 — A citation cannot be used
 
-**When**: The article of a citation is not in a form read, the source is not declared in the same file, a law is cited without an article or an OpenSpec spec without a requirement, or a `file` source is cited with one.
+**When**: The article of a citation is not in a form read, the source is not declared in the same file, a law is cited without an article or an OpenSpec spec without a requirement, or a `file` source is cited with one. A source that is not declared, cited in several places, is said once, at the first, and the note gives the lines of the others.
 
 **Fix**: Declare the source in the same file; cite a law by article or section (`@cfr "§1.7"`) and a `file` source whole (`@terms`).
 

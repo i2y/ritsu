@@ -1,0 +1,17 @@
+requirements 返金 v1
+description "宣言で名前を書き誤った役割と、それを書く行。役割は最初に書いた所で一度だけ言う。chain_names.req の日本語の版"
+
+# 役割の名前の書き誤り。どの `owner` と `decided … by` も `経理` と書いたまま
+role 径理 "返金の方針を決める"
+
+requirement 売上を超えない(within_sales)
+  text "返金は、その注文の売上を超えない"
+  in force 2026-10-01..
+  owner 経理
+  decided 2026-10-04 by 経理 "注文ごとに、返金の額は売上の額を超えない。この例のために決めたもの"
+
+requirement 払ったカードへ(back_to_the_card)
+  text "返金は、その注文を払ったカードへ戻す"
+  in force 2026-10-01..
+  owner 経理
+  decided 2026-10-04 by 経理 "返金をほかの方法では払わない。この例のために決めたもの"

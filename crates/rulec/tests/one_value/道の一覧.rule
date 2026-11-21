@@ -1,0 +1,4 @@
+enums 道の一覧(ways_ja) v1
+description "申請の通る道。道は一つしかない（架空）"
+
+enum 道(route) = 直行(direct) "承認者へ直に"

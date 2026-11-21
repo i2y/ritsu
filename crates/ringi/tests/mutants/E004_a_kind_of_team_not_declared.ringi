@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+use organization org from "shared/company.ringi"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  approve  head
+
+who
+  head = head of requester.division
+
+ticket
+  self approval  not allowed

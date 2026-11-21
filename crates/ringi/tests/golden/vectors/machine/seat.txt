@@ -1,0 +1,132 @@
+scenario a_joint_stage_after_the_manager, line 40: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, line 41: approve by e1101 at 2026-11-16 11:00 -> middle, in progress
+scenario a_joint_stage_after_the_manager, line 42: approve by e3101 at 2026-11-16 12:00 -> middle, in progress
+scenario a_joint_stage_after_the_manager, line 43: approve by e1001 at 2026-11-16 13:00 -> decide, in progress
+scenario a_joint_stage_after_the_manager, line 44: approve by e0101 at 2026-11-16 14:00 -> approved
+scenario a_joint_stage_after_the_manager, after it ended: comment by e1201 at 2026-11-16 14:00 -> refused (state)
+scenario a_joint_stage_after_the_manager, after line 40: approvals: approve by e1101 at 2026-11-16 10:00 -> middle, in progress
+scenario a_joint_stage_after_the_manager, after line 40: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario a_joint_stage_after_the_manager, after line 40: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario a_joint_stage_after_the_manager, after line 40: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario a_joint_stage_after_the_manager, after line 40: the requester: comment by e1201 at 2026-11-16 10:00 -> with requester
+scenario a_joint_stage_after_the_manager, after line 40: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario a_joint_stage_after_the_manager, after line 40: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 40: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_joint_stage_after_the_manager, after line 40: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_joint_stage_after_the_manager, after line 40: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_joint_stage_after_the_manager, after line 40: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario a_joint_stage_after_the_manager, after line 40: sent back: comment by e1101 at 2026-11-16 10:00 -> with requester
+scenario a_joint_stage_after_the_manager, after line 40: sent back: comment by e1201 at 2026-11-16 10:00 -> with requester
+scenario a_joint_stage_after_the_manager, after line 40: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario a_joint_stage_after_the_manager, after line 40: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario a_joint_stage_after_the_manager, after line 40: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 40: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 40: an administrator, by name: add approver by e0101 at 2026-11-16 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 40: an administrator, by name: hand over by e0101 at 2026-11-16 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 40: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 40: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_joint_stage_after_the_manager, after line 40: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario a_joint_stage_after_the_manager, after line 40: clocks: approve by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario a_joint_stage_after_the_manager, after line 40: clocks: comment by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario a_joint_stage_after_the_manager, after line 40: comments: comment by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 40: comments: comment by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 40: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario a_joint_stage_after_the_manager, after line 40: comments: comment by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 40: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario a_joint_stage_after_the_manager, after line 40: comments: approve by e1101 at 2026-11-16 10:00 -> middle, in progress
+scenario a_joint_stage_after_the_manager, after line 40: comments: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario a_joint_stage_after_the_manager, after line 40: comments: approve by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario a_joint_stage_after_the_manager, after line 40: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario a_joint_stage_after_the_manager, after line 40: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 40: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> refused (limit)
+scenario a_joint_stage_after_the_manager, after line 41: approvals: approve by e3101 at 2026-11-16 11:00 -> middle, in progress
+scenario a_joint_stage_after_the_manager, after line 41: approvals: approve by e1001 at 2026-11-16 11:00 -> decide, in progress
+scenario a_joint_stage_after_the_manager, after line 41: rejections: reject by e3101 at 2026-11-16 11:00 -> rejected
+scenario a_joint_stage_after_the_manager, after line 41: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
+scenario a_joint_stage_after_the_manager, after line 41: the requester: withdraw by e1201 at 2026-11-16 11:00 -> with requester
+scenario a_joint_stage_after_the_manager, after line 41: sent back: send back by e3101 at 2026-11-16 11:00 -> with requester
+scenario a_joint_stage_after_the_manager, after line 41: sent back: resubmit by e1201 at 2026-11-17 11:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 41: sent back: discard by e1201 at 2026-11-16 11:00 -> withdrawn
+scenario a_joint_stage_after_the_manager, after line 41: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario a_joint_stage_after_the_manager, after line 41: sent back: send back by e3101 at 2026-11-16 11:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 41: retracted: retract by e1101 at 2026-11-16 11:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 41: clocks: late at 2026-11-20 00:00 -> middle, in progress
+scenario a_joint_stage_after_the_manager, after line 41: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_joint_stage_after_the_manager, after line 43: approvals: approve by e0101 at 2026-11-16 13:00 -> approved
+scenario a_joint_stage_after_the_manager, after line 43: rejections: reject by e0101 at 2026-11-16 13:00 -> rejected
+scenario a_joint_stage_after_the_manager, after line 43: the requester: approve by e1201 at 2026-11-16 13:00 -> refused (person)
+scenario a_joint_stage_after_the_manager, after line 43: the requester: withdraw by e1201 at 2026-11-16 13:00 -> refused (state)
+scenario a_joint_stage_after_the_manager, after line 43: sent back: send back by e0101 at 2026-11-16 13:00 -> with requester
+scenario a_joint_stage_after_the_manager, after line 43: sent back: resubmit by e1201 at 2026-11-17 13:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, after line 43: sent back: discard by e1201 at 2026-11-16 13:00 -> withdrawn
+scenario a_joint_stage_after_the_manager, after line 43: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario a_joint_stage_after_the_manager, after line 43: sent back: send back by e0101 at 2026-11-16 13:00 -> middle, in progress
+scenario a_joint_stage_after_the_manager, after line 43: retracted: retract by e1001 at 2026-11-16 13:00 -> middle, in progress
+scenario a_joint_stage_after_the_manager, after line 43: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario a_joint_stage_after_the_manager, after line 43: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: reject by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: send back by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: retract by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: pause by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: resume by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: edit by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: withdraw by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: discard by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: resubmit by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: add approver at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: hand over at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: agent answered at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: note ready at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before: flow failed at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: no revision: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, after line 41: a comment, which says no revision: comment by e1101 at 2026-11-16 11:00 -> middle, in progress
+scenario a_joint_stage_after_the_manager, after line 41: made on the revision before, with a comment too long: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_joint_stage_after_the_manager, made on 2026-11-20 (closed from 2026-11-21): submit by e1201 at 2026-11-20 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-26 00:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, made on 2026-11-20 (closed from 2026-11-21): late at 2026-12-02 00:00 -> expired
+scenario a_joint_stage_after_the_manager, made on 2026-12-28 (closed from 2026-12-29): submit by e1201 at 2026-12-28 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-07 00:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-13 00:00 -> expired
+scenario a_joint_stage_after_the_manager, made with a comment: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario a_joint_stage_after_the_manager, made with a comment: submit by e1201 at 2026-11-16 10:00 -> refused (comment)
+requester e0001: submit by e0001 at 2026-11-16 10:00 -> middle, in progress
+requester e0101: submit by e0101 at 2026-11-16 10:00 -> first, in progress
+requester e0102: submit by e0102 at 2026-11-16 10:00 -> first, in progress
+requester e0201: submit by e0201 at 2026-11-16 10:00 -> first, in progress
+requester e0202: submit by e0202 at 2026-11-16 10:00 -> first, in progress
+requester e0203: submit by e0203 at 2026-11-16 10:00 -> first, in progress
+requester e0204: submit by e0204 at 2026-11-16 10:00 -> first, in progress
+requester e1001: submit by e1001 at 2026-11-16 10:00 -> first, in progress
+requester e1002: submit by e1002 at 2026-11-16 10:00 -> first, in progress
+requester e1101: submit by e1101 at 2026-11-16 10:00 -> first, in progress
+requester e1203: submit by e1203 at 2026-11-16 10:00 -> first, in progress
+requester e3101: submit by e3101 at 2026-11-16 10:00 -> first, in progress
+requester e4001: submit by e4001 at 2026-11-16 10:00 -> first, in progress
+requester e5001: submit by e5001 at 2026-11-16 10:00 -> first, in progress
+requester e6001: submit by e6001 at 2026-11-16 10:00 -> first, in progress
+requester e7001: submit by e7001 at 2026-11-16 10:00 -> first, in progress
+requester e7101: submit by e7101 at 2026-11-16 10:00 -> first, in progress
+requester e7102: submit by e7102 at 2026-11-16 10:00 -> first, in progress
+requester e7201: submit by e7201 at 2026-11-16 10:00 -> first, in progress
+requester e7202: submit by e7202 at 2026-11-16 10:00 -> first, in progress
+requester e9001: submit by e9001 at 2026-11-16 10:00 -> first, in progress
+requester e9002: submit by e9002 at 2026-11-16 10:00 -> first, in progress
+requester e9003: submit by e9003 at 2026-11-16 10:00 -> first, in progress
+proxy e0001 for e1201: submit by e0001 at 2026-11-16 10:00 -> refused (person)
+proxy e1101 for e3101: approve by e1101 at 2026-12-28 10:00 -> middle, in progress
+proxy e1101 for e3101: approve by e1101 at 2026-12-28 10:00 -> middle, in progress
+proxy e1101 for e3101: approve by e1001 at 2026-12-28 10:00 -> decide, in progress
+proxy e1101 for e3101: approve by e0101 at 2026-12-28 10:00 -> approved
+proxy e1101 for e3101: sent back by the proxy: send back by e1101 at 2026-12-28 10:00 -> with requester
+proxy e1101 for e3101: rejected by the proxy: reject by e1101 at 2026-12-28 10:00 -> rejected
+proxy e1101 for e3101: approved and taken back by the proxy: retract by e1101 at 2026-12-28 10:00 -> refused (state)
+proxy e1101 for e3101: a stage handed to e3101: hand over at 2026-12-28 10:00 -> first, in progress
+proxy e1101 for e3101: a stage handed to e3101: approve by e1101 at 2026-12-28 10:00 -> middle, in progress
+across the versions of the organization: submit by e1201 at 2027-03-31 10:00 -> first, in progress
+across the versions of the organization: approve by e1101 at 2027-04-01 10:00 -> middle, in progress
+across the versions of the organization: approve by e3101 at 2027-04-01 10:00 -> middle, in progress
+across the versions of the organization: approve by e1001 at 2027-04-01 10:00 -> decide, in progress
+across the versions of the organization: approve by e0101 at 2027-04-01 10:00 -> approved
+across the versions of the organization: send back by e1101 at 2027-03-31 10:00 -> with requester
+across the versions of the organization: resubmit by e1201 at 2027-04-01 10:00 -> first, in progress

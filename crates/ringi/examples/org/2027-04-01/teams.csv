@@ -1,0 +1,14 @@
+id,name,name_ja,kind,parent,head
+company,Example Co. (fictional),株式会社サンプル（架空）,company,,e0001
+sales_div,Sales Division,営業本部,division,company,e0101
+sales1,Sales Department 1,営業一部,department,sales_div,e3101
+corporate_div,Corporate Division,管理本部,division,company,e0102
+accounting,Accounting,経理部,department,corporate_div,e1001
+finance,Finance,財務部,department,corporate_div,e4001
+general_affairs,General Affairs,総務部,department,corporate_div,e5001
+hr,Human Resources,人事部,department,corporate_div,e6001
+legal,Legal,法務部,department,corporate_div,
+it,Information Systems,情報システム部,department,corporate_div,e7001
+it_security,IT Security,情報セキュリティ課,section,it,e7101
+it_operations,IT Operations,運用課,section,it,e7201
+board,Board,取締役会,committee,company,e0001

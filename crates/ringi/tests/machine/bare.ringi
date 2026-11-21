@@ -1,0 +1,22 @@
+request bare v1 "Bare request"
+description "A request with no scenario (fictional rules): `run` has nothing to run, and `vectors` nothing to make vectors from"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  first  board
+
+who
+  board = team board
+
+every stage
+  due in 3 business days at end of day
+  when late expire
+  when empty stay
+
+ticket
+  self approval  not allowed

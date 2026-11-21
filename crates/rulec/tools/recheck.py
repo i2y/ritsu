@@ -16,7 +16,10 @@ What it checks, per rule:
     out as the type the rule declares for the value. Units that do not meet stop here.
   * **int64** (§7.4): every named value's interval is recomputed here, by interval
     arithmetic over the declared ranges and the expression the certificate carries, and the
-    integer it stores at its scale has to fit in a signed 64-bit word.
+    integer it stores at its scale has to fit in a signed 64-bit word. A `define` with the
+    range the rule accepts for it (`accepts`, §15.313) is read by what follows only inside
+    that range, which the generated code refuses a call outside of; its own claim keeps what
+    it reaches before the door.
   * **max and min** (§15.219): the range stated for what a `max` or a `min` answers holds
     its column's range and its `empty` value, since it answers one of those.
   * **fold answers** (§15.219): the range stated for a fold's answer that the items below
@@ -104,6 +107,7 @@ Exit code 0 when every table holds, 1 when one does not, 2 on a certificate it c
 read. No dependencies; Python 3.9 or later.
 """
 
+import datetime
 import hashlib
 import itertools
 import json
@@ -321,11 +325,12 @@ def interval(e, ranges, le=frozenset()):
     return None
 
 
-def truth_of(e, ranges, le=frozenset()):
+def truth_of(e, ranges, le=frozenset(), iv=None):
     """The truth value a comparison always takes over the intervals of its two sides, or None
     when it can take either, or a side has no interval (§15.196). What `rulec` reads a boolean
     `define` of one comparison with: `made <= 2027-03-31` with `made` declared up to the end of
-    2026 is always true."""
+    2026 is always true. `iv` works out a side's interval where it is given (rulec's §15.325: with
+    axes held, the interval met with the side's linear form)."""
     if not isinstance(e, dict) or e.get("op") not in ("<=", "<", ">=", ">"):
         return None
 
@@ -334,7 +339,7 @@ def truth_of(e, ranges, le=frozenset()):
         if isinstance(x, dict) and x.get("type") == "date" and "lit" in x and x.get("value") is not None:
             v = num(x["value"])
             return (v, v)
-        return interval(x, ranges, le)
+        return iv(x) if iv is not None else interval(x, ranges, le)
 
     a, b = side(e["l"]), side(e["r"])
     if a is None or b is None:
@@ -350,13 +355,60 @@ def truth_of(e, ranges, le=frozenset()):
     return True if bh < al else (False if ah <= bl else None)
 
 
+# Two spellings of one unit (rulec's §15.332): ritsu's table of units gives the two the same
+# dimension, size and zero, and `check` compares them as one unit. Each is read here as the other's
+# spelling; a type is still said, and kept, as it is written. rulec's `tests/units.rs` holds this
+# list to the table.
+ONE_UNIT = {"JPY": "円", "mL": "cm3", "kL": "m3"}
+
+
+def spelled(t):
+    """The type `t` with its unit read as one spelling of it, for comparing (§15.332):
+    `money[JPY, 税込]` as `money[円, 税込]`, `volume[mL]?` as `volume[cm3]?`. Any other type as
+    it is."""
+    if not isinstance(t, str):
+        return t
+    head, bracket, rest = t.partition("[")
+    ends = [i for i in (rest.find(","), rest.find("]")) if i >= 0]
+    if not bracket or not ends:
+        return t
+    unit = rest[:min(ends)]
+    return f"{head}[{ONE_UNIT.get(unit, unit)}{rest[min(ends):]}"
+
+
+def same_type(a, b):
+    """Whether two types are one type, two spellings of one unit read as one (§15.332)."""
+    return spelled(a) == spelled(b)
+
+
+def same_unit(a, b):
+    """One unit in two spellings (§15.332) — the whole of the conversion this program does:
+    `800JPY` in a `money[円]` column is the value 800, read back by its number, and `800USD`
+    stays a unit it cannot read."""
+    return b is not None and (a == b or ONE_UNIT.get(a) == b or ONE_UNIT.get(b) == a)
+
+
+def col_unit(ty):
+    """The unit a column's type counts in — the currency of a `money[円]`, the unit of a
+    `mass[g]`. `None` for a type that writes no brackets."""
+    if not isinstance(ty, str):
+        return None
+    t = ty[:-1] if ty.endswith("?") else ty
+    if "[" not in t:
+        return None
+    return t.split("[", 1)[1].split(",", 1)[0].split("]", 1)[0].strip()
+
+
 def unify(a, b):
     """Two types meet when they are the same, or when one is money with no tax flag and the
-    other is the same currency with one — which is how a bare amount is written (§2.1)."""
-    if a == b:
+    other is the same currency with one — which is how a bare amount is written (§2.1). Two
+    spellings of one unit are one unit (§15.332): `money[JPY]` meets `money[円]`, and the type
+    kept is the one written first."""
+    if same_type(a, b):
         return a
     for x, y in ((a, b), (b, a)):
-        if x.startswith("money[") and y.startswith("money[") and y.startswith(x[:-1] + ","):
+        sx, sy = spelled(x), spelled(y)
+        if sx.startswith("money[") and sy.startswith("money[") and sy.startswith(sx[:-1] + ","):
             return y
     return None
 
@@ -543,13 +595,45 @@ def row_cell_bounds(cert, t, row, name):
     return (lo, hi)
 
 
+def accepted(cert):
+    """The range the rule accepts for each `define` that writes one (§15.313), by name: the
+    ends on the scale of `ranges`, None where it is open."""
+    return {k: (num(v[0]), num(v[1])) for k, v in cert.get("accepts", {}).items()
+            if isinstance(v, list) and len(v) == 2}
+
+
+def inside_accepted(acc, name, got):
+    """What follows reads a value inside the range the rule accepts for it (§15.313): the part of
+    the interval it reaches that lies there. A part that is empty is no interval at all."""
+    if got is None or name not in acc:
+        return got
+    lo, hi = acc[name]
+    a = got[0] if lo is None else max(got[0], lo)
+    b = got[1] if hi is None else min(got[1], hi)
+    if a > b:
+        raise Bad(f"{name}: the range the rule accepts for it meets nothing it reaches")
+    return (a, b)
+
+
+def meet_accepted(acc, name, got):
+    """What a value comes to, met with the range the rule accepts for it (§15.313): a call whose
+    value falls outside is turned away, so no call the rule answers has it there. The two ends cross
+    where no such call is left."""
+    if name not in acc:
+        return got
+    lo, hi = acc[name]
+    return (got[0] if lo is None else max(got[0], lo), got[1] if hi is None else min(got[1], hi))
+
+
 def worked_ranges(cert):
     """The interval every value the rule computes and every column a table writes numbers into
     is forced into, worked out here: a value from its expression, a table's column from what
     each of its rows writes (§15.196). A name the rule declares is bounded by its declared range;
-    a column a table writes numbers into, never by the certificate's word for it. Returns the
+    a column a table writes numbers into, never by the certificate's word for it. A `define` the
+    rule accepts only inside a range is that part of what it reaches (§15.313). Returns the
     intervals, the columns' expressions, and the columns whose rows state nothing."""
     le = guarantees(cert)
+    acc = accepted(cert)
     stated = {k: (num(v[0]), num(v[1])) for k, v in cert.get("ranges", {}).items()}
     values = cert.get("values", [])
     outs, unstated = numeric_outputs(cert)
@@ -568,7 +652,7 @@ def worked_ranges(cert):
         for v in values:
             if v["name"] in known:
                 continue
-            got = interval(v["expr"], env(), le)
+            got = inside_accepted(acc, v["name"], interval(v["expr"], env(), le))
             if got is not None:
                 known[v["name"]] = got
                 moved = True
@@ -672,10 +756,13 @@ def wide_values(cert, known):
             env[n] = (a if lo is None else lo, b if hi is None else hi)
     le = guarantees(cert)
 
+    acc = accepted(cert)
+
     def held(n, got):
-        # What follows reads it no wider than its type: one that is wider fails here already.
+        # What follows reads it no wider than its type: one that is wider fails here already; and
+        # a `define` only inside the range the rule accepts for it (§15.313).
         a, b = ends.get(n, got)
-        return (max(got[0], a), min(got[1], b))
+        return inside_accepted(acc, n, (max(got[0], a), min(got[1], b)))
 
     def strs():
         return {k: (str(a), str(b)) for k, (a, b) in env.items()}
@@ -756,6 +843,7 @@ def check_values(cert, known):
     wide, env = wide_values(cert, known)
     reads = claim_reads(cert, env)
     le = guarantees(cert)
+    acc = accepted(cert)
     checked = none_stated = steps = unsaid = 0
     for v in cert.get("values", []):
         # What the code holds on the way to it, a truth value's two sides among them (rulec's
@@ -785,6 +873,12 @@ def check_values(cert, known):
         if not opened and d is not None and d[0] is not None and d[1] is not None and (got[0] < d[0] or got[1] > d[1]):
             raise Bad(f"{v['name']}: the range the rule declares is narrower than what its expression reaches")
         said = (num(said[0]), num(said[1]))
+        # A `define` the rule accepts only inside a range (§15.313): what follows reads it inside
+        # (`known`), and its own claim is about what it reaches before the door.
+        if not opened and v["name"] in acc:
+            got = interval(v["expr"], reads, le)
+            if got is None:
+                raise Bad(f"{v['name']}: this program derives no interval for what it reaches before the door")
         if got[0] < said[0] or got[1] > said[1]:
             raise Bad(f"{v['name']}: the interval here is [{got[0]}, {got[1]}], wider than the stated [{said[0]}, {said[1]}]")
         stored = max(abs(got[0]), abs(got[1])) * v["scale"]
@@ -1421,7 +1515,7 @@ def _taken_earlier(u, row, ai, x):
     return False
 
 
-def produced_where(tables, column, value, inp):
+def produced_where(tables, column, value, inp, t=None, at=None):
     """Where a column another table decides can hold a value, read on one of that table's
     own columns.
 
@@ -1434,18 +1528,35 @@ def produced_where(tables, column, value, inp):
     which the column really holds the value.
 
     `("num", (lo, hi))` or `("words", {…})`, or `None` when no table here decides the column,
-    it has no axis for `inp`, or a row of it writes something this program cannot read.
+    it has no axis for `inp`, or a row of it writes something this program cannot read. A column
+    an `apply` brings in is decided by the table it is brought from (rulec's §15.322).
+
+    `at`, the axis of this table the column is on and a coordinate of it, is given where that axis
+    holds numbers: the rows are then those whose number, put through the roundings on the way, lands
+    in the coordinate (rulec's §15.322).
     """
-    for u in tables:
-        decides = u.get("decides") or []
-        if column not in decides:
-            continue
-        oi = decides.index(column)
+    rounds = []
+    if t is not None:
+        u0, oi0, rounds = source(t, column)
+        found = [] if u0 is None else [(u0, oi0)]
+    else:
+        found = [(u, (u.get("decides") or []).index(column)) for u in tables if column in (u.get("decides") or [])][:1]
+    numeric = at is not None and numeric_axis(at[0])
+    if numeric and t is None:
+        return None
+    for u, oi in found:
         ai = next((i for i, a in enumerate(u["axes"]) if a["column"] == inp), None)
         if ai is None:
             return None
         picked = []
         for r in u["rows"]:
+            if numeric:
+                pt = put_of(u, r, oi, rounds or [], True)
+                if pt[0] == "any":
+                    return None
+                if takes(at[0], at[1], pt):
+                    picked.append(r)
+                continue
             p = r.get("produces")
             if not isinstance(p, list) or oi >= len(p) or p[oi] is None:
                 return None
@@ -1621,6 +1732,192 @@ def decider(tables, column):
     return None, None
 
 
+def source(t, column):
+    """The table a column's value comes from (rulec's §15.322), where the column sits among its
+    outputs, and the roundings on the way, the innermost first: the table that decides it, or —
+    for a `define` that only names another value, `define x = a:y` or `define x = down(a:y, 1)`,
+    as an `apply` brings an output in — the table that decides that value. `(None, None, None)`
+    for anything else."""
+    cert = t.get("_cert") or {}
+    tables = t.get("_tables") or []
+    values = {v.get("name"): v for v in cert.get("values", [])}
+    opens = {o.get("name") for o in cert.get("opens", [])}
+    name, rounds = column, []
+    for _ in range(16):
+        u, oi = decider(tables, name)
+        if u is not None:
+            return u, oi, list(reversed(rounds))
+        v = values.get(name)
+        if name in opens or v is None or v.get("of") != "define":
+            return None, None, None
+        e = v.get("expr") or {}
+        if isinstance(e.get("name"), str):
+            name = e["name"]
+            continue
+        args = e.get("args") or []
+        if (e.get("call") in ROUNDINGS and len(args) == 2 and isinstance(args[0], dict)
+                and isinstance(args[0].get("name"), str) and isinstance(args[1], dict) and "num" in args[1]):
+            g = num(args[1].get("value"))
+            if g is None or g <= 0:
+                return None, None, None
+            rounds.append((e["call"], g))
+            name = args[0]["name"]
+            continue
+        return None, None, None
+    return None, None, None
+
+
+def put_of(u, r, oi, rounds, numeric):
+    """What row `r` of `u` puts into its output `oi`, read as the column it lands on is read
+    (rulec's §15.322): `("word", w)` for a word it writes as such, `("num", v)` for a number literal
+    put through `rounds` or a date literal as its day number (rulec's §15.325), `("absent",)` for
+    `none` on a column of numbers or dates, and `("any",)` for what this program does not follow — a
+    name, an expression — which may stand anywhere."""
+    p = r.get("produces")
+    w = p[oi] if isinstance(p, list) and oi < len(p) else None
+    if not numeric:
+        return ("word", w) if isinstance(w, str) else ("any",)
+    if w == "none":
+        return ("absent",)
+    ws = r.get("writes")
+    wr = ws[oi] if isinstance(ws, list) and oi < len(ws) else None
+    e = wr.get("expr") if isinstance(wr, dict) else None
+    if isinstance(e, dict) and "num" in e and num(e.get("value")) is not None:
+        v = num(e["value"])
+        for mode, g in rounds:
+            v = round_by(mode, g, v)
+        return ("num", v)
+    # A date has no rounding; one said to go through a rounding is not followed.
+    if isinstance(e, dict) and is_date_lit(e) and not rounds:
+        return ("num", num(e["value"]))
+    return ("any",)
+
+
+def is_date_lit(e):
+    """Whether an expression of the certificate is a date written in the rule, with its day number."""
+    return e.get("type") == "date" and "lit" in e and num(e.get("value")) is not None
+
+
+DATE_LIT = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+
+
+def date_number(text):
+    """The day number of a date as a rule writes it (`2026-07-01`), counted from 1970-01-01 as the
+    certificate counts it; None for text that is not one."""
+    m = DATE_LIT.fullmatch(text.strip())
+    if not m:
+        return None
+    try:
+        d = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return None
+    return Fraction(d.toordinal() - datetime.date(1970, 1, 1).toordinal())
+
+
+def takes(axis, x, put):
+    """Whether what a row puts can stand on coordinate `x` of an axis: the word of the coordinate,
+    a number inside it (one of a point, strictly between the ends of an interval), the absent value
+    on the coordinate of `none`. What this program does not follow stands anywhere."""
+    if put[0] == "any":
+        return True
+    if axis.get("prefixes") is not None:
+        return True
+    if numeric_axis(axis):
+        b = (axis.get("bounds") or [None] * len(axis["coords"]))[x]
+        if put[0] == "absent":
+            return b is None
+        if put[0] != "num" or b is None:
+            return False
+        lo, hi = num(b[0]), num(b[1])
+        v = put[1]
+        if lo is not None and hi is not None and lo == hi:
+            return v == lo
+        return (lo is None or lo < v) and (hi is None or v < hi)
+    return put[0] == "word" and axis["coords"][x] == put[1]
+
+
+def ways(t, u, row, depth=0, through=False):
+    """Every way row `row` of `u` can fire (rulec's §15.322): the row, joined with each row of the
+    table a column of `u`'s comes from — a column this table `t` does not cut — that writes what the
+    row takes there, and so on above. Each way is a list of `(table, row)`, the tables in the order
+    their columns come, each table's rows in their order.
+
+    With `through`, the row that writes the value is joined besides through each column of `u`'s
+    that this table cuts too and a table decides: with a row of that table that writes what the row
+    takes there, one step and no further (rulec's §15.325). The box fixes such a column, and the row
+    that writes it carries what it takes of the other columns."""
+    if depth > 32:
+        raise Bad(f"{t['table']}: the tables above {u['table']} run too deep to follow")
+    here = {a["column"] for a in t["axes"]}
+    acc = [[(u, row)]]
+    for ua, ax in enumerate(u["axes"]):
+        d = ax["column"]
+        if d in here and not (through and depth == 0):
+            continue
+        s, soi, rounds = source(t, d)
+        if s is None:
+            continue
+        if d in here and (s["table"] == t["table"] or s["table"] == u["table"]):
+            continue
+        numeric = numeric_axis(ax)
+        alts = []
+        for r2 in s["rows"]:
+            pt = put_of(s, r2, soi, rounds, numeric)
+            if not any(takes(ax, x, pt) for x in row["accepts"][ua]):
+                continue
+            alts.extend([[(s, r2)]] if d in here else ways(t, s, r2, depth + 1))
+        acc = [a + b for a in acc for b in alts]
+    return acc
+
+
+def ways_of(t, ai, ci, through=False):
+    """The table a column of this table comes from, and every way the value of coordinate `ci` of
+    its axis `ai` arrives: a row of that table that writes it — a word, or a number that lies in the
+    coordinate once put through the roundings on the way — joined with the rows above it
+    (`ways`). Counted here from the tables' own rows; a row that writes something this program
+    cannot follow leaves the ways uncounted, and what rests on them is refused. A value no row
+    writes is a `never` fact, not a reason that rests on rows, and is refused here too; a value
+    rows write that no way brings has no way to give a reason for."""
+    axes = t["axes"]
+    column = axes[ai]["column"]
+    u, oi, rounds = source(t, column)
+    if u is None:
+        raise Bad(f"{t['table']}: a leaf rests on the rows that write {column} = {axes[ai]['coords'][ci]}, "
+                  f"and no table here decides {column}")
+    out, written = [], False
+    for r in u["rows"]:
+        pt = put_of(u, r, oi, rounds, numeric_axis(axes[ai]))
+        if pt[0] == "any":
+            raise Bad(f"{t['table']}: row {r['row']} of {u['table']} writes something this program cannot read, "
+                      f"so the rows that write {column} = {axes[ai]['coords'][ci]} cannot be counted")
+        if takes(axes[ai], ci, pt):
+            written = True
+            out.extend(ways(t, u, r, through=through))
+    if not written:
+        raise Bad(f"{t['table']}: no row of {u['table']} writes {column} = {axes[ai]['coords'][ci]}, "
+                  f"which is a fact, not a reason that rests on rows")
+    return u, out
+
+
+def way_key(way):
+    """A way as a leaf names it: the number of the row that writes the value, and the rows of the
+    tables above it the way joins, `[table, row]` each."""
+    return (way[0][1]["row"], tuple((s["table"], r["row"]) for s, r in way[1:]))
+
+
+def want_text(keys):
+    """Ways as a message lists them: the row, and the rows above it the way joins."""
+    return [k[0] if not k[1] else f"{k[0]} with " + ", ".join(f"row {r} of {n}" for n, r in k[1]) for k in keys]
+
+
+def given_key(g):
+    """The same, from a reason a leaf gives."""
+    via = g.get("via") or []
+    if not isinstance(via, list) or not all(isinstance(x, list) and len(x) == 2 for x in via):
+        return None
+    return (g.get("row"), tuple((x[0], x[1]) for x in via))
+
+
 def check_above(t):
     """Every fact this table rests on, earned back from the tables that decide its columns.
 
@@ -1643,11 +1940,23 @@ def check_above(t):
         return ai, axes[ai]["column"], coords[ci]
 
     for f in ab.get("never", []):
-        _, col, val = named(f)
-        u, oi = decider(tables, col)
+        ai, col, val = named(f)
+        u, oi, rounds = source(t, col)
         if u is None:
             raise Bad(f"{t['table']}: a fact says {col} is never {val}, and no table here decides {col}")
-        never_written(t, u, oi, col, val)
+        if numeric_axis(axes[ai]):
+            # A number no row writes into the coordinate, each row's number put through the
+            # roundings on the way (rulec's §15.322).
+            for r in u["rows"]:
+                pt = put_of(u, r, oi, rounds, True)
+                if pt[0] == "any":
+                    raise Bad(f"{t['table']}: row {r['row']} of {u['table']} writes something this "
+                              f"program cannot read, so «{col} is never {val}» cannot be settled")
+                if takes(axes[ai], f["coord"], pt):
+                    raise Bad(f"{t['table']}: row {r['row']} of {u['table']} does write {col} = {val}, "
+                              f"so it is not a value the tables above never reach")
+        else:
+            never_written(t, u, oi, col, val)
 
     for f in ab.get("apart", []):
         inp = f.get("input")
@@ -1660,7 +1969,7 @@ def check_above(t):
             if col == inp:
                 real = closed_span(t, ai, q["coord"])
             else:
-                real = produced_where(tables, col, val, inp)
+                real = produced_where(tables, col, val, inp, t, (axes[ai], q["coord"]))
             if real is None:
                 raise Bad(f"{t['table']}: this program cannot work out where {col} = {val} "
                           f"puts {inp}, so the fact is not settled")
@@ -1726,6 +2035,459 @@ def truth_rules_out(t, ai, path):
     return label in ("true", "false") and (label == "true") != tv
 
 
+def expr_names(e, out=None):
+    """The names an expression of the certificate reads."""
+    out = set() if out is None else out
+    if isinstance(e, dict):
+        if isinstance(e.get("name"), str):
+            out.add(e["name"])
+        for v in e.values():
+            if isinstance(v, (dict, list)):
+                expr_names(v, out)
+    elif isinstance(e, list):
+        for v in e:
+            expr_names(v, out)
+    return out
+
+
+def form_plus(a, b, k):
+    """`a + k * b`, two linear forms (`held_form`)."""
+    cb, lo, hi = form_times(b, k)
+    cs = dict(a[0])
+    for n, c in cb.items():
+        cs[n] = cs.get(n, Fraction(0)) + c
+    return (cs, a[1] + lo, a[2] + hi)
+
+
+def form_times(a, k):
+    """`k * a`, a linear form times a constant."""
+    lo, hi = sorted((a[1] * k, a[2] * k))
+    return ({n: c * k for n, c in a[0].items()}, lo, hi)
+
+
+def form_point(a):
+    """The one value a form stands for, where it reads no held name and its remainder is a point."""
+    return a[1] if all(c == 0 for c in a[0].values()) and a[1] == a[2] else None
+
+
+def form_range(a, held):
+    """Where a form can go with every held name anywhere in its span."""
+    lo, hi = a[1], a[2]
+    for n, c in a[0].items():
+        x, y = sorted((c * held[n][0], c * held[n][1]))
+        lo, hi = lo + x, hi + y
+    return (lo, hi)
+
+
+def held_form(e, held, reads, le, inline, depth=0):
+    """A value read as a linear form over the held names (rulec's §15.325): `(coefficients, lo, hi)`,
+    the value being each held name's value times its coefficient, plus something in [lo, hi]. A held
+    name is itself; a value of `inline` is read through its own expression; a sum, a difference, a
+    multiple of a constant and a quotient by one keep the form; `min` and `max` are the argument the
+    other never passes, where the difference of the two forms keeps one sign over the held spans; a
+    rounding to a grid g is its argument with [-g, g] added, since every mode lands within one step
+    of what it rounds. Anything else is the interval `interval` gives, as the remainder of a form
+    that reads no held name. None where that has none either."""
+    if depth > 16 or not isinstance(e, dict):
+        return None
+
+    def fall():
+        iv = interval(e, reads, le)
+        return None if iv is None else ({}, iv[0], iv[1])
+
+    def form(x):
+        return held_form(x, held, reads, le, inline, depth)
+
+    if "name" in e:
+        n = e["name"]
+        if n in held:
+            return ({n: Fraction(1)}, Fraction(0), Fraction(0))
+        if n in inline:
+            return held_form(inline[n], held, reads, le, inline, depth + 1) or fall()
+        return fall()
+    if e.get("op") in ("+", "-", "*", "/"):
+        a, b = form(e["l"]), form(e["r"])
+        if a is None or b is None:
+            return fall()
+        if e["op"] == "+":
+            return form_plus(a, b, 1)
+        if e["op"] == "-":
+            return form_plus(a, b, -1)
+        if e["op"] == "*":
+            k = form_point(b)
+            if k is not None:
+                return form_times(a, k)
+            k = form_point(a)
+            return form_times(b, k) if k is not None else fall()
+        k = form_point(b)
+        return form_times(a, 1 / k) if k is not None and k != 0 else fall()
+    if "call" in e:
+        args = e.get("args") or []
+        if e["call"] in ("min", "max") and len(args) == 2:
+            a, b = form(args[0]), form(args[1])
+            if a is None or b is None:
+                return fall()
+            dl, dh = form_range(form_plus(a, b, -1), held)
+            if dl >= 0:
+                return a if e["call"] == "max" else b
+            if dh <= 0:
+                return b if e["call"] == "max" else a
+            return fall()
+        if e["call"] in ROUNDINGS and len(args) == 2:
+            g = interval(args[1], reads, le)
+            a = form(args[0])
+            if g is None or g[0] != g[1] or g[0] <= 0 or a is None:
+                return fall()
+            return (a[0], a[1] - g[0], a[2] + g[0])
+    return fall()
+
+
+def held_interval(e, held, reads, le, inline):
+    """What a value comes to with the names of `held` held to their spans (rulec's §15.325): the
+    interval `interval` works out, met with the range of the value's linear form (`held_form`)."""
+    iv = interval(e, reads, le)
+    if iv is None:
+        return None
+    f = held_form(e, held, reads, le, inline)
+    if f is None:
+        return iv
+    lo, hi = form_range(f, held)
+    return (max(iv[0], lo), min(iv[1], hi))
+
+
+class HeldReads(dict):
+    """The intervals `interval` reads names in while some axes are held to one coordinate each
+    (rulec's §15.322): a held name in the closed span of its coordinate, a value in `inline` worked
+    out again from its own expression the same way, and any other name as the int64 claim reads it."""
+
+    def __init__(self, base, held, inline, le):
+        super().__init__(base)
+        self.held, self.inline, self.le, self.busy = held, inline, le, set()
+
+    def get(self, n, default=None):
+        if n in self.held:
+            return self.held[n]
+        if n in self.inline:
+            if n in self.busy:
+                return (None, None)
+            self.busy.add(n)
+            try:
+                iv = interval(self.inline[n], self, self.le)
+            finally:
+                self.busy.discard(n)
+            return (None, None) if iv is None else iv
+        return super().get(n, default)
+
+
+def rat_gcd(a, b):
+    """The largest step two steps are both whole multiples of; a step of zero is a single value."""
+    a, b = abs(a), abs(b)
+    if a == 0:
+        return b
+    if b == 0:
+        return a
+    return Fraction(math.gcd(a.numerator * b.denominator, b.numerator * a.denominator), a.denominator * b.denominator)
+
+
+def grid_of(e, values, opens, depth=0):
+    """The grid an expression's values sit on (rulec's §15.322): `(origin, step)`, every value being
+    origin + k * step for a whole k, a step of zero the one value origin. A rounding puts its value on
+    the multiples of its step; a sum or a difference on the finest grid both sides sit on; a multiple
+    or a quotient by a constant on that multiple or quotient; `min` and `max` on one grid both sit on;
+    a derive or a `define` on its expression's. None where it says nothing of one."""
+    if depth > 16 or not isinstance(e, dict):
+        return None
+    if "num" in e:
+        v = num(e.get("value"))
+        return None if v is None else (v, Fraction(0))
+    if "name" in e:
+        w = values.get(e["name"])
+        if w is None or e["name"] in opens or w.get("of") not in ("define", "derive"):
+            return None
+        return grid_of(w.get("expr"), values, opens, depth + 1)
+    if "op" in e:
+        if e["op"] in ("+", "-"):
+            a, b = grid_of(e.get("l"), values, opens, depth + 1), grid_of(e.get("r"), values, opens, depth + 1)
+            if a is None or b is None:
+                return None
+            return (a[0] + b[0] if e["op"] == "+" else a[0] - b[0], rat_gcd(a[1], b[1]))
+        if e["op"] == "*":
+            for x, y in ((e.get("l"), e.get("r")), (e.get("r"), e.get("l"))):
+                if isinstance(y, dict) and "num" in y:
+                    k, g = num(y.get("value")), grid_of(x, values, opens, depth + 1)
+                    return None if k is None or g is None else (g[0] * k, g[1] * abs(k))
+            return None
+        if e["op"] == "/":
+            y = e.get("r")
+            if not (isinstance(y, dict) and "num" in y):
+                return None
+            k, g = num(y.get("value")), grid_of(e.get("l"), values, opens, depth + 1)
+            return None if k is None or k == 0 or g is None else (g[0] / k, g[1] / abs(k))
+        return None
+    if "call" in e:
+        args = e.get("args") or []
+        if e["call"] in ROUNDINGS and len(args) == 2 and isinstance(args[1], dict) and "num" in args[1]:
+            g = num(args[1].get("value"))
+            return None if g is None or g <= 0 else (Fraction(0), g)
+        if e["call"] in ("min", "max") and len(args) == 2:
+            a, b = grid_of(args[0], values, opens, depth + 1), grid_of(args[1], values, opens, depth + 1)
+            if a is None or b is None:
+                return None
+            return (a[0], rat_gcd(rat_gcd(a[1], b[1]), a[0] - b[0]))
+    return None
+
+
+def held_grid(e, held, reads, le, inline, values, opens, steps, depth=0):
+    """The grid a value's values sit on with the names of `held` held to their spans (rulec's §15.325):
+    as `grid_of` works it out, where a part the held names pin to one value (`held_interval`) sits on
+    that value alone; a value of `inline` on its own expression's grid read the same way; another
+    value the rule works out on `grid_of`'s; an input on the step it is stored at (`steps`, one over its
+    scale); and a product on a multiple of one side's grid where the other side is one value. None
+    where it says nothing of one."""
+    if depth > 16 or not isinstance(e, dict):
+        return None
+    iv = held_interval(e, held, reads, le, inline)
+    if iv is not None and iv[0] == iv[1]:
+        return (iv[0], Fraction(0))
+
+    def sub(x):
+        return held_grid(x, held, reads, le, inline, values, opens, steps, depth + 1)
+
+    if "num" in e:
+        v = num(e.get("value"))
+        return None if v is None else (v, Fraction(0))
+    if "name" in e:
+        n = e["name"]
+        if n in inline:
+            return sub(inline[n])
+        w = values.get(n)
+        if w is not None and n not in opens and w.get("of") in ("define", "derive"):
+            return grid_of(w.get("expr"), values, opens, depth + 1)
+        return (Fraction(0), steps[n]) if n in steps else None
+    if "op" in e:
+        if e["op"] in ("+", "-"):
+            a, b = sub(e.get("l")), sub(e.get("r"))
+            if a is None or b is None:
+                return None
+            return (a[0] + b[0] if e["op"] == "+" else a[0] - b[0], rat_gcd(a[1], b[1]))
+        if e["op"] == "*":
+            a, b = sub(e.get("l")), sub(e.get("r"))
+            if a is None or b is None:
+                return None
+            if b[1] == 0:
+                return (a[0] * b[0], abs(a[1] * b[0]))
+            if a[1] == 0:
+                return (a[0] * b[0], abs(b[1] * a[0]))
+            return None
+        if e["op"] == "/":
+            y = e.get("r")
+            if not (isinstance(y, dict) and "num" in y):
+                return None
+            k, g = num(y.get("value")), sub(e.get("l"))
+            return None if k is None or k == 0 or g is None else (g[0] / k, g[1] / abs(k))
+        return None
+    if "call" in e:
+        args = e.get("args") or []
+        if e["call"] in ROUNDINGS and len(args) == 2 and isinstance(args[1], dict) and "num" in args[1]:
+            g = num(args[1].get("value"))
+            return None if g is None or g <= 0 else (Fraction(0), g)
+        if e["call"] in ("min", "max") and len(args) == 2:
+            a, b = sub(args[0]), sub(args[1])
+            if a is None or b is None:
+                return None
+            return (a[0], rat_gcd(rat_gcd(a[1], b[1]), a[0] - b[0]))
+    return None
+
+
+def input_steps(cert):
+    """The step each input is stored at, by name: one over the scale the certificate states for it
+    (`scales`). Every value of the input is a whole number of it."""
+    scales = cert.get("scales") or {}
+    out = {}
+    for n in cert.get("inputs") or []:
+        k = scales.get(n)
+        if isinstance(k, int) and not isinstance(k, bool) and k > 0:
+            out[n] = Fraction(1, k)
+    return out
+
+
+def grid_misses(grid, lo, hi, reach):
+    """Whether no value of the grid lies on a coordinate — the point `lo` where `lo == hi`, otherwise
+    strictly between its ends, None for no end — inside the interval `reach` (rulec's §15.322)."""
+    o, st = grid
+    rl, rh = reach
+    if lo is not None and hi is not None and lo == hi:
+        l, l_out, r, r_out = lo, False, hi, False
+    else:
+        l, l_out = (lo, True) if lo is not None and lo >= rl else (rl, False)
+        r, r_out = (hi, True) if hi is not None and hi <= rh else (rh, False)
+    if l < rl or r > rh:
+        return True
+    if st == 0:
+        return not ((o > l if l_out else o >= l) and (o < r if r_out else o <= r))
+    ql, qr = (l - o) / st, (r - o) / st
+    kl = math.floor(ql) + 1 if l_out else math.ceil(ql)
+    kr = math.ceil(qr) - 1 if r_out else math.floor(qr)
+    return kl > kr
+
+
+def check_narrowed(t):
+    """Every fact `narrowed` states (rulec's §15.322): with the axes it holds at one coordinate each,
+    the `define` on its axis comes to none of the coordinates it names. Worked out here from the
+    define's expression, a held name read in the closed span of its coordinate, a value that reads
+    a held name worked out again from its own expression, and any other name read as the int64
+    claim reads it; a coordinate of numbers has to lie outside what comes out, or hold no value of the
+    grid the define's values sit on there, and a truth value has to be the one the comparison never
+    takes. A fact that holds no axis reads the define over the whole ranges. Where the fact cuts one
+    held coordinate into pieces (`cuts`: the axis, and where each piece after the first starts, on
+    that axis's step), each piece is worked out on its own and has to leave the coordinates out. A
+    fact can instead cut an input the table has no axis for (`cuts` with its `name`, §15.325): the
+    input is held over the whole of the interval the int64 claim reads it in, cut on the step it is
+    stored at. The grid is worked out for each piece with the names held (`held_grid`). A `define`
+    the rule accepts only inside a range is read inside it (§15.313): a piece where what it comes to
+    meets none of that range has no call the rule answers. Returns how many facts were settled."""
+    cert = t.get("_cert") or {}
+    axes = t["axes"]
+    facts = t.get("narrowed") or []
+    values = {v.get("name"): v for v in cert.get("values", [])}
+    opens = {o.get("name") for o in cert.get("opens", [])}
+    env = t.get("_claim") or {}
+    le = guarantees(cert)
+    steps = input_steps(cert)
+    for k, nf in enumerate(facts):
+        ai = nf.get("axis") if isinstance(nf, dict) else None
+        if not isinstance(ai, int) or not 0 <= ai < len(axes):
+            raise Bad(f"{t['table']}: a fact of what a `define` comes to points at axis {ai}, which does not exist")
+        name = axes[ai]["column"]
+        v = values.get(name)
+        if v is None or v.get("of") != "define" or name in opens:
+            raise Bad(f"{t['table']}: a fact says what {name} comes to, and no `define` of it is in the certificate")
+        held = {}
+        for b in nf.get("by") or []:
+            j, x = (b.get("axis"), b.get("coord")) if isinstance(b, dict) else (None, None)
+            if not isinstance(j, int) or not 0 <= j < len(axes) or j == ai or not numeric_axis(axes[j]):
+                raise Bad(f"{t['table']}: a fact of what {name} comes to holds axis {j}, which is no axis of numbers of this table")
+            if not isinstance(x, int) or not 0 <= x < len(axes[j]["coords"]) or axes[j]["column"] in held:
+                raise Bad(f"{t['table']}: a fact of what {name} comes to holds {axes[j]['column']} at a coordinate it cannot, or twice")
+            if (axes[j].get("bounds") or [None] * len(axes[j]["coords"]))[x] is None:
+                raise Bad(f"{t['table']}: a fact of what {name} comes to holds {axes[j]['column']} at its absent value")
+            lo, hi = closed_at(t, j, x)
+            wide = env.get(axes[j]["column"])
+            if (lo is None or hi is None) and wide is None:
+                raise Bad(f"{t['table']}: {axes[j]['column']} is held at an end no range writes, and this program reads no interval for it")
+            held[axes[j]["column"]] = (num(wide[0]) if lo is None else lo, num(wide[1]) if hi is None else hi)
+        # The pieces of one held coordinate, where the fact cuts it.
+        pieces = [dict(held)]
+        cuts = nf.get("cuts")
+        cut_name = None
+        if isinstance(cuts, dict) and "name" in cuts:
+            # An input the table has no axis for, over the whole of what the int64 claim reads it in.
+            cut_name = cuts.get("name")
+            at = [num(v) for v in (cuts.get("at") or [])]
+            st = steps.get(cut_name) if isinstance(cut_name, str) else None
+            wide = env.get(cut_name) if isinstance(cut_name, str) else None
+            if (st is None or cut_name in held or any(a.get("column") == cut_name for a in axes)
+                    or wide is None or num(wide[0]) is None or num(wide[1]) is None or not at or any(v is None for v in at)):
+                raise Bad(f"{t['table']}: a fact of what {name} comes to cuts {cut_name}, which is no input it can hold over "
+                          f"its whole range, or cuts it at nothing")
+            lo, hi = num(wide[0]), num(wide[1])
+            ends = [lo] + at
+            if any(b <= a for a, b in zip(ends, ends[1:])) or at[-1] > hi or any(v / st != math.floor(v / st) for v in at):
+                raise Bad(f"{t['table']}: a fact of what {name} comes to cuts {cut_name} at values that are not "
+                          f"in order inside its range, on the step it is stored at")
+            pieces = []
+            for a, b in zip(ends, at + [hi + st]):
+                p = dict(held)
+                p[cut_name] = (a, b - st)
+                pieces.append(p)
+        elif cuts is not None:
+            cj = cuts.get("axis") if isinstance(cuts, dict) else None
+            at = [num(v) for v in (cuts.get("at") or [])] if isinstance(cuts, dict) else []
+            col_j = axes[cj]["column"] if isinstance(cj, int) and 0 <= cj < len(axes) else None
+            st = num(axes[cj].get("step")) if col_j is not None else None
+            if col_j not in held or st is None or st <= 0 or not at or any(v is None for v in at):
+                raise Bad(f"{t['table']}: a fact of what {name} comes to cuts an axis it does not hold, or cuts it at nothing")
+            lo, hi = held[col_j]
+            ends = [lo] + at
+            # The values of an axis are whole multiples of its step, as `closed_at` reads them, so a cut
+            # on one leaves no value between two pieces.
+            if any(b <= a for a, b in zip(ends, ends[1:])) or at[-1] > hi or any(v / st != math.floor(v / st) for v in at):
+                raise Bad(f"{t['table']}: a fact of what {name} comes to cuts {col_j} at values that are not "
+                          f"in order inside its coordinate, on its step")
+            pieces = []
+            for a, b in zip(ends, at + [hi + st]):
+                p = dict(held)
+                p[col_j] = (a, b - st)
+                pieces.append(p)
+
+        held_names = set(held) | ({cut_name} if cut_name is not None else set())
+
+        def reads_held(n, seen=None):
+            seen = set() if seen is None else seen
+            w = values.get(n)
+            if w is None or n in seen:
+                return False
+            seen.add(n)
+            ns = expr_names(w.get("expr"))
+            return any(m in held_names for m in ns) or any(reads_held(m, seen) for m in ns)
+
+        inline = {n: w.get("expr") for n, w in values.items()
+                  if n != name and n not in held_names and n not in opens and w.get("of") in ("define", "derive") and reads_held(n)}
+        coords = nf.get("coords") or []
+        if not coords or not all(isinstance(x, int) and 0 <= x < len(axes[ai]["coords"]) for x in coords):
+            raise Bad(f"{t['table']}: a fact of what {name} comes to names coordinates it cannot")
+        heldtext = ', '.join(sorted(held_names)) or 'nothing'
+        if numeric_axis(axes[ai]):
+            for x in coords:
+                if (axes[ai].get("bounds") or [None] * len(axes[ai]["coords"]))[x] is None:
+                    raise Bad(f"{t['table']}: {name} is said never to be absent with {heldtext} held, which a range does not settle")
+            for piece in pieces:
+                reads = HeldReads(env, piece, inline, le)
+                reach = held_interval(v.get("expr"), piece, reads, le, inline)
+                grid = held_grid(v.get("expr"), piece, reads, le, inline, values, opens, steps)
+                if reach is None:
+                    raise Bad(f"{t['table']}: this program cannot work out what {name} comes to with {heldtext} held")
+                # A call whose value falls outside the range the rule accepts for it is turned away
+                # (§15.313): no call the rule answers has the held values here.
+                reach = meet_accepted(accepted(cert), name, reach)
+                if reach[0] > reach[1]:
+                    continue
+                for x in coords:
+                    lo, hi = bound_at(t, ai, x)
+                    if lo is not None and hi is not None and lo == hi:
+                        out = lo < reach[0] or lo > reach[1]
+                    else:
+                        out = (hi is not None and hi <= reach[0]) or (lo is not None and lo >= reach[1])
+                    if not out and not (grid is not None and grid_misses(grid, lo, hi, reach)):
+                        raise Bad(f"{t['table']}: {name} comes to {axes[ai]['coords'][x]} with "
+                                  f"{', '.join(f'{n} in [{a}, {b}]' for n, (a, b) in sorted(piece.items())) or 'nothing held'}, "
+                                  f"so the fact does not hold")
+        else:
+            for piece in pieces:
+                reads = HeldReads(env, piece, inline, le)
+                tv = (truth_of(v.get("expr"), reads, le, iv=lambda x: held_interval(x, piece, reads, le, inline))
+                      if v.get("type") == "bool" else None)
+                if tv is None:
+                    raise Bad(f"{t['table']}: {name} can be either truth value with {heldtext} held, as far as this program works out")
+                for x in coords:
+                    label = axes[ai]["coords"][x]
+                    if label not in ("true", "false") or (label == "true") == tv:
+                        raise Bad(f"{t['table']}: {name} can be {label} with {heldtext} held, so the fact does not hold")
+    return len(facts)
+
+
+def narrowed_rules_out(t, path):
+    """The fact of `narrowed` that takes this box, by its place, or None: the box fixes every axis
+    it holds at the fact's coordinate, and the define's axis at one it names (rulec's §15.322)."""
+    for k, nf in enumerate(t.get("narrowed") or []):
+        ai = nf.get("axis")
+        if not (isinstance(ai, int) and ai < len(path) and path[ai] in (nf.get("coords") or [])):
+            continue
+        if all(isinstance(b.get("axis"), int) and b["axis"] < len(path) and path[b["axis"]] == b.get("coord") for b in nf.get("by") or []):
+            return k
+    return None
+
+
 def point_ruled_out(t, path):
     """Whether the sieve rules this point out: some constraint cannot hold at it, some
     derived column cannot reach it, a boolean `define` stands at the truth value it never
@@ -1743,6 +2505,8 @@ def point_ruled_out(t, path):
     if any(truth_rules_out(t, ai, path) for ai in range(len(path))):
         return True
     if above_rules_out(t, path):
+        return True
+    if narrowed_rules_out(t, path) is not None:
         return True
     return any(derived_rules_out(t, ai, path) for ai in range(len(path)))
 
@@ -1787,12 +2551,13 @@ def factor(e):
 def linearize(e, want, types):
     """An expression as a linear form over names of one type, `({name: coefficient}, k)`, or
     None — exactly the shapes `rulec` reads as linear: names of that type, literals of it, sums
-    and differences, and products and quotients by a constant."""
+    and differences, and products and quotients by a constant. A name written in another spelling
+    of the unit is of that type (§15.332)."""
     if "name" in e:
-        return ({e["name"]: Fraction(1)}, Fraction(0)) if types.get(e["name"]) == want else None
+        return ({e["name"]: Fraction(1)}, Fraction(0)) if same_type(types.get(e["name"]), want) else None
     if "num" in e:
         v = num(e.get("value"))
-        return ({}, v) if v is not None and e.get("type") == want else None
+        return ({}, v) if v is not None and same_type(e.get("type"), want) else None
     if e.get("op") in ("+", "-"):
         a, b = linearize(e["l"], want, types), linearize(e["r"], want, types)
         if a is None or b is None:
@@ -1901,7 +2666,9 @@ def farkas_holds(t, cert, refs, box, above=None):
 
     `above` is a row of a table above, `(that table, the row)`, whose box lends its ends: an
     end on a numeric column it cuts (`cond`) holds of every coordinate the row takes there,
-    and the column has to be one this table numbers a value for (§15.195)."""
+    and the column has to be one this table numbers a value for (§15.195). It can be a way the
+    value arrives (rulec's §15.322), a list of such rows that all fire together: an end of any of
+    them holds."""
     facts = t.setdefault("_facts", model_facts(t, cert))
     total, k, strict = {}, Fraction(0), False
     for ref in refs:
@@ -1925,15 +2692,17 @@ def farkas_holds(t, cert, refs, box, above=None):
         elif "cond" in ref:
             if above is None:
                 return "it names the end of a row above, and no row above is in question"
-            u, row = above
+            steps = above if isinstance(above, list) else [above]
             cr = ref["cond"]
             name, hi, at, left_out = cr.get("name"), cr.get("hi"), num(cr.get("at")), bool(cr.get("open"))
-            ua = axis_of(u, name) if isinstance(name, str) else None
-            if ua is None or at is None or not numeric_axis(u["axes"][ua]):
-                return f"it names an end of {name}, which {u['table']} does not cut as a number"
+            cut = [(u, row, axis_of(u, name)) for u, row in steps] if isinstance(name, str) else []
+            cut = [(u, row, ua) for u, row, ua in cut if ua is not None and numeric_axis(u["axes"][ua])]
+            if not cut or at is None:
+                return f"it names an end of {name}, which {steps[0][0]['table']} does not cut as a number"
             if not numbered(t, name):
                 return f"it names {name}, which this table numbers no value for"
-            if not beyond(u, ua, row["accepts"][ua], hi, at, left_out):
+            if not any(beyond(u, ua, row["accepts"][ua], hi, at, left_out) for u, row, ua in cut):
+                u, row, _ = cut[0]
                 return f"a coordinate row {row['row']} of {u['table']} takes on {name} lies beyond the end it names"
             terms, fk, fs = ({name: Fraction(1)}, -at, left_out) if hi else ({name: Fraction(-1)}, at, left_out)
         else:
@@ -2800,11 +3569,14 @@ def writers(t, column, value):
     return u, rows
 
 
-def row_out_holds(t, cert, u, row, proof, box):
+def row_out_holds(t, cert, u, row, proof, box, way=None):
     """Why a row of a table above fires nowhere in the box: on a column of words both tables
     cut, the box takes none of the words the row lets in (`clash`); or the linear model, the
     box's ends and the row's own ends add up to a contradiction (`farkas`). None when the reason
-    holds, or what is wrong."""
+    holds, or what is wrong. With `way`, the rows of the tables above joined with it, which fire
+    with it (rulec's §15.322): the clash can be on any of them, and the ends of all of them hold
+    together."""
+    steps = way if way is not None else [(u, row)]
     if not isinstance(proof, dict):
         return "a reason this program cannot read"
     if "clash" in proof:
@@ -2812,31 +3584,448 @@ def row_out_holds(t, cert, u, row, proof, box):
         if not isinstance(aj, int) or not 0 <= aj < len(t["axes"]):
             return f"it names axis {aj}, which does not exist"
         a = t["axes"][aj]
-        ua = axis_of(u, a["column"])
-        if ua is None:
-            return f"{u['table']} does not cut {a['column']}"
-        if numeric_axis(a) or numeric_axis(u["axes"][ua]):
+        if numeric_axis(a):
             return f"{a['column']} is a number, which a clash of words does not settle"
         mine = {a["coords"][c] for c in box[aj]}
-        lets = {u["axes"][ua]["coords"][x] for x in row["accepts"][ua]}
-        if mine & lets:
-            return f"the box and row {row['row']} of {u['table']} both take {sorted(mine & lets)[0]} on {a['column']}"
-        return None
+        why = f"{u['table']} does not cut {a['column']}"
+        for s, r in steps:
+            ua = axis_of(s, a["column"])
+            if ua is None:
+                continue
+            if numeric_axis(s["axes"][ua]):
+                why = f"{a['column']} is a number, which a clash of words does not settle"
+                continue
+            lets = {s["axes"][ua]["coords"][x] for x in r["accepts"][ua]}
+            if not mine & lets:
+                return None
+            why = f"the box and row {r['row']} of {s['table']} both take {sorted(mine & lets)[0]} on {a['column']}"
+        return why
     if "farkas" in proof:
-        return farkas_holds(t, cert, proof["farkas"], box, (u, row))
+        return farkas_holds(t, cert, proof["farkas"], box, list(steps))
+    if "earlier" in proof:
+        return earlier_holds(t, proof["earlier"], box, list(steps))
+    if "misses" in proof:
+        return misses_holds(t, proof["misses"], box, list(steps))
+    if "reach" in proof:
+        return reach_holds(t, cert, proof["reach"], box, list(steps))
+    if "disjoint" in proof:
+        return disjoint_holds(t, proof["disjoint"], box, list(steps))
+    if "writes" in proof:
+        return writes_holds(t, proof["writes"], box, list(steps))
     return "a reason of a kind this program does not know"
 
 
-def above_keys(node, path=(), out=None):
-    """The (axis, coordinate) pairs the cover rests on the rows of a table above for."""
-    out = [] if out is None else out
-    if "split" in node:
-        for c, kid in enumerate(node["split"]):
-            above_keys(kid, path + (c,), out)
-    elif "above_rows" in node:
-        ai = node["above_rows"].get("axis")
-        if isinstance(ai, int) and ai < len(path) and (ai, path[ai]) not in out:
-            out.append((ai, path[ai]))
+def axis_ends(a, x):
+    """A coordinate of a numeric axis as a closed interval on the axis's own grid, as rulec's
+    `coord_ends` reads it: a point as itself, an interval without its ends, one grid step in. None
+    for the absent value."""
+    b = (a.get("bounds") or [None] * len(a["coords"]))[x]
+    if b is None:
+        return None
+    lo, hi = num(b[0]), num(b[1])
+    if lo is not None and hi is not None and lo == hi:
+        return (lo, hi)
+    st = num(a.get("step"))
+    if st is None or st <= 0:
+        raise Bad(f"{a['column']} has coordinates and no grid to read them on")
+    return (None if lo is None else lo + st, None if hi is None else hi - st)
+
+
+def ends_meet(x, y):
+    """Whether two closed intervals meet; a missing end is open."""
+    return not ((x[1] is not None and y[0] is not None and x[1] < y[0])
+                or (x[0] is not None and y[1] is not None and x[0] > y[1]))
+
+
+def carry_axis(fa, mine, ta):
+    """The coordinates of axis `ta` a value can stand on that stands on one of the coordinates
+    `mine` of axis `fa` — two tables cutting one column (rulec's `carry`): words by the word, numbers
+    where their closed intervals meet, the absent value with the absent value only. Prefix classes
+    are cut at the patterns each table names, so every coordinate stays, as it does for two axes
+    this program cannot set side by side. A list of booleans, one per coordinate of `ta`."""
+    n = len(ta["coords"])
+    if fa.get("prefixes") is not None or ta.get("prefixes") is not None or numeric_axis(fa) != numeric_axis(ta):
+        return [True] * n
+    if not numeric_axis(ta):
+        words = {fa["coords"][c] for c in mine}
+        return [ta["coords"][x] in words for x in range(n)]
+    out = []
+    for x in range(n):
+        te = axis_ends(ta, x)
+        if te is None:
+            out.append(any(axis_ends(fa, c) is None for c in mine))
+        else:
+            out.append(any(fe is not None and ends_meet(fe, te) for fe in (axis_ends(fa, c) for c in mine)))
+    return out
+
+
+COVER_PIECES = 1 << 20
+
+
+def boxes_cover(part, boxes):
+    """Whether the boxes together take every point of `part`; a box, and the part, is a list, per
+    axis, of the coordinates it takes. Split on an axis where a box that meets the part takes some
+    of the part's coordinates and not all, until one box takes the whole piece or none meets it."""
+    left = [COVER_PIECES]
+
+    def go(part, boxes):
+        left[0] -= 1
+        if left[0] < 0:
+            raise Bad("the rows said to take a row's box split it into too many pieces to follow")
+        if any(not p for p in part):
+            return True
+        meet = [b for b in boxes if all(set(p) & set(q) for p, q in zip(part, b))]
+        if not meet:
+            return False
+        if any(all(set(p) <= set(q) for p, q in zip(part, b)) for b in meet):
+            return True
+        b = meet[0]
+        for a, (p, q) in enumerate(zip(part, b)):
+            inside = [x for x in p if x in q]
+            if len(inside) < len(p):
+                outside = [x for x in p if x not in q]
+                return (go(part[:a] + [inside] + part[a + 1:], meet)
+                        and go(part[:a] + [outside] + part[a + 1:], meet))
+        return True
+
+    return go([list(p) for p in part], [[list(q) for q in b] for b in boxes])
+
+
+def row_part(t, box, s, r):
+    """What row `r` of table `s` takes, on each axis of its table, where the box lets a value stand:
+    the box's coordinates carried over a column both tables cut (`carry_axis`), every coordinate on
+    one the box does not cut (rulec's §15.325)."""
+    part = []
+    for ua, ax in enumerate(s["axes"]):
+        aj = axis_of(t, ax["column"])
+        lets = carry_axis(t["axes"][aj], box[aj], ax) if aj is not None else [True] * len(ax["coords"])
+        part.append([x for x in r["accepts"][ua] if lets[x]])
+    return part
+
+
+def step_of(e, steps):
+    """The row of the way a reason names by its place (`step`), or what is wrong."""
+    if not isinstance(e, dict):
+        return None, "a reason this program cannot read"
+    si = e.get("step")
+    if not isinstance(si, int) or isinstance(si, bool) or not 0 <= si < len(steps):
+        return None, f"it names step {si} of the way, which the way does not have"
+    return steps[si], None
+
+
+def misses_holds(t, e, box, steps):
+    """A row of the way takes nothing of the box (rulec's §15.325): on some axis of its table, no
+    coordinate it takes is one the box lets a value stand on, read on each axis's grid. None when
+    the reason holds, or what is wrong."""
+    sr, why = step_of(e, steps)
+    if why is not None:
+        return why
+    s, r = sr
+    if all(row_part(t, box, s, r)):
+        return f"row {r['row']} of {s['table']} takes some of what this box lets in on every column"
+    return None
+
+
+def writes_holds(t, e, box, steps):
+    """A row of the way, in the table that decides a column this table cuts too, writes a value none
+    of the box's coordinates there holds (rulec's §15.325): read as the column reads it, through the
+    roundings on the way (`put_of`, `takes`). None when the reason holds, or what is wrong."""
+    sr, why = step_of(e, steps)
+    if why is not None:
+        return why
+    s, r = sr
+    aj = e.get("axis")
+    if not isinstance(aj, int) or isinstance(aj, bool) or not 0 <= aj < len(t["axes"]):
+        return f"it names axis {aj}, which does not exist"
+    ax = t["axes"][aj]
+    u, oi, rounds = source(t, ax["column"])
+    if u is None or u["table"] != s["table"]:
+        return f"{s['table']} does not decide {ax['column']}"
+    pt = put_of(u, r, oi, rounds, numeric_axis(ax))
+    if pt[0] == "any":
+        return f"row {r['row']} of {s['table']} writes something this program cannot read"
+    xs = box[aj] if box[aj] is not None else range(len(ax["coords"]))
+    if any(takes(ax, x, pt) for x in xs):
+        return f"row {r['row']} of {s['table']} writes {ax['column']} = {put_text(ax, pt)}, which the box takes"
+    return None
+
+
+NUM_LABEL = re.compile(r"-?[0-9][0-9./]*(\D*)")
+
+
+def put_text(ax, pt):
+    """What a row puts, written the way the axis's coordinates are: the word, `none`, a day as its
+    date, or a number with the unit the coordinates carry."""
+    if pt[0] == "word":
+        return pt[1]
+    if pt[0] == "absent":
+        return "none"
+    labels = [c for c in ax["coords"] if isinstance(c, str)]
+    if any(DATE_LIT.fullmatch(c) for c in labels):
+        return (datetime.date(1970, 1, 1) + datetime.timedelta(days=int(pt[1]))).isoformat()
+    unit = next((m.group(1) for m in map(NUM_LABEL.fullmatch, labels) if m), "")
+    return f"{pt[1]}{unit}"
+
+
+def disjoint_holds(t, e, box, steps):
+    """Two rows of the way take no value of a column together (rulec's §15.325): the tables of the
+    two steps the reason names both cut the column, on the two axes it names, and no coordinate the
+    later row takes there — of those the box lets a value stand on (`row_part`) — meets one the
+    earlier row takes, read on each axis's grid (`carry_axis`). None when the reason holds, or what
+    is wrong."""
+    if not isinstance(e, dict):
+        return "a reason this program cannot read"
+    ss, aa = e.get("steps"), e.get("axes")
+    if not (isinstance(ss, list) and len(ss) == 2 and isinstance(aa, list) and len(aa) == 2
+            and all(isinstance(x, int) and not isinstance(x, bool) for x in ss + aa)):
+        return "it does not name two steps and two axes"
+    if not 0 <= ss[0] < ss[1] < len(steps):
+        return f"it names steps {ss} of the way, which are not two of its steps in order"
+    (s1, r1), (s2, r2) = steps[ss[0]], steps[ss[1]]
+    if not (0 <= aa[0] < len(s1["axes"]) and 0 <= aa[1] < len(s2["axes"])):
+        return f"it names axes {aa}, which the two tables do not have"
+    ax1, ax2 = s1["axes"][aa[0]], s2["axes"][aa[1]]
+    if ax1["column"] != ax2["column"]:
+        return f"{s1['table']} cuts {ax1['column']} there and {s2['table']} cuts {ax2['column']}"
+    lets = carry_axis(ax1, row_part(t, box, s1, r1)[aa[0]], ax2)
+    hit = [y for y in row_part(t, box, s2, r2)[aa[1]] if lets[y]]
+    if hit:
+        return (f"row {r1['row']} of {s1['table']} and row {r2['row']} of {s2['table']} both take "
+                f"{ax2['coords'][hit[0]]} on {ax1['column']}")
+    return None
+
+
+def reach_holds(t, cert, e, box, steps):
+    """A row of the way cuts a value the rule works out, and none of the coordinates it takes there
+    is one the value comes to in the box (rulec's §15.325): the value — a `define` or a derive, not an
+    open one — worked out again here from its expression with this table's axes the reason names
+    (`by`) held to the span of the box's coordinates on each, met with the span of what the row takes
+    of the same column where its table cuts it, as a fact of `narrowed` is (the interval met with the
+    linear form, `held_interval`), and with the axes of the row's own table it names (`row_by`) — of
+    columns this table does not cut — held to the span of what the row takes on each; met with the
+    span of what the box takes of the value itself where this table cuts it, and with the range the
+    rule accepts for it (§15.313). Each coordinate the row takes there, of those the box lets a value
+    stand on (`row_part`), lies outside that, or holds no value of the grid the value sits on inside
+    it (`held_grid`). A truth value of one comparison is worked out the same way (`truth_of`), and
+    the row takes only the other one. Where the reason cuts the span of one held axis into pieces
+    (`cuts`: the axis, and where each piece after the first starts, on its step), every piece has to
+    leave every coordinate out. None when the reason holds, or what is wrong."""
+    sr, why = step_of(e, steps)
+    if why is not None:
+        return why
+    s, r = sr
+    ua = e.get("axis")
+    if not isinstance(ua, int) or isinstance(ua, bool) or not 0 <= ua < len(s["axes"]):
+        return f"it names axis {ua} of {s['table']}, which does not exist"
+    ax = s["axes"][ua]
+    name = ax["column"]
+    values = {v.get("name"): v for v in cert.get("values", [])}
+    opens = {o.get("name") for o in cert.get("opens", [])}
+    v = values.get(name)
+    truth = not numeric_axis(ax) and v is not None and v.get("type") == "bool"
+    if v is None or v.get("of") not in ("define", "derive") or name in opens or not (numeric_axis(ax) or truth):
+        return f"{name} is not a number or a truth value the rule works out"
+    by = e.get("by")
+    if (not isinstance(by, list) or len(set(by)) != len(by)
+            or not all(isinstance(j, int) and not isinstance(j, bool) and 0 <= j < len(t["axes"]) for j in by)):
+        return "the axes it holds are not a list of this table's axes"
+    env = t.get("_claim") or {}
+    part = row_part(t, box, s, r)
+
+    def hull(u, aj, xs):
+        """The span of some coordinates of axis `aj` of table `u`, closed on its step, an end no range
+        writes read as the int64 claim reads it; None for none, the absent value, or no end."""
+        a = u["axes"][aj]
+        if not xs or any((a.get("bounds") or [None] * len(a["coords"]))[x] is None for x in xs):
+            return None
+        wide = env.get(a["column"])
+        ends = []
+        for x in xs:
+            lo, hi = closed_at(u, aj, x)
+            if (lo is None or hi is None) and wide is None:
+                return None
+            ends.append((num(wide[0]) if lo is None else lo, num(wide[1]) if hi is None else hi))
+        return (min(x for x, _ in ends), max(y for _, y in ends))
+
+    held = {}
+    for j in by:
+        a = t["axes"][j]
+        if not numeric_axis(a) or a["column"] == name or a["column"] in held or not box[j]:
+            return f"it holds {a['column']}, which it cannot"
+        if any((a.get("bounds") or [None] * len(a["coords"]))[x] is None for x in box[j]):
+            return f"it holds {a['column']}, where the box takes its absent value"
+        span = hull(t, j, box[j])
+        if span is None:
+            return f"{a['column']} is held at an end no range writes, and this program reads no interval for it"
+        # What the row itself takes of the column, where its table cuts it too.
+        for uj, b in enumerate(s["axes"]):
+            if b["column"] == a["column"] and numeric_axis(b):
+                mine = hull(s, uj, part[uj])
+                if mine is not None:
+                    span = (max(span[0], mine[0]), min(span[1], mine[1]))
+        if span[0] > span[1]:
+            return f"the row and the box take no value of {a['column']} together, which is a `misses`"
+        held[a["column"]] = span
+    # The axes of the row's own table it holds, each to the span of what the row takes there: where
+    # the way fires, the row does.
+    row_by = e.get("row_by", [])
+    if (not isinstance(row_by, list)
+            or not all(isinstance(j, int) and not isinstance(j, bool) and 0 <= j < len(s["axes"]) for j in row_by)):
+        return f"the axes of {s['table']} it holds are not a list of that table's axes"
+    for uj in row_by:
+        b = s["axes"][uj]
+        if not numeric_axis(b) or b["column"] == name or b["column"] in held or axis_of(t, b["column"]) is not None:
+            return f"it holds {b['column']} of {s['table']}, which it cannot"
+        span = hull(s, uj, part[uj])
+        if span is None:
+            return f"row {r['row']} of {s['table']} takes no span of {b['column']} this program reads"
+        held[b["column"]] = span
+    # What the box takes of the value itself, where this table cuts it.
+    own = None
+    for av, a in enumerate(t["axes"]):
+        if a["column"] == name and numeric_axis(a):
+            own = hull(t, av, box[av])
+    pieces = [dict(held)]
+    cuts = e.get("cuts")
+    if cuts is not None:
+        cj = cuts.get("axis") if isinstance(cuts, dict) else None
+        at = [num(x) for x in (cuts.get("at") or [])] if isinstance(cuts, dict) else []
+        if not isinstance(cj, int) or isinstance(cj, bool) or cj not in by or not at or any(x is None for x in at):
+            return "it cuts an axis it does not hold, or cuts it at nothing"
+        col_j = t["axes"][cj]["column"]
+        st = num(t["axes"][cj].get("step"))
+        lo, hi = held[col_j]
+        ends = [lo] + at
+        if st is None or st <= 0 or any(b <= a for a, b in zip(ends, ends[1:])) or at[-1] > hi or any(x / st != math.floor(x / st) for x in at):
+            return f"it cuts {col_j} at values that are not in order inside its span, on its step"
+        pieces = []
+        for a, b in zip(ends, at + [hi + st]):
+            p = dict(held)
+            p[col_j] = (a, b - st)
+            pieces.append(p)
+
+    def reads_held(n, seen=None):
+        seen = set() if seen is None else seen
+        w = values.get(n)
+        if w is None or n in seen:
+            return False
+        seen.add(n)
+        ns = expr_names(w.get("expr"))
+        return any(m in held for m in ns) or any(reads_held(m, seen) for m in ns)
+
+    inline = {n: w.get("expr") for n, w in values.items()
+              if n != name and n not in held and n not in opens and w.get("of") in ("define", "derive") and reads_held(n)}
+    le = guarantees(cert)
+    xs = part[ua]
+    if not xs:
+        return f"row {r['row']} of {s['table']} takes nothing of {name} here, which is a `misses`"
+    if truth:
+        for piece in pieces:
+            reads = HeldReads(env, piece, inline, le)
+            tv = truth_of(v.get("expr"), reads, le, iv=lambda x: held_interval(x, piece, reads, le, inline))
+            if tv is None:
+                return f"{name} can be either truth value in this box, as far as this program works out"
+            for x in xs:
+                label = ax["coords"][x]
+                if label not in ("true", "false") or (label == "true") == tv:
+                    return f"{name} can be {label} in this box, which row {r['row']} of {s['table']} takes"
+        return None
+    for x in xs:
+        if (ax.get("bounds") or [None] * len(ax["coords"]))[x] is None:
+            return f"row {r['row']} of {s['table']} takes the absent value of {name}"
+    in_steps = input_steps(cert)
+    for piece in pieces:
+        reads = HeldReads(env, piece, inline, le)
+        reach = held_interval(v.get("expr"), piece, reads, le, inline)
+        if reach is None:
+            return f"this program cannot work out what {name} comes to in this box"
+        # A call whose value falls outside the range the rule accepts for it is turned away (§15.313).
+        reach = meet_accepted(accepted(cert), name, reach)
+        if own is not None:
+            reach = (max(reach[0], own[0]), min(reach[1], own[1]))
+        if reach[0] > reach[1]:
+            continue
+        grid = held_grid(v.get("expr"), piece, reads, le, inline, values, opens, in_steps)
+        for x in xs:
+            lo, hi = bound_at(s, ua, x)
+            if lo is not None and hi is not None and lo == hi:
+                out = lo < reach[0] or lo > reach[1]
+            else:
+                out = (hi is not None and hi <= reach[0]) or (lo is not None and lo >= reach[1])
+            if not out and not (grid is not None and grid_misses(grid, lo, hi, reach)):
+                return (f"{name} comes to {ax['coords'][x]}, which row {r['row']} of {s['table']} takes, with "
+                        f"{', '.join(f'{n} in [{a}, {b}]' for n, (a, b) in sorted(piece.items())) or 'nothing held'}")
+    return None
+
+
+def earlier_holds(t, e, box, steps):
+    """A row of the way in a `policy first` table never decides in the box, because the rows above
+    it take all of what its box leaves there (rulec's §15.325): what the row takes, on each axis of
+    its table, where the box lets a value stand — carried over the column both tables cut, every
+    coordinate on one the box does not cut — lies in the boxes of the rows named, each above it.
+    None when the reason holds, or what is wrong."""
+    sr, why = step_of(e, steps)
+    if why is not None:
+        return why
+    s, r = sr
+    named = e.get("rows")
+    if s.get("policy") != "first":
+        return f"it rests on the rows above row {r['row']} of {s['table']}, which is not a `first` table"
+    if (not isinstance(named, list) or not all(isinstance(x, int) and not isinstance(x, bool) for x in named)
+            or named != sorted(set(named))):
+        return f"the rows of {s['table']} it names are not a list of row numbers in order"
+    by = {x["row"]: x for x in s["rows"]}
+    if any(x not in by or x >= r["row"] for x in named):
+        return f"it names a row of {s['table']} that is not above row {r['row']}"
+    if not boxes_cover(row_part(t, box, s, r), [by[x]["accepts"] for x in named]):
+        return (f"rows {named} of {s['table']} do not take all of what row {r['row']} takes in this box, "
+                f"so it may decide there")
+    return None
+
+
+def above_keys(t):
+    """The values the cover, and the pairs of rows, rest on the rows of a table above for: each
+    `(axis, coordinate, through)` — the last whether the ways are joined besides through the columns
+    both tables cut (rulec's §15.325) — with the boxes where a way of it is said never to decide,
+    because the rows above a row of it take all of what that row leaves there (`earlier`), a row of
+    it takes nothing of the box (`misses`), a row of it takes only values the rule works out that
+    do not come in the box (`reach`), two rows of it take no value of a column together
+    (`disjoint`), or a row of it writes a value the box does not take (`writes`): the key of the
+    way, and the box, a list per axis of the coordinates it takes (None for every one)."""
+    out = {}
+    n = len(t["axes"])
+
+    def note(ai, ci, ar, box):
+        k = (ai, ci, ar.get("through") is True)
+        skip = out.setdefault(k, [])
+        for r in ar.get("rows") or []:
+            key = given_key(r) if isinstance(r, dict) and any(k in r for k in ("earlier", "misses", "reach", "disjoint", "writes")) else None
+            if key is not None:
+                skip.append((key, box))
+
+    def walk(node, path):
+        if "split" in node:
+            for c, kid in enumerate(node["split"]):
+                walk(kid, path + [c])
+        elif "above_rows" in node and isinstance(node["above_rows"], dict):
+            ai = node["above_rows"].get("axis")
+            if isinstance(ai, int) and 0 <= ai < len(path):
+                note(ai, path[ai], node["above_rows"], [[c] for c in path] + [None] * (n - len(path)))
+
+    if t.get("cover") is not None:
+        walk(t["cover"], [])
+    rows = {r["row"]: r for r in t["rows"]}
+    for d in t.get("above_apart") or []:
+        a, b, ai = d.get("a"), d.get("b"), d.get("axis")
+        if a not in rows or b not in rows or not isinstance(ai, int) or not 0 <= ai < n:
+            continue
+        pb = [sorted(set(rows[a]["accepts"][x]) & set(rows[b]["accepts"][x])) for x in range(n)]
+        for x in d.get("at") or []:
+            c = x.get("coord") if isinstance(x, dict) else None
+            if isinstance(c, int) and isinstance(x.get("above_rows"), dict):
+                box = [list(y) for y in pb]
+                box[ai] = [c]
+                note(ai, c, x["above_rows"], box)
     return out
 
 
@@ -2850,41 +4039,44 @@ def coord_holds(u, ua, x, v):
 
 
 def above_admits(t, at, values, extra):
-    """Where the cover rests on the rows of a table above for a value a point takes, one of
-    those rows has to fire on the values behind the point (§15.195): each numeric column it cuts
-    that this table numbers a value for holds a value inside one of the row's own coordinates,
-    and each column of words both tables cut holds a word the row lets in. None when it does,
-    or why not."""
+    """Where the cover, or a pair of rows, rests on the rows of a table above for a value a point
+    takes, one of those rows has to fire on the values behind the point (§15.195, §15.196): each
+    numeric column it cuts that this table numbers a value for holds a value inside one of the
+    row's own coordinates, and each column of words both tables cut holds a word the row lets in.
+    A way a box holding the point says never decides there, for the rows above a row of it
+    (§15.325), does not count. None when it does, or why not."""
     if t.get("cover") is None:
         return None
     cols = [a["column"] for a in t["axes"]]
     vals = {n: num(v) for n, v in zip(cols, values or []) if v is not None}
     vals.update({n: num(v) for n, v in zip((t.get("linear") or {}).get("extra", []), extra or []) if v is not None})
-    for ai, ci in above_keys(t["cover"]):
+    for (ai, ci, through), skip in above_keys(t).items():
         if at[ai] != ci:
             continue
         column, value = cols[ai], t["axes"][ai]["coords"][ci]
-        u, ws = writers(t, column, value)
-        for r in ws:
-            fires = True
-            for ua, ax in enumerate(u["axes"]):
+        u, ws = ways_of(t, ai, ci, through=through)
+        # A way a box holding the point says never decides there, for the rows above a row of it
+        # (§15.325), does not fire on it.
+        taken = {k for k, box in skip if all(b is None or at[x] in b for x, b in enumerate(box))}
+
+        def fires(s, r):
+            for ua, ax in enumerate(s["axes"]):
                 n = ax["column"]
                 if numeric_axis(ax):
                     if not numbered(t, n):
                         continue
-                    if n not in vals or not any(coord_holds(u, ua, x, vals[n]) for x in r["accepts"][ua]):
-                        fires = False
-                        break
+                    if n not in vals or not any(coord_holds(s, ua, x, vals[n]) for x in r["accepts"][ua]):
+                        return False
                 else:
                     aj = axis_of(t, n)
                     if aj is None or numeric_axis(t["axes"][aj]):
                         continue
                     if t["axes"][aj]["coords"][at[aj]] not in {ax["coords"][x] for x in r["accepts"][ua]}:
-                        fires = False
-                        break
-            if fires:
-                break
-        else:
+                        return False
+            return True
+
+        # A way fires where every row of it does (rulec's §15.322).
+        if not any(way_key(w) not in taken and all(fires(s, r) for s, r in w) for w in ws):
             return f"no row of {u['table']} that writes {column} = {value} fires on the values behind it"
     return None
 
@@ -2895,7 +4087,7 @@ def check_cover(t):
     if t.get("cover") is None:
         raise Bad(f"{t['table']}: no cover is stated, so completeness is not shown")
     seen = {"rows": 0, "constraint": 0, "derived": 0, "define": 0, "truth": 0, "above": 0, "above_rows": 0,
-            "points": 0, "model": 0, "days": 0, "never": 0}
+            "points": 0, "model": 0, "days": 0, "never": 0, "narrowed": 0}
 
     def walk(node, path):
         if "split" in node:
@@ -2976,6 +4168,19 @@ def check_cover(t):
                 raise Bad(f"{t['table']}: {axes[ai]['column']} can be {axes[ai]['coords'][path[ai]]} here, so the box is not impossible")
             seen["truth"] += 1
             return
+        if "narrowed" in node:
+            # A `define` that, with the axes it reads held to the coordinates of this box, comes to
+            # none of the coordinate the box holds it at (rulec's §15.322): a fact settled above.
+            k = node["narrowed"]
+            facts = t.get("narrowed") or []
+            if not isinstance(k, int) or not 0 <= k < len(facts):
+                raise Bad(f"{t['table']}: a leaf names fact {k} of what a `define` comes to, which is not one of this table's")
+            if narrowed_rules_out(t, path) is None or not (
+                    path[facts[k]["axis"]] in facts[k]["coords"] if facts[k]["axis"] < len(path) else False) or not all(
+                    b["axis"] < len(path) and path[b["axis"]] == b["coord"] for b in facts[k]["by"]):
+                raise Bad(f"{t['table']}: a leaf rests on what {axes[facts[k]['axis']]['column']} comes to, and the box does not fix what that fact holds")
+            seen["narrowed"] += 1
+            return
         if "above_rows" in node:
             # A value decided above that only some rows of that table write, none of which fires
             # in the box (§15.195). The rows are counted here from that table's `produces`, and
@@ -2987,22 +4192,25 @@ def check_cover(t):
             column, value = axes[ai]["column"], axes[ai]["coords"][path[ai]]
             if a.get("column") != column or a.get("value") != value:
                 raise Bad(f"{t['table']}: a leaf speaks of {a.get('column')} = {a.get('value')}, and the box holds {column} = {value}")
-            u, ws = writers(t, column, value)
-            if not ws:
-                raise Bad(f"{t['table']}: no row of {u['table']} writes {column} = {value}, which is a fact, not this leaf")
+            # Every way the value arrives, counted here from the tables' own rows (rulec's §15.322),
+            # joined besides through the columns both tables cut where the leaf says so (§15.325).
+            if a.get("through", False) not in (True, False):
+                raise Bad(f"{t['table']}: a leaf says something this program cannot read of how its ways are joined")
+            u, ws = ways_of(t, ai, path[ai], through=a.get("through") is True)
             given = {}
             for r in a.get("rows") or []:
-                n = r.get("row") if isinstance(r, dict) else None
-                if not isinstance(n, int) or n in given:
+                key = given_key(r) if isinstance(r, dict) else None
+                if key is None or not isinstance(key[0], int) or key in given:
                     raise Bad(f"{t['table']}: a leaf names a row of {u['table']} it cannot, or twice")
-                given[n] = r
-            want = sorted(r["row"] for r in ws)
+                given[key] = r
+            want = sorted(way_key(w) for w in ws)
             if sorted(given) != want:
-                raise Bad(f"{t['table']}: the rows of {u['table']} that write {column} = {value} are {want}, "
-                          f"and the leaf gives reasons for {sorted(given)}")
+                raise Bad(f"{t['table']}: the rows of {u['table']} that write {column} = {value} are {want_text(want)}, "
+                          f"and the leaf gives reasons for {want_text(sorted(given))}")
             box = [[c] for c in path] + [list(range(len(x["coords"]))) for x in axes[len(path):]]
-            for r in ws:
-                why = row_out_holds(t, t["_cert"], u, r, given[r["row"]], box)
+            for w in ws:
+                r = w[0][1]
+                why = row_out_holds(t, t["_cert"], u, r, given[way_key(w)], box, w)
                 if why is not None:
                     raise Bad(f"{t['table']}: row {r['row']} of {u['table']} is said to fire nowhere in this box, and {why}")
             seen["above_rows"] += 1
@@ -3034,7 +4242,7 @@ def check_cover(t):
             seen["points"] += 1
             return
         if "upstream" in node:
-            if not any(a.get("kind") == "upstream" for a in axes):
+            if not any(a.get("kind") == "upstream" or source(t, a["column"])[0] is not None for a in axes):
                 raise Bad(f"{t['table']}: a leaf rests on a table above, and no column of "
                           f"this table comes from one")
             if not above_rules_out(t, path):
@@ -3049,10 +4257,13 @@ def check_cover(t):
 
 
 def optional_input(t, a):
-    """Whether an axis is an input the rule declares optional (`T?`): its type, as the
-    certificate states it, ends in `?`."""
+    """Whether an axis is of a column that may be absent (`T?`), which starts with `none`: an input
+    the rule declares optional, or a number or a date a table above writes or the rule works out
+    (rulec's §15.325) — its type, as the certificate states it, ends in `?`."""
     types = (t.get("_cert") or {}).get("types", {})
-    return a.get("kind") == "input" and str(types.get(a["column"], "")).endswith("?")
+    if not str(types.get(a["column"], "")).endswith("?"):
+        return False
+    return a.get("kind") == "input" or numeric_axis(a)
 
 
 def enum_order(t, axis):
@@ -3382,8 +4593,9 @@ def box_from_cells(t, row, groups):
 
 def sieve_admits(t, values, at):
     """Whether the values behind a reach point really can occur: each inside the coordinate
-    it stands for, each derived column inside its own reach, and every constraint on two of
-    this table's columns satisfied. Returns None when they can, or why not.
+    it stands for, each derived column inside its own reach, every constraint on two of
+    this table's columns satisfied, and no `never` line or fact of `narrowed` taking the point.
+    Returns None when they can, or why not.
 
     Without this the reachability claim would only say "the row's box is not empty", which
     is not what E102 is about."""
@@ -3430,6 +4642,12 @@ def sieve_admits(t, values, at):
             return f"{side_text(k['left'])} {k['op']} {side_text(k['right'])} does not hold at {x}, {y}"
     if never_rules_out(t, at) is not None:
         return "a `never` line rules this point out"
+    # What a `define` comes to with the axes it reads held where the point holds them (rulec's
+    # §15.322): a point a fact of `narrowed` takes is one no input reaches, however far inside the
+    # define's whole reach its value lies. `check_narrowed` earns each fact back.
+    k = narrowed_rules_out(t, at)
+    if k is not None:
+        return f"{axes[t['narrowed'][k]['axis']]['column']} does not come to this coordinate beside the ones the point takes (fact {k} of `narrowed`)"
     return None
 
 
@@ -3562,23 +4780,24 @@ def check_table(t):
                 ar, value = at[c], axes[ai]["coords"][c]
                 if not isinstance(ar, dict) or ar.get("axis") != ai or ar.get("column") != column or ar.get("value") != value:
                     raise Bad(f"{name}: rows {a} and {b}: the reason for {column} = {value} speaks of something else")
-                u, ws = writers(t, column, value)
-                if not ws:
-                    raise Bad(f"{name}: no row of {u['table']} writes {column} = {value}, which is a fact, not a reason")
+                if ar.get("through", False) not in (True, False):
+                    raise Bad(f"{name}: rows {a} and {b}: a reason says something this program cannot read of how its ways are joined")
+                u, ws = ways_of(t, ai, c, through=ar.get("through") is True)
                 given = {}
                 for r in ar.get("rows") or []:
-                    n = r.get("row") if isinstance(r, dict) else None
-                    if not isinstance(n, int) or n in given:
+                    key = given_key(r) if isinstance(r, dict) else None
+                    if key is None or not isinstance(key[0], int) or key in given:
                         raise Bad(f"{name}: rows {a} and {b}: a row of {u['table']} is named that cannot be, or twice")
-                    given[n] = r
-                want = sorted(r["row"] for r in ws)
+                    given[key] = r
+                want = sorted(way_key(w) for w in ws)
                 if sorted(given) != want:
-                    raise Bad(f"{name}: the rows of {u['table']} that write {column} = {value} are {want}, "
-                              f"and rows {a} and {b} give reasons for {sorted(given)}")
+                    raise Bad(f"{name}: the rows of {u['table']} that write {column} = {value} are {want_text(want)}, "
+                              f"and rows {a} and {b} give reasons for {want_text(sorted(given))}")
                 box = [list(x) for x in pb]
                 box[ai] = [c]
-                for r in ws:
-                    why = row_out_holds(t, t["_cert"], u, r, given[r["row"]], box)
+                for w in ws:
+                    r = w[0][1]
+                    why = row_out_holds(t, t["_cert"], u, r, given[way_key(w)], box, w)
                     if why is not None:
                         raise Bad(f"{name}: rows {a} and {b} are said to part on what {u['table']} writes, and row {r['row']} of it {why}")
             told[(a, b)] = None
@@ -3646,12 +4865,14 @@ def check_table(t):
     # write are values of their columns before anything reads them (rulec's §15.261).
     check_words(t)
     check_above(t)
+    check_narrowed(t)
     seen = check_cover(t)
     if True:
         cover_note = f", {seen['rows']} boxes covered"
         for k, word in (("constraint", "by a constraint"), ("derived", "out of a derive's reach"),
                         ("define", "out of a define's reach"),
                         ("truth", "at a truth value a define never takes"),
+                        ("narrowed", "where a define does not come over the box's own coordinates"),
                         ("above", "for the tables above"),
                         ("above_rows", "by the rows of a table above"), ("points", "point by point"),
                         ("model", "by the linear model"), ("days", "outside koyomi's days"),
@@ -3771,7 +4992,8 @@ def boundary_values(axis):
     out = {}
     for co, b in zip(axis["coords"], axis.get("bounds") or []):
         if b and b[0] is not None and b[0] == b[1]:
-            out[lit_key(co)] = num(b[0])
+            k = lit_key(co)
+            out[(k[0], k[1], ONE_UNIT.get(k[2], k[2])) if k[0] == "n" else k] = num(b[0])
     return out
 
 
@@ -4016,6 +5238,10 @@ def check_cells(cert, path):
                     if text.strip() != e["num"]:
                         raise Bad(f"{where}: the file writes `{text}`, the certificate reads it as `{e['num']}`")
                     loose += output_literal_agrees(where, (cert.get("types") or {}).get(col), text, e.get("value"))
+                elif is_date_lit(e):
+                    # A date the row writes (rulec's §15.325): the day the file names.
+                    if date_number(text) != num(e["value"]):
+                        raise Bad(f"{where}: the file writes `{text}`, the certificate reads it as the day {e['value']}")
                 else:
                     raise Bad(f"{where}: the certificate reads the cell as something an answer cell cannot be")
                 read += 1
@@ -4098,10 +5324,10 @@ def output_literal_agrees(where, ty, text, value):
     if k[0] != "n":
         raise Bad(f"{where}: the file writes `{text}`, which is not a number")
     n, unit = k[1], k[2]
-    cur = ty[len("money["):-1].split(",")[0].strip() if isinstance(ty, str) and ty.startswith("money[") else None
+    cur = col_unit(ty)
     if unit == "%":
         v = n / 100
-    elif unit == "" or (cur is not None and unit == cur):
+    elif unit == "" or same_unit(unit, cur):
         v = n
     else:
         return 1
@@ -4137,11 +5363,13 @@ def literal_agrees(where, axis, text, value):
     table and this program deliberately has none."""
     bounds = boundary_values(axis)
     k = lit_key(text)
+    if k[0] == "n":
+        k = (k[0], k[1], ONE_UNIT.get(k[2], k[2]))
     if k in bounds:
         if value is None or bounds[k] != num(value):
             raise Bad(f"{where}: the file writes `{text}`, the certificate reads it as {value}")
         return 0
-    if k[0] != "n" or k[2] != axis_unit(axis):
+    if k[0] != "n" or not same_unit(k[2], axis_unit(axis)):
         return 1
     # Every value a cell compares against inside the declared range is a boundary of its
     # own column (§6.2). One that is not a boundary is one outside the range — and then the
@@ -5003,15 +6231,16 @@ def check_carried(cert):
 
 def literal_number(text, ty):
     """The number a literal written in the rule stands for, in a column of type `ty`: `%` a
-    hundredth, no unit or the column's currency the number itself. None otherwise."""
+    hundredth, no unit or the unit the column counts in — its currency, or one spelling of
+    it (§15.332) — the number itself. None otherwise."""
     k = lit_key(text)
     if k[0] != "n":
         return None
     n, unit = k[1], k[2]
-    cur = ty[len("money["):-1].split(",")[0].strip() if isinstance(ty, str) and ty.startswith("money[") else None
+    cur = col_unit(ty)
     if unit == "%":
         return n / 100
-    if unit == "" or (cur is not None and unit == cur):
+    if unit == "" or same_unit(unit, cur):
         return n
     return None
 
@@ -5184,8 +6413,14 @@ def check(cert):
         out.append(f"  FAILED units: {e}")
         ok = False
     # Every value the rule computes and every column a table writes numbers into, worked out
-    # here: a value from its expression, a column from what its rows write (§15.196).
-    known, outs, unstated = worked_ranges(cert)
+    # here: a value from its expression, a column from what its rows write (§15.196). A range the
+    # rule accepts for a `define` that meets nothing it reaches leaves nothing to read it in
+    # (§15.313), and nothing below can be worked out.
+    try:
+        known, outs, unstated = worked_ranges(cert)
+    except Bad as e:
+        out.append(f"  FAILED ranges: {e}")
+        return out, False
     try:
         held = check_outputs(cert, known, outs)
         if held:
@@ -5292,6 +6527,7 @@ def check(cert):
         t["_reach_of"] = reach
         t["_written"] = written
         t["_truth"] = truth
+        t["_claim"] = env
         t["_tables"] = cert["tables"]
         t["_ranges"] = cert.get("ranges", {})
         # The days a date input takes from a koyomi file (§15.174) are the document's word, as
@@ -6116,6 +7352,7 @@ def check_chances(cert, ch):
     value_names = [v["name"] for v in values]
     inputs = list(cert.get("inputs") or [])
     walks = bool(cert.get("walks") or cert.get("fold_answers") or cert.get("extremes"))
+    acc = accepted(cert)
     counted = run_total = proved = walked = 0
     for cl in ch.get("claims", []):
         where = f"chances {cl['chances'] + 1} row {cl['row']}"
@@ -6136,6 +7373,13 @@ def check_chances(cert, ch):
         classes = cl.get("classes", [])
         if not axes:
             # Run one by one: every combination the cells let in, every draw.
+            if sequence and ch.get("weighted") and acc:
+                # A rule that turns calls away at a value it works out (§15.313) answers no draw of a
+                # combination it turns away, which the walk here does not leave out.
+                for k in classes:
+                    run_arith(where, k, holds)
+                STATED.append(f"{where}: the rule turns some calls away at a value it works out, and its pick by weight is not walked here")
+                continue
             if sequence and ch.get("weighted"):
                 walked_here = check_weighted(cert, ch, cl, where, holds, tables, coords, fuel, rounds, draws, classes)
                 if walked_here is None:
@@ -6220,6 +7464,11 @@ def check_chances(cert, ch):
                     except Inexact:
                         inexact = True
                         break
+                    # A value the rule accepts only inside a range turns the draw away past it, where
+                    # the generated code works it out (§15.313): no call is made there.
+                    if any(isinstance(env.get(n), Fraction) and ((lo is not None and env[n] < lo) or (hi is not None and env[n] > hi))
+                           for n, (lo, hi) in acc.items()):
+                        continue
                     hit = True
                     for col, cell in outs:
                         if "any" in cell:

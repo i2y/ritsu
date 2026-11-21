@@ -147,6 +147,38 @@ impl Range {
     }
 }
 
+/// A range of the whole numbers on the wire of a number type `t` (inside a `?` or a list too) as
+/// the checks and the pages say it: each end in the type's unit, its digits grouped by `_` from
+/// five on, as the files and ritsu's other languages write a value (`>=1JPY <=100_000JPY`,
+/// `>=0 <=10_000`, `<=50%` for a rate counted in steps of 1%; ritsu-units' `written::between`,
+/// the root DESIGN 6.2's 8). None for a type that holds no number.
+pub fn number_range_text(t: &Ty, rg: &Range) -> Option<String> {
+    let mut inner = t;
+    while let Ty::Opt(x) | Ty::List(x) = inner {
+        inner = x;
+    }
+    let unit = match inner {
+        Ty::Int => None,
+        Ty::Num(u) => Some(u),
+        _ => return None,
+    };
+    Some(ritsu_units::written::between(rg.lo.map(i128::from), rg.hi.map(i128::from), unit))
+}
+
+/// A whole number on the wire of the number type `t` as the checks say a value, in the type's
+/// unit (`10_000JPY`, `5000`); None for a type that holds no number.
+pub fn number_text(t: &Ty, n: i64) -> Option<String> {
+    let mut inner = t;
+    while let Ty::Opt(x) | Ty::List(x) = inner {
+        inner = x;
+    }
+    match inner {
+        Ty::Int => Some(ritsu_units::written::value(i128::from(n), None)),
+        Ty::Num(u) => Some(ritsu_units::written::value(i128::from(n), Some(u))),
+        _ => None,
+    }
+}
+
 /// `>=<lo> <=<hi>`, with the ends there are.
 pub fn show_ends(lo: Option<String>, hi: Option<String>) -> String {
     lo.map(|l| format!(">={l}")).into_iter().chain(hi.map(|h| format!("<={h}"))).collect::<Vec<_>>().join(" ")
@@ -182,6 +214,17 @@ impl crate::rulec::Column {
         }
     }
 
+    /// The type the column's numbers have in a `.flow`, as a rule's column is read: its unit as
+    /// rulec has it, and `int` for rulec's `number`, which has none. None for a column of another
+    /// type. What the column's range is said in.
+    pub fn number_ty(&self) -> Option<Ty> {
+        match &self.ty {
+            crate::rulec::RType::Num { unit, .. } if unit.dim == ritsu_units::Dim::Number => Some(Ty::Int),
+            crate::rulec::RType::Num { unit, .. } => Some(Ty::Num(unit.clone())),
+            _ => None,
+        }
+    }
+
     /// The values rulec says the column takes, for an input of an ordered enum that declares a
     /// range (`range >=basic <=gold`): the values the range lets in, in the enum's order.
     pub fn values(&self) -> Option<&[String]> {
@@ -202,9 +245,27 @@ pub struct EnumDef {
     /// have no order.
     pub ordered: bool,
     /// the `enums` file an `import enum` read it from: the path as written, and the enum's name
-    /// there. Only what shows the flow to people and tools (`doc` and `api`) reads it; to everything
-    /// else the enum is one the flow wrote.
+    /// there, as `doc` and `api` show it. Which enums are one type is `declared`'s.
     pub from: Option<(String, String)>,
+    /// where the enum is declared, for an enum that another name of the flow may be the same type as
+    /// (DESIGN 28): the `enums` file of an `import enum`, the flow's or a rule's, and the rule's own
+    /// file for an enum a rule declares itself. None for the flow's own enums, an API's and the
+    /// states of a machine, each a type of its own.
+    pub declared: Option<Declared>,
+}
+
+/// Where an enum is declared. Two enums declared at the same place with the same values are one
+/// type, whichever names the flow reads them by (`Model::same_enum`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Declared {
+    /// the file, made canonical, so that two ways to reach it are one
+    pub file: std::path::PathBuf,
+    /// the file from the `.flow`'s directory, as a message and a page show it
+    pub shown: String,
+    /// the enum's name in that file
+    pub name: String,
+    /// the rule that declares it in its own file, as the flow names it; None for an `enums` file's
+    pub rule: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -297,6 +358,10 @@ pub struct RuleUse {
     /// what it is: a rule of rulec's, a date of a dates file that koyomi computes (called as a rule
     /// is), or the life of a hold of a book's transfer (which a case follows, and nothing calls)
     pub kind: RuleKind,
+    /// the `enums` files the rule reads enums from, each once, in the order of their modules: the
+    /// rule's own module imports each one's, so the code that goes with the workflow names them
+    /// beside it (DESIGN 28.8). Empty for a date and a hold.
+    pub enums_modules: Vec<crate::rulec::EnumsModule>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -324,6 +389,8 @@ pub struct DateCall {
     pub params: Vec<(String, String, bool)>,
     /// the date turns into a time of the day (`at 09:00`, `at end of day`)
     pub at: bool,
+    /// that time, in minutes after midnight at the calendar's offset (1440 for the end of the day)
+    pub minutes: Option<u32>,
     /// the calendar's UTC offset, in minutes east: a time given for a day is read as the day it
     /// falls on there
     pub offset: Option<i32>,
@@ -609,6 +676,94 @@ pub enum TaskMachine {
     Observes,
 }
 
+/// Where an argument of an `http` task goes (DESIGN 43): a part of the URL's path, the query, a
+/// header, a cookie, or the body.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Place {
+    Path,
+    Query,
+    Header,
+    Cookie,
+    Body,
+}
+
+impl Place {
+    /// The word OpenAPI's `in` says it with.
+    pub fn word(self) -> &'static str {
+        match self {
+            Place::Path => "path",
+            Place::Query => "query",
+            Place::Header => "header",
+            Place::Cookie => "cookie",
+            Place::Body => "body",
+        }
+    }
+}
+
+/// How a list or a record is written where it goes: OpenAPI's `style` (DESIGN 43). A value that is
+/// neither is written the same by every style but `label` and `matrix`, which put a mark before it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Style {
+    Simple,
+    Label,
+    Matrix,
+    Form,
+    SpaceDelimited,
+    PipeDelimited,
+    DeepObject,
+}
+
+impl Style {
+    /// The word OpenAPI's `style` says it with.
+    pub fn word(self) -> &'static str {
+        match self {
+            Style::Simple => "simple",
+            Style::Label => "label",
+            Style::Matrix => "matrix",
+            Style::Form => "form",
+            Style::SpaceDelimited => "spaceDelimited",
+            Style::PipeDelimited => "pipeDelimited",
+            Style::DeepObject => "deepObject",
+        }
+    }
+
+    /// The style a word of OpenAPI's names.
+    pub fn read(word: &str) -> Option<Style> {
+        [Style::Simple, Style::Label, Style::Matrix, Style::Form, Style::SpaceDelimited, Style::PipeDelimited, Style::DeepObject].into_iter().find(|s| s.word() == word)
+    }
+
+    /// The style a place has when nothing says: `simple` in the path and a header, `form` in the
+    /// query, a cookie and a URL-encoded body.
+    pub fn default_at(place: Place) -> Style {
+        match place {
+            Place::Path | Place::Header => Style::Simple,
+            Place::Query | Place::Cookie | Place::Body => Style::Form,
+        }
+    }
+}
+
+/// Where one argument of an `http` task goes and how it is written there (DESIGN 43): the place,
+/// the name it goes by (a header's `X-Board-Key` for the argument `x_board_key`), and OpenAPI's
+/// `style` and `explode`, as the API's description says or, where it says nothing, as OpenAPI's
+/// defaults are. An argument of a JSON body goes by its own name, and its style says nothing.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WireParam {
+    pub param: String,
+    pub place: Place,
+    pub name: String,
+    pub style: Style,
+    pub explode: bool,
+}
+
+impl WireParam {
+    /// The place, the name and how it is written when nothing but the place is known: OpenAPI's
+    /// defaults, `explode` with `form` alone.
+    pub fn plain(param: &str, place: Place, name: &str) -> WireParam {
+        let style = Style::default_at(place);
+        WireParam { param: param.to_string(), place, name: name.to_string(), style, explode: style == Style::Form }
+    }
+}
+
 /// Another `.flow` that a task runs as its child workflow: where it is, and its checked model,
 /// which the task's parameters, answer and errors are held to.
 #[derive(Clone, Debug)]
@@ -655,12 +810,22 @@ pub struct TaskDef {
     /// the child workflow is this `.flow`
     pub flow: Option<Box<ChildFlow>>,
     /// `connect`: the task is an HTTP call by the Connect protocol, and this names the zero values
-    /// its answer's JSON may leave out (`apis::Op::zeros`), which the generated code fills in
+    /// its answer's JSON may leave out (`apis::Op::zeros`), which the generated code fills in, and
+    /// the `google.type.Date`s in it, which it reads as dates (DESIGN 44)
     pub connect: Option<serde_json::Value>,
+    /// `connect`: where the request holds a `google.type.Date` (`apis::Op::request_days`), to which
+    /// the generated code sends a `date` as protobuf's JSON writes it, `{year, month, day}`; None
+    /// when it holds none (DESIGN 44)
+    pub request_days: Option<serde_json::Value>,
     /// an `event` or a `callback` task whose value a method of the service the workflow implements
     /// sends (DESIGN 1.14): the zero values protobuf's JSON leaves out of the method's request, which
     /// the workflow's code fills in when the value comes, before it checks it
     pub answer_zeros: Option<serde_json::Value>,
+    /// `aws` of `use smithy`: the timestamps in what the task sends, by where they are in the input
+    /// (`"*"`: each item of a list, each value of a map), each with the form the API's model sends it
+    /// in (`apis::Op::timestamps`): `{"StartingPositionTimestamp": "epoch-seconds"}`. The default
+    /// Transport in TypeScript hands them to the AWS SDK as Dates (DESIGN 42)
+    pub timestamps: Option<serde_json::Value>,
     /// the parameters marked secret, each with the place inside it that is (empty: the whole value)
     /// and the mark: `secret` after its type, or the property of the OpenAPI operation it is held to
     /// (DESIGN 1.18)
@@ -673,6 +838,9 @@ pub struct TaskDef {
     /// the description of the API the task calls an operation of (`http` of `use openapi`, `connect`
     /// of `use proto`), as dandori reaches it: a file of the project the task sends to
     pub api_file: Option<String>,
+    /// an `http` task (and a `connect` one): where each parameter goes and how it is written there,
+    /// in the order of the parameters (DESIGN 43); empty for a task of another kind
+    pub wire: Vec<WireParam>,
     pub line: usize,
 }
 
@@ -927,6 +1095,29 @@ impl TExpr {
         }
     }
 
+    /// The variable this expression is a read of that must have a value, as the check says it has
+    /// one here (E012, E013): a variable that is not an input, read with fields, or of a type that
+    /// is neither `T?` nor `json` (whose null is a value). Where it is null all the same, the run
+    /// fails with Dandori.UnexpectedValue: the reference interpreter's and the code's of the
+    /// targets that read it through a check (DESIGN 38).
+    pub fn must_have(&self, m: &Model) -> Option<&str> {
+        match self {
+            TExpr::Var { name, fields, ty } if m.inputs.iter().all(|(i, _)| i != name) && (!fields.is_empty() || !matches!(ty, Ty::Opt(_) | Ty::Json)) => Some(name),
+            _ => None,
+        }
+    }
+
+    /// Whether the expression is a list written out with a value of an enum in it, at any depth
+    /// (`[manager, accounting]`, `[manager, r]`). Such a list stands where nothing says its type
+    /// only as the list a `for` goes through (DESIGN 29); TypeScript and Python read its values as
+    /// plain strings there, so the code written for them names the list's type.
+    pub fn lists_enum_values(&self) -> bool {
+        match self {
+            TExpr::List { items, .. } => items.iter().any(|x| matches!(x, TExpr::Enum(..)) || x.lists_enum_values()),
+            _ => false,
+        }
+    }
+
     /// Every variable the expression reads.
     pub fn vars(&self) -> Vec<&TExpr> {
         let mut out = Vec::new();
@@ -1109,6 +1300,30 @@ impl TK {
     pub fn reads_now(&self) -> bool {
         matches!(self, TK::Period { .. }) || self.exprs().iter().any(|e| e.has_now())
     }
+
+    /// The values the statement reads before anything of it runs: what it holds, but of a `for`
+    /// its list alone (its `yield` is read at the end of each round), and nothing of a `match` on a
+    /// case (a case that has not started reads as none there, 2.4). A variable they read where it
+    /// must have a value and has none ends the run at the statement (DESIGN 38).
+    pub fn reads_first(&self, m: &Model) -> Vec<&TExpr> {
+        match self {
+            TK::For { list, .. } => vec![list],
+            TK::Match { expr: TExpr::Var { name, .. }, .. } if m.case_index(name).is_some() => vec![],
+            k => k.exprs(),
+        }
+    }
+}
+
+/// The variables `es` read that must have a value there (`TExpr::must_have`), each once, in the
+/// order the code reads them: the first with none is the one the run fails at (DESIGN 38).
+pub fn must_haves<'a>(m: &Model, es: &[&'a TExpr]) -> Vec<&'a str> {
+    let mut out: Vec<&str> = Vec::new();
+    for v in es.iter().flat_map(|e| e.vars()) {
+        if let Some(n) = v.must_have(m).filter(|n| !out.contains(n)) {
+            out.push(n);
+        }
+    }
+    out
 }
 
 /// Where a flow of a package of ritsu's (ritsu's DESIGN 9.3) finds what it reads beside its own code:
@@ -1301,6 +1516,28 @@ pub struct Model {
     pub spellings: Vec<crate::spellings::Found>,
     /// the `use` lines, in the order they are written: what `api` lists beside what each one reads
     pub uses: Vec<UseLine>,
+    /// the numbers written with a unit (`fee: 0.5%`, DESIGN 40), as written, by the statement's site
+    /// and the place in the statement ([`Model::shown_at`]): the value is the whole number of the
+    /// place's unit (`TExpr::Int`), which the generators write; what the checks and the pages quote
+    /// is what the `.flow` wrote
+    pub written: BTreeMap<(usize, String), String>,
+}
+
+/// The place of a value in a statement, as [`Model::written`] keeps a number written there: an
+/// argument of a call or an output of `succeed` by its name (`fee`), and a field `f` of a record at
+/// `path` after a `.` (`claim.fee`). The value of a `let` and of a `yield` is at `""`, so a field of
+/// a record written there is at its name.
+pub fn field_place(path: &str, f: &str) -> String {
+    if path.is_empty() {
+        f.to_string()
+    } else {
+        format!("{path}.{f}")
+    }
+}
+
+/// The place of the item `i` of a list at `path` (`fees[0]`), as [`field_place`].
+pub fn item_place(path: &str, i: usize) -> String {
+    format!("{path}[{i}]")
 }
 
 /// A `use` line of the `.flow`: what it reads (`rule`, `dates`, `book`, or the kind of API
@@ -1318,6 +1555,68 @@ pub struct UseLine {
 }
 
 impl Model {
+    /// `e`, given at the place `path` of the statement `site` ([`field_place`]), as the `.flow` writes
+    /// it: a number written with a unit as it is written (`0.5%`, [`Model::written`]), in a record or
+    /// a list too, and the rest as [`TExpr::show`] says it.
+    pub fn shown_at(&self, site: usize, path: &str, e: &TExpr) -> String {
+        match e {
+            TExpr::Int(n) => self.written.get(&(site, path.to_string())).cloned().unwrap_or_else(|| n.to_string()),
+            TExpr::Record { fields, .. } => format!("{{{}}}", fields.iter().map(|(f, x)| format!("{f}: {}", self.shown_at(site, &field_place(path, f), x))).collect::<Vec<_>>().join(", ")),
+            TExpr::List { items, .. } => format!("[{}]", items.iter().enumerate().map(|(i, x)| self.shown_at(site, &item_place(path, i), x)).collect::<Vec<_>>().join(", ")),
+            other => other.show(),
+        }
+    }
+
+    /// The number `n` written at the place `path` of the statement `site` with a unit, as written
+    /// (`0.5%`); None for one written as a whole number, and for a value that is no number written
+    /// out.
+    pub fn written_at(&self, site: usize, path: &str) -> Option<&str> {
+        self.written.get(&(site, path.to_string())).map(String::as_str)
+    }
+
+    /// Whether two enums of the flow are one type: the same enum, or two names of one enum declared
+    /// at one place (`EnumDef::declared`) with the same values in the same order. `sh.category`,
+    /// `r1.category` and `category` are one type when the rules `r1` and `sh` and the flow's
+    /// `import enum` read `category` of one `enums` file; two rules that each declare a `category`
+    /// of their own hold two types, whatever their values (DESIGN 28).
+    pub fn same_enum(&self, a: EnumId, b: EnumId) -> bool {
+        a == b || {
+            let (x, y) = (&self.enums[a], &self.enums[b]);
+            matches!((&x.declared, &y.declared), (Some(p), Some(q)) if p.file == q.file && p.name == q.name) && x.values == y.values
+        }
+    }
+
+    /// The first enum of the flow that is one type with `e`: what the checks compare by.
+    pub fn enum_class(&self, e: EnumId) -> EnumId {
+        (0..e).find(|x| self.same_enum(*x, e)).unwrap_or(e)
+    }
+
+    /// The type with each enum in it as the first of its type (`enum_class`), so that `==` and
+    /// `Ty::fits` take two names of one enum for one type.
+    pub fn by_class(&self, t: &Ty) -> Ty {
+        match t {
+            Ty::Enum(e) => Ty::Enum(self.enum_class(*e)),
+            Ty::List(x) => Ty::List(Box::new(self.by_class(x))),
+            Ty::Opt(x) => Ty::Opt(Box::new(self.by_class(x))),
+            t => t.clone(),
+        }
+    }
+
+    /// `Ty::fits`, with two names of one enum taken for one type.
+    pub fn fits(&self, got: &Ty, want: &Ty) -> bool {
+        self.by_class(got).fits(&self.by_class(want))
+    }
+
+    /// `==` of two types, with two names of one enum taken for one type.
+    pub fn same_ty(&self, a: &Ty, b: &Ty) -> bool {
+        self.by_class(a) == self.by_class(b)
+    }
+
+    /// The other names of the flow that are one type with `e`, in the order of the model.
+    pub fn other_names(&self, e: EnumId) -> Vec<&str> {
+        (0..self.enums.len()).filter(|x| *x != e && self.same_enum(*x, e)).map(|x| self.enums[x].name.as_str()).collect()
+    }
+
     /// The head every file the builds write begins with (ritsu's DESIGN 9.2): ritsu's version, and
     /// the `.flow` with the digest of its bytes, each line a comment that starts with `mark`.
     pub fn head(&self, mark: &str) -> String {
@@ -1455,11 +1754,20 @@ impl Model {
         Some(self.values_in(e, rg))
     }
 
-    /// A place's range as a `.flow` writes it: `>=1 <=30`, and for an ordered enum, by the values
-    /// at its ends, `>=basic <=gold`; for a date, by its days, `>=2026-01-01 <=2027-12-31`; for a
-    /// time, as the `.flow` writes it with its `offset`, else by its days in UTC when it is whole
-    /// days there, else by its first and last seconds in UTC.
+    /// A place's range as the checks and the pages say it: a number's ends in its type's unit, as
+    /// the files and ritsu's other languages write them (`>=1JPY <=100_000JPY`, `>=0 <=10_000`,
+    /// `<=50%`; the root DESIGN 6.2's 8, [`number_range_text`]), and an ordered enum's, a date's
+    /// and a time's as [`Model::range_wire`] says them.
     pub fn range_text(&self, t: &Ty, rg: &Range) -> String {
+        number_range_text(t, rg).unwrap_or_else(|| self.range_wire(t, rg))
+    }
+
+    /// A place's range as a `.flow` writes it in the whole numbers on the wire: `>=1 <=30`, and for
+    /// an ordered enum, by the values at its ends, `>=basic <=gold`; for a date, by its days,
+    /// `>=2026-01-01 <=2027-12-31`; for a time, as the `.flow` writes it with its `offset`, else by
+    /// its days in UTC when it is whole days there, else by its first and last seconds in UTC. What
+    /// `api` says, a program's reading: a number's ends are the numbers the wire carries.
+    pub fn range_wire(&self, t: &Ty, rg: &Range) -> String {
         if let Some(e) = t.enum_inside() {
             return ends_text(&self.values_in(e, Some(*rg)));
         }

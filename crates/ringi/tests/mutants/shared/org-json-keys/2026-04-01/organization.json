@@ -1,0 +1,12 @@
+{"teams": [{"id": "company", "name": "Example Co. (fictional)", "kind": "company", "parent": null, "head": "e01"},
+{"id": "sales", "name": "Sales", "kind": "department", "parent": "company", "head": "e02"},
+{"id": "finance", "name": "Finance", "kind": "department", "parent": "company", "head": "e04"}],
+"people": [{"id": "e01", "name": "President (fictional)"},
+{"id": "e02", "name": "Head of Sales"},
+{"id": "e03", "name": "Sales staff"},
+{"id": "e04", "name": "Head of Finance"}],
+"members": [{"person": "e01", "team": "company", "position": "president", "primary": true},
+{"person": "e02", "team": "sales", "position": "dept_head", "primary": true},
+{"person": "e03", "team": "sales", "position": "staff", "primary": true},
+{"person": "e04", "team": "finance", "position": "dept_head", "primary": true}],
+"Junk": []}

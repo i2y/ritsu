@@ -1,0 +1,2 @@
+エラー[E001]: tests/mutants/E001_言葉で書いた期限.ringi:13:10: 営業日の数を書くところに `three` があります
+    13 |   due in three business days at end of day

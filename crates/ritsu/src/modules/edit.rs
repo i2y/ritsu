@@ -47,9 +47,8 @@ pub fn init(ctx: &Ctx, a: &Args) -> u8 {
         let shown = ctx.shown(&file);
         return ctx.refuse(tr!("`{shown}` がもうあります", "`{shown}` is there already"));
     }
-    if let Err(e) = std::fs::write(&file, manifest::init(&module, &version, &graph::running())) {
-        let shown = ctx.shown(&file);
-        return ctx.refuse(tr!("`{shown}` に書けません（{e}）", "cannot write `{shown}` ({e})"));
+    if let Err(e) = ritsu_base::fs::write(&file, manifest::init(&module, &version, &graph::running())) {
+        return ctx.refuse(ritsu_base::cli::cannot_write(&ctx.shown(&file), &e));
     }
     println!("{}", ctx.say(&tr!("ritsu.mod を書きました（モジュール {module} {version}）", "wrote ritsu.mod: module {module} {version}")));
     0
@@ -58,10 +57,7 @@ pub fn init(ctx: &Ctx, a: &Args) -> u8 {
 /// The `ritsu.mod` at `file`, read: what stops the command when it cannot be. `add` from a registry
 /// and `get` (stage D) read it so too.
 pub(super) fn read(ctx: &Ctx, root: &Path, file: &Path) -> Result<(Vec<u8>, Manifest), u8> {
-    let bytes = std::fs::read(file).map_err(|e| {
-        let shown = ctx.shown(file);
-        ctx.refuse(tr!("`{shown}` を読めません（{e}）", "cannot read `{shown}` ({e})"))
-    })?;
+    let bytes = ritsu_base::fs::read(file).map_err(|e| ctx.refuse(ritsu_base::cli::cannot_read(&ctx.shown(file), &e)))?;
     match manifest::parse(&bytes, manifest::FILE) {
         Ok(m) => Ok((bytes, m)),
         Err(ds) => Err(stopped(ctx, root, &graph::Problem::Diags(ds))),
@@ -75,10 +71,7 @@ pub(super) fn read(ctx: &Ctx, root: &Path, file: &Path) -> Result<(Vec<u8>, Mani
 /// change is `fresh`, and `git` the git of the run ([`lock::plan`]).
 pub(super) fn change(ctx: &Ctx, root: &Path, file: &Path, before: &[u8], text: &str, fresh: Option<&ModuleName>, git: &mut Git) -> Result<lock::Plan, u8> {
     let shown = || ctx.shown(file);
-    std::fs::write(file, text).map_err(|e| {
-        let shown = shown();
-        ctx.refuse(tr!("`{shown}` に書けません（{e}）", "cannot write `{shown}` ({e})"))
-    })?;
+    ritsu_base::fs::write(file, text).map_err(|e| ctx.refuse(ritsu_base::cli::cannot_write(&shown(), &e)))?;
     let put_back = || {
         let _ = std::fs::write(file, before);
     };
@@ -115,7 +108,7 @@ pub fn add(ctx: &Ctx, a: &Args) -> u8 {
         Err(t) => return ctx.refuse(t),
     };
     let Ok(target) = ritsu_base::fs::canonicalize(Path::new(source)) else {
-        return ctx.refuse(tr!("`{source}` がありません", "`{source}` is not there"));
+        return ctx.refuse(ritsu_base::cli::not_there(source));
     };
     let theirs = target.join(manifest::FILE);
     if !theirs.is_file() {

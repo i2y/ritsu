@@ -1,0 +1,13 @@
+request 例(example) v1 "例"
+
+form
+  目的(purpose) : long text "目的"
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

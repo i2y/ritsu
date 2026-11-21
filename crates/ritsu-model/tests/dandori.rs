@@ -319,8 +319,8 @@ fn flow_json(m: &Model) -> Value {
     })
 }
 
-fn visit(v: &Visit) -> String {
-    match v {
+fn visit(v: &Visit) -> Option<String> {
+    Some(match v {
         Visit::Stmt(s) => format!("s{s}"),
         Visit::Arm(s, i) => format!("a{s}.{i}"),
         Visit::Answer(s, k) => format!("r{s}:{k}"),
@@ -333,7 +333,12 @@ fn visit(v: &Visit) -> String {
         Visit::FlowEnd => "fe".into(),
         Visit::OnFailureEnd => "ofe".into(),
         Visit::OnCancelEnd => "oce".into(),
-    }
+        // what the page draws a run by and what a scenario's `covers` is checked against (dandori's
+        // DESIGN 36.3), beside the visits the model has: a loop left by `break`, a list with more
+        // items than the loop takes, a failed round of a parallel loop, a check of a precondition, an
+        // answer that fails its checks. The model's run says these by the visits around them.
+        Visit::Broke(_) | Visit::TooMany(_) | Visit::RoundFailed(..) | Visit::Check(..) | Visit::Bad(_) => return None,
+    })
 }
 
 /// The callee of every call, by the call's site.
@@ -402,7 +407,7 @@ fn ours(m: &Model, sc: &Value, shown: &std::collections::BTreeSet<usize>) -> Str
                 args.push(json!([site, a]));
             }
             json!({
-                "visits": visits.iter().map(visit).collect::<Vec<_>>(),
+                "visits": visits.iter().filter_map(visit).collect::<Vec<_>>(),
                 "args": args,
                 "end": trace["end"],
                 "cases": cases,
@@ -441,7 +446,7 @@ fn every_scenario_of_every_flow_runs_as_the_model_says() {
     let (mut flows, mut lines, mut outside, mut arg_calls) = (0, 0usize, Vec::new(), 0usize);
     for (i, p) in files.iter().enumerate() {
         let shown = p.strip_prefix(&root).unwrap().display().to_string();
-        let m = with_rules(|| dandori::check::check_file(p)).unwrap_or_else(|e| panic!("{shown}: {e}")).1.model;
+        let m = with_rules(|| dandori::check::check_file(p)).unwrap_or_else(|e| panic!("{shown}: {}", e.en)).1.model;
         let Some(m) = m else {
             outside.push(format!("{shown}: does not pass check"));
             continue;

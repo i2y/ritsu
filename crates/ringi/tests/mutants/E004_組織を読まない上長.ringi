@@ -1,0 +1,13 @@
+request 例(example) v1 "例"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  承認(approve)  上長
+
+who
+  上長(manager) = manager of requester
+
+ticket
+  self approval  not allowed

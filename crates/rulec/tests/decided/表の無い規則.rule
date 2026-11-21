@@ -1,0 +1,10 @@
+rule 表の無い規則(no_tables_ja) v1
+description "出力はあるが、表が一つも無い規則"
+
+enum 段階(level) = 低(low) | 高(high)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100000円
+
+outputs
+  等級(grade) : 段階

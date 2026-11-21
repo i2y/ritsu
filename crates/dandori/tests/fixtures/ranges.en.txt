@@ -12,5 +12,5 @@ error[E014]: tests/fixtures/ranges.flow:47:1: `泊` can be outside `>=1 <=30`, t
     47 |   let f = 与信(客室: standard, 泊数: 泊)
 error[E014]: tests/fixtures/ranges.flow:51:1: `100` is outside `>=1 <=99`, the range of the field `数量` of `明細`
     51 |   請求する(額: a.与信額, 明細: {数量: 100, 単価: 500})
-error[E014]: tests/fixtures/ranges.flow:52:1: `a.与信額` can be outside `<=1000000`, the range of the output `合計`: it is `>=12000 <=1200000`
+error[E014]: tests/fixtures/ranges.flow:52:1: `a.与信額` can be outside `<=1_000_000円`, the range of the output `合計`: it is `>=12_000円 <=1_200_000円`
     52 |   succeed 合計 = a.与信額

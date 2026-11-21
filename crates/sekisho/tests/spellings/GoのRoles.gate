@@ -1,0 +1,27 @@
+gate goのroles(go_roles_list_ja) v1
+description "Go のパッケージの、役割の一覧と同じ名前の型"
+namespace Shop
+
+role 店長(manager)
+  description "誰がどの係かを決める"
+  can 係を直す
+
+principal 職員(Staff)
+  description "店で働く人"
+  roles 店長
+
+resource 係の表(Roles)
+  description "店で誰がどの係かの表"
+  attributes
+    直せる(editable) : bool
+
+action 係を直す(edit_duties)
+  description "誰がどの係かを直す"
+  principal 職員
+  resource 係の表
+
+permit 店長は係を直せる(managers_edit_duties)
+  description "店長は次のことができる: 誰がどの係かを直す"
+  principal in 店長
+  action 係を直す
+  when resource.直せる

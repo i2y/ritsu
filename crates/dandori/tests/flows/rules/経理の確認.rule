@@ -1,0 +1,20 @@
+rule 経理の確認(needs_accounting_ja) v1
+description "その区分の申請を経理が確かめるか。区分は 経費の区分.rule から読む"
+import enum 区分 from "経費の区分.rule"
+
+inputs
+  区分(category) : 区分
+
+outputs
+  経理(accounting) : bool
+
+table 選ぶ(pick)
+policy unique
+| 区分 | -> 経理 |
+| 旅費 | false   |
+| 購入 | true    |
+| 研修 | false   |
+
+examples
+| 区分 | -> 経理 |
+| 購入 | true    |

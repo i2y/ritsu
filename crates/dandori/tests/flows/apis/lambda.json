@@ -1,0 +1,262 @@
+{
+  "smithy": "2.0",
+  "metadata": {
+    "dandori": "Written for the tests after the Smithy model of AWS Lambda: the operation CreateEventSourceMapping, a few of the members of what it takes and answers, and its errors, with the names, the types and the protocol (restJson1) the AWS SDKs give them. Not a copy of the published model."
+  },
+  "shapes": {
+    "com.amazonaws.lambda#AWSGirApiService": {
+      "type": "service",
+      "version": "2015-03-31",
+      "operations": [
+        {
+          "target": "com.amazonaws.lambda#CreateEventSourceMapping"
+        }
+      ],
+      "traits": {
+        "aws.api#service": {
+          "sdkId": "Lambda",
+          "arnNamespace": "lambda",
+          "cloudFormationName": "Lambda",
+          "cloudTrailEventSource": "lambda.amazonaws.com",
+          "endpointPrefix": "lambda"
+        },
+        "aws.auth#sigv4": {
+          "name": "lambda"
+        },
+        "aws.protocols#restJson1": {},
+        "smithy.api#title": "AWS Lambda"
+      }
+    },
+    "com.amazonaws.lambda#CreateEventSourceMapping": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.lambda#CreateEventSourceMappingRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.lambda#EventSourceMappingConfiguration"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.lambda#InvalidParameterValueException"
+        },
+        {
+          "target": "com.amazonaws.lambda#ResourceConflictException"
+        },
+        {
+          "target": "com.amazonaws.lambda#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.lambda#ServiceException"
+        },
+        {
+          "target": "com.amazonaws.lambda#TooManyRequestsException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "method": "POST",
+          "uri": "/2015-03-31/event-source-mappings",
+          "code": 202
+        }
+      }
+    },
+    "com.amazonaws.lambda#CreateEventSourceMappingRequest": {
+      "type": "structure",
+      "members": {
+        "EventSourceArn": {
+          "target": "com.amazonaws.lambda#Arn"
+        },
+        "FunctionName": {
+          "target": "com.amazonaws.lambda#FunctionName",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "Enabled": {
+          "target": "com.amazonaws.lambda#Enabled"
+        },
+        "BatchSize": {
+          "target": "com.amazonaws.lambda#BatchSize"
+        },
+        "StartingPosition": {
+          "target": "com.amazonaws.lambda#EventSourcePosition"
+        },
+        "StartingPositionTimestamp": {
+          "target": "com.amazonaws.lambda#Date"
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.lambda#EventSourceMappingConfiguration": {
+      "type": "structure",
+      "members": {
+        "UUID": {
+          "target": "com.amazonaws.lambda#String"
+        },
+        "StartingPosition": {
+          "target": "com.amazonaws.lambda#EventSourcePosition"
+        },
+        "StartingPositionTimestamp": {
+          "target": "com.amazonaws.lambda#Date"
+        },
+        "BatchSize": {
+          "target": "com.amazonaws.lambda#BatchSize"
+        },
+        "EventSourceArn": {
+          "target": "com.amazonaws.lambda#Arn"
+        },
+        "FunctionArn": {
+          "target": "com.amazonaws.lambda#FunctionArn"
+        },
+        "LastModified": {
+          "target": "com.amazonaws.lambda#Date"
+        },
+        "State": {
+          "target": "com.amazonaws.lambda#String"
+        },
+        "StateTransitionReason": {
+          "target": "com.amazonaws.lambda#String"
+        }
+      }
+    },
+    "com.amazonaws.lambda#Arn": {
+      "type": "string"
+    },
+    "com.amazonaws.lambda#BatchSize": {
+      "type": "integer",
+      "traits": {
+        "smithy.api#range": {
+          "min": 1,
+          "max": 10000
+        }
+      }
+    },
+    "com.amazonaws.lambda#Date": {
+      "type": "timestamp"
+    },
+    "com.amazonaws.lambda#Enabled": {
+      "type": "boolean"
+    },
+    "com.amazonaws.lambda#EventSourcePosition": {
+      "type": "enum",
+      "members": {
+        "TRIM_HORIZON": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "TRIM_HORIZON"
+          }
+        },
+        "LATEST": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "LATEST"
+          }
+        },
+        "AT_TIMESTAMP": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "AT_TIMESTAMP"
+          }
+        }
+      }
+    },
+    "com.amazonaws.lambda#FunctionArn": {
+      "type": "string"
+    },
+    "com.amazonaws.lambda#FunctionName": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 140
+        }
+      }
+    },
+    "com.amazonaws.lambda#String": {
+      "type": "string"
+    },
+    "com.amazonaws.lambda#InvalidParameterValueException": {
+      "type": "structure",
+      "members": {
+        "Type": {
+          "target": "com.amazonaws.lambda#String"
+        },
+        "message": {
+          "target": "com.amazonaws.lambda#String"
+        }
+      },
+      "traits": {
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 400
+      }
+    },
+    "com.amazonaws.lambda#ResourceConflictException": {
+      "type": "structure",
+      "members": {
+        "Type": {
+          "target": "com.amazonaws.lambda#String"
+        },
+        "message": {
+          "target": "com.amazonaws.lambda#String"
+        }
+      },
+      "traits": {
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 409
+      }
+    },
+    "com.amazonaws.lambda#ResourceNotFoundException": {
+      "type": "structure",
+      "members": {
+        "Type": {
+          "target": "com.amazonaws.lambda#String"
+        },
+        "Message": {
+          "target": "com.amazonaws.lambda#String"
+        }
+      },
+      "traits": {
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 404
+      }
+    },
+    "com.amazonaws.lambda#ServiceException": {
+      "type": "structure",
+      "members": {
+        "Type": {
+          "target": "com.amazonaws.lambda#String"
+        },
+        "Message": {
+          "target": "com.amazonaws.lambda#String"
+        }
+      },
+      "traits": {
+        "smithy.api#error": "server",
+        "smithy.api#httpError": 500
+      }
+    },
+    "com.amazonaws.lambda#TooManyRequestsException": {
+      "type": "structure",
+      "members": {
+        "retryAfterSeconds": {
+          "target": "com.amazonaws.lambda#String",
+          "traits": {
+            "smithy.api#httpHeader": "Retry-After"
+          }
+        },
+        "Type": {
+          "target": "com.amazonaws.lambda#String"
+        },
+        "message": {
+          "target": "com.amazonaws.lambda#String"
+        }
+      },
+      "traits": {
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 429
+      }
+    }
+  }
+}

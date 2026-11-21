@@ -32,7 +32,7 @@
 //! locale with its own digits would not be the bytes the other ten targets write.
 
 use super::{
-    camel, cell_src, civil_needed, fired_doc, mode_fn, out_src, pascal, plain_doc,
+    camel, cell_src, civil_needed, fired_doc, leading_params, mode_fn, out_src, pascal, plain_doc,
     pub_name, raw_base, record_doc, round_cases, traced_doc, unparen, walked_doc, wire_of, Expr2, Gen, Lang,
     Phase, WalkStep, Wire,
 };
@@ -66,8 +66,35 @@ fn java_id(s: &str) -> String {
     n
 }
 
-/// The class a rule's module is, which is also the name of the file it has to live in.
+/// The full name of a class of the JDK that the generated Java reads by its simple name: one of the
+/// classes of `java.lang` it names, or of those its files import (`JAVA_GLOBAL`, §15.336).
+fn java_full(word: &str) -> Option<String> {
+    if !ritsu_emit::copies::rulec::JAVA_GLOBAL.contains(&word) {
+        return None;
+    }
+    let package = match word {
+        "ArrayList" | "LinkedHashMap" | "List" | "Map" => "java.util",
+        "BufferedReader" | "IOException" | "InputStreamReader" | "PrintStream" => "java.io",
+        "StandardCharsets" => "java.nio.charset",
+        _ => "java.lang",
+    };
+    Some(format!("{package}.{word}"))
+}
+
+/// Whether the generated Java reads the class of the JDK `word` by its full name where the rule's
+/// class has its name, or an enum's type of the rule's (`ty`), so that W121 does not say the name
+/// (§15.336, `Gen::java_hidden`): every class the code reads by its simple name where an enum's
+/// type has the name, and one a file imports where the class has it.
+pub(crate) fn reaches_past(word: &str, ty: bool) -> bool {
+    java_full(word).is_some_and(|full| ty || !full.starts_with("java.lang."))
+}
+
+/// The class a rule's module is, which is also the name of the file it has to live in. The mark
+/// of [`Gen::fam`] stays before it.
 pub fn java_class(alias: &str) -> String {
+    if let Some(rest) = alias.strip_prefix(super::clash::MARK) {
+        return format!("{}{}", super::clash::MARK, java_class(rest));
+    }
     java_id(&pascal(alias))
 }
 
@@ -85,6 +112,24 @@ fn java_name(s: &str) -> String {
 /// A string literal.
 pub(super) fn java_str(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+/// A sentence as a Java string: the pieces of text in double quotes, and the indices joined on with
+/// `+` where it names an element by its index (§15.324).
+pub(super) fn java_said(s: &str, here: &str, before: &str) -> String {
+    if !super::names_element(s) {
+        return java_str(s);
+    }
+    super::pieces(s)
+        .into_iter()
+        .filter_map(|p| match p {
+            super::Piece::Text("") => None,
+            super::Piece::Text(t) => Some(java_str(t)),
+            super::Piece::Here => Some(here.to_string()),
+            super::Piece::Before => Some(before.to_string()),
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
 }
 
 /// Text a rule holds, made safe in a Java comment (ritsu's DESIGN 9.2): on one line, since a `\r`
@@ -340,9 +385,66 @@ const JAVA_JSON_HELPERS: &str = r##"    /** 読んだ文字列と、閉じ引用
 "##;
 
 impl<'a> Gen<'a> {
-    /// The class the module is, and the name of the file it lives in.
+    /// The class the module is, and the name of the file it lives in: with the mark of
+    /// [`Gen::fam`] before it while [`Gen::java_apart`] writes the code again.
     pub fn java_class(&self) -> String {
-        java_class(&pub_name(&self.f.name))
+        java_class(&self.fam(&pub_name(&self.f.name)))
+    }
+
+    /// The Java code `write` writes, with each class of the JDK in `to` (`Gen::java_hidden`) read
+    /// by its full name (`java.util.List`, `java.lang.Integer`, §15.336). The rule's class and its
+    /// enums keep their names, which a caller writes. The code is written again by
+    /// [`Gen::marked`], where the class and the enums' types carry the mark, and every word of the
+    /// name left unmarked is the JDK's. The file then imports no class of that name: a single-type
+    /// import of a class whose simple name a top level class of the file has is an error (JLS
+    /// 7.5.1), and in the runner the import would hide the rule's class from the code that calls
+    /// it (JLS 6.4.1); the code reads the JDK's by its full name everywhere. Code where no name
+    /// meets one is written as it always was, and so is code whose second writing is not the first
+    /// with the marks in it, which a test's build stops at.
+    pub(super) fn java_apart(&self, to: BTreeMap<String, String>, write: impl Fn(&Gen<'a>) -> String) -> String {
+        let text = write(self);
+        if to.is_empty() {
+            return text;
+        }
+        let marked = write(&self.marked());
+        if marked.replace(super::clash::MARK, "") != text {
+            debug_assert!(false, "the Java written with the marks is other than the Java:\n{}", super::clash::first_difference(&text, &marked.replace(super::clash::MARK, "")));
+            return text;
+        }
+        // Java reads a comment, a string, a character, an import and a member's name as
+        // TypeScript does, and has no template, which is all the walk tells apart.
+        let out = super::clash::rename_code(&marked, &to, super::clash::Syntax::Script);
+        out.split_inclusive('\n').filter(|l| !to.values().any(|full| l.trim_end() == format!("import {full};"))).collect()
+    }
+
+    /// The classes of the JDK a file of the generated Java reads by their simple names that a name
+    /// of the rule's hides there, each with its full name (§15.336). An enum's type is a member of
+    /// the module's class and hides a class only inside it, in the module (`module`). The module's
+    /// class is a class of the package, and so is the class of an `enums` file the rule reads its
+    /// enums from (`List.Zone`): one named like a class a file imports by its simple name
+    /// (`java.util.List`) meets the import in that file, which hides the package's class there, and
+    /// the file reads the JDK's by its full name and imports none of the name. Every other file
+    /// imports the class, and keeps it. A class of `java.lang`, which no file imports, the package's
+    /// class hides in every file of the package, the code of the other rules beside it and the test
+    /// of the roundings among them; that is no name written apart, and W121 says it.
+    pub(super) fn java_hidden(&self, module: bool) -> BTreeMap<String, String> {
+        let class = self.java_class();
+        let mut out: BTreeMap<String, String> = java_full(&class).filter(|full| !full.starts_with("java.lang.")).map(|full| (class, full)).into_iter().collect();
+        for o in self.c.owners.values() {
+            let owner = java_class(&pub_name(&o.module));
+            if let Some(full) = java_full(&owner).filter(|full| !full.starts_with("java.lang.")) {
+                out.insert(owner, full);
+            }
+        }
+        if module {
+            for en in self.c.enums.keys().filter(|en| !self.c.owners.contains_key(*en)) {
+                let t = self.java_enum(en);
+                if let Some(full) = java_full(&t) {
+                    out.insert(t, full);
+                }
+            }
+        }
+        out
     }
 
     /// A name as the generated Java spells it.
@@ -353,6 +455,76 @@ impl<'a> Gen<'a> {
     /// The public method's name.
     pub(super) fn java_fname(&self) -> String {
         java_name(&pub_name(&self.f.name))
+    }
+
+    /// An input or a sequence where the class's methods hold it: Java's spelling of its identifier,
+    /// or of the one it is bound under apart from it (§15.336). Java passes arguments by their place,
+    /// so a parameter is written so as well.
+    fn java_held(&self, n: &crate::ast::Name) -> String {
+        java_name(&self.held(n))
+    }
+
+    /// What the rule's values are held as in one of the class's methods, as Java spells them: the
+    /// inputs and the sequences, every method's parameters, and with `locals` the values the rule's
+    /// own methods work out besides.
+    fn java_held_words(&self, locals: bool) -> std::collections::HashSet<String> {
+        let mut out: std::collections::HashSet<String> = self.f.inputs.iter().map(|i| self.java_held(&i.name)).collect();
+        out.extend(self.f.elements.iter().map(|el| self.java_held(&el.name)));
+        if locals {
+            for it in &self.f.items {
+                let names: Vec<&crate::ast::Name> = match it {
+                    Item::Derived(d) => vec![&d.name],
+                    Item::Define(d) => vec![&d.name],
+                    Item::Agg(d) => vec![&d.name],
+                    Item::Fold(d) => d.answer.iter().map(|a| &a.name).collect(),
+                    Item::Table(t) => t.outputs.iter().map(|o| &o.name).collect(),
+                };
+                out.extend(names.into_iter().map(|n| java_name(&self.ident(&n.text))));
+            }
+        }
+        out
+    }
+
+    /// A local of a method of the class's own, `n` as `Gen::temp` names it, with `_` after it until
+    /// Java spells none of the rule's values that method holds so (`java_held_words`): `temp` reads
+    /// the names as the rule writes them, and Java writes `Total` as `total` (§15.336).
+    fn java_avoid(&self, n: &str, locals: bool) -> String {
+        let words = self.java_held_words(locals);
+        let mut n = n.to_string();
+        while words.contains(&java_name(&n)) {
+            n.push('_');
+        }
+        n
+    }
+
+    /// [`Gen::java_avoid`], as Java writes it.
+    fn java_local(&self, n: &str, locals: bool) -> String {
+        java_name(&self.java_avoid(n, locals))
+    }
+
+    /// The names the fold at `i` binds itself (`Gen::fold_names`), each kept apart from the rule's
+    /// values as Java spells them (`Gen::java_avoid`).
+    fn java_fold_names(&self, i: usize) -> super::FoldNames {
+        let n = self.fold_names(i);
+        let a = |x: &str| self.java_avoid(x, true);
+        super::FoldNames {
+            answer: a(&n.answer),
+            stopped: a(&n.stopped),
+            done: a(&n.done),
+            taken: a(&n.taken),
+            kept: a(&n.kept),
+            best: a(&n.best),
+            held: a(&n.held),
+            key: a(&n.key),
+            took: a(&n.took),
+            kept_one: a(&n.kept_one),
+            best_set: a(&n.best_set),
+            taken_at: a(&n.taken_at),
+            taken_at_camel: a(&n.taken_at_camel),
+            total: a(&n.total),
+            weight: a(&n.weight),
+            cuts: a(&n.cuts),
+        }
     }
 
     /// The type Java declares for a value. Enums, strings, booleans and `long` are all
@@ -401,9 +573,17 @@ impl<'a> Gen<'a> {
     pub(super) fn java_enum(&self, en: &str) -> String {
         let t = java_class(&self.enum_names.get(en).cloned().unwrap_or_else(|| "String".into()));
         match self.c.owners.get(en) {
-            Some(o) => format!("{}.{t}", java_class(&pub_name(&o.module))),
+            Some(o) => format!("{}.{t}", self.java_owner(o)),
             None => t,
         }
+    }
+
+    /// The class of the `enums` file an enum is read from: with the mark of [`Gen::fam`] before it
+    /// while [`Gen::java_apart`] writes the code again, since a class of the JDK the rule's files
+    /// import may have its name (§15.336, `Gen::java_hidden`).
+    fn java_owner(&self, o: &crate::ast::EnumOwner) -> String {
+        let name = pub_name(&o.module);
+        java_class(&if self.marks { format!("{}{name}", super::clash::MARK) } else { name })
     }
 
     /// The same type as code outside the rule's class names it.
@@ -597,6 +777,10 @@ impl<'a> Gen<'a> {
 
     /// The module: one class, one file, no package and no build file.
     pub fn java(&self) -> String {
+        self.java_apart(self.java_hidden(true), |g| g.java_text())
+    }
+
+    fn java_text(&self) -> String {
         let cls = self.java_class();
         // Java reads a `\uXXXX` in a comment before it reads the comment (JLS 3.3), so a `\u000a`
         // in a cited path or URL would end the head's comment; the backslashes are doubled to make
@@ -684,11 +868,12 @@ impl<'a> Gen<'a> {
         // What the walk of a rule that picks by weight gives back besides (§15.225).
         if self.weighted_fold().is_some() {
             o.push_str(&format!(
-                "    /** {} */\n    record Walked({ret} value, List<Fired> trace, List<Long> cuts) {{\n    }}\n\n",
+                "    /** {} */\n    record {}({ret} value, List<Fired> trace, List<Long> cuts) {{\n    }}\n\n",
                 tr!(
                     "出力と、当てはまった行と、重みで選ぶ腕が重みを足すたびの合計。",
                     "What came out, the rows that matched, and the running total of the weights each time the arm that picks by weight adds one."
-                )
+                ),
+                self.own("Walked")
             ));
         }
 
@@ -751,6 +936,14 @@ impl<'a> Gen<'a> {
                         java_expr(unparen(&e.text)),
                         tr!("定義", "definition"),
                     ));
+                    // The range the rule accepts for it, held where it is worked out (§15.313).
+                    let n = java_name(&self.ident(&d.name.text));
+                    if let Some(test) = self.accepted_ends(d).and_then(|ends| crate::codegen::or_out_of(&n, ends, "L")) {
+                        o.push_str(&format!(
+                            "        if ({test}) {{\n            throw new RuleInputError({}, {n});\n        }}\n",
+                            java_said(&crate::door::out_of_range(&self.said_name(&d.name.text)), &self.here(), ""),
+                        ));
+                    }
                 }
                 Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
@@ -769,7 +962,7 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for (s, el) in self.f.elements.iter().enumerate() {
             if let Some(cap) = self.count_cap_of(s) {
-                let seq = java_name(&pub_name(&el.name));
+                let seq = self.java_held(&el.name);
                 o.push_str(&format!("        if ({seq}.size() > {cap}) {{\n"));
                 o.push_str(&format!(
                     "            throw new RuleInputError({}, (long) {seq}.size());\n        }}\n",
@@ -790,9 +983,9 @@ impl<'a> Gen<'a> {
     /// One walk over sequence `s`, in Java (§15.219).
     fn java_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = &self.f.elements[s];
-        let seq = java_name(&pub_name(&el.name));
+        let seq = self.java_held(&el.name);
         let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), java_name(&pub_name(&fd.name)))).collect();
-        let e = java_name(&self.elem_var(s));
+        let e = self.java_local(&self.elem_var(s), true);
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}()"),
@@ -800,10 +993,16 @@ impl<'a> Gen<'a> {
             }
         };
         let mut o = String::new();
+        let index = self.java_local(&self.index_var(s), true);
+        self.walk_begin(s, &index);
         let mut body = self.java_element_guards(s, &local);
         let (seen, step) = self.java_unique(s, sums, &local);
         o.push_str(&seen);
         body.push_str(&step);
+        // Past a `stop`, the door alone (§15.328).
+        if let Some(i) = self.walk_goes_past_stop(sums) {
+            body.push_str(&format!("        if ({}) {{\n            continue;\n        }}\n", java_name(&self.java_fold_names(i).done)));
+        }
         body.push_str(&self.java_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -833,6 +1032,14 @@ impl<'a> Gen<'a> {
                             java_str(&crate::door::out_of_range(&d.name.text)),
                         ));
                     }
+                    // The bottom of its range, where a walk can come in under it (§15.314).
+                    if let Some(floor) = self.walk_floor(d) {
+                        let n = java_name(&self.ident(&d.name.text));
+                        after.push_str(&format!(
+                            "        if ({n} < {floor}L) {{\n            throw new RuleInputError({}, {n});\n        }}\n",
+                            java_str(&crate::door::out_of_range(&d.name.text)),
+                        ));
+                    }
                 }
                 crate::ast::Item::Fold(fold) => {
                     let (init, step, fin) = self.java_fold(i, fold, &seq, &local);
@@ -843,7 +1050,13 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
-        o.push_str(&format!("        for ({} {e} : {seq}) {{\n", self.element_type(s)));
+        // The index of the element is bound where a sentence of the walk says it (§15.324).
+        if self.walk_end() {
+            o.push_str(&format!("        for (int {index} = 0; {index} < {seq}.size(); {index}++) {{\n"));
+            o.push_str(&format!("            {} {e} = {seq}.get({index});\n", self.element_type(s)));
+        } else {
+            o.push_str(&format!("        for ({} {e} : {seq}) {{\n", self.element_type(s)));
+        }
         o.push_str(&Self::indent_block(&body, "    "));
         o.push_str("        }\n");
         o.push_str(&after);
@@ -864,7 +1077,7 @@ impl<'a> Gen<'a> {
     /// A `max` or a `min`, in Java (§15.219).
     fn java_extreme(&self, d: &crate::ast::AggDecl, local: &dyn Fn(&str) -> String) -> (String, String) {
         let n = java_name(&self.ident(&d.name.text));
-        let set = java_name(&self.temp(&format!("{}Set", self.ident(&d.name.text))));
+        let set = self.java_local(&self.temp(&format!("{}Set", self.ident(&d.name.text))), true);
         let v = local(&d.column.text);
         let ty = self.ty_of(&d.column.text);
         let op = if d.kind == crate::ast::AggKind::Max { ">" } else { "<" };
@@ -894,11 +1107,14 @@ impl<'a> Gen<'a> {
 
     /// A fold, in Java (§15.56).
     fn java_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
-        let names = self.fold_names(i);
+        let names = self.java_fold_names(i);
         let (answer, stopped, done) = (java_name(&names.answer), java_name(&names.stopped), java_name(&names.done));
         let (taken, kept, best) = (java_name(&names.taken), java_name(&names.kept), java_name(&names.best));
         let (held, key) = (java_name(&names.held), java_name(&names.key));
+        let taken_at = java_name(&names.taken_at_camel);
         let alone = self.fold_alone(i);
+        // Ends the loop at a `stop`: a fold alone in its walk with no door to keep past it (§15.328).
+        let ends = alone && !self.stop_keeps_door(i);
         let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
         let (out_name, answer_ty) = self.fold_target(fold);
         let out_ty = self.java_ty(&answer_ty);
@@ -920,12 +1136,17 @@ impl<'a> Gen<'a> {
             tr!("要素ゼロ件の答え", "the answer for no elements")
         ));
         init.push_str(&format!("        boolean {stopped} = false;\n"));
-        if !alone {
+        if !ends {
             init.push_str(&format!("        boolean {done} = false;\n"));
         }
         init.push_str(&format!(
             "        {acc} {taken} = null;\n        {acc} {kept} = null;\n        Long {best} = null;\n"
         ));
+        // The element a `take_unique` took, which the sentence says beside the one that matched
+        // again (§15.324).
+        if fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { unique: true, .. })) {
+            init.push_str(&format!("        int {taken_at} = 0;\n"));
+        }
         let weighted = fold.weighted();
         let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
         let (total, weight, cuts) = (java_name(&names.total), java_name(&names.weight), java_name(&names.cuts));
@@ -943,11 +1164,11 @@ impl<'a> Gen<'a> {
             arms.push_str(&format!("        if ({v} == {is}) {{  // {}\n", jc(&name.text)));
             match arm {
                 Arm::Next => arms.push_str("            // next\n"),
-                Arm::Stop(None) if alone => arms.push_str("            break;\n"),
+                Arm::Stop(None) if ends => arms.push_str("            break;\n"),
                 Arm::Stop(None) => arms.push_str(&format!("            {done} = true;\n")),
                 Arm::Stop(Some(x)) => {
                     arms.push_str(&format!("            {answer} = {};\n", val(x, local)));
-                    if alone {
+                    if ends {
                         arms.push_str(&format!("            {stopped} = true;\n            break;\n"));
                     } else {
                         arms.push_str(&format!("            {stopped} = true;\n            {done} = true;\n"));
@@ -955,16 +1176,13 @@ impl<'a> Gen<'a> {
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
+                        let here = self.here_used();
                         arms.push_str(&format!("            if ({taken} != null) {{\n"));
                         arms.push_str(&format!(
                             "                throw new RuleContradictionError({});\n            }}\n",
-                            java_str(&tr!(
-                                "畳み込み {}: take_unique に二件当たりました",
-                                "fold {}: two elements matched a take_unique",
-                                fold.verdict
-                            ))
+                            java_said(&crate::door::fold_contradiction(&fold.verdict, &fold.over, crate::door::BEFORE, crate::door::HERE), &here, &taken_at)
                         ));
-                        arms.push_str(&format!("            {taken} = {};\n", val(expr, local)));
+                        arms.push_str(&format!("            {taken} = {};\n            {taken_at} = {here};\n", val(expr, local)));
                     } else {
                         arms.push_str(&format!("            if ({taken} == null) {{\n"));
                         arms.push_str(&format!("                {taken} = {};\n            }}\n", val(expr, local)));
@@ -1022,12 +1240,15 @@ impl<'a> Gen<'a> {
         let seq = &self.f.elements[s].name.text;
         let (mut init, mut step) = (String::new(), String::new());
         for fd in self.unique_fields(s, sums) {
-            let seen = java_name(&self.temp(&format!("{}Seen", self.ident(&fd.name.text))));
+            let seen = self.java_local(&self.temp(&format!("{}Seen", self.ident(&fd.name.text))), true);
             let v = local(&fd.name.text);
+            // The list holds one value per element, at the element's index: where a value was first
+            // seen is the sentence's earlier element (§15.324).
+            let here = self.here_used();
             init.push_str(&format!("        List<Object> {seen} = new ArrayList<>();\n"));
             step.push_str(&format!(
                 "        if ({seen}.contains({v})) {{\n            throw new RuleInputError({});\n        }}\n        {seen}.add({v});\n",
-                java_str(&crate::door::duplicate(seq, &fd.name.text))
+                java_said(&crate::door::duplicate(seq, &fd.name.text, crate::door::BEFORE, crate::door::HERE), &here, &format!("{seen}.indexOf({v})"))
             ));
         }
         (init, step)
@@ -1048,9 +1269,10 @@ impl<'a> Gen<'a> {
                 // Each end the range writes, and −(2^63−1) where it writes no lower one: a long
                 // holds one value below that, and the door refuses it (§15.295).
                 if let Some(test) = super::or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "L") {
+                    // The sentence names the field by its place on the element (§15.324).
                     o.push_str(&format!(
                         "        if ({test}) {{\n            throw new RuleInputError({}, {v});\n        }}\n",
-                        java_str(&crate::door::out_of_range(&i.name.text)),
+                        java_said(&crate::door::out_of_range(&self.said_name(&i.name.text)), &self.here(), ""),
                     ));
                 }
             }
@@ -1100,17 +1322,17 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| format!("{} {}", self.java_ty(&self.ty_of(&i.name.text)), java_name(&pub_name(&i.name))))
+            .map(|i| format!("{} {}", self.java_ty(&self.ty_of(&i.name.text)), self.java_held(&i.name)))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("List<{}> {}", self.element_type(s), java_name(&pub_name(&el.name))));
+            params.push(format!("List<{}> {}", self.element_type(s), self.java_held(&el.name)));
         }
         let args: Vec<String> = self
             .f
             .inputs
             .iter()
-            .map(|i| java_name(&pub_name(&i.name)))
-            .chain(self.f.elements.iter().map(|el| java_name(&pub_name(&el.name))))
+            .map(|i| self.java_held(&i.name))
+            .chain(self.f.elements.iter().map(|el| self.java_held(&el.name)))
             .collect();
 
         o.push_str(&format!("    /**\n     * {}\n", plain_doc(&self.f.name.text, &self.f.version, &traced)));
@@ -1142,17 +1364,20 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    public static Traced {traced}({}) {{\n", params.join(", ")));
         // A rule that picks by weight runs its walk in a method of its own, which gives back the
         // running totals of the weights too (§15.225).
-        let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("java"), java_name(&self.fold_names(i).cuts)));
+        let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("java"), java_name(&self.java_fold_names(i).cuts)));
         if let Some((w, _)) = &walked {
-            o.push_str(&format!("        Walked w = {w}({});\n        return new Traced(w.value(), w.trace());\n    }}\n\n", args.join(", ")));
-            o.push_str(&format!("    /** {} */\n    static Walked {w}({}) {{\n", jc(&walked_doc()), params.join(", ")));
+            // What the walk gave back is a local of the method, beside its parameters.
+            let v = self.java_local("w", false);
+            let walked_ty = self.own("Walked");
+            o.push_str(&format!("        {walked_ty} {v} = {w}({});\n        return new Traced({v}.value(), {v}.trace());\n    }}\n\n", args.join(", ")));
+            o.push_str(&format!("    /** {} */\n    static {walked_ty} {w}({}) {{\n", jc(&walked_doc()), params.join(", ")));
         }
 
         // Entry guards (§8.5). The declared types already refuse a value of the wrong kind,
         // so what is left to ask is the range (§15.43).
         let local = |n: &str| -> String { java_name(&self.ident(n)) };
         for i in &self.f.inputs {
-            let v = java_name(&pub_name(&i.name));
+            let v = self.java_held(&i.name);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
             let optional = matches!(ty, Ty::Opt(_));
@@ -1183,7 +1408,7 @@ impl<'a> Gen<'a> {
             format!("            throw new RuleInputError({});\n", java_str(m))
         }));
 
-        let trace = self.temp("trace");
+        let trace = self.java_avoid(&self.temp("trace"), true);
         o.push_str(&format!("        List<Fired> {} = new ArrayList<>();\n", java_name(&trace)));
 
         if self.f.walks() {
@@ -1212,7 +1437,7 @@ impl<'a> Gen<'a> {
                     let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                     let grid_i = g.num * res.scale / g.den;
                     if res.scale != os && !opt {
-                        let raw = java_name(&self.temp(&raw_base(oi)));
+                        let raw = self.java_local(&self.temp(&raw_base(oi)), true);
                         o.push_str(&format!(
                             "        long {raw} = {};  // {}\n",
                             java_expr(unparen(&res.text)),
@@ -1231,8 +1456,8 @@ impl<'a> Gen<'a> {
             finals.push(if opt && body != v { format!("{v} == null ? null : {body}") } else { body });
         }
         let (made, cuts) = match &walked {
-            Some((_, c)) => ("Walked", format!(", {c}")),
-            None => ("Traced", String::new()),
+            Some((_, c)) => (self.own("Walked"), format!(", {c}")),
+            None => ("Traced".to_string(), String::new()),
         };
         if outs.len() == 1 {
             o.push_str(&format!("        return new {made}({}, {}{cuts});\n", finals[0], java_name(&trace)));
@@ -1349,7 +1574,7 @@ impl<'a> Gen<'a> {
     pub fn java_record(&self) -> String {
         let fname = self.java_fname();
         let single = self.f.outputs.len() == 1;
-        let (out, trace, tag) = (self.temp("out"), self.temp("trace"), self.temp("tag"));
+        let (out, trace, tag) = (self.java_avoid(&self.temp("out"), false), self.java_avoid(&self.temp("trace"), false), self.java_avoid(&self.temp("tag"), false));
         let (v_out, v_trace, v_tag) = (java_name(&out), java_name(&trace), java_name(&tag));
         let (ins, obs) = self.record_fields(
             |a, _| java_name(a),
@@ -1364,10 +1589,10 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| format!("{} {}", self.java_ty(&self.ty_of(&i.name.text)), java_name(&pub_name(&i.name))))
+            .map(|i| format!("{} {}", self.java_ty(&self.ty_of(&i.name.text)), self.java_held(&i.name)))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("List<{}> {}", self.element_type(s), java_name(&pub_name(&el.name))));
+            params.push(format!("List<{}> {}", self.element_type(s), self.java_held(&el.name)));
         }
 
         let mut o = String::new();
@@ -1399,19 +1624,19 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&format!("    /** {} */\n", record_doc()));
         o.push_str(&format!(
-            "    public static String {fname}Record({}, {ret} {v_out}, List<Fired> {v_trace}, String {v_tag}) {{\n",
-            params.join(", ")
+            "    public static String {fname}Record({}{ret} {v_out}, List<Fired> {v_trace}, String {v_tag}) {{\n",
+            leading_params(&params)
         ));
         let (v_ins, v_obs, v_rows, v_head) =
-            (java_name(&self.temp("ins")), java_name(&self.temp("obs")), java_name(&self.temp("rows")), java_name(&self.temp("head")));
+            (self.java_local(&self.temp("ins"), false), self.java_local(&self.temp("obs"), false), self.java_local(&self.temp("rows"), false), self.java_local(&self.temp("head"), false));
         let field = |(jp, e, w): &(String, String, Wire)| {
             format!("            {} + {}", json_key(jp, ":"), Self::java_wire(e, w))
         };
         // The sequence goes in first (§15.56).
         let mut parts: Vec<String> = Vec::new();
         for (s, el) in self.f.elements.iter().enumerate() {
-            let e = java_name(&self.temp("elem"));
-            let v_els = java_name(&if s == 0 { self.temp("els") } else { self.temp(&format!("els{}", s + 1)) });
+            let e = self.java_local(&self.temp("elem"), false);
+            let v_els = self.java_local(&if s == 0 { self.temp("els") } else { self.temp(&format!("els{}", s + 1)) }, false);
             let inner: Vec<String> = el
                 .fields
                 .iter()
@@ -1428,7 +1653,7 @@ impl<'a> Gen<'a> {
                 "        List<String> {v_els} = new ArrayList<>();\n        for ({} {e} : {}) {{\n            \
                  {v_els}.add(\"{{\" + {} + \"}}\");\n        }}\n",
                 self.element_type(s),
-                java_name(&pub_name(&el.name)),
+                self.java_held(&el.name),
                 inner.join(" + \",\" + ")
             ));
             parts.push(format!(
@@ -1442,7 +1667,7 @@ impl<'a> Gen<'a> {
             "        String {v_obs} = String.join(\",\"{});\n",
             join_args(&obs.iter().map(field).collect::<Vec<_>>())
         ));
-        let f = java_name(&self.temp("f"));
+        let f = self.java_local(&self.temp("f"), false);
         o.push_str(&format!(
             "        List<String> {v_rows} = new ArrayList<>();\n        for (Fired {f} : {v_trace}) {{\n            \
              {v_rows}.add(\"{{\\\"table\\\":\" + jsonStr({f}.table()) + \",\\\"row\\\":\" + {f}.row()\n                \
@@ -1477,27 +1702,35 @@ impl<'a> Gen<'a> {
         )
     }
 
+    /// The runner: a class beside the rule's, in its package, which reads the vectors and writes
+    /// what the rule answers.
     pub fn java_runner(&self) -> String {
+        self.java_apart(self.java_hidden(false), |g| g.java_runner_text())
+    }
+
+    fn java_runner_text(&self) -> String {
         let cls = self.java_class();
         let fname = self.java_fname();
         let d = java_name(&self.temp("d"));
         // One input read off the wire the way every door reads it (§15.204): there at all, of
         // its kind, and only then the module's type. Every reader throws the module's own
         // `RuleInputError`, with the sentence every language says.
-        let read = |ty: &Ty, src: &str, name: &str| -> String {
+        // `said` is what the sentences call the value: the name, or for a field of an element its
+        // place, `lines[\u{1}].amount`, which takes the index `at` of the element (§15.324).
+        let read = |ty: &Ty, src: &str, name: &str, said: &str, at: &str| -> String {
             let optional = matches!(ty, Ty::Opt(_));
-            let take = format!("take({src}, {}, {}, {optional})", java_str(name), java_str(&crate::door::missing(name)));
+            let take = format!("take({src}, {}, {}, {optional})", java_str(name), java_said(&crate::door::missing(said), at, ""));
             let one = |v: &str| -> String {
                 match ty.present() {
                     Ty::Enum(n) => format!(
                         "member({v}, {}, {}::from)",
-                        java_str(&crate::door::not_in_enum(name, n)),
+                        java_said(&crate::door::not_in_enum(said, n), at, ""),
                         self.java_enum_outside(n)
                     ),
-                    Ty::Bool => format!("b({v}, {})", java_str(&crate::door::not_bool(name))),
-                    Ty::Date => format!("date({v}, {})", java_str(&crate::door::not_date(name))),
-                    Ty::Str => format!("text({v}, {})", java_str(&crate::door::not_string(name))),
-                    _ => format!("integer({v}, {}, {})", java_str(&crate::door::not_integer(name)), java_str(&crate::door::out_of_range(name))),
+                    Ty::Bool => format!("b({v}, {})", java_said(&crate::door::not_bool(said), at, "")),
+                    Ty::Date => format!("date({v}, {})", java_said(&crate::door::not_date(said), at, "")),
+                    Ty::Str => format!("text({v}, {})", java_said(&crate::door::not_string(said), at, "")),
+                    _ => format!("integer({v}, {}, {})", java_said(&crate::door::not_integer(said), at, ""), java_said(&crate::door::out_of_range(said), at, "")),
                 }
             };
             if optional {
@@ -1511,7 +1744,7 @@ impl<'a> Gen<'a> {
         let mut args: Vec<String> = Vec::new();
         for (k, i) in self.f.inputs.iter().enumerate() {
             let a = java_name(&self.temp(&format!("a{k}")));
-            binds.push_str(&format!("                    var {a} = {};\n", read(&self.ty_of(&i.name.text), &d, &i.name.text)));
+            binds.push_str(&format!("                    var {a} = {};\n", read(&self.ty_of(&i.name.text), &d, &i.name.text, &i.name.text, "")));
             args.push(a);
         }
         // The sequence a walk reads, one element at a time (§15.56).
@@ -1520,15 +1753,30 @@ impl<'a> Gen<'a> {
             let v = java_name(&if s == 0 { self.temp("els") } else { self.temp(&format!("els{}", s + 1)) });
             let seq = &el.name.text;
             let ty = self.element_type(s);
-            let fields: Vec<String> = el.fields.iter().map(|fd| read(&self.ty_of(&fd.name.text), &e, &fd.name.text)).collect();
+            // A sentence about an element names it by its index (§15.324): the reader of the list
+            // is handed how to say an element that is not an object at its index, and the fields
+            // are read with the index the loop is at.
+            let at = java_name(&self.temp("i"));
+            // An optional field is read in a lambda (`maybe(…, x -> …)`), which reads only a local
+            // that never changes: its sentences take the index from a copy made in the loop.
+            let here = if el.fields.iter().any(|fd| matches!(self.ty_of(&fd.name.text), Ty::Opt(_))) { java_name(&self.temp("at")) } else { at.clone() };
+            let copy = if here == at { String::new() } else { format!("                        int {here} = {at};\n") };
+            let rows = java_name(&if s == 0 { self.temp("rows") } else { self.temp(&format!("rows{}", s + 1)) });
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| read(&self.ty_of(&fd.name.text), &e, &fd.name.text, &crate::door::element(seq, crate::door::HERE, &fd.name.text), &here))
+                .collect();
             binds.push_str(&format!(
                 "                    List<{cls}.{ty}> {v} = new ArrayList<>();\n                    \
-                 for (Map<String, String> {e} : list(take({d}, {}, {}, false), {}, {})) {{\n                        \
+                 List<Map<String, String>> {rows} = list(take({d}, {}, {}, false), {}, {at} -> {});\n                    \
+                 for (int {at} = 0; {at} < {rows}.size(); {at}++) {{\n{copy}                        \
+                 Map<String, String> {e} = {rows}.get({here});\n                        \
                  {v}.add(new {cls}.{ty}({}));\n                    }}\n",
                 java_str(seq),
                 java_str(&crate::door::missing(seq)),
                 java_str(&crate::door::not_sequence(seq)),
-                java_str(&crate::door::not_object(seq)),
+                java_said(&crate::door::not_object(seq, crate::door::HERE), &at, ""),
                 fields.join(", ")
             ));
             args.push(v);
@@ -1578,7 +1826,7 @@ impl<'a> Gen<'a> {
                     super::MoreKind::Enum => format!("\"{key}:\\\"\" + {cls}.{}.value() + \"\\\"\"", mc.upper()),
                     _ => format!("\"{key}:\" + {cls}.{}", mc.upper()),
                 });
-                more_start.push_str(&format!("                    {local} = {};\n", read(&mc.ty, "cv", &mc.input)));
+                more_start.push_str(&format!("                    {local} = {};\n", read(&mc.ty, "cv", &mc.input, &mc.input, "")));
                 more_tail.push_str(&format!("                        {local} = {r}.value().{}();\n", java_name(&mc.out_alias)));
             }
             // `]` and the closing brace, with what is carried between them when anything is.
@@ -1630,7 +1878,7 @@ impl<'a> Gen<'a> {
              try {{\n\
              {binds}                    \
              {cls}.Traced {r} = {cls}.{fname}Traced({args});\n                    \
-             out.println({cls}.{fname}Record({args}, {r}.value(), {r}.trace(), \"\"));\n\
+             out.println({cls}.{fname}Record({lead}{r}.value(), {r}.trace(), \"\"));\n\
              {tail}                \
              }} catch ({cls}.RuleInputError e) {{\n                    \
              out.println(refusal(\"input\", e.what));\n                \
@@ -1641,9 +1889,12 @@ impl<'a> Gen<'a> {
              {helpers}{wire}}}\n",
             ritsu_emit::header::VERSION,
             args = args.join(", "),
+            lead = leading_params(&args),
             labels = self.java_labels_mode(&line) + &self.java_prereq_mode(&line) + &self.java_chances_mode(&line, &d, &chances_mode.0, &chances_mode.1, &args.join(", ")),
-            helpers = JAVA_JSON_HELPERS,
-            wire = JAVA_WIRE.replace("@CLS@", &cls).replace(
+            // The runner's own records and the type its reader of an enum takes, as it names them
+            // beside the rule's class (§15.336), before the class is put in.
+            helpers = self.own_text(JAVA_JSON_HELPERS),
+            wire = self.own_text(&java_wire(!self.f.elements.is_empty())).replace("@CLS@", &cls).replace(
                 "@D_WIRE@",
                 &tr!(
                     "線の上の入力を、どの入口とも同じに読む。無いもの、型の違うものは、ほかの言語と同じ文で拒む。",
@@ -1715,6 +1966,19 @@ pub fn round_tests_java(u: &super::Uses) -> String {
 /// How the generated Java runner reads the wire (§15.204): the readers of the Python runner's,
 /// throwing the module's own `RuleInputError`. A string keeps its opening quote in the reader
 /// above, so `"12"` is not a number and the text `true` is not a truth value.
+/// The wire readers of the Java runner. In the runner of a rule that walks a sequence, the reader
+/// of the list is handed how to say an element that is not an object, at its index (§15.324); the
+/// runner of a rule with no sequence never calls it, and keeps it as it was written before.
+fn java_wire(walks: bool) -> String {
+    if walks {
+        JAVA_WIRE
+            .replace("String notSequence, String notObject) {", "String notSequence, java.util.function.IntFunction<String> notObject) {")
+            .replace("throw new @CLS@.RuleInputError(notObject);", "throw new @CLS@.RuleInputError(notObject.apply(out.size()));")
+    } else {
+        JAVA_WIRE.to_string()
+    }
+}
+
 const JAVA_WIRE: &str = r##"
     /** @D_WIRE@ */
     private static String take(Map<String, String> d, String k, String missing, boolean optional) {
@@ -1853,10 +2117,10 @@ impl<'a> Gen<'a> {
             .inputs
             .iter()
             .filter(|i| i.random.is_none())
-            .map(|i| format!("{} {}", self.java_ty(&self.ty_of(&i.name.text)), java_name(&pub_name(&i.name))))
+            .map(|i| format!("{} {}", self.java_ty(&self.ty_of(&i.name.text)), self.java_held(&i.name)))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("List<{}> {}", self.element_type(s), java_name(&pub_name(&el.name))));
+            params.push(format!("List<{}> {}", self.element_type(s), self.java_held(&el.name)));
         }
         let call = |draw: Option<(&str, &str)>| -> String {
             let mut args: Vec<String> = self
@@ -1865,21 +2129,21 @@ impl<'a> Gen<'a> {
                 .iter()
                 .map(|i| match draw {
                     Some((d, v)) if i.name.text == d => v.to_string(),
-                    _ => java_name(&pub_name(&i.name)),
+                    _ => self.java_held(&i.name),
                 })
                 .collect();
             for el in &self.f.elements {
-                args.push(java_name(&pub_name(&el.name)));
+                args.push(self.java_held(&el.name));
             }
             args.join(", ")
         };
         let (total, ways, out, k, last, e) = (
-            java_name(&self.temp("total")),
-            java_name(&self.temp("ways")),
-            java_name(&self.temp("out")),
-            java_name(&self.temp("k")),
-            java_name(&self.temp("last")),
-            java_name(&self.temp("e")),
+            self.java_local(&self.temp("total"), false),
+            self.java_local(&self.temp("ways"), false),
+            self.java_local(&self.temp("out"), false),
+            self.java_local(&self.temp("k"), false),
+            self.java_local(&self.temp("last"), false),
+            self.java_local(&self.temp("e"), false),
         );
         let add = |ind: &str, n: &str| -> String {
             format!(
@@ -1895,7 +2159,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("        long {total} = 0L;\n        List<Way> {ways} = new ArrayList<>();\n"));
         match self.weighted_draw_pub() {
             Some((draw, lo, hi)) => {
-                let (cuts, low, cut, n) = (java_name(&self.temp("cuts")), java_name(&self.temp("low")), java_name(&self.temp("cut")), java_name(&self.temp("n")));
+                let (cuts, low, cut, n) = (self.java_local(&self.temp("cuts"), false), self.java_local(&self.temp("low"), false), self.java_local(&self.temp("cut"), false), self.java_local(&self.temp("n"), false));
                 o.push_str(&format!("        List<Long> {cuts} = {}({}).cuts();\n", self.walked_fn("java"), call(Some((&draw, &format!("{lo}L"))))));
                 o.push_str(&format!(
                     "        if ({cuts}.isEmpty() || {cuts}.get({cuts}.size() - 1) == 0L) {{\n            return new Chances({all}L, List.of(new Way({fname}({}), {all}L)));\n        }}\n",
@@ -1912,10 +2176,10 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("        RuleInputError {last} = null;\n"));
                 let mut ind = "        ".to_string();
                 for (j, d) in self.drawn().iter().enumerate() {
-                    let v = java_name(&d.alias);
+                    let v = java_name(&d.held);
                     match &d.from {
                         super::chances::From::Range(lo, hi) => {
-                            let ctr = java_name(&self.temp(&format!("_i{j}")));
+                            let ctr = self.java_local(&self.temp(&format!("_i{j}")), false);
                             o.push_str(&format!("{ind}for (long {ctr} = {lo}L; {ctr} <= {hi}L; {ctr}++) {{\n{ind}    long {v} = {ctr};\n"));
                         }
                         super::chances::From::Values(vs) => {

@@ -1,0 +1,26 @@
+rule compare_never v1
+description "A derived value that compares two tiers the table writes, which never meet (fictional)"
+
+enum tier = basic < silver < gold
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# The tier a member is lifted to is silver or gold; the floor is always basic
+table lift_by_member
+policy unique
+| member | -> lift : tier | floor : tier |
+| basic  | silver         | basic        |
+| silver | gold           | basic        |
+| gold   | gold           | basic        |
+
+derive at_floor : bool = lift = floor
+
+table credit_by_floor
+policy unique
+| at_floor | -> credit |
+| true     | 0USD      |
+| false    | 5USD      |

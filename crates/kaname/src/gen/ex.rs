@@ -224,15 +224,56 @@ fn expr(x: &Ex, t: Target, min: u8) -> String {
     if p < min { format!("({s})") } else { s }
 }
 
+thread_local! {
+    /// While a module's code is written (DESIGN 10.3): the builtins of its target that a name of the
+    /// module hides, and how the code reaches each past it (Python's `_builtins.len`, TypeScript's
+    /// `globalThis.BigInt`).
+    static HIDDEN: std::cell::RefCell<std::collections::BTreeMap<String, String>> = std::cell::RefCell::default();
+}
+
+/// The builtins a module's names hide, while its code is written: none again when it is dropped.
+pub struct Hide;
+
+impl Hide {
+    /// The code of a module whose names hide the builtins `names` is written from now on: a call of
+    /// one reaches it as the value of `names` says. Only the builtins no name of the module's code is
+    /// called by (Python's `len`, TypeScript's `BigInt`): no local takes their names, and a function of
+    /// the module of such a name is called by its inner function's name.
+    pub fn new(names: std::collections::BTreeMap<String, String>) -> Hide {
+        HIDDEN.with(|h| *h.borrow_mut() = names);
+        Hide
+    }
+}
+
+impl Drop for Hide {
+    fn drop(&mut self) {
+        HIDDEN.with(|h| h.borrow_mut().clear());
+    }
+}
+
+/// How the code reaches the builtin `name` where a name of the module hides it; None where none does.
+fn reach(name: &str) -> Option<String> {
+    HIDDEN.with(|h| h.borrow().get(name).cloned())
+}
+
+/// The function a call names, written: a builtin a name of the module hides, as the code reaches it
+/// ([`reach`]).
+fn callee(f: &Ex, t: Target) -> String {
+    match f {
+        Ex::Atom(n) if matches!(t, Target::Python | Target::TypeScript) => reach(n).unwrap_or_else(|| n.clone()),
+        _ => expr(f, t, PRIMARY),
+    }
+}
+
 fn expr_bare(x: &Ex, t: Target) -> String {
     match x {
         Ex::Atom(s) => s.clone(),
-        Ex::Call(f, args) => format!("{}({})", expr(f, t, PRIMARY), args.iter().map(|a| expr(a, t, 0)).collect::<Vec<_>>().join(", ")),
+        Ex::Call(f, args) => format!("{}({})", callee(f, t), args.iter().map(|a| expr(a, t, 0)).collect::<Vec<_>>().join(", ")),
         // an argument with no keyword goes by its place: the order a generic function is given first
         // (DESIGN 26.7)
         Ex::CallKw(f, args) => format!(
             "{}({})",
-            expr(f, t, PRIMARY),
+            callee(f, t),
             args.iter().map(|(k, a)| if k.is_empty() { expr(a, t, 0) } else { format!("{k}={}", expr(a, t, 0)) }).collect::<Vec<_>>().join(", ")
         ),
         Ex::Bin(op, a, b) => {
@@ -253,7 +294,16 @@ fn expr_bare(x: &Ex, t: Target) -> String {
             // `- -x` would read as a decrement in TypeScript
             if inner.starts_with('-') { format!("-({inner})") } else { format!("-{inner}") }
         }
-        Ex::Ref(a) => format!("&{}", expr(a, t, UNARY)),
+        // a list written out and lent at once is a slice of an array: no `Vec` is made for it
+        // (clippy's `useless_vec`); one value cloned into it is the slice of that value, lent
+        // (`cloned_ref_to_slice_refs`)
+        Ex::Ref(a) => match &**a {
+            Ex::List(_, xs) if t == Target::Rust && !xs.is_empty() => match xs.as_slice() {
+                [one] if cloned(one).is_some() => format!("std::slice::from_ref(&{})", expr(cloned(one).unwrap_or(one), t, UNARY)),
+                _ => format!("&[{}]", xs.iter().map(|x| expr(x, t, 0)).collect::<Vec<_>>().join(", ")),
+            },
+            _ => format!("&{}", expr(a, t, UNARY)),
+        },
         Ex::Try(a) => format!("{}?", expr(a, t, PRIMARY)),
         Ex::Not(a) => match t {
             Target::Python => format!("not {}", expr(a, t, 3)),
@@ -300,10 +350,22 @@ fn expr_bare(x: &Ex, t: Target) -> String {
         Ex::Cast(a, ty) => match t {
             Target::TypeScript => format!("{} as {ty}", expr(a, t, UNARY)),
             Target::Rust => format!("{} as {ty}", expr(a, t, UNARY)),
+            Target::Python => format!("{}({})", reach(ty).unwrap_or_else(|| ty.clone()), expr(a, t, 0)),
             _ => format!("{ty}({})", expr(a, t, 0)),
         },
         Ex::Deref(a) if t == Target::Rust => format!("*{}", expr(a, t, UNARY)),
         Ex::Deref(a) => expr(a, t, PRIMARY),
+    }
+}
+
+/// The value `x.clone()` clones: `x`. None for any other expression.
+fn cloned(x: &Ex) -> Option<&Ex> {
+    match x {
+        Ex::Call(f, args) if args.is_empty() => match &**f {
+            Ex::Dot(of, m) if m == "clone" => Some(of),
+            _ => None,
+        },
+        _ => None,
     }
 }
 

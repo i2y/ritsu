@@ -1,0 +1,8 @@
+error[E042]: The contribution's input subtotal differs from the rule's in type or range
+  --> contrib/remote_island.rule:6
+  |
+6 |   subtotal : money[JPY]  range >=0JPY <=50_000JPY
+  |   ^^^^^^^^ money[JPY] >=0JPY <=50_000JPY
+  |
+ An input of the same name is the same input, and the rule declares it `money[円] >=0円 <=100_000円`. The caller passes one value, so make the type and the range the rule's, or give the input another name.
+

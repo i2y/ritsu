@@ -1,11 +1,13 @@
 //! `yuen affected` (DESIGN 8): what a diff touches, and who is to look at it. The diff's files
 //! are taken one by one, from the root: a `.req` (the requirements whose blocks it changes), a
 //! copy of a source (the requirements that cite the article, and the rules and calendars that
-//! pin it), a file the links name (the requirements that name something in it), code (geas
-//! answers which claims the change touches, through ritsu's port of claims, from the records of
-//! the lines each claim ran, and yuen follows the claims to the requirements that name them), a
-//! delta spec of an OpenSpec change not yet archived (what it does to the requirements of a spec
-//! the project pins, DESIGN 20.5), and the rest. Each requirement touched is said once, with its owner, where it comes from and the
+//! pin it), a file the links name (the requirements that name something in it), a file such a
+//! file reads, through every level (the requirements that name something in the file that reads
+//! it, `reads.rs`), code (geas answers which claims the change touches, through ritsu's port of
+//! claims, from the records of the lines each claim ran, and yuen follows the claims to the
+//! requirements that name them; and a spec's contract), a delta spec of an OpenSpec change not
+//! yet archived (what it does to the requirements of a spec the project pins, DESIGN 20.5), and
+//! the rest. Each requirement touched is said once, with its owner, where it comes from and the
 //! last decision on it. Nothing is run and nothing is written.
 
 use crate::ast::{FromWhat, Side};
@@ -68,6 +70,8 @@ struct Spec {
     unclaimed: Vec<(Untouched, Vec<Reach>)>,
     deleted: Vec<(String, bool)>,
     spec_changed: Vec<Reach>,
+    /// The files of the spec's contracts the diff changes, and the requirements that name the spec.
+    contract_changed: Vec<(String, Vec<Reach>)>,
     baseline: bool,
     refused: Option<Vec<Said>>,
 }
@@ -76,6 +80,13 @@ struct Spec {
 struct Named {
     file: Name,
     reqs: Vec<Reach>,
+}
+
+/// A file the diff changes that the files the links name read: each such file that reads it, the
+/// way down to it, and the requirements that name something in that file.
+struct ReadFile {
+    file: String,
+    by: Vec<(Name, Vec<crate::reads::Step>, Vec<Reach>)>,
 }
 
 /// A change no requirement reaches: lines no claim runs, in a file no link names; or a file in a
@@ -92,6 +103,7 @@ struct Answer {
     proposed: Vec<Proposed>,
     specs: Vec<Spec>,
     named: Vec<Named>,
+    read: Vec<ReadFile>,
     unreached: Vec<Unreached>,
     others: Vec<String>,
 }
@@ -99,6 +111,32 @@ struct Answer {
 impl Answer {
     /// Every requirement touched, in the order of the project.
     fn touched(&self) -> BTreeSet<usize> {
+        let mut out = self.reached_by_name();
+        out.extend(self.reached_by_reads());
+        out
+    }
+
+    /// The requirements touched only through the files the files they name read: none of what they
+    /// name, nor their own words, changed.
+    fn only_read(&self) -> BTreeSet<usize> {
+        let named = self.reached_by_name();
+        self.reached_by_reads().into_iter().filter(|r| !named.contains(r)).collect()
+    }
+
+    /// The requirements touched through the files the linked files read.
+    fn reached_by_reads(&self) -> BTreeSet<usize> {
+        let mut out = BTreeSet::new();
+        for f in &self.read {
+            for (_, _, reqs) in &f.by {
+                out.extend(reqs.iter().map(|(r, _)| *r));
+            }
+        }
+        out
+    }
+
+    /// The requirements touched through what they are or name: their `.req`, a copy they cite, a
+    /// proposed change, a spec, a linked file.
+    fn reached_by_name(&self) -> BTreeSet<usize> {
         let mut out = BTreeSet::new();
         for f in &self.req_files {
             out.extend(f.reqs.iter().map(|(r, _)| *r));
@@ -116,6 +154,9 @@ impl Answer {
                 out.extend(c.reqs.iter().map(|(r, _)| *r));
             }
             out.extend(s.spec_changed.iter().map(|(r, _)| *r));
+            for (_, reqs) in &s.contract_changed {
+                out.extend(reqs.iter().map(|(r, _)| *r));
+            }
             for (_, reqs) in &s.unclaimed {
                 out.extend(reqs.iter().map(|(r, _)| *r));
             }
@@ -141,27 +182,26 @@ impl Answer {
     }
 }
 
+/// What stops the command, in the words of every command of ritsu (ritsu's DESIGN 6.2, item 10).
 fn refuse(w: &mut dyn Write, msg: Text, lang: Lang) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    let _ = writeln!(w, "{head}: {}", msg.get(lang));
-    2
+    ritsu_base::cli::refuse(w, &msg, lang)
 }
 
 /// `yuen affected <path>... --diff <file|-> [--map <spec.geas>=<record>]... [--format json]`.
 pub fn command(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let Some(diff_arg) = a.get("--diff") else {
-        return refuse(err, tr!("`yuen affected` には差分 `--diff <file|->` が要ります", "`yuen affected` needs a diff: `--diff <file|->`"), lang);
+        return refuse(err, crate::cli::table().needs_of("affected", "--diff <file|->"), lang);
     };
     let (diff_shown, bytes) = if diff_arg == "-" {
         let mut b = Vec::new();
         if let Err(e) = std::io::stdin().read_to_end(&mut b) {
-            return refuse(err, tr!("標準入力を読めません: {e}", "Cannot read standard input: {e}"), lang);
+            return refuse(err, ritsu_base::cli::cannot_read_stdin(&e), lang);
         }
         ("<stdin>".to_string(), b)
     } else {
         match ritsu_base::fs::read(diff_arg) {
             Ok(b) => (diff_arg.to_string(), b),
-            Err(e) => return refuse(err, tr!("`{diff_arg}` を読めません: {e}", "Cannot read `{diff_arg}`: {e}"), lang),
+            Err(e) => return refuse(err, ritsu_base::cli::cannot_read(diff_arg, &e), lang),
         }
     };
     let files = match udiff::parse(&bytes) {
@@ -176,8 +216,9 @@ pub fn command(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &m
         let Some((spec, record)) = m.split_once('=') else {
             return refuse(err, tr!("`--map {m}` は `<spec.geas>=<記録>` の形ではありません", "`--map {m}` is not `<spec.geas>=<record>`"), lang);
         };
-        let Ok(abs) = ritsu_base::fs::canonicalize(spec) else {
-            return refuse(err, tr!("`--map` の spec `{spec}` がありません", "The spec `{spec}` of `--map` is not there"), lang);
+        let abs = match ritsu_base::fs::canonicalize(spec) {
+            Ok(abs) => abs,
+            Err(e) => return refuse(err, ritsu_base::cli::cannot_read(spec, &e), lang),
         };
         maps.push((abs, record.to_string()));
     }
@@ -541,9 +582,15 @@ fn answer(c: &Checked, files: &[FileDiff], moved: &[String], bytes: &[u8], diff_
                     consumed.insert(d.clone());
                 }
                 let spec_changed = if aff.spec_changed.is_empty() { vec![] } else { of_spec(None) };
-                specs.push(Spec { spec: spec_name, records: aff.records.clone(), claims, unclaimed, deleted: aff.deleted.clone(), spec_changed, baseline: aff.baseline_changed, refused: None });
+                // a contract the spec reads: what every claim of it is held to
+                let mut contract_changed = Vec::new();
+                for f in &aff.contract_changed {
+                    consumed.insert(f.clone());
+                    contract_changed.push((f.clone(), of_spec(None)));
+                }
+                specs.push(Spec { spec: spec_name, records: aff.records.clone(), claims, unclaimed, deleted: aff.deleted.clone(), spec_changed, contract_changed, baseline: aff.baseline_changed, refused: None });
             }
-            Err(said) => specs.push(Spec { spec: spec_name, records: vec![], claims: vec![], unclaimed: vec![], deleted: vec![], spec_changed: vec![], baseline: false, refused: Some(said) }),
+            Err(said) => specs.push(Spec { spec: spec_name, records: vec![], claims: vec![], unclaimed: vec![], deleted: vec![], spec_changed: vec![], contract_changed: vec![], baseline: false, refused: Some(said) }),
         }
     }
 
@@ -571,6 +618,43 @@ fn answer(c: &Checked, files: &[FileDiff], moved: &[String], bytes: &[u8], diff_
         }
     }
 
+    // 3b. the files the files the links name read, through every level (a spec's contracts are
+    // geas's to answer, in 4), in the project of the root as whoever joins the languages reads it
+    if let Some(at_root) = &p.suite.at_root {
+        at_root(&p.root);
+    }
+    let reads = crate::reads::Reads::default();
+    let mut linked: Vec<(Name, Vec<Vec<crate::reads::Step>>)> = Vec::new();
+    for (n, _, _) in &named_links {
+        let file = Name { tool: n.tool, path: n.path.clone(), items: vec![] };
+        if n.tool != Tool::Geas && !linked.iter().any(|(x, _)| *x == file) {
+            let ways = reads.closure(p, &file);
+            linked.push((file, ways));
+        }
+    }
+    let mut read: Vec<ReadFile> = Vec::new();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    for path in files.iter().flat_map(paths_of).chain(moved.iter().cloned()) {
+        if !seen.insert(path.clone()) {
+            continue;
+        }
+        let mut by = Vec::new();
+        for (file, ways) in &linked {
+            let Some(way) = ways.iter().find(|w| w.last().is_some_and(|s| crate::reads::reaches(&s.read, &path))) else { continue };
+            let mut reqs = Vec::new();
+            for (n, r, side) in &named_links {
+                if n.tool == file.tool && n.path == file.path {
+                    push(&mut reqs, (*r, Some(*side)));
+                }
+            }
+            by.push((file.clone(), way.clone(), reqs));
+        }
+        if !by.is_empty() {
+            consumed.insert(path.clone());
+            read.push(ReadFile { file: path, by });
+        }
+    }
+
     // what no requirement reaches: lines no claim runs in a file no link names, and files of a
     // scope no requirement leads to
     let mut unreached = Vec::new();
@@ -587,7 +671,7 @@ fn answer(c: &Checked, files: &[FileDiff], moved: &[String], bytes: &[u8], diff_
                 if s.artifacts.iter().any(|a| a.path == path) {
                     consumed.insert(path.clone());
                 }
-                if s.untraced.iter().any(|a| a.path == path) && named_file(&path).is_empty() && !unreached.iter().any(|u| matches!(u, Unreached::Untraced { file, .. } if *file == path)) {
+                if s.untraced.iter().any(|a| a.path == path) && named_file(&path).is_empty() && !read.iter().any(|x| x.file == path) && !unreached.iter().any(|u| matches!(u, Unreached::Untraced { file, .. } if *file == path)) {
                     unreached.push(Unreached::Untraced { file: path.clone(), scope: s.text.clone() });
                 }
             }
@@ -602,7 +686,7 @@ fn answer(c: &Checked, files: &[FileDiff], moved: &[String], bytes: &[u8], diff_
             others.push(path);
         }
     }
-    Ok(Answer { diff_shown: diff_shown.to_string(), req_files, copies, proposed, specs, named, unreached, others })
+    Ok(Answer { diff_shown: diff_shown.to_string(), req_files, copies, proposed, specs, named, read, unreached, others })
 }
 
 // ── For a person ──────────────────────────────────────────────────────────
@@ -764,7 +848,7 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
             lines.push(tr!("  記録が変更に合わないので、この spec のコードから主張に辿れません", "  the records do not fit the change, so the code of this spec reaches no claim"));
             continue;
         }
-        if s.claims.is_empty() && s.unclaimed.is_empty() && s.spec_changed.is_empty() {
+        if s.claims.is_empty() && s.unclaimed.is_empty() && s.spec_changed.is_empty() && s.contract_changed.is_empty() {
             lines.push(tr!("  なし", "  none"));
         }
         for c in &s.claims {
@@ -778,6 +862,10 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
         if !s.spec_changed.is_empty() {
             let who = reach_text(p, &s.spec_changed);
             lines.push(tr!("  spec そのものが変わります（{}）", "  the spec itself changes: {}", who.ja; who.en));
+        }
+        for (f, reqs) in &s.contract_changed {
+            let (file, who) = (p.shown(f), reach_text(p, reqs));
+            lines.push(tr!("  spec の契約 {file} が変わります（{}）", "  the spec's contract {file} changes: {}", who.ja; who.en));
         }
         for (u, reqs) in &s.unclaimed {
             let file = p.shown(&u.file);
@@ -804,6 +892,17 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
             let t = n.file.text();
             let who = reach_text(p, &n.reqs);
             lines.push(tr!("  {t}: {}", "  {t}: {}", who.ja; who.en));
+        }
+    }
+    if !a.read.is_empty() {
+        lines.push(tr!("要件が指すファイルが読むファイルで、差分が触るもの:", "files read by the files that requirements name, that the diff touches:"));
+        for f in &a.read {
+            let shown = p.shown(&f.file);
+            lines.push(tr!("  {shown}", "  {shown}"));
+            for (_, way, reqs) in &f.by {
+                let (w, who) = (way_text(way), reach_text(p, reqs));
+                lines.push(tr!("    {}: {}", "    {}: {}", w.ja, who.ja; w.en, who.en));
+            }
         }
     }
     if a.unreached.is_empty() {
@@ -854,6 +953,23 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
         out.push('\n');
     }
     out
+}
+
+/// The way down from a file the links name to a file it reads, a step at a time: the file that
+/// reads, the line that names what it reads, and how (`ringi "leave.ringi" line 5 (use route) ->
+/// ringi "routes/standard.ringi" line 4 (use calendar)`).
+fn way_text(way: &[crate::reads::Step]) -> Text {
+    let (mut ja, mut en) = (Vec::new(), Vec::new());
+    for s in way {
+        let (reader, how) = (s.reader.text(), &s.how);
+        let t = match s.line {
+            Some(l) => tr!("{reader} の {l} 行目（{how}）", "{reader} line {l} ({how})"),
+            None => tr!("{reader}（{how}）", "{reader} ({how})"),
+        };
+        ja.push(t.ja);
+        en.push(t.en);
+    }
+    tr!("{}", "{}", ja.join(" -> "); en.join(" -> "))
 }
 
 fn unclaimed_why(why: &str) -> Text {
@@ -939,6 +1055,7 @@ fn said_json(p: &Project, s: &Said) -> Value {
 
 fn to_json(p: &Project, a: &Answer) -> Value {
     let touched = a.touched();
+    let only_read = a.only_read();
     json!({
         "diff": a.diff_shown,
         "root": p.root_shown,
@@ -974,12 +1091,26 @@ fn to_json(p: &Project, a: &Answer) -> Value {
                 "requirements": reach_json(p, &c.reqs),
             })).collect::<Vec<_>>(),
             "spec_changed": reach_json(p, &s.spec_changed),
+            "contract_changed": s.contract_changed.iter().map(|(f, reqs)| json!({"file": f, "requirements": reach_json(p, reqs)})).collect::<Vec<_>>(),
             "unclaimed": s.unclaimed.iter().map(|(u, reqs)| json!({"file": u.file, "side": u.side, "lines": u.lines, "why": u.why, "requirements": reach_json(p, reqs)})).collect::<Vec<_>>(),
             "deleted": s.deleted.iter().map(|(d, known)| json!({"file": d, "recorded": known})).collect::<Vec<_>>(),
             "baseline_changed": s.baseline,
             "refused": s.refused.as_ref().map(|said| said.iter().map(|x| said_json(p, x)).collect::<Vec<_>>()),
         })).collect::<Vec<_>>(),
         "files": a.named.iter().map(|n| json!({"artifact": crate::diag::value(&n.file.to_json()), "requirements": reach_json(p, &n.reqs)})).collect::<Vec<_>>(),
+        "reads": a.read.iter().map(|f| json!({
+            "file": f.file,
+            "read_by": f.by.iter().map(|(file, way, reqs)| json!({
+                "artifact": crate::diag::value(&file.to_json()),
+                "way": way.iter().map(|s| json!({
+                    "reader": crate::diag::value(&s.reader.to_json()),
+                    "line": s.line,
+                    "how": s.how,
+                    "read": crate::diag::value(&s.read.to_json()),
+                })).collect::<Vec<_>>(),
+                "requirements": reach_json(p, reqs),
+            })).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
         "unreached": a.unreached.iter().map(|u| match u {
             Unreached::Unclaimed { file, side, lines, why } => json!({"file": file, "why": "unclaimed", "side": side, "lines": lines, "detail": why, "scope": null}),
             Unreached::Untraced { file, scope } => json!({"file": file, "why": "untraced", "side": null, "lines": null, "detail": null, "scope": scope}),
@@ -996,6 +1127,7 @@ fn to_json(p: &Project, a: &Answer) -> Value {
                 "owner": d.owner.as_ref().map(|o| o.0.clone()),
                 "from": from_labels(p, *r),
                 "decided": last.map(|dc| json!({"date": dc.date.to_string(), "by": dc.by.0, "why": dc.why})),
+                "only_through_reads": only_read.contains(r),
             })
         }).collect::<Vec<_>>(),
         "owners": owners(p, &touched),

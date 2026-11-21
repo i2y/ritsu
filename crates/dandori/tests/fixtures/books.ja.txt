@@ -1,10 +1,10 @@
 エラー[E005]: tests/fixtures/books.flow:6:10: 帳簿 `books/無い.book` を読めませんでした
      6 | use book 無い from "books/無い.book"
-  = `books/無い.book` を読めません: No such file or directory (os error 2)
+  = `tests/fixtures/books/無い.book` がありません
 エラー[E005]: tests/fixtures/books.flow:7:10: 帳簿 `books/壊れた.book` を読めませんでした
      7 | use book 壊れた from "books/壊れた.book"
-  = E020: 勘定 `棚` に境界がありません。`at least` か `at most` を書いてください。外の世界を表す勘定なら `outside` を付けてください（books/壊れた.book の 6 行目）
-  = E002: 勘定 `倉` が宣言されていません（books/壊れた.book の 11 行目）
+  = E020: 勘定 `棚` に境界がありません。`at least` か `at most` を書いてください。外の世界を表す勘定なら `outside` を付けてください（tests/fixtures/books/壊れた.book の 6 行目）
+  = E002: 勘定 `倉` が宣言されていません（tests/fixtures/books/壊れた.book の 11 行目）
 エラー[E006]: tests/fixtures/books.flow:8:10: `倉庫` が二度読み込まれています（規則と日付のファイルと帳簿は名前を共有します）
      8 | use book 倉庫 from "../flows/books/倉庫.book"
 エラー[E002]: tests/fixtures/books.flow:19:8: 帳簿 `棚卸し` はありません。`use book` で読んだものを書いてください

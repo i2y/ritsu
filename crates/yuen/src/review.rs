@@ -174,7 +174,7 @@ pub fn review(args: &[String], root: Option<&str>, c: &Choice, by: &str, date: O
 /// [`review`], reading what another language holds through the ports `suite` joins.
 pub fn review_with(args: &[String], root: Option<&str>, c: &Choice, by: &str, date: Option<&str>, suite: crate::suite::Suite) -> Result<Outcome, Refusal> {
     if c.at.is_empty() && c.requirements.is_empty() && !c.all {
-        return Err(Refusal(tr!("何を確かめたかを `--at`、`--requirement`、`--all` のどれかで選んでください", "Choose what was looked at with `--at`, `--requirement` or `--all`")));
+        return Err(Refusal(crate::cli::table().needs_any("review", &["--at", "--requirement", "--all"])));
     }
     let date = match date {
         Some(d) => Day::parse(d).ok_or_else(|| Refusal(tr!("`--date {d}` は日付（`2026-10-04` の形）ではありません", "`--date {d}` is not a date (`2026-10-04`)")))?,
@@ -240,19 +240,16 @@ pub fn review_with(args: &[String], root: Option<&str>, c: &Choice, by: &str, da
         let f = &p.files[fi];
         wrote += es.len();
         let new = apply(&f.src, es);
-        std::fs::write(&f.abs, new).map_err(|e| {
-            let d = &f.display;
-            Refusal(tr!("`{d}` を書けません: {e}", "Cannot write `{d}`: {e}"))
-        })?;
+        ritsu_base::fs::write(&f.abs, new).map_err(|e| Refusal(ritsu_base::cli::cannot_write(&f.display, &e)))?;
     }
     let mut dirs: BTreeSet<PathBuf> = BTreeSet::new();
     for (fi, items) in keep {
         let dir = p.files[fi].abs.parent().unwrap().join("reviewed");
-        std::fs::create_dir_all(&dir).map_err(|e| Refusal(tr!("reviewed/ を作れません: {e}", "Cannot make reviewed/: {e}")))?;
+        ritsu_base::fs::create_dir_all(&dir).map_err(|e| Refusal(ritsu_base::cli::cannot_create(&ritsu_base::paths::show(&dir), &e)))?;
         for (h, b) in items {
             let path = dir.join(&h);
             if !path.exists() {
-                std::fs::write(&path, &b).map_err(|e| Refusal(tr!("reviewed/{h} を書けません: {e}", "Cannot write reviewed/{h}: {e}")))?;
+                ritsu_base::fs::write(&path, &b).map_err(|e| Refusal(ritsu_base::cli::cannot_write(&ritsu_base::paths::show(&path), &e)))?;
             }
         }
         dirs.insert(dir);

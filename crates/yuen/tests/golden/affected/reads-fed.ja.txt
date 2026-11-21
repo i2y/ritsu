@@ -1,0 +1,4 @@
+差分: tests/fixtures/reads/changes/fed.ja.diff
+どの要件にも届かない変更: なし
+要件に関わらないファイル: tests/fixtures/reads/rules/counter.ja.rule
+触る要件はありません

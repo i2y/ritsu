@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=33JPY
+  # 3% of 33 yen at the most is 0.99 yen, and rounded down it is 0 yen
+  fee    : money[JPY] "Fee" = amount * 3%  round down(1JPY)  range >0JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

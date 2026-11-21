@@ -1,0 +1,7 @@
+warning[W105]: tests/spellings/proto_type_name.flow:16:31: The type `shop_Line` and the type `shop.Line` are one name in the code of TypeScript, Python and Go
+    16 | task find_line(id: string) -> shop.Line
+  = TypeScript (`--target temporal-typescript`, `--target durable`): both are `shop_Line` in `types.ts`: a name cannot be declared twice, so the module does not type-check (`Duplicate identifier`).
+  = Python (`--target temporal-python`, `--target pydantic-graph`): both are `shop_Line` in `types.py`: the later declaration takes the place of the earlier, so what reads the earlier reads the later (`mypy --strict` says `already defined`).
+  = Go (`--target temporal-go`): both are `IsShopLine`: a name cannot be declared twice, so the package does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/proto_type_name.flow: ok (1 warning(s))

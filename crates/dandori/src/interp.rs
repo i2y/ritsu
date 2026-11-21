@@ -48,22 +48,19 @@ enum Ctl {
 /// of what comes back. Time is told as it goes by, for a book whose holds expire.
 pub trait Answers {
     /// The answer to one try of this call, when this side takes the call; None for one the scenario
-    /// answers. Err stops the run: the call cannot be answered at all.
-    fn answer(&mut self, m: &Model, view: View, callee: &Callee, args: &Map<String, Value>) -> Option<Result<Value, String>>;
+    /// answers. Err stops the run: the call cannot be answered at all, and why, in both languages.
+    fn answer(&mut self, m: &Model, view: View, callee: &Callee, args: &Map<String, Value>) -> Option<Result<Value, ritsu_base::text::Text>>;
 
     /// The scenario answered a try of a call this side does not take.
     fn scripted(&mut self, _m: &Model, _callee: &Callee, _args: &Map<String, Value>, _answer: &Value) {}
 
-    /// Time goes by: so many seconds of a `wait`, of the wait before a retry, or of a call that timed
-    /// out (its timeout).
-    fn pass(&mut self, _seconds: f64, _why: Passing) {}
+    /// Time went by on the run's clock: so many seconds, why, the moment a `wait until` or a `timeout
+    /// until` was given, and the moment after, in milliseconds since 1970-01-01 in UTC.
+    fn pass(&mut self, _seconds: f64, _why: Passing, _until: Option<&str>, _after_ms: i64) {}
 
-    /// The run waits until this moment, as `wait until` is given it.
-    fn wait_until(&mut self, _at: &Value) {}
-
-    /// A call of an `event` or a `callback` task with `timeout until` timed out: its wait for the
-    /// answer ended at this moment, rounded up to the second, and a second after it began at the least.
-    fn timeout_until(&mut self, _at: &Value) {}
+    /// The run stops because the scenario cannot be run as it is written (a moment of its `now` that
+    /// is not a time, or that comes before the run's clock): what to say of it.
+    fn cannot_run(&mut self, _why: &ritsu_base::text::Text) {}
 }
 
 /// Why time goes by in a run.
@@ -72,6 +69,143 @@ pub enum Passing {
     Wait,
     Retry,
     Timeout,
+    /// a statement read `now` at a later moment the scenario gives it (its `now`, a list)
+    Now,
+}
+
+/// The clock a run reads `now` from (DESIGN 5 and 20). A run starts at the first moment of the
+/// scenario's `now`; each statement that reads `now` reads it once, and the k-th one after the start
+/// reads the moment k+1 of the list when there is one, else the clock. The clock starts at the first
+/// moment, and is set to each moment of the list that is read. A clock that moves also goes on by
+/// each `wait` (to the moment of a `wait until`), each wait before a retry and each timeout, as time
+/// goes on where the workflow runs; a moment of the list before it is one the run cannot read, for
+/// time does not go back. A clock that does not move is the one the runners give the platforms
+/// (their waits made short): the start reads the first moment, and every `now` after it the second,
+/// or the first when there is one.
+#[derive(Clone, Debug)]
+pub struct Clock {
+    /// the moments the scenario's `now` gives, the start's first
+    given: Vec<String>,
+    moves: bool,
+    /// how many times `now` was read after the start
+    reads: usize,
+    /// what `now` reads off the clock: a moment of the scenario's as it is written, until the
+    /// clock moves on from it, and then the moment it shows, to the second
+    shown: String,
+    /// the moment the clock shows, in milliseconds since 1970-01-01 in UTC (a clock that moves)
+    at_ms: i64,
+}
+
+impl Clock {
+    /// The clock of a run of the scenario: one that moves, or one that does not. A clock that moves
+    /// reads moments only: a `now` that is not a time is said.
+    pub fn of(sc: &Value, moves: bool) -> Result<Clock, ritsu_base::text::Text> {
+        let read = |x: &Value| x.as_str().unwrap_or(render::SCENARIO_NOW).to_string();
+        let given: Vec<String> = match &sc["now"] {
+            Value::Array(v) if !v.is_empty() => v.iter().map(read).collect(),
+            Value::Array(_) => vec![render::SCENARIO_NOW.to_string()],
+            v => vec![read(v)],
+        };
+        let mut at_ms = 0;
+        if moves {
+            for g in &given {
+                if crate::computed::moment_ms(g).is_none() {
+                    return Err(ritsu_base::tr!(
+                        "シナリオの `now` の `{g}` は時刻（`2026-03-31T15:30:00Z` の形）ではありません",
+                        "the scenario's `now`, `{g}`, is not a time (`2026-03-31T15:30:00Z`)"
+                    ));
+                }
+            }
+            at_ms = crate::computed::moment_ms(&given[0]).unwrap_or_default();
+        }
+        let shown = given[0].clone();
+        Ok(Clock { given, moves, reads: 0, shown, at_ms })
+    }
+
+    /// The moment the run starts at.
+    pub fn start(&self) -> &str {
+        &self.given[0]
+    }
+
+    /// What `now` reads after the start before any statement reads it: the moment every `now` after
+    /// the start reads on a clock that does not move.
+    pub fn later(&self) -> &str {
+        self.given.get(1).unwrap_or(&self.given[0])
+    }
+
+    /// Whether the clock moves on as time goes by.
+    pub fn moves(&self) -> bool {
+        self.moves
+    }
+
+    /// The moment the clock shows, in milliseconds since 1970-01-01 in UTC (a clock that moves).
+    pub fn at_ms(&self) -> i64 {
+        self.at_ms
+    }
+
+    /// The moments the scenario gives `now`, the start's first.
+    pub fn given(&self) -> &[String] {
+        &self.given
+    }
+
+    /// One more moment for the scenario's `now`, read by the next statement that reads it after the
+    /// ones given (what a scenario generator gives a run that leaves the period it runs in).
+    pub fn give(&mut self, moment: String) {
+        self.given.push(moment);
+    }
+
+    /// The next statement that reads `now` reads it: the moment, and how long the clock went on to
+    /// it, for a moment of the scenario's later than a clock that moves. Err for one before it.
+    pub fn read(&mut self) -> Result<(String, f64), ritsu_base::text::Text> {
+        self.reads += 1;
+        match self.given.get(self.reads).cloned() {
+            Some(g) if self.moves => {
+                let ms = crate::computed::moment_ms(&g).unwrap_or_default();
+                if ms < self.at_ms {
+                    let (k, clock) = (self.reads + 1, crate::computed::moment_text(self.at_ms));
+                    return Err(ritsu_base::tr!(
+                        "シナリオの `now` の {k} 番目の時刻 `{g}` は、それを読む文が走る時刻 {clock} より前です。時間は戻らないので、この実行はその時刻を読めません",
+                        "moment {k} of the scenario's `now`, `{g}`, comes before {clock}, when the statement that reads it runs: time does not go back, so the run cannot read it"
+                    ));
+                }
+                let moved = (ms - self.at_ms) as f64 / 1000.0;
+                self.at_ms = ms;
+                self.shown = g.clone();
+                Ok((g, moved))
+            }
+            Some(g) => {
+                self.shown = g.clone();
+                Ok((g, 0.0))
+            }
+            None => Ok((self.shown.clone(), 0.0)),
+        }
+    }
+
+    /// Let so many seconds go by: the moment after, in milliseconds, on a clock that moves; None on
+    /// one that does not.
+    pub fn go(&mut self, seconds: f64) -> Option<i64> {
+        if !self.moves {
+            return None;
+        }
+        let ms = (seconds * 1000.0).round().max(0.0) as i64;
+        if ms > 0 {
+            self.at_ms += ms;
+            self.shown = crate::computed::moment_text(self.at_ms - self.at_ms.rem_euclid(1000));
+        }
+        Some(self.at_ms)
+    }
+
+    /// How long a `wait until` the moment `at` waits: none for a moment that has come already, or for
+    /// a value that is not a time (the check holds `wait until` to timestamps).
+    pub fn until(&self, at: &str) -> Option<f64> {
+        crate::computed::moment_ms(at).map(|t| (t - self.at_ms).max(0) as f64 / 1000.0)
+    }
+
+    /// How long the wait of a `timeout until` the moment `at` lasts before it times out: to the
+    /// moment, rounded up to the second, and a second at the least (DESIGN 16).
+    pub fn timeout_until(&self, at: &str) -> Option<f64> {
+        crate::computed::moment_ms(at).map(|t| ((t - self.at_ms) as f64 / 1000.0).ceil().max(1.0))
+    }
 }
 
 struct Run<'a> {
@@ -90,7 +224,8 @@ struct Run<'a> {
     /// a cancellation stopped the run; `on cancel` has not run yet
     cancelled: bool,
     in_on_cancel: bool,
-    error: Option<String>,
+    /// why the run stopped before its end
+    error: Option<ritsu_base::text::Text>,
     /// how many `for … in parallel` rounds are running around the current statement
     par_depth: usize,
     /// how the current parallel round failed, kept until every round is done
@@ -99,6 +234,8 @@ struct Run<'a> {
     callees: Vec<CallInfo>,
     /// what the run went through, in order
     visits: Vec<Visit>,
+    /// what `now` reads
+    clock: Clock,
 }
 
 /// One thing a run went through, for `doc` to draw the run on the flow.
@@ -118,6 +255,19 @@ pub enum Visit {
     Round(usize, u64),
     /// a loop runs out of rounds or of items, without a `break`
     Done(usize),
+    /// a loop is left by a `break` in a round of its own
+    Broke(usize),
+    /// a loop's list has more items than it takes: the run fails there
+    TooMany(usize),
+    /// a round of a parallel loop fails (a task's error nothing in it took, or a deliberate end), by
+    /// the loop's site and the round's place
+    RoundFailed(usize, u64),
+    /// a check of a rule's precondition: whether the values keep it
+    Check(usize, bool),
+    /// an answer that came back fails its checks: it does not have the declared shape
+    /// (`Dandori.BadResponse`), or a case's state the machine does not lead to there
+    /// (`Dandori.UnexpectedState`)
+    Bad(usize),
     OnFailure,
     OnCancel,
     /// the flow runs to its end, and so do `on failure` and `on cancel`
@@ -151,30 +301,124 @@ struct CallError {
     cause: String,
 }
 
+/// The run on a clock that does not move, as the runners run the platforms: what the platforms'
+/// runs are held to (`run_traced`, `run_visits` and `cases_at_end` too). `dandori run` runs a
+/// scenario on a clock that moves (`run_moving`).
 pub fn run(m: &Model, sc: &Value, view: View) -> Result<Value, String> {
     run_traced(m, sc, view).map(|(v, _)| v)
 }
 
+// The runs on a clock that does not move are what the platforms' runs are held to, and say why
+// they stop in English; the runs on a clock that moves are the commands' (`dandori run`, `ritsu
+// run`, the walk of `dandori scenarios`), and say it in both languages.
+
 /// The run, and for every answer the calls took, which task took it and how it came out.
 pub fn run_traced(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>), String> {
-    run_all(m, sc, view, None).map(|r| (r.trace, r.callees))
+    run_all(m, sc, view, None, false).map(|r| (r.trace, r.callees)).map_err(|e| e.en)
 }
 
-/// The run, with the calls `answers` takes answered by it and the others by the scenario, in order;
-/// and for every answer the calls took, which task took it and how it came out.
-pub fn run_answered(m: &Model, sc: &Value, view: View, answers: &mut dyn Answers) -> Result<(Value, Vec<CallInfo>), String> {
-    run_all(m, sc, view, Some(answers)).map(|r| (r.trace, r.callees))
+/// The run on a clock that moves, as time goes on where the workflow runs: what `dandori run`
+/// prints, and the answers of the scenario it did not take.
+pub fn run_moving(m: &Model, sc: &Value, view: View) -> Result<(Value, Option<LeftOver>), ritsu_base::text::Text> {
+    run_all(m, sc, view, None, true).map(|r| (r.trace, LeftOver::of(sc, r.used)))
+}
+
+/// A run on a clock that moves, with the calls a side answers answered by it (`run_answered`).
+pub struct Answered {
+    pub trace: Value,
+    /// for every answer the calls took, which task took it and how it came out
+    pub callees: Vec<CallInfo>,
+    /// everything the run went through, in order
+    pub visits: Vec<Visit>,
+    /// the answers of the scenario it did not take
+    pub unused: Option<LeftOver>,
+}
+
+/// The run on a clock that moves, with the calls `answers` takes answered by it and the others by
+/// the scenario, in order.
+pub fn run_answered(m: &Model, sc: &Value, view: View, answers: &mut dyn Answers) -> Result<Answered, ritsu_base::text::Text> {
+    run_all(m, sc, view, Some(answers), true).map(|r| Answered { unused: LeftOver::of(sc, r.used), trace: r.trace, callees: r.callees, visits: r.visits })
+}
+
+/// The run on a clock that moves, with every call answered by the scenario, as `dandori run` runs it
+/// without the ports, and everything it went through.
+pub fn run_moving_visits(m: &Model, sc: &Value, view: View) -> Result<Answered, ritsu_base::text::Text> {
+    run_all(m, sc, view, None, true).map(|r| Answered { unused: LeftOver::of(sc, r.used), trace: r.trace, callees: r.callees, visits: r.visits })
+}
+
+/// The answers of a scenario that a run did not take: the run came to its end with them still in
+/// the list. `ritsu run` and `dandori run` say them, and end with 1 as for a scenario that runs out
+/// of answers (DESIGN 36): an answer left over is a count gone wrong, or a scenario written for
+/// another way through the flow, or for the flow before it changed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LeftOver {
+    /// the place of the first in the scenario's `answers`, counted from 1
+    pub from: usize,
+    pub answers: Vec<Value>,
+}
+
+impl LeftOver {
+    /// The answers of `sc` after the first `used`; None when the run took every one.
+    pub fn of(sc: &Value, used: usize) -> Option<LeftOver> {
+        let all = sc.get("answers")?.as_array()?;
+        (all.len() > used).then(|| LeftOver { from: used + 1, answers: all[used..].to_vec() })
+    }
+
+    /// What `--format json` writes of them.
+    pub fn json(&self) -> Value {
+        json!({ "from": self.from, "count": self.answers.len(), "answers": self.answers })
+    }
+
+    /// What is said of them, a line each: which answers they are, the first three of them cut
+    /// short, and why a run leaves answers; with `computes`, the run computed calls of rules, dates
+    /// or books, which take no answer from the scenario.
+    pub fn said(&self, computes: bool) -> Vec<ritsu_base::text::Text> {
+        use ritsu_base::tr;
+        let n = self.answers.len();
+        let mut shown: Vec<String> = self.answers.iter().take(3).map(|a| short(&serde_json::to_string(a).unwrap_or_default(), 60)).collect();
+        if n > 3 {
+            shown.push("…".into());
+        }
+        let shown = shown.join(", ");
+        let (from, to) = (self.from, self.from + n - 1);
+        let mut lines = vec![if n == 1 {
+            tr!("シナリオの {from} 番目の結果は使われませんでした: {shown}", "the run did not take answer {from} of the scenario: {shown}")
+        } else {
+            tr!("シナリオの {from} 番目から {to} 番目までの {n} 個の結果は使われませんでした: {shown}", "the run did not take answers {from} to {to} of the scenario ({n} of them): {shown}")
+        }];
+        lines.push(tr!(
+            "実行は、その結果を受け取る呼び出しの前に終わりました。シナリオが呼び出しの数を数え違えているか、フローの別の分岐や、変わる前のフローに合わせて書かれているのかもしれません。",
+            "The run came to its end before a call took it: the scenario may count the calls wrong, or be written for another way through the flow, or for the flow before it changed."
+        ));
+        if computes {
+            lines.push(tr!(
+                "実行が計算する規則・日付・帳簿の呼び出しは、シナリオの結果を受け取りません。",
+                "A call of a rule, a date or a book that the run computes takes no answer from the scenario."
+            ));
+        }
+        lines
+    }
+}
+
+/// `s`, cut to `max` characters at the most, with `…` where it is cut.
+fn short(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut t: String = s.chars().take(max - 1).collect();
+    t.push('…');
+    t
 }
 
 /// The run, and everything it went through, in order.
 pub fn run_visits(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<Visit>), String> {
-    run_all(m, sc, view, None).map(|r| (r.trace, r.visits))
+    run_all(m, sc, view, None, false).map(|r| (r.trace, r.visits)).map_err(|e| e.en)
 }
 
 /// Each case's state when the run ends, by the case's name: null for a case the run did not
 /// start. What Temporal's query `dandori.status` says of the cases then.
 pub fn cases_at_end(m: &Model, sc: &Value, view: View) -> Result<Map<String, Value>, String> {
-    let vars = run_all(m, sc, view, None)?.vars;
+    let vars = run_all(m, sc, view, None, false).map_err(|e| e.en)?.vars;
     Ok(m.cases
         .iter()
         .map(|c| {
@@ -189,10 +433,21 @@ struct Ran {
     callees: Vec<CallInfo>,
     vars: BTreeMap<String, Value>,
     visits: Vec<Visit>,
+    /// how many of the scenario's answers the run took
+    used: usize,
 }
 
-fn run_all<'a>(m: &'a Model, sc: &Value, view: View, hook: Option<&'a mut dyn Answers>) -> Result<Ran, String> {
+fn run_all<'a>(m: &'a Model, sc: &Value, view: View, mut hook: Option<&'a mut dyn Answers>, moves: bool) -> Result<Ran, ritsu_base::text::Text> {
     let answers = sc["answers"].as_array().cloned().unwrap_or_default();
+    let clock = match Clock::of(sc, moves) {
+        Ok(c) => c,
+        Err(why) => {
+            if let Some(h) = hook.as_deref_mut() {
+                h.cannot_run(&why);
+            }
+            return Err(why);
+        }
+    };
     let mut r = Run {
         m,
         hook,
@@ -212,13 +467,14 @@ fn run_all<'a>(m: &'a Model, sc: &Value, view: View, hook: Option<&'a mut dyn An
         pending: None,
         callees: vec![],
         visits: vec![],
+        clock,
     };
     for (v, _) in &m.vars {
         r.vars.insert(v.clone(), Value::Null);
     }
-    // what `now` reads: the scenario's moment, which the runners give the platforms' clocks too; a
-    // scenario may give the start of the run a moment of its own (`scenario_now`)
-    let (start, later) = scenario_now(sc);
+    // what `now` reads: the scenario's moments, which the runners give the platforms' clocks too
+    // (`Clock`); each statement that reads it reads the clock first (`Run::read_now`)
+    let (start, later) = (r.clock.start().to_string(), r.clock.later().to_string());
     r.vars.insert(START_VAR.into(), json!(start));
     r.vars.insert(NOW_VAR.into(), json!(later));
     // a workflow that implements a service reads its input as protobuf reads the request: the zero
@@ -264,10 +520,44 @@ fn run_all<'a>(m: &'a Model, sc: &Value, view: View, hook: Option<&'a mut dyn An
     if let Some(e) = r.error {
         return Err(e);
     }
-    Ok(Ran { trace: json!({ "steps": r.steps, "end": r.end }), callees: r.callees, vars: r.vars, visits: r.visits })
+    Ok(Ran { trace: json!({ "steps": r.steps, "end": r.end }), callees: r.callees, vars: r.vars, visits: r.visits, used: r.next_answer })
 }
 
 impl<'a> Run<'a> {
+    /// A statement reads `now`: what the clock reads, which `now` in the statement reads too. None
+    /// when the scenario gives it a moment the run cannot read, which stops the run.
+    fn read_now(&mut self) -> Option<Value> {
+        match self.clock.read() {
+            Ok((at, moved)) => {
+                if moved > 0.0 {
+                    let after = self.clock.at_ms();
+                    if let Some(h) = self.hook.as_deref_mut() {
+                        h.pass(moved, Passing::Now, None, after);
+                    }
+                }
+                let v = json!(at);
+                self.vars.insert(NOW_VAR.into(), v.clone());
+                Some(v)
+            }
+            Err(why) => {
+                if let Some(h) = self.hook.as_deref_mut() {
+                    h.cannot_run(&why);
+                }
+                self.error = Some(why);
+                None
+            }
+        }
+    }
+
+    /// Time goes by: the clock moves on, when it moves, and the side the answers come from is told.
+    fn pass(&mut self, seconds: f64, why: Passing, until: Option<&str>) {
+        if let Some(after) = self.clock.go(seconds) {
+            if let Some(h) = self.hook.as_deref_mut() {
+                h.pass(seconds, why, until, after);
+            }
+        }
+    }
+
     fn fail(&mut self, error: &str, cause: &str) {
         self.fail_with(error, json!(cause));
     }
@@ -285,6 +575,20 @@ impl<'a> Run<'a> {
         value_of(&self.vars, e)
     }
 
+    /// Whether `es` read a variable where it has no value (`TExpr::must_have`), in the order the
+    /// code reads them: the run fails then with Dandori.UnexpectedValue, at the statement's line.
+    /// The check says it does not happen (E012, E013); it comes about only past it (DESIGN 38).
+    fn unset(&mut self, es: &[&TExpr], line: usize) -> bool {
+        let found = crate::model::must_haves(self.m, es).into_iter().find(|n| self.vars.get(*n).is_none_or(Value::is_null)).map(str::to_string);
+        match found {
+            Some(name) => {
+                self.fail("Dandori.UnexpectedValue", &format!("line {line}: {name} has no value"));
+                true
+            }
+            None => false,
+        }
+    }
+
     fn block(&mut self, ss: &[TStmt]) -> Ctl {
         for s in ss {
             match self.stmt(s) {
@@ -300,10 +604,27 @@ impl<'a> Run<'a> {
 
     fn stmt(&mut self, s: &TStmt) -> Ctl {
         if self.steps.len() > 20_000 {
-            self.error = Some("the run took more than 20000 steps".into());
+            self.error = Some(ritsu_base::tr!("実行が 20000 ステップを超えました", "the run took more than 20000 steps"));
             return Ctl::Stop;
         }
         self.visits.push(Visit::Stmt(s.site));
+        // a statement that reads `now` reads the clock once, before it runs (a check of the period
+        // reads it itself, and a loop's yield at the end of each round)
+        let reads = match &s.kind {
+            TK::Period { .. } => false,
+            TK::For { list, .. } => list.has_now(),
+            k => k.reads_now(),
+        };
+        if reads && self.read_now().is_none() {
+            return Ctl::Stop;
+        }
+        // a variable the statement reads that has no value, which the check says does not happen;
+        // the run fails as the code of the targets fails (a `for`'s `yield` is read at each round's
+        // end, below)
+        let read = s.kind.reads_first(self.m);
+        if self.unset(&read, s.line) {
+            return Ctl::Stop;
+        }
         match &s.kind {
             TK::Pass => Ctl::Next,
             TK::Break => Ctl::Break,
@@ -311,9 +632,7 @@ impl<'a> Run<'a> {
                 if self.view == View::Asl {
                     self.steps.push(json!({ "wait": seconds }));
                 }
-                if let Some(h) = self.hook.as_deref_mut() {
-                    h.pass(*seconds as f64, Passing::Wait);
-                }
+                self.pass(*seconds as f64, Passing::Wait, None);
                 Ctl::Next
             }
             TK::WaitUntil { at } => {
@@ -321,8 +640,10 @@ impl<'a> Run<'a> {
                 if self.view == View::Asl {
                     self.steps.push(json!({ "wait_until": v }));
                 }
-                if let Some(h) = self.hook.as_deref_mut() {
-                    h.wait_until(&v);
+                // a value that is not a time does not come here: the check holds `wait until` to timestamps
+                let given = v.as_str().unwrap_or_default().to_string();
+                if let Some(seconds) = self.clock.until(&given) {
+                    self.pass(seconds, Passing::Wait, Some(&given));
                 }
                 Ctl::Next
             }
@@ -349,7 +670,14 @@ impl<'a> Run<'a> {
             // moment it reads, which goes to `on failure` as a task's error nothing handles does
             TK::Period { start } => {
                 let p = self.m.period.as_ref().expect("a check of the period is in a flow with one");
-                let v = self.vars.get(if *start { START_VAR } else { NOW_VAR }).cloned().unwrap_or(Value::Null);
+                let v = if *start {
+                    self.vars.get(START_VAR).cloned().unwrap_or(Value::Null)
+                } else {
+                    match self.read_now() {
+                        Some(v) => v,
+                        None => return Ctl::Stop,
+                    }
+                };
                 let t = v.as_str().unwrap_or_default().to_string();
                 if !*start {
                     self.vars.insert(now_at(s.site), v);
@@ -368,7 +696,9 @@ impl<'a> Run<'a> {
             }
             // a rule's precondition ritsu could not decide: the values the call will give it, as soon as they are made
             TK::Check(c) => {
-                if crate::prechecks::holds(&c.test, &|e| self.value(e)) {
+                let held = crate::prechecks::holds(&c.test, &|e| self.value(e));
+                self.visits.push(Visit::Check(s.site, held));
+                if held {
                     Ctl::Next
                 } else {
                     let cause = c.cause(self.m);
@@ -384,6 +714,7 @@ impl<'a> Run<'a> {
             TK::For { var, list, max, parallel, body, result, locals } => {
                 let items = self.value(list).as_array().cloned().unwrap_or_default();
                 if items.len() > *max as usize {
+                    self.visits.push(Visit::TooMany(s.site));
                     self.fail("Dandori.TooManyItems", &format!("line {}: the list has more than {max} items", s.line));
                     return Ctl::Stop;
                 }
@@ -398,12 +729,20 @@ impl<'a> Run<'a> {
                             let c = self.block(body);
                             if let (Ctl::Next, Some((_, y))) = (&c, result) {
                                 if self.end.is_none() && self.error.is_none() && self.pending.is_none() {
+                                    // a yield that reads `now` reads the clock at the end of each round
+                                    if y.has_now() && self.read_now().is_none() {
+                                        return Ctl::Stop;
+                                    }
+                                    if self.unset(&[y], s.line) {
+                                        return Ctl::Stop;
+                                    }
                                     out.push(self.value(y));
                                 }
                             }
                             self.rounds.pop();
                             match c {
                                 Ctl::Break => {
+                                    self.visits.push(Visit::Broke(s.site));
                                     broke = true;
                                     break;
                                 }
@@ -434,13 +773,30 @@ impl<'a> Run<'a> {
                             }
                             match self.pending.take() {
                                 Some(p) => {
+                                    self.visits.push(Visit::RoundFailed(s.site, i as u64));
                                     if first.is_none() {
                                         first = Some(p);
                                     }
                                 }
                                 None => {
                                     if let Some((_, y)) = result {
-                                        out.push(self.value(y));
+                                        if y.has_now() && self.read_now().is_none() {
+                                            return Ctl::Stop;
+                                        }
+                                        // the yield is the round's own: a variable it reads that
+                                        // has no value fails the round, as a failure in its body does
+                                        self.par_depth += 1;
+                                        let unset = self.unset(&[y], s.line);
+                                        self.par_depth -= 1;
+                                        match self.pending.take() {
+                                            Some(p) if unset => {
+                                                self.visits.push(Visit::RoundFailed(s.site, i as u64));
+                                                if first.is_none() {
+                                                    first = Some(p);
+                                                }
+                                            }
+                                            _ => out.push(self.value(y)),
+                                        }
                                     }
                                 }
                             }
@@ -467,7 +823,10 @@ impl<'a> Run<'a> {
                     let c = self.block(body);
                     self.rounds.pop();
                     match c {
-                        Ctl::Break => return Ctl::Next,
+                        Ctl::Break => {
+                            self.visits.push(Visit::Broke(s.site));
+                            return Ctl::Next;
+                        }
                         Ctl::Stop => return Ctl::Stop,
                         Ctl::Next => {}
                     }
@@ -509,7 +868,8 @@ impl<'a> Run<'a> {
                 Some(a.clone())
             }
             None => {
-                self.error = Some(format!("the scenario has no answer for call {} ({callee_name})", self.next_answer + 1));
+                let n = self.next_answer + 1;
+                self.error = Some(ritsu_base::tr!("シナリオに、{n} 番目の呼び出し（{callee_name}）の結果がありません", "the scenario has no answer for call {n} ({callee_name})"));
                 None
             }
         }
@@ -619,17 +979,23 @@ impl<'a> Run<'a> {
             }
             // a try that timed out took its timeout: the task's, the wait until the time `timeout until`
             // names, or the limit of a call of a rule or of a date (DESIGN 16)
-            if let (true, Some(h)) = (kind == "timeout", self.hook.as_deref_mut()) {
+            if kind == "timeout" {
                 match callee {
                     Callee::Task(t) => match m.tasks[*t].deadline.as_ref().and_then(|p| a.get(p)) {
-                        Some(at) => h.timeout_until(at),
+                        Some(at) => {
+                            // a value that is not a time does not come here: the check holds `timeout until` to timestamps
+                            let given = at.as_str().unwrap_or_default().to_string();
+                            if let Some(seconds) = self.clock.timeout_until(&given) {
+                                self.pass(seconds, Passing::Timeout, Some(&given));
+                            }
+                        }
                         None => {
                             if let Some(secs) = m.tasks[*t].timeout {
-                                h.pass(secs as f64, Passing::Timeout);
+                                self.pass(secs as f64, Passing::Timeout, None);
                             }
                         }
                     },
-                    Callee::Rule(_) => h.pass(crate::check::RULE_SECONDS as f64, Passing::Timeout),
+                    Callee::Rule(_) => self.pass(crate::check::RULE_SECONDS as f64, Passing::Timeout, None),
                 }
             }
             self.steps.push(json!({ "call": wire, "answer": { "error": kind, "as": err.target_name } }));
@@ -644,9 +1010,7 @@ impl<'a> Run<'a> {
                             let d = if delay.fract() == 0.0 { json!(delay as u64) } else { json!(delay) };
                             self.steps.push(json!({ "retry_wait": d }));
                         }
-                        if let Some(h) = self.hook.as_deref_mut() {
-                            h.pass(delay, Passing::Retry);
-                        }
+                        self.pass(delay, Passing::Retry, None);
                         again = true;
                     }
                     break;
@@ -677,12 +1041,14 @@ impl<'a> Run<'a> {
                         Callee::Rule(r) => Ty::Record(m.rules[*r].outputs),
                     };
                     if !render::value_fits(m, &v, &ty, m.answer_range(callee)) {
+                        self.visits.push(Visit::Bad(s.site));
                         self.fail("Dandori.BadResponse", &format!("line {}: the answer from {} does not have the declared shape", s.line, cname));
                         return Ctl::Stop;
                     }
                     if let (Some(Target::Case(c)), Some((_, allowed))) = (target, m.monitors.get(&s.site)) {
                         let st = v.get(&m.cases[*c].state_field).and_then(|x| x.as_str()).unwrap_or("");
                         if !allowed.iter().any(|x| x == st) {
+                            self.visits.push(Visit::Bad(s.site));
                             self.fail(
                                 "Dandori.UnexpectedState",
                                 &format!("line {}: {} answered with a state the machine does not lead to here (expected one of {})", s.line, cname, allowed.join(", ")),
@@ -736,7 +1102,7 @@ impl<'a> Run<'a> {
         if !self.in_on_failure && !self.in_on_cancel {
             if let Some(block) = m.on_failure.clone() {
                 self.in_on_failure = true;
-                self.vars.insert("dd_error".into(), json!({ "Error": err.target_name, "Cause": err.cause }));
+                self.vars.insert(ERROR_VAR.into(), json!({ "Error": err.target_name, "Cause": err.cause }));
                 self.visits.push(Visit::OnFailure);
                 match self.block(&block) {
                     Ctl::Stop => return Ctl::Stop,
@@ -848,23 +1214,8 @@ pub fn now_at(site: usize) -> String {
 /// Where the run keeps the moment it starts at: what the check of the period at the start reads.
 pub const START_VAR: &str = "(start)";
 
-/// What a scenario's `now` says: the moment the run starts at, and the moment every `now` after
-/// the start reads. A scenario writes one moment for both, or the two as a list, the start first,
-/// for a run that goes on past the end of the period it starts in (DESIGN 20).
-pub fn scenario_now(sc: &Value) -> (String, String) {
-    match &sc["now"] {
-        Value::Array(v) => {
-            let at = |i: usize| v.get(i).and_then(|x| x.as_str()).unwrap_or(render::SCENARIO_NOW).to_string();
-            let start = at(0);
-            let later = if v.len() > 1 { at(1) } else { start.clone() };
-            (start, later)
-        }
-        v => {
-            let one = v.as_str().unwrap_or(render::SCENARIO_NOW).to_string();
-            (one.clone(), one)
-        }
-    }
-}
+/// Where the run keeps the error `on failure` runs for: a name no variable can have.
+pub const ERROR_VAR: &str = "(error)";
 
 /// The value of an expression over the given variables. A field that is absent reads as null.
 pub fn value_of(vars: &BTreeMap<String, Value>, e: &TExpr) -> Value {

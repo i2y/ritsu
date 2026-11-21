@@ -1,0 +1,11 @@
+エラー[E101]: chain_names.kn:22:5: `gold` は列挙 `Tier` の値ではありません
+    22 |     gold => 5
+  = `gold` は 35 行目にも書かれています。
+エラー[E101]: chain_names.kn:25:21: Line にフィールド `qty` はありません
+    25 |   sum(lines, l => l.qty)
+  = Line のフィールドは `sku`, `qy` です。
+  = `qty` は 36、37 行目にも書かれています。
+エラー[E101]: chain_names.kn:27:12: `Order` という型はありません
+    27 | fn bill(o: Order, price: money[USDc] range >=1USDc <=1000USDc) -> money[USDc]
+  = 型に書けるのは、`number`、`bool`、`string`、`date`、`rate`、単位の型（`money[USD]`、`mass[kg]`）、`list[…]`、このモジュールのレコードと列挙、フィールドを持つ値の型（`<列挙>.<値>`）、`use` で読んだもの（`<規則>.outputs`、`<規則>.<列挙>`、`<規則>.<並び>`、`<帳簿>.<振替>.<操作>`、`<モジュール>.<レコード>`）、型の引数、`result[…]` です。
+  = `Order` は 31 行目にも書かれています。

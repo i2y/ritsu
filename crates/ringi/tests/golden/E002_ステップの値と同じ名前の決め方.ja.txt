@@ -1,0 +1,3 @@
+エラー[E002]: tests/mutants/E002_ステップの値と同じ名前の決め方.ringi:14:9: `manager_and_finance` は、`上長 and 経理`（9 行目）がステップに与える値と同じ名前なので、承認者の決め方の名前にできません
+    14 |   上長と経理(manager_and_finance)     = person "e04"
+  = チケットは、ステップの承認者の決め方を、そのステップの値として ASCII の名前で持ちます（JSON の `stages` の `value`）。`上長 and 経理` の値は `manager_and_finance` なので、二つを分けられません。決め方を別の名前にするか、`名前(ascii_name)` のように別の ASCII の名前を括弧に書いてください。

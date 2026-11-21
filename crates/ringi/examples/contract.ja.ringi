@@ -1,0 +1,141 @@
+request 契約(contract_ja) v1 "契約の確認"
+description "会社が結ぼうとしている契約を、法務が確かめる（架空の決まり）。エージェントが確かめる人のために要約し、法務の一人が受け付けて担当を決める。500 万円を超える契約は法務の二人が確かめ、1,000 万円を超える契約は法務部長が決める"
+owner legal
+
+use organization 組織(org) from "shared/company.ringi"
+use calendar 本社(office) from "shared/office.cal"
+use gate "shared/company.gate"
+use flow 要約(summarize) from "shared/summary.flow"
+
+form
+  相手(counterparty) : text "契約の相手"  count >=1 <=100
+  種類(kind) : choice "契約の種類"
+    秘密保持(nda)     "秘密保持契約"
+    業務委託(service) "業務委託契約"
+    ライセンス(license) "ライセンス契約"
+  金額(value)    : money[円] "契約の金額"  range >=0円 <=1_000_000_000円
+  月数(months)   : number "期間（月）"  range >=1 <=60
+  契約書(document) : attachment "契約書"
+  本文(text)     : long text "契約の本文"  count >=1 <=20_000
+  担当(reviewer) : person "担当"  approvers only
+  # 秘密保持契約には量る金額が無いので、法務がリスクを書くのは、ほかの契約だけである。
+  リスク(risks)  : long text "法務が書くリスク"  count <=2_000  approvers only  optional  shown when 種類 is not 秘密保持
+
+route
+  # 社長には上長がいないので、社長の契約はこのステップを飛ばし、ほかの人の契約と同じく法務が見る。
+  上長(manager)    上長
+    when empty escalate, then skip
+  要約(summary)    note from 要約
+  受付(intake)     法務
+  確認(review)     担当者
+  二人目(second)   at least 2 of 法務  when 金額 > 5_000_000円
+  # 法務部長が答えられない（法務部長自身の契約）ときは、上へ回す。
+  法務部長(counsel) 部長              when 金額 > 10_000_000円
+    when empty escalate
+  財務(finance)    circulate to 財務部  when 種類 is ライセンス
+
+who
+  上長(manager)     = manager of requester
+  法務(legal)       = team legal
+  担当者(reviewer)  = chosen by previous approver in 担当
+  部長(counsel)     = person "e9001"
+  財務部(finance)   = team finance
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late escalate, then expire
+  when empty stay
+
+ticket
+  self approval   not allowed
+  send back       to any earlier stage, at most 3 times
+  resubmit        within 10 business days
+  withdraw        until 法務部長
+  pause           at most 10 business days
+  approvers edit  リスク, 担当
+
+claims
+  大きな契約は法務部長が決める : 法務部長 is 部長 only when 金額 > 10_000_000円
+  期限内に終わる               : every ticket ends within 192 business days
+
+scenario 金額の大きいライセンス契約
+  requester e1201
+  form 相手 = "サンプルソフトウェア（架空）", 種類 = ライセンス, 金額 = 12_000_000円, 月数 = 12, 契約書 = "contract.pdf", 本文 = "ライセンスを受ける側は、ソフトウェアを 12 か月使える（架空）。"
+| at               | event                                                    | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                   | e1201 | 上長     | in progress |
+| 2026-11-16 11:00 | approve                                                  | e1101 | 要約     | in progress |
+| 2026-11-16 11:05 | note ready(summary: "一年のライセンス。賠償は料金が上限") |       | 受付     | in progress |
+| 2026-11-16 14:00 | edit(担当: person "e9003")                               | e9002 | 受付     | in progress |
+| 2026-11-16 14:05 | approve                                                  | e9002 | 確認     | in progress |
+| 2026-11-17 10:00 | pause                                                    | e9003 | 確認     | paused      |
+| 2026-11-18 10:00 | resume                                                   | e9003 | 確認     | in progress |
+| 2026-11-18 15:00 | approve                                                  | e9003 | 二人目   | in progress |
+| 2026-11-19 10:00 | approve                                                  | e9001 | 二人目   | in progress |
+| 2026-11-19 11:00 | approve                                                  | e9002 | 法務部長 | in progress |
+| 2026-11-20 10:00 | approve                                                  | e9001 |          | approved    |
+
+# 法務が、相手の会社の案を求めて差し戻す。案は届かず、10 営業日のうちに出し直されないので、申請は期限切れで終わる。
+scenario 相手の案が届かない契約
+  requester e1201
+  form 相手 = "サンプル物流（架空）", 種類 = 業務委託, 金額 = 3_000_000円, 月数 = 12, 契約書 = "contract.pdf", 本文 = "受託者は、会社の荷物を 12 か月運ぶ（架空）。"
+| at               | event                                       | by    | comment                                                            | -> stage | status         |
+| 2026-11-16 10:00 | submit                                      | e1201 |                                                                    | 上長     | in progress    |
+| 2026-11-16 11:00 | approve                                     | e1101 |                                                                    | 要約     | in progress    |
+| 2026-11-16 11:05 | note ready(summary: "荷物を運ぶ一年の契約") |       |                                                                    | 受付     | in progress    |
+| 2026-11-16 14:00 | send back                                   | e9002 | "相手から届いた案を付けてください。双方が署名する本文を確かめます" |          | with requester |
+| 2026-12-01 00:00 | resubmit late                               |       |                                                                    |          | expired        |
+
+# 秘密保持契約。量る金額が無いので法務はリスクを書かず、確認で決まる
+scenario 秘密保持契約
+  requester e1201
+  form 相手 = "サンプル研究所（架空）", 種類 = 秘密保持, 金額 = 0円, 月数 = 24, 契約書 = "nda.pdf", 本文 = "双方は、相手が開示したことを 2 年のあいだ秘密にする（架空）。"
+| at               | event                                          | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                         | e1201 | 上長     | in progress |
+| 2026-11-16 11:00 | approve                                        | e1101 | 要約     | in progress |
+| 2026-11-16 11:05 | note ready(summary: "双方に同じ、二年の秘密保持") |       | 受付     | in progress |
+| 2026-11-16 14:00 | edit(担当: person "e9003")                     | e9002 | 受付     | in progress |
+| 2026-11-16 14:05 | approve                                        | e9002 | 確認     | in progress |
+| 2026-11-17 10:00 | approve                                        | e9003 |          | approved    |
+
+# 法務の人が減ったあと（2027-04-01 からの組織）に、法務の一人が契約を申請する。二人目の確認には法務の
+# 二人が要るが、申請者のほかには一人しか残っていない。ステップは止まり、管理する人が承認者を足すまで待つ。
+scenario 人の減った法務の契約
+  requester e9003
+  form 相手 = "サンプル印刷（架空）", 種類 = 業務委託, 金額 = 6_000_000円, 月数 = 12, 契約書 = "contract.pdf", 本文 = "受託者は、会社のカタログを 12 か月印刷する（架空）。"
+| at               | event                                          | by    | -> stage | status      |
+| 2027-04-12 10:00 | submit                                         | e9003 | 上長     | in progress |
+| 2027-04-12 11:00 | approve                                        | e0102 | 要約     | in progress |
+| 2027-04-12 11:05 | note ready(summary: "印刷を頼む一年の契約")    |       | 受付     | in progress |
+| 2027-04-12 14:00 | edit(担当: person "e9002")                     | e9002 | 受付     | in progress |
+| 2027-04-12 14:05 | approve                                        | e9002 | 確認     | in progress |
+| 2027-04-13 10:00 | approve                                        | e9002 | 二人目   | in progress |
+| 2027-04-13 11:00 | add approver(approver: person "e0102")         |       | 二人目   | in progress |
+| 2027-04-13 15:00 | approve                                        | e9002 | 二人目   | in progress |
+| 2027-04-14 10:00 | approve                                        | e0102 |          | approved    |
+
+labels en
+  request          "Contract review"
+  相手             "Counterparty"
+  種類             "Kind of contract"
+  種類.秘密保持    "Non-disclosure agreement"
+  種類.業務委託    "Service agreement"
+  種類.ライセンス  "License agreement"
+  金額             "Contract value"
+  月数             "Term in months"
+  契約書           "Contract"
+  本文             "Text of the contract"
+  担当             "Reviewer"
+  リスク           "Risks legal notes"
+  stage 上長       "Manager"
+  stage 要約       "Summary"
+  stage 受付       "Intake"
+  stage 確認       "Review"
+  stage 二人目     "Second review"
+  stage 法務部長   "General counsel"
+  stage 財務       "Finance"
+  who 上長         "Manager"
+  who 法務         "Legal"
+  who 担当者       "Reviewer"
+  who 部長         "General counsel"
+  who 財務部       "Finance"

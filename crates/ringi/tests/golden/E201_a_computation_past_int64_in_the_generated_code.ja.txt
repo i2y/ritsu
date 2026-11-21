@@ -1,0 +1,5 @@
+エラー[E201]: tests/mutants/E201_a_computation_past_int64_in_the_generated_code.ringi:8:1: フィールド `amount` の計算を生成するコードのために下ろした先が、rulec の検査を通りません: `amount` は読むフィールドの範囲から 30_000_000_000_000_000_000JPY まで届き、int64 に収まりません
+     8 |   amount : money[JPY] "Amount" = sum(lines.subtotal)  range >=1JPY <=100_000_000JPY
+  = 生成するコードは、フォームが計算する値を、各フィールドに書いた範囲と比べる前に求めます。検査と `ritsu ringi run` は、各値を書いた範囲の中で読みます。
+  = `amount` が読むフィールド（`lines.quantity`、`lines.price`）の範囲を狭めて、届く値を int64 に収めてください。
+  = rulec の E108（下ろした `values.rule` の 15 行目）: amount が int64 に収まることを証明できません

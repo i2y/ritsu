@@ -111,18 +111,11 @@ pub fn rooted(p: &Path) -> bool {
 /// (a symbolic link is not followed, so the path stays the one the person wrote). A relative path
 /// whose first part starts with `@` is made absolute against the root of the module the working
 /// directory is in, when it is in one (DESIGN 17.6): `@pricing/rules/fee.rule` is the same file from
-/// any directory of the module.
+/// any directory of the module. The file a path names, as a run tells files apart, reads them, finds
+/// the root above them and names them from it, is [`opened`].
 pub fn absolute(p: &Path) -> PathBuf {
-    let joined = if rooted(p) {
-        p.to_path_buf()
-    } else {
-        let cwd = crate::fs::current_dir().unwrap_or_default();
-        let at = matches!(p.components().next(), Some(Component::Normal(s)) if s.as_encoded_bytes().first() == Some(&b'@'));
-        let base = if at { crate::modules::refer::raw_module_root(&cwd).unwrap_or(cwd) } else { cwd };
-        base.join(p)
-    };
     let mut out = PathBuf::new();
-    for c in joined.components() {
+    for c in joined(p).components() {
         match c {
             Component::CurDir => {}
             Component::ParentDir => {
@@ -134,13 +127,129 @@ pub fn absolute(p: &Path) -> PathBuf {
     out
 }
 
+/// `p` made absolute as [`absolute`] makes it, before anything is folded.
+fn joined(p: &Path) -> PathBuf {
+    if rooted(p) {
+        return p.to_path_buf();
+    }
+    let cwd = crate::fs::current_dir().unwrap_or_default();
+    let at = matches!(p.components().next(), Some(Component::Normal(s)) if s.as_encoded_bytes().first() == Some(&b'@'));
+    let base = if at { crate::modules::refer::raw_module_root(&cwd).unwrap_or(cwd) } else { cwd };
+    base.join(p)
+}
+
+/// The file a path names (DESIGN 4.15): the path made absolute as [`absolute`] makes it, and folded
+/// so that it opens the file the system opens. `x/..` is folded by its letters where `x` is no
+/// symbolic link; where `x` is one, it is replaced by where the link leads (read from the directory
+/// it is in, and folded the same way) and the `..` is taken from there, as the system takes it. A
+/// path that crosses no link with `..` is [`absolute`]'s, the path the person wrote: a link the path
+/// goes through without `..` is not followed (`shared/booking.flow` stays that, wherever `shared`
+/// leads). A part that is not there is no link, so a path to nothing is folded by its letters, and
+/// so is every path of the files of a page, which hold no link ([`crate::fs::link`]). After 40 links
+/// in one path, a loop, the rest is folded by its letters.
+pub fn opened(p: &Path) -> PathBuf {
+    opened_by(p, &|at| crate::fs::link(at))
+}
+
+/// [`opened`], with where each symbolic link leads asked of `link` in place of the files of the
+/// thread: what files laid over others ask of the files under them, for a path that goes up out of
+/// a directory only the files laid make (`crate::fs::Overlay`).
+pub fn opened_by(p: &Path, link: &dyn Fn(&Path) -> Option<PathBuf>) -> PathBuf {
+    let mut out = PathBuf::new();
+    // the parts still to take, the next one last
+    let mut todo: Vec<std::ffi::OsString> = Vec::new();
+    take_parts(&joined(p), &mut out, &mut todo);
+    let mut links = 0;
+    while let Some(part) = todo.pop() {
+        if part != ".." {
+            out.push(&part);
+            continue;
+        }
+        if links < 40
+            && out.file_name().is_some()
+            && let Some(to) = link(&out)
+        {
+            links += 1;
+            out.pop();
+            // the `..` again, once where the link leads is taken
+            todo.push(part);
+            take_parts(&to, &mut out, &mut todo);
+            continue;
+        }
+        out.pop();
+    }
+    out
+}
+
+/// The parts of `p` after its root put on `todo`, the first one last (`.` left out), and `out` made
+/// `p`'s root when `p` has one.
+fn take_parts(p: &Path, out: &mut PathBuf, todo: &mut Vec<std::ffi::OsString>) {
+    let at = todo.len();
+    let mut head = PathBuf::new();
+    for c in p.components() {
+        match c {
+            Component::Prefix(_) | Component::RootDir => head.push(c.as_os_str()),
+            Component::CurDir => {}
+            other => todo.push(other.as_os_str().to_os_string()),
+        }
+    }
+    if !head.as_os_str().is_empty() {
+        *out = head;
+    }
+    todo[at..].reverse();
+}
+
+/// Whether [`opened`] and [`absolute`] make one path of `p`: whether the file the system opens is
+/// the one the letters of `p` name (DESIGN 4.15). What a tool that names a file by its letters
+/// unless a `..` crosses a link asks of a path, as often as it joins one (rulec's contributions).
+/// The files are asked only where `p` has a `..`. A relative path that goes through no module's
+/// `@` is asked of its own parts, from the working directory: a `..` that climbs above the working
+/// directory folds by its letters, for the working directory is named with no link in it
+/// ([`crate::fs::Files::current_dir`]), and each `..` below is asked of the parts before it, read
+/// from there. Where one of those crosses a link, and for an absolute path or one through an `@`,
+/// the answer is [`opened`]'s and [`absolute`]'s, which read the working directory for a relative
+/// path.
+pub fn folds_by_letters(p: &Path) -> bool {
+    if !p.components().any(|c| c == Component::ParentDir) {
+        return true;
+    }
+    let through_a_module = p.components().any(|c| matches!(c, Component::Normal(s) if s.as_encoded_bytes().first() == Some(&b'@')));
+    if !rooted(p) && !through_a_module {
+        // the `..` that climb above the working directory, and the parts below where they lead
+        let mut above = PathBuf::new();
+        let mut out = PathBuf::new();
+        let mut among = true;
+        for c in p.components() {
+            match c {
+                Component::CurDir => {}
+                Component::Normal(s) => out.push(s),
+                Component::ParentDir if out.as_os_str().is_empty() => above.push(".."),
+                Component::ParentDir if crate::fs::link(&above.join(&out)).is_none() => {
+                    out.pop();
+                }
+                _ => {
+                    among = false;
+                    break;
+                }
+            }
+        }
+        if among {
+            return true;
+        }
+    }
+    let whole = joined(p);
+    opened(&whole) == absolute(&whole)
+}
+
 /// The root of a project (DESIGN 6.2, item 3; 17.6): the nearest directory at or above `start`
 /// that holds a `.git` (a directory, or the file a worktree has) or a `ritsu.mod`, found by looking,
-/// without running git; else `start` itself, or the directory it is in when it is a file. The root
-/// of a dependency seen through a module (`R/@pricing`) is passed: the root is the module's. `--root`
-/// is the caller's to read first.
+/// without running git; else `start` itself, or the directory it is in when it is a file. `start` is
+/// the file the system opens ([`opened`], DESIGN 4.15): a path whose `..` crosses a symbolic link
+/// finds the root above where the link leads, as the path written to there does. The root of a
+/// dependency seen through a module (`R/@pricing`) is passed: the root is the module's. `--root` is
+/// the caller's to read first.
 pub fn find_root(start: &Path) -> PathBuf {
-    let abs = absolute(start);
+    let abs = opened(start);
     let dir = if crate::fs::is_dir(&abs) { abs.clone() } else { abs.parent().map(Path::to_path_buf).unwrap_or_else(|| abs.clone()) };
     for d in dir.ancestors() {
         if crate::modules::refer::is_dependency_root(d) {
@@ -154,10 +263,11 @@ pub fn find_root(start: &Path) -> PathBuf {
 }
 
 /// A file on the disk as a path from `root` (both absolute or both made so); None when it is
-/// not under the root.
+/// not under the root. The file is the one the system opens ([`opened`], DESIGN 4.15): a path whose
+/// `..` crosses a symbolic link is named by where it leads, and two paths of one file have one name.
 pub fn from_root(root: &Path, file: &Path) -> Option<String> {
-    let abs = absolute(file);
-    let root = absolute(root);
+    let abs = opened(file);
+    let root = opened(root);
     let rel = abs.strip_prefix(&root).ok()?;
     let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
     Some(if parts.is_empty() { ".".to_string() } else { parts.join("/") })
@@ -198,7 +308,9 @@ pub fn seen_from(file: &Path, other: &Path) -> String {
 /// from any directory of the module and however the path was given (DESIGN 17.6): that is the path a
 /// command run anywhere in the module takes ([`absolute`] reads it from the module's root). Run from
 /// a directory that is not in the root's module, it is written from there as any other file is
-/// (`shop/@pricing/rules/fee.rule`), the way a command run there takes it.
+/// (`shop/@pricing/rules/fee.rule`), the way a command run there takes it. Run in a module, a file
+/// below the directory whose first part there starts with `@`, which a command would read from the
+/// module's root, is written `./@notes.rule`.
 #[derive(Clone, Debug)]
 pub struct Shown {
     root: PathBuf,
@@ -239,9 +351,142 @@ impl Shown {
             return format!("{p}{slash}");
         }
         let target = on_disk(&self.root, p);
-        let s = if self.absolute { target.to_string_lossy().to_string() } else { between(&self.cwd, &target) };
+        let s = if self.absolute { target.to_string_lossy().to_string() } else { from_where_run(&self.cwd, &target, || crate::modules::refer::raw_module_root(&self.cwd).is_some()) };
         format!("{s}{slash}")
     }
+}
+
+/// The path from the directory a run is in to a file (both absolute), the shortest way, as a command
+/// run there takes it back: in a module, a path whose first part starts with `@` is read from the
+/// module's root, into a dependency (DESIGN 17.6), so a file below the directory whose first part
+/// starts with `@` is written `./@notes.rule`. `in_module` is asked only then.
+fn from_where_run(cwd: &Path, file: &Path, in_module: impl FnOnce() -> bool) -> String {
+    let s = between(cwd, file);
+    if s.starts_with('@') && in_module() { format!("./{s}") } else { s }
+}
+
+/// How a run writes the paths it holds (DESIGN 4.15): the directory it runs in, whether the first
+/// path given to it was absolute, and the module it runs in.
+#[derive(Clone, Debug)]
+struct Way {
+    cwd: PathBuf,
+    absolute: bool,
+    module: Option<PathBuf>,
+}
+
+thread_local! {
+    static WAY: std::cell::RefCell<Option<Way>> = const { std::cell::RefCell::new(None) };
+}
+
+/// What [`run_from`] answers: while it is held, the thread's run writes its paths the way the
+/// first path given to it was written; dropped, the way before comes back.
+pub struct Run {
+    before: Option<Way>,
+}
+
+impl Drop for Run {
+    fn drop(&mut self) {
+        let before = self.before.take();
+        WAY.with(|w| *w.borrow_mut() = before);
+    }
+}
+
+/// Said by a command before it reads a file (DESIGN 4.15): the paths the run holds are written
+/// from the directory it runs in, absolute when `given`, the first path given to it (`.` when
+/// none was), is absolute. Every file the run reaches, however it was reached (as the person
+/// wrote it, from the root, joined to a path a file wrote), is then written one way, the way
+/// [`Shown`] writes a path from the root.
+pub fn run_from(given: &str) -> Run {
+    let cwd = absolute(Path::new("."));
+    let module = crate::modules::refer::raw_module_root(&cwd);
+    let way = Way { cwd, absolute: rooted(Path::new(given)), module };
+    Run { before: WAY.with(|w| w.borrow_mut().replace(way)) }
+}
+
+/// A path a tool holds (as it was given, joined to what a file wrote, from the root on the disk) as
+/// the run writes it to the person (DESIGN 4.15): `.` and `..` folded as [`opened`] folds them, so
+/// that the path opens, from the directory the run is in, the file the run read; the shortest way
+/// from that directory, or absolute when the run's first path was. Run in a module, a
+/// dependency's file is `@pricing/rules/fee.rule`, as [`Shown`] writes it, and a file of the module
+/// below the directory whose first part there starts with `@` is `./@notes.rule`. Outside a run (a
+/// library's call, a test), the path is written absolute when it is held absolute.
+pub fn show(held: &Path) -> String {
+    let abs = opened(held);
+    let (cwd, absolute_run, module) = match WAY.with(|w| w.borrow().clone()) {
+        Some(w) => (w.cwd, w.absolute, w.module),
+        None => {
+            let cwd = absolute(Path::new("."));
+            let module = crate::modules::refer::raw_module_root(&cwd);
+            (cwd, rooted(held), module)
+        }
+    };
+    if let Some(m) = &module
+        && let Ok(rest) = abs.strip_prefix(m)
+        && rest.components().next().is_some_and(|c| c.as_os_str().as_encoded_bytes().first() == Some(&b'@'))
+    {
+        return rest.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect::<Vec<_>>().join("/");
+    }
+    if absolute_run { abs.to_string_lossy().to_string() } else { from_where_run(&cwd, &abs, || module.is_some()) }
+}
+
+/// [`show`] of a path held as a string.
+pub fn show_str(held: &str) -> String {
+    show(Path::new(held))
+}
+
+/// A path given to a command, as the run holds it and writes it (DESIGN 4.15, 6.2 item 8): [`show`]
+/// of it, so that `./fee.rule`, `x/../fee.rule` and `fee.rule` are one path, read and said alike,
+/// and a path whose `..` climbs out of a symbolic link is the file the system opens there. What a
+/// command takes in the place of a path but is no path of the files is kept as written: `-` (the
+/// standard input), a path through a module's dependency (`@pricing/…`, and a side of `diff` at a
+/// version, `@pricing@1.0.0/…`, DESIGN 17.6 and 17.9.1), and an address (`https://…`), and so is a
+/// path the system does not open as it is written ([`opens_as_written`]).
+pub fn show_given(given: &str) -> String {
+    if no_path(given) || !opens_as_written(given) {
+        return given.to_string();
+    }
+    show_str(given)
+}
+
+/// What a command takes in the place of a path that is no path of the files ([`show_given`]).
+fn no_path(given: &str) -> bool {
+    given.is_empty() || given == "-" || given.starts_with('@') || given.contains("://")
+}
+
+/// Whether the system opens a path given as it is written: what each `..` climbs out of is a
+/// directory (or a link to one), and a path that ends with `/` is no file. The system opens neither
+/// `x/../fee.rule` where there is no `x` nor `fee.rule/`; folded, they would be `fee.rule`, and the
+/// run would read what it was not given. Kept as written, they are read and refused as they were
+/// before the paths given were folded. A path that is not there at all is folded: it is refused
+/// alike either way, and an `--out` is made.
+fn opens_as_written(given: &str) -> bool {
+    let mut before = PathBuf::new();
+    for c in Path::new(given).components() {
+        if c == Component::ParentDir && !before.as_os_str().is_empty() && !crate::fs::is_dir(&before) {
+            return false;
+        }
+        before.push(c);
+    }
+    !(given.len() > 1 && given.ends_with('/') && crate::fs::is_file(Path::new(given.trim_end_matches('/'))))
+}
+
+/// A path a flag takes (`--out`, `--scenario`), as the run holds it and writes it (DESIGN 4.15, 6.2
+/// item 8): `.` and `..` folded as [`opened`] folds them, so that `./generated`, `generated/` and
+/// `x/../generated` are `generated`; from the directory the run is in, the shortest way, when it was
+/// given relative, and absolute when it was given absolute, whichever way the run writes the files
+/// it reads. What is no path of the files, and a path the system does not open as it is written,
+/// are kept as written, as [`show_given`] keeps them.
+pub fn fold_given(given: &str) -> String {
+    if no_path(given) || !opens_as_written(given) {
+        return given.to_string();
+    }
+    let p = Path::new(given);
+    let abs = opened(p);
+    if rooted(p) {
+        return abs.to_string_lossy().to_string();
+    }
+    let cwd = absolute(Path::new("."));
+    from_where_run(&cwd, &abs, || crate::modules::refer::raw_module_root(&cwd).is_some())
 }
 
 /// The names a walk passes over wherever they are in a path (DESIGN 4.7): what tools keep their

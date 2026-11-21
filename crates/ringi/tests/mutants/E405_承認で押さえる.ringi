@@ -1,0 +1,17 @@
+request 例(example) v1 "例"
+
+use book 予算(budget) from "shared/budget.book"
+
+form
+  金額(amount) : money[JPY] "金額"  range >=1JPY <=100_000JPY
+  部(dept)     : text "部"  count >=1 <=20
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed
+  on approved    hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: 部, amount: 金額)

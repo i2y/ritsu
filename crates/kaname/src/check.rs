@@ -4,7 +4,10 @@
 //! prints of it, is here too.
 //!
 //! A module another one reads (`use module`) is checked as a module of its own, once in a run:
-//! [`Run`] keeps what each came to, and the modules being read, to say a ring (E203).
+//! [`Run`] keeps what each came to, and the modules being read, to say a ring (E203). A module is
+//! read, named, typed and walked once on a thread while every file that read reads the same
+//! ([`Prepared`]): the questions the checks across the borders ask with no verdicts, and the check
+//! with the verdicts they came to, decide on what that found (ritsu's DESIGN 4.15).
 
 use crate::ast::{Module, UseKind};
 use crate::diag::{self, Diag};
@@ -13,7 +16,7 @@ use crate::suite::Suite;
 use crate::types::{self, Typed};
 use ritsu_base::json::Json;
 use ritsu_base::text::{Lang, Text, capitalize};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -44,6 +47,11 @@ pub struct Checked {
     pub lowered: Option<Rc<Checked>>,
     /// Its properties, in the order written (empty in [`Checked::lowered`]).
     pub properties: Vec<CheckedProperty>,
+    /// The table of the names of its code in each target, by the target's place in [`Target::ALL`]
+    /// (DESIGN 10.3), made the first time a name of it is asked for.
+    ///
+    /// [`Target::ALL`]: crate::r#gen::Target::ALL
+    pub tables: [std::cell::OnceCell<Rc<crate::r#gen::taken::Table>>; 4],
 }
 
 /// A property of a module (DESIGN 38): as written, the function it is read as in
@@ -90,6 +98,7 @@ fn without_properties(full: Rc<Checked>, n: usize) -> Rc<Checked> {
         lambdas: std::cell::OnceCell::new(),
         lowered: Some(full),
         properties,
+        tables: Default::default(),
     })
 }
 
@@ -114,6 +123,7 @@ impl Checked {
 }
 
 /// What the check of one file comes to.
+#[derive(Clone)]
 pub struct Outcome {
     /// The file, as it was given.
     pub path: String,
@@ -159,61 +169,263 @@ impl Outcome {
     }
 }
 
-/// A run of the check: the languages it joins, what each module came to, and the modules being read
-/// now (E203).
+/// A run of the check: the languages it joins, and what each module came to with them, by the file
+/// on the disk. A module is read, named, typed and walked once on the thread, while every file that
+/// read reads the same ([`Prepared`], kept by the module and the languages): a check with the
+/// verdicts of the checks across the borders and one without them (the questions those checks ask
+/// first) each decide on what that found (ritsu's DESIGN 4.15).
 pub struct Run {
     pub suite: Suite,
-    kept: RefCell<BTreeMap<(PathBuf, String), Rc<Outcome>>>,
-    reading: RefCell<Vec<PathBuf>>,
+    kept: RefCell<BTreeMap<PathBuf, Rc<Outcome>>>,
+    /// The modules being decided in this run now: a ring of `use module` lines is not followed
+    /// round again.
+    deciding: RefCell<Vec<PathBuf>>,
 }
+
+thread_local! {
+    /// The modules being read now on this thread (E203). A module another reads is prepared by a run
+    /// of its own (with no verdicts), and a ring goes across those runs.
+    static READING: RefCell<Vec<PathBuf>> = const { RefCell::new(Vec::new()) };
+    /// The modules prepared on this thread, by the file on the disk and the ports of the languages
+    /// (whose engines are held with it, so none is dropped while it is kept): what it came to, and
+    /// what preparing it read.
+    static PREPARED: RefCell<BTreeMap<(PathBuf, [usize; 3]), Kept>> = const { RefCell::new(BTreeMap::new()) };
+    /// How many times a module has been checked whole (prepared) on this thread.
+    static CHECKS: Cell<usize> = const { Cell::new(0) };
+}
+
+/// A module kept on the thread: what preparing it came to, what that read, and the languages.
+struct Kept {
+    prepared: Rc<Prepared>,
+    seen: Rc<ritsu_base::fs::Seen>,
+    _suite: Suite,
+}
+
+/// How many modules a thread keeps; one more starts the keeping over.
+const KEEP: usize = 256;
+
+/// How many times a module has been checked whole on this thread (a module whose check is kept is
+/// decided again from it, and checks nothing): what a test of the keeping counts.
+pub fn checks() -> usize {
+    CHECKS.with(|c| c.get())
+}
+
+/// What the check of a module comes to before the verdicts of the checks across the borders are
+/// taken (DESIGN 4.3): what a check with them and one without them start from.
+pub struct Prepared {
+    path: String,
+    src: String,
+    stage: Stage,
+    /// The files of the module's `use module` lines, each with whether its check passed with no
+    /// verdicts: a module whose own come to otherwise with a run's verdicts is checked again in it.
+    modules: Vec<(String, bool)>,
+    /// What a check with no verdicts comes to, once decided.
+    plain: std::cell::OnceCell<Rc<Outcome>>,
+}
+
+enum Stage {
+    /// The check stopped before a module whose names and types pass: what it came to.
+    Stopped(Rc<Outcome>),
+    /// The module whose names and types pass, walked.
+    Walked(Box<Walked>),
+}
+
+/// A module whose names and types pass, with what was found of it before the verdicts.
+struct Walked {
+    /// What was said of it before the analysis.
+    said: Vec<Diag>,
+    /// The keys written in the file (W901).
+    keys: Vec<Diag>,
+    /// The module, its analysis not set: each check sets its own in a copy.
+    base: Rc<Checked>,
+    /// What the analysis of ranges found before the verdicts ([`crate::ranges::walk`]).
+    walk: crate::ranges::Analysis,
+    /// How many of its functions are its own (its properties come after them).
+    own: usize,
+    /// What its examples said (E601), once run: no verdict changes it.
+    examples: std::cell::OnceCell<Vec<Diag>>,
+    /// What the vectors said of each property (DESIGN 38.3), once run.
+    properties: std::cell::OnceCell<Vec<crate::properties::PropertyReport>>,
+}
+
+/// The module `base` again, its analysis to be set: each `use module` whose module is in `swapped`
+/// reads that one, and the files it reaches are gathered again.
+fn copy(base: &Checked, swapped: &BTreeMap<PathBuf, Rc<Checked>>) -> Checked {
+    let uses: Vec<Target> = base
+        .uses
+        .iter()
+        .map(|t| match t {
+            Target::Module(c) => Target::Module(swapped.get(&c.canon).cloned().unwrap_or_else(|| c.clone())),
+            other => other.clone(),
+        })
+        .collect();
+    let world = if swapped.is_empty() {
+        base.world.clone()
+    } else {
+        let mut w = World::default();
+        for t in &uses {
+            w.add(t);
+        }
+        w
+    };
+    Checked {
+        path: base.path.clone(),
+        canon: base.canon.clone(),
+        src: base.src.clone(),
+        module: base.module.clone(),
+        uses,
+        world,
+        decls: base.decls.clone(),
+        typed: base.typed.clone(),
+        analysis: std::cell::OnceCell::new(),
+        lambdas: std::cell::OnceCell::new(),
+        lowered: None,
+        properties: base.properties.clone(),
+        tables: Default::default(),
+    }
+}
+
+/// Why a file a run was given cannot be checked: the system's answer to reading it, kept with the
+/// check of the files that could be read.
+pub type Unread = Rc<std::io::Error>;
 
 impl Run {
     pub fn new(suite: Suite) -> Run {
-        Run { suite, kept: RefCell::default(), reading: RefCell::default() }
+        Run { suite, kept: RefCell::default(), deciding: RefCell::default() }
     }
 
-    /// The check of the file at `path`, as it is given; Err when it cannot be read. It is read
-    /// through ritsu-base's `fs`, the disk or the files a page in the browser holds.
-    pub fn file(&self, path: &str) -> Result<Rc<Outcome>, String> {
-        let key = (canonical(Path::new(path)), path.to_string());
-        if let Some(o) = self.kept.borrow().get(&key) {
+    /// The check of the file at `path`, named the way the run writes its paths (ritsu's DESIGN
+    /// 4.15), however `path` is written; Err when it cannot be read. It is read through ritsu-base's
+    /// `fs`, the disk or the files a page in the browser holds.
+    pub fn file(&self, path: &str) -> Result<Rc<Outcome>, Unread> {
+        let canon = canonical(Path::new(path));
+        if let Some(o) = self.kept.borrow().get(&canon) {
             return Ok(o.clone());
         }
-        let src = ritsu_base::fs::read_to_string(path).map_err(|e| e.to_string())?;
-        let o = Rc::new(self.text(path, &src));
-        self.kept.borrow_mut().insert(key, o.clone());
+        let shown = ritsu_base::paths::show_str(path);
+        let prepared = self.prepared(&canon, &shown)?;
+        self.deciding.borrow_mut().push(canon.clone());
+        let o = self.finish(&prepared);
+        self.deciding.borrow_mut().pop();
+        self.kept.borrow_mut().insert(canon, o.clone());
         Ok(o)
     }
 
-    /// The check of `src`, the text of the file `path`.
+    /// The module at `shown` prepared with this run's languages: kept on the thread from the last
+    /// time, while every file preparing it read reads the same; else prepared now, by a run of the
+    /// same languages with no verdicts, and kept.
+    fn prepared(&self, canon: &Path, shown: &str) -> Result<Rc<Prepared>, Unread> {
+        let at = |p: Option<*const ()>| p.map_or(0, |p| p as usize);
+        let key = (
+            canon.to_path_buf(),
+            [
+                at(self.suite.rules.as_ref().map(|r| Rc::as_ptr(r) as *const ())),
+                at(self.suite.dates.as_ref().map(|d| Rc::as_ptr(d) as *const ())),
+                at(self.suite.books.as_ref().map(|b| Rc::as_ptr(b) as *const ())),
+            ],
+        );
+        let kept = PREPARED.with(|k| k.borrow().get(&key).map(|k| (k.prepared.clone(), k.seen.clone())));
+        if let Some((p, seen)) = kept
+            && seen.still()
+        {
+            return Ok(p);
+        }
+        let plain = Suite { verdicts: None, ..self.suite.clone() };
+        let run = Run::new(plain.clone());
+        let (got, seen) = ritsu_base::fs::watched(|| ritsu_base::fs::read_to_string(shown).map(|src| run.prepare(shown, &src)));
+        let p = Rc::new(got.map_err(Rc::new)?);
+        PREPARED.with(|k| {
+            let mut k = k.borrow_mut();
+            if k.len() >= KEEP {
+                k.clear();
+            }
+            k.insert(key, Kept { prepared: p.clone(), seen: Rc::new(seen), _suite: plain });
+        });
+        Ok(p)
+    }
+
+    /// What `p` comes to with this run's verdicts: with none, the check decided once; with them, the
+    /// module decided on them, its `use module` lines reading the modules as this run checks them.
+    /// A module whose `use module` lines read a module that passes with the verdicts and not without
+    /// them, or the other way round, is checked again here.
+    fn finish(&self, p: &Prepared) -> Rc<Outcome> {
+        if self.suite.verdicts.is_none() {
+            return p
+                .plain
+                .get_or_init(|| match &p.stage {
+                    Stage::Stopped(o) => o.clone(),
+                    Stage::Walked(w) => Rc::new(self.decided(p, w, &BTreeMap::new())),
+                })
+                .clone();
+        }
+        let mut swapped = BTreeMap::new();
+        for (file, passed) in &p.modules {
+            if self.deciding.borrow().contains(&canonical(Path::new(file))) {
+                continue;
+            }
+            let now = self.file(file).ok().and_then(|o| o.checked.clone());
+            if now.is_some() != *passed {
+                return Rc::new(self.text(&p.path, &p.src));
+            }
+            if let Some(c) = now {
+                swapped.insert(c.canon.clone(), c);
+            }
+        }
+        match &p.stage {
+            Stage::Stopped(o) => o.clone(),
+            Stage::Walked(w) => Rc::new(self.decided(p, w, &swapped)),
+        }
+    }
+
+    /// The check of `src`, the text of the file `path`, with this run's languages and verdicts.
     pub fn text(&self, path: &str, src: &str) -> Outcome {
+        let p = self.prepare(path, src);
+        match &p.stage {
+            Stage::Stopped(o) => (**o).clone(),
+            Stage::Walked(w) => self.decided(&p, w, &BTreeMap::new()),
+        }
+    }
+
+    /// The check of `src` up to the verdicts: the syntax, the files its `use` lines read, the names,
+    /// the types, and the walk of the analysis of ranges.
+    fn prepare(&self, path: &str, src: &str) -> Prepared {
+        ritsu_base::tally::count("kaname", Path::new(path));
+        CHECKS.with(|c| c.set(c.get() + 1));
+        let stopped = |mut diags: Vec<Diag>, keys: Vec<Diag>, modules: Vec<(String, bool)>| {
+            diags.extend(keys);
+            diag::sort(&mut diags);
+            let o = Outcome { path: path.to_string(), diags, checked: None, analysed: None, properties: Vec::new() };
+            Prepared { path: path.to_string(), src: src.to_string(), stage: Stage::Stopped(Rc::new(o)), modules, plain: std::cell::OnceCell::new() }
+        };
         // a key written in the file is in the repository whether the file reads or not (W901)
         let keys = crate::security::keys(path, src);
         let parsed = crate::parse::parse(path, src);
         let Some(module) = parsed.module else {
-            let mut diags = parsed.diags;
-            diags.extend(keys);
-            diag::sort(&mut diags);
-            return Outcome { path: path.to_string(), diags, checked: None, analysed: None, properties: Vec::new() };
+            return stopped(parsed.diags, keys, Vec::new());
         };
         if let Some(d) = self.unjoined(&module, path, src) {
-            let mut diags = vec![d];
-            diags.extend(keys);
-            diag::sort(&mut diags);
-            return Outcome { path: path.to_string(), diags, checked: None, analysed: None, properties: Vec::new() };
+            return stopped(vec![d], keys, Vec::new());
         }
         let canon = canonical(Path::new(path));
-        self.reading.borrow_mut().push(canon.clone());
+        READING.with(|r| r.borrow_mut().push(canon.clone()));
         let (uses, mut diags) = self.uses(&module, path, src);
-        self.reading.borrow_mut().pop();
+        READING.with(|r| r.borrow_mut().pop());
+        // the modules its `use module` lines read, each with whether it passed
+        let modules: Vec<(String, bool)> = module
+            .uses
+            .iter()
+            .filter(|u| u.kind == UseKind::Module)
+            .filter_map(|u| beside(path, &u.path).ok())
+            .map(|t| {
+                let passed = self.kept.borrow().get(&canonical(&t)).is_some_and(|o| o.checked.is_some());
+                (t.to_string_lossy().to_string(), passed)
+            })
+            .collect();
         // what a module read reads cannot be read here: that alone is said, as for this module
         if diags.iter().any(|d| d.code == "E202") {
             diags.retain(|d| d.code == "E202");
-            diags.extend(keys);
-            diag::sort(&mut diags);
-            return Outcome { path: path.to_string(), diags, checked: None, analysed: None, properties: Vec::new() };
+            return stopped(diags, keys, modules);
         }
-        let read_all = uses.iter().all(Option::is_some);
         // while the module is checked, its properties are functions after its own (DESIGN 38.2): the
         // names, the types, the analysis and the effects read them as they read a function
         let own = module.fns.len();
@@ -231,76 +443,78 @@ impl Run {
         let mut dc = Dc { path, src, canon: &canon, module: &module, uses: &by_name, world: &world, diags: Vec::new(), scope: Vec::new() };
         dc.names();
         let decls = dc.declarations();
-        let n = module.exprs;
-        let (typed, more) = if read_all {
-            types::check(dc, &decls)
-        } else {
-            // the names inside the functions would name what could not be read: that is said once, at
-            // its `use` line
-            (Typed { types: vec![crate::ty::Ty::Error; n], refs: vec![types::Ref::None; n], bound: BTreeMap::new(), inst: BTreeMap::new(), named: BTreeMap::new() }, dc.diags)
-        };
+        // the names as the targets spell them (DESIGN 10.3)
+        dc.spelled(&decls, own);
+        // a name that a file that could not be read gives is of no type that can be told, and is
+        // said nothing of where it is written (it is said once, at its `use` line): what does not
+        // name one is checked all the same
+        let (typed, more) = types::check(dc, &decls);
         diags.extend(more);
+        // a name declared nowhere is said once, where it is first written (ritsu's DESIGN 8.3)
+        ritsu_base::diag::once(&mut diags);
+        if diag::has_errors(&diags) {
+            return stopped(diags, keys, modules);
+        }
         // `let … = try …` is read as the `match` it means, once the types pass (DESIGN 26.3)
         let (mut module, mut typed) = (module, typed);
-        if !diag::has_errors(&diags) {
-            let rets: Vec<crate::ty::Ty> = decls.fns.iter().map(|f| f.ret.ty.clone()).collect();
-            crate::tried::desugar(&mut module, &mut typed, &rets);
-            // a function written as a value is read as the lambda that calls it (DESIGN 27.1)
-            crate::wrapped::desugar(&mut module, &mut typed);
-        }
-        let mut checked = if diag::has_errors(&diags) {
-            None
-        } else {
-            Some(Rc::new(Checked {
-                path: path.to_string(),
-                canon,
-                src: src.to_string(),
-                module,
-                uses: uses.into_iter().flatten().collect(),
-                world,
-                decls,
-                typed,
-                analysis: std::cell::OnceCell::new(),
-                lambdas: std::cell::OnceCell::new(),
-                lowered: None,
-                properties: Vec::new(),
-            }))
-        };
-        // the analysis of ranges, the effects and the decisions written in code, once the types hold
-        // (DESIGN 4, 5, 7)
-        let analysed = checked.clone();
-        if let Some(c) = &checked {
-            let (analysis, found) = crate::ranges::analyze(c, &self.suite);
-            let _ = c.analysis.set(analysis);
-            diags.extend(found);
-            if diag::has_errors(&diags) {
-                checked = None;
-            }
-        }
+        let rets: Vec<crate::ty::Ty> = decls.fns.iter().map(|f| f.ret.ty.clone()).collect();
+        crate::tried::desugar(&mut module, &mut typed, &rets);
+        // a function written as a value is read as the lambda that calls it (DESIGN 27.1)
+        crate::wrapped::desugar(&mut module, &mut typed);
+        let base = Rc::new(Checked {
+            path: path.to_string(),
+            canon,
+            src: src.to_string(),
+            module,
+            uses: uses.into_iter().flatten().collect(),
+            world,
+            decls,
+            typed,
+            analysis: std::cell::OnceCell::new(),
+            lambdas: std::cell::OnceCell::new(),
+            lowered: None,
+            properties: Vec::new(),
+            tables: Default::default(),
+        });
+        // the analysis of ranges, as far as the verdicts change nothing of it (DESIGN 4, 5)
+        let walk = crate::ranges::walk(&base, &self.suite);
+        let w = Walked { said: diags, keys, base, walk, own, examples: std::cell::OnceCell::new(), properties: std::cell::OnceCell::new() };
+        Prepared { path: path.to_string(), src: src.to_string(), stage: Stage::Walked(Box::new(w)), modules, plain: std::cell::OnceCell::new() }
+    }
+
+    /// The rest of the check of a walked module, with this run's verdicts: the effects and the
+    /// decisions written in code (DESIGN 5, 7), the examples, then the properties.
+    fn decided(&self, p: &Prepared, w: &Walked, swapped: &BTreeMap<PathBuf, Rc<Checked>>) -> Outcome {
+        let c = Rc::new(copy(&w.base, swapped));
+        let mut diags = w.said.clone();
+        let (analysis, found) = crate::ranges::settle(&c, &self.suite, w.walk.clone());
+        let _ = c.analysis.set(analysis);
+        diags.extend(found);
+        let mut checked = if diag::has_errors(&diags) { None } else { Some(c.clone()) };
         // the examples run once everything else holds (E601)
         if let Some(c) = &checked {
-            let failed = crate::examples::check(c, &self.suite);
+            let failed = w.examples.get_or_init(|| crate::examples::check(c, &self.suite));
             if !failed.is_empty() {
-                diags.extend(failed);
+                diags.extend(failed.iter().cloned());
                 checked = None;
             }
         }
         // the module the stages after the check read: its properties out of its functions
-        let analysed = analysed.map(|c| without_properties(c, own));
+        let analysed = Some(without_properties(c, w.own));
         let mut checked = if checked.is_some() { analysed.clone() } else { None };
         // the properties, on their vectors, last (DESIGN 38.3)
         let mut properties = Vec::new();
         if let Some(c) = &checked {
-            properties = crate::properties::run(c, &self.suite);
+            properties = w.properties.get_or_init(|| crate::properties::run(c, &self.suite)).clone();
             let found = crate::properties::diags(c, &properties);
             if diag::has_errors(&found) {
                 checked = None;
             }
             diags.extend(found);
         }
-        diags.extend(keys);
+        diags.extend(w.keys.iter().cloned());
         diag::sort(&mut diags);
-        Outcome { path: path.to_string(), diags, checked, analysed, properties }
+        Outcome { path: p.path.clone(), diags, checked, analysed, properties }
     }
 
     /// E202 at the first line that reads a language this run does not join.
@@ -349,7 +563,9 @@ impl Run {
                     continue;
                 }
             };
-            let shown = target.display().to_string();
+            // the file named as the module wrote it, whoever runs the check and from where (ritsu's
+            // DESIGN 4.15)
+            let shown = u.path.clone();
             let ext = u.kind.extension();
             let word = u.kind.word();
             if !shown.ends_with(&format!(".{ext}")) {
@@ -406,7 +622,7 @@ impl Run {
                     }
                     None => None,
                 },
-                UseKind::Module => self.module_use(u, &shown, &canon, path, src, &mut diags),
+                UseKind::Module => self.module_use(u, &shown, &target, &canon, path, src, &mut diags),
             };
             out.push(t);
         }
@@ -415,12 +631,16 @@ impl Run {
 
     /// Another module, checked: E203 when reading it comes back to a module being read, E201 when it
     /// does not pass, E202 when it reads what this run cannot.
-    fn module_use(&self, u: &crate::ast::Use, shown: &str, canon: &Path, path: &str, src: &str, diags: &mut Vec<Diag>) -> Option<Target> {
+    /// `shown` is the module's file as the `use` line wrote it, `target` where it leads.
+    #[allow(clippy::too_many_arguments)]
+    fn module_use(&self, u: &crate::ast::Use, shown: &str, target: &Path, canon: &Path, path: &str, src: &str, diags: &mut Vec<Diag>) -> Option<Target> {
         let at = |code: &'static str, msg: Text| Diag::error(code, path, u.path_span.line, u.path_span.col, msg).source(src);
-        let ring = {
-            let reading = self.reading.borrow();
+        let ring = READING.with(|r| {
+            let reading = r.borrow();
             reading.iter().position(|p| p == canon).map(|i| reading[i..].iter().map(|p| p.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default()).collect::<Vec<_>>())
-        };
+        });
+        // the command that checks it, run where this run is
+        let run = ritsu_base::paths::show(target);
         if let Some(files) = ring {
             let mut names = files;
             names.push(names[0].clone());
@@ -441,7 +661,7 @@ impl Run {
             );
             return None;
         }
-        let o = match self.file(shown) {
+        let o = match self.file(&target.to_string_lossy()) {
             Ok(o) => o,
             Err(e) => {
                 diags.push(at("E201", tr!("`{shown}` を読めません: {e}", "Cannot read `{shown}`: {e}")));
@@ -464,8 +684,8 @@ impl Run {
         if o.has_errors() {
             if o.diags.iter().any(|d| d.code == "E203") {
                 diags.push(at("E203", tr!("`{shown}` は、モジュールの読み込みの輪の中にあります", "`{shown}` is in a ring of modules that read each other")).note(tr!(
-                    "輪がどこを通るかは、`kaname check {shown}` で読めます。読む向きを一つにしてください。",
-                    "`kaname check {shown}` says where the ring goes; make the modules read one way only."
+                    "輪がどこを通るかは、`kaname check {run}` で読めます。読む向きを一つにしてください。",
+                    "`kaname check {run}` says where the ring goes; make the modules read one way only."
                 )));
                 return None;
             }
@@ -474,7 +694,7 @@ impl Run {
                 let (code, place) = (x.code, x.place());
                 d = d.note(tr!("{code}: {}（{place}）", "{code}: {} ({place})", x.message.ja; capitalize(&x.message.en)));
             }
-            diags.push(d.note(tr!("`kaname check {shown}` で、そのファイルの誤りを全部読めます。", "`kaname check {shown}` says everything that is wrong with it.")));
+            diags.push(d.note(tr!("`kaname check {run}` で、そのファイルの誤りを全部読めます。", "`kaname check {run}` says everything that is wrong with it.")));
             return None;
         }
         o.checked.as_ref().map(|c| Target::Module(c.clone()))
@@ -524,7 +744,7 @@ pub fn with_lean(outcomes: &[Rc<Outcome>], opts: &crate::lean::LeanOptions) -> R
 /// the first path given that holds `.git` or `ritsu.mod`, else the directory of that file.
 pub fn root_of(root: Option<&Path>, first: &str) -> PathBuf {
     match root {
-        Some(r) => ritsu_base::paths::absolute(r),
+        Some(r) => ritsu_base::paths::opened(r),
         None => ritsu_base::paths::find_root(Path::new(first)),
     }
 }
@@ -573,7 +793,7 @@ pub fn to_json(o: &Outcome, root: &Path, lang: Lang) -> Json {
 /// What `ritsu check` prints of one file (`f`, as the person gave it) that the check came to, or
 /// could not read (ritsu's DESIGN 8.3): every finding, as `kaname check` prints it and as its
 /// `--format json` prints it, then the line that says the file passes.
-pub fn unit(root: &Path, f: &str, checked: Result<&Outcome, String>, lang: Lang) -> ritsu_ports::Checked {
+pub fn unit(root: &Path, f: &str, checked: Result<&Outcome, &std::io::Error>, lang: Lang) -> ritsu_ports::Checked {
     use ritsu_ports::{Checked as Unit, Finding, Part, Verdict};
     match checked {
         Ok(o) => {
@@ -590,15 +810,12 @@ pub fn unit(root: &Path, f: &str, checked: Result<&Outcome, String>, lang: Lang)
             };
             Unit { label: f.to_string(), parts, verdict, json: to_json(o, root, lang) }
         }
-        Err(e) => {
-            let msg = tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}");
-            let head = if lang == Lang::Ja { "エラー" } else { "error" };
-            Unit::unchecked(f, format!("{head}: {}\n", msg.get(lang)))
-        }
+        // in the words every command of ritsu says it in
+        Err(e) => Unit::unchecked(f, format!("{}\n", ritsu_base::cli::refusal(ritsu_base::cli::cannot_read(f, e).get(lang), lang))),
     }
 }
 
 /// Shorthand for a test or a tool: the file at `path` with the languages `suite` joins.
 pub fn check(path: &str, suite: Suite) -> Result<Rc<Outcome>, String> {
-    Run::new(suite).file(path)
+    Run::new(suite).file(path).map_err(|e| e.to_string())
 }

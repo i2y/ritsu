@@ -29,6 +29,28 @@ pub fn known_package(full: &str) -> bool {
     full.starts_with("google.protobuf.") || full.starts_with("buf.validate.") || full.starts_with("dandori.v1.")
 }
 
+/// What a type name written in `scope` (the full name of the message it is written in, or the
+/// package) comes to, by protobuf's rule: a name with a leading `.` is full as written, and any
+/// other is looked for in `scope`, then in each scope around it, out to the root. `found` says
+/// what a full name is declared as. Every language that reads a field's type finds it this way,
+/// so that `Status` in `message Line` is `Line.Status` and not another message's `Status`.
+pub fn resolve_name<T>(scope: &str, written: &str, found: impl Fn(&str) -> Option<T>) -> Option<T> {
+    if let Some(full) = written.strip_prefix('.') {
+        return found(full);
+    }
+    let mut s = scope;
+    loop {
+        let full = if s.is_empty() { written.to_string() } else { format!("{s}.{written}") };
+        if let Some(t) = found(&full) {
+            return Some(t);
+        }
+        if s.is_empty() {
+            return None;
+        }
+        s = s.rsplit_once('.').map_or("", |(a, _)| a);
+    }
+}
+
 /// Google's well-known types, which a `.proto` imports from `google/protobuf/…`.
 pub const WELL_KNOWN: &[&str] = &[
     "google.protobuf.Timestamp",
@@ -50,6 +72,10 @@ pub const WELL_KNOWN: &[&str] = &[
     "google.protobuf.BytesValue",
     "google.protobuf.NullValue",
 ];
+
+/// Google's date (`google/type/date.proto`), which dandori and `fed by proto` read as a `date`
+/// (dandori's DESIGN 42). Both know it by its full name, as the well-known types are.
+pub const DATE: &str = "google.type.Date";
 
 /// Where an import is looked for, as paths from the root, in order: under each of `roots`; then,
 /// as buf lays a module out, from the root of the module when the importing file sits where its
@@ -284,28 +310,12 @@ impl Protos {
     pub fn resolve(&self, file: &str, scope: &str, written: &str) -> Resolved {
         let vis = self.visible(file);
         let found = |full: &str| self.symbols.get(full).and_then(|ss| ss.iter().find(|s| vis.contains(&s.file))).cloned();
-        if let Some(abs) = written.strip_prefix('.') {
-            if let Some(f) = found(abs) {
-                return Resolved::Found(f);
-            }
-            if known_package(abs) {
-                return Resolved::Known(abs.to_string());
-            }
-        } else {
-            let mut s = scope.to_string();
-            loop {
-                let full = if s.is_empty() { written.to_string() } else { format!("{s}.{written}") };
-                if let Some(f) = found(&full) {
-                    return Resolved::Found(f);
-                }
-                if s.is_empty() {
-                    break;
-                }
-                s = s.rsplit_once('.').map(|(a, _)| a.to_string()).unwrap_or_default();
-            }
-            if known_package(written) {
-                return Resolved::Known(written.to_string());
-            }
+        if let Some(f) = resolve_name(scope, written, found) {
+            return Resolved::Found(f);
+        }
+        let bare = written.strip_prefix('.').unwrap_or(written);
+        if known_package(bare) {
+            return Resolved::Known(bare.to_string());
         }
         if self.unread.contains(file) { Resolved::Unknown } else { Resolved::Missing }
     }

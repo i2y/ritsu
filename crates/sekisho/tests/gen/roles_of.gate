@@ -1,0 +1,60 @@
+gate staff_roles v1
+description "Two types of principal, each holding roles of its own: a sign-in that carries every role is narrowed to the roles of its type"
+namespace Office
+
+role clerk
+  description "Answers requests"
+  can reply
+
+role manager
+  description "Answers requests and closes them"
+  includes clerk
+  can reply, close
+
+role auditor
+  description "Reads every request"
+  can read
+
+principal Employee
+  description "One who works in the office"
+  roles clerk, manager
+
+principal Inspector
+  description "One who comes to check the office"
+  roles auditor
+
+resource Ticket
+  description "A request to the office"
+  attributes
+    open : bool
+
+action reply
+  description "Answer a request"
+  principal Employee
+  resource Ticket
+
+action close
+  description "Close a request"
+  principal Employee
+  resource Ticket
+
+action read
+  description "Read a request"
+  principal Inspector
+  resource Ticket
+
+permit clerks_reply
+  description "A clerk answers an open request"
+  principal in clerk
+  action reply
+  when resource.open
+
+permit managers_close
+  description "A manager closes a request"
+  principal in manager
+  action close
+
+permit auditors_read
+  description "An auditor reads any request"
+  principal in auditor
+  action read

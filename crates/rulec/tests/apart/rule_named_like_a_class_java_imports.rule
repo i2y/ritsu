@@ -1,0 +1,16 @@
+rule array_list v1
+description "A rule named like a class of the JDK the Java module and its runner import, with an input named like the package the code then reads the class from"
+
+inputs
+  items : number  range >=0 <=100
+  java  : bool
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_items
+policy unique
+| items | java  | -> fee |
+| <=10  | -     | 2USD   |
+| >10   | true  | 5USD   |
+| >10   | false | 6USD   |

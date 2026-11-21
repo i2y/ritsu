@@ -1,0 +1,5 @@
+error[E006]: tests/mutants/E006_ワークフローの下の二度書き.gate:12:3: `resource 請求 from 請求番号` is written twice under this workflow
+    12 |   resource 請求 from 請求番号
+  = Write the attributes under one `resource` line.
+error[E006]: tests/mutants/E006_ワークフローの下の二度書き.gate:14:5: The attribute `金額` is written twice under this `resource`
+    14 |     金額 = 金額

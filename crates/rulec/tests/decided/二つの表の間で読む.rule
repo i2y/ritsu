@@ -1,0 +1,27 @@
+rule 二つの表の間で読む(read_between_ja) v1
+description "等級を二つの表で決め、等級を読む表をその間に書いた形。一つの出力を決める表は、そのうち最後の表の所でまとめて計算する"
+
+enum 段階(level) = 低(low) | 高(high)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100000円
+  会員(member) : bool
+
+outputs
+  等級(grade)  : 段階
+  確認(review) : bool
+
+table 小さい注文の等級(grade_small)
+| 金額     | -> 等級 |
+| <10000円 | 低      |
+
+table 確認の要否(review_of)
+policy unique
+| 等級 | 会員  | -> 確認 |
+| 低   | -     | false   |
+| 高   | true  | false   |
+| 高   | false | true    |
+
+table 大きい注文の等級(grade_large)
+| 金額      | -> 等級 |
+| >=10000円 | 高      |

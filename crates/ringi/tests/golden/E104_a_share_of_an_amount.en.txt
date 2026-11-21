@@ -1,0 +1,4 @@
+error[E104]: tests/mutants/E104_a_share_of_an_amount.ringi:5:31: `fee` is computed with no rounding
+     5 |   fee    : money[JPY] "Fee" = amount * 3%
+  = `amount * 3%` can leave a fraction: say how it rounds and to what, as in `round down(1JPY)` (`up`, `down`, `half_up`, `half_down`, `half_even`).
+  = The line, fixed: fee    : money[JPY] "Fee" = amount * 3%  round down(1JPY)

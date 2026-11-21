@@ -1,0 +1,5 @@
+error[E201]: tests/mutants/E201_a_computation_past_int64_in_the_generated_code.ringi:8:1: What the computation of the field `amount` is lowered to for the generated code does not pass rulec's check: from the ranges of the fields it reads, `amount` can come to 30_000_000_000_000_000_000JPY, past int64
+     8 |   amount : money[JPY] "Amount" = sum(lines.subtotal)  range >=1JPY <=100_000_000JPY
+  = The generated code works out what the form computes before it holds each value to the range its field writes; the check and `ritsu ringi run` read each value within that range.
+  = Narrow the ranges of the fields `amount` reads (`lines.quantity`, `lines.price`) so that what it can come to fits in int64.
+  = From rulec: E108 at line 15 of the lowered `values.rule`: Cannot prove that amount fits in int64

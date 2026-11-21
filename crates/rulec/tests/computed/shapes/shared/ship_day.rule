@@ -1,0 +1,15 @@
+rule ship_day v1
+description "The day an order ships, by where it goes: 1 July for a local order, 3 July for one that goes further"
+
+enum zone = local | national
+
+inputs
+  zone : zone
+
+outputs
+  ships : date
+
+table ships_of
+| zone     | -> ships   |
+| local    | 2026-07-01 |
+| national | 2026-07-03 |

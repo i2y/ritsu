@@ -1,0 +1,17 @@
+masters company_masters v1
+description "The account codes an expense chooses from, and the owners of the company's systems (fictional)"
+use organization org from "../org/company.ringi"
+
+master accounts "Account codes"
+  key code
+  fields
+    code  : text "Code"  count <=10
+    label : text "Name"  count <=60
+  data "accounts.csv"
+
+master systems "Systems"
+  key id
+  fields
+    id    : text "System"  count <=30
+    owner : person "Owner"
+  data "systems.csv"

@@ -1,0 +1,4 @@
+error[E306]: example.ringi:19:3: The claim small_by_manager does not hold: some request outside the condition comes to `manager` at the stage decide
+    19 |   small_by_manager : decide is manager only when amount <= 50_000JPY
+  = Such a request: amount = 50_001JPY
+  = Correct the route, or the condition.

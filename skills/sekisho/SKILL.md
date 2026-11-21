@@ -52,7 +52,7 @@ and show the page to the people who decide who may do what. Three things stay wi
    which combinations gained or lost a permission, and which are decided by other policies, with an
    example of each. Each side is a path, `<path>@<git revision>`, `@<name>/<path>` (a dependency at
    the lock's version) or `@<name>@<version>/<path>` (a version in the store); it exits 1 when a
-   permission is gained or lost or the interface differs. Show it to the people who decide.
+   permission is gained or lost, the interface differs, or a line under a workflow differs. Show it to the people who decide.
 
 ```console
 $ ritsu sekisho check examples/refunds/refunds.gate --root examples/refunds
@@ -153,6 +153,13 @@ separate refunding_and_auditing
   is written.
 - Every attribute counts finitely: `bool`, an enum, a number of a unit type with both ends of its
   `range`, a `date` with a range, an entity type, `T?`. There are no free strings.
+- Under a workflow's `description`, `resource Order from order_id` and, one step further in,
+  `status = order.status` say what the flow holds of the resource it acts on: the attribute on the
+  left is the value of the flow on the right (an input, a variable, or a field of one) wherever the
+  flow gives that id to an action of the type. `ritsu check` then asks whether the gate allows each
+  call with the values the flow has there, the arms of a `match` on the way counted. Nothing checks
+  these lines of the resource the service reads: they are an assumption, every answer that rests
+  on them says so, and a task whose call can be denied still declares its error for a denial.
 - `guards` names an operation of a document a `use` line reads: an `operationId` (or `"POST
   /orders/{orderId}/refunds"`), `"Service/Method"` of a `.proto`, an AsyncAPI operation's key, a
   chobo transfer's `<transfer>.<operation>`.
@@ -184,6 +191,8 @@ separate refunding_and_auditing
   contract says `security: []`), at ritsu's E907 and W907.
 - What a workflow should do when it is denied, at ritsu's W909: the task declares the error
   (`errors denied = 403`), and the flow handles it.
+- Whether the resource the service reads really has what the flow holds of it, before writing a
+  `resource … from …` line under a workflow: the line is the writer's word, and nothing checks it.
 - Whether an action should hang on another action's answer (`allowed`), when the business says
   "only when they could not …" or "rather than …", and what the other action's inputs are given
   when this action has none of their names (E110).
@@ -207,9 +216,15 @@ reproduction. The usual ones:
 | E207 | a calendar without data for every day `today` can be | narrow `today`'s range, or bring the calendar's data |
 | E208 | a workflow's flow does not pass dandori's check | fix the flow with dandori |
 | E209 | the command was run without the other languages | run it as `ritsu sekisho` |
+| E212 | a `resource … from …` line under a workflow, or an `<attribute> = <value>` under it, is not what the flow holds: no such value, another type or unit, a value outside the attribute's range at a call the line speaks of (the note names the calls) | name a value the flow has; narrow the flow's value (its `range`, or a branch before the call) or widen the attribute's range, after asking which is right |
+| W202 | a `resource … from …` line under a workflow that no call of the flow speaks of: no action takes a resource of its type from an argument, the action that takes one names no argument for its id, the flow calls none of the operations, or the calls give the id another value (the note says which) | write the value the calls give as the id, the type an action takes, or `resource <type> from <argument>` on the action; take the line out from under a workflow that makes no such call |
 | E301 | no permit allows the action | ask who may do it; if no one, `nobody "<why>"` after the `resource` line |
 | E302 | a permit a forbid covers entirely | narrow the forbid, or ask whether the permit should go |
 | E303 | a policy whose conditions never hold together | fix the conditions |
+| W305 | a policy that names an action it applies to in no combination, while it applies to another it names | ask whether the action should go from its `action` line, or the lines should apply to it too |
+| W306 | a permit that names an action where a forbid denies every combination it would allow, while it allows something of another it names | ask whether the action should go from its `action` line, or the forbid should let the permit allow it |
+| W307 | a `when` or `unless` line of a permit every combination of which it leaves out a forbid denies: it changes no decision | ask whether the line can go, or should leave out something else |
+| W308 | a `when` or `unless` line of a policy met wherever its other lines are: it leaves out only what cannot occur (the note says which value never comes, where the rules decide it) | ask whether the line can go or should leave out something else; for what a rule decides, hold the rule's answer in its `examples` |
 | E304, W304 | an expectation that does not hold, or picks nothing | ask whether the policies or the expectation are wrong |
 | E305 | a principal is allowed two duties a `separate` keeps apart | ask; usually a forbid on one of them for the holders of the other |
 | E306, W302 | a role's reach is not its `can` | ask whether `can` or the policies are right |
@@ -225,9 +240,10 @@ reproduction. The usual ones:
 | Code | What it means | What to do |
 |---|---|---|
 | E907, W907 | an operation a context opens that no action guards; a context none of whose operations is guarded yet | guard it with an action, or say in its contract that anyone may call it (`security: []`), after asking |
-| E908 | a workflow calls an operation its gate never allows it | ask whether the gate or the flow is wrong |
+| E908 | a workflow calls an operation its gate never allows it, with what the call gives and what the arms of a `match` leave at it | ask whether the gate or the flow is wrong; make the call where the gate allows it |
 | W908 | a workflow is allowed an action whose operation it never calls | narrow the permit to what the flow calls |
-| W909 | a workflow's call can be denied, and its task declares no error for it | declare the error on the task (`errors denied = 403`) and handle it in the flow |
+| E909 | a call gives a number that the action's `input` counts in another unit or step than the task does | ask which of the two types is right, and write the other as it |
+| W909 | a workflow's call can be denied, or is allowed only as far as the workflow's `resource … from …` lines hold, and its task declares no error for it | declare the error on the task (`errors denied = 403`) and handle it in the flow; where the answer reads the resource's attributes, ask what the flow holds of them and say it under the `workflow` |
 
 Fix the first diagnostic first: an error of words or names stops the checks after it.
 
@@ -242,7 +258,10 @@ Verified Permissions with `--authorizer avp`. It refuses before asking Cedar whe
 not what the gate declared. An action whose policies read `allowed` asks that action first, through
 its function, and is refused when it is. `ritsu gen` puts the same into the packages of a project,
 beside the rules and dates the code reads. The handler calls the function with the operation's
-arguments as it parsed them, and performs the operation with those same arguments.
+arguments as it parsed them, and performs the operation with those same arguments. A caller that
+holds the action's name as a string asks through `authorize` (`Authorize` in Go), with the ids of
+the resources by the name of their types; it refuses a name the gate has no action of (the kind
+`action`), and an action that takes inputs of its own is asked through its own function.
 
 `ritsu sekisho doc` writes the page for people: each action's table of who is allowed and who is
 denied, the policies beside the Cedar they become, the pages of the rules and dates the conditions

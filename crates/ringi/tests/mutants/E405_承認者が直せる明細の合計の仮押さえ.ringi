@@ -1,0 +1,28 @@
+request 例(example) v1 "例"
+
+use calendar 事務所(office) from "shared/事務所.cal"
+use book 予算(budget) from "shared/budget.book"
+
+form
+  明細(items) : rows "明細"  count >=1 <=10
+    品目(what)  : text "品目"  count >=1 <=40
+    単価(price) : money[JPY] "金額"  range >=1JPY <=100_000JPY
+  金額(amount) : money[JPY] "合計" = sum(明細.単価)  range >=1JPY <=1_000_000JPY
+  部(dept)     : text "部"  count >=1 <=20
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+every stage
+  due in 3 business days at end of day
+  when late expire
+
+ticket
+  self approval   not allowed
+  approvers edit  明細
+  on submitted    hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: 部, amount: 金額)
+  on approved     post 予算.reserve(request: ticket.id, attempt: ticket.attempt)
+  on rejected, expired  void 予算.reserve(request: ticket.id, attempt: ticket.attempt)

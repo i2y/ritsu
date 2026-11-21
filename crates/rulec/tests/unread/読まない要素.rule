@@ -1,0 +1,26 @@
+rule 読まない要素(unread_element) v1
+description "注文の箱代。急ぎなら、大きさによらず、どの明細でも箱が要る。歩きは明細を一つずつ名指すが、その項目を読まない（架空）"
+
+enum 荷の大きさ(parcel_size) = 小(small) | 大(large)
+enum 扱い(call) = 箱(box) | 待つ(wait)
+
+elements 明細(lines)
+  大きさ(size) : 荷の大きさ
+
+inputs
+  急ぎ(rush) : bool
+
+outputs
+  箱代(fee) : money[円]  round down(1円)
+
+table 箱を決める(box_for)
+policy unique
+| 大きさ | 急ぎ  | -> 次(step) : 扱い |
+| -      | true  | 箱                 |
+| -      | false | 待つ               |
+
+fold 次 over 明細 -> 箱代
+  箱 -> stop with 200円
+  待つ -> next
+  empty -> 0円
+  exhausted -> 0円

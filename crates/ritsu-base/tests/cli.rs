@@ -194,7 +194,28 @@ fn what_a_command_line_says() {
     assert_eq!(c.read(check, &args(&["--format", "yaml"])), Err(Misuse::NotAChoice { flag: "--format", value: "yaml".into(), choices: &["json"] }));
     assert_eq!(c.read(check, &args(&["--format"])), Err(Misuse::MissingValue { flag: "--format", placeholder: "json" }));
     assert_eq!(c.read(check, &args(&["--format", "json", "--format", "json"])), Err(Misuse::Twice("--format")));
+    // given three times, the line stops at the second, in the same words: no count to go wrong
+    assert_eq!(c.read(check, &args(&["--format", "json", "--format", "json", "--format", "json"])), Err(Misuse::Twice("--format")));
     assert_eq!(Misuse::Twice("--format").text("chobo", "check").ja, "`--format` が二度書かれています");
+}
+
+/// The sentences of a value a flag of whole numbers does not take, and of codes `explain` does not
+/// have: one code as it was said, several in one sentence in the order given, each once.
+#[test]
+fn a_number_a_flag_does_not_take_and_codes_explain_does_not_have() {
+    let n = ritsu_base::cli::not_positive("--budget", "0");
+    assert_eq!((n.en.as_str(), n.ja.as_str()), ("`--budget 0` is not a positive integer", "`--budget 0` は正の整数ではありません"));
+    let codes = |c: &[&str]| ritsu_base::cli::no_codes("koyomi", &c.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+    assert_eq!(codes(&["E999"]), ritsu_base::cli::no_code("koyomi", "E999"));
+    assert_eq!(codes(&["E999", "E999"]), ritsu_base::cli::no_code("koyomi", "E999"));
+    let two = codes(&["E999", "E998", "E999"]);
+    assert_eq!(
+        (two.en.as_str(), two.ja.as_str()),
+        (
+            "there are no codes `E999`, `E998`; run `koyomi explain --all`",
+            "`E999`、`E998` というコードはありません。`koyomi explain --all` を読んでください"
+        )
+    );
 }
 
 /// A flag that takes each value once (`--target`, DESIGN 9.6): any number of values, the same one
@@ -243,6 +264,13 @@ fn the_usage_line_and_a_flag_spelled() {
     let mut explain = cmd("explain", "<code>", Text::same("explain"));
     explain.usage = Some("chobo explain <code> | --all [--format markdown]");
     assert_eq!(y.usage_line(&explain), "chobo explain <code> | --all [--format markdown]", "a line written by hand is the line");
+    // a flag the command cannot run without is written without brackets, as the sentence that
+    // stops a line without it says it (`sakai gen --target`)
+    let make = Cmd { flags: vec![flag("--target", Some("<tool>"), Text::default()).once_each().needed(), flag("--out", Some("<dir>"), Text::default())], ..cmd("gen", "<map.ctx>", Text::same("gen")) };
+    assert_eq!(y.usage_line(&make), "yuen gen <map.ctx> --target <tool>... [--out <dir>]");
+    // a flag the arguments name is one way to call the command, not said again in brackets
+    let codes = Cmd { flags: vec![flag("--all", None, Text::default()), flag("--format", Some("markdown"), Text::default())], ..cmd("explain", "<CODE>... | --all", Text::same("explain")) };
+    assert_eq!(y.usage_line(&codes), "yuen explain <CODE>... | --all [--format markdown]");
     assert_eq!(flag("--map", Some("<spec>"), Text::default()).repeats().spelled(), "--map <spec>...");
     assert_eq!(help_flag().spelled(), "--help");
 }

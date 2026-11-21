@@ -363,9 +363,10 @@ impl Ints {
     }
 }
 
-/// The values an integer kind can hold on the wire.
+/// The values an integer kind can hold on the wire. A scalar's name is never written with a
+/// package: `.shop.v1.int64` would be a message.
 pub fn int_bounds(ty: &str) -> Option<(i128, i128)> {
-    match ty.rsplit('.').next().unwrap_or(ty) {
+    match ty {
         "int32" | "sint32" | "sfixed32" => Some((i32::MIN as i128, i32::MAX as i128)),
         "uint32" | "fixed32" => Some((0, u32::MAX as i128)),
         "int64" | "sint64" | "sfixed64" => Some((i64::MIN as i128, i64::MAX as i128)),
@@ -482,30 +483,203 @@ pub fn upper_snake(camel: &str) -> String {
     out
 }
 
-/// A value's name with the enum's prefix taken off, when what is left is a name of its own
-/// (`is_value` says whether a name is another value's whole name, which would make two values
-/// one). It is not when it begins with a digit — `SIZE_60` would leave `60`, which no alias can
-/// be. The name then stays as written, prefix and all, which is also what protobuf-py does with it.
-pub fn value_local<'v>(enum_name: &str, value: &'v str, is_value: impl Fn(&str) -> bool) -> &'v str {
-    let prefix = format!("{}_", upper_snake(enum_name));
-    match value.strip_prefix(prefix.as_str()) {
-        Some(rest) if rest.starts_with(|c: char| c.is_ascii_alphabetic()) && !is_value(rest) => rest,
-        _ => value,
+/// How the values of one enum of a `.proto` read: the names a rule's `import proto`, a gate's
+/// `use proto` and the check across the languages hold a contract's values to. The three read
+/// with this one reading (rulec's DESIGN §15.59 has the table of the forms a name can take).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EnumNames {
+    /// Each number the enum gives a name, once, in the order the file first gives it, without
+    /// the one proto3 reads as not set.
+    pub values: Vec<ValueNames>,
+    /// The value proto3 reads as not set, when the file has one: the number 0, read `unspecified`.
+    /// A field left out of a message arrives as it.
+    pub unset: Option<ValueNames>,
+}
+
+/// One value of an enum: its number, and each name the file gives the number, the first one
+/// first. Under `allow_alias` a number has more than one name, and it is still one value: a field
+/// holds the number, and protojson writes it under its first name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ValueNames {
+    pub number: i64,
+    pub names: Vec<Name>,
+}
+
+/// One name of a value, as the file writes it and as it is read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Name {
+    /// `CATEGORY_TRAVEL`.
+    pub written: String,
+    /// `travel`.
+    pub read: String,
+    pub how: How,
+}
+
+/// How a name came to be read as it is, which is what a reader says when the reading is not the
+/// one the writer expected.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum How {
+    /// Without the enum's name before it (`CATEGORY_TRAVEL`, `Category_Travel`).
+    Dropped,
+    /// Whole: it does not begin with the enum's name (`TRAVEL`).
+    Whole,
+    /// Whole: the enum's name runs on into a word of it (`STATUSBAR_HIDDEN` of `Status`).
+    RunsOn,
+    /// Whole: what follows the enum's name begins with a digit (`SIZE_60`).
+    Digit,
+    /// Whole, though it begins with the enum's name: without it, it would be read as this name (in
+    /// lower case), which is a name of another number (`COLOR_RED` beside `RED`).
+    Kept(String),
+    /// As written: its whole name in lower case is a name of another number too (`COLOR_RED` beside
+    /// `Color_Red`).
+    AsWritten,
+}
+
+impl ValueNames {
+    /// The value's first name, read: what a reader says the value by.
+    pub fn read(&self) -> &str {
+        &self.names[0].read
+    }
+
+    /// The value's first name as the file writes it: what protojson writes the value as.
+    pub fn written(&self) -> &str {
+        &self.names[0].written
+    }
+
+    /// Whether `name` is one of the value's names, read.
+    pub fn is(&self, name: &str) -> bool {
+        self.names.iter().any(|n| n.read == name)
+    }
+}
+
+/// How the values of the enum `enum_name` read, from each value's name and number in the order
+/// the file writes them. The enum is named as the file names it, nested in a message or not
+/// (`PayRequest.Category`); what its values carry is its own name (`Category`).
+///
+/// - A name that begins with the enum's own name drops it where the enum's name ends a word of
+///   it: a `_` follows (`CATEGORY_TRAVEL`), or a capital that begins a word (`CategoryTravel`).
+///   The case of the letters and where the `_`s fall do not matter (`Category_Travel`,
+///   `category_travel`, and `MEMBERTIER_GOLD` of `MemberTier`). A name the enum's name runs on
+///   into (`STATUSBAR_HIDDEN` of `Status`) keeps it, and so does one whose rest would begin with
+///   a digit (`SIZE_60`).
+/// - What is left, or the whole name, is read in lower case.
+/// - A name that would be read the same as a name of another number keeps its prefix
+///   (`COLOR_RED` beside `RED` is `color_red`), and two whole names that are still read the same —
+///   they differ only in case — are read as written. Two numbers are never read as one name.
+/// - The number 0 read `unspecified` is proto3's "not set" (`CATEGORY_UNSPECIFIED`,
+///   `Category_Unspecified`, `UNSPECIFIED`). A 0 read as anything else (`UNKNOWN`) is a value.
+pub fn names<'a>(enum_name: &str, values: impl IntoIterator<Item = (&'a str, i64)>) -> EnumNames {
+    let own = enum_name.rsplit('.').next().unwrap_or(enum_name);
+    let letters: Vec<u8> = own.bytes().filter(|b| *b != b'_').map(|b| b.to_ascii_lowercase()).collect();
+    let vals: Vec<(&str, i64)> = values.into_iter().collect();
+    let split: Vec<Split> = vals.iter().map(|(n, _)| split(&letters, n)).collect();
+    let rest: Vec<Option<&str>> = split.iter().map(|s| if let Split::Rest(r) = s { Some(*r) } else { None }).collect();
+    // a name read at a level: 0 without the prefix, 1 whole, 2 as written
+    let read = |i: usize, level: u8| match (level, rest[i]) {
+        (0, Some(r)) => r.to_ascii_lowercase(),
+        (0 | 1, _) => vals[i].0.to_ascii_lowercase(),
+        _ => vals[i].0.to_string(),
+    };
+    let zero_unset = (0..vals.len()).any(|i| vals[i].1 == 0 && read(i, 0) == "unspecified");
+    let unset = |i: usize| zero_unset && vals[i].1 == 0;
+    // a name read the same as one of another number goes a level up, the lower of the two (both,
+    // at the same level), until no two numbers share a name
+    let mut level: Vec<u8> = rest.iter().map(|r| if r.is_some() { 0 } else { 1 }).collect();
+    loop {
+        let up: Vec<usize> = (0..vals.len())
+            .filter(|&i| level[i] < 2 && !unset(i))
+            .filter(|&i| (0..vals.len()).any(|j| vals[j].1 != vals[i].1 && !unset(j) && level[i] <= level[j] && read(i, level[i]) == read(j, level[j])))
+            .collect();
+        if up.is_empty() {
+            break;
+        }
+        for i in up {
+            level[i] += 1;
+        }
+    }
+    let mut out = EnumNames::default();
+    for (i, &(written, number)) in vals.iter().enumerate() {
+        let how = match (level[i], &split[i]) {
+            (0, _) => How::Dropped,
+            (1, Split::Rest(_)) => How::Kept(read(i, 0)),
+            (1, Split::NotThere) => How::Whole,
+            (1, Split::RunsOn) => How::RunsOn,
+            (1, Split::Digit) => How::Digit,
+            _ => How::AsWritten,
+        };
+        let name = Name { written: written.to_string(), read: read(i, level[i]), how };
+        let slot = if unset(i) {
+            out.unset.get_or_insert_with(|| ValueNames { number, names: Vec::new() })
+        } else {
+            let k = match out.values.iter().position(|v| v.number == number) {
+                Some(k) => k,
+                None => {
+                    out.values.push(ValueNames { number, names: Vec::new() });
+                    out.values.len() - 1
+                }
+            };
+            &mut out.values[k]
+        };
+        if !slot.names.iter().any(|n| n.read == name.read) {
+            slot.names.push(name);
+        }
+    }
+    out
+}
+
+/// How a value's name begins, against the enum's own name.
+enum Split<'n> {
+    /// With the enum's name and a word break: what is left, which begins with a letter.
+    Rest(&'n str),
+    /// Not with the enum's name.
+    NotThere,
+    /// With the enum's name running on into a word.
+    RunsOn,
+    /// With the enum's name and a word break, and then a digit.
+    Digit,
+}
+
+/// How `name` begins against the enum's own name (`letters`: its letters in lower case, without
+/// its `_`s), whatever the case of its letters and wherever its `_`s fall.
+fn split<'n>(letters: &[u8], name: &'n str) -> Split<'n> {
+    let b = name.as_bytes();
+    if letters.is_empty() || !name.is_ascii() {
+        return Split::NotThere;
+    }
+    let (mut i, mut j) = (0, 0);
+    while j < letters.len() {
+        match b.get(i) {
+            Some(b'_') => i += 1,
+            Some(c) if c.to_ascii_lowercase() == letters[j] => {
+                i += 1;
+                j += 1;
+            }
+            _ => return Split::NotThere,
+        }
+    }
+    // a word ends here: a `_` follows, or a capital that begins a word — after a small letter, or
+    // before one (`MemberTierGold`, `MEMBERTIERGold`)
+    let Some(&next) = b.get(i) else { return Split::NotThere };
+    let begins = next.is_ascii_uppercase() && (b[i - 1].is_ascii_lowercase() || b.get(i + 1).is_some_and(|c| c.is_ascii_lowercase()));
+    if next != b'_' && !begins {
+        return Split::RunsOn;
+    }
+    while b.get(i) == Some(&b'_') {
+        i += 1;
+    }
+    let left = &name[i..];
+    if left.starts_with(|c: char| c.is_ascii_alphabetic()) {
+        Split::Rest(left)
+    } else if left.is_empty() {
+        Split::NotThere
+    } else {
+        Split::Digit
     }
 }
 
 /// The values an enum of a `.proto` means under the rules on a field (`rules`, by number; default
-/// for none), each as a rule's `import proto` calls it: the prefix taken off, in lower case, without
-/// the value 0 named `…_UNSPECIFIED`, which proto3 reads as not set (rulec's `Enum::named`).
-pub fn enum_names(e: &crate::model::Enum, rules: &IntRules) -> Vec<String> {
-    let is_value = |n: &str| e.values.iter().any(|o| o.name == n);
+/// for none), read as [`names`] reads them, without the one proto3 reads as not set.
+pub fn enum_names(e: &crate::model::Enum, rules: &IntRules) -> Vec<ValueNames> {
     let passes = |n: i128| rules.konst.is_none_or(|k| k == n) && (rules.in_.is_empty() || rules.in_.contains(&n)) && !rules.not_in.contains(&n);
-    e.values
-        .iter()
-        .filter(|v| passes(v.number as i128))
-        .filter_map(|v| {
-            let local = value_local(&e.name, &v.name, is_value);
-            (v.number != 0 || !local.eq_ignore_ascii_case("unspecified")).then(|| local.to_ascii_lowercase())
-        })
-        .collect()
+    names(&e.name, e.values.iter().map(|v| (v.name.as_str(), v.number))).values.into_iter().filter(|v| passes(v.number as i128)).collect()
 }

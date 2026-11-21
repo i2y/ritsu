@@ -208,8 +208,8 @@ pub struct RangeDecl {
 /// One end of a range, as written.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Bound {
-    /// A whole number in the unit of the type: `30`.
-    Int(i64),
+    /// A whole number in the unit of the type: `30`, and where it is written.
+    Int(i64, Span),
     /// A number with a unit, as rulec writes a bound: `1kg`, `1.5%`, `100万円`. lower counts it in
     /// the unit of the type, and refuses one that does not come to a whole number of it.
     Quantity { value: ritsu_units::Rat, unit: String, raw: String, span: Span },
@@ -382,12 +382,39 @@ pub struct TaskDecl {
     pub discloses: Vec<(Vec<Name>, String, Span)>,
 }
 
+/// The value of `held <input> = <value>`, as written: a value of the machine's table as its rule
+/// writes it (`manual`, `true`), a whole number, or a number with its unit (`0.5%`, DESIGN 40), which
+/// lower counts in the unit of the input's type as it counts a value of a call.
+#[derive(Clone, Debug)]
+pub enum Held {
+    Word(String, Span),
+    Int(i64, Span),
+    Quantity { value: ritsu_units::Rat, unit: String, raw: String, span: Span },
+}
+
+impl Held {
+    pub fn span(&self) -> Span {
+        match self {
+            Held::Word(_, s) | Held::Int(_, s) | Held::Quantity { span: s, .. } => *s,
+        }
+    }
+
+    /// The value as the `.flow` writes it.
+    pub fn text(&self) -> String {
+        match self {
+            Held::Word(w, _) => w.clone(),
+            Held::Int(n, _) => n.to_string(),
+            Held::Quantity { raw, .. } => raw.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CaseDecl {
     pub name: Name,
     pub record: TypeExpr,
     pub machine: Vec<Name>,
-    pub held: Vec<(Name, Name)>,
+    pub held: Vec<(Name, Held)>,
     pub external: Vec<Name>,
     pub state_field: Option<Name>,
     /// `refused when <output> = <value>`
@@ -466,13 +493,17 @@ pub enum Expr {
     List(Vec<Expr>, Span),
     /// `now`: the moment the statement runs
     Now(Span),
+    /// A number with a unit, written where the type of the value is known: `fee: 0.5%`,
+    /// `weight: 1.5kg`, `amount: 100万円` (DESIGN 40). lower counts it in the unit of that type, as
+    /// it counts a bound of a range, and it goes on as that whole number.
+    Quantity { value: ritsu_units::Rat, unit: String, raw: String, span: Span },
 }
 
 impl Expr {
     pub fn span(&self) -> Span {
         match self {
             Expr::Path(p) => p[0].1,
-            Expr::Str(_, s) | Expr::Interp(_, s) | Expr::Int(_, s) | Expr::Bool(_, s) | Expr::Record(_, s) | Expr::List(_, s) | Expr::Now(s) => *s,
+            Expr::Str(_, s) | Expr::Interp(_, s) | Expr::Int(_, s) | Expr::Bool(_, s) | Expr::Record(_, s) | Expr::List(_, s) | Expr::Now(s) | Expr::Quantity { span: s, .. } => *s,
         }
     }
 }
@@ -482,6 +513,20 @@ impl Expr {
 
 fn err(span: Span, message: Text) -> Diag {
     Diag::error("E001", span.line, span.col, message)
+}
+
+/// A number as a `.flow` writes a value, a whole number (`3`) or one with its unit (`0.5%`,
+/// `300JPY`), and as rulec writes a value of a machine's table: the value, and its unit (empty for a
+/// whole number). None for anything else. What lower reads the values of a machine's table with, to
+/// find the one a number `held` names (DESIGN 40).
+pub(crate) fn number_text(s: &str) -> Option<(ritsu_units::Rat, String)> {
+    let lines = lex(s).ok()?;
+    let [line] = lines.as_slice() else { return None };
+    match line.toks.as_slice() {
+        [Token { tok: Tok::Int(n), .. }] => Some((ritsu_units::Rat::int(i128::from(*n)), String::new())),
+        [Token { tok: Tok::Quantity { value, unit, .. }, .. }] => Some((*value, unit.clone())),
+        _ => None,
+    }
 }
 
 /// The exact value of a number as written (`-1.5`, digits only after `_` are taken out), times
@@ -610,9 +655,12 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                     }
                 }
                 let text: String = chars[start..j].iter().filter(|c| **c != '_').collect();
-                // a bound with its unit, as rulec writes one: `>=1kg`, `<=100万円`, `<=50%`, `>=41℉`;
-                // the signs are ritsu-units' (`ritsu_units::chars`), and the full-width `％` is `%`
-                if bound && j < chars.len() && (is_ident_start(chars[j]) || ritsu_units::chars::is_sign(chars[j])) {
+                // a number with its unit, as rulec writes one: a bound, `>=1kg`, `<=100万円`, `<=50%`,
+                // `>=41℉`, and a value where its type is known, `fee: 0.5%` (DESIGN 40); the signs
+                // are ritsu-units' (`ritsu_units::chars`), and the full-width `％` is `%`. The step
+                // of a rate's type, `rate[step 0.1%]`, is a word of the type, read as one
+                let step = matches!(toks.last(), Some(Token { tok: Tok::Ident(w), .. }) if w == "step");
+                if (bound || !step) && j < chars.len() && (is_ident_start(chars[j]) || ritsu_units::chars::is_sign(chars[j])) {
                     let mut k = j;
                     let mult: i128 = match chars[k] {
                         '万' => 10_000,
@@ -702,6 +750,10 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                 toks.push(Token { tok: Tok::Sym(s), span });
                 j += 1;
                 continue;
+            }
+            // `range >0 <10`: an end of a range is in the range, so say how one is written
+            if matches!(c, '>' | '<') && toks.iter().any(|t| matches!(&t.tok, Tok::Ident(w) if w == "range")) {
+                return Err(err(span, tr!("範囲の端は `>=` と `<=` で書いてください（端の値も範囲に入ります。`{c}` は使えません）", "the ends of a range are written with `>=` and `<=`, not `{c}` (an end is in the range)")));
             }
             return Err(err(span, tr!("ここに `{c}` は書けません", "unexpected character `{c}`")));
         }
@@ -821,6 +873,8 @@ impl<'a> Cur<'a> {
                 self.i += 1;
                 Ok((n, sp))
             }
+            // a count or a time glued to its word: `wait 30seconds`, `retry 3times`
+            Some(Tok::Quantity { unit, .. }) if unit.starts_with(is_ident_start) => Err(err(sp, tr!("数と語のあいだに空白を入れてください", "put a space between a number and a word"))),
             _ => Err(err(sp, tr!("ここには{}が要ります", "expected {} here", what.ja; what.en))),
         }
     }
@@ -1065,7 +1119,10 @@ fn range_decl(cur: &mut Cur) -> Result<Option<RangeDecl>, Diag> {
                 cur.i += 1;
                 b
             }
-            _ => Bound::Int(cur.int(tr!("整数、列挙の値か日付", "a whole number, a value of an enum or a date"))?.0),
+            _ => {
+                let (n, sp) = cur.int(tr!("整数、列挙の値か日付", "a whole number, a value of an enum or a date"))?;
+                Bound::Int(n, sp)
+            }
         });
     }
     if lo.is_none() && hi.is_none() {
@@ -1096,6 +1153,10 @@ fn expr(cur: &mut Cur) -> Result<Expr, Diag> {
         Some(Tok::Int(n)) => {
             cur.i += 1;
             Ok(Expr::Int(n, sp))
+        }
+        Some(Tok::Quantity { value, unit, raw }) => {
+            cur.i += 1;
+            Ok(Expr::Quantity { value, unit, raw, span: sp })
         }
         Some(Tok::Ident(s)) if s == "true" || s == "false" => {
             cur.i += 1;
@@ -1895,19 +1956,15 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     if cc.eat_kw("held") {
                         let n = cc.ident(tr!("規則の入力", "an input of the rule"))?;
                         cc.expect_sym("=")?;
+                        let s2 = cc.span();
                         let v = match cc.peek().cloned() {
-                            Some(Tok::Ident(s)) => {
-                                let s2 = cc.span();
-                                cc.i += 1;
-                                (s, s2)
-                            }
-                            Some(Tok::Int(n)) => {
-                                let s2 = cc.span();
-                                cc.i += 1;
-                                (n.to_string(), s2)
-                            }
+                            Some(Tok::Ident(s)) => Held::Word(s, s2),
+                            Some(Tok::Int(n)) => Held::Int(n, s2),
+                            // a number with its unit: the input's type is the rule's (DESIGN 40)
+                            Some(Tok::Quantity { value, unit, raw }) => Held::Quantity { value, unit, raw, span: s2 },
                             _ => return Err(err(cc.span(), tr!("ここには値が要ります", "expected a value here"))),
                         };
+                        cc.i += 1;
                         c.held.push((n, v));
                     } else if cc.eat_kw("external") {
                         c.external.extend(cc.names(tr!("イベント", "an event"))?);

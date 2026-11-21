@@ -1,0 +1,3 @@
+error[E304]: tests/mutants/E304_一人に二人の議決.ringi:7:15: `社長` chooses one person, so `at least 2 of 社長` cannot be reached
+     7 |   決裁(decide)  at least 2 of 社長
+  = A quorum counts the members of a team: use it with a way to choose that names a team (`team legal`).

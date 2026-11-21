@@ -11,7 +11,12 @@
 //!   faults it is to refuse (the store's records, the input, the time; `sekisho::raw`), and each
 //!   answer — allowed or not, the policies that decide as a set, the kind of a refusal, the context
 //!   Cedar was given — is held to what sekisho's reference evaluation answers for the same values,
-//!   through the ports of rulec and koyomi (`Raw::compare`).
+//!   through the ports of rulec and koyomi (`Raw::compare`);
+//! - the entry by the action's name (`authorize`, DESIGN 5.7) is given each case too, the
+//!   resource's id under its type and an id of every other type the gate's actions take beside it,
+//!   and answers as the action's own function does (an action with inputs of its own, refused as
+//!   `input`); a name the gate has no action of is refused as `action`, and no id, or ids of two of
+//!   an action's types, as `resource`.
 //!
 //! The Python is tools/runner-py's: cedarpy 4.12.1, boto3 and its stubs, mypy 2.4.0, made with
 //! `uv venv --python 3.13 tools/runner-py/.venv` and `uv pip sync --python
@@ -164,6 +169,13 @@ m = importlib.import_module(sys.argv[1])
 with open(sys.argv[2], encoding="utf-8") as f:
     raw = json.load(f)
 types, actions = raw["types"], raw["actions"]
+# for the entry by the action's name: the types each action takes, the other types the gate's
+# actions take, and the actions with inputs of their own
+with open(sys.argv[3], encoding="utf-8") as f:
+    by_name = json.load(f)
+takes, others, own = by_name["takes"], by_name["others"], set(by_name["own"])
+# the names roles_of is given: the gate's types, and one it does not declare
+names = by_name["types"]
 
 
 def snake(alias):
@@ -209,6 +221,11 @@ def record(e):
     return cls(**args)
 
 
+def said(a):
+    return [a.allowed, sorted(a.policies), a.error.kind if a.error else None, a.context]
+
+
+same, refused, narrowed = 0, 0, 0
 for case in raw["cases"]:
     held = {}
     for e in case["store"]:
@@ -221,7 +238,115 @@ for case in raw["cases"]:
     now = datetime.fromisoformat(case["now"])
     a = getattr(m, "authorize_" + case["action"])(Store(held), principal, given, now)
     print(json.dumps({"name": case["name"], "allowed": a.allowed, "policies": a.policies, "error": a.error.kind if a.error else None, "context": a.context}, ensure_ascii=False))
+    # the entry by the action's name, given the same: the resource's id under its type, beside an
+    # id of each type of the gate's the action does not take
+    resources = {t: "other-" + t for t in others[case["action"]]}
+    ts = takes[case["action"]]
+    rt = ts[0] if len(ts) == 1 else case["input"].get("resource_type") if isinstance(case["input"].get("resource_type"), str) else ""
+    rid = case["input"].get(actions[case["action"]]["resource"])
+    if isinstance(rid, str) and rt:
+        resources[rt] = rid
+    b = m.authorize(Store(held), principal, case["action"], resources, now)
+    if case["action"] in own:
+        if b.error is None or b.error.kind != "input" or b.allowed or b.policies:
+            print(f"by name differs: {case['name']}: {said(b)}, not a refusal of the kind input")
+        else:
+            refused += 1
+    elif said(b) != said(a):
+        print(f"by name differs: {case['name']}: {said(b)}, not {said(a)}")
+    else:
+        same += 1
+    # the roles a sign-in carries, every role of the gate's and one it does not declare, passed
+    # through roles_of of the principal's type as a service does: asked again, the entry does not
+    # refuse the principal
+    key = (snake(case["principal"]["type"]), case["principal"]["id"])
+    r = held.get(key)
+    field = None
+    if r is not None:
+        kinds_of = types[case["principal"]["type"]]["attrs"]
+        field = next((f.name for f in dataclasses.fields(r) if f.name not in kinds_of and f.name.rstrip("_") == "roles"), None)
+    if field is not None and case["action"] not in own and b.error is None:
+        may = m.roles_of(case["principal"]["type"])
+        kept = [x for x in m.roles() + ["no_such_role"] if x in may]
+        again = dict(held)
+        again[key] = dataclasses.replace(r, **{field: kept})
+        d = m.authorize(Store(again), principal, case["action"], resources, now)
+        if d.error is not None and d.error.kind == "principal":
+            print(f"roles of differs: {case['name']}: {kept} refused as the principal: {d.error}")
+        else:
+            narrowed += 1
+
+# what the entry refuses before any function is asked
+probes = 0
+none = datetime.fromisoformat("2026-01-01T00:00:00+00:00")
+nobody = m.Principal("", "")
+
+
+def probe(what, b, kind, message):
+    global probes
+    probes += 1
+    if b.error is None or b.error.kind != kind or b.allowed or b.policies or (message and str(b.error) != message):
+        print(f"by name differs: {what}: {said(b)}, not a refusal of the kind {kind} {message}")
+
+
+probe("a name of no action", m.authorize(Store({}), nobody, "no such action", {}, none), "action", 'the gate has no action "no such action"')
+for action, ts in takes.items():
+    if action in own:
+        continue
+    probe(f"{action} with no id", m.authorize(Store({}), nobody, action, {}, none), "resource", "")
+    if len(ts) > 1:
+        probe(f"{action} with an id of each of its types", m.authorize(Store({}), nobody, action, {t: "x" for t in ts}, none), "resource", "")
+print(f"by name: {same} answered as the action's own function answers, {refused} refused as taking inputs of their own, {probes} refusals before any function")
+# the list of the roles the gate declares, a new list each call
+listed = m.roles()
+again = m.roles()
+if again:
+    again[0] = "changed"
+print("roles: " + json.dumps(listed, separators=(",", ":")) + " " + json.dumps(m.roles(), separators=(",", ":")))
+# the roles of each type, and of a name the gate does not declare
+print(f"roles of: {narrowed} asked again with the roles roles_of leaves")
+for t in names:
+    print(f"roles of {t}: " + json.dumps(m.roles_of(t), separators=(",", ":")))
 "#;
+
+/// What the harness reads for the entry by the action's name, as JSON: the types each action
+/// takes, the other types the gate's actions take, and the actions with inputs of their own.
+fn by_name(g: &sekisho::model::Gate) -> String {
+    let q = |x: &str| ritsu_base::json::quote(x);
+    let every: std::collections::BTreeSet<usize> = g.actions.iter().flat_map(|a| a.resources.iter().copied()).collect();
+    let types = |ts: &mut dyn Iterator<Item = usize>| ts.map(|t| q(&g.types[t].named.alias)).collect::<Vec<_>>().join(", ");
+    let takes: Vec<String> = g.actions.iter().map(|a| format!("{}: [{}]", q(&a.named.alias), types(&mut a.resources.iter().copied()))).collect();
+    let others: Vec<String> = g.actions.iter().map(|a| format!("{}: [{}]", q(&a.named.alias), types(&mut every.iter().copied().filter(|t| !a.resources.contains(t))))).collect();
+    let own: Vec<String> = g.actions.iter().filter(|a| !a.inputs.is_empty()).map(|a| q(&a.named.alias)).collect();
+    let names: Vec<String> = g.types.iter().map(|t| q(&t.named.alias)).chain([q("no such type")]).collect();
+    format!("{{\"takes\": {{{}}}, \"others\": {{{}}}, \"own\": [{}], \"types\": [{}]}}", takes.join(", "), others.join(", "), own.join(", "), names.join(", "))
+}
+
+/// What the harness prints of `roles_of` for each type of the gate and for a name it does not
+/// declare: the aliases of the roles of the type's `roles` line, in the order the gate declares the
+/// roles, as `json.dumps` writes them with no spaces.
+fn lines_of_roles_of(g: &sekisho::model::Gate) -> Vec<String> {
+    let mut out: Vec<String> = g
+        .types
+        .iter()
+        .map(|t| {
+            let mut rs = t.roles.clone();
+            rs.sort_unstable();
+            rs.dedup();
+            let each: Vec<String> = rs.iter().map(|&r| ritsu_base::json::quote(&g.roles[r].named.alias)).collect();
+            format!("roles of {}: [{}]", t.named.alias, each.join(","))
+        })
+        .collect();
+    out.push("roles of no such type: []".to_string());
+    out
+}
+
+/// The aliases of the roles a gate declares, in its order, as `json.dumps` writes a list of them
+/// with no spaces.
+fn roles_of(g: &sekisho::model::Gate) -> String {
+    let each: Vec<String> = g.roles.iter().map(|r| ritsu_base::json::quote(&r.named.alias)).collect();
+    format!("[{}]", each.join(","))
+}
 
 /// The answers of the generated Python for every case of the raw values of every `.gate` that
 /// passes its check, held to the reference evaluation.
@@ -232,7 +357,7 @@ fn every_case_is_answered_as_sekisho_answers_it() {
     let t = TempDir::new("sekisho-py-cases");
     std::fs::write(t.path().join("harness.py"), HARNESS).unwrap();
     let (mut wrong, mut lines) = (Vec::new(), Vec::new());
-    let mut total = 0usize;
+    let (mut total, mut narrowed) = (0usize, 0usize);
     for (i, g) in gates().iter().enumerate() {
         let name = format!("g{i}");
         let Some(o) = package(g, t.path(), &name, Authorizer::Cedar, ritsu_base::text::Lang::En) else { continue };
@@ -240,13 +365,16 @@ fn every_case_is_answered_as_sekisho_answers_it() {
         let r = sekisho::raw::raw(scope, checked, &suite);
         let data = t.path().join(format!("{name}.json"));
         std::fs::write(&data, r.json(&checked.gate)).unwrap();
+        let named = t.path().join(format!("{name}.by-name.json"));
+        std::fs::write(&named, by_name(&checked.gate)).unwrap();
         let module = format!("{name}.authz.{}", checked.gate.named.alias);
-        let out = Command::new(&py).arg(t.path().join("harness.py")).arg(&module).arg(&data).current_dir(t.path()).env("PYTHONPATH", t.path()).env("PYTHON_COLORS", "0").output().unwrap();
+        let out = Command::new(&py).arg(t.path().join("harness.py")).arg(&module).arg(&data).arg(&named).current_dir(t.path()).env("PYTHONPATH", t.path()).env("PYTHON_COLORS", "0").output().unwrap();
         if !out.status.success() {
             wrong.push(format!("{g}: the harness fails:\n{}", String::from_utf8_lossy(&out.stderr)));
             continue;
         }
-        match r.compare(&String::from_utf8_lossy(&out.stdout)) {
+        let printed = String::from_utf8_lossy(&out.stdout);
+        match r.compare(&printed) {
             Ok(0) => lines.push(format!("{g}: no action, so no case")),
             Ok(n) => {
                 total += n;
@@ -255,7 +383,43 @@ fn every_case_is_answered_as_sekisho_answers_it() {
             }
             Err(e) => wrong.push(format!("{g}: {e}")),
         }
+        // the entry by the action's name
+        let differs: Vec<&str> = printed.lines().filter(|l| l.starts_with("by name differs: ")).collect();
+        if !differs.is_empty() {
+            wrong.push(format!("{g}: {} answers of authorize differ:\n{}", differs.len(), differs.iter().take(20).copied().collect::<Vec<_>>().join("\n")));
+        }
+        match printed.lines().find(|l| l.starts_with("by name: ")) {
+            Some(l) => lines.push(format!("{g}: {}", l.trim_start_matches("by name: "))),
+            None => wrong.push(format!("{g}: the harness does not say what authorize answered")),
+        }
+        // roles() is the gate's roles as it declares them, and a change to what it returned is not
+        // in the next
+        let declared = roles_of(&checked.gate);
+        match printed.lines().find_map(|l| l.strip_prefix("roles: ")) {
+            Some(l) if l == format!("{declared} {declared}") => {}
+            other => wrong.push(format!("{g}: roles() gave {other:?}, not {declared} twice")),
+        }
+        // roles_of of each type, and the cases asked again with the roles it leaves
+        for want in lines_of_roles_of(&checked.gate) {
+            if !printed.lines().any(|l| l == want) {
+                wrong.push(format!("{g}: no line {want:?}"));
+            }
+        }
+        let differs: Vec<&str> = printed.lines().filter(|l| l.starts_with("roles of differs: ")).collect();
+        if !differs.is_empty() {
+            wrong.push(format!("{g}: {} cases refused with the roles roles_of leaves:\n{}", differs.len(), differs.iter().take(20).copied().collect::<Vec<_>>().join("\n")));
+        }
+        match printed.lines().find_map(|l| l.strip_prefix("roles of: ")).and_then(|l| l.split(' ').next()?.parse::<usize>().ok()) {
+            Some(n) => {
+                narrowed += n;
+                if g.ends_with("tests/gen/roles_of.gate") && n == 0 {
+                    wrong.push(format!("{g}: no case asked again with the roles roles_of leaves"));
+                }
+            }
+            None => wrong.push(format!("{g}: the harness does not say what it asked with the roles roles_of leaves")),
+        }
     }
+    println!("{narrowed} cases asked again with every role of the gate's and one more, passed through roles_of, and none refused as the principal");
     for l in &lines {
         println!("{l}");
     }

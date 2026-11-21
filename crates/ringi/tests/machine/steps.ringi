@@ -1,0 +1,47 @@
+request steps v1 "Steps request"
+description "A form whose numbers are counted in steps of a part of their unit (fictional rules): rates in steps of 0.25%, 0.1%, 2.5%, 0.5% and 1% (a rate with no step), one below 0% and above 100%, one that may be left empty, one shown on a condition, one worked out and one in rows, and money in cents and in sen"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  share  : rate[step 0.25%] "Share"  range >=-10% <=150%
+  double : rate[step 0.25%] "Double" = share + share  range >=-20% <=300%
+  margin : rate[step 2.5%] "Margin"  range >=0% <=500%
+  plain  : rate "Plain rate"  range >=1% <=100%
+  tenth  : rate[step 0.1%] "Tenth"  range >=0% <=100%  optional
+  cap    : rate[step 0.25%] "Cap"  range >=0% <=100%  shown when tenth is not none
+  cents  : money[USDc] "Cents"  range >=1USDc <=1_000_000USDc
+  sen    : money[銭] "Sen"  range >=1銭 <=100_000銭
+  lines  : rows "Lines"  count >=1 <=3
+    cut   : rate[step 0.5%] "Cut"  range >=0% <=50%
+    price : money[USDc] "Price"  range >=1USDc <=100_000USDc
+
+route
+  first  manager
+
+who
+  manager = manager of requester
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval   not allowed
+  approvers edit  share, tenth
+
+scenario inside_every_range
+  requester e1201
+  form share = 31.25%, margin = 312.5%, plain = 5%, tenth = 12.5%, cap = 0.25%, cents = 125USDc, sen = 125銭, lines = [{cut: 12.5%, price: 1_250USDc}]
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve | e1101 |          | approved    |
+
+scenario below_zero_and_past_a_hundred
+  requester e1201
+  form share = -10%, margin = 500%, plain = 100%, cents = 1_000_000USDc, sen = 1銭, lines = [{cut: 0%, price: 1USDc}, {cut: 50%, price: 100_000USDc}]
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 11:00 | reject  | e1101 |          | rejected    |

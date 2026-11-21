@@ -19,6 +19,10 @@ Temporal is dandori's main platform.
 code in `rules.ts`: its activity is in `activities.ts`, and sends to the rule's service
 ([A rule as a service](tasks.md#a-rule-as-a-service)).
 
+- **The rules.** `rulec gen <rule> --target typescript --out <the package's directory>/rulec` writes
+  the modules `rules.ts` imports. A rule that reads enums from an `enums` file imports that file's
+  module, which rulec writes beside it, by its `.ts` name, as Node runs TypeScript: tsc compiles
+  them with `rewriteRelativeImportExtensions`, as `rules.ts` says at its top.
 - **Versions.** The workflow's type and task queue carry the `.flow`'s version (`hotel_stay_v1`), so a
   new version runs beside the old one. `makeWorker(own, { deployment })` also puts the worker on
   Worker Deployment Versioning, with a hash of the code as its build id, and pins each run to the
@@ -84,6 +88,9 @@ workflow: `workflow.py` (the workflow, and `workflows` to give the worker), `typ
 `answer_packing`).
 The workflow type, the activities, the callback's Update and signal, the query and the ids are named
 as in the TypeScript, so a worker in one language can serve another.
+`rulec gen <rule> --target python --python-package --out <the package's directory>/rulec` writes the
+modules `rules.py` imports, as its top says: with `--python-package`, a rule that reads enums from
+an `enums` file reads that file's module from inside the package.
 
 ## Temporal (Go)
 
@@ -103,9 +110,13 @@ service, a function for each method (`Fulfill`, `AnswerPacking`). Everything on 
   shape, which the workflow has to see to refuse it. `types.go` still has a struct for each record and a
   string type for each enum, and `Decode` reads a task's arguments into them; each of your tasks gets
   its arguments as `map[string]any` and answers any value the SDK can write as JSON.
+- **`Start` takes the input as its type**, a `WorkflowInput`, as the TypeScript and Python `start` do.
+  A workflow with no inputs takes `WorkflowInput{}`. From a JSON value, check it with
+  `IsWorkflowInput` and read it with `Decode`. The workflow checks what it gets, as before.
 - **The rules.** `rulec gen <rule> --target go --out <the package's directory>/rulec` writes each rule's Go as a
   module of its own (`rulec/go/holdamount`), which your `go.mod` requires and replaces with that
-  directory, as `rules.go` says at its top.
+  directory, as `rules.go` says at its top. So does the package of each `enums` file a rule reads
+  enums from, which rulec writes beside the rule's: Go reads the `replace` of your module alone.
 - **The default `Transport`** uses `net/http`, the AWS SDK for Go v2 for Lambda and the AWS APIs, OpenAI's
   Go client for OpenAI's agents, and Anthropic's Go SDK for Claude's, and a package imports only the
   SDKs its flow calls through. OpenAI has no Agents SDK for Go; the Go client sends the request Step
@@ -116,7 +127,8 @@ service, a function for each method (`Fulfill`, `AnswerPacking`). Everything on 
 ## AWS Step Functions
 
 `--target asl` writes the state machine, in ASL with JSONata, and for every rule it calls by Lambda, a
-Lambda handler around the Python rulec generates. A rule that says `connect` is called at its service
+Lambda handler around the Python rulec generates, deployed with the rule's module and the module of
+each `enums` file the rule reads, as its top says. A rule that says `connect` is called at its service
 by an HTTP Task, which needs a `connection` and a URL that is HTTPS, and has no Lambda function. The tasks call Lambda functions, HTTP APIs through
 EventBridge connections, and AWS services through the SDK integrations; a callback hands on a task
 token. Code you write has no place in a state machine, so a task that is neither of these is refused
@@ -171,7 +183,8 @@ which works out the seconds left to the time from `now()`, a second at the least
 ## pydantic-graph
 
 `--target pydantic-graph` writes a package with `graph.py` (`graph`, and its `State` and `Deps`),
-`types.py`, `tasks.py` (`make_tasks(own, transport)`), `io.py`, `rules.py` and `runtime.py`. Every
+`types.py`, `tasks.py` (`make_tasks(own, transport)`), `io.py`, `rules.py` (whose modules
+`rulec gen --python-package` writes, as for Temporal's Python) and `runtime.py`. Every
 statement is a node, and the return type of each node names where the flow can go, so
 `graph.render()` draws the flow. The run lives in the process that runs it: the waits sleep by
 `Deps.clock`, a callback's answer comes to `Deps.callbacks`, and pydantic-graph 2.x keeps nothing
@@ -228,13 +241,36 @@ $ dandori run <file.flow> --scenario <file.json> [--target reference|asl|tempora
 
 `scenarios` writes inputs and scripted answers that together take every arm, every handler, every way
 a case can move, and lists that are empty, short, and longer than their loop takes. `run` plays one
-through the reference interpreter and prints the calls as the target would make them.
+through the reference interpreter and prints the calls as the target would make them; answers the
+run does not take are an error of the scenario's, which it says after the run, exiting 1.
 [How it is checked](https://i2y.github.io/ritsu/dandori/assurance/) says how the builds are held to it.
 
-Run as `ritsu dandori scenarios`, with rulec beside it, a call of a rule of the flow's own (not one
-called at its Connect service) is not a place to choose an answer: rulec computes it from the
-values the call gives, as `ritsu run` does, and the scenario says so with `"rules": "rulec"` and
-holds no answer for it. To change what a rule answers, a scenario changes the answers of the
-tasks its inputs come from. `ritsu dandori run` computes those calls the same way, so it runs
-such a scenario as `ritsu run` does. A scenario written before, which answers the calls of rules
-itself, stops `ritsu run` at the first of them, saying so; `ritsu dandori run` still runs it.
+Run as `ritsu dandori scenarios`, with the other languages beside it, a call of a rule (one called
+at its Connect service too), a call of a date and an operation of a book are not places to choose
+an answer: rulec, koyomi and chobo compute them from the values the call gives, as `ritsu run` does
+(the answer of a rule called at its Connect service is put in the shape the service writes, and
+read back as the generated code reads it). The scenario says so with `"rules": "rulec"`,
+`"dates": "koyomi"` and `books` (what was done to each book before the run, empty where nothing
+was), and holds no answer for them.
+To change what they answer, a scenario changes where their values come from: the answers of the
+tasks before, the moment the run starts at, and what was done to the books before it (a transfer
+that fills an account, the same operation done already, another with the same key, a hold posted,
+voided or left to expire, a transfer that takes out again what one put in). Where a `match` reads
+a rule's answer, the numbers and the days the call gives take the inputs of the vectors rulec makes
+of the rule, so that a run comes to each arm the rule answers there. Each scenario is run as
+`ritsu run` runs it before it is written, and every one runs under `ritsu run` unchanged. An arm or
+a handler no scenario takes is said after the scenarios, on standard error, with rulec's reason
+where rulec says the rule never comes to it.
+`ritsu dandori run` computes those calls the same way, so it runs such a scenario as `ritsu run`
+does. A scenario an older `ritsu dandori scenarios` wrote, which answers the calls of rules, dates
+or books itself, stops `ritsu run` at the first such call, saying so; `ritsu dandori run` still runs
+it.
+
+`dandori run` and `ritsu run` read `now` from the run's clock, when the statement that reads it
+runs. The clock starts at the scenario's `now` and goes on by each wait (to its time, for
+`wait until`), each wait before a retry and each timeout, so a deadline worked out from `now` after a
+wait of six days counts from the day the wait came to. A scenario whose `now` is a list of moments
+has each statement that reads `now` after the start read the next of them, and the clock goes on to
+it. The platforms are compared on a clock that does not move: each runner sets the platform's clock
+to the scenario's moments and shortens the waits, and the reference interpreter plays the scenario
+on the same clock.

@@ -1,0 +1,19 @@
+rule 列の手数料(column_fee) v1
+description "SQL の問い合わせが自分で持つ列と同じ名前の定義"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+define 番号(_id) : money[USD] = 数量 * 3USD
+define 誤り(_input_error) : money[USD] = 番号 + 1USD
+define 丸める前(_raw_fee) : money[USD] = half_up(誤り / 3, 1USD)
+define 一つ目(_r1) : money[USD] = 丸める前 + 番号
+
+table 数量ごとの手数料(fee_by_qty)
+policy unique
+| 数量 | -> 手数料 |
+| <=5  | 一つ目    |
+| >5   | 2USD      |

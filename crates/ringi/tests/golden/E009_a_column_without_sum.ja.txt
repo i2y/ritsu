@@ -1,0 +1,2 @@
+エラー[E009]: tests/mutants/E009_a_column_without_sum.ringi:7:49: `items.price` は明細 `items` の列です。合計するなら `sum(items.price)` と書きます
+     7 |   receipt : attachment "Receipt"  required when items.price > 30_000JPY

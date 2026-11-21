@@ -23,19 +23,19 @@ def split (lines : List Line) (refund : Int) : List Share :=
 
 abbrev shares_add_up : Prop :=
   ∀ (lines : List Line) (refund : Int),
-    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    1 ≤ List.length lines → List.length lines ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
     0 ≤ refund → refund ≤ 10000000 →
     ((List.map (fun (s : Share) => s.share) (split lines refund)).sum) = refund
 
 abbrev no_share_is_negative : Prop :=
   ∀ (lines : List Line) (refund : Int),
-    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    1 ≤ List.length lines → List.length lines ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
     0 ≤ refund → refund ≤ 10000000 →
     ∀ s ∈ split lines refund, s.share ≥ 0
 
 abbrev no_share_is_more_than_its_left : Prop :=
   ∀ (lines : List Line) (refund : Int),
-    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    1 ≤ List.length lines → List.length lines ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
     0 ≤ refund → refund ≤ 10000000 →
     refund ≤ ((List.map (fun (l : Line) => l.left) lines).sum) →
     ∀ s ∈ split lines refund, s.share ≤ s.left

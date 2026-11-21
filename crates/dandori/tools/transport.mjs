@@ -4,9 +4,9 @@
 // writes it down and gives the scenario's answer. Shared by tools/temporal/run.mjs,
 // tools/durable/run.mjs, and the pods of tools/argo/run.mjs.
 //
-// spec.http: [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders}; the
-//   decision tasks of one API send to one URL, and an error takes its status from the task that
-//   declares it)
+// spec.http: [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders}, which a
+//   call's URL fills, with the query of its arguments after it (DESIGN 43); the decision tasks of
+//   one API send to one URL, and an error takes its status from the task that declares it)
 // spec.aws:  [ { api: "<service>:<action>", errors: { <error>: <exception> }, keyParam } ]
 //
 // A callback task's submit hands on `callback_id` (in the Lambda payload, or in the SQS
@@ -26,7 +26,7 @@
 export function makeTransport(spec, run) {
   const httpTasks = (spec.http ?? []).map((t) => ({
     ...t,
-    re: new RegExp("^" + t.url.split(/\{[^}]*\}/).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^/?]*") + "$"),
+    re: new RegExp("^" + t.url.split(/\{[^}]*\}/).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^/?]*") + "([?&].*)?$"),
   }));
   const awsTasks = spec.aws ?? [];
 

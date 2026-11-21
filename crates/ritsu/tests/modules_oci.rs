@@ -11,6 +11,8 @@
 //! The modules are the example's (DESIGN 17.26), copied, named on the test's registry, each
 //! `require` from it.
 
+mod common;
+
 use ritsu_base::modules::lock::{Lock, Locked, Pinned};
 use ritsu_base::modules::names::ModuleName;
 use ritsu_base::modules::semver::Version;
@@ -28,7 +30,7 @@ fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-const LANG_VARS: [&str; 10] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"];
+const LANG_VARS: [&str; 11] = common::LANG_VARS;
 
 /// A cosign of the test's own: it writes the arguments it is called with, a line each call, and
 /// says no when `FAKE_COSIGN_EXIT` is not 0.
@@ -110,8 +112,7 @@ impl World {
 
     /// ritsu, run in the directory `dir` of the test with the test's store, and `env` over the rest.
     fn run_env(&self, dir: &str, args: &[&str], env: &[(&str, &str)]) -> (i32, String, String) {
-        let o = self.command(dir, args, env).output().expect("could not run ritsu");
-        said(o)
+        finished(&mut self.command(dir, args, env), &format!("ritsu {args:?} in {dir}, with the test's registry"))
     }
 
     fn command(&self, dir: &str, args: &[&str], env: &[(&str, &str)]) -> Command {
@@ -170,6 +171,18 @@ impl World {
 
 fn said(o: Output) -> (i32, String, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+}
+
+/// How long ritsu or cosign may take with the test's registry: seconds each. Past it, the test
+/// fails with what the program printed, not at the limit of the job with nothing said.
+const LIMIT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+/// A program that talks to the test's registry, run to its end for no longer than [`LIMIT`]
+/// (ritsu-testkit's `finish`, which fails the test past it, saying `what` it was): what it said,
+/// as [`said`] has it.
+fn finished(c: &mut Command, what: &str) -> (i32, String, String) {
+    let r = ritsu_testkit::run::finish(c, LIMIT, what);
+    (r.code.unwrap_or(-1), r.stdout, r.stderr)
 }
 
 fn json(out: &str) -> serde_json::Value {
@@ -584,10 +597,13 @@ fn two_fetches_at_once_leave_one_store() {
     w.ok("shop", &["mod", "lock"]);
     let store = w.path("store-shared");
     let env = [(store::VARIABLE, store.to_str().unwrap())];
-    let a = w.command("shop", &["mod", "fetch"], &env).spawn().unwrap();
-    let b = w.command("shop", &["mod", "fetch"], &env).spawn().unwrap();
-    for c in [a, b] {
-        let (code, out, err) = said(c.wait_with_output().unwrap());
+    let (mut a, mut b) = (w.command("shop", &["mod", "fetch"], &env), w.command("shop", &["mod", "fetch"], &env));
+    let both = std::thread::scope(|s| {
+        let a = s.spawn(move || finished(&mut a, "the first of two ritsu mod fetch at once, with the test's registry"));
+        let b = s.spawn(move || finished(&mut b, "the second of two ritsu mod fetch at once, with the test's registry"));
+        [a.join(), b.join()].map(|r| r.unwrap_or_else(|e| std::panic::resume_unwind(e)))
+    });
+    for (code, out, err) in both {
         assert_eq!(code, 0, "{out}{err}");
     }
     assert_eq!(entries(&store).len(), 2);
@@ -960,7 +976,7 @@ impl Cosign {
         for (k, v) in &self.env {
             c.env(k, v);
         }
-        said(c.output().unwrap())
+        finished(&mut c, &format!("cosign {args:?}, with the test's registry"))
     }
 
     /// A key pair in `dir`, `<prefix>.key` and `<prefix>.pub`.

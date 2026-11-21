@@ -1,0 +1,55 @@
+request expense v1 "Expense claim"
+description "An expense the requester paid for the company, approved by their manager and then paid back to them. ritsu ringi init wrote it as a start: change it into your own rules"
+owner general_affairs
+
+use organization org from "shared/company.ringi"
+use calendar office from "shared/office.cal"
+use gate "shared/company.gate"
+use flow pay from "shared/pay.flow"
+
+form
+  amount  : money[JPY] "Amount"  range >=1JPY <=1_000_000JPY
+  purpose : long text "Purpose"  count >=1 <=500
+
+route
+  manager  manager
+
+who
+  manager = manager of requester
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late expire
+  when empty escalate
+
+ticket
+  # The president is at the top of the organization, with no manager to approve their claims.
+  submitted by   everyone except position president
+  self approval  not allowed
+  send back      to the requester, at most 2 times
+  resubmit       within 5 business days
+  withdraw       until it is decided
+  # Once the claim is approved, the server starts the payment on Temporal, and cmd/worker runs it.
+  on approved    launch pay(request_id: ticket.id, requester: requester.id, amount: amount, purpose: purpose)
+
+scenario approved_and_paid
+  requester s1201
+  form amount = 4_800JPY, purpose = "A taxi to a customer"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1201 | manager  | in progress |
+| 2026-11-16 15:00 | approve | s1101 |          | approved    |
+
+scenario rejected_by_the_manager
+  requester s1202
+  form amount = 52_000JPY, purpose = "A dinner with the team"
+| at               | event  | by    | comment                         | -> stage | status      |
+| 2026-11-16 10:00 | submit | s1202 |                                 | manager  | in progress |
+| 2026-11-16 15:00 | reject | s1101 | "Team dinners are not expenses" |          | rejected    |
+
+labels ja
+  request        "経費の精算"
+  amount         "金額"
+  purpose        "目的"
+  stage manager  "上長"
+  who manager    "上長"

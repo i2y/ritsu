@@ -1,0 +1,20 @@
+rule number_output v1
+description "A number an applied table writes, read with the amount it is decided from: each fee lies in the cell of the band that writes it"
+
+enum choice = one | two | three
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+apply t = "shared/tier.rule" meaning:8c5e54b1fadce0b7
+  amount = amount
+  fee -> t_fee
+
+outputs
+  x : choice
+
+table pick
+| amount                  | t_fee  | -> x  |
+| <=10_000JPY             | 100JPY | one   |
+| >10_000JPY <=100_000JPY | 300JPY | two   |
+| >100_000JPY             | 900JPY | three |

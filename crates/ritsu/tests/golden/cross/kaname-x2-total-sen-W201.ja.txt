@@ -1,0 +1,8 @@
+ok line_tax.rule
+ok order.kn: 関数 1 個、fails rule
+警告[ritsu W201]: order.kn:10:3: 規則 line_tax を呼ぶところで、前提 `total_tax <= 8000JPY` が保たれるかを決められません
+    10 |   line_tax(lines: map(lines, l => line_tax.lines { price: l.price })).due
+  = 並び `lines` に渡すリストは 20 件までです。その長さと要素の範囲の端では `total_tax <= 8000JPY` が成り立ちませんが、関数のベクタに、そういうリストを渡す入力はありませんでした。
+  = kaname の生成したコードが、走らせたときにその場所で確かめます。規則から生成したコードが入口で受け付けなければ、関数はそこで `rule` で失敗します。
+  = 呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡すと、示せるようになります。
+ritsu check: ファイル 2 個（rulec 1、kaname 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 1 か所、決められない 1 か所

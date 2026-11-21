@@ -1,0 +1,4 @@
+error[E105]: tests/mutants/E105_a_receipt_asked_for_while_hidden.ringi:8:80: The field receipt may be asked for while it is hidden
+     8 |   receipt : attachment "Receipt"  shown when category is travel  required when amount > 30_000JPY
+  = Such a request: amount = 30_001JPY, category = expense
+  = A hidden field cannot be filled. Correct the conditions so that the field is shown whenever `required when` holds.

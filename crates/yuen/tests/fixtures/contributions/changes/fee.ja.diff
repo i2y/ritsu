@@ -1,0 +1,17 @@
+diff --git a/rules/fee.ja.rule b/rules/fee.ja.rule
+index 89682be..ebd3084 100644
+--- a/rules/fee.ja.rule
++++ b/rules/fee.ja.rule
+@@ -12,10 +12,10 @@ outputs
+ table 手数料(fee) open
+ policy unique
+ | 戻し方 | -> 手数料 : number |
+-| 郵送   | 5                  |
++| 郵送   | 6                  |
+ | 窓口   | 0                  |
+ 
+ examples
+ | 戻し方 | -> 手数料 |
+-| 郵送   | 5         |
++| 郵送   | 6         |
+ | 窓口   | 0         |

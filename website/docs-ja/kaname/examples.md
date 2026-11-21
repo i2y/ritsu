@@ -33,7 +33,7 @@ $ ritsu gen --root . --out gen --module example.com/order_flow --target typescri
 | `result[T, E]` | `{ kind: "ok", value }`、`{ kind: "err", error }` | `kaname.Ok`、`kaname.Err` | `kaname.Ok[T, E]`、`kaname.Err[T, E]` |
 | `dict[K, V]`、`set[T]` | `ReadonlyMap`、`ReadonlySet` | `dict`、`frozenset` | `map[K]V`、`map[T]struct{}` |
 
-ホストが呼ぶ関数は、計算を始める前に引数を宣言で確かめ、外れていれば `input` で失敗します。失敗はどれも種類を持つ `KanameError` で、種類は `input` か、関数のエフェクトが言う種類のどれかです。業務として受け付けないことは、失敗ではなく `result` で、ホストがそれを読みます。
+ホストが呼ぶ関数は、計算を始める前に引数を宣言で確かめ、外れていれば `input` で失敗します。失敗はどれも種類を持つ `KanameError` で、種類は `input` か、関数のエフェクトが言う種類のどれかです。種類が `input` なら、受け付けなかった場所も `path` に持ちます（`submit.form.days`、`lines[0].weight`）。ホストは文を読まずに、その場所を指せます。業務として受け付けないことは、失敗ではなく `result` で、ホストがそれを読みます。
 
 ## 注文とイベント
 

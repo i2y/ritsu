@@ -1,0 +1,14 @@
+rule one_flag v1
+description "Whether a quantity is sold in bulk: a rule of one output, a yes or no"
+
+inputs
+  qty : number  range >=0 <=99
+
+outputs
+  bulk : bool
+
+table bulk_of
+policy unique
+| qty  | -> bulk : bool |
+| <10  | false          |
+| >=10 | true           |

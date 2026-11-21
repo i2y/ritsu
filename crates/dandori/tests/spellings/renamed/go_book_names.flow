@@ -9,12 +9,12 @@ record Call
 record Answer
   count : int
 
-enum Carrier = air | rail
+enum BookTransport = air | rail
 
 record Everything
   call : Call
   result : Answer
-  transport : Carrier
+  transport : BookTransport
 
 inputs
   id : string

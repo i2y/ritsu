@@ -1,6 +1,6 @@
 # 普通の名前 v1
 
-生成するコードが自分のものにしない名前です。Go のパッケージが持ちそうな名詞と、コードが読まない Python の組み込みと JavaScript のグローバルを、型と変数に使います。どのプラットフォームでも動きます
+生成するコードが自分のものにしない名前です。Go のパッケージが持ちそうな名詞、コードが読まない Python の組み込みと JavaScript のグローバル、コードが別の名前で読む Python の typing の名前を、型と変数に使います。どのプラットフォームでも動きます
 
 `tests/flows/plain_names.ja.flow`, drawn by `dandori doc`. Inputs: `番号: string`. Outputs: `文: string`, `全部の値: 全部`.
 
@@ -28,7 +28,9 @@ flowchart TD
     s17["slice = 書く(…)<br>lambda note"]
     s18["sum = 書く(…)<br>lambda note"]
     s19["vars = 書く(…)<br>lambda note"]
-    s20(["succeed 文 = #quot;{bytes}{callable}{filter}{format}{frozense…"])
+    s20["TypeError = 書く(…)<br>lambda note"]
+    s21["TypeGuard = 書く(…)<br>lambda note"]
+    s22(["succeed 文 = #quot;{bytes}{callable}{filter}{format}{frozense…"])
     start --> s1
     s1 --> s2
     s2 --> s3
@@ -49,9 +51,11 @@ flowchart TD
     s17 --> s18
     s18 --> s19
     s19 --> s20
+    s20 --> s21
+    s21 --> s22
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s20 ok
+    class s22 ok
 ```
 
 A rectangle is a task, one with a line down each side a rule, a slanted one a task whose value comes from outside (an event, or the answer to a callback), a hexagon a `match`, a rounded box a wait, and a box around steps a loop. A dashed arrow is an error the call handles.
@@ -60,25 +64,27 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 114 | `全部の値 = 集める(…)` | `lambda gather`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 115 | `bytes = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 116 | `callable = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 117 | `filter = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 118 | `format = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 119 | `frozenset = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 120 | `hasattr = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 121 | `hash = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 122 | `iter = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 123 | `map = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 124 | `object = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 125 | `open = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 126 | `print = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 127 | `repr = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 128 | `reversed = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 129 | `setattr = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 130 | `slice = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 131 | `sum = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 132 | `vars = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 121 | `全部の値 = 集める(…)` | `lambda gather`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 122 | `bytes = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 123 | `callable = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 124 | `filter = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 125 | `format = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 126 | `frozenset = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 127 | `hasattr = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 128 | `hash = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 129 | `iter = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 130 | `map = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 131 | `object = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 132 | `open = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 133 | `print = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 134 | `repr = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 135 | `reversed = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 136 | `setattr = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 137 | `slice = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 138 | `sum = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 139 | `vars = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 140 | `TypeError = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 141 | `TypeGuard = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 
 ## Ends
 
@@ -86,5 +92,5 @@ Every way the workflow can end.
 
 | Line | End |
 |---:|---|
-| 133 | `succeed 文 = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", 全部の値 = 全部の値` |
+| 142 | `succeed 文 = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}{TypeError}{TypeGuard}", 全部の値 = 全部の値` |
 

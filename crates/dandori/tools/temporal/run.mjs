@@ -583,20 +583,42 @@ if (serving) {
   process.exit(0);
 }
 
-/** Start the other language's runner, serving the activities; `done` closes its input, waits for it, and reads the calls of each run. */
+/**
+ * Start the other language's runner, serving the activities. `done` closes its input, waits for it, and reads the calls of
+ * each run; `gone` fails when it ends before that: the activities are its alone, and the runs would wait without end.
+ */
 async function serveActivities(address) {
   const stepsFile = path.join(work, "steps.json");
   const child = spawn(activitiesBy[0], [...activitiesBy.slice(1), stepsFile, address], { stdio: ["pipe", "pipe", "inherit"] });
+  let closing = false;
   const exited = new Promise((ok, fail) => child.on("exit", (code) => (code === 0 ? ok() : fail(new Error(`the activities' runner exited with ${code}`)))));
-  // its workers poll before the first run starts, so that no activity waits for them
+  const gone = new Promise((_, fail) => child.on("exit", (code, signal) => closing || fail(new Error(`the activities' runner exited with ${code ?? signal} before the runs were over`))));
+  gone.catch(() => {});
+  // its workers poll before the first run starts, so that no activity waits for them; what it prints after that goes on to
+  // this runner's standard error (what it says there is this runner's already)
+  let serving = false;
   await new Promise((ok, fail) => {
-    child.stdout.on("data", (d) => String(d).includes("serving") && ok());
+    child.stdout.on("data", (d) => {
+      if (serving) process.stderr.write(d);
+      else if (String(d).includes("serving")) {
+        serving = true;
+        // what came after its "serving" line in the same piece
+        const s = String(d);
+        const rest = s.slice(s.indexOf("\n", s.indexOf("serving")) + 1 || s.length);
+        if (rest !== "") process.stderr.write(rest);
+        ok();
+      }
+    });
     exited.catch(fail);
   });
-  return async () => {
-    child.stdin.end();
-    await exited;
-    return JSON.parse(fs.readFileSync(stepsFile, "utf8"));
+  return {
+    gone,
+    done: async () => {
+      closing = true;
+      child.stdin.end();
+      await exited;
+      return JSON.parse(fs.readFileSync(stepsFile, "utf8"));
+    },
   };
 }
 
@@ -652,7 +674,7 @@ try {
     );
   }
   const runAll = async () => {
-    const ends = await Promise.all(
+    const all = Promise.all(
       spec.runs.map(async (r) => {
         const run = { id: r.id, answers: r.answers, events: r.events ?? {}, next: 0, steps: [], done: false };
         runs.set(r.id, run);
@@ -702,6 +724,8 @@ try {
         return { end, cases, shown, asked, histories: await runsOf(r.id, handle.firstExecutionRunId) };
       }),
     );
+    // with the other language's activities, the runs stop waiting when its runner ends before they are over
+    const ends = served === null ? await all : await Promise.race([all, served.gone]);
     spec.runs.forEach((r, i) => results.push({ steps: runs.get(r.id).steps, end: ends[i].end, cases: ends[i].cases, shown: ends[i].shown, asked: ends[i].asked }));
     // DANDORI_TEMPORAL_DUMP=<directory>: the histories of the runs the scenario cancels, as the server has them, to read
     // when one of them ends otherwise than the reference interpreter says
@@ -723,7 +747,7 @@ try {
   }
   await chain();
   if (served !== null) {
-    const steps = await served();
+    const steps = await served.done();
     for (const [i, r] of spec.runs.entries()) results[i].steps = steps[r.id];
   }
   // the generated client finds every run by the workflow's type, the ones that went on in a new run too (the server lists them a moment late)

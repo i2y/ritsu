@@ -1,0 +1,17 @@
+rule tier_by_size v1
+description "The tier of an order by its size and its haste, of the tiers the gates and the flows share. A sketch written for the tests"
+import enum tier from "order_states.rule"
+
+inputs
+  large : bool
+  rush  : bool
+
+outputs
+  tier : tier
+
+table tiers
+policy unique
+| large | rush  | -> tier |
+| false | false | basic   |
+| true  | false | silver  |
+| -     | true  | gold    |

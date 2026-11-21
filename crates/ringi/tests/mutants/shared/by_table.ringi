@@ -1,0 +1,13 @@
+route by_table v1 "Approval by a table"
+
+inputs
+  long : bool
+
+route
+| long  | -> check | head  |
+| true  | finance  | heads |
+| false | finance  |       |
+
+who
+  finance = team finance
+  heads   = team finance_heads

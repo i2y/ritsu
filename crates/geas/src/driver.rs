@@ -141,9 +141,11 @@ impl Live {
             Err(RecvTimeoutError::Disconnected) => {
                 let o = owed_for(call);
                 let name = &self.target;
-                let how = match self.proc.wait_until(Instant::now() + Duration::from_secs(1)) {
-                    Some(st) => proc::how_it_ended(st),
-                    None => tr!("標準出力が閉じました", "its stdout closed"),
+                // once it has ended, what it wrote just before is read to the end; a driver
+                // that only closed its stdout still runs, and is quoted as far as it wrote
+                let (how, stderr) = match self.proc.wait_until(Instant::now() + Duration::from_secs(1)) {
+                    Some(st) => (proc::how_it_ended(st), self.proc.stderr_after_end()),
+                    None => (tr!("標準出力が閉じました", "its stdout closed"), self.proc.stderr_so_far()),
                 };
                 Err(Failure {
                     code: "E037",
@@ -155,7 +157,7 @@ impl Live {
                         o.en,
                         how.en,
                     ),
-                    notes: proc::stderr_tail(&self.proc.stderr_so_far()),
+                    notes: proc::stderr_tail(&stderr),
                 })
             }
         }
@@ -243,6 +245,23 @@ mod tests {
         assert_eq!(c(Call::Submit(Place::Field(2))), r#"{"do":"submit","field":2}"#);
         assert_eq!(c(Call::Press("cmd-s".into())), r#"{"do":"press","key":"cmd-s"}"#);
         assert_eq!(c(Call::Advance(500)), r#"{"do":"advance","ms":500}"#);
+    }
+
+    /// A driver that writes on stderr and exits before it answers: E037 quotes the last
+    /// lines it wrote, though its stderr is read only after geas learns it ended, as on a
+    /// busy machine.
+    #[cfg(unix)]
+    #[test]
+    fn a_driver_that_exits_is_quoted_to_the_end_of_its_stderr() {
+        let p = proc::start_late(&["sh", "-c", proc::FORTY_LINES], Duration::from_millis(300));
+        let (tx, lines) = mpsc::channel();
+        drop(tx);
+        let mut live = Live { proc: p, lines, target: "app".into() };
+        let Err(f) = live.ask("{}", None) else { panic!("a driver that exited answered") };
+        assert_eq!((f.code, f.msg.en.as_str()), ("E037", "the driver of `app` exited before answering the first line, which hands it the pins (exit 3)"));
+        let notes: Vec<String> = f.notes.into_iter().map(|n| n.en).collect();
+        let tail: Vec<String> = (36..=40).map(|i| format!("stderr: line {i} of why it stopped")).collect();
+        assert_eq!(notes, tail);
     }
 
     #[test]

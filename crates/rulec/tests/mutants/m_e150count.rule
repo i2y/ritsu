@@ -1,0 +1,19 @@
+rule gift_basket v1
+description "Whether a card goes in a gift basket. A basket has up to five fragile items, which holds it to five lines, and six wrapped items at least: no basket has six lines"
+
+# One line of the basket.
+elements lines
+  wrapped : bool
+  fragile : bool
+
+count wrapped_items over lines where wrapped  range >=6 <=10
+count fragile_items over lines where fragile  range >=0 <=5
+
+outputs
+  card : bool
+
+table card_of
+policy unique
+| wrapped_items | fragile_items | -> card |
+| <8            | -             | false   |
+| >=8           | -             | true    |

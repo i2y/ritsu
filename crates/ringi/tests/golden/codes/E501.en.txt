@@ -1,0 +1,3 @@
+error[E501]: org/2026-04-01/teams.csv:3:1: The kind `section` of the team `sales` is not a kind of team the organization's file declares
+     3 | sales,Sales,営業部,section,company,e02
+  = The kinds of team declared: company, department

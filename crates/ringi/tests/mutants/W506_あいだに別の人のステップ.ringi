@@ -1,0 +1,20 @@
+request 例(example) v1 "例"
+
+use organization 組織(org) from "shared/小さい会社.ringi"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確かめ(check)  財務
+  営業(sales)    営業部長
+  決裁(decide)   財務部長
+
+who
+  財務(finance)        = team finance
+  営業部長(sales_head) = person "e02"
+  財務部長(head)       = person "e04"
+
+ticket
+  self approval  allowed
+  same approver  approves once

@@ -8,7 +8,10 @@
 //! `is_file`, `std::env::current_dir`). Without [`with`] they are `std::fs`, unchanged. Inside
 //! [`with`], they read and write what it was given — [`Memory`], or any other [`Files`] — on this
 //! thread only. Where the disk has no answer (a symbolic link, permissions), memory has none
-//! either: it holds files and the directories they are in.
+//! either: it holds files and the directories they are in. [`watched`] notes what a run of code
+//! reads through here, which a language keeps a check by while every file it read reads the same.
+//! [`steady`] asks the disk each question once while a run of code asks it many times (the walk of
+//! `dandori scenarios`, whose every call of a rule asks again what the rule's check read).
 //!
 //! Built for WASI (the npm package, DESIGN 8.8), they are `std::fs` with two differences that make
 //! the answers the native binary's: an error of the disk says the system's number rather than
@@ -23,11 +26,12 @@
 //! read only. A listing of `R` does not show `@<name>`. [`raw`] reads without the view.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::rc::Rc;
+use std::sync::{Arc, Weak};
 
 /// What is at a path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,9 +116,17 @@ pub trait Files {
     fn read_dir(&self, p: &Path) -> io::Result<Vec<(OsString, Kind)>>;
     fn write(&self, p: &Path, bytes: &[u8]) -> io::Result<()>;
     fn create_dir_all(&self, p: &Path) -> io::Result<()>;
+    /// The working directory, named with no symbolic link in it, as the system names it
+    /// (`std::env::current_dir`): a `..` that climbs above it folds by its letters
+    /// ([`crate::paths::folds_by_letters`]).
     fn current_dir(&self) -> io::Result<PathBuf>;
     /// The path made absolute, `.` and `..` folded; an error when nothing is there.
     fn canonicalize(&self, p: &Path) -> io::Result<PathBuf>;
+    /// Where the symbolic link at `p` leads, as the link is written; None where `p` is no link or
+    /// nothing is there. Files of their own hold no link, the default (memory, a git revision).
+    fn link(&self, _p: &Path) -> Option<PathBuf> {
+        None
+    }
     /// The git revision the files are read at ([`GitRevision`]), for a sentence that says what to
     /// run (`ritsu mod fetch --rev <revision>`): None for the disk and memory. A [`Files`] that hands
     /// its calls on hands this on too.
@@ -172,10 +184,364 @@ pub fn id() -> usize {
     }
 }
 
+/// What a run of code read through this module, each question once with its answer ([`watched`]):
+/// what a language keeps a check by, while every file the check read reads the same (DESIGN 4.15).
+/// [`Seen::still`] asks every question again through the files of now, so a check kept and handed
+/// out while another is being watched is read again by the one watched: what the kept check rests
+/// on, the other rests on too. A file read is held by its bytes, in one copy that every check of the
+/// thread that read the same bytes at the same path shares ([`copies_held`]): a check is kept for
+/// the rest of the run, and a file many checks read (an `enums` file every rule imports) is held
+/// once, not once for each of them.
+#[derive(Clone, Default, Debug)]
+pub struct Seen(Vec<Look>);
+
+/// A question asked of the files, and the answer (None where there was nothing); a file's bytes in
+/// the copy the checks of the thread share.
+#[derive(Clone, Debug, PartialEq)]
+enum Look {
+    Read(PathBuf, Option<Arc<Vec<u8>>>),
+    Meta(PathBuf, Option<Meta>),
+    Dir(PathBuf, Option<Vec<(OsString, Kind)>>),
+    Canonical(PathBuf, Option<PathBuf>),
+    Link(PathBuf, Option<PathBuf>),
+}
+
+/// The kinds of question, as [`Look::question`] tells them apart.
+const READ: u8 = 0;
+const META: u8 = 1;
+const DIR: u8 = 2;
+const CANONICAL: u8 = 3;
+const LINK: u8 = 4;
+
+impl Look {
+    /// The question, to ask it once.
+    fn question(&self) -> (u8, &Path) {
+        match self {
+            Look::Read(p, _) => (READ, p),
+            Look::Meta(p, _) => (META, p),
+            Look::Dir(p, _) => (DIR, p),
+            Look::Canonical(p, _) => (CANONICAL, p),
+            Look::Link(p, _) => (LINK, p),
+        }
+    }
+
+    /// Whether the files the thread reads now answer the question the same (the paths are where
+    /// the view of a module's dependencies led, so they are asked as they are).
+    fn holds(&self) -> bool {
+        match self {
+            Look::Read(p, was) => match (raw::read(p), was) {
+                (Ok(now), Some(was)) => now == **was,
+                (Err(_), None) => true,
+                _ => false,
+            },
+            Look::Meta(p, was) => raw::metadata(p).ok() == *was,
+            Look::Dir(p, was) => raw::read_dir(p).ok() == *was,
+            Look::Canonical(p, was) => raw::canonicalize(p).ok() == *was,
+            Look::Link(p, was) => raw::link(p) == *was,
+        }
+    }
+}
+
+thread_local! {
+    /// The copies of the files read that the checks of this thread hold ([`Seen`]).
+    static COPIES: RefCell<Copies> = RefCell::new(Copies::default());
+}
+
+#[derive(Default)]
+struct Copies {
+    /// For each path read from the files [`id`] numbers, the copies of what was read there that a
+    /// check may still hold, pointed at without being held. The bytes are a `Vec` of their own, so
+    /// that what points at a copy no check holds keeps the counts of the `Arc`, not the bytes.
+    held: HashMap<(usize, PathBuf), Vec<Weak<Vec<u8>>>>,
+    /// How many paths may be listed before those no check holds a copy of are let go.
+    sweep_at: usize,
+}
+
+/// The copy of `bytes`, read at `p` from the files [`id`] numbers `files`: one a check of the thread
+/// holds of the same bytes there, else a new one. A copy goes with the last check that held it.
+fn copy(files: usize, p: &Path, bytes: &[u8]) -> Arc<Vec<u8>> {
+    COPIES.with(|c| {
+        let mut c = c.borrow_mut();
+        let copies = c.held.entry((files, p.to_path_buf())).or_default();
+        copies.retain(|w| w.strong_count() > 0);
+        if let Some(held) = copies.iter().filter_map(Weak::upgrade).find(|b| b.as_slice() == bytes) {
+            return held;
+        }
+        let new = Arc::new(bytes.to_vec());
+        copies.push(Arc::downgrade(&new));
+        if c.held.len() >= c.sweep_at {
+            c.held.retain(|_, copies| {
+                copies.retain(|w| w.strong_count() > 0);
+                !copies.is_empty()
+            });
+            c.sweep_at = (c.held.len() * 2).max(64);
+        }
+        new
+    })
+}
+
+/// How many copies of files read the checks of this thread hold now, and their bytes in all: one
+/// for each file and what it held when read, however many checks read it.
+pub fn copies_held() -> (usize, usize) {
+    COPIES.with(|c| c.borrow().held.values().flatten().filter_map(Weak::upgrade).fold((0, 0), |(n, len), b| (n + 1, len + b.len())))
+}
+
+impl Seen {
+    /// Whether every question asked reads the same now.
+    pub fn still(&self) -> bool {
+        self.0.iter().all(Look::holds)
+    }
+
+    /// Every file read, with what it held (None where nothing could be read), in the order read.
+    pub fn reads(&self) -> impl Iterator<Item = (&Path, Option<&[u8]>)> {
+        self.0.iter().filter_map(|l| if let Look::Read(p, b) = l { Some((p.as_path(), b.as_deref().map(Vec::as_slice))) } else { None })
+    }
+
+    /// What `other` asked, asked here too: an answer read off another check rests on what that
+    /// check read.
+    pub fn extend(&mut self, other: &Seen) {
+        for l in &other.0 {
+            if !self.0.iter().any(|m| m.question() == l.question()) {
+                self.0.push(l.clone());
+            }
+        }
+    }
+}
+
+/// The files a run of code reads through ([`watched`]): every call handed on to what the thread read
+/// before (the disk, or the files of an outer [`with`]), each question noted once with its answer.
+/// It stands for the files it hands on to ([`Files::stands_for`]), so what is kept for those (the
+/// tree of a module) is read here too.
+struct Recorder {
+    under: Option<Rc<dyn Files>>,
+    stands: usize,
+    seen: RefCell<(Vec<Look>, BTreeSet<(u8, PathBuf)>)>,
+}
+
+impl Recorder {
+    fn files(&self) -> &dyn Files {
+        match &self.under {
+            Some(f) => f.as_ref(),
+            None => &Disk,
+        }
+    }
+
+    /// Notes the question of the kind `kind` about `p` with its answer, the first time it is asked.
+    fn note(&self, kind: u8, p: &Path, look: impl FnOnce() -> Look) {
+        let mut s = self.seen.borrow_mut();
+        if s.1.insert((kind, p.to_path_buf())) {
+            s.0.push(look());
+        }
+    }
+}
+
+impl Files for Recorder {
+    fn read(&self, p: &Path) -> io::Result<Vec<u8>> {
+        let got = self.files().read(p);
+        self.note(READ, p, || Look::Read(p.to_path_buf(), got.as_ref().ok().map(|b| copy(self.stands, p, b))));
+        got
+    }
+
+    fn metadata(&self, p: &Path) -> io::Result<Meta> {
+        let got = self.files().metadata(p);
+        self.note(META, p, || Look::Meta(p.to_path_buf(), got.as_ref().ok().copied()));
+        got
+    }
+
+    fn read_dir(&self, p: &Path) -> io::Result<Vec<(OsString, Kind)>> {
+        let got = self.files().read_dir(p);
+        self.note(DIR, p, || Look::Dir(p.to_path_buf(), got.as_ref().ok().cloned()));
+        got
+    }
+
+    fn write(&self, p: &Path, bytes: &[u8]) -> io::Result<()> {
+        self.files().write(p, bytes)
+    }
+
+    fn create_dir_all(&self, p: &Path) -> io::Result<()> {
+        self.files().create_dir_all(p)
+    }
+
+    fn current_dir(&self) -> io::Result<PathBuf> {
+        self.files().current_dir()
+    }
+
+    fn canonicalize(&self, p: &Path) -> io::Result<PathBuf> {
+        let got = self.files().canonicalize(p);
+        self.note(CANONICAL, p, || Look::Canonical(p.to_path_buf(), got.as_ref().ok().cloned()));
+        got
+    }
+
+    fn link(&self, p: &Path) -> Option<PathBuf> {
+        let got = self.files().link(p);
+        self.note(LINK, p, || Look::Link(p.to_path_buf(), got.clone()));
+        got
+    }
+
+    fn revision(&self) -> Option<String> {
+        self.files().revision()
+    }
+
+    fn stands_for(&self) -> Option<usize> {
+        Some(self.stands)
+    }
+}
+
+thread_local! {
+    /// What the disk answered within the [`steady`] this thread runs in: each question once.
+    static STEADY: RefCell<Option<Steady>> = const { RefCell::new(None) };
+}
+
+/// The answers of the disk within a [`steady`], each as the disk gave it the first time it was asked.
+#[derive(Default)]
+struct Steady {
+    read: HashMap<PathBuf, Result<Rc<Vec<u8>>, Said>>,
+    meta: HashMap<PathBuf, Result<Meta, Said>>,
+    link_meta: HashMap<PathBuf, Result<Meta, Said>>,
+    dir: HashMap<PathBuf, Result<Vec<(OsString, Kind)>, Said>>,
+    canonical: HashMap<PathBuf, Result<PathBuf, Said>>,
+    link: HashMap<PathBuf, Option<PathBuf>>,
+    cwd: Option<Result<PathBuf, Said>>,
+}
+
+/// An error of the disk, kept to be said again in the same words: an error of the system by its
+/// number, any other by its kind and its text.
+#[derive(Clone)]
+struct Said {
+    kind: io::ErrorKind,
+    number: Option<i32>,
+    text: String,
+}
+
+impl Said {
+    fn of(e: &io::Error) -> Said {
+        Said { kind: e.kind(), number: e.raw_os_error(), text: e.to_string() }
+    }
+
+    fn again(&self) -> io::Error {
+        match self.number {
+            Some(n) => io::Error::from_raw_os_error(n),
+            None => io::Error::new(self.kind, self.text.clone()),
+        }
+    }
+}
+
+/// `f` run with the disk asked each question once (DESIGN 4.15): within it, the bytes of a file,
+/// what is at a path (with a symbolic link followed and not), the names in a directory, a path made
+/// canonical, where a link leads and the working directory are asked of the disk the first time,
+/// and the same question again is answered as the disk answered then. A file or a directory this
+/// module writes ([`write`], [`create_dir_all`]) has every question asked anew after it. What a
+/// check kept rests on ([`Seen::still`]) is asked through it as well, so a run of code that asks
+/// the ports many times (the walk of `dandori scenarios`) reads each file once, however many times
+/// a port asks whether its check still holds; once `f` returns, the disk is asked again, and a check
+/// whose files have changed is made anew. A `steady` inside another takes the outer one's answers.
+/// Files of their own (memory, a git revision) are not the disk and are read as they are. The
+/// working directory is asked once too, and a relative path is kept as it was given: code that
+/// moves the working directory (`std::env::set_current_dir`), or writes files other than through
+/// this module, runs outside a `steady`.
+pub fn steady<R>(f: impl FnOnce() -> R) -> R {
+    if STEADY.with(|s| s.borrow().is_some()) {
+        return f();
+    }
+    struct End;
+    impl Drop for End {
+        fn drop(&mut self) {
+            STEADY.with(|s| *s.borrow_mut() = None);
+        }
+    }
+    STEADY.with(|s| *s.borrow_mut() = Some(Steady::default()));
+    let _end = End;
+    f()
+}
+
+/// The answer to a question of the disk: within a [`steady`], the one kept in `slot` for `p`, else
+/// `ask`'s, kept there; outside, `ask`'s.
+fn asked_once<T: Clone>(slot: fn(&mut Steady) -> &mut HashMap<PathBuf, Result<T, Said>>, p: &Path, ask: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
+    let kept = STEADY.with(|s| s.borrow_mut().as_mut().map(|s| slot(s).get(p).cloned()));
+    match kept {
+        None => ask(),
+        Some(Some(answer)) => answer.map_err(|e| e.again()),
+        Some(None) => {
+            let got = ask();
+            let keep = match &got {
+                Ok(v) => Ok(v.clone()),
+                Err(e) => Err(Said::of(e)),
+            };
+            STEADY.with(|s| {
+                if let Some(s) = s.borrow_mut().as_mut() {
+                    slot(s).insert(p.to_path_buf(), keep);
+                }
+            });
+            got
+        }
+    }
+}
+
+/// The bytes of a file on the disk, asked once within a [`steady`].
+fn disk_read(p: &Path) -> io::Result<Vec<u8>> {
+    asked_once(|s| &mut s.read, p, || std::fs::read(p).map(Rc::new).map_err(as_native)).map(|b| b.as_ref().clone())
+}
+
+/// A file on the disk as text: within a [`steady`], its bytes as asked once; bytes that are not
+/// UTF-8 are read again for `std`'s own error.
+fn disk_read_to_string(p: &Path) -> io::Result<String> {
+    if STEADY.with(|s| s.borrow().is_none()) {
+        return std::fs::read_to_string(p).map_err(as_native);
+    }
+    String::from_utf8(disk_read(p)?).or_else(|_| std::fs::read_to_string(p).map_err(as_native))
+}
+
+/// What is at a path on the disk with a symbolic link not followed, asked once within a [`steady`].
+fn disk_symlink_metadata(p: &Path) -> io::Result<Meta> {
+    asked_once(|s| &mut s.link_meta, p, || std::fs::symlink_metadata(p).map(|m| Meta::of(&m)).map_err(as_native))
+}
+
+/// The names in a directory on the disk, each with what it is: asked once within a [`steady`] when
+/// every entry could be read, else asked as it is each time.
+fn entries(dir: &Path) -> io::Result<Vec<io::Result<(OsString, Kind)>>> {
+    let kept = STEADY.with(|s| s.borrow_mut().as_mut().map(|s| s.dir.get(dir).cloned()));
+    match kept {
+        None => disk_entries(dir),
+        Some(Some(answer)) => answer.map(|v| v.into_iter().map(Ok).collect()).map_err(|e| e.again()),
+        Some(None) => {
+            let got = disk_entries(dir);
+            let keep = match &got {
+                Ok(v) => v.iter().map(|e| e.as_ref().ok().cloned()).collect::<Option<Vec<_>>>().map(Ok),
+                Err(e) => Some(Err(Said::of(e))),
+            };
+            if let Some(keep) = keep {
+                STEADY.with(|s| {
+                    if let Some(s) = s.borrow_mut().as_mut() {
+                        s.dir.insert(dir.to_path_buf(), keep);
+                    }
+                });
+            }
+            got
+        }
+    }
+}
+
+/// What the disk answered before a write: asked anew after it.
+fn forget_steady() {
+    STEADY.with(|s| {
+        if let Some(s) = s.borrow_mut().as_mut() {
+            *s = Steady::default();
+        }
+    });
+}
+
+/// `f` run with every question it asks of this module noted: what it came to, and what it read.
+pub fn watched<R>(f: impl FnOnce() -> R) -> (R, Seen) {
+    let rec = Rc::new(Recorder { under: current(), stands: id(), seen: RefCell::default() });
+    let got = with(rec.clone(), f);
+    let (looks, _) = rec.seen.take();
+    (got, Seen(looks))
+}
+
 /// What the layer reads without the view of a module's dependencies: the paths as they are. What
 /// reads a module's own files to make the view (its `ritsu.mod`, its lock, the store) reads here.
 pub mod raw {
-    use super::{Disk, Files, Kind, Meta, as_native, disk_entries, held};
+    use super::{Disk, Files, Kind, Meta, disk_read_to_string, disk_symlink_metadata, entries, held};
     use std::ffi::OsString;
     use std::io;
     use std::path::{Path, PathBuf};
@@ -192,7 +558,7 @@ pub mod raw {
     pub fn read_to_string(p: &Path) -> io::Result<String> {
         match held() {
             Some(f) => String::from_utf8(f.read(p)?).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "stream did not contain valid UTF-8")),
-            None => std::fs::read_to_string(p).map_err(as_native),
+            None => disk_read_to_string(p),
         }
     }
 
@@ -208,7 +574,7 @@ pub mod raw {
     pub fn symlink_metadata(p: &Path) -> io::Result<Meta> {
         match held() {
             Some(f) => f.metadata(p),
-            None => std::fs::symlink_metadata(p).map(|m| Meta::of(&m)).map_err(as_native),
+            None => disk_symlink_metadata(p),
         }
     }
 
@@ -217,7 +583,7 @@ pub mod raw {
     pub fn read_dir(p: &Path) -> io::Result<Vec<(OsString, Kind)>> {
         match held() {
             Some(f) => f.read_dir(p),
-            None => disk_entries(p)?.into_iter().collect(),
+            None => entries(p)?.into_iter().collect(),
         }
     }
 
@@ -226,6 +592,14 @@ pub mod raw {
         match held() {
             Some(f) => f.canonicalize(p),
             None => Disk.canonicalize(p),
+        }
+    }
+
+    /// [`super::link`].
+    pub fn link(p: &Path) -> Option<PathBuf> {
+        match held() {
+            Some(f) => f.link(p),
+            None => Disk.link(p),
         }
     }
 }
@@ -239,9 +613,21 @@ fn seen(p: &Path) -> std::borrow::Cow<'_, Path> {
     }
 }
 
-/// What writing under a dependency answers.
+/// What writing under a dependency answers: its files are read only. A command says it in its own
+/// words, in the language it prints in ([`crate::cli::cannot_write`]).
+#[derive(Debug)]
+pub struct ReadOnly(pub PathBuf);
+
+impl std::fmt::Display for ReadOnly {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} is in a dependency, whose files are read only", self.0.display())
+    }
+}
+
+impl std::error::Error for ReadOnly {}
+
 fn read_only(p: &Path) -> io::Error {
-    io::Error::new(io::ErrorKind::PermissionDenied, format!("{} is in a dependency, whose files are read only", p.display()))
+    io::Error::new(io::ErrorKind::PermissionDenied, ReadOnly(p.to_path_buf()))
 }
 
 /// `std::fs::read`.
@@ -293,11 +679,11 @@ pub fn symlink_metadata(p: impl AsRef<Path>) -> io::Result<Meta> {
 pub fn read_dir(p: impl AsRef<Path>) -> io::Result<std::vec::IntoIter<io::Result<Entry>>> {
     let dir = p.as_ref().to_path_buf();
     let real = seen(&dir).into_owned();
-    let entries: Vec<io::Result<Entry>> = match held() {
+    let listed: Vec<io::Result<Entry>> = match held() {
         Some(f) => f.read_dir(&real)?.into_iter().map(|(name, kind)| Ok(Entry { dir: dir.clone(), name, kind })).collect(),
-        None => disk_entries(&real)?.into_iter().map(|e| e.map(|(name, kind)| Entry { dir: dir.clone(), name, kind })).collect(),
+        None => entries(&real)?.into_iter().map(|e| e.map(|(name, kind)| Entry { dir: dir.clone(), name, kind })).collect(),
     };
-    Ok(entries.into_iter())
+    Ok(listed.into_iter())
 }
 
 /// `std::fs::canonicalize`. In memory, the path made absolute with `.` and `..` folded. Built
@@ -313,6 +699,13 @@ pub fn canonicalize(p: impl AsRef<Path>) -> io::Result<PathBuf> {
         }
         None => raw::canonicalize(p),
     }
+}
+
+/// Where the symbolic link at `p` leads, as the link is written (`std::fs::read_link`); None where
+/// `p` is no link or nothing is there. Memory holds none, and a path through the view of a module's
+/// dependencies is none either: the view is read by its letters.
+pub fn link(p: impl AsRef<Path>) -> Option<PathBuf> {
+    raw::link(p.as_ref())
 }
 
 /// `std::env::current_dir`.
@@ -331,36 +724,72 @@ pub fn current_dir() -> io::Result<PathBuf> {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Disk;
 
+/// Within a [`steady`], each question is asked of the disk once.
 impl Files for Disk {
     fn read(&self, p: &Path) -> io::Result<Vec<u8>> {
-        std::fs::read(p).map_err(as_native)
+        disk_read(p)
     }
 
     fn metadata(&self, p: &Path) -> io::Result<Meta> {
-        std::fs::metadata(p).map(|m| Meta::of(&m)).map_err(as_native)
+        asked_once(|s| &mut s.meta, p, || std::fs::metadata(p).map(|m| Meta::of(&m)).map_err(as_native))
     }
 
     fn read_dir(&self, p: &Path) -> io::Result<Vec<(OsString, Kind)>> {
-        disk_entries(p)?.into_iter().collect()
+        entries(p)?.into_iter().collect()
     }
 
     fn write(&self, p: &Path, bytes: &[u8]) -> io::Result<()> {
+        forget_steady();
         std::fs::write(p, bytes).map_err(as_native)
     }
 
     fn create_dir_all(&self, p: &Path) -> io::Result<()> {
+        forget_steady();
         std::fs::create_dir_all(p).map_err(as_native)
     }
 
     fn current_dir(&self) -> io::Result<PathBuf> {
-        std::env::current_dir().map_err(as_native)
+        let kept = STEADY.with(|s| s.borrow().as_ref().map(|s| s.cwd.clone()));
+        match kept {
+            None => std::env::current_dir().map_err(as_native),
+            Some(Some(answer)) => answer.map_err(|e| e.again()),
+            Some(None) => {
+                let got = std::env::current_dir().map_err(as_native);
+                let keep = got.as_ref().map(Clone::clone).map_err(Said::of);
+                STEADY.with(|s| {
+                    if let Some(s) = s.borrow_mut().as_mut() {
+                        s.cwd = Some(keep);
+                    }
+                });
+                got
+            }
+        }
     }
 
     fn canonicalize(&self, p: &Path) -> io::Result<PathBuf> {
-        #[cfg(target_os = "wasi")]
-        return realpath(p);
-        #[cfg(not(target_os = "wasi"))]
-        std::fs::canonicalize(p)
+        asked_once(|s| &mut s.canonical, p, || {
+            #[cfg(target_os = "wasi")]
+            return realpath(p);
+            #[cfg(not(target_os = "wasi"))]
+            std::fs::canonicalize(p)
+        })
+    }
+
+    fn link(&self, p: &Path) -> Option<PathBuf> {
+        let kept = STEADY.with(|s| s.borrow_mut().as_mut().map(|s| s.link.get(p).cloned()));
+        match kept {
+            None => std::fs::read_link(p).ok(),
+            Some(Some(answer)) => answer,
+            Some(None) => {
+                let got = std::fs::read_link(p).ok();
+                STEADY.with(|s| {
+                    if let Some(s) = s.borrow_mut().as_mut() {
+                        s.link.insert(p.to_path_buf(), got.clone());
+                    }
+                });
+                got
+            }
+        }
     }
 }
 
@@ -878,8 +1307,7 @@ pub fn git_new_enough(said: &str) -> bool {
 fn git_checked() -> Result<(), crate::text::Text> {
     let o = match std::process::Command::new("git").arg("version").output() {
         Ok(o) => o,
-        Err(e) if crate::wasi::unsupported(&e) => return Err(crate::wasi::cannot_start("git")),
-        Err(e) => return Err(crate::tr!("git を起動できません（{e}）", "cannot start git ({e})")),
+        Err(e) => return Err(crate::cli::cannot_start("git", &e)),
     };
     let said = String::from_utf8_lossy(&o.stdout).trim().to_string();
     if git_new_enough(&said) {
@@ -893,8 +1321,7 @@ fn git_checked() -> Result<(), crate::text::Text> {
 fn git_in(dir: &Path, args: &[&str]) -> Result<Option<Vec<u8>>, crate::text::Text> {
     match std::process::Command::new("git").arg("-C").arg(dir).args(args).output() {
         Ok(o) => Ok(o.status.success().then_some(o.stdout)),
-        Err(e) if crate::wasi::unsupported(&e) => Err(crate::wasi::cannot_start("git")),
-        Err(e) => Err(crate::tr!("git を起動できません（{e}）", "cannot start git ({e})")),
+        Err(e) => Err(crate::cli::cannot_start("git", &e)),
     }
 }
 
@@ -903,7 +1330,9 @@ impl GitRevision {
     /// when git cannot start or is too old, `dir` is in no repository, or the revision is not one.
     pub fn open(dir: &Path, rev: &str) -> Result<GitRevision, crate::text::Text> {
         git_checked()?;
-        let shown = dir.display().to_string();
+        // the directory as the run writes a place it looked at (DESIGN 6.2 item 8): from where it runs,
+        // the shortest way (`.` for that directory itself)
+        let shown = crate::paths::between(&crate::paths::absolute(Path::new(".")), &crate::paths::absolute(dir));
         let top = git_in(dir, &["rev-parse", "--show-toplevel"])?
             .ok_or_else(|| crate::tr!("`{shown}` は git のリポジトリの中にありません", "`{shown}` is in no git repository"))?;
         let top = PathBuf::from(String::from_utf8_lossy(&top).trim_end_matches(['\n', '\r']));
@@ -1061,6 +1490,13 @@ impl Files for GitRevision {
         Ok(if rel.is_empty() { top } else { top.join(rel) })
     }
 
+    fn link(&self, p: &Path) -> Option<PathBuf> {
+        match self.in_repo(p) {
+            Some(_) => None,
+            None => Disk.link(p),
+        }
+    }
+
     fn revision(&self) -> Option<String> {
         Some(self.rev.clone())
     }
@@ -1070,6 +1506,15 @@ impl Files for GitRevision {
 /// and every other call is handed to the files under (the disk when none). What `@<name>@<version>/…`
 /// reads through (DESIGN 17.9.1): the module at hand's `ritsu.mod` and `ritsu.lock` as they would be
 /// if it required that version, and its other files as they are. Nothing is written.
+///
+/// A file may be laid in a directory the files under do not have (what ringi lowers a request to,
+/// `expense.lowered/route.rule`): the directory is there while the overlay is, holding the files laid
+/// in it, and a path that goes up out of it (`expense.lowered/../shared/office.cal`) is folded before
+/// it is handed on, as the system would open it were the directory there (`paths::opened`, asking
+/// the files under where a link leads): the `..` out of the directory by its letters, a `..` out of a
+/// symbolic link from where the link leads (`in/expense.lowered/../../shared/office.cal`, with `in`
+/// a link to `../common/in`, is `../common/shared/office.cal`). A path through directories the files
+/// under have is handed on as it is.
 pub struct Overlay {
     files: BTreeMap<PathBuf, Vec<u8>>,
     under: Option<Rc<dyn Files>>,
@@ -1097,8 +1542,36 @@ impl Overlay {
         if self.files.is_empty() {
             return None;
         }
-        let abs = if crate::paths::rooted(p) { fold(p) } else { fold(&self.under().current_dir().ok()?.join(p)) };
-        self.files.get(&abs)
+        self.files.get(&fold(&self.unfolded(p)?))
+    }
+
+    /// The path made absolute against the working directory of the files under, not folded.
+    fn unfolded(&self, p: &Path) -> Option<PathBuf> {
+        if crate::paths::rooted(p) { Some(p.to_path_buf()) } else { Some(self.under().current_dir().ok()?.join(p)) }
+    }
+
+    /// Whether `dir` (absolute, folded) is a directory only the files laid make: some file is laid
+    /// under it, and the files under have nothing there.
+    fn made(&self, dir: &Path) -> bool {
+        self.files.keys().any(|f| f != dir && f.starts_with(dir)) && self.under().metadata(dir).is_err()
+    }
+
+    /// The path to hand to the files under: when it goes up out of a directory only the files laid
+    /// make (which is no link), folded as the system would open it, asking the files under where a
+    /// link leads; else as it is.
+    fn handed(&self, p: &Path) -> PathBuf {
+        if self.files.is_empty() {
+            return p.to_path_buf();
+        }
+        let Some(abs) = self.unfolded(p) else { return p.to_path_buf() };
+        let mut at = PathBuf::new();
+        for c in abs.components() {
+            if c == Component::ParentDir && self.made(&fold(&at)) {
+                return crate::paths::opened_by(&abs, &|q| self.under().link(q));
+            }
+            at.push(c.as_os_str());
+        }
+        p.to_path_buf()
     }
 }
 
@@ -1106,26 +1579,40 @@ impl Files for Overlay {
     fn read(&self, p: &Path) -> io::Result<Vec<u8>> {
         match self.laid(p) {
             Some(b) => Ok(b.clone()),
-            None => self.under().read(p),
+            None => self.under().read(&self.handed(p)),
         }
     }
 
     fn metadata(&self, p: &Path) -> io::Result<Meta> {
-        match self.laid(p) {
-            Some(b) => Ok(Meta { kind: Kind::File, len: b.len() as u64 }),
-            None => self.under().metadata(p),
+        if let Some(b) = self.laid(p) {
+            return Ok(Meta { kind: Kind::File, len: b.len() as u64 });
+        }
+        let p = self.handed(p);
+        match self.under().metadata(&p) {
+            Err(e) => match self.unfolded(&p).map(|a| fold(&a)) {
+                Some(abs) if self.made(&abs) => Ok(Meta { kind: Kind::Dir, len: 0 }),
+                _ => Err(e),
+            },
+            ok => ok,
         }
     }
 
     fn read_dir(&self, p: &Path) -> io::Result<Vec<(OsString, Kind)>> {
-        let mut out = self.under().read_dir(p)?;
-        let abs = if crate::paths::rooted(p) { fold(p) } else { fold(&self.under().current_dir()?.join(p)) };
+        let p = self.handed(p);
+        let abs = fold(&self.unfolded(&p).ok_or_else(not_found)?);
+        let mut out = match self.under().read_dir(&p) {
+            Ok(v) => v,
+            Err(_) if self.made(&abs) => Vec::new(),
+            Err(e) => return Err(e),
+        };
         for f in self.files.keys() {
-            if f.parent() == Some(abs.as_path())
-                && let Some(n) = f.file_name()
-                && !out.iter().any(|(x, _)| x == n)
-            {
-                out.push((n.to_os_string(), Kind::File));
+            // a file laid here, or the first directory on the way to one laid deeper
+            let Ok(rest) = f.strip_prefix(&abs) else { continue };
+            let mut parts = rest.components();
+            let (Some(first), deeper) = (parts.next(), parts.next().is_some()) else { continue };
+            let n = first.as_os_str();
+            if !out.iter().any(|(x, _)| x == n) {
+                out.push((n.to_os_string(), if deeper { Kind::Dir } else { Kind::File }));
             }
         }
         Ok(out)
@@ -1144,16 +1631,33 @@ impl Files for Overlay {
     }
 
     fn canonicalize(&self, p: &Path) -> io::Result<PathBuf> {
-        match self.laid(p) {
-            Some(_) => {
-                let abs = if crate::paths::rooted(p) { fold(p) } else { fold(&self.under().current_dir()?.join(p)) };
-                let dir = abs.parent().map(|d| self.under().canonicalize(d)).transpose()?;
-                Ok(match (dir, abs.file_name()) {
-                    (Some(d), Some(n)) => d.join(n),
-                    _ => abs,
-                })
+        let p = self.handed(p);
+        let abs = fold(&self.unfolded(&p).ok_or_else(not_found)?);
+        if self.laid(&p).is_none() && !self.made(&abs) {
+            return self.under().canonicalize(&p);
+        }
+        // the nearest directory above that the files under have, made canonical by them, and the
+        // rest of the path as it is
+        let mut rest = Vec::new();
+        let mut at = abs.clone();
+        loop {
+            let Some(name) = at.file_name().map(|n| n.to_os_string()) else { return Ok(abs) };
+            rest.push(name);
+            if !at.pop() {
+                return Ok(abs);
             }
-            None => self.under().canonicalize(p),
+            if !self.made(&at)
+                && let Ok(top) = self.under().canonicalize(&at)
+            {
+                return Ok(rest.iter().rev().fold(top, |d, n| d.join(n)));
+            }
+        }
+    }
+
+    fn link(&self, p: &Path) -> Option<PathBuf> {
+        match self.laid(p) {
+            Some(_) => None,
+            None => self.under().link(p),
         }
     }
 

@@ -510,27 +510,39 @@ class Rule:
             # No point is a draw: the door says why of the first.
             self._columns({k: v[:1] for k, v in cols.items()})
         keep = np.flatnonzero(ok)
-        out = self(**{k: [v[i] for i in keep] for k, v in cols.items()})
+        # A point where a value the rule works out falls outside the range it accepts for it is
+        # refused there, and is no draw either (rulec's §15.313).
+        gone = np.zeros(len(keep), dtype=bool)
+        out = self._decide({k: [v[i] for i in keep] for k, v in cols.items()}, gone)[0]
+        if gone.all():
+            # No point is a draw: the rule says why of the first.
+            self.traced(**{k: [v[keep[0]]] for k, v in cols.items()})
         ways, index = [], {}
         for i in range(len(keep)):
+            if gone[i]:
+                continue
             key = tuple(_plain(out[o][i]) for o in self.outputs)
             if key in index:
                 ways[index[key]][1] += 1
             else:
                 index[key] = len(ways)
                 ways.append([dict(zip(self.outputs, key)), 1])
-        return len(keep), [(w, c) for w, c in ways]
+        return len(keep) - int(gone.sum()), [(w, c) for w, c in ways]
 
     def _columns(self, cols: dict, constraints: bool = True):
         """The entry guard, and the wire turned into integers. Refusing is part of the rule.
 
         It refuses what every other generated door refuses, in the same order and with the
-        same sentences: each column's type, enum and range, then each `constraint` between
-        two columns, then the days of a koyomi date. Each refusal names the first element
-        it is about.
+        same sentences (rulec's §15.328): each column there and of its kind, a value of its
+        enum and, a number, one int64 holds; then each column inside its range; then each
+        `constraint` between two columns, then the days of a koyomi date. Each refusal names
+        the first element it is about.
         """
         env, n = {}, None
         word = self.plan.get("row", "row")
+        # What the range pass reads of each column: the values as they came and where they are
+        # absent.
+        seen = {}
 
         def refuse(what, value=_NOVALUE, row=None):
             return RuleInputError(what, value, row, word)
@@ -575,9 +587,10 @@ class Rule:
                     i = int(np.argmax(bad))
                     raise refuse(say["integer"], wire[i], i)
                 v = fill(v, 0) if spec.get("optional") else v
-                # The range, and the ends of the type where it writes none, before the column
-                # is int64: the cast wraps a value past them into one inside (§15.295).
-                bad = _outside(v, spec.get("min"), spec.get("max")) & ~absent
+                # A whole number int64 does not hold, before the column is int64: the cast wraps
+                # one past its ends into one inside (§15.295). A reader of the wire refuses it
+                # there, before it reads the next column (§15.328).
+                bad = _outside(v, -9223372036854775808, 9223372036854775807) & ~absent
                 if bad.any():
                     i = int(np.argmax(bad))
                     raise refuse(say["range"], wire[i], i)
@@ -601,19 +614,27 @@ class Rule:
                 if bad.any():
                     i = int(np.argmax(bad))
                     raise refuse(say["enum"], v[i], i)
+            env[name] = v
+            seen[name] = (wire, absent)
+        # Each column inside its range, once every column is there and of its kind (§15.328).
+        for spec in self.plan["inputs"]:
+            name, say, kind = spec["name"], spec.get("say", {}), spec["kind"]
+            v, (wire, absent) = env[name], seen[name]
             if "allowed" in spec:
                 bad = ~np.isin(v, spec["allowed"]) & ~absent
                 if bad.any():
                     i = int(np.argmax(bad))
                     raise refuse(say["range"], v[i], i)
-            if kind == "date":
-                # The range is the range of the values that are there (§15.201).
+            if kind in ("int", "date"):
+                # The range, and for a number the ends of the type where it writes none; the
+                # range is the range of the values that are there (§15.201, §15.295).
                 bad = _outside(v, spec.get("min"), spec.get("max")) & ~absent
                 if bad.any():
                     i = int(np.argmax(bad))
                     raise refuse(say["range"], wire[i], i)
-            env[name] = v
-        n = 0 if n is None else n
+        # A rule that reads no column answers one row: the same answer for every case (rulec's
+        # §15.330).
+        n = 1 if n is None else n
         # A combination the caller said does not happen: no row was demanded for it, so it is
         # refused rather than answered. Both sides are brought to the step they share first.
         for k in self.plan.get("constraints", []) if constraints else []:
@@ -640,11 +661,30 @@ class Rule:
 
     def traced(self, **cols):
         """The outputs and, per table, the 1-based row that decided each element."""
+        return self._decide(cols, None)
+
+    def _decide(self, cols, gone):
+        """`traced`. A value the rule works out outside the range it accepts for it refuses the
+        element where it is worked out (rulec's §15.313); given `gone`, a mask, the element is
+        marked in it instead, and nothing after looks at it for a refusal."""
         env, n = self._columns(cols)
         fired = []
         for st in self.plan["steps"]:
             if st["op"] == "define":
                 env[st["name"]] = _ev(st["expr"], env)
+                # A definition that names an optional number, date or truth value has no value
+                # where that one has none: the output of an applied rule comes in as one.
+                if st["expr"].get("k") == "name" and ("absent", st["expr"]["n"]) in env:
+                    env[("absent", st["name"])] = env[("absent", st["expr"]["n"])]
+                a = st.get("accept")
+                if a is not None:
+                    v = np.broadcast_to(np.asarray(env[st["name"]]), (n,))
+                    bad = _outside(v, a.get("min"), a.get("max"))
+                    if gone is not None:
+                        gone |= bad
+                    elif bad.any():
+                        i = int(np.argmax(bad))
+                        raise RuleInputError(a["what"], v[i], i, self.plan.get("row", "row"))
                 continue
             conds, picks = [], []
             for row in st["rows"]:
@@ -660,6 +700,8 @@ class Rule:
             # element, the rule contradicts itself, and the element is not answered.
             for g in st.get("guards", []):
                 both = conds[g["a"]] & conds[g["b"]]
+                if gone is not None:
+                    both = both & ~gone
                 if both.any():
                     raise RuleContradictionError(g["what"], int(np.argmax(both)), self.plan.get("row", "row"))
             for oi, out in enumerate(st["outs"]):
@@ -670,11 +712,11 @@ class Rule:
                 # of words holds `none` there, as an optional enum input does, and any other its
                 # placeholder, with where it is absent beside it (rulec's §15.249).
                 if st.get("optional", [False] * len(st["outs"]))[oi]:
-                    gone = np.select(conds, [_absent(r["absent"][oi], env, n) for r in st["rows"]], default=False)
+                    none_here = np.select(conds, [_absent(r["absent"][oi], env, n) for r in st["rows"]], default=False)
                     if kind == "enum":
-                        env[out] = np.where(gone, "none", env[out])
+                        env[out] = np.where(none_here, "none", env[out])
                     else:
-                        env[("absent", out)] = gone
+                        env[("absent", out)] = none_here
             # Which row decided each element. A merged set's rows come from different tables,
             # so the trace entry travels with the row rather than with the step.
             fired.append((np.select(conds, np.arange(len(conds)), default=0), [r["fired"] for r in st["rows"]]))
@@ -689,10 +731,13 @@ class Rule:
                     raw = raw // r["div"]
             # An optional output is `None` where it has no value (rulec's §15.249).
             if spec.get("optional"):
-                gone = env.get(("absent", spec["name"]))
-                if gone is None:
-                    gone = np.asarray(raw).astype(str) == "none"
-                raw = _objects([None if g else x for x, g in zip(np.atleast_1d(raw), gone)])
+                none_here = env.get(("absent", spec["name"]))
+                # A `result` that names an optional value has none where that one has none.
+                if none_here is None and e is not None and e.get("k") == "name":
+                    none_here = env.get(("absent", e["n"]))
+                if none_here is None:
+                    none_here = np.asarray(raw).astype(str) == "none"
+                raw = _objects([None if g else x for x, g in zip(np.atleast_1d(raw), none_here)])
             out[spec["name"]] = raw
         return out, fired
 

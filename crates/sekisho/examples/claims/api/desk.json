@@ -1,0 +1,18 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Claims desk", "version": "1.0.0", "description": "Pay a claim" },
+  "servers": [ { "url": "https://desk.example" } ],
+  "paths": {
+    "/claims/{claimId}/payments": {
+      "post": {
+        "operationId": "payClaim",
+        "summary": "Pay a claim",
+        "parameters": [ { "name": "claimId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": {
+          "200": { "description": "Paid", "content": { "application/json": { "schema": { "type": "object", "required": ["paid"], "properties": { "paid": { "type": "boolean" } } } } } },
+          "403": { "description": "The gate did not allow it" }
+        }
+      }
+    }
+  }
+}

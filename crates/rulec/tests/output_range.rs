@@ -268,7 +268,7 @@ fn a_range_reads_an_end_no_range_writes_as_the_end_of_its_type() {
     assert!(said(&fold).0.is_empty(), "{}", said(&fold).1);
     let (codes, en, _) = said(&fold.replace("range >=0\n\ntable", "range >=0 <=100\n\ntable"));
     assert_eq!(codes, ["E140"], "{en}");
-    assert!(en.contains("it can take >=0 <=9223372036854775807") && en.contains("`q` has no upper or no lower bound"), "{en}");
+    assert!(en.contains("it can take >=0 <=9_223_372_036_854_775_807") && en.contains("`q` has no upper or no lower bound"), "{en}");
     let walk = "rule top_line v1\n\nelements lines\n  q : number  range >=0\n\noutputs\n  r : number  round down(1)  range >=0\n\nmax r over lines of q empty 0  range >=0\n";
     assert!(said(walk).0.is_empty(), "{}", said(walk).1);
 }

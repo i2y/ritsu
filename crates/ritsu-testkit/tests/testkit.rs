@@ -150,6 +150,80 @@ fn a_program_runs_to_its_end_or_its_time_limit() {
     assert_eq!(r.stderr, "done");
 }
 
+/// Whether the process `pid` is still running (a zombie is not).
+#[cfg(unix)]
+fn running(pid: &str) -> bool {
+    let out = Command::new("ps").args(["-o", "stat=", "-p", pid]).output().unwrap();
+    let stat = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    !stat.is_empty() && !stat.starts_with('Z')
+}
+
+/// A program that does not end by its limit is killed with every process it started — here a
+/// stand-in for a server it runs, which holds the program's standard output and error as such a
+/// server does — and the run says what the program printed until then, at once: the server left
+/// running would keep the pipes open, and the run would wait as long as it runs (dandori's runners
+/// of the platforms start servers and other runners).
+#[cfg(unix)]
+#[test]
+fn a_program_past_its_limit_is_killed_with_every_process_it_started() {
+    let t = TempDir::new("tree");
+    let pids = t.path().join("pids");
+    let script = format!("echo started; echo said >&2; (sh -c 'sleep 30' & echo $! >> {p}; wait) & echo $! >> {p}; sleep 30", p = pids.display());
+    let start = Instant::now();
+    let r = run::run(Command::new("sh").args(["-c", &script]), Duration::from_millis(500));
+    assert!(start.elapsed() < Duration::from_secs(10), "the run waited {:?} for the processes the program started", start.elapsed());
+    assert!(r.timed_out && !r.ok && r.code.is_none());
+    assert_eq!((r.stdout.as_str(), r.stderr.as_str()), ("started\n", "said\n"), "what the program printed until its limit");
+    let started = std::fs::read_to_string(&pids).unwrap();
+    let started: Vec<&str> = started.split_whitespace().collect();
+    assert_eq!(started.len(), 2, "{started:?}");
+    // a killed process is gone a moment later
+    let gone = |pid: &str| {
+        for _ in 0..100 {
+            if !running(pid) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        false
+    };
+    for pid in started {
+        assert!(gone(pid), "the process {pid} the program started is still running");
+    }
+}
+
+/// A program that ends and leaves a process running that holds its output: the run ends a little
+/// after the program, with what it printed, and does not wait for the process.
+#[cfg(unix)]
+#[test]
+fn a_program_that_leaves_a_process_holding_its_output_is_not_waited_for() {
+    let start = Instant::now();
+    let r = run::run(Command::new("sh").args(["-c", "sleep 30 & echo done"]), Duration::from_secs(60));
+    assert!(start.elapsed() < Duration::from_secs(20), "the run waited {:?} for a process the program left", start.elapsed());
+    assert!(r.ok && !r.timed_out);
+    assert_eq!(r.stdout, "done\n");
+}
+
+/// A runner past its limit fails the test there, naming what it ran and with what it printed until
+/// then; one that ends in time is handed back as it ended, a failure too.
+#[cfg(unix)]
+#[test]
+fn finish_fails_a_test_with_what_a_stopped_program_printed() {
+    let start = Instant::now();
+    let failed = std::panic::catch_unwind(|| {
+        run::finish(Command::new("sh").args(["-c", "echo waiting; echo still >&2; sleep 30"]), Duration::from_millis(500), "the flow orders: the runner")
+    });
+    assert!(start.elapsed() < Duration::from_secs(20), "finish waited {:?}", start.elapsed());
+    let said = failed.expect_err("a program past its limit fails the test");
+    let said = said.downcast_ref::<String>().cloned().unwrap_or_default();
+    assert!(said.starts_with("the flow orders: the runner: it did not end within 0.5 seconds, and was stopped with every process it started."), "{said}");
+    assert!(said.contains("--- standard output ---\nwaiting\n--- standard error ---\nstill"), "{said}");
+    let ended = run::finish(Command::new("sh").args(["-c", "echo out; exit 3"]), Duration::from_secs(60), "a runner that fails");
+    assert!(!ended.ok && !ended.timed_out && ended.code == Some(3) && ended.stdout == "out\n", "{ended:?}");
+    let fed = run::finish_with_input(&mut Command::new("cat"), Some(b"given"), Duration::from_secs(60), "cat");
+    assert!(fed.ok && fed.stdout == "given", "{fed:?}");
+}
+
 /// The parts of a test run side by side, each once, on threads named after the test, so that a
 /// SKIP line said in one is the test's. A part that fails does not stop the others: the test fails
 /// once every part has run, with what each failed part said, in the order of the parts.

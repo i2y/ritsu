@@ -18,7 +18,7 @@
 use crate::diag::Diag;
 use crate::model::*;
 use crate::render::{self, ident};
-use crate::temporal_py::{method, py_check, py_name, py_type, q, retriers, rules_file, task_doc, task_impl, types_file, io_py};
+use crate::temporal_py::{have, method, py_check, py_name, py_type, q, retriers, rules_file, task_doc, task_impl, types_file, io_py, PyOwn};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The package the build writes: the workflow's name.
@@ -30,6 +30,12 @@ fn no_output(m: &Model) -> String {
 
 pub fn package(m: &Model) -> String {
     ident(&m.name)
+}
+
+/// The hint on the list a `for` goes through: its type when the list is written in the `for` with
+/// values of an enum in it, which Python would read as `list[str]` (DESIGN 29); else none.
+fn items_type(m: &Model, list: &TExpr) -> String {
+    if list.lists_enum_values() { format!(": {}", py_type(m, &list.ty())) } else { String::new() }
 }
 
 /// `now` in a node: the clock of the run.
@@ -47,6 +53,19 @@ fn one_now(body: &[String]) -> Vec<String> {
 
 /// The End type of the main graph: the workflow's outputs, or None.
 const OUTPUT: &str = "dict[str, Any] | None";
+
+/// What the line of a step function says to `mypy --strict`, and why (DESIGN 34). pydantic-graph
+/// declares the type variables of `StepContext`, `GraphBuilder` and `TypeExpression` with
+/// `infer_variance=True`, which mypy does not read: it takes the classes for ones without type
+/// parameters, and says so where the code gives them some. `unused-ignore` keeps the line quiet
+/// for a mypy that reads them.
+const STEP_IGNORE: &str = "# type: ignore[type-arg, unused-ignore]  # mypy reads StepContext as having no type parameters: it does not read pydantic-graph's TypeVar(..., infer_variance=True)";
+
+/// The same, for the line that makes the main graph, whose output type is given as pydantic-graph
+/// says a union is given (`TypeExpression[…]`). A mypy that reads the type variables does not solve
+/// the output's from that form (`type[TypeExpression[T]] | type[T]`): it says `arg-type`, and
+/// `var-annotated` of the builder, which the line keeps quiet as well (DESIGN 38).
+const BUILDER_IGNORE: &str = "# type: ignore[misc, arg-type, var-annotated, unused-ignore]  # mypy reads TypeExpression as having no type parameters: it does not read pydantic-graph's TypeVar(..., infer_variance=True)";
 
 /// Where the flow goes from a node: another node, or the end of its graph with a value.
 #[derive(Clone, Debug, PartialEq)]
@@ -121,6 +140,10 @@ struct Gen<'a> {
     loops: Vec<usize>,
     /// the state's fields besides the variables: name → (type, default)
     fields: BTreeMap<String, (String, String)>,
+    /// the fields of the flow's variables (DESIGN 22)
+    vars: render::Vars,
+    /// the line of the statement being written, which a read of a variable with no value names
+    at: usize,
 }
 
 pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
@@ -139,7 +162,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let header = m.head("#");
     // the rules whose code goes with the workflow are in rules.py; the others are called at their services, from tasks.py
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
-    let mut g = Gen { m, nodes: Vec::new(), rounds: Vec::new(), loops: Vec::new(), fields: BTreeMap::new() };
+    let mut g = Gen { m, nodes: Vec::new(), rounds: Vec::new(), loops: Vec::new(), fields: BTreeMap::new(), vars: render::Vars::new(m, py_name, None), at: 0 };
     let graph = g.graph(&header, !called.is_empty());
     let mut files = vec![
         (format!("{dir}/__init__.py"), format!("{header}# {} v{}: the workflow as a pydantic-graph graph. See graph.py.\n", m.name, m.version)),
@@ -153,6 +176,21 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         files.push((format!("{dir}/rules.py"), rules_file(m, &header, &called, false)));
     }
     Ok(files)
+}
+
+/// What the body of `Tasks` (tasks.py) reads, in its methods' annotations: a method of one of these
+/// names goes by the name with `_` before it, which no name of the flow begins with (W105). Only
+/// graph.py calls the methods, by the same name.
+const TASKS_READS: &[&str] = &["Any", "OwnTasks", "dict", "io", "str"];
+
+/// The method of `Tasks` that runs `task` (`TASKS_READS`).
+fn tasks_method(task: &str) -> String {
+    let f = method(task);
+    if TASKS_READS.contains(&f.as_str()) {
+        format!("_{f}")
+    } else {
+        f
+    }
 }
 
 /// tasks.py: the tasks the graph calls, the ones the user writes, and the code for the others.
@@ -181,7 +219,8 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("# - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer comes\n");
     a.push_str("#   when the code that hears it calls `Deps.callbacks.answer(callback_id, {\"ok\": …})` (or\n");
     a.push_str("#   {\"error\": <name>, \"message\": …}) in the process the run is in.\n\n");
-    a.push_str("from __future__ import annotations\n\nfrom typing import Any, Protocol\n\n");
+    let (signature, imports) = crate::temporal_py::own_tasks_signature(&own);
+    a.push_str(&format!("from __future__ import annotations\n\n{imports}from typing import Any, Protocol\n\n"));
     a.push_str("from . import io\nfrom . import types as T\nfrom .runtime import TaskFailure\n\n\n");
     a.push_str(&crate::temporal_py::schemas_block(m, &m.tasks.iter().collect::<Vec<_>>(), p));
     a.push_str(&crate::temporal_py::jev_block(&m.tasks.iter().collect::<Vec<_>>(), p));
@@ -191,13 +230,13 @@ fn tasks_file(m: &Model, header: &str) -> String {
         a.push('\n');
     }
     for task in &own {
-        a.push_str(&format!("\n    async def {}(self, args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n        ...\n", method(&task.name), task_doc(m, task)));
+        a.push_str(&format!("\n    async def {}{signature}:\n        \"\"\"{}\"\"\"\n        ...\n", method(&task.name), task_doc(m, task)));
     }
     a.push_str("\n\ndef fail(kind: str, message: str) -> TaskFailure:\n    return TaskFailure(kind, message)\n\n\n");
     a.push_str("class Tasks:\n    \"\"\"Your tasks and the ones dandori writes: what the graph calls.\"\"\"\n\n");
     a.push_str("    def __init__(self, own: OwnTasks, transport: io.Transport | None = None) -> None:\n        self._own = own\n        self._t = transport if transport is not None else io.transport()\n");
     for task in &m.tasks {
-        a.push_str(&format!("\n    async def {}(self, args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n", method(&task.name), task_doc(m, task)));
+        a.push_str(&format!("\n    async def {}(self, args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n", tasks_method(&task.name), task_doc(m, task)));
         let lines = task_impl(m, task, p);
         let uses_own = lines.iter().any(|l| l.contains("own."));
         a.push_str(if uses_own { "        own = self._own\n" } else { "        t = self._t\n" });
@@ -218,7 +257,7 @@ fn tasks_file(m: &Model, header: &str) -> String {
 /// `now` on pydantic-graph: the clock the graph runs with.
 const NOW_PY: &str = r#"
 
-def now(clock: Any) -> str:
+def now(clock: Clock) -> str:
     """`now`: the moment, by the clock the graph runs with (Deps.clock); to the second, in UTC."""
     import datetime as dt
 
@@ -229,7 +268,7 @@ def now(clock: Any) -> str:
 const UNTIL_PY: &str = r#"
 
 
-def seconds_until(clock: Any, at: str) -> int:
+def seconds_until(clock: Clock, at: str) -> int:
     """How long `timeout until` waits for an answer: the seconds from `now` to a moment given as an
     RFC 3339 string in UTC, rounded up, and one at the least."""
     left = (datetime.fromisoformat(at.replace("Z", "+00:00")) - datetime.fromisoformat(now(clock).replace("Z", "+00:00"))).total_seconds()
@@ -245,7 +284,7 @@ import asyncio
 import itertools
 import json
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Sequence
+from typing import Any, Awaitable, Callable, Sequence, TypeVar
 
 
 class Failure(Exception):
@@ -435,6 +474,26 @@ def text(v: Any) -> str:
     return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
 
 
+V = TypeVar("V")
+
+
+def have(value: V | None, name: str, line: int) -> V:
+    """The value of a variable where the `.flow`'s check says it has one: a variable of the state
+    holds None until it is set. None here is a fault of the code, not a task's error: the run fails
+    with Dandori.UnexpectedValue, as the reference interpreter's does, which `attempt` does not
+    take for a task's failure."""
+    if value is None:
+        raise Failure("Dandori.UnexpectedValue", f"line {line}: {name} has no value")
+    return value
+
+
+def refail(failed: dict[str, Any] | None) -> Failure:
+    """The failure a run ends with after `on failure`: the task's error it ran for."""
+    if failed is None:
+        return Failure("Dandori.UnexpectedValue", "on failure ran for no task's error")
+    return Failure(failed["kind"], failed["message"])
+
+
 async def wait_until(clock: Clock, at: str) -> None:
     """Wait until a moment given as an RFC 3339 string in UTC."""
     seconds = (datetime.fromisoformat(at.replace("Z", "+00:00")) - clock.now()).total_seconds()
@@ -444,7 +503,7 @@ async def wait_until(clock: Clock, at: str) -> None:
 
 impl<'a> Gen<'a> {
     fn var(&self, name: &str) -> String {
-        format!("s.{}", py_name(name))
+        format!("s.{}", self.vars.get(name))
     }
 
     fn expr(&self, e: &TExpr) -> String {
@@ -458,6 +517,10 @@ impl<'a> Gen<'a> {
             TExpr::NowAt(site) => format!("s.{}", render::now_name(*site)),
             TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
+                if !fields.is_empty() || !matches!(ty, Ty::Opt(_) | Ty::Json) {
+                    // every variable of the state, the inputs too, holds None until it is set; the check says it is set here (E012)
+                    s = have(&s, name, self.at);
+                }
                 for (i, f) in fields.iter().enumerate() {
                     // an absent field reads as None
                     if i + 1 == fields.len() && matches!(ty, Ty::Opt(_) | Ty::Json) {
@@ -507,7 +570,7 @@ impl<'a> Gen<'a> {
             Some(block) => {
                 // `on failure` runs for a task's error nothing took, then the run fails with it
                 let mut refail = self.node("DD_refail".into(), "after `on failure`: the run fails with the task's error".into(), (usize::MAX, 0), &flow_cx(Unhandled::Fail));
-                refail.line(0, "raise dd.Failure(s.dd_failed[\"kind\"], s.dd_failed[\"message\"])");
+                refail.line(0, "raise dd.refail(s.dd_failed)");
                 self.nodes.push(refail);
                 self.field("dd_failed".into(), "dict[str, Any] | None", "None");
                 let on_failure = self.block(block, Jump::Node("DD_refail".into()), &flow_cx(Unhandled::Fail));
@@ -532,14 +595,14 @@ impl<'a> Gen<'a> {
         out.push_str("# It returns the outputs (None when the flow ends without `succeed`), or raises runtime.Failure.\n");
         out.push_str("# The run lives in this process: a wait sleeps by Deps.clock, a callback's answer comes to\n# Deps.callbacks. graph.render() draws the flow.\n\n");
         out.push_str("from __future__ import annotations\n\nimport copy\nfrom dataclasses import dataclass, field\nfrom typing import Any\n\n");
-        out.push_str("from pydantic_graph import BaseNode, End, GraphBuilder, GraphRunContext, StepContext\n\n");
+        out.push_str("from pydantic_graph import BaseNode, End, GraphBuilder, GraphRunContext, StepContext, TypeExpression\n\n");
         out.push_str("from . import runtime as dd\nfrom . import types as T\nfrom .tasks import Tasks\n\n\n");
 
         // the state: every variable, and where the loops are
         out.push_str("@dataclass\nclass State:\n    \"\"\"The flow's variables, and where its loops are.\"\"\"\n\n");
         for (v, ty) in &m.vars {
             let t = if matches!(ty, Ty::Opt(_)) { py_type(m, ty) } else { format!("{} | None", py_type(m, ty)) };
-            out.push_str(&format!("    {}: {t} = None\n", py_name(v)));
+            out.push_str(&format!("    {}: {t} = None\n", self.vars.get(v)));
         }
         for (n, (t, d)) in &self.fields {
             out.push_str(&format!("    {n}: {t} = {d}\n"));
@@ -614,7 +677,7 @@ impl<'a> Gen<'a> {
             emit(&mut out, &mut r.nodes, &keep);
             let adds: Vec<String> = r.nodes.iter().filter(|n| keep.contains(&n.class)).map(|n| format!("{b}.node({})", n.class, b = format!("dd_{}", r.name))).collect();
             out.push_str(&format!(
-                "\n\ndd_{name} = GraphBuilder(name={}, state_type=State, deps_type=Deps, input_type=Any, output_type=Any)\n\n\n@dd_{name}.step\nasync def {name}_begin(ctx: StepContext[State, Deps, Any]) -> {entry}:\n    return {entry}()\n\n\ndd_{name}.add(dd_{name}.edge_from(dd_{name}.start_node).to({name}_begin), {})\n{name} = dd_{name}.build()\n",
+                "\n\ndd_{name} = GraphBuilder(name={}, state_type=State, deps_type=Deps, input_type=Any, output_type=Any)\n\n\n@dd_{name}.step\nasync def {name}_begin(ctx: StepContext[State, Deps, Any]) -> {entry}:  {STEP_IGNORE}\n    return {entry}()\n\n\ndd_{name}.add(dd_{name}.edge_from(dd_{name}.start_node).to({name}_begin), {})\n{name} = dd_{name}.build()\n",
                 q(&r.name),
                 adds.join(", "),
                 name = r.name,
@@ -626,19 +689,19 @@ impl<'a> Gen<'a> {
         emit(&mut out, &mut nodes, &keep);
 
         // the start: the input, checked, into the state
-        out.push_str(&format!("\n\ndd_graph = GraphBuilder(name={}, state_type=State, deps_type=Deps, input_type=dict[str, Any], output_type={OUTPUT})\n\n\n", q(&ident(&m.name))));
-        out.push_str(&format!("@dd_graph.step\nasync def begin(ctx: StepContext[State, Deps, dict[str, Any]]) -> {first}:\n"));
-        // a workflow that implements a service reads its input as protobuf reads the request
-        let inputs = match &m.service {
-            Some(s) => {
-                out.push_str(&format!("    inputs = T.fill(ctx.inputs, {})\n", render::layout(&s.input_zeros, 1, "    ", true)));
-                "inputs"
-            }
-            None => "ctx.inputs",
-        };
-        out.push_str(&format!("    if not T.is_WorkflowInput({inputs}):\n        raise dd.Failure(\"Dandori.BadInput\", \"the execution's input does not have the declared shape\")\n"));
+        out.push_str(&format!("\n\ndd_graph = GraphBuilder(name={}, state_type=State, deps_type=Deps, input_type=T.WorkflowInput, output_type=TypeExpression[{OUTPUT}])  {BUILDER_IGNORE}\n\n\n", q(&ident(&m.name))));
+        out.push_str(&format!("@dd_graph.step\nasync def begin(ctx: StepContext[State, Deps, T.WorkflowInput]) -> {first}:  {STEP_IGNORE}\n"));
+        out.push_str("    state: State = ctx.state\n");
+        // the input is checked here, whatever was given, as `T.is_WorkflowInput` takes it (`Any`, which the
+        // code reads already: a name of the flow cannot hide it); a workflow that implements a service
+        // reads it as protobuf reads the request
+        match &m.service {
+            Some(s) => out.push_str(&format!("    inputs: Any = T.{}(ctx.inputs, {})\n", PyOwn::of(m).own("fill"), render::layout(&s.input_zeros, 1, "    ", true))),
+            None => out.push_str("    inputs: Any = ctx.inputs\n"),
+        }
+        out.push_str("    if not T.is_WorkflowInput(inputs):\n        raise dd.Failure(\"Dandori.BadInput\", \"the execution's input does not have the declared shape\")\n");
         for (i, _) in &m.inputs {
-            out.push_str(&format!("    ctx.state.{} = {inputs}.get({})\n", py_name(i), q(i)));
+            out.push_str(&format!("    state.{} = inputs.get({})\n", self.vars.get(i), q(i)));
         }
         out.push_str(&format!("    return {first}()\n\n\n"));
         let adds: Vec<String> = nodes.iter().filter(|n| keep.contains(&n.class)).map(|n| format!("dd_graph.node({})", n.class)).collect();
@@ -675,6 +738,13 @@ impl<'a> Gen<'a> {
     }
 
     fn stmt(&mut self, s: &TStmt, next: Jump, cx: &Ctx) -> Jump {
+        let at = std::mem::replace(&mut self.at, s.line);
+        let j = self.stmt_here(s, next, cx);
+        self.at = at;
+        j
+    }
+
+    fn stmt_here(&mut self, s: &TStmt, next: Jump, cx: &Ctx) -> Jump {
         let m = self.m;
         let site = s.site;
         let line = s.line;
@@ -800,7 +870,7 @@ impl<'a> Gen<'a> {
                 self.loops.pop();
                 let v = self.var(var);
                 let mut start = self.node(format!("S{site}_for"), format!("line {line}: for {var} in {}", list.show()), (site, 0), cx);
-                start.line(0, &format!("dd_items = {}", self.expr(list)));
+                start.line(0, &format!("dd_items{} = {}", items_type(m, list), self.expr(list)));
                 start.line(0, &format!("if len(dd_items) > {max}:"));
                 start.line(1, &format!("raise dd.Failure(\"Dandori.TooManyItems\", {})", q(&format!("line {line}: the list has more than {max} items"))));
                 start.line(0, &format!("s.dd_items_{site} = dd_items"));
@@ -850,16 +920,16 @@ impl<'a> Gen<'a> {
                 let name = format!("round_{site}");
                 self.rounds.push(Round { name: name.clone(), entry, nodes: round_nodes });
                 let mut n = self.node(format!("S{site}_for"), format!("line {line}: for {var} in {} in parallel", list.show()), (site, 0), cx);
-                n.line(0, &format!("dd_items = {}", self.expr(list)));
+                n.line(0, &format!("dd_items{} = {}", items_type(m, list), self.expr(list)));
                 n.line(0, &format!("if len(dd_items) > {max}:"));
                 n.line(1, &format!("raise dd.Failure(\"Dandori.TooManyItems\", {})", q(&format!("line {line}: the list has more than {max} items"))));
                 n.line(0, "");
                 n.line(0, "async def dd_round(dd_item: Any, dd_i: int) -> Any:");
                 n.line(1, "r = copy.copy(s)");
-                n.line(1, &format!("r.{} = dd_item", py_name(var)));
+                n.line(1, &format!("r.{} = dd_item", self.vars.get(var)));
                 for l in locals {
                     if l != var {
-                        n.line(1, &format!("r.{} = None", py_name(l)));
+                        n.line(1, &format!("r.{} = None", self.vars.get(l)));
                     }
                 }
                 n.line(1, &format!("r.dd_loop_{site} = dd_i"));
@@ -958,7 +1028,7 @@ impl<'a> Gen<'a> {
             Callee::Rule(r) => format!("lambda: deps.rules.{}({{{}}})", render::rule_activity(&m.rules[*r].name), parts.join(", ")),
             Callee::Task(t) => {
                 let task = &m.tasks[*t];
-                let f = format!("deps.tasks.{}", method(&task.name));
+                let f = format!("deps.tasks.{}", tasks_method(&task.name));
                 if task.callback {
                     let timeout = match render::deadline_arg(m, callee, args) {
                         Some(at) => format!("dd.seconds_until(deps.clock, {})", self.expr(at)),
@@ -974,7 +1044,7 @@ impl<'a> Gen<'a> {
                     n.line(1, &format!("await dd.within({f}({{{}}}), {})", with_id.join(", "), crate::check::CALLBACK_HAND_ON_SECONDS));
                     match &task.answer_zeros {
                         // the answer that a method of the service sends, read as protobuf reads it
-                        Some(z) => n.line(1, &format!("return T.fill(await dd.await_callback(deps.callbacks, deps.clock, dd_id, {timeout}), {})", render::layout(z, 1, "    ", true))),
+                        Some(z) => n.line(1, &format!("return T.{}(await dd.await_callback(deps.callbacks, deps.clock, dd_id, {timeout}), {})", PyOwn::of(m).own("fill"), render::layout(z, 1, "    ", true))),
                         None => n.line(1, &format!("return await dd.await_callback(deps.callbacks, deps.clock, dd_id, {timeout})")),
                     }
                     n.line(0, "");
@@ -1021,7 +1091,7 @@ impl<'a> Gen<'a> {
             None => None,
         };
         if let (Some(v), Some(ty)) = (var, &result_ty) {
-            n.line(0, &format!("if not {}:", py_check(m, "dd_r", ty, m.answer_range(callee), "T.", 0)));
+            n.line(0, &format!("if not {}:", py_check(m, &PyOwn::of(m), "dd_r", ty, m.answer_range(callee), "T.", 0)));
             n.line(1, &format!("raise dd.Failure(\"Dandori.BadResponse\", {})", q(&format!("line {}: the answer from {} does not have the declared shape", s.line, cname))));
             if let (Some(Target::Case(c)), Some((_, allowed))) = (target, m.monitors.get(&site)) {
                 let field = &m.cases[*c].state_field;

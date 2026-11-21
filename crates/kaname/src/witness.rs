@@ -126,8 +126,15 @@ fn breaks(it: &Interp, m: &Checked, pl: &Place, seen: &[(std::path::PathBuf, usi
     None
 }
 
-/// Whether a number is outside a range (a value that is none is in every range).
+/// Whether a number or a date (its day number) is outside a range (a value that is none is in every
+/// range).
 fn outside(v: &Value, r: &Range) -> bool {
-    let Some(x) = v.num() else { return false };
+    let x = match v {
+        Value::Date(d) => Rat::int(i128::from(*d)),
+        _ => match v.num() {
+            Some(x) => x,
+            None => return false,
+        },
+    };
     r.min.is_some_and(|lo| num::cmp(x, lo).is_lt()) || r.max.is_some_and(|hi| num::cmp(x, hi).is_gt())
 }

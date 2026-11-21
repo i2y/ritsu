@@ -1,0 +1,58 @@
+requirements refunds v1
+description "What the refund desk answers: written for the tests of yuen affected, which follow the files that the named files read"
+
+role finance "Decides who refunds what"
+
+requirement bands_of_a_refund
+  text "A refund of up to 20 items is small, and a larger one is large"
+  owner finance
+  decided 2026-11-02 by finance "Written for this test"
+  satisfied by rulec "rules/refund_band.rule" table band
+    reviewed 2026-11-02 by finance sha256:dafed228c7f4357e -> sha256:d44b92e1b54ee918
+  not verified "The tests of affected read no claim"
+    approved 2026-11-02 by finance sha256:dafed228c7f4357e
+
+requirement who_refunds
+  text "A clerk refunds a small refund within the period"
+  owner finance
+  decided 2026-11-02 by finance "Written for this test"
+  satisfied by sekisho "gates/refunds.gate" policy clerks_refund_small_amounts
+    reviewed 2026-11-02 by finance sha256:f06568d653ca52d1 -> sha256:66ccbc13852555f5
+  not verified "The tests of affected read no claim"
+    approved 2026-11-02 by finance sha256:f06568d653ca52d1
+
+requirement refund_period
+  text "A refund is asked for within 30 days of the payment, or by the next day the office is open"
+  owner finance
+  decided 2026-11-02 by finance "Written for this test"
+  satisfied by koyomi "dates/refund_terms.cal" date last_day
+    reviewed 2026-11-02 by finance sha256:6b973f9dcfed922d -> sha256:b6a6176decb78eab
+  not verified "The tests of affected read no claim"
+    approved 2026-11-02 by finance sha256:6b973f9dcfed922d
+
+requirement refund_api
+  text "A refund is asked for with the order and the items"
+  owner finance
+  decided 2026-11-02 by finance "Written for this test"
+  satisfied by openapi "api/refunds.yaml" operation refundOrder
+    reviewed 2026-11-02 by finance sha256:55355af0b266af59 -> sha256:35921eff5d5ce67d
+  not verified "The tests of affected read no claim"
+    approved 2026-11-02 by finance sha256:55355af0b266af59
+
+requirement refund_messages
+  text "The refund service takes the amount as money"
+  owner finance
+  decided 2026-11-02 by finance "Written for this test"
+  satisfied by proto "proto/refunds.proto" service RefundService
+    reviewed 2026-11-02 by finance sha256:5b64c47d84c164f3 -> sha256:295a59522a8c12d7
+  not verified "The tests of affected read no claim"
+    approved 2026-11-02 by finance sha256:5b64c47d84c164f3
+
+requirement refund_words
+  text "The desk calls a refund small or large by the items sent back"
+  owner finance
+  decided 2026-11-02 by finance "Written for this test"
+  satisfied by sakai "contexts/desk.ctx" term band
+    reviewed 2026-11-02 by finance sha256:666cf6cd5ad75127 -> sha256:68ca410a6e5cac0e
+  not verified "The tests of affected read no claim"
+    approved 2026-11-02 by finance sha256:666cf6cd5ad75127

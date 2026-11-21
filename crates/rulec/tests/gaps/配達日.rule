@@ -1,0 +1,23 @@
+rule 配達日(delivery_day) v1
+description "配達日から読む時期。上の表は最初と最後の日の間に二つの日を書き、下の表には最初と最後の日の行しかない"
+
+enum 地域(zone) = 市内(local) | 県内(regional) | 離島(remote) | 県外(national)
+enum 時期(timing) = 早い(early) | 中ごろ(middle) | 遅い(late)
+
+inputs
+  地域(zone) : 地域
+
+outputs
+  時期(timing) : 時期
+
+table 配達日の表(days)
+| 地域 | -> 配達日 : date |
+| 市内 | 2026-08-01       |
+| 県内 | 2026-08-04       |
+| 離島 | 2026-08-06       |
+| 県外 | 2026-08-10       |
+
+table 時期の表(timings)
+| 配達日       | -> 時期 |
+| <=2026-08-01 | 早い    |
+| >=2026-08-10 | 遅い    |

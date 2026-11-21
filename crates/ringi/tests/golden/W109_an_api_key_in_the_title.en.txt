@@ -1,0 +1,5 @@
+warning[W109]: tests/mutants/W109_an_api_key_in_the_title.ringi:5:3: `access` asks the requester for a secret (api key)
+     5 |   access : text "API key"  count <=80
+  = What is filled in stays in the ticket's history, where approvers and whoever reads the pages and the logs see it. Do not pass a secret through a request: pass it through what is made for it (a secret store, a screen the person fills in themselves).
+ok tests/mutants/W109_an_api_key_in_the_title.ringi: a request, 2 fields, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered

@@ -1,0 +1,22 @@
+rule 二つの最高値の補償額(both_dearest_cover_ja) v1
+description "小包にかける保険の額。贈り物として包む明細でいちばん高い価格に、明細の価格の合計の二倍と、包まない明細でいちばん高い価格の二倍を足す（無ければ 0 円）。10,000 円から保険をかけ、999 円に満たない小包は受けない"
+
+# 小包の明細の一件ぶん
+elements 明細(lines)
+  価格(price)  : money[円]  range >=0円 <=1000円
+  贈り物(gift) : bool
+
+max 包む品の最高値(dearest_gift) over 明細 of 価格 where 贈り物 empty 0円
+sum 合計(total) over 明細 of 価格  range >=0円 <=100000円
+max 包まない品の最高値(dearest_plain) over 明細 of 価格 where 贈り物 = false empty 0円
+
+define 補償額(cover) : money[円] = 包む品の最高値 + 合計 * 2 + 包まない品の最高値 * 2  range >=999円 <=200000円
+
+outputs
+  保険(insured) : bool
+
+table 保険の判定(insure)
+policy unique
+| 補償額    | -> 保険 |
+| <10000円  | false   |
+| >=10000円 | true    |

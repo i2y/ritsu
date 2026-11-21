@@ -1,0 +1,164 @@
+package {{package}}
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"slices"
+	"sync"
+
+	server "{{framework}}"
+
+	"{{module}}/go/authz/company"
+)
+
+// Gate asks the gate ritsu generated from project/shared/company.gate (go/authz/company), with what
+// the framework's question says. The gate's Requesters and Approvers are groups: the person is in
+// them when the question lists them. An attribute added to a principal or a resource needs its
+// value in gateStore; a role the gate lets a Staff hold is in the answer of the generated RolesOf,
+// so one added to the gate needs no change here.
+type Gate struct {
+	// Log is where Gate says a role a sign-in gives that the gate does not declare: once for each
+	// role, for the first hundred of them.
+	Log *slog.Logger
+
+	mu   sync.Mutex
+	told map[string]bool
+}
+
+// gateRoles are the roles a Staff principal of project/shared/company.gate can hold, in the order
+// the gate declares them: the generated package's RolesOf, asked by the principal's type in Cedar.
+// The generated gate refuses a person with a role it does not declare, whatever they ask, so Allow
+// leaves out a role the sign-in gives for something else (a claim of the provider, a header of the
+// proxy).
+func gateRoles() []string {
+	return company.RolesOf("Staff")
+}
+
+// Allow asks the gate by the action's name, with the ID of each resource the framework knows: the
+// ticket, its stage, its kind of request (the version the question is of), and the organization.
+// The gate takes the one its action asks about. An action the gate does not declare is an error;
+// the gate's other refusals are a no, a person it does not read (one with no primary team in the
+// organization's version) among them.
+func (g *Gate) Allow(_ context.Context, q server.Question) (bool, error) {
+	ids := map[string]string{"Ticket": q.Ticket, "Stage": q.Ticket + "/" + q.Stage, "RequestType": q.Kind, "Organization": "organization"}
+	store := gateStore{q: q, roles: g.roles(q.Person)}
+	a := company.Authorize(store, company.Principal{Type: "Staff", ID: q.Person.ID}, q.Action, ids, q.Now)
+	if a.Err != nil && a.Err.Kind == "action" {
+		return false, errors.New(a.Err.Message)
+	}
+	return a.Err == nil && a.Allowed, nil
+}
+
+// roles answers the roles of the person the gate declares, in the order the sign-in gives them:
+// staff when it gives none of them. A role left out is said in the log.
+func (g *Gate) roles(p server.Person) []string {
+	declared := gateRoles()
+	var kept []string
+	for _, r := range p.Roles {
+		switch {
+		case !slices.Contains(declared, r):
+			g.leftOut(r, p.ID)
+		case !slices.Contains(kept, r):
+			kept = append(kept, r)
+		}
+	}
+	if len(kept) == 0 {
+		return []string{"staff"}
+	}
+	return kept
+}
+
+// leftOut says in the log that the gate does not declare role, the first time a sign-in gives it.
+// It keeps the names of a hundred roles at the most, as the names come from outside.
+func (g *Gate) leftOut(role, person string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.told[role] || len(g.told) >= 100 {
+		return
+	}
+	if g.told == nil {
+		g.told = map[string]bool{}
+	}
+	g.told[role] = true
+	if g.Log != nil {
+		g.Log.Warn("the gate does not declare a role the sign-in gives, and is asked without it", "role", role, "person", person)
+	}
+}
+
+// gateStore is what the gate reads, from one question.
+type gateStore struct {
+	q     server.Question
+	roles []string
+}
+
+// Staff answers the person as the gate reads them, or nil for one the organization's version does
+// not have (no primary team in it): the gate refuses them whatever they ask, so that no one outside
+// the organization is taken as one of a department. Their department is their team of the kind of
+// the team that owns the request type, the first team of that kind at or above their primary team:
+// a request type owned by a section, a department or a division is compared at its own level,
+// whatever the organization calls its kinds of team. A question with no owner among the version's
+// teams (one of the organization, or of a request type that names no owner or a team the version
+// does not have) gives their primary team, which owns nothing of it.
+func (s gateStore) Staff(id string) (*company.Staff, error) {
+	kind := ""
+	if owner, ok := teamIn(s.q.Org, s.q.Owner); ok {
+		kind = owner.Kind
+	}
+	department := s.q.Org.TeamOf(id, kind)
+	if department == "" {
+		return nil, nil
+	}
+	st := &company.Staff{Department: department}
+	if id == s.q.Person.ID {
+		st.Roles = s.roles
+		if slices.Contains(s.q.Requesters, id) {
+			st.MemberOfRequesters = []string{"requesters"}
+		}
+		if slices.Contains(s.q.Approvers, id) {
+			st.MemberOfApprovers = []string{"approvers"}
+		}
+	}
+	return st, nil
+}
+
+func (s gateStore) Stage(string) (*company.Stage, error) {
+	return &company.Stage{Requester: s.q.Requester, Requesters: "requesters", Approvers: "approvers", Owner: s.owner(), SelfApproval: s.q.SelfApproval}, nil
+}
+
+func (s gateStore) Ticket(string) (*company.Ticket, error) {
+	return &company.Ticket{Requester: s.q.Requester, Requesters: "requesters", Owner: s.owner()}, nil
+}
+
+func (s gateStore) RequestType(string) (*company.RequestType, error) {
+	return &company.RequestType{Owner: s.owner()}, nil
+}
+
+// owner answers the team that owns the request type. One that names no owner is owned by no team:
+// the gate is given an ID that no team of the organization's version has, so that it is no one's
+// department, and only a rule that reads no department (a system administrator's) allows anything
+// of it.
+func (s gateStore) owner() string {
+	if s.q.Owner != "" {
+		return s.q.Owner
+	}
+	id := "(no owner)"
+	for {
+		if _, ok := teamIn(s.q.Org, id); !ok {
+			return id
+		}
+		id = "(" + id + ")"
+	}
+}
+
+// teamIn answers the team of the version v with the ID id, and whether it has one.
+func teamIn(v *server.OrgVersion, id string) (server.Team, bool) {
+	if v != nil {
+		for _, t := range v.Teams {
+			if t.ID == id {
+				return t, true
+			}
+		}
+	}
+	return server.Team{}, false
+}

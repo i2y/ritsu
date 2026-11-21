@@ -1,0 +1,19 @@
+calendars/office.cal: ok — calendar office: no table, so the data range is 0001-01-01..9999-12-31
+error[koyomi E301]: dates/approval_terms.cal:19:3: The claim due_within_eleven_days fails for 3 of the 730 days of received
+    19 |   due_within_eleven_days : due <= received + 10 days
+  = It fails on 2026-12-24..2026-12-25 (2 days), 2027-12-24
+  = The farthest is received 2026-12-24, where due 2027-01-04 is 11 days after received
+  the first input it fails on:
+      received  2026-12-24 Thu
+      due       2027-01-04 Mon  + 3 business days: not counted: 2026-12-26 (Saturday), 2026-12-27 (Sunday), 2026-12-29..2027-01-01 (New Year break), 2027-01-02 (Saturday and New Year break) and 2027-01-03 (Sunday and New Year break) are closed
+                time 2027-01-05T00:00:00+09:00 (2027-01-04T15:00:00Z in UTC)
+                due is 11 days after received, and the claim allows at most 10 days after
+waiting for dates/approval_terms.cal (koyomi E301 at line 19) to pass:
+  flows/approvals.flow:24: [dandori E015] flow "joint.flow"
+  flows/approvals.flow:29: [dandori E015] flow "stage.flow"
+  flows/joint.flow:20: [dandori E015] flow "stage.flow"
+  flows/stage.flow:5: [dandori E005] use dates terms from "../dates/approval_terms.cal"
+  gates/expense.gate:14: [sekisho E208] workflow approvals from "../flows/approvals.flow"
+  requirements/expense.req:13: [yuen E203] satisfied by koyomi "../dates/approval_terms.cal" date due
+  requirements/expense.req:19: [yuen E203] verified by koyomi "../dates/approval_terms.cal" claim due_is_open
+ritsu check: 7 files (koyomi 2, dandori 3, sekisho 1, yuen 1): 1 fail (1 error), 5 waiting; borders between the languages: 0 checked, 0 undecided

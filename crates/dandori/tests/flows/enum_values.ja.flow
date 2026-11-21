@@ -1,0 +1,27 @@
+workflow 列挙の値 v1
+description "型を書いていないところに列挙の値を書く。for が回す並び（一回ずつと、同時に）、型を書かない変数に入れる並び（ほかの要素が型を決める）、型を書かない変数に入れる値。どれも、その名前を値に持つただ一つの列挙の値で、どの出力先のコードもその型を書く。enum_values.flow の日本語の版"
+
+enum 役割 = 上長 | 経理 | 法務
+
+task 尋ねる(申請番号: string, 役割: 役割)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:ask"
+
+inputs
+  申請番号 : string
+  最初     : 役割
+
+outputs
+  尋ねた役割 : list[役割]
+  最後       : 役割
+
+flow
+  for 相手 in [上長, 経理] at most 2
+    尋ねる(申請番号: 申請番号, 役割: 相手)
+  let 尋ねた役割 = for 宛先 in [法務, 上長] at most 2 in parallel
+    尋ねる(申請番号: 申請番号, 役割: 宛先)
+    yield 宛先
+  let 確認の順 = [法務, 最初]
+  for 確認者 in 確認の順 at most 2
+    尋ねる(申請番号: 申請番号, 役割: 確認者)
+  let 最後 = 経理
+  succeed 尋ねた役割 = 尋ねた役割, 最後 = 最後

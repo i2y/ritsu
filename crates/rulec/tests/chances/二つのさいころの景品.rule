@@ -1,0 +1,31 @@
+rule 二つのさいころの景品(two_dice_for_a_prize_ja) v1
+description "さいころを二つ振って景品を決める。合計が 8 以上なら大きい景品になる。合計は二つの目から計算する値で、範囲を付けていないので、どの目にも答える"
+
+enum 景品(prize) = 小(small) | 大(large)
+
+inputs
+  一つ目(first)  : number  range >=1 <=6  random
+  二つ目(second) : number  range >=1 <=6  random
+
+define 合計(total) : number = 一つ目 + 二つ目
+
+outputs
+  景品(prize) : 景品
+
+table 景品表(prize_of)
+policy unique
+| 合計 | -> 景品 |
+| <8   | 小      |
+| >=8  | 大      |
+
+# 36 通りの目のうち、15 通りが合計 8 以上になる。
+chances
+| -> 景品 | chance |
+| 大      | 5/12   |
+| 小      | 7/12   |
+
+examples
+| 一つ目 | 二つ目 | -> 景品 |
+| 1      | 1      | 小      |
+| 3      | 5      | 大      |
+| 6      | 6      | 大      |

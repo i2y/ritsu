@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_a_name_of_an_underscore_alone.ringi:5:3: `_` alone cannot be a name
+     5 |   _      : text "Note"  count <=20  optional
+  = The languages the code is generated in read a name of `_` alone as one that holds no value (Go, Rust, and Python's `match`). Choose another name, or give another ASCII name in brackets, as in `name(ascii_name)`.

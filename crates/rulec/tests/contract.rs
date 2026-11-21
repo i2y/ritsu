@@ -518,6 +518,271 @@ fn 契約から取る並びの件数と合計と要素を突き合わせる() {
     assert!(codes(&f).is_empty(), "{f:?}");
 }
 
+/// A walk is held to the bottom of the range of a `sum` or a `count` where that is above zero
+/// (§15.314), so a sequence taken from a contract is held to it as well: a collection the contract
+/// lets through with no elements, or with a total under the bottom, is one the generated code
+/// refuses once it has walked it. The least a total comes to is the fewest elements the contract
+/// lets through, each at the least the contract lets its field be; which elements a `count` counts
+/// is not read from a contract, so its bottom is one the contract does not promise. A range that
+/// starts at zero says nothing, as before.
+#[test]
+fn a_sequence_taken_from_a_contract_is_held_to_the_bottoms_of_its_walk() {
+    let rule = |count: &str, sum: &str| {
+        format!(
+            "rule t v1\n\nshape order = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+             elements items from order.lines\n  qty    : number  range >=1 <=9  from qty\n  amount : money[USD]  range >=0USD <=100USD  from amount\n\n\
+             outputs\n  x : bool\n\n\
+             table b\npolicy unique\n| qty | -> big : bool |\n| >=3 | true          |\n| <3  | false         |\n\n\
+             count n over items where big  range {count} <=10\n\
+             sum s over items of amount  range {sum} <=1000USD\n\n\
+             table t\npolicy unique\n| n | s | -> x |\n| - | - | true |\n"
+        )
+    };
+    let titles = |f: &[(String, String, String)]| f.iter().map(|(_, t, _)| t.clone()).collect::<Vec<_>>();
+    // No least length and amounts from 0: an empty collection passes the contract, and its total is 0.
+    let open = lines_schema(",\"maxItems\":10", ",\"minimum\":0,\"maximum\":100");
+    let f = check("floor-sum-empty", &rule(">=0", ">=250USD"), "order.json", &open);
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は `order.lines` が 0 件でも通しますが、s は 250USD からしか受け付けません"), "{:?}", titles(&f));
+    assert!(f[0].2.contains("\"fix\":{\"kind\":\"none\"}"), "{f:?}");
+    // One line at the least, of 0 dollars at the least: no number of lines keeps the total up.
+    let f = check("floor-sum-one", &rule(">=0", ">=250USD"), "order.json", &lines_schema(",\"minItems\":1,\"maxItems\":10", ",\"minimum\":0,\"maximum\":100"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は `order.lines` を 1 件から通し、amount の合計は 0USD のこともありますが、s は 250USD からしか受け付けません"), "{:?}", titles(&f));
+    // Amounts from 50 dollars: five lines reach 250 dollars, and that is the narrowing offered.
+    let fifty = |extra: &str| lines_schema(extra, ",\"minimum\":50,\"maximum\":100");
+    let f = check("floor-sum-fifty", &rule(">=0", ">=250USD"), "order.json", &fifty(",\"maxItems\":10"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].2.contains("\"fix\":{\"kind\":\"narrow_contract\",\"text\":\"\\\"minItems\\\": 5, \\\"maxItems\\\": 10\"}"), "{f:?}");
+    assert!(f[0].2.contains("一件の amount は 50USD から"), "{f:?}");
+    // With it, the total is held; four lines are one short.
+    let f = check("floor-sum-held", &rule(">=0", ">=250USD"), "order.json", &fifty(",\"minItems\":5,\"maxItems\":10"));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    let f = check("floor-sum-four", &rule(">=0", ">=250USD"), "order.json", &fifty(",\"minItems\":4,\"maxItems\":10"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は `order.lines` を 4 件から通し、amount の合計は 200USD のこともありますが、s は 250USD からしか受け付けません"), "{:?}", titles(&f));
+    // A count from 1: an empty collection has none, and a collection of five promises none either.
+    let f = check("floor-count-empty", &rule(">=1", ">=0USD"), "order.json", &open);
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は `order.lines` が 0 件でも通しますが、n は数える要素が 1 件からしか受け付けません"), "{:?}", titles(&f));
+    assert!(f[0].2.contains("\"fix\":{\"kind\":\"none\"}"), "{f:?}");
+    let f = check("floor-count-five", &rule(">=1", ">=0USD"), "order.json", &fifty(",\"minItems\":5,\"maxItems\":10"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は、`order.lines` の要素のうちいくつが n に数えられるかを約束しませんが、n は 1 からしか受け付けません"), "{:?}", titles(&f));
+    // A count from 2: a collection of one is short of it whichever lines count, and a collection
+    // of two has as many lines as the count starts at, and promises none of them.
+    let f = check("floor-count-short", &rule(">=2", ">=0USD"), "order.json", &fifty(",\"minItems\":1,\"maxItems\":10"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は `order.lines` が 1 件でも通しますが、n は数える要素が 2 件からしか受け付けません"), "{:?}", titles(&f));
+    let f = check("floor-count-two", &rule(">=2", ">=0USD"), "order.json", &fifty(",\"minItems\":2,\"maxItems\":10"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は、`order.lines` の要素のうちいくつが n に数えられるかを約束しませんが、n は 2 からしか受け付けません"), "{:?}", titles(&f));
+    // The same from a `.proto`, where the narrowing offered is the Protovalidate rule.
+    let pb = |repeated: &str| {
+        proto(&format!(
+            "message Order {{\n  repeated Line lines = 1 [(buf.validate.field).repeated = {{{repeated}}}];\n}}\n\n\
+             message Line {{\n  int64 qty = 1 [(buf.validate.field).int64 = {{gte: 1, lte: 9}}];\n  int64 amount = 2 [(buf.validate.field).int64 = {{gte: 50, lte: 100}}];\n}}"
+        ))
+    };
+    let pb_rule = rule(">=0", ">=250USD").replace("jsonschema \"order.json\" \"#/$defs/Order\"", "proto \"order.proto\" shop.v1.Order");
+    assert!(pb_rule.contains("shape order = proto"), "{pb_rule}");
+    let f = check("floor-sum-proto", &pb_rule, "order.proto", &pb("max_items: 10"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は `order.lines` が 0 件でも通しますが、s は 250USD からしか受け付けません"), "{:?}", titles(&f));
+    assert!(f[0].2.contains("[(buf.validate.field).repeated = {min_items: 5, max_items: 10}]"), "{f:?}");
+    let f = check("floor-sum-proto-held", &pb_rule, "order.proto", &pb("min_items: 5, max_items: 10"));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    // Ranges that start at zero: nothing is said.
+    let f = check("floor-none", &rule(">=0", ">=0USD"), "order.json", &open);
+    assert!(codes(&f).is_empty(), "{f:?}");
+}
+
+/// One element adds no more to a total than the contract lets its field be, where that is under
+/// the top of what the rule takes of it (§15.314). Ten lines of up to 50 dollars come to 500, which
+/// the `sum` takes, though the rule takes a line of 100. Counted by the rule's range alone, the
+/// total was said to reach 1000 dollars, and a contract that kept the rule's range was E122.
+#[test]
+fn the_top_of_a_total_counts_what_the_contract_lets_one_element_be() {
+    let rule = "rule t v1\n\nshape order = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+                elements items from order.lines\n  qty    : number  range >=1 <=9  from qty\n  amount : money[USD]  range >=0USD <=100USD  from amount\n\n\
+                outputs\n  x : bool\n\n\
+                table b\npolicy unique\n| qty | -> big : bool |\n| >=3 | true          |\n| <3  | false         |\n\n\
+                count n over items where big  range >=0 <=10\n\
+                sum s over items of amount  range >=0USD <=500USD\n\n\
+                table t\npolicy unique\n| n | s | -> x |\n| - | - | true |\n";
+    let titles = |f: &[(String, String, String)]| f.iter().map(|(_, t, _)| t.clone()).collect::<Vec<_>>();
+    let f = check("top-narrow", rule, "order.json", &lines_schema(",\"maxItems\":10", ",\"minimum\":0,\"maximum\":50"));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    // One dollar more a line passes the top, and the narrowing offered counts lines of 51 dollars.
+    let f = check("top-narrow-51", rule, "order.json", &lines_schema(",\"maxItems\":10", ",\"minimum\":0,\"maximum\":51"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は `order.lines` を 10 件まで通し、amount の合計は 510USD に届きますが、s は 500USD までしか受け付けません"), "{:?}", titles(&f));
+    assert!(f[0].2.contains("一件の amount は 51USD まで"), "{f:?}");
+    assert!(f[0].2.contains("\"fix\":{\"kind\":\"narrow_contract\",\"text\":\"\\\"maxItems\\\": 9\"}"), "{f:?}");
+    // A contract as wide as the rule is counted at the rule's top.
+    let f = check("top-wide", rule, "order.json", &lines_schema(",\"maxItems\":10", ",\"minimum\":0,\"maximum\":100"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("amount の合計は 1000USD に届きますが、s は 500USD までしか受け付けません"), "{:?}", titles(&f));
+    assert!(f[0].2.contains("\"text\":\"\\\"maxItems\\\": 5\"}"), "{f:?}");
+}
+
+/// A `unique` field of a sequence taken from a contract (§15.314): the door refuses two elements
+/// that share a value of it, and nothing read from a contract keeps one field apart between
+/// elements — `uniqueItems` compares whole elements — so two lines with one quantity pass the
+/// contract and were refused with `check` saying nothing. It is E122 with no narrowing to offer,
+/// and a collection of one element at most, which cannot hold two alike, says nothing. The same
+/// from a `.proto`.
+#[test]
+fn a_unique_field_of_a_sequence_taken_from_a_contract_is_one_the_contract_does_not_promise() {
+    let rule = |cap: &str| {
+        format!(
+            "rule t v1\n\nshape order = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+             elements items from order.lines\n  qty    : number  range >=1 <=9  unique  from qty\n  amount : money[USD]  range >=0USD <=100USD  from amount\n\n\
+             outputs\n  x : bool\n\n\
+             table b\npolicy unique\n| qty | -> big : bool |\n| >=3 | true          |\n| <3  | false         |\n\n\
+             count n over items where big  range >=0 <={cap}\n\
+             sum s over items of amount  range >=0USD <=1000USD\n\n\
+             table t\npolicy unique\n| n | s | -> x |\n| - | - | true |\n"
+        )
+    };
+    let amount = ",\"minimum\":0,\"maximum\":100";
+    let f = check("unique-two", &rule("10"), "order.json", &lines_schema(",\"maxItems\":10", amount));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は `order.lines` に qty が同じ要素が二つあっても通しますが、並び items は qty が同じ要素を二つ受け付けません"), "{f:?}");
+    assert!(f[0].2.contains("契約には、要素どうしで `order.lines[].qty` が違うという決まりがありません"), "{f:?}");
+    // The sentence the door says, with the two elements as `i` and `j` (§15.324).
+    assert!(f[0].2.contains("items の要素に qty が同じものが二つあります（items[i] と items[j]）") && f[0].2.contains("`uniqueItems` は要素を丸ごと比べる"), "{f:?}");
+    assert!(f[0].2.contains("\"fix\":{\"kind\":\"none\"}") && f[0].2.contains("qty の `unique` を外して"), "{f:?}");
+    // `uniqueItems` does not promise it: two lines of one quantity and two amounts are two items.
+    let f = check("unique-items", &rule("10"), "order.json", &lines_schema(",\"maxItems\":10,\"uniqueItems\":true", amount));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    // Two lines can be alike; one cannot, whether the contract or the rule's `count` holds it to one.
+    let f = check("unique-two-lines", &rule("10"), "order.json", &lines_schema(",\"maxItems\":2", amount));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    let f = check("unique-one-line", &rule("10"), "order.json", &lines_schema(",\"maxItems\":1", amount));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    let f = check("unique-one-counted", &rule("1"), "order.json", &lines_schema(",\"maxItems\":1", amount));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    // A field that is not `unique` says nothing.
+    let f = check("unique-none", &rule("10").replace("  unique  from qty", "  from qty"), "order.json", &lines_schema(",\"maxItems\":10", amount));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    // From a `.proto`: the same, without the sentence about `uniqueItems`.
+    let pb = proto(
+        "message Order {\n  repeated Line lines = 1 [(buf.validate.field).repeated = {max_items: 10}];\n}\n\n\
+         message Line {\n  int64 qty = 1 [(buf.validate.field).int64 = {gte: 1, lte: 9}];\n  int64 amount = 2 [(buf.validate.field).int64 = {gte: 0, lte: 100}];\n}",
+    );
+    let pb_rule = rule("10").replace("jsonschema \"order.json\" \"#/$defs/Order\"", "proto \"order.proto\" shop.v1.Order");
+    assert!(pb_rule.contains("shape order = proto"), "{pb_rule}");
+    let f = check("unique-proto", &pb_rule, "order.proto", &pb);
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("qty が同じ要素を二つ受け付けません") && !f[0].2.contains("uniqueItems"), "{f:?}");
+}
+
+/// The weights of a pick over a sequence taken from a contract (§15.314): the walk adds them up in
+/// an int64 and refuses the call the moment the total would pass it, so the longest collection the
+/// contract lets through, each weight at its largest, has to fit. Three reviewers of up to four
+/// quintillion each pass the contract and were refused with `check` saying nothing; it is E122,
+/// and the narrowing offered is the length the total fits at. Two fit; so does a weight the
+/// contract holds lower than the rule does; and a collection with no top has no top on its total.
+#[test]
+fn the_weights_of_a_pick_over_a_sequence_taken_from_a_contract_have_to_fit() {
+    let rule = "rule t v1\n\nenum presence = away | in_office\n\nshape team = jsonschema \"team.json\" \"#/$defs/Team\"\n\n\
+                elements reviewers from team.reviewers\n  reviewer_id : number  range >=1 <=50  from id\n  present     : bool  from present\n\
+                \x20 capacity    : number  range >=0 <=4_000_000_000_000_000_000  from capacity\n\n\
+                inputs\n  roll : number  range >=0 <=9999  random\n\n\
+                outputs\n  reviewer : number  round down(1)\n\n\
+                table in_today\npolicy unique\n| present | -> presence : presence |\n| true    | in_office              |\n| false   | away                   |\n\n\
+                fold presence over reviewers\n  away      -> next\n  in_office -> take_weighted reviewer_id by capacity\n  draw      -> roll\n  empty     -> 0\n  exhausted -> held\n";
+    let team = |extra: &str, top: &str| {
+        format!(
+            "{{\"$defs\":{{\"Team\":{{\"type\":\"object\",\"required\":[\"reviewers\"],\"properties\":{{\"reviewers\":{{\"type\":\"array\"{extra},\
+             \"items\":{{\"type\":\"object\",\"required\":[\"id\",\"present\",\"capacity\"],\"properties\":{{\"id\":{{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}},\
+             \"present\":{{\"type\":\"boolean\"}},\"capacity\":{{\"type\":\"integer\",\"minimum\":0,\"maximum\":{top}}}}}}}}}}}}}}}}}"
+        )
+    };
+    let wide = "4000000000000000000";
+    let f = check("weights-three", rule, "team.json", &team(",\"maxItems\":3", wide));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(
+        f[0].1.contains("契約は `team.reviewers` を 3 件まで通し、重みの合計は 12_000_000_000_000_000_000 に届きますが、並び reviewers は、重みの合計が int64 に収まる並びしか受け付けません"),
+        "{f:?}"
+    );
+    assert!(f[0].2.contains("一件の重みは 4_000_000_000_000_000_000 まで") && f[0].2.contains("reviewers の重みの合計が int64 に収まりません"), "{f:?}");
+    assert!(f[0].2.contains("\"fix\":{\"kind\":\"narrow_contract\",\"text\":\"\\\"maxItems\\\": 2\"}"), "{f:?}");
+    // Two reviewers at the most fit, as the fix says.
+    let f = check("weights-two", rule, "team.json", &team(",\"maxItems\":2", wide));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    // Seven reviewers of 1,317,624,576,693,539,401 at the most come to 2^63 − 1, the most an int64
+    // holds: the total fits. One more each, and it is seven past.
+    let f = check("weights-edge", rule, "team.json", &team(",\"maxItems\":7", "1317624576693539401"));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    let f = check("weights-past", rule, "team.json", &team(",\"maxItems\":7", "1317624576693539402"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("重みの合計は 9_223_372_036_854_775_814 に届きます") && f[0].2.contains("\\\"maxItems\\\": 6\""), "{f:?}");
+    // A capacity the contract holds to 100 is counted at 100: ten reviewers come to 1000.
+    let f = check("weights-narrow", rule, "team.json", &team(",\"maxItems\":10", "100"));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    // No top on the collection: no top on the total, and the length offered is counted at 100.
+    let f = check("weights-open", rule, "team.json", &team("", "100"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約は `team.reviewers` の件数に上限を置いていないので、重みの合計にも上限がありません"), "{f:?}");
+    assert!(f[0].2.contains("\\\"maxItems\\\": 92233720368547758\""), "{f:?}");
+}
+
+/// The range a `define` is accepted in (§15.313), where the value is worked out from what a contract
+/// gives: the generated code refuses a call whose value falls outside, and an amount of 1,000 the
+/// contract lets through has a fee of 3% past the 20 the rule accepts, with `check` saying
+/// nothing. It is E122, with a request that takes the value outside as the example and no
+/// annotation to offer; a contract that stops at 699, whose fee is 20, says nothing. The same of a
+/// value worked out on each element from its fields, and nothing of one worked out from an input
+/// no contract gives.
+#[test]
+fn the_range_a_define_is_accepted_in_is_held_to_what_the_contract_lets_through() {
+    let rule = "rule t v1\n\nshape order = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+                inputs\n  amount : number  range >=1 <=1000  from order.amount\n\n\
+                define fee : number = down(amount * 3%, 1)  range >=0 <=20\n\n\
+                outputs\n  fee : number  round down(1)\n";
+    let schema = |top: i64| format!("{{\"$defs\":{{\"Order\":{{\"type\":\"object\",\"required\":[\"amount\"],\"properties\":{{\"amount\":{{\"type\":\"integer\",\"minimum\":1,\"maximum\":{top}}}}}}}}}}}");
+    let f = check("define-input", rule, "order.json", &schema(1000));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約が通す値で、規則の計算する fee が、受け付ける範囲 >=0 <=20 の外になります"), "{f:?}");
+    assert!(f[0].2.contains("たとえば amount = 701 のとき。") && f[0].2.contains("`order.amount` から計算します") && f[0].2.contains("fee が範囲の外です"), "{f:?}");
+    assert!(f[0].2.contains("\"fix\":{\"kind\":\"none\"}") && f[0].2.contains("契約で `order.amount` の範囲を狭めてください"), "{f:?}");
+    // 3% of 699 is 20, rounded down; of 700, 21.
+    let f = check("define-input-held", rule, "order.json", &schema(699));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    let f = check("define-input-700", rule, "order.json", &schema(700));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].2.contains("たとえば amount = 700 のとき。"), "{f:?}");
+    // A value neither shown to stay inside nor found outside is said too, a contract being read no
+    // narrower than it is: the difference of the amount and itself is 0, which the arithmetic of
+    // intervals does not show.
+    let f = check("define-undecided", &rule.replace("down(amount * 3%, 1)  range >=0 <=20", "amount - amount  range >=0 <=0"), "order.json", &schema(1000));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("契約が通す値で、規則の計算する fee が、受け付ける範囲 >=0 <=0 に収まると示せません"), "{f:?}");
+    assert!(f[0].2.contains("\"fix\":{\"kind\":\"none\"}"), "{f:?}");
+    // An amount the caller gives beside the object is the caller's to keep: nothing is said here.
+    let beside = "rule t v1\n\nshape order = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+                  inputs\n  amount : number  range >=1 <=1000\n  seats  : number  range >=1 <=1000  from order.amount\n\n\
+                  define fee : number = down(amount * 3%, 1)  range >=0 <=20\n\n\
+                  outputs\n  fee : number  round down(1)\n  n   : number  round down(1)\n\ndefine n : number = seats\n";
+    let f = check("define-beside", beside, "order.json", &schema(1000));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    // On each element: a line of up to 9 at up to 100 comes to 900, and one is accepted up to 500.
+    let lines = "rule t v1\n\nshape order = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+                 elements items from order.lines\n  qty    : number  range >=1 <=9  from qty\n  amount : number  range >=0 <=100  from amount\n\n\
+                 define subtotal : number = qty * amount  range >=0 <=500\n\n\
+                 sum total over items of subtotal  range >=0 <=9000\n\n\
+                 outputs\n  x : number  round down(1)\n\ndefine x : number = total\n";
+    let f = check("define-lines", lines, "order.json", &lines_schema(",\"maxItems\":10", ",\"minimum\":0,\"maximum\":100"));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("規則の計算する subtotal が、受け付ける範囲 >=0 <=500 の外になります"), "{f:?}");
+    assert!(f[0].2.contains("`order.lines[].qty`、`order.lines[].amount` から計算します") && f[0].2.contains("たとえば items = [qty "), "{f:?}");
+    // Lines of up to 55 come to 495 at the most.
+    let f = check("define-lines-held", lines, "order.json", &lines_schema(",\"maxItems\":10", ",\"minimum\":0,\"maximum\":55"));
+    assert!(codes(&f).is_empty(), "{f:?}");
+}
+
 /// From a `.proto`, a field of an element left unset arrives as its default, and a field with no
 /// rule lets 0 through (§15.223, §15.133); a `repeated` with no `max_items` puts no end on a total,
 /// and the narrowing offered is the Protovalidate rule that would.

@@ -1,0 +1,4 @@
+enums 時刻(time) v1
+description "標準のライブラリのモジュールと同じ名前の enums ファイル"
+
+enum 地域(zone) = 北(north) | 南(south)

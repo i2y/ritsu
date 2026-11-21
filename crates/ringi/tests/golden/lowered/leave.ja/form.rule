@@ -1,0 +1,15 @@
+rule leave_ja_form v1
+description "What ringi writes from the form of leave.ja.ringi: the totals and computations, and when a field is shown and asked for"
+
+import enum kind from "choices.rule"
+
+inputs
+  kind : kind
+
+outputs
+  reason_required : bool
+
+table reason_required
+| kind         | -> reason_required |
+| not: special | false              |
+| special      | true               |

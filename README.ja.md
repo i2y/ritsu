@@ -6,11 +6,11 @@
 
 コーディングエージェントは、人が一行ずつ読めるより速く、多くのコードを書くようになりました。そこで問いがはっきりします。誰が、あるいは何がコードを書いても、コードが実現すべきものは何か。サービスのあいだと中の契約。業務の規則。暦と期日。帳簿と、その上限と下限。ワークフローの骨組み。だれが何をしてよいか。要件がどこから来て、いま何がそれを満たしているか。
 
-ritsu は、そのそれぞれに小さな言語を一つずつ与えます。どれも、人が読めるファイルです。各言語は、書いたことを確かめられるところまで確かめます。試しに選んだ例ではなく、すべての入力、すべての日、すべての道筋についてです。コードが要るところではコードを生成し、中身を理解したい人のためのページを作ります。九つが一つの処理系を共有しているので、証明が言語の境目で切れません。ワークフローは呼ぶ規則の前提を知り、規則は暦がとりうる日を知り、帳簿は規則が返しうる額を知っています。
+ritsu は、そのそれぞれに小さな言語を一つずつ与えます。どれも、人が読めるファイルです。各言語は、書いたことを確かめられるところまで確かめます。試しに選んだ例ではなく、すべての入力、すべての日、すべての道筋についてです。コードが要るところではコードを生成し、中身を理解したい人のためのページを作ります。十の言語が一つの処理系を共有しているので、証明が言語の境目で切れません。ワークフローは呼ぶ規則の前提を知り、規則は暦がとりうる日を知り、帳簿は規則が返しうる額を知っています。
 
 つなぎのコードはエージェントが書き、コードが実現すべきものは ritsu が持ちます。
 
-## 九つの言語
+## 十の言語
 
 | | ファイル | 何のための言語か | 生成するもの |
 |---|---|---|---|
@@ -23,8 +23,9 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 | [sakai](#sakai境界づけられたコンテキストの地図) | `.ctx` | 境界づけられたコンテキストの地図 | import を確かめるツールの設定、Context Mapper |
 | [sekisho](#sekishoだれが何をしてよいか) | `.gate` | だれが何をしてよいか：役割、属性、関係。規則と日付を条件に使える | Cedar と、Cedar に尋ねる TypeScript、Python、Go |
 | [kaname](#kanamefunctional-core) | `.kn` | Functional Core。入出力を持たない汎用のコードを ritsu の型で書き、規則と日付と帳簿も呼べる | `ritsu gen` が書くパッケージの中の TypeScript、Python、Go、Rust と、Rust から組む Wasm |
+| [ringi](#ringi申請と承認) | `.ringi` | どの部門の申請と承認にも。フォーム、経路とステップごとの承認者の決め方、組織を書き、申請一件をチケットとしてイベントで進める | `ritsu gen` が書くパッケージの中の、チケットの TypeScript、Python、Go、Rust。`--target requests` で、A2UI の画面、サーバーの API の OpenAPI、エージェントが使う道具、ベクタ |
 
-どの言語も、それだけで使えます。`.flow` を書かずに rulec だけを使うこともできます。一つのファイルに二つの言語を混ぜることはしません。運賃、暦、帳簿、ワークフローを読む人は、それぞれ違うからです。
+どの言語も、それだけで使えます。`.flow` を書かずに rulec だけを使うこともできます。一つのファイルに二つの言語を混ぜることはしません。運賃、暦、帳簿、ワークフローを読む人は、それぞれ違うからです。`.ringi` のファイルには、表、条件、期限を ringi の書き方で書きます。ringi がそれを規則、日付、モジュールに下ろし、rulec、koyomi、kaname が確かめるので、ここでも一つのファイルには一つの言語だけです。
 
 以下の例は英語で書いたものです。dandori、koyomi、chobo、geas などの例には、日本語で書いた版（`.ja.flow`、`.ja.cal` など）もあります。
 
@@ -426,9 +427,78 @@ ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも�
 
 モジュールの書き方、ホストと一緒の Functional Core の四つの例、検査が保証することは、[サイトのページ](https://i2y.github.io/ritsu/ja/kaname/)で順に見られます。そのほかは [kaname の README](crates/kaname/README.ja.md) にあります。
 
+### ringi：申請と承認
+
+申請の種類（`.ringi` のファイル）一つは、会社で扱う申請の一つの種類です。経費の精算、購買、休暇、システムのアカウント、契約の確認など、どの部門の申請にも使えます。ファイルには、フォーム、経路、期限と催促、出したときや承認されたとき、取り下げられたときにチケットがすることを書きます。経路には、ステップごとの承認者の決め方を書きます。決まった人、申請者の上長、申請者から上へたどって最初の決まった役職の人、チーム、マスタの行のほか、申請を先へ通すことしかしないエージェントも選べます。経路の表、条件、計算するフィールド、期限は、規則と日付とモジュールに下ろされ、rulec、koyomi、kaname が確かめます。そのため、どの行にも当たらない申請があれば、その金額で分かります。組織のデータを渡すと、`ringi check` は組織の版ごとに、承認者のいなくなるステップと、それがだれの申請かを挙げます。どのチケットも終わることと、長くて何営業日かかるかも示します。
+
+```ringi
+request 経費(expense_ja) v1 "経費の申請"
+…
+form
+  種別(category) : choice "種別"
+    出張(travel)   "出張"
+    経費(expense)  "経費"
+    購買(purchase) "購買"
+  明細(items) : rows "明細"  count >=1 <=20
+    品目(what)  : text "品目"  count <=100
+    金額(price) : money[円] "金額"  range >=1円 <=1_000_000円
+  合計(amount)      : money[円] "合計" = sum(明細.金額)  range >=1円 <=10_000_000円
+…
+route
+| 種別 | 合計                     | -> 確かめ(precheck) | 一次(first) | 二次(second)    | 決裁(decide)   |
+| 出張 | <=30_000円               |                    |             |                 | エージェント決裁 |
+| 出張 | >30_000円 <=100_000円    |                    |             |                 | 上長           |
+| 出張 | >100_000円               |                    | 上長        |                 | 部長           |
+| 経費 | <=100_000円              | エージェント確認    |             |                 | 上長           |
+| 経費 | >100_000円 <=1_000_000円 | エージェント確認    | 上長        |                 | 部長           |
+| 経費 | >1_000_000円             |                    | 上長        | 部長            | 本部長         |
+| 購買 | <=1_000_000円            |                    | 上長        | 経理            | 部長           |
+| 購買 | >1_000_000円             |                    | 上長        | 部長 and 経理   | 本部長         |
+
+who
+  上長(manager)                 = manager of requester
+  部長(dept_head)               = head of requester.department
+  経理(accounting)              = team accounting
+  本部長(division_head)         = nearest division_head above requester
+  エージェント確認(check)        = agent 事前の確かめ, else 上長
+  エージェント決裁(travel_agent) = agent 出張の決裁, else 上長
+  取締役(board)                 = team board
+…
+```
+
+```console
+$ cd crates/ringi/examples
+$ ringi check expense.ja.ringi --lang ja
+警告[W502]: expense.ja.ringi:33:84: 2027-04-01 からの組織では、ステップ `決裁` は承認者がいないので、ほかへ回るか飛ばされます
+    33 | | 出張 | >100_000円               |                    | 上長        |                 | 部長           |
+  = `部長` はチーム legal（法務部）に当たり、その長が空いています。
+…
+ok expense.ja.ringi: 申請の種類、フィールド 8 個、ステップ 4 個
+  2026-04-01 から使えます: 組織 `shared/company.ringi` の最初の版（データ `../org`）
+  終わり無く使えます: 読むデータに終わりがありません
+  長くても 93 営業日で終わります（ステップに 4 × 21、申請者のもとで 3 × 3）
+…
+$ ringi simulate expense.ja.ringi --requester e1201 --on 2026-12-29 --lang ja
+expense.ja.ringi（2026-12-29、2026-04-01 からの組織）
+  `--form` が無いので、経路が来うるステップを、承認者の決め方ごとに見せます。どれが来るかはフォームの値で決まります
+申請者 e1201（営業担当 1）
+  確かめ  エージェント確認（エージェントが迷えば上長へ）：e1101（営業一課長）
+  一次    上長：e1101（営業一課長）
+  二次    部長：e3101（営業一部長）［e3101 の代理で e1101（営業一課長）も］
+          経理：e1001（経理部長）、e1002（経理担当）のだれか
+  決裁    エージェント決裁（エージェントが迷えば上長へ）：e1101（営業一課長）
+          上長：e1101（営業一課長）
+          部長：e3101（営業一部長）［e3101 の代理で e1101（営業一課長）も］
+          本部長：e0101（営業本部長）
+```
+
+組織のデータでは、2026-12-28 から 2027-01-08 まで、経費と購買の申請の承認で e1101 が e3101 の代理です。そのため、2026-12-29 には、部長に当たるステップに二人のどちらが答えてもかまいません。
+
+`ringi run` は、申請の種類に書いたシナリオをチケットの機械にかけます。`ringi doc` は、申請を管理する人と承認する人が読むページを書きます。`ringi diff` は、変更でどの申請のだれの承認が変わるかを言います。`ritsu gen` は、チケットのコードを、それが呼ぶ規則と日付のコードの横に書きます。`ritsu gen --target requests` は、どの言語にも依らない物として、A2UI のメッセージの画面、サーバーの API の OpenAPI、エージェントが使う道具、サーバーを試験するベクタを書きます。チケットを保管し、人のログインを扱い、催促を送るサーバーは ritsu の外にあります。申請の種類の書き方、検査が保証すること、ページの読み方、サーバーがすることは、[サイトのページ](https://i2y.github.io/ritsu/ja/ringi/)で順に見られます。そのほかは [ringi の README](crates/ringi/README.ja.md) にあります。
+
 ## 言語が出会うところ
 
-九つが一つの処理系を共有しているのは、ある言語が確かめたことを、別の言語が前提にできるようにするためです。たとえば返金の規則は、支払った額より多くを求める人はいない、と決めてかかっています。
+十の言語が一つの処理系を共有しているのは、ある言語が確かめたことを、別の言語が前提にできるようにするためです。たとえば返金の規則は、支払った額より多くを求める人はいない、と決めてかかっています。
 
 ```rule
 rule refund_check v1
@@ -489,8 +559,8 @@ ok refund_check.rule
 refund.flow: 検査を通りました
 エラー[ritsu E201]: refund.flow:21:1: 規則 check を呼ぶところで、前提 `asked <= paid` を破る値を渡すことがあります
     21 |   let decision = check(paid: paid, asked: asked)
-  = `asked` は `>=0 <=10000`、`paid` は `>=0 <=10000` で、asked = 10000, paid = 0 のとき `asked <= paid` が成り立ちません
-  = 規則から生成したコードは、前提を破る呼び出しを入口で受け付けません。この呼び出しは、ワークフローを走らせたときに初めて落ちます。値の範囲は、dandori がその値を入れるすべての場所から集めたものです。
+  = `asked` は `>=0 <=10_000`、`paid` は `>=0 <=10_000` で、asked = 10_000, paid = 0 のとき `asked <= paid` が成り立ちません
+  = 規則から生成したコードは、前提を破る呼び出しを入口で受け付けません。この呼び出しは、ワークフローを走らせたときに初めて落ちます。値の範囲は、dandori が、この呼び出しに届く実行が最後に入れた値から集めたものです。
   = 値を渡す前に前提を保つよう分岐するか、範囲を狭めてください（入力やタスクの結果の `range`）。
 ritsu check: ファイル 2 個（rulec 1、dandori 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所
 ```
@@ -505,6 +575,9 @@ ritsu check: ファイル 2 個（rulec 1、dandori 1）。検査を通らない
 - kaname のモジュールが規則、日付、振替に渡すどの値も、相手が宣言した範囲に入るか
 - rulec、dandori、chobo、kaname で一つの型になったお金と単位
 - sakai の地図のコンテキストが公開する操作に、それを守るゲートの action があるか。ワークフローが呼ぶ操作を、ゲートがそのワークフローに許しているか
+- 申請の経路と、申請が読むゲート。チケットの操作のどれにも action があるか、経路が決めた承認者が決められるか、自己承認が経路の書いたとおりか
+- 申請を出したときの仮押さえと、承認の一回りにかかりうる長さ。チケットが確定か取消をする前に、仮押さえが切れないか
+- チケットがワークフローに渡す値（`launch` の値、エージェントと要約が読むフォーム）と、ワークフローが受け取る値
 - yuen は表、日付、主張、タスク、関数を一つずつハッシュで固定し、sakai はコンテキストをまたぐ参照を行番号つきで確かめる
 
 ## モジュール
@@ -667,8 +740,11 @@ ritsu impact：base → 作業ツリー
 | E906 | プロジェクトの外（モデルのプロバイダー、判断のモデルの API（Jev、OpenAI の Decisions API、このマシンでないサーバー）、URL だけで書いた相手、AWS のサービス）へ送る秘密の値 | `dandori check` |
 | E905、W905 | 地図の外のファイルや、印を付けたコンテキストと地図の上で関係の無いコンテキストへ送る秘密の値。地図が sakai の検査を通らず、送り先が地図のどこかを決められないこと | `ritsu check` |
 | W910 | ゲートの action の入力のうち、ポリシーが読み、守る操作の契約が秘密と印を付けたもの。その値は Cedar に尋ねるリクエストに入り、判断の記録に残ります | `sekisho check` |
+| W109（ringi） | 申請の種類のテキストのフィールドで、名前か題が秘密の値を指すもの（`password`、`secret`、`token`、`api key`、それぞれの日本語）。入力した値はチケットの履歴に残り、承認者、ページ、ログに出ます | `ringi check` |
 | E907、W907 | コンテキストが公開する操作（`open host service`）を、どのゲートの action も守っていないこと。公開する操作を一つも守っていないコンテキスト | `ritsu check`（ゲートのあるプロジェクト） |
 | E908、W908、W909 | ゲートがどの組み合わせでも許さない、ワークフローの呼び出し。ワークフローが許されているのに呼ばない action。拒まれることがあるか、許されるかを決められない呼び出しで、拒まれたときのエラーを宣言していないもの | `ritsu check` |
+| E909 | ワークフローの呼び出しが引数に渡す数を、ゲートの同じ名前の `input` が違う単位か刻みで数えるもの（`rate[step 0.1%]` と `rate[step 1%]`）。ゲートはフローの 0.5% を 5% として読みます | `ritsu check` |
+| E911、W911 | 申請が読むゲートが、申請の経路の決めと違うことを言うこと。action の無い、チケットの操作かサーバーの管理の操作。経路が決めた承認者に、承認者の操作を一つも許さないこと。経路が許さない自己承認を許すこと。そうかどうかを決められないこと | `ritsu check` |
 
 値が秘密になるのは、契約が印を付けたとき（`.proto` の `debug_redact`、OpenAPI のスキーマの `x-data-classification`・`x-sensitive-data`・`format: password`）と、`.flow` が型のあとに `secret` と書いたときです。dandori は、その値が入るすべての変数を追います。次の例は、dandori のテストにある、例 `crates/dandori/examples/payout` を変えたものです。売り手への知らせを下書きするモデルに、口座の名義を読ませています。
 
@@ -695,6 +771,7 @@ $ dandori check E906_payout_holder.flow --lang ja
 - `chobo doc`：帳簿、その上限と下限、振替
 - `sekisho doc`：だれが何をしてよいかを action ごとの表にし、生成する Cedar と並べる
 - `kaname doc`：モジュールの、表にある判断、エフェクトごとの関数とそれぞれが失敗しうる場所、コードにある判断
+- `ringi doc`：申請の種類の、フォーム、出せる人、どの申請のどのステップをだれが承認するかを一枚にした経路、チケットがいちばん長くかかる場合。`ringi diff`：変更で、どの申請のだれの承認が変わるか、進行中のチケットにどう効くか
 - `yuen trace`：要件を出典までさかのぼり、満たすものまでたどる
 - `explain <コード>`：すべての診断の説明と、そのまま走らせられる再現
 
@@ -704,12 +781,12 @@ rulec の証明書は、Lean 4 で検査し直します。chobo、koyomi、dando
 
 ## AI エージェント向け
 
-ritsu とその言語は、AI エージェントに使ってもらうためのものです。[skills/](skills) に、十の [Agent Skills](https://agentskills.io) を置いています。[skills/ritsu](skills/ritsu) は二つ以上の言語を使うプロジェクトのためのスキルで、`ritsu check` から、ワークフローの実行とパッケージの生成までの手順、言語をまたぐ診断の読み方と直し方、残りは言語ごとのどのスキルを読むか、が入っています。残りの九つは言語ごとのスキルで、`skills/<言語>/` にあります。一覧は [skills/README.ja.md](skills/README.ja.md) にあります。入れ方は四つあります。
+ritsu とその言語は、AI エージェントに使ってもらうためのものです。[skills/](skills) に、十一の [Agent Skills](https://agentskills.io) を置いています。[skills/ritsu](skills/ritsu) は二つ以上の言語を使うプロジェクトのためのスキルで、`ritsu check` から、ワークフローの実行とパッケージの生成までの手順、言語をまたぐ診断の読み方と直し方、残りは言語ごとのどのスキルを読むか、が入っています。残りの十は言語ごとのスキルで、`skills/<言語>/` にあります。一覧は [skills/README.ja.md](skills/README.ja.md) にあります。入れ方は四つあります。
 
-- **Claude Code**：ritsu のサイトがプラグインのマーケットプレイスを公開していて、プラグイン `ritsu` に十のスキルが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。Claude Code が取ってくるのは `skills/` のフォルダーだけで、リポジトリ全体はダウンロードしません。
+- **Claude Code**：ritsu のサイトがプラグインのマーケットプレイスを公開していて、プラグイン `ritsu` に十一のスキルが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。Claude Code が取ってくるのは `skills/` のフォルダーだけで、リポジトリ全体はダウンロードしません。
 - **どのエージェントでも、バイナリから**：`ritsu skills install` が、プロジェクトの `.claude/skills/` に書きます。`--user` を付けると `~/.claude/skills/` に、`--dir <dir>` を付けると、ほかのエージェントがスキルを読む場所に書きます。名前を挙げると（`ritsu skills install rulec dandori`）そのスキルだけを書き、`ritsu skills list` で一覧を出します。
 - **手で**：`skills/` から必要なフォルダーを、`~/.claude/skills/` か、プロジェクトの `.claude/skills/` にコピーします。
-- **リリースから**：`ritsu-skills-v<版>.zip` に十のフォルダーが入っています。エージェントがスキルを読む場所に展開します。
+- **リリースから**：`ritsu-skills-v<版>.zip` に十一のフォルダーが入っています。エージェントがスキルを読む場所に展開します。
 
 ## コマンド
 
@@ -720,13 +797,15 @@ ritsu gen --target …              プロジェクト全体を、指定した�
 ritsu gen --check …               パッケージが今の状態に合っているか。--format json ならファイルごとに
 ritsu gen --library …             モジュールを、npm、PyPI、Go のライブラリにする
 ritsu mod <コマンド> …            モジュールのコマンド（add、lock、fetch、push、diff、report など）
-ritsu impact --base …     変更で答えが動いたか、誰に関わるか、規則が決める行き先
-ritsu explain <コード>            診断の意味と再現
+ritsu impact --base …             変更で答えが動いたか、誰に関わるか、規則が決める行き先
+ritsu explain <コード>...         診断の意味と再現
 ritsu skills install              Agent Skills を、エージェントが読む場所に書く
 ritsu <言語> …                    各言語のコマンド（例：ritsu rulec doc fee.rule）
 ```
 
-リリースのアーカイブには、`ritsu` と、それを指す九つのリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`、`kaname`）が入っていて、どれもその言語として動きます。`cargo install` で入るのは `ritsu` のバイナリだけなので、言語は `ritsu <言語> …` で呼ぶか、言語の名前のリンクを自分で作ります（`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec` など）。日本語にするには `--lang ja` を付けます。`ritsu gen --library` が書くものと、その公開の仕方は、ritsu のサイトの[ライブラリとして公開する](https://i2y.github.io/ritsu/ja/libraries/)にあります。`ritsu mod` については、上の[モジュール](#モジュール)を見てください。
+どの言語の `explain` も、`ritsu explain` も、コードをいくつでも取り、渡した順に説明します。二つ以上のときは、`--all` と同じ形で、渡したコードだけを書きます。
+
+リリースのアーカイブには、`ritsu` と、それを指す十のリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`、`kaname`、`ringi`）が入っていて、どれもその言語として動きます。`cargo install` で入るのは `ritsu` のバイナリだけなので、言語は `ritsu <言語> …` で呼ぶか、言語の名前のリンクを自分で作ります（`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec` など）。日本語にするには `--lang ja` を付けます。環境変数 `RITSU_LANG`（と、`SEKISHO_LANG` などの言語ごとの変数）が決めるのは、コマンドが出す文の言語だけです。書く物（生成したコード、ページ、`api` の JSON、ベクタ）は `--lang` だけで決まり、無ければ英語なので、同じファイルからは、どの機械でも同じ物ができます。`ritsu gen --library` が書くものと、その公開の仕方は、ritsu のサイトの[ライブラリとして公開する](https://i2y.github.io/ritsu/ja/libraries/)にあります。`ritsu mod` については、上の[モジュール](#モジュール)を見てください。
 
 ## 入れ方
 
@@ -759,7 +838,7 @@ npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.55.2/i2
   [koyomi](crates/koyomi/README.ja.md)、[chobo](crates/chobo/README.ja.md)、
   [geas](crates/geas/README.ja.md)、[yuen](crates/yuen/README.ja.md)、
   [sakai](crates/sakai/README.ja.md)、[sekisho](crates/sekisho/README.ja.md)、
-  [kaname](crates/kaname/README.ja.md)（rulec と dandori は英語だけ）
+  [kaname](crates/kaname/README.ja.md)、[ringi](crates/ringi/README.ja.md)（rulec と dandori は英語だけ）
 - `crates/ritsu-*`：共通の土台、単位、口、プロジェクトの読み込み、言語をまたぐ検査、`.proto` の読み手、生成の共通部分、ブラウザ向けのビルド
 - `modules/holidays`：英国と日本の祝日のモジュール。ほかのプロジェクトが依存に足して使う
 - `proofs/`：Lean のモデル

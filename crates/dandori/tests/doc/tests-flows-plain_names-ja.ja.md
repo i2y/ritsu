@@ -1,6 +1,6 @@
 # 普通の名前 v1
 
-生成するコードが自分のものにしない名前です。Go のパッケージが持ちそうな名詞と、コードが読まない Python の組み込みと JavaScript のグローバルを、型と変数に使います。どのプラットフォームでも動きます
+生成するコードが自分のものにしない名前です。Go のパッケージが持ちそうな名詞、コードが読まない Python の組み込みと JavaScript のグローバル、コードが別の名前で読む Python の typing の名前を、型と変数に使います。どのプラットフォームでも動きます
 
 `tests/flows/plain_names.ja.flow` を `dandori doc` で描いたものです。入力は `番号: string`、出力は `文: string`・`全部の値: 全部` です。
 
@@ -28,7 +28,9 @@ flowchart TD
     s17["slice = 書く(…)<br>lambda note"]
     s18["sum = 書く(…)<br>lambda note"]
     s19["vars = 書く(…)<br>lambda note"]
-    s20(["succeed 文 = #quot;{bytes}{callable}{filter}{format}{frozense…"])
+    s20["TypeError = 書く(…)<br>lambda note"]
+    s21["TypeGuard = 書く(…)<br>lambda note"]
+    s22(["succeed 文 = #quot;{bytes}{callable}{filter}{format}{frozense…"])
     start --> s1
     s1 --> s2
     s2 --> s3
@@ -49,9 +51,11 @@ flowchart TD
     s17 --> s18
     s18 --> s19
     s19 --> s20
+    s20 --> s21
+    s21 --> s22
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s20 ok
+    class s22 ok
 ```
 
 四角はタスク、両脇に線のある四角は規則、斜めの四角は外から値が届くタスク（イベントやコールバックの応答）、六角形は `match`、角の丸い四角は待ち、ステップを囲む枠はループです。破線の矢印は、呼び出しがその場で処理するエラーです。
@@ -60,25 +64,27 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 114 | `全部の値 = 集める(…)` | `lambda gather`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 115 | `bytes = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 116 | `callable = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 117 | `filter = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 118 | `format = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 119 | `frozenset = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 120 | `hasattr = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 121 | `hash = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 122 | `iter = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 123 | `map = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 124 | `object = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 125 | `open = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 126 | `print = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 127 | `repr = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 128 | `reversed = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 129 | `setattr = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 130 | `slice = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 131 | `sum = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 132 | `vars = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 121 | `全部の値 = 集める(…)` | `lambda gather`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 122 | `bytes = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 123 | `callable = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 124 | `filter = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 125 | `format = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 126 | `frozenset = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 127 | `hasattr = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 128 | `hash = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 129 | `iter = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 130 | `map = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 131 | `object = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 132 | `open = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 133 | `print = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 134 | `repr = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 135 | `reversed = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 136 | `setattr = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 137 | `slice = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 138 | `sum = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 139 | `vars = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 140 | `TypeError = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 141 | `TypeGuard = 書く(…)` | `lambda note`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 
@@ -86,5 +92,5 @@ flowchart TD
 
 | 行 | 終わり方 |
 |---:|---|
-| 133 | `succeed 文 = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", 全部の値 = 全部の値` |
+| 142 | `succeed 文 = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}{TypeError}{TypeGuard}", 全部の値 = 全部の値` |
 

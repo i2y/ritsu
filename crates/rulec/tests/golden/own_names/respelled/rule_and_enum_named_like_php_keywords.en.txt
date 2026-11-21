@@ -1,0 +1,28 @@
+warning[W121]: `print` is a keyword as written in PHP, so the generated code there writes it with `_` after it
+  --> tests/own_names/respelled/rule_and_enum_named_like_php_keywords.rule:1
+  |
+1 | rule print v1
+  |      ^^^^^ the rule's name
+  |
+ PHP: the rule's function is `print_` and its namespace `Print_`, the names a caller reads it by.
+ The code builds as it is. For a name with no `_` in any language, give it an alias (`print(<alias>)`).
+
+warning[W121]: `class` is a keyword as written in PHP, so the generated code there writes it with `_` after it
+  --> tests/own_names/respelled/rule_and_enum_named_like_php_keywords.rule:4
+  |
+4 | enum class = draft | final
+  |      ^^^^^ the enum's name
+  |
+ PHP: the enum's class is `Class_`, the name a caller reads it by.
+ The code builds as it is. For a name with no `_` in any language, give it an alias (`class(<alias>)`).
+
+warning[W121]: `final` is a keyword as written in PHP, so the generated code there writes it with `_` after it
+  --> tests/own_names/respelled/rule_and_enum_named_like_php_keywords.rule:4
+  |
+4 | enum class = draft | final
+  |                      ^^^^^ the enum's value
+  |
+ PHP: the enum's value is `Class_::FINAL_`, the name a caller reads it by.
+ The code builds as it is. For a name with no `_` in any language, give it an alias (`final(<alias>)`).
+
+ok tests/own_names/respelled/rule_and_enum_named_like_php_keywords.rule

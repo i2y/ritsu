@@ -4,10 +4,32 @@
 //! is checked here is the rest of the contract a calling agent meets: what `tools/list`
 //! says, what a refused call says, and that `--record` keeps what was asked.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::time::{Duration, Instant};
 use ritsu_testkit::{Need, TempDir, ready};
+
+/// How long the server may take to answer a request, to say where it listens, or to end once its
+/// input is closed: a moment each. Past it, the test fails, saying what it waited for, and is not
+/// held until the limit of the job.
+const LIMIT: Duration = Duration::from_secs(60);
+
+/// The lines `r` gives, read in a thread of their own, so that each can be waited for with a limit.
+fn lines_of(r: impl Read + Send + 'static) -> Receiver<String> {
+    let (sent, lines) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut r = BufReader::new(r);
+        let mut line = String::new();
+        while r.read_line(&mut line).is_ok_and(|n| n > 0) {
+            if sent.send(std::mem::take(&mut line)).is_err() {
+                break;
+            }
+        }
+    });
+    lines
+}
 
 const RULE: &str = "tests/corpus/厚生年金保険料.rule";
 
@@ -25,7 +47,7 @@ fn generate(tag: &str) -> (TempDir, PathBuf) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", RULE, "--out", dir.to_str().unwrap()]).args(rulec::targets::UP_TO_0_40)
+        .args(["gen", RULE, "--out", dir.to_str().unwrap(), "--lang", "ja"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -43,7 +65,13 @@ fn talk(cwd: &Path, cmd: &str, args: &[&str], reqs: &[&str]) -> Vec<rulec::json:
         .spawn()
         .expect("サーバを起動できない");
     let mut si = child.stdin.take().unwrap();
-    let mut so = BufReader::new(child.stdout.take().unwrap());
+    let so = lines_of(child.stdout.take().unwrap());
+    let mut se = child.stderr.take().unwrap();
+    let said = std::thread::spawn(move || {
+        let mut s = String::new();
+        let _ = se.read_to_string(&mut s);
+        s
+    });
     let mut out = Vec::new();
     for r in reqs {
         writeln!(si, "{r}").unwrap();
@@ -51,13 +79,31 @@ fn talk(cwd: &Path, cmd: &str, args: &[&str], reqs: &[&str]) -> Vec<rulec::json:
         if !r.contains("\"id\"") {
             continue; // a notification gets no answer
         }
-        let mut line = String::new();
-        assert!(so.read_line(&mut line).unwrap() > 0, "答えずに終わった: {r}");
+        let line = match so.recv_timeout(LIMIT) {
+            Ok(line) => line,
+            Err(RecvTimeoutError::Disconnected) => panic!("答えずに終わった: {r}"),
+            Err(RecvTimeoutError::Timeout) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("{} 秒のうちに答えなかったので止めた: {r}", LIMIT.as_secs());
+            }
+        };
         out.push(rulec::json::parse(line.trim()).unwrap_or_else(|e| panic!("JSON でない: {e}\n{line}")));
     }
     drop(si);
-    let o = child.wait_with_output().unwrap();
-    assert!(o.status.success(), "サーバが落ちた:\n{}", String::from_utf8_lossy(&o.stderr));
+    let until = Instant::now() + LIMIT;
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if Instant::now() > until {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("入力を閉じても {} 秒のうちに終わらなかったので止めた", LIMIT.as_secs());
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert!(status.success(), "サーバが落ちた:\n{}", said.join().unwrap_or_default());
     out
 }
 
@@ -115,7 +161,8 @@ fn contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
     assert!(desc.contains("厚生年金保険料") && desc.contains("報酬月額"), "{desc}");
     let schema = tool.get("inputSchema").expect("inputSchema");
     let want: rulec::json::Json = {
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(["schema", RULE]).output().unwrap();
+        // The schema is in the language of `--lang` alone, as the server's is (the root DESIGN 4.1).
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(["schema", RULE, "--lang", "ja"]).output().unwrap();
         let j = rulec::json::parse(String::from_utf8_lossy(&o.stdout).trim()).unwrap();
         j.get("properties").unwrap().get("in").unwrap().clone()
     };
@@ -173,7 +220,7 @@ fn サーバは生成物の一つとして数えられる() {
     for f in ["python/pension_premium_mcp.py", "typescript/pension_premium_mcp.ts", "javascript/pension_premium_mcp.mjs"] {
         assert!(dir.join(f).exists(), "{f} が無い");
     }
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(["api", RULE]).output().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(["api", RULE, "--lang", "ja"]).output().unwrap();
     let j = rulec::json::parse(String::from_utf8_lossy(&o.stdout).trim()).unwrap();
     for (lang, want) in [("python", "pension_premium_mcp.py"), ("typescript", "pension_premium_mcp.ts"), ("javascript", "pension_premium_mcp.mjs")] {
         assert_eq!(j.get(lang).and_then(|l| l.get("mcp")).and_then(|m| m.as_str()), Some(want), "{lang}");
@@ -191,14 +238,18 @@ fn http_contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
         Command::new(cmd).current_dir(dir.join(cwd)).args(args).args(["--http", "127.0.0.1:0"]).stdout(Stdio::piped()).stderr(Stdio::piped()),
     )
     .expect("サーバを起動できない");
-    let mut so = BufReader::new(child.stdout.take().unwrap());
-    let mut line = String::new();
-    assert!(so.read_line(&mut line).unwrap() > 0, "待ち受けを言わずに終わった");
+    let line = match lines_of(child.stdout.take().unwrap()).recv_timeout(LIMIT) {
+        Ok(line) => line,
+        Err(RecvTimeoutError::Disconnected) => panic!("待ち受けを言わずに終わった"),
+        Err(RecvTimeoutError::Timeout) => panic!("{} 秒のうちに待ち受けを言わなかった", LIMIT.as_secs()),
+    };
     let at = line.trim().trim_start_matches("http://").trim_end_matches("/mcp").to_string();
 
     // (status, headers as one lowercase blob, body)
     let call = |method: &str, headers: &str, body: &str| -> (u16, String, String) {
         let mut s = std::net::TcpStream::connect(&at).expect("繋げない");
+        s.set_read_timeout(Some(LIMIT)).unwrap();
+        s.set_write_timeout(Some(LIMIT)).unwrap();
         let req = format!(
             "{method} /mcp HTTP/1.1\r\nHost: {at}\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
@@ -206,7 +257,7 @@ fn http_contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
         s.write_all(req.as_bytes()).unwrap();
         s.flush().unwrap();
         let mut all = String::new();
-        std::io::Read::read_to_string(&mut s, &mut all).unwrap();
+        s.read_to_string(&mut all).unwrap_or_else(|e| panic!("{cwd}: {method} に {} 秒のうちに答えなかった: {e}", LIMIT.as_secs()));
         let (head, body) = all.split_once("\r\n\r\n").unwrap_or((all.as_str(), ""));
         let code: u16 = head.lines().next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
         (code, head.to_lowercase(), body.to_string())
@@ -343,4 +394,51 @@ fn nodeのサーバはページをviewとして出す() {
     let (_tmp, dir) = generate("jsui");
     ui_contract(&dir, "javascript", "node", &["pension_premium_mcp.mjs"]);
     ui_contract(&dir, "typescript", "node", &["--no-warnings", "pension_premium_mcp.ts"]);
+}
+
+/// A server that wrote more on stderr than a pipe holds — the traceback of a call that failed —
+/// stopped on the write while `rulec test` waited for its answer, and neither went on (§15.338).
+/// `rulec test` reads what the server writes on stderr as it comes: the server here says a long
+/// traceback as it starts and ends, over stdio and over HTTP, and the run ends with the failure,
+/// which shows what the server wrote, in the language of the run. The English rule, and its
+/// Japanese version.
+#[test]
+fn rulec_test_reads_what_a_server_writes_on_stderr_as_it_comes() {
+    if !ready(Need::Python, || have("python3"), "python3 is not here; the server is not run") {
+        return;
+    }
+    for (rule, alias, lang, said) in [
+        ("tests/corpus/pension_insurance_premium.rule", "pension_insurance_premium", "en", "what the server wrote on stderr:"),
+        (RULE, "pension_premium", "ja", "サーバーが stderr に書いたこと:"),
+    ] {
+        let t = TempDir::new("tool-stderr");
+        let dir = t.path().join("out");
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", lang)
+            .current_dir(root())
+            .args(["gen", rule, "--out", dir.to_str().unwrap(), "--target", "python", "--extra", "runner", "--extra", "mcp", "--extra", "vectors"])
+            .output()
+            .expect("cannot start rulec");
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        // Some 1.5 MB on stderr, where a pipe holds 64 KiB, before the server ends unanswered.
+        std::fs::write(
+            dir.join("python").join(format!("{alias}_mcp.py")),
+            "import sys\nsys.stderr.write('Traceback (most recent call last): the call failed\\n' * 30000)\nsys.exit(1)\n",
+        )
+        .unwrap();
+        let mut c = Command::new(env!("CARGO_BIN_EXE_rulec"));
+        c.env("RULEC_LANG", lang).env("TMPDIR", ritsu_testkit::tmp::tmpdir_in(&dir)).args(["test", dir.to_str().unwrap(), "--format", "json"]);
+        let ran = ritsu_testkit::run::finish(&mut c, Duration::from_secs(300), "rulec test");
+        let j = rulec::json::parse(ran.stdout.lines().next().unwrap_or_default()).unwrap_or_else(|e| panic!("{e}: {}{}", ran.stdout, ran.stderr));
+        let results = j.get("results").and_then(|v| v.as_arr()).unwrap_or_default();
+        let via = |v: &str| results.iter().find(|r| r.get("lang").and_then(|x| x.as_str()) == Some("python") && r.get("via").and_then(|x| x.as_str()) == Some(v)).unwrap_or_else(|| panic!("[{lang}] no python {v}: {j:?}"));
+        for v in ["mcp", "mcp-http"] {
+            let r = via(v);
+            assert_eq!(r.get("ok").and_then(|x| x.as_bool()), Some(false), "[{lang}] {v}: {}", r.get("error").and_then(|x| x.as_str()).unwrap_or_default().chars().take(400).collect::<String>());
+            let error = r.get("error").and_then(|x| x.as_str()).unwrap_or_default();
+            assert!(error.contains(said) && error.contains("Traceback (most recent call last): the call failed"), "[{lang}] {v}: {}", error.chars().take(400).collect::<String>());
+        }
+        // The runner beside it answers as ever.
+        assert_eq!(via("runner").get("ok").and_then(|v| v.as_bool()), Some(true), "[{lang}] {j:?}");
+    }
 }

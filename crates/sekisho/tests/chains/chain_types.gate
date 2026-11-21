@@ -1,0 +1,35 @@
+gate order_desk v1
+description "Types whose names are written wrong where they are declared: each is said once, at the action, and what follows from it is not said again"
+namespace OrderDesk
+
+enum refund_reason = damaged | late
+
+role clerk
+  description "Answers customers at the desk"
+  can refund_order
+
+# the principal named wrong where it is declared: the action still writes `User`, and the
+# permit is not said to have no principal
+principal Usr
+  description "A member of the staff"
+  roles clerk
+
+# the resource named wrong where it is declared: the action still writes `Order`, and the
+# condition that reads its attribute is not said again
+resource Ordr
+  description "An order of the shop"
+  attributes
+    amount : money[USDc]  range >=1USDc <=1000000USDc
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+  input
+    reason : refund_reason
+
+permit clerks_refund_small_orders
+  description "A clerk refunds an order of 100 dollars or less"
+  principal in clerk
+  action refund_order
+  when resource.amount <= 10000USDc

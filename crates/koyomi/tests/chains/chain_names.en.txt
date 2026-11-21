@@ -1,0 +1,4 @@
+error[E008]: chain_names.cal:8:17: The name received is not declared
+     8 | date reminder = received
+  = A date starts from the date under `inputs` or from another date declared with `date`.
+  = `received` is written on lines 12 and 20 too.

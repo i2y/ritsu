@@ -1,0 +1,39 @@
+rule toy_box v1
+description "What kind of box an order makes: two toys make a toy box, ten units a bulky one and three gifts a wrapped one. A box comes to 200 yen or more, and a line is 100 yen at most. No table reads the kind of a line: only the count of toys does"
+
+enum Kind = food | toy | book | tool
+
+# A line of the box
+elements lines
+  price : money[JPY]  range >=1JPY <=100JPY
+  qty   : number  range >=1 <=9
+  kind  : Kind
+  gift  : bool
+
+count toys over lines where kind = toy  range >=0 <=5
+count gifts over lines where gift  range >=0 <=5
+sum total over lines of price  range >=200JPY <=2_000JPY
+sum units over lines of qty  range >=0 <=100
+
+outputs
+  toy_box : bool
+  bulky   : bool
+  wrapped : bool
+
+table toy_box_of
+policy unique
+| toys | -> toy_box |
+| <2   | false      |
+| >=2  | true       |
+
+table bulky_of
+policy unique
+| units | -> bulky |
+| <10   | false    |
+| >=10  | true     |
+
+table wrapped_of
+policy unique
+| gifts | -> wrapped |
+| <3    | false      |
+| >=3   | true       |

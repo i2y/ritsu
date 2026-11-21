@@ -90,6 +90,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	enumspb "go.temporal.io/api/enums/v1"
@@ -1034,11 +1035,12 @@ func (r *runner) status(ctx context.Context, id string) (Where, error) {
 }
 
 // activitiesBy starts the other language's runner, which serves the activities; done closes its
-// input, waits for it, and reads the calls of each run.
-func activitiesBy(by []string, address string) (done func() (map[string][]any, error), stop func(), err error) {
+// input, waits for it, and reads the calls of each run. gone says when it ended before done: the
+// activities are its alone, and the runs would wait without end.
+func activitiesBy(by []string, address string) (done func() (map[string][]any, error), stop func(), gone <-chan error, err error) {
 	dir, err := os.MkdirTemp("", "dandori-steps-")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	stepsFile := filepath.Join(dir, "steps.json")
 	cmd := exec.Command(by[0], append(slices.Clone(by[1:]), stepsFile, address)...)
@@ -1049,21 +1051,37 @@ func activitiesBy(by []string, address string) (done func() (map[string][]any, e
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		_ = os.RemoveAll(dir)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		_ = os.RemoveAll(dir)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err := cmd.Start(); err != nil {
 		_ = os.RemoveAll(dir)
-		return nil, nil, fmt.Errorf("starting the activities' runner: %w", err)
+		return nil, nil, nil, fmt.Errorf("starting the activities' runner: %w", err)
 	}
+	// the runner is waited for once, here, when its output has ended
+	drained := make(chan struct{})
+	waited := make(chan struct{})
+	var waitErr error
+	var closing atomic.Bool
+	ended := make(chan error, 1)
+	go func() {
+		<-drained
+		waitErr = cmd.Wait()
+		close(waited)
+		if !closing.Load() {
+			ended <- fmt.Errorf("the activities' runner exited before the runs were over (%v)", cmd.ProcessState)
+		}
+	}()
 	stop = func() {
-		if cmd.ProcessState == nil {
+		select {
+		case <-waited:
+		default:
 			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
+			<-waited
 		}
 		_ = os.RemoveAll(dir)
 	}
@@ -1075,21 +1093,23 @@ func activitiesBy(by []string, address string) (done func() (map[string][]any, e
 			break
 		}
 		if err != nil {
+			close(drained)
 			stop()
-			return nil, nil, errors.New("the activities' runner ended before it served")
+			return nil, nil, nil, errors.New("the activities' runner ended before it served")
 		}
 	}
-	// the rest of its output is read to its end, so that it never waits to write
-	drained := make(chan struct{})
+	// the rest of its output goes on to this runner's standard error, read to its end, so that it
+	// never waits to write
 	go func() {
-		_, _ = io.Copy(io.Discard, lines)
+		_, _ = io.Copy(os.Stderr, lines)
 		close(drained)
 	}()
 	done = func() (map[string][]any, error) {
+		closing.Store(true)
 		_ = stdin.Close()
-		<-drained
-		if err := cmd.Wait(); err != nil {
-			return nil, fmt.Errorf("the activities' runner: %w", err)
+		<-waited
+		if waitErr != nil {
+			return nil, fmt.Errorf("the activities' runner: %w", waitErr)
 		}
 		b, err := os.ReadFile(stepsFile)
 		if err != nil {
@@ -1101,7 +1121,7 @@ func activitiesBy(by []string, address string) (done func() (map[string][]any, e
 		}
 		return steps, nil
 	}
-	return done, stop, nil
+	return done, stop, ended, nil
 }
 
 // namedHistory is a history with the file it is written to.
@@ -1111,7 +1131,8 @@ type namedHistory struct {
 }
 
 func runAll(flow Flow, sp spec, s Settings, historiesDir string) ([]any, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	server, err := startServer(serverOptions{timerShift: true, searchAttributes: true})
 	if err != nil {
 		return nil, err
@@ -1128,15 +1149,18 @@ func runAll(flow Flow, sp spec, s Settings, historiesDir string) ([]any, error) 
 	childTypes, childQueues := sp.childTypes()
 	queues := queuesOf(flow.TaskQueue, sp.Queues)
 	var served func() (map[string][]any, error)
+	// a nil channel: nothing serves the activities elsewhere
+	var gone <-chan error
 	if by != nil {
 		// the other language's runner serves the activities; a worker here serves the workflow and
 		// the child workflows' stand-ins only
-		done, stop, err := activitiesBy(by, server.FrontendHostPort())
+		done, stop, ended, err := activitiesBy(by, server.FrontendHostPort())
 		if err != nil {
 			return nil, err
 		}
 		defer stop()
 		served = done
+		gone = ended
 		queues = queuesOf(flow.TaskQueue, childQueues)
 	}
 	// every worker runs until the runs are done
@@ -1182,7 +1206,19 @@ func runAll(flow Flow, sp spec, s Settings, historiesDir string) ([]any, error) 
 			ends[i], errs[i] = r.one(ctx, sc)
 		}()
 	}
-	wg.Wait()
+	over := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(over)
+	}()
+	// with the other language's activities, the runs stop waiting when its runner ends before they are over
+	select {
+	case <-over:
+	case err := <-gone:
+		cancel()
+		<-over
+		return nil, err
+	}
 	if err := errors.Join(errs...); err != nil {
 		return nil, err
 	}

@@ -1,0 +1,19 @@
+rule count_never v1
+description "A count of the lines the table marks skip, a verdict the table never writes (fictional)"
+
+enum verdict_kind = take | hold | skip
+
+elements lines
+  amt : money[JPY]  range >=0JPY <=1000JPY
+
+outputs
+  skips : number  round down(1)
+
+# Each line is taken or held, never skipped
+table decide
+policy unique
+| amt      | -> verdict : verdict_kind |
+| >=500JPY | take                      |
+| <500JPY  | hold                      |
+
+count skips over lines where verdict = skip  range >=0 <=100

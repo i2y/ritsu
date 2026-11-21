@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+use masters m from "shared/masters_with_a_hole.ringi"
+
+form
+  account : choice from m.accounts "Account code"
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

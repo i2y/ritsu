@@ -1,0 +1,14 @@
+rule 価格が先(price_first_ja) v1
+description "価格、または価格が無いときの 0。入力を出す行が先にある"
+
+inputs
+  価格(price)             : money[円]  range >=1円 <=1000円
+  価格あり(price_given)   : bool
+
+outputs
+  計上額(counted) : money[円]  round down(1円)
+
+table 計上額
+| 価格あり | -> 計上額 |
+| true     | 価格      |
+| false    | 0円       |

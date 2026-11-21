@@ -1,0 +1,16 @@
+rule band_only v1
+description "The band of an amount, and nothing else"
+
+enum size = small | medium | large
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+outputs
+  band : size
+
+table bands
+| amount                  | -> band |
+| <=10_000JPY             | small   |
+| >10_000JPY <=100_000JPY | medium  |
+| >100_000JPY             | large   |

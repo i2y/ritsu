@@ -1,0 +1,17 @@
+rule 正方形の部屋(square_rooms_ja) v1
+description "正方形の部屋二つで、タイル一枚に紙を二枚ずつ使う。紙が 14 枚になる行があるが、整数の辺の二乗を二つ足しても 7 にはならず、検査は決められない（W128）"
+
+inputs
+  辺(side)           : number  range >=0 <=5
+  二つ目の辺(second) : number  range >=0 <=5
+
+define 枚数(sheets) : number = (辺 * 辺 + 二つ目の辺 * 二つ目の辺) * 2
+
+outputs
+  注記(note) : bool
+
+table 注記の判定(note_of)
+policy first
+| 枚数 | -> 注記 |
+| 14   | true    |
+| -    | false   |

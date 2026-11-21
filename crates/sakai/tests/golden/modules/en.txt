@@ -44,11 +44,11 @@ $ sakai check --lang en errors/unowned.ctx
 error[E103]: @lib/rules/order_total.rule:16:1: The file @lib/rules/order_total.rule refers to rulec "@lib/@base/rules/vat_rate.rule", which is outside the map's scope (apply)
     16 | apply vat = "@base/rules/vat_rate.rule" meaning:8a62fb4ec05fd289
   = The scope is the map's `covers` ("."), without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it.
-  = @lib/@base/rules/vat_rate.rule is a file of the dependency `@lib/@base`: bring the dependency's context that owns it into the map with `use context "@lib/@base/…"`, or write `"@lib/@base"` in `covers` and own the file in a context of the map.
+  = The file @lib/@base/rules/vat_rate.rule belongs to the dependency `@lib/@base`: bring the dependency's context that owns it into the map with `use context "@lib/@base/…"`, or write `"@lib/@base"` in `covers` and own the file in a context of the map.
 exit 1
 
 $ sakai check --lang en errors/unowned.ctx --format json
-{"root":".","file":"errors/unowned.ctx","ok":false,"summary":null,"diagnostics":[{"code":"E103","severity":"error","file":"@lib/rules/order_total.rule","line":16,"col":1,"message":"The file @lib/rules/order_total.rule refers to rulec \"@lib/@base/rules/vat_rate.rule\", which is outside the map's scope (apply)","notes":["The scope is the map's `covers` (\".\"), without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it.","@lib/@base/rules/vat_rate.rule is a file of the dependency `@lib/@base`: bring the dependency's context that owns it into the map with `use context \"@lib/@base/…\"`, or write `\"@lib/@base\"` in `covers` and own the file in a context of the map."],"references":[],"fix":null}]}
+{"root":".","file":"errors/unowned.ctx","ok":false,"summary":null,"diagnostics":[{"code":"E103","severity":"error","file":"@lib/rules/order_total.rule","line":16,"col":1,"message":"The file @lib/rules/order_total.rule refers to rulec \"@lib/@base/rules/vat_rate.rule\", which is outside the map's scope (apply)","notes":["The scope is the map's `covers` (\".\"), without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it.","The file @lib/@base/rules/vat_rate.rule belongs to the dependency `@lib/@base`: bring the dependency's context that owns it into the map with `use context \"@lib/@base/…\"`, or write `\"@lib/@base\"` in `covers` and own the file in a context of the map."],"references":[],"fix":null}]}
 exit 1
 
 # in en/app/contexts

@@ -78,11 +78,13 @@ facts:
   allow_lost = 0
   policies_moved = 2
   book_changes = 0
+  request_changes = 0
   interface_changes = 0
   interface_breaks = 0
   undecided = 0
   opaque_specs = 0
   requirements_moved = 2
+  requirements_read = 0
   requirements_unknown = 0
   claims_touched = 0
   unclaimed_lines = 0

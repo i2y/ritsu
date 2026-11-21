@@ -53,6 +53,12 @@ pub fn over<R>(input: &str, days: Vec<i64>, f: impl FnOnce() -> R) -> R {
     f()
 }
 
+/// Whether `checked_over` holds a date input to some days on this thread: a check made then is
+/// another question than the rule's own check (ritsu's DESIGN 4.15).
+pub fn holding_over() -> bool {
+    OVER.with(|c| c.borrow().is_some())
+}
+
 /// The days `checked_over` holds `input` to, if it holds this one.
 pub fn held_over(input: &str) -> Option<Vec<i64>> {
     OVER.with(|c| c.borrow().as_ref().filter(|(n, _)| n == input).map(|(_, d)| d.clone()))

@@ -1,0 +1,13 @@
+diff --git a/rules/counter.ja.rule b/rules/counter.ja.rule
+index 6a8a131..78cb9c4 100644
+--- a/rules/counter.ja.rule
++++ b/rules/counter.ja.rule
+@@ -2,7 +2,7 @@ rule 点数の確認(refund_counter) v1
+ description "窓口が返品の点数を数えたか。yuen affected の試験のために書いた。窓口のコードが、返金の区分の点数をここから取る"
+ 
+ inputs
+-  点数(items) : number  range >=1 <=60
++  点数(items) : number  range >=1 <=50
+ 
+ outputs
+   数えた(counted) : bool

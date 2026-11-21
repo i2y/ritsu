@@ -1,0 +1,23 @@
+rule lifted_in_order v1
+description "A credit read through an apply, whose rows for silver and gold come before the rows no lifted tier takes (fictional)"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# The tier a member is lifted to: silver or gold, never basic or platinum
+table lift_by_member
+policy unique
+| member | -> lift : tier |
+| basic  | silver         |
+| silver | gold           |
+| >=gold | gold           |
+
+# The callee's rows for basic and platinum come after the two that take every lifted tier
+apply lifted = "credit_in_order.rule" meaning:9c103f401db5b9c0
+  tier = lift
+  credit -> credit

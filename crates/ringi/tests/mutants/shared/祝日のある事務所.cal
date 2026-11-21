@@ -1,0 +1,10 @@
+calendar finite v1
+description "土曜と日曜と、2026 年と 2027 年の祝日が休み（架空）"
+offset +09:00
+
+source holidays = file "祝日.csv" sha256:5927e83156e00064
+  format csv
+  covers 2026-01-01..2027-12-31
+
+closed weekly sat, sun
+closed holidays

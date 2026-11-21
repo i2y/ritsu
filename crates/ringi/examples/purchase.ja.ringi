@@ -1,0 +1,193 @@
+request 購買稟議(purchase_ja) v1 "購買の稟議"
+description "会社のお金を使う購買の稟議。会社の決裁権限表（架空）が種類と金額に応じて定める人が審査と決裁をし、承認されたら発注する"
+owner general_affairs
+
+use organization 組織(org) from "shared/company.ringi"
+use masters マスタ(m) from "shared/masters.ringi"
+use calendar 本社(office) from "shared/office.cal"
+use rule 権限表(authority) from "shared/authority.rule"
+use book 予算(budget) from "shared/budget.book"
+use gate "shared/company.gate"
+use flow 発注(order) from "shared/order.flow"
+
+form
+  種類(kind)     : choice from 権限表.kind "種類"
+    goods    "物品・サービス"
+    capex    "設備投資"
+    software "ソフトウェア"
+  取引先(vendor) : choice from マスタ.vendors "取引先"
+  明細(lines)    : rows "明細"  count >=1 <=30
+    品目(item)      : text "品目"  count <=100
+    数量(quantity)  : number "数量"  range >=1 <=10_000
+    単価(price)     : money[円] "単価"  range >=1円 <=50_000_000円
+    小計(subtotal)  : money[円] "小計" = 数量 * 単価  range >=1円 <=100_000_000円
+  合計(amount)       : money[円] "合計" = sum(明細.小計)  range >=1円 <=100_000_000円
+  用途(summary)      : long text "何に使うか"  count >=1 <=1000
+  見積書(quote)      : attachment "見積書"
+  前払い(advance)    : rate[step 5%] "前払いの割合"  range >=0% <=100%
+  相見積もり(others) : rows "相見積もり"  count >=0 <=3
+    会社(company)    : text "会社"  count >=1 <=100
+    金額(bid)        : money[円] "見積もりの金額"  range >=1円 <=100_000_000円
+  技術の確認者(reviewer) : person "技術の確認者"  optional
+
+route
+  # 社長には上長がいないので、社長の申請はこのステップを飛ばす。
+  一次(first)        上長
+    when empty escalate, then skip
+  技術(technical)    確認者                when 技術の確認者 is not none
+  # 財務は、職務権限表が回す購買と、30% を超えて前払いする購買を確かめる。
+  財務(finance)      財務部                when 権限表.finance or 前払い > 30%
+  取締役会(board)    at least 60% of 取締役 when 権限表.board
+    due in 10 business days at end of day
+    when late expire
+  # 社長は職務権限表のいちばん上で、社長自身の購買を決裁する上の人はいないので、取締役会へ回し、
+  # 取締役のだれかが決裁する。
+  決裁(decide)       権限表.decider
+    when empty escalate, then 取締役
+  回覧(inform)       circulate to 総務部
+
+who
+  上長(manager)               = manager of requester
+  確認者(reviewer)            = chosen by requester in 技術の確認者
+  財務部(finance)             = team finance
+  取締役(board)               = team board
+  総務部(general_affairs)     = team general_affairs
+  部長(dept_head)             = head of requester.department
+  本部長(division_head)       = nearest division_head above requester
+  社長(president)             = nearest president above requester
+
+every stage
+  due in 5 business days at end of day
+  remind after 3 business days at 09:00
+  when late escalate, then expire
+  when empty escalate
+
+ticket
+  self approval     not allowed
+  # 上長が決裁もするときなど、同じ人が二つ以上のステップに答えるなら、最後のステップで一度だけ答える。
+  # 決裁は、財務と取締役会が答えたあとになる。
+  same approver     approves once, at the last stage
+  send back         to any earlier stage, at most 3 times
+  resubmit          within 10 business days
+  withdraw          until 決裁
+  retract approval until the next stage answers
+  approvers edit    用途
+  # 社長、本部長、取締役は部の上にいるので、その人の申請は部の予算を押さえない。
+  on submitted      hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: requester.department, amount: 合計)  when requester.department is not none
+  on approved       post 予算.reserve(request: ticket.id, attempt: ticket.attempt)
+  on approved       launch 発注(request_id: ticket.id, vendor: 取引先, amount: 合計, summary: 用途)
+  on sent back, rejected, withdrawn, expired  void 予算.reserve(request: ticket.id, attempt: ticket.attempt)
+
+claims
+  大きな購買は取締役会で決議する場合がある : possible 取締役会 is at least 60% of 取締役
+  期限内に終わる                         : every ticket ends within 246 business days
+
+scenario 取締役会で決議する購買
+  requester e1201
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 10_000_000円)
+  form 種類 = capex, 取引先 = "V-0031", 明細 = [{品目: "プレスのライン", 数量: 1, 単価: 8_000_000円}], 用途 = "工場の二本目のプレスのライン", 見積書 = "quote.pdf", 前払い = 20%, 相見積もり = [{会社: "サンプルプレス（架空）", 金額: 8_600_000円}]
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 一次     | in progress |
+| 2026-11-16 14:00 | approve | e1101 | 財務     | in progress |
+| 2026-11-17 10:00 | approve | e4001 | 取締役会 | in progress |
+| 2026-11-18 10:00 | approve | e0201 | 取締役会 | in progress |
+| 2026-11-18 11:00 | approve | e0202 | 取締役会 | in progress |
+| 2026-11-18 15:00 | approve | e0203 | 決裁     | in progress |
+| 2026-11-19 10:00 | approve | e0001 |          | approved    |
+
+# 小さな購買で、半分を前払いする。職務権限表は財務へ回さないが、前払いが財務へ回す
+scenario 半分を前払いする購買
+  requester e1201
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 10_000_000円)
+  form 種類 = goods, 取引先 = "V-0012", 明細 = [{品目: "展示会のブース", 数量: 1, 単価: 400_000円}], 用途 = "春の展示会のブース", 見積書 = "quote.pdf", 前払い = 50%, 相見積もり = []
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 一次     | in progress |
+| 2026-11-16 11:00 | approve | e1101 | 財務     | in progress |
+| 2026-11-16 14:00 | approve | e4001 | 決裁     | in progress |
+| 2026-11-17 10:00 | approve | e3101 |          | approved    |
+
+# 本部長が申請者の上長で、決裁もする。財務のあとの決裁で、一度だけ答える
+scenario 上長が財務のあとに決裁する
+  requester e3101
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 10_000_000円)
+  form 種類 = goods, 取引先 = "V-0012", 明細 = [{品目: "デモ機", 数量: 4, 単価: 500_000円}], 用途 = "営業所に置くデモ機", 見積書 = "quote.pdf", 前払い = 0%, 相見積もり = []
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e3101 | 財務     | in progress |
+| 2026-11-16 14:00 | approve | e4001 | 決裁     | in progress |
+| 2026-11-17 10:00 | approve | e0101 |          | approved    |
+
+# 決裁が期限を過ぎて社長へ回り、社長が承認する。決裁を待っていた一次はそのとき始まり、
+# 本部長はそこで答える
+scenario 決裁が上へ回り上長はあとで答える
+  requester e3101
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 10_000_000円)
+  form 種類 = goods, 取引先 = "V-0012", 明細 = [{品目: "デモ機", 数量: 4, 単価: 500_000円}], 用途 = "営業所に置くデモ機", 見積書 = "quote.pdf", 前払い = 0%, 相見積もり = []
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e3101 | 財務     | in progress |
+| 2026-11-16 14:00 | approve | e4001 | 決裁     | in progress |
+| 2026-11-19 09:00 | remind  |       | 決裁     | in progress |
+| 2026-11-24 00:00 | late    |       | 決裁     | in progress |
+| 2026-11-24 10:00 | approve | e0001 | 一次     | in progress |
+| 2026-11-24 15:00 | approve | e0101 |          | approved    |
+
+# 上長のステップが待っているあいだに、組織の版が替わる。法務部長は申請者の上長で、部の長でもあったが、
+# 2027-04-01 からはいない。決裁が始まるときに、待っていた一次を決め直す。どちらも管理本部長へ回り、
+# 管理本部長が一度だけ答える
+scenario 上長が待つあいだに組織が変わる
+  requester e9002
+  given 予算.allocate(dept: "legal", period: "2026", amount: 3_000_000円)
+  form 種類 = goods, 取引先 = "V-0012", 明細 = [{品目: "書類のスキャナ", 数量: 1, 単価: 300_000円}], 用途 = "契約書の保管に使うスキャナ", 見積書 = "quote.pdf", 前払い = 0%, 相見積もり = [], 技術の確認者 = person "e7201"
+| at               | event   | by    | -> stage | status      |
+| 2027-03-30 10:00 | submit  | e9002 | 技術     | in progress |
+| 2027-04-01 11:00 | approve | e7201 | 決裁     | in progress |
+| 2027-04-01 15:00 | approve | e0102 |          | approved    |
+
+# 取締役会が購買を否決する。取締役の一人が承認し、三人がそれぞれ理由を書いて却下する。三人目の却下で、
+# 承認が要る三人に届かなくなるので、購買はそこで却下になり、押さえた予算は戻る
+scenario 取締役会が否決する購買
+  requester e1201
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 10_000_000円)
+  form 種類 = capex, 取引先 = "V-0031", 明細 = [{品目: "梱包のラインのロボットアーム", 数量: 2, 単価: 3_500_000円}], 用途 = "梱包のラインに置く 2 台のロボットアーム", 見積書 = "quote.pdf", 前払い = 0%, 相見積もり = []
+| at               | event   | by    | comment                                      | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 |                                              | 一次     | in progress |
+| 2026-11-16 14:00 | approve | e1101 |                                              | 財務     | in progress |
+| 2026-11-17 10:00 | approve | e4001 |                                              | 取締役会 | in progress |
+| 2026-11-18 10:00 | approve | e0201 |                                              | 取締役会 | in progress |
+| 2026-11-18 11:00 | reject  | e0202 | "梱包のラインは、能力の半分しか使っていない" | 取締役会 | in progress |
+| 2026-11-18 13:00 | reject  | e0203 | "ラインに 2 台は多い"                        | 取締役会 | in progress |
+| 2026-11-18 15:00 | reject  | e0204 | "1 台の見積もりで、改めて申請してほしい"     |          | rejected    |
+
+labels en
+  request          "Purchase ringi"
+  種類             "Kind"
+  種類.goods       "Goods and services"
+  種類.capex       "Capital expenditure"
+  種類.software    "Software"
+  取引先           "Vendor"
+  明細             "Lines"
+  明細.品目        "Item"
+  明細.数量        "Quantity"
+  明細.単価        "Unit price"
+  明細.小計        "Subtotal"
+  合計             "Amount"
+  用途             "What it is for"
+  見積書           "Quotation"
+  前払い           "Paid in advance"
+  相見積もり       "Other quotations"
+  相見積もり.会社  "Company"
+  相見積もり.金額  "Amount quoted"
+  技術の確認者     "Technical reviewer"
+  stage 一次       "First approval"
+  stage 技術       "Technical review"
+  stage 財務       "Finance"
+  stage 取締役会   "Board"
+  stage 決裁       "Decision"
+  stage 回覧       "Circulation"
+  who 上長         "Manager"
+  who 確認者       "Reviewer"
+  who 財務部       "Finance"
+  who 取締役       "Board"
+  who 総務部       "General affairs"
+  who 部長         "Head of the department"
+  who 本部長       "Head of the division"
+  who 社長         "President"

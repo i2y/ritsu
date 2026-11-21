@@ -1,0 +1,38 @@
+2026-11-16 10:00  submit                            by e1201  -> manager (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve                           by e1101  -> summary (flow summarize), due 2026-11-19 end of day; ask flow summarize
+2026-11-16 11:05  note ready                                  -> intake (one of e9001, e9002, e9003), due 2026-11-19 end of day
+2026-11-16 14:00  edit (reviewer = person "e9003")  by e9002  -> intake (one of e9001, e9002, e9003), due 2026-11-19 end of day
+2026-11-16 14:05  approve                           by e9002  -> review (e9003), due 2026-11-19 end of day
+2026-11-17 10:00  pause                             by e9003  -> paused at review (e9003), until 2026-12-01 end of day
+2026-11-18 10:00  resume                            by e9003  -> review (e9003), due 2026-11-20 end of day
+2026-11-18 15:00  approve                           by e9003  -> second (2 of e9001, e9002, e9003), due 2026-11-23 end of day
+2026-11-19 10:00  approve                           by e9001  -> second (one of e9002, e9003), due 2026-11-23 end of day
+2026-11-19 11:00  approve                           by e9002  -> counsel (e9001), due 2026-11-24 end of day
+2026-11-20 10:00  approve                           by e9001  -> approved; finance circulated to e4001
+scenario `a_large_license`: as written (11 rows)
+
+2026-11-16 10:00  submit         by e1201  -> manager (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve        by e1101  -> summary (flow summarize), due 2026-11-19 end of day; ask flow summarize
+2026-11-16 11:05  note ready               -> intake (one of e9001, e9002, e9003), due 2026-11-19 end of day
+2026-11-16 14:00  send back      by e9002  -> with requester, resubmit by 2026-11-30 end of day; comment "Attach the draft the counterparty sent: we check what both sign"
+2026-12-01 00:00  resubmit late            -> expired; expired (resubmit late)
+scenario `a_draft_that_does_not_come`: as written (5 rows)
+
+2026-11-16 10:00  submit                            by e1201  -> manager (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve                           by e1101  -> summary (flow summarize), due 2026-11-19 end of day; ask flow summarize
+2026-11-16 11:05  note ready                                  -> intake (one of e9001, e9002, e9003), due 2026-11-19 end of day
+2026-11-16 14:00  edit (reviewer = person "e9003")  by e9002  -> intake (one of e9001, e9002, e9003), due 2026-11-19 end of day
+2026-11-16 14:05  approve                           by e9002  -> review (e9003), due 2026-11-19 end of day
+2026-11-17 10:00  approve                           by e9003  -> approved
+scenario `a_non_disclosure_agreement`: as written (6 rows)
+
+2027-04-12 10:00  submit                            by e9003  -> manager (e0102), due 2027-04-15 end of day
+2027-04-12 11:00  approve                           by e0102  -> summary (flow summarize), due 2027-04-15 end of day; ask flow summarize
+2027-04-12 11:05  note ready                                  -> intake (e9002), due 2027-04-15 end of day
+2027-04-12 14:00  edit (reviewer = person "e9002")  by e9002  -> intake (e9002), due 2027-04-15 end of day
+2027-04-12 14:05  approve                           by e9002  -> review (e9002), due 2027-04-15 end of day
+2027-04-13 10:00  approve                           by e9002  -> second (nobody, until an administrator adds an approver), due 2027-04-16 end of day; second has nobody (1 of legal cannot give the 2 approvals the stage needs)
+2027-04-13 11:00  add approver e0102                          -> second (2 of e9002, e0102), due 2027-04-16 end of day
+2027-04-13 15:00  approve                           by e9002  -> second (e0102), due 2027-04-16 end of day
+2027-04-14 10:00  approve                           by e0102  -> approved
+scenario `a_lawyer_after_the_team_shrinks`: as written (9 rows)

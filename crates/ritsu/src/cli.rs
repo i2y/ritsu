@@ -1,8 +1,8 @@
 //! The commands of `ritsu` and their flags, in one table (DESIGN 8.1; ritsu-base's `cli`, as every
-//! language draws its `--help` and reads its command line). The nine languages are in the table
+//! language draws its `--help` and reads its command line). The ten languages are in the table
 //! for `ritsu --help` only: what follows `ritsu <language>` is the language's own command line.
 
-use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
+use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag, made_lang_flag};
 use ritsu_base::text::Text;
 use ritsu_base::tr;
 
@@ -12,7 +12,7 @@ pub fn global_flags() -> Vec<Flag> {
 
 /// The languages, in the order `ritsu --help` lists them, each with what `ritsu <language>` reads
 /// of the others.
-pub const LANGUAGES: [&str; 9] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname"];
+pub const LANGUAGES: [&str; 10] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname", "ringi"];
 
 /// What kind of value a fact of `ritsu impact` is, and so what type a rule takes it as.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,7 +24,7 @@ pub enum FactKind {
 }
 
 /// The facts of `ritsu impact`, by which the inputs of a route rule are named.
-pub const FACTS: [(&str, FactKind); 26] = [
+pub const FACTS: [(&str, FactKind); 28] = [
     ("spec_files", FactKind::Count),
     ("generated_files", FactKind::Count),
     ("code_files", FactKind::Count),
@@ -39,11 +39,13 @@ pub const FACTS: [(&str, FactKind); 26] = [
     ("allow_lost", FactKind::Count),
     ("policies_moved", FactKind::Count),
     ("book_changes", FactKind::Count),
+    ("request_changes", FactKind::Count),
     ("interface_changes", FactKind::Count),
     ("interface_breaks", FactKind::Count),
     ("undecided", FactKind::Count),
     ("opaque_specs", FactKind::Count),
     ("requirements_moved", FactKind::Count),
+    ("requirements_read", FactKind::Count),
     ("requirements_unknown", FactKind::Count),
     ("claims_touched", FactKind::Count),
     ("unclaimed_lines", FactKind::Count),
@@ -80,9 +82,13 @@ fn language(name: &'static str) -> Cmd {
             "sekisho のコマンド（だれが何をしてよいか）。ゲートが条件に使う規則、日付のファイル、カレンダーと、ワークフローのフローを、同じプロセスの中で読む",
             "sekisho's commands (who may do what), reading in the same process the rules, dates files and calendars a gate takes as conditions, and the flows of its workflows"
         ),
-        _ => tr!(
+        "kaname" => tr!(
             "kaname のコマンド（Functional Core を書く汎用の言語）。モジュールが呼ぶ規則、日付のファイル、帳簿を、同じプロセスの中で読む",
             "kaname's commands (a general-purpose language for a functional core), reading in the same process the rules, dates files and books a module calls"
+        ),
+        _ => tr!(
+            "ringi のコマンド（申請と承認）。申請の種類が読む組織、マスタ、規則、カレンダー、帳簿、ワークフロー、ゲートと、申請の種類を下ろした規則、日付のファイル、モジュールを、同じプロセスの中で読む",
+            "ringi's commands (applications and approvals), reading in the same process the organization, the masters, the rules, calendars, books, workflows and gates a request type reads, and the rules, dates files and modules it is lowered to"
         ),
     };
     Cmd {
@@ -145,8 +151,14 @@ fn run() -> Cmd {
             flag("--format", Some("json"), tr!("一つの JSON で出す", "print one JSON object")).choices(&["json"]),
         ],
         exits: vec![
-            (0, tr!("最後まで流れた（成功、失敗、キャンセルのどれで終わっても）", "the run came to its end (it succeeded, failed or was cancelled)")),
-            (1, tr!("フローにエラーがある、モジュールの木にエラーがある、または流れが途中で止まった（シナリオに結果が足りないなど）", "the flow has errors, the tree of modules has an error, or the run could not go on (the scenario ran out of answers, say)")),
+            (0, tr!("最後まで流れ（成功、失敗、キャンセルのどれで終わっても）、シナリオの結果を全部使った", "the run came to its end (it succeeded, failed or was cancelled) and took every answer of the scenario")),
+            (
+                1,
+                tr!(
+                    "フローにエラーがある（dandori の検査か、規則・日付・帳簿を呼ぶ所の言語をまたぐ検査。フローは流さない）、モジュールの木にエラーがある、流れが途中で止まった（シナリオに結果が足りないなど）、またはシナリオの結果を使い残した（流れは最後まで見せる）",
+                    "the flow has errors (from dandori's check, or from the check across the languages at its calls of rules, dates and books; the flow is not run), the tree of modules has an error, the run could not go on (the scenario ran out of answers, say), or the run did not take every answer of the scenario (the run is shown to its end)"
+                ),
+            ),
             (2, tr!("引数の誤り、読めないファイル、流せないシナリオ、取り出していない依存、新しい ritsu が要るモジュール", "bad arguments, a file that cannot be read, a scenario that cannot be run, a dependency not fetched, or a module that needs a newer ritsu")),
         ],
         examples: vec!["ritsu run invoice.flow --scenario scenarios/paid.json", "ritsu run invoice.flow --scenario scenarios/paid.json --target temporal-typescript --format json"],
@@ -166,8 +178,8 @@ pub fn commands() -> Vec<Cmd> {
         params: vec![(
             "<path>...",
             tr!(
-                "ファイルかディレクトリ。無ければ今いるディレクトリ。ディレクトリは、下の .rule、.flow、.cal、.book、.geas、.req、.ctx、.gate、.kn、.proto を全部",
-                "files or directories; else the directory you are in. A directory stands for every .rule, .flow, .cal, .book, .geas, .req, .ctx, .gate, .kn and .proto under it"
+                "ファイルかディレクトリ。無ければ今いるディレクトリ。ディレクトリは、下の .rule、.flow、.cal、.book、.geas、.req、.ctx、.gate、.kn、.ringi、.proto を全部",
+                "files or directories; else the directory you are in. A directory stands for every .rule, .flow, .cal, .book, .geas, .req, .ctx, .gate, .kn, .ringi and .proto under it"
             ),
         )],
         flags: vec![
@@ -205,6 +217,14 @@ pub fn commands() -> Vec<Cmd> {
                     "check the proofs of kaname's properties (<the module's alias>.lean beside the .kn) with Lean: a property whose proof Lean takes is shown, and one whose proof it does not take is E604. Needs lake"
                 ),
             ),
+            flag(
+                "--through",
+                Some("<date>"),
+                tr!(
+                    "ringi の申請の種類のどれもが、その日（2028-03-31 の形）まで使えることを確かめる。マスタの行かカレンダーのデータがその日の前に終われば、E107 か E404",
+                    "hold every request of ringi's to being usable through that day (a date such as 2028-03-31): a master whose rows or a calendar whose data end before it is E107 or E404"
+                ),
+            ),
         ],
         exits: vec![
             (0, tr!("エラーなし（警告はありうる）", "no errors (there may be warnings)")),
@@ -232,8 +252,8 @@ pub fn commands() -> Vec<Cmd> {
         params: vec![(
             "<path>...",
             tr!(
-                "ファイルかディレクトリ。無ければ今いるディレクトリ。下の .rule、.cal、.book、.flow、.kn、.gate がパッケージに入る",
-                "files or directories; else the directory you are in. The .rule, .cal, .book, .flow, .kn and .gate files under them go into the package"
+                "ファイルかディレクトリ。無ければ今いるディレクトリ。下の .rule、.cal、.book、.flow、.kn、.gate がパッケージに入る。下の .ringi の申請の種類は、下ろした規則と期日、チケットの機械につなぐ kaname のモジュール、機械のモジュール `ticket` が入る（まだ下ろせない物を持つ申請の種類は、入らないことを警告で言う）",
+                "files or directories; else the directory you are in. The .rule, .cal, .book, .flow, .kn and .gate files under them go into the package; of a request of a .ringi under them, the rules and the dates it is lowered to, the module of kaname that joins it to the machine of its tickets and the machine, the module `ticket` (a warning names a request with what is not lowered yet, and leaves it out)"
             ),
         )],
         flags: vec![
@@ -241,13 +261,13 @@ pub fn commands() -> Vec<Cmd> {
                 "--target",
                 Some("<target>"),
                 tr!(
-                    "書くもの（書く順はフラグの順でなく typescript、python、go、rust、cedar、lean）。言語はそのパッケージ、cedar はゲートの Cedar、lean は kaname のモジュールの Lean。無ければ ritsu.mod の target の行を読み、それも無ければ何も書かずに 2 で終わる",
-                    "a target to write (written in the order typescript, python, go, rust, cedar, lean whatever the order of the flags): a language its package, cedar the gates' Cedar, lean the Lean of kaname's modules. Without it, the target line of ritsu.mod; without that too, nothing is written and the exit is 2"
+                    "書くもの（書く順はフラグの順でなく typescript、python、go、rust、cedar、lean、requests）。言語はそのパッケージ、cedar はゲートの Cedar、lean は kaname のモジュールの Lean、requests は言語に依らない申請の種類（説明、サーバーの API、エージェントの道具、組織のデータの形、ベクタ）。無ければ ritsu.mod の target の行を読み、それも無ければ何も書かずに 2 で終わる",
+                    "a target to write (written in the order typescript, python, go, rust, cedar, lean, requests whatever the order of the flags): a language its package, cedar the gates' Cedar, lean the Lean of kaname's modules, requests the kinds of request apart from any language (their descriptions, the server's API, an agent's tools, the shape of the organization's data, the vectors). Without it, the target line of ritsu.mod; without that too, nothing is written and the exit is 2"
                 ),
             )
             .choices(&ritsu_base::modules::manifest::TARGET_WORDS)
             .once_each(),
-            flag("--out", Some("<dir>"), tr!("パッケージを書く先。言語ごとに <dir>/<language> に書く", "where the packages go: each in <dir>/<language>")).default("generated"),
+            flag("--out", Some("<dir>"), tr!("パッケージを書く先。言語ごとに <dir>/<language>、cedar、lean、requests は <dir>/<target> に書く", "where the packages go: each in <dir>/<language>, and cedar, lean and requests in <dir>/<target>")).default("generated"),
             flag("--check", None, tr!("書かずに、パッケージが古ければ 1 で落ちる（CI 用）", "write nothing, and exit 1 if a package is stale (for CI)")),
             flag(
                 "--format",
@@ -272,6 +292,14 @@ pub fn commands() -> Vec<Cmd> {
             flag("--name", Some("<name>"), tr!("パッケージの名前（npm のパッケージ、Python のパッケージのディレクトリ、Go の import のパスの既定、Rust のクレート）", "the package's name: the npm package's, the Python package's directory, the Go import path unless --module says one, and the Rust crate's")).default("generated"),
             flag("--module", Some("<path>"), tr!("Go のパッケージのディレクトリの import のパス", "the Go import path of the package's directory")),
             flag(
+                "--catalog",
+                Some("<url>"),
+                tr!(
+                    "--target requests で、画面のテンプレートが指す ritsu のカタログの ID。このプロジェクトのカタログを指す名前で、自分の持つ URL の形で書く。requests/a2ui/catalog.json を配る場所と同じでなくてよく、環境が変わっても同じ値を使う。一つのサーバーや画面が一緒に読むパッケージは、それぞれ別の ID にする（画面はカタログを ID で選ぶ）。ritsu.mod の catalog の行が無ければ、requests には要る",
+                    "with --target requests, the ID the screens name ritsu's catalog by: a name for this project's catalog, written as a URL you own. It need not be where requests/a2ui/catalog.json is served, and stays the same in every environment. Packages one server or one screen reads together each need an ID of their own, as the screens pick a catalog by its ID. requests needs it, unless ritsu.mod has a catalog line"
+                ),
+            ),
+            flag(
                 "--library",
                 None,
                 tr!(
@@ -289,10 +317,17 @@ pub fn commands() -> Vec<Cmd> {
             )
             .repeats(),
             root_flag(),
+            made_lang_flag("RITSU_LANG"),
         ],
         exits: vec![
             (0, tr!("書いた、または --check で古いものが無い", "written, or --check found nothing stale")),
-            (1, tr!("検査を通らないファイルがある、書く出力先が受け取れない名前がある、モジュールの木にエラーがある、または --check で古いものがある（何も書かない）", "a file does not pass its check, a target given cannot take a name of a file, the tree of modules has an error, or --check found something stale (nothing is written)")),
+            (
+                1,
+                tr!(
+                    "パッケージのファイルが言語の検査を通らない、言語をまたぐ検査かモジュールの検査がエラーを出す、パッケージのファイルからの参照が sakai の地図の境界を越える（yuen と geas のエラーでは止めない）、書く出力先が受け取れない名前がある、モジュールの木にエラーがある、または --check で古いものがある（何も書かない）",
+                    "a file of the package does not pass its language's check, the checks across the languages or of the modules find an error, a reference from a file of the package crosses a boundary of sakai's map (yuen's and geas's errors do not stop it), a target given cannot take a name of a file, the tree of modules has an error, or --check found something stale (nothing is written)"
+                ),
+            ),
             (2, tr!(
                 "引数の誤り（--target も ritsu.mod の target の行も無い、も含む）、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、走らせるときに一つでなければならない名前（ワークフローの型、Cedar の名前）を作る二つのモジュールのファイル、生成先の言語が予約している語のモジュールや依存の名前、取り出していない依存、新しい ritsu が要るモジュール、--library で、どのライブラリも持たず --embed にも無い依存か、Rust の出力先",
                 "bad arguments (neither --target nor a target line in ritsu.mod, among them), a file that cannot be read or written, two files that write one file of a package, files of two modules that make one name that must be one at run time (a workflow type, a name of Cedar's), a module or a dependency named by a word the language keeps, a dependency not fetched, a module that needs a newer ritsu, or under --library a dependency no library holds that --embed does not name, or the target rust"
@@ -310,19 +345,19 @@ pub fn commands() -> Vec<Cmd> {
         codes: vec![],
     });
     cmds.push(Cmd {
-        usage: Some("ritsu explain <CODE> | --all [--format markdown|json]"),
+        usage: Some("ritsu explain <CODE>... | --all [--format markdown|json]"),
         name: "explain",
-        args: "<CODE>",
+        args: "<CODE>... | --all",
         purpose: tr!(
             "ritsu の診断のコードを引く。いつ出るか、どう直すか、最小の再現（言語のコードは `ritsu <言語> explain`）",
-            "look one of ritsu's diagnostic codes up: when it comes, how to fix it, the smallest reproduction (a language's code: `ritsu <language> explain`)"
+            "look ritsu's diagnostic codes up: when each comes, how to fix it, the smallest reproduction (a language's code: `ritsu <language> explain`)"
         ),
-        params: vec![("<CODE>", tr!("`E101` のような ritsu のコード。`--all` なら要らない", "one of ritsu's codes, such as `E101`; not needed with `--all`"))],
+        params: vec![("<CODE>...", tr!("`E101` のような ritsu のコード。いくつでも渡せて、渡した順に出す。`--all` とは一緒に渡さない", "ritsu's codes, such as `E101`, any number, printed in the order given; not given with `--all`"))],
         flags: vec![
             flag("--all", None, tr!("全部のコードを出す", "print every code")),
             flag("--format", Some("markdown|json"), tr!("Markdown（docs/codes.md の元）か JSON で出す", "print Markdown (what docs/codes.md is made from) or JSON")).choices(&["markdown", "json"]),
         ],
-        exits: vec![(0, tr!("引けた", "found")), (2, tr!("ritsu にそのコードが無い、または引数の誤り", "ritsu has no such code, or bad arguments"))],
+        exits: vec![(0, tr!("引けた", "found")), (2, tr!("ritsu に無いコードがある、または引数の誤り", "a code ritsu does not have, or bad arguments"))],
         examples: vec!["ritsu explain E101", "ritsu explain --all --format markdown --lang ja"],
         codes: vec![],
     });
@@ -409,7 +444,7 @@ fn modules() -> Cmd {
     }
 }
 
-/// `ritsu skills` (PLAN F.3): the ten Agent Skills the binary carries, listed or written where an
+/// `ritsu skills` (PLAN F.3): the eleven Agent Skills the binary carries, listed or written where an
 /// agent reads them.
 fn skills() -> Cmd {
     Cmd {
@@ -417,13 +452,13 @@ fn skills() -> Cmd {
         name: "skills",
         args: "list | install [<name>...]",
         purpose: tr!(
-            "ritsu と九つの言語の Agent Skills（AI エージェント向けの手引き）を一覧する、またはエージェントが読む場所に書く",
-            "list the Agent Skills of ritsu and the nine languages (the guides for AI agents), or write them where an agent reads them"
+            "ritsu と十の言語の Agent Skills（AI エージェント向けの手引き）を一覧する、またはエージェントが読む場所に書く",
+            "list the Agent Skills of ritsu and the ten languages (the guides for AI agents), or write them where an agent reads them"
         ),
         params: vec![
-            ("list", tr!("十のスキルの名前と、何に使うか", "the names of the ten skills, and what each is for")),
+            ("list", tr!("十一のスキルの名前と、何に使うか", "the names of the eleven skills, and what each is for")),
             ("install", tr!("スキルを <dir>/<name>/ に書く", "write the skills as <dir>/<name>/")),
-            ("<name>...", tr!("書くスキル。無ければ十のスキルすべて", "the skills to write; else all ten")),
+            ("<name>...", tr!("書くスキル。無ければ十一のスキルすべて", "the skills to write; else all eleven")),
         ],
         flags: vec![
             flag("--dir", Some("<dir>"), tr!("スキルを書くディレクトリ（ほかのエージェントが読む場所）", "the directory to write the skills into (where another agent reads them)")).default(".claude/skills"),

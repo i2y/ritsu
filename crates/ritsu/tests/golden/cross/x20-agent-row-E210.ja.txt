@@ -1,0 +1,10 @@
+precheck.flow: 検査を通りました
+ok purchase.ringi: 申請の種類、フィールド 3 個、ステップ 2 個
+  終わらないことがあります: ステップ `decide`、`check` には期限がありません（`due in …`）。答えが来るまで待ちます
+エラー[ritsu E210]: purchase.ringi:17: `purchase` は flow `precheck` の入力 `amount` に 30_000JPY を渡すことがありますが、入力が受け取るのは money[JPY] >=1JPY <=10_000JPY です
+    17 |   small   = agent precheck, else finance
+  = `amount` は、経路の 12 行目では money[JPY] >=1JPY <=30_000JPY です。
+  = flow が受け取るのは 10_000JPY 以下です。
+  = 決め方 `small` のステップで、ringi は flow にチケットの ID（`request_id`）と、flow が入力に宣言したフォームのフィールドを渡します。
+  = 渡す値を flow が受け取る範囲に収めるか、"precheck.flow" の入力 `amount`（12 行目）を広げてください。
+ritsu check: ファイル 2 個（dandori 1、ringi 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 4 か所、決められない 0 か所

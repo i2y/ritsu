@@ -211,6 +211,21 @@ range goes on an input, an output, a field of a record, and a task's parameter o
 unit (`>=0`), as the values travel in JSON, or written with a unit, as in a rule (`>=1kg`, `<=100万円`,
 `>=41℉`), and counted in the type's unit: `>=1kg` is 1000 of `mass[g]`. A unit is written with the
 characters a rule writes one with, the signs `%`, `℃` and `℉` too, and the full-width `％` is `%`.
+The checks and the diagrams say each end with its unit, as ritsu's other checks say a number: a
+`money[JPY]` written `>=1 <=100000` is `>=1JPY <=100_000JPY`, and a `rate[step 0.1%]` written
+`<=500` is `<=50%`.
+
+A value is written with its unit the same way, where its type is known: an argument of a call
+(`pay(fee: 0.5%, weight: 1.5kg)`), a field of a record and an item of a list whose types are known, an
+output of `succeed` (`succeed total = 300JPY`), a variable whose type is known
+(`let fee: rate[step 0.1%] = 0.5%`), and the value a case's `held` gives an input of the rule
+(`held fee = 0.5%`). It is counted in the type's unit, and the code dandori writes
+passes that whole number, as it passes `fee: 5`: `0.5%` of `rate[step 0.1%]` is 5. Where no type
+says the unit (`let x = 0.5%` alone, or a `json` field), or the number does not count to a whole
+number of the unit (`0.55%` there), it is an error (E003). The other way round, a whole number
+without a unit on a rate counted in steps other than 1%, a value or an end, is a warning (W106):
+`fee: 5` is 5 steps of 0.1%, and a reader cannot tell it from 5%. A rate in steps of 1%, money and a
+quantity (`money[USDc]`, `mass[g]`) read their whole numbers as they are, and say nothing.
 
 - What comes in is checked when the workflow runs. An input, or a task's or a rule's answer, with a
   number outside its range fails the run with `Dandori.BadInput` or `Dandori.BadResponse`, on every
@@ -234,8 +249,13 @@ warning[W104]: tests/fixtures/hotel_ranges.flow:21:1: nothing says what range `e
 
 </div>
 
-A variable's range is that of every value put in it, anywhere in the flow. Since a `.flow` has no
-arithmetic, a range travels as it is, from where a value comes to where it goes. On Temporal, adding
+Where a variable is given on, its range is that of the value last put in it on the runs that
+reach that statement: two ways to the statement that put different values in it make it either,
+and a value put in it on a way that does not come there does not count
+([tests/fixtures/range_rebound.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/range_rebound.flow)).
+A variable the rounds of a loop put a value in is every value put in it, anywhere in the flow.
+Since a `.flow` has no arithmetic, a range travels as it is, from where a value comes to where it
+goes. On Temporal, adding
 a range or narrowing one changes what a running workflow does when its values fall outside, so it
 ships as a new version or through Worker Deployment Versioning.
 
@@ -266,16 +286,16 @@ flow
 
 A campaign that can be platinum, from an input without a range or from a rule's output, is E014
 ([tests/fixtures/enum_ranges.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_ranges.flow)).
-Where no range can be written, branch on the value with `match` and write out one the range lets in,
-as [tests/fixtures/enum_ranges_held.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_ranges_held.flow)
-does.
+Where no range can be written, branch on the value with `match` and give it in the arms for the
+values the range lets in, as [tests/fixtures/enum_range_arms.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_range_arms.flow)
+does: in an arm, the value is one of the arm's values until another is put in it.
 
 <div class="dd-term" markdown>
 
 ```text
 error[E014]: tests/fixtures/enum_ranges.flow:28:1: `campaign` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
     28 |   let c = tiers(member: member.tier, campaign: campaign, subtotal: subtotal)
-  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
 ```
 
 </div>

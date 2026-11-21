@@ -1,0 +1,13 @@
+organization company v1 "Company"
+description "A small company (fictional): its positions from the lowest, its kinds of team from the widest, and the folder that holds the data of each version"
+
+positions
+  staff     "Staff"
+  dept_head "Head of department"
+  president "President"
+
+team kinds
+  company    "Company"
+  department "Department"
+
+data "versions"

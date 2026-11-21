@@ -1,0 +1,37 @@
+rule purchase_route v1
+description "The order a purchase request goes through. It applies the table of authority and takes from it whether finance reviews the request; its table reads the kind, the amount and that answer together, and asks for no row the table of authority never gives"
+
+enum kind = goods | capex | software
+enum first_by = manager
+enum finance_by = finance_team
+enum decide_by = dept_head | division_head | president
+
+inputs
+  kind   : kind
+  amount : money[JPY]  range >=1JPY <=100_000_000JPY
+
+apply authority = "shared/authority.rule" meaning:19261fb92723d78d
+  kind = kind
+  amount = amount
+  finance -> authority_finance
+
+outputs
+  first   : first_by
+  finance : finance_by?
+  decide  : decide_by
+
+table route
+| kind     | amount         | authority_finance | -> first | finance      | decide        |
+| goods    | <=1_000_000JPY | false             | manager  | none         | dept_head     |
+| goods    | >1_000_000JPY  | true              | manager  | finance_team | division_head |
+| capex    | -              | true              | manager  | finance_team | president     |
+| software | <=3_000_000JPY | false             | manager  | none         | division_head |
+| software | >3_000_000JPY  | true              | manager  | finance_team | president     |
+
+examples
+| kind     | amount        | -> first | finance      | decide        |
+| goods    | 1_000_000JPY  | manager  | none         | dept_head     |
+| goods    | 1_000_001JPY  | manager  | finance_team | division_head |
+| capex    | 1JPY          | manager  | finance_team | president     |
+| software | 3_000_000JPY  | manager  | none         | division_head |
+| software | 3_000_001JPY  | manager  | finance_team | president     |

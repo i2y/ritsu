@@ -1,0 +1,5 @@
+error[E503]: example.ringi:12:3: In the organization from 2026-04-01, `counsel` names someone who is not there
+    12 |   counsel = person "e09"
+  = `counsel` names e09, who is not in the organization from 2026-04-01.
+  = The stage `decide` is `when empty escalate`, and it cannot go up from someone the organization does not have (what `then` says holds only where nobody is above).
+  = Correct the ID, or add the person (the team) to the data of the version.

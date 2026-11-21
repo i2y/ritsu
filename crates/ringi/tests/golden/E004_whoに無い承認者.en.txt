@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_whoに無い承認者.ringi:7:15: `経理部` is not declared in `who`
+     7 |   確かめ(check)  経理部
+  = The ways to choose an approver declared: `経理`

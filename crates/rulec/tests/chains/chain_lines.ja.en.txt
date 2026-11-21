@@ -1,0 +1,28 @@
+error[E058]: The `[` of a type is never closed
+  --> chain_lines.ja.rule:9
+  |
+9 |   定価(list_price) : money[USD  range >=0USD <=1000USD
+  |                           ^ no `]` closes this `[`
+  |
+ The brackets of a type close with `]` (`money[USD]`, `rate[step 1%]`). The rest of this line was read as if the type ended where the `]` belongs.
+
+error[E005]: `output` cannot appear at this position
+  --> chain_lines.ja.rule:12
+   |
+12 | output
+   | ^^^^^^
+   |
+ Did you mean `outputs`?
+ The words allowed at this position are description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never / possible
+ The line under it is not read either.
+
+error[E005]: `polcy` cannot appear at this position
+  --> chain_lines.ja.rule:17 table 上乗せ
+   |
+17 | polcy unique
+   | ^^^^^
+   |
+ Did you mean `policy`?
+ The words allowed at this position are description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never / possible
+ The 4 lines under it are not read either.
+

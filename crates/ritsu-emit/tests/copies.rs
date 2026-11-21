@@ -23,7 +23,10 @@ fn rendered() -> String {
     line("dandori", "PY_RESERVED", copies::dandori::PY_RESERVED.iter().collect());
     line("dandori", "GO_RESERVED", copies::dandori::GO_RESERVED.iter().collect());
     line("dandori", "GO_EXPORTED", copies::dandori::GO_EXPORTED.to_vec());
+    line("dandori", "TS_RESERVED", copies::dandori::TS_RESERVED.iter().collect());
     line("dandori", "TS_GLOBALS", copies::dandori::TS_GLOBALS.to_vec());
+    line("dandori", "GO_OWN", copies::dandori::GO_OWN.to_vec());
+    line("dandori", "TS_TYPES_OWN", copies::dandori::TS_TYPES_OWN.to_vec());
     line("dandori", "JSONATA_FUNCTIONS", copies::dandori::JSONATA_FUNCTIONS.to_vec());
     o
 }

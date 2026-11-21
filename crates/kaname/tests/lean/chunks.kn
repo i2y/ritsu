@@ -1,0 +1,8 @@
+module chunks v1
+description "a list's `take` and `drop` given a count that is a number written out: `List.take (Int.toNat 2)`"
+
+fn first_two(xs: list[number] count <=5) -> list[number]
+  xs.take(2)
+
+fn rest_one(xs: list[number] count <=5) -> list[number]
+  xs.drop(1)

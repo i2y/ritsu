@@ -1,0 +1,4 @@
+enums std v1
+description "An enums file named std, the name of the standard library of Rust and a name the go command keeps"
+
+enum zone = north | south

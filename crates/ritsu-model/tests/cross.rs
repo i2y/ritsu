@@ -141,7 +141,7 @@ fn x2_rulecs_answer_over_two_ranges_is_the_models() {
             for l in &ranges {
                 for r in &ranges {
                     let asked = vec![("a".to_string(), l.0, l.1), ("b".to_string(), r.0, r.1)];
-                    let got = engine.preconditions_hold(&rule, &asked, None).unwrap_or_else(|e| panic!("{e:?}"));
+                    let got = engine.preconditions_hold(&rule, &asked, None, None).unwrap_or_else(|e| panic!("{e:?}"));
                     let (_, said) = got.iter().find(|(p, _)| matches!(p, Precondition::Relation { .. })).expect("the relation is a precondition");
                     let line = json!({"corner": {"op": op, "left": [end(l.0), end(l.1)], "right": [end(r.0), end(r.1)], "scales": [a.3, b.3]}});
                     rows.push((line.to_string(), answer(said, |vs: &Values| json!([wire_int(&vs[0].1), wire_int(&vs[1].1)]))));

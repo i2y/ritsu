@@ -1,0 +1,23 @@
+rule same_rule_optional_number v1
+description "A fee a table of the same rule writes, absent for an order picked up at the shop, read on its own"
+
+enum zone = local | national | pickup
+enum band = low | high | free
+
+inputs
+  zone : zone
+
+outputs
+  x : band
+
+table fee_of
+| zone     | -> fee : money[JPY]? |
+| local    | 100JPY               |
+| national | 300JPY               |
+| pickup   | none                 |
+
+table pick
+| fee      | -> x |
+| <=100JPY | low  |
+| >=300JPY | high |
+| none     | free |

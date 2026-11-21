@@ -1,0 +1,9 @@
+// tests/spellings/protoの型の名前.flow が読むメッセージ。TypeScript と Python のコードでは、このメッセージの
+// 名前がフローのレコードと同じ `店_Item` になり、Go でも二つは一つの名前になる。
+syntax = "proto3";
+
+package shop.ja.v1;
+
+message Item {
+  string sku = 1 [json_name = "品番"];
+}

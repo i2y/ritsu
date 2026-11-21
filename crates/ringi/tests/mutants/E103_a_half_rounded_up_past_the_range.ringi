@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=3JPY
+  # half of 1 yen is 0.5 yen, which rounds up to 1 yen: the half is never under 1 yen
+  half   : money[JPY] "Half" = amount * 50%  round half_up(1JPY)  range <1JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

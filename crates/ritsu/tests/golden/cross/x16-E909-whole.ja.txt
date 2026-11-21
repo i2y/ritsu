@@ -1,0 +1,10 @@
+警告[dandori W106]: returns.flow:15:37: `fee` に書いた `5` は、0.1% の刻みの数として読みます。0.5% です
+    15 |   refund_order(orderId: order, fee: 5)
+  = 読む人に率が分かるよう、`fee: 0.5%` と書いてください。生成するコードが渡す数（5）は変わりません
+returns.flow: 検査を通りました（警告 1 件）
+refunds.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0
+エラー[ritsu E909]: returns.flow:15: タスク `refund_order` は `fee` を rate[step 0.1%] として渡しますが、refunds.gate の action `refund_order` は入力 `fee` を rate[step 1%] として読みます
+    15 |   refund_order(orderId: order, fee: 5)
+  = 二つは、同じ数を違う値として読みます。フローの 0.5% は、ゲートでは 5% です。
+  = どちらかの型を、もう一方に合わせてください。このタスクの引数 `fee` か、refunds.gate の action `refund_order` の入力 `fee` です（範囲の端を単位なしで書いていれば、それも）。
+ritsu check: ファイル 2 個（dandori 1、sekisho 1）。検査を通らないもの 1 個（エラー 1 件、警告 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所

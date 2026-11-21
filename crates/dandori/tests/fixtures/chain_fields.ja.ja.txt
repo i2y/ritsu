@@ -1,0 +1,8 @@
+エラー[E005]: tests/fixtures/chain_fields.ja.flow:4:10: 規則 `rules/無い地域.rule` を読めませんでした
+     4 | use rule 地域 from "rules/無い地域.rule"
+  = `tests/fixtures/rules/無い地域.rule` がありません
+エラー[E002]: tests/fixtures/chain_fields.ja.flow:22:12: タスクか規則 `探ス` はありません
+    22 |   let 場所 = 探ス(ID: ID)
+エラー[E002]: tests/fixtures/chain_fields.ja.flow:24:27: 変数や値 `どこにも` はありません
+    24 |   succeed 札 = 場所.区域, ほか = どこにも.区域
+  = 値は変数・そのフィールド・文字列・数・true・false のどれかです

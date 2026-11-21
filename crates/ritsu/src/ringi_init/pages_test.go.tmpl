@@ -1,0 +1,89 @@
+package {{package}}
+
+import (
+	"bytes"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+
+	"{{framework}}/devlogin"
+	"{{framework}}/servertest"
+	"{{framework}}/web"
+)
+
+// TestPages makes a purchase request on the pages, as people do in a browser with go run
+// ./cmd/server -dev-login: the requester signs in and submits the form, the manager is told and
+// approves, and the head of the department approves.
+func TestPages(t *testing.T) {
+	var log bytes.Buffer
+	dev := &devlogin.SignIn{}
+	srv := newServer(t, dev, &log)
+	h, err := web.New(srv, web.Config{Require: dev.Require, LoginURL: dev.LoginURL, SignOut: devlogin.LogoutPath, Logger: slog.New(slog.NewTextHandler(&log, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dev.Server = srv
+	dev.Mount(h)
+	signIn := func(person string) *servertest.Browser {
+		b := &servertest.Browser{Handler: h}
+		if w := b.Post(devlogin.LoginPath, url.Values{"person": {person}, "return_to": {"/pages/"}}); w.Code != http.StatusSeeOther {
+			t.Fatalf("%s signs in: %d %s", person, w.Code, w.Body)
+		}
+		return b
+	}
+	// press opens a page as a person, and presses a button of its form: the answer is 303, to the
+	// ticket's card.
+	press := func(b *servertest.Browser, page, button string, values map[string]string) string {
+		t.Helper()
+		w := b.Get(page)
+		f, err := servertest.ReadForm(w.Body.Bytes())
+		if w.Code != http.StatusOK || err != nil {
+			t.Fatalf("the page %s: %d %v", page, w.Code, err)
+		}
+		for name, v := range values {
+			if err := f.Set(name, v); err != nil {
+				t.Fatal(err)
+			}
+		}
+		w, err = b.Press(f, button)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("%s on %s: %d %.500s", button, page, w.Code, w.Body)
+		}
+		return w.Header().Get("Location")
+	}
+	card := press(signIn("s1201"), "/pages/requests/purchase/new?lang=en", "button.submit", map[string]string{
+		"f.amount": "120000", "f.purpose": "A laptop for the new member of the section",
+	})
+	id, ok := strings.CutPrefix(card, "/pages/tickets/")
+	id, _, _ = strings.Cut(id, "?")
+	if !ok {
+		t.Fatalf("the request went to %q", card)
+	}
+	// The things to do after the request: the notice to the manager, which notify.go writes to the
+	// log.
+	if _, err := srv.RunToDo(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(log.String(), "msg=notice") || !strings.Contains(log.String(), "s1101@example.com") {
+		t.Errorf("no notice to the manager in the log:\n%s", log.String())
+	}
+	// The notice says the kind by its title in the language notify.go writes in.
+	if title, in := srv.Title("purchase", 1, "{{lang}}"); in != "{{lang}}" || !strings.Contains(log.String(), title) || !strings.Contains(log.String(), "title_lang={{lang}}") {
+		t.Errorf("the notice does not say the kind by its title in {{lang}} (%q in %q):\n%s", title, in, log.String())
+	}
+	if again := press(signIn("s1101"), card, "button.approve", nil); again != card {
+		t.Errorf("the manager's approval went to %q", again)
+	}
+	if tk := ticketOf(t, srv, "s1201", id); tk.Status != "in_progress" || tk.Stage == nil || *tk.Stage != "head" {
+		t.Fatalf("after the manager: %+v", tk)
+	}
+	press(signIn("s1001"), card, "button.approve", nil)
+	if tk := ticketOf(t, srv, "s1201", id); tk.Status != "approved" {
+		t.Errorf("after the head of the department: %+v", tk)
+	}
+}

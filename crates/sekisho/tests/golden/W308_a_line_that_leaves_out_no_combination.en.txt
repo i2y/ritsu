@@ -1,0 +1,5 @@
+warning[W308]: tests/mutants/W308_a_line_that_leaves_out_no_combination.gate:28:1: The line `unless resource.status is refunded` of the permit `clerks_refund_paid_orders` leaves out no combination that can happen
+    28 |   unless resource.status is refunded
+  = It is met on the 1 combination its `principal` line and its other lines are met on.
+  = Remove the line, or correct it so that it leaves out what it is meant to.
+tests/mutants/W308_a_line_that_leaves_out_no_combination.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

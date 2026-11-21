@@ -1,0 +1,11 @@
+エラー[E002]: tests/fixtures/chain_names.flow:10:10: 型 `strng` はありません
+    10 |   kind : strng
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+  = `strng` は 13 行目にも書かれています
+エラー[E002]: tests/fixtures/chain_names.flow:21:3: タスクか規則 `notfy` はありません
+    21 |   notfy(id: id)
+  = `notfy` は 23、24 行目にも書かれています
+エラー[E002]: tests/fixtures/chain_names.flow:26:14: 変数や値 `rle` はありません
+    26 |   notify(id: rle)
+  = 値は変数・そのフィールド・文字列・数・true・false のどれかです
+  = `rle` は 27 行目にも書かれています

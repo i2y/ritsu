@@ -1,0 +1,10 @@
+警告[W121]: `fall_through` は、Go の生成コードが自分で使う名前と同じになります
+  --> tests/own_names/Goの予約語になる規則.rule:1
+  |
+1 | rule fall_through v1
+  |      ^^^^^^^^^^^^ 規則の名前
+  |
+ Go: `fallthrough` はこの言語の予約語なので、そう書く規則の名前を書けず、組めません。
+ 使わない生成先なら、このままで構いません。使うなら、別名を付けてください（`fall_through(<別名>)`）。
+
+ok tests/own_names/Goの予約語になる規則.rule

@@ -1,0 +1,8 @@
+error[E002]: chain_declarations.ja.book:8:26: no unit `円` is declared
+     8 | account 売上金(店: string) : 円
+  = `円` is written on lines 11, 12 and 15 too
+error[E030]: chain_declarations.ja.book:17:7: `支払い` in the key is not a parameter of `売上`
+    17 |   key 支払い
+error[E002]: chain_declarations.ja.book:21:45: there is no type `ドル`; a type is string or a declared unit
+    21 | transfer 決済手数料(支払い: string, 店: string, 手数料: ドル)
+chain_declarations.ja.book: 3 error(s), 0 warning(s)

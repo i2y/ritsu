@@ -139,7 +139,7 @@ fn gather(dir: &Path, rel: &str, out: &mut Vec<(String, Vec<u8>)>, skip: &dyn Fn
         match kind {
             Kind::Dir => gather(dir, &p, out, skip)?,
             Kind::File => {
-                let bytes = fs::raw::read(&dir.join(&p)).map_err(|e| tr!("`{p}` を読めません（{e}）", "cannot read `{p}` ({e})"))?;
+                let bytes = fs::raw::read(&dir.join(&p)).map_err(|e| crate::cli::cannot_read(&p, &e))?;
                 out.push((p, bytes));
             }
             Kind::Other => {

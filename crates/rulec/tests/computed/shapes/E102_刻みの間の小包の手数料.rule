@@ -1,0 +1,17 @@
+rule 刻みの間の小包の手数料(parcel_fee_between_two_steps) v1
+description "金額の 10% を 10 円に切り上げて 5 円を足した小包の手数料を、金額と一緒に読む。250 円までの金額では 15 円、25 円、35 円のどれかなので、15 円と 25 円の間の手数料の行にはどの入力も届かない"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=300円
+
+define 小包の手数料(parcel_fee) : money[円] = up(金額 * 10%, 10円) + 5円
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 金額    | 小包の手数料 | -> 答え |
+| <=250円 | >15円 <25円  | 二      |
+| -       | -            | 一      |

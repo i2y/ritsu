@@ -9,12 +9,12 @@ record 呼び出し
 record 帳簿の答え
   数 : int
 
-enum 運び方 = 空路 | 鉄路
+enum BookTransport = 空路 | 鉄路
 
 record 全部
   呼び出し : 呼び出し
   結果 : 帳簿の答え
-  運び方 : 運び方
+  運び方 : BookTransport
 
 inputs
   便 : string

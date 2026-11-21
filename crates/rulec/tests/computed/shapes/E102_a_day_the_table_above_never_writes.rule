@@ -1,0 +1,21 @@
+rule day_the_table_above_never_writes v1
+description "A date an applied table writes, named day by day, with a row for the day between the two it writes, which no order comes to"
+
+enum zone = local | national
+enum timing = early | middle | late
+
+inputs
+  zone : zone
+
+apply s = "shared/ship_day.rule" meaning:ba324522b221da9e
+  zone = zone
+  ships -> s_ships
+
+outputs
+  x : timing
+
+table pick
+| s_ships    | -> x      |
+| 2026-07-01 | early     |
+| 2026-07-02 | middle    |
+| 2026-07-03 | late      |

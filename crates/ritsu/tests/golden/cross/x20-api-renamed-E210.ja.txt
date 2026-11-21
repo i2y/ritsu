@@ -1,0 +1,14 @@
+restock.flow: 検査を通りました
+ok company.ringi: 組織、役職 3 個、チームの種類 2 個
+  データ `org`: 版 1 個（2026-04-01）、チーム 3 個と 5 人、代理無し
+ok purchase.ringi: 申請の種類、フィールド 2 個、ステップ 1 個
+  2026-04-01 から使えます: 組織 `company.ringi` の最初の版（データ `org`）
+  終わり無く使えます: 読むデータに終わりがありません
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます
+エラー[ritsu E210]: restock.flow:28: flow は "out/requests/openapi.json" の `submit_purchase` を呼びますが、今の `purchase.ringi` から書く API にその操作はありません
+    28 |   let moved = submit_purchase(form: purchase)
+  = 文書は、この操作を申請 `purchase` の版 1 から書いたと言います。
+  = 今の `purchase.ringi` から書く API の、フォームを受け取る操作: `submit_supplies`、`worked_supplies`。
+  = dandori は、flow が送る値をこの文書と比べます。今の申請が受け取る値とは比べていません。
+  = `ritsu gen --target requests` で "out/requests/openapi.json" を書き直してから、flow をもう一度検査してください。
+ritsu check: ファイル 3 個（dandori 1、ringi 2）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所

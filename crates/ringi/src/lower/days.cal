@@ -1,0 +1,9 @@
+dates ticket_days v1
+description "The day of a day's number"
+
+inputs
+  epoch : date  range >=1970-01-01 <=1970-01-01
+  n     : int  range >=0 <=2932896
+
+date day_of = epoch
+  + n days

@@ -1,0 +1,31 @@
+rule first_tier_at_a_net_of_minus_one v1
+description "The tier table of the net and the amount, and a row for the first tier at a net of -1 yen. The first tier comes only from 82 yen on, where the net is never -1 yen, so no input reaches that row: the check works the net out again on the amounts the rows of the tier table for the first tier take"
+
+enum choice = one | two
+enum tier = t1 | t2
+
+inputs
+  amount : money[JPY]  range >=0JPY <=115JPY
+
+define net : money[JPY] = down(amount * 7%, 1JPY) - up(amount * 5%, 1JPY)
+
+outputs
+  x : choice
+
+table tier_of
+| net    | amount  | -> tier : tier |
+| <=0JPY | <82JPY  | t2             |
+| <=0JPY | >=82JPY | t1             |
+| >=1JPY | <82JPY  | t2             |
+| >=1JPY | >=82JPY | t1             |
+
+table pick
+| amount          | net              | tier | -> x |
+| <=9JPY          | -1JPY            | t2   | one  |
+| <=9JPY          | 0JPY, 1JPY, 2JPY | t2   | two  |
+| >=10JPY <=19JPY | -1JPY            | t2   | one  |
+| >=10JPY <=19JPY | 0JPY, 1JPY, 2JPY | t2   | two  |
+| >19JPY          | -1JPY            | t1   | two  |
+| >19JPY          | -1JPY            | t2   | one  |
+| >19JPY          | 0JPY, 1JPY, 2JPY | t1   | two  |
+| >19JPY          | 0JPY, 1JPY, 2JPY | t2   | one  |

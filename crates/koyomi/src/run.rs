@@ -4,14 +4,20 @@
 use crate::calendar::Loader;
 use crate::check::{self, Checked, Options};
 use crate::cli::{self, Args};
+use ritsu_base::cli::{cannot_create, cannot_read, cannot_write, refusal};
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
 use std::process::ExitCode;
 
+/// Stop before the work, as every command of the toolchain stops (ritsu's DESIGN 6.2, item 10).
 fn refuse(msg: Text, lang: Lang) -> ExitCode {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    eprintln!("{head}: {}", msg.get(lang));
-    ExitCode::from(2)
+    ExitCode::from(ritsu_base::cli::refuse(&mut std::io::stderr(), &msg, lang))
+}
+
+/// Stop a command given arguments it does not take: what it takes, and its usage line.
+fn takes(name: &str, lang: Lang) -> ExitCode {
+    let table = cli::table();
+    refuse(table.takes(table.command(name).expect("the command is in the table")), lang)
 }
 
 /// `--lang ja`, `--lang=ja`, anywhere on the line: decided before anything is printed.
@@ -28,9 +34,14 @@ fn lang_flag(args: &[String]) -> Option<String> {
 }
 
 /// The `koyomi` command, on `args` (the words after the program's name), printing to standard
-/// output and standard error: the exit code.
+/// output and standard error: the exit code. Asked for JSON, a command that stops before its work
+/// writes why as JSON too (ritsu's DESIGN 6.2, item 10).
 pub fn run(args: Vec<String>) -> ExitCode {
-    let lang = Lang::pick(lang_flag(&args).as_deref(), "KOYOMI_LANG");
+    ritsu_base::cli::answering(&args, &mut std::io::stdout(), |_| command(&args))
+}
+
+fn command(args: &[String]) -> ExitCode {
+    let lang = Lang::pick(lang_flag(args).as_deref(), "KOYOMI_LANG");
     let table = cli::table();
     let Some(first) = args.first() else {
         eprint!("{}", table.help_all(lang));
@@ -68,14 +79,14 @@ pub fn run(args: Vec<String>) -> ExitCode {
                         print!("{}", table.help_cmd(c, lang));
                         ExitCode::SUCCESS
                     }
-                    None => refuse(tr!("`{n}` というコマンドはありません。`koyomi --help` を読んでください", "there is no command `{n}`; run `koyomi --help`"), lang),
+                    None => refuse(ritsu_base::cli::no_command("koyomi", n), lang),
                 },
             };
         }
         _ => {}
     }
     let Some(cmd) = table.command(first) else {
-        return refuse(tr!("`{first}` というコマンドはありません。`koyomi --help` を読んでください", "there is no command `{first}`; run `koyomi --help`"), lang);
+        return refuse(ritsu_base::cli::no_command("koyomi", first), lang);
     };
     let a = match table.parse(cmd, &args[1..]) {
         Ok(a) => a,
@@ -92,13 +103,30 @@ pub fn run(args: Vec<String>) -> ExitCode {
     {
         return refuse(t, lang);
     }
+    // The word `source` takes before its path, the code `explain` takes and what `eval` is asked
+    // after its file (a date, `name=value`) are no paths; every other positional argument is one.
+    let (first, end) = match cmd.name {
+        "source" => (1, a.pos.len()),
+        "explain" => (0, 0),
+        "eval" => (0, a.pos.len().min(1)),
+        _ => (0, a.pos.len()),
+    };
+    // the paths the run holds are written the way the first path given was (ritsu's DESIGN 4.15),
+    // and so are the paths given: `./平日.cal` and `x/../平日.cal` are `平日.cal` (6.2 item 8), and
+    // `--out ./generated` is `generated`
+    let _way = ritsu_base::paths::run_from(a.pos.get(first).filter(|_| first < end).map_or(".", String::as_str));
+    let mut a = a;
+    for p in a.pos.iter_mut().take(end).skip(first) {
+        *p = ritsu_base::paths::show_given(p);
+    }
+    a.fold_paths(&["--out"]);
     match cmd.name {
         "check" => check_cmd(&a, lang),
         "eval" => eval_cmd(&a, lang),
         "diff" => diff_cmd(&a, lang),
         "explain" => explain_cmd(&a, lang),
         "api" => api_cmd(&a, lang),
-        "gen" => gen_cmd(&a, &args, lang),
+        "gen" => gen_cmd(&a, args, lang),
         "vectors" => vectors_cmd(&a, lang),
         "doc" => doc_cmd(&a, lang),
         "source" => source_cmd(&a, lang),
@@ -106,14 +134,16 @@ pub fn run(args: Vec<String>) -> ExitCode {
     }
 }
 
-/// The `.cal` files a path stands for: itself, or every `.cal` under a directory, in path order.
+/// The `.cal` files a path stands for: itself, or every `.cal` under a directory, in path order,
+/// each as the run writes it (`.` gives `平日.cal`, not `./平日.cal`; ritsu's DESIGN 4.15).
 /// The walk does not enter another module, nor the `.ritsu` of a module; when it did not start in
 /// a module, it says on stderr which modules it passed over, and the command that reads each
-/// (ritsu's DESIGN 17.6).
-fn expand(arg: &str, command: &str, lang: Lang) -> Vec<String> {
+/// (ritsu's DESIGN 17.6). A directory with no `.cal` under it is what stops the command, as it stops
+/// every command of the toolchain (ritsu's DESIGN 6.2, item 10).
+fn expand(arg: &str, command: &str, lang: Lang) -> Result<Vec<String>, Text> {
     let p = std::path::Path::new(arg);
     if !ritsu_base::fs::is_dir(p) {
-        return vec![arg.to_string()];
+        return Ok(vec![arg.to_string()]);
     }
     let mut out = Vec::new();
     let mut modules = Vec::new();
@@ -124,33 +154,36 @@ fn expand(arg: &str, command: &str, lang: Lang) -> Vec<String> {
         for e in es {
             if ritsu_base::fs::is_dir(&e) {
                 match ritsu_base::paths::not_entered(&e) {
-                    Some(ritsu_base::paths::NotEntered::Module) => modules.push(e.to_string_lossy().to_string()),
+                    Some(ritsu_base::paths::NotEntered::Module) => modules.push(ritsu_base::paths::show_given(&e.to_string_lossy())),
                     Some(ritsu_base::paths::NotEntered::State) => {}
                     None => walk(&e, out, modules),
                 }
             } else if e.extension().is_some_and(|x| x == "cal") {
-                out.push(e.to_string_lossy().to_string());
+                out.push(ritsu_base::paths::show_given(&e.to_string_lossy()));
             }
         }
     }
     walk(p, &mut out, &mut modules);
     if ritsu_base::modules::refer::module_of(p).is_none() {
         for m in modules {
-            eprintln!("{}", ritsu_base::paths::other_module_note(&m, &format!("koyomi {command}")).get(lang));
+            eprintln!("{}", ritsu_base::paths::other_module_note(&m, &format!("{} {command}", ritsu_base::cli::command_name("koyomi"))).get(lang));
         }
     }
-    out
+    if out.is_empty() {
+        return Err(ritsu_base::cli::no_files_under(arg, &[".cal"]));
+    }
+    Ok(out)
 }
 
 fn check_cmd(a: &Args, lang: Lang) -> ExitCode {
     if a.pos.is_empty() {
-        return refuse(tr!("`koyomi check` には .cal のファイルが要ります", "`koyomi check` needs .cal files"), lang);
+        return takes("check", lang);
     }
     let budget = match a.get("--budget") {
         None => check::DEFAULT_BUDGET,
         Some(b) => match b.replace([',', '_'], "").parse::<u64>() {
             Ok(n) if n > 0 => n,
-            _ => return refuse(tr!("`--budget {b}` は正の整数ではありません", "`--budget {b}` is not a positive integer"), lang),
+            _ => return refuse(ritsu_base::cli::not_positive("--budget", b), lang),
         },
     };
     let opts = Options { budget };
@@ -161,8 +194,16 @@ fn check_cmd(a: &Args, lang: Lang) -> ExitCode {
     // The files given before each, for what they make one in a target (W001, DESIGN 17).
     let mut earlier = Vec::new();
     for arg in &a.pos {
-        for f in expand(arg, "check", lang) {
-            match check::check_file(&f, &opts, &mut loader) {
+        let files = match expand(arg, "check", lang) {
+            Ok(files) => files,
+            Err(t) => {
+                unreadable = true;
+                refuse(t, lang);
+                continue;
+            }
+        };
+        for f in files {
+            match check::check_given(&f, &opts, &mut loader) {
                 Ok(mut o) => {
                     check::compare_across(&mut o, &mut earlier);
                     errors |= o.has_errors();
@@ -174,8 +215,7 @@ fn check_cmd(a: &Args, lang: Lang) -> ExitCode {
                 }
                 Err(e) => {
                     unreadable = true;
-                    let msg = tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}");
-                    eprintln!("{}: {}", if lang == Lang::Ja { "エラー" } else { "error" }, msg.get(lang));
+                    refuse(cannot_read(&f, &e), lang);
                 }
             }
         }
@@ -192,13 +232,13 @@ fn check_cmd(a: &Args, lang: Lang) -> ExitCode {
 /// `koyomi diff <old> <new>` (ritsu's DESIGN 17.9.3).
 fn diff_cmd(a: &Args, lang: Lang) -> ExitCode {
     let [old, new] = a.pos.as_slice() else {
-        return refuse(tr!("`koyomi diff` には古い版と新しい版の二つを渡してください", "`koyomi diff` takes two sides, the old and the new"), lang);
+        return takes("diff", lang);
     };
     let budget = match a.get("--budget") {
         None => check::DEFAULT_BUDGET,
         Some(b) => match b.replace([',', '_'], "").parse::<u64>() {
             Ok(n) if n > 0 => n,
-            _ => return refuse(tr!("`--budget {b}` は正の整数ではありません", "`--budget {b}` is not a positive integer"), lang),
+            _ => return refuse(ritsu_base::cli::not_positive("--budget", b), lang),
         },
     };
     let sides = crate::diff::spelled(old, budget).and_then(|o| crate::diff::spelled(new, budget).map(|n| (o, n)));
@@ -222,11 +262,12 @@ fn print_diags(ds: &[crate::diag::Diag], lang: Lang) {
 
 fn eval_cmd(a: &Args, lang: Lang) -> ExitCode {
     let Some(path) = a.pos.first() else {
-        return refuse(tr!("`koyomi eval` には .cal のファイルが要ります", "`koyomi eval` needs a .cal file"), lang);
+        return takes("eval", lang);
     };
     let json = a.get("--format") == Some("json");
-    let Ok(text) = ritsu_base::fs::read_to_string(path) else {
-        return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"), lang);
+    let text = match ritsu_base::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) => return refuse(cannot_read(path, &e), lang),
     };
     let is_calendar = text.lines().map(|l| l.trim()).find(|l| !l.is_empty() && !l.starts_with('#')).is_some_and(|l| l.starts_with("calendar "));
     let mut loader = Loader::default();
@@ -237,9 +278,9 @@ fn eval_cmd(a: &Args, lang: Lang) -> ExitCode {
         let Some(d) = crate::date::parse(day) else {
             return refuse(tr!("`{day}` は日付（`2026-05-04` の形）ではありません", "`{day}` is not a date (`2026-05-04`)"), lang);
         };
-        let o = match check::check_file(path, &Options::default(), &mut loader) {
+        let o = match check::check_given(path, &Options::default(), &mut loader) {
             Ok(o) => o,
-            Err(e) => return refuse(tr!("`{path}` を読めません: {e}", "cannot read `{path}`: {e}"), lang),
+            Err(e) => return refuse(cannot_read(path, &e), lang),
         };
         if o.has_errors() {
             print_diags(&o.diags, lang);
@@ -256,7 +297,7 @@ fn eval_cmd(a: &Args, lang: Lang) -> ExitCode {
             print_diags(&ds, lang);
             return ExitCode::from(1);
         }
-        Err(Err(e)) => return refuse(tr!("`{path}` を読めません: {e}", "cannot read `{path}`: {e}"), lang),
+        Err(Err(e)) => return refuse(cannot_read(path, &e), lang),
     };
     for w in &warnings {
         eprint!("{}", w.render(lang));
@@ -271,48 +312,52 @@ fn eval_cmd(a: &Args, lang: Lang) -> ExitCode {
 }
 
 fn explain_cmd(a: &Args, lang: Lang) -> ExitCode {
-    let md = a.get("--format") == Some("markdown");
+    let format = a.get("--format");
     let ledger = crate::codes::ledger();
     if a.has("--all") {
+        // codes and `--all` are the two ways to call it, not one: what it takes
         if !a.pos.is_empty() {
-            return refuse(tr!("`--all` とコードは一緒に書けません", "`--all` takes no code"), lang);
+            return takes("explain", lang);
         }
-        if md {
-            print!("{}", ledger.render_markdown(lang));
-        } else {
-            for (i, e) in ledger.entries.iter().enumerate() {
-                if i > 0 {
-                    println!();
+        match format {
+            Some("markdown") => print!("{}", ledger.render_markdown(lang)),
+            Some("json") => println!("{}", ritsu_base::json::Json::arr(ledger.entries.iter().map(|e| ledger.to_json(e, lang))).pretty()),
+            _ => {
+                for (i, e) in ledger.entries.iter().enumerate() {
+                    if i > 0 {
+                        println!();
+                    }
+                    print!("{}", ledger.render_text(e, lang));
                 }
-                print!("{}", ledger.render_text(e, lang));
             }
         }
         return ExitCode::SUCCESS;
     }
-    let [code] = a.pos.as_slice() else {
-        return refuse(tr!("`koyomi explain <CODE>` か `koyomi explain --all` です", "it is `koyomi explain <CODE>` or `koyomi explain --all`"), lang);
-    };
-    match ledger.find(code) {
-        Some(e) => {
-            if md {
-                print!("{}", ledger.render_markdown_one(e, lang));
-            } else {
-                print!("{}", ledger.render_text(e, lang));
-            }
+    if a.pos.is_empty() {
+        return takes("explain", lang);
+    }
+    match ledger.look_up(&a.pos) {
+        Ok(entries) => {
+            let shape = match format {
+                Some("markdown") => ritsu_base::ledger::Shape::Markdown,
+                Some("json") => ritsu_base::ledger::Shape::Json,
+                _ => ritsu_base::ledger::Shape::Text,
+            };
+            print!("{}", ledger.explained(&entries, shape, lang));
             ExitCode::SUCCESS
         }
-        None => refuse(tr!("診断のコード `{code}` はありません。`koyomi explain --all` で一覧が出ます", "there is no diagnostic code `{code}`; `koyomi explain --all` lists them"), lang),
+        Err(unknown) => refuse(ritsu_base::cli::no_codes("koyomi", &unknown), lang),
     }
 }
 
 fn api_cmd(a: &Args, lang: Lang) -> ExitCode {
     let [path] = a.pos.as_slice() else {
-        return refuse(tr!("`koyomi api` には .cal のファイルを一つ渡してください", "`koyomi api` takes one .cal file"), lang);
+        return takes("api", lang);
     };
     let mut loader = Loader::default();
-    let o = match check::check_file(path, &Options::default(), &mut loader) {
+    let o = match check::check_given(path, &Options::default(), &mut loader) {
         Ok(o) => o,
-        Err(e) => return refuse(tr!("`{path}` を読めません: {e}", "cannot read `{path}`: {e}"), lang),
+        Err(e) => return refuse(cannot_read(path, &e), lang),
     };
     if o.has_errors() {
         print_diags(&o.diags, lang);
@@ -331,7 +376,7 @@ fn api_cmd(a: &Args, lang: Lang) -> ExitCode {
 /// one line on standard error.
 fn refused(o: &check::Outcome, why: Text, lang: Lang) {
     print!("{}", check::render(o, lang));
-    eprintln!("{}: {}", if lang == Lang::Ja { "エラー" } else { "error" }, why.get(lang));
+    eprintln!("{}", refusal(why.get(lang), lang));
 }
 
 /// What `gen` says when it is given no `--target` (DESIGN 16), from the words of its command line
@@ -374,7 +419,7 @@ fn generated_by_koyomi(p: &std::path::Path) -> bool {
 fn gen_cmd(a: &Args, typed: &[String], lang: Lang) -> ExitCode {
     use crate::naming::{TARGETS, Target};
     if a.pos.is_empty() {
-        return refuse(tr!("`koyomi gen` には .cal のファイルが要ります", "`koyomi gen` needs .cal files"), lang);
+        return takes("gen", lang);
     }
     // It writes only the targets it is given: with none, nothing, and the command line that writes
     // what 0.40.0 wrote (DESIGN 16).
@@ -385,6 +430,9 @@ fn gen_cmd(a: &Args, typed: &[String], lang: Lang) -> ExitCode {
     // in the order of TARGETS, not of the flags
     let targets: Vec<Target> = TARGETS.iter().copied().filter(|t| given.contains(&t.key())).collect();
     let with_runner = a.all("--extra").contains(&"runner");
+    // what the code says is in `--lang`, else English, whatever the environment says (ritsu's
+    // DESIGN 4.1); `lang` is what the run prints
+    let made = Lang::made(a.get("--lang"));
     let out_dir = std::path::PathBuf::from(a.get("--out").unwrap_or("generated"));
     let check_only = a.has("--check");
     let mut loader = Loader::default();
@@ -400,10 +448,14 @@ fn gen_cmd(a: &Args, typed: &[String], lang: Lang) -> ExitCode {
     // The files given before each, for what they make one in a target (W001, DESIGN 17).
     let mut earlier = Vec::new();
     for arg in &a.pos {
-        for f in expand(arg, "gen", lang) {
-            let mut o = match check::check_file(&f, &Options::default(), &mut loader) {
+        let files = match expand(arg, "gen", lang) {
+            Ok(files) => files,
+            Err(t) => return refuse(t, lang),
+        };
+        for f in files {
+            let mut o = match check::check_given(&f, &Options::default(), &mut loader) {
                 Ok(o) => o,
-                Err(e) => return refuse(tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang),
+                Err(e) => return refuse(cannot_read(&f, &e), lang),
             };
             check::compare_across(&mut o, &mut earlier);
             let Some(checked) = o.checked.as_ref().filter(|_| !o.has_errors()) else {
@@ -411,7 +463,7 @@ fn gen_cmd(a: &Args, typed: &[String], lang: Lang) -> ExitCode {
                 failed = true;
                 continue;
             };
-            let u = crate::codegen::unit_of(checked, lang);
+            let u = crate::codegen::unit_of(checked, made);
             // what stops the targets, each finding once (one names Rust and Wasm alike)
             let mut stops: Vec<crate::diag::Diag> = Vec::new();
             let mut broken: Vec<&str> = Vec::new();
@@ -449,7 +501,7 @@ fn gen_cmd(a: &Args, typed: &[String], lang: Lang) -> ExitCode {
                 let named: Vec<String> = broken.iter().map(|k| format!("`{k}`")).collect();
                 let (list_ja, list_en) = (named.join("、"), named.join(", "));
                 let why = tr!("`{f}` からは {list_ja} のコードを生成できないので、何も生成しません", "`{f}` cannot be made into the code of {list_en}, so nothing is generated");
-                eprintln!("{}: {}", if lang == Lang::Ja { "エラー" } else { "error" }, why.get(lang));
+                eprintln!("{}", refusal(why.get(lang), lang));
                 stopped = true;
             }
         }
@@ -475,12 +527,12 @@ fn gen_cmd(a: &Args, typed: &[String], lang: Lang) -> ExitCode {
             continue;
         }
         if let Some(dir) = p.parent()
-            && std::fs::create_dir_all(dir).is_err()
+            && let Err(e) = std::fs::create_dir_all(dir)
         {
-            return refuse(tr!("`{}` を作れません", "cannot create `{}`", dir.display()), lang);
+            return refuse(cannot_create(&dir.to_string_lossy(), &e), lang);
         }
-        if std::fs::write(&p, body).is_err() {
-            return refuse(tr!("`{shown}` に書けません", "cannot write `{shown}`"), lang);
+        if let Err(e) = std::fs::write(&p, body) {
+            return refuse(cannot_write(&shown, &e), lang);
         }
         println!("{}", tr!("生成しました: {shown}", "generated: {shown}").get(lang));
     }
@@ -510,12 +562,12 @@ fn gen_cmd(a: &Args, typed: &[String], lang: Lang) -> ExitCode {
 fn vectors_cmd(a: &Args, lang: Lang) -> ExitCode {
     use std::io::Write;
     let [path] = a.pos.as_slice() else {
-        return refuse(tr!("`koyomi vectors` には .cal のファイルを一つ渡してください", "`koyomi vectors` takes one .cal file"), lang);
+        return takes("vectors", lang);
     };
     let mut loader = Loader::default();
-    let o = match check::check_file(path, &Options::default(), &mut loader) {
+    let o = match check::check_given(path, &Options::default(), &mut loader) {
         Ok(o) => o,
-        Err(e) => return refuse(tr!("`{path}` を読めません: {e}", "cannot read `{path}`: {e}"), lang),
+        Err(e) => return refuse(cannot_read(path, &e), lang),
     };
     let Some(checked) = o.checked.as_ref().filter(|_| !o.has_errors()) else {
         refused(&o, tr!("`{path}` は検査を通らないので、ベクタを出しません", "`{path}` does not pass check, so it has no vectors"), lang);
@@ -542,7 +594,7 @@ fn vectors_cmd(a: &Args, lang: Lang) -> ExitCode {
 
 fn doc_cmd(a: &Args, lang: Lang) -> ExitCode {
     let [path] = a.pos.as_slice() else {
-        return refuse(tr!("`koyomi doc` には .cal のファイルを一つ渡してください", "`koyomi doc` takes one .cal file"), lang);
+        return takes("doc", lang);
     };
     let months = match a.get("--months") {
         None => None,
@@ -561,11 +613,12 @@ fn doc_cmd(a: &Args, lang: Lang) -> ExitCode {
     };
     let format = if a.get("--format") == Some("html") { crate::doc::Format::Html } else { crate::doc::Format::Markdown };
     let mut loader = Loader::default();
-    let o = match check::check_file(path, &Options::default(), &mut loader) {
+    let o = match check::check_given(path, &Options::default(), &mut loader) {
         Ok(o) => o,
-        Err(e) => return refuse(tr!("`{path}` を読めません: {e}", "cannot read `{path}`: {e}"), lang),
+        Err(e) => return refuse(cannot_read(path, &e), lang),
     };
-    match crate::doc::page(&o, lang, &crate::doc::Options { months }) {
+    // the page is in `--lang`, else English, whatever the environment says (ritsu's DESIGN 4.1)
+    match crate::doc::page(&o, Lang::made(a.get("--lang")), &crate::doc::Options { months }) {
         Ok(p) => {
             print!("{}", crate::doc::render(&p, format));
             ExitCode::SUCCESS
@@ -578,7 +631,7 @@ fn doc_cmd(a: &Args, lang: Lang) -> ExitCode {
                 "`{path}` にはページを作れないエラーがあるので、ページを出しません",
                 "`{path}` has errors that keep its page from being made"
             );
-            eprintln!("{}: {}", if lang == Lang::Ja { "エラー" } else { "error" }, msg.get(lang));
+            eprintln!("{}", refusal(msg.get(lang), lang));
             ExitCode::from(1)
         }
     }
@@ -586,13 +639,14 @@ fn doc_cmd(a: &Args, lang: Lang) -> ExitCode {
 
 fn source_cmd(a: &Args, lang: Lang) -> ExitCode {
     let [verb, path] = a.pos.as_slice() else {
-        return refuse(tr!("`koyomi source fetch|pin|outdated <file.cal>` です", "it is `koyomi source fetch|pin|outdated <file.cal>`"), lang);
+        return takes("source", lang);
     };
     if !matches!(verb.as_str(), "fetch" | "pin" | "outdated") {
-        return refuse(tr!("`{verb}` という source のコマンドはありません。fetch、pin、outdated のどれかです", "`{verb}` is not one of source's: fetch, pin, outdated"), lang);
+        return takes("source", lang);
     }
-    let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-        return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"), lang);
+    let src = match ritsu_base::fs::read_to_string(path) {
+        Ok(src) => src,
+        Err(e) => return refuse(cannot_read(path, &e), lang),
     };
     let parsed = crate::parse::parse(path, &src);
     let Some(f) = parsed.file.filter(|_| !parsed.diags.iter().any(|d| d.is_error())) else {
@@ -605,7 +659,7 @@ fn source_cmd(a: &Args, lang: Lang) -> ExitCode {
         "outdated" => crate::fetch::outdated(&f, &dir),
         _ => crate::fetch::pin(&f, &dir, &src).and_then(|(text, o)| {
             if text != src {
-                ritsu_base::fs::write(path, &text).map_err(|e| tr!("`{path}` に書けません: {e}", "cannot write `{path}`: {e}"))?;
+                ritsu_base::fs::write(path, &text).map_err(|e| cannot_write(path, &e))?;
             }
             Ok(o)
         }),

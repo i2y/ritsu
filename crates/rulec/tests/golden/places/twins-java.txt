@@ -1,0 +1,2 @@
+error: `size_label.rule` and `sizeLabel.rule` both write out/java/SizeLabel.java; give one of them another alias
+エラー: `size_label.rule` と `sizeLabel.rule` が、同じ out/java/SizeLabel.java を書きます。どちらかの別名を変えてください

@@ -1,0 +1,11 @@
+エラー[E102]: 行1 はどの入力にも当てはまりません
+  --> tests/computed/shapes/E102_a_parcel_fee_between_two_steps.rule:16 表 pick
+   |
+16 | | <=250JPY | >15JPY <25JPY | two  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行1: ここに到達する入力はありません
+ 9 | define parcel_fee : money[JPY] = up(amount * 10%, 10JPY) + 5JPY
+   |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ この行の `amount` の値では >=15JPY <=35JPY の 5JPY に 10JPY の倍数を足した値です
+   |
+ `parcel_fee` は `amount` から計算する値です。この行がとる `amount` の値では、`parcel_fee` は >=15JPY <=35JPY の 5JPY に 10JPY の倍数を足した値しかとらず、この行が求める値になりません。
+ ヒント: 計算の式とこの行の条件を見比べてください。どの入力もこの行に当たらないので、不要なら削除してください。
+

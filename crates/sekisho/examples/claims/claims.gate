@@ -1,0 +1,46 @@
+gate claims v1
+description "Who may pay a claim: an adjuster pays any claim, and the desk's workflow pays the claims a rule leaves to the desk"
+namespace Claims
+
+use rule who_pays from "rules/who_pays.rule"
+use openapi desk from "api/desk.json"
+
+role adjuster
+  description "Pays the claims the desk does not"
+  can pay_claim
+
+principal User
+  description "A member of the staff, signed in"
+  roles adjuster
+
+# The lines under `resource` say what the flow holds of the claim it pays: the flow's `claim_id` is
+# the claim's id, and its `amount` the claim's amount. Nothing checks that the service reads the
+# same amount; what `ritsu check` says of the flow's calls rests on these lines.
+workflow pay from "flows/pay.flow"
+  description "Pays a claim the rule leaves to the desk, and hands the others to a person"
+  resource Claim from claim_id
+    amount = amount
+
+resource Claim
+  description "A claim"
+  attributes
+    amount : money[JPY]  range >=1JPY <=10_000JPY
+
+action pay_claim
+  description "Pay a claim"
+  guards desk payClaim
+  principal User, Workflow
+  resource Claim from claimId
+  context
+    payer = who_pays(amount: resource.amount).who
+
+permit adjusters_pay_claims
+  description "An adjuster pays any claim"
+  principal in adjuster
+  action pay_claim
+
+permit the_workflow_pays_the_desks_claims
+  description "The workflow pays the claims the rule leaves to the desk"
+  principal is workflow pay
+  action pay_claim
+  when payer is desk

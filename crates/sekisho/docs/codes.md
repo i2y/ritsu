@@ -63,7 +63,7 @@ See also: [E005](#e005)
 
 **When**: The indentation has a tab, the lines of one block are not indented alike, or an indented line follows a line that takes none.
 
-**Fix**: Indent with spaces, every line of a block by the same amount; the lines under `attributes`, `input` and `context` one step further.
+**Fix**: Indent with spaces, every line of a block by the same amount; the lines under `attributes`, `input`, `context` and a workflow's `resource` one step further.
 
 **Example**:
 
@@ -99,7 +99,7 @@ See also: [E003](#e003), [E004](#e004)
 
 ## E006 — A name is declared twice
 
-**When**: A name or an alias is declared twice among the things of one kind (the types and the enums, the roles, an enum's values, a type's attributes, the workflows, the actions, an action's inputs and computed values, the policies, the expectations, the separations, the names of the `use` lines), an enum read with `import enum` as one written with `enum` (its name after `->` too), also against what a file read with `use gate` declares; or an input of a rule is given twice, or `actions` lists an action twice.
+**When**: A name or an alias is declared twice among the things of one kind (the types and the enums, the roles, an enum's values, a type's attributes, the workflows, the actions, an action's inputs and computed values, the policies, the expectations, the separations, the names of the `use` lines), an enum read with `import enum` as one written with `enum` (its name after `->` too), also against what a file read with `use gate` declares; or an input of a rule is given twice, `actions` lists an action twice, or a workflow says one `resource … from …` twice, or one attribute twice under it.
 
 **Fix**: Rename one of them, or give it another alias.
 
@@ -134,9 +134,9 @@ See also: [E002](#e002), [E008](#e008)
 
 <a id="e008"></a>
 
-## E008 — An alias is a reserved word of Cedar or of the generated code
+## E008 — An alias is a reserved word of Cedar, or the name of a type Cedar or sekisho uses
 
-**When**: An alias (or an ASCII name with none) is a reserved word of Cedar (`if`, `then`, `else`, `has`, `like`) or of TypeScript, Python or Go; or a type's name is Cedar's `Action` or one of its builtin types, or `Role` or `Workflow`, which sekisho declares.
+**When**: An alias (or an ASCII name with none) is a reserved word of Cedar (`if`, `then`, `else`, `has`, `like`); or a type's name is Cedar's `Action` or one of its builtin types, or `Role` or `Workflow`, which sekisho declares. A reserved word of TypeScript, Python or Go is not said here: it is W402, only where the code of that target writes the name as that word, and the file passes.
 
 **Fix**: Choose another alias.
 
@@ -148,7 +148,7 @@ gate t v1
 role has
 ```
 
-See also: [E007](#e007)
+See also: [E007](#e007), [W402](#w402)
 
 <a id="e009"></a>
 
@@ -172,7 +172,7 @@ principal User
 
 ## E101 — A name names nothing
 
-**When**: A role, a type, an attribute, a value of an enum, an action, an input, a computed value, the name of a `use`, a rule's output or input, a date function or a unit that is referred to is not there; an enum an `import enum` reads is not in its `enums` file; or a policy or an expectation names an action of another file.
+**When**: A role, a type, an attribute, a value of an enum, an action, an input, a computed value, the name of a `use`, a rule's output or input, a date function or a unit that is referred to is not there; an enum an `import enum` reads is not in its `enums` file; or a policy or an expectation names an action of another file. A name of one kind written in several places is said once, where it is first written, and the note gives the lines of the others. A condition on an attribute of a resource whose type is not there says nothing.
 
 **Fix**: Correct the spelling, or declare it; the note lists the names there are. The names of a rule or a dates file are listed as a `.gate` writes them, by the alias where the name cannot be written; one that can be written by neither needs an alias in that file.
 
@@ -203,7 +203,7 @@ See also: [E006](#e006)
 
 ## E102 — A type that does not fit
 
-**When**: True or false compared with a value of an enum, an enum with a number, numbers of different units; a value that is not true or false written alone as a condition; a range on a type that takes none; a value of another type given to a rule's input.
+**When**: True or false compared with a value of an enum, an enum with a number, numbers of different units; a value that is not true or false written alone as a condition; a range on a type that takes none; a value of another type given to a rule's input; a value of a flow said, under a workflow's `resource`, for an attribute that points to an entity; an input or a computed value of one name of different types in different actions, or an attribute of one name in different types. An enum is one type by whatever name it is read when it is declared at one place (a file, and its name there) with the same values in the same order: an enum of an `enums` file read twice with `import enum`, or the output of a rule that reads it. Enums declared at two places are two types, even with the same values, and the note says where each is declared.
 
 **Fix**: Make the value fit the type of what it is compared with; a number has to be of the same unit (`JPY` and `円` are the same; with tax and without are not).
 
@@ -254,7 +254,7 @@ See also: [E102](#e102)
 
 ## E104 — A relation v1 does not write
 
-**When**: An attribute is followed by another (`resource.order.customer`); two attributes of different types are compared; an attribute is compared with the principal when no principal of its type comes; a number is compared with another value.
+**When**: An attribute is followed by another (`resource.order.customer`); two attributes of different types are compared; an attribute is compared with the principal when no principal of its type comes; a number is compared with another value. Two attributes of enums declared at one place with the same values in the same order are of one type, and compare (as for E102).
 
 **Fix**: Keep a relation to one step (`resource.customer is principal`, `resource.tenant is principal.tenant`, `principal in resource.team`); an answer that goes two steps can be a true-or-false output of a rule.
 
@@ -317,7 +317,7 @@ See also: [E101](#e101), [E102](#e102)
 
 ## E106 — A principal the actions never take
 
-**When**: No principal a policy's or an expectation's `principal` line picks (`is <type>`, `is workflow <name>`, `in <role>`) comes to an action it lists; with `action any`, to no action at all.
+**When**: No principal a policy's or an expectation's `principal` line picks (`is <type>`, `is workflow <name>`, `in <role>`) comes to an action it lists; with `action any`, to no action at all. It is not said when the action names a principal type that is not there (E101 says it).
 
 **Fix**: Correct the `principal` line, or add the type to the action's `principal` line; for a role, write it in the `roles` of a type that holds it.
 
@@ -461,7 +461,7 @@ See also: [E109](#e109), [E101](#e101)
 
 ## E201 — A file a `use` reads does not pass its language's check, cannot be read, or is outside the root
 
-**When**: A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file an `import enum` reads is a rule and no `enums` file, or does not pass rulec's check; or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use` is outside the root. A file a gate reads is named by a reference whose path is from the root: the operations its actions guard, the rules, dates and calendars the `@doc` of the generated Cedar names, and what the other languages name of it.
+**When**: A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file an `import enum` reads is a rule and no `enums` file, or does not pass rulec's check; or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use` is outside the root. A file a gate reads is named by a reference whose path is from the root: the operations its actions guard, the rules, dates and calendars the `@doc` of the generated Cedar names, and what the other languages name of it. The name of an `import enum` that brought no enum is in the file all the same: a type that names it is not said to be missing (E101) too.
 
 **Fix**: Correct that file until its language's check passes it. For a file outside the root, give `--root` a directory that holds it.
 
@@ -519,9 +519,9 @@ See also: [E203](#e203), [E205](#e205)
 
 ## E203 — An input is not what the operation takes
 
-**When**: A name under `input` is neither a parameter nor a field of the body of an operation the action guards; or its type is not what the operation takes (a number taken as one with a fraction or as a string, other values of an enum); or its range goes past what the operation takes; or the operation does not require it and it has no `?`.
+**When**: A name under `input` is neither a parameter nor a field of the body of an operation the action guards; or its type is not what the operation takes (a number taken as one with a fraction or as a string, other values of an enum, a `repeated` field of a `.proto` taken as one value); or its range goes past what the operation takes; or the operation does not require it and it has no `?`. An enum `input` has every value the operation takes: an OpenAPI `enum`, or the values of the enum a `.proto` field's type comes to by protobuf's rules for names, as far as Protovalidate's rules let them through. A `.proto` value's name is read as rulec's `import proto` reads it: the enum's own name taken off the front and the rest in lower case (`CATEGORY_TRAVEL` is `travel`), and the names of one number (`allow_alias`) one value.
 
-**Fix**: Write what the operation takes, by the same name and type, with a range within the operation's.
+**Fix**: Write what the operation takes, by the same name and type, with a range within the operation's. Add a value the enum lacks by any one of the names the note gives; rulec's reference has the whole table of how names are read, under `import proto`.
 
 **Example**:
 
@@ -844,7 +844,7 @@ flow
   succeed refund = r.id
 ```
 
-See also: [E201](#e201)
+See also: [E201](#e201), [E212](#e212)
 
 <a id="e209"></a>
 
@@ -930,6 +930,174 @@ role clerk
 
 See also: [E210](#e210), [E006](#e006)
 
+<a id="e212"></a>
+
+## E212 — A `resource` line under a workflow is not what the flow holds
+
+**When**: A `resource <type> from <value of the flow>` under a `workflow … from`, or an `<attribute> = <value of the flow>` under it, is not what the flow holds: the flow has no such value (an input, a variable, or a field of one); the value is of another type or unit than the attribute; or, at a call the line speaks of (one that gives the `from` value as the resource's id), what the runs that reach the call hold can be outside the attribute's range, a value the attribute's enum does not have, or none where the attribute has no `?` (a note names the calls such a value reaches). These lines are the gate's word for what the flow holds of the resource, and `ritsu check` rests on them when it asks whether the gate allows the calls of the flow.
+
+**Fix**: Name a value the flow has. Where the ranges differ, narrow what the flow's value can be to what the attribute takes (the `range` of the flow's input or of the record's field), or widen the attribute's range.
+
+**Example**: put the files below in one directory, and run `ritsu sekisho check example.gate` there.
+
+`example.gate`:
+
+```
+gate shop v1
+description "A shop's orders"
+
+use openapi orders from "orders.json"
+
+workflow returns from "returns.flow"
+  description "Refunds a returned order"
+  resource Order from order_id
+    total = amount
+
+resource Order
+  description "An order"
+  attributes
+    total : money[GBP]  range >=0GBP <=5_000GBP
+
+action refund_order
+  description "Refund an order"
+  guards orders refundOrder
+  principal Workflow
+  resource Order from orderId
+
+permit returns_refunds_small_orders
+  description "The returns workflow refunds an order of up to 100 pounds"
+  principal is workflow returns
+  action refund_order
+  when resource.total <= 100GBP
+```
+
+`returns.flow`:
+
+```flow
+workflow returns v1
+description "Refunds a returned order"
+
+use openapi orders from "orders.json"
+
+inputs
+  order_id : string
+  amount   : money[GBP]  range >=0GBP <=10_000GBP
+
+outputs
+  refunded : money[GBP]
+
+task refund(orderId: string)
+  http POST orders "/orders/{orderId}/refunds"
+  key
+
+flow
+  refund(orderId: order_id)
+  succeed refunded = amount
+```
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Orders", "version": "1" },
+  "servers": [ { "url": "https://orders.example" } ],
+  "paths": {
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [ { "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "201": { "description": "Refunded" }, "403": { "description": "Not allowed" } }
+      }
+    }
+  }
+}
+```
+
+See also: [E208](#e208), [E101](#e101), [W202](#w202)
+
+<a id="w202"></a>
+
+## W202 — A `resource` line under a workflow speaks of no call
+
+**When**: No call of the flow is one a `resource <type> from <value of the flow>` under a `workflow … from` speaks of: a call of an operation an action of the gate guards, that gives the line's `from` value to the argument the action takes a resource of that type from. `ritsu check` rests on the line only at such calls (E212, and whether the gate allows the call), so the line holds at none. A note says why none is: no action takes a resource of the type from an argument (the type is written wrong), the action that takes one does not say which argument gives its id, the flow calls none of the operations the actions that do guard (the line is under the wrong workflow, or of no use), or the calls give the argument another value (the value is written wrong; the note says what they give). Said once the flow passes dandori's check (else E208) and the operations the actions guard are in their contracts (else E202).
+
+**Fix**: Write the value the calls give as the id, or the type of resource the action takes; where the action does not say which argument gives the id, write `resource <type> from <argument>` on it. Take the line out from under a workflow that calls none of the operations.
+
+**Example**: put the files below in one directory, and run `ritsu sekisho check example.gate` there.
+
+`example.gate`:
+
+```
+gate shop v1
+description "A shop's orders"
+
+use openapi orders from "orders.json"
+
+workflow exchanges from "exchanges.flow"
+  description "Refunds the first order of an exchange"
+  resource Order from order_id
+
+resource Order
+  description "An order"
+
+action refund_order
+  description "Refund an order"
+  guards orders refundOrder
+  principal Workflow
+  resource Order from orderId
+
+permit exchanges_refund
+  description "The exchanges workflow refunds an order"
+  principal is workflow exchanges
+  action refund_order
+```
+
+`exchanges.flow`:
+
+```flow
+workflow exchanges v1
+description "Refunds the first order of an exchange"
+
+use openapi orders from "orders.json"
+
+inputs
+  order_id       : string
+  first_order_id : string
+
+outputs
+  done : bool
+
+task refund(orderId: string)
+  http POST orders "/orders/{orderId}/refunds"
+  key
+
+flow
+  refund(orderId: first_order_id)
+  succeed done = true
+```
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Orders", "version": "1" },
+  "servers": [ { "url": "https://orders.example" } ],
+  "paths": {
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [ { "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "201": { "description": "Refunded" }, "403": { "description": "Not allowed" } }
+      }
+    }
+  }
+}
+```
+
+See also: [E212](#e212)
+
 <a id="e301"></a>
 
 ## E301 — No permit allows the action in any combination
@@ -1007,9 +1175,9 @@ See also: [E301](#e301), [E303](#e303)
 
 ## E303 — A permit or a forbid applies to no combination
 
-**When**: The `principal` line and the `when` and `unless` lines of a policy never hold together, in any combination.
+**When**: The `principal` line and the `when` and `unless` lines of a policy never hold together, in any combination. Each line is said with the number of combinations it is met on. Where the lines ask for values the rules never give together (two values computed from one attribute, say), or for a value a rule answers for nothing the gate gives it, the values and what they are computed from are said too.
 
-**Fix**: Remove the line that cannot be met, or the policy itself.
+**Fix**: Remove the line that cannot be met, or the policy itself. Where the lines ask for values the rules do not give, correct them to values the rules give.
 
 **Example**:
 
@@ -1052,7 +1220,7 @@ See also: [E302](#e302)
 
 ## E304 — An expectation does not hold
 
-**When**: A combination an `expect allow` or `expect deny` picks is answered otherwise: how many, and one of them, are shown. So is an action under `nobody` that some combination allows.
+**When**: A combination an `expect allow` or `expect deny` picks is answered otherwise: how many, and one of them, are shown. So is an action under `nobody` that some combination allows. The example is a combination as the check counts it. Where the check ran an input through the rules that comes to its computed values, the brackets after them say it: `(as when …)` is one such input, `(whenever …)` a stretch every input of which comes to them.
 
 **Fix**: Fix the policies, or the expectation if it says more than is meant.
 
@@ -1402,9 +1570,9 @@ See also: [W201](#w201)
 
 ## W304 — An expectation picks no combination
 
-**When**: The `principal`, `when` and `unless` lines of an `expect` hold together in no combination of its actions: the expectation holds, and checks nothing (most often a line is written wrong).
+**When**: The `principal`, `when` and `unless` lines of an `expect` hold together in no combination of its actions: the expectation holds, and checks nothing (most often a line is written wrong). Where the lines pick values the rules never give together, or a value a rule answers for nothing the gate gives it, the values and what they are computed from are said: the rules decide that whatever the policies say.
 
-**Fix**: Correct the lines that cannot be met together, or remove the expectation.
+**Fix**: Correct the lines that cannot be met together, or remove the expectation. Where they pick values the rules do not give, write what is to be held in the rule (its `examples`).
 
 **Example**:
 
@@ -1445,6 +1613,197 @@ expect deny nothing_paid_and_refunded_is_refunded
 ```
 
 See also: [E304](#e304), [E303](#e303)
+
+<a id="w305"></a>
+
+## W305 — A policy never applies to an action it names
+
+**When**: A policy that names its actions (not `action any`) applies to some of them, and to one of them in no combination: there its `principal`, `when` and `unless` lines never hold together (most often a line reads what that action's types do not have, or a value that never comes with it). Only the combinations that can occur are counted, and where a combination counted though it may not occur is left, nothing is said. A policy of `action any` that applies to some actions only is as it should be, and is not named.
+
+**Fix**: Remove the action from the policy's `action` line, or correct its lines so that it applies to that action too.
+
+**Example**:
+
+```gate
+gate library v1
+description "Who may read a document of the library and list a folder; a forbid names an action it never applies to"
+namespace Library
+
+role staff
+  description "Works in the library"
+
+principal User
+  description "A member of the staff"
+  roles staff
+  attributes
+    suspended : bool
+
+resource Doc
+  description "A document"
+  attributes
+    open_to_all : bool
+
+resource Folder
+  description "A folder of documents"
+
+action read_doc
+  description "Read a document"
+  principal User
+  resource Doc
+
+action list_folder
+  description "List what a folder holds"
+  principal User
+  resource Folder
+
+permit staff_read_and_list
+  description "Staff read documents and list folders"
+  principal in staff
+  action read_doc, list_folder
+
+forbid suspended_staff_see_nothing_open
+  description "A suspended member of the staff sees nothing that is open to all"
+  principal in staff
+  action read_doc, list_folder
+  when resource.open_to_all
+  when principal.suspended
+```
+
+See also: [W301](#w301), [W304](#w304)
+
+<a id="w306"></a>
+
+## W306 — A permit allows nothing of an action it names
+
+**When**: A permit that names its actions (not `action any`) allows something of some of them, and of one of them nothing: a forbid denies every combination the permit applies to there, so the permit changes no answer of that action (E302 for one action). Only the combinations that can occur are counted, and one counted though it may not occur is counted as one the permit may allow. Where none of the combinations the permit applies to there is shown to occur, nothing is said.
+
+**Fix**: Remove the action from the permit's `action` line, or narrow the forbid if the permit is meant to allow that action.
+
+**Example**:
+
+```gate
+gate library v1
+description "Who may read a document of the library and remove it; a permit names an action a forbid keeps from everyone"
+namespace Library
+
+role staff
+  description "Works in the library"
+
+principal User
+  description "A member of the staff"
+  roles staff
+
+resource Doc
+  description "A document"
+
+action read_doc
+  description "Read a document"
+  principal User
+  resource Doc
+
+action purge_doc
+  description "Remove a document for good"
+  principal User
+  resource Doc
+  nobody "documents are kept"
+
+permit staff_read_and_purge
+  description "Staff read documents, and would remove them"
+  principal in staff
+  action read_doc, purge_doc
+
+forbid no_one_purges
+  description "Documents are kept"
+  action purge_doc
+```
+
+See also: [E302](#e302), [W305](#w305)
+
+<a id="w307"></a>
+
+## W307 — A line of a permit changes no decision
+
+**When**: Every combination a `when` or `unless` line of a permit leaves out (its other lines met, this one not) is one a forbid denies: without the line, the permit would apply to them too, and the forbid would still deny them, so no answer changes (W301 for one line). Only the combinations that can occur are counted, and one counted though it may not occur is counted as one the line leaves out. A line whose combinations another permit allows is not named (of permits written case by case, the line says which case the permit is), nor a line of a forbid, nor one of a permit W301 names. Where two lines of one policy change nothing taken out one at a time but may change an answer taken out together, each says so.
+
+**Fix**: Remove the line, or correct it if it is meant to leave out something else.
+
+**Example**:
+
+```gate
+gate library v1
+description "Who may index a document of the library; a line of a permit leaves out only what a forbid denies"
+namespace Library
+
+principal Service
+  description "A program that runs on its own"
+
+resource Doc
+  description "A document"
+  attributes
+    open_to_all : bool
+
+action index_doc
+  description "Index a document"
+  principal Service
+  resource Doc
+
+permit services_index
+  description "Services index the documents open to all"
+  principal is Service
+  action index_doc
+  when resource.open_to_all
+
+forbid services_skip_closed_docs
+  description "A service leaves alone a document that is not open to all"
+  principal is Service
+  action index_doc
+  unless resource.open_to_all
+```
+
+See also: [W301](#w301), [W308](#w308)
+
+<a id="w308"></a>
+
+## W308 — A line of a policy leaves out no combination that can occur
+
+**When**: A `when` or `unless` line of a permit or a forbid is met on every combination its other lines are met on: it acts only on combinations that cannot occur (ones its other lines leave out already, a value a rule never gives, …). Only the combinations that can occur are counted, and one counted though it may not occur is counted as one the line leaves out, so it is said only where even so the line leaves out none. Where the rules decide it, a note says which value never comes, and why. Where two lines of one policy change nothing taken out one at a time but may change an answer taken out together, each says so.
+
+**Fix**: Remove the line, or correct it so that it leaves out what it is meant to. Where a rule decides it, hold what the rule answers in the rule (its `examples`).
+
+**Example**:
+
+```gate
+gate shop v1
+description "A shop's orders; a line of a permit is met wherever its other line is"
+
+enum status = paid | refunded | returned
+
+role clerk
+  description "Answers customers"
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Order
+  description "An order"
+  attributes
+    status : status
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+
+permit clerks_refund_paid_orders
+  description "A clerk refunds a paid order that is not refunded yet"
+  principal in clerk
+  action refund_order
+  when resource.status is paid
+  unless resource.status is refunded
+```
+
+See also: [E303](#e303), [W304](#w304), [W307](#w307)
 
 <a id="w401"></a>
 
@@ -1679,9 +2038,9 @@ permit everyone_reads
 
 <a id="e401"></a>
 
-## E401 — Names that are one identifier in the code of the target
+## E401 — Names that are one identifier, or a reserved word, in the code of the target
 
-**When**: With `--target typescript`, `python` or `go` of `sekisho gen`: W402 says of that target. Written as it is, the code does not compile or type-check, or one declaration takes the place of another, so nothing is written. A generator renames nothing: a call is written with the names `check` read.
+**When**: With `--target typescript`, `python` or `go` of `sekisho gen`: W402 says of that target. Written as it is, the code does not compile or type-check, or one declaration takes the place of another, so nothing is written. `ritsu gen` given that target stops the same way, with 1. A generator renames nothing: a call is written with the names `check` read.
 
 **Fix**: Change the alias the notes give. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
 
@@ -1714,9 +2073,9 @@ See also: [W402](#w402)
 
 <a id="w402"></a>
 
-## W402 — Names that are one identifier in the generated code
+## W402 — Names that are one identifier, or a reserved word, in the generated code
 
-**When**: In the code of `--target typescript`, `python` or `go`, two names of the gate are one identifier, or a name is one the code uses itself. A module declares the records of the types it reads, the enums, its own types (`Store`, `Request`, …) and the input of each action (`<Action>Input`) at its top level, each name in its language's spelling (the enum `order_state` is `OrderState`, the input of the action `refund` is `RefundInput`, the attribute `order_id` is the field `OrderId` in Go). So are the globals of TypeScript (`Date`, …), and Python's words and what its module imports (`Literal`, …). In a record of Go, so are the attributes and the fields of the roles and the groups (`Roles`, `MemberOf<type>`). It breaks the code of some of the languages, and the others and Cedar stay as they are, so it is a warning, and `sekisho gen` of a target it breaks stops with E401.
+**When**: In the code of `--target typescript`, `python` or `go`, two names of the gate are one identifier, a name is one the code uses itself, or a name is a reserved word of the language. A module declares the records of the types it reads, the enums, its own types and functions (`Store`, `Request`, …; in Go, also `Authorize`, the entry by the action's name, and `Roles` and `RolesOf`, the lists of the roles) and the input of each action (`<Action>Input`) at its top level, each name in its language's spelling (the enum `order_state` is `OrderState`, the input of the action `refund` is `RefundInput`, the attribute `order_id` is the field `OrderId` in Go). So are the globals of TypeScript (`Date`, …), and what Python's module imports (`Literal`, …). In a record of Go, so are the attributes and the fields of the roles and the groups (`Roles`, `MemberOf<type>`). A reserved word is met where the code writes a name as it is: Python writes an attribute as a field of its record (the attribute `class`), and a type in lower case as a method of `Store` (the type `Return` is `return`); and the alias of the file is the name of Python's module (`pass`), of Go's package (`select`), and of the module the TypeScript index of a package of `ritsu gen`'s exports with `export * as` (a reserved word of strict mode, as `interface`). Every other name is written as a property, a method or a string, or with more around it, and Go writes it with a capital, so a reserved word is none there. It breaks the code of some of the languages, and the others and Cedar stay as they are, so it is a warning, and `sekisho gen` and `ritsu gen` of a target it breaks stop with E401.
 
 **Fix**: For a target you do not build, leave it as it is. For one you do, change the alias the notes give. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
 
@@ -1743,7 +2102,7 @@ permit clerks_reply
   action reply
 ```
 
-See also: [E401](#e401)
+See also: [E401](#e401), [E008](#e008)
 
 <a id="w901"></a>
 

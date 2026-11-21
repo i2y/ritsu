@@ -1,0 +1,7 @@
+module shadow_lib v1
+description "The library `shadow` reads: a `let` bound to `Kaname`, the name of the package's own namespace, beside a value written `Kaname.Frac`"
+
+# a `let` named `Kaname`, beside a parameter written the package's `Kaname.Frac`
+fn answer(p: money[JPY] range >=0JPY <=100JPY) -> number
+  let Kaname = 1
+  Kaname + 1

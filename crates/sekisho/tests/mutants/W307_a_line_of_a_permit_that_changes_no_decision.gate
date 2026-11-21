@@ -1,0 +1,28 @@
+gate library v1
+description "Who may index a document of the library; a line of a permit leaves out only what a forbid denies"
+namespace Library
+
+principal Service
+  description "A program that runs on its own"
+
+resource Doc
+  description "A document"
+  attributes
+    open_to_all : bool
+
+action index_doc
+  description "Index a document"
+  principal Service
+  resource Doc
+
+permit services_index
+  description "Services index the documents open to all"
+  principal is Service
+  action index_doc
+  when resource.open_to_all
+
+forbid services_skip_closed_docs
+  description "A service leaves alone a document that is not open to all"
+  principal is Service
+  action index_doc
+  unless resource.open_to_all

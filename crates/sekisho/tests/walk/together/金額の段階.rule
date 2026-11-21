@@ -1,0 +1,16 @@
+rule 金額の段階(steps) v1
+description "金額が小口かどうか。金額の区分と同じ金額を読み、別の金額で切る、もう一つの規則"
+
+enum 段階(step) = 小口(small) | 大口(large)
+
+inputs
+  金額(amount) : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  段階(step) : 段階
+
+table 決める(decide)
+policy unique
+| 金額     | -> 段階 |
+| <=300JPY | 小口    |
+| >300JPY  | 大口    |

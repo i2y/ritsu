@@ -8,7 +8,7 @@
 
 编码智能体写代码的速度和数量，已经超过了任何人逐行阅读的能力。这让一个问题变得更尖锐：无论代码由谁来写，甚至由什么来写，它到底要实现什么？服务之间和服务内部的契约。业务规则。日历与期限。账本及其上下限。工作流的骨架。谁可以做什么。每条需求从何而来，现在又由什么来满足。
 
-ritsu 为其中每一项提供一种小型语言，写在人能读懂的文件里。每种语言都在能检查的范围内检查文件所写的内容：覆盖每个输入、每一天、每条路径，而不是抽样。需要代码的地方，它生成代码；需要理解内容的人，它为他们生成页面。九种语言共用一套工具链，所以证明不会在语言的边界处中断：工作流知道它调用的规则有哪些前置条件，规则知道日历可能落在哪些日子，账本知道规则可能返回哪些金额。
+ritsu 为其中每一项提供一种小型语言，写在人能读懂的文件里。每种语言都在能检查的范围内检查文件所写的内容：覆盖每个输入、每一天、每条路径，而不是抽样。需要代码的地方，它生成代码；需要理解内容的人，它为他们生成页面。十种语言共用一套工具链，所以证明不会在语言的边界处中断：工作流知道它调用的规则有哪些前置条件，规则知道日历可能落在哪些日子，账本知道规则可能返回哪些金额。
 
 胶水代码交给智能体去写，代码必须实现的东西由 ritsu 来把握。
 
@@ -16,7 +16,7 @@ ritsu 为其中每一项提供一种小型语言，写在人能读懂的文件�
 [全屏试用](../play/){ .md-button }
 [GitHub](https://github.com/i2y/ritsu){ .md-button }
 
-## 九种语言
+## 十种语言
 
 | | 文件 | 用途 | 生成 |
 |---|---|---|---|
@@ -29,12 +29,13 @@ ritsu 为其中每一项提供一种小型语言，写在人能读懂的文件�
 | [sakai](../languages/sakai/) | `.ctx` | 限界上下文的映射图 | 导入检查工具（import linter）的配置；Context Mapper |
 | [sekisho](../sekisho/) | `.gate` | 谁可以做什么：角色、属性、关系，并以规则和日期为条件 | Cedar，以及调用它的 TypeScript、Python 和 Go |
 | [kaname](../kaname/) | `.kn` | 函数式核心：不做输入输出的通用代码，可以按各自的类型调用规则、日期和账本 | TypeScript、Python、Go 和 Rust，放在 `ritsu gen` 写出的包里，以及由 Rust 构建的 Wasm |
+| [ringi](../ringi/) | `.ringi` | 各部门提交和审批的申请：表单、审批路径和每一步由谁审批、期限，以及申请结束时发生的事 | 申请单的 TypeScript、Python、Go 和 Rust 代码；界面、OpenAPI 文档和测试服务器用的向量 |
 
 语言名的链接指向英文网站中介绍该语言的页面。每种语言都可以单独使用：不写 `.flow` 也能用 rulec。一个文件不会混用两种语言，因为费率、日历、账本和工作流的读者各不相同。
 
 ## 语言交汇之处
 
-九种语言共用一套工具链，因此一种语言检查过的东西，另一种语言可以直接当作前提。下面这条退款规则假定，没有人会申请超过已付金额的退款：
+十种语言共用一套工具链，因此一种语言检查过的东西，另一种语言可以直接当作前提。下面这条退款规则假定，没有人会申请超过已付金额的退款：
 
 ```rule
 rule refund_check v1
@@ -95,8 +96,8 @@ ok refund_check.rule
 refund.flow: ok
 error[ritsu E201]: refund.flow:21:1: The call of the rule check can give it values that break its precondition `asked <= paid`
     21 |   let decision = check(paid: paid, asked: asked)
-  = `asked` is `>=0 <=10000` and `paid` is `>=0 <=10000`, and at asked = 10000, paid = 0 `asked <= paid` does not hold
-  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, gathered from every place the values come from.
+  = `asked` is `>=0 <=10_000` and `paid` is `>=0 <=10_000`, and at asked = 10_000, paid = 0 `asked <= paid` does not hold
+  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, from what the runs that reach this call last put in the values.
   = Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result).
 ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided
 ```
@@ -115,6 +116,7 @@ ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the
 - `chobo doc`：账本、它的上下限和转账；
 - `sekisho doc`：按操作列出谁可以做什么，旁边是编译出的 Cedar；
 - `kaname doc`：模块中表格里的决策、按效果分类的函数及其可能失败的地方，以及写在代码中的决策；
+- `ringi doc`：一种申请的表单、每一步由谁在何时之前审批，以及申请单的行为；
 - `yuen trace`：把一条需求追溯到来源，并找到满足它的东西。
 
 ## 证明
@@ -131,7 +133,7 @@ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 
 从 0.23.0 起，每个版本都在[发布页面](https://github.com/i2y/ritsu/releases)提供 macOS 和 Linux 的压缩包，以及 `.deb` 和 `.rpm` 包。使用 Homebrew 时为 `brew install i2y/tap/ritsu`。
 
-发布的压缩包里有 `ritsu` 和指向它的九个链接（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`、`kaname`），每个链接都作为对应的语言运行。`cargo install` 只安装 `ritsu` 这一个二进制文件：可以用 `ritsu <语言> …` 调用某种语言，也可以自己按语言名建立链接（`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec`）。项目的检查用 `ritsu check`，生成代码用 `ritsu gen`。
+发布的压缩包里有 `ritsu` 和指向它的十个链接（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`、`kaname`、`ringi`），每个链接都作为对应的语言运行。`cargo install` 只安装 `ritsu` 这一个二进制文件：可以用 `ritsu <语言> …` 调用某种语言，也可以自己按语言名建立链接（`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec`）。项目的检查用 `ritsu check`，生成代码用 `ritsu gen`。
 
 只安装一种语言、在 GitHub Actions 中使用，以及 npm 包，见英文首页的 [Install](../#install)。
 
@@ -141,7 +143,7 @@ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 
 ## 面向 AI 智能体
 
-ritsu 及其语言是为 AI 智能体使用而设计的。[skills/](https://github.com/i2y/ritsu/tree/main/skills) 中有十个 [Agent Skills](https://agentskills.io)：[skills/ritsu](https://github.com/i2y/ritsu/tree/main/skills/ritsu) 用于包含多种语言的项目，其余九个各对应一种语言。`ritsu skills install` 会把它们写入项目的 `.claude/skills/`。其他安装方式见 [skills/README.md](https://github.com/i2y/ritsu/blob/main/skills/README.md)（英文）。
+ritsu 及其语言是为 AI 智能体使用而设计的。[skills/](https://github.com/i2y/ritsu/tree/main/skills) 中有十一个 [Agent Skills](https://agentskills.io)：[skills/ritsu](https://github.com/i2y/ritsu/tree/main/skills/ritsu) 用于包含多种语言的项目，其余十个各对应一种语言。`ritsu skills install` 会把它们写入项目的 `.claude/skills/`。其他安装方式见 [skills/README.md](https://github.com/i2y/ritsu/blob/main/skills/README.md)（英文）。
 
 ## 更多
 

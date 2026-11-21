@@ -1,0 +1,6 @@
+エラー[E502]: tests/mutants/E502_いちばん上で待つ.ringi:9:15: 2026-04-01 からの組織では、ステップ `確かめ` に承認者がいません
+     9 |   確かめ(check)  上長
+  = 申請者の上に、`上長` に当たる長がいません。
+  = 申請者 1 人: e01（社長（架空））。
+  = ステップは `when empty escalate, then stay` で、上に回せる人がいない（組織のいちばん上）ので、チケットはこのステップで、管理する人が承認者を足すまで待ちます。
+  = 飛ばしてよいなら `when empty escalate, then skip` と書いてください。だれかが見るべきなら、`then` のあとに、その人の申請に答える承認者の決め方を書いてください（`who` に `board = team board` と宣言して `when empty escalate, then board`）。

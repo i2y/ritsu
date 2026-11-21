@@ -14,6 +14,7 @@ use crate::eval::{self, Val};
 use crate::num::Rat;
 use crate::types::{Checked, Ty};
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// A value as the grid argument reads it: `Σ aᵥ·v + k`, each `v` ranging over the multiples
@@ -971,6 +972,18 @@ pub fn min_rat(a: Rat, b: Rat) -> Rat {
     if a.cmp_to(b) == std::cmp::Ordering::Greater { b } else { a }
 }
 
+/// The largest multiple of a positive `step` that is not above `v`.
+pub fn floor_to(v: Rat, step: Rat) -> Rat {
+    let q = v.div(step);
+    step.mul(Rat::int(q.num.div_euclid(q.den)))
+}
+
+/// The smallest multiple of a positive `step` that is not below `v`.
+pub fn ceil_to(v: Rat, step: Rat) -> Rat {
+    let q = v.div(step);
+    step.mul(Rat::int(-(-q.num).div_euclid(q.den)))
+}
+
 /// The greatest common divisor of two non-negative rationals: the largest `d` of which both
 /// are whole multiples.
 fn rat_gcd(a: Rat, b: Rat) -> Option<Rat> {
@@ -1066,6 +1079,35 @@ impl Domain {
         Some(d)
     }
 
+    /// The same walk with each number the rule reads only by comparing it with written values
+    /// ([`cut_only`]) held to the first value of each piece those values cut its range into
+    /// (§15.325). Every other value of a piece passes the same cells, so it gives the same rows,
+    /// the same values and the same answers as the first. A walk that stops at the first input
+    /// with some property stops at the same input: that input is the first of its piece on each
+    /// such number, since the first of the piece comes before it and has the property too, and
+    /// the same holds of the earlier half of a pair. Where nothing has the property, nothing
+    /// kept has it. A value is kept where a written value lies between it and the value before
+    /// it, ends included: the first value at or over a written value, and the first over it.
+    /// Whether there are too many inputs to try is asked of the whole range, as before.
+    fn at_cuts(mut self, f: &RuleFile, c: &Checked) -> Domain {
+        for (n, vs) in self.names.iter().zip(self.values.iter_mut()) {
+            let Some(cuts) = cut_only(f, c, n) else { continue };
+            let mut before: Option<Rat> = None;
+            vs.retain(|v| {
+                let x = match v {
+                    Val::Num(r) => *r,
+                    Val::Date(y, m, d) => crate::types::date_ord(*y, *m, *d),
+                    // `none`, of a value that may be left out.
+                    _ => return true,
+                };
+                let keep = before.is_none_or(|p| cuts.iter().any(|b| p.cmp_to(*b) != Ordering::Greater && b.cmp_to(x) != Ordering::Greater));
+                before = Some(x);
+                keep
+            });
+        }
+        self
+    }
+
     /// Every combination, each as a full assignment, with the index of each name's value.
     fn each(&self, mut visit: impl FnMut(&[usize], BTreeMap<String, Val>) -> bool) {
         let mut at = vec![0usize; self.names.len()];
@@ -1091,6 +1133,83 @@ impl Domain {
             }
         }
     }
+}
+
+/// The values a number cuts at, when the rule reads it only by comparing it with written values
+/// (§15.325): the numbers and dates written in each table cell of its column and in each `never`
+/// line on it. `None` when the rule reads it any other way, where a value between two of those
+/// could give another answer — in a `derive`, a `define` or the `result` line, in a `constraint`,
+/// handed back by a row — or in a cell that does not compare it with a number or a date, and for
+/// a value that is not a number or a date.
+fn cut_only(f: &RuleFile, c: &Checked, n: &str) -> Option<Vec<Rat>> {
+    let ty = match c.ty_of(n)? {
+        Ty::Opt(t) => *t,
+        t => t,
+    };
+    if !numeric(&ty) {
+        return None;
+    }
+    let mut read: BTreeSet<String> = BTreeSet::new();
+    for it in &f.items {
+        match it {
+            Item::Derived(d) => crate::coverage::expr_names(&d.expr, &mut read),
+            Item::Define(d) => crate::coverage::expr_names(&d.expr, &mut read),
+            Item::Table(t) => {
+                for row in &t.rows {
+                    for o in &row.outs {
+                        if let OutCell::Name(m) = o {
+                            read.insert(m.clone());
+                        }
+                    }
+                }
+            }
+            Item::Agg(_) | Item::Fold(_) => return None,
+        }
+    }
+    for e in c.defs.values() {
+        crate::coverage::expr_names(e, &mut read);
+    }
+    if let Some(r) = &f.result {
+        crate::coverage::expr_names(&r.expr, &mut read);
+    }
+    for k in &f.constraints {
+        read.extend(k.names().cloned());
+    }
+    if read.contains(n) {
+        return None;
+    }
+    let lit = |l: &Lit| match l {
+        Lit::Num(x) => crate::types::lit_value_in_pub(x, &ty),
+        Lit::Date(y, m, d) => Some(crate::types::date_ord(*y, *m, *d)),
+        _ => None,
+    };
+    let mut cuts: Vec<Rat> = Vec::new();
+    let mut take = |cell: &Cell| -> Option<()> {
+        let ls: Vec<&Lit> = match cell {
+            Cell::DontCare | Cell::Nothing => Vec::new(),
+            Cell::Lit(l) => vec![l],
+            Cell::Set(ls) | Cell::Not(ls) => ls.iter().collect(),
+            Cell::Cmp(cs) => cs.iter().map(|(_, l)| l).collect(),
+            Cell::Prefix(_) | Cell::Ranked { .. } => return None,
+        };
+        for l in ls {
+            cuts.push(lit(l)?);
+        }
+        Some(())
+    };
+    for it in &f.items {
+        if let Item::Table(t) = it {
+            if let Some(ci) = t.inputs.iter().position(|(m, _)| m == n) {
+                for row in &t.rows {
+                    take(row.cells.get(ci)?)?;
+                }
+            }
+        }
+    }
+    for cell in f.never_cells(n) {
+        take(cell)?;
+    }
+    Some(cuts)
 }
 
 /// Every value an input takes, when there are at most `cap`: each multiple of its step in its
@@ -1157,7 +1276,7 @@ fn one_value(c: &Checked, n: &str, ty: &Ty) -> Val {
 pub fn exhaust_tie(f: &RuleFile, c: &Checked, name: &str, grid: Rat) -> Option<Option<BTreeMap<String, Val>>> {
     let reads = reads_of(f);
     let on: BTreeSet<String> = leaves_of(f, &reads, name).into_iter().filter(|n| c.ty_of(n).is_some()).collect();
-    let dom = Domain::of(f, c, &on)?;
+    let dom = Domain::of(f, c, &on)?.at_cuts(f, c);
     let mut found = None;
     dom.each(|_, a| {
         if crate::vectors::allowed(f, c, &a) {
@@ -1184,24 +1303,24 @@ pub fn exhaust_pair(
     tag: Option<&str>,
     col: &str,
 ) -> Option<Option<(BTreeMap<String, Val>, BTreeMap<String, Val>)>> {
-    let reads = reads_of(f);
-    // A column on the way to the outputs moves only together with one of them, so every input
-    // any output turns on is in the question.
-    let mut on = leaves_of(f, &reads, col);
-    if !f.outputs.iter().any(|o| o.name.text == col) {
-        for o in &f.outputs {
-            on.extend(leaves_of(f, &reads, &o.name.text));
-        }
-    }
-    // The words an output cell writes (`small`, `true`) are not values that come in (§15.194).
-    on.retain(|n| c.ty_of(n).is_some());
-    let dom = Domain::of(f, c, &on)?;
+    let dom = pair_domain(f, c, col)?;
     // Each input met so far, grouped once per name by every other name's value: two in one
     // group are one input apart. A pair is looked for as each input comes, and the walk stops
     // at the first.
+    //
+    // No two in a group show the value moving, or the walk would have stopped (§15.325). For an
+    // output, which moves when its value differs, they all have the first's value, and the first
+    // shows the move if any does. For a column on the way, which moves when its value and the
+    // outputs both differ, either all have the first's value or all have its outputs: a member
+    // with another value has the first's outputs, and one with other outputs has the first's
+    // value, so two of those would differ in both. When the first does not show the move, the
+    // members that do are then those with another value, or those with other outputs, and the
+    // first of them is the first the group took of its kind. So the first, the first with
+    // another value and the first with other outputs are asked, in the order they came, and
+    // the pair is the one asking every member in that order gives.
     type Seen = (BTreeMap<String, Val>, Option<Val>, Vec<(String, Option<Val>)>);
     let mut seen: Vec<Seen> = Vec::new();
-    let mut groups: Vec<HashMap<Vec<usize>, Vec<usize>>> = vec![HashMap::new(); dom.names.len()];
+    let mut groups: Vec<HashMap<Vec<usize>, [Option<usize>; 3]>> = vec![HashMap::new(); dom.names.len()];
     let mut found = None;
     dom.each(|at, a| {
         if !crate::vectors::allowed(f, c, &a) {
@@ -1216,19 +1335,57 @@ pub fn exhaust_pair(
         for (x, g) in groups.iter_mut().enumerate() {
             let mut key = at.to_vec();
             key[x] = usize::MAX;
-            let members = g.entry(key).or_default();
-            for &m in members.iter() {
+            let firsts = g.entry(key).or_insert([None; 3]);
+            let mut asked: Vec<usize> = firsts.iter().flatten().copied().collect();
+            asked.sort_unstable();
+            asked.dedup();
+            for m in asked {
                 let (p, q) = (&seen[m], &seen[here]);
                 if value_moved(f, col, (p.1.as_ref(), &p.2), (q.1.as_ref(), &q.2)) {
                     found = Some((p.0.clone(), q.0.clone()));
                     return false;
                 }
             }
-            members.push(here);
+            match firsts[0] {
+                None => firsts[0] = Some(here),
+                Some(m0) => {
+                    if firsts[1].is_none() && seen[here].1 != seen[m0].1 {
+                        firsts[1] = Some(here);
+                    }
+                    if firsts[2].is_none() && seen[here].2 != seen[m0].2 {
+                        firsts[2] = Some(here);
+                    }
+                }
+            }
         }
         true
     });
     Some(found)
+}
+
+/// The inputs the walk for a pair on `col` turns ([`exhaust_pair`]), each with the values it tries.
+fn pair_domain(f: &RuleFile, c: &Checked, col: &str) -> Option<Domain> {
+    let reads = reads_of(f);
+    // A column on the way to the outputs moves only together with one of them, so every input
+    // any output turns on is in the question.
+    let mut on = leaves_of(f, &reads, col);
+    if !f.outputs.iter().any(|o| o.name.text == col) {
+        for o in &f.outputs {
+            on.extend(leaves_of(f, &reads, &o.name.text));
+        }
+    }
+    // The words an output cell writes (`small`, `true`) are not values that come in (§15.194).
+    on.retain(|n| c.ty_of(n).is_some());
+    Some(Domain::of(f, c, &on)?.at_cuts(f, c))
+}
+
+/// How many values of each input the walk for a pair on `col` tries, by name in the order of the
+/// inputs (§15.325): every value of its range, or for a number the rule reads only by comparing it
+/// with written values, the first of each piece those values cut it into. `None` where there are
+/// too many to try.
+pub fn pair_walk(f: &RuleFile, c: &Checked, col: &str) -> Option<Vec<(String, usize)>> {
+    let dom = pair_domain(f, c, col)?;
+    Some(dom.names.into_iter().zip(dom.values.iter().map(Vec::len)).collect())
 }
 
 /// Every input the columns `cols` of a table turn on, evaluated, for one `makes` takes: the input

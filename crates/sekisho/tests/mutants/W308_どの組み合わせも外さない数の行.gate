@@ -1,0 +1,26 @@
+gate 店(shop) v1
+description "店の注文。permit の行が、ほかの行が満たされるところで、いつも満たされる"
+
+role 係(clerk)
+  description "お客さまに応対する"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    金額(amount) : money[JPY]  range >=1JPY <=100_000JPY
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 職員
+  resource 注文
+
+permit 係は一万円以上を返金できる(clerks_refund_large_orders)
+  description "係は、一万円以上の注文を返金できる"
+  principal in 係
+  action 返金する
+  when resource.金額 >= 10_000JPY
+  when resource.金額 > 1_000JPY

@@ -184,7 +184,7 @@ pub fn shapes(tool: Tool) -> &'static [&'static [&'static str]] {
         Tool::Dandori => &[&["output"], &["input"], &["record", "field"]],
         Tool::Kaname => &[&["record", "field"]],
         Tool::Sekisho => &[&["principal", "attribute"], &["resource", "attribute"], &["action", "input"]],
-        Tool::Geas | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Yuen | Tool::Sakai => &[],
+        Tool::Geas | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Yuen | Tool::Sakai | Tool::Ringi => &[],
     }
 }
 
@@ -250,9 +250,11 @@ pub fn read(text: &str) -> Result<Name, Problem> {
 }
 
 /// The naming with its path from the root of the project: the path written from the directory of
-/// `file`, or from the root of the module of ritsu's it is in for `@<name>/…` (DESIGN 17.6).
+/// `file`, or from the root of the module of ritsu's it is in for `@<name>/…` (DESIGN 17.6); where a
+/// `..` of it crosses a symbolic link, the file the system opens there, as the language of `file`
+/// names the files it reads ([`crate::modules::join_opened`]).
 pub fn from_root(root: &std::path::Path, file: &str, name: &Name) -> Result<Name, Text> {
-    let path = crate::modules::join(root, file, &name.path).map_err(|e| e.text())?;
+    let path = crate::modules::join_opened(root, file, &name.path).map_err(|e| e.text())?;
     Ok(Name { path, ..name.clone() })
 }
 

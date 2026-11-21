@@ -1,0 +1,8 @@
+error[E005]: tests/fixtures/chain_fields.flow:4:10: could not read the rule `rules/missing_zones.rule`
+     4 | use rule zones from "rules/missing_zones.rule"
+  = `tests/fixtures/rules/missing_zones.rule` is not there
+error[E002]: tests/fixtures/chain_fields.flow:22:15: there is no task or rule `locat`
+    22 |   let where = locat(id: id)
+error[E002]: tests/fixtures/chain_fields.flow:24:39: there is no variable or value `nowhere`
+    24 |   succeed label = where.zone, other = nowhere.zone
+  = a value is a variable, a field of one, a string, a number, true or false

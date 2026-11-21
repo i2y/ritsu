@@ -1,0 +1,15 @@
+rule 料金の上の帯(fee_top_band) v1
+description "金額で決める段階。いちばん上の帯を書いていないので、500 円を超える金額はどの行にも当たらない"
+
+enum 段階(level) = 低(low) | 中(mid) | 高(high)
+
+inputs
+  金額(amount) : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  段階(level) : 段階
+
+table 段階の表(levels)
+| 金額             | -> 段階 |
+| <=100JPY         | 低      |
+| >100JPY <=500JPY | 中      |

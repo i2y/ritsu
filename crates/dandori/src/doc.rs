@@ -216,7 +216,7 @@ impl<'a> Builder<'a> {
                     out.push(Piece::Node(n));
                 }
                 TK::Assign { name, expr } => {
-                    let n = self.stmt_node(s, Kind::Let, vec![short(&format!("let {name} = {}", expr_text(expr)), 56)]);
+                    let n = self.stmt_node(s, Kind::Let, vec![short(&format!("let {name} = {}", expr_text_at(self.i.m, s.site, "", expr)), 56)]);
                     out.push(Piece::Node(n));
                 }
                 TK::Repeat { times, body } => {
@@ -230,13 +230,13 @@ impl<'a> Builder<'a> {
                     out.push(Piece::Loop { site: s.site, title, footer: None, body, parallel: false, exit });
                 }
                 TK::For { var, list, max, parallel, body, result, .. } => {
-                    let footer = result.as_ref().map(|(_, y)| format!("yield {}", expr_text(y)));
+                    let footer = result.as_ref().map(|(_, y)| format!("yield {}", expr_text_at(self.i.m, s.site, "", y)));
                     let (body, footer) = self.loop_body(s, body, footer);
                     let mut title = String::new();
                     if let Some((r, _)) = result {
                         title.push_str(&format!("let {r} = "));
                     }
-                    title.push_str(&format!("for {var} in {} at most {max}", expr_text(list)));
+                    title.push_str(&format!("for {var} in {} at most {max}", expr_text_at(self.i.m, s.site, "in", list)));
                     match parallel {
                         Some(0) => title.push_str(" in parallel"),
                         Some(k) => title.push_str(&format!(" in parallel, {k} at a time")),
@@ -251,7 +251,7 @@ impl<'a> Builder<'a> {
                     out.push(Piece::Break(n));
                 }
                 TK::Succeed { fields } => {
-                    let text = if fields.is_empty() { "succeed".to_string() } else { format!("succeed {}", fields.iter().map(|(f, e)| format!("{f} = {}", expr_text(e))).collect::<Vec<_>>().join(", ")) };
+                    let text = if fields.is_empty() { "succeed".to_string() } else { format!("succeed {}", fields.iter().map(|(f, e)| format!("{f} = {}", expr_text_at(self.i.m, s.site, f, e))).collect::<Vec<_>>().join(", ")) };
                     let n = self.stmt_node(s, Kind::Succeed, vec![short(&text, 56)]);
                     out.push(Piece::Stop(n));
                 }
@@ -321,6 +321,15 @@ fn expr_text(e: &TExpr) -> String {
         TExpr::Str(s) => format!("\"{s}\""),
         TExpr::Interp(_) => format!("\"{}\"", e.show()),
         other => other.show(),
+    }
+}
+
+/// [`expr_text`] of a value at the place `path` of the statement `site`, a number written with a unit
+/// as written (`Model::shown_at`, DESIGN 40).
+fn expr_text_at(m: &Model, site: usize, path: &str, e: &TExpr) -> String {
+    match e {
+        TExpr::Str(_) | TExpr::Interp(_) => expr_text(e),
+        other => m.shown_at(site, path, other),
     }
 }
 
@@ -968,7 +977,7 @@ pub fn end_rows(i: &Input) -> Vec<EndRow> {
                 let s = stmt_of[site];
                 let text = match &s.kind {
                     TK::Succeed { fields } if fields.is_empty() => "`succeed`".to_string(),
-                    TK::Succeed { fields } => format!("`succeed {}`", fields.iter().map(|(f, e)| format!("{f} = {}", expr_text(e))).collect::<Vec<_>>().join(", ")),
+                    TK::Succeed { fields } => format!("`succeed {}`", fields.iter().map(|(f, e)| format!("{f} = {}", expr_text_at(m, s.site, f, e))).collect::<Vec<_>>().join(", ")),
                     TK::Fail { error, cause, leaving } => {
                         let mut t = format!("`fail {error}`");
                         if let Some(c) = cause {
@@ -1117,9 +1126,10 @@ fn md_prose(s: &str) -> String {
 }
 
 /// The type of an input or an output as the page names it: its type, and with a range, the range as
-/// a `.flow` writes it, a number's in the whole numbers of its type's unit (`int range >=1 <=30`) and
-/// an ordered enum's by its values (`tiers.tier range >=basic <=gold`). Without it, the type reads
-/// as taking every value of its type, which the run's door does not (DESIGN 9).
+/// the checks say it, a number's ends in its type's unit (`money[JPY] range >=1JPY <=100_000JPY`,
+/// `int range >=1 <=30`) and an ordered enum's by its values (`tiers.tier range >=basic <=gold`).
+/// Without it, the type reads as taking every value of its type, which the run's door does not
+/// (DESIGN 9).
 fn typed(m: &Model, t: &Ty, rg: Option<&Range>) -> String {
     match rg {
         Some(r) => format!("{} range {}", m.ty_name(t), m.range_text(t, r)),
@@ -1309,6 +1319,17 @@ pub fn markdown(i: &Input) -> String {
         o.push_str("|---|---|---|---|---|\n");
         for r in &read {
             let _ = writeln!(o, "| `{}` | {} | `{}` | `{}` | {} |", r.name, r.values.iter().map(|v| format!("`{v}`")).collect::<Vec<_>>().join(sep(lang)), r.path, r.there, r.ordered);
+        }
+        o.push('\n');
+    }
+    let one = one_type(i.m);
+    if !one.is_empty() {
+        let _ = writeln!(o, "## {}\n", tr(lang, "Names of one enum", "一つの列挙の名前"));
+        let _ = writeln!(o, "{}\n", one_type_note(lang));
+        let _ = writeln!(o, "{}", tr(lang, "| Names | Declared in | Name there | Values |", "| 名前 | 宣言しているファイル | そこでの名前 | 値 |"));
+        o.push_str("|---|---|---|---|\n");
+        for g in &one {
+            let _ = writeln!(o, "| {} | `{}` | `{}` | {} |", g.names.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(sep(lang)), g.file, g.there, g.values.iter().map(|v| format!("`{v}`")).collect::<Vec<_>>().join(sep(lang)));
         }
         o.push('\n');
     }
@@ -1522,6 +1543,8 @@ pub fn lit_by_visits(g: &Graph, edges: &[EdgeInfo], visits: &[Visit]) -> Lit {
             Visit::OnCancelEnd => {
                 lit.nodes.insert("oncEnd".into());
             }
+            // what the statements and the edges above draw already
+            Visit::Broke(_) | Visit::TooMany(_) | Visit::RoundFailed(..) | Visit::Check(..) | Visit::Bad(_) => {}
         }
     }
     light_edges(&mut lit, edges, &conds);
@@ -1868,11 +1891,11 @@ impl<'a> Page<'a> {
         o
     }
 
-    /// A scenario's run, step by step, from what it went through.
-    fn run_steps(&self, sc: &serde_json::Value, visits: &[Visit]) -> String {
+    /// A scenario's run, step by step, from what it went through and the answers of its calls in
+    /// the order it took them (those the languages computed among them).
+    fn run_steps(&self, answers: &[serde_json::Value], visits: &[Visit]) -> String {
         let m = self.i.m;
         let lang = self.lang();
-        let answers = sc["answers"].as_array().cloned().unwrap_or_default();
         let mut next = 0;
         let mut items: Vec<String> = Vec::new();
         let mut cur: Option<String> = None;
@@ -1948,7 +1971,7 @@ impl<'a> Page<'a> {
                         }));
                     }
                 }
-                Visit::Done(_) => {}
+                Visit::Done(_) | Visit::Broke(_) | Visit::TooMany(_) | Visit::RoundFailed(..) | Visit::Check(..) | Visit::Bad(_) => {}
                 Visit::OnFailure => {
                     flush(&mut cur, &mut items);
                     items.push("<code>on failure</code>".into());
@@ -2043,6 +2066,37 @@ fn enums_read(m: &Model, lang: Lang) -> Vec<EnumRead> {
     m.enums.iter().filter_map(|e| e.from.as_ref().map(|(path, there)| EnumRead { name: e.name.clone(), values: e.values.clone(), path: path.clone(), there: there.clone(), ordered: if e.ordered { tr(lang, "yes", "あり") } else { tr(lang, "no", "なし") } })).collect()
 }
 
+/// The names of the flow that are one enum (DESIGN 28), as the page shows them: the names, in
+/// the order of the model, the file that declares the enum and its name there, and its values.
+struct OneType {
+    names: Vec<String>,
+    file: String,
+    there: String,
+    values: Vec<String>,
+}
+
+/// Each enum the flow reads by two names or more: the same enum of one file, read by the flow
+/// (`import enum`) and by the rules it uses (`use rule`).
+fn one_type(m: &Model) -> Vec<OneType> {
+    (0..m.enums.len())
+        .filter(|e| m.enum_class(*e) == *e && !m.other_names(*e).is_empty())
+        .filter_map(|e| {
+            let d = m.enums[e].declared.as_ref()?;
+            let mut names = vec![m.enums[e].name.clone()];
+            names.extend(m.other_names(e).into_iter().map(String::from));
+            Some(OneType { names, file: d.shown.clone(), there: d.name.clone(), values: m.enums[e].values.clone() })
+        })
+        .collect()
+}
+
+fn one_type_note(lang: Lang) -> String {
+    tr(
+        lang,
+        "Each row is one enum, which the flow and the rules it uses read by these names: the same enum of one file. They are one type, so a value of one name is given where another is expected.",
+        "一行が一つの列挙です。同じファイルの同じ列挙を、フローと、フローが使う規則が、これらの名前で読んでいます。一つの型なので、一つの名前の値を、ほかの名前が要るところに渡せます。",
+    )
+}
+
 fn enums_read_note(lang: Lang) -> String {
     tr(
         lang,
@@ -2109,7 +2163,9 @@ pub fn html(i: &Input) -> String {
     let edges: Vec<EdgeInfo> = drawn.iter().flat_map(|(_, d)| d.edges.iter().map(|e| EdgeInfo { id: e.id.clone(), from: e.from.clone(), to: e.to.clone(), conds: e.conds.clone() })).collect();
     let errors = diag_errors(i.diags);
 
-    // the scenarios, when the workflow passes check: each run, what it lights up, and where it ends
+    // the scenarios, when the workflow passes check: the runs `dandori scenarios` writes, each run
+    // as `ritsu run` runs it (with rulec, koyomi and chobo where they are joined), on a clock that
+    // moves as time goes on in the run: what it lights up, and where it ends (DESIGN 36)
     struct Shown {
         name: String,
         lit: Lit,
@@ -2119,19 +2175,26 @@ pub fn html(i: &Input) -> String {
         cls: &'static str,
     }
     let mut runs: Vec<Shown> = Vec::new();
+    let mut untaken = Vec::new();
+    // the scenarios and their runs ask the ports many times, with the disk asked each question once
+    // (DESIGN 36.3)
     if errors == 0 {
-        for sc in crate::scenarios::generate(m) {
-            let Ok((trace, visits)) = crate::interp::run_visits(m, &sc, crate::render::View::Temporal) else { continue };
-            let (word, cls) = trace_end(&trace["end"], lang);
-            runs.push(Shown {
-                name: sc["name"].as_str().unwrap_or("").trim_start_matches("run ").to_string(),
-                lit: lit_by_visits(g, &edges, &visits),
-                end: end_node(g, &page.stmt_of, &visits),
-                steps: page.run_steps(&sc, &visits),
-                word,
-                cls,
-            });
-        }
+        ritsu_base::fs::steady(|| {
+            let list = crate::scenarios::generate_computed(m);
+            untaken = crate::scenarios::untaken(m, &list);
+            for sc in &list {
+                let Some((trace, visits, answers)) = crate::scenarios::run_written(m, sc, crate::render::View::Temporal) else { continue };
+                let (word, cls) = trace_end(&trace["end"], lang);
+                runs.push(Shown {
+                    name: sc["name"].as_str().unwrap_or("").trim_start_matches("run ").to_string(),
+                    lit: lit_by_visits(g, &edges, &visits),
+                    end: end_node(g, &page.stmt_of, &visits),
+                    steps: page.run_steps(&answers, &visits),
+                    word,
+                    cls,
+                });
+            }
+        });
     }
     let checks: Vec<Lit> = i.diags.iter().map(|d| lit_by_steps(g, &edges, d)).collect();
     let docs = rule_docs(i, true);
@@ -2186,18 +2249,27 @@ pub fn html(i: &Input) -> String {
     if errors > 0 {
         let _ = write!(o, "<p class=\"note\">{}</p>", tr(lang, "None: `dandori check` finds errors in this workflow.", "検査でエラーが見つかっているので、シナリオはありません。").replace('`', ""));
     } else {
-        let every = if m.cases.is_empty() {
-            match lang {
-                Lang::En => format!("{} scenarios that together take every arm and every handler of an error, grouped by how they end. Pick one to light up the way it goes.", runs.len()),
-                Lang::Ja => format!("すべての分岐と、エラーを処理するすべての箇所を通る {} 本のシナリオを、終わり方ごとにまとめています。選ぶと、その実行が通るところが光ります。", runs.len()),
-            }
-        } else {
-            match lang {
-                Lang::En => format!("{} scenarios that together take every arm, every handler of an error and every way a case can move, grouped by how they end. Pick one to light up the way it goes.", runs.len()),
-                Lang::Ja => format!("すべての分岐、エラーを処理するすべての箇所、案件の状態の移り方のすべてを通る {} 本のシナリオを、終わり方ごとにまとめています。選ぶと、その実行が通るところが光ります。", runs.len()),
-            }
+        // what they take: every arm and every handler of an error, but what none takes, said below
+        // as `dandori scenarios` says it (DESIGN 36)
+        let but = !untaken.is_empty();
+        let every = match (m.cases.is_empty(), lang, but) {
+            (true, Lang::En, false) => format!("{} scenarios that together take every arm and every handler of an error, grouped by how they end. Pick one to light up the way it goes.", runs.len()),
+            (true, Lang::Ja, false) => format!("すべての分岐と、エラーを処理するすべての箇所を通る {} 本のシナリオを、終わり方ごとにまとめています。選ぶと、その実行が通るところが光ります。", runs.len()),
+            (false, Lang::En, false) => format!("{} scenarios that together take every arm, every handler of an error and every way a case can move, grouped by how they end. Pick one to light up the way it goes.", runs.len()),
+            (false, Lang::Ja, false) => format!("すべての分岐、エラーを処理するすべての箇所、案件の状態の移り方のすべてを通る {} 本のシナリオを、終わり方ごとにまとめています。選ぶと、その実行が通るところが光ります。", runs.len()),
+            (true, Lang::En, true) => format!("{} scenarios that together take every arm and every handler of an error but those below, grouped by how they end. Pick one to light up the way it goes.", runs.len()),
+            (true, Lang::Ja, true) => format!("下に挙げるものを除く、すべての分岐と、エラーを処理するすべての箇所を通る {} 本のシナリオを、終わり方ごとにまとめています。選ぶと、その実行が通るところが光ります。", runs.len()),
+            (false, Lang::En, true) => format!("{} scenarios that together take every arm, every handler of an error but those below, and every way a case can move, grouped by how they end. Pick one to light up the way it goes.", runs.len()),
+            (false, Lang::Ja, true) => format!("下に挙げるものを除く、すべての分岐とエラーを処理するすべての箇所、案件の状態の移り方のすべてを通る {} 本のシナリオを、終わり方ごとにまとめています。選ぶと、その実行が通るところが光ります。", runs.len()),
         };
         let _ = write!(o, "<p class=\"note\">{every}</p>");
+        if but {
+            o.push_str("<ul class=\"untaken\">");
+            for u in &untaken {
+                let _ = write!(o, "<li>{}</li>", inline(u.said().get(lang)));
+            }
+            o.push_str("</ul>");
+        }
         // grouped by where they end, in the order of the file
         let mut groups: Vec<(String, String, &'static str, Vec<usize>)> = Vec::new();
         for (k, r) in runs.iter().enumerate() {
@@ -2257,6 +2329,14 @@ pub fn html(i: &Input) -> String {
         let _ = write!(o, "<h2>{}</h2><p class=\"note\">{}</p><table><thead><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr></thead><tbody>", tr(lang, "Enums read from other files", "ほかのファイルから読んだ列挙"), inline(&enums_read_note(lang)), tr(lang, "Enum", "列挙"), tr(lang, "Values", "値"), tr(lang, "File", "ファイル"), tr(lang, "Name there", "そこでの名前"), tr(lang, "Ordered", "順"));
         for r in &read {
             let _ = write!(o, "<tr><td><code>{}</code></td><td>{}</td><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>", esc(&r.name), r.values.iter().map(|v| format!("<code>{}</code>", esc(v))).collect::<Vec<_>>().join(sep(lang)), esc(&r.path), esc(&r.there), r.ordered);
+        }
+        o.push_str("</tbody></table>");
+    }
+    let one = one_type(m);
+    if !one.is_empty() {
+        let _ = write!(o, "<h2>{}</h2><p class=\"note\">{}</p><table><thead><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr></thead><tbody>", tr(lang, "Names of one enum", "一つの列挙の名前"), inline(&one_type_note(lang)), tr(lang, "Names", "名前"), tr(lang, "Declared in", "宣言しているファイル"), tr(lang, "Name there", "そこでの名前"), tr(lang, "Values", "値"));
+        for g in &one {
+            let _ = write!(o, "<tr><td>{}</td><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>", g.names.iter().map(|n| format!("<code>{}</code>", esc(n))).collect::<Vec<_>>().join(sep(lang)), esc(&g.file), esc(&g.there), g.values.iter().map(|v| format!("<code>{}</code>", esc(v))).collect::<Vec<_>>().join(sep(lang)));
         }
         o.push_str("</tbody></table>");
     }
@@ -2329,6 +2409,7 @@ header.top .desc.open { -webkit-line-clamp: unset; }
 .side h2 { font-size: 13px; margin: 4px 0 6px; text-transform: none; }
 .side section + section { margin-top: 16px; }
 .note { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+ul.untaken { font-size: 12px; color: var(--muted); margin: 0 0 10px; padding-left: 16px; }
 ul.groups, ul.checks, ul.rules, ul.legend, ul.facts, ol.steps { list-style: none; margin: 0; padding: 0; }
 .group { margin: 0 0 10px; }
 .gl { font-size: 12px; margin-bottom: 3px; }

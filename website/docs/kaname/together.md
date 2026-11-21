@@ -76,9 +76,9 @@ with its answer. GOV.UK's own example is £1,000 paid 50 days late, at a base ra
 ```console
 $ cd crates/kaname
 $ ritsu kaname run examples/late_payment/late_payment.kn claim --input tests/inputs/late_payment.json
-claim(invoice: Invoice { id: "inv_1", invoiced: 2026-03-02, amount: 100000GBPc }, paid_on: 2026-05-20, reference_rate: 0.5%)
+claim(invoice: Invoice { id: "inv_1", invoiced: 2026-03-02, amount: 100_000GBPc }, paid_on: 2026-05-20, reference_rate: 0.5%)
   line 20: terms.due(invoiced: 2026-03-02) = 2026-03-31
-  line 23: charges(debt: 100000GBPc, days_late: 50, reference_rate: 0.5%) = { compensation: 70GBP, interest: 1150GBPc }
+  line 23: charges(debt: 100_000GBPc, days_late: 50, reference_rate: 0.5%) = { compensation: 70GBP, interest: 1150GBPc }
 = Claim { due: 2026-03-31, days_late: 50, compensation: 70GBP, interest: 1150GBPc }
 ```
 
@@ -99,6 +99,13 @@ error[E102]: tests/docs/dollars.kn:7:67: The argument `fee` of the transfer `led
 A value of an enum with fields, a dict or a set, a `result` and a function value go to no rule,
 date or transfer as they are: a module splits them with `match`, or makes them a list or a value of
 the type the rule takes.
+
+An enum is the place it is declared. When the product categories are written once in an `enums`
+file, and the shipping rule and the returns rule each read them with `import enum`, the module
+reads the same enum by three names: the file read with `use rule` (`catalog.category`), and each
+rule (`shipping.category`, `returns.category`). They are one type, so a category the module holds
+goes to both rules. A rule that declares a `category` of its own makes another type, even with the
+same values, and the error says where each is declared.
 
 ## Across the languages
 
@@ -121,8 +128,8 @@ error[kaname E401]: tests/docs/net.kn:13:1: `capture` is written `total`, but it
   = Make the places shown (narrow the values with an `if` before they go there), or write a wider effect.
 error[ritsu E203]: tests/docs/net.kn:15:74: `payment.amount - fee`, given to `amount` of the transfer `ledger.capture.do`, can be an amount chobo does not take
     15 |   ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount - fee)
-  = For example, `capture(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` gives it -48.
-  = chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step.
+  = For example, `capture(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` gives it -48USDc.
+  = chobo takes an amount from 0 to 2⁶³ − 1 in the unit's smallest step.
   = kaname's generated code checks the amount where it builds the transfer, and the function fails there with `range`.
   = Narrow the amount with an `if` before the transfer, or make a negative amount a transfer the other way.
 ritsu check: 3 files (rulec 1, chobo 1, kaname 1): 1 fail (2 errors); borders between the languages: 2 checked, 0 undecided

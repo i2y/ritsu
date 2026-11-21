@@ -1,0 +1,6 @@
+警告[W202]: tests/mutants/W202_a_line_written_for_a_type_no_action_takes.gate:21:1: この行が当たる呼び出しがありません。ワークフロー `pay`（`../../examples/claims/flows/pay.flow`）のどの呼び出しも、`claim_id` を `Payment` の ID として渡しません
+    21 |   resource Payment from claim_id
+  = `ritsu check` がこの行を前提にするのは、`claim_id` を ID として渡す呼び出しだけです（E212 と、ゲートが呼び出しを許すかの確かめ）。この行は、フローのどの呼び出しの確かめにも効きません。
+  = `Payment` を引数から受け取る action がありません。`pay_claim` は `Claim` を `claimId` から受け取ります。
+  = action が受け取る resource の型を書くか、行を消してください。
+tests/mutants/W202_a_line_written_for_a_type_no_action_takes.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0

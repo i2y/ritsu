@@ -1,0 +1,3 @@
+error[E104]: tests/mutants/E104_enums_declared_at_two_places.gate:31:36: `resource.status` (the enum `order_status`) and `resource.asked` (the enum `shared_status`) are of different types, and do not compare
+    31 |   when resource.status is resource.asked
+  = The enum `order_status` is an enum this gate declares; the enum `shared_status` is the enum `order_status` of the `enums` file `read/order_states.rule`. Enums declared at two places are two types, even with the same values; to make them one, put the enum in an `enums` file, and read it with `import enum` in each file that uses it.

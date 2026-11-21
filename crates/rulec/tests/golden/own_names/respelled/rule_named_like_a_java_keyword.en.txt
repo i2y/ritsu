@@ -1,0 +1,10 @@
+warning[W121]: `transient` is a keyword as written in Java, so the generated code there writes it with `_` after it
+  --> tests/own_names/respelled/rule_named_like_a_java_keyword.rule:1
+  |
+1 | rule transient v1
+  |      ^^^^^^^^^ the rule's name
+  |
+ Java: the method of the rule's class `Transient` is `transient_`, the name a caller calls it by.
+ The code builds as it is. For a name with no `_` in any language, give it an alias (`transient(<alias>)`).
+
+ok tests/own_names/respelled/rule_named_like_a_java_keyword.rule

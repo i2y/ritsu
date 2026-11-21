@@ -1,0 +1,8 @@
+diff: tests/fixtures/reads/changes/schemas.diff
+files read by the files that requirements name, that the diff touches:
+  tests/fixtures/reads/api/schemas.yaml
+    openapi "api/refunds.yaml" line 13 ($ref): met by refund_api
+changes no requirement reaches: none
+requirements touched:
+  refund_api (tests/fixtures/reads/refunds.req:33): owner finance; decided 2026-11-02 by finance: "Written for this test"
+1 requirement touched; ask finance

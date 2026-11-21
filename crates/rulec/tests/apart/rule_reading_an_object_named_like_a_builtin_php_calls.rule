@@ -1,0 +1,18 @@
+rule array_sum v1
+description "A rule that reads a caller's object, named like the builtin the PHP module sums what it reads with"
+# The caller has already fixed the shape of an order with a JSON Schema. The total of its lines is
+# read from it: the code that reads the order is generated, and sums what it reads.
+shape order = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  total : money[USD]  range >=0USD <=100_000USD  from sum order.lines of amount_usd
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+# A small order pays for its handling
+table fee_by_total
+policy unique
+| total    | -> fee |
+| <100USD  | 10USD  |
+| >=100USD | 0USD   |

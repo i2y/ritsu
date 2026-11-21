@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_フィールドと同じ名前の列.ringi:22:3: The column `承認者` has the name of the field `承認者` (line 8), so it holds the field's values, and its rows name ways to choose an approver
+    22 | | 承認者(approver) | -> 回す先(goes_to) |
+  = An input column of a named table holds the values of the field of the form it is named as, and any other the names of the ways to choose an approver. A field's name is a key of the JSON of a ticket, and cannot be written under another name: give the column of the ways a name no field has (`| current | -> goes_to |`).

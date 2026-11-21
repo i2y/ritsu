@@ -7,7 +7,7 @@ dandori scenarios <file.flow> [--out <dir>]
 dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
 dandori api <file.flow>
-dandori explain <CODE> | --all [--format markdown|json]
+dandori explain <CODE>... | --all [--format markdown|json]
 dandori <command> --help
 dandori --version
 ```
@@ -20,9 +20,9 @@ A workflow that uses rules, dates files or books (`use rule`, `use dates`, `use 
 |---|---|
 | `check` | Checks one or more `.flow` files: types, every arm, every state a case can be left in, retries. Prints the diagnostics, each with the run that gets there, and `ok` for a file that passes. |
 | `gen` | Writes the code for each platform its `--target` names (one or more), each into `<out>/<target>/` (`generated/` by default), in the order of the platforms above whatever the order given, and prints each file's path. Also refuses what a platform cannot do (E050), and a workflow whose one run can outgrow the platform (E040); when one platform refuses, nothing is written. With `--check` it writes nothing, prints each file that is missing or differs, and exits 1 if there is one. [Build for a platform](../platforms.md) |
-| `scenarios` | Writes scenarios (an input and the answers the calls get) that together take every arm, every handler and every way a case can move, and for each place of the inputs held to a range, one whose input is just outside it there: one file each into `--out`, or all of them as JSON on standard output. |
-| `run` | Plays one scenario through the reference interpreter, and prints every call as the target would make it, every wait, and how the run ends. |
-| `doc` | Draws the workflow for the person who reviews it: the flow, what each call does and where its errors go, and every way the workflow can end. Markdown with Mermaid charts, or one HTML page (`--format html`) where each scenario lights up the way its run goes; into `<name>.md` or `<name>.html` in `--out`, else on standard output. The rules the workflow calls are put in as `rulec doc` renders them. It draws a workflow whose check finds errors too, and exits with 1. [Draw a workflow](../diagrams.md) |
+| `scenarios` | Writes scenarios (an input and the answers the calls get) that together take every arm, every handler and every way a case can move, and for each place of the inputs held to a range, one whose input is just outside it there: one file each into `--out`, or all of them as JSON on standard output. Run as `ritsu dandori scenarios`, the calls of the flow's own rules, the calls of its dates and the operations of its books are computed by rulec, koyomi and chobo, as `ritsu run` computes them, and not written; to reach each arm of a `match` on a rule's answer, it chooses where the values the rule is given come from (the answers of the tasks before, the input). Each scenario is run as `ritsu run` runs it before it is written. An arm or a handler no scenario takes is said after the scenarios on standard error, with rulec's reason where rulec says the rule never comes to it. |
+| `run` | Plays one scenario through the reference interpreter, and prints every call as the target would make it, every wait, and how the run ends. `now` reads the run's clock, which starts at the scenario's `now` and goes on by each wait. Answers the run does not take are an error of the scenario's: after the run, it says which answers they are and why a run leaves answers, and exits 1, as when the scenario runs out of answers. |
+| `doc` | Draws the workflow for the person who reviews it: the flow, what each call does and where its errors go, and every way the workflow can end. Markdown with Mermaid charts, or one HTML page (`--format html`) where each scenario `scenarios` writes lights up the way its run goes, as `ritsu run` runs it; into `<name>.md` or `<name>.html` in `--out`, else on standard output. The rules the workflow calls are put in as `rulec doc` renders them. It draws a workflow whose check finds errors too, and exits with 1. [Draw a workflow](../diagrams.md) |
 | `api` | Prints what the workflow declares as one JSON object, without the source being read: [the format](#the-json-of-api). It needs a workflow that passes `check`; one that does not is given the diagnostics `check` gives, and exit 1. |
 | `explain` | Looks a diagnostic code up: when it comes, how to fix it, and the smallest `.flow` that gets it, with what goes beside it. `--all` prints every code; `--format markdown` prints Markdown, `--format json` the machine-facing JSON. [Diagnostics](codes.md) |
 
@@ -66,7 +66,7 @@ platform the workflow is written for. The keys, in order:
 | `period`, `history_encrypted` | the period the workflow runs in (`text`, `min`, `max`, `line`), and the line of `history encrypted`; else `null` |
 | `uses` | each `use` line: `kind` (`rule`, `dates`, `book`, `openapi`, `smithy`, `proto`), `name`, `file` as written and `line`; for a rule also its name, version, `sha256`, `inputs` and `outputs` with their types and ranges, and whether it is called as a `lambda`, `local`, at a `connect` URL or through a `connection`; for a dates file its dates with their parameters; for a book its transfers |
 | `inputs`, `outputs` | each with `name`, `type`, `optional`, `range`, `secret` and `line`; an input, and a field of a record, also `fed_by`, the naming of its `fed by` when it has one. A `range` is `text` as the `.flow` writes it and `min` and `max` as data (a number, a day, a moment, or the value of an ordered enum, with all the `values` it lets in) |
-| `enums`, `records` | each with its values or fields; an enum's `from` is the file and the name an `import enum` read it from (null for one written in the flow); a record's `origin` says whether it is the workflow's own, a rule's outputs, a hold, or a message of a `.proto` |
+| `enums`, `records` | each with its values or fields; an enum's `from` is the file and the name an `import enum` read it from (null for one written in the flow), and its `same_as` the other names of the flow that are the same type, the same enum of one file read by another name (`[]` when there are none); a record's `origin` says whether it is the workflow's own, a rule's outputs, a hold, or a message of a `.proto` |
 | `tasks` | each with `kind` (`http`, `connect`, `aws`, `lambda`, `agent`, `jev`, `book`, `workflow`, `state_machine`, `durable_function`, `argo_template`, `image`, `event`, or `own` for the implementation you write), what it `calls`, `params` and `result` (type, range, secret), `timeout`, `deadline`, `retry`, `key`, `idempotent`, `changes_things`, `callback`, `errors` with their status or exception, `refused_as`, `machine`, and `discloses` |
 | `cases` | each with the `record` it holds, the machine it `follows`, its `states` and `final` states, what is `held`, the `external` events, and `refused_when` |
 | `children` | each child `.flow` a task runs: the task, the `file`, the workflow, its `inputs` and `outputs` |
@@ -84,7 +84,7 @@ platform the workflow is written for. The keys, in order:
 | `--format json` | the diagnostics of `check` as JSON, for tools |
 | `--format html` | the page `doc` writes, as HTML; Markdown by default |
 | `--all`, `--format markdown` or `--format json` | every code, for `explain`; as Markdown, or as JSON |
-| `--lang ja` or `--lang en` | the language of the messages; else `DANDORI_LANG`, then `RITSU_LANG`, else English |
+| `--lang ja` or `--lang en` | the language of the messages and of the page `doc` writes; without it, the messages follow `DANDORI_LANG`, then `RITSU_LANG`, else English, and the page is in English |
 | `--help` | what the command takes, its exit codes and examples (`dandori help <command>` is the same page); `dandori --help` lists the commands |
 | `--version` | `dandori --version` prints the version |
 

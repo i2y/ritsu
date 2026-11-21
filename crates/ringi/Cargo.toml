@@ -1,0 +1,28 @@
+[package]
+name = "ringi"
+version.workspace = true
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "A language for a company's applications and approvals: the form of a request, the route it takes and who approves at each stage, its deadlines and what happens when it ends, written in one file and checked in ritsu's types"
+repository.workspace = true
+
+# ritsu's base layer, and nothing from outside (ritsu's DESIGN 3.1): JSON is ritsu-base's, as
+# rulec's, sekisho's and kaname's are. The languages a request reads and is lowered to (rulec,
+# koyomi, chobo, dandori, sekisho, kaname) are handed to it through ritsu's ports; the library holds
+# none of them.
+[dependencies]
+ritsu-base = { path = "../ritsu-base" }
+ritsu-emit = { path = "../ritsu-emit" }
+ritsu-ports = { path = "../ritsu-ports" }
+ritsu-units = { path = "../ritsu-units" }
+
+# The languages a request reads and is lowered to, each through its own engine of ritsu's ports: the
+# tests join them as `ritsu ringi` does (ritsu's DESIGN 3.3). ringi's own code holds none of them.
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }
+chobo = { path = "../chobo" }
+dandori = { path = "../dandori" }
+kaname = { path = "../kaname" }
+koyomi = { path = "../koyomi" }
+rulec = { path = "../rulec" }
+sekisho = { path = "../sekisho" }

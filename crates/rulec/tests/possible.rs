@@ -10,6 +10,12 @@ use ritsu_testkit::{Need, TempDir, need, ready};
 use rulec::json::Json;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -489,7 +495,7 @@ fn 積の値は約数で決まる() {
 #[test]
 fn e146_計算する値は一部だけを挙げる() {
     let few = notes(&computed("qty + price", "possible total = 3000000\n"), "E146");
-    assert!(few.contains("total answers values such as 2 / 3 / 4 / 1000001 / 1000002 / 2000000."), "{few}");
+    assert!(few.contains("total answers values such as 2 / 3 / 4 / 1_000_001 / 1_000_002 / 2_000_000."), "{few}");
     let many = notes(&computed("qty * price", "possible total = 1000003\n"), "E146");
     assert!(many.contains("total answers values such as 1 / 2 / 4 / … / "), "{many}");
     assert!(!many.contains("different values"), "{many}");
@@ -713,15 +719,9 @@ fn 生成したコードが並びを再生する() {
     let out_dir = d.join("gen").to_string_lossy().into_owned();
     let (c, out) = rulec(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/order_happens.rule", "--out", &out_dir]));
     assert_eq!(c, 0, "{out}");
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmpdir_in(Path::new(&out_dir)))
-        .current_dir(root())
-        .args(["test", &out_dir, "--format", "json"])
-        .output()
-        .unwrap();
-    let said = String::from_utf8_lossy(&o.stdout).into_owned();
-    assert_eq!(o.status.code(), Some(0), "the generated code plays the calls of the `possible` lines:\n{said}");
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(Path::new(&out_dir))).current_dir(root()).args(["test", &out_dir, "--format", "json"]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone();
+    assert_eq!(o.code, Some(0), "the generated code plays the calls of the `possible` lines:\n{said}");
 }
 
 // ------------------------------------------------------------------------------------------------

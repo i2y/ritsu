@@ -1,0 +1,28 @@
+2026-11-16 10:00  submit              e0001  -> turned（e0201、e0202、e0203、e0204 のだれか）、期限は 2026-11-19 の終わり; skipped を飛ばした（no head is above the requester; nobody is above to go up to）; turned を e0201、e0202、e0203、e0204 へ回した（no head is above the requester; nobody is above to go up to: board）
+2026-11-16 11:00  approve             e0201  -> stopped（だれもいない。管理する人が承認者を足すのを待つ）、期限は 2026-11-19 の終わり; stopped にだれもいない（no head is above the requester; nobody is above to go up to）
+2026-11-16 12:00  add approver e0101         -> stopped（e0101）、期限は 2026-11-19 の終わり
+2026-11-16 13:00  approve             e0101  -> nobody（だれもいない。管理する人が承認者を足すのを待つ）、期限は 2026-11-19 の終わり; nobody にだれもいない（no head is above the requester; nobody is above to go up to, and dept_head has nobody: no team of the kind department is above the requester）
+2026-11-16 14:00  add approver e0102         -> nobody（e0102）、期限は 2026-11-19 の終わり
+2026-11-16 15:00  approve             e0102  -> stays（だれもいない。管理する人が承認者を足すのを待つ）、期限は 2026-11-19 の終わり; stays にだれもいない（no head is above the requester）
+2026-11-16 16:00  add approver e0101         -> stays（e0101）、期限は 2026-11-19 の終わり
+2026-11-16 17:00  approve             e0101  -> last（e0201、e0202、e0203、e0204 のだれか）、期限は 2026-11-19 の終わり
+2026-11-17 10:00  approve             e0202  -> approved
+シナリオ `the_president_asks`: 書いたとおり（9 行）
+
+2026-11-16 10:00  submit   e0001  -> turned（e0201、e0202、e0203、e0204 のだれか）、期限は 2026-11-19 の終わり; skipped を飛ばした（no head is above the requester; nobody is above to go up to）; turned を e0201、e0202、e0203、e0204 へ回した（no head is above the requester; nobody is above to go up to: board）
+2026-11-16 11:00  approve  e0201  -> stopped（だれもいない。管理する人が承認者を足すのを待つ）、期限は 2026-11-19 の終わり; stopped にだれもいない（no head is above the requester; nobody is above to go up to）
+2026-11-20 00:00  late            -> expired; 期限切れ（late; nowhere to go up）
+シナリオ `nobody_is_added`: 書いたとおり（3 行）
+
+2026-11-16 10:00  submit  e0001  -> turned（e0201、e0202、e0203、e0204 のだれか）、期限は 2026-11-19 の終わり; skipped を飛ばした（no head is above the requester; nobody is above to go up to）; turned を e0201、e0202、e0203、e0204 へ回した（no head is above the requester; nobody is above to go up to: board）
+2026-11-20 00:00  late           -> expired; 期限切れ（late; nowhere to go up）
+シナリオ `the_board_is_late`: 書いたとおり（2 行）
+
+2026-11-16 10:00  submit   e1201  -> skipped（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  approve  e1101  -> turned（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:01  approve  e1101  -> stopped（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:02  approve  e1101  -> nobody（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:03  approve  e1101  -> stays（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:04  approve  e1101  -> last（e0001、e0201、e0202、e0203、e0204 のだれか）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e0001  -> approved
+シナリオ `a_member_of_the_staff_asks`: 書いたとおり（7 行）

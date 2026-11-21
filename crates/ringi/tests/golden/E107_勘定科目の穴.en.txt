@@ -1,0 +1,5 @@
+error[E107]: tests/mutants/E107_勘定科目の穴.ringi:6:3: The master `マスタ.勘定科目` has no row to choose on 2026-07-01 to 2026-07-31
+     6 |   科目(account) : choice from マスタ.勘定科目 "勘定科目"
+  = The request is used from 2026-01-01 on, and the field `科目` reads the master on each of those days.
+  = The row before: `tests/mutants/shared/穴のある勘定科目.csv`, line 2 (`5103`, from 2026-01-01 to 2026-06-30); making its `valid_to` 2026-07-31 fills it.
+  = The row after: `tests/mutants/shared/穴のある勘定科目.csv`, line 3 (`5110`, from 2026-08-01 with no end); making its `valid_from` 2026-07-01 fills it.

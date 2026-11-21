@@ -1,0 +1,14 @@
+error[E002]: tests/fixtures/chain_declarations.ja.flow:8:10: there is no type `strng`
+     8 |   ID   : strng
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E002]: tests/fixtures/chain_declarations.ja.flow:13:9: there is no type `札の種類`
+    13 |   札   : 札の種類
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E002]: tests/fixtures/chain_declarations.ja.flow:16:24: there is no type `見積り`
+    16 | task 取得(ID: string) -> 見積り
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E002]: tests/fixtures/chain_declarations.ja.flow:19:25: there is no type `役割`
+    19 | task 尋ねる(ID: string, 役: 役割)
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E007]: tests/fixtures/chain_declarations.ja.flow:25:20: `無い` and `遅い` both come back as 410; Step Functions tells errors apart by status, so give each its own
+    25 |   errors 無い = 410, 遅い = 410

@@ -1,9 +1,9 @@
 error[E005]: tests/fixtures/dates.flow:6:11: could not read the dates file `dates/無い.cal`
      6 | use dates 無い from "dates/無い.cal"
-  = cannot read `dates/無い.cal`: No such file or directory (os error 2)
+  = `tests/fixtures/dates/無い.cal` is not there
 error[E005]: tests/fixtures/dates.flow:7:11: could not read the dates file `dates/壊れた.cal`
      7 | use dates 壊れた from "dates/壊れた.cal"
-  = E010: The public name 起点 has no ASCII alias (dates/壊れた.cal, line 6)
+  = E010: The public name 起点 has no ASCII alias (tests/fixtures/dates/壊れた.cal, line 6)
 error[E006]: tests/fixtures/dates.flow:8:10: `期限` is used twice (rules, dates files and books share names)
      8 | use book 期限 from "../flows/books/倉庫.book"
 error[E002]: tests/fixtures/dates.flow:22:11: the dates file `期限` has no date `無い日` (期日)

@@ -1,0 +1,503 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Library",
+    "version": "1.0.0",
+    "description": "A library's books, shelves, loans and notes, whose parameters go to the path, the query, a header, a cookie and a URL-encoded body, written in each of OpenAPI's styles, for tests/flows/http_places.flow"
+  },
+  "servers": [
+    {
+      "url": "https://library.example.com"
+    }
+  ],
+  "paths": {
+    "/books/{ids}": {
+      "get": {
+        "operationId": "findBooks",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "authors",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "years",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Years"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Sort"
+            },
+            "style": "deepObject",
+            "explode": true
+          },
+          {
+            "name": "words",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "spaceDelimited",
+            "explode": false
+          },
+          {
+            "name": "codes",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "pipeDelimited",
+            "explode": false
+          },
+          {
+            "name": "lost",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "note",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How many books there are",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shelves/{shelf}/spots{spot}/labels/{labels}": {
+      "get": {
+        "operationId": "lookSpot",
+        "parameters": [
+          {
+            "name": "shelf",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "spot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Spot"
+            },
+            "style": "matrix",
+            "explode": true
+          },
+          {
+            "name": "labels",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "label",
+            "explode": true
+          },
+          {
+            "name": "X-Library-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Trace-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Shelves",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "name": "X-Spot",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Spot"
+            },
+            "explode": true
+          },
+          {
+            "name": "session-id",
+            "in": "cookie",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "prefs",
+            "in": "cookie",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "explode": false
+          },
+          {
+            "name": "theme",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The spot on the shelf",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Seen"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{book-id}/loans": {
+      "post": {
+        "operationId": "lend",
+        "parameters": [
+          {
+            "name": "book-id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "due",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reader": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reader"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The loan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Loan"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{id}/notes": {
+      "post": {
+        "operationId": "noteBook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "place": {
+                    "$ref": "#/components/schemas/Place"
+                  },
+                  "marks": {
+                    "$ref": "#/components/schemas/Marks"
+                  },
+                  "words": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "memo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text",
+                  "tags",
+                  "place",
+                  "marks",
+                  "words"
+                ]
+              },
+              "encoding": {
+                "marks": {
+                  "style": "deepObject",
+                  "explode": true
+                },
+                "words": {
+                  "style": "pipeDelimited",
+                  "explode": false
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Note"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Years": {
+        "type": "object",
+        "properties": {
+          "first": {
+            "type": "integer"
+          },
+          "last": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "first",
+          "last"
+        ]
+      },
+      "Sort": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "order": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by"
+        ]
+      },
+      "Spot": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer"
+          },
+          "col": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row",
+          "col"
+        ]
+      },
+      "Place": {
+        "type": "object",
+        "properties": {
+          "room": {
+            "type": "string"
+          },
+          "shelf": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "room",
+          "shelf"
+        ]
+      },
+      "Marks": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "line": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page",
+          "line"
+        ]
+      },
+      "Found": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "count"
+        ]
+      },
+      "Seen": {
+        "type": "object",
+        "properties": {
+          "shelf": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "shelf"
+        ]
+      },
+      "Loan": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "Note": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    }
+  }
+}

@@ -179,17 +179,27 @@ impl<'a> P<'a> {
     }
 
     fn file_of(&mut self, nodes: &[Node]) -> Option<File> {
-        let first = &nodes[0];
+        let start = || tr!("ファイルが `map` か `context` の行で始まっていません", "The file does not start with a `map` or a `context` line");
+        let how = || {
+            tr!(
+                "コンテキストマップなら `map 通販(shop) v1`、一つのコンテキストなら `context 在庫(inventory) v1` のように書き始めてください。",
+                "Start a context map like `map 通販(shop) v1`, and one context like `context 在庫(inventory) v1`."
+            )
+        };
+        // an empty file, or one of comments and blank lines, has no line to start with: said at its
+        // first line, as a file whose first line is another one is
+        let Some(first) = nodes.first() else {
+            self.diags.push(diag::at("E003", self.file, 1, 1, start()).source(self.src));
+            self.note(how());
+            return None;
+        };
         let l = self.line(first);
         match l.tokens[0].word() {
             Some(kw::MAP) => self.map_file(nodes).map(File::Map),
             Some(kw::CONTEXT) => self.context_file(nodes).map(File::Context),
             _ => {
-                self.push("E003", l, l.tokens[0].col, tr!("ファイルが `map` か `context` の行で始まっていません", "The file does not start with a `map` or a `context` line"));
-                self.note(tr!(
-                    "コンテキストマップなら `map 通販(shop) v1`、一つのコンテキストなら `context 在庫(inventory) v1` のように書き始めてください。",
-                    "Start a context map like `map 通販(shop) v1`, and one context like `context 在庫(inventory) v1`."
-                ));
+                self.push("E003", l, l.tokens[0].col, start());
+                self.note(how());
                 None
             }
         }
@@ -453,8 +463,8 @@ impl<'a> P<'a> {
                             Some(Tool::Yuen | Tool::Sakai) => {
                                 self.push("E002", l, col, tr!("ここに `{w}` のファイルは書けません", "A `{w}` file does not go here"));
                                 self.note(tr!(
-                                    "書けるのは成果物（rulec、dandori、koyomi、chobo、geas、sekisho、kaname、proto、file、openapi、asyncapi、cedar、jsonschema）とディレクトリ（dir）です。",
-                                    "Artifacts (rulec, dandori, koyomi, chobo, geas, sekisho, kaname, proto, file, openapi, asyncapi, cedar, jsonschema) and directories (dir) go here."
+                                    "書けるのは成果物（rulec、dandori、koyomi、chobo、geas、sekisho、kaname、ringi、proto、file、openapi、asyncapi、cedar、jsonschema）とディレクトリ（dir）です。",
+                                    "Artifacts (rulec, dandori, koyomi, chobo, geas, sekisho, kaname, ringi, proto, file, openapi, asyncapi, cedar, jsonschema) and directories (dir) go here."
                                 ));
                                 return None;
                             }

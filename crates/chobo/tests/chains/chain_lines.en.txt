@@ -1,0 +1,5 @@
+error[E001]: chain_lines.book:8:39: unexpected `:`; write `account <name>(<parameter>: string, …) : <unit>` (no parentheses without parameters; `outside` at the end for an outside account)
+     8 | account seller_balance(seller: string : USD
+error[E001]: chain_lines.book:22:1: a `key` line goes indented under an `account` or a `transfer`
+    22 | key payment
+chain_lines.book: 2 error(s), 0 warning(s)

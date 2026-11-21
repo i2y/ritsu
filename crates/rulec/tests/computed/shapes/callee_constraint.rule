@@ -1,0 +1,24 @@
+rule callee_constraint v1
+description "An applied rule with a `constraint` between its inputs, read with both ends"
+
+enum verdict = ok | check
+
+inputs
+  lo : number  range >=0 <=100
+  hi : number  range >=0 <=100
+
+constraint lo <= hi
+
+apply s = "shared/span.rule" meaning:6f36ae91ac127f18
+  lo = lo
+  hi = hi
+  size -> s_size
+
+outputs
+  v : verdict
+
+table pick
+| lo   | hi   | s_size | -> v  |
+| <=50 | <=50 | narrow | ok    |
+| <=50 | >50  | wide   | check |
+| >50  | -    | narrow | ok    |

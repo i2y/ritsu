@@ -1,0 +1,18 @@
+error[E014]: tests/fixtures/enum_range_arms.flow:42:1: `wide` can be outside `>=silver <=gold`, the range of the parameter `campaign` of `send`: it can be `basic`
+    42 |       send(campaign: wide)
+  = Write `range >=silver <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+error[E014]: tests/fixtures/enum_range_arms.flow:45:1: `wide` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
+    45 |   let b = tiers(member: wide, campaign: wide, subtotal: subtotal)
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+error[E014]: tests/fixtures/enum_range_arms.flow:65:1: `chosen` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
+    65 |       let e = tiers(member: wide, campaign: chosen, subtotal: subtotal)
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+error[E014]: tests/fixtures/enum_range_arms.flow:72:1: `turn` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
+    72 |         let f = tiers(member: wide, campaign: turn, subtotal: subtotal)
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+error[E014]: tests/fixtures/enum_range_arms.flow:74:1: `turn` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
+    74 |       let g = tiers(member: wide, campaign: turn, subtotal: subtotal)
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+error[E014]: tests/fixtures/enum_range_arms.flow:80:1: `wide` can be outside `>=silver <=gold`, the range of the parameter `campaign` of `send`: it can be `basic`
+    80 |   send(campaign: wide)
+  = Write `range >=silver <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in

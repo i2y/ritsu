@@ -1,0 +1,20 @@
+rule review_only v1
+description "Whether a fee needs a review, read from a rule whose fee is its result (fictional)"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+
+apply fee = "shared/fee.rule" meaning:c1a843698fd6c350
+  amount = amount
+
+outputs
+  needs_review : bool
+
+table needs_review
+| -> needs_review |
+| review          |
+
+examples
+| amount    | -> needs_review |
+| 1_000JPY  | false           |
+| 50_000JPY | true            |

@@ -1,0 +1,4 @@
+エラー[E202]: tests/mutants/E202_壊れた共有の経路.ringi:3:29: `shared/壊れた経路.ringi` は ringi の検査を通りません
+     3 | use route 標準(standard) from "shared/壊れた経路.ringi"
+  = E004: `部長たち` は `who` に宣言がありません（`tests/mutants/shared/壊れた経路.ringi:8:16`）
+  = そのファイルを、検査が通るように直してください。

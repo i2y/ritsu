@@ -1,0 +1,39 @@
+module words v1
+description "Words a target keeps, as names every target writes as one it takes: the fields delete, new, func, range and default (TypeScript writes a field as it is, a property of an object; Go in Pascal case), the values def, class, func and delete of an enum (written in upper case and in Pascal case), the functions func, range and go and the generic function import (Go writes a function in Pascal case; a generic one is an inner function of TypeScript and Python), the private function class, the parameters delete, var and select (TypeScript and Go name a parameter apart from their words) and the locals function and new"
+
+enum grade = def | class | func | delete
+
+record Entry
+  delete  : number  range >=0 <=9
+  new     : string  count <=3
+  func    : number  range >=0 <=9
+  range   : number  range >=0 <=9
+  default : grade
+
+fn func(delete: number range >=0 <=9, var: number range >=0 <=9, select: number range >=0 <=9) -> number
+  let function = delete + var
+  function * 2 + select
+
+fn range(e: Entry) -> number
+  e.delete + e.func + e.range + e.new.count()
+
+fn chosen(e: Entry) -> grade
+  e.default
+
+fn go(xs: list[Entry] count <=3) -> list[grade] count <=3
+  xs.map(x => x.default)
+
+fn import[T](xs: list[T] count <=3, d: T) -> T
+  match xs.first()
+    none => d
+    some x => x
+
+fn first_grade(xs: list[grade] count <=3) -> grade
+  import(xs: xs, d: grade.def)
+
+private fn class(n: number range >=0 <=9) -> number range >=0 <=9
+  9 - n
+
+fn made(n: number range >=0 <=9) -> Entry
+  let new = "abc"
+  Entry { delete: n, new: new, func: class(n: n), range: 0, default: grade.delete }

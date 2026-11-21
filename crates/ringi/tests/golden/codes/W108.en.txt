@@ -1,0 +1,5 @@
+warning[W108]: example.ringi:16:18: When an approver edits `amount`, the route may change
+    16 |   approvers edit amount
+  = The route reads `amount`. When an approver edits it, the route after the stage at hand is decided again with the new value, and the answers of the stages before it stay. See that this is what is meant.
+ok example.ringi: a request, 1 field, 2 stages
+  may never end: the stages `check` and `decide` have no deadline (`due in …`), and wait until they are answered

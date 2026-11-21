@@ -1,0 +1,29 @@
+2026-11-16 10:00  submit   e1201  -> 一次（e1101）、期限は 2026-11-19 の終わり; hold 予算.reserve 1_200_000 JPY
+2026-11-16 15:00  approve  e1101  -> 二次（部長: e3101; 経理: e1001、e1002 のだれか）、期限は 2026-11-19 の終わり
+2026-11-17 11:00  approve  e1001  -> 二次（部長: e3101）、期限は 2026-11-19 の終わり
+2026-11-17 16:00  approve  e3101  -> 決裁（e0101）、期限は 2026-11-20 の終わり
+2026-11-18 09:30  approve  e0101  -> approved; launch 支払い; post 予算.reserve
+帳簿 `予算` の終わりの残高: dept_budget(sales1) 3_800_000 JPY、allocations -5_000_000 JPY、payees 1_200_000 JPY
+  仮押さえ `reserve`（T-1、attempt-1）: posted
+シナリオ `部長と経理で二次承認をする購買`: 書いたとおり（5 行）
+
+2026-11-16 10:00  submit             e1201  -> 決裁（flow 出張の決裁）、期限は 2026-11-19 の終わり; flow 出張の決裁 に頼んだ; hold 予算.reserve 28_000 JPY
+2026-11-16 10:01  agent answered ok         -> approved; launch 支払い; post 予算.reserve
+帳簿 `予算` の終わりの残高: dept_budget(sales1) 4_972_000 JPY、allocations -5_000_000 JPY、payees 28_000 JPY
+  仮押さえ `reserve`（T-1、attempt-1）: posted
+シナリオ `エージェントが決裁する日帰りの出張`: 書いたとおり（2 行）
+
+2026-11-16 10:00  submit                                       e1201  -> 決裁（flow 出張の決裁）、期限は 2026-11-19 の終わり; flow 出張の決裁 に頼んだ; hold 予算.reserve 29_500 JPY
+2026-11-16 10:01  agent answered doubt "運賃がいつもより高い"         -> 決裁（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 14:00  approve                                      e1101  -> approved; launch 支払い; post 予算.reserve
+帳簿 `予算` の終わりの残高: dept_budget(sales1) 4_970_500 JPY、allocations -5_000_000 JPY、payees 29_500 JPY
+  仮押さえ `reserve`（T-1、attempt-1）: posted
+シナリオ `エージェントが決めきれない出張`: 書いたとおり（3 行）
+
+2026-11-16 10:00  submit    e1201  -> 一次（e1101）、期限は 2026-11-19 の終わり; hold 予算.reserve 118_000 JPY
+2026-11-16 15:00  approve   e1101  -> 決裁（e3101）、期限は 2026-11-19 の終わり
+2026-11-17 09:00  withdraw  e1201  -> with requester、再申請は 2026-11-20 の終わりまで; コメント「取引先が訪問を春に延ばした」; void 予算.reserve
+2026-11-17 09:05  discard   e1201  -> withdrawn
+帳簿 `予算` の終わりの残高: dept_budget(sales1) 5_000_000 JPY、allocations -5_000_000 JPY、payees 0 JPY
+  仮押さえ `reserve`（T-1、attempt-1）: voided
+シナリオ `取りやめた出張`: 書いたとおり（4 行）

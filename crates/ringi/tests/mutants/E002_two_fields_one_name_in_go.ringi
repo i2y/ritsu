@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+form
+  amount    : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  cost_code : text "Cost code"  count <=20
+  costCode  : text "Cost code of the project"  count <=20  optional
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

@@ -1,0 +1,5 @@
+error[E201]: tests/mutants/E201_範囲の無い合計が生成するコードでint64を超える.ringi:8:1: What the computation of the field `合計` is lowered to for the generated code does not pass rulec's check: from the ranges of the fields it reads, `合計` can come to 30_000_000_000_000_000_000円, past int64
+     8 |   合計(amount) : money[円] "合計" = sum(明細.小計)
+  = The generated code works out what the form computes before it holds each value to the range its field writes; the check and `ritsu ringi run` read each value within that range.
+  = Narrow the ranges of the fields `合計` reads (`明細.数量`, `明細.単価`) so that what it can come to fits in int64.
+  = From rulec: E108 at line 15 of the lowered `values.rule`: Cannot prove that amount fits in int64

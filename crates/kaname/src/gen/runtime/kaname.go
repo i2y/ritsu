@@ -25,13 +25,16 @@ const lang = "@LANG@"
 
 // KanameError is why a function of kaname stops. Kind is input (the argument a host gave is outside
 // what the function takes), or a kind of the effects: rule, date, range, overflow, zero (kaname's
-// DESIGN 4.2). Module and Line are where in the .kn it stopped; Err is what another language
-// returned, when it is that language's refusal.
+// DESIGN 4.2). Module and Line are where in the .kn it stopped; Path is, for the kind input, the
+// place of what is not taken, from the argument's name (submit.form.days, organization.people[0],
+// now), and empty for the other kinds; Err is what another language returned, when it is that
+// language's refusal.
 type KanameError struct {
 	Kind    string
 	Module  string
 	Line    int
 	Message string
+	Path    string
 	Err     error
 }
 
@@ -44,6 +47,12 @@ func (e *KanameError) Unwrap() error { return e.Err }
 // the host called recovers).
 func Fail(kind, module string, line int, message string) {
 	panic(&KanameError{Kind: kind, Module: module, Line: line, Message: spaced(message)})
+}
+
+// FailInput stops the function with the error of the kind input at line of module: the argument is
+// not taken at path.
+func FailInput(module string, line int, path, message string) {
+	panic(&KanameError{Kind: "input", Module: module, Line: line, Message: spaced(message), Path: path})
 }
 
 // Refused stops the function with the error of kind at line of module, caused by err: what a
@@ -429,7 +438,8 @@ func RatText(x Q) string {
 	return sign + num.String() + "/" + den.String()
 }
 
-// NumText writes a number as a literal of its unit: 1150GBPc, 0.5%, 30.
+// NumText writes a number as text writes it, a literal of its unit with its digits as they are:
+// 1150GBPc, 100000000GBPc, 30 (a rate as a percentage, 0.5%).
 func NumText(x Q, unit string) string {
 	if unit == "%" {
 		return RatText(QMul(x, Of(100))) + "%"
@@ -437,8 +447,43 @@ func NumText(x Q, unit string) string {
 	return RatText(x) + unit
 }
 
-// IntText writes a whole number with its unit.
-func IntText(x int64, unit string) string { return NumText(Of(x), unit) }
+// NumShown writes a number as a message writes it, as the languages write numbers: a literal of its
+// unit with its whole part's digits grouped by _ from five on: 100_000_000GBPc, 5000JPY, 0.5%, 30.
+func NumShown(x Q, unit string) string {
+	if unit == "%" {
+		return grouped(RatText(QMul(x, Of(100)))) + "%"
+	}
+	return grouped(RatText(x)) + unit
+}
+
+// IntShown writes a whole number with its unit, as NumShown does.
+func IntShown(x int64, unit string) string { return NumShown(Of(x), unit) }
+
+// grouped writes a number RatText writes with the digits of its whole part grouped by _ from five on
+// (12_345.5); a fraction (1/3) is as it is.
+func grouped(t string) string {
+	sign, body := "", t
+	if strings.HasPrefix(t, "-") {
+		sign, body = "-", t[1:]
+	}
+	whole, frac := body, ""
+	if i := strings.IndexByte(body, '.'); i >= 0 {
+		whole, frac = body[:i], body[i:]
+	}
+	if len(whole) < 5 || strings.Trim(whole, "0123456789") != "" {
+		return t
+	}
+	var b strings.Builder
+	b.WriteString(sign)
+	for i := 0; i < len(whole); i++ {
+		if i > 0 && (len(whole)-i)%3 == 0 {
+			b.WriteByte('_')
+		}
+		b.WriteByte(whole[i])
+	}
+	b.WriteString(frac)
+	return b.String()
+}
 
 // Outside is where a value a function is given or answers is outside what its place declares: the
 // place (a parameter, and the field or the element of it), the value as a message writes it, and
@@ -536,8 +581,8 @@ func equal(x, y reflect.Value) bool {
 	}
 }
 
-// Itoa writes a count.
-func Itoa(n int) string { return strconv.Itoa(n) }
+// Itoa writes a count as a message writes it: 12, 5000, 10_000.
+func Itoa(n int) string { return grouped(strconv.Itoa(n)) }
 
 // Elem is the path of the i-th element of what: what[i].
 func Elem(what string, i int) string { return what + "[" + strconv.Itoa(i) + "]" }

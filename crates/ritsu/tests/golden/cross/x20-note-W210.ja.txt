@@ -1,0 +1,11 @@
+summary.flow: 検査を通りました
+ok contract.ringi: 申請の種類、フィールド 4 個、ステップ 2 個
+  終わらないことがあります: ステップ `summary`、`review` には期限がありません（`due in …`）。答えが来るまで待ちます
+警告[ritsu W210]: contract.ringi:12: `contract` が flow `summarize` の入力 `amount` に渡す値を、入力が受け取るかを決められません
+    12 |   summary  note from summarize  when urgent or amount >= 1_000_000JPY
+  = 決められない理由: 0JPY を渡すことがあるように見えます（flow が受け取るのは 1_000_000JPY 以上です）。ただし、ステップの `when` の条件が値をもっと絞るかもしれず、ringi はそれを追いません。
+  = `amount` は money[JPY] >=0JPY <=100_000_000JPY です。
+  = 入力 `amount` が受け取るのは money[JPY] >=1_000_000JPY <=50_000_000JPY です（"summary.flow" の 8 行目）。
+  = ステップ `summary` で、ringi は flow にチケットの ID（`request_id`）と、flow が入力に宣言したフォームのフィールドを渡します。
+  = ringi が値を絞って読むのは、経路の表の行と、フォームのフィールドを定数と比べる `when`（`amount <= 500_000JPY`、`and` でつないだものも）です。
+ritsu check: ファイル 2 個（dandori 1、ringi 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 5 か所、決められない 1 か所

@@ -350,6 +350,11 @@ pub struct Analysis {
     pub axes: Vec<Axis>,
     /// Which of `axes` are random (their columns read only the random inputs).
     pub random: Vec<usize>,
+    /// Which of `random` are columns worked out from the random inputs rather than drawn (a `define`
+    /// of two dice's total). A claim over them is run one by one in every class, so no box names
+    /// them, and the certificate leaves them out of its axes: those are what the inputs are drawn
+    /// from (§15.325).
+    pub worked_out: Vec<usize>,
     pub claims: Vec<Claim>,
 }
 
@@ -385,10 +390,21 @@ fn roots(f: &RuleFile, name: &str, inputs: &BTreeSet<String>, seen: &mut BTreeSe
     out
 }
 
+/// How the columns of the walk fall apart: which axes are random, and which of those are columns
+/// worked out from the random inputs rather than the inputs themselves.
+struct Split {
+    random: Vec<bool>,
+    worked_out: Vec<usize>,
+}
+
 /// Whether the rule's columns fall apart into the random and the rest (§15.224): no fold or summary,
 /// no column of the walk worked out from both kinds of input, no `constraint` naming both. Then a cell
 /// of the walk is a class of the inputs that are not random crossed with a box of the random ones.
-fn separable(f: &RuleFile, axes: &[Axis]) -> Option<Vec<bool>> {
+///
+/// A column worked out from the random inputs alone (`define total = a + b` over two dice) is random
+/// too, but it is not drawn: its coordinates do not tile what an input is drawn from, and a box of it
+/// is no count of draws. `worked_out` names those axes (§15.325).
+fn separable(f: &RuleFile, axes: &[Axis]) -> Option<Split> {
     if f.walks() {
         return None;
     }
@@ -406,14 +422,17 @@ fn separable(f: &RuleFile, axes: &[Axis]) -> Option<Vec<bool>> {
             return None;
         }
     }
-    let mut out = Vec::new();
-    for ax in axes {
+    let mut out = Split { random: Vec::new(), worked_out: Vec::new() };
+    for (i, ax) in axes.iter().enumerate() {
         let rs = roots(f, &ax.col, &inputs, &mut BTreeSet::new());
         let r = rs.iter().filter(|n| random.contains(*n)).count();
         if r > 0 && r < rs.len() {
             return None;
         }
-        out.push(r > 0);
+        if r > 0 && !random.contains(&ax.col) {
+            out.worked_out.push(i);
+        }
+        out.random.push(r > 0);
     }
     Some(out)
 }
@@ -484,28 +503,53 @@ pub fn analyze(f: &RuleFile, c: &Checked, budget: usize) -> Analysis {
         return a;
     }
     let cap = point_budget(budget);
+    // A value the generated code refuses past the range the rule accepts for it (§15.313) turns
+    // calls away: some draws, or every draw of a combination of the other inputs, which the boxes
+    // of the walk do not count. The points are run one by one.
+    let refuses = f.items.iter().any(|it| matches!(it, Item::Define(d) if c.refusing_ends(d).is_some()));
     // The walk, when the columns fall apart into the random and the rest.
-    let walk = if f.walks() {
+    let walk = if f.walks() || refuses {
         None
     } else {
         Walker::new(f, c, &claim_cuts(f, c), &BTreeSet::new()).ok().and_then(|w| {
-            let kinds = separable(f, &w.axes)?;
-            (w.size() <= cap).then_some((w, kinds))
+            let split = separable(f, &w.axes)?;
+            (w.size() <= cap).then_some((w, split))
         })
     };
+    let points = || -> Vec<Claim> { f.chances.iter().enumerate().flat_map(|(ti, ch)| ch.rows.iter().map(move |row| by_points(f, c, ti, ch, row, cap))).collect() };
+    let undecided = |cs: &[Claim]| cs.iter().filter(|cl| matches!(cl.verdict, Verdict::Undecided(_))).count();
     match walk {
-        Some((mut w, kinds)) => {
+        Some((mut w, split)) => {
+            // A column worked out from the random inputs alone moves inside every box of the inputs it
+            // reads, so the walk runs the points one by one in each class anyway, and states what it
+            // ran. Run them for the whole claim instead, as a re-checker runs them again (§15.325);
+            // the walk is kept only where that leaves more claims undecided within the budget, as it
+            // takes one combination for a class whose answer the inputs that are not random do not
+            // move.
+            // Where a claim is given up on before a point is run — too many combinations, most
+            // often — the run leaves it undecided, and it is run only once the walk leaves some
+            // undecided too, the one case where the two are compared.
+            let worked = !split.worked_out.is_empty();
+            let short = worked && f.chances.iter().any(|ch| ch.rows.iter().any(|row| row.chance.is_none() || points_past(f, c, ch, row, cap).is_some()));
+            let run = (worked && !short).then(points);
+            if let Some(run) = &run {
+                if undecided(run) == 0 {
+                    a.claims = run.clone();
+                    return a;
+                }
+            }
             a.axes = w.axes.clone();
-            a.random = kinds.iter().enumerate().filter(|(_, r)| **r).map(|(i, _)| i).collect();
-            by_classes(f, c, &mut w, &kinds, cap, &mut a);
-        }
-        None => {
-            for (ti, ch) in f.chances.iter().enumerate() {
-                for row in &ch.rows {
-                    a.claims.push(by_points(f, c, ti, ch, row, cap));
+            a.random = split.random.iter().enumerate().filter(|(_, r)| **r).map(|(i, _)| i).collect();
+            a.worked_out = split.worked_out.clone();
+            by_classes(f, c, &mut w, &split.random, cap, &mut a);
+            let run = if short && undecided(&a.claims) > 0 { Some(points()) } else { run };
+            if let Some(run) = run {
+                if undecided(&run) <= undecided(&a.claims) {
+                    return Analysis { claims: run, ..Analysis::default() };
                 }
             }
         }
+        None => a.claims = points(),
     }
     a
 }
@@ -821,8 +865,81 @@ fn class_points(f: &RuleFile, c: &Checked, axes: &[Axis], fixed_ix: &[usize], cl
 /// an enum's values and a truth value's two that the cell lets in, a number's whole steps between the
 /// ends of its range and of the cell.
 fn input_values(c: &Checked, name: &str, cell: &Cell, cap: u128) -> Result<Vec<Val>, String> {
+    let (mut vals, steps) = input_plan(c, name, cell, cap)?;
+    if let Some(s) = steps {
+        let keep = keeps(c, name, cell);
+        for k in s.a..=s.b {
+            let v = s.at(k);
+            if keep(&v) {
+                vals.push(v);
+            }
+        }
+    }
+    Ok(vals)
+}
+
+/// How many values `input_values` lists, without listing a number's steps (§15.325): their ends are
+/// the cell's own met with the range's, so where the cell is `-`, one value, or comparisons that all
+/// read as values, every step between the two ends passes it, and only the ends are asked.
+fn input_count(c: &Checked, name: &str, cell: &Cell, cap: u128) -> Result<u128, String> {
+    let (vals, steps) = input_plan(c, name, cell, cap)?;
+    let mut n = vals.len() as u128;
+    if let Some(s) = steps.filter(|s| s.b >= s.a) {
+        let keep = keeps(c, name, cell);
+        let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+        let read = |l: &Lit| match l {
+            Lit::Num(n) => crate::types::lit_value_in_pub(n, ty.present()).is_some(),
+            Lit::Date(..) => true,
+            _ => false,
+        };
+        let ends_only = match cell {
+            Cell::DontCare => true,
+            Cell::Lit(l @ Lit::Num(_)) => read(l),
+            Cell::Cmp(cs) => cs.iter().all(|(_, l)| read(l)),
+            _ => false,
+        };
+        if ends_only {
+            n += (s.b - s.a + 1) as u128;
+            n -= u128::from(!keep(&s.at(s.a)));
+            n -= u128::from(s.b > s.a && !keep(&s.at(s.b)));
+        } else {
+            n += (s.a..=s.b).filter(|&k| keep(&s.at(k))).count() as u128;
+        }
+    }
+    Ok(n)
+}
+
+/// Whether a value of an input passes a claim's cell on it.
+fn keeps<'a>(c: &'a Checked, name: &str, cell: &'a Cell) -> impl Fn(&Val) -> bool + 'a {
     let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
-    let keep = |v: &Val| matches!(cell, Cell::DontCare) || crate::eval::cell_matches(c, cell, v, &ty);
+    move |v: &Val| matches!(cell, Cell::DontCare) || crate::eval::cell_matches(c, cell, v, &ty)
+}
+
+/// The whole steps of a number or a date between two ends, as counts of the step.
+struct Steps {
+    step: Rat,
+    a: i128,
+    b: i128,
+    date: bool,
+}
+
+impl Steps {
+    fn at(&self, k: i128) -> Val {
+        let r = self.step.mul(Rat::int(k));
+        if self.date {
+            let (y, m, d) = crate::types::ord_to_date(r);
+            Val::Date(y, m, d)
+        } else {
+            Val::Num(r)
+        }
+    }
+}
+
+/// What `input_values` lists: the few values listed outright (the absent value, an enum's, a truth
+/// value's, a set's), and a number's or a date's steps between two ends, held to the budget.
+fn input_plan(c: &Checked, name: &str, cell: &Cell, cap: u128) -> Result<(Vec<Val>, Option<Steps>), String> {
+    let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+    let keep = keeps(c, name, cell);
     let mut vals: Vec<Val> = Vec::new();
     if let Ty::Opt(_) = ty {
         let none = Val::Enum(crate::kw::NONE.into());
@@ -874,7 +991,7 @@ fn input_values(c: &Checked, name: &str, cell: &Cell, cap: u128) -> Result<Vec<V
                         vals.push(v);
                     }
                 }
-                return Ok(vals);
+                return Ok((vals, None));
             }
             let (Some(lo), Some(hi)) = (lo, hi) else {
                 return Err(tr!("{name} に範囲の端が無いので、値を一つずつ挙げられません", "{name} has no end to its range, so its values cannot be listed"));
@@ -887,22 +1004,59 @@ fn input_values(c: &Checked, name: &str, cell: &Cell, cap: u128) -> Result<Vec<V
             if b >= a && (b - a + 1) as u128 > cap {
                 return Err(tr!("{name} の値が予算（{cap} 点）を越えます", "the values of {name} go past the budget ({cap} points)"));
             }
-            for k in a..=b {
-                let r = step.mul(Rat::int(k));
-                let v = if matches!(ty.present(), Ty::Date) {
-                    let (y, m, d) = crate::types::ord_to_date(r);
-                    Val::Date(y, m, d)
-                } else {
-                    Val::Num(r)
-                };
-                if keep(&v) {
-                    vals.push(v);
-                }
-            }
+            return Ok((vals, Some(Steps { step, a, b, date: matches!(ty.present(), Ty::Date) })));
         }
         _ => return Err(tr!("{name} の値は一つずつ挙げられません", "the values of {name} cannot be listed one by one")),
     }
-    Ok(vals)
+    Ok((vals, None))
+}
+
+/// Why `by_points` gives up on a claim before it runs a point, worked out without listing the values
+/// (§15.325): a sequence it cannot read, an input whose values cannot be listed, or more combinations
+/// of the inputs that are not random, times the points of the random ones, than the budget.
+fn points_past(f: &RuleFile, c: &Checked, ch: &ChancesDecl, row: &ChanceRow, cap: u128) -> Option<String> {
+    let seqs: Vec<&str> = f.elements.iter().map(|e| e.name.text.as_str()).collect();
+    let mut n: u128 = 1;
+    for ((name, _), cell) in ch.inputs.iter().zip(&row.cells) {
+        if seqs.contains(&name.as_str()) {
+            let read = match cell {
+                Cell::Lit(Lit::Word(w)) => crate::eval::seq_value(f, c, w).is_some(),
+                _ => false,
+            };
+            if !read {
+                return Some(tr!("並び {name} が読めません", "the sequence {name} cannot be read"));
+            }
+            continue;
+        }
+        match input_count(c, name, cell, cap) {
+            Ok(k) => n = n.saturating_mul(k),
+            Err(why) => return Some(why),
+        }
+    }
+    let per = match method(f) {
+        Method::Weighted { .. } => 1,
+        Method::Points => space(f, c).unwrap_or(u128::MAX),
+    };
+    (n.saturating_mul(per) > cap).then(|| past_budget(n, per, cap))
+}
+
+/// The reason a claim is left undecided when its combinations go past the budget. The counts are
+/// grouped as every number a sentence says (§15.333).
+fn past_budget(n: u128, per: u128, cap: u128) -> String {
+    let many = per > 1;
+    let count = |x: u128| ritsu_units::written::digits(i128::try_from(x).unwrap_or(i128::MAX));
+    let (n, per, cap) = (count(n), count(per), count(cap));
+    if many {
+        tr!(
+            "乱数でない入力の組み合わせ {n} 通りに、乱数の入力の点 {per} をかけると、予算（{cap} 点）を越えます",
+            "the {n} combinations of the inputs that are not random, times the {per} points of the random inputs, go past the budget ({cap} points)"
+        )
+    } else {
+        tr!(
+            "乱数でない入力の組み合わせ {n} 通りが予算（{cap} 点）を越えます",
+            "the {n} combinations of the inputs that are not random go past the budget ({cap} points)"
+        )
+    }
 }
 
 /// One claim with the points run one by one (§15.224): every combination of the inputs that are not
@@ -914,6 +1068,12 @@ fn by_points(f: &RuleFile, c: &Checked, ti: usize, ch: &ChancesDecl, row: &Chanc
         claim.verdict = Verdict::Undecided(String::new());
         return claim;
     };
+    // Given up on before the values are listed: a million amounts are not listed to be told they are
+    // too many.
+    if let Some(why) = points_past(f, c, ch, row, cap) {
+        claim.verdict = Verdict::Undecided(why);
+        return claim;
+    }
     let seqs: Vec<&str> = f.elements.iter().map(|e| e.name.text.as_str()).collect();
     let mut lists: Vec<(String, Vec<Val>)> = Vec::new();
     let mut n: u128 = 1;
@@ -950,17 +1110,7 @@ fn by_points(f: &RuleFile, c: &Checked, ti: usize, ch: &ChancesDecl, row: &Chanc
         Method::Points => space(f, c).unwrap_or(u128::MAX),
     };
     if n.saturating_mul(per) > cap {
-        claim.verdict = Verdict::Undecided(if per > 1 {
-            tr!(
-                "乱数でない入力の組み合わせ {n} 通りに、乱数の入力の点 {per} をかけると、予算（{cap} 点）を越えます",
-                "the {n} combinations of the inputs that are not random, times the {per} points of the random inputs, go past the budget ({cap} points)"
-            )
-        } else {
-            tr!(
-                "乱数でない入力の組み合わせ {n} 通りが予算（{cap} 点）を越えます",
-                "the {n} combinations of the inputs that are not random go past the budget ({cap} points)"
-            )
-        });
+        claim.verdict = Verdict::Undecided(past_budget(n, per, cap));
         return claim;
     }
     let mut xs: Vec<BTreeMap<String, Val>> = vec![BTreeMap::new()];
@@ -1360,11 +1510,14 @@ pub fn certificate_json(f: &RuleFile, c: &Checked, src: &str) -> Option<String> 
             }
         })
         .collect();
-    let axes: Vec<String> = a
-        .axes
+    // The walk's axes, but a column worked out from the random inputs: a class over it is run one by
+    // one, so no box names it, and the random axes listed are what the inputs are drawn from (§15.325).
+    let kept: Vec<usize> = (0..a.axes.len()).filter(|k| !a.worked_out.contains(k)).collect();
+    let listed = |k: usize| kept.iter().position(|&x| x == k).unwrap_or(k);
+    let axes: Vec<String> = kept
         .iter()
-        .enumerate()
-        .map(|(k, ax)| {
+        .map(|&k| {
+            let ax = &a.axes[k];
             Obj::new()
                 .str("column", &ax.col)
                 .bool("random", a.random.contains(&k))
@@ -1375,7 +1528,7 @@ pub fn certificate_json(f: &RuleFile, c: &Checked, src: &str) -> Option<String> 
         })
         .collect();
     let fixed_ix: Vec<usize> = (0..a.axes.len()).filter(|k| !a.random.contains(k)).collect();
-    let at_json = |ix: &[usize], coords: &[usize]| -> String { arr(&ix.iter().zip(coords).map(|(i, ci)| format!("[{i},{ci}]")).collect::<Vec<_>>()) };
+    let at_json = |ix: &[usize], coords: &[usize]| -> String { arr(&ix.iter().zip(coords).map(|(i, ci)| format!("[{},{ci}]", listed(*i))).collect::<Vec<_>>()) };
     let mut claims = Vec::new();
     for cl in &a.claims {
         let ch = &f.chances[cl.table];

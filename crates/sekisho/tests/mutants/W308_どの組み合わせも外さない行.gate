@@ -1,0 +1,28 @@
+gate 店(shop) v1
+description "店の注文。permit の行が、ほかの行が満たされるところで、いつも満たされる"
+
+enum 注文の状態(order_status) = 支払済(paid) | 返金済(refunded) | 返品済(returned)
+
+role 係(clerk)
+  description "お客さまに応対する"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    状態(status) : 注文の状態
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 職員
+  resource 注文
+
+permit 係は支払済の注文を返金できる(clerks_refund_paid_orders)
+  description "係は、支払済で、まだ返金していない注文を返金できる"
+  principal in 係
+  action 返金する
+  when resource.状態 is 支払済
+  unless resource.状態 is 返金済

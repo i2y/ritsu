@@ -1,0 +1,25 @@
+rule order_review v1
+description "The grade of an order and whether it is reviewed. Each output is decided by a table, and the table that reads the grade stands below the one that decides it. The rule the others in this directory break"
+
+enum level = low "Low" | high "High"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+  member : bool
+
+outputs
+  grade  : level
+  review : bool
+
+table grade_of
+policy unique
+| amount      | -> grade |
+| <10_000JPY  | low      |
+| >=10_000JPY | high     |
+
+table review_of
+policy unique
+| grade | member | -> review |
+| low   | -      | false     |
+| high  | true   | false     |
+| high  | false  | true      |

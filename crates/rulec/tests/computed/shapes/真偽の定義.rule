@@ -1,0 +1,17 @@
+rule 真偽の定義(bool_define) v1
+description "金額を比べる define の真偽を、金額と一緒に読む"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+define 大きい(big) : bool = 金額 > 100_000円
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 金額        | 大きい | -> 答え |
+| <=100_000円 | false  | 一      |
+| >100_000円  | true   | 二      |

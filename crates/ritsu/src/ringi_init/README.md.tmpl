@@ -1,0 +1,203 @@
+# {{title}}
+
+Requests and approvals: the rules are written in ritsu's request language under `project/`, ritsu
+generates the Go code and the contract from them, and the framework serves them, with the pages
+people use in a browser and the API. The framework is the Go module `{{framework}}`.
+{{ja_link}}
+{{if temporal}}
+`ritsu ringi init` wrote these files as a start: two request types, one of them with a flow, a small
+organization, a gate, a server and a worker. They are yours now: change them into your own rules.
+{{else}}
+`ritsu ringi init` wrote these files as a start: one request type, a small organization, a gate and
+a server. They are yours now: change them into your own rules.
+{{end}}
+
+## What is in it
+
+| File | What it is |
+|---|---|
+{{if temporal}}
+| `project/purchase.ringi` | A request type: its form, its route of two stages, its deadlines, and scenarios that say what happens |
+| `project/expense.ringi` | A request type with a flow: an expense claim, which the requester's manager approves and the flow `pay` pays back |
+{{else}}
+| `project/purchase.ringi` | The request type: its form, its route of two stages, its deadlines, and scenarios that say what happens |
+{{end}}
+| `project/shared/company.ringi` | The shape of the organization: the positions and the kinds of team |
+| `project/org/2026-04-01/` | The organization's data from that day: its teams, people and members, as CSV |
+| `project/shared/office.cal` | The business days the deadlines count |
+| `project/shared/company.gate` | Who may do what on the tickets |
+{{if temporal}}
+| `project/shared/pay.flow` | The flow of the payment, which an expense claim starts once it is approved |
+{{end}}
+| `go/`, `requests/` | What ritsu generates from `project/` (do not edit them) |
+| `generate.go` | The line `go generate` runs to generate them again |
+| `{{package_file}}` | What the project gives the server: its kinds, organization, gate and notifier |
+| `gate.go` | The glue between the server's questions and the generated gate |
+| `notify.go` | A notifier that writes each notice to the log |
+{{if mcp}}
+| `tools.go` | The agents' tools at `/mcp` of the server, over MCP |
+{{end}}
+{{if temporal}}
+| `flows.go` | What starts the flows on Temporal, and the workers that run them |
+| `payments.go` | The tasks of the payment, which the project writes: these write to the log |
+{{end}}
+| `cmd/server/` | The server |
+{{if temporal}}
+| `cmd/worker/` | The worker that runs the flows |
+{{end}}
+| `*_test.go` | The tests |
+
+## Running it
+
+{{if temporal}}
+The flows run on Temporal: start its dev server first, with the Temporal CLI's
+`temporal server start-dev`. It listens on `localhost:7233`, where the server and the worker look
+for it (`-temporal` gives them another address). Then run the worker and the server, each in a
+terminal of its own:
+
+```sh
+go mod tidy
+go run ./cmd/worker
+go run ./cmd/server -dev-login
+```
+{{else}}
+```sh
+go mod tidy
+go run ./cmd/server -dev-login
+```
+{{end}}
+
+Open http://127.0.0.1:8080/pages/ in a browser and choose who you are. `s1201` (a member of the
+staff of Sales Section 1) makes a purchase request; `s1101`, the section's manager, approves it,
+then `s1001`, the head of the Sales Department. The notices go to the log. `-dev-login` checks no
+one: it serves this computer only.
+{{if temporal}}
+
+An expense claim goes to the requester's manager alone. Once it is approved, the server starts its
+payment on Temporal, and the worker runs it with the tasks of `payments.go`, which write `paid` and
+`told` to the worker's log where real ones would pay the requester and tell them.
+{{end}}
+{{if mcp}}
+
+The agents' tools are at http://127.0.0.1:8080/mcp, over MCP's streamable HTTP. An agent signs in
+as a browser does: with `-dev-login`, it sends the cookie `ringi-dev-person=s1201` (the page `/login`
+sets it in a browser); with no flag of a sign-in, the header `X-Person: s1201`. What it does with the
+tools is asked of the gate, as on the pages.
+{{end}}
+
+## Changing the rules
+
+Change the files of `project/`, then check them and generate the code again:
+
+```sh
+ritsu check project
+go generate ./...
+go test ./...
+```
+
+`ritsu check` runs each scenario and checks what the rules claim; `ritsu ringi simulate
+project/purchase.ringi --every-requester` shows where each person's request goes. In CI, run the
+line of `generate.go` with `--check`: it writes nothing, and fails when `go/` or `requests/` is not
+what `project/` makes.
+
+The organization's data is built into the program: a new version of it is a directory
+`project/org/<the day it takes effect>/`, and the server reads it when it starts again. A server that
+runs takes it without starting again, from a person whose sign-in gives them the role
+`system_admin` (with `-dev-login`, chosen on its sign-in page). Check the data with
+`ritsu check project`, put `org/` into a zip archive from `project/`, and upload the archive on the
+page `/pages/admin/organization`:
+
+```sh
+cd project && zip -r ../org.zip org -x '*/.*'
+```
+
+The page shows what the new data changes, day by day, and imports it when you confirm. Add the same
+version to `project/org/` too: a server started again imports the data built in only when it changed
+since the server last imported it. Each import, and each switch of a version of a request type, is
+kept in the record that `/pages/admin/records` shows.
+
+## Tests
+
+`go test ./...` runs {{test_count}} tests:
+
+- `TestVectors` gives the server every vector ritsu wrote in `requests/vectors/` from the rules
+  and the scenarios, and checks its answers.
+- `TestGate` checks `gate.go` on what only the gate decides: who sees a ticket they are not on, and
+  who withdraws one; who may do each of the four operations of the administration, by role and by
+  department; that a person the organization's version does not have, and a request type that names
+  no owner, are of no one's department; and that a role the gate does not declare is left out.
+- `TestPages` makes a request on the pages with the development sign-in, and approves it.
+{{if mcp}}
+- `TestTools` serves the project as `cmd/server` does, with the agents' tools at `/mcp`: an agent of
+  `s1201` makes a purchase request with the tools and reads it, and a request with no one signed in
+  is answered 401.
+{{end}}
+{{if temporal}}
+- `TestFlows` runs the payment of an approved expense claim on Temporal's dev server, with the
+  workers of `cmd/worker`: the requester is paid once, and told. The dev server runs from the
+  Temporal CLI that `TEMPORAL_CLI` names, else from the file the SDK keeps in the system's temporary
+  directory (`temporal-cli-go-sdk-<version>`). The test downloads nothing: without the CLI, it says
+  `SKIP`.
+{{end}}
+
+## Running it for people
+
+`go run ./cmd/server -h` lists every flag.
+
+- **Where the tickets are kept**: `-db 'postgres://…'` keeps them in PostgreSQL, in the schema
+  `ringi`, with the attachments. Without `-db`, they are kept in memory and lost when the server
+  stops.
+- **How people sign in**: through an OpenID Connect provider, with `-oidc-issuer`,
+  `-oidc-client-id`, `-oidc-redirect-url https://<the server's host>/login/callback`, and the
+  client's secret and the keys of the session cookies in the environment variables
+  `RINGI_OIDC_CLIENT_SECRET` and `RINGI_SESSION_KEYS` (base64 of 32 bytes each, the newest first).
+  A person is the one of the organization's data with the email address the provider gives. Without
+  these flags, and without `-dev-login`, the person is the header `X-Person`, which a proxy in front
+  of the server sets after it signs people in; the server then listens on a loopback address only.
+- **https**: `-tls-cert` and `-tls-key`, with `-addr` on the address people reach.
+{{if mcp}}
+- **The agents' tools**: `/mcp` finds the person as the pages do. With a provider, an agent needs
+  the cookie of a session signed in from a browser. To take bearer tokens instead, serve the tools
+  with `mcp.HTTP{Verify: …}` on a server of your own: the README of the module `{{framework}}/mcp`
+  shows how.
+{{end}}
+{{if temporal}}
+- **Temporal**: `-temporal <host:port>`, the same on the server and on each worker. Run the
+  workers beside the server, as many as the flows need. The namespace and TLS are the client's
+  options (`client.Options`) in `cmd/server/main.go` and `cmd/worker/main.go`.
+{{end}}
+
+The server refuses settings that would let anyone be anyone: `-dev-login` or the header with
+`-tls-cert`, on an address other computers reach, or where the provider's settings are.
+
+## Adding a request type
+
+Write `project/<name>.ringi` beside `purchase.ringi`, with the same `use` lines for the organization,
+the calendar and the gate, then run `ritsu check project`, `go generate ./...` and `go test ./...`.
+The new type's scenarios become vectors that `TestVectors` runs. A type that reads masters needs
+their data built in too: add their directory to the `//go:embed project/org` line of
+`{{package_file}}`. `gate.go` asks the gate by the action's name, so an action added to the gate needs
+no change there; an attribute added to a principal or a resource needs its value in `gateStore`. A
+role the gate lets a Staff hold is in `RolesOf`'s answer, so one added to the gate needs no change
+either.
+
+## Adding a flow
+
+{{if temporal}}
+A flow is work that runs after a ticket ends or in a stage of it, such as a payment or an agent's
+check: `use flow <name> from "shared/<name>.flow"` in the request type, and `launch` or `ask` it, as
+`expense.ringi` launches `pay` once a claim is approved. `go generate ./...` writes its Go package
+under `go/flows/`. `Flows` in `flows.go` reads the flows the kinds name, so the server starts a new
+one as it is; its worker goes in `Workers`, with the tasks the project writes for it (its package's
+`OwnTasks`, as `Payments` are the payment's). An agent's step needs the keys of its agents'
+providers where its worker runs. The framework's module that runs the flows is
+`{{framework}}/temporal`: its README says more.
+{{else}}
+A flow is work that runs after a ticket ends or in a stage of it, such as a payment or an agent's
+check: `use flow <name> from "shared/<name>.flow"` in the request type, and `launch` or `ask` it.
+`go generate ./...` writes its Go package under `go/flows/`. The server starts flows through
+`server.Config.Flows`, and an agent's step through `Agents`. The framework's module that runs them
+is `{{framework}}/temporal`:
+its README shows how to give them to the server and run their workers. Until a server has them, it
+keeps each start it cannot make as a thing to do, and says so in the log each time it tries again.
+{{end}}

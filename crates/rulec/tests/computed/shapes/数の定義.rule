@@ -1,0 +1,17 @@
+rule 数の定義(number_define) v1
+description "率と丸めで define が計算する手数料を、金額と一緒に読む。3 万円までは手数料が 900 円以下、その先は 900 円以上"
+
+enum 経路(route) = 窓口(desk) | 経理(finance)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+define 手数料(fee) : money[円] = down(金額 * 3%, 1円)
+
+outputs
+  回す先(who) : 経路
+
+table 選ぶ(pick)
+| 金額       | 手数料  | -> 回す先 |
+| <=30_000円 | <=900円 | 窓口      |
+| >30_000円  | >=900円 | 経理      |

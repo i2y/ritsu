@@ -1,0 +1,14 @@
+error[E002]: tests/fixtures/chain_declarations.flow:8:10: there is no type `strng`
+     8 |   id   : strng
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E002]: tests/fixtures/chain_declarations.flow:13:11: there is no type `Labl`
+    13 |   label : Labl
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E002]: tests/fixtures/chain_declarations.flow:16:27: there is no type `Qoute`
+    16 | task fetch(id: string) -> Qoute
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E002]: tests/fixtures/chain_declarations.flow:19:28: there is no type `rol`
+    19 | task ask(id: string, role: rol)
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E007]: tests/fixtures/chain_declarations.flow:25:22: `gone` and `late` both come back as 410; Step Functions tells errors apart by status, so give each its own
+    25 |   errors gone = 410, late = 410

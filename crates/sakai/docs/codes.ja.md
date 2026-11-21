@@ -146,7 +146,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E003 — ファイルが `map` か `context` の行で始まっていません
 
-**いつ出るか**: コメントと空行を除いた最初の行が、`map …` でも `context …` でもないとき。
+**いつ出るか**: コメントと空行を除いた最初の行が、`map …` でも `context …` でもないとき。そういう行が一つも無いとき（空のファイル、コメントと空行だけのファイル）にも、1 行目に出ます。
 
 **直し方**: コンテキストマップなら `map 通販(shop) v1`、一つのコンテキストなら `context 在庫(inventory) v1` のように書き始めてください。
 
@@ -416,7 +416,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E007 — 宣言されていない名前です
 
-**いつ出るか**: 関係の相手や `as` のコンテキストが地図に無いとき、`means` や対応の要素が proto に無いとき。短い書き方の名前が二つの package に当たるときにも出ます。
+**いつ出るか**: 関係の相手や `as` のコンテキストが地図に無いとき、`means` や対応の要素が proto に無いとき。短い書き方の名前が二つの package に当たるときにも出ます。地図に無い同じコンテキストを一つのファイルに何度も書いたときは、最初に書いた所で一度だけ出て、ほかの行の番号を注に挙げます。ほかのファイルが書けば、そのファイルでも一度出ます。
 
 **直し方**: 名前の書き違いを直すか、`use context` を足してください。二つの package に当たる名前は package から書いてください（`message warehouse.v1.ReserveResponse`）。
 
@@ -1857,7 +1857,7 @@ message X {}
 
 ## E203 — `through` に無い package を通る参照です
 
-**いつ出るか**: 上流の公表された言語のうち、関係の `through` に並べていない package を参照しているとき。
+**いつ出るか**: 上流の公表された言語のうち、関係の `through` に並べていない package を参照しているとき。上流の見出しが proto の package と違うとき（E302）は、その package への参照には出ません。
 
 **直し方**: `through` に package を足すか、参照を直してください。
 
@@ -2745,7 +2745,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E302 — 公表された言語のファイルが、そのコンテキストのものでないか、package が違います
 
-**いつ出るか**: 公表された言語の proto、規則、Rust のクレート、OpenAPI と AsyncAPI の文書、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときにも出ます。`rulec` に規則の代わりに `enums` のファイルを並べたときも同じです（`enums` のファイルからは Connect のサービスが生成されず、公表する package もありません）。
+**いつ出るか**: 公表された言語の proto、規則、Rust のクレート、OpenAPI と AsyncAPI の文書、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときにも出ます。`rulec` に規則の代わりに `enums` のファイルを並べたときも同じです（`enums` のファイルからは Connect のサービスが生成されず、公表する package もありません）。proto の package が見出しと違うときは、この誤りだけを言い、その package を `through` に並べた関係（E312）と、それを参照するもの（E203）は何も言いません。
 
 **直し方**: 見出しの package を直すか、そのコンテキストのファイルを並べてください。
 
@@ -3471,7 +3471,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E312 — 上流が `through` の package を公表していません
 
-**いつ出るか**: `through` に並べた package が、上流の `published language` に無いとき。
+**いつ出るか**: `through` に並べた package が、上流の `published language` に無いとき。上流の見出しが proto の package と違うとき（E302）は、その package については出ません。
 
 **直し方**: 上流が公表している package を書いてください。
 

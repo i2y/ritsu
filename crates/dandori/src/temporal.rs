@@ -26,6 +26,7 @@ use crate::diag::Diag;
 use crate::model::*;
 use crate::render::{self, ident};
 use crate::spellings::{Alias, Clash, ClientNames, Lang, Name, With};
+use crate::wire;
 use crate::diag::Text;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -121,8 +122,77 @@ fn io_ts(m: &Model) -> String {
             .replacen("      const b = options.books?.[call.book];\n", "      const b = (options.books as Record<string, any> | undefined)?.[call.book];\n", 1)
 }
 
+/// Whether a task of the flow calls an AWS API (`aws`).
+pub(crate) fn calls_aws(m: &Model) -> bool {
+    m.tasks.iter().any(|t| matches!(t.binding, Some(Binding::Aws { .. })))
+}
+
+/// `text` with its one `from` as `to`: a Transport's text that is put together from the text of
+/// another, which has `from` once (the tests' builds stop when it is gone).
+pub(crate) fn put_once(text: String, from: &str, to: &str) -> String {
+    debug_assert_eq!(text.matches(from).count(), 1, "the Transport's text has no one {from:?}");
+    text.replacen(from, to, 1)
+}
+
+/// io.ts of a flow that calls an AWS API: the default Transport hands the AWS SDK the timestamps
+/// of what each API takes (`TIMESTAMPS`, from the tasks' `timestamps`) as Dates, which the SDK
+/// sends in the form the API's model says, and gives back the Dates of the answer as RFC 3339
+/// text in UTC (DESIGN 42). A flow that calls none keeps the text as it was.
+fn aws_times_ts(m: &Model, io: String) -> String {
+    if !calls_aws(m) {
+        return io;
+    }
+    let mut table: BTreeMap<String, serde_json::Map<String, Value>> = BTreeMap::new();
+    for t in &m.tasks {
+        if let (Some(Binding::Aws { service, action }), Some(Value::Object(times))) = (&t.binding, &t.timestamps) {
+            table.entry(format!("{service}:{action}")).or_default().extend(times.clone());
+        }
+    }
+    let rows: String = table.iter().map(|(api, times)| format!("  {}: {},\n", q(api), Value::Object(times.clone()))).collect();
+    let rows = if rows.is_empty() { "{}".to_string() } else { format!("{{\n{rows}}}") };
+    let io = put_once(io, "export function transport(options: Options = {}): Transport {", &format!("{}{}", AWS_TIMES_TS.replace("{{TIMESTAMPS}}", &rows), "export function transport(options: Options = {}): Transport {"));
+    let io = put_once(
+        io,
+        "  /** Call an AWS API, named as Step Functions names it (`sns`, `publish`); an exception comes back by its name. */",
+        "  /** Call an AWS API, named as Step Functions names it (`sns`, `publish`); an exception comes back by its name. A timestamp goes and comes as RFC 3339 text, in UTC. */",
+    );
+    put_once(
+        io,
+        "      let args = input;\n      // SQS takes the message as text; Step Functions writes a JSON body out the same way\n      if (service === \"sqs\" && action === \"sendMessage\" && typeof input.MessageBody === \"object\") args = { ...input, MessageBody: JSON.stringify(input.MessageBody) };\n      try {\n        const out = await c[action](args);\n        const { $metadata, ...rest } = out ?? {};\n        return { ok: rest };\n",
+        "      // the timestamps the API's model has, as the Dates the SDK sends in the model's form\n      let args = dates(input, TIMESTAMPS[`${service}:${action}`]) as Record<string, unknown>;\n      // SQS takes the message as text; Step Functions writes a JSON body out the same way\n      if (service === \"sqs\" && action === \"sendMessage\" && typeof input.MessageBody === \"object\") args = { ...args, MessageBody: JSON.stringify(input.MessageBody) };\n      try {\n        const out = await c[action](args);\n        const { $metadata, ...rest } = out ?? {};\n        // and the Dates of the answer as the text a flow holds a timestamp in\n        return { ok: moments(rest) };\n",
+    )
+}
+
+/// What io.ts has for the timestamps of the AWS APIs (`aws_times_ts`).
+const AWS_TIMES_TS: &str = r#"/**
+ * The timestamps in what the workflow sends each AWS API, by where they are in the API's input ("*":
+ * each item of a list, each value of a map), with the form the API's Smithy model sends them in. A
+ * flow holds a timestamp as RFC 3339 text; the AWS SDK takes a Date, and sends it in that form.
+ */
+const TIMESTAMPS: Record<string, unknown> = {{TIMESTAMPS}};
+
+/** `v` with the timestamps `at` names as Dates, for the AWS SDK. */
+function dates(v: unknown, at: unknown): unknown {
+  if (v === null || v === undefined || at === undefined || at === null) return v;
+  if (typeof at === "string") return typeof v === "string" ? new Date(v) : v;
+  if (typeof v !== "object" || typeof at !== "object") return v;
+  const by = at as Record<string, unknown>;
+  if (Array.isArray(v)) return v.map((x) => dates(x, by["*"]));
+  return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, dates(x, by[k] ?? by["*"])]));
+}
+
+/** What the AWS SDK answered, as JSON: a Date as RFC 3339 text in UTC, with no zeros at the end of its fraction of a second. */
+function moments(v: unknown): unknown {
+  if (v instanceof Date) return v.toISOString().replace(/\.?0+Z$/, "Z");
+  if (Array.isArray(v)) return v.map(moments);
+  if (v !== null && typeof v === "object" && [Object.prototype, null].includes(Object.getPrototypeOf(v))) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, moments(x)]));
+  return v;
+}
+
+"#;
+
 fn io_ts_alone(m: &Model) -> String {
-    let io = IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string());
+    let io = connect_days_ts(m, aws_times_ts(m, IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string())));
     let books = crate::asl::used_books(m);
     if books.is_empty() {
         return io;
@@ -214,17 +284,220 @@ impl Flavor {
     }
 }
 
-/// The names a type's name cannot be in `types.ts`: the global types it reads, and what it declares
-/// (ritsu-emit's copy of the table that was kept here).
-use ritsu_emit::copies::dandori::TS_GLOBALS;
+/// The names a type's name cannot be in `types.ts`: what it declares that a caller reads
+/// (`WorkflowInput`, `WorkflowOutput`; ritsu-emit's `TS_TYPES_OWN`, W105) and the words tsc refuses
+/// (`ts_type_word`); and what `run` reads (`TS_RESERVED`), which a variable's name cannot be.
+use ritsu_emit::copies::dandori::{TS_RESERVED, TS_TYPES_OWN};
+use ritsu_emit::words::typescript;
 
+/// TypeScript's own types, and the words that begin a type, which the name of an interface or of a
+/// type alias cannot be (`number`, `object`, `keyof`). With the words of strict-mode JavaScript
+/// (`class`, `let`, `undefined`), they are what tsc refuses as the name of a type of `types.ts`;
+/// tests/spellings.rs holds the two to it. `as` is an alias's alone, which an enum is.
+pub const TS_TYPE_WORDS: &[&str] = &["any", "bigint", "boolean", "infer", "keyof", "never", "number", "object", "readonly", "string", "symbol", "undefined", "unique", "unknown"];
+
+/// Whether `n`, as the name of a type of `types.ts` (an interface, or an alias when `alias`), is a
+/// word tsc refuses there.
+pub fn ts_type_word(n: &str, alias: bool) -> bool {
+    typescript::RESERVED.contains(&n) || typescript::STRICT.contains(&n) || TS_TYPE_WORDS.contains(&n) || (alias && n == "as")
+}
+
+/// The global types `types.ts` reads, each with type arguments (`Array<string>`, `Record<string,
+/// unknown>`). A type of the flow of one of these names keeps it, and the file reads the global as
+/// `globalThis.Array` (DESIGN 22). `tests/spellings.rs` holds the table to what the code of every
+/// flow reads.
+pub const TYPES_READ: &[&str] = &["Array", "Record"];
+
+/// Whether TypeScript cannot declare a function by `id`: a reserved word, one of strict mode's, or
+/// a name it does not let be bound (`arguments`, `eval`, `undefined`).
+fn ts_value_word(id: &str) -> bool {
+    ritsu_emit::words::typescript::NAMES.contains(id)
+}
+
+/// TypeScript's `text`, with each name `to` has written as it says where the code reads or declares
+/// it: not a field after a dot, a key or a member before a colon, or what is in a string or a
+/// comment (a template's `${…}` is code). An import of such a name comes in under the new one
+/// (`import { type Client as _Client }`, `import type * as _T`). With `generic`, a name is written
+/// anew only where type arguments follow it (`Array<string>`), which no type of a flow has, and not
+/// where the file reads the global's value (`Array.isArray`) or the flow's type of the name.
+fn ts_respelled(text: &str, to: &BTreeMap<String, String>, generic: bool) -> String {
+    if to.is_empty() {
+        return text.to_string();
+    }
+    let word_char = |c: char| c.is_alphanumeric() || c == '_' || c == '$';
+    // whether `before` ends with the word `w`
+    let after_word = |before: &str, w: &str| before.strip_suffix(w).is_some_and(|r| !r.ends_with(word_char));
+    let cs: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len() + 64);
+    let mut i = 0;
+    while i < cs.len() {
+        let c = cs[i];
+        if c == '/' && matches!(cs.get(i + 1), Some(&'/') | Some(&'*')) {
+            let end = if cs[i + 1] == '/' {
+                cs[i..].iter().position(|&x| x == '\n').map(|p| i + p).unwrap_or(cs.len())
+            } else {
+                (i + 2..cs.len().saturating_sub(1)).find(|&k| cs[k] == '*' && cs[k + 1] == '/').map(|k| k + 2).unwrap_or(cs.len())
+            };
+            out.extend(&cs[i..end]);
+            i = end;
+            continue;
+        }
+        if c == '"' || c == '\'' {
+            let mut j = i + 1;
+            while j < cs.len() && cs[j] != c {
+                j += if cs[j] == '\\' { 2 } else { 1 };
+            }
+            let end = (j + 1).min(cs.len());
+            out.extend(&cs[i..end]);
+            i = end;
+            continue;
+        }
+        if c == '`' {
+            out.push(c);
+            i += 1;
+            while i < cs.len() && cs[i] != '`' {
+                if cs[i] == '\\' {
+                    out.extend(&cs[i..(i + 2).min(cs.len())]);
+                    i += 2;
+                    continue;
+                }
+                if cs[i] == '$' && cs.get(i + 1) == Some(&'{') {
+                    let mut depth = 0usize;
+                    let mut j = i + 2;
+                    while j < cs.len() && !(cs[j] == '}' && depth == 0) {
+                        match cs[j] {
+                            '{' => depth += 1,
+                            '}' => depth -= 1,
+                            _ => {}
+                        }
+                        j += 1;
+                    }
+                    let inner: String = cs[i + 2..j.min(cs.len())].iter().collect();
+                    out.push_str("${");
+                    out.push_str(&ts_respelled(&inner, to, generic));
+                    out.push('}');
+                    i = (j + 1).min(cs.len());
+                    continue;
+                }
+                out.push(cs[i]);
+                i += 1;
+            }
+            if i < cs.len() {
+                out.push('`');
+                i += 1;
+            }
+            continue;
+        }
+        if c.is_alphabetic() || c == '_' || c == '$' {
+            let s = i;
+            while i < cs.len() && word_char(cs[i]) {
+                i += 1;
+            }
+            let word: String = cs[s..i].iter().collect();
+            let before = out.trim_end();
+            if word == "import" && (before.is_empty() || before.ends_with(';') || out.ends_with('\n')) {
+                let e = cs[s..].iter().position(|&x| x == ';').map(|p| s + p + 1).unwrap_or(cs.len());
+                let stmt: String = cs[s..e].iter().collect();
+                out.push_str(&respelled_import_ts(&stmt, to));
+                i = e;
+                continue;
+            }
+            let field = before.ends_with('.') && !before.ends_with("...");
+            let mut j = i;
+            while j < cs.len() && cs[j].is_whitespace() {
+                j += 1;
+            }
+            // a key of an object, or a member of a type, before its colon; not the name a `const`
+            // declares, a `case`, or what a `?` of a condition gives
+            let colon = cs.get(j) == Some(&':') || (cs.get(j) == Some(&'?') && cs.get(j + 1) == Some(&':'));
+            let key = colon && !before.ends_with('?') && !["const", "let", "var", "case"].iter().any(|w| after_word(before, w));
+            match to.get(&word) {
+                Some(n) if !field && !key && (!generic || cs.get(i) == Some(&'<')) => out.push_str(n),
+                _ => out.push_str(&word),
+            }
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
+/// One import statement of TypeScript, with a name `to` has brought in under the new one.
+fn respelled_import_ts(stmt: &str, to: &BTreeMap<String, String>) -> String {
+    let alias = |bound: &str| to.get(bound).filter(|n| !n.contains('.')).cloned();
+    if let Some((head, rest)) = stmt.split_once("* as ") {
+        let end = rest.find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$')).unwrap_or(rest.len());
+        return match alias(&rest[..end]) {
+            Some(n) => format!("{head}* as {n}{}", &rest[end..]),
+            None => stmt.to_string(),
+        };
+    }
+    let (Some(open), Some(close)) = (stmt.find('{'), stmt.find('}')) else {
+        return stmt.to_string();
+    };
+    let mut changed = false;
+    let parts: Vec<String> = stmt[open + 1..close]
+        .split(',')
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .map(|p| {
+            let (kind, rest) = p.strip_prefix("type ").map(|r| ("type ", r)).unwrap_or(("", p));
+            let (name, bound) = rest.split_once(" as ").map(|(a, b)| (a.trim(), b.trim())).unwrap_or((rest, rest));
+            match alias(bound) {
+                Some(n) => {
+                    changed = true;
+                    format!("{kind}{name} as {n}")
+                }
+                None => p.to_string(),
+            }
+        })
+        .collect();
+    if !changed {
+        return stmt.to_string();
+    }
+    format!("{}{{ {} }}{}", &stmt[..open], parts.join(", "), &stmt[close + 1..])
+}
+
+/// A type's name in `types.ts` and after `T.` in the other files: the name you wrote, with its dots
+/// turned to underscores. One that begins with `_`, is one of `TS_TYPES_OWN`, or is a word tsc
+/// refuses is written another way, and W105 stops the target.
 pub(crate) fn type_name(name: &str) -> String {
     let n = ident(&name.replace('.', "_"));
-    if TS_GLOBALS.contains(&n.as_str()) {
+    if TS_TYPES_OWN.contains(&n.as_str()) || ts_type_word(&n, false) {
         format!("{n}_")
     } else {
         n
     }
+}
+
+/// A variable of the flow in the TypeScript of a workflow, as `run` declares it: its name (`ident`),
+/// or `_` and its name when `run` reads something of the name besides — a word of JavaScript, a
+/// global, one of its own names (`TS_RESERVED`), the activity of a task (`task_<name>`) or the
+/// workflow's function (`<name>_v<version>`, which `continueAsNew` reads). No name of the flow
+/// begins with `_` there (`ident`), and no name of the code does, so the variable is apart from
+/// both; `render::Vars` keeps it apart from the other variables, with a `_` after it.
+pub fn ts_var(name: &str) -> String {
+    let s = ident(name);
+    let function = s.rsplit_once("_v").is_some_and(|(w, v)| !w.is_empty() && !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()));
+    if TS_RESERVED.contains(&s) || s.starts_with("task_") || function {
+        format!("_{s}")
+    } else {
+        s
+    }
+}
+
+/// An argument of an `http` task where it goes, as io.ts's `Param` (DESIGN 43): the name it goes by
+/// there, its value, OpenAPI's style and explode, and what the value is (`"v"` one value, `"j"` a
+/// `json` one, `"l"` a list, or a record's fields in their order).
+fn param_ts(w: &WireParam, k: &wire::Kind) -> String {
+    let shape = match k {
+        wire::Kind::One => q("v"),
+        wire::Kind::Json => q("j"),
+        wire::Kind::List => q("l"),
+        wire::Kind::Record(fs) => format!("[{}]", fs.iter().map(|f| q(f)).collect::<Vec<_>>().join(", ")),
+    };
+    format!("[{}, args[{}], {}, {}, {shape}]", q(&w.name), q(&w.param), q(w.style.word()), w.explode)
 }
 
 fn q(s: &str) -> String {
@@ -397,9 +670,99 @@ fn types_file(m: &Model, header: &str) -> String {
     }
     t.push_str("}\n");
     if m.service.is_some() {
-        t.push_str(FILL_TS);
+        if service_days(m) {
+            t.push_str(&fill_days_ts(FILL_TS.to_string()));
+            t.push_str(READ_DAY_TS);
+        } else {
+            t.push_str(FILL_TS);
+        }
     }
-    t
+    // a type of the flow named as a global type the file reads: the file reads the global through
+    // `globalThis` (DESIGN 22)
+    let mine: BTreeSet<String> = enums.iter().map(|e| type_name(&m.enums[*e].name)).chain(recs.iter().map(|r| type_name(&m.records[*r].name))).collect();
+    let to: BTreeMap<String, String> = TYPES_READ.iter().filter(|g| mine.contains(**g)).map(|g| (g.to_string(), format!("globalThis.{g}"))).collect();
+    ts_respelled(&t, &to, true)
+}
+
+/// Whether what comes into a workflow that implements a service (its input, the value of an event,
+/// the answer of a callback) holds a `google.type.Date`, which protobuf's JSON writes as
+/// `{year, month, day}` and the workflow reads as a date (DESIGN 44).
+pub(crate) fn service_days(m: &Model) -> bool {
+    m.service.as_ref().is_some_and(|s| crate::apis::has_days(&s.input_zeros)) || m.tasks.iter().any(|t| t.answer_zeros.as_ref().is_some_and(crate::apis::has_days))
+}
+
+/// Whether a `connect` task of the flow reads a `google.type.Date` from its answer, and whether
+/// one sends one in its request (DESIGN 44).
+pub(crate) fn connect_days(m: &Model) -> (bool, bool) {
+    (m.tasks.iter().any(|t| t.connect.as_ref().is_some_and(crate::apis::has_days)), m.tasks.iter().any(|t| t.request_days.is_some()))
+}
+
+/// The line of `fill` that fills in the zero values, which the dates follow.
+const FILL_ZEROS_TS: &str = "  for (const [k, z] of Object.entries(zeros.f ?? {})) if (out[k] === undefined || out[k] === null) out[k] = z;\n";
+
+/// `fill` (io.ts's, or the one of the types of a workflow that implements a service) reading the
+/// `google.type.Date`s under `zeros.d` as dates as well (`readDay`, DESIGN 44).
+fn fill_days_ts(text: String) -> String {
+    let text = put_once(text, "l?: Record<string, any> }): unknown {\n", "l?: Record<string, any>; d?: string[] }): unknown {\n");
+    let text = put_once(text, "under `zeros.l`.\n */\nexport function fill(", "under `zeros.l`; and the `google.type.Date`s under\n * `zeros.d` read as dates (`readDay`).\n */\nexport function fill(");
+    put_once(
+        text,
+        FILL_ZEROS_TS,
+        &format!("{FILL_ZEROS_TS}  for (const k of zeros.d ?? []) if (out[k] !== undefined) out[k] = Array.isArray(out[k]) ? (out[k] as unknown[]).map(readDay) : readDay(out[k]);\n"),
+    )
+}
+
+/// How the TypeScript dandori writes reads a `google.type.Date` (DESIGN 44), as `apis::day_read` does.
+const READ_DAY_TS: &str = r#"
+/**
+ * A `google.type.Date` as protobuf's JSON writes it, `{year, month, day}`, as the date a flow holds,
+ * `2026-11-16`. A date short of its year, its month or its day (protobuf's JSON leaves a 0 out), one
+ * with a field of another name, and one with a number that is not whole or not in its range (a year
+ * from 1 to 9999, a month to 12, a day to 31) is left as it is, for the check of what came to refuse.
+ */
+export function readDay(v: unknown): unknown {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return v;
+  const o = v as Record<string, unknown>;
+  const part = (k: string, hi: number): number | undefined => {
+    const n = o[k];
+    return typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= hi ? n : undefined;
+  };
+  const [y, m, d] = [part("year", 9999), part("month", 12), part("day", 31)];
+  if (y === undefined || m === undefined || d === undefined || Object.keys(o).some((k) => k !== "year" && k !== "month" && k !== "day")) return v;
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+"#;
+
+/// How io.ts writes the dates a `connect` task sends (DESIGN 44), as `apis::wire_days` does.
+const WIRE_DAYS_TS: &str = r#"/**
+ * A request with the dates where `at` says (`d`: its fields, `m`: the messages inside it, `l`: the
+ * lists of messages) as protobuf's JSON writes a `google.type.Date`, `{year, month, day}`. What is
+ * not four, two and two digits between hyphens is left as it is, for the service to refuse.
+ */
+export function wireDays(v: Record<string, unknown>, at: { d?: string[]; m?: Record<string, any>; l?: Record<string, any> }): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...v };
+  const day = (x: unknown): unknown => (typeof x === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(x) ? { year: Number(x.slice(0, 4)), month: Number(x.slice(5, 7)), day: Number(x.slice(8, 10)) } : x);
+  const message = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x);
+  for (const k of at.d ?? []) if (k in out) out[k] = Array.isArray(out[k]) ? (out[k] as unknown[]).map(day) : day(out[k]);
+  for (const [k, s] of Object.entries(at.m ?? {})) if (message(out[k])) out[k] = wireDays(out[k] as Record<string, unknown>, s);
+  for (const [k, s] of Object.entries(at.l ?? {})) if (Array.isArray(out[k])) out[k] = (out[k] as unknown[]).map((x) => (message(x) ? wireDays(x, s) : x));
+  return out;
+}
+
+"#;
+
+/// io.ts of a flow whose `connect` tasks read or send a `google.type.Date` (DESIGN 44): `fill` reads
+/// the dates of an answer as dates (`readDay`), and `wireDays` writes the dates of a request as
+/// protobuf's JSON writes them. A flow that has none keeps the text as it was.
+fn connect_days_ts(m: &Model, io: String) -> String {
+    let (reads, writes) = connect_days(m);
+    let anchor = "/** The body of a 2xx answer, or the declared error its status names. */";
+    let io = if reads { put_once(fill_days_ts(io), anchor, &format!("{}\n{anchor}", READ_DAY_TS.trim_start())) } else { io };
+    if writes {
+        put_once(io, anchor, &format!("{WIRE_DAYS_TS}{anchor}"))
+    } else {
+        io
+    }
 }
 
 /// How a workflow that implements a service reads what comes in (the input, the value of an event,
@@ -474,8 +837,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         if !errs.is_empty() {
             return Err(errs);
         }
-        let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: "context".into(), can: None, now: "dd.now()".into() };
-        let wf = g.workflow(&header, !bundled.is_empty());
+        let wf = workflow_file(m, flavor, "context", &header, !bundled.is_empty());
         let mut files = vec![
             (format!("{dir}/types.ts"), types_ts),
             (format!("{dir}/tasks.ts"), tasks_file(m, flavor, &header)),
@@ -492,8 +854,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
     if let Some(d) = crate::check::history_limit(m, Platform::Temporal) {
         return Err(vec![d]);
     }
-    let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: String::new(), can: None, now: "dd.now()".into() };
-    let wf = g.workflow(&header, !bundled.is_empty());
+    let wf = workflow_file(m, flavor, "", &header, !bundled.is_empty());
     let mut files = vec![
         (format!("{dir}/types.ts"), types_ts),
         (format!("{dir}/activities.ts"), tasks_file(m, flavor, &header)),
@@ -503,7 +864,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         (format!("{dir}/client.ts"), client_file(m, &header)),
     ];
     if !bundled.is_empty() {
-        files.push((format!("{dir}/rules.ts"), rules_file(m, &header, &bundled)));
+        files.push((format!("{dir}/rules.ts"), rules_file(m, &header, &bundled, true)));
     }
     if m.history_encrypted.is_some() {
         files.push((format!("{dir}/failure.ts"), failure_ts(m, &header)));
@@ -606,11 +967,55 @@ export async function sendOnce(client: Client, workflowId: string, event: EventN
     c.push_str("export async function* histories(client: Client, query = `WorkflowType = '${WORKFLOW_TYPE}' AND ExecutionStatus = 'Running'`): AsyncIterable<{ workflowId: string; history: Awaited<ReturnType<WorkflowHandle[\"fetchHistory\"]>> }> {\n");
     c.push_str("  for await (const w of client.workflow.list({ query })) {\n    yield { workflowId: w.workflowId, history: await client.workflow.getHandle(w.workflowId, w.runId).fetchHistory() };\n  }\n}\n");
     c.push_str(UPDATE_ID_TS);
+    // the names of the service's messages and functions, which the code below keeps apart from its own
+    let mut bound: Vec<(String, bool)> = Vec::new();
     if let Some(s) = &m.service {
-        c.push_str(&service_client_ts(m, s).0);
+        let (text, names, _) = service_client_ts(m, s);
+        c.push_str(&text);
+        bound = names;
     }
     if m.history_encrypted.is_some() {
-        return encrypted_client_ts(c);
+        c = encrypted_client_ts(c);
+    }
+    respelled_client_ts(c, &bound)
+}
+
+/// What client.ts imports, and what it declares for itself alone (`ddUpdateId`, `ddSameValue`, the
+/// `encrypted` of the client of an encrypted history), the types and then the values: a message's
+/// type or a method's function of one of these names has the file's own come in, or go, by the name
+/// with `_` before it (`import { type Client as _Client }`, `import type * as _T`), which no name of
+/// the service begins with.
+const CLIENT_OWN_TYPES_TS: &[&str] = &["Client", "ClientOptions", "Connection", "PayloadCodec", "T", "WorkflowHandle", "WorkflowIdReusePolicy"];
+const CLIENT_OWN_VALUES_TS: &[&str] = &["ddSameValue", "ddSha256Hex", "ddUpdateId", "ddValueSha256", "encrypted"];
+
+/// The global types client.ts reads: a message's type of one of these names has the file read the
+/// global through `globalThis` (`globalThis.Promise<void>`). `tests/spellings.rs` holds the table to
+/// what the client of every flow reads.
+pub const CLIENT_GLOBALS_TS: &[&str] = &["AsyncIterable", "Awaited", "Omit", "Promise", "Record", "ReturnType"];
+
+/// What the top of client.ts leaves to the module: `globalThis` and `require`, which the code
+/// reads, and `exports`, which a module of CommonJS binds there (`tsc` says `Compiler reserves name`
+/// of the last two). A method's function of one of these names is declared by the name with `_`
+/// before it and exported by its own (`export { _require as require }`).
+const CLIENT_SCOPE_TS: &[&str] = &["exports", "globalThis", "require"];
+
+/// client.ts, `c`, whose service's messages and functions are written as `\u{1}<i>\u{2}`, the `i`th of
+/// `bound` (each with whether it is a type): each by its name, and the names of the code it takes
+/// kept apart from it (DESIGN 22). A client none of whose names the service takes is the text as it
+/// was.
+fn respelled_client_ts(c: String, bound: &[(String, bool)]) -> String {
+    let mut to: BTreeMap<String, String> = BTreeMap::new();
+    for (n, ty) in bound {
+        let (own, globals): (&[&str], &[&str]) = if *ty { (CLIENT_OWN_TYPES_TS, CLIENT_GLOBALS_TS) } else { (CLIENT_OWN_VALUES_TS, &[]) };
+        if own.contains(&n.as_str()) {
+            to.insert(n.clone(), format!("_{n}"));
+        } else if globals.contains(&n.as_str()) {
+            to.insert(n.clone(), format!("globalThis.{n}"));
+        }
+    }
+    let mut c = ts_respelled(&c, &to, false);
+    for (i, (n, _)) in bound.iter().enumerate() {
+        c = c.replace(&format!("\u{1}{i}\u{2}"), n);
     }
     c
 }
@@ -706,34 +1111,58 @@ export function encryptedClient(connection: Connection, codec: PayloadCodec, opt
 }
 
 /// The names client.ts has besides its own when the workflow says `history encrypted` (DESIGN 1.18):
-/// what it imports for the codec, and what it declares. A method's function or a message's type of
-/// one of these names cannot be written, as for one of the client's own names (1.14; W105).
+/// what it imports for the codec, and what it declares. Of these, a caller reads `EncryptedClient`
+/// and `encryptedClient`, which a message's type and a method's function cannot be (1.14; W105); the
+/// others give way to a name of the service (`CLIENT_OWN_TYPES_TS`, `CLIENT_OWN_VALUES_TS`).
 pub const ENCRYPTED_CLIENT: &[&str] = &["Connection", "ClientOptions", "PayloadCodec", "encrypted", "EncryptedClient", "encryptedClient"];
 
-/// What client.ts declares and imports, and the global types it reads, which an alias of a message
-/// of the name would hide: a message's type cannot be one of them (W105).
-pub const CLIENT_NAMES: &[&str] = &["Status", "StartOptions", "CallbackAnswer", "EventName", "Client", "WorkflowHandle", "T", "EVENTS", "WORKFLOW_TYPE", "TASK_QUEUE", "SERVICE", "WorkflowIdReusePolicy", "AsyncIterable", "Awaited", "Omit", "Promise", "ReturnType", "ddSha256Hex", "ddValueSha256", "ddUpdateId", "ddSameValue", "SentWithAnotherValueError"];
+/// The types client.ts declares that a caller reads: a message's type cannot be one of them (W105).
+/// The client of an encrypted history has `EncryptedClient` besides.
+pub const CLIENT_TYPES: &[&str] = &["CallbackAnswer", "EventName", "SentWithAnotherValueError", "StartOptions", "Status"];
+
+/// The values client.ts declares that a caller reads, besides the functions that do what a method
+/// may do (`start`, `answer`, `send`, `sendOnce`, `status`, `histories`): a method's function cannot
+/// be one of them (W105). The client of an encrypted history has `encryptedClient` besides.
+pub const CLIENT_VALUES: &[&str] = &["EVENTS", "SERVICE", "SentWithAnotherValueError", "TASK_QUEUE", "WORKFLOW_TYPE"];
+
+/// `\u{1}<i>\u{2}`, where `i` is the place of `n` in `bound` (as a type, or a value), which it is put
+/// at the end of when it is not there.
+fn held(bound: &mut Vec<(String, bool)>, n: &str, ty: bool) -> String {
+    let i = bound.iter().position(|(b, t)| b == n && *t == ty).unwrap_or_else(|| {
+        bound.push((n.to_string(), ty));
+        bound.len() - 1
+    });
+    format!("\u{1}{i}\u{2}")
+}
 
 /// client.ts, for a workflow that implements a service: the service's name, a type for each
 /// message by the name the `.proto` gives it, and a function for each method, which calls the
-/// client's own `start`, `send`, `answer` or `status`. And the names it could not write.
-fn service_client_ts(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
+/// client's own `start`, `send`, `answer` or `status`. Its messages' and functions' names are
+/// `\u{1}<i>\u{2}` in the text, the `i`th of the names it gives too (each with whether it is a type),
+/// for `respelled_client_ts`; and the names it could not write. A message is a type and a function a
+/// value, which TypeScript keeps apart: each meets what the client declares of its kind for a caller
+/// (`CLIENT_TYPES`, `CLIENT_VALUES`).
+fn service_client_ts(m: &Model, s: &ServiceUse) -> (String, Vec<(String, bool)>, Vec<(String, Name, With)>) {
     const FUNCTIONS: &[&str] = &["start", "answer", "send", "sendOnce", "status", "histories"];
-    let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED_CLIENT } else { &[] };
-    let own: Vec<(String, With)> = CLIENT_NAMES.iter().chain(encrypted).map(|x| (x.to_string(), With::Own)).collect();
-    let mut names = ClientNames::new(own, FUNCTIONS);
+    let encrypted = m.history_encrypted.is_some();
+    let own = |names: &[&str], more: &'static str| -> Vec<(String, With)> { names.iter().copied().chain(encrypted.then_some(more)).map(|x| (x.to_string(), With::Own)).collect() };
+    let mut types = ClientNames::new(own(CLIENT_TYPES, "EncryptedClient"), &[]);
+    let mut values = ClientNames::new(own(CLIENT_VALUES, "encryptedClient"), FUNCTIONS);
+    let mut bound: Vec<(String, bool)> = Vec::new();
     let mut c = String::new();
     c.push_str(&format!("\n/** The service the workflow implements, which `{}` describes. Its methods are the functions below. */\nexport const SERVICE = {};\n", s.file, q(&s.name)));
     // a type for a message, by its name in the .proto, unless the client has one of the name already
-    let alias = |c: &mut String, names: &mut ClientNames, message: &str, ty: &str, same: bool, what: String| -> String {
+    let alias = |c: &mut String, types: &mut ClientNames, bound: &mut Vec<(String, bool)>, message: &str, ty: &str, same: bool, what: String| -> String {
         let short = message.rsplit('.').next().unwrap_or(message);
-        let id = type_name(short);
-        if id != short {
-            names.clashes.push((short.to_string(), Name::Message(message.to_string()), With::Own));
-        }
-        match names.message(id, message, ty, same) {
-            Alias::Use(n) => n,
+        match types.message(ident(short), message, ty, same) {
+            // the client's own type, which the message is
+            Alias::Use(n) if n == ty => n,
+            Alias::Use(n) => held(bound, &n, true),
             Alias::Write(n) => {
+                if n != short || ts_type_word(&n, true) {
+                    types.clashes.push((short.to_string(), Name::Message(message.to_string()), With::Own));
+                }
+                let n = held(bound, &n, true);
                 c.push_str(&format!("\n/** {what}: `{message}`. */\nexport type {n} = {ty};\n"));
                 n
             }
@@ -747,26 +1176,29 @@ fn service_client_ts(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
             let mut cs = mt.name.chars();
             ident(&cs.next().map(|f| f.to_lowercase().chain(cs).collect::<String>()).unwrap_or_default())
         };
+        if ts_value_word(&lower) {
+            values.clashes.push((lower.clone(), Name::Method(mt.name.clone()), With::Own));
+        }
         let (f, sig, call) = match mt.marks.first() {
             Some(Mark::Start { .. }) => {
-                let f = names.function(lower.clone(), &mt.name, lower == "start");
-                let req = alias(&mut c, &mut names, &mt.request, "T.WorkflowInput", false, format!("The request of {label}, the workflow's input"));
-                alias(&mut c, &mut names, &mt.response, "T.WorkflowOutput", false, format!("The response of {label}, the workflow's output"));
+                let f = values.function(lower.clone(), &mt.name, lower == "start");
+                let req = alias(&mut c, &mut types, &mut bound, &mt.request, "T.WorkflowInput", false, format!("The request of {label}, the workflow's input"));
+                alias(&mut c, &mut types, &mut bound, &mt.response, "T.WorkflowOutput", false, format!("The response of {label}, the workflow's output"));
                 (f, format!("(client: Client, id: string, input: {req}, options: StartOptions = {{}}): Promise<WorkflowHandle>"), "  return start(client, id, input, options);\n".to_string())
             }
             Some(Mark::Event { task }) => {
-                let f = names.function(lower.clone(), &mt.name, false);
-                let req = alias(&mut c, &mut names, &mt.request, &task_type(task), false, format!("The request of {label}, the value of the event of `{task}`"));
+                let f = values.function(lower.clone(), &mt.name, false);
+                let req = alias(&mut c, &mut types, &mut bound, &mt.request, &task_type(task), false, format!("The request of {label}, the value of the event of `{task}`"));
                 (f, format!("(client: Client, workflowId: string, value: {req}): Promise<void>"), format!("  await send(client, workflowId, {}, {{ ok: value }});\n", q(task)))
             }
             Some(Mark::Answer { task }) => {
-                let f = names.function(lower.clone(), &mt.name, false);
-                let req = alias(&mut c, &mut names, &mt.request, &task_type(task), false, format!("The request of {label}, the answer of the callback of `{task}`"));
+                let f = values.function(lower.clone(), &mt.name, false);
+                let req = alias(&mut c, &mut types, &mut bound, &mt.request, &task_type(task), false, format!("The request of {label}, the answer of the callback of `{task}`"));
                 (f, format!("(client: Client, callbackId: string, value: {req}): Promise<void>"), "  await answer(client, callbackId, { ok: value });\n".to_string())
             }
             Some(Mark::Status) => {
-                let f = names.function(lower.clone(), &mt.name, lower == "status");
-                let res = alias(&mut c, &mut names, &mt.response, "Status", true, format!("The response of {label}, where a run is"));
+                let f = values.function(lower.clone(), &mt.name, lower == "status");
+                let res = alias(&mut c, &mut types, &mut bound, &mt.response, "Status", true, format!("The response of {label}, where a run is"));
                 (f, format!("(client: Client, id: string): Promise<{res}>"), "  return status(client, id);\n".to_string())
             }
             None => continue,
@@ -778,37 +1210,51 @@ fn service_client_ts(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
             _ => "where the workflow `id` is (as `status` says)".to_string(),
         };
         if let Some(name) = f {
-            c.push_str(&format!("\n/** {label}: {what}. */\nexport async function {name}{sig} {{\n{call}}}\n"));
+            let n = held(&mut bound, &name, false);
+            if CLIENT_SCOPE_TS.contains(&name.as_str()) {
+                // a name the top of the file leaves to the module: the function goes by `_<name>`
+                // there, and the module exports it by its own
+                c.push_str(&format!("\n/** {label}: {what}. */\nasync function _{name}{sig} {{\n{call}}}\nexport {{ _{name} as {n} }};\n"));
+            } else {
+                c.push_str(&format!("\n/** {label}: {what}. */\nexport async function {n}{sig} {{\n{call}}}\n"));
+            }
         }
     }
-    (c, names.clashes)
+    let mut clashes = types.clashes;
+    clashes.extend(values.clashes);
+    (c, bound, clashes)
 }
 
-/// What the code of TypeScript cannot keep (DESIGN 22): a type's name that is a global of
-/// JavaScript or the code's, which is a type of another name in `type_name`; a name that begins
-/// with `_`, which begins with `v` in `ident`; and what its client could not write.
+/// What the code of TypeScript cannot keep (DESIGN 22): a name a caller reads that TypeScript cannot
+/// declare — a reserved word or a type of the language, or a name that begins with `_` (which
+/// begins with `v` in `ident`) — which a type of `types.ts`, a method you implement, and a message's
+/// type or a method's function of the client go by; a type that is what types.ts declares for a
+/// caller (`TS_TYPES_OWN`); and what its client could not write. A name the code imports, declares
+/// for itself alone, or reads from the globals is no such name: the code has its own another way
+/// where a name of the flow takes it.
 pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
     let mut out = Vec::new();
     let (enums, recs) = used_types(m);
-    let types = enums.iter().map(|e| &m.enums[*e].name).chain(recs.iter().map(|r| &m.records[*r].name));
+    // an enum is a type alias, a record an interface
+    let types = enums.iter().map(|e| (&m.enums[*e].name, true)).chain(recs.iter().map(|r| (&m.records[*r].name, false)));
     let mut said = |targets: &[&'static str], id: String, name: Name, why: Text| {
         for target in targets {
             out.push(Clash { lang: Lang::TypeScript, target, id: id.clone(), name: name.clone(), with: With::Own, why: why.clone(), in_package: false });
         }
     };
-    for n in types {
+    for (n, alias) in types {
         let plain = n.replace('.', "_");
         let id = type_name(n);
-        if id != plain {
-            let why = if id == ident(&plain) {
-                tr!("TypeScript の名前は `_` で始められるのに、生成するコードの名前は `{id}` になります。", "the name would be `{id}` in the code, which does not begin a name with `_`.")
-            } else if plain.starts_with("Workflow") {
-                tr!("`types.ts` は `{plain}` を自分で宣言します。同じ名前を二度宣言できないので、モジュールが型の検査を通りません（`Duplicate identifier`）。", "`types.ts` declares `{plain}` itself: a name cannot be declared twice as a type, so the module does not type-check (`Duplicate identifier`).")
-            } else {
-                tr!("`{plain}` は JavaScript のグローバルな型で、`types.ts` が読みます。同じ名前の型は、それを隠します。", "`{plain}` is a global type of JavaScript that `types.ts` reads, and a type of that name hides it.")
-            };
-            said(&["temporal-typescript", "durable"], plain, Name::Type(n.clone()), why);
-        }
+        let why = if ts_type_word(&plain, alias) {
+            tr!("`{plain}` は TypeScript の語で、型の名前にできません。", "`{plain}` is a word of TypeScript, which a type cannot be named.")
+        } else if id == plain {
+            continue;
+        } else if id == ident(&plain) {
+            tr!("TypeScript の名前は `_` で始められるのに、生成するコードの名前は `{id}` になります。", "the name would be `{id}` in the code, which does not begin a name with `_`.")
+        } else {
+            tr!("`types.ts` は `{plain}` を自分で宣言し、呼ぶ側がそれを読みます。同じ名前を二度宣言できないので、モジュールが型の検査を通りません（`Duplicate identifier`）。", "`types.ts` declares `{plain}` itself, which a caller reads: a name cannot be declared twice as a type, so the module does not type-check (`Duplicate identifier`).")
+        };
+        said(&["temporal-typescript", "durable"], plain, Name::Type(n.clone()), why);
     }
     for (p, target) in [(Platform::Temporal, "temporal-typescript"), (Platform::Durable, "durable")] {
         for t in m.tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))) {
@@ -819,12 +1265,35 @@ pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
             }
         }
     }
+    // two types types.ts writes by one name (`shop.Line` and a record `shop_Line`, `_x` and `v_x`),
+    // both of which a caller reads. The caller of Argo keeps them apart (`types_apart`), but for two
+    // enums a rule or a `.proto` names, which keep their names there.
+    let mut first: BTreeMap<String, (&String, bool)> = BTreeMap::new();
+    for (n, is_enum) in enums.iter().map(|e| (&m.enums[*e].name, true)).chain(recs.iter().map(|r| (&m.records[*r].name, false))) {
+        let id = type_name(n);
+        match first.get(&id) {
+            Some((a, a_enum)) => {
+                let why = tr!("どちらも `types.ts` の `{id}` です。同じ名前を二度宣言できないので、モジュールが型の検査を通りません（`Duplicate identifier`）。", "both are `{id}` in `types.ts`: a name cannot be declared twice, so the module does not type-check (`Duplicate identifier`).");
+                let made = is_enum && *a_enum && n.contains('.') && a.contains('.');
+                let targets: &[&'static str] = if made { &["temporal-typescript", "durable", "argo"] } else { &["temporal-typescript", "durable"] };
+                for target in targets {
+                    out.push(Clash { lang: Lang::TypeScript, target, id: id.clone(), name: Name::Type(n.clone()), with: With::Name(Name::Type(a.to_string())), why: why.clone(), in_package: false });
+                }
+            }
+            None => {
+                first.insert(id, (n, is_enum));
+            }
+        }
+    }
     if let Some(s) = &m.service {
-        for (id, name, with) in service_client_ts(m, s).1 {
-            let why = match &with {
-                With::Name(_) => tr!("どちらも `client.ts` の `{id}` です。同じ名前を二度宣言できないので、モジュールが型の検査を通りません。", "both are `{id}` in `client.ts`: a name cannot be declared twice, so the module does not type-check."),
-                With::TwoTypes => tr!("`client.ts` の `{id}` は一つの型にしかなれません。", "`{id}` in `client.ts` can be one type only."),
-                With::Own => tr!("`client.ts` は `{id}` を自分で持っています。同じ名前を二度宣言できないので、モジュールが型の検査を通りません。", "`client.ts` has `{id}` itself: a name cannot be declared twice, so the module does not type-check."),
+        for (id, name, with) in service_client_ts(m, s).2 {
+            let why = match (&with, &name) {
+                (With::Name(_), _) => tr!("どちらも `client.ts` の `{id}` です。同じ名前を二度宣言できないので、モジュールが型の検査を通りません。", "both are `{id}` in `client.ts`: a name cannot be declared twice, so the module does not type-check."),
+                (With::TwoTypes, _) => tr!("`client.ts` の `{id}` は一つの型にしかなれません。", "`{id}` in `client.ts` can be one type only."),
+                (With::Own, _) if ident(&id) != id => tr!("TypeScript の名前は `_` で始められるのに、生成するコードの名前は `{}` になります。", "the name would be `{}` in the code, which does not begin a name with `_`.", ident(&id)),
+                (With::Own, Name::Message(_)) if ts_type_word(&id, true) => tr!("`{id}` は TypeScript の語で、`client.ts` は型の名前にできません。", "`{id}` is a word of TypeScript, which `client.ts` cannot name a type."),
+                (With::Own, Name::Method(_)) if ts_value_word(&id) => tr!("`{id}` は TypeScript の予約語か、strict モードが取ってある名前です。`client.ts` はこの名前で関数を宣言できません。", "`{id}` is a reserved word of TypeScript or a name its strict mode keeps: `client.ts` cannot declare a function by it."),
+                (With::Own, _) => tr!("`client.ts` は `{id}` を自分で持ち、呼ぶ側がそれを読みます。同じ名前を二度宣言できないので、モジュールが型の検査を通りません。", "`client.ts` has `{id}` itself, which a caller reads: a name cannot be declared twice, so the module does not type-check."),
             };
             out.push(Clash { lang: Lang::TypeScript, target: "temporal-typescript", id, name, with, why, in_package: false });
         }
@@ -1051,7 +1520,8 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                 }
             }
             Some(Via::Http { method, url, form }) => {
-                let used = crate::lower::placeholders(url);
+                // the path's arguments and the query in the URL, the headers and the cookies, and the
+                // body, each written as the description says or OpenAPI's defaults do (DESIGN 43)
                 let mut url_parts: Vec<String> = Vec::new();
                 let mut rest = url;
                 while let Some(i) = rest.find('{') {
@@ -1062,11 +1532,20 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                     if i > 0 {
                         url_parts.push(q(&rest[..i]));
                     }
-                    url_parts.push(format!("io.segment(args[{}])", q(&rest[i + 1..j])));
+                    let ph = &rest[i + 1..j];
+                    url_parts.push(match wire::path_param(m, task, ph) {
+                        Some((w, k, _)) if !wire::plain_segment(w, &k) => format!("io.path({})", param_ts(w, &k)),
+                        Some((w, _, _)) => format!("io.segment(args[{}])", q(&w.param)),
+                        None => format!("io.segment(args[{}])", q(ph)),
+                    });
                     rest = &rest[j + 1..];
                 }
                 if !rest.is_empty() || url_parts.is_empty() {
                     url_parts.push(q(rest));
+                }
+                let query: Vec<String> = wire::at(m, task, Place::Query).iter().map(|(w, k, _)| param_ts(w, k)).collect();
+                if !query.is_empty() {
+                    url_parts.push(format!("io.query({}, [{}])", q(if url.contains('?') { "&" } else { "?" }), query.join(", ")));
                 }
                 let mut req = vec![format!("http: {}", q(method)), format!("url: {}", url_parts.join(" + "))];
                 let mut headers = Vec::new();
@@ -1079,13 +1558,26 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                 if task.key {
                     headers.push("\"Idempotency-Key\": args[\"idempotency_key\"]".to_string());
                 }
-                if !headers.is_empty() {
+                let (hs, cs) = (wire::at(m, task, Place::Header), wire::at(m, task, Place::Cookie));
+                if !hs.is_empty() || !cs.is_empty() {
+                    let ps = |v: &[(&WireParam, wire::Kind, &Ty)]| v.iter().map(|(w, k, _)| param_ts(w, k)).collect::<Vec<_>>().join(", ");
+                    let own = if headers.is_empty() { "{}".to_string() } else { format!("{{ {} }}", headers.join(", ")) };
+                    req.push(format!("...io.headers({own}, [{}], [{}])", ps(&hs), ps(&cs)));
+                } else if !headers.is_empty() {
                     req.push(format!("headers: {{ {} }}", headers.join(", ")));
                 }
-                let rest_args: Vec<String> = task.params.iter().filter(|(p, _)| !used.contains(p)).map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
-                if !rest_args.is_empty() {
-                    let place = if method == "GET" || method == "DELETE" { "query" } else { "body" };
-                    req.push(format!("{place}: {{ {} }}", rest_args.join(", ")));
+                let body: Vec<&WireParam> = task.wire.iter().filter(|w| w.place == Place::Body).collect();
+                if form && !body.is_empty() && !wire::plain_form(m, task) {
+                    let ps: Vec<String> = wire::at(m, task, Place::Body).iter().map(|(w, k, _)| param_ts(w, k)).collect();
+                    req.push(format!("body: io.form([{}])", ps.join(", ")));
+                } else if !body.is_empty() {
+                    // a JSON body by the parameters' names; a URL-encoded one of values that are always there by the names it takes
+                    let fields: Vec<String> = body.iter().map(|w| format!("{}: args[{}]", q(if form { &w.name } else { &w.param }), q(&w.param))).collect();
+                    match &task.request_days {
+                        // a `connect` task's dates, as protobuf's JSON writes a `google.type.Date` (DESIGN 44)
+                        Some(t) => req.push(format!("body: io.wireDays({{ {} }}, {t})", fields.join(", "))),
+                        None => req.push(format!("body: {{ {} }}", fields.join(", "))),
+                    }
                 }
                 if form {
                     req.push("form: true".into());
@@ -1259,9 +1751,50 @@ fn braces(inner: &str) -> String {
     }
 }
 
+/// `m`, with each type that `types.ts` would write by the name of another (`shop.Line` and a record
+/// `shop_Line`, `_x` and `v_x`) going by its name with `_` after it, as many times as it takes to
+/// have a name of its own. The caller of Argo keeps them apart so: no caller reads its types, and
+/// Node, which runs it, refuses a function declared twice (`is_<type>`). A made type (a rule's or a
+/// `.proto`'s, whose name has a dot) keeps its name before the flow's own does, and an enum of them
+/// keeps it always: `used_types` finds a rule's enum by its name, and `clashes` stops Argo where
+/// two such enums are one.
+fn types_apart(m: &Model) -> Model {
+    let (enums, recs) = used_types(m);
+    let mut order: Vec<(u8, bool, usize)> = enums
+        .iter()
+        .map(|e| (if m.enums[*e].name.contains('.') { 0 } else { 2 }, true, *e))
+        .chain(recs.iter().map(|r| (if m.records[*r].name.contains('.') { 1 } else { 2 }, false, *r)))
+        .collect();
+    order.sort_by_key(|(rank, _, _)| *rank);
+    let names: BTreeSet<&String> = m.enums.iter().map(|e| &e.name).chain(m.records.iter().map(|r| &r.name)).collect();
+    let mut taken: BTreeSet<String> = BTreeSet::new();
+    let mut out = m.clone();
+    for (rank, is_enum, ix) in order {
+        let name = if is_enum { &m.enums[ix].name } else { &m.records[ix].name };
+        let mut n = name.clone();
+        if rank > 0 {
+            while taken.contains(&type_name(&n)) || (n != *name && names.contains(&n)) {
+                n.push('_');
+            }
+        }
+        taken.insert(type_name(&n));
+        if n != *name {
+            if is_enum {
+                out.enums[ix].name = n;
+            } else {
+                out.records[ix].name = n;
+            }
+        }
+    }
+    out
+}
+
 /// The program that runs, in a container of an Argo workflow, the tasks dandori writes (the
 /// ones that say `lambda`, `http`, `aws` or `agent`) and the rules: `caller/` in the Argo build.
+/// Two types of one name in `types.ts` go by two names here (`types_apart`).
 pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
+    let apart = types_apart(m);
+    let m = &apart;
     // only the rules whose code goes with the workflow are in rules.ts; the others are in tasks.ts, where they are called at their services
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
     // Node runs these directly, stripping the types, and wants the extension on a relative import
@@ -1281,7 +1814,7 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
         ),
     ];
     if !called.is_empty() {
-        let rules = rules_file(m, header, &called).lines().map(|l| {
+        let rules = rules_file(m, header, &called, false).lines().map(|l| {
             if l.starts_with("import ") && (l.contains("./rulec/typescript/") || l.contains("./koyomi/typescript/")) {
                 l.replacen("\";", ".ts\";", 1)
             } else {
@@ -1438,7 +1971,9 @@ pub(crate) fn import_names(imports: &BTreeMap<String, BTreeSet<String>>, same: i
     (lines, local)
 }
 
-pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
+/// rules.ts: `compiled` when tsc compiles it (Temporal's worker), not when Node runs the TypeScript
+/// as it is (Argo's caller, whose imports have their `.ts` names).
+pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, compiled: bool) -> String {
     let mut rules_ts = header.to_string();
     let dates = called.iter().any(|r| m.rules[*r].date().is_some());
     if called.iter().all(|r| m.rules[*r].date().is_some()) {
@@ -1453,6 +1988,11 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> S
     } else {
         if called.iter().any(|r| m.rules[*r].is_rule()) {
             rules_ts.push_str("// `rulec gen <rule> --target typescript --out rulec` writes the modules these imports read.\n");
+            // a rule's module imports the module of the `enums` file it reads enums from by its
+            // `.ts` name, as Node runs TypeScript, where these imports have none (DESIGN 28.8)
+            if compiled && called.iter().any(|r| m.rules[*r].is_rule() && !m.rules[*r].enums_modules.is_empty()) {
+                rules_ts.push_str("// A rule that reads enums from an enums file imports that file's module, which rulec writes\n// beside it, by its .ts name: tsc compiles them with `rewriteRelativeImportExtensions`.\n");
+            }
         }
         if dates {
             rules_ts.push_str("// `koyomi gen <file.cal> --target typescript --out koyomi` writes the modules of the dates.\n");
@@ -1613,16 +2153,16 @@ const IO: &str = r#"// How the tasks that say `lambda`, `http`, `aws`, `agent` o
 export type Answer = { ok: unknown } | { error: string; message: string };
 
 /**
- * An HTTP request as Step Functions' HTTP Task sends it; `form` asks for a URL-encoded body, and
- * `typesafe` and `openai` say it is a call of TypeSafe's Jev or of OpenAI's Decisions API, to
- * which the default transport adds that API's key.
+ * An HTTP request as Step Functions' HTTP Task sends it. The URL has the query in it, and the
+ * headers the cookies in one Cookie. `form` asks for a URL-encoded body, of each name with its value
+ * (a list's items one by one), and `typesafe` and `openai` say it is a call of TypeSafe's Jev or of
+ * OpenAI's Decisions API, to which the default transport adds that API's key.
  */
 export interface HttpRequest {
   http: string;
   url: string;
   headers?: Record<string, string>;
   body?: Record<string, unknown>;
-  query?: Record<string, unknown>;
   form?: boolean;
   typesafe?: boolean;
   openai?: boolean;
@@ -1703,7 +2243,11 @@ export class AgentStopped extends Error {
 }
 
 export interface Options {
-  /** Headers to add to an HTTP request, such as the credentials the other side wants (for a server of Open Responses too). */
+  /**
+   * Headers to add to an HTTP request, such as the credentials the other side wants (for a server of
+   * Open Responses too). One takes the place of the request's of its name, in any case; a Cookie's
+   * cookies join the request's, each in the place of the request's of its name.
+   */
   headers?: (url: string) => Record<string, string> | Promise<Record<string, string>>;
   /** The configuration of the AWS SDK clients, such as the region. */
   aws?: Record<string, unknown>;
@@ -1741,23 +2285,46 @@ const CLIENTS: Record<string, [string, string]> = {
   ssm: ["@aws-sdk/client-ssm", "SSM"],
 };
 
-/** `a=1&b[c]=2`, the way a URL-encoded body nests. */
-function encode(o: Record<string, unknown>, prefix = ""): string {
+/**
+ * `a=1&b=2&b=3`: a URL-encoded body, each name with its value, and with each item of a list for one
+ * (DESIGN 43), both escaped by encodeURIComponent; a value that is not there is left out.
+ */
+function encode(o: Record<string, unknown>): string {
   const parts: string[] = [];
   for (const [k, v] of Object.entries(o)) {
-    const key = prefix ? `${prefix}[${k}]` : k;
-    if (v === undefined) continue;
-    if (v !== null && typeof v === "object") parts.push(encode(v as Record<string, unknown>, key));
-    else parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v === null ? "" : String(v))}`);
+    for (const x of Array.isArray(v) ? v : [v]) {
+      // not `key=`: an empty string is a value, and the call has none
+      if (x === undefined || x === null) continue;
+      parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(text(x))}`);
+    }
   }
-  return parts.filter((p) => p !== "").join("&");
+  return parts.join("&");
+}
+
+/** The cookies of a request (`a=1; b=2`) with `added`'s, each of which takes the place of the request's of its name. */
+function withCookies(request: string | undefined, added: string): string {
+  const pairs = (s: string) => s.split(";").map((p) => p.trim()).filter((p) => p !== "");
+  const name = (p: string) => p.split("=")[0];
+  const names = new Set(pairs(added).map(name));
+  return [...pairs(request ?? "").filter((p) => !names.has(name(p))), ...pairs(added)].join("; ");
 }
 
 export function transport(options: Options = {}): Transport {
   async function http(req: HttpRequest): Promise<{ status: number; body: unknown }> {
-    let url = req.url;
-    if (req.query) url += (url.includes("?") ? "&" : "?") + encode(req.query);
-    const headers: Record<string, string> = { ...(req.headers ?? {}), ...(options.headers ? await options.headers(req.url) : {}) };
+    // a header's name is one in any case: the last given of a name goes
+    const headers: Record<string, string> = {};
+    const has = (k: string) => Object.keys(headers).find((h) => h.toLowerCase() === k.toLowerCase());
+    const put = (k: string, v: string) => {
+      const was = has(k);
+      if (was !== undefined) delete headers[was];
+      headers[k] = v;
+    };
+    for (const [k, v] of Object.entries(req.headers ?? {})) put(k, v);
+    // the options' headers take the place of the request's, but for the cookies, which join them
+    for (const [k, v] of Object.entries(options.headers ? await options.headers(req.url) : {})) {
+      const cookies = k.toLowerCase() === "cookie" ? has(k) : undefined;
+      put(k, cookies !== undefined ? withCookies(headers[cookies], v) : v);
+    }
     if (req.typesafe && !Object.keys(headers).some((h) => h.toLowerCase() === "authorization")) {
       const key = options.typesafe?.apiKey ?? process.env.TYPESAFE_API_KEY;
       if (!key) throw new Error("no API key for Jev: set TYPESAFE_API_KEY, or give the transport { typesafe: { apiKey } }");
@@ -1773,10 +2340,12 @@ export function transport(options: Options = {}): Transport {
       if (req.form) body = encode(req.body);
       else {
         body = JSON.stringify(req.body);
-        if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
+        if (has("Content-Type") === undefined) headers["Content-Type"] = "application/json";
       }
     }
-    const res = await fetch(url, { method: req.http, headers, body });
+    // fetch takes a header's text as bytes: each value as its UTF-8, as the other languages send it
+    const sent = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k, Buffer.from(v, "utf8").toString("latin1")]));
+    const res = await fetch(req.url, { method: req.http, headers: sent, body });
     const text = await res.text();
     let parsed: unknown = text;
     if ((res.headers.get("content-type") ?? "").includes("json")) {
@@ -1895,9 +2464,137 @@ export function workflowOf(callbackId: string): string {
   return JSON.parse(callbackId)[0];
 }
 
-/** An argument put into a URL: text as it is, nothing for none, anything else as JSON, escaped by encodeURIComponent. */
+/** A value's text in a URL, a header or a URL-encoded body: text as it is, nothing for none, anything else as JSON. */
+function text(v: unknown): string {
+  return typeof v === "string" ? v : v === null || v === undefined ? "" : JSON.stringify(v);
+}
+
+/** An argument put into a URL: its text, escaped by encodeURIComponent. */
 export function segment(v: unknown): string {
-  return encodeURIComponent(typeof v === "string" ? v : v === null || v === undefined ? "" : JSON.stringify(v));
+  return encodeURIComponent(text(v));
+}
+
+/**
+ * An argument of an `http` task where it goes (DESIGN 43): the name it goes by there, its value,
+ * OpenAPI's style and explode, and what the value is: "v" one value, "j" a `json` one, "l" a list,
+ * or a record's fields in their order.
+ */
+export type Param = [name: string, value: unknown, style: string, explode: boolean, shape: string | string[]];
+
+/** The texts of the items of a list that are there. */
+function items(v: unknown): string[] {
+  return (Array.isArray(v) ? v : [v]).filter((x) => x !== null && x !== undefined).map(text);
+}
+
+/** The names and the texts of the fields of a record that are there, in the record's order. */
+function fields(v: unknown, names: string[]): [string, string][] {
+  const o = v as Record<string, unknown>;
+  return names.filter((f) => o[f] !== null && o[f] !== undefined).map((f): [string, string] => [f, text(o[f])]);
+}
+
+/** The items of a list, or the names and the values of a record's fields in turn, each through `e`, between `sep`; none when there are none. */
+function joined(v: unknown, shape: string | string[], sep: string, e: (s: string) => string): string | undefined {
+  const all = typeof shape === "string" ? items(v) : fields(v, shape).flat();
+  return all.length ? all.map(e).join(sep) : undefined;
+}
+
+/** `;name=text`, or `;name` for empty text (matrix). */
+function named(name: string, t: string): string {
+  return t === "" ? `;${name}` : `;${name}=${t}`;
+}
+
+/** The query of a call's arguments after `mark` ("?", or "&" after the URL's own): "" when none is there. */
+export function query(mark: string, params: Param[]): string {
+  const e = encodeURIComponent;
+  const pairs: string[] = [];
+  for (const [name, v, style, explode, shape] of params) {
+    if (v === null || v === undefined) continue;
+    if (shape === "v" || shape === "j") pairs.push(`${e(name)}=${e(text(v))}`);
+    else if (shape === "l" && style === "form" && explode) for (const t of items(v)) pairs.push(`${e(name)}=${e(t)}`);
+    else if (typeof shape !== "string" && (style === "deepObject" || (style === "form" && explode))) {
+      for (const [f, t] of fields(v, shape)) pairs.push(`${e(style === "deepObject" ? `${name}[${f}]` : f)}=${e(t)}`);
+    } else {
+      const j = joined(v, shape, style === "spaceDelimited" ? "%20" : style === "pipeDelimited" ? "%7C" : ",", e);
+      if (j !== undefined) pairs.push(`${e(name)}=${j}`);
+    }
+  }
+  return pairs.length ? mark + pairs.join("&") : "";
+}
+
+/** An argument put into the path, as its style writes it: `a,b`, `.a.b`, `;n=a;n=b`. */
+export function path([name, v, style, explode, shape]: Param): string {
+  if (v === null || v === undefined) return "";
+  const e = encodeURIComponent;
+  if (typeof shape === "string" && shape !== "l") {
+    const t = e(text(v));
+    return style === "label" ? `.${t}` : style === "matrix" ? named(e(name), t) : t;
+  }
+  if (typeof shape === "string") {
+    const its = items(v).map(e);
+    if (!its.length) return "";
+    if (style === "label") return "." + its.join(explode ? "." : ",");
+    if (style === "matrix") return explode ? its.map((t) => named(e(name), t)).join("") : named(e(name), its.join(","));
+    return its.join(",");
+  }
+  const fs = fields(v, shape).map(([f, t]): [string, string] => [e(f), e(t)]);
+  if (!fs.length) return "";
+  const flat = fs.flat().join(",");
+  const pairs = (sep: string) => fs.map(([f, t]) => `${f}=${t}`).join(sep);
+  if (style === "label") return "." + (explode ? pairs(".") : flat);
+  if (style === "matrix") return explode ? fs.map(([f, t]) => named(f, t)).join("") : named(e(name), flat);
+  return explode ? pairs(",") : flat;
+}
+
+/**
+ * The headers of a call: dandori's own, then each argument that goes in a header, as `simple` writes
+ * it with its text as it is, then the arguments that go in a cookie, `name=value` as `form` writes
+ * them, in one Cookie (DESIGN 43); none when there is none.
+ */
+export function headers(own: Record<string, string>, params: Param[], cookies: Param[]): { headers?: Record<string, string> } {
+  const out: Record<string, string> = { ...own };
+  for (const [name, v, , explode, shape] of params) {
+    if (v === null || v === undefined) continue;
+    let t: string | undefined;
+    if (shape === "v" || shape === "j") t = text(v);
+    else if (typeof shape !== "string" && explode) {
+      const fs = fields(v, shape);
+      t = fs.length ? fs.map(([f, x]) => `${f}=${x}`).join(",") : undefined;
+    } else t = joined(v, shape, ",", (s) => s);
+    if (t !== undefined) out[name] = t;
+  }
+  const pairs: string[] = [];
+  for (const [name, v, , , shape] of cookies) {
+    if (v === null || v === undefined) continue;
+    const t = shape === "v" || shape === "j" ? encodeURIComponent(text(v)) : joined(v, shape, ",", encodeURIComponent);
+    if (t !== undefined) pairs.push(`${name}=${t}`);
+  }
+  if (pairs.length) out["Cookie"] = pairs.join("; ");
+  return Object.keys(out).length ? { headers: out } : {};
+}
+
+/**
+ * A URL-encoded body of a call's arguments, as the Transport is handed it (DESIGN 43): one value as
+ * it is (a `json` one as its text), a list `form` writes with `explode` as its items' texts, which the
+ * name repeats for, a record's fields by their names or as `name[field]`, and the joined text of the
+ * other styles; nothing for a value that is not there.
+ */
+export function form(params: Param[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [name, v, style, explode, shape] of params) {
+    if (v === null || v === undefined) continue;
+    if (shape === "v") out[name] = v;
+    else if (shape === "j") out[name] = text(v);
+    else if (shape === "l" && style === "form" && explode) {
+      const its = items(v);
+      if (its.length) out[name] = its;
+    } else if (typeof shape !== "string" && (style === "deepObject" || (style === "form" && explode))) {
+      for (const [f, t] of fields(v, shape)) out[style === "deepObject" ? `${name}[${f}]` : f] = t;
+    } else {
+      const j = joined(v, shape, style === "spaceDelimited" ? " " : style === "pipeDelimited" ? "|" : ",", (s) => s);
+      if (j !== undefined) out[name] = j;
+    }
+  }
+  return out;
 }
 
 /** The value of an answer, or the declared error it names (`names`: the other side's name → the error). */
@@ -2124,6 +2821,26 @@ export class Failure extends DurableOperationError {
   }
 }
 
+/**
+ * A fault of the code that the `.flow`'s check rules out, such as a variable read where it has no
+ * value (have): the handler fails with Dandori.UnexpectedValue, as the reference interpreter's run
+ * does. `attempt` lets it through, so that it is no task's error.
+ */
+export class Unexpected extends Failure {
+  constructor(message: string) {
+    super("Dandori.UnexpectedValue", message);
+  }
+}
+
+/**
+ * The value of a variable where the `.flow`'s check says it has one: a variable holds null until
+ * it is set. Null here is a fault of the code, not a task's error (Unexpected).
+ */
+export function have<V>(value: V | null | undefined, name: string, line: number): V {
+  if (value === null || value === undefined) throw new Unexpected(`line ${line}: ${name} has no value`);
+  return value;
+}
+
 /** A retrier, as the state machine's Retry has it: the kinds it takes ("*" is every kind). */
 export interface Retrier {
   on: readonly string[];
@@ -2148,11 +2865,16 @@ export function kindOf(e: unknown, declared: readonly string[]): string {
     }
     return "failure";
   }
-  const cause = (e as { cause?: { name?: unknown } } | null)?.cause;
-  const name = cause && typeof cause.name === "string" ? cause.name : e instanceof Error ? e.name : "";
+  const name = nameOf(e);
   if (name === "Dandori.Timeout") return "timeout";
   if (declared.includes(name)) return name;
   return "failure";
+}
+
+/** The name of an error from a step: its cause's, by which a step's failure keeps it. */
+function nameOf(e: unknown): string {
+  const cause = (e as { cause?: { name?: unknown } } | null)?.cause;
+  return cause && typeof cause.name === "string" ? cause.name : e instanceof Error ? e.name : "";
 }
 
 function messageOf(e: unknown): string {
@@ -2161,13 +2883,19 @@ function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** Call once, and again as the retriers say, waiting between as Step Functions would. */
+/**
+ * Call once, and again as the retriers say, waiting between as Step Functions would. A fault of
+ * the code (Unexpected) is no task's error: it goes on, also when it came from inside a step,
+ * which fails with its name (as a replay reads it again).
+ */
 export async function attempt<R>(context: DurableContext, name: string, call: () => Promise<R>, retriers: readonly Retrier[], declared: readonly string[]): Promise<R> {
   const counts = retriers.map(() => 0);
   for (;;) {
     try {
       return await call();
     } catch (e) {
+      if (e instanceof Unexpected) throw e;
+      if (nameOf(e) === "Dandori.UnexpectedValue") throw new Unexpected(messageOf(e));
       const kind = kindOf(e, declared);
       let again = false;
       for (let i = 0; i < retriers.length; i++) {
@@ -2277,6 +3005,26 @@ export class TaskError extends Error {
   }
 }
 
+/**
+ * A fault of the code that the `.flow`'s check rules out, such as a variable read where it has no
+ * value (have): the workflow fails with Dandori.UnexpectedValue, as the reference interpreter's
+ * run does. `attempt` lets it through, so that it is no task's error.
+ */
+export class Unexpected extends ApplicationFailure {
+  constructor(message: string) {
+    super(message, "Dandori.UnexpectedValue", true);
+  }
+}
+
+/**
+ * The value of a variable where the `.flow`'s check says it has one: a variable holds null until
+ * it is set. Null here is a fault of the code, not a task's error (Unexpected).
+ */
+export function have<V>(value: V | null | undefined, name: string, line: number): V {
+  if (value === null || value === undefined) throw new Unexpected(`line ${line}: ${name} has no value`);
+  return value;
+}
+
 /** A callback that got no answer in time. */
 export class CallbackTimeout extends Error {
   constructor() {
@@ -2323,14 +3071,14 @@ function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** Call once, and again as the retriers say, waiting between as Step Functions would. A cancellation is no task's error: it goes on as it is. */
+/** Call once, and again as the retriers say, waiting between as Step Functions would. A cancellation and a fault of the code (Unexpected) are no task's error: they go on as they are. */
 export async function attempt<R>(call: () => Promise<R>, retriers: readonly Retrier[], declared: readonly string[]): Promise<R> {
   const counts = retriers.map(() => 0);
   for (;;) {
     try {
       return await call();
     } catch (e) {
-      if (isCancellation(e)) throw e;
+      if (isCancellation(e) || e instanceof Unexpected) throw e;
       const kind = kindOf(e, declared);
       let again = false;
       for (let i = 0; i < retriers.length; i++) {
@@ -2709,6 +3457,18 @@ export function sha256Hex(text: string): string {
 }
 "#;
 
+/// workflow.ts: the code of `run` has the identifiers of the flow's variables (DESIGN 22). It is
+/// written first with each variable as a placeholder, so the names it reads are the code's own
+/// (its imports, the globals, its parameters, the proxies of the tasks), and a variable takes `_`
+/// after one of them.
+fn workflow_file(m: &Model, flavor: Flavor, ctx: &str, header: &str, rules: bool) -> String {
+    let gen = |vars: render::Vars| Gen { m, out: String::new(), loops: vec![], flavor, ctx: ctx.to_string(), can: None, now: "dd.now()".into(), vars, at: 0 };
+    let probe = gen(render::Vars::probe(m)).workflow(header, rules);
+    let run = &probe[probe.find("async function run(").unwrap_or(0)..];
+    let run = &run[..run.find("\n}\n").map(|j| j + 3).unwrap_or(run.len())];
+    gen(render::Vars::new(m, ts_var, Some(&render::CodeNames::of(run, false)))).workflow(header, rules)
+}
+
 struct Gen<'a> {
     m: &'a Model,
     out: String,
@@ -2723,6 +3483,10 @@ struct Gen<'a> {
     /// what `now` is written as: the workflow's clock on Temporal; on durable functions, the moment
     /// the step before the statement read
     now: String,
+    /// the identifiers of the flow's variables
+    vars: render::Vars,
+    /// the line of the statement being written, which a read of a variable with no value names
+    at: usize,
 }
 
 impl<'a> Gen<'a> {
@@ -2735,7 +3499,7 @@ impl<'a> Gen<'a> {
     }
 
     fn var(&self, name: &str) -> String {
-        ident(name)
+        self.vars.get(name)
     }
 
     fn expr(&self, e: &TExpr) -> String {
@@ -2750,14 +3514,15 @@ impl<'a> Gen<'a> {
             TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
                 let is_input = self.m.inputs.iter().any(|(i, _)| i == name);
-                // a variable is declared with null in it until it is set; the checker says it is set here
-                if fields.is_empty() && !is_input && !matches!(ty, Ty::Opt(_)) {
+                if e.must_have(self.m).is_some() {
+                    // a variable is declared with null in it until it is set; the checker says it is
+                    // set here (E012), and null there ends the workflow (DESIGN 38)
+                    s = format!("dd.have({s}, {}, {})", q(name), self.at);
+                } else if fields.is_empty() && !is_input && !matches!(ty, Ty::Opt(_)) {
+                    // a `json` variable, whose null is a value
                     s.push('!');
                 }
-                for (i, f) in fields.iter().enumerate() {
-                    if i == 0 && !is_input {
-                        s.push('!');
-                    }
+                for f in fields {
                     s.push_str(&format!("[{}]", q(f)));
                 }
                 if !fields.is_empty() && matches!(ty, Ty::Opt(_) | Ty::Json) {
@@ -3098,7 +3863,9 @@ impl<'a> Gen<'a> {
                 "dd.now()".into()
             };
         }
+        let at = std::mem::replace(&mut self.at, s.line);
         self.stmt_here(s, d);
+        self.at = at;
         self.now = "dd.now()".into();
     }
 
@@ -3142,6 +3909,9 @@ impl<'a> Gen<'a> {
                 if fields.is_empty() {
                     self.line(d, if m.service.is_some() { "return {};" } else { "return null;" });
                 } else {
+                    // in the order the outputs are declared, which the result's JSON keeps
+                    let mut fields: Vec<&(String, TExpr)> = fields.iter().collect();
+                    fields.sort_by_key(|(f, _)| m.outputs.iter().position(|(o, _)| o == f));
                     let parts: Vec<String> = fields.iter().map(|(f, e)| format!("{}: {}", q(f), self.expr(e))).collect();
                     self.line(d, &format!("return {{ {} }};", parts.join(", ")));
                 }
@@ -3213,10 +3983,13 @@ impl<'a> Gen<'a> {
                 self.line(d, "{");
                 self.line(d + 1, &format!("// line {}: for {var} in {}", s.line, list.show()));
                 let lx = self.expr(list);
+                // a list of an enum's values written in the `for` gets its type, which TypeScript
+                // would read as `string[]` (DESIGN 29)
+                let typed = if list.lists_enum_values() { format!(": {}", ts_type(m, &list.ty())) } else { String::new() };
                 match can {
                     // a run that goes on in the loop takes up the list the loop began with
-                    Some(k) => self.line(d + 1, &format!("const {items} = dd.carried(dd_resume, {k}, \"items\", () => {lx});")),
-                    None => self.line(d + 1, &format!("const {items} = {lx};")),
+                    Some(k) => self.line(d + 1, &format!("const {items}{typed} = dd.carried(dd_resume, {k}, \"items\", () => {lx});")),
+                    None => self.line(d + 1, &format!("const {items}{typed} = {lx};")),
                 }
                 self.line(
                     d + 1,

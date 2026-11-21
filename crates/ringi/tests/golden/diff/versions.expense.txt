@@ -1,0 +1,23 @@
+  The request `expense` (`expense.ringi`), read in the organization in effect on 2026-04-01 (the version from 2026-04-01) and on 2027-04-01 (the version from 2027-04-01).
+Approvers:
+  The approvers change for 4 of the 23 requesters both versions have.
+    e1201 (Sales staff 1), precheck: check (manager when the agent doubts): e1101 (Manager of Section 1A) → check (manager when the agent doubts): e3101 (Head of Sales Department 1)
+    e1201 (Sales staff 1), first: manager: e1101 (Manager of Section 1A) → manager: e3101 (Head of Sales Department 1)
+    e1201 (Sales staff 1), decide (travel_agent): travel_agent (manager when the agent doubts): e1101 (Manager of Section 1A) → travel_agent (manager when the agent doubts): e3101 (Head of Sales Department 1)
+    e1201 (Sales staff 1), decide (manager): manager: e1101 (Manager of Section 1A) → manager: e3101 (Head of Sales Department 1)
+    e1203 (Sales staff 3), precheck: check (manager when the agent doubts): e1101 (Manager of Section 1A) → check (manager when the agent doubts): e3101 (Head of Sales Department 1)
+    e1203 (Sales staff 3), first: manager: e1101 (Manager of Section 1A) → manager: e3101 (Head of Sales Department 1)
+    e1203 (Sales staff 3), decide (travel_agent): travel_agent (manager when the agent doubts): e1101 (Manager of Section 1A) → travel_agent (manager when the agent doubts): e3101 (Head of Sales Department 1)
+    e1203 (Sales staff 3), decide (manager): manager: e1101 (Manager of Section 1A) → manager: e3101 (Head of Sales Department 1)
+    e9002 (Lawyer 2), precheck: check (manager when the agent doubts): e9001 (General counsel) → check (manager when the agent doubts): e0102 (Head of Corporate Division)
+    e9002 (Lawyer 2), first: manager: e9001 (General counsel) → manager: e0102 (Head of Corporate Division)
+  And 12 more: `--format json` lists them all.
+Requesters:
+  - Only in the version from 2026-04-01: e9001 (General counsel)
+Stages nobody answers:
+  How many requesters each stage finds nobody for, by what happens then as the request says, where the two versions differ:
+    second (dept_head), goes up or elsewhere: 14 → 15
+    second (dept_head and accounting), goes up or elsewhere: 14 → 15
+    decide (dept_head), goes up or elsewhere: 14 → 15
+Tickets in progress:
+  A stage whose approvers are decided keeps them on and after 2027-04-01; each stage that starts on or after 2027-04-01 takes its approvers from the version from 2027-04-01. Where an approver a stage waits for is no longer in the organization, an administrator hands the ticket over; a late stage goes up as the version in effect then says.

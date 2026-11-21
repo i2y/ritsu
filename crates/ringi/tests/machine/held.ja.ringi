@@ -1,0 +1,47 @@
+request 備品(held_ja) v1 "備品の申請"
+description "だれの申請でも、申請者の部の予算を仮押さえする（架空の決まり）。どの部よりも上の人には予算を指す部が無く、その人の申請は出したときに断られる"
+
+use organization 組織(org) from "../../examples/shared/company.ringi"
+use calendar 本社(office) from "../../examples/shared/office.cal"
+use book 予算(budget) from "../../examples/shared/budget.book"
+
+form
+  品目(what)   : text "品目"  count >=1 <=100
+  金額(amount) : money[円] "金額"  range >=1円 <=1_000_000円
+
+route
+  決裁(decide)  上長
+
+who
+  上長(manager) = manager of requester
+  取締役(board) = team board
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then 取締役
+
+ticket
+  self approval  not allowed
+  withdraw       until 決裁
+  on submitted   hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: requester.department, amount: 金額)
+  on approved    post 予算.reserve(request: ticket.id, attempt: ticket.attempt)
+  on rejected, withdrawn, expired  void 予算.reserve(request: ticket.id, attempt: ticket.attempt)
+
+# 仮押さえは申請者の部の予算から取り、承認されたときに確定する
+scenario 押さえて確定
+  requester e1201
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 500_000円)
+  form 品目 = "モニター", 金額 = 60_000円
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 決裁     | in progress |
+| 2026-11-16 11:00 | approve | e1101 |          | approved    |
+
+# 却下されると、金額は部に戻る
+scenario 押さえて取り消し
+  requester e1201
+  given 予算.allocate(dept: "sales1", period: "2026", amount: 500_000円)
+  form 品目 = "モニター", 金額 = 60_000円
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit | e1201 | 決裁     | in progress |
+| 2026-11-16 11:00 | reject | e1101 |          | rejected    |

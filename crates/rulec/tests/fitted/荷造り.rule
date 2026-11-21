@@ -1,0 +1,65 @@
+rule 荷造り(packing_ja) v1
+description "注文をどう荷造りするか。おもちゃが三つでおもちゃの箱、本が二冊で本の箱、数量が二十で大きな箱、贈り物が四つで包装、急ぎが二件で急ぎの便、冷蔵が三件で冷蔵の箱になる。注文は 300 円以上で、一件は 100 円まで"
+
+enum 種類(kind_of_line) = 食品(food) | おもちゃ(toy) | 本(book) | 道具(tool)
+
+# 注文の明細の一件ぶん
+elements 明細(lines)
+  価格(price)  : money[円]  range >=1円 <=100円
+  数量(qty)    : number  range >=1 <=9
+  品目(kind)   : 種類
+  贈り物(gift) : bool
+  急ぎ(rush)   : bool
+  冷蔵(cold)   : bool
+
+count おもちゃの数(toys) over 明細 where 品目 = おもちゃ  range >=0 <=6
+count 本の数(books) over 明細 where 品目 = 本  range >=0 <=6
+count 贈り物の数(gifts) over 明細 where 贈り物  range >=0 <=6
+count 急ぎの数(rushes) over 明細 where 急ぎ  range >=0 <=6
+count 冷蔵の数(colds) over 明細 where 冷蔵  range >=0 <=6
+sum 金額(total) over 明細 of 価格  range >=300円 <=3000円
+sum 総数量(units) over 明細 of 数量  range >=0 <=100
+
+outputs
+  おもちゃ箱(toy_box) : bool
+  本の箱(shelf)       : bool
+  大きな箱(bulky)     : bool
+  包装(wrapped)       : bool
+  急ぎの便(fast)      : bool
+  冷蔵の箱(chilled)   : bool
+
+table おもちゃ箱の判定(toy_box_of)
+policy unique
+| おもちゃの数 | -> おもちゃ箱 |
+| <3           | false         |
+| >=3          | true          |
+
+table 本の箱の判定(shelf_of)
+policy unique
+| 本の数 | -> 本の箱 |
+| <2     | false     |
+| >=2    | true      |
+
+table 大きさの判定(bulky_of)
+policy unique
+| 総数量 | -> 大きな箱 |
+| <20    | false       |
+| >=20   | true        |
+
+table 包装の判定(wrapped_of)
+policy unique
+| 贈り物の数 | -> 包装 |
+| <4         | false   |
+| >=4        | true    |
+
+table 急ぎの判定(fast_of)
+policy unique
+| 急ぎの数 | -> 急ぎの便 |
+| <2       | false       |
+| >=2      | true        |
+
+table 冷蔵の判定(chilled_of)
+policy unique
+| 冷蔵の数 | -> 冷蔵の箱 |
+| <3       | false       |
+| >=3      | true        |

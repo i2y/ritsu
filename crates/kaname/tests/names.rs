@@ -49,6 +49,21 @@ fn the_files_a_module_reads() {
     assert_eq!(codes(&o), ["E201"]);
 }
 
+/// A name a file that could not be read gives is of no type that can be told (DESIGN 39): where it
+/// is written, nothing more is said than the `use` line's E201, as of a value made from it, a name
+/// an arm of a `match` gives one among them. What does not name it is checked to its types all the
+/// same, and a mistake there is said in its place: the arguments of a call of it too.
+#[test]
+fn what_does_not_name_a_file_that_could_not_be_read_is_checked() {
+    let t = TempDir::new("kaname-unread-uses");
+    t.write("rules/broken.rule", "rule broken v1\n\ninputs\n  amount : money[USDc]\n");
+    let main = "module m v1\n\nuse rule fee from \"rules/broken.rule\"\n\nfn f(a: money[USDc] range >=1USDc <=10USDc) -> money[USDc]\n  let x = fee(amount: a).fee\n  x + 1USDc\n\nfn g(a: money[USDc] range >=1USDc <=10USDc) -> money[USDc]\n  match fee(amount: a).discount\n    none => 0USDc\n    some d => d * 2\n\nfn h(n: number range >=0 <=9) -> number\n  n + true\n\nfn k(a: money[USDc] range >=1USDc <=10USDc) -> money[USDc]\n  fee(amount: a + false).fee\n";
+    let o = check_in(&t, main, common::joined());
+    assert_eq!(codes(&o), ["E201", "E105", "E105"], "{}", text(&o));
+    let lines: Vec<Option<usize>> = o.diags.iter().map(|d| d.line).collect();
+    assert_eq!(lines, [Some(3), Some(15), Some(18)], "{}", text(&o));
+}
+
 /// A rule with no outputs (an `enums` file) is read for its enums (DESIGN 2.7): a module that writes
 /// its enum as a type passes, and its generated code reads the rule's module of types alone. Nothing
 /// to call is generated from it (rulec's §15.258), so a call of it, or its outputs written as a type,
@@ -96,7 +111,7 @@ fn a_value_with_no_fields_says_it_has_none() {
         (
             "module m v1\n\nenum Order\n  placed\n    on : date\n  cancelled\n\nfn why(c: Order.cancelled) -> string\n  c.reason\n",
             ritsu_base::text::Lang::En,
-            "  = Order.cancelled has no fields.\n",
+            "  = The value Order.cancelled has no fields.\n",
         ),
         (
             "module 例(m) v1\n\nenum 注文(Order)\n  受付(placed)\n    日(on) : date\n  取消(cancelled)\n\nfn 理由(why)(c: 注文.取消) -> string\n  c.理由\n",
@@ -181,22 +196,59 @@ fn names_given_twice_or_not_ascii() {
     assert_eq!(check("module m v1\n\nrecord R\n  a : string\n  a : bool\n"), ["E006"]);
     assert_eq!(check("module m v1\n\nenum e = a | a\n"), ["E006"]);
     assert_eq!(check("module m v1\n\nfn f(x: bool, x: bool) -> bool\n  true\n"), ["E006"]);
-    // a name the generated code takes: ASCII, or an alias (E005), and a word it can take (E007)
+    // a name the generated code takes: ASCII, or an alias (E005); no name of the helper module, which
+    // the code of every target reads by it (E007)
     assert_eq!(check("module 例 v1\n"), ["E005"]);
     assert_eq!(check("module m v1\n\nrecord R\n  名前 : string\n"), ["E005"]);
     assert_eq!(check("module m v1\n\nrecord R\n  名前(名前) : string\n"), ["E005"]);
     assert_eq!(check("module m v1\n\nenum e = 金 | silver\n"), ["E005"]);
-    assert_eq!(check("module m v1\n\nfn def() -> number\n  1\n"), ["E007"]);
-    assert_eq!(check("module m v1\n\nrecord R\n  名前(func) : string\n"), ["E007"]);
     assert_eq!(check("module m v1\n\nrecord KanameError\n  a : string\n"), ["E007"]);
-    // a name of a module the generated Rust alone cannot take is a warning (W001), and `gen::stops` says
-    // E008 of that target alone; another keyword of Rust is no name to warn of
-    for name in ["crate", "self", "Self", "mod", "door"] {
-        assert_eq!(check(&format!("module {name} v1\n")), ["W001"], "{name}");
-        assert_eq!(check(&format!("module 名前({name}) v1\n")), ["W001"], "{name}");
+    assert_eq!(check("module m v1\n\nfn 補助(glue)() -> number\n  1\n"), ["E007"]);
+    // a target's word, where the target writes the name as it is, is a warning (W001), and
+    // `gen::stops` says E008 of the targets it names alone; where the targets write it otherwise, or
+    // the generator names it, it is no name to warn of
+    let stopped = |src: &str| -> Vec<&'static str> {
+        let o = common::check_text("t.kn", src);
+        let c = o.checked.as_ref().unwrap_or_else(|| panic!("{}", text(&o)));
+        kaname::r#gen::Target::ALL.into_iter().filter(|t| !kaname::r#gen::stops(c, *t).is_empty()).map(|t| t.key()).collect()
+    };
+    for (src, targets) in [
+        ("module m v1\n\nfn def() -> number\n  1\n", &["python"][..]),
+        ("module m v1\n\nfn delete() -> number\n  1\n", &["typescript"]),
+        ("module m v1\n\nfn eval() -> number\n  1\n", &["typescript"]),
+        ("module m v1\n\nfn 名前(class)() -> number\n  1\n", &["typescript", "python"]),
+        ("module m v1\n\nfn f(def: number) -> number\n  def\n", &["python"]),
+        ("module m v1\n\nrecord R\n  名前(def) : string\n", &["python"]),
+        ("module m v1\n\nenum e\n  a\n    kind : string\n  b\n", &["typescript"]),
+        ("module import v1\n", &["python", "go"]),
+        ("module go_to v1\n", &["go"]),
+        ("module 名前(super) v1\n", &["rust"]),
+    ] {
+        assert_eq!(check(src), ["W001"], "{src}");
+        assert_eq!(stopped(src), targets, "{src}");
     }
-    assert_eq!(check("module loop v1\n"), [] as [&str; 0]);
-    assert_eq!(check("module 名前(ref) v1\n"), [] as [&str; 0]);
+    for src in [
+        // Go's field and constant, in Pascal case; TypeScript's field, as it is
+        "module m v1\n\nrecord R\n  名前(func) : string\n  delete : string\n",
+        "module m v1\n\nenum e = def | class | func\n",
+        // the generator names the parameters, a private function and a generic one, in every target
+        "module m v1\n\nfn f(delete: number, var: number) -> number\n  delete + var\n",
+        "module m v1\n\nprivate fn class() -> number\n  1\n\nfn f() -> number\n  class()\n",
+        "module m v1\n\nfn import[T](x: T) -> T\n  x\n",
+        // a keyword of Rust, a raw identifier
+        "module loop v1\n",
+        "module 名前(ref) v1\n",
+    ] {
+        assert_eq!(check(src), [] as [&str; 0], "{src}");
+        assert!(stopped(src).is_empty(), "{src}");
+    }
+    // a name of a module the generated Rust cannot take, by itself and as an alias
+    for name in ["crate", "self", "super", "Self", "mod", "door"] {
+        for src in [format!("module {name} v1\n"), format!("module 名前({name}) v1\n")] {
+            assert_eq!(check(&src), ["W001"], "{name}");
+            assert_eq!(stopped(&src), ["rust"], "{name}");
+        }
+    }
     // a `let` needs no alias, as rulec's internal names need none
     assert_eq!(check("module m v1\n\nfn f() -> number\n  let 合計 = 1\n  合計\n"), Vec::<&str>::new());
     // a type that names nothing

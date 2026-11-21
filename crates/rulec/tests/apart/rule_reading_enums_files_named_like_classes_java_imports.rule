@@ -1,0 +1,25 @@
+rule zone_fee v1
+description "A rule that reads its enums from enums files named like classes of the JDK its Java module and its runner import"
+
+import enum zone from "enums_file_named_like_a_class_the_java_module_imports.rule"
+import enum course from "enums_file_named_like_a_class_the_java_runner_imports.rule"
+
+inputs
+  zone   : zone
+  course : course
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table fee_by
+policy unique
+| zone | course              | -> fee |
+| near | intro               | 2USD   |
+| near | advanced, capstone  | 4USD   |
+| far  | -                   | 7USD   |
+
+examples
+| zone | course   | -> fee |
+| near | intro    | 2USD   |
+| near | capstone | 4USD   |
+| far  | advanced | 7USD   |

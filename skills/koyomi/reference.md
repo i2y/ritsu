@@ -284,14 +284,14 @@ A contract often leaves a bound to the code, which checks it by hand and then gi
 
 - **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
 - **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
-- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date (a string, or a `.proto`'s `google.type.Date`) and lists no days.
 
 E208 says the source is not there: its file, or the name in it.
 
-Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. A string an OpenAPI document or a JSON Schema marks `format: date-time` is a moment, a day with a time of day: no date takes it, and a workflow's `timestamp` does, as it does another workflow's `timestamp` and a `.proto`'s `google.protobuf.Timestamp`. A `.proto`'s `google.type.Date` is a date, known by its name as dandori knows it. A field of a `.proto` that may be left unset (`optional`, in a `oneof`, or a message, unless a rule or proto2 marks it `required`) can come as no value, which a place that is not `T?` refuses. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
 
 A contract carries a date as a string, so one that lists its days (`enum`, `const`) is compared by
-those days, and one that does not is W207.
+those days, and one that does not is W207. A `.proto`'s `google.type.Date` lists none.
 
 **What is not checked.** Nothing checks that the hand-written code really carries that value. The
 page of `koyomi doc` says so: Comes from `…` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). Generated code does not change, and `koyomi api` gives the
@@ -524,16 +524,16 @@ Usage:
   koyomi doc <file.cal>                        print the page for people (accounting, legal, whoever keeps the calendar, the developers reviewing the code): Markdown, or one HTML file
   koyomi api <file.cal>                        print the functions, their inputs, the calendar, the data range and the sources' digests as JSON, for other tools
   koyomi source fetch|pin|outdated <file.cal>  handle the copies of the sources: fetch brings them beside the .cal, pin writes their digests into it, outdated asks whether the originals moved on
-  koyomi explain <CODE>                        look a diagnostic code up: when it comes, how to fix it, the smallest reproduction
+  koyomi explain <CODE>... | --all             look diagnostic codes up: when each comes, how to fix it, the smallest reproduction
 
 For one command in detail: `koyomi <cmd> --help` (`koyomi help <cmd>` is the same page).
-Every command takes --lang ja|en (default en; the KOYOMI_LANG or RITSU_LANG environment variable works too).
+Every command takes --lang ja|en (default en; the KOYOMI_LANG or RITSU_LANG environment variable sets the language of the text printed, and what gen and doc write follows --lang alone).
 Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be read
 ```
 
 | Command | Flags |
 |---|---|
-| `koyomi check <file.cal>...` | `--format json`, `--budget <n>`; a directory stands for every `.cal` under it |
+| `koyomi check <file.cal>...` | `--format json`, `--budget <n>`; a directory stands for every `.cal` under it (with none under it, exit 2) |
 | `koyomi eval <file.cal> <name>=<value>...` | `--format json`; a name or its alias; for a calendar, one date (`koyomi eval examples/calendars/england_and_wales.cal 2026-04-03`) |
 | `koyomi diff <old> <new>` | `--format markdown\|json`, `--budget <n>`; two calendars or two dates files, each a path, `<path>@<git revision>`, `@<name>/<path>` or `@<name>@<version>/<path>` |
 | `koyomi gen <file.cal>...` | `--target typescript\|python\|go\|rust\|sql\|wasm`, once or more (without it, exit 2 and the command that writes what 0.40.0 wrote), `--extra runner`, `--out <dir>` (`generated`), `--check`; a target a W001 names stops the run (E016) |
@@ -541,18 +541,25 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
 | `koyomi doc <file.cal>` | `--format markdown\|html`, `--months <YYYY-MM>..<YYYY-MM>` |
 | `koyomi api <file.cal>` | |
 | `koyomi source fetch\|pin\|outdated <file.cal>` | |
-| `koyomi explain <CODE>` | `--all`, `--format markdown` |
+| `koyomi explain <CODE>... \| --all` | `--format markdown\|json` |
 
-Every command takes `--lang ja|en`, else the `KOYOMI_LANG` environment variable, else `RITSU_LANG`
-(the variable every language of ritsu reads), else English; the system's locale is never read. An unknown flag, a value outside a flag's set, a flag without its
+Every command takes `--lang ja|en`. Without it, the text a command prints is in the language of the
+`KOYOMI_LANG` environment variable, else `RITSU_LANG` (the variable every language of ritsu reads),
+else English, and what `gen` and `doc` write is in English, whatever the environment says; the
+system's locale is never read. An unknown flag, a value outside a flag's set, a flag without its
 value and a flag given twice (for `gen --target`, which may be given more than once, a target given
 twice) are refused with exit code 2, never ignored.
 
 **Exit codes.** 0 when there is no error (warnings may be), 1 when there is one, 2 for bad
-arguments (`gen` with no `--target` among them), a file that cannot be read, or a bug in koyomi. `doc` prints a page, and exits 0, for a
+arguments (`gen` with no `--target` among them), a file that cannot be read (not there, or not
+UTF-8), or a bug in koyomi. `doc` prints a page, and exits 0, for a
 file whose claims or examples fail; any other error leaves it without a page, with exit 1.
 `source outdated` exits 1 when a source has moved on. `diff` exits 1 when the inputs or the answers
 of the two versions differ, and 2 when they cannot be compared.
+With `--format json` anywhere on the line, a run that stops before its work (exit 2: a file
+that is not there or not UTF-8, a flag it does not take, an argument missing) writes the sentence
+it says on stderr in JSON on stdout as well, `{"error": {"code": 2, "message": "…"}}`, without
+its `error: ` head.
 
 **The network.** Only `source fetch` and `source outdated` read it, through `curl`, trying an HTTP
 URL three times. Every other command, `check` among them, reads only the files.
@@ -654,7 +661,7 @@ does not carry the inputs) or one of `wire.errors`. It has no `errors`: the modu
 
 | Variable | What it does |
 |---|---|
-| `KOYOMI_LANG` | `ja` or `en`, when `--lang` is not given |
+| `KOYOMI_LANG` | `ja` or `en`, the language of the text a command prints when `--lang` is not given (what `gen` and `doc` write follows `--lang` alone) |
 | `RITSU_LANG` | the same, when neither `--lang` nor `KOYOMI_LANG` is given (every language of ritsu reads it) |
 | `KOYOMI_EGOV` | where e-Gov law API v2 is, for `source fetch` and `source outdated` (the tests point it at a server of their own) |
 

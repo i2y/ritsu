@@ -1,0 +1,4 @@
+permit approvers_answer
+  description "A manager or a director answers the stage that waits for them"
+  principal in manager, director
+  action answer

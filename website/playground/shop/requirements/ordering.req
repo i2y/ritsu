@@ -10,7 +10,7 @@ requirement customers_cancel_until_paid
   satisfied by sekisho "../gates/orders.gate" policy customers_cancel_their_unpaid_orders
     reviewed 2026-10-07 by customer_care sha256:2fea5c2145cd01f6 -> sha256:108e87f092296931
   satisfied by sekisho "../gates/orders.gate" policy clerks_refund_on_office_days
-    reviewed 2026-10-07 by customer_care sha256:2fea5c2145cd01f6 -> sha256:b8c2639083caa568
+    reviewed 2026-11-17 by customer_care sha256:2fea5c2145cd01f6 -> sha256:5e412a2bcacef0da
   verified by sekisho "../gates/orders.gate" expect customers_do_not_refund
     reviewed 2026-10-07 by customer_care sha256:2fea5c2145cd01f6 -> sha256:f8a2aac73ceb4642
 

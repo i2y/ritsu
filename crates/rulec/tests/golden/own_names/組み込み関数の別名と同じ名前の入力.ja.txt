@@ -1,0 +1,1 @@
+ok tests/own_names/組み込み関数の別名と同じ名前の入力.rule

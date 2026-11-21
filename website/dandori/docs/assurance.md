@@ -45,7 +45,9 @@ On Temporal, durable functions and pydantic-graph, the tasks dandori writes run 
 `Transport` that records what they would send, so what they send is compared with what Step Functions
 sends. The tasks you write, the rules and the child workflows are stand-ins that answer from the
 scenario. The rounds of a parallel loop run one at a time in the runners, so the calls come in the
-reference's order.
+reference's order. Where each argument of an HTTP call goes, and how a list or a record is written
+there, is held once more to the calls of `tests/flows/http_places.flow` written out in the test
+(DESIGN 43), so that a change every platform and the reference make alike shows too.
 
 ## Temporal
 
@@ -128,10 +130,17 @@ server, and would look at the workflow again only twenty minutes later. The test
 - The rest of the default `Transport` (`fetch` and the AWS SDK in TypeScript, the standard library and
   boto3 in Python, `net/http` and the AWS SDK for Go v2 in Go) sends every HTTP, Lambda and AWS call of
   the scenarios to stand-ins on this machine: a server that answers HTTP and Lambda's Invoke, and moto
-  for SNS and SQS. What arrives must be the call, in the same text from TypeScript and Python, and an AWS
-  error must come back by the name the task declares (`NotFoundException`). Go's maps keep no order, so
-  Go writes the keys of an object, and the pairs of a query or a form, in the order of their names: the
-  same JSON and the same pairs, in another order. A decision task's state and questions are the
+  for SNS, SQS and the other AWS APIs. What arrives must be the call, in the same text from TypeScript
+  and Python, and an AWS error must come back by the name the task declares (`NotFoundException`). The
+  server writes down an HTTP call's query as it arrives, with the headers and the cookies: the query
+  must be the call's, character for character, in each language (a `'` as `%27`, as `fetch` sends
+  it), and a header's text that is not ASCII must arrive as its UTF-8. The check's own options add a
+  header, which takes the place of the call's of its name given in another case, and a cookie, which
+  must arrive with the call's cookies (DESIGN 43). An AWS API that moto answers itself is called once
+  moto holds what the call needs (a function, a stream); a timestamp must reach moto in the form the
+  API's Smithy model says, and come back to the flow as RFC 3339 in UTC (`2026-11-16T09:00:00Z`). Go's
+  maps keep no order, so Go writes the keys of an object, and the pairs of a form, in the order of
+  their names: the same JSON and the same pairs, in another order. A decision task's state and questions are the
   exception: a model reads the options in their order, and answers a little otherwise in another, so
   Go sends them as the other languages write them.
 - A rule called at its service (`connect` under `use rule`) is an HTTP request on every platform, and the
@@ -289,9 +298,10 @@ The durable functions test runner cannot time a call out on cue, so the scenario
 left out there. Argo and the graph's runner cannot time out a task either, but a callback's timeout can
 be played: on pydantic-graph by not answering it, on Argo by answering the wait with what its running
 out gives. On Temporal, both can. The TypeScript for Temporal, durable functions and Argo's caller also
-passes `tsc --strict`, the Go for Temporal, with the Go rulec writes for the rules, passes `go vet` and is
-as gofmt writes it, and the code between each platform and a rule answers every vector `rulec vectors`
-produces as rulec says.
+passes `tsc --strict`; the Python for Temporal and pydantic-graph, with the Python rulec and koyomi write
+for the rules and the dates, passes `mypy --strict`; the Go for Temporal, with the Go rulec writes for the
+rules, passes `go vet` and is as gofmt writes it; and the code between each platform and a rule answers
+every vector `rulec vectors` produces as rulec says.
 
 Nothing here runs on AWS itself, on a production Temporal cluster or Temporal Cloud, or against real
 OpenAI and Anthropic APIs.

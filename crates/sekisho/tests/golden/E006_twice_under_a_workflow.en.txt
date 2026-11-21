@@ -1,0 +1,5 @@
+error[E006]: tests/mutants/E006_twice_under_a_workflow.gate:12:3: `resource Claim from claim_id` is written twice under this workflow
+    12 |   resource Claim from claim_id
+  = Write the attributes under one `resource` line.
+error[E006]: tests/mutants/E006_twice_under_a_workflow.gate:14:5: The attribute `amount` is written twice under this `resource`
+    14 |     amount = amount

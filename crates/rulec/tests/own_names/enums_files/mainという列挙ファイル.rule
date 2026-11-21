@@ -1,0 +1,4 @@
+enums 本体(main) v1
+description "main という名前の enums ファイル（Go のパッケージと Swift のファイルの名前にならない）"
+
+enum 地域(zone) = 北(north) | 南(south)

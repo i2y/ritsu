@@ -1,0 +1,9 @@
+error[E154]: There is no rounding mode `DOWN`
+  --> tests/round_modes/mode_in_capitals.rule:8
+  |
+8 |   fee : money[USD]  round DOWN(1USD)
+  |                     ^^^^^^^^^^^^^^^^ a rounding mode is one of `down`, `up`, `half_up`, `half_down` and `half_even`
+  |
+ Did you mean `down`?
+ `down` rounds toward zero and `up` away from it, onto a multiple of the grid; `half_up`, `half_down` and `half_even` round to the nearest multiple, and part only on an exact half, which goes away from zero, toward zero and to the even neighbour.
+

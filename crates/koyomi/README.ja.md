@@ -139,7 +139,7 @@ koyomi は、[rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec)（業�
 
 ## インストール
 
-koyomi は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリから、最近の stable の Rust でビルドします。九つの言語を全部入れ、複数の言語のファイルがあるプロジェクトを `ritsu check` で確かめるなら、次のとおりです。
+koyomi は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリから、最近の stable の Rust でビルドします。十の言語を全部入れ、複数の言語のファイルがあるプロジェクトを `ritsu check` で確かめるなら、次のとおりです。
 
 ```console
 $ cargo install --git https://github.com/i2y/ritsu --locked ritsu
@@ -167,7 +167,7 @@ $ koyomi source fetch|pin|outdated examples/calendars/england_and_wales.cal
 $ koyomi explain E201 --lang ja                  # いつ出るか、どう直すか、最小の再現
 ```
 
-`--lang ja` を付けると、診断、ページ、生成したコードのコメントとエラーのメッセージが日本語になります。exit code は、エラーが無ければ 0、あれば 1、引数の誤りなら 2 です。`diff` には、それぞれの版を、パス、`<パス>@<git の版>`、`@<名前>/<パス>`（依存の lock の版）、`@<名前>@<版>/<パス>`（置き場の版）のどれかで渡し、入力か答えが違えば 1 で終わります。言語、コマンド、出力の形の全部は [docs/reference.md](docs/reference.md)（英語）に、診断の一覧は [docs/codes.ja.md](docs/codes.ja.md) に、生成したコードの形は [docs/generated-code.md](docs/generated-code.md)（英語）にあります。
+`koyomi explain` はコードをいくつでも取り、渡した順に説明します。二つ以上のときは、`--all` と同じ形で、渡したコードだけを書きます。`--lang ja` を付けると、診断、ページ、生成したコードのコメントとエラーのメッセージが日本語になります。exit code は、エラーが無ければ 0、あれば 1、引数の誤りなら 2 です。`diff` には、それぞれの版を、パス、`<パス>@<git の版>`、`@<名前>/<パス>`（依存の lock の版）、`@<名前>@<版>/<パス>`（置き場の版）のどれかで渡し、入力か答えが違えば 1 で終わります。言語、コマンド、出力の形の全部は [docs/reference.md](docs/reference.md)（英語）に、診断の一覧は [docs/codes.ja.md](docs/codes.ja.md) に、生成したコードの形は [docs/generated-code.md](docs/generated-code.md)（英語）にあります。
 
 ## 例
 

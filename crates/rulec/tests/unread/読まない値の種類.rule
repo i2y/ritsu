@@ -1,0 +1,26 @@
+rule 読まない値の種類(unread_kinds) v1
+description "金額による手数料。読まない値を、種類ごとに一つずつ持つ（架空）"
+
+enum 経路(channel) = 店(shop) | ウェブ(web)
+
+elements 明細(lines)
+  数量(qty) : number  range >=0 <=100
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100_000円
+  経由(via)    : 経路
+
+outputs
+  手数料(fee) : money[円]  round down(1円)
+
+derive 二倍(doubled) : money[円] = 金額 * 2  range >=2円 <=200_000円
+
+define 三倍(tripled) : money[円] = 金額 * 3
+
+sum 数量の合計(total_qty) over 明細 of 数量  range >=0 <=10000
+
+table 金額ごとの手数料(fee_of)
+policy unique
+| 金額      | -> 手数料 | 帯(band) : 経路 |
+| <30000円  | 100円     | 店              |
+| >=30000円 | 500円     | ウェブ          |

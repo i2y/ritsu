@@ -1,0 +1,175 @@
+scenario the_president_asks, line 41: submit by e0001 at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, line 42: approve by e0201 at 2026-11-16 11:00 -> stopped, in progress
+scenario the_president_asks, line 43: add approver at 2026-11-16 12:00 -> stopped, in progress
+scenario the_president_asks, line 44: approve by e0101 at 2026-11-16 13:00 -> nobody, in progress
+scenario the_president_asks, line 45: add approver at 2026-11-16 14:00 -> nobody, in progress
+scenario the_president_asks, line 46: approve by e0102 at 2026-11-16 15:00 -> stays, in progress
+scenario the_president_asks, line 47: add approver at 2026-11-16 16:00 -> stays, in progress
+scenario the_president_asks, line 48: approve by e0101 at 2026-11-16 17:00 -> last, in progress
+scenario the_president_asks, line 49: approve by e0202 at 2026-11-17 10:00 -> approved
+scenario the_president_asks, after it ended: comment by e0001 at 2026-11-17 10:00 -> refused (state)
+scenario the_president_asks, after line 41: approvals: approve by e0201 at 2026-11-16 10:00 -> stopped, in progress
+scenario the_president_asks, after line 41: rejections: reject by e0201 at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, after line 41: rejections: reject by e0202 at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, after line 41: rejections: reject by e0203 at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, after line 41: rejections: reject by e0204 at 2026-11-16 10:00 -> rejected
+scenario the_president_asks, after line 41: the requester: approve by e0001 at 2026-11-16 10:00 -> refused (person)
+scenario the_president_asks, after line 41: the requester: withdraw by e0001 at 2026-11-16 10:00 -> refused (event)
+scenario the_president_asks, after line 41: sent back: send back by e0201 at 2026-11-16 10:00 -> refused (event)
+scenario the_president_asks, after line 41: paused: pause by e0201 at 2026-11-16 10:00 -> refused (event)
+scenario the_president_asks, after line 41: an administrator: add approver at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, after line 41: an administrator: hand over at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, after line 41: an administrator, by name: add approver by e0102 at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, after line 41: an administrator, by name: hand over by e0102 at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, after line 41: clocks: late at 2026-11-20 00:00 -> expired
+scenario the_president_asks, after line 41: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario the_president_asks, after line 41: clocks: approve by e0201 at 2026-11-20 00:00 -> refused (clock)
+scenario the_president_asks, after line 41: clocks: comment by e0201 at 2026-11-20 00:00 -> refused (clock)
+scenario the_president_asks, after line 41: comments: comment by e0201 at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, after line 41: comments: comment by e0001 at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, after line 41: comments: comment by e0201 at 2026-11-16 10:00 -> refused (comment)
+scenario the_president_asks, after line 41: comments: comment by e0201 at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, after line 41: comments: comment by e0201 at 2026-11-16 10:00 -> refused (comment)
+scenario the_president_asks, after line 41: comments: approve by e0201 at 2026-11-16 10:00 -> stopped, in progress
+scenario the_president_asks, after line 41: comments: send back by e0201 at 2026-11-16 10:00 -> refused (event)
+scenario the_president_asks, after line 41: comments: approve by e0201 at 2026-11-16 10:00 -> refused (comment)
+scenario the_president_asks, after line 42: the requester: approve by e0001 at 2026-11-16 11:00 -> refused (person)
+scenario the_president_asks, after line 42: the requester: withdraw by e0001 at 2026-11-16 11:00 -> refused (event)
+scenario the_president_asks, after line 42: retracted: retract by e0201 at 2026-11-16 11:00 -> refused (event)
+scenario the_president_asks, after line 42: flows: note ready at 2026-11-16 11:00 -> refused (state)
+scenario the_president_asks, after line 42: flows: flow failed at 2026-11-16 11:00 -> refused (state)
+scenario the_president_asks, after line 42: an administrator: add approver at 2026-11-16 11:00 -> stopped, in progress
+scenario the_president_asks, after line 42: clocks: late at 2026-11-20 00:00 -> expired
+scenario the_president_asks, after line 44: the requester: approve by e0001 at 2026-11-16 13:00 -> refused (person)
+scenario the_president_asks, after line 44: the requester: withdraw by e0001 at 2026-11-16 13:00 -> refused (event)
+scenario the_president_asks, after line 44: flows: note ready at 2026-11-16 13:00 -> refused (state)
+scenario the_president_asks, after line 44: flows: flow failed at 2026-11-16 13:00 -> refused (state)
+scenario the_president_asks, after line 44: an administrator: add approver at 2026-11-16 13:00 -> nobody, in progress
+scenario the_president_asks, after line 44: clocks: late at 2026-11-20 00:00 -> expired
+scenario the_president_asks, after line 46: the requester: approve by e0001 at 2026-11-16 15:00 -> refused (person)
+scenario the_president_asks, after line 46: the requester: withdraw by e0001 at 2026-11-16 15:00 -> refused (event)
+scenario the_president_asks, after line 46: flows: note ready at 2026-11-16 15:00 -> refused (state)
+scenario the_president_asks, after line 46: flows: flow failed at 2026-11-16 15:00 -> refused (state)
+scenario the_president_asks, after line 46: an administrator: add approver at 2026-11-16 15:00 -> stays, in progress
+scenario the_president_asks, after line 46: clocks: late at 2026-11-20 00:00 -> expired
+scenario the_president_asks, after line 48: approvals: approve by e0201 at 2026-11-16 17:00 -> approved
+scenario the_president_asks, after line 48: rejections: reject by e0201 at 2026-11-16 17:00 -> last, in progress
+scenario the_president_asks, after line 48: rejections: reject by e0202 at 2026-11-16 17:00 -> last, in progress
+scenario the_president_asks, after line 48: rejections: reject by e0203 at 2026-11-16 17:00 -> last, in progress
+scenario the_president_asks, after line 48: rejections: reject by e0204 at 2026-11-16 17:00 -> rejected
+scenario the_president_asks, after line 48: the requester: approve by e0001 at 2026-11-16 17:00 -> refused (person)
+scenario the_president_asks, after line 48: the requester: withdraw by e0001 at 2026-11-16 17:00 -> refused (event)
+scenario the_president_asks, after line 48: sent back: send back by e0201 at 2026-11-16 17:00 -> refused (event)
+scenario the_president_asks, after line 48: sent back: send back by e0201 at 2026-11-16 17:00 -> refused (event)
+scenario the_president_asks, after line 48: clocks: late at 2026-11-20 00:00 -> expired
+scenario a_member_of_the_staff_asks, line 74: submit by e1201 at 2026-11-16 10:00 -> skipped, in progress
+scenario a_member_of_the_staff_asks, line 75: approve by e1101 at 2026-11-16 11:00 -> turned, in progress
+scenario a_member_of_the_staff_asks, line 76: approve by e1101 at 2026-11-16 11:01 -> stopped, in progress
+scenario a_member_of_the_staff_asks, line 77: approve by e1101 at 2026-11-16 11:02 -> nobody, in progress
+scenario a_member_of_the_staff_asks, line 78: approve by e1101 at 2026-11-16 11:03 -> stays, in progress
+scenario a_member_of_the_staff_asks, line 79: approve by e1101 at 2026-11-16 11:04 -> last, in progress
+scenario a_member_of_the_staff_asks, line 80: approve by e0001 at 2026-11-16 12:00 -> approved
+scenario a_member_of_the_staff_asks, after line 74: approvals: approve by e1101 at 2026-11-16 10:00 -> turned, in progress
+scenario a_member_of_the_staff_asks, after line 74: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario a_member_of_the_staff_asks, after line 74: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario a_member_of_the_staff_asks, after line 74: the requester: withdraw by e1201 at 2026-11-16 10:00 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 74: sent back: send back by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 74: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 74: an administrator: add approver at 2026-11-16 10:00 -> skipped, in progress
+scenario a_member_of_the_staff_asks, after line 74: an administrator: hand over at 2026-11-16 10:00 -> skipped, in progress
+scenario a_member_of_the_staff_asks, after line 74: clocks: late at 2026-11-20 00:00 -> skipped, in progress
+scenario a_member_of_the_staff_asks, after line 74: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_member_of_the_staff_asks, after line 74: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario a_member_of_the_staff_asks, after line 74: clocks: approve by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario a_member_of_the_staff_asks, after line 75: approvals: approve by e1101 at 2026-11-16 11:00 -> stopped, in progress
+scenario a_member_of_the_staff_asks, after line 75: rejections: reject by e1101 at 2026-11-16 11:00 -> rejected
+scenario a_member_of_the_staff_asks, after line 75: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
+scenario a_member_of_the_staff_asks, after line 75: the requester: withdraw by e1201 at 2026-11-16 11:00 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 75: sent back: send back by e1101 at 2026-11-16 11:00 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 75: sent back: send back by e1101 at 2026-11-16 11:00 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 75: retracted: retract by e1101 at 2026-11-16 11:00 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 75: clocks: late at 2026-11-20 00:00 -> turned, in progress
+scenario a_member_of_the_staff_asks, after line 75: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_member_of_the_staff_asks, after line 76: approvals: approve by e1101 at 2026-11-16 11:01 -> nobody, in progress
+scenario a_member_of_the_staff_asks, after line 76: rejections: reject by e1101 at 2026-11-16 11:01 -> rejected
+scenario a_member_of_the_staff_asks, after line 76: the requester: approve by e1201 at 2026-11-16 11:01 -> refused (person)
+scenario a_member_of_the_staff_asks, after line 76: the requester: withdraw by e1201 at 2026-11-16 11:01 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 76: sent back: send back by e1101 at 2026-11-16 11:01 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 76: clocks: late at 2026-11-20 00:00 -> stopped, in progress
+scenario a_member_of_the_staff_asks, after line 76: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_member_of_the_staff_asks, after line 77: approvals: approve by e1101 at 2026-11-16 11:02 -> stays, in progress
+scenario a_member_of_the_staff_asks, after line 77: rejections: reject by e1101 at 2026-11-16 11:02 -> rejected
+scenario a_member_of_the_staff_asks, after line 77: the requester: approve by e1201 at 2026-11-16 11:02 -> refused (person)
+scenario a_member_of_the_staff_asks, after line 77: the requester: withdraw by e1201 at 2026-11-16 11:02 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 77: sent back: send back by e1101 at 2026-11-16 11:02 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 77: clocks: late at 2026-11-20 00:00 -> nobody, in progress
+scenario a_member_of_the_staff_asks, after line 77: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_member_of_the_staff_asks, after line 78: approvals: approve by e1101 at 2026-11-16 11:03 -> last, in progress
+scenario a_member_of_the_staff_asks, after line 78: rejections: reject by e1101 at 2026-11-16 11:03 -> rejected
+scenario a_member_of_the_staff_asks, after line 78: the requester: approve by e1201 at 2026-11-16 11:03 -> refused (person)
+scenario a_member_of_the_staff_asks, after line 78: the requester: withdraw by e1201 at 2026-11-16 11:03 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 78: sent back: send back by e1101 at 2026-11-16 11:03 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 78: clocks: late at 2026-11-20 00:00 -> stays, in progress
+scenario a_member_of_the_staff_asks, after line 78: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_member_of_the_staff_asks, after line 79: approvals: approve by e0001 at 2026-11-16 11:04 -> approved
+scenario a_member_of_the_staff_asks, after line 79: rejections: reject by e0001 at 2026-11-16 11:04 -> last, in progress
+scenario a_member_of_the_staff_asks, after line 79: rejections: reject by e0201 at 2026-11-16 11:04 -> last, in progress
+scenario a_member_of_the_staff_asks, after line 79: rejections: reject by e0202 at 2026-11-16 11:04 -> last, in progress
+scenario a_member_of_the_staff_asks, after line 79: rejections: reject by e0203 at 2026-11-16 11:04 -> last, in progress
+scenario a_member_of_the_staff_asks, after line 79: rejections: reject by e0204 at 2026-11-16 11:04 -> rejected
+scenario a_member_of_the_staff_asks, after line 79: the requester: approve by e1201 at 2026-11-16 11:04 -> refused (person)
+scenario a_member_of_the_staff_asks, after line 79: the requester: withdraw by e1201 at 2026-11-16 11:04 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 79: sent back: send back by e0001 at 2026-11-16 11:04 -> refused (event)
+scenario a_member_of_the_staff_asks, after line 79: clocks: late at 2026-11-20 00:00 -> last, in progress
+scenario a_member_of_the_staff_asks, after line 79: clocks: late at 2026-11-26 00:00 -> expired
+scenario the_president_asks, after line 42: made on the revision before: approve by e0201 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: reject by e0201 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: send back by e0201 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: retract by e0201 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: pause by e0201 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: resume by e0201 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: edit by e0201 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: withdraw by e0001 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: discard by e0001 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: resubmit by e0001 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: add approver at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: hand over at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: agent answered at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: note ready at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: made on the revision before: flow failed at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: no revision: approve by e0201 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, after line 42: a comment, which says no revision: comment by e0201 at 2026-11-16 11:00 -> stopped, in progress
+scenario the_president_asks, after line 42: made on the revision before, with a comment too long: approve by e0201 at 2026-11-16 11:00 -> refused (stale)
+scenario the_president_asks, made on 2026-11-20 (closed from 2026-11-21): submit by e0001 at 2026-11-20 10:00 -> turned, in progress
+scenario the_president_asks, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-26 00:00 -> expired
+scenario the_president_asks, made on 2026-12-28 (closed from 2026-12-29): submit by e0001 at 2026-12-28 10:00 -> turned, in progress
+scenario the_president_asks, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-07 00:00 -> expired
+scenario the_president_asks, made with a comment: submit by e0001 at 2026-11-16 10:00 -> turned, in progress
+scenario the_president_asks, made with a comment: submit by e0001 at 2026-11-16 10:00 -> refused (comment)
+requester e0101: submit by e0101 at 2026-11-16 10:00 -> skipped, in progress
+requester e0102: submit by e0102 at 2026-11-16 10:00 -> skipped, in progress
+requester e0201: submit by e0201 at 2026-11-16 10:00 -> skipped, in progress
+requester e0202: submit by e0202 at 2026-11-16 10:00 -> skipped, in progress
+requester e0203: submit by e0203 at 2026-11-16 10:00 -> skipped, in progress
+requester e0204: submit by e0204 at 2026-11-16 10:00 -> skipped, in progress
+requester e1001: submit by e1001 at 2026-11-16 10:00 -> skipped, in progress
+requester e1002: submit by e1002 at 2026-11-16 10:00 -> skipped, in progress
+requester e1101: submit by e1101 at 2026-11-16 10:00 -> skipped, in progress
+requester e1201: submit by e1201 at 2026-11-16 10:00 -> skipped, in progress
+requester e1203: submit by e1203 at 2026-11-16 10:00 -> skipped, in progress
+requester e3101: submit by e3101 at 2026-11-16 10:00 -> skipped, in progress
+requester e4001: submit by e4001 at 2026-11-16 10:00 -> skipped, in progress
+requester e5001: submit by e5001 at 2026-11-16 10:00 -> skipped, in progress
+requester e6001: submit by e6001 at 2026-11-16 10:00 -> skipped, in progress
+requester e7001: submit by e7001 at 2026-11-16 10:00 -> skipped, in progress
+requester e7101: submit by e7101 at 2026-11-16 10:00 -> skipped, in progress
+requester e7102: submit by e7102 at 2026-11-16 10:00 -> skipped, in progress
+requester e7201: submit by e7201 at 2026-11-16 10:00 -> skipped, in progress
+requester e7202: submit by e7202 at 2026-11-16 10:00 -> skipped, in progress
+requester e9001: submit by e9001 at 2026-11-16 10:00 -> skipped, in progress
+requester e9002: submit by e9002 at 2026-11-16 10:00 -> skipped, in progress
+requester e9003: submit by e9003 at 2026-11-16 10:00 -> skipped, in progress
+proxy e0101 for e0001: submit by e0101 at 2026-11-16 10:00 -> refused (person)
+across the versions of the organization: submit by e0001 at 2027-03-31 10:00 -> turned, in progress
+across the versions of the organization: approve by e0201 at 2027-04-01 10:00 -> stopped, in progress
+across the versions of the organization: send back by e0201 at 2027-03-31 10:00 -> refused (event)

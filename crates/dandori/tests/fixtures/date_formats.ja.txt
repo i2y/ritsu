@@ -1,0 +1,30 @@
+エラー[E016]: tests/fixtures/date_formats.flow:35:1: 引数 `period` は、`leave` の POST /leaves が受け取るものと合いません。`first_day` は、`timestamp` で、日付ではありません。`date` にしてください
+    35 | task book(employee: string, period: Period) -> Leave
+エラー[E016]: tests/fixtures/date_formats.flow:35:1: `leave` の POST /leaves のレスポンスは `Leave` に合いません。`id` は、文字列で、`date` ではありません
+    35 | task book(employee: string, period: Period) -> Leave
+エラー[E016]: tests/fixtures/date_formats.flow:35:1: `leave` の POST /leaves のレスポンスは `Leave` に合いません。`first_day` は、日付で、`timestamp` ではありません。`date` にしてください
+    35 | task book(employee: string, period: Period) -> Leave
+エラー[E016]: tests/fixtures/date_formats.flow:35:1: `leave` の POST /leaves のレスポンスは `Leave` に合いません。`booked_at` は、日時で、`date` ではありません。`timestamp` にしてください
+    35 | task book(employee: string, period: Period) -> Leave
+エラー[E016]: tests/fixtures/date_formats.flow:39:1: 引数 `first_day` は、`leave` の POST /leaves/{id}/move が受け取るものと合いません。`timestamp` で、日付ではありません。`date` にしてください
+    39 | task move(id: string, first_day: timestamp, previous: string, asked_at: date) -> Moved
+エラー[E016]: tests/fixtures/date_formats.flow:39:1: 引数 `asked_at` は、`leave` の POST /leaves/{id}/move が受け取るものと合いません。`date` で、日時ではありません。`timestamp` にしてください
+    39 | task move(id: string, first_day: timestamp, previous: string, asked_at: date) -> Moved
+エラー[E016]: tests/fixtures/date_formats.flow:43:1: 引数 `asked_at` は、`leave` の POST /leaves/{id}/move が受け取るものと合いません。`string` で、日時ではありません。`timestamp` にしてください
+    43 | task move_by_text(id: string, first_day: date, asked_at: string) -> Moved
+エラー[E016]: tests/fixtures/date_formats.flow:48:1: 引数 `day` は、`leave` の GET /days/{day} が受け取るものと合いません。`Kind` で、日付ではありません。`date` にしてください
+    48 | task day_off(day: Kind, until: int) -> Day
+エラー[E016]: tests/fixtures/date_formats.flow:48:1: 引数 `until` は、`leave` の GET /days/{day} が受け取るものと合いません。`int` で、日付ではありません。`date` にしてください
+    48 | task day_off(day: Kind, until: int) -> Day
+エラー[E016]: tests/fixtures/date_formats.flow:48:1: `leave` の GET /days/{day} のレスポンスは `Day` に合いません。`day` は、日付で、`Kind` ではありません。`date` にしてください
+    48 | task day_off(day: Kind, until: int) -> Day
+エラー[E016]: tests/fixtures/date_formats.flow:48:1: `leave` の GET /days/{day} のレスポンスは `Day` に合いません。`closing` は、`2026-12-29` のことがあり、範囲 `>=2026-12-01 <=2026-12-28` の外です
+    48 | task day_off(day: Kind, until: int) -> Day
+エラー[E016]: tests/fixtures/date_formats.flow:52:1: 引数 `day` は、`leave` の POST /closings が受け取るものと合いません。`date` で、2026-12-28・2026-12-29 のどれかではありません。`date  range >=2026-12-28 <=2026-12-29` にしてください
+    52 | task close_year(day: date) -> Closing
+エラー[E016]: tests/fixtures/date_formats.flow:52:1: `leave` の POST /closings のレスポンスは `Closing` に合いません。`day` は、`2026-12-28` のことがあり、`timestamp` はそれを受け取りません
+    52 | task close_year(day: date) -> Closing
+エラー[E016]: tests/fixtures/date_formats.flow:60:1: 引数 `day` は、`leave` の POST /closings が受け取るものと合いません。`2026-12-30` のことがあり、受け取る値（2026-12-28・2026-12-29）にありません
+    60 | task close_by(day: date  range >=2026-12-28 <=2026-12-30) -> Closed
+エラー[E016]: tests/fixtures/date_formats.flow:64:1: 引数 `day` は、`leave` の POST /closings が受け取るものと合いません。受け取るのは 2026-12-28・2026-12-29 のどれかですが、`string` はどんな値にもなりえます。`date  range >=2026-12-28 <=2026-12-29` にしてください
+    64 | task close_by_text(day: string) -> Closed

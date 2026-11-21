@@ -48,6 +48,10 @@ pub struct Run {
     pub path: Vec<Step>,
     /// The line is not quoted: it holds a key (W901).
     pub unquoted: bool,
+    /// The message names the file it is about, as every command of ritsu names a file it cannot
+    /// read or write (ritsu's DESIGN 6.2, item 10): the text says no place before it, and the JSON
+    /// keeps the file.
+    pub named: bool,
 }
 
 impl Extra for Run {
@@ -87,6 +91,14 @@ pub fn error(code: &'static str, line: usize, col: usize, msg: Text) -> Diag {
     Diag::error(code, "", line, col, msg)
 }
 
+/// An error whose message names its file ([`Run::named`]): one the command cannot read or write,
+/// in the words of every command of ritsu (`ritsu_base::cli::cannot_read` and the like).
+pub fn named(code: &'static str, msg: Text) -> Diag {
+    let mut d = error(code, 0, 0, msg);
+    d.extra.named = true;
+    d
+}
+
 /// What geas adds to a diagnostic as it is built.
 pub trait DiagExt {
     /// The run that gets there.
@@ -114,7 +126,7 @@ pub trait Show {
 impl Show for Diag {
     fn placed(&self, file: &str, src: &str) -> Diag {
         let mut d = self.clone();
-        d.file = file.to_string();
+        d.file = if d.extra.named { String::new() } else { file.to_string() };
         d.rel = file.to_string();
         // a key on the line is masked (ritsu-base's `secrets::mask`): a line must not carry a key
         // into the logs, whatever the diagnostic

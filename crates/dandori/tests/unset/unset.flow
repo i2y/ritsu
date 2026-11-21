@@ -1,0 +1,39 @@
+workflow unset v1
+description "Reads variables where the check says they have a value. The tests take away the statements that set them, which the check does not let a flow do, and the run fails with Dandori.UnexpectedValue where the read is."
+
+record Order
+  id : string
+  note : string?
+
+inputs
+  id : string
+
+outputs
+  text : string
+  notes : list[string]
+  kept : list[string]
+
+task fetch(id: string) -> Order
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:fetch"
+
+task note(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+
+task keep(id: string, maybe: string?) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:keep"
+
+flow
+  let order = fetch(id: id)
+  let text = note(id: order.id)
+  let maybe : string? = none
+  let notes = for x in [id] at most 2 in parallel
+    let n = note(id: x)
+    yield n
+  let kept = for y in [id] at most 2
+    let k = keep(id: y, maybe: maybe)
+    yield k
+  succeed text = text, notes = notes, kept = kept
+
+# Runs only for a task's failure that nothing handled: never for a read of a variable with no value.
+on failure
+  fail Stopped "on failure ran"

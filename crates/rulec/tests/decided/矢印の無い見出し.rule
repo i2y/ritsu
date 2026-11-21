@@ -1,0 +1,25 @@
+rule 矢印の無い見出し(no_arrow_ja) v1
+description "等級の表の見出しを `->` 無しで書いた形。等級が条件として読まれる"
+
+enum 段階(level) = 低(low) | 高(high)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100000円
+  会員(member) : bool
+
+outputs
+  等級(grade)  : 段階
+  確認(review) : bool
+
+table 等級を決める(grade_of)
+policy unique
+| 金額      | 等級 |
+| <10000円  | 低   |
+| >=10000円 | 高   |
+
+table 確認の要否(review_of)
+policy unique
+| 等級 | 会員  | -> 確認 |
+| 低   | -     | false   |
+| 高   | true  | false   |
+| 高   | false | true    |

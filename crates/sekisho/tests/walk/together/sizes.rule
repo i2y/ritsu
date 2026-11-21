@@ -1,0 +1,30 @@
+rule sizes v1
+description "Three outputs of one amount: two that one table writes together, and a third from a table of its own that cuts the amount elsewhere"
+
+enum level = low | high
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  a : level
+  b : level
+  c : level
+
+table both
+policy unique
+| amount   | -> a | b    |
+| <=500JPY | low  | low  |
+| >500JPY  | high | high |
+
+table third
+policy unique
+| amount   | -> c |
+| <=300JPY | low  |
+| >300JPY  | high |
+
+examples
+| amount | -> a | b    | c    |
+| 300JPY | low  | low  | low  |
+| 500JPY | low  | low  | high |
+| 501JPY | high | high | high |

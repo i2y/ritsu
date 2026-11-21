@@ -1,0 +1,96 @@
+workflow go_names v1
+description "Types named as what the package of Go declares for its own use and tells no caller of: the parts of the worker that a program running the workflow reads, the default transport, the errors of an agent, the places of the decision services, and the patterns of a time and of a date. The package gives its own other names, which the program reads, and the flow runs on every platform"
+
+# the parts of the worker, which a program that runs the workflow reads
+record WorkflowType
+  name : string
+
+enum TaskQueue = fast | slow
+
+record Events
+  count : int
+
+enum BuildID = first | second
+
+record RegisterWorkflow
+  done : bool
+
+record RegisterActivities
+  done : bool
+
+enum OwnTasksBy = hand | machine
+
+record WorkerOptions
+  workers : int
+
+# the rest of what the package keeps for itself
+record DefaultTransport
+  via : string
+
+enum AgentHTTPError = timeout | refused
+
+enum AgentStopped = early | late
+
+record JevURL
+  url : string
+
+record DecisionsURL
+  url : string
+
+record ClaudeMaxTokens
+  limit : int
+
+enum TIMESTAMP = before | after
+
+# a flow with dates has DATE too
+enum DATE = weekday | weekend
+
+# the names the runner's build adds to every package, for its checks and the clock `now` reads
+record DDSetNows
+  at : string
+
+enum DDReadRule = wire | body
+
+enum DDJev = ask | tell
+
+record Everything
+  workflow_type       : WorkflowType
+  task_queue          : TaskQueue
+  events              : Events
+  build_id            : BuildID
+  register_workflow   : RegisterWorkflow
+  register_activities : RegisterActivities
+  own_tasks_by        : OwnTasksBy
+  worker_options      : WorkerOptions
+  default_transport   : DefaultTransport
+  agent_http_error    : AgentHTTPError
+  agent_stopped       : AgentStopped
+  jev_url             : JevURL
+  decisions_url       : DecisionsURL
+  claude_max_tokens   : ClaudeMaxTokens
+  timestamp           : TIMESTAMP
+  date                : DATE
+  dd_set_nows         : DDSetNows
+  dd_read_rule        : DDReadRule
+  dd_jev              : DDJev
+
+inputs
+  id  : string
+  day : date
+
+outputs
+  everything : Everything
+  day        : date
+  note       : string
+
+task gather(id: string, day: date) -> Everything
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:gather"
+  idempotent
+
+# a task you implement, which the worker's OwnTasksBy hands to the package
+task note(id: string) -> string
+
+flow
+  let everything = gather(id: id, day: day)
+  let n = note(id: id)
+  succeed everything = everything, day = day, note = n

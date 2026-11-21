@@ -1,0 +1,6 @@
+エラー[E101]: chain_types.gate:26:13: 型 `User` はありません
+    26 |   principal User
+  = 書ける principal の型は `Usr` です。
+エラー[E101]: chain_types.gate:27:12: 型 `Order` はありません
+    27 |   resource Order
+  = 書ける resource の型は `Ordr` です。

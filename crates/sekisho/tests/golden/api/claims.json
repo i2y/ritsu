@@ -1,0 +1,189 @@
+{
+  "sekisho": "<version>",
+  "name": "claims",
+  "alias": "claims",
+  "version": "v1",
+  "source_sha256": "338fa5c96f2c05a2fab4a92373c025e244cf6a413b43e402534c882f6f175b18",
+  "description": "Who may pay a claim: an adjuster pays any claim, and the desk's workflow pays the claims a rule leaves to the desk",
+  "namespace": "Claims",
+  "uses": [
+    {
+      "kind": "rule",
+      "name": "who_pays",
+      "path": "rules/who_pays.rule",
+      "line": 5
+    },
+    {
+      "kind": "openapi",
+      "name": "desk",
+      "path": "api/desk.json",
+      "line": 6
+    }
+  ],
+  "today": null,
+  "cedar": {
+    "policies": "cedar/claims.cedar",
+    "schema": "cedar/claims.cedarschema",
+    "schema_json": "cedar/claims.cedarschema.json",
+    "policies_json": "cedar/claims.policies.json"
+  },
+  "enums": [],
+  "roles": [
+    {
+      "name": "adjuster",
+      "alias": "adjuster",
+      "line": 8,
+      "entity": "Claims::Role::\"adjuster\"",
+      "includes": [],
+      "can": [
+        "pay_claim"
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "User",
+      "alias": "User",
+      "kind": "principal",
+      "line": 12,
+      "entity_type": "Claims::User",
+      "roles": [
+        "adjuster"
+      ],
+      "member_of": [
+        "Role"
+      ],
+      "attributes": []
+    },
+    {
+      "name": "Claim",
+      "alias": "Claim",
+      "kind": "resource",
+      "line": 24,
+      "entity_type": "Claims::Claim",
+      "roles": [],
+      "member_of": [],
+      "attributes": [
+        {
+          "name": "amount",
+          "alias": "amount",
+          "type": "money[JPY]",
+          "range": {
+            "min": 1,
+            "max": 10000
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        }
+      ]
+    },
+    {
+      "name": "Workflow",
+      "alias": "Workflow",
+      "kind": "workflow",
+      "line": null,
+      "entity_type": "Claims::Workflow",
+      "roles": [],
+      "member_of": [],
+      "attributes": []
+    }
+  ],
+  "workflows": [
+    {
+      "name": "pay",
+      "alias": "pay",
+      "line": 19,
+      "entity": "Claims::Workflow::\"pay\"",
+      "flow": "flows/pay.flow",
+      "assumes": [
+        {
+          "resource": "Claim",
+          "from": "claim_id",
+          "line": 21,
+          "attributes": [
+            {
+              "attribute": "amount",
+              "value": "amount",
+              "line": 22
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "name": "pay_claim",
+      "alias": "pay_claim",
+      "line": 29,
+      "entity": "Claims::Action::\"pay_claim\"",
+      "guards": [
+        {
+          "reference": {
+            "text": "openapi \"api/desk.json\" operation payClaim",
+            "tool": "openapi",
+            "path": "api/desk.json",
+            "items": [
+              [
+                "operation",
+                "payClaim"
+              ]
+            ]
+          },
+          "line": 31
+        }
+      ],
+      "principals": [
+        "User",
+        "Workflow"
+      ],
+      "resources": [
+        "Claim"
+      ],
+      "from": "claimId",
+      "nobody": null,
+      "inputs": [],
+      "context": [
+        {
+          "name": "payer",
+          "alias": "payer",
+          "line": 35,
+          "computed": "who_pays(amount: resource.amount).who",
+          "type": "enum",
+          "values": [
+            "desk",
+            "person"
+          ],
+          "optional": false
+        }
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "name": "adjusters_pay_claims",
+      "alias": "adjusters_pay_claims",
+      "id": "claims/adjusters_pay_claims",
+      "effect": "permit",
+      "actions": [
+        "pay_claim"
+      ],
+      "file": "claims.gate",
+      "line": 37
+    },
+    {
+      "name": "the_workflow_pays_the_desks_claims",
+      "alias": "the_workflow_pays_the_desks_claims",
+      "id": "claims/the_workflow_pays_the_desks_claims",
+      "effect": "permit",
+      "actions": [
+        "pay_claim"
+      ],
+      "file": "claims.gate",
+      "line": 42
+    }
+  ],
+  "expects": [],
+  "separations": []
+}

@@ -1,0 +1,4 @@
+エラー[E008]: chain_names.cal:8:17: 「received」は宣言されていません
+     8 | date reminder = received
+  = 日付は、`inputs` の日付か、`date` で宣言したほかの日付から始めてください。
+  = `received` は 12、20 行目にも書かれています。

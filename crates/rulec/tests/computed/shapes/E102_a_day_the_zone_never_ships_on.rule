@@ -1,0 +1,21 @@
+rule day_the_zone_never_ships_on v1
+description "A date an applied table writes, named day by day with the zone it is decided from: the third row asks for a local order on 3 July, the day only a national order ships"
+
+enum zone = local | national
+enum timing = early | late | odd
+
+inputs
+  zone : zone
+
+apply s = "shared/ship_day.rule" meaning:ba324522b221da9e
+  zone = zone
+  ships -> s_ships
+
+outputs
+  x : timing
+
+table pick
+| zone     | s_ships    | -> x  |
+| local    | 2026-07-01 | early |
+| national | 2026-07-03 | late  |
+| local    | 2026-07-03 | odd   |

@@ -1,0 +1,26 @@
+rule packing_fee v1
+description "A tier read off the packing fee and the zone: the table above writes a fee between the two bands for each zone, and the table below has a row for the local one only"
+
+enum size = small | medium | large
+enum zone = local | national
+enum tier = light | standard | heavy
+
+inputs
+  size : size
+  zone : zone
+
+outputs
+  tier : tier
+
+table fees
+| size   | zone     | -> fee : money[JPY] |
+| small  | -        | 300JPY              |
+| medium | local    | 700JPY              |
+| medium | national | 800JPY              |
+| large  | -        | 1_500JPY            |
+
+table tiers
+| fee               | zone  | -> tier  |
+| <=500JPY          | -     | light    |
+| >=1_000JPY        | -     | heavy    |
+| >500JPY <1_000JPY | local | standard |

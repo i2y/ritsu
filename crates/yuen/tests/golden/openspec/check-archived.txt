@@ -1,10 +1,10 @@
-warning[W102]: examples/openspec_greeter_archived/greeter.req:7:8: A requirement of the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md is pinned by no source of the project: "Health check"
+warning[W102]: examples/openspec_greeter_archived/greeter.req:7:8: A requirement of the spec openspec/specs/greeting/spec.md is pinned by no source of the project: "Health check"
      7 | source greeting = openspec "openspec/specs/greeting/spec.md"
   = Pin each one and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval.
 error[E103]: examples/openspec_greeter_archived/greeter.req:8:3: greeting "Greeting by name" does not match its pin (pinned sha256:1c3d865f4a521275, the requirement is sha256:228485bfce459383)
      8 |   "Greeting by name" sha256:1c3d865f4a521275
   = The requirement changed in the spec after it was pinned (an archived change, or an edit). Read what changed, then pin it again (`yuen source pin`).
-  what changed in the requirement since it was pinned (the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md):
+  what changed in the requirement since it was pinned (the spec openspec/specs/greeting/spec.md):
       @@ -1,4 +1,4 @@
         ### Requirement: Greeting by name
       - The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.

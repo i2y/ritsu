@@ -1,0 +1,36 @@
+rule 読まない畳み込み(unread_fold) v1
+description "金額による手数料。答えを読まない畳み込みと、読まない数え上げを持つ（架空）"
+
+enum 判定(verdict_kind) = 取る(take) | 飛ばす(skip)
+
+elements 明細(lines)
+  額(amt) : money[円]  range >=0円 <=1000円
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100_000円
+
+outputs
+  手数料(fee) : money[円]  round down(1円)
+
+table 判定する(decide)
+policy unique
+| 額      | -> 判定(verdict) : 判定 |
+| >=500円 | 取る                    |
+| <500円  | 飛ばす                  |
+
+fold 判定 over 明細 -> 最初の大きい額(first_big) : money[円]
+  取る -> take_first 額
+  飛ばす -> next
+  empty -> 0円
+  exhausted -> 0円
+
+sum 額の合計(all_amt) over 明細 of 額  range >=0円 <=100_000円
+count 取った数(takes) over 明細 where 判定 = 取る  range >=0 <=100
+
+define 三倍(tripled) : money[円] = 金額 * 3  range >=3円 <=300_000円
+
+table 金額ごとの手数料(fee_of)
+policy unique
+| 金額      | -> 手数料 |
+| <30000円  | 100円     |
+| >=30000円 | 500円     |

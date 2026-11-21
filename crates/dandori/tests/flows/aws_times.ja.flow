@@ -1,0 +1,29 @@
+# AWS の API の Smithy のモデルを通る日時（DESIGN 42）。日時は、モデルが置き場所ごとに言う形で
+# 行く。Lambda の API（restJson1）は、JSON の本文の日時を 1970 年からの秒（epoch-seconds）で
+# 受け取り、自分の日時も同じ形で答える。フローはどちらも RFC 3339 の文字列で持つ。どのプラット
+# フォームでも動く。既定の Transport は、ストリームと関数を置いた moto へこの呼び出しを送る。
+workflow ストリームの読み始め v1
+description "ある時刻から先のストリームのレコードを関数に読ませる。時刻を受け取り、別の時刻を答える AWS の API を使う"
+
+use smithy lambda from "apis/lambda.json"
+
+enum 読み始め = TRIM_HORIZON | LATEST | AT_TIMESTAMP
+
+record 対応
+  UUID         : string
+  State        : string
+  LastModified : timestamp
+
+inputs
+  いつから : timestamp
+
+outputs
+  対応 : 対応
+
+# ストリームのレコードを、`いつから` の時刻から先、関数へ渡す。
+task 読ませる(FunctionName: string, EventSourceArn: string, StartingPosition: 読み始め, StartingPositionTimestamp: timestamp) -> 対応
+  aws lambda:createEventSourceMapping
+
+flow
+  let 作った対応 = 読ませる(FunctionName: "orders-reader", EventSourceArn: "arn:aws:kinesis:ap-northeast-1:123456789012:stream/orders", StartingPosition: AT_TIMESTAMP, StartingPositionTimestamp: いつから)
+  succeed 対応 = 作った対応

@@ -1,0 +1,6 @@
+error[E403]: tests/mutants/E403_期限と同じ時の催促.ringi:22:1: A reminder does not come before its deadline
+    22 |   期限の前に催促する : every stage reminds before it is due
+  = As koyomi says it: The claim 期限の前に催促する fails for 146,097 of the 146,097 days of started
+  = It fails on 2000-01-01..2399-12-31
+  = The farthest is started 2000-01-01, where remind 2000-01-05 is the same day as due
+  = Make the reminder come after fewer business days than the deadline.

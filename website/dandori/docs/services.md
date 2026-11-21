@@ -108,7 +108,11 @@ That JSON leaves out a field without presence when it holds its zero value (an e
 false, an enum's first value, an empty list or map). So on every platform, the code dandori writes
 fills those zero values in, from the `.proto`, before it checks what comes in: the input of a run,
 and the value of an event or the answer of a callback that a method of the service sends. It does
-so in the messages inside them, and in the messages of their lists.
+so in the messages inside them, and in the messages of their lists. A `google.type.Date` there,
+which protobuf's JSON writes as `{"year": 2026, "month": 11, "day": 16}`, is read as the `date`
+`2026-11-16`. One short of its year, its month or its day is no date: in the input it fails the run
+with `Dandori.BadInput`, and in an event's value or a callback's answer it is an answer that does
+not fit, `Dandori.BadResponse`.
 
 Whether a value is there is the workflow's to say. A field that says whether it is set (a message,
 `optional`, a member of a `oneof`) can be read by an input that is not `T?`; a request without it
@@ -117,7 +121,9 @@ leaves out a `google.protobuf.Value` that is not set, and the run reads it as nu
 
 What goes out is written in full, the zero values too, which protobuf's JSON reads as well. A run
 of a workflow that implements a service ends with an object even when it has no outputs: `{}`,
-since protobuf does not read a message from `null`.
+since protobuf does not read a message from `null`. An output goes as the flow holds it, so none
+goes to a `google.type.Date`, to a list of them or to a message that holds one (E017): a date would
+go as `2026-11-16`, which protobuf does not read as one. Make that field of the response a `string`.
 
 ## Clients in other languages
 

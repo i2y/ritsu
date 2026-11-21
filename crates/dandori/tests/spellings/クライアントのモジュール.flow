@@ -1,0 +1,22 @@
+workflow クライアントのモジュール v1 implements svc.Svc
+description "TypeScript のクライアントのモジュールが持つ名前（require、exports、globalThis）と同じ名前のメソッドです。"
+
+use proto svc from "protos/クライアントのモジュール.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task 待つ() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = 待つ()
+    on timeout => fail Late "知らせがありません"
+  succeed id = "{id} {s.note}"

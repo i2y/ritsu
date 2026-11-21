@@ -50,6 +50,20 @@ pub use ritsu_testkit::golden::{bless, golden};
 #[allow(unused_imports)]
 pub use ritsu_testkit::{Need, TempDir, need, skip};
 
+/// A program that talks to a database is run to its end with a limit (ritsu-testkit's `finish`):
+/// past it, it is stopped with every process it started, and the test fails there with what it
+/// printed, not at the limit of the job with nothing said.
+#[allow(unused_imports)]
+pub use ritsu_testkit::run::finish;
+
+/// How long psql or mysql may take with one file or one script: a second or two each.
+pub const SQL_LIMIT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+/// How long a client of a book may take against its database or ledger: a runner of the
+/// scenarios, or the calls at once under REPEATABLE READ, with `go run` building it first — a
+/// minute at most on a busy machine.
+pub const CLIENT_LIMIT: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
 pub fn chobo() -> std::process::Command {
     let mut c = std::process::Command::new(env!("CARGO_BIN_EXE_chobo"));
     c.env_remove("CHOBO_LANG").env_remove("RITSU_LANG");

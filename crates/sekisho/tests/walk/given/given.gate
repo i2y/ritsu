@@ -1,0 +1,63 @@
+gate given v1
+description "A rule whose input may be left out, given an attribute: one that is always there, and one that may be absent. The value the rule keeps for the input left out is not counted, since the gate never calls it so"
+namespace Readers
+
+use rule band from "band.rule"
+
+role reader
+  description "Anyone who reads"
+
+principal User
+  description "A reader whose age is known"
+  roles reader
+  attributes
+    age : number  range >=1 <=100
+
+principal Guest
+  description "A reader whose age may not be known"
+  attributes
+    age : number?  range >=1 <=100
+
+resource Doc
+  description "A document"
+
+action read_doc
+  description "Read a document: the age is always there"
+  principal User
+  resource Doc
+  context
+    band = band(age: principal.age).band
+
+action skim_doc
+  description "Skim a document: the age may be absent, and then the band is too"
+  principal Guest
+  resource Doc
+  context
+    band = band(age: principal.age).band
+
+permit readers_of_a_band_read
+  description "A reader whose band is child or adult reads"
+  principal in reader
+  action read_doc
+  unless band is unknown
+
+permit adult_guests_skim
+  description "A guest of the adult band skims"
+  principal is Guest
+  action skim_doc
+  when band is adult
+
+expect allow every_reader_reads
+  description "An age that is there is never of the unknown band"
+  principal in reader
+  action read_doc
+
+expect deny only_adult_guests_skim
+  description "A guest who is a child, or whose age is absent, does not skim"
+  action skim_doc
+  when band is not adult
+
+expect deny no_guest_is_of_the_unknown_band
+  description "The rule keeps unknown for an age left out, and the gate never leaves it out: it picks no combination"
+  action skim_doc
+  when band is unknown

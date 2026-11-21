@@ -1,0 +1,20 @@
+rule surcharge v1
+description "A surcharge by weight that a second table takes precedence over for fragile goods: the two together leave the heavy goods that are not fragile without a row"
+
+inputs
+  weight  : mass[kg]  range >=1kg <=50kg
+  fragile : bool
+
+outputs
+  surcharge : money[JPY]  round down(1JPY)
+
+table base
+policy unique
+| weight | -> surcharge |
+| <=20kg | 0JPY         |
+
+table fragile_goods
+policy unique
+overrides base
+| fragile | weight | -> surcharge |
+| true    | -      | 500JPY       |

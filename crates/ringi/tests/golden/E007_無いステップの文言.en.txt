@@ -1,0 +1,2 @@
+error[E007]: tests/mutants/E007_無いステップの文言.ringi:18:3: The label `stage 承認` is for nothing: the route has no stage `承認`
+    18 |   stage 承認     "Approval"

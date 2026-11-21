@@ -1,0 +1,19 @@
+rule 同じ側か(same_side) v1
+description "二つの金額が 500 円の同じ側にあるか"
+
+enum 側(side) = 同じ(same) | 別(apart)
+
+inputs
+  一つ目(first)  : money[JPY]  range >=1JPY <=1_000JPY
+  二つ目(second) : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  側(side) : 側
+
+table 決める(decide)
+policy unique
+| 一つ目   | 二つ目   | -> 側 |
+| <=500JPY | <=500JPY | 同じ  |
+| >500JPY  | >500JPY  | 同じ  |
+| <=500JPY | >500JPY  | 別    |
+| >500JPY  | <=500JPY | 別    |

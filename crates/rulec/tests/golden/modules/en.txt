@@ -89,16 +89,16 @@ exit 1
 
 $ rulec check .
 error[E044]: `order` cannot be applied: `@lib/rules/order_total.rule` cannot be read
-  --> ./loose/invoice.rule:16 apply order
+  --> loose/invoice.rule:16 apply order
    |
 16 | apply order = "@lib/rules/order_total.rule" meaning:a1be19262a386726
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
- The path is followed from the directory of the rule file (looked for: ./loose/@lib/rules/order_total.rule).
+ The path is followed from the directory of the rule file (looked for: loose/@lib/rules/order_total.rule).
  a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
 
-note: `./app` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check ./app` to read it
-note: `./base` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check ./base` to read it
-note: `./lib` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check ./lib` to read it
+note: `app` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check app` to read it
+note: `base` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check base` to read it
+note: `lib` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check lib` to read it
 exit 1
 

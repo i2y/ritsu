@@ -43,6 +43,12 @@ pub fn exported(name: &str) -> String {
     if p.is_empty() || p.starts_with(|c: char| c.is_ascii_digit()) { format!("X{p}") } else { p }
 }
 
+/// Whether `id` is a keyword of Go. What the package declares and the fields of its records are
+/// written with a capital, so none of a gate's names is one.
+pub fn keyword(id: &str) -> bool {
+    ritsu_emit::words::go::KEYWORDS.contains(&id)
+}
+
 /// The names the package declares, which `check` holds apart.
 struct Names {
     principal: String,
@@ -54,6 +60,9 @@ struct Names {
     entity_ref: String,
     date: String,
     avp: String,
+    authorize: String,
+    roles: String,
+    roles_of: String,
     records: BTreeMap<usize, String>,
     inputs: BTreeMap<usize, String>,
 }
@@ -62,7 +71,7 @@ struct Names {
 /// its own, then the inputs. Two of them that are one name are W402 and E401 (`crate::spellings`).
 pub fn declared(g: &Gate, shape: &crate::cedar::Shape) -> Vec<Declared> {
     let mut d: Vec<Declared> = plan::types_used(g).into_iter().filter(|&t| plan::reads(g, shape, t)).map(|t| Declared::new(g.types[t].named.alias.clone(), From::Type(t))).collect();
-    d.extend(["Principal", "Store", "Error", "Request", "Answer", "Entity", "EntityRef", "Date", "VerifiedPermissions"].iter().map(|w| Declared::new(w.to_string(), From::Own)));
+    d.extend(["Principal", "Store", "Error", "Request", "Answer", "Entity", "EntityRef", "Date", "VerifiedPermissions", "Authorize", "Roles", "RolesOf"].iter().map(|w| Declared::new(w.to_string(), From::Own)));
     d.extend(g.actions.iter().enumerate().map(|(i, a)| Declared::new(format!("{}Input", exported(&a.named.alias)), From::Input(i))));
     d
 }
@@ -87,11 +96,14 @@ fn names(p: &Plan) -> Names {
     for &t in &recorded {
         records.insert(t, it.next().unwrap_or_default());
     }
-    let mut fixed: Vec<String> = (0..9).map(|_| it.next().unwrap_or_default()).collect();
+    let mut fixed: Vec<String> = (0..12).map(|_| it.next().unwrap_or_default()).collect();
     let mut inputs = BTreeMap::new();
     for i in 0..g.actions.len() {
         inputs.insert(i, it.next().unwrap_or_default());
     }
+    let roles_of = fixed.pop().unwrap_or_default();
+    let roles = fixed.pop().unwrap_or_default();
+    let authorize = fixed.pop().unwrap_or_default();
     let avp = fixed.pop().unwrap_or_default();
     let date = fixed.pop().unwrap_or_default();
     let entity_ref = fixed.pop().unwrap_or_default();
@@ -101,7 +113,7 @@ fn names(p: &Plan) -> Names {
     let error = fixed.pop().unwrap_or_default();
     let store = fixed.pop().unwrap_or_default();
     let principal = fixed.pop().unwrap_or_default();
-    Names { principal, store, error, request, answer, entity, entity_ref, date, avp, records, inputs }
+    Names { principal, store, error, request, answer, entity, entity_ref, date, avp, authorize, roles, roles_of, records, inputs }
 }
 
 /// The fields of a type's record: `Roles`, a field for each group it is a member of, and each
@@ -237,10 +249,8 @@ pub fn module(p: &Plan, o: &Options) -> String {
     t.push_str(&doc(&d, ""));
     t.push_str(&format!("package {pkg}\n\n"));
     // the imports
-    let mut std_imports: Vec<&str> = vec!["fmt", "sort"];
-    if !g.actions.is_empty() || p.today().is_some() {
-        std_imports.push("time");
-    }
+    // `time` for the instant every function to ask the gate takes, `Authorize` among them
+    let mut std_imports: Vec<&str> = vec!["fmt", "sort", "time"];
     match o.authorizer {
         Authorizer::Cedar => std_imports.push("encoding/json"),
         Authorizer::Avp => std_imports.extend(["context", "encoding/json"]),
@@ -293,6 +303,7 @@ pub fn module(p: &Plan, o: &Options) -> String {
     for a in &p.actions {
         action(p, &n, o, a, &mut t);
     }
+    by_name(p, &n, o, &mut t);
     ask(p, &n, o, &mut t);
     while t.ends_with("\n\n") {
         t.pop();
@@ -333,7 +344,7 @@ fn types(p: &Plan, n: &Names, o: &Options, t: &mut String) {
         }
         for (gt, field) in &r.groups {
             let gn = &g.types[*gt].named.alias;
-            lines.push((field.clone(), "[]string".to_string(), format!(" // {}", tr(o, &format!("メンバーである {gn} の ID"), &format!("the ids of the {gn}s it is a member of")))));
+            lines.push((field.clone(), "[]string".to_string(), format!(" // {}", tr(o, &format!("メンバーである {gn} の ID"), &format!("the ids of the groups of type {gn} it is a member of")))));
         }
         for (i, f) in ty.attrs.iter().enumerate() {
             lines.push((r.attrs[i].clone(), field_type(n, f), field_comment(g, f, o.lang)));
@@ -378,8 +389,8 @@ fn types(p: &Plan, n: &Names, o: &Options, t: &mut String) {
     t.push_str(&doc(
         &tr(
             o,
-            &format!("{} は、ゲートに尋ねられなかった理由です。このとき答えは「拒む」です。Kind は principal、resource、input、today、rule、date（リクエストを組み立てられない）、cedar（Cedar がエラーを返したか、尋ねられなかった）のどれかです。", n.error),
-            &format!("{} is why the gate could not be asked, and the answer is a deny: Kind is principal, resource, input, today, rule or date (the request could not be built), or cedar (Cedar answered with an error, or could not be asked).", n.error),
+            &format!("{} は、ゲートに尋ねられなかった理由です。このとき答えは「拒む」です。Kind は principal、resource、input、today、rule、date（リクエストを組み立てられない）、cedar（Cedar がエラーを返したか、尋ねられなかった）、action（{} に、ゲートに無い action の名前が渡された）のどれかです。", n.error, n.authorize),
+            &format!("{} is why the gate could not be asked, and the answer is a deny: Kind is principal, resource, input, today, rule or date (the request could not be built), cedar (Cedar answered with an error, or could not be asked), or action ({} was given a name the gate has no action of).", n.error, n.authorize),
         ),
         "",
     ));
@@ -451,7 +462,36 @@ fn helpers(p: &Plan, n: &Names, o: &Options, t: &mut String) {
     let er = &n.entity_ref;
     let en = &n.entity;
     let dt = &n.date;
-    // the roles
+    // the roles: the lists of what the gate declares and of what each type of principal takes, for
+    // the service to pass a person's roles through (DESIGN 33), and the entities
+    let declared: Vec<String> = g.roles.iter().map(|r| s(&r.named.alias)).collect();
+    t.push_str(&doc(
+        &tr(
+            o,
+            &format!("{} は、ゲートが宣言した役割の別名を、宣言の順に、呼ぶたびに新しいスライスで返します。レコードに入れる役割は {} で絞ります。", n.roles, n.roles_of),
+            &format!("{} returns the aliases of the roles the gate declares, in the order it declares them, in a new slice each call. The roles to put into a record are narrowed with {}.", n.roles, n.roles_of),
+        ),
+        "",
+    ));
+    t.push_str(&format!("func {}() []string {{\n\treturn []string{{{}}}\n}}\n\n", n.roles, declared.join(", ")));
+    t.push_str(&doc(
+        &tr(
+            o,
+            &format!("{} は、Cedar での名前が t の principal の型が持てる役割（その型の roles の行に書いたもの）の別名を、ゲートが宣言した順に、呼ぶたびに新しいスライスで返します。principal の型でない名前と、ゲートに無い名前には、空のスライスを返します。レコードの Roles には、この中の役割だけを入れられます。ほかの役割を一つでも持つ人は、どの action でも拒まれるので、サインインが運ぶ役割は、これで絞ってから入れてください。", n.roles_of),
+            &format!("{} returns the aliases of the roles a principal of the type named t in Cedar can hold (those its roles line names), in the order the gate declares them, in a new slice each call; an empty one for a name that is not a principal's type, or that the gate does not declare. A record's Roles holds only these: one who holds any other is refused every action, so pass the roles a sign-in carries through it first.", n.roles_of),
+        ),
+        "",
+    ));
+    t.push_str(&format!("func {}(t string) []string {{\n", n.roles_of));
+    let held: Vec<(&str, Vec<String>)> = plan::roles_of(g).into_iter().map(|(ty, rs)| (ty, rs.iter().map(|r| s(r)).collect())).collect();
+    if !held.is_empty() {
+        t.push_str("\tswitch t {\n");
+        for (ty, rs) in &held {
+            t.push_str(&format!("\tcase {}:\n\t\treturn []string{{{}}}\n", s(ty), rs.join(", ")));
+        }
+        t.push_str("\t}\n");
+    }
+    t.push_str("\treturn []string{}\n}\n\n");
     if !g.roles.is_empty() {
         let role_type = p.cedar_name(crate::cedar::ROLE);
         t.push_str(&doc(&tr(o, "roles は、ゲートの役割のエンティティです。親は、その役割が includes に書いた役割です。", "roles are the gate's roles as entities, each in the roles it includes."), ""));
@@ -778,6 +818,91 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
     }
 }
 
+/// The entry by the action's name (DESIGN 5.7): `Authorize`, given the action as Cedar names it and
+/// the ids of resources by the names of their types in Cedar, answers through the action's own
+/// function, with the id of the one type of the action's that it is given. A name the gate has no
+/// action of, an action that takes inputs of its own, and no id, or ids of two types, of the
+/// action's resource are refused, as the action's own function refuses what it cannot ask.
+fn by_name(p: &Plan, n: &Names, o: &Options, t: &mut String) {
+    let g = p.g;
+    let (e, answer, me) = (&n.error, &n.answer, &n.authorize);
+    let how = match o.authorizer {
+        Authorizer::Cedar => tr(o, "このプロセスの中の cedar-go", "cedar-go, in this process"),
+        Authorizer::Avp => "Amazon Verified Permissions".to_string(),
+    };
+    let example = p.actions.first().map(|ap| {
+        let alias = &g.actions[ap.index].named.alias;
+        let name = exported(alias);
+        tr(o, &format!("{alias} なら Authorize{name}"), &format!("Authorize{name} for {alias}"))
+    });
+    let (ja_eg, en_eg) = match &example {
+        Some(x) if o.lang == Lang::Ja => (format!("（{x}）"), String::new()),
+        Some(x) => (String::new(), format!(" ({x})")),
+        None => (String::new(), String::new()),
+    };
+    t.push_str(&doc(
+        &tr(
+            o,
+            &format!("{me} は、action という名前の action を許すかを Cedar（{how}）に尋ねます。尋ねるのは、その action の関数です{ja_eg}。action は Cedar での action の名前で、resources は、resource の ID を、その型の Cedar での名前ごとに持ちます。action がとらない型の ID は読みません。ゲートに無い名前（種類は action）、自分の入力を受け取る action（input。その action の関数で尋ねてください）、action の resource の ID が無いか、二つの型の ID があるとき（resource）は、*{e} を持つ拒む答えを返します。"),
+            &format!("{me} asks Cedar ({how}) whether the action named action is allowed, through the action's own function{en_eg}. action is the action's name in Cedar, and resources holds the id of a resource by the name of its type in Cedar; the ids of types the action does not take are left alone. A name the gate has no action of (the kind action), an action that takes inputs of its own (input: ask it through its own function), and no id, or ids of two types, of the action's resource (resource) are a deny, with an *{e}."),
+        ),
+        "",
+    ));
+    match o.authorizer {
+        Authorizer::Cedar => t.push_str(&format!("func {me}(store {}, p {}, action string, resources map[string]string, now time.Time) {answer} {{\n", n.store, n.principal)),
+        Authorizer::Avp => t.push_str(&format!("func {me}(ctx context.Context, avp {}, store {}, p {}, action string, resources map[string]string, now time.Time) {answer} {{\n", n.avp, n.store, n.principal)),
+    }
+    let mut given = false;
+    if !p.actions.is_empty() {
+        t.push_str("\tswitch action {\n");
+        for ap in &p.actions {
+            let a = &g.actions[ap.index];
+            let alias = &a.named.alias;
+            let name = exported(alias);
+            t.push_str(&format!("\tcase {}:\n", s(alias)));
+            if !a.inputs.is_empty() {
+                let own: Vec<String> = a.inputs.iter().map(|f| f.named.alias.clone()).collect();
+                let m = tr(o, &format!("{alias} は自分の入力（{}）を受け取ります。Authorize{name} で尋ねてください", own.join("、")), &format!("{alias} takes inputs of its own ({}): ask it through Authorize{name}", own.join(", ")));
+                t.push_str(&format!("\t\treturn {answer}{{Policies: []string{{}}, Err: &{e}{{\"input\", {}}}}}\n", s(&m)));
+                continue;
+            }
+            let types: Vec<String> = a.resources.iter().map(|&x| g.types[x].named.alias.clone()).collect();
+            let (ja_types, en_types) = (types.join("、"), types.join(", "));
+            let none = tr(o, &format!("resources に {alias} の resource（{ja_types}）の ID がありません"), &format!("resources holds no id of the resource of {alias} ({en_types})"));
+            let rf = exported(&plan::resource_field(a));
+            let input = if types.len() == 1 {
+                t.push_str(&format!("\t\tid, ok := resources[{}]\n\t\tif !ok {{\n\t\t\treturn {answer}{{Policies: []string{{}}, Err: &{e}{{\"resource\", {}}}}}\n\t\t}}\n", s(&types[0]), s(&none)));
+                format!("{}{{{rf}: id}}", n.inputs[&ap.index])
+            } else {
+                given = true;
+                let two = tr(o, &format!("resources に {alias} の resource（{ja_types}）の ID が二つ以上あります。尋ねる一つだけを渡してください"), &format!("resources holds ids of more than one type of the resource of {alias} ({en_types}): give the one it is asked of"));
+                let lits: Vec<String> = types.iter().map(|x| s(x)).collect();
+                t.push_str(&format!("\t\tt, err := given(resources, []string{{{}}}, {}, {})\n", lits.join(", "), s(&none), s(&two)));
+                t.push_str(&format!("\t\tif err != nil {{\n\t\t\treturn {answer}{{Policies: []string{{}}, Err: err}}\n\t\t}}\n"));
+                format!("{}{{{rf}: resources[t], ResourceType: t}}", n.inputs[&ap.index])
+            };
+            match o.authorizer {
+                Authorizer::Cedar => t.push_str(&format!("\t\treturn Authorize{name}(store, p, {input}, now)\n")),
+                Authorizer::Avp => t.push_str(&format!("\t\treturn Authorize{name}(ctx, avp, store, p, {input}, now)\n")),
+            }
+        }
+        t.push_str("\t}\n");
+    }
+    let unknown = tr(o, "ゲートに action %q はありません", "the gate has no action %q");
+    t.push_str(&format!("\treturn {answer}{{Policies: []string{{}}, Err: &{e}{{\"action\", fmt.Sprintf({}, action)}}}}\n}}\n\n", s(&unknown)));
+    if given {
+        t.push_str(&doc(
+            &tr(
+                o,
+                &format!("given は、resource の型をいくつかとる action の、types のうち resources が ID を持つ一つの型です。一つも無いか、二つ以上あれば、種類 resource の *{e} を返します（文は none と two）。"),
+                &format!("given is the one type of types, the types of the resource of an action that takes several, that resources holds an id of. None, or more than one, is an *{e} of the kind resource, saying none or two."),
+            ),
+            "",
+        ));
+        t.push_str(&format!("func given(resources map[string]string, types []string, none, two string) (string, *{e}) {{\n\tfound := \"\"\n\tfor _, t := range types {{\n\t\tif _, ok := resources[t]; ok {{\n\t\t\tif found != \"\" {{\n\t\t\t\treturn \"\", &{e}{{\"resource\", two}}\n\t\t\t}}\n\t\t\tfound = t\n\t\t}}\n\t}}\n\tif found == \"\" {{\n\t\treturn \"\", &{e}{{\"resource\", none}}\n\t}}\n\treturn found, nil\n}}\n\n"));
+    }
+}
+
 /// Whether a value given to an input of an asked action may be absent here: an input or an
 /// attribute that may be.
 fn given_may_be_absent(g: &Gate, a: &Action, s: &Source) -> bool {
@@ -1050,9 +1175,9 @@ fn rule_arg(p: &Plan, facts: &ritsu_ports::RuleFacts, m: &str, col: &ritsu_ports
     let g = p.g;
     let typed = |v: String| if pty == "int64" { format!("int64({v})") } else { format!("{m}.{pty}({v})") };
     match (plan::strip(&col.ty), src) {
-        (C::Date, Source::Lit(Literal::Date(d))) => format!("int64({d})"),
-        (C::Date, Source::Today) => "int64(day)".to_string(),
-        (C::Date, _) => format!("int64(days({raw}.Year, {raw}.Month, {raw}.Day))"),
+        (C::Date { .. }, Source::Lit(Literal::Date(d))) => format!("int64({d})"),
+        (C::Date { .. }, Source::Today) => "int64(day)".to_string(),
+        (C::Date { .. }, _) => format!("int64(days({raw}.Year, {raw}.Month, {raw}.Day))"),
         (C::Bool, Source::Lit(Literal::Bool(b))) => b.to_string(),
         (C::Bool, _) => raw.to_string(),
         (C::Num { unit, .. }, Source::Lit(Literal::Num(num))) => {

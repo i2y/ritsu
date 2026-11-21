@@ -1,0 +1,4 @@
+error[E102]: example.ringi:4:3: `purpose` has no upper limit on its length
+     4 |   purpose : long text "Purpose"
+  = Write the most characters it takes, as in `count <=100`: with no limit, a text of any length is taken.
+  = The line, fixed: purpose : long text "Purpose"  count <=100

@@ -1,0 +1,3 @@
+error[E405]: tests/mutants/E405_承認で押さえる.ringi:17:23: The hold `予算.reserve` made on `approved` is never posted or voided
+    17 |   on approved    hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: 部, amount: 金額)
+  = A hold is made `on submitted`, and each ending posts it or voids it.

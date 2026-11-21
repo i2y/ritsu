@@ -1,0 +1,4 @@
+error[E306]: tests/mutants/E306_a_possible_that_does_not_happen.ringi:20:1: The claim a_president_at_times does not hold: no request comes to it
+    20 |   a_president_at_times : possible decide is president
+  = As rulec says it: On the calls that meet the line's inputs, decide answers head / manager.
+  = Correct the route, or remove the claim.

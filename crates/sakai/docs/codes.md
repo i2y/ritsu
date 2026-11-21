@@ -146,7 +146,7 @@ See also: [E004](#e004)
 
 ## E003 — The file does not start with a `map` or a `context` line
 
-**When**: The first line that is not a comment or blank is neither `map …` nor `context …`.
+**When**: The first line that is not a comment or blank is neither `map …` nor `context …`; also at line 1 when there is no such line (an empty file, or one of comments and blank lines).
 
 **Fix**: Start a context map like `map Shop(shop) v1`, and one context like `context Inventory(inventory) v1`.
 
@@ -416,7 +416,7 @@ See also: [E007](#e007)
 
 ## E007 — A name is not declared
 
-**When**: A relationship or an `as` names a context the map does not read, or `means` or a mapping names an element the proto does not have; also a short name that two packages have.
+**When**: A relationship or an `as` names a context the map does not read, or `means` or a mapping names an element the proto does not have; also a short name that two packages have. A context the map does not read, named on several lines of a file, is said once, at the first, and the note gives the lines of the others; another file that names it says it once too.
 
 **Fix**: Correct the spelling, or add the `use context`. Write a name two packages have with its package (`message warehouse.v1.ReserveResponse`).
 
@@ -1857,7 +1857,7 @@ See also: [E201](#e201)
 
 ## E203 — A reference goes through a package `through` does not list
 
-**When**: A reference reaches a published package of the upstream that the relationship's `through` does not list.
+**When**: A reference reaches a published package of the upstream that the relationship's `through` does not list. It is not said of a reference to a package the upstream's proto declares under a heading that names another (E302 says that).
 
 **Fix**: Add the package to `through`, or change the reference.
 
@@ -2745,7 +2745,7 @@ See also: [E302](#e302)
 
 ## E302 — A file of a published language is not the context's, or has another package
 
-**When**: A proto, a rule, a Rust crate or the place of the generated code of a published language does not belong to the context; or a proto's package, or a crate's name (with `-` written `_`), is not what the heading names; or a `crate` is no crate of the workspace at the map's `code rust` place, or the map has no `code rust`; or a `rulec` line lists an `enums` file in the place of a rule, from which no Connect service is generated, so there is no package to publish.
+**When**: A proto, a rule, a Rust crate or the place of the generated code of a published language does not belong to the context; or a proto's package, or a crate's name (with `-` written `_`), is not what the heading names; or a `crate` is no crate of the workspace at the map's `code rust` place, or the map has no `code rust`; or a `rulec` line lists an `enums` file in the place of a rule, from which no Connect service is generated, so there is no package to publish. Where the package of a proto is not what the heading names, this is all that is said: a relationship whose `through` lists that package (E312) and what refers to it (E203) say nothing.
 
 **Fix**: Correct the heading's package, or list the context's own files.
 
@@ -3471,7 +3471,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E312 — The upstream does not publish a package of `through`
 
-**When**: A package under `through` is not among the upstream's `published language`s.
+**When**: A package under `through` is not among the upstream's `published language`s. It is not said of a package the upstream's proto declares under a heading that names another (E302 says that).
 
 **Fix**: Write a package the upstream publishes.
 

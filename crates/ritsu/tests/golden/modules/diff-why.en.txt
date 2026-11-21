@@ -13,16 +13,16 @@ require: no change
 behavior:
   fine.rule (rulec): the answers differ
     rule fine v1 → v1
-      an output changed range: most  100..100 → 200..200
+      an output changed range: most  100USD..100USD → 200USD..200USD
     2 cells, of which 2 are inputs that can occur: 0 same, 2 differ, 0 unsettled, 0 unrealized
 
       violation = serious
-        most: 100 → 200
+        most: 100USD → 200USD
         rows: table amounts row 1
         example: violation=serious
 
       violation = other
-        most: 100 → 200
+        most: 100USD → 200USD
         rows: table amounts row 2
         example: violation=other
 

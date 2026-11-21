@@ -12,9 +12,10 @@
 //   { "kind": "http", "request": { the HttpRequest }, "reply": { "status", "body" } }
 //   { "kind": "lambda", "fn", "payload", "reply": { "ok" } | { "error", "message" } }
 //   { "kind": "aws", "service", "action", "input", "topics": [name], "queues": [name],
-//     "listen": { "queue", "topic"? } | null }
+//     "listen": { "queue", "topic"? } | null, "setup"?: [{ "method", "path", "headers", "body" }] }
 // results.json, one for each case: { "received": the request as it arrived (HTTP, Lambda),
-//   "returned": what the Transport gave back, "messages": what the listening queue got }
+//   "returned": what the Transport gave back, "messages": what the listening queue got,
+//   "moto": [{ "method", "path", "body", "answer" }], the requests that went to moto and its answers }
 
 import fs from "node:fs";
 import http from "node:http";
@@ -55,14 +56,18 @@ const server = http.createServer(async (req, res) => {
     // /http/<host><path>: an HTTP task's request
     const type = req.headers["content-type"] ?? "";
     const text = body.toString("utf8");
+    // Node reads a header's bytes as latin-1; the Transports send each value's UTF-8
+    const headers = Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, typeof v === "string" ? Buffer.from(v, "latin1").toString("utf8") : v]));
+    const at = req.url.indexOf("?");
     now.received = {
       method: req.method,
       path: url.pathname.slice("/http".length).replace(/^\/[^/]+/, ""),
       query: pairs(url.search),
-      headers: req.headers,
+      headers,
       body: text === "" ? null : type.includes("json") ? JSON.parse(text) : type.includes("x-www-form-urlencoded") ? pairs(text) : text,
       raw: text,
-      rawQuery: url.search,
+      // the query as it arrived, before a URL's parser writes it again
+      rawQuery: at < 0 ? "" : req.url.slice(at),
     };
     const r = now.case.reply;
     const json = typeof r.body !== "string";
@@ -79,11 +84,15 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ errorType: r.error, errorMessage: r.message }));
     }
   } else {
-    // any other AWS API: moto's
+    // any other AWS API: moto's, and what went and came back written down
     const headers = { ...req.headers, host: motoUrl.host };
-    const out = http.request({ host: motoUrl.hostname, port: motoUrl.port, method: req.method, path: req.url, headers }, (m) => {
+    const out = http.request({ host: motoUrl.hostname, port: motoUrl.port, method: req.method, path: req.url, headers }, async (m) => {
+      const parts = [];
+      for await (const c of m) parts.push(c);
+      const answer = Buffer.concat(parts);
+      now?.moto.push({ method: req.method, path: req.url, body: body.toString("utf8"), answer: answer.toString("utf8") });
       res.writeHead(m.statusCode, m.headers);
-      m.pipe(res);
+      res.end(answer);
     });
     out.end(body);
   }
@@ -92,8 +101,11 @@ await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
 /** This server's address, in place of an HTTP task's scheme and host, and the AWS SDK's endpoint. */
 const front = `http://127.0.0.1:${server.address().port}`;
 
+// a header of the options' own; for the library of tests/flows/http_places.flow, one that takes the
+// place of the request's of its name, which it gives in another case; and a cookie that joins the
+// request's (DESIGN 43)
 const transport = io.transport({
-  headers: () => ({ "X-Dandori-Check": "wire" }),
+  headers: (url) => ({ "X-Dandori-Check": "wire", ...(url.includes("/library.example.com/") ? { "x-library-key": "wire-key" } : {}), Cookie: "wire_session=1" }),
   aws: { endpoint: front, region: REGION, credentials },
 });
 const sns = new SNS({ endpoint: moto, region: REGION, credentials });
@@ -107,7 +119,7 @@ async function queueUrl(name) {
 const results = [];
 try {
   for (const c of cases) {
-    now = { case: c, received: null };
+    now = { case: c, received: null, moto: [] };
     let returned;
     let messages = null;
     if (c.kind === "http") {
@@ -119,6 +131,11 @@ try {
     } else {
       // moto as the case wants it: the topics and queues that exist, and a queue that listens
       await fetch(`${moto}/moto-api/reset`, { method: "POST" });
+      // what else the call needs there, as the case's requests to moto make it
+      for (const r of c.setup ?? []) {
+        const made = await fetch(`${moto}${r.path}`, { method: r.method, headers: r.headers, body: r.body });
+        if (!made.ok) throw new Error(`moto did not take ${r.method} ${r.path}: ${made.status} ${await made.text()}`);
+      }
       for (const name of c.topics) await sns.createTopic({ Name: name });
       for (const name of c.queues) await sqs.createQueue({ QueueName: name });
       if (c.listen?.topic) {
@@ -136,7 +153,7 @@ try {
         messages = (got.Messages ?? []).map((m) => m.Body);
       }
     }
-    results.push({ received: now.received, returned, messages });
+    results.push({ received: now.received, returned, messages, moto: now.moto });
   }
 } finally {
   server.close();

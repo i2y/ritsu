@@ -1,0 +1,17 @@
+error[E101]: Completeness gap: some input matches no row
+  --> tests/gaps/handling.rule:15 table fees
+   |
+15 | table fees
+   |       ^^^^ the input space is not fully covered
+   |
+ No row matches these 3 parts of the input:
+   amount from 101JPY to 500JPY, kind = parcel, rush = false
+   amount from 101JPY to 1000JPY, kind = pallet
+   amount from 501JPY to 1000JPY, kind one of letter, parcel, rush = true
+ An input that matches no row: amount = 501JPY, kind = letter, rush = true
+ hint: add these rows, with what each answers written in place of `?`:
+   | >100JPY <=500JPY | parcel | false | ? | ? |
+   | >100JPY | pallet | - | ? | ? |
+   | >500JPY | letter, parcel | true | ? | ? |
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.
+

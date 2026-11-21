@@ -83,11 +83,11 @@ fn a_false_property_is_found_on_the_vectors() {
     assert!(en.checked.is_none() && ja.checked.is_none(), "an E603 stops the module");
     assert_eq!(
         texts(&en, "E603", Lang::En)[0].lines().next().unwrap(),
-        "error[E603]: tests/properties/shares.kn:12:1: The property `every_line_gets_a_share` is false for lines: [Line { sku: \"a\", left: 500000USDc }, Line { sku: \"a\", left: 500000USDc }], refund: 1USDc"
+        "error[E603]: tests/properties/shares.kn:12:1: The property `every_line_gets_a_share` is false for lines: [Line { sku: \"a\", left: 500_000USDc }, Line { sku: \"a\", left: 500_000USDc }], refund: 1USDc"
     );
     assert!(texts(&en, "E603", Lang::En)[0].contains("= Line 15: `shares` is [0USDc, 1USDc]"), "{}", said(&en));
     let j = &texts(&ja, "E603", Lang::Ja)[0];
-    assert!(j.contains("性質 `どの明細にも配る` は、明細: [明細 { 品番: \"a\", 残り: 500000USDc }, 明細 { 品番: \"a\", 残り: 500000USDc }], 返金: 1USDc で成り立ちません") && j.contains("15 行目: `配分` は [0USDc, 1USDc]"), "{j}");
+    assert!(j.contains("性質 `どの明細にも配る` は、明細: [明細 { 品番: \"a\", 残り: 500_000USDc }, 明細 { 品番: \"a\", 残り: 500_000USDc }], 返金: 1USDc で成り立ちません") && j.contains("15 行目: `配分` は [0USDc, 1USDc]"), "{j}");
 }
 
 /// The values a `when` line compares with become vectors, as an `if`'s do (DESIGN 9): the threshold

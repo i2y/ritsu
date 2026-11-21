@@ -75,7 +75,7 @@ fn the_port_says_which_calls_give_a_secret_to_a_file_of_the_project() {
     // the fixtures: the calls of the bank's `.proto` and of the CRM's OpenAPI document that give one
     let mut failures = Vec::new();
     for f in FIXTURES {
-        let sends = dandori::ports::Engine.sends(Path::new(f), &ports).unwrap_or_else(|e| panic!("{f}: {e:?}"));
+        let sends = dandori::ports::Engine::default().sends(Path::new(f), &ports).unwrap_or_else(|e| panic!("{f}: {e:?}"));
         let text = serde_json::to_string_pretty(&shown(&sends)).unwrap() + "\n";
         let golden = root().join(f).with_extension("sends.json");
         if let Err(e) = ritsu_testkit::golden::check(&golden, &text) {
@@ -91,11 +91,11 @@ fn the_port_says_which_calls_give_a_secret_to_a_file_of_the_project() {
     all.retain(|f| f.ends_with(".flow"));
     assert!(all.len() > 40, "{all:?}");
     for f in &all {
-        let sends = dandori::ports::Engine.sends(&root().join(f), &ports).unwrap_or_else(|e| panic!("{f}: {e:?}"));
+        let sends = dandori::ports::Engine::default().sends(&root().join(f), &ports).unwrap_or_else(|e| panic!("{f}: {e:?}"));
         assert!(sends.is_empty(), "{f} gives a secret: {sends:?}");
     }
     // a flow that does not pass the check is said by its errors
-    let failing = dandori::ports::Engine.sends(Path::new("tests/fixtures/security/E906_agent.flow"), &ports).unwrap_err();
+    let failing = dandori::ports::Engine::default().sends(Path::new("tests/fixtures/security/E906_agent.flow"), &ports).unwrap_err();
     assert!(failing.iter().any(|s| s.code == "E906"), "{failing:?}");
 }
 
@@ -232,7 +232,7 @@ func main() {
 		panic(err)
 	}
 	_ = pay.NewWorker(c, own{}, nil, "")
-	_, _ = pay.Start(context.Background(), c, "pay-1", map[string]any{"account": map[string]any{"id": "acct-1", "number": "4111"}}, false)
+	_, _ = pay.Start(context.Background(), c, "pay-1", pay.WorkflowInput{Account: pay.Account{Id: "acct-1", Number: "4111"}}, false)
 }
 "#;
 
@@ -278,7 +278,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_, _ = pay.Start(context.Background(), c, "pay-1", map[string]any{"account": map[string]any{"id": "acct-1", "number": "4111"}}, false)
+	_, _ = pay.Start(context.Background(), c, "pay-1", pay.WorkflowInput{Account: pay.Account{Id: "acct-1", Number: "4111"}}, false)
 }
 "#;
 
@@ -402,29 +402,36 @@ const NAMES: [&str; 2] = ["tests/encrypted/names.flow", "tests/encrypted/names.j
 /// The same flows, with those names changed as the notes of W105 say.
 const RENAMED: [&str; 2] = ["tests/encrypted/renamed/names.flow", "tests/encrypted/renamed/names.ja.flow"];
 
-/// A name the client of an encrypted history declares, given to a record, an enum, or a method or a
-/// message of the service the workflow implements, is one the code of that language cannot keep, as
-/// for one of the client's own names (DESIGN 1.14, 1.18, 22): `check` says so (W105), and `gen` stops
-/// for the language whose client has it (E051), each language at its own names. Renamed, nothing is
-/// said, the code passes `tsc --strict` and `go vet`, and `mypy --strict` finds no name defined twice
-/// in the Python.
+/// A name the client of an encrypted history declares for a caller (`encryptedClient` in TypeScript,
+/// `connect` in Python, `EncryptedClient` and `Dial` in Go), given to a record, or to a method or a
+/// message of the service the workflow implements, is one the code of that language cannot keep
+/// (DESIGN 1.14, 1.18, 22): `check` says so (W105), and `gen` stops for that language (E051). A name
+/// the client declares for itself alone (`Connection` in TypeScript, `DataConverter` in Python,
+/// `CodecDataConverter` in Go…) stops nothing: the client gives its own another name. Renamed as
+/// W105 says, with those names kept, nothing is said, the code passes `tsc --strict` and `go vet`,
+/// and `mypy --strict` finds no name defined twice in the Python.
 #[test]
 fn the_names_of_an_encrypted_client_stop_the_code_that_has_them() {
     let scratch = TempDir::new("dandori-encrypted-names");
-    let stops: [(&str, &[&str]); 3] = [
-        ("temporal-typescript", &["`EncryptedClient`", "`Encrypted`", "ClientOptions", "Connection", "PayloadCodec"]),
-        ("temporal-python", &["`Connect`", "DataConverter", "NewType", "PayloadCodec"]),
-        ("temporal-go", &["`CodecFailureConverter`", "`Dial`", "`EncryptedClient`", "CodecDataConverter"]),
+    // what each stops at, and what it does not stop at
+    let stops: [(&str, &[&str], &[&str]); 3] = [
+        ("temporal-typescript", &["`EncryptedClient`"], &["`Encrypted`", "ClientOptions", "Connection", "PayloadCodec"]),
+        ("temporal-python", &["`Connect`"], &["DataConverter", "NewType", "PayloadCodec"]),
+        ("temporal-go", &["`CodecFailureConverter`", "`Dial`", "`EncryptedClient`", "`CodecDataConverter`"], &["declares `CodecFailureConverter` itself", "declares `CodecDataConverter` itself"]),
     ];
     for f in NAMES {
         let (_, c) = dandori::check::check_file(&root().join(f)).unwrap();
         assert!(c.diags.iter().all(|d| d.code == "W105"), "{f}: {:?}", c.diags.iter().map(|d| format!("{} {}", d.code, d.en)).collect::<Vec<_>>());
         let m = c.model.unwrap_or_else(|| panic!("{f} passes check"));
-        for (target, names) in stops {
+        for (target, names, kept) in stops {
             let d = dandori::commands::build(&m, target).unwrap().err().unwrap_or_else(|| panic!("{f} does not stop for {target}"));
             assert!(d.iter().all(|x| x.code == "E051"), "{f} --target {target}: {d:?}");
             for n in names {
                 assert!(d.iter().any(|x| x.en.contains(n)), "{f} --target {target} does not stop at {n}: {:?}", d.iter().map(|x| &x.en).collect::<Vec<_>>());
+            }
+            let text_of = |x: &dandori::diag::Diag| format!("{} {}", x.en, x.notes.iter().map(|n| n.en.as_str()).collect::<Vec<_>>().join(" "));
+            for n in kept {
+                assert!(d.iter().all(|x| !text_of(x).contains(n)), "{f} --target {target} stops at {n}, which the client gives way with: {:?}", d.iter().map(text_of).collect::<Vec<_>>());
             }
         }
     }
@@ -453,13 +460,9 @@ fn the_names_of_an_encrypted_client_stop_the_code_that_has_them() {
             let out = Command::new(&mypy).current_dir(code.parent().unwrap()).args(["--strict", "--no-color-output", "--cache-dir", "cache", "--python-executable"]).arg(&python).args(["-p", &package]).output().unwrap();
             let text = said(&out);
             assert!(text.contains("source file"), "mypy did not check the Python of {f}:\n{text}");
-            // The Python of a workflow that implements a service does not pass `mypy --strict` as it
-            // is, with an encrypted history or not (tests/flows/service.flow): the method that starts
-            // a run gives `start` its request, a TypedDict, where `start` takes a dict. Any other
-            // error, a name defined twice (`no-redef`) or a type given another value (`misc`) among
-            // them, is one this test is for.
-            let errors: Vec<&str> = text.lines().filter(|l| l.contains(": error:")).collect();
-            assert!(errors.iter().all(|l| l.contains("Argument 3 to \"start\"") && l.ends_with("[arg-type]")), "mypy --strict finds fault with the Python of {f}:\n{text}");
+            // a name defined twice (`no-redef`) or a type given another value (`misc`) would be an
+            // error here; the Python of every flow passes as it is (DESIGN 34)
+            assert!(out.status.success(), "mypy --strict finds fault with the Python of {f}:\n{text}");
         }
         eprintln!("mypy --strict: the Python of the names of an encrypted client");
     }
@@ -776,7 +779,7 @@ func run() (map[string]any, error) {
 	results := map[string]any{}
 	for _, r := range [][2]string{{"paid", "4111-1111-1111-1111"}, {"refused", "5500-0000-0000-0004"}} {
 		id, number := r[0], r[1]
-		run, err := pay.Start(context.Background(), c, id, map[string]any{"account": map[string]any{"id": "acct-" + id, "number": number}}, false)
+		run, err := pay.Start(context.Background(), c, id, pay.WorkflowInput{Account: pay.Account{Id: "acct-" + id, Number: number}}, false)
 		if err != nil {
 			return nil, err
 		}

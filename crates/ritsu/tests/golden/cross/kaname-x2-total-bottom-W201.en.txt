@@ -1,0 +1,8 @@
+ok order_lines.rule
+ok order.kn: 1 function, fails rule
+warning[ritsu W201]: order.kn:11:3: Whether the call of the rule order_lines keeps its precondition `5 <= amount <= 100_000_000` cannot be decided
+    11 |   order_lines(lines: map(lines, l => order_lines.lines { quantity: l.quantity, price: l.price })).amount
+  = The list given to `lines` can have as few as 1 element; at that length and the ends of its elements' ranges `5 <= amount <= 100_000_000` does not hold, and no input among the function's vectors gives such a list.
+  = kaname's generated code checks it there when it runs: where the rule's generated code refuses the call at its door, the function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`), and it is shown.
+ritsu check: 2 files (rulec 1, kaname 1): all pass (1 warning); borders between the languages: 2 checked, 1 undecided

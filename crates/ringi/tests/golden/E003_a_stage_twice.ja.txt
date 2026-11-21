@@ -1,0 +1,2 @@
+エラー[E003]: tests/mutants/E003_a_stage_twice.ringi:8:3: `check` は経路のステップに二度宣言されています（最初は 7 行目）
+     8 |   check  finance

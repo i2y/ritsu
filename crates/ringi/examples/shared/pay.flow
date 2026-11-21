@@ -1,0 +1,28 @@
+workflow expense_payment v1
+  now range >=2026-01-01 <=2027-12-31 offset +09:00
+description "The payment of an approved expense request: the accounts system pays the requester, and the requester is told. ringi starts it when the ticket is approved, after it has posted the budget it held"
+
+inputs
+  request_id : string
+  requester  : string
+  amount     : money[JPY]  range >=1JPY <=10_000_000JPY
+  purpose    : string
+
+outputs
+  reference : string
+
+record Payment
+  reference : string
+
+task pay_requester(request_id: string, requester: string, amount: money[JPY], purpose: string) -> Payment
+  timeout 1 day
+  retry 3 times every 10 minutes
+  idempotent
+
+task tell_requester(request_id: string, text: string)
+  idempotent
+
+flow
+  let p = pay_requester(request_id: request_id, requester: requester, amount: amount, purpose: purpose)
+  tell_requester(request_id: request_id, text: "Request {request_id} was paid: {p.reference}")
+  succeed reference = p.reference

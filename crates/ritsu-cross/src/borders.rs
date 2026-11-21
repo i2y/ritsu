@@ -176,10 +176,15 @@ pub fn amount_fits(out: &Found<OutputValues>) -> Answer<(i128, Values)> {
         return Answer::Fails((*v, inputs.clone()));
     }
     match (o.min, o.max) {
-        (Some(lo), Some(hi)) => Answer::Undecided(tr!(
-            "rulec の数えた範囲では出力が >={lo} <={hi} で、規則のベクタには chobo が受け取らない額になる入力がありません",
-            "rulec counts the output as >={lo} <={hi}, and none of the rule's vectors gives it an amount chobo does not take"
-        )),
+        // the output's unit is not known here: where a check says this, it says it again in that
+        // unit (`amounts_unshown`), and this is the digits alone (DESIGN 6.2 item 8)
+        (Some(lo), Some(hi)) => {
+            let range = ritsu_units::written::between(Some(lo), Some(hi), None);
+            Answer::Undecided(tr!(
+                "rulec の数えた範囲では出力が {range} で、規則のベクタには chobo が受け取らない額になる入力がありません",
+                "rulec counts the output as {range}, and none of the rule's vectors gives it an amount chobo does not take"
+            ))
+        }
         _ => Answer::Undecided(tr!("出力の範囲に上限か下限が無いので、chobo が受け取る額に収まるとは言えません", "the output's range has an open end, so it cannot be shown to stay an amount chobo takes")),
     }
 }

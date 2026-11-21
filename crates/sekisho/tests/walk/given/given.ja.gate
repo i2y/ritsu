@@ -1,0 +1,63 @@
+gate 渡した入力(given_ja) v1
+description "書かなくてもよい入力のある規則に、属性を渡す。いつも有る属性と、無いことのある属性。入力を書かないときだけの値は数えない。gate はそう呼ばないからである"
+namespace ReadersJa
+
+use rule 年齢の区分 from "年齢の区分.rule"
+
+role 読者(reader)
+  description "読む人のだれでも"
+
+principal 利用者(User)
+  description "年齢の分かっている読者"
+  roles 読者
+  attributes
+    年齢(age) : number  range >=1 <=100
+
+principal ゲスト(Guest)
+  description "年齢が分からないことのある読者"
+  attributes
+    年齢(age) : number?  range >=1 <=100
+
+resource 文書(Doc)
+  description "文書"
+
+action 読む(read_doc)
+  description "文書を読む。年齢はいつも有る"
+  principal 利用者
+  resource 文書
+  context
+    区分(band) = 年齢の区分(年齢: principal.年齢).区分
+
+action 流し読む(skim_doc)
+  description "文書を流し読む。年齢は無いことがあり、そのときは区分も無い"
+  principal ゲスト
+  resource 文書
+  context
+    区分(band) = 年齢の区分(年齢: principal.年齢).区分
+
+permit 区分のある読者は読める(readers_of_a_band_read)
+  description "区分が子どもか大人の読者は読める"
+  principal in 読者
+  action 読む
+  unless 区分 is 不明
+
+permit 大人のゲストは流し読める(adult_guests_skim)
+  description "区分が大人のゲストは流し読める"
+  principal is ゲスト
+  action 流し読む
+  when 区分 is 大人
+
+expect allow 読者はだれでも読める
+  description "有る年齢の区分が不明になることはない"
+  principal in 読者
+  action 読む
+
+expect deny 大人でないゲストは流し読めない
+  description "子どものゲストと、年齢の無いゲストは流し読めない"
+  action 流し読む
+  when 区分 is not 大人
+
+expect deny 区分が不明のゲストはいない
+  description "規則は、年齢を書かないときに不明を出す。gate は年齢を書かずに呼ばないので、これが選ぶ組み合わせは無い"
+  action 流し読む
+  when 区分 is 不明

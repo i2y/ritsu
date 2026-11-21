@@ -290,7 +290,7 @@ fn header(book: &Book, origin: &Origin, what: &str, backend: crate::target::Back
     for c in crates(backend) {
         o.push_str(&format!("//! {}\n", c.line()));
     }
-    o.push_str("//! ```\n#![allow(non_snake_case, non_camel_case_types, dead_code)]\n\n");
+    o.push_str("//! ```\n#![allow(non_snake_case, non_camel_case_types, dead_code, clippy::all)]\n\n");
     o
 }
 

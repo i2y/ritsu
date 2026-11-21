@@ -1,0 +1,186 @@
+module 一つの分岐(one_arm_ja) v1
+description "分岐が一つの match。生成したコードは分岐の中身をそのまま書く。値が一つの列挙、フィールドを持つ値に名前を付けるときと付けないとき。数・文字列・真偽・日付・オプショナルな値・result・型の引数の値を else だけで受けるとき。全部の値を一つの分岐に並べるとき。分岐が二つの match の中の一つの match、一つの中の二つ、一つの中の一つ。答えを let が受けるときと、if の枝の中。let が持つ値、関数の呼び出しの値、失敗しうる呼び出しの値を分けるときと、try のあと。one_arm.kn の日本語の版"
+
+enum 種類(Way)
+  一つだけ(only)
+
+enum 包み(Wrapped)
+  箱(box)
+    数(n) : number  range >=0 <=9
+
+enum 二つ(Two) = 一つ目(first) | 二つ目(second)
+
+# 一つだけの種類の名前。値が一つの列挙
+fn 名前(name)(種類(w): 種類) -> string
+  match 種類
+    一つだけ => "一つだけ"
+
+# 箱に入っている数。フィールドを持つ一つの値に名前を付ける
+fn 中身(held)(包み(b): 包み) -> number
+  match 包み
+    箱 x => x.数
+
+# 同じ値に、名前を付けない
+fn 箱か(boxed)(包み(b): 包み) -> bool
+  match 包み
+    箱 => true
+
+# 数を else だけで受ける
+fn 次(next)(数(n): number range >=0 <=100) -> number
+  match 数
+    else => 数 + 1
+
+# 文字列を else だけで受ける
+fn 整える(tidy)(文字列(s): string count <=20) -> string
+  match 文字列
+    else => 文字列.trim()
+
+# 真偽を else だけで受ける
+fn 逆(flipped)(真偽(b): bool) -> bool
+  match 真偽
+    else => not 真偽
+
+# 日付を else だけで受ける
+fn 同じ日(same_day)(日(d): date range >=2026-01-01 <=2026-12-31) -> date
+  match 日
+    else => 日
+
+# オプショナルな値を else だけで受ける
+fn 零にする(or_zero)(数(o): number? range >=0 <=9) -> number
+  match 数
+    else => 0
+
+# result を else だけで受ける
+fn 一を返す(one_of)(結果(r): result[number, string]) -> number
+  match 結果
+    else => 1
+
+# 値が一つの列挙と、フィールドを持つ列挙を else だけで受ける
+fn どれでも(named)(種類(w): 種類) -> string
+  match 種類
+    else => "どれでも"
+
+fn どの箱でも(any_box)(包み(b): 包み) -> number
+  match 包み
+    else => 5
+
+# 全部の値を一つの分岐に並べる
+fn どちらでも(either)(二つ(t): 二つ) -> string
+  match 二つ
+    一つ目, 二つ目 => "どちらでも"
+
+fn 真偽によらず(any_bool)(真偽(b): bool) -> number
+  match 真偽
+    true, false => 1
+
+# 分岐が二つの match の中の、分岐が一つの match
+fn 内側(inner)(種類(w): 種類, 真偽(b): bool) -> number
+  match 真偽
+    true =>
+      match 種類
+        一つだけ => 1
+    false => 0
+
+# 分岐が一つの match の中の、分岐が二つの match
+fn 外側(outer)(種類(w): 種類, 真偽(b): bool) -> number
+  match 種類
+    一つだけ =>
+      match 真偽
+        true => 1
+        false => 0
+
+# 分岐が一つの match の中の、分岐が一つの match
+fn 二重(twice)(種類(w): 種類, 包み(b): 包み) -> number
+  match 種類
+    一つだけ =>
+      match 包み
+        箱 x => x.数 + 1
+
+# 分岐が一つの match の答えを let が受ける
+fn 受ける(kept)(種類(w): 種類) -> number
+  let k =
+    match 種類
+      一つだけ => 2
+  k * 3
+
+# if の枝の中の、分岐が一つの match
+fn 枝(branch)(種類(w): 種類, 数(n): number range >=0 <=100) -> number
+  if 数 > 50
+    match 種類
+      一つだけ => 数 - 50
+  else
+    数
+
+# 関数の呼び出しの値を、分岐が一つの match で分ける
+fn 呼んだ値(of_call)(数(n): number range >=0 <=100) -> number
+  match 次(数: 数)
+    else => 7
+
+fn 包んだ値(of_call_named)(数(n): number range >=0 <=9) -> number
+  match 包む(数: 数)
+    箱 x => x.数 * 2
+
+fn 包む(wrap)(数(n): number range >=0 <=9) -> 包み
+  包み.箱 { 数: 数 }
+
+# 失敗しうる呼び出しの値を、分岐が一つの match で分ける。呼び出しは同じように行う
+fn 三乗(cube)(数(n): number) -> number
+  数 * 数 * 数
+
+fn 三乗した値(of_cube)(数(n): number) -> number
+  match 三乗(数: 数)
+    else => 7
+
+# let が持つ値を、分岐が一つの match で分ける
+fn 持った値(of_let)(数(n): number range >=0 <=100) -> number
+  let y = 数 + 1
+  match y
+    else => 7
+
+fn 持った種類(of_let_way)(種類(w): 種類) -> string
+  let v = 種類
+  match v
+    一つだけ => "一つだけ"
+
+# try のあとの、分岐が一つの match
+fn 取り出したあと(after_try)(種類(w): 種類, 結果(r): result[number, string]) -> result[number, string]
+  let x = try 結果
+  match 種類
+    一つだけ => ok(x + 1)
+
+# 無いことがある型の引数の値を、else だけで受ける
+fn 最初か(first_or)[T](一覧(xs): list[T] count <=3, 代わり(d): T) -> T
+  match 一覧.first()
+    else => 代わり
+
+fn 最初の数(first_number)(一覧(xs): list[number] count <=3) -> number
+  最初か(一覧: 一覧, 代わり: 0)
+
+examples
+  名前(種類: 種類.一つだけ) = "一つだけ"
+  中身(包み: 包み.箱 { 数: 3 }) = 3
+  箱か(包み: 包み.箱 { 数: 3 }) = true
+  次(数: 4) = 5
+  整える(文字列: " a ") = "a"
+  逆(真偽: true) = false
+  同じ日(日: 2026-05-01) = 2026-05-01
+  零にする(数: none) = 0
+  一を返す(結果: ok(3)) = 1
+  どれでも(種類: 種類.一つだけ) = "どれでも"
+  どの箱でも(包み: 包み.箱 { 数: 1 }) = 5
+  内側(種類: 種類.一つだけ, 真偽: true) = 1
+  外側(種類: 種類.一つだけ, 真偽: false) = 0
+  二重(種類: 種類.一つだけ, 包み: 包み.箱 { 数: 2 }) = 3
+  受ける(種類: 種類.一つだけ) = 6
+  枝(種類: 種類.一つだけ, 数: 60) = 10
+  呼んだ値(数: 1) = 7
+  包んだ値(数: 4) = 8
+  持った値(数: 1) = 7
+  持った種類(種類: 種類.一つだけ) = "一つだけ"
+  どちらでも(二つ: 二つ.二つ目) = "どちらでも"
+  真偽によらず(真偽: false) = 1
+  三乗した値(数: 2) = 7
+  三乗した値(数: 3_000_000) fails overflow
+  取り出したあと(種類: 種類.一つだけ, 結果: ok(4)) = ok(5)
+  取り出したあと(種類: 種類.一つだけ, 結果: err("no")) = err("no")
+  最初の数(一覧: [3]) = 0

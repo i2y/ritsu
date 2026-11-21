@@ -1,0 +1,8 @@
+エラー[E212]: tests/mutants/E212_フローに無い値.gate:10:1: フロー `../../examples/claims/flows/pay.ja.flow` に値 `請求の番号` はありません
+    10 |   resource 請求 from 請求の番号
+  = `workflow` の下の `resource` の行には、フローの入力か変数、またはそのフィールド（`order.total`）を書きます。
+  = フローの入力と変数は `p`、`r`、`請求番号`、`金額` です。
+エラー[E212]: tests/mutants/E212_フローに無い値.gate:11:1: フロー `../../examples/claims/flows/pay.ja.flow` に値 `請求.合計` はありません
+    11 |     金額 = 請求.合計
+  = `workflow` の下の `resource` の行には、フローの入力か変数、またはそのフィールド（`order.total`）を書きます。
+  = フローの入力と変数は `p`、`r`、`請求番号`、`金額` です。

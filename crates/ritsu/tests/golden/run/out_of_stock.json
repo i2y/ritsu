@@ -106,19 +106,6 @@
         "amount": 120
       }
     },
-    "books": {
-      "stock": [
-        {
-          "op": "do",
-          "kind": "receive",
-          "args": {
-            "delivery": "D-1",
-            "sku": "pen",
-            "qty": 10
-          }
-        }
-      ]
-    },
     "answers": [
       {
         "error": "out_of_stock",

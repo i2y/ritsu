@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_ワークフローの下の知らない属性.gate:11:5: The resource `請求` has no attribute `合計`
+    11 |     合計 = 金額
+  = The attributes there are `金額`.

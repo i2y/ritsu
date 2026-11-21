@@ -1,0 +1,20 @@
+エラー[E005]: tests/fixtures/unread_uses.flow:4:10: 規則 `rules/broken_quote.rule` を読めませんでした
+     4 | use rule quote from "rules/broken_quote.rule"
+  = E101: 完全性の欠落: どの行にも当てはまらない入力があります（tests/fixtures/rules/broken_quote.rule の 13 行目）
+エラー[E005]: tests/fixtures/unread_uses.flow:5:11: 日付のファイル `dates/壊れた.cal` を読めませんでした
+     5 | use dates terms from "dates/壊れた.cal"
+  = E010: 公開する名前「起点」に ASCII の別名がありません（tests/fixtures/dates/壊れた.cal の 6 行目）
+エラー[E005]: tests/fixtures/unread_uses.flow:6:10: 帳簿 `books/no_such_stock.book` を読めませんでした
+     6 | use book stock from "books/no_such_stock.book"
+  = `tests/fixtures/books/no_such_stock.book` がありません
+エラー[E005]: tests/fixtures/unread_uses.flow:7:23: `rules/delivery_fee.rule` は `enums` ファイルではなく、規則です
+     7 | import enum zone from "rules/delivery_fee.rule"
+  = `import enum` が読めるのは、`enums <名前> v1` で始まるファイルの列挙です。規則の出力にある列挙は、`use rule` で読み、`<規則>.<列挙>` と書きます。
+エラー[E002]: tests/fixtures/unread_uses.flow:51:30: `Parcel` にフィールド `code` はありません（あるのは id・zone・weight）
+    51 |   let sent = send(id: parcel.code)
+エラー[E002]: tests/fixtures/unread_uses.flow:52:15: タスクか規則 `sned` はありません
+    52 |   let again = sned(id: parcel.id)
+エラー[E002]: tests/fixtures/unread_uses.flow:54:18: `Parcel` にフィールド `idd` はありません（あるのは id・zone・weight）
+    54 |   tag(text: copy.idd)
+エラー[E002]: tests/fixtures/unread_uses.flow:55:13: `Label` にフィールド `txt` はありません（あるのは zone・text）
+    55 |   tag(text: "{label.zone} {label.txt}")

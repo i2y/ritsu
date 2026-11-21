@@ -76,15 +76,21 @@ fn what_is_not_an_openspec_spec() {
     for (what, args, code, want) in [
         ("not a spec", vec![spec, "--openspec", "notes.md"], 2, "error[E090]: notes.md: does not read as an OpenSpec spec"),
         ("an empty directory", vec![spec, "--openspec", "empty"], 2, "error[E090]: empty: does not read as an OpenSpec spec: there is no spec.md under it"),
-        ("nothing there", vec![spec, "--openspec", "nowhere"], 2, "error[E081]: nowhere: cannot read this file: it is not there"),
+        ("nothing there", vec![spec, "--openspec", "nowhere"], 2, "error[E081]: `nowhere` is not there"),
         ("no --openspec", vec![spec], 2, "error[E080]: `geas scenarios` needs `--openspec <path>`"),
         ("--draft and --json", vec![spec, "--openspec", "notes.md", "--draft", "--json"], 2, "error[E080]: `--draft` writes claims"),
     ] {
         let mut a = vec!["scenarios"];
         a.extend(args);
         let (out, err, c) = run(s.path(), &a, &[]);
-        assert_eq!((out.as_str(), c), ("", code), "{what}: {err}");
+        assert_eq!(c, code, "{what}: {err}");
         assert!(err.starts_with(want), "{what}: {err}");
+        // a line that asks for JSON gets the E080 in the JSON too, with no file (DESIGN 13)
+        if a.contains(&"--json") {
+            assert!(out.starts_with("{\"geas\":1,\"ok\":false,\"file\":null,\"diagnostics\":[{\"code\":\"E080\""), "{what}: {out}");
+        } else {
+            assert_eq!(out, "", "{what}");
+        }
     }
 }
 

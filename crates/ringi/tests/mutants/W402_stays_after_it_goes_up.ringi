@@ -1,0 +1,23 @@
+request example v1 "Example"
+
+use calendar office from "shared/office.cal"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check   finance
+  decide  president
+    due in 5 business days at end of day
+    when late escalate, then stay
+
+who
+  finance   = team finance
+  president = team board
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+
+ticket
+  self approval  not allowed

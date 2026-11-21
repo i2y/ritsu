@@ -1,0 +1,4 @@
+enums string v1
+description "An enums file named like a class or a module several languages have"
+
+enum zone = north | south

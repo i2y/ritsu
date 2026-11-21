@@ -246,9 +246,9 @@ fn diff_reads_a_line() {
     let v2 = write(t.path(), "v2.rule", &with_line);
     let v3 = write(t.path(), "v3.rule", &with_line.replace("rule tool_fee v2", "rule tool_fee v3").replace("| false    | false     | 2USD                |", "| false    | false     | 3USD                |"));
     let (_, out, e) = run("en", &["diff", &v1, &v2]);
-    assert!(out.contains("fee: 9 → -") && out.contains("outside this region the two versions answer alike"), "{out}{e}");
+    assert!(out.contains("fee: 9USD → -") && out.contains("outside this region the two versions answer alike"), "{out}{e}");
     let (_, out, e) = run("en", &["diff", &v2, &v3]);
-    assert!(out.contains("fee: 2 → 3"), "{out}{e}");
+    assert!(out.contains("fee: 2USD → 3USD"), "{out}{e}");
     assert!(out.contains("0 unrealized") && !out.contains("?"), "the combination both versions take out is nobody's case:\n{out}{e}");
     assert!(out.contains("outside this region the two versions answer alike"), "{out}{e}");
     // A record of the old version that falls under the new version's line is named with it.
@@ -339,7 +339,7 @@ fn the_port_decides_a_line_over_the_ranges_a_call_gives() {
     let engine = rulec::ports::Engine::new();
     let answers = |ranges: &[(&str, i128, i128)]| {
         let given: Vec<(String, Option<i128>, Option<i128>)> = ranges.iter().map(|(n, a, b)| (n.to_string(), Some(*a), Some(*b))).collect();
-        let got = i18n::with(Lang::En, || engine.preconditions_hold(&p, &given, None)).unwrap();
+        let got = i18n::with(Lang::En, || engine.preconditions_hold(&p, &given, None, None)).unwrap();
         got.into_iter().filter(|(q, _)| matches!(q, Precondition::Never { .. })).map(|(_, a)| a).collect::<Vec<_>>()
     };
     let got = answers(&[("shipped", 1, 49), ("asked", 0, 10000)]);
@@ -353,6 +353,52 @@ fn the_port_decides_a_line_over_the_ranges_a_call_gives() {
     let Answer::Fails(example) = &got[0] else { panic!("{got:?}") };
     assert_eq!(example, &[("shipped".to_string(), Value::Int(0)), ("asked".to_string(), Value::Int(1))]);
     assert!(matches!(got[1], Answer::Undecided(_)), "{got:?}");
+}
+
+/// A caller that knows every value it gives a truth value or an enum's input says them beside the
+/// ranges (§15.282): a condition none of them meets shows the line holds, one all of them meet is
+/// met as a number inside a closed range is, and one only some meet leaves the line undecided, as
+/// do values that are not the input's own.
+#[test]
+fn the_port_decides_a_line_over_the_values_a_call_gives() {
+    use ritsu_ports::{Answer, Precondition, Rules, Value};
+    let t = TempDir::new("never-port-values");
+    let rule = "rule tool_route v1\n\nenum path = at_once | review\nenum tier = basic | gold\n\ninputs\n  has_tool  : bool\n  all_parts : bool\n  tools     : number  range >=0 <=5\n  tier      : tier\n\nnever has_tool = true, all_parts = true\nnever has_tool = false, tools >= 1\nnever tier = gold, tools = 0\n\noutputs\n  route : path\n\ntable pick\npolicy unique\n| has_tool | -> route : path |\n| true     | at_once         |\n| false    | review          |\n";
+    let p = PathBuf::from(write(t.path(), "r.rule", rule));
+    let engine = rulec::ports::Engine::new();
+    let answers = |tools: (i128, i128), values: &[(&str, Vec<Value>)]| {
+        let ranges = vec![("tools".to_string(), Some(tools.0), Some(tools.1))];
+        let values: Vec<(String, Vec<Value>)> = values.iter().map(|(n, vs)| (n.to_string(), vs.clone())).collect();
+        let got = i18n::with(Lang::En, || engine.preconditions_hold_given(&p, &ranges, &values, None, None)).unwrap();
+        got.into_iter().filter(|(q, _)| matches!(q, Precondition::Never { .. })).map(|(_, a)| a).collect::<Vec<_>>()
+    };
+    let (yes, no) = (Value::Bool(true), Value::Bool(false));
+    let (basic, gold) = (Value::Enum("basic".into()), Value::Enum("gold".into()));
+    // no values: a truth value and an enum leave their lines undecided, as they always did
+    let got = answers((0, 5), &[]);
+    assert!(got.iter().all(|a| matches!(a, Answer::Undecided(_))), "{got:?}");
+    // a condition none of the values meets keeps its line
+    let got = answers((0, 5), &[("has_tool", vec![yes.clone()]), ("all_parts", vec![no.clone()]), ("tier", vec![basic.clone()])]);
+    assert!(got.iter().all(|a| matches!(a, Answer::Holds)), "{got:?}");
+    // every condition met: the values, and a number inside its closed range, are the example
+    let got = answers((0, 5), &[("has_tool", vec![no.clone()]), ("all_parts", vec![yes.clone(), no.clone()]), ("tier", vec![gold.clone()])]);
+    assert!(matches!(got[0], Answer::Holds), "{got:?}");
+    let Answer::Fails(example) = &got[1] else { panic!("{got:?}") };
+    assert_eq!(example, &[("has_tool".to_string(), no.clone()), ("tools".to_string(), Value::Int(1))]);
+    let Answer::Fails(example) = &got[2] else { panic!("{got:?}") };
+    assert_eq!(example, &[("tier".to_string(), gold.clone()), ("tools".to_string(), Value::Int(0))]);
+    // a number that cannot meet its condition keeps the line, whatever the values
+    let got = answers((1, 5), &[("tier", vec![gold.clone()])]);
+    assert!(matches!(got[2], Answer::Holds), "{got:?}");
+    // values only some of which meet the condition say nothing of which comes
+    let got = answers((0, 5), &[("has_tool", vec![yes.clone(), no.clone()]), ("all_parts", vec![yes.clone()]), ("tier", vec![basic.clone(), gold.clone()])]);
+    assert!(got.iter().all(|a| matches!(a, Answer::Undecided(_))), "{got:?}");
+    // values that are not the input's own are not read
+    let got = answers((0, 5), &[("has_tool", vec![Value::Enum("no".into())]), ("all_parts", vec![no.clone()]), ("tier", vec![Value::Enum("platinum".into())])]);
+    assert!(matches!(got[0], Answer::Holds) && matches!(got[1], Answer::Undecided(_)) && matches!(got[2], Answer::Undecided(_)), "{got:?}");
+    // no value at all is given on no call: nothing can break the line
+    let got = answers((0, 5), &[("tier", vec![])]);
+    assert!(matches!(got[2], Answer::Holds), "{got:?}");
 }
 
 /// `rulec fmt` leaves a line as it is written, as it leaves a `constraint`, and changes nothing the

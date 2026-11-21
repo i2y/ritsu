@@ -14,9 +14,9 @@ $ rulec --version
 rulec 0.41.0
 ```
 
-`ritsu` と九つのリンクが PATH に入るので、`rulec` はこれまでどおりコマンドとして使えます。古い名前の `i2y/tap/rulec` も同じ formula を指しますが、Homebrew 7 では、その formula を信頼してからでないと使えません。信頼する前に `brew install i2y/tap/rulec` を走らせると、`Refusing to load formula i2y/tap/ritsu from untrusted tap i2y/tap` と言って止まります。`brew trust --formula i2y/tap/ritsu` のあとなら、古い名前でも ritsu が入ります。
+`ritsu` と十のリンクが PATH に入るので、`rulec` はこれまでどおりコマンドとして使えます。古い名前の `i2y/tap/rulec` も同じ formula を指しますが、Homebrew 7 では、その formula を信頼してからでないと使えません。信頼する前に `brew install i2y/tap/rulec` を走らせると、`Refusing to load formula i2y/tap/ritsu from untrusted tap i2y/tap` と言って止まります。`brew trust --formula i2y/tap/ritsu` のあとなら、古い名前でも ritsu が入ります。
 
-formula が入れるのは、その環境向けのリリースのアーカイブで、`SHA256SUMS` の行と突き合わせてから入れます。formula はリリースのたびに書き換わります。書き換えるのは、brew が macOS と Linux の両方で実際に入れて、formula のテスト（九つの名前を全部呼びます）が通ったあとです。次のリリースは `brew upgrade ritsu` で入ります。
+formula が入れるのは、その環境向けのリリースのアーカイブで、`SHA256SUMS` の行と突き合わせてから入れます。formula はリリースのたびに書き換わります。書き換えるのは、brew が macOS と Linux の両方で実際に入れて、formula のテスト（十の名前を全部呼びます）が通ったあとです。次のリリースは `brew upgrade ritsu` で入ります。
 
 ## Debian・Ubuntu・Fedora・RHEL
 
@@ -38,7 +38,7 @@ ritsu-0.41.0-1.x86_64.rpm: OK
 $ sudo dnf install "./ritsu-$v-1.$a.rpm"
 ```
 
-パッケージが入れるのは、`/usr/bin/ritsu` と、その横の九つのリンク（`/usr/bin/rulec -> ritsu` など）です。rulec 自身のリリースの `rulec` のパッケージは、このパッケージに置き換わります。
+パッケージが入れるのは、`/usr/bin/ritsu` と、その横の十のリンク（`/usr/bin/rulec -> ritsu` など）です。rulec 自身のリリースの `rulec` のパッケージは、このパッケージに置き換わります。
 
 パッケージに署名はしていません。アーカイブと同じく、`SHA256SUMS` の行との突き合わせが検証の全部です。パッケージのリポジトリは用意していないので、`apt upgrade` や `dnf upgrade` では新しいリリースは入りません。次のリリースも同じ手順で入れてください。
 
@@ -113,7 +113,9 @@ $ ./target/release/rulec --help
 - **`rulec test`** — 生成した Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy のうち、ランナーと一緒に生成した言語を実際に走らせて、参照評価器（rulec の中にある「正解」の実装）と突き合わせます。`python3`・`node`・`rustc`・`ruby`・`php`・`go`・`swiftc`・JDK のうち、走らせる言語の分が要ります（SQL は同じ `python3` の中の `sqlite3` で走ります）。無ければ「どれを飛ばしたか」を言って、落ちはしません。
 - **`rulec verify`** — アダプタを子プロセスとして起動するので、そのアダプタを書いた言語が要ります。
 
-生成物を**型検査したい**場合だけ、さらにツールが要ります。生成 Python は `mypy --strict` を、生成 TypeScript は `tsc --strict` を通り、生成 Ruby には `steep` が読む `.rbs` が付いてきます。どれも**使うのに必要ではありません** — 生成物はそれ自体でそのまま動きます。
+生成物を**型検査したい**場合だけ、さらにツールが要ります。生成 Python は `mypy --strict` を、生成 TypeScript は `tsc --strict` を（`--noUnusedLocals` と `--noUnusedParameters` を足しても）通り、生成 Ruby には `steep` が読む `.rbs` が付いてきます。どれも**使うのに必要ではありません** — 生成物はそれ自体でそのまま動きます。
+
+tsc では、数を `bigint` で書くので、ECMAScript の target が ES2020 以降である必要があります。TypeScript 7 は何も指定しなくてもそうなり、TypeScript 5 では `--target es2020` 以降を指定します。`enums` ファイルを読む規則は、Node が走らせるとおり、そのファイルのモジュールを `.ts` の名前で import します。tsc でその二つを組むには `rewriteRelativeImportExtensions`（TypeScript 5.7 以降）が、何も書き出さずに型だけを確かめるには `allowImportingTsExtensions` と `noEmit`（TypeScript 5.0 以降）が要ります。`enums` ファイルを読まない規則は横のモジュールを何も import しないので、どちらも要りません。
 
 ## エージェントスキル
 
@@ -155,14 +157,14 @@ $ claude mcp add rulec -- rulec mcp
 
 ## 言語
 
-出力の**既定は英語**です。設定は一つで、生成コードの中の文面まで含めて、出るものが全部日本語になります。
+出力の**既定は英語**です。`--lang ja` を付ければ、生成コードの中の文面まで含めて、出るものが全部日本語になります。
 
 ```console
 $ rulec check rules/送料.rule --lang ja
 $ RULEC_LANG=ja rulec check rules/送料.rule
 ```
 
-優先順位は `--lang` → `RULEC_LANG` → `RITSU_LANG` → 既定。**システムのロケールは見ません。** 生成物は `gen --check` で照合され、CI のログは diff されるので、走らせたマシンで出力が変わってはいけないからです。
+優先順位は `--lang` → `RULEC_LANG` → `RITSU_LANG` → 既定。環境変数が選ぶのは端末に出す文だけで、`gen`・`doc`・`api`・`vectors`・`schema`・`adapter` が書く物は `--lang` だけで決まり、無ければ英語です。**システムのロケールも見ません。** 生成物は `gen --check` で照合され、CI のログは diff されるので、走らせたマシンで出力が変わってはいけないからです。
 
 ## CI に置く
 

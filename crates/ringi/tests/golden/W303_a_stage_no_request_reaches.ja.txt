@@ -1,0 +1,5 @@
+警告[W303]: tests/mutants/W303_a_stage_no_request_reaches.ringi:8:1: ステップ head の `heads` には、どの申請も届きません
+     8 |   head   heads  when amount > 200_000JPY
+  = 行やステップの条件を直すか、どの申請も届かない物を経路から消してください。
+ok tests/mutants/W303_a_stage_no_request_reaches.ringi: 申請の種類、フィールド 1 個、ステップ 2 個
+  終わらないことがあります: ステップ `check`、`head` には期限がありません（`due in …`）。答えが来るまで待ちます

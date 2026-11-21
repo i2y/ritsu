@@ -1,0 +1,18 @@
+rule 上限(cap_under_amount) v1
+description "金額を超えない上限。500 円を超える上限を取る行が無く、上限が 500 円を超えるのは、金額も 500 円を超えるときだけ"
+
+enum 区分(band) = 低い(low) | 高い(high)
+
+inputs
+  上限(cap)    : money[JPY]  range >=0JPY <=1_000JPY
+  金額(amount) : money[JPY]  range >=0JPY <=1_000JPY
+
+constraint 上限 <= 金額
+
+outputs
+  区分(band) : 区分
+
+table 区分の表(bands)
+| 上限     | 金額     | -> 区分 |
+| <=500JPY | <=500JPY | 低い    |
+| <=500JPY | >500JPY  | 高い    |

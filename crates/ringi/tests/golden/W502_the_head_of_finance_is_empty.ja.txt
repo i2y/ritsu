@@ -1,0 +1,12 @@
+警告[W502]: tests/mutants/W502_the_head_of_finance_is_empty.ringi:9:10: 2026-04-01 からの組織では、ステップ `check` は承認者がいないので、ほかへ回るか飛ばされます
+     9 |   check  head
+  = `head` はチーム finance（財務部）に当たり、その長が空いています。
+  = ステップは `when empty escalate` なので、上へ回ります。
+  = e01（社長（架空））へ回る申請者 1 人: e04（財務部長）。
+  = 版のデータを直すか、そのままでよいかを確かめてください。
+ok tests/mutants/W502_the_head_of_finance_is_empty.ringi: 申請の種類、フィールド 1 個、ステップ 1 個
+  2026-04-01 から使えます: 組織 `shared/vacant.ringi` の最初の版（データ `org-vacant`）
+  終わり無く使えます: 読むデータに終わりがありません
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます
+  組織の形で、ステップ（`check`）がほかへ回るか飛ばされる申請者: 2026-04-01 からの組織の 4 人のうち 1 人
+  だれの申請の、どのステップがどこへ回るか: `ringi simulate tests/mutants/W502_the_head_of_finance_is_empty.ringi --every-requester`

@@ -1,0 +1,7 @@
+error[E002]: tests/fixtures/field_of_no_type.flow:6:12: there is no type `Zon`
+     6 |   zone   : Zon
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E002]: tests/fixtures/field_of_no_type.flow:21:27: `Parcel` has no field `code` (id, zone, weight)
+    21 |   let b = send(id: parcel.code)
+error[E002]: tests/fixtures/field_of_no_type.flow:23:50: `Parcel` has no field `size` (id, zone, weight)
+    23 |   let q: Parcel = {zone: "south", id: parcel.id, size: 2, weight: 1}

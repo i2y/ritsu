@@ -1,0 +1,67 @@
+workflow 記述の日付と日時 v1
+description "API の記述と日付・日時の食い違い（DESIGN 39）。記述が日と言う所に時刻、列挙、数を、時刻と言う所に日と文字列を、受け取る日を挙げた所に日と、範囲を書いた二つの日と、文字列を送り、一つの範囲には挙げていない日がある。応答は逆向きに読み、挙げた日の一つは読むフィールドの範囲の外で、一つは時刻として読む"
+
+use openapi 勤怠 from "../flows/apis/leave.json"
+
+enum 日の種類 = working | holiday
+
+record 期間
+  first_day : timestamp
+  last_day  : date
+
+# どのフィールドも、記述が言うのとは別の型で読む
+record 取った休暇
+  id        : date
+  first_day : timestamp
+  booked_at : date
+
+record 移した休暇
+  id        : string
+  first_day : date
+  booked_at : timestamp
+
+record 日
+  day     : 日の種類
+  kind    : 日の種類
+  closing : date  range >=2026-12-01 <=2026-12-28
+
+record 締め
+  day : timestamp
+
+record 締めた日
+  day : date
+
+# 初日が時刻の期間を、記述が日と言う所に送る
+task 取る(employee: string, period: 期間) -> 取った休暇
+  http POST 勤怠 "/leaves"
+
+# 日と言う所に時刻を、時刻と言う所に日を送る。日と言う所への文字列は通る
+task 移す(id: string, first_day: timestamp, previous: string, asked_at: date) -> 移した休暇
+  http POST 勤怠 "/leaves/{id}/move"
+
+# 時刻と言う所に文字列を送る
+task 文字列で移す(id: string, first_day: date, asked_at: string) -> 移した休暇
+  http POST 勤怠 "/leaves/{id}/move"
+
+# 日と言う所に、パスへ列挙を、クエリへ数を送る。応答の日は列挙で読み、挙げた日の一つは、それを読む
+# フィールドの範囲の外
+task 休みの日か(day: 日の種類, until: int) -> 日
+  http GET 勤怠 "/days/{day}"
+
+# 受け取る二つの日を挙げた所に日を送り、その一つを時刻として読む
+task 年を締める(day: date) -> 締め
+  http POST 勤怠 "/closings"
+
+# 受け取る二つの日を挙げた所に、範囲を書いた日を送る。一つ目の範囲はその二つの日で、二つ目はもう一日ある
+task その日に締める(day: date  range >=2026-12-28 <=2026-12-29) -> 締めた日
+  http POST 勤怠 "/closings"
+
+task その日までに締める(day: date  range >=2026-12-28 <=2026-12-30) -> 締めた日
+  http POST 勤怠 "/closings"
+
+# 受け取る日を挙げた所に文字列を送る
+task 文字列で締める(day: string) -> 締めた日
+  http POST 勤怠 "/closings"
+
+flow
+  pass

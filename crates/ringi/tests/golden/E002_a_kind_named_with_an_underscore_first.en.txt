@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_a_kind_named_with_an_underscore_first.ringi:1:9: `_example` starts with `_`, and cannot name a kind of request
+     1 | request _example v1 "Example"
+  = The name of a kind of request begins the names of the files it is lowered to, and of the modules and packages of the code generated from them (`_example_route`). Go reads no file whose name starts with `_`, and rustc warns of a module's name with two `_` in a row. Choose a name that starts with a letter, ends with a letter or a digit, and has no two `_` in a row.

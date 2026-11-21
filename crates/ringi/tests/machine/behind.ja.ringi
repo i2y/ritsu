@@ -1,0 +1,71 @@
+request 工具(behind_ja) v1 "工具の申請"
+description "本社の営業日で東京の時刻に期限を数え、UTC から 5 時間遅れの工場の営業日で知らせを数えるステップ（架空の決まり）。カレンダーはそれぞれ、イベントの日を自分のオフセットで読んで営業日を数え、時計をそのオフセットの時刻に鳴らす。保留の終わりと申請者に戻った期限は工場の営業日で数える"
+
+use organization 組織(org) from "../../examples/shared/company.ringi"
+use calendar 本社(office) from "../../examples/shared/office.cal"
+use calendar 西工場(west) from "west.cal"
+
+form
+  品目(what) : text "品目"  count >=1 <=100
+
+route
+  決裁(decide)  上長
+
+who
+  上長(manager) = manager of requester
+
+every stage
+  due in 2 business days in 本社 at end of day
+  remind after 1 business day in 西工場 at 09:00
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+  send back      to the requester, at most 2 times
+  resubmit       within 2 business days in 西工場
+  pause          at most 3 business days in 西工場
+
+# 東京の月曜 10:00（工場の日曜 20:00）に出す。知らせは工場の日曜から 1 営業日の月曜の 09:00、東京
+# の月曜 23:00 に鳴り、正午のコメントはその前である。東京の水曜 11:00（工場はまだ火曜）に差し戻さ
+# れ、工場のその火曜から 2 営業日、工場の木曜の終わり（東京の金曜 14:00）までに出し直す
+scenario 二つのオフセット
+  requester e1201
+  form 品目 = "ドリル"
+| at               | event     | by    | comment        | -> stage | status         |
+| 2026-11-16 10:00 | submit    | e1201 |                | 決裁     | in progress    |
+| 2026-11-16 12:00 | comment   | e1101 | "どのドリルですか" | 決裁     | in progress    |
+| 2026-11-16 23:00 | remind    |       |                | 決裁     | in progress    |
+| 2026-11-18 11:00 | send back | e1101 |                |          | with requester |
+| 2026-11-20 13:00 | resubmit  | e1201 |                | 決裁     | in progress    |
+| 2026-11-20 23:00 | remind    |       |                | 決裁     | in progress    |
+| 2026-11-24 10:00 | approve   | e1101 |                |          | approved       |
+
+# 東京の月曜 11:00（工場はまだ日曜）に、工場が許す 3 営業日の保留をする。工場のその日曜から数えて
+# 水曜の終わり（東京の木曜 14:00）までで、その 1 時間前に再開して 3 日を使う。時計はステップが始
+# まった時刻の 3 日後から数え、知らせは工場の水曜から 1 営業日の木曜 09:00、東京の 23:00 に鳴る
+scenario 工場の営業日の保留
+  requester e1201
+  form 品目 = "旋盤"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 決裁     | in progress |
+| 2026-11-16 11:00 | pause   | e1101 | 決裁     | paused      |
+| 2026-11-19 13:00 | resume  | e1101 | 決裁     | in progress |
+| 2026-11-19 23:00 | remind  |       | 決裁     | in progress |
+| 2026-11-20 10:00 | approve | e1101 |          | approved    |
+
+# 東京の 11 月 30 日（月）11:00（工場はまだ日曜）に、工場が許す 3 営業日の保留をする。工場は 12 月
+# 2 日（水）が棚卸しで休み、本社はその日も開いているので、3 営業日は工場の月曜、火曜、木曜で、工場
+# の木曜の終わり（東京の金曜 14:00）まで。その 1 時間前に再開して 3 日を使う。3 日は工場の暦で 4 日
+# にわたるので、どの時計も、本社の期限も、ステップが始まった時刻の 4 日後から数える（4 日あとに出
+# した申請のステップの時計と同じ）。知らせは工場の木曜から 1 営業日の金曜 09:00、東京の 23:00 に
+# 鳴る。期限は 12 月 8 日（火）の終わりで、3 日だけずらすより 1 日遅い
+scenario 工場の棚卸しをはさむ保留
+  requester e1201
+  form 品目 = "プレス"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-30 10:00 | submit  | e1201 | 決裁     | in progress |
+| 2026-11-30 11:00 | pause   | e1101 | 決裁     | paused      |
+| 2026-12-04 13:00 | resume  | e1101 | 決裁     | in progress |
+| 2026-12-04 23:00 | remind  |       | 決裁     | in progress |
+| 2026-12-07 10:00 | approve | e1101 |          | approved    |

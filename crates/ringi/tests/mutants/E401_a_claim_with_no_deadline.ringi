@@ -1,0 +1,18 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check   finance
+  decide  board
+
+who
+  finance = team finance
+  board   = team board
+
+ticket
+  self approval  not allowed
+
+claims
+  ends_in_time : every ticket ends within 30 business days

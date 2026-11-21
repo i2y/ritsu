@@ -1,0 +1,24 @@
+dates approval_terms v1
+description "Each stage of an expense request is answered by the end of the third business day after it reaches the approver; a reminder goes at 09:00 on the second business day"
+use calendar "../calendars/office.cal"
+
+inputs
+  received : date  range >=2026-01-01 <=2027-12-31
+
+date reminder = received
+  + 2 business days
+  at 09:00
+
+date due = received
+  + 3 business days
+  at end of day
+
+claims
+  due_is_open            : due is open
+  reminder_before_due    : reminder < due
+  due_within_eleven_days : due <= received + 11 days
+
+examples
+| received   | -> reminder | -> due     |
+| 2026-11-13 | 2026-11-17  | 2026-11-18 |
+| 2026-12-25 | 2027-01-04  | 2027-01-05 |

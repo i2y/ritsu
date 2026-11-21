@@ -1,0 +1,20 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  impl   : choice "Implementation"
+    inhouse "In house"
+    vendor  "Vendor"
+
+route
+| impl    | amount       | -> decide |
+| inhouse | <=50_000JPY  | manager   |
+| inhouse | >50_000JPY   | head      |
+| vendor  | -            | head      |
+
+who
+  manager = team managers
+  head    = team heads
+
+ticket
+  self approval  not allowed

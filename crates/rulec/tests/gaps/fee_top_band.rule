@@ -1,0 +1,15 @@
+rule fee_top_band v1
+description "A level by amount, with the top band left out: every amount above 500 yen matches no row"
+
+enum level = low | mid | high
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  level : level
+
+table levels
+| amount           | -> level |
+| <=100JPY         | low      |
+| >100JPY <=500JPY | mid      |

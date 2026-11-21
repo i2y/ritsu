@@ -100,6 +100,60 @@ e, f = lowest_same(100), lowest_same(200)
 print(default, a, b, c, d, e, f)
 "#;
 
+/// The module of [`an_else_that_writes_a_value_as_text_answers_a_string`].
+const ELSE_TEXT: &str = "module elsetext v1
+
+enum way = one | two | three
+
+fn way_of(w: way) -> string total
+  match w
+    one => \"first\"
+    else => text(w)
+";
+
+/// An arm `else` that writes the value of an enum it took as text answers a string in the generated
+/// Python, which `mypy --strict` passes, and every case is the reference interpreter's answer. Before,
+/// the arm returned the value's `value`, which mypy reads as `Any` (`no-any-return`).
+#[test]
+fn an_else_that_writes_a_value_as_text_answers_a_string() {
+    if !ritsu_testkit::need(Need::Python) {
+        return;
+    }
+    if !ritsu_testkit::tools::runs("python3", &["--version"]) {
+        ritsu_testkit::skip("python3 is not on the PATH; the Python kaname generates is not run");
+        return;
+    }
+    let Some(mypy) = ritsu_testkit::tools::find("MYPY", Some(Path::new("tools/.venv/bin/mypy")), "mypy", &["--version"]) else {
+        ritsu_testkit::skip("mypy is not installed (tools/requirements.txt); the Python kaname generates is not type-checked");
+        return;
+    };
+    let t = TempDir::new("kaname-python-elsetext");
+    let dir = t.path().to_path_buf();
+    let cases = deep({
+        let dir = dir.clone();
+        move || {
+            let o = common::check_text("elsetext.kn", ELSE_TEXT);
+            let c = o.analysed.clone().unwrap_or_else(|| panic!("{}", common::shown(&o, Lang::En)));
+            let modules = vec![(c.clone(), "elsetext.kn".to_string())];
+            write_package(&dir, Target::Python, Lang::En, &modules);
+            std::fs::write(dir.join("harness.py"), kaname::r#gen::harness::program(&[c], Target::Python, PY_NAME, GO_PACKAGE, Lang::En)).unwrap();
+            let (cases, _) = cases(&modules, Lang::En, Target::Python);
+            std::fs::write(dir.join("cases.json"), cases_json(&cases)).unwrap();
+            cases
+        }
+    });
+    let mut c = Command::new(&mypy);
+    c.args(["--strict", "--no-incremental", "--cache-dir"]).arg(dir.join(".mypy_cache")).args(["harness.py", PY_NAME]).current_dir(&dir);
+    let r = ritsu_testkit::run(&mut c, LIMIT);
+    assert!(r.ok, "mypy --strict finds fault with the Python kaname generates:\n{}", r.both());
+    let r = ritsu_testkit::run(Command::new("python3").arg("harness.py").arg("cases.json").current_dir(&dir), LIMIT);
+    assert!(r.ok, "python3 failed:\n{}", r.both());
+    let (agree, wrong) = compare(&cases, &r.stdout);
+    assert!(wrong.is_empty(), "the Python answers otherwise than the reference:\n{}", wrong.join("\n"));
+    assert!(agree >= 3 && agree == cases.len(), "{agree} of {} cases agree", cases.len());
+    println!("{agree} of {} cases agree", cases.len());
+}
+
 /// A call 200 deep (199 below the first), at CPython's own limit; `steps_down(66)`, 199 calls deep
 /// through a function value; and two chains of categories 200 deep, held at the entry and compared.
 const AT_DEFAULT: &str = "from pkg.glue import hof, rec, trees\n\n\ndef chain(n: int) -> trees.Category:\n    c = trees.Category(name=\"a\", children=[])\n    for _ in range(n - 1):\n        c = trees.Category(name=\"a\", children=[c])\n    return c\n\n\nprint(rec.countdown(n=199), hof.steps_down(n=66), trees.same(a=chain(200), b=chain(200)))\n";
@@ -125,7 +179,7 @@ fn the_generated_python_answers_as_the_reference_does() {
         for lang in [Lang::En, Lang::Ja] {
             let dir = root.join(format!("py-{}", if lang == Lang::Ja { "ja" } else { "en" }));
             write_package(&dir, Target::Python, lang, &modules);
-            std::fs::write(dir.join("harness.py"), kaname::r#gen::harness::program(&checked, Target::Python, PY_NAME, GO_PACKAGE)).unwrap();
+            std::fs::write(dir.join("harness.py"), kaname::r#gen::harness::program(&checked, Target::Python, PY_NAME, GO_PACKAGE, lang)).unwrap();
             let (cases, counts) = cases(&modules, lang, Target::Python);
             std::fs::write(dir.join("cases.json"), cases_json(&cases)).unwrap();
             if let Some(mypy) = &checker {

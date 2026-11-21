@@ -1,0 +1,19 @@
+diff --git a/rules/size.rule b/rules/size.rule
+index 165eb89..3418a21 100644
+--- a/rules/size.rule
++++ b/rules/size.rule
+@@ -12,10 +12,10 @@ outputs
+ table size
+ policy unique
+ | items | -> size : size |
+-| <=20  | few            |
+-| >20   | many           |
++| <=25  | few            |
++| >25   | many           |
+ 
+ examples
+ | items | -> size |
+-| 20    | few     |
+-| 21    | many    |
++| 25    | few     |
++| 26    | many    |

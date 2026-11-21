@@ -12,6 +12,7 @@ use crate::ast::{EnumDecl, EnumFrom, EnumImport, EnumOwner, EnumSource, FileKind
 use crate::diag::{Diag, Severity, Span};
 use crate::jsonschema::{self, Found};
 use crate::types::Checked;
+use ritsu_proto::validate::{EnumNames, How, Name as Read, ValueNames};
 
 /// An `enums` file as a rule reads it (§15.212): parsed, checked whole, and typed.
 pub struct EnumsFile {
@@ -23,22 +24,35 @@ pub struct EnumsFile {
 }
 
 /// Reads the `enums` file at `path` and checks it whole. `Err` holds the codes of the errors it
-/// has, or `None` when it is not an `enums` file at all.
+/// has, or `None` when it is not an `enums` file at all. The file is checked as its own check
+/// checks it, its spans in it, also where a rule is read for a contribution's scope (§15.227): what
+/// a rule takes of it is marked at the rule's line that reads it. An `enums` file has no input, so a
+/// rule read again with its inputs held to ranges (`over::with`) reads it as it is (`over::without`):
+/// its check is the one kept from the file's own check, not a check of its own for each holding
+/// (ritsu's DESIGN 4.15). It is checked by the path the run writes it (`apply::checked_as`), and only
+/// the codes of its errors are read, which a report in either language says (`crate::verdict`), so
+/// that the check is the file's one however a rule writes its path and in whichever language it was
+/// made; `path` stays the one the rule's line leads to.
 pub fn read_enums_file(path: &str) -> Result<EnumsFile, Option<Vec<&'static str>>> {
+    crate::over::without(|| read_enums_file_as_it_is(path))
+}
+
+fn read_enums_file_as_it_is(path: &str) -> Result<EnumsFile, Option<Vec<&'static str>>> {
     let bytes = crate::vfs::read(std::path::Path::new(path)).map_err(|_| Some(Vec::new()))?;
     let src = String::from_utf8_lossy(&bytes).into_owned();
     let parsed = crate::parse::parse(&src, path);
     if parsed.file.as_ref().is_some_and(|f| f.kind != FileKind::Enums) {
         return Err(None);
     }
-    let rep = crate::report(&src, path);
+    let read_as = crate::apply::checked_as(path);
+    let rep = crate::diag::in_main(|| crate::verdict(&src, &read_as));
     let mut codes: Vec<&'static str> = rep.diags.iter().filter(|d| d.severity == Severity::Error).map(|d| d.code).collect();
     codes.sort();
     codes.dedup();
     if !codes.is_empty() {
         return Err(Some(codes));
     }
-    let (file, checked) = crate::prepare(&src, path).map_err(|_| Some(Vec::new()))?;
+    let (file, checked) = crate::diag::in_main(|| crate::prepare(&src, &read_as)).map_err(|_| Some(Vec::new()))?;
     Ok(EnumsFile { file, checked, src, path: path.to_string() })
 }
 
@@ -109,7 +123,7 @@ pub fn read_imports(f: &mut RuleFile, rule_path: &str) -> Vec<Diag> {
                         .note(tr!(
                             "パスは規則ファイルのある場所からたどります（探した先: {}）。",
                             "The path is followed from the directory of the rule file (looked for: {}).",
-                            p.display()
+                            ritsu_base::paths::show(&p)
                         ))
                         .maybe_note(crate::vfs::outside_note(&dir, &im.file)),
                 );
@@ -307,7 +321,7 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
                     .note(tr!(
                         "パスは規則ファイルのある場所からたどります（探した先: {}）。",
                         "The path is followed from the directory of the rule file (looked for: {}).",
-                        p.display()
+                        ritsu_base::paths::show(&p)
                     ))
                     .maybe_note(crate::vfs::outside_note(im.dir(rule_path), &im.file)),
             ),
@@ -316,31 +330,54 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
     out
 }
 
-/// The aliases the file asks the rule for, or why they could not be read.
-fn wanted(im: &EnumImport, text: &str, at: &str) -> Result<Vec<String>, Diag> {
+/// The values a file has for an enum, each with the names a rule may write it by.
+struct Wanted {
+    values: Vec<ValueNames>,
+    /// What a `.proto` says of how it read its names: its enum, as read, for the notes of E032.
+    /// None for a JSON Schema, whose values are taken as they are written.
+    proto: Option<(crate::proto::Enum, EnumNames)>,
+}
+
+/// The values the file asks the rule for, or why they could not be read.
+fn wanted(im: &EnumImport, text: &str, at: &str) -> Result<Wanted, Diag> {
     let err = |title: String| Diag::error("E013", title).at(at.to_string()).mark(im.span.clone(), "");
     match im.kind {
         EnumSource::Proto => {
             // A contract that does not read is named, not read in part (§15.166).
-            let found = match crate::proto::read(&im.file, text) {
-                Ok(f) => f.enums,
+            let file = match crate::proto::read(&im.file, text) {
+                Ok(f) => f,
                 Err(e) => return Err(err(tr!("`{}` を読めません", "Cannot read `{}`", im.file)).note(crate::proto::unreadable(&e))),
             };
-            match found.iter().find(|e| e.name == im.source) {
-                Some(e) => Ok(e.aliases()),
-                None => Err(err(tr!(
+            match file.enum_named(&im.source) {
+                Ok(e) => {
+                    let names = e.names();
+                    Ok(Wanted { values: names.values.clone(), proto: Some((e.clone(), names)) })
+                }
+                // Two messages each nest an enum of the name: the line says which.
+                Err(several) if !several.is_empty() => Err(err(tr!(
+                    "`{}` に、`{}` という名前の列挙が複数あります",
+                    "`{}` has more than one enum named `{}`",
+                    im.file,
+                    im.source
+                ))
+                .note(tr!(
+                    "どれを読むかを、入れ子にしているメッセージの名前を前に付けて書いてください: {}",
+                    "Say which, by the messages it is nested in: {}",
+                    several.iter().map(|e| format!("`{}`", e.path)).collect::<Vec<_>>().join(tr!("、", ", ").as_str())
+                ))),
+                Err(_) => Err(err(tr!(
                     "`{}` に `{}` という列挙はありません",
                     "`{}` has no enum named `{}`",
                     im.file,
                     im.source
                 ))
-                .note(if found.is_empty() {
+                .note(if file.enums.is_empty() {
                     tr!("そのファイルに列挙は一つもありません。", "That file declares no enum at all.")
                 } else {
                     tr!(
                         "そのファイルにある列挙: {}",
                         "The enums in that file: {}",
-                        found.iter().map(|e| e.name.as_str()).collect::<Vec<_>>().join(", ")
+                        file.enums.iter().map(|e| e.path.as_str()).collect::<Vec<_>>().join(", ")
                     )
                 })),
             }
@@ -350,7 +387,15 @@ fn wanted(im: &EnumImport, text: &str, at: &str) -> Result<Vec<String>, Diag> {
                 err(tr!("`{}` を読めません", "Cannot read `{}`", im.file)).note(why)
             })?;
             match jsonschema::values(&doc, &im.source) {
-                Found::Values(v) => Ok(v),
+                // A schema's values are taken as they are written: each is one value with one name.
+                Found::Values(v) => Ok(Wanted {
+                    values: v
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, v)| ValueNames { number: i as i64, names: vec![Read { written: v.clone(), read: v, how: How::Whole }] })
+                        .collect(),
+                    proto: None,
+                }),
                 Found::NoSuchPointer { at: reached, keys } => Err(err(tr!(
                     "`{}` の中に `{}` はありません",
                     "`{}` has nothing at `{}`",
@@ -392,8 +437,10 @@ fn wanted(im: &EnumImport, text: &str, at: &str) -> Result<Vec<String>, Diag> {
     }
 }
 
-/// E032: the set the file has and the set the rule declares are not the same.
-fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_path: &str) -> Vec<Diag> {
+/// E032: the values the file has and the values the rule declares are not the same. A value of
+/// the file's is the rule's when the rule names it by one of its names, and by one only: under
+/// `allow_alias` a number has more than one name, and it is still one value.
+fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &Wanted, rule_path: &str) -> Vec<Diag> {
     let Some(target) = f.enums.iter().find(|e| e.name.text == im.target.text) else {
         // Nothing else reads this name, so without a word here the enum would be held to nothing.
         let declared: Vec<String> = f.enums.iter().map(|e| format!("`{}`", e.name.text)).collect();
@@ -419,9 +466,17 @@ fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_pat
         .iter()
         .map(|v| v.ascii.clone().unwrap_or_else(|| v.text.clone()))
         .collect();
-    let only_file: Vec<&String> = want.iter().filter(|a| !have.contains(a)).collect();
-    let only_rule: Vec<&String> = have.iter().filter(|a| !want.contains(a)).collect();
-    if only_file.is_empty() && only_rule.is_empty() {
+    let only_file: Vec<&ValueNames> = want.values.iter().filter(|w| !have.iter().any(|a| w.is(a))).collect();
+    let only_rule: Vec<&String> = have.iter().filter(|a| !want.values.iter().any(|w| w.is(a))).collect();
+    let twice: Vec<(&ValueNames, Vec<&String>)> = want
+        .values
+        .iter()
+        .filter_map(|w| {
+            let by: Vec<&String> = have.iter().filter(|a| w.is(a)).collect();
+            (by.len() > 1).then_some((w, by))
+        })
+        .collect();
+    if only_file.is_empty() && only_rule.is_empty() && twice.is_empty() {
         // A file of enums has no rows to decide anything in; each rule that reads the enum is
         // held to it (§15.212).
         if f.kind == FileKind::Enums {
@@ -442,12 +497,23 @@ fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_pat
     )
     .at(format!("{rule_path}:{}", target.span.line))
     .mark(target.name.span.clone(), "");
-    if !only_file.is_empty() {
+    // A value of the rule's that is a contract's name read another way: the value proto3 reads as
+    // not set (`category_unspecified`), or the whole name of a value (`category_food` for
+    // `Category_Food`, read `food`). The note says which, and that value is not new to the rule.
+    let names = want.proto.as_ref().map(|(_, n)| n);
+    let unset_of = |a: &str| names.and_then(|n| n.unset.as_ref()).and_then(|u| u.names.iter().find(|n| n.read == a || n.written.eq_ignore_ascii_case(a)));
+    let whole_of = |a: &str| names.and_then(|n| n.values.iter().find_map(|v| v.names.iter().find(|n| n.read != a && n.written.eq_ignore_ascii_case(a)).map(|n| (v, n))));
+    let not_set: Vec<(&String, &Read)> = only_rule.iter().filter_map(|a| unset_of(a).map(|n| (*a, n))).collect();
+    let renamed: Vec<(&String, &ValueNames, &Read)> = only_rule.iter().filter(|a| unset_of(a).is_none()).filter_map(|a| whole_of(a).map(|(v, n)| (*a, v, n))).collect();
+    let new_values: Vec<&ValueNames> = only_file.iter().copied().filter(|w| !renamed.iter().any(|(_, v, _)| v.number == w.number)).collect();
+    let gone: Vec<&String> = only_rule.iter().copied().filter(|a| !not_set.iter().any(|(r, _)| r == a) && !renamed.iter().any(|(r, _, _)| r == a)).collect();
+    if !new_values.is_empty() {
+        let first: Vec<&str> = new_values.iter().map(|w| w.read()).collect();
         d = d.note(tr!(
             "{} にあって、この列挙に無い値: {}",
             "In {} but not in this enum: {}",
             im.file,
-            only_file.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" / ")
+            first.join(" / ")
         ));
         // The form follows how the enum is written. Where its values are named in ASCII, the
         // contract's value can be added as it is; where they are named in another script (and so
@@ -457,7 +523,7 @@ fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_pat
             d.note(tr!(
                 "この列挙は値の名前に別名を付けて書いているので、`{}` の形で足してください。`<名前>` の部分は自分で決めてください。",
                 "This enum gives its values names with aliases, so add it as `{}`, with a name of your choosing.",
-                only_file
+                first
                     .iter()
                     .map(|a| format!("{}({a})", tr!("<名前>", "<name>")))
                     .collect::<Vec<_>>()
@@ -467,7 +533,7 @@ fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_pat
             d.note(tr!(
                 "この列挙に `{}` を足してください。",
                 "Add `{}` to this enum.",
-                only_file.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" | ")
+                first.join(" | ")
             ))
         };
         d = d.note(tr!(
@@ -476,19 +542,133 @@ fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_pat
             im.file
         ));
     }
-    if !only_rule.is_empty() {
+    if !gone.is_empty() {
         d = d.note(tr!(
             "この列挙にあって、{} に無い値: {}",
             "In this enum but not in {}: {}",
             im.file,
-            only_rule.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" / ")
+            gone.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" / ")
         ));
         d = d.note(tr!(
             "契約から消えた値なら、この規則からも消してください。綴りの誤りなら、綴りを直してください。",
             "A value the contract dropped goes from the rule too; a misspelling is corrected."
         ));
     }
+    for (a, n) in &not_set {
+        d = d.note(tr!(
+            "この列挙の `{0}` は {1} の `{2}` で、番号 0 です。proto3 では「設定していない」ことを表す値で、規則が答える値ではないので、この列挙から消してください。",
+            "`{0}` of this enum is `{2}` in {1}, the number 0: what proto3 reads as not set, and not a value a rule answers for. Take it out of this enum.",
+            a,
+            im.file,
+            n.written
+        ));
+    }
+    for (a, _, n) in &renamed {
+        d = d.note(tr!(
+            "この列挙の `{0}` は、{1} の `{2}` の名前をそのまま書いたものです。その値は `{3}` と読むので、`{3}` と書いてください。",
+            "`{0}` of this enum is the whole name of `{2}` in {1}, which is read as `{3}`: write `{3}`.",
+            a,
+            im.file,
+            n.written,
+            n.read
+        ));
+    }
+    let and = tr!(" と ", " and ");
+    let list = tr!("、", ", ");
+    for (w, by) in &twice {
+        let rule: Vec<String> = by.iter().map(|a| format!("`{a}`")).collect();
+        let written: Vec<String> = w.names.iter().map(|n| format!("`{}`", n.written)).collect();
+        d = d.note(tr!(
+            "この列挙の {0} は、{1} では番号 {2} の一つの値です（{3}）。どれか一つにしてください。",
+            "{0} of this enum are one value in {1}, the number {2} ({3}). Keep one of them.",
+            rule.join(&and),
+            im.file,
+            w.number,
+            written.join(&list)
+        ));
+    }
+    // How the contract's names were read, where the reading is not the plain one: what the rule
+    // has to write follows from it.
+    if let Some((e, names)) = &want.proto {
+        let mut said: Vec<&str> = Vec::new();
+        let read_from = new_values.iter().copied().chain(twice.iter().map(|(w, _)| *w)).chain(renamed.iter().map(|(_, v, _)| *v));
+        for w in read_from {
+            if w.names.len() > 1 && !twice.iter().any(|(t, _)| t.number == w.number) && !said.contains(&w.written()) {
+                let written: Vec<String> = w.names.iter().map(|n| format!("`{}`", n.written)).collect();
+                let read: Vec<String> = w.names.iter().map(|n| format!("`{}`", n.read)).collect();
+                d = d.note(tr!(
+                    "{0} の {1} は番号 {2} の一つの値で、規則には {3} のどれで書いてもかまいません。",
+                    "{1} in {0} are one value, the number {2}; a rule may write it as any of {3}.",
+                    im.file,
+                    written.join(&and),
+                    w.number,
+                    read.join(&list)
+                ));
+            }
+            for n in &w.names {
+                if said.contains(&n.written.as_str()) {
+                    continue;
+                }
+                if let Some(t) = how_read(e, names, n, &im.file) {
+                    d = d.note(t);
+                }
+                said.push(n.written.as_str());
+            }
+        }
+    }
     vec![d]
+}
+
+/// What a note of E032 says of how a contract's name was read, when it was not read the plain way:
+/// a prefix of buf's form dropped (`CATEGORY_TRAVEL`), or a name with no prefix taken whole (`TRAVEL`).
+fn how_read(e: &crate::proto::Enum, names: &EnumNames, n: &Read, file: &str) -> Option<String> {
+    let own = &e.name;
+    let other = |read: &str| names.values.iter().flat_map(|v| v.names.iter()).find(|o| o.read == read && o.written != n.written).map(|o| o.written.clone()).unwrap_or_default();
+    Some(match &n.how {
+        How::Dropped if n.written == format!("{}_{}", crate::proto::upper_snake(own), n.read.to_ascii_uppercase()) => return None,
+        How::Whole => return None,
+        How::Dropped => tr!(
+            "{0} の `{1}` は、頭にある列挙の名前（`{2}`）を落として `{3}` と読みます。",
+            "`{1}` in {0} is read as `{3}`, without the enum's name (`{2}`) at its front.",
+            file,
+            n.written,
+            own,
+            n.read
+        ),
+        How::RunsOn => tr!(
+            "{0} の `{1}` は、頭の `{2}` のあとが語の切れ目（`_` か大文字）でないので、列挙の名前を落とさずに `{3}` と読みます。",
+            "`{1}` in {0} is read whole, as `{3}`: the `{2}` it begins with runs on into a word, with no `_` or capital after it.",
+            file,
+            n.written,
+            own,
+            n.read
+        ),
+        How::Digit => tr!(
+            "{0} の `{1}` は、列挙の名前（`{2}`）を落とすと数字で始まるので、落とさずに `{3}` と読みます。",
+            "`{1}` in {0} is read whole, as `{3}`: without the enum's name (`{2}`) it would begin with a digit.",
+            file,
+            n.written,
+            own,
+            n.read
+        ),
+        How::Kept(without) => tr!(
+            "{0} の `{1}` は、列挙の名前（`{2}`）を落とすと `{3}` になり、`{4}` の読みと同じになるので、落とさずに `{5}` と読みます。",
+            "`{1}` in {0} is read whole, as `{5}`: without the enum's name (`{2}`) it would be `{3}`, which `{4}` is read as.",
+            file,
+            n.written,
+            own,
+            without,
+            other(without),
+            n.read
+        ),
+        How::AsWritten => tr!(
+            "{0} の `{1}` は、大文字と小文字だけが違う名前がほかの値にあるので、書いたとおりに `{2}` と読みます。",
+            "`{1}` in {0} is read as written, `{2}`: another value has a name that differs from it only in case.",
+            file,
+            n.written,
+            n.read
+        ),
+    })
 }
 
 /// The second gate (E033). The sets agree, so every value the contract has is written here —

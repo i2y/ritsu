@@ -1,0 +1,4 @@
+enums 仕組み(system) v1
+description "java.lang のクラスと同じ名前の enums ファイル（Java のコードはそのクラスを単純名で読む）"
+
+enum 地域(zone) = 北(north) | 南(south)

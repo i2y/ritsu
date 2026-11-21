@@ -1,0 +1,31 @@
+rule two_dice_for_a_prize v1
+description "Two dice are rolled for a prize, and a total of 8 or more wins the large prize. The total is worked out from the two dice and has no range of its own, so every roll is answered"
+
+enum prize = small | large
+
+inputs
+  first  : number  range >=1 <=6  random
+  second : number  range >=1 <=6  random
+
+define total : number = first + second
+
+outputs
+  prize : prize
+
+table prize_of
+policy unique
+| total | -> prize |
+| <8    | small    |
+| >=8   | large    |
+
+# Of the 36 rolls, 15 total 8 or more.
+chances
+| -> prize | chance |
+| large    | 5/12   |
+| small    | 7/12   |
+
+examples
+| first | second | -> prize |
+| 1     | 1      | small    |
+| 3     | 5      | large    |
+| 6     | 6      | large    |

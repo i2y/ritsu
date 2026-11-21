@@ -1,0 +1,37 @@
+rule 歩いて決める段階(walk_answers) v1
+description "明細を歩いて決める二つの段階。それを読む二つの準用の行は、歩きが決めない値をとる（架空）"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+enum 印(mark) = 飛ばす(skip) | 選ぶ(pick)
+
+elements 明細(lines)
+  目印(flagged) : bool
+
+outputs
+  畳み込みの値引き(fold_credit) : money[USD]  round down(1USD)
+  最高の値引き(top_credit) : money[USD]  round down(1USD)
+
+# 目印のある明細はゴールドで選び、ほかはシルバーで飛ばす
+table 目印で決める(grade_by_flag)
+policy unique
+| 目印  | -> 等級(grade) : 段階 | 判定(verdict) : 印 |
+| true  | ゴールド              | 選ぶ               |
+| false | シルバー              | 飛ばす             |
+
+# 畳み込みの答えはゴールドかシルバー
+fold 判定 over 明細 -> 選んだ段階(chosen) : 段階
+  選ぶ -> stop with ゴールド
+  飛ばす -> next
+  empty -> シルバー
+  exhausted -> シルバー
+
+# ゴールドの明細の最も高い等級、無ければ一般。シルバーにはならない
+max 最高(top) over 明細 of 等級 where 等級 = ゴールド empty 一般
+
+apply 畳み込みから(by_fold) = "一般から読む値引き.rule" meaning:32fe498486d05d88
+  段階 = 選んだ段階
+  値引き -> 畳み込みの値引き
+
+apply 最高から(by_top) = "一般から読む値引き.rule" meaning:32fe498486d05d88
+  段階 = 最高
+  値引き -> 最高の値引き

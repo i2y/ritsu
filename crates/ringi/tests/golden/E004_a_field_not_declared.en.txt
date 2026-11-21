@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_a_field_not_declared.ringi:5:49: `total` is not declared
+     5 |   receipt : attachment "Receipt"  required when total > 30_000JPY
+  = The fields declared: `amount` and `receipt`

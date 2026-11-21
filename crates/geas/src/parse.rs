@@ -1982,6 +1982,8 @@ pub fn parse(src: &str) -> Result<Spec, Vec<Diag>> {
         Ok(raw) => static_checks(raw, &mut diags),
         Err(Stop) => None,
     };
+    // a name declared nowhere is said once, where it is first written (ritsu's DESIGN 8.3)
+    ritsu_base::diag::once_with(&mut diags, |n, l| ritsu_base::diag::unstopped(ritsu_base::diag::written_too(n, l)));
     diag::sort(&mut diags);
     match spec {
         Some(mut spec) if !diag::has_errors(&diags) => {
@@ -2539,7 +2541,8 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
                                     target_pos.col,
                                     tr!("ターゲット `{target}` はありません", "there is no target `{target}`"),
                                 )
-                                .note(list),
+                                .note(list)
+                                .same_in("target", target.clone()),
                             );
                         }
                         Some(kind) => {
@@ -2657,7 +2660,9 @@ fn keep_checks(c: &RawClaim, kinds: &HashMap<&str, Option<TargetKind>>, diags: &
                     "`{shown}` is not a name this claim keeps, so it stays as written",
                 ),
             )
-            .note(tr!("この主張が持っている名前: {ja}", "the names it keeps: {en}"));
+            .note(tr!("この主張が持っている名前: {ja}", "the names it keeps: {en}"))
+            // said once a claim (ritsu's DESIGN 8.3)
+            .same_in(format!("claim {}", c.pos.line), shown.clone());
             d.severity = diag::Severity::Warning;
             diags.push(d);
             continue;

@@ -1,0 +1,12 @@
+# A context named wrong where it is declared, and the lines that name it: the name is said once in
+# each file that writes it, where it is first written.
+map Shop(shop) v1
+description "Takes orders and holds stock"
+
+use context "ctx/ordering.ctx"
+use context "ctx/inventory.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"

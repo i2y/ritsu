@@ -1,0 +1,20 @@
+rule expense_ja_next_up v1
+description "What ringi writes from the table 一段上 of expense.ja.ringi"
+
+enum approver = manager "上長" | dept_head "部長" | accounting "経理" | division_head "本部長" | check "エージェント確認" | travel_agent "エージェント決裁" | board "取締役"
+
+inputs
+  approver : approver
+
+outputs
+  goes_to : approver
+
+table next_up
+| approver      | -> goes_to    |
+| check         | manager       |
+| travel_agent  | manager       |
+| manager       | dept_head     |
+| dept_head     | division_head |
+| accounting    | division_head |
+| division_head | division_head |
+| board         | board         |

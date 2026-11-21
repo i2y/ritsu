@@ -1,0 +1,10 @@
+summary.flow: 検査を通りました
+ok contract.ringi: 申請の種類、フィールド 4 個、ステップ 2 個
+  終わらないことがあります: ステップ `summary`、`review` には期限がありません（`due in …`）。答えが来るまで待ちます
+エラー[ritsu E210]: contract.ringi:12: `contract` は flow `summarize` の入力 `amount` に 0JPY を渡すことがありますが、入力が受け取るのは money[JPY] >=1_000_000JPY <=50_000_000JPY です
+    12 |   summary  note from summarize
+  = `amount` は money[JPY] >=0JPY <=100_000_000JPY です。
+  = flow が受け取るのは 1_000_000JPY 以上です。
+  = ステップ `summary` で、ringi は flow にチケットの ID（`request_id`）と、flow が入力に宣言したフォームのフィールドを渡します。
+  = 渡す値を flow が受け取る範囲に収めるか、"summary.flow" の入力 `amount`（8 行目）を広げてください。
+ritsu check: ファイル 2 個（dandori 1、ringi 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 5 か所、決められない 0 か所

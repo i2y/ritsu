@@ -1,0 +1,13 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  approve  manager
+
+who
+  manager = manager of requester
+
+ticket
+  self approval  not allowed

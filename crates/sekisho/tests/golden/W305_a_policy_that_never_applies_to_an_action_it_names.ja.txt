@@ -1,0 +1,6 @@
+警告[W305]: tests/mutants/W305_a_policy_that_never_applies_to_an_action_it_names.gate:37:1: forbid `suspended_staff_see_nothing_open` は action `list_folder` を挙げていますが、`list_folder` のどの組み合わせにも当てはまりません
+    37 | forbid suspended_staff_see_nothing_open
+  = `principal` の行が当てはまる 2 通りのうち、`when resource.open_to_all` は 0 通り、`when principal.suspended` は 1 通りで満たされます。どの組み合わせでも満たされない行があります。
+  = ほかに挙げた action では、`read_doc` の 1 通りに当てはまります。
+  = `action` の行から `list_folder` を外すか、`list_folder` にも当てはまるよう行を直してください。
+tests/mutants/W305_a_policy_that_never_applies_to_an_action_it_names.gate: ok — action 2、ポリシー 2（permit 1、forbid 1）、期待 0、職務の分離 0

@@ -1,0 +1,14 @@
+request 例(example) v1 "例"
+
+form
+  システム(system)     : text "システム"  count <=30
+  パスワード(password) : text "パスワード"  count <=50
+
+route
+  確かめ(check)  情報システム
+
+who
+  情報システム(it_desk) = team it_desk
+
+ticket
+  self approval  not allowed

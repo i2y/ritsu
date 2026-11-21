@@ -1,0 +1,8 @@
+2026-11-16 10:00  submit   r0001  -> first（h0030）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  approve  h0030  -> decide（e0001）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e0001  -> approved
+シナリオ `the_head_thirty_teams_up`: 書いたとおり（3 行）
+
+2026-11-16 10:00  submit   u0001  -> decide（e0001）、期限は 2026-11-19 の終わり; first を飛ばした（no head is above the requester; nobody is above to go up to）
+2026-11-16 12:00  approve  e0001  -> approved
+シナリオ `nobody_within_thirty_teams_up`: 書いたとおり（2 行）

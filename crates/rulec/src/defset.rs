@@ -18,6 +18,7 @@ use std::collections::HashMap;
 
 /// One `overrides` target, resolved: every row of member `winner` takes precedence over the
 /// rows of member `loser`, or over its one row `loser_row` (a merged index).
+#[derive(Clone)]
 pub struct Edge {
     pub winner: usize,
     pub loser: usize,
@@ -25,6 +26,7 @@ pub struct Edge {
     pub span: Span,
 }
 
+#[derive(Clone)]
 pub struct DefSet {
     /// The output the tables share, or the table's own name when it stands alone.
     pub key: String,

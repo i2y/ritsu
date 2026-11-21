@@ -1,0 +1,6 @@
+error[E307]: tests/mutants/E307_受け取らない入力.ringi:8:7: The shared route `標準` is not given `長い`
+     8 | route 標準(日数: 5)
+  = Give it, as in `route 標準(長い: …)`.
+error[E307]: tests/mutants/E307_受け取らない入力.ringi:8:10: The shared route `標準` does not take `日数`
+     8 | route 標準(日数: 5)
+  = The inputs declared: `長い`

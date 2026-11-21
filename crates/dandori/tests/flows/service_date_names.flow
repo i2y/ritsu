@@ -1,0 +1,46 @@
+# protobuf's `google.type.Date` coming into a workflow whose records are named as what the code of
+# Python declares in types.py to read such days: `fill`, which fills in the days of a request, and
+# `read_day`, which reads one (DESIGN 22). The code reads its own by other names, and the run reads
+# the days as service_dates.flow's does, on every platform.
+workflow service_date_names v1 implements names.DateNames
+description "Rent a car as service_dates does, with the records of the driver and of the return named fill and read_day, the names the code of Python has for reading the days of a request"
+
+use proto names from "protos/date_names.proto"
+
+record fill
+  name       : string
+  licensedOn : date
+
+record read_day
+  returnedOn : date
+  km         : int
+
+inputs
+  car     : string
+  pickup  : date
+  dropoff : date
+  closed  : list[date]
+  driver  : fill
+  others  : list[fill]
+
+task hand_over(car: string, pickup: date, dropoff: date, closed: list[date], licensed: date)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-desk"
+  idempotent
+
+# The desk gets the car and the callback's id, and answers when the car is back.
+task wait_for_return(car: string, dropoff: date) -> read_day
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-return"
+  callback
+  timeout 7 days
+
+task close(car: string, returned: date, km: int)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-close"
+  idempotent
+
+flow
+  hand_over(car: car, pickup: pickup, dropoff: dropoff, closed: closed, licensed: driver.licensedOn)
+  for o in others at most 3
+    hand_over(car: car, pickup: pickup, dropoff: dropoff, closed: closed, licensed: o.licensedOn)
+  let back = wait_for_return(car: car, dropoff: dropoff)
+    on timeout => fail late "the car was not back within 7 days"
+  close(car: car, returned: back.returnedOn, km: back.km)

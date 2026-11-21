@@ -1,0 +1,17 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  fee    : money[JPY] "Fee" = amount * 10%  round down(1JPY)
+
+route
+  check   finance
+  decide  heads  when fee > 5_000JPY
+
+who
+  finance = team finance
+  heads   = team finance_heads
+
+ticket
+  self approval  not allowed
+  approvers edit amount

@@ -1,0 +1,8 @@
+エラー[E002]: chain_names.geas:12:8: ターゲット `api` はありません
+    12 |   when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+  = このファイルのターゲット: apii
+  = `api` は 15、17、22 行目にも書かれています
+警告[W016]: chain_names.geas:12:98: `{token}` はこの主張が持っている名前ではないので、書いたままになります
+    12 |   when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+  = この主張が持っている名前: tokn、id
+  = `{token}` は 15、17 行目にも書かれています

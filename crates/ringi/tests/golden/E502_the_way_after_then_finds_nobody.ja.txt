@@ -1,0 +1,6 @@
+エラー[E502]: tests/mutants/E502_the_way_after_then_finds_nobody.ringi:9:10: 2026-04-01 からの組織では、ステップ `check` に承認者がいません
+     9 |   check  manager
+  = 申請者の上に、`manager` に当たる長がいません。
+  = 申請者 1 人: e01（社長（架空））。
+  = ステップは `when empty escalate, then auditor` で、上に回せる人がいない（組織のいちばん上）ので `auditor` へ回しますが、`auditor` が指す e09 は、2026-04-01 からの組織にいません。チケットはこのステップで、管理する人が承認者を足すまで待ちます。
+  = 版のデータを直すか、`then` のあとに、どの版でも人のいる決め方を書いてください。

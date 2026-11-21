@@ -7,7 +7,7 @@
 //! caps how many elements the sequence has. Past the top of the range the `sum` declares, the
 //! generated code refuses at its door a sequence the caller may well send, and until this check
 //! nothing said so: a contribution that adds a row with a large value to an open table did it in
-//! silence.
+//! silence. Short of the bottom of that range, it refuses every sequence there is (E150).
 
 use crate::ast::{AggDecl, AggKind, Item, RuleFile, VarDecl};
 use crate::diag::{Diag, Severity, Span};
@@ -121,7 +121,8 @@ fn reaches(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
             }
         }
         let Some(r) = best else { continue };
-        if r.total.cmp_to(hi) != Ordering::Greater {
+        let bottom = c.ranges.get(&d.name.text).and_then(|(lo, _)| *lo).filter(|lo| r.total.cmp_to(*lo) == Ordering::Less);
+        if r.total.cmp_to(hi) != Ordering::Greater && bottom.is_none() {
             continue;
         }
         let sty = c.ty_of(&d.name.text).unwrap_or(Ty::Number);
@@ -132,6 +133,42 @@ fn reaches(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
         let mut listed: Vec<String> = r.parts.iter().take(10).map(|(v, m, _)| format!("{v} {}", show(*m, &cty))).collect();
         if r.parts.len() > 10 {
             listed.push(tr!("ほか {} 個", "and {} more", r.parts.len() - 10));
+        }
+        // The other side of the same count (§15.314): with every value once the total is still
+        // short of the bottom of the range, so no sequence the door lets in comes to it. E150, as
+        // for a bottom the most elements at the top of the column come short of.
+        if let Some(lo) = bottom {
+            let (seq, lo) = (&d.over, show(lo, &sty));
+            let listed = if listed.is_empty() {
+                tr!("どの値の要素も、何も足しません。", "The element of no value adds anything.")
+            } else {
+                tr!(
+                    "{field} の値ごとに、その要素が足しうる最大を、大きい順に: {}。",
+                    "The most the element of each `{field}` can add, largest first: {}.",
+                    listed.join(if crate::i18n::ja() { "、" } else { ", " })
+                )
+            };
+            let mut diag = Diag::error("E150", tr!("合計の範囲が、その値の届く範囲と重なりません", "The range of the sum does not meet the values it can reach"))
+                .at(tr!("{} 合計", "{} sum", at(&d.span, path)))
+                .mark(d.range.as_ref().map_or_else(|| d.span.clone(), |r| r.span.clone()), tr!("{sum} が取りうる値は <={reach} です", "{sum} can only be <={reach}"))
+                .note(tr!(
+                    "{field} は `unique` なので、{seq} に同じ {field} の要素は二つ入りません。{listed}",
+                    "`{field}` is `unique`, so {seq} holds each of its values once at most. {listed}"
+                ));
+            if let Some(n) = r.capped {
+                diag = diag.note(tr!(
+                    "`count` の上限で、並びの要素は {n} 個までなので、大きいほうから {n} 個を足しました。",
+                    "A `count` caps the sequence at {n} elements, so the {n} largest are added."
+                ));
+            }
+            out.push(
+                diag.note(tr!(
+                    "合わせて {reach} で、この範囲の下限 {lo} に届きません。生成コードは、並びをたどり終えたところで、どの呼び出しも受け付けないことになります。",
+                    "They come to {reach}, short of the bottom {lo} of this range. The generated code would refuse every call once the walk is over."
+                ))
+                .note(tr!("ヒント: 範囲の下限を {reach} 以下にするか、行が足す値を上げてください。", "Hint: bring the bottom of the range down to {reach} or less, or raise what the rows add.")),
+            );
+            continue;
         }
         let mut diag = Diag::error(
             "E147",

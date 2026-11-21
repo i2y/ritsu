@@ -1,0 +1,3 @@
+エラー[E603]: tests/mutants/E603_an_approval_by_someone_else.ringi:24:22: チケットは、この行の `approve` を受け付けません: e02（営業部長）は、ステップ `check` の承認者でも、その代理でもありません
+    24 | | 2026-06-01 10:00 | approve | e02 | decide   | in progress |
+  = チケットは `check` にあり、状態は `in progress` です。置いてある時計はありません。

@@ -844,7 +844,11 @@
         "Make the file pass rulec's check; the references of a file that cannot be read cannot be checked."
       ],
       "references": [],
-      "fix": null
+      "fix": null,
+      "reads": "billing/rules/billing_need.rule",
+      "waits_for": [
+        "billing/rules/billing_need.rule"
+      ]
     }
   ],
   "borders": {

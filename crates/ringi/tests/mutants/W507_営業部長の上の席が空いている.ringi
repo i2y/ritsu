@@ -1,0 +1,20 @@
+request 例(example) v1 "例"
+
+use organization 組織(org) from "shared/社長の席が空いた会社.ringi"
+use calendar 事務所(office) from "shared/事務所.cal"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  決裁(decide)  営業部長
+
+who
+  営業部長(sales_head) = person "e02"
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+
+ticket
+  self approval  allowed

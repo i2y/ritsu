@@ -17,6 +17,11 @@
 //! - E207: a calendar `today is open in` reads does not cover every day of `today`.
 //! - E208: a workflow's `.flow` does not pass dandori's check, cannot be read, or is outside the
 //!   root.
+//! - E212: what a `resource` line under a workflow says the flow holds (DESIGN 2.12) is not what
+//!   the flow holds: it has no such value, the value is of another type or unit than the
+//!   attribute (both said here), or it can be outside what the attribute takes at a call the line
+//!   speaks of ([`values_at_calls`], once the contracts are read and what each action guards is
+//!   known).
 //!
 //! What the languages answer is gathered as [`Known`], what the walk reads of each computed value.
 
@@ -141,7 +146,7 @@ fn given(g: &Gate, a: &Action, src: &Source) -> Given {
     }
 }
 
-fn source_text(src: &Source) -> String {
+pub(crate) fn source_text(src: &Source) -> String {
     match src {
         Source::Attr(o, n) => format!("{}.{n}", o.word()),
         Source::Input(n) => n.clone(),
@@ -285,10 +290,409 @@ pub fn check(g: &Gate, langs: &Langs) -> (Vec<Diag>, Known) {
                 let d = at("E208", g, w.named.line, tr!("`{}` は dandori の検査を通らないか、読めません", "`{}` does not pass dandori's check, or cannot be read", w.flow));
                 let d = said_notes(d, &said).note(tr!("ワークフローを dandori の検査が通るように直してください。", "Fix the workflow until dandori's check passes."));
                 diags.push(crate::names::with_outside(d, &g.file, &w.flow, &w.file));
+                continue;
             }
+            held_by_the_flow(g, w, *flows, ports, &mut diags);
         }
     }
     (diags, known)
+}
+
+/// E212: each `resource` line under a workflow, and each line under it, against what dandori says
+/// the flow holds (DESIGN 2.12): a value the flow has, of the attribute's type and unit. Whether
+/// the value can be outside what the attribute takes is a question of the calls the line speaks of
+/// ([`values_at_calls`]).
+fn held_by_the_flow(g: &Gate, w: &Workflow, flows: &dyn Flows, ports: &Ports, diags: &mut Vec<Diag>) {
+    let Some(rel) = g.from_root(&w.file) else { return };
+    let flow = &w.flow;
+    let names = tr!(
+        "`workflow` の下の `resource` の行には、フローの入力か変数、またはそのフィールド（`order.total`）を書きます。",
+        "A `resource` line under a workflow names an input or a variable of the flow, or a field of one (`order.total`)."
+    );
+    let value = |path: &str, line: usize, diags: &mut Vec<Diag>| -> Option<ritsu_ports::FlowValue> {
+        match flows.value(&g.root, &rel, ports, path) {
+            Ok(Some(v)) => Some(v),
+            Ok(None) => {
+                diags.push(at("E212", g, line, tr!("フロー `{flow}` に値 `{path}` はありません", "The flow `{flow}` has no value `{path}`")).note(names.clone()).note(flow_names(flows, g, &rel, ports, path)));
+                None
+            }
+            // a flow that does not pass is E208's
+            Err(_) => None,
+        }
+    };
+    for h in &w.holds {
+        value(&h.id, h.line, diags);
+        let ty = &g.types[h.resource];
+        for (a, path, line) in &h.attrs {
+            let Some(v) = value(path, *line, diags) else { continue };
+            let attr = &ty.attrs[*a];
+            if !kinds_differ(attr, &v.holds) {
+                continue;
+            }
+            if let Some((message, notes)) = flow_fits(g, attr, path, &v.holds) {
+                diags.push(with_notes(at("E212", g, *line, message), notes));
+            }
+        }
+    }
+}
+
+/// Whether an attribute and a value of a flow are of different types or units (E212 says it of the
+/// line, whatever the value is).
+fn kinds_differ(attr: &Field, holds: &ritsu_ports::Carried) -> bool {
+    use ritsu_ports::Carried;
+    match (&attr.ty, holds.present().0) {
+        (FieldType::Bool, Carried::Bool) | (FieldType::Enum(_), Carried::Enum { .. }) | (FieldType::Date { .. }, Carried::Date { .. }) | (FieldType::Entity(_), _) => false,
+        (FieldType::Num { unit, .. }, Carried::Num { unit: have, .. }) => !have.as_ref().is_some_and(|u| u.same(unit)),
+        _ => true,
+    }
+}
+
+/// E212, of what a value of a flow can be: each line under a `resource` line under a workflow
+/// (DESIGN 2.12), at each call the line speaks of — a call of an operation an action of the gate
+/// guards, where the action takes a resource of the line's type from an argument (`resource Order
+/// from orderId`) and the call gives that argument the line's own value — with what the runs of the
+/// flow that reach the call last put in the value, less what the arms of a `match` on the way leave
+/// out (dandori's `OperationCall`). The line is said of every call that gives the id, so a value
+/// put in on a way that reaches none of them is not counted. A line no call speaks of says nothing
+/// to check, and where dandori cannot say the calls, the value is read as every value put in it
+/// anywhere in the flow. Read once the contracts are, for what each action guards.
+pub fn values_at_calls(g: &Gate, langs: &Langs) -> Vec<Diag> {
+    let mut diags = Vec::new();
+    let Some((flows, ports)) = &langs.flows else { return diags };
+    for w in &g.workflows {
+        let Some(rel) = g.from_root(&w.file) else { continue };
+        // a flow that does not pass is E208's
+        if flows.crossings(&w.file, ports).is_err() {
+            continue;
+        }
+        let calls = flows.operation_calls(&g.root, &rel, ports).ok().map(|(_, cs)| cs);
+        for h in &w.holds {
+            let ty = &g.types[h.resource];
+            // the calls the line speaks of
+            let speaks: Option<Vec<&ritsu_ports::OperationCall>> = calls.as_ref().map(|cs| {
+                cs.iter()
+                    .filter(|c| {
+                        let Some(a) = g.actions.iter().find(|a| a.references().iter().any(|(r, _)| *r == c.operation)) else { return false };
+                        let Some((arg, _)) = &a.from else { return false };
+                        a.resources.contains(&h.resource) && c.args.iter().any(|(p, v)| p == arg && v.path.as_deref() == Some(h.id.as_str()))
+                    })
+                    .collect()
+            });
+            // W202: a line no call speaks of, of a value the flow has (else E212 says it)
+            if let (Some(speaks), Some(calls)) = (&speaks, &calls) {
+                if speaks.is_empty() && matches!(flows.value(&g.root, &rel, ports, &h.id), Ok(Some(_))) {
+                    if let Some(d) = spoken_of_by_no_call(g, w, h, calls) {
+                        diags.push(d);
+                    }
+                }
+            }
+            for (a, path, line) in &h.attrs {
+                let Ok(Some(v)) = flows.value(&g.root, &rel, ports, path) else { continue };
+                let attr = &ty.attrs[*a];
+                // said with the line already
+                if kinds_differ(attr, &v.holds) {
+                    continue;
+                }
+                let Some(speaks) = &speaks else {
+                    if let Some((message, notes)) = flow_fits(g, attr, path, &v.holds) {
+                        diags.push(with_notes(at("E212", g, *line, message), notes));
+                    }
+                    continue;
+                };
+                // over every value put in it, it fits: so it does at each call
+                if flow_fits(g, attr, path, &v.holds).is_none() {
+                    continue;
+                }
+                let mut first: Option<(Text, Vec<Text>)> = None;
+                let mut outside: Vec<&ritsu_ports::OperationCall> = Vec::new();
+                for c in speaks {
+                    let here = c.reached.as_ref().and_then(|r| r.values.iter().find(|(p, _)| p == path)).map(|(_, x)| x.holds.clone()).unwrap_or_else(|| v.holds.clone());
+                    let left = c.reached.as_ref().and_then(|r| r.held.iter().find(|(k, _)| k == path)).map(|(_, vals)| vals.as_slice());
+                    if let Some(said) = flow_fits(g, attr, path, &narrowed(&here, left)) {
+                        first.get_or_insert(said);
+                        outside.push(c);
+                    }
+                }
+                let Some((message, mut notes)) = first else { continue };
+                // each call, as the flow's line and the task it calls
+                let each: Vec<Text> = outside.iter().map(|c| tr!("{} 行目の `{}`", "`{}` on line {}", c.line, c.task; c.task, c.line)).collect();
+                let l = Text::list(&each);
+                let at_calls = if outside.len() == 1 {
+                    tr!("フローの {} の呼び出しに、そういう値が届きます。", "Such a value reaches the call of {} in the flow.", l.ja; l.en)
+                } else {
+                    tr!("フローの {} の呼び出しに、そういう値が届きます。", "Such a value reaches the calls of {} in the flow.", l.ja; l.en)
+                };
+                // after the example, where there is one (a number or a date), and before what to do
+                let place = if notes.len() >= 2 { 1 } else { 0 };
+                notes.insert(place, at_calls);
+                diags.push(with_notes(at("E212", g, *line, message), notes));
+            }
+        }
+    }
+    diags
+}
+
+/// W202: a `resource` line under a workflow that no call of the flow speaks of (one that gives the
+/// line's `from` value as the id of a resource of its type, to an operation an action of the gate
+/// guards, [`values_at_calls`]), with why: no action takes a resource of the line's type from an
+/// argument (the type is written wrong, the line is of no use, or the action that takes one does not
+/// say which argument gives its id), the flow calls none of the
+/// operations the actions that do guard (the line is under the wrong workflow, or of no use), or
+/// its calls of them give the argument another value (the value is written wrong). None where an
+/// action that takes one guards an operation the contracts did not resolve (E202 says it), which
+/// leaves the calls of it unknown.
+fn spoken_of_by_no_call(g: &Gate, w: &Workflow, h: &Holds, calls: &[ritsu_ports::OperationCall]) -> Option<Diag> {
+    let ty = &g.types[h.resource].named.name;
+    let id = &h.id;
+    let flow = &w.flow;
+    let takers: Vec<&Action> = g.actions.iter().filter(|a| a.from.is_some() && a.resources.contains(&h.resource)).collect();
+    if takers.iter().any(|a| a.guards.iter().any(|x| x.reference.is_none())) {
+        return None;
+    }
+    let mut notes = vec![tr!(
+        "`ritsu check` がこの行を前提にするのは、`{id}` を ID として渡す呼び出しだけです（E212 と、ゲートが呼び出しを許すかの確かめ）。この行は、フローのどの呼び出しの確かめにも効きません。",
+        "`ritsu check` rests on the line only at a call that gives `{id}` as the id (E212, and whether the gate allows the call): it holds at no call of the flow."
+    )];
+    // actions that take one, but say of no argument that it gives the id
+    let untold: Vec<&Action> = g.actions.iter().filter(|a| a.from.is_none() && a.resources.contains(&h.resource)).collect();
+    if takers.is_empty() && !untold.is_empty() {
+        let named = Text::list(&untold.iter().map(|a| tr!("`{}`", "`{}`", a.named.name)).collect::<Vec<_>>());
+        notes.push(if untold.len() == 1 {
+            tr!(
+                "{} は `{ty}` を受け取りますが、どの引数が resource の ID かを書いていません（`resource {ty} from <引数>`）。",
+                "{} takes a `{ty}`, but does not say which argument gives its id (`resource {ty} from <argument>`).",
+                named.ja;
+                named.en
+            )
+        } else {
+            tr!(
+                "{} は `{ty}` を受け取りますが、どの引数が resource の ID かを書いていません（`resource {ty} from <引数>`）。",
+                "{} take a `{ty}`, but do not say which argument gives its id (`resource {ty} from <argument>`).",
+                named.ja;
+                named.en
+            )
+        });
+        notes.push(tr!(
+            "action に、resource の ID を渡す引数を書いてください（`resource {ty} from <引数>`）。",
+            "Write which argument of the action gives the resource's id: `resource {ty} from <argument>`."
+        ));
+    } else if takers.is_empty() {
+        let others: Vec<Text> = g
+            .actions
+            .iter()
+            .filter_map(|a| {
+                let (arg, _) = a.from.as_ref()?;
+                let types = Text::list(&a.resources.iter().map(|r| tr!("`{}`", "`{}`", g.types[*r].named.name)).collect::<Vec<_>>());
+                Some(tr!("`{}` は {} を `{arg}` から", "`{}` takes {} from `{arg}`", a.named.name, types.ja; a.named.name, types.en))
+            })
+            .collect();
+        notes.push(if others.is_empty() {
+            tr!("このゲートの action は、どれも resource を引数から受け取りません（`resource … from …`）。", "No action of the gate takes its resource from an argument (`resource … from …`).")
+        } else {
+            let l = Text::list(&others);
+            tr!("`{ty}` を引数から受け取る action がありません。{}受け取ります。", "No action of the gate takes a `{ty}` from an argument: {}.", l.ja; l.en)
+        });
+        notes.push(tr!("action が受け取る resource の型を書くか、行を消してください。", "Write the type of resource an action takes, or take the line out."));
+    } else {
+        let guarded: Vec<(_, &Action)> = takers.iter().flat_map(|a| a.references().into_iter().map(move |(n, _)| (n, *a))).collect();
+        let theirs: Vec<(&ritsu_ports::OperationCall, &Action)> = calls.iter().filter_map(|c| guarded.iter().find(|(n, _)| *n == c.operation).map(|(_, a)| (c, *a))).collect();
+        let named = Text::list(&takers.iter().map(|a| tr!("`{}`", "`{}`", a.named.name)).collect::<Vec<_>>());
+        if theirs.is_empty() {
+            notes.push(tr!(
+                "フローは、`{ty}` を受け取る action（{}）が守る操作を、どれも呼びません。",
+                "The flow calls none of the operations the actions that take a `{ty}` guard ({}).",
+                named.ja;
+                named.en
+            ));
+            notes.push(tr!("その操作を呼ぶワークフローの下に書くか、行を消してください。", "Write the line under the workflow that calls them, or take it out."));
+        } else {
+            let mut given: Vec<String> = Vec::new();
+            let each: Vec<Text> = theirs
+                .iter()
+                .map(|(c, a)| {
+                    let arg = a.from.as_ref().map(|(x, _)| x.as_str()).unwrap_or_default();
+                    match c.args.iter().find(|(p, _)| p == arg) {
+                        Some((_, v)) => {
+                            if let Some(p) = &v.path {
+                                if !given.contains(p) {
+                                    given.push(p.clone());
+                                }
+                            }
+                            tr!("{} 行目の `{}` は `{arg}` に `{}`", "`{}` on line {} gives `{}` as `{arg}`", c.line, c.task, v.shown; c.task, c.line, v.shown)
+                        }
+                        None => tr!("{} 行目の `{}` は `{arg}` を渡さない", "`{}` on line {} gives no `{arg}`", c.line, c.task; c.task, c.line),
+                    }
+                })
+                .collect();
+            let l = Text::list(&each);
+            notes.push(tr!(
+                "`{ty}` を受け取る action（{}）が守る操作の呼び出しは、ID の引数に別の値を渡します（{}）。",
+                "The calls of the operations the actions that take a `{ty}` guard ({}) give the id another value ({}).",
+                named.ja,
+                l.ja;
+                named.en,
+                l.en
+            ));
+            notes.push(match given.as_slice() {
+                [one] => tr!("呼び出しが ID として渡す値を書いてください（`resource {ty} from {one}`）。", "Write the value the calls give as the id: `resource {ty} from {one}`."),
+                _ => tr!("呼び出しが ID として渡す値を書いてください。", "Write the value the calls give as the id."),
+            });
+        }
+    }
+    let name = &w.named.name;
+    let message = tr!(
+        "この行が当たる呼び出しがありません。ワークフロー `{name}`（`{flow}`）のどの呼び出しも、`{id}` を `{ty}` の ID として渡しません",
+        "The line speaks of no call: no call of the workflow `{name}` (`{flow}`) gives `{id}` as the id of a `{ty}`"
+    );
+    Some(with_notes(at("W202", g, h.line, message), notes))
+}
+
+/// What a value of a flow holds at a call where the arms of a `match` on the way leave `left` of it
+/// (`none`, `some` and the values of an enum, as the arms write them).
+fn narrowed(holds: &ritsu_ports::Carried, left: Option<&[String]>) -> ritsu_ports::Carried {
+    use ritsu_ports::Carried;
+    let Some(left) = left else { return holds.clone() };
+    match holds {
+        Carried::Opt(t) if !left.iter().any(|v| v == "none") => narrowed(t, Some(left)),
+        Carried::Opt(t) => Carried::Opt(Box::new(narrowed(t, Some(left)))),
+        Carried::Enum { name, values } => Carried::Enum { name: name.clone(), values: values.iter().filter(|v| left.contains(&v.written)).cloned().collect() },
+        c => c.clone(),
+    }
+}
+
+/// What can be written where `path` is no value of the flow (E212): the fields of the longest
+/// part of it that is a value, else the flow's inputs and variables.
+fn flow_names(flows: &dyn Flows, g: &Gate, rel: &str, ports: &Ports, path: &str) -> Text {
+    let quoted = |names: Vec<String>| Text::list(&names.iter().map(|n| Text::same(format!("`{n}`"))).collect::<Vec<Text>>());
+    let mut under = path;
+    while let Some((head, _)) = under.rsplit_once('.') {
+        under = head;
+        if !matches!(flows.value(&g.root, rel, ports, under), Ok(Some(_))) {
+            continue;
+        }
+        let fields = flows.value_names(&g.root, rel, ports, under).unwrap_or_default();
+        if fields.is_empty() {
+            return tr!("フローの `{under}` にフィールドはありません。", "The flow's `{under}` has no fields.");
+        }
+        let l = quoted(fields);
+        return tr!("フローの `{under}` のフィールドは {} です。", "The fields of the flow's `{under}` are {}.", l.ja; l.en);
+    }
+    let names = flows.value_names(&g.root, rel, ports, "").unwrap_or_default();
+    if names.is_empty() {
+        return tr!("フローには、入力も変数もありません。", "The flow has no inputs and no variables.");
+    }
+    let l = quoted(names);
+    tr!("フローの入力と変数は {} です。", "The flow's inputs and variables are {}.", l.ja; l.en)
+}
+
+/// How a message names what a value of a flow holds.
+fn carried_text(c: &ritsu_ports::Carried) -> Text {
+    use ritsu_ports::Carried;
+    match c {
+        Carried::Bool => tr!("真偽", "a bool"),
+        Carried::Str => tr!("文字列", "a string"),
+        Carried::Date { .. } | Carried::Days(_) => tr!("日付", "a date"),
+        Carried::Enum { name, .. } => tr!("列挙 `{name}`", "the enum `{name}`"),
+        Carried::Num { written, .. } => Text::same(format!("`{written}`")),
+        Carried::Opt(t) => {
+            let t = carried_text(t);
+            tr!("値が無いことのある{}", "{}, which may be none", t.ja; t.en)
+        }
+        Carried::Other(t) => Text::same(format!("`{t}`")),
+    }
+}
+
+/// How a message names what an attribute takes.
+fn field_text(g: &Gate, f: &Field) -> Text {
+    match &f.ty {
+        FieldType::Bool => tr!("真偽", "a bool"),
+        FieldType::Enum(e) => tr!("列挙 `{}`", "the enum `{}`", g.enums[*e].named.name),
+        FieldType::Num { written, .. } => Text::same(format!("`{written}`")),
+        FieldType::Date { .. } => tr!("日付", "a date"),
+        FieldType::Entity(t) => tr!("`{}` のエンティティ", "an entity of `{}`", g.types[*t].named.name),
+    }
+}
+
+/// Whether an attribute can be what a value of a flow holds (E212): None when it can, else the
+/// message and its notes. The value is of the attribute's type and unit; it is always there
+/// unless the attribute may be absent; and every value it can be is one the attribute takes.
+fn flow_fits(g: &Gate, attr: &Field, path: &str, holds: &ritsu_ports::Carried) -> Option<(Text, Vec<Text>)> {
+    use ritsu_ports::Carried;
+    let name = &attr.named.name;
+    let (inner, may_be_none) = holds.present();
+    if may_be_none && !attr.optional {
+        return Some((
+            tr!("フローの `{path}` は値が無いことがありますが、属性 `{name}` にはいつも値があります", "The flow's `{path}` may be none, and the attribute `{name}` always has a value"),
+            vec![tr!(
+                "resource に値が無いことがあるなら、属性を `{name} : <型>?` と書いてください。無ければ、いつも値のあるフローの値を書いてください。",
+                "If the resource may have none, write the attribute as `{name} : <type>?`; else name a value of the flow that is always there."
+            )],
+        ));
+    }
+    let differ = || {
+        let (have, want) = (carried_text(inner), field_text(g, attr));
+        Some((tr!("フローの `{path}` は{}で、属性 `{name}` は{}です", "The flow's `{path}` is {}, and the attribute `{name}` is {}", have.ja, want.ja; have.en, want.en), Vec::new()))
+    };
+    let narrow = tr!(
+        "フローの値がとりうるものを属性の範囲の中に狭めるか（フローの入力やレコードのフィールドの `range`）、属性の範囲を広げてください。",
+        "Narrow what the flow's value can be to what the attribute takes (the `range` of the flow's input or of the record's field), or widen the attribute's range."
+    );
+    match (&attr.ty, inner) {
+        (FieldType::Bool, Carried::Bool) => None,
+        (FieldType::Enum(e), Carried::Enum { values, .. }) => {
+            let en = &g.enums[*e];
+            let stray = values.iter().find(|v| !en.values.iter().any(|n| n.is(&v.written) || n.is(&v.public)))?;
+            let v = &stray.written;
+            let known: Vec<Text> = en.values.iter().map(|n| Text::same(format!("`{}`", n.name))).collect();
+            let l = Text::list(&known);
+            Some((
+                tr!("フローの `{path}` は `{v}` になりえますが、それは属性 `{name}` の列挙 `{}` の値ではありません", "The flow's `{path}` can be `{v}`, which is no value of `{}`, the enum of the attribute `{name}`", en.named.name),
+                vec![tr!("`{}` の値は {} です。", "The values of `{}` are {}.", en.named.name, l.ja; en.named.name, l.en)],
+            ))
+        }
+        (FieldType::Num { unit, lo, hi, .. }, Carried::Num { unit: have, min, max, .. }) => {
+            if !have.as_ref().is_some_and(|u| u.same(unit)) {
+                return differ();
+            }
+            let (x, y) = (show_num(*lo, Some(unit)), show_num(*hi, Some(unit)));
+            let out = match (min, max) {
+                (Some(m), _) if m < lo => Some(Ok(*m)),
+                (_, Some(m)) if m > hi => Some(Ok(*m)),
+                (None, _) => Some(Err(tr!("フローは、`{path}` がどこまで小さくなりうるかを言っていません。", "Nothing in the flow says how small `{path}` can be."))),
+                (_, None) => Some(Err(tr!("フローは、`{path}` がどこまで大きくなりうるかを言っていません。", "Nothing in the flow says how large `{path}` can be."))),
+                _ => None,
+            }?;
+            let why = match out {
+                Ok(v) => {
+                    let ex = show_num(v, Some(unit));
+                    tr!("例：`{path}` が {ex} のとき。", "For example: `{path}` at {ex}.")
+                }
+                Err(open) => open,
+            };
+            Some((tr!("フローの `{path}` は、属性 `{name}` の範囲（{x}〜{y}）の外になりえます", "The flow's `{path}` can be outside the range of the attribute `{name}` ({x}..{y})"), vec![why, narrow]))
+        }
+        (FieldType::Date { lo, hi }, Carried::Date { min, max }) => {
+            let (x, y) = (crate::types::day_text(*lo), crate::types::day_text(*hi));
+            let out = match (min, max) {
+                (Some(m), _) if m < lo => Some(Ok(*m)),
+                (_, Some(m)) if m > hi => Some(Ok(*m)),
+                (None, _) => Some(Err(tr!("フローは、`{path}` がどこまで前の日になりうるかを言っていません。", "Nothing in the flow says how early `{path}` can be."))),
+                (_, None) => Some(Err(tr!("フローは、`{path}` がどこまで後の日になりうるかを言っていません。", "Nothing in the flow says how late `{path}` can be."))),
+                _ => None,
+            }?;
+            let why = match out {
+                Ok(d) => {
+                    let ex = crate::types::day_text(d);
+                    tr!("例：`{path}` が {ex} のとき。", "For example: `{path}` at {ex}.")
+                }
+                Err(open) => open,
+            };
+            Some((tr!("フローの `{path}` は、属性 `{name}` の範囲（{x}〜{y}）の外になりえます", "The flow's `{path}` can be outside the range of the attribute `{name}` ({x}..{y})"), vec![why, narrow]))
+        }
+        // `names.rs` has said an attribute that points to an entity (E102)
+        (FieldType::Entity(_), _) => None,
+        _ => differ(),
+    }
 }
 
 /// The column of a rule's input or output that `word` names: by its name or its alias.
@@ -297,7 +701,7 @@ fn column<'a>(cols: &'a [ritsu_ports::Column], word: &str) -> Option<&'a ritsu_p
 }
 
 #[allow(clippy::too_many_arguments)]
-fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts, args: &[(String, Source)], output: &str, langs: &Langs, diags: &mut Vec<Diag>) -> Option<Kn> {
+pub(crate) fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts, args: &[(String, Source)], output: &str, langs: &Langs, diags: &mut Vec<Diag>) -> Option<Kn> {
     let u = &g.uses[rule];
     let line = c.named.line;
     let before = diags.len();
@@ -374,14 +778,11 @@ fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts
                 outside(g, line, &facts.rule, name, &shown, (*lo, *hi), (*min, *max), unit.as_ref(), diags);
             }
             (ColumnType::Bool, Given::Bool) => inputs.push((col.name.clone(), None)),
-            (ColumnType::Date, Given::Date { lo, hi }) => {
+            (ColumnType::Date { min, max }, Given::Date { lo, hi }) => {
                 inputs.push((col.name.clone(), None));
-                // rulec takes the range of a date as day numbers
+                // rulec takes the range of a date as day numbers, and its column carries the range
                 ranges.push((col.name.clone(), Some(*lo as i128), Some(*hi as i128)));
-                if let Some(r) = langs.rules
-                    && let Ok((min, max)) = r.date_range(&u.file, &col.name)
-                    && (min.is_some_and(|m| *lo < m) || max.is_some_and(|m| *hi > m))
-                {
+                if min.is_some_and(|m| *lo < m) || max.is_some_and(|m| *hi > m) {
                     let (x, y) = (min.map(crate::types::day_text).unwrap_or_default(), max.map(crate::types::day_text).unwrap_or_default());
                     diags.push(at("E206", g, line, tr!("`{shown}` は規則 `{}` の入力 `{name}` の範囲（{x}〜{y}）の外になりえます", "`{shown}` can be outside the range of the input `{name}` of the rule `{}` ({x}..{y})", facts.rule; facts.rule)));
                 }
@@ -434,7 +835,7 @@ fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts
     // the value out of the walk, as a range that can be crossed does)
     let mut broken = false;
     if let Some(r) = langs.rules
-        && let Ok(answers) = r.preconditions_hold(&u.file, &ranges, None)
+        && let Ok(answers) = r.preconditions_hold(&u.file, &ranges, None, None)
     {
         for (p, ans) in answers {
             match ans {
@@ -488,7 +889,7 @@ fn column_type(t: &ColumnType) -> String {
     match t {
         ColumnType::Bool => "bool".into(),
         ColumnType::Str => "string".into(),
-        ColumnType::Date => "date".into(),
+        ColumnType::Date { .. } => "date".into(),
         ColumnType::Enum { name: e, .. } => e.clone(),
         ColumnType::Num { written, .. } => written.clone(),
         ColumnType::Opt(x) => format!("{}?", column_type(x)),
@@ -499,18 +900,21 @@ fn precondition_text(p: &Precondition) -> String {
     match p {
         Precondition::Relation { left, op, right } => format!("`{left} {op} {right}`"),
         Precondition::SumRelation { left, op, right } => format!("`{} {op} {}`", left.join(" + "), right.join(" + ")),
-        Precondition::Sum { name, over, of, max } => format!("`{name}` ({of} over {over} <= {max})"),
+        Precondition::Sum { name, over, of, max, min: None, .. } => format!("`{name}` ({of} over {over} <= {max})"),
+        Precondition::Sum { name, over, of, max, min: Some(min), .. } => format!("`{name}` ({min} <= {of} over {over} <= {max})"),
+        Precondition::Count { name, over, min } => format!("`{name}` (counted over {over} >= {min})"),
         Precondition::Length { sequence, max } => format!("`{sequence}` (<= {max})"),
         Precondition::Unique { sequence, field } => format!("`{sequence}` ({field} unique)"),
         Precondition::Days { input, date, .. } => format!("`{input}` ({date})"),
         Precondition::Never { said, .. } => format!("`{said}`"),
+        Precondition::Define { name, range, .. } => format!("`{name}` ({range})"),
     }
 }
 
 /// An input as rulec gives it, `low = 100, high = 0` (`、` between them in Japanese); a date, which
 /// rulec gives as its day number, as the day.
 fn values_text(vals: &[(String, Value)], facts: &RuleFacts) -> Text {
-    let is_date = |n: &str| column(&facts.inputs, n).is_some_and(|c| matches!(&c.ty, ColumnType::Date) || matches!(&c.ty, ColumnType::Opt(x) if **x == ColumnType::Date));
+    let is_date = |n: &str| column(&facts.inputs, n).is_some_and(|c| c.ty.is_date());
     let parts: Vec<String> = vals
         .iter()
         .map(|(n, v)| {

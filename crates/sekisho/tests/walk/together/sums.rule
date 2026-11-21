@@ -1,0 +1,26 @@
+rule sums v1
+description "Two outputs of the sum of two numbers: neither changes along one of the numbers alone"
+
+enum level = low | high
+
+inputs
+  a : number  range >=0 <=100
+  b : number  range >=0 <=100
+
+outputs
+  x : level
+  y : level
+
+derive total : number = a + b  range >=0 <=200
+
+table first
+policy unique
+| total | -> x |
+| <=100 | low  |
+| >100  | high |
+
+table second
+policy unique
+| total | -> y |
+| <=150 | low  |
+| >150  | high |

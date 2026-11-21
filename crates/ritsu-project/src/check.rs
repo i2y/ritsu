@@ -21,11 +21,13 @@ impl Project {
     /// rules, dates files and books it calls read through rulec, koyomi and chobo; dandori a file at
     /// a time, with the rules, dates files and books it reads through the same ports; sekisho a file
     /// at a time, with the rules, dates files, calendars, books and flows it reads
-    /// (`Joined::sekisho`); yuen the project's `.req` files as one; sakai each map. The `.proto`
-    /// files have no language of their own to check them (ritsu-cross reads them).
+    /// (`Joined::sekisho`); ringi a file at a time, with the six languages a `.ringi` reads and is
+    /// lowered to (`Joined::ringi`), an organization or masters several requests read checked once;
+    /// yuen the project's `.req` files as one; sakai each map. The `.proto` files have no language
+    /// of their own to check them (ritsu-cross reads them).
     ///
-    /// rulec, koyomi, chobo, geas, kaname, dandori and sekisho are given the project's files, as the
-    /// person would write them; yuen and sakai, which find their files themselves, the paths given
+    /// rulec, koyomi, chobo, geas, kaname, dandori, sekisho and ringi are given the project's files,
+    /// as the person would write them; yuen and sakai, which find their files themselves, the paths given
     /// that hold theirs, with the project's root as `--root`. In a check of a whole module, each
     /// dependency with files of theirs is given too (`@lib`, DESIGN 17.8), as a module is given when
     /// it is checked by itself: yuen checks each module's `.req` files as one project (its names are
@@ -44,6 +46,11 @@ impl Project {
     /// ritsu-cross, which reads the project through it, so the verdicts are handed in.
     pub fn check_with(&self, joined: &Joined, verdicts: Option<Rc<dyn Verdicts>>, lang: Lang) -> Vec<(Tool, Checked)> {
         let root_arg = self.root_arg();
+        // what ringi reads besides the files (`--through`), said before anything is asked of it: each
+        // `.ringi` is checked once with it, and the checks across the languages read that check;
+        // and the language of the run, which the files a request is lowered to are asked in first
+        joined.ringi.set_options(&self.ringi);
+        joined.ringi.set_lang(lang);
         let mut out = Vec::new();
         for tool in ORDER {
             let files: Vec<String> = self.of(tool).iter().map(|f| f.shown.clone()).collect();
@@ -59,6 +66,7 @@ impl Project {
                 Tool::Kaname => joined.kaname.checked_lean(&self.root, &files, &joined.ports(), verdicts.clone(), self.lean.as_ref(), lang),
                 Tool::Dandori => joined.dandori.checked_with(&self.root, &files, &joined.ports(), lang),
                 Tool::Sekisho => joined.sekisho.checked(&self.root, &files, lang),
+                Tool::Ringi => joined.ringi.checked_with(&self.root, &files, &self.ringi, lang),
                 Tool::Yuen => {
                     let engine = yuen::ports::Engine::with(joined.yuen());
                     let ours = self.given_for(Tool::Yuen);
@@ -81,10 +89,12 @@ impl Project {
         out
     }
 
-    /// Files what rulec says of a line of a contribution, when it checks the rule the contribution
-    /// adds to, under the contribution (rulec files each finding under the file it checks, the rule,
-    /// and says where the line is in the JSON's `where`; §15.231), when the project holds the
-    /// contribution. In a module, a contribution of the module at hand to a rule of a dependency is
+    /// Files what rulec says, in the check of one file, of a line of another under the file the
+    /// line is in, when the project holds it: a line of a contribution, found when it checks the
+    /// rule the contribution adds to, and a line of the rule, found when it checks the contribution
+    /// (rulec files each finding under the file it checks, and says where the line is in the JSON's
+    /// `where`; §15.231). The `file` and the `line` of a finding are then of one file, in a module
+    /// and out of one. In a module, a contribution of the module at hand to a rule of a dependency is
     /// the module's own, and so is what is said of its lines (DESIGN 17.8: what is said at a border
     /// between the module and a dependency is the module's). `ritsu check` and `ritsu gen` count a
     /// check's findings this way, so that the two say the same of a tree.

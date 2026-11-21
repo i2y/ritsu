@@ -1,0 +1,7 @@
+2026-11-16 10:00  submit   e1201  -> first（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  approve  e1101  -> approved
+シナリオ `inside_every_range`: 書いたとおり（2 行）
+
+2026-11-16 10:00  submit  e1201  -> first（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  reject  e1101  -> rejected
+シナリオ `below_zero_and_past_a_hundred`: 書いたとおり（2 行）

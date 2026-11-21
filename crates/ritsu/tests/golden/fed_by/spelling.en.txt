@@ -1,0 +1,7 @@
+ok shipping_fee.rule
+ok waiver.rule
+error[ritsu E207]: waiver.rule:5:1: `input fee` takes money[JPY] >=0JPY <=1000JPY, and its source rulec "shipping_fee.rule" output fee can be 1200JPY
+     5 |   fee : money[JPY]  range >=0JPY <=1_000JPY  fed by rulec "shipping_fee.rule" output fee
+  = rulec "shipping_fee.rule" output fee comes to 1200JPY at weight = 2001g.
+  = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
+ritsu check: 2 files (rulec 2): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

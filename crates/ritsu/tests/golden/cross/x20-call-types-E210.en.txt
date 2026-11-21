@@ -1,0 +1,9 @@
+order.flow: ok
+ok purchase.ringi: a request, 1 field, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+error[ritsu E210]: purchase.ringi:15: What `purchase` gives the flow `order` as its input `request_id` is not what the input takes, string
+    15 |   on approved  launch order(request_id: amount, amount: amount)
+  = `amount` is money[JPY] >=1JPY <=1_000_000JPY.
+  = The request gives money[JPY] >=1JPY <=1_000_000JPY, and the flow takes string: the types differ.
+  = Give the input a value of its type in the call, or change the type of the input `request_id` in "order.flow" (line 5).
+ritsu check: 2 files (dandori 1, ringi 1): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided

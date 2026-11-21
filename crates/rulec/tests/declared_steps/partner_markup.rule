@@ -1,0 +1,23 @@
+rule partner_markup v1
+description "The price of an item: a partner's items take the markup the partner sets, the others a markup by kind. The heading holds the markup to whole percents, and the partner's rate comes in half percents"
+
+enum kind = books | music | toys
+
+inputs
+  item_kind    : kind
+  partner      : bool
+  partner_rate : rate[step 0.5%]  range >=0% <=30%
+  list_price   : money[USD]  range >=0USD <=1000USD
+
+outputs
+  price : money[USD]  round half_up(1USD)
+
+table markup_of
+policy unique
+| partner | item_kind | -> markup : rate[step 1%] |
+| true    | -         | partner_rate              |
+| false   | books     | 5%                        |
+| false   | music     | 10%                       |
+| false   | toys      | 20%                       |
+
+define price : money[USD] = list_price + list_price * markup

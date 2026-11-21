@@ -1,0 +1,47 @@
+rule クーポンのある注文(coupon_order_ja) v1
+description "注文の還元額と手数料と、高い品があるか。注文には出荷する明細が二件以上ある。一件だけの注文は受け付けず、手数料の行と還元額の丸めを探す呼び出しも、明細を一件にしたものは受け付けない"
+
+enum 地域(region_kind) = 北(north) | 東(east) | 南(south)
+
+inputs
+  会員(member)     : bool
+  地域区分(region) : 地域
+  クーポン(coupon) : money[円]  range >=0円 <=1000円
+
+# 注文の明細の一件ぶん
+elements 明細(lines)
+  価格(price)   : money[円]  range >=1円 <=100円
+  出荷(shipped) : bool
+
+count 出荷する明細(shipped_lines) over 明細 where 出荷  range >=2 <=5
+max 最高値(dearest) over 明細 of 価格 empty 0円
+
+outputs
+  還元額(rebate) : money[円]  round half_up(1円)
+  高い品(pricey) : bool
+  手数料(fee)    : money[円]  round down(1円)
+
+# 会員には、クーポンの 1.5% を還元する
+table 還元率の表(share_of)
+policy unique
+| 会員  | -> 還元率(share) : rate |
+| true  | 1.5%                    |
+| false | 0%                      |
+
+result 還元額 = クーポン * 還元率
+
+table 高い品の判定(pricey_of)
+policy unique
+| 最高値 | -> 高い品 |
+| <50円  | false     |
+| >=50円 | true      |
+
+table 手数料の表(fee_of)
+policy first
+| 会員  | 地域区分 | クーポン | -> 手数料 |
+| true  | -        | -        | 0円       |
+| false | 北       | <300円   | 500円     |
+| false | 北       | >=300円  | 300円     |
+| false | 東       | <600円   | 400円     |
+| false | 東       | >=600円  | 200円     |
+| false | -        | -        | 600円     |

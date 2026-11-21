@@ -1,0 +1,5 @@
+警告[W402]: tests/spellings/GoのRoles.gate:13:1: 型 `Roles` は、Go のコードで `Roles` と書かれ、コードが自分で使う名前と同じです
+    13 | resource 係の表(Roles)
+  = Go（`--target go`）: 型 `Roles` を `Roles` と書きますが、コードは同じ名前を自分でも宣言します。パッケージをコンパイルできません（`redeclared in this block`）。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
+tests/spellings/GoのRoles.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

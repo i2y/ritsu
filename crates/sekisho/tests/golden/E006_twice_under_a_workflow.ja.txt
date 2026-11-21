@@ -1,0 +1,5 @@
+エラー[E006]: tests/mutants/E006_twice_under_a_workflow.gate:12:3: `resource Claim from claim_id` が、このワークフローに二度書かれています
+    12 |   resource Claim from claim_id
+  = 属性は、一つの `resource` の行の下にまとめて書いてください。
+エラー[E006]: tests/mutants/E006_twice_under_a_workflow.gate:14:5: 属性 `amount` が、この `resource` の下に二度書かれています
+    14 |     amount = amount

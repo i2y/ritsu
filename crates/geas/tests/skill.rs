@@ -63,7 +63,7 @@ fn the_install_writes_the_folder_as_it_is() {
     assert!(err.starts_with("error[E080]: `--force` goes with `--install <dir>`"), "{err}");
     let (_, err, code) = run(s.path(), &["skill", "x.geas"], &[]);
     assert_eq!(code, 2);
-    assert!(err.starts_with("error[E080]: `geas skill` takes no file"), "{err}");
+    assert_eq!(err, "error[E080]: `geas skill` takes no arguments\n  = usage: geas skill [--install <dir> [--force]]\n");
 }
 
 #[test]

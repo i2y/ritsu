@@ -23,21 +23,31 @@
 //! An amount that never comes from a rule is dandori's to hold to the task's ranges (its E014),
 //! and its refusals are the ones chobo's check finds, which dandori holds the task to (its E022).
 
-use crate::{borders, named, Border, Borders, Came, Check, Flow, Side};
+use crate::{borders, named, numbers, Border, Borders, Came, Check, Flow, Side};
 use ritsu_base::naming::Tool;
 use ritsu_base::diag::Diag;
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
-use ritsu_ports::{Amount, Answer, Books, ColumnType, Finding, Found, Held, Origin, OutputCall, OutputValues, Rules, Value};
+use ritsu_ports::{Amount, Answer, Books, Finding, Found, Held, Origin, OutputCall, OutputValues, RuleFacts, Rules, Value};
 use ritsu_project::{Joined, Project};
+use ritsu_units::{written, Unit};
 
 /// One rule's output an amount can be: the rule as a note names it, the output, what it comes to,
-/// and the call of the rule the runs to the transfer make, where dandori follows them.
+/// the call of the rule the runs to the transfer make, where dandori follows them, and what rulec
+/// says of the rule (the units a note says its values in).
 struct Output {
     rule: String,
     output: String,
     values: Found<OutputValues>,
     call: Option<OutputCall>,
+    facts: Option<RuleFacts>,
+}
+
+impl Output {
+    /// The unit of the output, which a note says what it comes to in.
+    fn unit(&self) -> Option<Unit> {
+        self.facts.as_ref().and_then(|f| numbers::output_unit(f, &self.output))
+    }
 }
 
 /// The places an amount can come from, as `borders::amounts_given` reads them.
@@ -56,47 +66,15 @@ fn from_rule(a: &Amount) -> bool {
     }
 }
 
-/// What a call gives the rule's inputs, as `Rules::output_values_over` takes it: a number on the
-/// wire, an enum by the places of its values in the rule's order (a run of places as one range, a
-/// value apart from the others as the input named again), a bool as 0 and 1. An input whose value
-/// the rule does not name is held to nothing narrower.
+/// What a call gives the rule's inputs, as `Rules::output_values_over` takes it
+/// (`OutputCall::held_ranges`).
 fn held_ranges(joined: &Joined, call: &OutputCall) -> Vec<(String, Option<i128>, Option<i128>)> {
-    let facts = joined.rulec.facts(&call.rule).ok();
-    let mut out = Vec::new();
-    for i in &call.inputs {
-        match &i.held {
-            None => {}
-            Some(Held::Range(lo, hi)) => out.push((i.input.clone(), *lo, *hi)),
-            Some(Held::Values(values)) => {
-                let ty = facts.as_ref().and_then(|f| f.inputs.iter().find(|c| c.name == i.input)).map(|c| match &c.ty {
-                    ColumnType::Opt(t) => (**t).clone(),
-                    t => t.clone(),
-                });
-                let order: Vec<String> = match &ty {
-                    Some(ColumnType::Bool) => vec!["false".into(), "true".into()],
-                    Some(ColumnType::Enum { name, .. }) => facts.as_ref().and_then(|f| f.enums.iter().find(|e| e.name == *name)).map(|e| e.values.iter().map(|v| v.name.clone()).collect()).unwrap_or_default(),
-                    _ => Vec::new(),
-                };
-                let places: Option<Vec<i128>> = values.iter().map(|v| order.iter().position(|o| o == v).map(|p| p as i128)).collect();
-                let Some(mut places) = places.filter(|p| !p.is_empty()) else { continue };
-                places.sort_unstable();
-                let mut runs: Vec<(i128, i128)> = Vec::new();
-                for p in places {
-                    match runs.last_mut() {
-                        Some((_, hi)) if *hi + 1 == p => *hi = p,
-                        _ => runs.push((p, p)),
-                    }
-                }
-                out.extend(runs.into_iter().map(|(lo, hi)| (i.input.clone(), Some(lo), Some(hi))));
-            }
-        }
-    }
-    out
+    call.held_ranges(joined.rulec.facts(&call.rule).ok().as_ref())
 }
 
-/// What a call gives the inputs the flow holds, as a note says it: `` `event_kind` = handback or
-/// workshop ``, `` `asked` >=0 <=50 ``.
-fn held_text(call: &OutputCall) -> Option<Text> {
+/// What a call gives the inputs the flow holds, as a note says it, a number in the input's unit:
+/// `` `event_kind` = handback or workshop ``, `` `asked` >=0JPY <=50JPY ``.
+fn held_text(call: &OutputCall, facts: Option<&RuleFacts>) -> Option<Text> {
     let mut ja = Vec::new();
     let mut en = Vec::new();
     for i in &call.inputs {
@@ -112,7 +90,7 @@ fn held_text(call: &OutputCall) -> Option<Text> {
                 en.push(format!("`{input}` = {words}"));
             }
             Some(Held::Range(lo, hi)) => {
-                let ends = [lo.map(|n| format!(">={n}")), hi.map(|n| format!("<={n}"))].into_iter().flatten().collect::<Vec<_>>().join(" ");
+                let ends = written::between(*lo, *hi, facts.and_then(|f| numbers::input_unit(f, input)).as_ref());
                 ja.push(format!("`{input}` {ends}"));
                 en.push(format!("`{input}` {ends}"));
             }
@@ -130,7 +108,7 @@ fn amounts(project: &Project, joined: &Joined, a: &Amount) -> Amounts {
         let named = named(project, &call.rule);
         let ranges = held_ranges(joined, call);
         let values = if ranges.is_empty() { joined.rulec.output_values(&call.rule, &call.output) } else { joined.rulec.output_values_over(&call.rule, &call.output, &ranges) };
-        got.outputs.push(Output { rule: named.clone(), output: call.output.clone(), values: values.unwrap_or_else(|_| unread(&named)), call: Some(call.clone()) });
+        got.outputs.push(Output { rule: named.clone(), output: call.output.clone(), values: values.unwrap_or_else(|_| unread(&named)), call: Some(call.clone()), facts: joined.rulec.facts(&call.rule).ok() });
     }
     for o in &a.from {
         match o {
@@ -139,7 +117,7 @@ fn amounts(project: &Project, joined: &Joined, a: &Amount) -> Amounts {
             Origin::Output { rule, output } => {
                 let named = named(project, rule);
                 let values = joined.rulec.output_values(rule, output).unwrap_or_else(|_| unread(&named));
-                got.outputs.push(Output { rule: named, output: output.clone(), values, call: None });
+                got.outputs.push(Output { rule: named, output: output.clone(), values, call: None, facts: joined.rulec.facts(rule).ok() });
             }
             Origin::Range(lo, hi) => got.ranges.push((*lo, *hi)),
             Origin::Unknown(t) => {
@@ -151,18 +129,6 @@ fn amounts(project: &Project, joined: &Joined, a: &Amount) -> Amounts {
         }
     }
     got
-}
-
-/// A value as a note writes it.
-fn shown(v: &Value) -> String {
-    match v {
-        Value::Int(n) => n.to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Str(s) => format!("\"{s}\""),
-        Value::Date(d) | Value::Enum(d) => d.clone(),
-        Value::None => "none".into(),
-        Value::List(xs) => format!("[{} elements]", xs.len()),
-    }
 }
 
 /// Reasons as a message lists them: `` `out_of_stock`, `too_many` ``.
@@ -178,6 +144,9 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                 continue;
             }
             let task = &call.task;
+            // an amount is counted in its parameter's unit, the smallest step of the book's unit
+            let book = joined.chobo.facts(&call.book).ok();
+            let param_unit = |param: &str| book.as_ref().and_then(|b| numbers::param_unit(b, &call.transfer, param));
             let mut all_outputs: Vec<Found<OutputValues>> = Vec::new();
             let mut all_ranges = Vec::new();
             let mut open: Option<Text> = None;
@@ -204,6 +173,11 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                 match answer {
                     Answer::Holds => {}
                     Answer::Fails((v, at)) => {
+                        // the amount in the unit of what gives it: the rule's output, or the parameter
+                        let v = match &at {
+                            borders::AmountFrom::Output(i, _) => written::value(v, got.outputs[*i].unit().as_ref()),
+                            borders::AmountFrom::Range(_) => written::value(v, param_unit(param).as_ref()),
+                        };
                         let mut held: Option<Text> = None;
                         let mut fix = tr!(
                             "規則の返す額を 0 以上にしてください（負の額は、向きの違う振替に分けてください）。",
@@ -213,10 +187,10 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                             borders::AmountFrom::Output(i, inputs) => {
                                 let o = &got.outputs[*i];
                                 let (rule, output) = (&o.rule, &o.output);
-                                let at = inputs.iter().map(|(n, x)| format!("{n} = {}", shown(x))).collect::<Vec<_>>().join(", ");
+                                let at = numbers::inputs(o.facts.as_ref(), inputs);
                                 if let Some(c) = &o.call {
                                     let line = c.line;
-                                    held = held_text(c).map(|h| {
+                                    held = held_text(c, o.facts.as_ref()).map(|h| {
                                         tr!("この振替に至る実行では、{line} 行目の呼び出しが規則に渡すのは {} です。", "On the runs that reach this transfer, the call on line {line} gives the rule {}.", h.ja; h.en)
                                     });
                                     // the first input of the example, in the rule's order, that a
@@ -253,8 +227,8 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                         };
                         let diag = diag
                             .note(tr!(
-                                "chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 9223372036854775807 までです。それ以外の額の呼び出しは、拒否されるのではなく失敗します。",
-                                "chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step, and a call with any other fails rather than being refused."
+                                "chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 2⁶³ − 1 までです。それ以外の額の呼び出しは、拒否されるのではなく失敗します。",
+                                "chobo takes an amount from 0 to 2⁶³ − 1 in the unit's smallest step, and a call with any other fails rather than being refused."
                             ))
                             .note(fix);
                         out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
@@ -275,15 +249,16 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                             Some((i, lo, hi)) => {
                                 let o = &got.outputs[i];
                                 let (rule, output) = (&o.rule, &o.output);
-                                let counted = match o.call.as_ref().and_then(|c| held_text(c).map(|h| (c.line, h))) {
+                                let range = written::between(Some(lo), Some(hi), o.unit().as_ref());
+                                let counted = match o.call.as_ref().and_then(|c| held_text(c, o.facts.as_ref()).map(|h| (c.line, h))) {
                                     Some((line, h)) => tr!(
-                                        "{line} 行目の呼び出しが規則に渡す値（{}）で rulec が数えた範囲では、`{given}`（規則 \"{rule}\" の出力 `{output}`）は >={lo} <={hi} です。その値の中の規則のベクタには、chobo が受け取らない額になる入力がありませんでした。",
-                                        "rulec counts `{given}`, the output `{output}` of the rule \"{rule}\", as >={lo} <={hi} over what the call on line {line} gives it ({}), and none of the rule's vectors there gives it an amount chobo does not take.",
+                                        "{line} 行目の呼び出しが規則に渡す値（{}）で rulec が数えた範囲では、`{given}`（規則 \"{rule}\" の出力 `{output}`）は {range} です。その値の中の規則のベクタには、chobo が受け取らない額になる入力がありませんでした。",
+                                        "rulec counts `{given}`, the output `{output}` of the rule \"{rule}\", as {range} over what the call on line {line} gives it ({}), and none of the rule's vectors there gives it an amount chobo does not take.",
                                         h.ja; h.en
                                     ),
                                     None => tr!(
-                                        "rulec の数えた範囲では、`{given}`（規則 \"{rule}\" の出力 `{output}`）は >={lo} <={hi} です。規則のベクタには、chobo が受け取らない額になる入力がありませんでした。",
-                                        "rulec counts `{given}`, the output `{output}` of the rule \"{rule}\", as >={lo} <={hi}, and none of the rule's vectors gives it an amount chobo does not take."
+                                        "rulec の数えた範囲では、`{given}`（規則 \"{rule}\" の出力 `{output}`）は {range} です。規則のベクタには、chobo が受け取らない額になる入力がありませんでした。",
+                                        "rulec counts `{given}`, the output `{output}` of the rule \"{rule}\", as {range}, and none of the rule's vectors gives it an amount chobo does not take."
                                     ),
                                 };
                                 diag.note(counted)
@@ -317,7 +292,11 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                     Err(_) => Found::Undecided(tr!("chobo から \"{}\" の情報を得られません", "chobo does not answer for \"{}\"", named(project, &call.book))),
                 },
             };
+            // the amounts in their parameters' unit, where they share one
+            let units: Vec<Option<Unit>> = call.amounts.iter().map(|a| param_unit(&a.param)).collect();
+            let unit = units.first().cloned().flatten().filter(|u| units.iter().all(|x| x.as_ref() == Some(u)));
             let (lo, hi) = range.unwrap_or((1, borders::MAX_AMOUNT));
+            let (lo, hi) = (written::value(lo, unit.as_ref()), written::value(hi, unit.as_ref()));
             // the reasons of the book's bounds: the refusals that turn on the amounts
             let bounds: Vec<String> = joined.chobo.facts(&call.book).map(|b| b.accounts.iter().flat_map(|a| a.lower.iter().chain(a.upper.iter()).map(|x| x.refusal.clone())).collect()).unwrap_or_default();
             let answer = borders::refusals_met(&found, op, &call.handles, &bounds);

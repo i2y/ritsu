@@ -101,7 +101,8 @@ to a task, to `wait until`, and into a string (`"received at {now}"`). A stateme
 however many times it says `now`, and every try of a call that is tried again gives the moment of
 the first: each platform reads the clock once for the statement, so that a replay reads the same
 time again (the table below). In a workflow that says the period it runs in, `now` is a moment of
-the period.
+the period. Under `ritsu run`, the clock goes on by each wait, so a date given `now` after a wait
+of six days counts from the day the wait came to.
 
 ## The period a workflow runs in
 
@@ -277,10 +278,16 @@ What you put beside the generated code:
 ## How it is checked
 
 - Every platform plays every scenario against the reference interpreter, as for every other call:
-  a scenario answers a date with a day (and a time), and an operation of a book with done, done
-  before, or a refusal. Each platform's clock is set to the run's moment, so that `now` reads the
-  same everywhere. A run of a workflow with a period can say two: the moment it starts at, and the
-  one every `now` after the start reads, so that the runs that leave the period are played too.
+  a scenario answers a date with a day (and the time of that day the date says), and an operation
+  of a book with done, done before, or a refusal. Each platform's clock is set to the run's moment
+  and does not move, so that `now` reads the same everywhere. A run of a workflow with a period can
+  say two: the moment it starts at, and the one every `now` after the start reads, so that the runs
+  that leave the period are played too.
+- The scenarios `ritsu dandori scenarios` writes leave the dates to koyomi and the books to chobo
+  (`"dates": "koyomi"`, and `books`, what was done to each book before the run): a refusal comes
+  from what is in the book and from the time that goes by, not from an answer chosen. Every one runs
+  under `ritsu run` unchanged, on a clock that goes on by each wait, to the end `ritsu dandori run`
+  comes to.
 - The code dandori writes around koyomi's (the Lambda function, `rules.ts`, `rules.py`, `rules.go`)
   runs with the code koyomi writes, on every input of the file's range, and must answer what koyomi
   says each date comes to; one input in seven goes as a time of that day instead, read at the

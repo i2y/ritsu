@@ -1,0 +1,4 @@
+enums expense_choices v1
+description "What ringi writes from the choices of expense.ringi: one enum for each, which the form, the route and the tables read"
+
+enum category = travel "Travel" | expense "Expenses" | purchase "Purchase"

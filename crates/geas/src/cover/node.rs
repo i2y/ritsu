@@ -6,6 +6,7 @@
 use super::{FileLines, Report};
 use crate::json::{self, J};
 use crate::tree;
+use ritsu_base::text::Text;
 use std::path::{Path, PathBuf};
 
 /// One range V8 reports: UTF-16 offsets into the script, end not included.
@@ -17,10 +18,10 @@ struct Range {
 
 /// The files under `root` one coverage file reports. `source` reads a file the way
 /// the run saw it (the tests hand in recorded sources).
-pub fn read(text: &str, root: &Path, source: &dyn Fn(&Path) -> Option<String>) -> Result<Report, String> {
+pub fn read(text: &str, root: &Path, source: &dyn Fn(&Path) -> Option<String>) -> Result<Report, Text> {
     let v = json::parse(text)?;
     let Some(J::Arr(scripts)) = get(&v, "result") else {
-        return Err("no `result` list".into());
+        return Err(tr!("`result` の並びがありません", "no `result` list"));
     };
     let mut out = Report::new();
     for script in scripts {
@@ -46,7 +47,7 @@ pub fn read(text: &str, root: &Path, source: &dyn Fn(&Path) -> Option<String>) -
                     for r in rs {
                         let n = |k: &str| match get(r, k) {
                             Some(J::Num(x)) if *x >= 0.0 => Ok(*x as u64),
-                            _ => Err(format!("a range of {rel} has no `{k}`")),
+                            _ => Err(tr!("{rel} の範囲に `{k}` がありません", "a range of {rel} has no `{k}`")),
                         };
                         ranges.push(Range { start: n("startOffset")?, end: n("endOffset")?, count: n("count")? });
                     }

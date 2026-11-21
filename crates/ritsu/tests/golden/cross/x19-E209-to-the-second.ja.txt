@@ -1,0 +1,21 @@
+office.cal: ok — カレンダー office。表を使わないので、データの範囲は 0001-01-01〜9999-12-31 です
+budget.book: ok
+  allocate.do   拒否されうる理由: key_conflict
+  reserve.hold  拒否されうる理由: over_budget（dept_budget(dept) at least 0）、key_conflict、already_refused
+  reserve.post  拒否されうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
+  reserve.void  拒否されうる理由: already_posted、expired、no_such_hold
+  キー: allocate は、dept と period の組ごとに一度だけ動きます。キーが同じで amount が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: reserve は、request と attempt の組ごとに一度だけ動きます。キーが同じで dept、amount のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
+ok purchase.ringi: 申請の種類、フィールド 2 個、ステップ 1 個
+  2026-04-01 から使えます: `effective from`
+  終わり無く使えます: 読むデータに終わりがありません
+  長くても 10 営業日で終わります
+エラー[ritsu E209]: purchase.ringi:22:22: `purchase` のチケットが仮押さえ `budget.reserve` を確定か取消にする前に、期限が切れることがあります
+    22 |   on submitted  hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)
+  = 仮押さえは申請を出したときに作り、その `round` が終わるまで開いています。ringi の検査の数え方で、長くて 10 営業日です（一つの `round` が 10 営業日）。
+  = 2026-04-01 に出した申請は、カレンダー `office` で 10 営業日あとの 2026-04-15 まで開いていることがあり、15 日になります。
+  = 仮押さえは、作ってから 15 日で期限が切れます（"budget.book" の `reserve`）。
+  = 仮押さえは、期限のちょうどその秒に切れています。2026-04-01 の 00:00 に作った仮押さえは、2026-04-15 が終わる時点で切れています。
+  = 期限の切れた仮押さえの確定と取消を、帳簿は `expired` で拒否します。チケットが承認されても、押さえた分はもうありません。
+  = 仮押さえの期限を延ばすか（振替の `pending expires after`）、ステップの期限を短くしてください。
+ritsu check: ファイル 3 個（koyomi 1、chobo 1、ringi 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所

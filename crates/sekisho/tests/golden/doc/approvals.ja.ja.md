@@ -58,7 +58,7 @@ action ごとに、`sekisho check` が数えた組み合わせを、Cedar の答
 
 - どの操作も守りません。
 - principal の型：`利用者`。resource の型：`購入`（ID は操作の引数 `purchaseId` から読む）
-- input `金額`（`amount`）：`money[GBP, incl_tax]`、1GBP〜20,000GBP
+- input `金額`（`amount`）：`money[GBP, incl_tax]`、1GBP〜20_000GBP
 - 計算した値：`区分`（下の「計算した値」）
 - 組み合わせは 64 通りで、そのうち 2 通りを許します。
 
@@ -90,7 +90,7 @@ action ごとに、`sekisho check` が数えた組み合わせを、Cedar の答
 
 - どの操作も守りません。
 - principal の型：`利用者`。resource の型：`購入`（ID は操作の引数 `purchaseId` から読む）
-- input `金額`（`amount`）：`money[GBP, incl_tax]`、1GBP〜20,000GBP
+- input `金額`（`amount`）：`money[GBP, incl_tax]`、1GBP〜20_000GBP
 - 計算した値：`区分`（下の「計算した値」）
 - `allowed 承認する(金額: 金額)` を読みます。同じ principal と resource で `承認する` を尋ねたら許されるかで、値はこのページの `承認する` の表のとおりです（下の「計算した値」）。
 - 組み合わせは 64 通りで、そのうち 6 通りを許します。

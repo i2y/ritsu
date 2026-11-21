@@ -1,0 +1,20 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=1_000_000JPY
+
+route
+| amount       | -> decide |
+| <=100_000JPY | manager   |
+| >100_000JPY  | head      |
+
+who
+  manager   = team managers
+  head      = team heads
+  president = team presidents
+
+ticket
+  self approval  not allowed
+
+claims
+  a_president_at_times : possible decide is president

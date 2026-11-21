@@ -13,10 +13,10 @@
 
 mod impact;
 mod modules;
-mod package;
 
-use ritsu::{check, cli, explain, run, skills};
+use ritsu::{check, cli, explain, package, run, skills};
 use ritsu_base::text::{Lang, Text};
+#[cfg(target_os = "wasi")]
 use ritsu_base::tr;
 use ritsu_project::Joined;
 use std::io::Write;
@@ -94,14 +94,19 @@ fn help_topic(after: &[String]) -> (Option<&str>, Option<String>) {
     (topic, asked)
 }
 
+/// What stops the command, as every command of the toolchain says it (DESIGN 6.2, item 10), and 2.
 fn refuse(msg: Text, lang: Lang) -> ExitCode {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    eprintln!("{head}: {}", msg.get(lang));
-    ExitCode::from(2)
+    ExitCode::from(ritsu_base::cli::refuse(&mut std::io::stderr(), &msg, lang))
 }
 
 /// The language's own command, on the words after its name, with the languages it reads joined.
-fn language(name: &str, args: &[String]) -> ExitCode {
+/// Run as `ritsu <language> …` (`through`), the commands its words name are named that way too
+/// (`run `ritsu koyomi check --help``), which run where only `ritsu` is installed; run by the
+/// language's name (a link named `koyomi`), they are named by it (DESIGN 6.2, item 10).
+fn language(name: &str, args: &[String], through: bool) -> ExitCode {
+    if through {
+        return ritsu_base::cli::through("ritsu", || language(name, args, false));
+    }
     let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
     let code = match name {
         // rulec reads the days of `range from koyomi` through koyomi's port (DESIGN 7.5 (b))
@@ -122,6 +127,8 @@ fn language(name: &str, args: &[String]) -> ExitCode {
         "sekisho" => sekisho::run::run(args, Joined::new().sekisho().into(), &mut out, &mut err),
         // a module calls its rules, dates files and books in the same process (kaname's DESIGN 11.2)
         "kaname" => ritsu::languages::kaname(args, &mut out, &mut err),
+        // a request reads, and is lowered to, six languages in the same process (ringi's DESIGN 16.3)
+        "ringi" => ritsu::languages::ringi(args, &mut out, &mut err),
         _ => unreachable!("only the languages come here"),
     };
     let _ = out.flush();
@@ -130,17 +137,10 @@ fn language(name: &str, args: &[String]) -> ExitCode {
 
 fn main() -> ExitCode {
     restore_sigpipe();
-    // A panic is a bug in ritsu: exit 2, as DESIGN 8.4 says, rather than Rust's 101.
-    std::panic::set_hook(Box::new(|info| {
-        // Built for WASI there is no SIGPIPE: a reader that went away (`| head`) is an error of the
-        // write, which std's printing panics on. The native binary dies of the signal quietly, as
-        // `cat` does; this one goes quietly too, with the code a shell gives that death (DESIGN 8.8).
-        #[cfg(target_os = "wasi")]
-        if info.payload_as_str().is_some_and(|s| s.starts_with("failed printing to std") && s.contains("Broken pipe")) {
-            std::process::exit(128 + 13);
-        }
-        eprintln!("ritsu: a bug in ritsu, please report it: {info}");
-    }));
+    // A panic is a bug in ritsu: exit 2, as DESIGN 8.4 says, rather than Rust's 101, in the words
+    // every binary of the toolchain says it in (DESIGN 6.2, item 10). Built for WASI, a reader that
+    // went away (`| head`) ends the run quietly, as the native binary's signal does (DESIGN 8.8).
+    ritsu_base::cli::on_panic("ritsu");
     // The command runs on a thread of its own with room for 256 MiB of stack, as `kaname`'s does:
     // `ritsu kaname run` reads and runs values a host may give nested 200 deep (kaname's DESIGN
     // 28.1), which overflows the stack of a main thread in a debug build on x86_64 Linux. WASI has
@@ -195,8 +195,8 @@ fn run() -> ExitCode {
     }
     // called by a language's name, ritsu is that command
     let name = std::path::Path::new(&called).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-    if cli::LANGUAGES.contains(&name.as_str()) {
-        return language(&name, &args);
+    if cli::is_language(&name) {
+        return language(&name, &args, false);
     }
     let lang = Lang::pick(lang_asked(&args).as_deref(), "RITSU_LANG");
     let table = cli::table();
@@ -228,14 +228,14 @@ fn run() -> ExitCode {
                     ExitCode::SUCCESS
                 }
                 // a language reads its own variable (`RULEC_LANG`) when no `--lang` is asked
-                Some(l) if cli::is_language(l) => language(l, &std::iter::once("--help".to_string()).chain(asked.into_iter().flat_map(|a| ["--lang".to_string(), a])).collect::<Vec<_>>()),
+                Some(l) if cli::is_language(l) => language(l, &std::iter::once("--help".to_string()).chain(asked.into_iter().flat_map(|a| ["--lang".to_string(), a])).collect::<Vec<_>>(), true),
                 Some("mod") => ExitCode::from(modules::cli::command(&["--help".to_string()], lang)),
                 Some(c) => match table.command(c) {
                     Some(cmd) => {
                         print!("{}", table.help_cmd(cmd, lang));
                         ExitCode::SUCCESS
                     }
-                    None => refuse(tr!("`{c}` というコマンドはありません。`ritsu --help` を読んでください", "there is no command `{c}`; run `ritsu --help`"), lang),
+                    None => refuse(ritsu_base::cli::no_command("ritsu", c), lang),
                 },
             }
         }
@@ -243,32 +243,32 @@ fn run() -> ExitCode {
             println!("ritsu {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        "check" | "explain" | "gen" | "skills" => {
+        "check" | "explain" | "gen" | "skills" | "run" | "impact" | "mod" => {
             let mut rest: Vec<String> = args[..at].to_vec();
             rest.extend(args[at + 1..].iter().cloned());
+            // A line that asks for JSON is answered in JSON when the command stops before its work
+            // (DESIGN 6.2, item 10): `check` and `run` say so themselves, and `gen` writes the
+            // reason in its own JSON.
+            let answering = |f: &dyn Fn() -> u8| ritsu_base::cli::answering(&rest, &mut std::io::stdout(), |_| f());
             ExitCode::from(match first.as_str() {
                 "check" => check::command(&rest, lang),
                 "gen" => package::command(&rest, lang),
-                "skills" => skills::command(&rest, lang),
-                _ => explain::command(&rest, lang),
+                "run" => run::command(&rest, lang),
+                "skills" => answering(&|| skills::command(&rest, lang)),
+                "impact" => answering(&|| impact::command(&rest, lang)),
+                "mod" => answering(&|| modules::cli::command(&rest, lang)),
+                _ => answering(&|| explain::command(&rest, lang)),
             })
         }
-        "run" => {
-            let mut rest: Vec<String> = args[..at].to_vec();
-            rest.extend(args[at + 1..].iter().cloned());
-            ExitCode::from(run::command(&rest, lang))
+        // `ritsu --lang ja koyomi check …`: the `--lang` before the language is the language's too
+        l if cli::is_language(l) => {
+            let mut rest = args[at + 1..].to_vec();
+            if !rest.is_empty() && Lang::flag_of(&rest).is_none() {
+                rest.extend(args[..at].iter().cloned());
+            }
+            language(l, &rest, true)
         }
-        "impact" => {
-            let mut rest: Vec<String> = args[..at].to_vec();
-            rest.extend(args[at + 1..].iter().cloned());
-            ExitCode::from(impact::command(&rest, lang))
-        }
-        "mod" => {
-            let mut rest: Vec<String> = args[..at].to_vec();
-            rest.extend(args[at + 1..].iter().cloned());
-            ExitCode::from(modules::cli::command(&rest, lang))
-        }
-        l if cli::is_language(l) => language(l, &args[at + 1..]),
-        other => refuse(tr!("`{other}` というコマンドはありません。`ritsu --help` を読んでください", "there is no command `{other}`; run `ritsu --help`"), lang),
+        // `--lang` anywhere on the line gives the language of what stops it (`ritsu nosuch --lang ja`)
+        other => ritsu_base::cli::answering(&args, &mut std::io::stdout(), |_| refuse(ritsu_base::cli::no_command("ritsu", other), Lang::pick(Lang::flag_of(&args).as_deref(), "RITSU_LANG"))),
     }
 }

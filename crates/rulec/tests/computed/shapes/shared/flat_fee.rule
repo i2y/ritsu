@@ -1,0 +1,14 @@
+rule flat_fee v1
+description "A flat fee of 260 yen up to 213 yen, and none above it"
+
+inputs
+  amount : money[JPY]  range >=0JPY <=360JPY
+
+outputs
+  fee : money[JPY]  round down(1JPY)
+
+table fees
+| amount           | -> fee |
+| <=116JPY         | 260JPY |
+| >116JPY <=213JPY | 260JPY |
+| >213JPY          | 0JPY   |

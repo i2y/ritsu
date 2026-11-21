@@ -1,0 +1,4 @@
+error[E103]: tests/mutants/E103_切り捨てて無くなる手数料.ringi:6:57: The range `>0円` of the field 手数料 holds no value its computation comes to
+     6 |   手数料(fee)  : money[円] "手数料" = 金額 * 3%  round down(1円)  range >0円
+  = The computation comes to `>=0円 <=0円` (from the ranges of what it reads). With this range no request can be made.
+  = Correct the range so that it meets what the computation comes to. A request whose value falls outside the range is refused; a range wider or narrower than that is no mistake.

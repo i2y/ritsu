@@ -1,0 +1,30 @@
+# Timestamps through an AWS API's Smithy model (DESIGN 42). A timestamp goes in the form the model
+# says for where it goes: Lambda's API (restJson1) takes the one in its JSON body as seconds since
+# 1970 (epoch-seconds), and answers its own the same way, while the flow holds both as RFC 3339
+# text. Runs on every platform; the default Transports send the call to moto, which holds the
+# stream and the function.
+workflow aws_times v1
+description "Have a function read a stream's records from a moment on, through an AWS API that takes the moment and answers another"
+
+use smithy lambda from "apis/lambda.json"
+
+enum Position = TRIM_HORIZON | LATEST | AT_TIMESTAMP
+
+record Mapping
+  UUID         : string
+  State        : string
+  LastModified : timestamp
+
+inputs
+  from : timestamp
+
+outputs
+  mapping : Mapping
+
+# The stream's records go to the function from `from` on.
+task read_from(FunctionName: string, EventSourceArn: string, StartingPosition: Position, StartingPositionTimestamp: timestamp) -> Mapping
+  aws lambda:createEventSourceMapping
+
+flow
+  let mapping = read_from(FunctionName: "orders-reader", EventSourceArn: "arn:aws:kinesis:ap-northeast-1:123456789012:stream/orders", StartingPosition: AT_TIMESTAMP, StartingPositionTimestamp: from)
+  succeed mapping = mapping

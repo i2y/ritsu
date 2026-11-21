@@ -1,0 +1,5 @@
+warning[W303]: tests/mutants/W303_a_stage_no_request_reaches.ringi:8:1: No request reaches `heads` at the stage head
+     8 |   head   heads  when amount > 200_000JPY
+  = Correct the conditions of the rows or of the stage, or take out of the route what no request reaches.
+ok tests/mutants/W303_a_stage_no_request_reaches.ringi: a request, 1 field, 2 stages
+  may never end: the stages `check` and `head` have no deadline (`due in …`), and wait until they are answered

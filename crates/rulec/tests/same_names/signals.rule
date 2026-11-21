@@ -1,0 +1,5 @@
+enums signals v1
+description "The lights of a crossing, beside an enum named like what every rule's code declares of the rows that matched (fictional)"
+
+enum light = red | green
+enum fired = yes | no

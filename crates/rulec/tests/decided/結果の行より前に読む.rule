@@ -1,0 +1,17 @@
+rule 結果の行より前に読む(read_result_ja) v1
+description "`result` の行だけが決める手数料を、表が読む形。`result` はどの表よりも後で計算する"
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100000円
+
+outputs
+  手数料(fee)  : money[円]  round down(1円)
+  確認(review) : bool
+
+table 確認の要否(review_of)
+policy unique
+| 手数料   | -> 確認 |
+| <1000円  | false   |
+| >=1000円 | true    |
+
+result 手数料 = down(金額 * 3%, 1円)

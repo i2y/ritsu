@@ -1,0 +1,25 @@
+rule no_arrow v1
+description "The heading of the table of the grade written with no `->`: the grade is read as a condition"
+
+enum level = low "Low" | high "High"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+  member : bool
+
+outputs
+  grade  : level
+  review : bool
+
+table grade_of
+policy unique
+| amount      | grade |
+| <10_000JPY  | low   |
+| >=10_000JPY | high  |
+
+table review_of
+policy unique
+| grade | member | -> review |
+| low   | -      | false     |
+| high  | true   | false     |
+| high  | false  | true      |

@@ -1,0 +1,9 @@
+company.gate: ok — 8 actions, 4 policies (3 permits, 1 forbid), 0 expectations, 0 separations
+ok purchase.ringi: a request, 1 field, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+error[ritsu E911]: purchase.ringi:3: The gate company.gate declares no action for 3 operations of the server's administration: `read_audit`, `import_organization` and `read_organization_audit`
+     3 | use gate "company.gate"
+  = The server's administration asks the gate about four operations: `change_request_type`, which switches a version of a request type, and `read_audit`, which reads its record, with the request type as the resource; `import_organization`, which imports the organization's data, and `read_organization_audit`, which reads its record, with the organization as the resource.
+  = The server asks the gate before it takes an operation, and an action the gate does not declare is allowed to no one: no one could do these operations.
+  = Declare an action for each in company.gate (as `action read_audit`, with the principal and the resource it takes), and write a permit for who may do each.
+ritsu check: 2 files (sekisho 1, ringi 1): 1 fail (1 error); borders between the languages: 3 checked, 0 undecided

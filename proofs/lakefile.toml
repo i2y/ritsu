@@ -1,6 +1,6 @@
 name = "ritsu_proofs"
 version = "0.1.0"
-defaultTargets = ["RulecCert", "ChoboModel", "KoyomiModel", "DandoriCore", "RitsuCross", "KanameCore", "rulec-recheck", "ritsu-model"]
+defaultTargets = ["RulecCert", "ChoboModel", "KoyomiModel", "DandoriCore", "RitsuCross", "KanameCore", "RingiCore", "rulec-recheck", "ritsu-model"]
 
 # The Lean layer of ritsu (DESIGN 11): one package, one toolchain, no dependencies.
 #
@@ -9,6 +9,8 @@ defaultTargets = ["RulecCert", "ChoboModel", "KoyomiModel", "DandoriCore", "Rits
 # `DandoriCore` model the core of three languages and prove what their checks settle; `RitsuCross`
 # models the checks across the languages and proves that each of them settles what it says;
 # `KanameCore` models kaname's evaluation and its analysis of ranges, and proves the analysis sound.
+# `RingiCore` writes ringi's ticket machine as the machine's code does and proves what its design
+# says of it.
 # `ritsu-model` runs the models on the inputs the Rust tests make (DESIGN 11.3).
 
 [[lean_lib]]
@@ -28,6 +30,9 @@ name = "RitsuCross"
 
 [[lean_lib]]
 name = "KanameCore"
+
+[[lean_lib]]
+name = "RingiCore"
 
 [[lean_exe]]
 name = "rulec-recheck"

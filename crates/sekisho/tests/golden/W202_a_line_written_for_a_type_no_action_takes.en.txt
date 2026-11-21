@@ -1,0 +1,6 @@
+warning[W202]: tests/mutants/W202_a_line_written_for_a_type_no_action_takes.gate:21:1: The line speaks of no call: no call of the workflow `pay` (`../../examples/claims/flows/pay.flow`) gives `claim_id` as the id of a `Payment`
+    21 |   resource Payment from claim_id
+  = `ritsu check` rests on the line only at a call that gives `claim_id` as the id (E212, and whether the gate allows the call): it holds at no call of the flow.
+  = No action of the gate takes a `Payment` from an argument: `pay_claim` takes `Claim` from `claimId`.
+  = Write the type of resource an action takes, or take the line out.
+tests/mutants/W202_a_line_written_for_a_type_no_action_takes.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations

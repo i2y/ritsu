@@ -1,0 +1,7 @@
+returns.flow: ok
+refunds.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+error[ritsu E909]: returns.flow:15: The task `refund_order` gives `amount` as money[GBP, incl_tax], and the action `refund_order` of refunds.gate reads its input `amount` as money[GBPc, incl_tax]
+    15 |   refund_order(orderId: order, amount: amount)
+  = The two read one number as two values: the flow's 1GBP is 1GBPc to the gate.
+  = Write one type as the other: the task's parameter `amount` here, or the input `amount` of the action `refund_order` in refunds.gate (and the ends of its range, where they are written without a unit).
+ritsu check: 2 files (dandori 1, sekisho 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

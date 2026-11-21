@@ -1,0 +1,4 @@
+diff: tests/fixtures/reads/changes/unread.diff
+changes no requirement reaches: none
+other files the diff touches: tests/fixtures/reads/app/desk.py, tests/fixtures/reads/data/branch_closures.csv, tests/fixtures/reads/dates/branch.cal, tests/fixtures/reads/notes.txt, tests/fixtures/reads/shop.ctx
+no requirement is touched

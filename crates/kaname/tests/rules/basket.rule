@@ -1,0 +1,30 @@
+rule basket v1
+description "The lines of a basket, each with its day, the day it is held to when it is held, its price, the rate taken off it and whether it is a gift: how many are gifts, how many are held, the earliest day, the largest rate and what the lines cost"
+
+# One line of the basket. The caller passes up to five
+elements lines
+  on      : date           range >=2026-01-01 <=2027-12-31
+  held_to : date?
+  price   : money[USDc]    range >=0USDc <=10_000USDc
+  off     : rate[step 1%]  range >=0% <=50%
+  gift    : bool
+
+# Whether a line is kept for a day
+table kept_of
+policy first
+| held_to | -> kept : bool |
+| none    | false          |
+| -       | true           |
+
+count gifts over lines where gift  range >=0 <=5
+count held_lines over lines where kept  range >=0 <=5
+min first over lines of on empty 2027-12-31
+max most_off over lines of off empty 0%
+sum spent over lines of price  range >=0USDc <=50_000USDc
+
+outputs
+  gifts      : number  round down(1)
+  held_lines : number  round down(1)
+  first      : date
+  most_off   : rate[step 1%]  round down(1%)
+  spent      : money[USDc]  round down(1USDc)

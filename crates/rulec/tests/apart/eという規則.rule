@@ -1,0 +1,18 @@
+rule e v1
+description "Java の runner が宣言する型と、Connect のサービスが読み込む名前と同じ名前の規則"
+
+enum 会員段階(tier) = 一般(basic) | ゴールド(gold)
+
+inputs
+  会員(member) : 会員段階
+  数量(qty)    : number  range >=0 <=10
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 会員ごとの手数料(fee_by_member)
+policy unique
+| 会員     | 数量 | -> 手数料 |
+| 一般     | <=5  | 3USD      |
+| 一般     | >5   | 2USD      |
+| ゴールド | -    | 1USD      |

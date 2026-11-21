@@ -1,0 +1,20 @@
+rule date_on_its_day v1
+description "A date an applied table writes, named day by day: the table below has a row for each day the table above writes, each naming that day alone"
+
+enum zone = local | national
+enum timing = early | late
+
+inputs
+  zone : zone
+
+apply s = "shared/ship_day.rule" meaning:ba324522b221da9e
+  zone = zone
+  ships -> s_ships
+
+outputs
+  x : timing
+
+table pick
+| s_ships    | -> x  |
+| 2026-07-01 | early |
+| 2026-07-03 | late  |

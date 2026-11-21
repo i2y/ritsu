@@ -1,0 +1,3 @@
+エラー[E101]: tests/mutants/E101_rows_with_no_limit.ringi:4:3: 明細 `items` の行の数に上限がありません
+     4 |   items : rows "Items"
+  = `count >=1 <=20` のように、行の数の上限を書いてください。上限は、合計の範囲と、生成するコードが受け付ける行の数になります。

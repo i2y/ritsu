@@ -1,0 +1,13 @@
+organization company v1 "Company"
+description "A small company (fictional) whose proxies name someone who has left"
+
+positions
+  staff     "Staff"
+  dept_head "Head of department"
+  president "President"
+
+team kinds
+  company    "Company"
+  department "Department"
+
+data "shared/org-proxy"

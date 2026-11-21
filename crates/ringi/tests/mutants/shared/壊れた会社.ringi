@@ -1,0 +1,4 @@
+organization 会社(company) v1 "会社"
+
+team kinds
+  部(department) "部"

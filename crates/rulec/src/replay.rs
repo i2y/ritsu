@@ -263,7 +263,8 @@ fn take(
                         Ok(v) => {
                             y.insert(name.clone(), v);
                         }
-                        Err(s) => return Took::Refused(s),
+                        // An element's field is named with its sequence, as the record holds it.
+                        Err(s) => return Took::Refused(s.in_element(seq)),
                     },
                     None => short = true,
                 }

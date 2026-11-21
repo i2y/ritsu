@@ -205,20 +205,19 @@ pub fn files(o: &check::Outcome, target: &str, shown: &str, lang: Lang) -> Resul
 /// them, and one line on standard error.
 fn not_generated(o: &check::Outcome, why: ritsu_base::text::Text, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) {
     let _ = write!(out, "{}", check::render(o, lang));
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    let _ = writeln!(err, "{head}: {}", why.get(lang));
+    let _ = writeln!(err, "{}", ritsu_base::cli::refusal(why.get(lang), lang));
 }
 
 /// `sekisho gen <file.gate>... --target cedar|typescript|python|go... [--authorizer cedar|avp]
 /// [--module <path>] [--out <dir>] [--check]`: the exit code.
 pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.pos.is_empty() {
-        return refuse(err, tr!("`sekisho gen` には .gate のファイルが要ります", "`sekisho gen` needs .gate files"), lang);
+        return refuse(err, crate::cli::table().takes_of("gen"), lang);
     }
     let given = a.all("--target");
     if given.is_empty() {
         let t = TARGETS.join("|");
-        return refuse(err, tr!("`sekisho gen` には `--target {t}` が一つ以上要ります", "`sekisho gen` needs one or more `--target {t}`"), lang);
+        return refuse(err, crate::cli::table().needs_of("gen", &format!("--target {t}")), lang);
     }
     if let Some(t) = given.iter().enumerate().find_map(|(i, t)| given[..i].contains(t).then_some(t)) {
         return refuse(err, tr!("`--target {t}` が二度書かれています", "`--target {t}` is given twice"), lang);
@@ -241,7 +240,7 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     for f in &a.pos {
         let o = match check::check_file(f, suite, &opts) {
             Ok(o) => o,
-            Err(e) => return refuse(err, tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang),
+            Err(e) => return refuse(err, ritsu_base::cli::cannot_read(f, &e), lang),
         };
         if o.unjoined() {
             // E209: the file reads a language this sekisho does not hold
@@ -272,7 +271,9 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
                 worst = worst.max(1);
                 continue;
             }
-            let made = match generate(&o, &Target { name: target, authorizer, go_module: go_module.clone(), place: ritsu_emit::package::Place::here() }, &shown, lang, suite) {
+            // what the code says is in `--lang`, else English, whatever the environment says
+            // (ritsu's DESIGN 4.1); `lang` is what the run prints
+            let made = match generate(&o, &Target { name: target, authorizer, go_module: go_module.clone(), place: ritsu_emit::package::Place::here() }, &shown, Lang::made(a.get("--lang")), suite) {
                 Ok(m) => m,
                 Err(e) => {
                     return refuse(err, tr!("`{f}` から生成できません（{e}）。sekisho の不具合です。報告してください", "cannot generate from `{f}` ({e}): a bug in sekisho, please report it"), lang);
@@ -308,12 +309,12 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
             continue;
         }
         if let Some(dir) = p.parent()
-            && ritsu_base::fs::create_dir_all(dir).is_err()
+            && let Err(e) = ritsu_base::fs::create_dir_all(dir)
         {
-            return refuse(err, tr!("`{}` を作れません", "cannot create `{}`", dir.display()), lang);
+            return refuse(err, ritsu_base::cli::cannot_create(&dir.to_string_lossy(), &e), lang);
         }
-        if ritsu_base::fs::write(&p, body).is_err() {
-            return refuse(err, tr!("`{shown}` に書けません", "cannot write `{shown}`"), lang);
+        if let Err(e) = ritsu_base::fs::write(&p, body) {
+            return refuse(err, ritsu_base::cli::cannot_write(&shown, &e), lang);
         }
         let _ = writeln!(out, "{}", tr!("生成しました: {shown}", "generated: {shown}").get(lang));
     }

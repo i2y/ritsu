@@ -242,8 +242,8 @@ fn gen_writes_every_target_named_in_one_run() {
     for (targets, lang, said) in [
         (&["--target", "go", "--target", "go"][..], "en", "error: `--target go` is given twice\n"),
         (&["--target", "go", "--target", "go"], "ja", "エラー: `--target go` が二度書かれています\n"),
-        (&[], "en", "error: `sekisho gen` needs one or more `--target cedar|typescript|python|go`\n"),
-        (&[], "ja", "エラー: `sekisho gen` には `--target cedar|typescript|python|go` が一つ以上要ります\n"),
+        (&[], "en", "error: `sekisho gen` needs `--target cedar|typescript|python|go`\nusage: sekisho gen <file.gate>... --target cedar|typescript|python|go... [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>] [--lang ja|en]\n"),
+        (&[], "ja", "エラー: `sekisho gen` には `--target cedar|typescript|python|go` が要ります\n使い方: sekisho gen <file.gate>... --target cedar|typescript|python|go... [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>] [--lang ja|en]\n"),
         (&["--target", "go", "--target", "cobol"], "en", "error: `--target cobol` is not a value this flag takes; it takes only cedar | typescript | python | go\n"),
     ] {
         let t = ritsu_testkit::TempDir::new("sekisho-gen-refused");
@@ -347,7 +347,7 @@ fn vectors_of_relations() {
 /// example is run with its directory as the root.
 #[test]
 fn api_says_what_the_gate_declares() {
-    for (path, golden) in [("examples/refunds/refunds.gate", "refunds.json"), ("examples/refunds/refunds.ja.gate", "refunds.ja.json"), ("tests/gen/papers.gate", "papers.json"), ("examples/approvals/approvals.gate", "approvals.json"), ("tests/gen/asked.gate", "asked.json")] {
+    for (path, golden) in [("examples/refunds/refunds.gate", "refunds.json"), ("examples/refunds/refunds.ja.gate", "refunds.ja.json"), ("tests/gen/papers.gate", "papers.json"), ("examples/approvals/approvals.gate", "approvals.json"), ("tests/gen/asked.gate", "asked.json"), ("examples/claims/claims.gate", "claims.json"), ("examples/claims/claims.ja.gate", "claims.ja.json")] {
         let root = common::root_of(path).unwrap();
         let (code, out, _) = run(&["api", path, "--root", root.to_str().unwrap()], common::joined());
         assert_eq!(code, 0, "{path}");

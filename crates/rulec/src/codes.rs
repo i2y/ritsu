@@ -1370,6 +1370,488 @@ define per_unit : money[JPY] = half_up(total / max(units, 1), 1JPY)
 
 result average = per_unit
 "##;
+// E150 (§15.313): the range a `define` is accepted in meets nothing it reaches.
+const X_E150: &str = r##"rule カード手数料(card_fee) v1
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1000000円
+
+define 手数料(fee) : money[円] = down(金額 * 3%, 1円)  range >=40000円
+
+outputs
+  請求額(charged) : money[円]  round down(1円)
+
+result 請求額 = 手数料
+"##;
+const X_E150_EN: &str = r##"rule card_fee v1
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1000000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=40000JPY
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+
+result charged = fee
+"##;
+const X_E150_SUM: &str = r##"rule 贈り物のかご(gift_basket) v1
+
+elements 明細(lines)
+  価格(price)   : money[円]  range >=0円 <=50000円
+  包装(wrapped) : bool
+
+count 包装した品(wrapped_items) over 明細 where 包装  range >=0 <=5
+sum 金額(amount) over 明細 of 価格  range >=300000円 <=1000000円
+
+outputs
+  送料無料(free_shipping) : bool
+  カード(card)            : bool
+
+table 送料(shipping)
+policy unique
+| 金額       | -> 送料無料 |
+| <500000円  | false       |
+| >=500000円 | true        |
+
+table カードの判定(card_of)
+policy unique
+| 包装した品 | -> カード |
+| <2         | false     |
+| >=2        | true      |
+"##;
+const X_E150_SUM_EN: &str = r##"rule gift_basket v1
+
+elements lines
+  price   : money[JPY]  range >=0JPY <=50000JPY
+  wrapped : bool
+
+count wrapped_items over lines where wrapped  range >=0 <=5
+sum amount over lines of price  range >=300000JPY <=1000000JPY
+
+outputs
+  free_shipping : bool
+  card          : bool
+
+table shipping
+policy unique
+| amount      | -> free_shipping |
+| <500000JPY  | false            |
+| >=500000JPY | true             |
+
+table card_of
+policy unique
+| wrapped_items | -> card |
+| <2            | false   |
+| >=2           | true    |
+"##;
+const X_E150_TOP: &str = r##"rule 贈り物のかご(gift_basket) v1
+
+elements 明細(lines)
+  価格(price)   : money[円]  range >=1000円 <=50000円
+  包装(wrapped) : bool
+
+count 包装した品(wrapped_items) over 明細 where 包装  range >=3 <=5
+sum 金額(amount) over 明細 of 価格  range >=0円 <=2000円
+
+outputs
+  送料無料(free_shipping) : bool
+  カード(card)            : bool
+
+table 送料(shipping)
+policy unique
+| 金額     | -> 送料無料 |
+| <1000円  | false       |
+| >=1000円 | true        |
+
+table カードの判定(card_of)
+policy unique
+| 包装した品 | -> カード |
+| 3          | false     |
+| >=4        | true      |
+"##;
+const X_E150_TOP_EN: &str = r##"rule gift_basket v1
+
+elements lines
+  price   : money[JPY]  range >=1000JPY <=50000JPY
+  wrapped : bool
+
+count wrapped_items over lines where wrapped  range >=3 <=5
+sum amount over lines of price  range >=0JPY <=2000JPY
+
+outputs
+  free_shipping : bool
+  card          : bool
+
+table shipping
+policy unique
+| amount    | -> free_shipping |
+| <1000JPY  | false            |
+| >=1000JPY | true             |
+
+table card_of
+policy unique
+| wrapped_items | -> card |
+| 3             | false   |
+| >=4           | true    |
+"##;
+const X_E150_STEP: &str = r##"rule 包装紙(wrapping) v1
+
+inputs
+  贈り物の数(gifts) : number  range >=0 <=5
+
+define 枚数(sheets) : number = 贈り物の数 * 2 + 1  range >=2 <=2
+
+outputs
+  大きなロール(large_roll) : bool
+
+table ロールの判定(roll_of)
+policy unique
+| 枚数 | -> 大きなロール |
+| -    | true            |
+"##;
+const X_E150_STEP_EN: &str = r##"rule wrapping v1
+
+inputs
+  gifts : number  range >=0 <=5
+
+define sheets : number = gifts * 2 + 1  range >=2 <=2
+
+outputs
+  large_roll : bool
+
+table roll_of
+policy unique
+| sheets | -> large_roll |
+| -      | true          |
+"##;
+const X_E114_HEADING: &str = r##"rule 値段(price) v1
+
+enum 種類(kind) = 本(books) | 音楽(music)
+
+inputs
+  品目(item_kind)  : 種類
+  定価(list_price) : money[円]  range >=0円 <=100000円
+
+outputs
+  値段(price) : money[円]  round half_up(1円)
+
+table 上乗せ率の判定(markup_of)
+policy unique
+| 品目 | -> 上乗せ率(markup) : rate[step 1%] |
+| 本   | 0.5%                                |
+| 音楽 | 10%                                 |
+
+define 値段(price) : money[円] = 定価 + 定価 * 上乗せ率
+"##;
+const X_E114_HEADING_EN: &str = r##"rule price v1
+
+enum kind = books | music
+
+inputs
+  item_kind  : kind
+  list_price : money[JPY]  range >=0JPY <=100000JPY
+
+outputs
+  price : money[JPY]  round half_up(1JPY)
+
+table markup_of
+policy unique
+| item_kind | -> markup : rate[step 1%] |
+| books     | 0.5%                      |
+| music     | 10%                       |
+
+define price : money[JPY] = list_price + list_price * markup
+"##;
+const X_E114_DEFINE: &str = r##"rule セールの値段(sale_price) v1
+
+enum 種類(kind) = 本(books) | 音楽(music)
+
+inputs
+  品目(item_kind)  : 種類
+  定価(list_price) : money[円]  range >=0円 <=100000円
+
+outputs
+  値段(price) : money[円]  round half_up(1円)
+
+table 上乗せ率の判定(markup_of)
+policy unique
+| 品目 | -> 上乗せ率(markup) : rate[step 1%] |
+| 本   | 5%                                  |
+| 音楽 | 10%                                 |
+
+define セールの上乗せ率(sale_markup) : rate[step 1%] = 上乗せ率 / 2
+
+define 値段(price) : money[円] = 定価 + 定価 * セールの上乗せ率
+"##;
+const X_E114_DEFINE_EN: &str = r##"rule sale_price v1
+
+enum kind = books | music
+
+inputs
+  item_kind  : kind
+  list_price : money[JPY]  range >=0JPY <=100000JPY
+
+outputs
+  price : money[JPY]  round half_up(1JPY)
+
+table markup_of
+policy unique
+| item_kind | -> markup : rate[step 1%] |
+| books     | 5%                        |
+| music     | 10%                       |
+
+define sale_markup : rate[step 1%] = markup / 2
+
+define price : money[JPY] = list_price + list_price * sale_markup
+"##;
+const X_E150_COUNT: &str = r##"rule 贈り物のかご(gift_basket) v1
+
+elements 明細(lines)
+  包装(wrapped)   : bool
+  割れ物(fragile) : bool
+
+count 包装した品(wrapped_items) over 明細 where 包装  range >=6 <=10
+count 割れ物の数(fragile_items) over 明細 where 割れ物  range >=0 <=5
+
+outputs
+  カード(card) : bool
+
+table カードの判定(card_of)
+policy unique
+| 包装した品 | 割れ物の数 | -> カード |
+| <8         | -          | false     |
+| >=8        | -          | true      |
+"##;
+const X_E150_COUNT_EN: &str = r##"rule gift_basket v1
+
+elements lines
+  wrapped : bool
+  fragile : bool
+
+count wrapped_items over lines where wrapped  range >=6 <=10
+count fragile_items over lines where fragile  range >=0 <=5
+
+outputs
+  card : bool
+
+table card_of
+policy unique
+| wrapped_items | fragile_items | -> card |
+| <8            | -             | false   |
+| >=8           | -             | true    |
+"##;
+// E151 (§15.323): an output nothing decides — the `result` line of the charged amount left out.
+const X_E151: &str = r##"rule カード手数料(card_fee) v1
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1000000円
+
+define 手数料(fee) : money[円] = down(金額 * 3%, 1円)
+
+outputs
+  請求額(charged) : money[円]  round down(1円)
+  確認(review)    : bool
+
+table 確認の要否(review_of)
+| 手数料    | -> 確認 |
+| <10000円  | false   |
+| >=10000円 | true    |
+"##;
+const X_E151_EN: &str = r##"rule card_fee v1
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+  review  : bool
+
+table review_of
+| fee         | -> review |
+| <10_000JPY  | false     |
+| >=10_000JPY | true      |
+"##;
+// The same code for an output read above what decides it: the table reads the charged amount, which
+// the `define` below it works out.
+const X_E151_ABOVE: &str = r##"rule カード手数料(card_fee) v1
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1000000円
+
+outputs
+  請求額(charged) : money[円]  round down(1円)
+  確認(review)    : bool
+
+table 確認の要否(review_of)
+| 請求額    | -> 確認 |
+| <10000円  | false   |
+| >=10000円 | true    |
+
+define 請求額 : money[円] = down(金額 * 3%, 1円)
+"##;
+const X_E151_ABOVE_EN: &str = r##"rule card_fee v1
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+  review  : bool
+
+table review_of
+| charged     | -> review |
+| <10_000JPY  | false     |
+| >=10_000JPY | true      |
+
+define charged : money[JPY] = down(amount * 3%, 1JPY)
+"##;
+// The same code for an output the expression of its own `define` reads.
+const X_E151_ITSELF: &str = r##"rule カード手数料(card_fee) v1
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1000000円
+
+outputs
+  請求額(charged) : money[円]  round down(1円)
+
+define 請求額 : money[円] = 請求額 + down(金額 * 3%, 1円)
+"##;
+const X_E151_ITSELF_EN: &str = r##"rule card_fee v1
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+
+define charged : money[JPY] = charged + down(amount * 3%, 1JPY)
+"##;
+// E152 (§15.323): a table whose heading has no `->`.
+const X_E152: &str = r##"rule カード手数料(card_fee) v1
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1000000円
+
+define 手数料(fee) : money[円] = down(金額 * 3%, 1円)
+
+outputs
+  請求額(charged) : money[円]  round down(1円)
+  確認(review)    : bool
+
+table 確認の要否(review_of)
+| 手数料    | 確認  |
+| <10000円  | false |
+| >=10000円 | true  |
+
+result 請求額 = 手数料
+"##;
+const X_E152_EN: &str = r##"rule card_fee v1
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+  review  : bool
+
+table review_of
+| fee         | review |
+| <10_000JPY  | false  |
+| >=10_000JPY | true   |
+
+result charged = fee
+"##;
+// E153 is what `gen` says of the W121 of a target it is asked for: `rulec gen --target python` of
+// this rule (tests/codes.rs reads the W121 as `gen` does).
+const X_E153: &str = r##"rule 小包の印(parcel_flags) v1
+
+inputs
+  重さ(weight) : number  range >=1 <=100
+
+outputs
+  重い(heavy)   : bool
+  知らせる(_tell) : bool
+
+table 印の判定(flags_of)
+| 重さ | -> 重い | 知らせる |
+| <=10 | false   | false    |
+| >10  | true    | true     |
+"##;
+const X_E153_EN: &str = r##"rule parcel_flags v1
+
+inputs
+  weight : number  range >=1 <=100
+
+outputs
+  heavy : bool
+  _tell : bool
+
+table flags_of
+| weight | -> heavy | _tell |
+| <=10   | false    | false |
+| >10    | true     | true  |
+"##;
+const X_E154: &str = r##"rule 配送料(shipping_fee) v1
+
+inputs
+  個数(qty) : number  range >=1 <=10
+
+outputs
+  送料(fee) : money[円, incl_tax]  round half(10円)
+
+table 個数ごとの送料(fee_by_qty)
+policy unique
+| 個数 | -> 送料 |
+| <=5  | 600円   |
+| >5   | 1200円  |
+"##;
+const X_E154_EN: &str = r##"rule shipping_fee v1
+
+inputs
+  qty : number  range >=1 <=10
+
+outputs
+  fee : money[USD]  round half(1USD)
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | 6USD   |
+| >5  | 12USD  |
+"##;
+const X_E155: &str = r##"rule 配送料(shipping_fee) v1
+
+inputs
+  個数(qty) : number  range >=1 <=10
+
+outputs
+  送料(fee) : money[円]  round down(1円)  round up(1円)
+
+table 個数ごとの送料(fee_by_qty)
+policy unique
+| 個数 | -> 送料 |
+| <=5  | 600円   |
+| >5   | 1200円  |
+"##;
+const X_E155_EN: &str = r##"rule shipping_fee v1
+
+inputs
+  qty : number  range >=1 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)  round up(1USD)
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | 6USD   |
+| >5  | 12USD  |
+"##;
 const X_W135: &str = r##"rule t(t) v1
 
 inputs
@@ -2107,17 +2589,18 @@ message Row {
 "##,
 )];
 /// W128 (§15.209): a row that asks a computed column for a value no input gives, which nothing
-/// shows.
+/// shows: no two whole squares add up to 7. (The square of one whole side, never 2, the check
+/// shows, and that row is E102, §15.325.)
 const X_W128: &str = "rule 平方の区分(square_band) v1\n\n\
-                      inputs\n  辺(side) : number  range >=0 <=10\n\n\
+                      inputs\n  辺(side) : number  range >=0 <=10\n  二つ目の辺(second) : number  range >=0 <=10\n\n\
                       outputs\n  区分(band) : number  round down(1)\n\n\
-                      define 面積 : number = 辺 * 辺\n\n\
-                      table 区分表(band_of)\npolicy first\n| 面積 | -> 区分 : number |\n| 2    | 1                |\n| -    | 2                |\n";
+                      define 面積 : number = 辺 * 辺 + 二つ目の辺 * 二つ目の辺\n\n\
+                      table 区分表(band_of)\npolicy first\n| 面積 | -> 区分 : number |\n| 7    | 1                |\n| -    | 2                |\n";
 const X_W128_EN: &str = "rule square_band v1\n\n\
-                      inputs\n  side : number  range >=0 <=10\n\n\
+                      inputs\n  side : number  range >=0 <=10\n  second : number  range >=0 <=10\n\n\
                       outputs\n  band : number  round down(1)\n\n\
-                      define area : number = side * side\n\n\
-                      table band_of\npolicy first\n| area | -> band : number |\n| 2    | 1                |\n| -    | 2                |\n";
+                      define area : number = side * side + second * second\n\n\
+                      table band_of\npolicy first\n| area | -> band : number |\n| 7    | 1                |\n| -    | 2                |\n";
 const X_E101: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
@@ -2199,6 +2682,43 @@ policy unique
 | <50%         | false          |
 | >=50% <=100% | true           |
 | >100%        | true           |
+"##;
+// E102's third form on a `define` read with the input it reads (§15.322): `手数料` passes 900円 only
+// from an amount of 30,034円, so the first row, which asks for more on an amount up to 30,000円, is
+// reached by no input.
+const X_E102_HELD: &str = r##"rule t(t) v1
+
+inputs
+  額(a) : money[円]  range >=1円 <=1000000円
+
+outputs
+  r(r) : bool
+
+define 手数料(f) : money[円] = down(額 * 3%, 1円)
+
+table j(j)
+policy unique
+| 手数料  | 額        | -> r(r) : bool |
+| >900円  | <=30000円 | true           |
+| >900円  | >30000円  | false          |
+| <=900円 | -         | false          |
+"##;
+const X_E102_HELD_EN: &str = r##"rule t(t) v1
+
+inputs
+  amount(a) : money[JPY]  range >=1JPY <=1000000JPY
+
+outputs
+  r(r) : bool
+
+define fee(f) : money[JPY] = down(amount * 3%, 1JPY)
+
+table j(j)
+policy unique
+| fee      | amount     | -> r(r) : bool |
+| >900JPY  | <=30000JPY | true           |
+| >900JPY  | >30000JPY  | false          |
+| <=900JPY | -          | false          |
 "##;
 // E102's third form on a boolean `define` (§15.196): every day `作成日` takes is before the end of
 // the period, so `期間内` is always true and the second row asks for a value no input makes.
@@ -2831,37 +3351,37 @@ policy unique
 | <=5 | the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_began |
 | >5  | the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended |
 "##;
-const X_W121_RUBY: &str = r##"rule 基本の送料(base_fee) v1
+const X_W121_ENUM: &str = r##"rule 会員の区分(tier) v1
+
+enum 区分(tier) = 一般(basic) | 金(gold)
 
 inputs
-  数量(qty) : number  range >=0 <=10
+  会員(member) : 区分
 
 outputs
   送料(fee) : money[USD]  round down(1USD)
 
-define 基本料金(Base) : money[USD] = 3USD
-
-table 数量ごとの送料(fee_by_qty)
+table 区分ごとの送料(fee_by_tier)
 policy unique
-| 数量 | -> 送料  |
-| <=5  | 基本料金 |
-| >5   | 2USD     |
+| 会員 | -> 送料 |
+| 一般 | 5USD    |
+| 金   | 0USD    |
 "##;
-const X_W121_RUBY_EN: &str = r##"rule base_fee v1
+const X_W121_ENUM_EN: &str = r##"rule tier v1
+
+enum tier = basic | gold
 
 inputs
-  qty : number  range >=0 <=10
+  member : tier
 
 outputs
   fee : money[USD]  round down(1USD)
 
-define Base : money[USD] = 3USD
-
-table fee_by_qty
+table fee_by_tier
 policy unique
-| qty | -> fee |
-| <=5 | Base   |
-| >5  | 2USD   |
+| member | -> fee |
+| basic  | 5USD   |
+| gold   | 0USD   |
 "##;
 const X_W121_OWN: &str = r##"rule 送料と記録(fee_and_trace) v1
 
@@ -2900,14 +3420,13 @@ inputs
 
 outputs
   手数料(fee) : money[USD]  round down(1USD)
-
-define _ : money[USD] = 3USD
+  _           : number  round down(1)
 
 table 数量ごとの手数料(fee_by_qty)
 policy unique
-| 数量 | -> 手数料 |
-| <=5  | _         |
-| >5   | 2USD      |
+| 数量 | -> 手数料 | _ |
+| <=5  | 3USD      | 1 |
+| >5   | 2USD      | 2 |
 "##;
 const X_W121_BLANK_EN: &str = r##"rule underscore_fee v1
 
@@ -2916,14 +3435,13 @@ inputs
 
 outputs
   fee : money[USD]  round down(1USD)
-
-define _ : money[USD] = 3USD
+  _   : number  round down(1)
 
 table fee_by_qty
 policy unique
-| qty | -> fee |
-| <=5 | _      |
-| >5  | 2USD   |
+| qty | -> fee | _ |
+| <=5 | 3USD   | 1 |
+| >5  | 2USD   | 2 |
 "##;
 
 const X_W121_CHAR: &str = r##"rule 面積の料金(area_fee) v1
@@ -3419,8 +3937,8 @@ pub fn ledger() -> Vec<Entry> {
             "E003",
             tr!("ファイルが `rule` の行で始まっていません", "The file does not start with a `rule` line"),
             tr!(
-                "一つの `.rule` は一つの規則で、先頭行が規則名と版です。空行とコメントより前に他の宣言があるとき、または `rule` の行に名前が無いとき。名前の無い `rule` の行は、いままで何も言われずに、中身の無い規則として検査を通っていました。",
-                "One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it, or the `rule` line has no name — a file whose `rule` line had none used to pass the check as a rule with nothing in it."
+                "一つの `.rule` は一つの規則で、先頭行が規則名と版です。空行とコメントより前に他の宣言があるとき、`rule` の行に名前が無いとき、そういう行が一つも無いとき（空のファイル、コメントと空行だけのファイル。1 行目に出ます）。",
+                "One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it, the `rule` line has no name, or there is no such line at all (an empty file, or one of comments and blank lines; said at line 1)."
             ),
             tr!(
                 "先頭に `rule 規則名(alias) v1` の一行を足してください。",
@@ -3448,8 +3966,8 @@ pub fn ledger() -> Vec<Entry> {
             "E005",
             tr!("この位置に書けない語です", "A word that cannot appear at this position"),
             tr!(
-                "行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです。",
-                "The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each."
+                "行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです。綴りの近い語があれば、注に挙げます（表の見出しのすぐ下では `policy` と `overrides` も）。その行から、次に行頭に書ける語で始まる行までは、その行の下の行として読まず、一行ずつ言いません。読まなかった行の数を注で言います。",
+                "The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each. When a word is close, the note gives it (right under a table's heading, `policy` and `overrides` too). The lines after it, up to the next that starts with a word a line may start with, are taken as its own: they are not read, nor said one by one, and the note says how many there are."
             ),
             tr!(
                 "`{}` のどれかに直してください。業務の語を書けるのは、名前とセルの中だけです。",
@@ -3549,12 +4067,12 @@ pub fn ledger() -> Vec<Entry> {
             "E012",
             tr!("宣言されていない名前です", "The name is not declared"),
             tr!(
-                "表の列や式が、どこにも宣言されていない名前を指しているとき。前に宣言していない名前は使えないので、名前はそれを使う行より上で宣言する必要があります。セルやグループに書いた値がどの列挙の値でもないときにも出ます。組み込みの区分（`std/us/states` など）を取り込んでいれば、注に、似た綴りの値か、その語を値に持つ別の国の名前空間が出ます。取り込んだ二つの国が同じ綴りの値を持つとき（`WA` はワシントン州と西オーストラリア州の符号です）は、その綴りをそのまま書いても出ます。`import proto` と `import jsonschema` の `->` の右が、このファイルのどの列挙でもないときにも出ます。`none` はこれに当たりません。optional の列では値の無いことで、optional でない列では E103 です。",
-                "A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. It appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia), and when what follows `->` on an `import proto` or `import jsonschema` line is no enum of this file. `none` is not one of these: under an optional column it is the absent value, and under any other column it is E103."
+                "表の列や式が、どこにも宣言されていない名前を指しているとき。前に宣言していない名前は使えないので、名前はそれを使う行より上で宣言する必要があります。セルやグループに書いた値がどの列挙の値でもないときにも出ます。組み込みの区分（`std/us/states` など）を取り込んでいれば、注に、似た綴りの値か、その語を値に持つ別の国の名前空間が出ます。取り込んだ二つの国が同じ綴りの値を持つとき（`WA` はワシントン州と西オーストラリア州の符号です）は、その綴りをそのまま書いても出ます。`import proto` と `import jsonschema` の `->` の右が、このファイルのどの列挙でもないときにも出ます。`none` はこれに当たりません。optional の列では値の無いことで、optional でない列では E103 です。宣言（入力、出力、定義など）に書いた型が、rulec の型でも、このファイルが宣言するか読む列挙でもないときは、その宣言の行に出ます。注に、書ける型とこのファイルの列挙を挙げ、その宣言を読む行（表の列とセル、範囲、定義、`constraint`、それをまとめる `count`・`sum`・`max`・`min`、例）は何も言いません。同じ名前を何か所にも書いたときは、最初に書いた所で一度だけ言い、ほかの行の番号を注に挙げます。",
+                "A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. It appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia), and when what follows `->` on an `import proto` or `import jsonschema` line is no enum of this file. `none` is not one of these: under an optional column it is the absent value, and under any other column it is E103. A type a declaration writes (an input, an output, a definition and the like) that is neither a type of rulec nor an enum this file declares or reads is said on the declaration's line: the note lists the types and the enums of this file, and the lines that read the declaration (its column and cells, its range, the definitions, a `constraint`, a `count`, `sum`, `max` or `min` over it, the examples) say nothing. A name written in several places is said once, where it is first written, and the note gives the lines of the others."
             ),
             tr!(
-                "綴りを宣言に合わせるか、その入力・導出・定義を上に宣言してください。二つの国が共有する綴りなら、値の名前（`Washington` か `Western_Australia`）で書いてください。",
-                "Match the spelling to the declaration, or declare the input, derived value or definition above. For a spelling two countries share, write the value's name (`Washington` or `Western_Australia`)."
+                "綴りを宣言に合わせるか、その入力・導出・定義を上に宣言してください。型なら、書ける型か、このファイルの列挙の名前にしてください。二つの国が共有する綴りなら、値の名前（`Washington` か `Western_Australia`）で書いてください。",
+                "Match the spelling to the declaration, or declare the input, derived value or definition above. A type is one of the types, or an enum of this file. For a spelling two countries share, write the value's name (`Washington` or `Western_Australia`)."
             ),
             X_E012,
             &["E011", "E013"],
@@ -3563,12 +4081,12 @@ pub fn ledger() -> Vec<Entry> {
             "E013",
             tr!("取込先がありません", "No such import"),
             tr!(
-                "規則が外から読むものが無いか、読めないとき。外から読む行は六つあります。組み込みの名前空間を取り込む `import`（十三か国の一段目の区分。`std/us/states`、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states`、`std/jp/prefectures`。日本の都道府県は `std/都道府県` でも取り込めて、そのときは値を日本語で書きます）、`.proto` の列挙を取り込む `import proto \"<ファイル>\" <列挙> -> <この規則の列挙>`、JSON Schema の列挙を取り込む `import jsonschema \"<ファイル>\" \"<ポインタ>\" -> <この規則の列挙>`（OpenAPI も同じ）、`enums` のファイルの列挙を取り込む `import enum <列挙> from \"<ファイル>\"`、入力を読む契約を名付ける `shape <名前> = proto \"<ファイル>\" <メッセージ>`（JSON Schema なら `jsonschema \"<ファイル>\" \"<ポインタ>\"`）と入力の `from`、規則を契約のサービスとして出す `implements proto \"<ファイル>\" <サービス>` です。ファイルを読む行では、ファイルを読めないとき、指した列挙・メッセージ・サービスがファイルに無いとき、行の形が違うときに出ます。`implements` の行が二行あるときにも出ます。rulec は YAML を読まないので、JSON にしたものを指してください。一つの国の区分を二つの名前で取り込んだとき（`std/都道府県` と `std/jp/prefectures`）にも出ます。",
-                "Something the rule reads from outside is not there, or cannot be read. Six lines read from outside: an `import` of a built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese); `import proto \"<file>\" <Enum> -> <enum of this rule>`, an enum of a `.proto`; `import jsonschema \"<file>\" \"<pointer>\" -> <enum of this rule>`, an enum of a JSON Schema, OpenAPI included; `import enum <enum> from \"<file>\"`, an enum of an `enums` file; `shape <name> = proto \"<file>\" <Message>` (or `jsonschema \"<file>\" \"<pointer>\"`), the contract an input's `from` reads; and `implements proto \"<file>\" <Service>`, the contract's service the rule is served as. For a line that reads a file it appears when the file cannot be read, when the enum, message or service it names is not in the file, or when the line is not that shape; and when there are two `implements` lines. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`)."
+                "規則が外から読むものが無いか、読めないとき。外から読む行は六つあります。組み込みの名前空間を取り込む `import`（十三か国の一段目の区分。`std/us/states`、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states`、`std/jp/prefectures`。日本の都道府県は `std/都道府県` でも取り込めて、そのときは値を日本語で書きます）、`.proto` の列挙を取り込む `import proto \"<ファイル>\" <列挙> -> <この規則の列挙>`、JSON Schema の列挙を取り込む `import jsonschema \"<ファイル>\" \"<ポインタ>\" -> <この規則の列挙>`（OpenAPI も同じ）、`enums` のファイルの列挙を取り込む `import enum <列挙> from \"<ファイル>\"`、入力を読む契約を名付ける `shape <名前> = proto \"<ファイル>\" <メッセージ>`（JSON Schema なら `jsonschema \"<ファイル>\" \"<ポインタ>\"`）と入力の `from`、規則を契約のサービスとして出す `implements proto \"<ファイル>\" <サービス>` です。ファイルを読む行では、ファイルを読めないとき、指した列挙・メッセージ・サービスがファイルに無いとき、行の形が違うときに出ます。二つのメッセージが同じ名前の列挙やメッセージを入れ子に持ち、行がその名前だけで書いたときにも出ます。`implements` の行が二行あるときにも出ます。rulec は YAML を読まないので、JSON にしたものを指してください。一つの国の区分を二つの名前で取り込んだとき（`std/都道府県` と `std/jp/prefectures`）にも出ます。",
+                "Something the rule reads from outside is not there, or cannot be read. Six lines read from outside: an `import` of a built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese); `import proto \"<file>\" <Enum> -> <enum of this rule>`, an enum of a `.proto`; `import jsonschema \"<file>\" \"<pointer>\" -> <enum of this rule>`, an enum of a JSON Schema, OpenAPI included; `import enum <enum> from \"<file>\"`, an enum of an `enums` file; `shape <name> = proto \"<file>\" <Message>` (or `jsonschema \"<file>\" \"<pointer>\"`), the contract an input's `from` reads; and `implements proto \"<file>\" <Service>`, the contract's service the rule is served as. For a line that reads a file it appears when the file cannot be read, when the enum, message or service it names is not in the file, or when the line is not that shape; when two messages each nest an enum or a message of the name the line writes, and it writes that name alone; and when there are two `implements` lines. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`)."
             ),
             tr!(
-                "名前空間の綴りを直すか（似た綴りがあれば注に出ます）、その列挙を `enum` でこのファイルに書いてください。ファイルを読む行では、パスは規則ファイルのある場所からの相対パスで書いてください。列挙・メッセージ・サービスが見つからないときは、注に、そのファイルにあるものが並びます。メッセージとサービスは、名前か、ファイルの package を付けた名前で書いてください。JSON Schema のポインタは `#/components/schemas/<名前>` の形です。ポインタが届かなかったときは、注に、届いたところにある鍵が並びます。`implements` は一つの規則に一行です。",
-                "Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. For a line that reads a file, the path is followed from the directory of the rule file, so write it relative to that. An enum, a message or a service that is not found comes back with the ones the file has, and a message or a service is named by its name or by its name with the file's package. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there. A rule has one `implements` line."
+                "名前空間の綴りを直すか（似た綴りがあれば注に出ます）、その列挙を `enum` でこのファイルに書いてください。ファイルを読む行では、パスは規則ファイルのある場所からの相対パスで書いてください。列挙・メッセージ・サービスが見つからないときは、注に、そのファイルにあるものが並びます。列挙とメッセージは、名前か、入れ子にしているメッセージの名前を前に付けた名前（`Order.Status`）で書き、サービスは名前で書いてください。どれも、ファイルの package を前に付けてもかまいません。同じ名前が二つあるときは、注に、入れ子にしているメッセージの名前を付けた名前が並びます。JSON Schema のポインタは `#/components/schemas/<名前>` の形です。ポインタが届かなかったときは、注に、届いたところにある鍵が並びます。`implements` は一つの規則に一行です。",
+                "Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. For a line that reads a file, the path is followed from the directory of the rule file, so write it relative to that. An enum, a message or a service that is not found comes back with the ones the file has. An enum or a message is named by its name or by its name after the messages it is nested in (`Order.Status`), and a service by its name; the file's package may go in front of any of them. A name two messages nest comes back with both, named after their messages. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there. A rule has one `implements` line."
             ),
             X_E013,
             &["E012", "E032", "E076"],
@@ -3627,11 +4145,11 @@ pub fn ledger() -> Vec<Entry> {
                 "A `constraint` line is not `input comparison input`: there is no comparison, a side is neither one name nor names added up with `+`, or both sides are sums."
             ),
             tr!(
-                "`constraint <入力> <= <入力>` の形にしてください。比較は `<=` `<` `>=` `>` の四つです。片側だけは入力を足した和にできます（`constraint 値引き + ポイント <= 小計`）。係数と定数は書けません。`A = B` を言いたいなら、`A <= B` と `A >= B` の二行に分けてください。",
-                "Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. One side may add inputs up (`constraint discount + points <= subtotal`); a coefficient or a constant cannot be written. For `A = B`, write the two lines `A <= B` and `A >= B`."
+                "`constraint <入力> <= <入力>` の形にしてください。比較は `<=` `<` `>=` `>` の四つです。片側だけは入力を足した和にできます（`constraint 値引き + ポイント <= 小計`）。係数と定数は書けません。`A = B` を言いたいなら、`A <= B` と `A >= B` の二行に分けてください。計算した値の上限や下限（`数量 * 単価 <= 1000万円`）は、`constraint` でなく、その値を `define` にして `range` を書きます（`define 小計 : money[円] = 数量 * 単価  range <=1000万円`）。",
+                "Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. One side may add inputs up (`constraint discount + points <= subtotal`); a coefficient or a constant cannot be written. For `A = B`, write the two lines `A <= B` and `A >= B`. A bound on a value worked out (`quantity * price <= 10_000_000JPY`) is not a `constraint`: make the value a `define` and write the `range` on it (`define subtotal : money[JPY] = quantity * price  range <=10_000_000JPY`)."
             ),
             X_E017,
-            &["E018"],
+            &["E018", "E150"],
         ),
         err(
             "E018",
@@ -3651,8 +4169,8 @@ pub fn ledger() -> Vec<Entry> {
             "E019",
             tr!("例が、生成コードが入口で受け付けない入力です", "An example is an input the generated code refuses at its door"),
             tr!(
-                "例の入力が `constraint` を満たしていないか `never` の行に当たるとき、または入力（並びの要素のフィールドを含む）の値が宣言した範囲の外にあるとき。制約は「この組み合わせは起きない」という宣言で、範囲は「この外の値は来ない」という宣言です。完全性の検査はそれを信じて、そこには行を要求していません。生成コードもその入力を入口で受け付けません。そのため、規則はその入力の答えを決めていません。並びの要素が `count` の範囲の上限より多い例と、生成コードが歩きで断る入力の例（重みで選ぶ並びの重みの合計が int64 を越える、`sum` が宣言した範囲を越える、引いた値が重みの合計より小さくない）もこれで、生成コードが断るときの文が付きます。範囲の外の例と、二つの日付のあいだの `constraint` を破る例は、いままで検査を通り、その例から作ったベクタは、生成コードでエラーになっていました。",
-                "An example's inputs do not satisfy a `constraint` or fall under a `never` line, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. So is an example whose sequence has more elements than the top of a `count` over it, and one the generated code refuses on its walk — weights of a pick by weight whose total passes int64, a `sum` past its declared range, a drawn value not below the total of the weights — each with the sentence the code refuses it with. An example outside the range, and one that breaks a `constraint` between two dates, used to pass the check, and the vector made from it was then refused by the generated code."
+                "例の入力が `constraint` を満たしていないか `never` の行に当たるとき、または入力（並びの要素のフィールドを含む）の値が宣言した範囲の外にあるとき。制約は「この組み合わせは起きない」という宣言で、範囲は「この外の値は来ない」という宣言です。完全性の検査はそれを信じて、そこには行を要求していません。生成コードもその入力を入口で受け付けません。そのため、規則はその入力の答えを決めていません。並びの要素が `count` の範囲の上限より多い例と、生成コードが歩きで断る入力の例（重みで選ぶ並びの重みの合計が int64 を越える、`sum` か `count` が宣言した範囲の外で終わる（上の端を越える、下の端に届かない）、引いた値が重みの合計より小さくない）もこれで、生成コードが断るときの文が付きます。範囲の外の例と、二つの日付のあいだの `constraint` を破る例は、いままで検査を通り、その例から作ったベクタは、生成コードでエラーになっていました。",
+                "An example's inputs do not satisfy a `constraint` or fall under a `never` line, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. So is an example whose sequence has more elements than the top of a `count` over it, and one the generated code refuses on its walk — weights of a pick by weight whose total passes int64, a `sum` or a `count` that ends outside its declared range (past the top, or under the bottom), a drawn value not below the total of the weights — each with the sentence the code refuses it with. An example outside the range, and one that breaks a `constraint` between two dates, used to pass the check, and the vector made from it was then refused by the generated code."
             ),
             tr!(
                 "例の値を直してください。その値や組み合わせが本当に来るなら、範囲を広げるか、制約か `never` の行を消してください。",
@@ -3816,8 +4334,8 @@ pub fn ledger() -> Vec<Entry> {
                 "The `count` line has no `range >=0 <=<max>`, or no upper bound, or a negative lower one. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence**."
             ),
             tr!(
-                "`range >=0 <=100` の形で書いてください。生成コードは、この上限より長い並びを入口で受け付けません。数値の入力と同じで、宣言の外は黙って通しません。",
-                "Write it as `range >=0 <=100`. The generated code refuses a longer sequence at the door, the way it refuses a number outside its range."
+                "`range >=0 <=100` の形で書いてください。生成コードは、この上限より長い並びを入口で受け付けません。数値の入力と同じで、宣言の外は黙って通しません。下限を 1 以上にすると（`range >=1 <=100`）、数えた結果がそれに届かない呼び出しも受け付けません（一つも当たらない並び、空の並び）。",
+                "Write it as `range >=0 <=100`. The generated code refuses a longer sequence at the door, the way it refuses a number outside its range. With a lower bound of 1 or more (`range >=1 <=100`) it refuses a call whose count comes in under it as well: a sequence with no element that counts, an empty one."
             ),
             X_E030,
             &["E028", "E112"],
@@ -3841,12 +4359,12 @@ pub fn ledger() -> Vec<Entry> {
             "E032",
             tr!("取り込んだ列挙と宣言がずれています", "The declared enum and the imported one disagree"),
             tr!(
-                "`import proto` や `import jsonschema` が指す列挙の値と、この規則の `enum` の値（別名があれば別名）がそろっていないとき。片方にしか無い値は、どちらの側のものも名前で出ます。値が増えるのはたいてい proto の側で、それは**規則の外での変更が、互換な変更として通ってしまったもの**です。",
-                "The values of the enum named by `import proto` or `import jsonschema` and the values of the rule's `enum` (their ASCII aliases, where they have them) are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule**."
+                "`import proto` や `import jsonschema` が指す列挙の値と、この規則の `enum` の値（別名があれば別名）がそろっていないとき。片方にしか無い値は、どちらの側のものも名前で出ます。値が増えるのはたいてい proto の側で、それは**規則の外での変更が、互換な変更として通ってしまったもの**です。`.proto` の値の名前は、頭にある列挙の名前を落として小文字にした綴りで読みます（`MEMBER_TIER_GOLD` は `gold`）。頭の名前の大文字小文字と `_` の位置は問いません。ただし、列挙の名前が語の途中まで続く名前（列挙 `Status` の `STATUSBAR_HIDDEN`）、落とすと数字で始まる名前、落とすとほかの番号の値と同じ綴りになる名前は、落とさずに読みます。同じ番号の二つの名前（`allow_alias`）は一つの値で、規則はそのどれか一つで書きます。二つとも書いたときにも出ます。契約の名前をどう読んだかは、注に出ます。",
+                "The values of the enum named by `import proto` or `import jsonschema` and the values of the rule's `enum` (their ASCII aliases, where they have them) are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule**. A `.proto`'s value names are read with the enum's own name taken off the front and the rest in lower case (`MEMBER_TIER_GOLD` is `gold`), whatever the case of that name and wherever its `_`s are; a name the enum's name runs on into (`STATUSBAR_HIDDEN` of the enum `Status`), one that would begin with a digit, and one that would be spelt as a value of another number keep it. The names of one number (`allow_alias`) are one value, which the rule writes by one of them; writing two of them is E032 too. The notes say how each name of the contract was read."
             ),
             tr!(
-                "増えた値をこの規則の `enum` に足してください。値の名前に別名を付けて書く列挙なら、名前は自分で決めてください。消えた値なら、この規則からも消してください。値を足すと、次はその値に行が要るかを E033 が問います。",
-                "Add the new value to the rule's `enum`; where the enum gives its values names with aliases, the name is yours to choose. A value the contract dropped goes from the rule too. Once it is added, the table asks whether it needs a row (E033)."
+                "増えた値をこの規則の `enum` に足してください。値の名前に別名を付けて書く列挙なら、名前は自分で決めてください。消えた値なら、この規則からも消してください。規則の値が契約の名前そのもの（`category_food`）なら、注の言う綴り（`food`）に直してください。0 番の「設定していない」値（`CATEGORY_UNSPECIFIED`）は、規則に書きません。値を足すと、次はその値に行が要るかを E033 が問います。",
+                "Add the new value to the rule's `enum`; where the enum gives its values names with aliases, the name is yours to choose. A value the contract dropped goes from the rule too. Where a value of the rule is the whole name of one of the contract's (`category_food`), write the spelling the note gives (`food`); the value proto3 reads as not set (`CATEGORY_UNSPECIFIED`) has no place in the rule. Once it is added, the table asks whether it needs a row (E033)."
             ),
             X_E032,
             &["E013", "E033", "E101"],
@@ -4077,8 +4595,8 @@ pub fn ledger() -> Vec<Entry> {
             "E047",
             tr!("宣言の後ろに余分な語があります", "Extra token after the declaration"),
             tr!(
-                "宣言の行に、その行が読まない語が残っているとき。行ごとに読む語は決まっていて、入力の行は `range`・`contract_only`・`random`、要素のフィールドの行は `range` と `contract_only`、出力の行は `range` と `round`、`derive` の行と `count`・`sum`・`max`・`min` の行は `range` だけです。`shape` の行と、入力の `from` のパスの後ろ（`where`・`empty` のほか）には何も置けません。rulec のパーサーは行から欲しい語を探して残りを読み飛ばすので、こうした語はいままで黙って捨てられていました。範囲の後ろに書いた税区分（`range >=0円 <=10000円 incl_tax`）も、単位が単位として読めずに余った分も、`derive` の `round` も、`from` の後ろの `range` も、どれも通っていました。範囲は完全性の検査が調べる値の全体で、生成コードの入口のガードでもあるので、境界が一つ落ちると、片側が欠けた範囲のまま「完全」と答えることになります。",
-                "A declaration line holds a word the line does not read. Each kind of line reads its own words: an input's `range`, `contract_only` and `random`; a field of an element's `range` and `contract_only`; an output's `range` and `round`; a `derive` and a `count`, `sum`, `max` or `min` line `range` alone. A `shape` line holds nothing after its declaration, and an input's `from` nothing after its path but `where` and `empty`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, what is left of a bound whose unit did not lex as one, a `round` on a `derive`, a `range` after a `from`. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered \"complete\" with one side missing."
+                "宣言の行に、その行が読まない語が残っているとき。行ごとに読む語は決まっていて、入力の行は `range`・`contract_only`・`random`、要素のフィールドの行は `range` と `contract_only`、出力の行は `range` と `round`、`derive` と `define` の行と `count`・`sum`・`max`・`min` の行は `range` だけです。`shape` の行と、入力の `from` のパスの後ろ（`where`・`empty` のほか）には何も置けません。rulec のパーサーは行から欲しい語を探して残りを読み飛ばすので、こうした語はいままで黙って捨てられていました。範囲の後ろに書いた税区分（`range >=0円 <=10000円 incl_tax`）も、単位が単位として読めずに余った分も、`derive` の `round` も、`from` の後ろの `range` も、どれも通っていました。範囲は完全性の検査が調べる値の全体で、生成コードの入口のガードでもあるので、境界が一つ落ちると、片側が欠けた範囲のまま「完全」と答えることになります。",
+                "A declaration line holds a word the line does not read. Each kind of line reads its own words: an input's `range`, `contract_only` and `random`; a field of an element's `range` and `contract_only`; an output's `range` and `round`; a `derive`, a `define` and a `count`, `sum`, `max` or `min` line `range` alone. A `shape` line holds nothing after its declaration, and an input's `from` nothing after its path but `where` and `empty`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, what is left of a bound whose unit did not lex as one, a `round` on a `derive`, a `range` after a `from`. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered \"complete\" with one side missing."
             ),
             tr!(
                 "その語を消すか、宣言の一部として正しい形に直してください。税区分や刻みは型の括弧の中に（`money[円, incl_tax]`、`rate[step 0.1%]`）、範囲は `range >=<値> <=<値>`、丸めは `round <向き>(<刻み>)` の形で書いてください。入力の範囲と印は `from` の前に書きます。導出の値を丸めるなら、式の中で `down(<式>, 1円)` のように丸めます。",
@@ -4235,12 +4753,12 @@ pub fn ledger() -> Vec<Entry> {
             "E058",
             tr!("宣言の行を読めません", "A declaration line cannot be read"),
             tr!(
-                "`define`・`derive`・`result`・`enum`・`group`・`table` のような宣言の語で始まる行を、その宣言として読めないとき。名前が無い、`=` の前に余分な語がある、などです。こういう行は、いままで何も言われずに捨てられていました。`derive` の行は捨てられもせず、検査が終わらなくなっていました。",
-                "A line that starts with a declaring word — `define`, `derive`, `result`, `enum`, `group`, `table` and the like — cannot be read as that declaration: it has no name, something stands before its `=`, and so on. Such a line used to be dropped with nothing said, and a `derive` line was not even dropped: the check never finished."
+                "`define`・`derive`・`result`・`enum`・`group`・`table` のような宣言の語で始まる行を、その宣言として読めないとき。名前が無い、`=` の前に余分な語がある、などです。こういう行は、いままで何も言われずに捨てられていました。`derive` の行は捨てられもせず、検査が終わらなくなっていました。型のかっこの `[` が閉じていないときにも出ます。いままでは行の残りを型のかっこの中として読み、範囲を税の区分だと言うか（入力と定義）、`|` で閉じたものとして通していました（表の見出し）。",
+                "A line that starts with a declaring word — `define`, `derive`, `result`, `enum`, `group`, `table` and the like — cannot be read as that declaration: it has no name, something stands before its `=`, and so on. Such a line used to be dropped with nothing said, and a `derive` line was not even dropped: the check never finished. It also appears when the `[` of a type is never closed: the rest of the line was read as in the brackets, and the range said to be a tax (an input, a definition), or the `|` taken to close them and the rule passed (a table's heading)."
             ),
             tr!(
-                "診断の注記にある形に書き直してください（`define 大口(bulk) : bool = 注文金額 >= 3万円`）。どの宣言の形も docs/reference.md にあります。",
-                "Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30_000JPY`). Every declaration's shape is in docs/reference.md."
+                "診断の注記にある形に書き直してください（`define 大口(bulk) : bool = 注文金額 >= 3万円`）。どの宣言の形も docs/reference.md にあります。型のかっこは `]` で閉じてください（`money[円]`、`rate[step 1%]`）。",
+                "Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30_000JPY`). Every declaration's shape is in docs/reference.md. Close the brackets of a type with `]` (`money[USD]`, `rate[step 1%]`)."
             ),
             X_E058,
             &["E006", "E057", "E059", "E005"],
@@ -4279,8 +4797,8 @@ pub fn ledger() -> Vec<Entry> {
             "E061",
             tr!("範囲が空です", "The range is empty"),
             tr!(
-                "`range` に入る値が一つも無いとき。下の端が上の端を超えている（`range >=10円 <=0円`）か、両端が同じ値で片方が `>` か `<` のときです。こういう範囲は、いままで何も言われずに通っていました。完全性の証明は何も無い集合について「漏れなし」と答え、生成コードの入口はどの呼び出しも受け付けていませんでした。",
-                "No value lies in a `range`: the lower end is past the upper one (`range >=10JPY <=0JPY`), or the two are equal and one of them is `>` or `<`. Such a range used to pass with nothing said: the completeness proof answered \"complete\" over nothing, and the generated code's entry refused every call."
+                "`range` に入る値が一つも無いとき。下の端が上の端を超えている（`range >=10円 <=0円`）か、両端が同じ値で片方が `>` か `<` のとき、または `>` か `<` で書いた端のあいだに、値の刻みに載る値が無いとき（`range >0円 <1円`。0 円より大きく 1 円より小さい金額はありません）です。`>` と `<` は書いた値を含まない端で、値の刻み（金額と数量は単位の 1、率は宣言した刻み、日付は 1 日）の上で読みます。こういう範囲は、いままで何も言われずに通っていました。完全性の証明は何も無い集合について「漏れなし」と答え、生成コードの入口はどの呼び出しも受け付けていませんでした。",
+                "No value lies in a `range`: the lower end is past the upper one (`range >=10JPY <=0JPY`), the two are equal and one of them is `>` or `<`, or no value on the step lies between two ends written with `>` or `<` (`range >0JPY <1JPY`: no amount in whole yen is above 0 yen and below 1 yen). `>` and `<` leave out the value they write, and are read on the step of the value: one unit of an amount or a quantity, the step a rate declares, one day of a date. Such a range used to pass with nothing said: the completeness proof answered \"complete\" over nothing, and the generated code's entry refused every call."
             ),
             tr!(
                 "書き間違えた端を直してください（`range >=0円 <=10円`）。",
@@ -4447,12 +4965,12 @@ pub fn ledger() -> Vec<Entry> {
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
-                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です。当てはまらない入力の具体例が必ず付きます。列が規則の計算する値（導出、`define`、上の表の出力）なら、例はその値で書かれ、その値を作る入力も、参照の評価器で確かめられたときは付きます。その入力は、導出が足し算・引き算・定数倍だけなら式から求め、ほかの列（`min` や丸めを使う導出、`define`、上の表の出力）では、入力の組み合わせが 16,384 通りまでなら全部を確かめて探します。導出の値は、セルを書く単位より細かい刻みをとることがあり（`amount * 10%` は 0.1 刻み）、その刻みで調べます。どの入力も届かない値には、行を求めません。導出と、数を計算する `define` の列では、その列が実際に取りうる値の外に、行を求めません（取りうる値は、式を入力の範囲と上流の表が出す値で計算したもので、導出では `constraint` も読みます）。上流の表が出す値の列では、上流の表がその値を出す行の条件と合わせて、ほかの列が取りえない値に、行を求めません。一つの比べ方でできた真偽の `define` の列では、入力の範囲でいつも同じ値をとるなら、もう一方の値に行を求めません（`作成日 <= 2027-03-31` で、作成日がその日までしかとらないなら、false に行を求めません）。optional の入力（`T?`）では、値が無いことも入力の一つで、その行を求めます。数・日付・真偽の optional の入力では、値があるときの宣言した範囲の全部にも行を求めます。上の表が決める optional の列では、上の表が `none` を書く行か、値の無いことのある名前を渡す行があれば、値の無いことにも行を求めます。",
-                "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it; on the column of a boolean `define` of one comparison, at the truth value it never takes over the inputs' ranges (`made <= 2027-03-31` with `made` declared only up to that day is never false). An optional input (`T?`) takes the absent value too, and a row is asked for it; an optional number, date or truth value is asked for the whole of its declared range besides. An optional column a table above decides takes the absent value where a row above writes `none` or passes on a name that may have none, and a row is asked for it there."
+                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です。例が必ず付きます。どの行にも当てはまらない入力は、言葉と、それを取る行の両方で、全部を挙げます。行は、表がすでに書いている境と宣言した範囲の端で切り、答えのセルは `?` のままにします。上流の表が決める数や日付の列で、その区切りの中に上流の表が書く値がいくつかしかないときは、行はその値を一つずつ書きます（8 月 1 日と 8 月 10 日の行しかない表が、上流の表の書く 8 月 4 日と 8 月 6 日を読むなら、`| 2026-08-04 | ? |` と `| 2026-08-06 | ? |`）。列がそこでとるのはその値だけなので、行はやはり穴を全部埋めます。上流の表の行が名前や式を書くときは、どの値も来うるので、区切りのままです。言葉も行も、その部分の中で入力が届く値だけを言います（`constraint` や計算した列のせいで、どの入力も来ない値は言いません）。挙げるのは 8 か所までで、残りは数を言います。表が読む列だけでできた例は、そのまま入力です。列が規則の計算する値（導出、`define`、上の表の出力）なら、例は、参照の評価器で流して確かめた入力と、その入力でそれらの列がとる値です。表の読まない入力があれば、その入力を「この例を作る入力」の行で添えます。その入力は、導出が足し算・引き算・定数倍だけなら式から求め、ほかの列（`min` や丸めを使う導出、`define`、上の表の出力）では、入力の組み合わせが 16,384 通りまでなら全部を確かめて探し、それでも無ければ、穴の部分ごとに、その中で作って探し、最後に、計算のもとになる入力の組み合わせが 16,384 通りまでなら、全部を参照の評価器で流します。入力が見つからないときは、見出しも例も「組み合わせ」と言い、入力とは呼ばず、JSON の `witness` に `inputs` を書きません。そのうえで、全部を流してどの行にも当てはまらない入力が無かったならそう言い（検査は、証明書に載せて再検査で確かめられることだけで決めるので、指摘は残ります）、流せなかったなら、この組み合わせになる入力は見つからず、無いことも示せなかったと言います。導出の値は、セルを書く単位より細かい刻みをとることがあり（`amount * 10%` は 0.1 刻み）、その刻みで調べます。どの入力も届かない値には、行を求めません。導出と、数を計算する `define` の列では、その列が実際に取りうる値の外に、行を求めません（取りうる値は、式を入力の範囲と上流の表が出す値で計算したもので、導出では `constraint` も読みます）。表が `define` の列と、その式が読む入力の列を一緒に読むときは、式を、セルがその入力にとる値で計算し直し、そこで届かない値に行を求めません（`down(金額 * 3%, 1円)` は、金額が 30,000 円以下のセルでは 900 円を超えません）。範囲を書いた `define` は、規則が受け付けるその範囲の中だけを読みます。式は、その入力それぞれに数を掛けて足した形でも読みます（`max(金額, 30円) - 金額` は、金額が 30 円以上のセルでは 0 円です）。それで決まらないときは、セルの値を区切り、区切りごとに計算し直します（一つの値で 64 区切り、表で 4,096 回まで）。表が式の読む入力を一つも読まないときは、その入力の範囲の全体を区切ります。数を計算する `define` の値が、式で決まる刻みにしか乗らないときは、刻みの間の値にも行を求めません（`up(金額 * 10%, 10円)` は 10 円刻みの値しかとらないので、11 円から 19 円には行を求めません）。入力は自分の刻みに乗り、セルが一つの値に決める部分はその値なので、`down(金額 * 1%, 1円) + 箱の数 * 37円` は、金額が 100 円未満のセルでは 37 円の倍数しかとりません。式が足し算・引き算・定数倍だけの `define` は、等式としても読みます。等式は有理数の上で読むので、整数の上でだけ空になるセルは、セルの値で計算し直して外します（品数が 2 未満で上限が 1 以上なら、`品数 - 上限` は 0 を超えません）。上流の表が出す値の列では、上流の表がその値を出す行の条件と合わせて、ほかの列が取りえない値に、行を求めません。上流の表が `policy first` なら、その行は、上の行が先に取る入力を除いて、入力ごとに読みます。上流の表は、同じ規則の表でも、`apply` で取り込んだ規則の表でもかまいません。`with` の読み替えと、取り込んだ規則がさらに取り込んだ規則の表もたどります。数か日付を書く上流の表では、どの行も書かない数や日付に行を求めません（7 月 1 日と 7 月 3 日だけを書く表の出力を読む表は、7 月 2 日に行を求めません）。上流の表が規則の計算する値から決める値は、その計算する値をセルの入力で計算し直して読み、値を書く行が求める所にそれが届かないなら、行を求めません。一つの比べ方でできた真偽の `define` の列では、入力の範囲でいつも同じ値をとるなら、もう一方の値に行を求めません（`作成日 <= 2027-03-31` で、作成日がその日までしかとらないなら、false に行を求めません）。セルがその入力にとる値でも、同じように読みます。`fed by` の入力は、出どころの規則に何を渡したかが書いていないので、ほかの入力とは関係の無い値として読みます。穴にかかるときは、注がそう言い、`apply` で取り込むように案内します。optional の入力（`T?`）では、値が無いことも入力の一つで、その行を求めます。数・日付・真偽の optional の入力では、値があるときの宣言した範囲の全部にも行を求めます。上の表が決める optional の列では、上の表が `none` を書く行か、値の無いことのある名前を渡す行があれば、値の無いことにも行を求めます。",
+                "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. An example is always attached. Every part of the input no row takes is named with it, in words and as the row that takes it: the row is cut at the boundaries the table already writes and at the ends of the declared ranges, and its output cells are left as `?`. On a column of numbers or dates a table above decides, a cut in which the table above writes a few values only is written as those values, a row for each (a table with rows for 1 August and 10 August that reads a day the table above writes as 4 August or 6 August is given `| 2026-08-04 | ? |` and `| 2026-08-06 | ? |`): the column takes no other value there, so the rows still close the whole gap. Where a row above writes a name or an expression, any value may come, and the cut stays as it is. Both say only the values an input reaches in that part: a value a `constraint` or a computed column leaves no input at is not said. Up to eight parts are written out, and the rest are counted. An example made of the columns the table reads alone is an input as it stands. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example is an input the reference evaluator has run, with the values it gives those columns, and where the input holds inputs the table does not read, an \"An input producing this example\" line gives it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384, and failing that, built inside each part of the gap in turn, and last, where the inputs the columns are worked out from have no more than 16,384 combinations, all of them are run through the reference evaluator. Where no input is found, the headline and the example speak of a combination, it is not called an input, and the JSON `witness` has no `inputs`; the notes then say that running every input found none that matches no row, where that run was made (the finding stays, since the check decides only by what its certificate carries for a re-checker to confirm), and otherwise that no input giving it was found and none could be shown not to exist. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); where a table reads a `define` together with the inputs its expression reads, past what the expression comes to over the values each cell gives those inputs (`down(amount * 3%, 1JPY)` does not pass 900 yen in a cell of `amount` up to 30,000 yen) and inside the range the rule accepts for a `define` that has one, the expression read too as each of those inputs times a number, added up (`max(amount, 30JPY) - amount` is 0 yen in a cell of `amount` from 30 yen), worked out again over pieces of those values where that does not settle it (up to 64 for one value, and 4,096 times for the table), and over pieces of the ranges of the inputs it reads where the table reads none of them, and a `define` that only adds, subtracts and multiplies by constants read by its equation too, which is read over fractions, and over the values of the cell for what only whole numbers leave out (with fewer than two items and a limit of one or more, `items - limit` is never above 0); on the column of a `define` that computes a number, between the values of the grid its expression puts them on (`up(amount * 10%, 10JPY)` comes to multiples of 10 yen alone, and no row is asked for 11 to 19 yen; an input sits on its own step, and a part a cell holds to one value is that value, so `down(amount * 1%, 1JPY) + boxes * 37JPY` comes to multiples of 37 yen in a cell of `amount` under 100 yen); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it, the table above being one of the same rule or one of a rule brought in with `apply`, followed through `with` and through the rules that rule applies in turn, a row of a `policy first` table above read one input at a time without the inputs the rows before it take first, at a number or a date no row of a table above that writes them writes (a table that reads a date written only as 1 July and 3 July needs no row for 2 July), and at a value whose rows above ask a value the rule works out for what it never comes to over the cell's inputs; on the column of a boolean `define` of one comparison, at the truth value it never takes over the inputs' ranges (`made <= 2027-03-31` with `made` declared only up to that day is never false), or over the values each cell gives them. An input `fed by` another rule's output is read free of the other inputs, since the line does not say what that rule was given; where one takes part in a gap, a note says so and points to `apply`. An optional input (`T?`) takes the absent value too, and a row is asked for it; an optional number, date or truth value is asked for the whole of its declared range besides. An optional column a table above decides takes the absent value where a row above writes `none` or passes on a name that may have none, and a row is asked for it there."
             ),
             tr!(
-                "その組み合わせが起こらないなら、行を足さずに `never` の行で表から外してください（定義から確かめられるときは、書く行を注が示します）。起こるなら、それを起こす入力に当てはまる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足してください。値に専用の行が要らないなら、列挙の宣言に `default` を付けてください。",
-                "If the combination does not happen, take it out of the tables with a `never` line rather than a row (a note shows the line, where the definitions show it). If it does, add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration."
+                "その組み合わせが起こらないなら、行を足さずに `never` の行で表から外してください（定義から確かめられるときは、書く行を注が示します）。起こるなら、ヒントの行を足し、`?` に答えを書いてください。行はそのままで穴を全部埋めます。`?` を残した行は検査を通りません（E063）。途中で答えが変わる行は、そこで分けてください。ちょうど取るセルが書けない所（表の書くどの前置きでも始まらない文字列など）は、`policy first` の表の最後に書く行で取ります。ヒントがその行を示します。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足してください。値に専用の行が要らないなら、列挙の宣言に `default` を付けてください。",
+                "If the combination does not happen, take it out of the tables with a `never` line rather than a row (a note shows the lines, where the definitions show them). If it does, add the rows the hint gives and write what each answers in place of `?`: the rows close the whole gap as they are, and a row left with its `?` does not pass (E063). Split a row where the answer changes inside it. Where no cell takes a part exactly (the strings under none of the prefixes a table writes, for one), the row is one written last in a `policy first` table, and the hint gives it. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration."
             ),
             X_E101,
             &["E102", "E105", "W111", "W133", "E142"],
@@ -4461,8 +4979,8 @@ pub fn ledger() -> Vec<Entry> {
             "E102",
             tr!("どの入力にも当てはまらない行があります", "Unreachable row: the row never matches"),
             tr!(
-                "どの入力もその行に当てはまらないとき。形は三つあり、診断の文が原因を書き分けます。一つ目は、先行する行（`overrides` で優先する行も含む）にすべて覆われている行です。二つ目は、上流の表が決して出さない値を指している行です。三つ目は、導出か、数を計算する `define` の列に、その列が実際に取りうる値の外だけを求めている行です（取りうる値の中の部分を、先行する行が先に取っている場合も含みます）。上流の表が出す値と導出の両方を列に持つ表で、上流の表がその値を出すときには導出が取りえない値を求めている行と、一つの比べ方でできた真偽の `define` が、入力の範囲ではとらない値を求めている行も、この形です。取りうる値は、式を入力の範囲と上流の表が出す値で計算したもので（導出では `constraint` も読みます）、導出に書いた `range` ではありません。",
-                "No input matches the row. There are three forms, told apart in the wording. In the first, every input the row would take is already taken by an earlier row, or by a row that takes precedence through `overrides`. In the second, the row names a value that the upstream table never produces. In the third, the row asks a derived column, or the column of a `define` that computes a number, only for values outside what it can actually reach, the part inside (if any) being taken first by earlier rows; so does a row that asks a column a table above decides and a derived column for values the derive never comes to while the rows that write that value fire, and a row that asks a boolean `define` of one comparison for the truth value it never takes over the inputs' ranges. What a value can reach is its expression computed over the inputs' ranges and the values the tables above produce (for a derive, over the `constraint` lines too), not the `range` written on it."
+                "どの入力もその行に当てはまらないとき。形は三つあり、診断の文が原因を書き分けます。一つ目は、先行する行（`overrides` で優先する行も含む）にすべて覆われている行です。二つ目は、上流の表が決して出さない値を指している行と、上流の表がその値を出すときには、ほかの列が行の求める値をとらないか、前の行が先に入力を取る行です（前の行が加わるときは、注がそう言います）。上流の表は、同じ規則の表でも、`apply` で取り込んだ規則の表でもかまいません（`with` の読み替えと、取り込んだ規則がさらに取り込んだ規則もたどります）。三つ目は、導出か、数を計算する `define` の列に、その列が実際に取りうる値の外だけを求めている行です（取りうる値の中の部分を、先行する行が先に取っている場合も含みます）。上流の表が出す値と導出の両方を列に持つ表で、上流の表がその値を出すときには導出が取りえない値を求めている行と、一つの比べ方でできた真偽の `define` が、入力の範囲ではとらない値を求めている行も、この形です。取りうる値は、式を入力の範囲と上流の表が出す値で計算したもので（導出では `constraint` も読みます）、導出に書いた `range` ではありません。表が `define` の列と、その式が読む入力の列を一緒に読むときは、式を、行がその入力にとる値で計算し直します（`down(額 * 3%, 1円)` は、額が 30,000 円以下の行では 900 円を超えません。式が足し算・引き算・定数倍だけの `define` は、等式としても読み、行の値で計算し直して、整数だからとらない値も外します）。式は、その入力それぞれに数を掛けて足した形でも読むので、`max(額, 30円) - 額` は、額が 30 円以上の行では 0 円です。それで決まらないときは、行の値を区切り、区切りごとに計算し直します。数の `define` に、式で決まる刻みの間の値だけを求める行も、この形です（`up(額 * 10%, 10円)` に 15 円を求める行。入力は自分の刻みに乗るので、`贈り物の数 * 2` に 3 を求める行も）。範囲を書いた `define` が、行の値ではその範囲の外にしかならない行も、この形です。そうした呼び出しは、すべて断られます。上流の表が規則の計算する値から決める値を求める行は、その計算する値を行の入力で計算し直して読みます。その値を書く上流の表の行が、そこでは計算する値がとらない値しか求めていなければ、どの入力もこの行に当たりません。入力の範囲の外だけを求める行と、`count`・`sum` の範囲や歩きの答え（`max`・`min`、fold の答え）の範囲の外だけを求める行も、当てはまる入力がありません。範囲の外になる呼び出しは受け付けないからです。",
+                "No input matches the row. There are three forms, told apart in the wording. In the first, every input the row would take is already taken by an earlier row, or by a row that takes precedence through `overrides`. In the second, the row names a value that the upstream table never produces, or one it produces only where the row's other columns are not what the row asks for or where the earlier rows take the input first (a note then says so); the upstream table may be one of the same rule or one of a rule brought in with `apply`, followed through `with` and through the rules that rule applies in turn. In the third, the row asks a derived column, or the column of a `define` that computes a number, only for values outside what it can actually reach, the part inside (if any) being taken first by earlier rows; so does a row that asks a column a table above decides and a derived column for values the derive never comes to while the rows that write that value fire, and a row that asks a boolean `define` of one comparison for the truth value it never takes over the inputs' ranges. What a value can reach is its expression computed over the inputs' ranges and the values the tables above produce (for a derive, over the `constraint` lines too), not the `range` written on it. Where a table reads a `define` together with the inputs its expression reads, the expression is computed again over the values the row gives those inputs (`down(amount * 3%, 1JPY)` does not pass 900 yen in a row of `amount` up to 30,000 yen; a `define` that only adds, subtracts and multiplies by constants is read by its equation as well, and over those values for what only whole numbers leave out). The expression is also read as each of those inputs times a number, added up, so `max(amount, 30JPY) - amount` is 0 yen in a row of `amount` from 30 yen; where that does not settle it, it is worked out again over pieces of those values. A row that asks a `define` of numbers only for values between the points of the grid its expression puts them on is of this form too (15 yen of `up(amount * 10%, 10JPY)`, and, an input sitting on its own step, 3 of `gifts * 2`). So is a row over whose values a `define` with a `range` comes only to values outside it: every such call is turned away. A row that asks for a value a table above decides from a value the rule works out is read with that value worked out again over the row's inputs, and where the rows above that write it ask only for what it never comes to there, no input reaches the row. A row that asks only for values outside the range of an input, of a `count` or a `sum`, or of what a walk answers (`max`, `min`, a fold's answer) has no input either: a call that falls outside a range is refused."
             ),
             tr!(
                 "その行が新しい仕様なら、覆っている行より上へ移してください。不要なら削除してください。上流が出さない値を指しているなら、上流の表にその値を出す行を足すか、この行を消してください。導出や `define` が取りえない値を求めているなら、条件をその取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。真偽の `define` がとらない値を求めているなら、この行の条件を、その `define` がいつもとる値に書き直すか、この行を削除してください。",
@@ -4491,6 +5009,14 @@ pub fn ledger() -> Vec<Entry> {
         )
         .also(
             tr!(
+                "三つ目の形（行がとる入力の値では、`define` が届かない値を求める行）の最小の再現",
+                "Smallest reproduction of the third form (a row asking a `define` for values it never comes to over the values the row gives the input it reads)"
+            ),
+            X_E102_HELD,
+            X_E102_HELD_EN,
+        )
+        .also(
+            tr!(
                 "三つ目の形（真偽の `define` が入力の範囲ではとらない値を求める行）の最小の再現",
                 "Smallest reproduction of the third form (a row asking a boolean `define` for the truth value it never takes)"
             ),
@@ -4501,8 +5027,8 @@ pub fn ledger() -> Vec<Entry> {
             "E103",
             tr!("単位の混同: 型の違う値を混ぜています", "Unit mismatch: values of different types are being mixed"),
             tr!(
-                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときにも出ます。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）にも出ます。列の列挙に無い値やグループをセルに書いたときにも出ます。出力のセルに書いたときと、グループが二つの列挙の値を混ぜているときも同じです。式の中の数が、書いた単位の値にならないときにも出ます。単位の無い小数（`amount * 0.4`。単位の無い数は整数の `number` です）と、金額や量の端数（`0.5円`）です。表・節・例の見出しに、その名前がもう持っている型と違う型を書いたときにも出ます。出力の名前なら出力の宣言の型、上の表や節が決める名前ならその型です。optional でない列（規則の出力、表が決める列、例の期待値）に `none` を書いたときと、値の無いことのある名前を書いたときにも出ます。値の無いことのある名前を式の中で使ったとき（`quoted * 2`）にも出ます。そういう値は、表のセルで確かめるか、optional の列にそのまま渡すことしかできません。型の `[…]` に、型が読まないものを書いたときにも出ます。単位の表に無い単位（`money[RUB]`、`money[JPYc]`）、ほかの次元の単位（`mass[cm]`）、単位の無い `money` や `mass`、読む分のあとの語（`mass[g, kg]`）、`[…]` の無い型に書いたもの（`number[kg]`）です。その単位の数をどこにも書いていなくても出ます。",
-                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in. And it is `none`, or a name that may have no value, written under a column that is not optional: an output, a column a table decides, an expected value. And it is a name that may have no value worked with in an expression (`quoted * 2`): such a value is tested in a table's cells, or handed on to an optional column as it is, and nothing else. And it is what the brackets of a type cannot hold: a unit the table of units does not have (`money[RUB]`, `money[JPYc]`), a unit of another dimension (`mass[cm]`), no unit on `money` or `mass`, a word after what the type reads (`mass[g, kg]`), and anything on a type with no brackets (`number[kg]`). It comes with no literal written in the unit anywhere."
+                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときにも出ます。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）にも出ます。列の列挙に無い値やグループをセルに書いたときにも出ます。出力のセルに書いたときと、グループが二つの列挙の値を混ぜているときも同じです。式の中の数が、書いた単位の値にならないときにも出ます。単位の無い小数（`amount * 0.4`。単位の無い数は整数の `number` です）と、金額や量の端数（`0.5円`）です。表・節・例の見出しに、その名前がもう持っている型と違う型を書いたときにも出ます。出力の名前なら出力の宣言の型、上の表や節が決める名前ならその型です。optional でない列（規則の出力、表が決める列、例の期待値）に `none` を書いたときと、値の無いことのある名前を書いたときにも出ます。値の無いことのある名前を式の中で使ったとき（`quoted * 2`）にも出ます。そういう値は、表のセルで確かめるか、optional の列にそのまま渡すことしかできません。型の `[…]` に、型が読まないものを書いたときにも出ます。単位の表に無い単位（`money[RUB]`、`money[JPYc]`）、ほかの次元の単位（`mass[cm]`）、単位の無い `money` や `mass`、読む分のあとの語（`mass[g, kg]`）、`[…]` の無い型に書いたもの（`number[kg]`）です。その単位の数をどこにも書いていなくても出ます。税区分か `[…]` にこうした誤りのある型は、何行に書いても（出力の型と、表の見出しにもう一度書いた型など）、最初に書いた所で一度だけ言い、ほかの行の番号を注に挙げます。単位の読めない型に書いた値（範囲、丸めの刻み、セル、例）と、それを読む行（`constraint`、それをまとめる `count`・`sum`・`max`・`min`）は何も言いません。",
+                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in. And it is `none`, or a name that may have no value, written under a column that is not optional: an output, a column a table decides, an expected value. And it is a name that may have no value worked with in an expression (`quoted * 2`): such a value is tested in a table's cells, or handed on to an optional column as it is, and nothing else. And it is what the brackets of a type cannot hold: a unit the table of units does not have (`money[RUB]`, `money[JPYc]`), a unit of another dimension (`mass[cm]`), no unit on `money` or `mass`, a word after what the type reads (`mass[g, kg]`), and anything on a type with no brackets (`number[kg]`). It comes with no literal written in the unit anywhere. A type whose tax or brackets hold such a mistake is said where it is first written, once however many lines write it (an output's type, and again in a table's heading), and the note gives the other lines. The values written in a type of no unit (its range, its rounding grid, the cells, the examples) and the lines that read it (a `constraint`, a `count`, `sum`, `max` or `min` over it) say nothing."
             ),
             tr!(
                 "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書いてください。刻みなら、型と同じ単位で書いてください（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書いてください。率は `%` で書いてください（`0.4` は `40%`。`fix.text` がこの形を出します）。見出しの型が名前の型と違うなら、どちらが正しいかを決めて直してください。見出しの型は消してもかまいません。消せば、名前の型で読みます。値の無いことを答える列なら、その型を `T?` にしてください（規則の出力なら `outputs` の宣言、表が決める列なら見出しの型です）。そうでなければ、`none` の代わりに値を書いてください。単位は、表にあるものを書いてください（`money[USD]`、`money[銭]`、`mass[g]`）。表に無い通貨の額は `number` で持てます。",
@@ -4538,8 +5064,8 @@ pub fn ledger() -> Vec<Entry> {
             "E105",
             tr!("行の重なり: 同じ入力が二つ以上の行に当てはまります", "Overlapping rows: the same input matches two or more rows"),
             tr!(
-                "`policy unique` の表で、両方に当てはまる入力を実際に構成できたとき。構成できなかった重なりは W114 に落ちます。上の表が同時には出さない値の組でしか重ならない対と、どの入力も届かない点（`define` の取りうる値の外、真偽の `define` がとらない値、上の表がその値を出す行の条件と導出の組み合わせ）でしか重ならない対は、重なりとして報告しません（完全性の検査と E102 が、そういう点に行を求めず、そこだけを求める行をどの入力にも当てはまらない行とするのと同じ読み方です）。optional の列では、比べ方、リテラル、値の集合は値があるときだけに当てはまり、`-` と `not:` は値が無いことにも当てはまります。だから `none` の行は、`-` の行とも `not: 5` の行とも、値の無い入力で重なります。",
-                "In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead. A pair that meets only on a combination the tables above never produce together, or only where no input reaches — past what a `define` comes to, at the truth value a boolean `define` never takes, where the rows of a table above leave a derive no values — is not reported: the completeness check asks no row there, and E102 calls a row that asks only for such points dead. On an optional column a comparison, a literal and a set of values match only a value that is there, while `-` and `not:` match the absent value too; so a `none` row meets a `-` row, and a `not: 5` row, on the absent value."
+                "`policy unique` の表で、二つの行が同じ入力をとるとき。両方に当てはまる例を挙げ、二つの行のセルが重なる所の全部も言います。同じ入力を取る、片方がもう片方の取る入力を全部取る、または両方のセルが取る入力を列ごとに言う、のどれかです。表が規則の計算する値を読むときは、例は、参照の評価器で流して確かめた入力と、その入力でそれらの列がとる値です（表の読まない入力があれば、「この例を作る入力」の行で添えます）。入力は、重なりの中の点ごとに作って探し、最後に、計算のもとになる入力の組み合わせが 16,384 通りまでなら、全部を参照の評価器で流します。導出や `define` の列で、そういう入力が見つからない重なりは W114 に落ちます。上の表の出力の列で入力が見つからないときは、見出しも例も「組み合わせ」と言い、入力とは呼ばず、JSON の `witness` に `inputs` を書きません。そのうえで、全部を流して両方の行に当てはまる入力が無かったならそう言い（指摘は残ります）、流せなかったなら、入力は見つからず、無いことも示せなかったと言います。上の表が同時には出さない値の組でしか重ならない対と、どの入力も届かない点（`define` の取りうる値の外、真偽の `define` がとらない値、上の表がその値を出す行の条件と導出の組み合わせ）でしか重ならない対は、重なりとして報告しません（完全性の検査と E102 が、そういう点に行を求めず、そこだけを求める行をどの入力にも当てはまらない行とするのと同じ読み方です）。optional の列では、比べ方、リテラル、値の集合は値があるときだけに当てはまり、`-` と `not:` は値が無いことにも当てはまります。だから `none` の行は、`-` の行とも `not: 5` の行とも、値の無い入力で重なります。",
+                "In a `policy unique` table, two rows take a common input. An example both match is given, and all of what the cells of the two rows share is said beside it: that they take the same inputs, that one takes everything the other does, or the inputs both take, column by column. Where the table reads a value the rule computes, the example is an input the reference evaluator has run, with the values it gives those columns (an \"An input producing this example\" line gives the input where it holds inputs the table does not read). The input is built at the points of the overlap in turn, and last, where the inputs the columns are worked out from have no more than 16,384 combinations, all of them are run through the reference evaluator. An overlap on a derive or a `define` for which no such input is found falls to W114 instead. Where none is found on the columns a table above decides, the headline and the example speak of a combination, it is not called an input, and the JSON `witness` has no `inputs`; the notes then say that running every input found none that matches both rows, where that run was made (the finding stays), and otherwise that no input was found and none could be shown not to exist. A pair that meets only on a combination the tables above never produce together, or only where no input reaches — past what a `define` comes to, at the truth value a boolean `define` never takes, where the rows of a table above leave a derive no values — is not reported: the completeness check asks no row there, and E102 calls a row that asks only for such points dead. On an optional column a comparison, a literal and a set of values match only a value that is there, while `-` and `not:` match the absent value too; so a `none` row meets a `-` row, and a `not: 5` row, on the absent value."
             ),
             tr!(
                 "出力が違うなら、どちらが正しいか決めて行を直してください。順序に意味を持たせたいなら `policy first` を宣言してください。出力まで同じなら、片方を削ってください。同じ出力を定める二つの表や節が重なるときは、勝つほうに `overrides <相手>` を書いてください。表なら `policy` の次の行に、節なら節の下の行に書きます。二つが同じ答えを返していても、重なりは許しません。今日同じ答えでも、明日の編集で片方だけが変わるからです。",
@@ -4645,15 +5171,15 @@ pub fn ledger() -> Vec<Entry> {
             "E112",
             tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of a derived value does not contain the values it can reach"),
             tr!(
-                "入力の範囲から計算した「実際に取りうる値」が、導出に宣言した `range` からはみ出すとき。入力の範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読みます（そこから int64 を越えうるなら E108 だけです）。範囲が狭いと、完全性検査が実際に起きる値を見ないまま「完全」と答えます。`max`・`min` に書いた `range` が、列の範囲と `empty` の値を含まないときも、これです。答えはそのどちらかの値だからです。",
-                "The interval computed from the input ranges falls outside the `range` declared on the derived value. An end an input's range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way; one that can pass int64 from there is E108 alone). With too narrow a range, the completeness check answers \"complete\" without ever looking at values that really occur. So does a `range` written on a `max` or a `min` that leaves out part of its column's range or its `empty` value, since it answers one of those."
+                "入力の範囲から計算した「実際に取りうる値」が、導出に宣言した `range` からはみ出すとき。入力の範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読みます（そこから int64 を越えうるなら E108 だけです）。範囲が狭いと、完全性検査が実際に起きる値を見ないまま「完全」と答えます。`max`・`min` に書いた `range` が、列の範囲と `empty` の値を含まないときも、これです。答えはそのどちらかの値だからです。`>` と `<` で書いた端は、書いた値を含みません。`range >0円 <200円` は、値が 0 円か 200 円になりうるなら、これです。",
+                "The interval computed from the input ranges falls outside the `range` declared on the derived value. An end an input's range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way; one that can pass int64 from there is E108 alone). With too narrow a range, the completeness check answers \"complete\" without ever looking at values that really occur. So does a `range` written on a `max` or a `min` that leaves out part of its column's range or its `empty` value, since it answers one of those. An end written with `>` or `<` leaves out the value it writes: `range >0JPY <200JPY` is this where the value can come to 0 yen or to 200 yen."
             ),
             tr!(
-                "文面が示す範囲まで `range` を広げてください（`range >=-110万円 <=100万円` の形で書いてあります）。起こりえない分まで広げても、検査がそこを自分で外すので害はありません。取りうる値の端が、書いていない端を型の端として読んだものなら、注がその入力を挙げます。範囲を広げるか、その入力の範囲に書いていない端を書いてください。",
-                "Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-1_100_000JPY <=1_000_000JPY`). Widening past what is reachable costs nothing: the check sifts the infeasible part out. Where an end of that interval comes from an end an input's range does not write, a note names the input: widen the range, or write that end on the input's range."
+                "文面が示す範囲まで `range` を広げてください（`range >=-110万円 <=100万円` の形で書いてあります）。起こりえない分まで広げても、検査がそこを自分で外すので害はありません。取りうる値の端が、書いていない端を型の端として読んだものなら、注がその入力を挙げます。範囲を広げるか、その入力の範囲に書いていない端を書いてください。その範囲を、規則が値として受け付ける範囲のつもりで書いたのなら（外になる呼び出しは受け付けない）、`derive` でなく `define … range` で書きます。",
+                "Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-1_100_000JPY <=1_000_000JPY`). Widening past what is reachable costs nothing: the check sifts the infeasible part out. Where an end of that interval comes from an end an input's range does not write, a note names the input: widen the range, or write that end on the input's range. Where the range is meant as the values the rule accepts, a call whose value falls outside being refused, write the value as a `define` with that `range` instead of a `derive`."
             ),
             X_E112,
-            &["E108", "E101"],
+            &["E108", "E101", "E150"],
         )
         .english(X_E112_EN),
         err(
@@ -4675,16 +5201,18 @@ pub fn ledger() -> Vec<Entry> {
             "E114",
             tr!("値が宣言した刻みに載っていません", "A value does not sit on the declared step"),
             tr!(
-                "`rate[step 1%]` の列に `0.5%` のように、宣言した刻みの整数倍でない値が書かれたとき。実行時の値はその刻みの整数一本なので、この値には表し方がありません。率の出力の丸めの刻みが、出力の宣言した刻みの整数倍でないとき（`rate[step 1%]` に `round down(0.5%)`）も同じです。答えは丸めの刻みに載り、呼び出し側へは宣言した刻みの整数で渡すので、表せない答えが出ます。",
-                "A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step, so this one has no representation. The same holds for the rounding grid of a rate output that is not a whole number of the step the output declares (`rate[step 1%]` with `round down(0.5%)`): every answer sits on the grid and is handed over as a whole number of the step, so some answers could not be written."
+                "`rate[step 1%]` の列に `0.5%` のように、宣言した刻みの整数倍でない値が書かれたとき。実行時の値はその刻みの整数一本なので、この値には表し方がありません。表の見出しで刻みを書いた、規則が答えない率（`-> markup : rate[step 1%]`）も同じで、その列のセルと、セルに書いた名前の取る値は刻みに載ります。刻みを書いた `derive` と `define` の率は、式が刻みに載らない値になりうるとき（`rate[step 1%]` の `markup / 2`）に止めます。取る値は式から読み、読めない式には言いません。率の出力の丸めの刻みが、出力の宣言した刻みの整数倍でないとき（`rate[step 1%]` に `round down(0.5%)`）も同じです。答えは丸めの刻みに載り、呼び出し側へは宣言した刻みの整数で渡すので、表せない答えが出ます。",
+                "A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step, so this one has no representation. So does a rate the rule does not answer with its step written on a table's heading (`-> markup : rate[step 1%]`): its cells, and the values a name in one of them takes, sit on the step. A `derive` or a `define` of a rate typed with a step is stopped where its expression can come to a value off it (`markup / 2` typed `rate[step 1%]`); the values are read off the expression, and of one they are not read off, nothing is said. The same holds for the rounding grid of a rate output that is not a whole number of the step the output declares (`rate[step 1%]` with `round down(0.5%)`): every answer sits on the grid and is handed over as a whole number of the step, so some answers could not be written."
             ),
             tr!(
-                "刻みに載る値に直すか、型の刻みを細かくしてください（`rate[step 0.1%]`）。黙って近い刻みに寄せると、表で読める境界と生成コードの境界が食い違います。丸めの刻みなら、刻みを丸めに合わせるか、丸めの刻みを刻みの整数倍にしてください。",
-                "Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code. For a rounding grid, declare the step the rounding needs, or round to a whole number of the step."
+                "刻みに載る値に直すか、型の刻みを細かくしてください（`rate[step 0.1%]`）。黙って近い刻みに寄せると、表で読める境界と生成コードの境界が食い違います。丸めの刻みなら、刻みを丸めに合わせるか、丸めの刻みを刻みの整数倍にしてください。`derive` と `define` の式なら、式を刻みに丸めるか（`half_up(…, 1%)`）、値の取る刻みを宣言してください。",
+                "Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code. For a rounding grid, declare the step the rounding needs, or round to a whole number of the step. For the expression of a `derive` or a `define`, round it to the step (`half_up(…, 1%)`), or declare the step its values take."
             ),
             X_E114,
             &["E103", "E106"],
-        ),
+        )
+        .also(tr!("見出しで刻みを書いた、規則が答えない率のセル", "A cell under a heading that writes a step on a rate the rule does not answer"), X_E114_HEADING, X_E114_HEADING_EN)
+        .also(tr!("刻みに載らない値になる、刻みを書いた定義", "A definition typed with a step whose expression comes off it"), X_E114_DEFINE, X_E114_DEFINE_EN),
         err(
             "E115",
             tr!("割る数が正の定数ではありません", "The divisor is not a positive constant"),
@@ -4734,8 +5262,8 @@ pub fn ledger() -> Vec<Entry> {
             "E118",
             tr!("呼び出しの形が違います", "The call is not written correctly"),
             tr!(
-                "無い関数を呼んでいるか、引数の数が合わないとき。書けるのは `min(a, b)` `max(a, b)` `allocate(配る額, 累計, 全体)` `mod(x, n)` `isqrt(x)` と丸めの五つ（`down(x, 1円)` など）だけです。丸めの刻みが定数でないときも、これです。",
-                "A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)`, `mod(x, n)`, `isqrt(x)` and the five rounding modes (`down(x, 1JPY)` and the rest). A rounding grid that is not a constant is this too."
+                "無い関数を呼んでいるか、引数の数が合わないとき。書けるのは `min(a, b)` `max(a, b)` `allocate(配る額, 累計, 全体)` `mod(x, n)` `isqrt(x)` と丸めの五つ（`down(x, 1円)` など）だけです。丸めの刻みが定数でないときも、これです。書き損じに近い名前の関数があれば、注にその名前を出します。",
+                "A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)`, `mod(x, n)`, `isqrt(x)` and the five rounding modes (`down(x, 1JPY)` and the rest). A rounding grid that is not a constant is this too. Where a call exists whose name is near the misspelling, a note proposes it."
             ),
             tr!(
                 "綴りと引数の数を確かめてください。引数が多ければ余りは黙って捨てられ、少なければ答えが決まりません。どちらも以前の版では検査を素通りしていて、ジェネレーターで初めて止まっていました。",
@@ -4813,12 +5341,12 @@ pub fn ledger() -> Vec<Entry> {
             "E122",
             tr!("契約が通す値を、規則が受け付けません", "The contract lets through a value the rule refuses"),
             tr!(
-                "`from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`。順のある列挙の入力に `range` を書いていれば、範囲に入る値と比べます）、JSON Schema の `required` です。`from sum` は、要素のフィールドの値の範囲と要素の数から決まる合計の届く先を、`from max`・`from min` はフィールドの値を比べます。`elements … from` で契約から取る並びは、要素のフィールドを入力と同じに比べ、並びの件数を `count` の上限と、要素の値の合計を `sum` の上限と比べます。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、\"\"、0 件）として届きます。`.proto` の文字列から読む日付は、\"\" を通すかどうかを見ます。フィールドをまたぐ条件（CEL の式、`oneof`、JSON Schema の `allOf`・`anyOf`・`oneOf`・`not`・`if`）が一つのフィールドの幅を狭めていれば、それも読みます。JSON Schema の型に null があるのに、入力が省略できないときにも出ます。読めない規則（剰余や文字列の関数を使う CEL など）は、無いものとして扱います。契約を実際より広く読むので、要らないところで出ることはあっても、見逃すことはありません。",
-                "A value read with `from` can pass the contract's validation and still be refused by the input's declaration. What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum` — held to the values inside its `range` when an ordered enum input has one), and JSON Schema's `required`. A `from sum` is held by how far its total reaches — the values of the field times how many elements there may be — and a `from max` or `from min` by the values of the field. A sequence taken with `elements … from` has each field of its elements held as an input is, its length held to the cap its `count`s put on it, and its totals to the upper end of each `sum` over it. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, \"\", no elements) with no rule applied; a date read from a `.proto` string is held to whether \"\" passes. A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field, and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken."
+                "`from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`。順のある列挙の入力に `range` を書いていれば、範囲に入る値と比べます）、JSON Schema の `required` です。`from sum` は、要素のフィールドの値の範囲と要素の数から決まる合計の届く先を、`from max`・`from min` はフィールドの値を比べます。`elements … from` で契約から取る並びは、要素のフィールドを入力と同じに比べ、並びの件数を `count` の上限と、要素の値の合計を `sum` の上限と比べます。`sum` か `count` の範囲が 0 より大きい値から始まるときは、下の端も比べます。`sum` は、契約が通すいちばん少ない件数で、どの要素もいちばん小さい値のときの合計と比べます。`count` は、どの要素を数えるかを契約から読めないので、契約が約束していないものとして扱います。`unique` のフィールドは、要素どうしで一つのフィールドが違うことを契約から読めないので（JSON Schema の `uniqueItems` は要素を丸ごと比べます）、並びが 1 件までのときのほかは、契約が約束していないものとして扱います。重みで選ぶ `take_weighted` の並びは、契約が通すいちばん多い件数で、どの重みもいちばん大きいときの合計が int64 に収まるかを比べます。`range` を書いた `define` は、契約から読む入力や要素のフィールドから計算する値が、契約の通す値で範囲の外になるかを確かめ、外になるリクエストを例に出します。収まるとも外になるとも示せないときも、そう言います。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、\"\"、0 件）として届きます。`.proto` の文字列から読む日付は、\"\" を通すかどうかを見ます。フィールドをまたぐ条件（CEL の式、`oneof`、JSON Schema の `allOf`・`anyOf`・`oneOf`・`not`・`if`）が一つのフィールドの幅を狭めていれば、それも読みます。JSON Schema の型に null があるのに、入力が省略できないときにも出ます。読めない規則（剰余や文字列の関数を使う CEL など）は、無いものとして扱います。契約を実際より広く読むので、要らないところで出ることはあっても、見逃すことはありません。",
+                "A value read with `from` can pass the contract's validation and still be refused by the input's declaration. What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum` — held to the values inside its `range` when an ordered enum input has one), and JSON Schema's `required`. A `from sum` is held by how far its total reaches — the values of the field times how many elements there may be — and a `from max` or `from min` by the values of the field. A sequence taken with `elements … from` has each field of its elements held as an input is, its length held to the cap its `count`s put on it, and its totals to the upper end of each `sum` over it. Where the range of a `sum` or a `count` over it starts above zero, the bottom is held too: the least total, the fewest elements the contract lets through with each at its least, against the bottom of the `sum`; and the bottom of a `count` as something the contract does not promise, since which elements count is not read from a contract. A `unique` field is something the contract does not promise either, unless the collection holds one element at most: that the elements differ in one field is not read from a contract (JSON Schema's `uniqueItems` compares whole elements). The weights a `take_weighted` picks by are held to int64: the most elements the contract lets through, each weight at its largest, have to total within it. A `define` with a `range`, worked out from inputs or fields read from a contract, is held over what the contract lets them be: a request that takes the value outside the range is the example, and where the value is neither shown to stay inside nor found outside, that is said too. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, \"\", no elements) with no rule applied; a date read from a `.proto` string is held to whether \"\" passes. A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field, and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken."
             ),
             tr!(
-                "どちらを直すかは、人が決めることです。その値が来ないはずなら、契約を狭めてください。`fix.text` が、契約に書く注釈そのものです（`narrow_contract`）。来るのなら、規則の範囲を広げるか列挙に値を足して、その値の答えを決めてください。`where` で絞った件数の下限のように契約に書けない前提もあり、そのときは `fix.kind` が `none` です。読む値が無いことがあるなら、入力を `T?` にしてください。値が無いとき、規則はそれを none として読みます。",
-                "Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none."
+                "どちらを直すかは、人が決めることです。その値が来ないはずなら、契約を狭めてください。`fix.text` が、契約に書く注釈そのものです（`narrow_contract`）。来るのなら、規則の範囲を広げるか列挙に値を足して、その値の答えを決めてください。`where` で絞った件数の下限や `unique` のように契約に書けない前提もあり、そのときは `fix.kind` が `none` です。読む値が無いことがあるなら、入力を `T?` にしてください。値が無いとき、規則はそれを none として読みます。",
+                "Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out, or a `unique` field; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none."
             ),
             X_E122,
             &["W123", "E123", "E121", "E032"],
@@ -5009,15 +5537,15 @@ pub fn ledger() -> Vec<Entry> {
             "E140",
             tr!("出力の範囲が、出力のとる値を含んでいません", "An output's range does not hold the values it takes"),
             tr!(
-                "出力の行に書いた `range` が、その出力のとりうる値を含まないとき。とりうる値は、出力を決めるもの（表の行のセルの値と式、同じ名前の `define`、`result` の式、並びをたどる行）が入力の範囲と `constraint` のもとでとる値の両端を、出力の丸め方で丸めたあいだです。範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読みます。数でない出力に書いた範囲は確かめられないので、これです。ただし、端の無い入力から計算する式が int64 を越えうるときは、E108 だけになります。出力の範囲は、ほかの言語（kaname、dandori など）が規則の答えを読む範囲なので、狭いと、そこで行う範囲の検査が、規則が実際に返す値を見落とします。",
-                "The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result`, a line that walks a sequence — under the inputs' ranges and the `constraint` lines, with both ends rounded the way the output rounds. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way). A range written on an output that is no number cannot be checked, and is this too. An expression that can pass int64 from an input with an open end is E108 alone. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns."
+                "出力の行に書いた `range` が、その出力のとりうる値を含まないとき。とりうる値は、出力を決めるもの（表の行のセルの値と式、同じ名前の `define`、`result` の式、並びをたどる行）が入力の範囲と `constraint` のもとでとる値の両端を、出力の丸め方で丸めたあいだです。範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読みます。`>` と `<` で書いた端は、書いた値を含みません（`range >0円` は、出力が 0 円になりうるなら、これです）。数でない出力に書いた範囲は確かめられないので、これです。ただし、端の無い入力から計算する式が int64 を越えうるときは、E108 だけになります。出力の範囲は、ほかの言語（kaname、dandori など）が規則の答えを読む範囲なので、狭いと、そこで行う範囲の検査が、規則が実際に返す値を見落とします。",
+                "The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result`, a line that walks a sequence — under the inputs' ranges and the `constraint` lines, with both ends rounded the way the output rounds. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way). An end written with `>` or `<` leaves out the value it writes: `range >0JPY` is this where the output can come to 0 yen. A range written on an output that is no number cannot be checked, and is this too. An expression that can pass int64 from an input with an open end is E108 alone. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns."
             ),
             tr!(
                 "範囲を、文面の示すとりうる値まで広げてください（`fix.text` に `range >=0円 <=1000円` の形で入っています）。とりうる値の端が、書いていない端を型の端として読んだものなら、`fix.text` は無く、注がその名前を挙げます。範囲を広げるか、その名前の範囲に書いていない端を書いてください。数でない出力なら、範囲を外してください。範囲を書かない出力にも、rulec が求めた範囲が付き、ほかの言語はそれを読みます。",
                 "Widen the range to the values the message states (`fix.text` holds it, as `range >=0USDc <=1000USDc`). Where an end of those values comes from an end no range writes, read at the end of its type, there is no `fix.text`, and a note names whose: widen the range, or write that end on the name's range. On an output that is no number, take the range off. An output with none written has the range rulec works out, and the other languages read that."
             ),
             X_E140,
-            &["E112", "E061", "E103"],
+            &["E112", "E061", "E103", "E150"],
         )
         .english(X_E140_EN)
         .also(tr!("範囲に書いていない端", "An end a range does not write"), X_E140_OPEN, X_E140_OPEN_EN)
@@ -5133,8 +5661,8 @@ pub fn ledger() -> Vec<Entry> {
             "W128",
             tr!("行に当たる入力を見つけられず、当たらないことも示せませんでした", "No input was found that reaches a row, and none was shown not to"),
             tr!(
-                "計算した列（導出、`define`）にセルを書いた行で、その行に当たる入力が、規則の例にも、ベクタを作るときの探し方でも、入力の候補の値の組み合わせ（4,096 通りまで）にも、その行を除いたときに完全性の検査が見つける穴を作る入力にも見つからず、どの入力も当たらないことも示せなかったとき。そういう行の点は入力ではなく、そこに届く入力があるかは式どうしの関係で決まります（整数でしか届かない、整数では届かない、など）。届くと決まっていない行を、黙って通しません。入力と列挙だけの行は、点がそのまま入力なので、この探しはしません。計算した値が加わらずに外れると示せた行（`constraint`、`never`、koyomi の日、上流の表だけで外れる行）も、決まった行なので、この警告は出ず、入力と列挙だけのそういう行と同じく通ります。",
-                "A row that writes a cell on a computed column (a derive, a `define`): no input reaching it was found among the rule's examples, by the search the vectors are made with, among the combinations of the inputs' candidate values (up to 4,096), or as the input behind the gap the completeness check finds with the row taken out, and it could not be shown that no input does. The point of such a row is not an input, and whether one reaches it turns on how the expressions relate (a value only whole numbers reach, or one they never do). A row nothing decided is not passed in silence. A row of inputs and enums alone needs no search: its point is an input. A row shown to be left out with no computed value taking part (by a `constraint`, a `never`, koyomi's days or the tables above alone) is decided too: it gets no warning, and passes as such a row of inputs and enums does."
+                "計算した列（導出、`define`、取り込んだ規則の出力、同じ規則のほかの表の出力）にセルを書いた行で、その行に当たる入力が、規則の例にも、ベクタを作るときの探し方でも、入力の候補の値の組み合わせ（4,096 通りまで）にも、その行を除いたときに完全性の検査が見つける穴を作る入力にも、行の箱の中で計算した列が行のセルに入るように作った入力（箱 8 個まで）にも見つからず、どの入力も当たらないことも示せなかったとき。最後に、計算のもとになる入力の組み合わせが 16,384 通りまでなら全部を参照の評価器で流し、当たる入力があれば、その行は決まった行として扱います。全部を流しても当たる入力が無かった行は、見出しが「行 N に当たる入力はありませんが、検査はそれを示せません」になります。検査は、証明書に載せて再検査で確かめられることだけで決めるので、その行を E102 にはしません。そういう行の点は入力ではなく、そこに届く入力があるかは式どうしの関係で決まります（整数でしか届かない、整数では届かない、など）。検査は、計算した列を行のセルの値でもう一度計算し（区間、入力それぞれに数を掛けて足した形、値の乗る刻み、整数）、それで外れる行は E102 にします。ここに残るのはおもに、二つの入力の積や二乗の和です（整数の二辺の二乗を足しても 7 にはなりません）。届くと決まっていない行を、黙って通しません。入力と列挙だけの行は、点がそのまま入力なので、この探しはしません。計算した値が加わらずに外れると示せた行も、決まった行なので、この警告は出ません。`constraint`、`never`、koyomi の日が加わって外れる行は、入力と列挙だけのそういう行と同じく通り、`rulec coverage` がその行を言います。前の行と上流の表だけで外れる行は、E102 です。",
+                "A row that writes a cell on a computed column (a derive, a `define`, an output of a rule brought in with `apply` or of another table of this rule): no input reaching it was found among the rule's examples, by the search the vectors are made with, among the combinations of the inputs' candidate values (up to 4,096), as the input behind the gap the completeness check finds with the row taken out, or as an input built inside one of the row's boxes so that the computed columns land in the row's cells (up to eight boxes), and it could not be shown that no input does. Last, where the inputs the columns are worked out from have no more than 16,384 combinations, all of them are run through the reference evaluator, and a row one of them reaches is taken as decided. A row none of them reaches is named with the headline \"No input reaches row N, but the check cannot show it\": the check decides only by what its certificate carries for a re-checker to confirm, so the row is not made E102. The point of such a row is not an input, and whether one reaches it turns on how the expressions relate (a value only whole numbers reach, or one they never do). The check works each computed column out again over the row's cells — its interval, the inputs times numbers added up, the grid its values sit on, whole numbers — and a row that this leaves out is E102; what is left here is mostly a product of two inputs or a sum of squares (no two whole sides have squares that add up to 7). A row nothing decided is not passed in silence. A row of inputs and enums alone needs no search: its point is an input. A row shown to be left out with no computed value taking part is decided too, and gets no warning: one a `constraint`, a `never` or koyomi's days take part in leaving out passes, as such a row of inputs and enums does, and `rulec coverage` names it; one the rows before it and the tables above alone leave out is E102."
             ),
             tr!(
                 "その行に当たる入力が本当にあるか、式と行の条件を見比べてください。あるなら、その入力を例に書くと、この警告は消えます。無いなら、行を削除してください。削除して完全性の欠落（E101）が出るなら、その組み合わせが起きないことも rulec は示せていないので、行は残してかまいません。",
@@ -5162,8 +5690,8 @@ pub fn ledger() -> Vec<Entry> {
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),
             tr!(
-                "`policy first` の表で、一部だけ重なっていて出力が違う行の対があるとき。階段状の隠れと、答えが同じ隠れは件数の注記に畳まれ、ここに一覧されるのは要確認の対だけです。重なりがどの入力も届かない点だけにあるときは、E105 と同じく報告しません。",
-                "In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed. A pair that meets only where no input reaches is not reported, as under E105."
+                "`policy first` の表で、一部だけ重なっていて出力が違う行の対があるとき。階段状の隠れと、答えが同じ隠れは件数の注記に畳まれ、ここに一覧されるのは要確認の対だけです。両方に当てはまる入力の例と、両方の行のセルが取る入力の全部を列ごとに言います。例の決まりは E105 と同じです。重なりがどの入力も届かない点だけにあるときは、E105 と同じく報告しません。",
+                "In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed, each with an input both rows match and with all of what the cells of the two take, column by column. The example is given as under E105. A pair that meets only where no input reaches is not reported, as under E105."
             ),
             tr!(
                 "意図どおりならこのままで構いません（CI の `check --diff-base` は新たに生じた対だけを報告します）。後の行を優先したいなら、その行を先の行より上へ移してください。すべての対を見るには `--show-shadow` を付けてください。",
@@ -5191,8 +5719,8 @@ pub fn ledger() -> Vec<Entry> {
             "W111",
             tr!("使われていない宣言があります", "A declaration is never used"),
             tr!(
-                "入力・導出・グループ・列挙の値が、どの表のどのセルにも現れないとき。書き忘れのしるしであることも、意図した契約であることもあります。`import` で持ち込んだ型の値は対象外です。順のある列挙の値のうち、その列挙を型に持つ名前がどれも入力で、どの入力の `range` もその値を外しているものも対象外です。その値を持ってくる呼び出しは無いからです。入力をそのまま渡すセル（`| false | requested |`）が答える値も、その列挙をどの表も列で確かめていなければ対象外です。その値の行を持てる表が無いからです。",
-                "An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way, nor is a value of an ordered enum when every name of that type is an input whose `range` leaves the value out: no call brings it. Nor is a value a cell that hands an input on (`| false | requested |`) answers with, when no table tests the enum in a column: no table could give it a row of its own."
+                "入力・導出・グループ・列挙の値が、どの表のどのセルにも現れないとき。書き忘れのしるしであることも、意図した契約であることもあります。`import` で持ち込んだ型の値は対象外です。順のある列挙の値のうち、その列挙を型に持つ名前がどれも入力で、どの入力の `range` もその値を外しているものも対象外です。その値を持ってくる呼び出しは無いからです。入力をそのまま渡すセル（`| false | requested |`）が答える値も、その列挙をどの表も列で確かめていなければ対象外です。その値の行を持てる表が無いからです。列挙の値は、その列挙を読む表の E101 が足す行でその値を名指ししているなら、E101 だけが言います。",
+                "An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way, nor is a value of an ordered enum when every name of that type is an input whose `range` leaves the value out: no call brings it. Nor is a value a cell that hands an input on (`| false | requested |`) answers with, when no table tests the enum in a column: no table could give it a row of its own. A value of an enum is said by E101 alone where the rows E101 asks for, in a table that reads the enum, name it."
             ),
             tr!(
                 "入力が範囲の入口検査としてだけ効いているなら、宣言に `contract_only` を付けて黙らせてください。列挙の値が既定行に落ちるのが正しいなら、値の宣言に `default` を付けてください。どちらでもないなら、その列を表に足すか、宣言を消してください。",
@@ -5280,23 +5808,23 @@ pub fn ledger() -> Vec<Entry> {
             "W121",
             tr!("生成先の言語で、識別子がぶつかるか使えません", "An identifier collides, or cannot be used, in a target language"),
             tr!(
-                "ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき。別名はそのまま関数・引数・型・メンバの名前になります。規則の別名は、モジュールやパッケージの名前にもなります。そこで標準ライブラリと同じ名前だと、生成したモジュールがぶつかります。また、規則と、規則が宣言する列挙の型の名前が同じになるとき。Go は規則の関数と列挙の型を一つのパッケージに並べ、Java は列挙を規則のクラスの中に置くので、どちらもコンパイルできません（`enums` のファイルから読む列挙は、そのファイルのパッケージやクラスの名前で書くので、ぶつかりません）。別名の無い名前が予約語のときも出ます。そのときは生成コードがどの言語でも名前の後ろに `_` を付けて書き（`class_`）、それがこの規則のほかの名前の識別子でもあれば、さらに番号を付けます（`class_2`）。別名の無い名前に、生成先のどれかが名前に取らない字があるときも出ます（`差²` の `²`、`面積㎡` の `㎡`、`rate%` の `%`、Go が取らない母音記号）。そのときは生成コードがどの言語でもその字を `_` にして書き（`差_`）、同じように番号を付けることがあります。グループと `shape` の名前も同じです。公開される名前（入力、出力、並び、要素のフィールド）なら、ASCII の別名が要るので E011 で止まります。書いた二つの名前の識別子（別名、無ければ名前）が違っても、どれかの生成先の綴りで一つになるときにも出ます。綴りは、値を書く lowerCamelCase、構造体のフィールドの PascalCase、`.proto` のフィールドの JSON の名前、列挙の値の大文字、予約語や言語が使う変数の名前に付ける `_`、大文字と小文字を区別しない列の名前（SQLite）、名前の先頭の 63 バイト（PostgreSQL）です。識別子をその生成先が使えないときも出ます。大文字で始まる名前を定数として読む言語、`_` で始まるフィールドを受け付けない `NamedTuple`、63 バイトより長い列の名前を切る PostgreSQL、`_` だけの名前を変数にもフィールドにもできない言語、列の名前に `true` と `false` を付けない SQLite、ASCII でない名前を取らない `.proto` です。書いた名前が、生成したコードが自分で使う名前と同じになるときにも出ます。当てはまった行と答えと要素の型、誤りの型、丸めなどの補助関数、局所変数、組み込みの名前、`.proto` のメッセージとフィールド（`DecideResponse` の `trace`）、列挙の値の `<型>_UNSPECIFIED`、Connect のサービスが読み込む名前、言語のコマンドが取ってあるパッケージの名前、プログラムが始まるファイルの名前です。どの生成先でそうなるかは、警告の注記が言います。どの言語でも一つに綴る二つの名前（二つの列挙の型など）は、E034 で止まります。",
-                "An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). And for a name with no alias that has a character some target takes in no name (the `²` of `差²`, the `㎡` of `面積㎡`, the `%` of `rate%`, a vowel sign Go does not take): the generated code of every language then writes that character as `_` (`差_`), with a number after it in the same way, a group's and a shape's name alike. A public name (an input, an output, a sequence, a field of an element) of the kind takes an ASCII alias, and stops the check with E011. It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), and the first 63 bytes of a name (PostgreSQL). And where a target cannot take an identifier: a language that reads a name starting with a capital as a constant, a `NamedTuple`, which takes no field starting with `_`, PostgreSQL, which cuts a column's name longer than 63 bytes, the languages in which a name of `_` alone is neither a variable nor a field, SQLite, which gives a column no name of `true` or `false`, and the `.proto`, which takes no name that is not in ASCII. And where a name the author wrote is one the generated code uses itself: the types of the rows that matched, of the answer and of one element, the errors, the helpers that round and the rest, its locals, the names the language has built in, the messages and the fields of the `.proto` (the `trace` of `DecideResponse`), the `<TYPE>_UNSPECIFIED` of an enum's values, the names the service of Connect imports, the package names a language's command keeps, and the name of the file a program starts in. The warning's notes say which targets. Two names every language spells as one (the types of two enums, say) stop the check with E034."
+                "書いた名前を、生成先のどれかがそのままでは書けないときに出ます。どの生成先でそうなるかと、何とぶつかるかは、警告の注記が言います。ASCII の別名が、生成先のどれかの予約語のとき。別名は関数・引数・型・メンバの名前になります。値の別名は、名前をそのまま書く言語の予約語と、大文字と小文字まで同じときだけ言います（予約語を書き分ける言語と、値を変数に書く言語では、その別名を書けます）。規則と列挙の別名は、その言語が書く綴りで比べます。列挙の型は PascalCase なので、`float` は Java の `Float` で予約語ではなく、`self` は `Self` になり、それを予約語とする言語では予約語です。規則の Go のパッケージは、小文字にして `_` を除いた名前なので、`fall_through` は予約語の `fallthrough` です。列挙の値は、言語が書く列挙子や定数が予約語（`Self`、`BEGIN`、`END`）になるときに言います。言語が予約語の後ろに `_` を付けて書き、そのまま組めるとき（規則の関数・名前空間・メソッド、`enums` ファイルの名前空間、列挙のクラス、値の定数）は、どの言語で何と書くかを知らせるだけで、生成先は名指しません。規則の別名は、モジュールやパッケージの名前にもなります。そこで標準ライブラリと同じ名前だと、生成したモジュールがぶつかります。`enums` ファイルの名前も、各言語がそのファイルを書くモジュール・クラス・パッケージの名前として、同じように比べます。そのファイルから読む規則が、その名前で読み込むからです。別名の無い名前が予約語のときも出ます。そのときは生成コードがどの言語でも名前の後ろに `_` を付けて書き（`class_`）、それがこの規則のほかの名前の識別子でもあれば、さらに番号を付けます（`class_2`）。別名の無い名前に、生成先のどれかが名前に取らない字があるときも出ます（`差²` の `²`、`面積㎡` の `㎡`、`rate%` の `%`、Go が取らない母音記号）。そのときは生成コードがどの言語でもその字を `_` にして書き（`差_`）、同じように番号を付けることがあります。グループと `shape` の名前も同じです。公開される名前（入力、出力、並び、要素のフィールド）なら、ASCII の別名が要るので E011 で止まります。規則のモジュールが規則のために置く名前と、列挙から作る名前が、二つを一つの場所に置く言語で重なるときも出ます（規則 `tier` と列挙 `tier` の、Go の `Tier`）。そのときは重なる言語でだけ、列挙の型の後ろに番号を付けて書き（`Tier2`）、型から作る名前もそれに従います。警告は、言語ごとの型の名前と、重なった二つの名前を言います。書いた二つの名前の識別子（別名、無ければ名前）が違っても、どれかの生成先の綴りで一つになるときにも出ます。綴りは、値を書く lowerCamelCase、構造体のフィールドの PascalCase、`.proto` のフィールドの JSON の名前、列挙の値の大文字、予約語や言語が使う変数の名前に付ける `_`、大文字と小文字を区別しない列の名前（SQLite）、名前の先頭の 63 バイト（PostgreSQL）、型の名前と値の名前をつないだ Go の列挙の値の定数（`import enum` で読む列挙も比べます）です。呼ぶ側が名前で使う所に、生成先が取れない名前を書いたときも出ます。`_` で始まるフィールドを受け付けない `NamedTuple`（出力が二つ以上ある規則の出力と、要素のフィールド）、63 バイトより長い列の名前を切る PostgreSQL、`_` だけの名前をフィールドや引数のラベルにできない言語（出力が二つ以上ある規則の出力、要素のフィールド、構造体のフィールドか引数のラベルになる入力）、列の名前に `true` と `false` を付けない SQLite（出力）、ASCII でない名前を取らない `.proto`、`_` で始まる名前のファイルをパッケージに入れない Go（規則の名前）です。書いた名前が、生成したコードが呼ぶ側に見せる名前と同じになるときにも出ます。当てはまった行と答えと要素の型、誤りの型、`.proto` のメッセージとフィールド（`DecideResponse` の `trace`）、列挙の値の `<型>_UNSPECIFIED`、言語のコマンドが取ってあるパッケージの名前、プログラムが始まるファイルの名前、`import enum` で読む列挙を規則のモジュールが渡す名前です。生成したコードが中だけで使う名前（補助関数、局所変数、読み込むモジュールの名前）とは、重なる言語で生成コードが規則の名前を別の名前で持つので、出ません。組み込みの名前も、生成コードがそれを隠されない書き方で読む言語では出ません。生成先 `swift` は、規則のモジュールと runner と、規則が読む `enums` ファイルのモジュールを一つのモジュールに組むので、それらのうちの二つが一つの名前を宣言するときにも出ます。二つが同じ列挙の宣言（同じ規則の同じ列挙で、値の並びが全部同じ）なら、列挙はファイルのモジュールに一度だけ書かれ、出ません。どの言語でも一つに綴る二つの名前（二つの列挙の型など）は、E034 で止まります。",
+                "A name the author wrote cannot be written as it is in the code of some target; the warning's notes say which targets, and what the name meets there. An ASCII alias is a keyword of one of the targets. An alias becomes a function, a parameter, a type or a member there; a value's alias is said only where it is a keyword, in the same case, of a language that writes names as they are (a language that writes a keyword apart, or a value as a variable, takes it). The rule's alias and an enum's are held to the keywords as each language spells them: an enum's type is in PascalCase, so `float` is Java's `Float`, which is no keyword, and `self` is `Self`, which is one where a language keeps it; the rule's Go package is the alias in lower case without its `_`, so `fall_through` is the keyword `fallthrough`. A value of an enum is said where the variant or the constant a language writes it as is a keyword (`Self`, `BEGIN`, `END`). Where a language writes the name with `_` after a keyword and its code builds (the rule's function, namespace or method, an `enums` file's namespace, an enum's class, a value's constant), the warning only says what that language writes, and names no target. The rule's alias also names a module or a package, and the standard library's own names are held against it there. An `enums` file's name is held to the same words, as the module, the class or the package each language writes the file as, which the rules that read from it import by that name. It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). And for a name with no alias that has a character some target takes in no name (the `²` of `差²`, the `㎡` of `面積㎡`, the `%` of `rate%`, a vowel sign Go does not take): the generated code of every language then writes that character as `_` (`差_`), with a number after it in the same way, a group's and a shape's name alike. A public name (an input, an output, a sequence, a field of an element) of the kind takes an ASCII alias, and stops the check with E011. And where a name the rule's module declares for the rule meets a name made of an enum, in a language that puts the two in one place (Go's `Tier` of a rule `tier` and of an enum `tier`): the generated code of that language alone writes the enum's type with a number after it (`Tier2`), and the names made of the type follow; the warning names the type in each such language and the two names that met. It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), the first 63 bytes of a name (PostgreSQL), and Go's constants of an enum's values, the type's name and the value's joined (an enum read with `import enum` among them). And where a name a caller uses is one a target cannot take: a `NamedTuple`, which takes no field starting with `_` (the outputs of a rule with two or more, the fields of an element), PostgreSQL, which cuts a column's name longer than 63 bytes, the languages in which a name of `_` alone is no field and no label (the outputs of a rule with two or more, the fields of an element, the inputs where they are the fields of a struct or the labels of the arguments), SQLite, which gives a column no name of `true` or `false` (the outputs), the `.proto`, which takes no name that is not in ASCII, and Go, whose command leaves a file whose name starts with `_` out of the package (the rule's name). And where a name the author wrote is one the generated code shows its callers: the types of the rows that matched, of the answer and of one element, the errors, the messages and the fields of the `.proto` (the `trace` of `DecideResponse`), the `<TYPE>_UNSPECIFIED` of an enum's values, the package names a language's command keeps, the name of the file a program starts in, and the name under which the rule's module hands on an enum it reads with `import enum`. A name the generated code keeps to itself (a helper, a local, a module it imports) is not said: where the two meet, the code of that language holds the rule's name under another. Nor is a builtin the code of a language reaches another way. The `swift` target builds the rule's module, its runner and the modules of the `enums` files it reads into one module, and it is raised where two of them declare one name — where the two declare the same enum (the enum of the same rule, with the same values in the same order), the enum is written once, in the file's module, and it is not raised. Two names every language spells as one (the types of two enums, say) stop the check with E034."
             ),
             tr!(
-                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。どの生成先でどうぶつかるかは、警告の注記に出ます。引数やローカル変数の名前は、その本体の外までは隠しません。そのため、引数やローカル変数の名前でこの警告が出るのは、予約語のときと、生成先が名前に取らない字があるときだけです。二つの名前がある生成先で一つの識別子になるなら、その生成先を使うときは、どちらかに別名を付けてください。生成先が使えない識別子や、生成したコードが自分で使う名前なら、使える別名を付けてください（大文字で始まらない、`_` で始まらない、63 バイト以下の、生成したコードが使わない別名）。使わない生成先なら、このままで構いません。",
-                "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword or a character a target takes in no name. Of two names that are one identifier in a target you generate, give one an alias; to an identifier a target cannot take, or a name its generated code uses itself, give an alias it takes (one that starts with neither a capital nor `_`, is 63 bytes or fewer, and is no name the generated code uses). For a target you do not generate, leave it."
+                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。二つの名前がある生成先で一つの識別子になるなら、その生成先を使うときは、どちらかに別名を付けてください。生成先が取れない名前や、生成したコードが呼ぶ側に見せる名前なら、取れる別名を付けてください（`_` で始まらない、63 バイト以下の、生成したコードが見せない別名）。列挙の型に番号を付けたくないなら、規則か列挙に別名を付けてください。使わない生成先なら、このままで構いません。使う生成先をこの警告が名指すあいだは、`rulec gen` と `ritsu gen` は何も書かずに止まります（E153）。生成先を名指さない警告（どこかの言語が `_` を付けて書く名前など）は、何も止めません。",
+                "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`. Of two names that are one identifier in a target you generate, give one an alias; to a name a target cannot take, or one its generated code shows its callers, give an alias it takes (one that does not start with `_`, is 63 bytes or fewer, and is no name the generated code shows). To keep an enum's type unnumbered, give the rule or the enum an alias. For a target you do not generate, leave it; while the warning names a target you ask for, `rulec gen` and `ritsu gen` write nothing (E153). One that names no target (a name some language writes with `_`, say) stops nothing."
             ),
             X_W121,
-            &["E009", "E011", "E034"],
+            &["E009", "E011", "E034", "E153"],
         )
         .english(X_W121_EN)
         .also(tr!("Swift と Java が同じに綴る二つの名前", "Two names Swift and Java spell alike"), X_W121_CAMEL, X_W121_CAMEL_EN)
         .also(tr!("SQLite が一つの列として読む二つの名前", "Two names SQLite reads as one column"), X_W121_CASE, X_W121_CASE_EN)
         .also(tr!("PostgreSQL が一つの名前に切る二つの長い名前", "Two long names PostgreSQL cuts to one"), X_W121_LONG, X_W121_LONG_EN)
-        .also(tr!("Ruby が定数として読む名前", "A name Ruby reads as a constant"), X_W121_RUBY, X_W121_RUBY_EN)
-        .also(tr!("生成したコードが自分で使う名前", "A name the generated code uses itself"), X_W121_OWN, X_W121_OWN_EN)
-        .also(tr!("`_` だけの名前", "A name of `_` alone"), X_W121_BLANK, X_W121_BLANK_EN)
+        .also(tr!("規則と同じ名前の列挙", "An enum named like the rule"), X_W121_ENUM, X_W121_ENUM_EN)
+        .also(tr!("生成したコードが呼ぶ側に見せる名前", "A name the generated code shows its callers"), X_W121_OWN, X_W121_OWN_EN)
+        .also(tr!("`_` だけの名前の出力", "An output named `_` alone"), X_W121_BLANK, X_W121_BLANK_EN)
         .also(tr!("生成先が名前に取らない字のある名前", "A name with a character a target takes in no name"), X_W121_CHAR, X_W121_CHAR_EN),
         warn(
             "W115",
@@ -5317,8 +5845,8 @@ pub fn ledger() -> Vec<Entry> {
             "W114",
             tr!("未確認の重なり: 両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both rows"),
             tr!(
-                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出が入力を共有する形と、真偽の `define` の中の閾値は、消去が決めるようになったのでここには落ちてきません。残るのは、消去が有理数の上で解いているために決まらない形です。下の最小の再現の `倍` は必ず偶数なので `5円` ちょうどにはなりませんが、有理数には `2.5円` があります。不等式の数が上限（400 本）を超えた場合と、単位をまたぐ場合も同じです。どれも「証明できなかった」という意味で、「起こりうる」という意味ではありません。上流の表がその値を出す行の条件と導出の組み合わせでしか重ならない対は、検査がその組み合わせを読んで重なりから外すので、ここには来ません。",
-                "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input and the thresholds inside a boolean `define` no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `twice` above is always even and never exactly `5JPY`, but `2.5JPY` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible. A pair that meets only where the rows of a table above leave a derive no values does not fall here either: the check reads that and drops it."
+                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出が入力を共有する形と、真偽の `define` の中の閾値は、消去が決めるようになったのでここには落ちてきません。残るのは、消去が有理数の上で解いているために決まらない形です。下の最小の再現の `倍` は必ず偶数なので `5円` ちょうどにはなりませんが、有理数には `2.5円` があります。不等式の数が上限（400 本）を超えた場合と、単位をまたぐ場合も同じです。どれも「証明できなかった」という意味で、「起こりうる」という意味ではありません。上流の表がその値を出す行の条件と導出の組み合わせでしか重ならない対は、検査がその組み合わせを読んで重なりから外すので、ここには来ません。計算のもとになる入力の組み合わせが 16,384 通りまでなら、全部を参照の評価器で流し、両方に当てはまる入力があれば E105 にします。無ければ、見出しを「両方に当てはまる組み合わせがあります」にして、両方に当てはまる入力が無かったことを言います。検査は、証明書に載せて再検査で確かめられることだけで決めるので、重なりは確かめられないまま残り、生成コードのガードも残ります。",
+                "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input and the thresholds inside a boolean `define` no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `twice` above is always even and never exactly `5JPY`, but `2.5JPY` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible. A pair that meets only where the rows of a table above leave a derive no values does not fall here either: the check reads that and drops it. Where the inputs the columns are worked out from have no more than 16,384 combinations, all of them are run through the reference evaluator: an input both rows match makes the pair E105, and with none, the headline says the two rows take a common combination and the notes say no input matches both. The check decides only by what its certificate carries for a re-checker to confirm, so the overlap stays unconfirmed, and the guard in the generated code stays."
             ),
             tr!(
                 "その条件を同時に満たす入力が存在するなら、行を直してください（出力が違うので、当てはまれば矛盾です）。存在しないなら、このままで構いません。生成コードには、万一その条件に当てはまる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。",
@@ -5672,6 +6200,102 @@ pub fn ledger() -> Vec<Entry> {
             &["E047", "E061", "E132"],
         )
         .english(X_E149_EN),
+        err(
+            "E150",
+            tr!("定義の範囲が、その値の届く範囲と重なりません", "The range of the definition does not meet the values it can reach"),
+            tr!(
+                "`define` の行の `range` が、その値の届く範囲と一点も重ならないとき。`define` の `range` は、規則がその値として受け付ける範囲で、計算した値がその外になる呼び出しは、生成コードも `rulec run` も、その値を計算したところで受け付けません。届く範囲と重ならない範囲では、どの呼び出しも受け付けないことになります。届く範囲より広い範囲や、一部だけ重なる範囲には何も言いません。上限を書くのは、多くは届く範囲を狭めるためだからです。`sum` と `count` の範囲も、並びをたどり終えたところで外の値を受け付けないので、どの並びも届かない範囲には同じコードが出ます。並びの要素は、その並びの `count` の上限のうち最も小さいものまでで、`count` の下限のうち最も大きいもの以上です。その件数と、合計する列の範囲の端から数えて、合計の下限に届かないとき（件数の上限 × 一件の上限 が下限より小さい）、合計の上限を必ず越えるとき（件数の下限 × 一件の下限 が上限より大きい）、`count` の下限が件数の上限より大きいときです。届く範囲と重なっても、値が刻みの上の点だけを取り、範囲にその点が一つも無いときも同じです。`贈り物の数 * 2 + 1` は奇数だけを取るので、`range >=2 <=2` には入りません。取る点は式から読み（リテラル・名前・足し算・引き算・掛け算・整数の定数での割り算・`min`・`max`・リテラルの格子への丸め・定数での `mod`・`allocate`・`isqrt`）、読めない式には言いません。",
+                "The `range` on a `define` line meets none of the values the definition can reach. A `define`'s `range` is the range the rule accepts for the value: neither the generated code nor `rulec run` takes a call whose value falls outside it, which is refused where the value is worked out, so a range that meets none of the reachable values would refuse every call. A range wider than what the value reaches, or one that meets part of it, is not reported: narrowing what the value reaches is most often why it is written. The range of a `sum` or a `count` refuses a value outside it once the walk is over, so one no sequence comes to gets the same code. A sequence has at most as many elements as the least top of the `count`s over it, and at least as many as the greatest bottom of them; where a field of an enum or a truth value is `unique`, no two elements share a value of it, so it has at most as many as the field has values. Counted from those and from the ends of the summed column's range, it appears when the bottom of a sum is never reached (the most elements times the top of one element is under it), when the top of a sum is always passed (the fewest elements times the bottom of one element is over it), and when the bottom of a `count` is above the most elements the sequence can have. So does a range that meets what the value reaches and holds none of the points it takes, where it takes only points on a step: `gifts * 2 + 1` is odd, and `range >=2 <=2` holds no odd number. The points are read off the expression (a literal, a name, a sum, a difference, a product, a quotient by a whole constant, `min`, `max`, a rounding to a grid written as a literal, `mod` by a constant, `allocate`, `isqrt`); of an expression they are not read off, nothing is said."
+            ),
+            tr!(
+                "範囲の端を、届く範囲と重なるように直してください（届く範囲はエラーの印が言います）。範囲を取り去れば、その値は届く範囲のどの値も受け付けます。入力どうしの関係を書くなら `constraint` です。`sum` と `count` では、注が件数と一件の端の掛け算を書くので、範囲の端か、`count` の端か、合計する列の端のどれかを、届くように直してください。点だけを取る値では、印が取る点を言い、ヒントが範囲にいちばん近い取る値を言います。",
+                "Write ends that meet the reachable values, which the mark on the error gives. Without the range, the value takes every value it reaches. A relation between inputs is a `constraint`. For a `sum` and a `count`, the note writes the product of the number of elements and the end of one element: move an end of the range, of the `count`, or of the summed column until a sequence reaches it. For a value that takes only points on a step, the mark says which points, and the hint the ones nearest the range."
+            ),
+            X_E150,
+            &["E112", "E140", "E103", "E017", "E030", "E061"],
+        )
+        .english(X_E150_EN)
+        .also(tr!("件数の上限と一件の上限から届かない、合計の下限", "The bottom of a sum that the most elements, each at its top, come short of"), X_E150_SUM, X_E150_SUM_EN)
+        .also(tr!("件数の下限と一件の下限から必ず越える、合計の上限", "The top of a sum that the fewest elements, each at its bottom, come past"), X_E150_TOP, X_E150_TOP_EN)
+        .also(tr!("並びの件数の上限より大きい、`count` の下限", "The bottom of a `count` above the most elements the sequence can have"), X_E150_COUNT, X_E150_COUNT_EN)
+        .also(tr!("値の取る点が一つも入らない範囲", "A range that holds none of the points the value takes"), X_E150_STEP, X_E150_STEP_EN),
+        err(
+            "E151",
+            tr!("出力を決めるものが無いか、決まる前に読んでいます", "An output is decided by nothing, or read before it is decided"),
+            tr!(
+                "宣言した出力を決めるものが一つも無いとき。出力を決めるのは、表の `->` の後ろの列、同じ名前の `define` か `derive`、その出力に答える `sum`・`count`・`max`・`min`・`fold`、`apply` が渡す出力、最初の出力なら `result` の行です。値の無いことがある出力（`?`）でも同じです。または、表や定義がその出力を読む所が、決める所より前にあるとき。表と定義は書いた順に計算し（一つの出力を決める表は、そのうち最後の表の所でまとめて計算します）、`result` はどの表と定義よりも後で最初の出力を決めるので、読む所ではまだ値がありません。出力の `define` の式がその出力を読むときも同じです。こうした規則は、いままで検査を通っていました。`rulec run` はその出力を値の無いまま返し、それを読む表はどの行にも当たらず、生成したコードは値を入れていない名前を読んで止まっていました。",
+                "A declared output has nothing that decides it: a table's column after `->`, a `define` or a `derive` of the same name, a `sum`, `count`, `max`, `min` or `fold` that answers it, an output an `apply` brings in, or, for the first output, the `result` line. An output that may have no value (`?`) is held to the same. Or a table or a definition reads an output above what decides it: the tables and definitions are worked out in the order written (the tables that decide one output together, at the last of them), and `result` decides the first output after all of them, so there is no value yet where it is read. So does the expression of an output's `define` that reads that output. Such a rule used to pass the check: `rulec run` answered the output with no value, a table that read it matched no row, and the generated code read a name it had never set."
+            ),
+            tr!(
+                "その出力を決める表か定義を書いてください。この規則が答えない出力なら、`outputs` から消してください。決める所より前で読んでいるなら、読む行を下へ移してください。`result` だけが決める最初の出力を読むなら、`result` の行の代わりに、読む所より上で `define` を書いて決めてください。出力の `define` の式は、入力と上の行で決まる値で書いてください。",
+                "Write the table or the definition that decides the output, or take it out of `outputs` if the rule does not answer it. Where it is read above what decides it, move the line that reads it below. To read the first output that only `result` decides, write a `define` of it above what reads it in place of the `result` line. Write the expression of an output's `define` from the inputs and from what the lines above it decide."
+            ),
+            X_E151,
+            &["E009", "E152", "E016", "E107"],
+        )
+        .english(X_E151_EN)
+        .also(tr!("決める定義より上で読む出力", "An output read above the definition that decides it"), X_E151_ABOVE, X_E151_ABOVE_EN)
+        .also(tr!("決める定義の式の中で読む出力", "An output read in the expression of the definition that decides it"), X_E151_ITSELF, X_E151_ITSELF_EN),
+        err(
+            "E152",
+            tr!("表に出力の列がありません", "A table has no output column"),
+            tr!(
+                "表の見出しに `->` が無いとき。表は `->` の後ろの列で答え、`->` の無い見出しでは、どの列も条件として読まれます。その表はどの行も何も決めず、出力の名前の列は、まだ何も決めていない出力を条件として読みます。いままでは検査を通り、表が決めるはずだった出力は値の無いまま返っていました。完全性の検査は、その出力のとりうる値ごとに行を求めていました。出力の列を持たないのが正しい表はありません。`chances`、`examples`、`scenario`、`sequence` の見出しは、それぞれの決まりで読みます。",
+                "A table's heading has no `->`. A table answers in the columns after `->`; in a heading with none, every column is read as a condition. No row of such a table decides anything, and a column that names an output reads, as a condition, an output nothing has decided. Such a table used to pass the check, the output it was meant to decide came back with no value, and the completeness check asked for a row for every value that output can take. No table is right with no output column: the headings of `chances`, `examples`, `scenario` and `sequence` are read by rules of their own."
+            ),
+            tr!(
+                "行が答える最初の列の前に `->` を書いてください。見出しの終わりの列が出力の名前なら、エラーはその列を挙げて、直した見出しを示します。",
+                "Write `->` before the first column the rows answer. Where the columns at the end of the heading name outputs, the error names the first of them and shows the heading with the `->` in place."
+            ),
+            X_E152,
+            &["E151", "E070", "E111", "E026"],
+        )
+        .english(X_E152_EN),
+        err(
+            "E153",
+            tr!("生成するコードが、名前をそのままでは使えません", "The generated code cannot take a name as it stands"),
+            tr!(
+                "`rulec gen` か `ritsu gen` に挙げた出力先（`--target`、`--extra connect`）のコードが、W121 の言う名前をそのままでは使えないとき。W121 は、名前のために生成コードが組めないか、読み込めないか、違う名前で答えるかを、出力先ごとに言う警告です。gen はそうした出力先を挙げられると、その W121 をこのコードのエラーとして言い、警告の挙げない出力先を書いて 1 で終わります（`ritsu gen` のパッケージは何も書きません）。生成コードが名前を別の綴りで書くと言うだけの W121（予約語の後ろに `_` を付ける、後ろに番号を付けるなど）や、挙げていない出力先の W121 では止まりません。`rulec check` はこのコードを出さず、W121 のままです。いままでは gen がそのまま書き、組めないコードが残っていました。",
+                "A target named to `rulec gen` or `ritsu gen` (`--target`, `--extra connect`) writes code that cannot take a name as it stands, as a W121 says: W121 is the warning that says, target by target, where a name keeps the generated code from building or loading, or makes it answer under another name. Named such a target, gen says the W121 as an error of this code and exits 1, writing the targets the warnings do not name (`ritsu gen` writes nothing of the package). A W121 that only says the generated code writes a name another way (a keyword with `_` after it, a name with a number after it, and the like) does not stop it, nor does the W121 of a target not named, and `rulec check` does not give this code: it says the W121. gen used to write the code all the same, and left code that did not build."
+            ),
+            tr!(
+                "W121 の注が言うとおりに名前か別名を変えてください。その出力先を使わないなら、使う出力先だけを `--target` に挙げてください。",
+                "Change the name or its alias as the notes of the W121 say. For a target you do not use, name only the ones you use with `--target`."
+            ),
+            X_E153,
+            &["W121", "E034"],
+        )
+        .english(X_E153_EN),
+        err(
+            "E154",
+            tr!("そういう丸め方はありません", "No such rounding mode"),
+            tr!(
+                "出力の `round` の後ろの語が、五つの丸め方（`down`・`up`・`half_up`・`half_down`・`half_even`）のどれでもないとき。エラーは書いた語と五つの丸め方を言い、綴りの近い丸め方か、よく使う名前がその丸め方を指す語なら、それも言います（`half` なら `half_up`、`DOWN` なら `down`、`切り捨て` なら `down`）。いままでは `check` が黙って通していました。刻みを読む検査（刻みに乗らない値の E106 など）は丸めの無い出力として読み、生成コードは多くの言語で `down` で丸め、NumPy のコードは走らせると落ちていました。",
+                "The word after an output's `round` is none of the five rounding modes (`down`, `up`, `half_up`, `half_down`, `half_even`). The error names the word and the five, and the mode the word is nearest in spelling, or a common name of, where there is one (`half_up` for `half`, `down` for `DOWN` or `truncate`). It used to pass the check without a word: the checks that read the grid (E106 on a value off the grid, among others) read the output as one with no rounding, the generated code rounded down in most languages, and NumPy's failed when run."
+            ),
+            tr!(
+                "五つの丸め方のどれかを書いてください。出典が四捨五入なら `half_up`、切り捨てなら `down`、切り上げなら `up` です。",
+                "Write one of the five. A source that rounds half up takes `half_up`, one that cuts the fraction off takes `down`, and one that rounds any fraction away takes `up`."
+            ),
+            X_E154,
+            &["E104", "E103", "E106", "E118"],
+        )
+        .english(X_E154_EN),
+        err(
+            "E155",
+            tr!("同じ句を二度書いています", "The same clause is written twice"),
+            tr!(
+                "宣言の後ろの句（`range`、`round`、`contract_only`、`random`、`unique`）や、表の下の `policy`・`overrides` の行が、二度目に書かれたとき。いままでは黙ってどちらか一方だけが効いていました。出力の `round` を二度書くと前が効き、入力の `range` を二度書くと後が効き、`policy unique first` の `first` は捨てられていました。同じ句を二度書くのは、多くは行の書きかけか貼り間違いで、読む人には効く方が分かりません。",
+                "A clause of a declaration's tail (`range`, `round`, `contract_only`, `random`, `unique`), or a `policy` or `overrides` line under a table, written a second time. Only one of the two used to take effect, without a word: the first `round` won over the second on an output, the last `range` over the earlier on an input, and `policy unique first` dropped `first`. A clause written twice is most often a line left half written or pasted wrong, and which of the two counts cannot be told from the line."
+            ),
+            tr!(
+                "片方を消してください。範囲を二つに分けたかったわけではなく、効くのは一つだけです。",
+                "Take one of the two off. Only one ever took effect."
+            ),
+            X_E155,
+            &["E047", "E007", "E034"],
+        )
+        .english(X_E155_EN),
     ]
 }
 
@@ -5768,9 +6392,9 @@ pub fn render_markdown(e: &Entry) -> String {
     o
 }
 
-/// `rulec explain <CODE> --format json`. Language independent in its keys; the prose
-/// fields follow `--lang`, and so does the reproduction (`example` and `files`) of an entry
-/// that has an English twin.
+/// One entry of `rulec explain <CODE> --format json`, on one line ([`json_one`] and [`json_of`]
+/// indent it). Language independent in its keys; the prose fields follow `--lang`, and so does
+/// the reproduction (`example` and `files`) of an entry that has an English twin.
 pub fn render_json(e: &Entry) -> String {
     let repro = e.repro(crate::i18n::current());
     json::Obj::new()
@@ -5840,15 +6464,38 @@ pub fn markdown_all() -> String {
     o
 }
 
-/// `rulec explain --all --format json`: one object per line, so it streams like the
-/// diagnostics themselves.
+/// `rulec explain --all --format json`: every entry, in one indented array, as every tool's
+/// `explain` writes two or more (ritsu's DESIGN 6.2, item 10).
 pub fn json_all() -> String {
-    ledger().iter().map(|e| format!("{}\n", render_json(e))).collect()
+    json_of(&ledger())
 }
 
 /// `rulec explain --all` in text.
 pub fn text_all() -> String {
-    ledger().iter().map(|e| format!("{}\n", render_text(e))).collect::<Vec<_>>().join("")
+    text_of(&ledger())
+}
+
+/// `rulec explain <CODE>... --format json` of several codes: as `--all` writes every code, one
+/// indented array, with only these, in the order given.
+pub fn json_of(entries: &[Entry]) -> String {
+    let each = entries.iter().map(|e| ritsu_base::json::parse(&render_json(e)).expect("rulec reads the JSON it writes"));
+    format!("{}\n", ritsu_base::json::Json::arr(each).pretty())
+}
+
+/// `rulec explain <CODE> --format json` of one code: the entry as one indented document.
+pub fn json_one(e: &Entry) -> String {
+    format!("{}\n", ritsu_base::json::parse(&render_json(e)).expect("rulec reads the JSON it writes").pretty())
+}
+
+/// `rulec explain <CODE>...` of several codes in text, as `--all` writes every code.
+pub fn text_of(entries: &[Entry]) -> String {
+    entries.iter().map(|e| format!("{}\n", render_text(e))).collect()
+}
+
+/// `rulec explain <CODE>... --format markdown` of several codes: each code's section, as
+/// `--all` writes them, without the page's head.
+pub fn markdown_of(entries: &[Entry]) -> String {
+    entries.iter().map(render_markdown).collect::<Vec<_>>().join("\n")
 }
 
 // ── The reproductions of the codes about chances (§15.224–§15.226) ─────────────

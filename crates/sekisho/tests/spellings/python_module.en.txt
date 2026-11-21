@@ -1,0 +1,5 @@
+warning[W402]: tests/spellings/python_module.gate:1:1: The file `pass` is written `pass` in the code of Python, a reserved word of the language
+     1 | gate pass v1
+  = Python (`--target python`): the file `pass` is written `pass` as the name of its module, and `pass` is a reserved word of Python: no `import` can read the module (`authz/pass.py`), and the `__init__.py` `ritsu gen` writes in a package, `from . import pass as pass`, does not load (`SyntaxError`).
+  = For a target you do not build, leave it as it is. For one you do, change its alias. The alias of the file also names the files, the module and the package the code is written to, so change what reads them with it.
+tests/spellings/python_module.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

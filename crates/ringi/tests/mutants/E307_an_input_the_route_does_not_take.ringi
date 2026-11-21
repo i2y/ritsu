@@ -1,0 +1,11 @@
+request example v1 "Example"
+
+use route standard from "shared/standard.ringi"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route standard(days: 5)
+
+ticket
+  self approval  not allowed

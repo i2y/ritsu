@@ -1,0 +1,38 @@
+workflow 連鎖する変数 v1
+description "誤りのある式から値を入れた変数と、それを読む行。chain_variables.flow の日本語の版"
+
+record 段
+  承認者 : string
+
+record 見積
+  合計 : int
+
+inputs
+  ID   : string
+  段々 : list[段]
+
+outputs
+  承認者の一覧 : list[string]
+  合計         : int
+  名前の一覧   : list[string]
+  写し         : int
+
+task 取得(ID: string) -> 見積
+task 書き留める(文: string)
+
+flow
+  # `yield` のフィールドを書き誤ったので、一覧 `両方` は型を持たない
+  let 両方 = for 段 in 段々 at most 3
+    yield 段.承認社
+  # 無いタスクなので、その答えも型を持たない
+  let 見 = 取特(ID: ID)
+  # 型を書いていないレコード
+  let 記 = {合計: 3}
+  # 一覧でないものを回すので、回す変数も、集める値も型を持たない
+  let 名前 = for 名 in ID at most 3
+    yield 名
+  # いつもある値の分岐は、型の無い値に名前を付ける
+  match ID
+    some 値 => 書き留める(文: 値)
+    none => pass
+  succeed 承認者の一覧 = 両方, 合計 = 見.合計, 名前の一覧 = 名前, 写し = 記.合計

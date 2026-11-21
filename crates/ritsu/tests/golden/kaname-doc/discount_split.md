@@ -95,6 +95,6 @@ The module's decisions are all in tables.
 `kaname check` runs each line of `examples` in the reference interpreter, as a host would call the function, and compares the answer with the one written. The reference interpreter answers these.
 
 ```kn
-split(lines: [Line { label: "labor", amount: 5000USDc }, Line { label: "parts", amount: 10000USDc }], discount: 1000USDc)
+split(lines: [Line { label: "labor", amount: 5000USDc }, Line { label: "parts", amount: 10_000USDc }], discount: 1000USDc)
   = [Share { label: "labor", share: 333USDc }, Share { label: "parts", share: 667USDc }]
 ```

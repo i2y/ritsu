@@ -1,0 +1,3 @@
+error[E305]: tests/mutants/E305_最初のステップを前の承認者が指名.ringi:8:16: `指名された人` is chosen by the approver before, and no stage before `確かめ` always approves
+     8 |   確かめ(review)  指名された人
+  = The approver before is the one of a stage before it with no condition; a stage that circulates (`circulate to`) or summarizes (`note from`) approves nothing.

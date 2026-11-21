@@ -1,0 +1,10 @@
+warning[W121]: `begin` is a name the code generated for Ruby cannot take
+  --> tests/own_names/enum_value_begin.rule:4
+  |
+4 | enum step = begin | middle | finish
+  |             ^^^^^ the enum value's name
+  |
+ Ruby: a value of an enum is a constant named in upper case, so `begin` is `BEGIN`, a keyword, which no constant can be named: the generated module does not build.
+ For a target you do not generate, leave it. For one you do, give it an alias (`begin(<alias>)`).
+
+ok tests/own_names/enum_value_begin.rule

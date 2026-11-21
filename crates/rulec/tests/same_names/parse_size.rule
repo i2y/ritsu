@@ -1,0 +1,26 @@
+rule parse_size v1
+description "The size of a parcel, read from the choices, the rule named like a name the code makes of the size (fictional)"
+
+import enum size from "shapes.rule"
+
+inputs
+  weight : number  range >=1 <=100
+
+outputs
+  size : size
+  big  : bool
+
+table size
+| weight | -> size |
+| <=10   | small   |
+| >10    | large   |
+
+table big
+| size    | -> big |
+| >=large | true   |
+| small   | false  |
+
+examples
+| weight | -> size | big   |
+| 1      | small   | false |
+| 11     | large   | true  |

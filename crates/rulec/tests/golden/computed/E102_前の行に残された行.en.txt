@@ -1,0 +1,13 @@
+error[E102]: Unreachable row: row 4 never matches
+  --> tests/computed/shapes/E102_前の行に残された行.rule:20 table 選ぶ
+   |
+20 | | <52円         | -     | 一      |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 4: no input reaches here
+ 9 | define 大口(big) : bool = 金額 > 56円
+   |                           ^^^^^^^^^^^ always false over the values of `金額` in this row
+   |
+ `大口` follows from `金額`. Over the values of `金額` this row takes, `大口` is always false.
+ Because of `policy first`, the earlier rows take the rest of this row's values first.
+ hint: compare the expression with this row's conditions. No input reaches this row, so if it is not needed, delete it.
+
+note tests/computed/shapes/E102_前の行に残された行.rule: 1 shadow pairs (1 structural, 0 equivalent, 0 needs review)

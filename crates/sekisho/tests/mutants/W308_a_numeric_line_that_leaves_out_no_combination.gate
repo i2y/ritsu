@@ -1,0 +1,26 @@
+gate shop v1
+description "A shop's orders; a line of a permit is met wherever its other line is"
+
+role clerk
+  description "Answers customers"
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Order
+  description "An order"
+  attributes
+    amount : money[JPY]  range >=1JPY <=100_000JPY
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+
+permit clerks_refund_large_orders
+  description "A clerk refunds an order of 10,000 yen or more"
+  principal in clerk
+  action refund_order
+  when resource.amount >= 10_000JPY
+  when resource.amount > 1_000JPY

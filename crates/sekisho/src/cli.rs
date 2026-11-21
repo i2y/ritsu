@@ -10,7 +10,7 @@
 
 use crate::check::{self, Options};
 use crate::suite::Suite;
-use ritsu_base::cli::{Args, Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
+use ritsu_base::cli::{Args, Cmd, Flag, Reading, Table, flag, help_flag, lang_flag, made_lang_flag};
 use ritsu_base::text::{Lang, Text};
 use std::io::Write;
 use std::path::PathBuf;
@@ -105,6 +105,7 @@ pub fn table() -> Table {
                     flag("--out", Some("<dir>"), tr!("生成物を書くディレクトリ", "the directory the generated files go to")).default("generated"),
                     flag("--check", None, tr!("書き出さずに、ディスクの生成物が、いま生成するものと一字一句同じかを見る。違えば 1（CI 用）", "write nothing; exit 1 if a file on disk differs from what gen would write (for CI)")),
                     root_flag(),
+                    made_lang_flag("SEKISHO_LANG"),
                 ],
                 exits: vec![
                     (0, tr!("生成した、または --check で全部が同じだった", "generated, or --check found every file the same")),
@@ -145,8 +146,8 @@ pub fn table() -> Table {
                     root_flag(),
                 ],
                 exits: vec![
-                    (0, tr!("許可の増減もインターフェースの違いも無い（効いたポリシーだけの変わりと、決められない組み合わせはありうる）", "no permission gained or lost and the same interface (the deciding policies may change, and some combinations may be undecided)")),
-                    (1, tr!("許可が増えたか減った、またはインターフェースが違う", "a permission gained or lost, or the interface differs")),
+                    (0, tr!("許可の増減も、インターフェースの違いも、ワークフローの下の行の違いも無い（効いたポリシーだけの変わりと、決められない組み合わせはありうる）", "no permission gained or lost, the same interface and the same lines under the workflows (the deciding policies may change, and some combinations may be undecided)")),
+                    (1, tr!("許可が増えたか減った、インターフェースが違う、またはワークフローの下の行が違う", "a permission gained or lost, the interface differs, or a line under a workflow differs")),
                     (2, tr!("比べられない（検査を通らない、上限を超える、読めない、ほかの言語を読むファイルをそれを読めないこの sekisho で走らせた）", "cannot compare (a side that does not pass check, over the budget, a file that cannot be read, or a file that reads another language run with this sekisho, which reads none)")),
                 ],
                 examples: vec![
@@ -216,6 +217,7 @@ pub fn table() -> Table {
                     .choices(&["markdown", "html"])
                     .default("markdown"),
                     root_flag(),
+                    made_lang_flag("SEKISHO_LANG"),
                 ],
                 exits: vec![
                     (0, tr!("出した", "printed")),
@@ -229,11 +231,11 @@ pub fn table() -> Table {
                 codes: vec![],
             },
             Cmd {
-                usage: Some("sekisho explain <code> | --all [--format markdown|json] [--lang ja|en]"),
+                usage: Some("sekisho explain <code>... | --all [--format markdown|json] [--lang ja|en]"),
                 name: "explain",
-                args: "<code>",
-                purpose: tr!("診断のコードを説明する。いつ出るか、直し方、それを出す一番小さな例", "explain a diagnostic code: when it is printed, how to fix it, and the smallest file that prints it"),
-                params: vec![("<code>", tr!("`E101` のようなコード", "a code such as `E101`"))],
+                args: "<code>... | --all",
+                purpose: tr!("診断のコードを説明する。いつ出るか、直し方、それを出す一番小さな例", "explain diagnostic codes: when each is printed, how to fix it, and the smallest file that prints it"),
+                params: vec![("<code>...", tr!("`E101` のようなコード。いくつでも渡せて、渡した順に説明する。`--all` とは一緒に渡さない", "codes such as `E101`, any number, explained in the order given; not given with `--all`"))],
                 flags: vec![
                     flag("--all", None, tr!("全部のコード", "every code")),
                     flag("--format", Some("markdown|json"), tr!("Markdown（docs/codes.md の形）か JSON", "Markdown (as docs/codes.md is) or JSON")).choices(&["markdown", "json"]),
@@ -256,9 +258,8 @@ pub fn table() -> Table {
 
 /// Say what is wrong with the command line, or with a file it cannot read: one line on `w`, exit 2.
 pub(crate) fn refuse(w: &mut dyn Write, msg: Text, lang: Lang) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    let _ = writeln!(w, "{head}: {}", msg.get(lang));
-    2
+    // in the words of every command of ritsu (ritsu's DESIGN 6.2, item 10)
+    ritsu_base::cli::refuse(w, &msg, lang)
 }
 
 /// `--lang ja`, `--lang=ja`, anywhere on the line: decided before anything is printed.
@@ -276,6 +277,12 @@ fn lang_word(args: &[String]) -> Option<String> {
 
 /// The command line, read against the table and run: the exit code.
 pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    // a line that asks for JSON is answered in JSON when the command stops before its work too: the
+    // last value on standard output is `{"error": …}` (ritsu's DESIGN 6.2, item 10)
+    ritsu_base::cli::answering(args, out, |out| command(args, suite, out, err))
+}
+
+fn command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let lang = Lang::pick(lang_word(args).as_deref(), "SEKISHO_LANG");
     let table = table();
     let Some(first) = args.first() else {
@@ -304,14 +311,14 @@ pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Wr
                         let _ = write!(out, "{}", table.help_cmd(c, lang));
                         0
                     }
-                    None => refuse(err, tr!("`{n}` というコマンドはありません。`sekisho --help` を読んでください", "there is no command `{n}`; run `sekisho --help`"), lang),
+                    None => refuse(err, ritsu_base::cli::no_command("sekisho", n), lang),
                 },
             };
         }
         _ => {}
     }
     let Some(cmd) = table.command(first) else {
-        return refuse(err, tr!("`{first}` というコマンドはありません。`sekisho --help` を読んでください", "there is no command `{first}`; run `sekisho --help`"), lang);
+        return refuse(err, ritsu_base::cli::no_command("sekisho", first), lang);
     };
     let a = match table.parse(cmd, &args[1..]) {
         Ok(a) => a,
@@ -328,6 +335,17 @@ pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Wr
     {
         return refuse(err, t, lang);
     }
+    // the paths the run holds are written the way the first path given was (ritsu's DESIGN 4.15),
+    // and so are the gates given: `./refunds.gate` and `x/../refunds.gate` are `refunds.gate` (6.2
+    // item 8), and `--out ./generated` is `generated`; the code `explain` takes is no path
+    let _way = ritsu_base::paths::run_from(a.pos.first().filter(|_| cmd.name != "explain").map_or(".", String::as_str));
+    let mut a = a;
+    if cmd.name != "explain" {
+        for p in &mut a.pos {
+            *p = ritsu_base::paths::show_given(p);
+        }
+    }
+    a.fold_paths(&["--out"]);
     match cmd.name {
         "check" => check_cmd(&a, lang, suite, out, err),
         "gen" => crate::r#gen::run(&a, lang, suite, out, err),
@@ -343,13 +361,13 @@ pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Wr
 /// `sekisho diff <old> <new>` (ritsu's DESIGN 17.9.4).
 fn diff_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let [old, new] = a.pos.as_slice() else {
-        return refuse(err, tr!("`sekisho diff` には古い版と新しい版の二つを渡してください", "`sekisho diff` takes two sides, the old and the new"), lang);
+        return refuse(err, table().takes_of("diff"), lang);
     };
     let budget = match a.get("--budget") {
         None => check::DEFAULT_BUDGET,
         Some(b) => match b.replace([',', '_'], "").parse::<u64>() {
             Ok(n) if n > 0 => n,
-            _ => return refuse(err, tr!("`--budget {b}` は正の整数ではありません", "`--budget {b}` is not a positive integer"), lang),
+            _ => return refuse(err, ritsu_base::cli::not_positive("--budget", b), lang),
         },
     };
     // the check of each side is held to the larger of `--budget` and the default, as koyomi's is: a
@@ -370,13 +388,13 @@ fn diff_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut 
 
 fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.pos.is_empty() {
-        return refuse(err, tr!("`sekisho check` には .gate のファイルが要ります", "`sekisho check` needs .gate files"), lang);
+        return refuse(err, table().takes_of("check"), lang);
     }
     let budget = match a.get("--budget") {
         None => check::DEFAULT_BUDGET,
         Some(b) => match b.replace([',', '_'], "").parse::<u64>() {
             Ok(n) if n > 0 => n,
-            _ => return refuse(err, tr!("`--budget {b}` は正の整数ではありません", "`--budget {b}` is not a positive integer"), lang),
+            _ => return refuse(err, ritsu_base::cli::not_positive("--budget", b), lang),
         },
     };
     let root = match root(a, &a.pos[0], lang, err) {
@@ -398,7 +416,7 @@ fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
             }
             Err(e) => {
                 worst = 2;
-                refuse(err, tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang);
+                refuse(err, ritsu_base::cli::cannot_read(f, &e), lang);
             }
         }
     }
@@ -422,7 +440,7 @@ pub(crate) fn passing(a: &Args, f: &str, what: Text, suite: &Suite, lang: Lang, 
     let opts = Options { root: Some(root(a, f, lang, err)?), ..Options::default() };
     let o = match check::check_file(f, suite, &opts) {
         Ok(o) => o,
-        Err(e) => return Err(refuse(err, tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang)),
+        Err(e) => return Err(refuse(err, ritsu_base::cli::cannot_read(f, &e), lang)),
     };
     if o.unjoined() {
         let _ = write!(out, "{}", check::render(&o, lang));
@@ -430,8 +448,7 @@ pub(crate) fn passing(a: &Args, f: &str, what: Text, suite: &Suite, lang: Lang, 
     }
     if o.has_errors() || o.walked.is_none() || o.scope.is_none() {
         let _ = write!(out, "{}", check::render(&o, lang));
-        let head = if lang == Lang::Ja { "エラー" } else { "error" };
-        let _ = writeln!(err, "{head}: {}", what.get(lang));
+        let _ = writeln!(err, "{}", ritsu_base::cli::refusal(what.get(lang), lang));
         return Err(1);
     }
     Ok(o)
@@ -439,7 +456,7 @@ pub(crate) fn passing(a: &Args, f: &str, what: Text, suite: &Suite, lang: Lang, 
 
 fn vectors_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let [f] = a.pos.as_slice() else {
-        return refuse(err, tr!("`sekisho vectors` には .gate のファイルを一つ渡してください", "`sekisho vectors` takes one .gate file"), lang);
+        return refuse(err, table().takes_of("vectors"), lang);
     };
     let o = match passing(a, f, tr!("`{f}` は検査を通らないので、ベクタを出しません", "`{f}` does not pass check, so it has no vectors"), suite, lang, out, err) {
         Ok(o) => o,
@@ -466,7 +483,7 @@ fn vectors_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &m
 
 fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let [f] = a.pos.as_slice() else {
-        return refuse(err, tr!("`sekisho api` には .gate のファイルを一つ渡してください", "`sekisho api` takes one .gate file"), lang);
+        return refuse(err, table().takes_of("api"), lang);
     };
     let o = match passing(a, f, tr!("`{f}` は検査を通らないので、api を出しません", "`{f}` does not pass check, so it has no api"), suite, lang, out, err) {
         Ok(o) => o,
@@ -479,7 +496,7 @@ fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
 
 fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let [f] = a.pos.as_slice() else {
-        return refuse(err, tr!("`sekisho doc` には .gate のファイルを一つ渡してください", "`sekisho doc` takes one .gate file"), lang);
+        return refuse(err, table().takes_of("doc"), lang);
     };
     let o = match passing(a, f, tr!("`{f}` は検査を通らないので、ページを書きません", "`{f}` does not pass check, so it has no page"), suite, lang, out, err) {
         Ok(o) => o,
@@ -487,7 +504,8 @@ fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     };
     let format = if a.get("--format") == Some("html") { crate::doc::Format::Html } else { crate::doc::Format::Markdown };
     let calls = crate::doc::calls_of(&o, suite);
-    match crate::doc::page(&o, suite, lang, format, calls.as_deref()) {
+    // the page is in `--lang`, else English, whatever the environment says (ritsu's DESIGN 4.1)
+    match crate::doc::page(&o, suite, Lang::made(a.get("--lang")), format, calls.as_deref()) {
         Some(p) => {
             let _ = write!(out, "{}", crate::doc::write(&p, format));
             0
@@ -499,10 +517,61 @@ fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     }
 }
 
+/// What `sekisho doc <gate> …` prints as HTML and as Markdown, drawn from one check of the gate: the
+/// page in the browser shows both for one question, which checks each file once (ritsu's DESIGN
+/// 4.15). `args` are the words after `sekisho`, without `--format`; each page is the exit code, what
+/// it prints and what it says on standard error, as `run` with the words and `--format html`, and
+/// with them alone.
+pub fn doc_pages(args: &[String], suite: &Suite) -> [(u8, String, String); 2] {
+    let lang = Lang::pick(lang_word(args).as_deref(), "SEKISHO_LANG");
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let text = |b: Vec<u8>| String::from_utf8_lossy(&b).into_owned();
+    let table = table();
+    let parsed = table.command("doc").ok_or(()).and_then(|cmd| table.parse(cmd, args.get(1..).unwrap_or_default()).map_err(|e| {
+        refuse(&mut err, e, lang);
+    }));
+    let Ok(a) = parsed else {
+        let e = text(err);
+        return [(2, String::new(), e.clone()), (2, String::new(), e)];
+    };
+    if let Err(t) = ritsu_base::modules::given_all(&a.pos) {
+        refuse(&mut err, t, lang);
+        let e = text(err);
+        return [(2, String::new(), e.clone()), (2, String::new(), e)];
+    }
+    let _way = ritsu_base::paths::run_from(a.pos.first().map_or(".", String::as_str));
+    let mut a = a;
+    for p in &mut a.pos {
+        *p = ritsu_base::paths::show_given(p);
+    }
+    let [f] = a.pos.as_slice() else {
+        refuse(&mut err, table.takes_of("doc"), lang);
+        let e = text(err);
+        return [(2, String::new(), e.clone()), (2, String::new(), e)];
+    };
+    let o = match passing(&a, f, tr!("`{f}` は検査を通らないので、ページを書きません", "`{f}` does not pass check, so it has no page"), suite, lang, &mut out, &mut err) {
+        Ok(o) => o,
+        Err(code) => {
+            let (o, e) = (text(out), text(err));
+            return [(code, o.clone(), e.clone()), (code, o, e)];
+        }
+    };
+    let calls = crate::doc::calls_of(&o, suite);
+    let made = Lang::made(a.get("--lang"));
+    [crate::doc::Format::Html, crate::doc::Format::Markdown].map(|format| match crate::doc::page(&o, suite, made, format, calls.as_deref()) {
+        Some(p) => (0, crate::doc::write(&p, format), String::new()),
+        None => (1, check::render(&o, lang), String::new()),
+    })
+}
+
 fn explain_cmd(a: &Args, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let format = a.get("--format");
     let ledger = crate::codes::ledger();
     if a.has("--all") {
+        // codes and `--all` are the two ways to call it, not one: what it takes
+        if !a.pos.is_empty() {
+            return refuse(err, table().takes_of("explain"), lang);
+        }
         match format {
             Some("markdown") => {
                 let _ = write!(out, "{}", ledger.render_markdown(lang));
@@ -521,24 +590,19 @@ fn explain_cmd(a: &Args, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -
         }
         return 0;
     }
-    let Some(code) = a.pos.first() else {
-        return refuse(err, tr!("`sekisho explain` には `E101` のようなコードか `--all` が要ります", "`sekisho explain` needs a code such as `E101`, or `--all`"), lang);
-    };
-    match ledger.find(code) {
-        Some(e) => {
-            match format {
-                Some("markdown") => {
-                    let _ = write!(out, "{}", ledger.render_markdown_one(e, lang));
-                }
-                Some("json") => {
-                    let _ = writeln!(out, "{}", ledger.to_json(e, lang).pretty());
-                }
-                _ => {
-                    let _ = write!(out, "{}", ledger.render_text(e, lang));
-                }
-            }
+    if a.pos.is_empty() {
+        return refuse(err, table().takes_of("explain"), lang);
+    }
+    match ledger.look_up(&a.pos) {
+        Ok(entries) => {
+            let shape = match format {
+                Some("markdown") => ritsu_base::ledger::Shape::Markdown,
+                Some("json") => ritsu_base::ledger::Shape::Json,
+                _ => ritsu_base::ledger::Shape::Text,
+            };
+            let _ = write!(out, "{}", ledger.explained(&entries, shape, lang));
             0
         }
-        None => refuse(err, tr!("`{code}` という診断のコードはありません。`sekisho explain --all` で全部を見られます", "there is no diagnostic code `{code}`; `sekisho explain --all` lists them all"), lang),
+        Err(unknown) => refuse(err, ritsu_base::cli::no_codes("sekisho", &unknown), lang),
     }
 }

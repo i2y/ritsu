@@ -1,0 +1,15 @@
+company.gate: ok — 11 actions, 4 policies (3 permits, 1 forbid), 0 expectations, 0 separations
+ok purchase.ringi: a request, 1 field, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+warning[ritsu W911]: purchase.ringi:3: Whether the gate company.gate allows the approvers the route of `purchase` decides `approve` and `reject` cannot be decided
+     3 | use gate "company.gate"
+  = Asked of the gate: the principal is in `resource.approvers`, `resource.requester` is not the principal and `resource.self_approval` is false.
+  = Why it cannot be decided: `resource.self_approval` is not a bool.
+  = Of a stage, ringi hands the gate `resource.requester` (the requester: an entity of the principal's type), `resource.approvers` (an entity the approvers are members of) and `resource.self_approval` (a bool). Declare them so on the gate's resource.
+warning[ritsu W911]: purchase.ringi:15: Whether the gate company.gate allows a requester of `purchase` `approve` and `reject` on their own request cannot be decided
+    15 |   self approval  not allowed
+  = Line 15 of the request says `self approval not allowed`.
+  = Asked of the gate: `resource.requester` is the principal and `resource.self_approval` is false.
+  = Why it cannot be decided: `resource.self_approval` is not a bool.
+  = Of a stage, ringi hands the gate `resource.requester` (the requester: an entity of the principal's type), `resource.approvers` (an entity the approvers are members of) and `resource.self_approval` (a bool). Declare them so on the gate's resource.
+ritsu check: 2 files (sekisho 1, ringi 1): all pass (2 warnings); borders between the languages: 3 checked, 2 undecided

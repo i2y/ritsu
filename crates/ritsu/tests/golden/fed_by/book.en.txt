@@ -10,11 +10,11 @@ refunds.book: ok
 ok bill.kn: 1 function, total
 refund.flow: ok
 desk.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
-error[ritsu E207]: refund_limit.rule:5:1: `input left` takes money[USDc] >=0 <=10000000, and its source chobo "refunds.book" account remaining can be 10000001
+error[ritsu E207]: refund_limit.rule:5:1: `input left` takes money[USDc] >=0USDc <=10_000_000USDc, and its source chobo "refunds.book" account remaining can be 10_000_001USDc
      5 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
   = The book takes it: an end with no `at least` or `at most` goes as far as chobo's limit (2⁶³ − 1).
   = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
-error[ritsu E207]: refund.flow:9:1: `record Balance field left` takes money[USDc] >=0 <=10000000, and its source chobo "refunds.book" account remaining can be 10000001
+error[ritsu E207]: refund.flow:9:1: `record Balance field left` takes money[USDc] >=0USDc <=10_000_000USDc, and its source chobo "refunds.book" account remaining can be 10_000_001USDc
      9 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
   = The book takes it: an end with no `at least` or `at most` goes as far as chobo's limit (2⁶³ − 1).
   = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.

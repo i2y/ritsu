@@ -105,6 +105,9 @@ pub(crate) enum MoreKind {
 
 /// `member_kind` → `MemberKind`.
 fn pascal(s: &str) -> String {
+    if let Some(rest) = s.strip_prefix(clash::MARK) {
+        return format!("{}{}", clash::MARK, pascal(rest));
+    }
     s.split('_')
         .filter(|p| !p.is_empty())
         .map(|p| {
@@ -134,6 +137,8 @@ pub fn type_name_of(n: &Name) -> String {
 /// (§15.239), each with what it clashes with: in Go, one of the rule's functions (`Size`,
 /// `SizeTraced`, `SizeRecord`, `SizeChances`); in Java, the rule's class. An enum read from an
 /// `enums` file is not among them: the generated code names it by the file's package or class.
+/// What `check` says of them under W121. The generated code writes the two apart since §15.326,
+/// the enum's type taking a number after it in those languages, so the warning outlives its cause.
 pub fn rule_name_clashes(f: &RuleFile) -> Vec<(&crate::ast::EnumDecl, (Option<String>, Option<String>))> {
     let alias = pub_name(&f.name);
     let fname = pascal(&alias);
@@ -156,7 +161,8 @@ pub fn rule_name_clashes(f: &RuleFile) -> Vec<(&crate::ast::EnumDecl, (Option<St
 /// `SizeChances`), the types they take and give (`Input`, `Output`, `Fired`, the elements of its
 /// sequences, the two errors, `Chances` and `Way`), and a machine's `Initial`, `Final` and
 /// `IsFinal`. One package holds one thing of a name, so an enum's type of one of these names is
-/// either named by the package that owns it or, for an enum the rule declares, said by `check`.
+/// named by the package that owns it; an enum the rule declares takes a number after its type where
+/// its names meet the rule's functions (§15.326), and `check` says one named as one of the types.
 pub fn go_rule_names(f: &RuleFile) -> Vec<String> {
     let alias = pub_name(&f.name);
     let fname = pascal(&alias);
@@ -186,6 +192,32 @@ pub fn go_rule_names(f: &RuleFile) -> Vec<String> {
 
 fn pub_name(n: &Name) -> String {
     n.ascii.clone().unwrap_or_else(|| n.text.clone())
+}
+
+/// Python: the `NamedTuple` `class` of the `fields` (each name with its annotation), where the name
+/// of a field is a word of the annotation of one after it. In the class's body a field's name is a
+/// name from where it is declared, and a type checker reads the later annotation by the field: the
+/// class is then written in `NamedTuple`'s other form, whose annotations, held as text, are read at
+/// the top of the module (§15.336). None where no annotation names an earlier field. `named_tuple`
+/// is how the module names `NamedTuple`.
+fn py_named_apart(class: &str, fields: &[(String, String)], named_tuple: &str) -> Option<String> {
+    let words = |ty: &str| ty.split(|ch: char| !(ch.is_alphanumeric() || ch == '_')).map(str::to_string).collect::<Vec<_>>();
+    let meets = fields.iter().enumerate().any(|(i, (n, _))| fields[i + 1..].iter().any(|(_, ty)| words(ty).contains(n)));
+    if !meets {
+        return None;
+    }
+    let listed: Vec<String> = fields.iter().map(|(n, ty)| format!("(\"{n}\", \"{ty}\")")).collect();
+    Some(format!("{class} = {named_tuple}(\"{class}\", [{}])\n", listed.join(", ")))
+}
+
+/// `base`, with `_` after it as many times as it takes to be none of `taken`: a local a function of
+/// the generated code keeps for itself, apart from its parameters (§15.336).
+fn free_of(base: &str, taken: &[String]) -> String {
+    let mut n = base.to_string();
+    while taken.iter().any(|t| *t == n) {
+        n.push('_');
+    }
+    n
 }
 
 /// What every door says of a truth value that is not JSON's `true` or `false`, in the language
@@ -239,6 +271,10 @@ pub(crate) struct FoldNames {
     pub took: String,
     pub kept_one: String,
     pub best_set: String,
+    /// The index of the element a `take_unique` took (§15.324): `taken_at` where locals are written
+    /// in snake case, `takenAt` where in camel case.
+    pub taken_at: String,
+    pub taken_at_camel: String,
     /// A pick by weight (§15.226): the running total of the weights, one element's weight, and the
     /// running totals after each element weighed, which the function that counts the answers reads.
     pub total: String,
@@ -282,12 +318,97 @@ pub struct Gen<'a> {
     /// of a dependency, and where each `enums` file it reads is, for the paths it imports them by.
     /// Outside a package, and for the module at hand, the package's directory.
     place: ritsu_emit::package::Place,
+    /// `rulec gen`'s Python modules go inside a package (`--python-package`, §15.319): the module
+    /// reads each `enums` file's module beside it by a relative import. Off for a module written
+    /// into a package of ritsu's, whose paths `place` gives.
+    python_package: bool,
     /// While one walk's items of one element are written: the names something in that walk reads
     /// (§15.219). A local an item binds and nothing in the walk reads is said to be read in Go,
     /// which refuses to compile it otherwise; the rest of the rule is not looked at there.
     reads_here: std::cell::RefCell<Option<HashSet<String>>>,
+    /// While the body of one walk is written: the sequence it walks and the variable the index of
+    /// the element is in, which a sentence about the element says (§15.324). `used` is whether one
+    /// did, which is when the walk binds the index at all.
+    walk_at: std::cell::RefCell<Option<WalkAt>>,
     /// The contract the rule implements (§15.274), read the first time a generator asks for it.
     served: std::cell::OnceCell<Option<crate::implements::Served>>,
+    /// The backend whose code this generator writes, when it writes something there otherwise than
+    /// the generator of every language: an enum under another type (§15.326), a value or a name of
+    /// its own apart from the rule's (§15.336). None for the generator of every language
+    /// (`Gen::for_target`).
+    made_for: Option<&'static str>,
+    /// Of those enums, each by its name with the type it has in every other language: the type the
+    /// `.proto` declares it as, and for one of an `enums` file the type its file's module gives it,
+    /// which this module hands on under its own (§15.326).
+    renamed_from: BTreeMap<String, String>,
+    /// The values the rule's functions bind under another identifier in this generator's language
+    /// than the one it writes them as, by their names: where the identifier would hide a name the
+    /// generated code reads there (`Gen::for_target`, §15.336). Empty for the generator of every
+    /// language.
+    binds: BTreeMap<String, String>,
+    /// The names of the generated code's own that this generator's language writes otherwise, as
+    /// it writes them, with what it writes instead: where a name of the rule's that the caller sees
+    /// would meet one (§15.336). Empty for the generator of every language.
+    owns: BTreeMap<String, String>,
+    /// Whether the code this generator writes marks the rule's function where it names it, and has
+    /// each enum's type marked in `enum_names`, `value_names` and `renamed_from`: the copy of the
+    /// generator [`Gen::apart_text`] writes the module with the second time ([`Gen::marked`]).
+    marks: bool,
+    /// The helpers TypeScript's module declares under a name that starts with `_`, which a group's
+    /// constant stays apart from (`Gen::ts_group`), worked out the first time a group asks.
+    ts_helpers: std::cell::OnceCell<Vec<String>>,
+}
+
+/// The walk whose body is being written (`Gen::walk_at`).
+pub(crate) struct WalkAt {
+    /// The sequence, by the key the input's JSON has it under.
+    seq: String,
+    /// The variable of the generated code that holds the index of the element.
+    var: String,
+    /// Whether a sentence of the body named the element by its index.
+    used: bool,
+}
+
+/// One piece of a sentence about an element (§15.324): text, or where the generated code puts the
+/// index of the element (`Here`) or of the earlier element of two (`Before`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Piece<'s> {
+    Text(&'s str),
+    Here,
+    Before,
+}
+
+/// A sentence cut where `door::HERE` and `door::BEFORE` leave the indices in it. The text between
+/// two of them is there even when it is empty, so a language that keeps the pieces apart (Rust's
+/// `Said`) has one between every two indices.
+pub(crate) fn pieces(s: &str) -> Vec<Piece<'_>> {
+    let mut out = Vec::new();
+    let mut rest = s;
+    while let Some(k) = rest.find(['\u{1}', '\u{2}']) {
+        out.push(Piece::Text(&rest[..k]));
+        out.push(if rest[k..].starts_with('\u{1}') { Piece::Here } else { Piece::Before });
+        rest = &rest[k + 1..];
+    }
+    out.push(Piece::Text(rest));
+    out
+}
+
+/// Whether a sentence names an element by its index (§15.324).
+pub(crate) fn names_element(s: &str) -> bool {
+    s.contains(['\u{1}', '\u{2}'])
+}
+
+/// The sentence with each index put in between `open` and `close`, the way a language that builds a
+/// string by interpolation writes it: `${index}` in a template literal, `{index}` in an f-string.
+pub(crate) fn interpolate(s: &str, here: &str, before: &str, open: &str, close: &str) -> String {
+    pieces(s)
+        .into_iter()
+        .map(|p| match p {
+            Piece::Text(t) => t.to_string(),
+            Piece::Here => format!("{open}{here}{close}"),
+            Piece::Before => format!("{open}{before}{close}"),
+        })
+        .collect()
 }
 
 mod arith;
@@ -310,6 +431,10 @@ pub use prereq::prereq_fn_names;
 mod chances;
 /// How the projection function reads the caller's object (§15.234).
 mod from;
+/// The names an enum's code takes beside the rule's own functions (§15.326).
+mod apart;
+mod clash;
+use clash::splice_fields;
 /// The ways the generators spell the author's names, held against one another (§15.263) and
 /// against the names the generated code gives itself (§15.265).
 pub mod spellings;
@@ -406,6 +531,26 @@ impl<'a> Gen<'a> {
             .collect()
     }
 
+    /// The bottom a `sum` or a `count` is compared with once its walk is over
+    /// ([`Checked::walk_floor`], §15.314), as the integer the total is held as. `None` where no
+    /// walk comes in under the bottom of the range: no test is written.
+    pub(crate) fn walk_floor(&self, d: &crate::ast::AggDecl) -> Option<i128> {
+        let lo = self.c.walk_floor(d)?;
+        Some(crate::types::wire_int(lo, self.c.scales.get(&d.name.text).copied().unwrap_or(1)))
+    }
+
+    /// The ends a `define` is compared with, right where it is worked out, when the rule accepts a
+    /// range for it (§15.313), as
+    /// the integers the value is held as, on its scale: each end the range writes that what the
+    /// value reaches can pass. `None` for a value with no such range, or one whose range holds all
+    /// it reaches: no call is refused there, and no test is written. What it reaches fits int64
+    /// (E108), so every end written here does too.
+    pub(crate) fn accepted_ends(&self, d: &crate::ast::DefineDecl) -> Option<(Option<i128>, Option<i128>)> {
+        let (lo, hi) = self.c.refusing_ends(d)?;
+        let sc = self.c.scales.get(&d.name.text).copied().unwrap_or(1);
+        Some((lo.map(|v| crate::types::wire_int(v, sc)), hi.map(|v| crate::types::wire_int(v, sc))))
+    }
+
     /// Whether the item at `i` is emitted in this phase. The split is the evaluator's: the
     /// stage `types::stages` gives it (§15.208, §15.219). A summary is the walk, not an item a
     /// pass writes.
@@ -440,6 +585,56 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The variable a walk over sequence `s` holds the index of the element in (§15.324).
+    pub(crate) fn index_var(&self, s: usize) -> String {
+        if s == 0 {
+            self.temp("index")
+        } else {
+            self.temp(&format!("index{}", s + 1))
+        }
+    }
+
+    /// Start writing the body of a walk over sequence `s`, whose index is in `var` (§15.324).
+    pub(crate) fn walk_begin(&self, s: usize, var: &str) {
+        *self.walk_at.borrow_mut() = Some(WalkAt { seq: self.f.elements[s].name.text.clone(), var: var.to_string(), used: false });
+    }
+
+    /// The body is written: whether a sentence of it named the element by its index, so that the
+    /// walk binds the index.
+    pub(crate) fn walk_end(&self) -> bool {
+        self.walk_at.borrow_mut().take().is_some_and(|w| w.used)
+    }
+
+    /// What a sentence calls a field of the element or a `define` worked out for it (§15.324): in
+    /// the body of a walk `lines[\u{1}].subtotal`, with the index left for the language to put in;
+    /// anywhere else the name.
+    pub(crate) fn said_name(&self, name: &str) -> String {
+        match self.walk_at.borrow_mut().as_mut() {
+            Some(w) => {
+                w.used = true;
+                crate::door::element(&w.seq, crate::door::HERE, name)
+            }
+            None => name.to_string(),
+        }
+    }
+
+    /// The variable the walk being written holds the index of the element in; empty outside one.
+    pub(crate) fn here(&self) -> String {
+        self.walk_at.borrow().as_ref().map(|w| w.var.clone()).unwrap_or_default()
+    }
+
+    /// Mark the index of the walk being written as read by a sentence that does not go through
+    /// `said_name`: the two elements of a `unique` field or a `take_unique`.
+    pub(crate) fn here_used(&self) -> String {
+        match self.walk_at.borrow_mut().as_mut() {
+            Some(w) => {
+                w.used = true;
+                w.var.clone()
+            }
+            None => String::new(),
+        }
+    }
+
     /// The names the fold at `i` among the rule's items binds itself (`FoldNames`).
     pub(crate) fn fold_names(&self, i: usize) -> FoldNames {
         let k = self.f.items[..i].iter().filter(|it| matches!(it, Item::Fold(_))).count();
@@ -456,6 +651,8 @@ impl<'a> Gen<'a> {
             took: n("tookOne"),
             kept_one: n("keptOne"),
             best_set: n("bestSet"),
+            taken_at: n("taken_at"),
+            taken_at_camel: n("takenAt"),
             total: n("weights"),
             weight: n("weight"),
             cuts: n("cuts"),
@@ -687,8 +884,49 @@ impl<'a> Gen<'a> {
             stages: crate::types::stages(f),
             package: None,
             place: ritsu_emit::package::Place::here(),
+            python_package: false,
             reads_here: std::cell::RefCell::new(None),
+            walk_at: std::cell::RefCell::new(None),
             served: std::cell::OnceCell::new(),
+            made_for: None,
+            renamed_from: BTreeMap::new(),
+            binds: BTreeMap::new(),
+            owns: BTreeMap::new(),
+            marks: false,
+            ts_helpers: std::cell::OnceCell::new(),
+        }
+    }
+
+    /// This generator with the marks [`Gen::apart_text`] reads ([`clash::MARK`]): before the rule's
+    /// function where the code names it ([`Gen::fam`]), and before each enum's type wherever the code
+    /// names the type, which every way of writing one reads from `enum_names`, `value_names` and
+    /// `renamed_from` (the name conversions keep a mark at the head where it is).
+    fn marked(&self) -> Gen<'a> {
+        let mark = |t: &String| format!("{}{t}", clash::MARK);
+        Gen {
+            f: self.f,
+            c: self.c,
+            w114: self.w114.clone(),
+            enum_names: self.enum_names.iter().map(|(k, t)| (k.clone(), mark(t))).collect(),
+            value_names: self.value_names.iter().map(|(k, (t, m))| (k.clone(), (mark(t), m.clone()))).collect(),
+            idents: self.idents.clone(),
+            src_hash: self.src_hash.clone(),
+            src: self.src.clone(),
+            path: self.path.clone(),
+            shown: self.shown.clone(),
+            stages: crate::types::stages(self.f),
+            package: self.package.clone(),
+            place: self.place.clone(),
+            python_package: self.python_package,
+            reads_here: std::cell::RefCell::new(None),
+            walk_at: std::cell::RefCell::new(None),
+            served: std::cell::OnceCell::new(),
+            made_for: self.made_for,
+            renamed_from: self.renamed_from.iter().map(|(k, t)| (k.clone(), mark(t))).collect(),
+            binds: self.binds.clone(),
+            owns: self.owns.clone(),
+            marks: true,
+            ts_helpers: std::cell::OnceCell::new(),
         }
     }
 
@@ -705,6 +943,13 @@ impl<'a> Gen<'a> {
         self
     }
 
+    /// The same generator, with `rulec gen`'s Python modules put inside a package when `yes`
+    /// (`--python-package`, §15.319).
+    pub fn in_python_package(mut self, yes: bool) -> Self {
+        self.python_package = yes;
+        self
+    }
+
     /// The same generator, its heads naming the rule's file as `path` (a path from a project's
     /// root, as `ritsu gen` writes it) rather than by its name.
     pub fn shown(mut self, path: &str) -> Self {
@@ -712,16 +957,45 @@ impl<'a> Gen<'a> {
         self
     }
 
-    /// The page for people, as `rulec doc --format html` renders it: the same
-    /// renderer, running the same generated JavaScript (§15.37, §15.52).
     /// Which of the helpers of §15.213–§15.215 the rule's expressions call: only those are
     /// written into its module and its unit vectors.
     pub fn arith_uses(&self) -> Uses {
         Uses::of(self.f)
     }
 
+    /// The page for people, as `rulec doc --format html` renders it: the same
+    /// renderer, running the same generated JavaScript (§15.37, §15.52).
     pub fn page(&self) -> String {
-        crate::doc::render_html(self.f, self.c, &self.src, &self.path, &self.javascript())
+        crate::doc::render_html(self.f, self.c, &self.src, &self.path, &self.page_javascript())
+    }
+
+    /// The JavaScript a page holds: the module, with the module of each `enums` file it reads put
+    /// inside it (§15.319). A page is one file, `rulec doc` writes nothing beside it and an MCP host
+    /// shows it alone, so `./catalog.mjs` is not there to import. Each `enums` file's module goes
+    /// into a function that answers what it exports, and the lines that import from it or hand its
+    /// names on take them from that answer.
+    pub fn page_javascript(&self) -> String {
+        self.page_javascript_with(&|p| crate::enums::read_enums_file(p).ok())
+    }
+
+    /// [`Gen::page_javascript`], with each `enums` file the rule reads as `enums_file` gives it: an
+    /// engine that keeps the checks of a run gives the file as its check kept it, so that the file
+    /// is not checked again (ritsu's DESIGN 4.15). A file it gives none for is left out, as a file
+    /// that does not pass its check is.
+    pub fn page_javascript_with(&self, enums_file: &dyn Fn(&str) -> Option<crate::enums::EnumsFile>) -> String {
+        // the module as the JavaScript target writes it, each enum under the type it takes there
+        // (§15.326)
+        if let Some(t) = self.for_target("javascript") {
+            return t.page_javascript_with(enums_file);
+        }
+        let mut js = self.javascript();
+        for p in crate::enums::owner_paths(self.f) {
+            let Some(ef) = enums_file(&p) else { continue };
+            let module = pub_name(&ef.file.name);
+            let code = strip_types(&Gen::new(&ef.file, &ef.checked, &ef.src, &ef.path).ts_enums_module());
+            js = module_inside(&js, &module, &code);
+        }
+        js
     }
 
     fn ty_of(&self, n: &str) -> Ty {
@@ -744,6 +1018,21 @@ impl<'a> Gen<'a> {
             .map(|i| &i.name.text)
             .chain(self.f.elements.iter().flat_map(|e| e.fields.iter().map(|fd| &fd.name.text)))
             .chain(self.f.outputs.iter().map(|o| &o.name.text))
+            .collect()
+    }
+
+    /// The columns a table writes that may be absent (`-> fee : money[JPY]?`). Rust, Go and Swift
+    /// hold one under the type of its unit (`Option<JPY>`, `*JPY`, `JPY?`), as an input that may be
+    /// absent passes on as it stands (§15.249), so their module declares that type though none of
+    /// the rule's inputs, fields and outputs carries the unit (§15.343). The other languages hold
+    /// such a column as a plain integer.
+    fn branded_columns(&self) -> Vec<&String> {
+        self.f
+            .items
+            .iter()
+            .filter_map(|it| if let Item::Table(t) = it { Some(t) } else { None })
+            .flat_map(|t| t.outputs.iter().map(|o| &o.name.text))
+            .filter(|n| matches!(self.ty_of(n), Ty::Opt(_)))
             .collect()
     }
 
@@ -780,8 +1069,108 @@ impl<'a> Gen<'a> {
     /// always uses its ASCII alias, and an internal name uses one when the author wrote it
     /// and the name itself when they did not. Every lookup in this file keys on the declared
     /// name; only what is *written out* goes through here.
+    ///
+    /// In the generator of one language (`Gen::for_target`), a value the rule's functions would
+    /// hide a name of the generated code's with is bound under another identifier there (§15.336),
+    /// and this is that identifier: every place a generator writes a value as it is held — a
+    /// parameter, a variable, a read of one — goes through here. What a caller sees of the value —
+    /// a field, a key, a label, a keyword argument — is written from its declared name or alias
+    /// (`pub_name`), or by [`Gen::written`], and keeps it.
     fn ident(&self, n: &str) -> String {
+        if let Some(b) = self.binds.get(n) {
+            return b.clone();
+        }
+        self.written(n)
+    }
+
+    /// The identifier of a declared name as every language writes it (§1.3), whatever a language
+    /// binds it under inside the rule's functions ([`Gen::ident`]).
+    fn written(&self, n: &str) -> String {
         self.idents.get(n).cloned().unwrap_or_else(|| n.to_string())
+    }
+
+    /// The declared name `n` where the rule's functions hold it, in a language that writes a value as
+    /// its alias, else its name (`pub_name`): an input, a sequence, a field of an element, a shape.
+    /// The identifier it is bound under apart from that (§15.336), where it has one.
+    fn held(&self, n: &Name) -> String {
+        self.binds.get(&n.text).cloned().unwrap_or_else(|| pub_name(n))
+    }
+
+    /// A name of the generated code's own, as this language writes it here: the name, unless a name
+    /// of the rule's would meet it, when it is written otherwise (§15.336).
+    fn own(&self, name: &str) -> String {
+        self.owns.get(name).cloned().unwrap_or_else(|| name.to_string())
+    }
+
+    /// `text`, a part of the code that holds no name of the rule's (a helper, a line the module
+    /// starts with), with each name of the generated code's own that this language writes otherwise
+    /// written so (§15.336).
+    fn own_text(&self, text: &str) -> String {
+        if self.owns.is_empty() {
+            return text.to_string();
+        }
+        clash::rename_words(text, &self.owns)
+    }
+
+    /// The rule's function `name` (its name, or one of the names made of it) where the module calls
+    /// or declares it: with [`clash::MARK`] before it while [`Gen::apart_text`] writes the module
+    /// again, else as it is.
+    pub(crate) fn fam(&self, name: &str) -> String {
+        if self.marks && name == pub_name(&self.f.name) {
+            format!("{}{name}", clash::MARK)
+        } else {
+            name.to_string()
+        }
+    }
+
+    /// The code `write` writes, in a language whose module holds the rule's function and the enums'
+    /// types beside the functions of its own and reads builtins by their names (Python, TypeScript
+    /// and JavaScript, Ruby, Rust, Swift), with each word of the rule's that the code has for another
+    /// name too written apart there (§15.336). Where the rule's function or an enum's type is named
+    /// like a builtin, the code reaches the builtin past it (`_builtins.abs`, `globalThis.JSON`,
+    /// `::Struct`, `::std::string::String`, `Swift.Int64`, `Gen::hidden_builtins`); where a helper of
+    /// the module's has the function's name (`_max`, `round_down`), the helper takes `_` after it, as
+    /// many as it takes to meet no word of the module. The code is written again by [`Gen::marked`],
+    /// and every word of the name left unmarked is the other's. Code where no name meets one is
+    /// written as it always was, and so is code whose second writing is not the first with the
+    /// marks in it, which a test's build stops at.
+    fn apart_text(&self, syntax: clash::Syntax, write: impl Fn(&Gen<'a>) -> String) -> String {
+        self.written_apart(syntax, true, write)
+    }
+
+    /// [`Gen::apart_text`] for code that names the enums' types and declares no function of the
+    /// rule's: Ruby's signatures.
+    fn apart_types(&self, syntax: clash::Syntax, write: impl Fn(&Gen<'a>) -> String) -> String {
+        self.written_apart(syntax, false, write)
+    }
+
+    fn written_apart(&self, syntax: clash::Syntax, fns: bool, write: impl Fn(&Gen<'a>) -> String) -> String {
+        let text = write(self);
+        let rule = pub_name(&self.f.name);
+        // the builtins an enum's type hides, each with the way the code reaches it
+        let mut to: BTreeMap<String, String> =
+            self.c.enums.keys().map(|jp| self.enum_type(jp)).filter_map(|t| self.owns.get(&t).map(|w| (t.clone(), w.clone()))).collect();
+        let hidden = if fns { self.owns.get(&rule).cloned() } else { None };
+        let twice = fns && clash::declares_twice(&text, &rule, syntax);
+        if hidden.is_none() && !twice && to.is_empty() {
+            return text;
+        }
+        let marked = write(&self.marked());
+        if marked.replace(clash::MARK, "") != text {
+            debug_assert!(false, "the code written with the marks is other than the code:\n{}", clash::first_difference(&text, &marked.replace(clash::MARK, "")));
+            return text;
+        }
+        if hidden.is_some() || twice {
+            let new = hidden.unwrap_or_else(|| {
+                let mut n = format!("{rule}_");
+                while clash::has_word(&marked, &n) {
+                    n.push('_');
+                }
+                n
+            });
+            to.insert(rule, new);
+        }
+        clash::rename_code(&marked, &to, syntax)
     }
 
     /// A name for a generated temporary that nothing in the rule already answers to. The
@@ -818,8 +1207,9 @@ impl<'a> Gen<'a> {
             .chain(f.shapes.iter().map(|d| &d.name))
             .collect();
         let mut n = base.to_string();
-        // A name declared without an alias is its own identifier, so the text counts too.
-        while declared.iter().any(|d| d.text == n || pub_name(d) == n) {
+        // A name declared without an alias is its own identifier, so the text counts too, and so
+        // does the identifier a value is bound under apart from it (§15.336).
+        while declared.iter().any(|d| d.text == n || pub_name(d) == n) || self.binds.values().any(|b| *b == n) {
             n.push('_');
         }
         n
@@ -1445,20 +1835,18 @@ impl<'a> Gen<'a> {
     /// declares, or the alias it declares for one an `enums` file owns, or that file's type by its
     /// package where the alias would take a name the rule's own functions have.
     pub(crate) fn go_enum_ty(&self, en: &str) -> String {
-        let t = self.enum_type(en);
         match self.go_owner_of(en) {
-            Some(pkg) => format!("{pkg}.{t}"),
-            None => t,
+            Some(pkg) => format!("{pkg}.{}", self.owner_type(en)),
+            None => self.enum_type(en),
         }
     }
 
     /// The Go type of an enum as the runner writes it, the rule's package imported as `r`: `r.Size`,
     /// or the owner's type by its package where the rule's package names it so (§15.239).
     pub(crate) fn go_runner_enum_ty(&self, en: &str) -> String {
-        let t = self.enum_type(en);
         match self.go_owner_of(en) {
-            Some(pkg) => format!("{pkg}.{t}"),
-            None => format!("r.{t}"),
+            Some(pkg) => format!("{pkg}.{}", self.owner_type(en)),
+            None => format!("r.{}", self.enum_type(en)),
         }
     }
 
@@ -1518,7 +1906,9 @@ impl<'a> Gen<'a> {
             if !self.c.labels.contains_key(en) || out.iter().any(|(n, _, _)| n == en) {
                 continue;
             }
-            let owner = self.c.owners.get(en).map(|o| pub_name(&o.module));
+            // An enum this module hands on under another type is found in this module, under the
+            // names it has here (§15.326).
+            let owner = self.c.owners.get(en).filter(|_| !self.handed_here(en)).map(|o| pub_name(&o.module));
             out.push((en.clone(), self.enum_type(en), owner));
         }
         out
@@ -1861,6 +2251,22 @@ fn wire_of(ty: &Ty) -> Wire {
     }
 }
 
+/// Each of a record function's own parameters with the `, ` after it, before the ones every record
+/// function takes: nothing for a rule that reads no input.
+fn leading_params(params: &[String]) -> String {
+    params.iter().map(|p| format!("{p}, ")).collect()
+}
+
+/// [`leading_params`] of parameters already joined: `params` and a comma, or nothing where there
+/// are none (§15.330).
+fn leading_param(params: &str) -> String {
+    if params.is_empty() {
+        String::new()
+    } else {
+        format!("{params}, ")
+    }
+}
+
 /// The doc line of the record function.
 fn record_doc() -> String {
     tr!(
@@ -1966,6 +2372,17 @@ impl<'a> Gen<'a> {
         if taken { format!("{id}_") } else { id }
     }
 
+    /// The constant TypeScript's and JavaScript's module holds a group in: `_remote` for `remote`, with
+    /// `_` after it where a helper of the module's has that name (`_min`, `_civil`, §15.336).
+    fn ts_group(&self, name: &str) -> String {
+        let mut id = format!("_{}", self.ident(name));
+        let helpers = self.ts_helpers.get_or_init(|| own::ts_helpers(&own::Has::of(self.f, self.c)));
+        while helpers.contains(&id) {
+            id.push('_');
+        }
+        id
+    }
+
     /// Render a cell as a Python condition. A don't-care yields None (no condition).
     fn py_cell(&self, cell: &Cell, var: &str, ty: &Ty, col_scale: i128) -> Option<String> {
         let inner = match ty {
@@ -2055,6 +2472,10 @@ impl<'a> Gen<'a> {
     }
 
     pub fn python(&self) -> String {
+        self.apart_text(clash::Syntax::Python, |g| g.python_text())
+    }
+
+    fn python_text(&self) -> String {
         let mut o = self.header("#");
         // Import from typing only what is used. NamedTuple is needed only with multiple outputs.
         // `enum` only where the module declares an enum of its own: a rule whose enums all come
@@ -2063,16 +2484,45 @@ impl<'a> Gen<'a> {
         // Brands. They work with mypy and pyright and cost nothing at runtime. In a package of
         // ritsu's, those of money and of the quantities are the package's, imported (§15.248).
         let (own, units) = self.brands();
-        o.push_str(&format!(
-            "from __future__ import annotations\n\n{}from typing import {}NamedTuple{}{}\n\n",
-            if classes { "import enum\n" } else { "" },
-            if self.projects() { "Any, " } else { "" },
-            if own.is_empty() && self.package.is_some() { "" } else { ", NewType" },
-            // The readers take the object as the dict it is checked to be (§15.234).
-            if self.projects() { ", cast" } else { "" }
-        ));
+        // The readers take the object as the dict it is checked to be (§15.234).
+        let mut typing: Vec<&str> = Vec::new();
+        if self.projects() {
+            typing.push("Any");
+        }
+        typing.push("NamedTuple");
+        if !(own.is_empty() && self.package.is_some()) {
+            typing.push("NewType");
+        }
+        if self.projects() {
+            typing.push("cast");
+        }
+        // What a name of the rule's hides is read through the module it comes from, imported under
+        // a name of its own (§15.336).
+        typing.retain(|n| self.own(n) == *n);
+        let mut imports = String::new();
+        if let Some(b) = self.owns.get("import builtins") {
+            imports.push_str(&format!("import builtins as {b}\n"));
+        }
+        if classes {
+            match self.owns.get("import enum") {
+                Some(e) => imports.push_str(&format!("import enum as {e}\n")),
+                None => imports.push_str("import enum\n"),
+            }
+        }
+        if let Some(t) = self.owns.get("import typing") {
+            imports.push_str(&format!("import typing as {t}\n"));
+        }
+        if !typing.is_empty() {
+            imports.push_str(&format!("from typing import {}\n", typing.join(", ")));
+        }
+        let future = match self.owns.get("annotations") {
+            Some(a) => format!("annotations as {a}"),
+            None => "annotations".to_string(),
+        };
+        o.push_str(&format!("from __future__ import {future}\n\n{imports}\n"));
+        let new_type = self.own("NewType");
         for (b, ty) in &own {
-            o.push_str(&format!("{b} = NewType(\"{b}\", int)  # {ty}\n"));
+            o.push_str(&format!("{b} = {new_type}(\"{b}\", int)  # {ty}\n"));
         }
         if !units.is_empty() {
             // handed on as the module's own (`X as X`), as the types of an `enums` file are
@@ -2124,28 +2574,37 @@ impl<'a> Gen<'a> {
         // refused and held as a `str`, with `None` for a refusal about no one value (§15.207):
         // an error that took any object, and a sentinel to say "no value", is a type and a
         // statement that code compiled ahead of time cannot have. The message is the same.
+        // Where the rule's function is `super`, the classes call their base's `__init__` by the
+        // base's name: `super()` with nothing in it finds its class only by that very name, and
+        // mypy does not read a `super` reached through the builtins as the one it knows (§15.336).
+        let init = |base: &str| if self.owns.contains_key("super") { format!("{}.__init__(self, what)", self.own(base)) } else { "super().__init__(what)".to_string() };
         o.push_str(&format!(
-            "class RuleInputError(ValueError):\n    \"\"\"{}\"\"\"\n\n\
+            "class RuleInputError({}):\n    \"\"\"{}\"\"\"\n\n\
              \x20   def __init__(self, what: str, value: str | None = None) -> None:\n\
-             \x20       super().__init__(what)\n\
+             \x20       {}\n\
              \x20       self.what = what\n\
              \x20       self.value = value\n\n\
              \x20   def __str__(self) -> str:\n\
              \x20       return self.what if self.value is None else f\"{{self.what}}: {{self.value}}\"\n\n",
+            self.own("ValueError"),
             tr!(
                 "宣言した範囲の外。呼び出し側の契約違反。value は受け付けなかった値の repr() で、特定の値が理由でないときは None。",
                 "Outside the declared input domain: a contract violation by the caller. `value` is the repr() of the value refused, or None when the refusal is about no one value."
-            )
+            ),
+            init("ValueError")
         ));
         o.push_str(&format!(
-            "class RuleContradictionError(AssertionError):\n    \"\"\"{}\"\"\"\n\n\
+            "class RuleContradictionError({}):\n    \"\"\"{}\"\"\"\n\n\
              \x20   def __init__(self, what: str) -> None:\n\
-             \x20       super().__init__(what)\n\
+             \x20       {}\n\
              \x20       self.what = what\n\n",
-            tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller.")
+            self.own("AssertionError"),
+            tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller."),
+            init("AssertionError")
         ));
         o.push_str(&format!(
-            "class Fired(NamedTuple):\n    \"\"\"{}\"\"\"\n\n    table: str\n    row: int\n    label: str = \"\"\n\n",
+            "class Fired({}):\n    \"\"\"{}\"\"\"\n\n    table: str\n    row: int\n    label: str = \"\"\n\n",
+            self.own("NamedTuple"),
             fired_doc()
         ));
         // The alias exists so that the local inside the function can be annotated without
@@ -2165,7 +2624,15 @@ impl<'a> Gen<'a> {
         // The functions first: which builtins they call decides which names are bound above them.
         let mut body = round_py();
         body.push_str(&arith::py_helpers(&arith::Uses::of(self.f)));
-        body.push_str(&self.py_fn());
+        let functions = self.py_fn();
+        // W121 says a rule's name `_enumerate` meets the walk where `py_walks_count` says so.
+        debug_assert_eq!(
+            has_word(&functions, "_enumerate"),
+            self.py_walks_count(),
+            "rule {}: whether the walk counts the elements, as written and as `own` reads it",
+            self.f.name.text
+        );
+        body.push_str(&functions);
         body.push_str("\n\n");
         body.push_str(&self.py_record());
         // The function that counts the answers over the points of the random inputs (§15.225).
@@ -2277,10 +2744,10 @@ impl<'a> Gen<'a> {
         o
     }
 
-    /// The module with the import of what it uses of each `enums` file it reads from, after the
-    /// `typing` line (§15.212): the type, and its order and display name functions where it calls
-    /// them. In a package the module beside it; from `rulec gen`, the module in the same
-    /// directory.
+    /// The module with the import of each `enums` file it reads from, after the `typing` line
+    /// (§15.212): the type, and the functions of its order and its display names. In a package of
+    /// ritsu's the module beside it; from `rulec gen`, the module in the same directory, by its name,
+    /// or by a relative import when the module goes inside a package (`--python-package`, §15.319).
     fn py_imports(&self, o: String) -> String {
         let foreign = self.foreign_owners();
         if foreign.is_empty() {
@@ -2296,14 +2763,35 @@ impl<'a> Gen<'a> {
                     }
                 }
             }
-            if names.is_empty() {
-                continue;
+            // What the module has of each enum, as a module that declares the enum has it, after
+            // what the rule calls (§15.319).
+            for (jp, t) in &types {
+                let mut handed = vec![t.clone()];
+                if self.c.ordered.contains(jp) {
+                    handed.push(self.py_rank_fn(jp));
+                }
+                if self.c.labels.contains_key(jp) {
+                    handed.push(self.py_label_fn(jp));
+                }
+                for n in handed {
+                    if !names.contains(&n) {
+                        names.push(n);
+                    }
+                }
             }
-            let from = if self.package.is_some() { self.place.py_path(&self.rules_dir(), &format!("{dir}rules/{module}")) } else { module.clone() };
-            // The types are the module's to hand on (`X as X`, an explicit re-export): a caller,
-            // the runner and the MCP server name them through the rule's module, as they name
-            // the types a rule declares itself. The functions are its own use.
-            let names: Vec<String> = names.into_iter().map(|n| if types.iter().any(|(_, t)| *t == n) { format!("{n} as {n}") } else { n }).collect();
+            let from = if self.package.is_some() {
+                self.place.py_path(&self.rules_dir(), &format!("{dir}rules/{module}"))
+            } else if self.python_package {
+                format!(".{module}")
+            } else {
+                module.clone()
+            };
+            // All of it is the module's to hand on (`X as X`, an explicit re-export): a caller, the
+            // runner and the MCP server name it through the rule's module, as they name what the
+            // rule's own enums have. An enum whose names meet the rule's own is handed on under
+            // the type it takes here (`Size as Size2`, §15.326).
+            let theirs = |n: &String| types.iter().map(|(jp, _)| self.theirs("python", jp, n)).find(|o| o != n).unwrap_or_else(|| n.clone());
+            let names: Vec<String> = names.iter().map(|n| format!("{} as {n}", theirs(n))).collect();
             lines.push_str(&format!("from {from} import {}\n", names.join(", ")));
         }
         match o.find("from typing import") {
@@ -2311,8 +2799,97 @@ impl<'a> Gen<'a> {
                 let end = o[at..].find('\n').map(|e| at + e + 1).unwrap_or(o.len());
                 format!("{}{lines}{}", &o[..end], &o[end..])
             }
-            None => format!("{lines}{o}"),
+            // A module that reads all it reads of `typing` through the module (§15.336): after its
+            // imports, which follow `from __future__ import …` and a blank line.
+            None => match o.find("from __future__ import") {
+                Some(at) => {
+                    let line_end = |from: usize| o[from..].find('\n').map(|e| from + e + 1).unwrap_or(o.len());
+                    let mut end = line_end(at);
+                    if o[end..].starts_with('\n') {
+                        end += 1;
+                    }
+                    while o[end..].starts_with("import ") || o[end..].starts_with("from ") {
+                        end = line_end(end);
+                    }
+                    format!("{}{lines}{}", &o[..end], &o[end..])
+                }
+                None => format!("{lines}{o}"),
+            },
         }
+    }
+}
+
+/// A sentence as a Go string: `fmt.Sprintf` with the indices put in as `%d` where it names an element
+/// by its index (§15.324), and a plain string otherwise (`plain` writes that one).
+fn go_said_with(s: &str, here: &str, before: &str, plain: &dyn Fn(&str) -> String) -> String {
+    if !names_element(s) {
+        return plain(s);
+    }
+    let (mut form, mut args) = (String::new(), Vec::new());
+    for p in pieces(s) {
+        match p {
+            Piece::Text(t) => form.push_str(&t.replace('%', "%%")),
+            Piece::Here => {
+                form.push_str("%d");
+                args.push(here);
+            }
+            Piece::Before => {
+                form.push_str("%d");
+                args.push(before);
+            }
+        }
+    }
+    format!("fmt.Sprintf({form:?}, {})", args.join(", "))
+}
+
+/// [`go_said_with`] as the module writes a sentence: a plain one between quotes as it is.
+fn go_said(s: &str, here: &str, before: &str) -> String {
+    go_said_with(s, here, before, &|x| format!("\"{x}\""))
+}
+
+/// A sentence as the Rust module's `Said` (§15.324): `Said::of` the sentence, or where it names an
+/// element by its index, `Said::at` and `Said::two` with the pieces of text around the indices.
+/// The indices stay integers until the sentence is shown: a string built where the error is made
+/// is a loop the model checker of the proof harness does not come back from (§15.95).
+fn rs_said(s: &str, here: &str, before: &str) -> String {
+    let mut words: Vec<String> = Vec::new();
+    let mut places: Vec<&str> = Vec::new();
+    for p in pieces(s) {
+        match p {
+            Piece::Text(t) => words.push(format!("\"{t}\"")),
+            Piece::Here => places.push(here),
+            Piece::Before => places.push(before),
+        }
+    }
+    match places.as_slice() {
+        [] => format!("Said::of({})", words[0]),
+        [i] => format!("Said::at({}, {i}, {})", words[0], words[1]),
+        [i, j, ..] => format!("Said::two({}, {i}, {}, {j}, {})", words[0], words[1], words[2]),
+    }
+}
+
+/// A sentence as a Swift string, the indices put in as `\(…)` (§15.324).
+fn sw_said(s: &str, here: &str, before: &str) -> String {
+    format!("\"{}\"", interpolate(s, here, before, "\\(", ")"))
+}
+
+/// A sentence as a Ruby string, the indices put in as `#{…}` (§15.324).
+fn rb_said(s: &str, here: &str, before: &str) -> String {
+    format!("\"{}\"", interpolate(s, here, before, "#{", "}"))
+}
+
+/// A sentence as the body of a TypeScript template literal, the indices put in as `${…}` (§15.324).
+fn ts_said(s: &str, here: &str, before: &str) -> String {
+    interpolate(s, here, before, "${", "}")
+}
+
+/// A sentence as a Python string: an f-string with the indices put in where it names an element by
+/// its index (§15.324), and a plain string otherwise.
+fn py_said(s: &str, here: &str, before: &str) -> String {
+    if names_element(s) {
+        format!("f\"{}\"", interpolate(s, here, before, "{", "}"))
+    } else {
+        format!("\"{s}\"")
     }
 }
 
@@ -2324,7 +2901,7 @@ impl<'a> Gen<'a> {
 /// `_proto`, …) have none, and call the builtins as they are; an alias of the rule or of an
 /// enum that hides a builtin is W121's. `min` and `max` are the rule language's own functions
 /// and are written as `_min` and `_max`.
-const PY_BUILTINS: [(&str, &str); 11] = [
+const PY_BUILTINS: [(&str, &str); 12] = [
     ("_isinstance", "isinstance"),
     ("_int", "int"),
     ("_float", "float"),
@@ -2336,6 +2913,7 @@ const PY_BUILTINS: [(&str, &str); 11] = [
     ("_all", "all"),
     ("_sum", "sum"),
     ("_set", "set"),
+    ("_enumerate", "enumerate"),
 ];
 
 /// The other names the module defines at its top level beside the bound builtins: the helpers.
@@ -2566,6 +3144,15 @@ impl<'a> Gen<'a> {
     /// The walk plan as the generators write it (§15.219): for each walk in the order it runs,
     /// its number, its sequence, the items of one element worked out on every element, and the
     /// summaries it reduces — with the items of one call that run after each number of walks.
+    /// The sequence whose walk works out the item at `i` once for each element, if one does: what
+    /// a sentence about the item names it under (§15.324).
+    pub(crate) fn walked_in(&self, i: usize) -> Option<usize> {
+        self.walk_steps().into_iter().find_map(|w| match w {
+            WalkStep::Walk { seq, body, .. } if body.contains(&i) => Some(seq),
+            _ => None,
+        })
+    }
+
     pub(crate) fn walk_steps(&self) -> Vec<WalkStep> {
         let st = &self.stages;
         let mut out = vec![WalkStep::Once(st.once(0))];
@@ -2588,6 +3175,36 @@ impl<'a> Gen<'a> {
             crate::types::Stage::Each { seq, walk } => self.stages.summaries_in(self.f, seq, walk).len() == 1,
             _ => true,
         }
+    }
+
+    /// Whether the walk of the fold at `i`, alone in it, goes on past a `stop` (§15.328): the
+    /// fold's work ends there, as do the items of one element, and the door still looks at each
+    /// element after it — its fields inside their ranges and its `unique` fields — when the walk is
+    /// the first over the sequence and the door has one of those to look at: a number, a date whose
+    /// range writes an end, a field marked `unique`. The walk then binds the fold's `done` and goes
+    /// on to the next element once it is set. A walk with nothing to look at ends at the `stop`.
+    pub(crate) fn stop_keeps_door(&self, i: usize) -> bool {
+        let crate::types::Stage::Each { seq, walk } = self.stages.at(i) else { return false };
+        let Some(Item::Fold(fold)) = self.f.items.get(i) else { return false };
+        if !self.fold_alone(i) || !fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Stop(_))) {
+            return false;
+        }
+        let first = self.stages.walks().iter().filter(|(_, s)| *s == seq).map(|(w, _)| *w).min() == Some(walk);
+        first
+            && self.element_fields(seq).iter().any(|fd| {
+                fd.unique.is_some()
+                    || match self.ty_of(&fd.name.text).present() {
+                        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => true,
+                        Ty::Date => self.c.ranges.get(&fd.name.text).is_some_and(|(lo, hi)| lo.is_some() || hi.is_some()),
+                        _ => false,
+                    }
+            })
+    }
+
+    /// The fold of the walk whose summaries are `sums` that goes on past its `stop` with the door
+    /// alone (`stop_keeps_door`), if there is one: where the walk writes its `done`.
+    pub(crate) fn walk_goes_past_stop(&self, sums: &[usize]) -> Option<usize> {
+        sums.iter().copied().find(|&i| self.stop_keeps_door(i))
     }
 
     /// The name a fold's answer is bound to, its type, and whether that type is one of numbers.
@@ -2614,6 +3231,12 @@ impl<'a> Gen<'a> {
                 Item::Define(d) => {
                     let e = self.expr(&d.expr, local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&py_truths(&e.text)), tr!("定義", "definition")));
+                    // The range the rule accepts for it, held where it is worked out (§15.313).
+                    if let Some(test) = self.accepted_ends(d).and_then(|ends| py_out_of(&self.ident(&d.name.text), ends)) {
+                        let n = self.ident(&d.name.text);
+                        let said = py_said(&crate::door::out_of_range(&self.said_name(&d.name.text)), &self.here(), "");
+                        o.push_str(&format!("    if {test}:\n        raise RuleInputError({said}, _repr({n}))\n"));
+                    }
                 }
                 Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
@@ -2636,7 +3259,7 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for (s, el) in self.f.elements.iter().enumerate() {
             if let Some(cap) = self.count_cap_of(s) {
-                let seq = pub_name(&el.name);
+                let seq = self.held(&el.name);
                 o.push_str(&format!(
                     "    if _len({seq}) > {cap}:\n        raise RuleInputError(\"{}\", _repr(_len({seq})))\n",
                     crate::door::too_many(&el.name.text, cap)
@@ -2653,12 +3276,39 @@ impl<'a> Gen<'a> {
         o
     }
 
+    /// Whether a walk of the Python function counts the elements of its sequence, which it does
+    /// with `enumerate` under the name the module gives it, `_enumerate` (§15.207): where a sentence
+    /// of the walk names an element (§15.324). That is a field the walk checks (any type but
+    /// `Unknown` — a string's kind too, §15.339), a `unique` field, a `define` worked out for each
+    /// element with a range the rule accepts for it, or a `take_unique`. `own` lists the name for
+    /// W121 by this; the module is held to it where it is written.
+    pub(crate) fn py_walks_count(&self) -> bool {
+        let checked = |fd: &&crate::ast::VarDecl| {
+            matches!(
+                self.ty_of(&fd.name.text).present(),
+                Ty::Enum(_) | Ty::Bool | Ty::Str | Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date
+            )
+        };
+        let fields = (0..self.f.elements.len()).any(|s| {
+            let fs = self.element_fields(s);
+            fs.iter().any(checked) || fs.iter().any(|fd| fd.unique.is_some())
+        });
+        let defines = self.f.items.iter().enumerate().any(|(i, it)| match it {
+            Item::Define(d) => {
+                self.walked_in(i).is_some() && self.accepted_ends(d).is_some_and(|(lo, hi)| lo.is_some() || hi.is_some())
+            }
+            _ => false,
+        });
+        let takes = self.f.folds().any(|fold| fold.arms.iter().any(|(_, arm, _)| matches!(arm, Arm::Take { unique: true, .. })));
+        fields || defines || takes
+    }
+
     /// One walk over sequence `s` (§15.219): each summary's accumulator, one pass over the elements
     /// with the guards of one element, the items of one element and each summary's step, and each
     /// summary's answer bound to its name once the loop is over.
     fn py_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = &self.f.elements[s];
-        let seq = pub_name(&el.name);
+        let seq = self.held(&el.name);
         let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
         let e = self.elem_var(s);
         // Inside the walk a field is read off the element.
@@ -2669,10 +3319,16 @@ impl<'a> Gen<'a> {
             }
         };
         let mut o = String::new();
-        let mut body = self.py_element_guards(s, &local);
+        let index = self.index_var(s);
+        self.walk_begin(s, &index);
+        let mut body = self.py_element_ranges(s, &local);
         let (seen, step) = self.py_unique(s, sums, &local);
         o.push_str(&seen);
         body.push_str(&step);
+        // Past a `stop`, the door alone (§15.328).
+        if let Some(i) = self.walk_goes_past_stop(sums) {
+            body.push_str(&format!("    if {}:\n        continue\n", self.fold_names(i).done));
+        }
         body.push_str(&self.py_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -2699,6 +3355,14 @@ impl<'a> Gen<'a> {
                             crate::door::out_of_range(&d.name.text)
                         ));
                     }
+                    // The bottom of its range, where a walk can come in under it (§15.314).
+                    if let Some(floor) = self.walk_floor(d) {
+                        let n = self.ident(&d.name.text);
+                        after.push_str(&format!(
+                            "    if {n} < {floor}:\n        raise RuleInputError(\"{}\", _repr({n}))\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
                 }
                 Item::Fold(fold) => {
                     let (init, step, fin) = self.py_fold(i, fold, &seq, &local);
@@ -2709,7 +3373,12 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
-        o.push_str(&format!("    for {e} in {seq}:\n"));
+        // The index of the element is bound where a sentence of the walk says it (§15.324).
+        if self.walk_end() {
+            o.push_str(&format!("    for {index}, {e} in _enumerate({seq}):\n"));
+        } else {
+            o.push_str(&format!("    for {e} in {seq}:\n"));
+        }
         o.push_str(&Self::indent_block(&body, "    "));
         o.push_str(&after);
         o
@@ -2766,12 +3435,15 @@ impl<'a> Gen<'a> {
     }
 
     /// A fold in Python (§15.56): the lines before the loop, the arms inside it, and the answer
-    /// bound to its name after it. A fold alone in its walk ends the loop when it stops; one that
-    /// shares its walk stops reading and lets the loop go on (§15.219).
+    /// bound to its name after it. A fold alone in its walk ends the loop when it stops, unless the
+    /// door is still to look at the elements after it (§15.328); one that shares its walk stops
+    /// reading and lets the loop go on (§15.219).
     fn py_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
         let names = self.fold_names(i);
-        let FoldNames { answer, stopped, done, taken, kept, best, held, key, .. } = &names;
+        let FoldNames { answer, stopped, done, taken, kept, best, held, key, taken_at, .. } = &names;
         let alone = self.fold_alone(i);
+        // Ends the loop at a `stop`: a fold alone in its walk with no door to keep past it.
+        let ends = alone && !self.stop_keeps_door(i);
         // `held` is the accumulator, and it is read only where the walk is over.
         let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
         let (out_name, out_ty) = self.fold_target(fold);
@@ -2795,11 +3467,17 @@ impl<'a> Gen<'a> {
         let mut init = String::new();
         init.push_str(&format!("    {answer}: {acc_ty} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         init.push_str(&format!("    {stopped} = False\n"));
-        if !alone {
+        if !ends {
             init.push_str(&format!("    {done} = False\n"));
         }
         if takes {
             init.push_str(&format!("    {taken}: {acc_ty} | None = None\n"));
+        }
+        // The element a `take_unique` took, which the sentence says beside the one that matched
+        // again (§15.324).
+        let unique = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { unique: true, .. }));
+        if unique {
+            init.push_str(&format!("    {taken_at} = 0\n"));
         }
         if weighted {
             init.push_str(&format!("    {}: int = 0  # {}\n", names.total, tr!("重みの合計", "the running total of the weights")));
@@ -2819,11 +3497,11 @@ impl<'a> Gen<'a> {
             arms.push_str(&format!("    if {v} is {cls}.{member}:  # {}\n", name.text));
             match arm {
                 Arm::Next => arms.push_str("        pass\n"),
-                Arm::Stop(None) if alone => arms.push_str("        break\n"),
+                Arm::Stop(None) if ends => arms.push_str("        break\n"),
                 Arm::Stop(None) => arms.push_str(&format!("        {done} = True\n")),
                 Arm::Stop(Some(x)) => {
                     arms.push_str(&format!("        {answer} = {}\n", val(x, local)));
-                    if alone {
+                    if ends {
                         arms.push_str(&format!("        {stopped} = True\n        break\n"));
                     } else {
                         arms.push_str(&format!("        {stopped} = True\n        {done} = True\n"));
@@ -2831,16 +3509,14 @@ impl<'a> Gen<'a> {
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
+                        let here = self.here_used();
                         arms.push_str(&format!("        if {taken} is not None:\n"));
                         arms.push_str(&format!(
-                            "            raise RuleContradictionError(\"{}\")\n",
-                            tr!(
-                                "畳み込み {}: take_unique に二件当たりました",
-                                "fold {}: two elements matched a take_unique",
-                                fold.verdict
-                            )
+                            "            raise RuleContradictionError({})\n",
+                            py_said(&crate::door::fold_contradiction(&fold.verdict, &fold.over, crate::door::BEFORE, crate::door::HERE), &here, taken_at)
                         ));
                         arms.push_str(&format!("        {taken} = {}\n", val(expr, local)));
+                        arms.push_str(&format!("        {taken_at} = {here}\n"));
                     } else {
                         arms.push_str(&format!("        if {taken} is None:\n"));
                         arms.push_str(&format!("            {taken} = {}\n", val(expr, local)));
@@ -2895,51 +3571,120 @@ impl<'a> Gen<'a> {
         (init, step, fin)
     }
 
-    /// The entry guards of one element, inside the walk: the same checks an input gets, on the
-    /// values the caller filled in for this element.
-    fn py_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
+    /// The head of the test of a field that may be absent, after [`Self::py_element_whole`] has
+    /// bound the element again: mypy reads the new element's field as the optional it is declared,
+    /// though the test is inside the `if … is not None` of the field, so the test says it again
+    /// (§15.343). Nothing for a field that is always there, or one no whole float is made over.
+    fn py_still_there(v: &str, optional: bool) -> String {
+        if optional { format!("{v} is not None and ") } else { String::new() }
+    }
+
+    /// A whole float of an element's field is the integer it is, here as at the inputs (§15.205).
+    /// The element is a NamedTuple: what reads it next reads one that holds the integer.
+    fn py_element_whole(&self, v: &str, ty: &Ty) -> String {
+        let Some((e, field)) = v.rsplit_once('.') else { return String::new() };
+        let to = self.py_ty(ty);
+        let int = if to == "int" { format!("_int({v})") } else { format!("{to}(_int({v}))") };
+        format!("    if _isinstance({v}, _float) and _float({v}).is_integer():\n        {e} = {e}._replace({field}={int})\n")
+    }
+
+    /// The first look at each element of every sequence, in Python (§15.328): before any input is
+    /// held to its range, each element in turn, and each of its fields in the order the rule
+    /// declares them, of its kind — a value of its enum, a truth value, a string (§15.339), an
+    /// integer, and a number one that int64 holds, as a reader of the wire takes it.
+    fn py_element_kinds(&self) -> String {
+        let mut out = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+            let e = self.elem_var(s);
+            let local = |n: &str| -> String { fields.get(n).map(|f| format!("{e}.{f}")).unwrap_or_else(|| n.to_string()) };
+            let index = self.index_var(s);
+            self.walk_begin(s, &index);
+            let mut o = String::new();
+            let here = self.here();
+            for i in self.element_fields(s) {
+                let v = local(&i.name.text);
+                // The sentences name the field by its place on the element (§15.324).
+                let said = || self.said_name(&i.name.text);
+                let ty = self.ty_of(&i.name.text);
+                // An optional field is looked at as the type it wraps when it has a value (§15.201).
+                let optional = matches!(ty, Ty::Opt(_));
+                let ty = ty.present().clone();
+                let mut o = Guarded::new(&mut o, optional.then(|| (format!("    if {v} is not None:\n"), String::new())), "    ");
+                match &ty {
+                    Ty::Enum(n) => o.push_str(&format!(
+                        "    if not _isinstance({v}, {}):\n        raise RuleInputError({}, _repr({v}))\n",
+                        self.py_ty(&ty),
+                        py_said(&crate::door::not_in_enum(&said(), n), &here, "")
+                    )),
+                    Ty::Bool => o.push_str(&format!(
+                        "    if not _isinstance({v}, _bool):\n        raise RuleInputError({}, _repr({v}))\n",
+                        py_said(&not_bool(&said()), &here, "")
+                    )),
+                    Ty::Str => o.push_str(&format!(
+                        "    if not _isinstance({v}, _str):\n        raise RuleInputError({}, _repr({v}))\n",
+                        py_said(&crate::door::not_string(&said()), &here, "")
+                    )),
+                    Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                        if ty != Ty::Date {
+                            o.push_str(&self.py_element_whole(&v, &ty));
+                        }
+                        o.push_str(&format!(
+                            "    if not _isinstance({v}, _int) or _isinstance({v}, _bool):\n        raise RuleInputError({}, _repr({v}))\n",
+                            py_said(&crate::door::not_integer(&said()), &here, "")
+                        ));
+                        if ty != Ty::Date {
+                            o.push_str(&format!(
+                                "    if {}{}:\n        raise RuleInputError({}, _repr({v}))\n",
+                                Self::py_still_there(&v, optional),
+                                py_past_int64(&v),
+                                py_said(&crate::door::out_of_range(&said()), &here, "")
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let used = self.walk_end();
+            if !o.is_empty() {
+                let seq = self.held(&el.name);
+                let head = if used { format!("    for {index}, {e} in _enumerate({seq}):\n") } else { format!("    for {e} in {seq}:\n") };
+                out.push_str(&head);
+                out.push_str(&Self::indent_block(&o, "    "));
+            }
+        }
+        out
+    }
+
+    /// The door's look at one element where the walk comes to it (§15.328): each field inside the
+    /// range it declares, in the order the rule declares them, the same ends an input is held to,
+    /// on the values the first look found of their kinds.
+    fn py_element_ranges(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
+        let here = self.here();
         for i in self.element_fields(s) {
             let v = local(&i.name.text);
+            // The sentences name the field by its place on the element (§15.324). Asked for only
+            // where one is written: a walk binds the index only where a sentence reads it.
+            let said = || self.said_name(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             // An optional field is guarded as the type it wraps when it has a value (§15.201).
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("    if {v} is not None:\n"), String::new())), "    ");
-            match &ty {
-                Ty::Enum(n) => o.push_str(&format!(
-                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
-                    self.py_ty(&ty),
-                    crate::door::not_in_enum(&i.name.text, n)
-                )),
-                Ty::Bool => o.push_str(&format!(
-                    "    if not _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
-                    not_bool(&i.name.text)
-                )),
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
-                    // A whole float is the integer it is, here as at the inputs (§15.205). The
-                    // element is a NamedTuple: the walk goes on with one that holds the integer.
-                    if ty != Ty::Date {
-                        if let Some((e, field)) = v.rsplit_once('.') {
-                            let to = self.py_ty(&ty);
-                            let int = if to == "int" { format!("_int({v})") } else { format!("{to}(_int({v}))") };
-                            o.push_str(&format!(
-                                "    if _isinstance({v}, _float) and _float({v}).is_integer():\n        {e} = {e}._replace({field}={int})\n"
-                            ));
-                        }
-                    }
-                    o.push_str(&format!(
-                        "    if not _isinstance({v}, _int) or _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
-                        crate::door::not_integer(&i.name.text)
-                    ));
-                    if let Some(test) = py_out_of(&v, crate::door::ends(self.c, &i.name.text, true)) {
-                        o.push_str(&format!(
-                            "    if {test}:\n        raise RuleInputError(\"{}\", _repr({v}))\n",
-                            crate::door::out_of_range(&i.name.text)
-                        ));
-                    }
+            if let Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date = &ty {
+                // The walk reads the element again from the sequence, so a whole float is made the
+                // integer it is again.
+                if ty != Ty::Date {
+                    o.push_str(&self.py_element_whole(&v, &ty));
                 }
-                _ => {}
+                if let Some(test) = py_out_of(&v, crate::door::ends(self.c, &i.name.text, true)) {
+                    o.push_str(&format!(
+                        "    if {}{test}:\n        raise RuleInputError({}, _repr({v}))\n",
+                        Self::py_still_there(&v, optional && ty != Ty::Date),
+                        py_said(&crate::door::out_of_range(&said()), &here, "")
+                    ));
+                }
             }
         }
         o
@@ -2947,12 +3692,15 @@ impl<'a> Gen<'a> {
 
     /// The fields marked `unique` (§15.290), in Python: the values seen so far, kept from before
     /// the first walk over the sequence, and in the walk, after the guards of one element, the
-    /// refusal of a value an element before it had. An enum or a truth value is kept in a list:
-    /// the walk stops at the first value seen twice, so the list never holds more than the values
-    /// of the type, and a list is what a Python that compiles the module ahead of time takes where
-    /// it refuses a set, whose order a compiled run would not reproduce. Another type is kept in a
-    /// set, so that a long sequence is not walked once for each element. Returns the lines before
-    /// the loop and the lines inside it.
+    /// refusal of a value an element before it had, which names the element the value was first
+    /// seen on (§15.324). An enum or a truth value is kept in a list: the walk stops at the first
+    /// value seen twice, so the list never holds more than the values of the type, and a list is
+    /// what a Python that compiles the module ahead of time takes where it refuses a set, whose
+    /// order a compiled run would not reproduce. The list holds one value per element, at the
+    /// element's index, and the refusal walks it to the value: such a compiler takes neither a
+    /// dict in a function nor a list's `index()`. Another type is kept in a dict from the value to
+    /// the index of the element it was first seen on, so that a long sequence is not walked once
+    /// for each element. Returns the lines before the loop and the lines inside it.
     fn py_unique(&self, s: usize, sums: &[usize], local: &dyn Fn(&str) -> String) -> (String, String) {
         let seq = &self.f.elements[s].name.text;
         let (mut init, mut step) = (String::new(), String::new());
@@ -2960,14 +3708,19 @@ impl<'a> Gen<'a> {
             let seen = self.temp(&format!("{}_seen", self.ident(&fd.name.text)));
             let v = local(&fd.name.text);
             let ty = self.ty_of(&fd.name.text);
-            let (start, keep) = match ty {
-                Ty::Enum(_) | Ty::Bool => (format!("{seen}: list[{}] = []", self.py_ty(&ty)), format!("{seen}.append({v})")),
-                _ => (format!("{seen} = _set()"), format!("{seen}.add({v})")),
+            let here = self.here_used();
+            let (start, keep, first, find) = match ty {
+                Ty::Enum(_) | Ty::Bool => {
+                    let at = self.temp(&format!("{}_first", self.ident(&fd.name.text)));
+                    let find = format!("        {at} = 0\n        while {seen}[{at}] != {v}:\n            {at} += 1\n");
+                    (format!("{seen}: list[{}] = []", self.py_ty(&ty)), format!("{seen}.append({v})"), at, find)
+                }
+                _ => (format!("{seen}: dict[{}, int] = {{}}", self.py_ty(&ty)), format!("{seen}[{v}] = {here}"), format!("{seen}[{v}]"), String::new()),
             };
             init.push_str(&format!("    {start}\n"));
             step.push_str(&format!(
-                "    if {v} in {seen}:\n        raise RuleInputError(\"{}\", _repr({v}))\n    {keep}\n",
-                crate::door::duplicate(seq, &fd.name.text)
+                "    if {v} in {seen}:\n{find}        raise RuleInputError({}, _repr({v}))\n    {keep}\n",
+                py_said(&crate::door::duplicate(seq, &fd.name.text, crate::door::BEFORE, crate::door::HERE), &here, &first)
             ));
         }
         (init, step)
@@ -2979,6 +3732,35 @@ impl<'a> Gen<'a> {
         let to = self.py_ty(ty);
         let int = if to == "int" { format!("_int({v})") } else { format!("{to}(_int({v}))") };
         format!("    if _isinstance({v}, _float) and _float({v}).is_integer():\n        {v} = {int}\n")
+    }
+
+    /// The parameters of a function of the Python module that takes the rule's inputs and
+    /// sequences, under the identifiers its body reads them by, and those identifiers, where some
+    /// of them is bound apart from its name (§15.336): None where each is its name.
+    fn py_held_params(&self) -> Option<(Vec<String>, Vec<String>)> {
+        let apart = self.f.inputs.iter().map(|i| &i.name).chain(self.f.elements.iter().map(|el| &el.name)).any(|n| self.held(n) != pub_name(n));
+        if !apart {
+            return None;
+        }
+        let mut params: Vec<String> = self.f.inputs.iter().map(|i| format!("{}: {}", self.held(&i.name), self.py_ty(&self.ty_of(&i.name.text)))).collect();
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| self.held(&i.name)).collect();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: list[{}]", self.held(&el.name), self.element_type(s)));
+            args.push(self.held(&el.name));
+        }
+        Some((params, args))
+    }
+
+    /// The function of its own that a public function `name` of the Python module hands its
+    /// arguments on to (`Gen::py_held_params`): `_` before its name, and after it as many as it
+    /// takes to be no name of the rule's.
+    fn py_inner(&self, name: &str) -> String {
+        let names = value_names(self.f);
+        let mut n = format!("_{name}");
+        while names.iter().any(|(x, _)| x.text == n || pub_name(x) == n) || self.binds.values().any(|b| *b == n) {
+            n.push('_');
+        }
+        n
     }
 
     fn py_fn(&self) -> String {
@@ -3001,26 +3783,36 @@ impl<'a> Gen<'a> {
             "Output".into()
         };
         let mut o = String::new();
+        let named_tuple = self.own("NamedTuple");
 
         // One element is a row of inputs, so it is the same NamedTuple an `Output` is.
         for (s, el) in self.f.elements.iter().enumerate() {
-            o.push_str(&format!("class {}(NamedTuple):\n", self.element_type(s)));
-            o.push_str(&format!("    \"\"\"{}\"\"\"\n\n", tr!("{} の一件", "one of {}", el.name.text)));
-            for fd in &el.fields {
-                o.push_str(&format!(
-                    "    {}: {}\n",
-                    pub_name(&fd.name),
-                    self.py_ty(&self.ty_of(&fd.name.text))
-                ));
+            let fields: Vec<(String, String)> = el.fields.iter().map(|fd| (pub_name(&fd.name), self.py_ty(&self.ty_of(&fd.name.text)))).collect();
+            let doc = tr!("{} の一件", "one of {}", el.name.text);
+            match py_named_apart(&self.element_type(s), &fields, &named_tuple) {
+                Some(t) => o.push_str(&format!("# {doc}\n{t}\n")),
+                None => {
+                    o.push_str(&format!("class {}({named_tuple}):\n", self.element_type(s)));
+                    o.push_str(&format!("    \"\"\"{doc}\"\"\"\n\n"));
+                    for (n, ty) in &fields {
+                        o.push_str(&format!("    {n}: {ty}\n"));
+                    }
+                }
             }
             o.push_str("\n\n");
         }
 
         // Multiple outputs are a NamedTuple (§8.5).
         if outs.len() > 1 {
-            o.push_str("class Output(NamedTuple):\n");
-            for od in outs {
-                o.push_str(&format!("    {}: {}\n", pub_name(&od.name), self.py_ty(&self.ty_of(&od.name.text))));
+            let fields: Vec<(String, String)> = outs.iter().map(|od| (pub_name(&od.name), self.py_ty(&self.ty_of(&od.name.text)))).collect();
+            match py_named_apart("Output", &fields, &named_tuple) {
+                Some(t) => o.push_str(&t),
+                None => {
+                    o.push_str(&format!("class Output({named_tuple}):\n"));
+                    for (n, ty) in &fields {
+                        o.push_str(&format!("    {n}: {ty}\n"));
+                    }
+                }
             }
             o.push('\n');
         }
@@ -3032,26 +3824,43 @@ impl<'a> Gen<'a> {
             args.push(pub_name(&el.name));
         }
         let traced = format!("{fname}_traced");
-        o.push_str(&format!("def {fname}({}) -> {ret}:\n", params.join(", ")));
+        // What the plain function keeps the answer in is none of its parameters (§15.336).
+        let (res, rest) = (free_of("out", &args), free_of("_", &args));
+        o.push_str(&format!("def {}({}) -> {ret}:\n", self.fam(&fname), params.join(", ")));
         o.push_str(&format!("    \"\"\"{}\"\"\"\n", plain_doc(&self.f.name.text, &self.f.version, &traced)));
-        o.push_str(&format!("    out, _ = {traced}({})\n    return out\n\n\n", args.join(", ")));
+        o.push_str(&format!("    {res}, {rest} = {traced}({})\n    return {res}\n\n\n", args.join(", ")));
         o.push_str(&format!("def {traced}({}) -> tuple[{ret}, list[Fired]]:\n", params.join(", ")));
         o.push_str(&format!("    \"\"\"{}\"\"\"\n", traced_doc(&self.f.name.text, &self.f.version)));
+        // Where some input is bound apart from its name inside the functions, the traced function
+        // hands the arguments on to one of its own that takes them under the identifiers the
+        // body reads: a caller still names them as the rule does (§15.336).
+        let (params, args) = match self.py_held_params() {
+            Some((held, held_args)) => {
+                let inner = self.py_inner(&traced);
+                o.push_str(&format!("    return {inner}({})\n\n\n", args.join(", ")));
+                o.push_str(&format!("def {inner}({}) -> tuple[{ret}, list[Fired]]:\n", held.join(", ")));
+                (held, held_args)
+            }
+            None => (params, args),
+        };
         // A rule that picks by weight runs its walk in a function of its own, which gives back the
         // running totals of the weights too: what the function that counts the answers reads
         // (§15.225).
         let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("python"), self.fold_names(i).cuts));
         if let Some((w, _)) = &walked {
-            o.push_str(&format!("    out, trace, _ = {w}({})\n    return out, trace\n\n\n", args.join(", ")));
+            let (a, b, c) = (free_of("out", &args), free_of("trace", &args), free_of("_", &args));
+            o.push_str(&format!("    {a}, {b}, {c} = {w}({})\n    return {a}, {b}\n\n\n", args.join(", ")));
             o.push_str(&format!("def {w}({}) -> tuple[{ret}, list[Fired], list[int]]:\n", params.join(", ")));
             o.push_str(&format!("    \"\"\"{}\"\"\"\n", walked_doc()));
         }
 
         // Entry guards (§8.5). They enforce at runtime what the proof assumes: inputs lie within
-        // their declared domains.
+        // their declared domains. An input with two or more things wrong with it is refused for
+        // the first of them in the order every door looks (§15.328): each input of its kind, then
+        // each element of each sequence, then each input inside its range, then the constraints.
         let local = |n: &str| -> String { self.ident(n) };
         for i in &self.f.inputs {
-            let v = pub_name(&i.name);
+            let v = self.held(&i.name);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value: its
             // range, its step and its type were never looked at, so 2025-01-01 was answered for a
@@ -3061,32 +3870,22 @@ impl<'a> Gen<'a> {
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("    if {v} is not None:\n"), String::new())), "    ");
             match &ty {
                 // The enum by the name the rule declares it under, as every door says it (§15.204).
-                Ty::Enum(n) => {
-                    o.push_str(&format!(
-                        "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
-                        self.py_ty(&ty),
-                        crate::door::not_in_enum(&i.name.text, n)
-                    ));
-                    // The values the range of an ordered enum lets in, first to last (§15.210).
-                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
-                        let r = self.py_rank_fn(n);
-                        o.push_str(&format!(
-                            "    if not {r}({}) <= {r}({v}) <= {r}({}):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
-                            self.py_value(lo, &ty),
-                            self.py_value(hi, &ty),
-                            crate::door::out_of_range(&i.name.text)
-                        ));
-                    }
-                }
+                Ty::Enum(n) => o.push_str(&format!(
+                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
+                    self.py_ty(&ty),
+                    crate::door::not_in_enum(&i.name.text, n)
+                )),
                 // A truth value is `True` or `False` and nothing else (§15.203).
                 Ty::Bool => o.push_str(&format!(
                     "    if not _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                     not_bool(&i.name.text)
                 )),
-                // A date is an ordinal, and its declared range is the universe the
-                // completeness proof used, so it is guarded like any other number. Without
-                // this, a date outside the declared range falls into whichever branch happens
-                // to catch it and the caller gets a silently wrong answer.
+                // A string is a `str` and nothing else (§15.339): a number given for it is equal
+                // to no cell of the table, and fell to another row without a word.
+                Ty::Str => o.push_str(&format!(
+                    "    if not _isinstance({v}, _str):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
+                    crate::door::not_string(&i.name.text)
+                )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     // Not an integer is refused before the range is looked at (§15.43): a
                     // float sits inside any range, and 18.3 for a rate declared in steps of
@@ -3101,6 +3900,43 @@ impl<'a> Gen<'a> {
                         "    if not _isinstance({v}, _int) or _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                         crate::door::not_integer(&i.name.text)
                     ));
+                    // A whole number int64 does not hold, where a reader of the wire refuses it.
+                    if ty != Ty::Date {
+                        o.push_str(&format!(
+                            "    if {}:\n        raise RuleInputError(\"{}\", _repr({v}))\n",
+                            py_past_int64(&v),
+                            crate::door::out_of_range(&i.name.text)
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&self.py_element_kinds());
+        for i in &self.f.inputs {
+            let v = self.held(&i.name);
+            let ty = self.ty_of(&i.name.text);
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = Guarded::new(&mut o, optional.then(|| (format!("    if {v} is not None:\n"), String::new())), "    ");
+            match &ty {
+                // The values the range of an ordered enum lets in, first to last (§15.210).
+                Ty::Enum(n) => {
+                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                        let r = self.py_rank_fn(n);
+                        o.push_str(&format!(
+                            "    if not {r}({}) <= {r}({v}) <= {r}({}):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
+                            self.py_value(lo, &ty),
+                            self.py_value(hi, &ty),
+                            crate::door::out_of_range(&i.name.text)
+                        ));
+                    }
+                }
+                // A date is an ordinal, and its declared range is the universe the
+                // completeness proof used, so it is guarded like any other number. Without
+                // this, a date outside the declared range falls into whichever branch happens
+                // to catch it and the caller gets a silently wrong answer.
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     // Each end the range writes, and nothing past ±(2^63−1) (§15.295). The bounds
                     // are in the units the argument arrives in, which for a rate is the number of
                     // steps. Taking the numerator alone turned `range >=0% <=100%` into
@@ -3216,6 +4052,67 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("    {}: {raw} | None\n", self.ident(&oc.name.text)));
             }
         }
+        // What each row binds each column to.
+        let value = |ri: usize, oi: usize| -> String {
+            let oc = &t.outputs[oi];
+            match t.rows[ri].outs.get(oi) {
+                Some(OutCell::Lit(Lit::Num(n))) => {
+                    let ty = self.ty_of(&oc.name.text);
+                    self.int_lit(n, &ty, self.scale(&oc.name.text))
+                }
+                Some(OutCell::Lit(l)) => match l {
+                    Lit::Word(w) if w == crate::kw::TRUE => "True".into(),
+                    Lit::Word(w) if w == crate::kw::FALSE => "False".into(),
+                    Lit::Word(w) => self.py_value(w, &self.ty_of(&oc.name.text)),
+                    Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                    Lit::Str(x) => str_lit(x),
+                    _ => "0".into(),
+                },
+                Some(OutCell::Name(w)) => {
+                    if w == crate::kw::TRUE {
+                        "True".into()
+                    } else if w == crate::kw::FALSE {
+                        "False".into()
+                    } else if self.is_value(w) {
+                        self.py_value(w, &self.ty_of(&oc.name.text))
+                    } else {
+                        let v = local(w);
+                        match self.rescaled(w, &oc.name.text, v.clone()) {
+                            // A value that may be absent is scaled only when it is there.
+                            r if r != v && matches!(self.ty_of(w), Ty::Opt(_)) => format!("None if {v} is None else {r}"),
+                            r => r,
+                        }
+                    }
+                }
+                Some(OutCell::Nothing) => "None".into(),
+                None => "0".into(),
+            }
+        };
+        let values: Vec<Vec<String>> = (0..t.rows.len()).map(|ri| (0..t.outputs.len()).map(|oi| value(ri, oi)).collect()).collect();
+        // A column of money, a quantity or a rate is read as the whole number it holds whatever its
+        // rows. mypy takes a local's type from its first binding, so a first row handing on a name
+        // as it stands — an input or a field of an element, of the unit's type — made the column
+        // that type, and `price` then `0` failed under --strict where `0` then `price` passed. Such
+        // a column is annotated before its rows; a first row of a whole number, or of a value
+        // brought to another step, is read as one already (§15.329). A column of an enum or a bool
+        // is annotated with its type the same way: where the first row tests the name it hands on,
+        // mypy has narrowed that name to the one value tested (`Literal[Level.CALM]`), and the
+        // column's other values failed (§15.340).
+        for (oi, oc) in t.outputs.iter().enumerate() {
+            let named = match t.rows.first().and_then(|r| r.outs.get(oi)) {
+                Some(OutCell::Name(w)) => w != crate::kw::TRUE && w != crate::kw::FALSE && !self.is_value(w) && values[0][oi] == local(w),
+                _ => false,
+            };
+            let declared = match self.ty_of(&oc.name.text) {
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => Some("int".to_string()),
+                Ty::Enum(n) if self.enum_names.contains_key(&n) => Some(self.py_ty(&Ty::Enum(n))),
+                Ty::Bool => Some("bool".to_string()),
+                _ => None,
+            };
+            if let (true, Some(declared)) = (named, declared) {
+                o.push_str(&format!("    {}: {declared}\n", self.ident(&oc.name.text)));
+            }
+        }
         for (ri, row) in t.rows.iter().enumerate() {
             // §8.1 criterion 1: write out every cell. Conditions already known to be true from
             // earlier branches are not dropped either.
@@ -3238,39 +4135,7 @@ impl<'a> Gen<'a> {
                 .collect();
             o.push_str(&format!("    {kw} {cond}:  # {}\n", self.row_head(t, ri, &cells.join(" | "))));
             for (oi, oc) in t.outputs.iter().enumerate() {
-                let v = match row.outs.get(oi) {
-                    Some(OutCell::Lit(Lit::Num(n))) => {
-                        let ty = self.ty_of(&oc.name.text);
-                        self.int_lit(n, &ty, self.scale(&oc.name.text))
-                    }
-                    Some(OutCell::Lit(l)) => match l {
-                        Lit::Word(w) if w == crate::kw::TRUE => "True".into(),
-                        Lit::Word(w) if w == crate::kw::FALSE => "False".into(),
-                        Lit::Word(w) => self.py_value(w, &self.ty_of(&oc.name.text)),
-                        Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
-                        Lit::Str(x) => str_lit(x),
-                        _ => "0".into(),
-                    },
-                    Some(OutCell::Name(w)) => {
-                        if w == crate::kw::TRUE {
-                            "True".into()
-                        } else if w == crate::kw::FALSE {
-                            "False".into()
-                        } else if self.is_value(w) {
-                            self.py_value(w, &self.ty_of(&oc.name.text))
-                        } else {
-                            let v = local(w);
-                            match self.rescaled(w, &oc.name.text, v.clone()) {
-                                // A value that may be absent is scaled only when it is there.
-                                r if r != v && matches!(self.ty_of(w), Ty::Opt(_)) => format!("None if {v} is None else {r}"),
-                                r => r,
-                            }
-                        }
-                    }
-                    Some(OutCell::Nothing) => "None".into(),
-                    None => "0".into(),
-                };
-                o.push_str(&format!("        {} = {v}\n", self.ident(&oc.name.text)));
+                o.push_str(&format!("        {} = {}\n", self.ident(&oc.name.text), values[ri][oi]));
             }
             let (tn, rn, lbl) = self.fired_of(t, ri);
             if lbl.is_empty() {
@@ -3280,7 +4145,8 @@ impl<'a> Gen<'a> {
             }
         }
         o.push_str(&format!(
-            "    else:\n        raise AssertionError(\"{}\")\n",
+            "    else:\n        raise {}(\"{}\")\n",
+            self.own("AssertionError"),
             tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
         ));
         o.push_str(&self.guards(t, local, Lang::Py, "    ", |name, i, j| {
@@ -3562,14 +4428,77 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The same line in Rust, for the same values: rustc warns of a local nothing reads, and a
+    /// crate built with `-D warnings` stops there. A definition nothing reads is said by nothing
+    /// before here, an output of a rule this one applies and does not read among them (§15.340).
+    fn rs_unread(&self, name: &str) -> String {
+        if self.is_read(name) {
+            String::new()
+        } else {
+            format!("    let _ = {};\n", self.ident(name))
+        }
+    }
+
+    /// The same line in Ruby, which warns under `-w` of a local assigned and never read (§15.340).
+    fn rb_unread(&self, name: &str) -> String {
+        if self.is_read(name) {
+            String::new()
+        } else {
+            format!("    _ = {}\n", self.ident(name))
+        }
+    }
+
+    /// The same line in TypeScript and JavaScript: `tsc --noUnusedLocals` refuses a local nothing
+    /// reads, and `void` reads it (§15.342). `+=` is a read there, as in Ruby, so what a walk adds
+    /// up needs none.
+    fn ts_unread(&self, name: &str) -> String {
+        if self.is_read(name) {
+            String::new()
+        } else {
+            format!("  void {};\n", self.ident(name))
+        }
+    }
+
     /// Whether anything downstream reads a table's output column. A column nothing reads is
     /// still assigned, so that the branch and the row stay 1:1 (§8.2), but Go refuses to
     /// compile a local that is never read. W111 reports the column itself.
     fn is_read(&self, name: &str) -> bool {
+        if self.only_named(name) {
+            return false;
+        }
         if let Some(r) = self.reads_here.borrow().as_ref() {
             return r.contains(name);
         }
         self.c.used.contains(name) || self.f.outputs.iter().any(|o| o.name.text == name)
+    }
+
+    /// Whether `name` is read only as a column of tables that write `-` in every row of it. Such a
+    /// table names the value and tests nothing of it, so the code it is written as never reads it,
+    /// though the check counts the column as a use (W111 does not say it). Go did not compile such
+    /// a rule (§15.340).
+    fn only_named(&self, name: &str) -> bool {
+        if self.f.outputs.iter().any(|o| o.name.text == name) {
+            return false;
+        }
+        let mut named = false;
+        for it in &self.f.items {
+            if let Item::Table(t) = it {
+                if let Some(ci) = t.inputs.iter().position(|(n, _)| n == name) {
+                    if !t.rows.iter().all(|r| matches!(r.cells.get(ci), Some(Cell::DontCare) | None)) {
+                        return false;
+                    }
+                    named = true;
+                }
+                if t.rows.iter().any(|r| r.outs.iter().any(|o| matches!(o, OutCell::Name(w) if w == name))) {
+                    return false;
+                }
+                continue;
+            }
+            if crate::types::item_reads(it).iter().any(|n| n == name) {
+                return false;
+            }
+        }
+        named
     }
 
     /// The names the items and the summaries of one walk read (§15.219).
@@ -3696,7 +4625,15 @@ impl<'a> Gen<'a> {
         // A brand is a defined type (not an alias): the compiler rejects YenInclTax + YenExclTax.
         // In a package of ritsu's, those of money and of the quantities are the package's defined
         // types, under the same names (§15.248).
-        let (own, units) = self.brands();
+        let (mut own, units) = self.brands();
+        // A column a table writes that may be absent is held under the unit's type (`*JPY`): a
+        // rule none of whose inputs, fields and outputs carry the unit declares it (§15.343).
+        for v in self.branded_columns() {
+            let ty = self.ty_of(v).present().clone();
+            if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) && !units.contains_key(&brand_of(&ty)) {
+                own.entry(brand_of(&ty)).or_insert(ty);
+            }
+        }
         for (b, ty) in &own {
             o.push_str(&format!("type {b} int64{CELL}// {ty}\n"));
         }
@@ -3869,29 +4806,34 @@ impl<'a> Gen<'a> {
             let pkg = self.go_qualifier(&module, &dir);
             for (jp, ascii) in types {
                 let Some(vals) = self.c.enums.get(&jp) else { continue };
+                // What the package that owns it calls each name: the same, unless the type is
+                // handed on under another here (§15.326).
+                let theirs = |n: &str| self.theirs("go", &jp, n);
+                let owned = theirs(&ascii);
                 // Where the rule's own functions take the type's name, the package names it by the
                 // package that owns it and declares no alias of it (§15.239).
                 if self.go_owner_of(&jp).is_some() {
                     o.push_str("const (\n");
                 } else {
                     o.push_str(&format!(
-                        "// {ascii} {}\ntype {ascii} = {pkg}.{ascii}\n\nconst (\n",
-                        tr!("は {pkg}.{ascii} の別名で、同じ型。", "is {pkg}.{ascii} under another name: the same type.")
+                        "// {ascii} {}\ntype {ascii} = {pkg}.{owned}\n\nconst (\n",
+                        tr!("は {pkg}.{owned} の別名で、同じ型。", "is {pkg}.{owned} under another name: the same type.")
                     ));
                 }
                 for v in vals {
                     let n = self.go_value(v, &Ty::Enum(jp.clone()));
-                    o.push_str(&format!("\t{n}{CELL}= {pkg}.{n}\n"));
+                    o.push_str(&format!("\t{n}{CELL}= {pkg}.{}\n", theirs(&n)));
                 }
                 o.push_str(")\n\n");
                 // On one line where gofmt keeps it on one: its header and its one statement
                 // within 100 bytes (go/printer's `funcBody`). A longer one gofmt breaks, and so
                 // does this, or `gofmt -l` names the file (§15.222).
-                let (head, stmt) = (format!("func Parse{ascii}(s string) ({}, bool)", self.go_enum_ty(&jp)), format!("return {pkg}.Parse{ascii}(s)"));
+                let parse = theirs(&format!("Parse{ascii}"));
+                let (head, stmt) = (format!("func Parse{ascii}(s string) ({}, bool)", self.go_enum_ty(&jp)), format!("return {pkg}.{parse}(s)"));
                 let body = if head.len() + stmt.len() <= 100 { format!("{head} {{ {stmt} }}") } else { format!("{head} {{\n\t{stmt}\n}}") };
                 o.push_str(&format!(
                     "// Parse{ascii} {}\n{body}\n\n",
-                    tr!("は {pkg}.Parse{ascii} と同じ。", "is {pkg}.Parse{ascii}.")
+                    tr!("は {pkg}.{parse} と同じ。", "is {pkg}.{parse}.")
                 ));
             }
         }
@@ -3945,7 +4887,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The rule's items as Go, at the base indentation (§15.56).
-    fn go_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
+    fn go_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase, zero: &str) -> String {
         let mut o = String::new();
         for (i, it) in self.f.items.iter().enumerate() {
             if !self.in_phase(i, it, phase) {
@@ -3960,6 +4902,14 @@ impl<'a> Gen<'a> {
                 Item::Define(d) => {
                     let e = self.expr(&d.expr, local);
                     o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_typed(&go_expr(&e.text)), tr!("定義", "definition")));
+                    // The range the rule accepts for it, held where it is worked out (§15.313).
+                    let n = self.ident(&d.name.text);
+                    if let Some(test) = self.accepted_ends(d).and_then(|ends| or_out_of(&n, ends, "")) {
+                        o.push_str(&format!(
+                            "\tif {test} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: {}, Value: {n}, HasValue: true}}\n\t}}\n",
+                            go_said(&crate::door::out_of_range(&self.said_name(&d.name.text)), &self.here(), "")
+                        ));
+                    }
                     o.push_str(&self.go_unread(&d.name.text));
                 }
                 Item::Agg(_) | Item::Fold(_) => {}
@@ -3989,7 +4939,7 @@ impl<'a> Gen<'a> {
         for step in self.walk_steps() {
             match step {
                 // What a walk does not depend on is worked out once, before it (§15.208).
-                WalkStep::Once(ix) => o.push_str(&self.go_items(outer, trace, Phase::Only(&ix))),
+                WalkStep::Once(ix) => o.push_str(&self.go_items(outer, trace, Phase::Only(&ix), zero)),
                 WalkStep::Walk { seq, body, sums, .. } => o.push_str(&self.go_walk(seq, &body, &sums, outer, trace, zero)),
             }
         }
@@ -4018,15 +4968,21 @@ impl<'a> Gen<'a> {
             }
         };
         let mut o = String::new();
-        let mut body = self.go_element_guards(s, &local, zero);
+        let index = self.index_var(s);
+        self.walk_begin(s, &index);
+        let mut body = self.go_element_ranges(s, &local, zero);
         let (seen, step) = self.go_unique(s, sums, &local, zero);
         o.push_str(&seen);
         body.push_str(&step);
+        // Past a `stop`, the door alone (§15.328).
+        if let Some(i) = self.walk_goes_past_stop(sums) {
+            body.push_str(&format!("\tif {} {{\n\t\tcontinue\n\t}}\n", self.fold_names(i).done));
+        }
         // Go refuses to compile a local nothing reads, so what the walk's own items bind and no
         // one in the walk reads is said to be read (§15.219).
         let reads = self.walk_reads(body_items, sums);
         *self.reads_here.borrow_mut() = Some(reads);
-        body.push_str(&self.go_items(&local, trace, Phase::Only(body_items)));
+        body.push_str(&self.go_items(&local, trace, Phase::Only(body_items), zero));
         *self.reads_here.borrow_mut() = None;
         let (mut after, mut unread) = (String::new(), String::new());
         for &i in sums {
@@ -4053,6 +5009,14 @@ impl<'a> Gen<'a> {
                             crate::door::out_of_range(&d.name.text)
                         ));
                     }
+                    // The bottom of its range, where a walk can come in under it (§15.314).
+                    if let Some(floor) = self.walk_floor(d) {
+                        let n = self.ident(&d.name.text);
+                        after.push_str(&format!(
+                            "\tif {n} < {floor} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {n}, HasValue: true}}\n\t}}\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
                     unread.push_str(&self.go_unread(&d.name.text));
                 }
                 Item::Fold(fold) => {
@@ -4064,7 +5028,15 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
-        o.push_str(&format!("\tfor _, {e} := range {seq} {{\n"));
+        // The index of the element is bound where a sentence of the walk says it (§15.324): Go
+        // refuses to compile one nothing reads. So it goes with an element no line of the walk
+        // reads, as where each row of its tables tests a field with `-`, which is said to be left
+        // unread on purpose (§15.340).
+        let at = if self.walk_end() { index.as_str() } else { "_" };
+        if !clash::reads_word(&body, &e, clash::Syntax::Script) {
+            body.insert_str(0, &format!("\t_ = {e}\n"));
+        }
+        o.push_str(&format!("\tfor {at}, {e} := range {seq} {{\n"));
         o.push_str(&Self::indent_block(&body, "\t"));
         o.push_str("\t}\n");
         o.push_str(&after);
@@ -4119,8 +5091,10 @@ impl<'a> Gen<'a> {
     /// set" flag.
     fn go_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String, zero: &str) -> (String, String, String) {
         let names = self.fold_names(i);
-        let FoldNames { answer, stopped, done, taken, kept, best, held, key, took, kept_one, best_set, .. } = &names;
+        let FoldNames { answer, stopped, done, taken, kept, best, held, key, took, kept_one, best_set, taken_at_camel: taken_at, .. } = &names;
         let alone = self.fold_alone(i);
+        // Ends the loop at a `stop`: a fold alone in its walk with no door to keep past it (§15.328).
+        let ends = alone && !self.stop_keeps_door(i);
         let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
         let (out_name, out_ty) = self.fold_target(fold);
         let acc_ty = if out_ty.is_numeric() { "int64".to_string() } else { self.go_ty(&out_ty) };
@@ -4143,11 +5117,16 @@ impl<'a> Gen<'a> {
         let mut init = String::new();
         init.push_str(&format!("\tvar {answer} {acc_ty} = {}{CELL}// {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         init.push_str(&format!("\t{stopped} := false\n"));
-        if !alone {
+        if !ends {
             init.push_str(&format!("\t{done} := false\n"));
         }
         if takes {
             init.push_str(&format!("\tvar {taken} {acc_ty} = {acc_zero}\n\t{took} := false\n"));
+        }
+        // The element a `take_unique` took, which the sentence says beside the one that matched
+        // again (§15.324).
+        if fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { unique: true, .. })) {
+            init.push_str(&format!("\t{taken_at} := 0\n"));
         }
         if weighted {
             init.push_str(&format!("\tvar {} int64 = 0{CELL}// {}\n", names.total, tr!("重みの合計", "the running total of the weights")));
@@ -4165,11 +5144,11 @@ impl<'a> Gen<'a> {
             arms.push_str(&format!("\tif {} == {} {{{CELL}// {}\n", v, self.go_value(&name.text, &self.ty_of(&fold.verdict)), name.text));
             match arm {
                 Arm::Next => arms.push_str(&format!("\t\t// {}\n", crate::kw::NEXT)),
-                Arm::Stop(None) if alone => arms.push_str("\t\tbreak\n"),
+                Arm::Stop(None) if ends => arms.push_str("\t\tbreak\n"),
                 Arm::Stop(None) => arms.push_str(&format!("\t\t{done} = true\n")),
                 Arm::Stop(Some(x)) => {
                     arms.push_str(&format!("\t\t{answer} = {}\n", val(x, local)));
-                    if alone {
+                    if ends {
                         arms.push_str(&format!("\t\t{stopped} = true\n\t\tbreak\n"));
                     } else {
                         arms.push_str(&format!("\t\t{stopped} = true\n\t\t{done} = true\n"));
@@ -4177,16 +5156,13 @@ impl<'a> Gen<'a> {
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
+                        let here = self.here_used();
                         arms.push_str(&format!("\t\tif {took} {{\n"));
                         arms.push_str(&format!(
-                            "\t\t\treturn {zero}, nil, &RuleContradictionError{{What: \"{}\"}}\n\t\t}}\n",
-                            tr!(
-                                "畳み込み {}: take_unique に二件当たりました",
-                                "fold {}: two elements matched a take_unique",
-                                fold.verdict
-                            )
+                            "\t\t\treturn {zero}, nil, &RuleContradictionError{{What: {}}}\n\t\t}}\n",
+                            go_said(&crate::door::fold_contradiction(&fold.verdict, &fold.over, crate::door::BEFORE, crate::door::HERE), &here, taken_at)
                         ));
-                        arms.push_str(&format!("\t\t{taken} = {}\n\t\t{took} = true\n", val(expr, local)));
+                        arms.push_str(&format!("\t\t{taken} = {}\n\t\t{took} = true\n\t\t{taken_at} = {here}\n", val(expr, local)));
                     } else {
                         arms.push_str(&format!("\t\tif !{took} {{\n"));
                         arms.push_str(&format!("\t\t\t{taken} = {}\n\t\t\t{took} = true\n\t\t}}\n", val(expr, local)));
@@ -4252,39 +5228,74 @@ impl<'a> Gen<'a> {
         (init, step, fin)
     }
 
-    /// The entry guards of one element, inside the walk: the same checks an input gets, on the
-    /// values the caller filled in for this element.
-    fn go_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String, zero: &str) -> String {
+    /// One field of an element as the door reads it in Go: the value, and where the field is
+    /// optional the lines that read what its pointer points at, under the name of the field.
+    fn go_field(&self, name: &str, v: String) -> (String, Option<(String, String)>) {
+        if matches!(self.ty_of(name), Ty::Opt(_)) {
+            let x = self.ident(name);
+            (x.clone(), Some((format!("\tif {v} != nil {{\n\t\t{x} := *{v}\n"), "\t}\n".to_string())))
+        } else {
+            (v, None)
+        }
+    }
+
+    /// The first look at each element of every sequence, in Go (§15.328): before any input is held
+    /// to its range, each element in turn, and each field of an enum in the order the rule declares
+    /// them, a value of its enum. The other kinds are the kinds of the struct's fields.
+    fn go_element_kinds(&self, zero: &str) -> String {
+        let mut out = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pascal(&pub_name(&fd.name)))).collect();
+            let e = self.elem_var(s);
+            let local = |n: &str| -> String { fields.get(n).map(|f| format!("{e}.{f}")).unwrap_or_else(|| n.to_string()) };
+            let index = self.index_var(s);
+            self.walk_begin(s, &index);
+            let mut o = String::new();
+            let here = self.here();
+            for i in self.element_fields(s) {
+                let Ty::Enum(n) = self.ty_of(&i.name.text).present().clone() else { continue };
+                // The sentences name the field by its place on the element (§15.324).
+                let said = || self.said_name(&i.name.text);
+                let (v, wrap) = self.go_field(&i.name.text, local(&i.name.text));
+                let val = go_i64(&v);
+                let mut o = Guarded::new(&mut o, wrap, "\t");
+                o.push_str(&format!(
+                    "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: {}, Value: {val}, HasValue: true}}\n\t}}\n",
+                    go_said(&crate::door::not_in_enum(&said(), &n), &here, "")
+                ));
+            }
+            let at = if self.walk_end() { index.as_str() } else { "_" };
+            if !o.is_empty() {
+                out.push_str(&format!("\tfor {at}, {e} := range in.{} {{\n", pascal(&pub_name(&el.name))));
+                out.push_str(&Self::indent_block(&o, "\t"));
+                out.push_str("\t}\n");
+            }
+        }
+        out
+    }
+
+    /// The door's look at one element where the walk comes to it (§15.328): each field inside the
+    /// range it declares, in the order the rule declares them.
+    fn go_element_ranges(&self, s: usize, local: &dyn Fn(&str) -> String, zero: &str) -> String {
         let mut o = String::new();
+        let here = self.here();
         for i in self.element_fields(s) {
-            let v = local(&i.name.text);
-            let ty = self.ty_of(&i.name.text);
+            // The sentences name the field by its place on the element (§15.324). Asked for only
+            // where one is written: a walk binds the index only where a sentence reads it.
+            let said = || self.said_name(&i.name.text);
+            let ty = self.ty_of(&i.name.text).present().clone();
+            if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                continue;
+            }
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
-            let optional = matches!(ty, Ty::Opt(_));
-            let ty = ty.present().clone();
-            // A pointer: the guard reads what it points at, under the name of the field.
-            let (v, wrap) = if optional {
-                let x = self.ident(&i.name.text);
-                (x.clone(), Some((format!("\tif {v} != nil {{\n\t\t{x} := *{v}\n"), "\t}\n".to_string())))
-            } else {
-                (v, None)
-            };
+            let (v, wrap) = self.go_field(&i.name.text, local(&i.name.text));
             let val = go_i64(&v);
-            let mut o = Guarded::new(&mut o, wrap, "\t");
-            match &ty {
-                Ty::Enum(n) => o.push_str(&format!(
-                    "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
-                    crate::door::not_in_enum(&i.name.text, n)
-                )),
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
-                    if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
-                        o.push_str(&format!(
-                            "\tif {test} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
-                            crate::door::out_of_range(&i.name.text)
-                        ));
-                    }
-                }
-                _ => {}
+            if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
+                let mut o = Guarded::new(&mut o, wrap, "\t");
+                o.push_str(&format!(
+                    "\tif {test} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: {}, Value: {val}, HasValue: true}}\n\t}}\n",
+                    go_said(&crate::door::out_of_range(&said()), &here, "")
+                ));
             }
         }
         o
@@ -4299,10 +5310,14 @@ impl<'a> Gen<'a> {
         for fd in self.unique_fields(s, sums) {
             let seen = self.temp(&format!("{}Seen", self.ident(&fd.name.text)));
             let v = local(&fd.name.text);
-            init.push_str(&format!("\t{seen} := map[any]bool{{}}\n"));
+            // Where each value was first seen, which the sentence says beside the element it came
+            // round again on (§15.324).
+            let here = self.here_used();
+            let first = self.temp("first");
+            init.push_str(&format!("\t{seen} := map[any]int{{}}\n"));
             step.push_str(&format!(
-                "\tif {seen}[{v}] {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\"}}\n\t}}\n\t{seen}[{v}] = true\n",
-                crate::door::duplicate(seq, &fd.name.text)
+                "\tif {first}, ok := {seen}[{v}]; ok {{\n\t\treturn {zero}, nil, &RuleInputError{{What: {}}}\n\t}}\n\t{seen}[{v}] = {here}\n",
+                go_said(&crate::door::duplicate(seq, &fd.name.text, crate::door::BEFORE, crate::door::HERE), &here, &first)
             ));
         }
         (init, step)
@@ -4429,48 +5444,57 @@ impl<'a> Gen<'a> {
             None => o.push_str(&format!("func {traced}(in Input) ({ret}, []Fired, error) {{\n")),
         }
 
-        for i in &self.f.inputs {
-            let v = local(&i.name.text);
-            let ty = self.ty_of(&i.name.text);
-            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
-            let optional = matches!(ty, Ty::Opt(_));
-            let ty = ty.present().clone();
-            // A pointer: the guard reads what it points at, under the name of the input.
-            let (v, wrap) = if optional {
-                let x = self.ident(&i.name.text);
-                (x.clone(), Some((format!("\tif {v} != nil {{\n\t\t{x} := *{v}\n"), "\t}\n".to_string())))
-            } else {
-                (v, None)
-            };
-            let val = go_i64(&v);
-            let mut o = Guarded::new(&mut o, wrap, "\t");
-            match &ty {
-                Ty::Enum(n) => {
-                    o.push_str(&format!(
+        // An input with two or more things wrong with it is refused for the first of them in the
+        // order every door looks (§15.328): each input of its kind, then each element of each
+        // sequence, then each input inside its range, then the constraints. In Go the kind to look
+        // at is an enum's: the struct holds the rest.
+        for kinds in [true, false] {
+            for i in &self.f.inputs {
+                let v = local(&i.name.text);
+                let ty = self.ty_of(&i.name.text);
+                // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+                let optional = matches!(ty, Ty::Opt(_));
+                let ty = ty.present().clone();
+                // A pointer: the guard reads what it points at, under the name of the input.
+                let (v, wrap) = if optional {
+                    let x = self.ident(&i.name.text);
+                    (x.clone(), Some((format!("\tif {v} != nil {{\n\t\t{x} := *{v}\n"), "\t}\n".to_string())))
+                } else {
+                    (v, None)
+                };
+                let val = go_i64(&v);
+                let mut o = Guarded::new(&mut o, wrap, "\t");
+                match &ty {
+                    Ty::Enum(n) if kinds => o.push_str(&format!(
                         "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
                         crate::door::not_in_enum(&i.name.text, n)
-                    ));
+                    )),
                     // The values the range of an ordered enum lets in, first to last (§15.210).
-                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
-                        o.push_str(&format!(
-                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
-                            self.go_value(lo, &ty),
-                            self.go_value(hi, &ty),
-                            crate::door::out_of_range(&i.name.text)
-                        ));
+                    Ty::Enum(_) => {
+                        if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                            o.push_str(&format!(
+                                "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
+                                self.go_value(lo, &ty),
+                                self.go_value(hi, &ty),
+                                crate::door::out_of_range(&i.name.text)
+                            ));
+                        }
                     }
-                }
-                // Each end the range writes, and −(2^63−1) where it writes no lower one: int64
-                // holds one value below that, and the door refuses it (§15.295).
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
-                    if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
-                        o.push_str(&format!(
-                            "\tif {test} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
-                            crate::door::out_of_range(&i.name.text)
-                        ));
+                    // Each end the range writes, and −(2^63−1) where it writes no lower one: int64
+                    // holds one value below that, and the door refuses it (§15.295).
+                    Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date if !kinds => {
+                        if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
+                            o.push_str(&format!(
+                                "\tif {test} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
+                                crate::door::out_of_range(&i.name.text)
+                            ));
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
+            }
+            if kinds {
+                o.push_str(&self.go_element_kinds(&zero));
             }
         }
 
@@ -4484,7 +5508,7 @@ impl<'a> Gen<'a> {
         if self.f.walks() {
             o.push_str(&self.go_walks(&local, &trace, &zero));
         } else {
-            o.push_str(&self.go_items(&local, &trace, Phase::All));
+            o.push_str(&self.go_items(&local, &trace, Phase::All, &zero));
         }
 
         // Every output takes the same three steps: its source — the `result` expression for
@@ -5250,26 +6274,33 @@ impl<'a> Gen<'a> {
     /// `RuleInputError`, with the sentence every language says. What is left to the module's
     /// door is what it holds a caller to as well: the range, the constraints, the days.
     pub fn py_read(&self, ty: &Ty, src: &str, name: &str) -> String {
+        self.py_read_as(ty, src, name, name)
+    }
+
+    /// [`Gen::py_read`], with the sentences calling the value `said`: for a field of an element
+    /// `lines[\u{1}].amount`, which the reader of the elements puts its index `i` into (§15.324).
+    fn py_read_as(&self, ty: &Ty, src: &str, name: &str, said: &str) -> String {
+        let lit = |x: String| -> String { if names_element(&x) { py_said(&x, "i", "") } else { format!("{x:?}") } };
         let optional = matches!(ty, Ty::Opt(_));
         let take = format!(
-            "_take({src}, {name:?}, {:?}{})",
-            crate::door::missing(name),
+            "_take({src}, {name:?}, {}{})",
+            lit(crate::door::missing(said)),
             if optional { ", True" } else { "" }
         );
         let one = |t: &Ty, v: &str| -> String {
             match t {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                    format!("_enum(m.{cls}, {v}, {:?})", crate::door::not_in_enum(name, n))
+                    format!("_enum(m.{cls}, {v}, {})", lit(crate::door::not_in_enum(said, n)))
                 }
-                Ty::Bool => format!("_bool({v}, {:?})", crate::door::not_bool(name)),
-                Ty::Date => format!("_date({v}, {:?})", crate::door::not_date(name)),
-                Ty::Str => format!("_str({v}, {:?})", crate::door::not_string(name)),
+                Ty::Bool => format!("_bool({v}, {})", lit(crate::door::not_bool(said))),
+                Ty::Date => format!("_date({v}, {})", lit(crate::door::not_date(said))),
+                Ty::Str => format!("_str({v}, {})", lit(crate::door::not_string(said))),
                 // A branded input has to be constructed, exactly as a caller must.
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
-                    format!("m.{}(_int({v}, {:?}))", brand_of(t), crate::door::not_integer(name))
+                    format!("m.{}(_int({v}, {}, {}))", brand_of(t), lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said)))
                 }
-                _ => format!("_int({v}, {:?})", crate::door::not_integer(name)),
+                _ => format!("_int({v}, {}, {})", lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said))),
             }
         };
         match ty {
@@ -5280,16 +6311,21 @@ impl<'a> Gen<'a> {
     }
 
     /// The elements of the sequence a walk reads, read the way one call's inputs are (§15.56,
-    /// §15.204): the sequence an array, each element an object, each field as an input.
+    /// §15.204): the sequence an array, each element an object, each field as an input. A sentence
+    /// about an element names it by its index `i` (§15.324).
     pub fn py_read_elements(&self, s: usize) -> String {
         let el = &self.f.elements[s];
         let seq = &el.name.text;
-        let e = format!("_obj(e, {:?})", crate::door::not_object(seq));
-        let fields: Vec<String> = el.fields.iter().map(|fd| self.py_read(&self.ty_of(&fd.name.text), &e, &fd.name.text)).collect();
+        let e = format!("_obj(e, {})", py_said(&crate::door::not_object(seq, crate::door::HERE), "i", ""));
+        let fields: Vec<String> = el
+            .fields
+            .iter()
+            .map(|fd| self.py_read_as(&self.ty_of(&fd.name.text), &e, &fd.name.text, &crate::door::element(seq, crate::door::HERE, &fd.name.text)))
+            .collect();
         // `m.Element(x)` is a call, not a tuple: the trailing comma a one-element tuple needs
         // would only make the formatter explode the line (§15.105).
         format!(
-            "[m.{}({}) for e in _seq(_take(d, {seq:?}, {:?}), {:?})]",
+            "[m.{}({}) for i, e in enumerate(_seq(_take(d, {seq:?}, {:?}), {:?}))]",
             self.element_type(s),
             fields.join(", "),
             crate::door::missing(seq),
@@ -5297,23 +6333,42 @@ impl<'a> Gen<'a> {
         )
     }
 
-    pub fn python_runner(&self) -> String {
-        let alias = pub_name(&self.f.name);
-        let mut args: Vec<String> = Vec::new();
-        for i in &self.f.inputs {
-            let ty = self.ty_of(&i.name.text);
-            args.push(self.py_read(&ty, "d", &i.name.text));
+    /// The arguments of one call as a Python runner reads them off the wire, in the order the
+    /// function takes them, which is the order every reader takes them in (§15.328): the inputs
+    /// `ins`, read where they stand; then each sequence a walk reads, built the same way one element
+    /// at a time (§15.56), under a name of its own (§15.219). The lines that read them before the
+    /// call, at `indent`, and what the tuple of the arguments is made of.
+    pub(crate) fn py_call(&self, ins: &[String], indent: &str) -> (String, Vec<String>) {
+        if self.f.elements.is_empty() {
+            return (String::new(), ins.to_vec());
         }
-        // The sequences a walk reads are built the same way, one element at a time (§15.56), each
-        // under a name of its own (§15.219).
         let mut prelude = String::new();
+        let mut args: Vec<String> = Vec::new();
+        if !ins.is_empty() {
+            let tuple = if ins.len() == 1 { format!("{},", ins[0]) } else { ins.join(", ") };
+            prelude.push_str(&format!("{indent}ins = ({tuple})\n"));
+            args.push("*ins".to_string());
+        }
         for s in 0..self.f.elements.len() {
             let rows = if s == 0 { "rows".to_string() } else { format!("rows{}", s + 1) };
-            prelude.push_str(&format!("        {rows} = {}\n", self.py_read_elements(s)));
+            prelude.push_str(&format!("{indent}{rows} = {}\n", self.py_read_elements(s)));
             args.push(rows);
         }
+        (prelude, args)
+    }
+
+    pub fn python_runner(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let mut ins: Vec<String> = Vec::new();
+        for i in &self.f.inputs {
+            let ty = self.ty_of(&i.name.text);
+            ins.push(self.py_read(&ty, "d", &i.name.text));
+        }
         // `--chances` reads a line's inputs as the vectors are read (§15.225).
-        let chances = self.py_chances_mode(&args, &prelude);
+        let chances = {
+            let (prelude, args) = self.py_call(&ins, "        ");
+            self.py_chances_mode(&args, &prelude)
+        };
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is, not read back off the wire.
         let machine = self.machine_consts().zip(self.carried()).zip(self.carried_out_alias());
@@ -5321,7 +6376,7 @@ impl<'a> Gen<'a> {
         if let Some((((en, _, _), (cin, _)), out)) = machine {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
-                args[k] = format!("(state if \"step\" in v else {})", args[k]);
+                ins[k] = format!("(state if \"step\" in v else {})", ins[k]);
             }
             // The values carried along with the state (§15.217): each held as the module's own
             // value from one call to the next, read off the trace's first line where it starts.
@@ -5330,7 +6385,7 @@ impl<'a> Gen<'a> {
             for mc in &more {
                 let local = format!("carried_{}", mc.in_alias);
                 if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == mc.input) {
-                    args[k] = format!("({local} if \"step\" in v else {})", args[k]);
+                    ins[k] = format!("({local} if \"step\" in v else {})", ins[k]);
                 }
                 let ty = match mc.kind() {
                     MoreKind::Enum | MoreKind::Branded => format!("m.{}", self.py_ty(&mc.ty)),
@@ -5361,14 +6416,24 @@ impl<'a> Gen<'a> {
         let (owners, labels) = self.py_labels_mode();
         // And with `--prerequisites`, what each block's functions answer (§15.222).
         let labels = labels + &self.py_prereq_mode() + &chances;
+        // The rule's module, by its name; or as a module of the package this directory makes,
+        // where the module goes inside a package (§15.327).
+        let package = self.py_reads_as_package();
+        let only = |line: &'static str| if package { line } else { "" };
+        let (importlib, os, types) = (only("import importlib\n"), only("import os\n"), only("import types\n"));
+        let module = if package { py_package_lines() } else { String::new() } + &self.py_read_module(&alias, "m");
+        let (prelude, args) = self.py_call(&ins, "        ");
         format!(
             "# Code generated by rulec {}. DO NOT EDIT.\n\
              import datetime\n\
              import enum\n\
+             {importlib}\
              import json\n\
+             {os}\
              import sys\n\
+             {types}\
              from typing import Any, Callable, TypeVar\n\n\
-             import {alias} as m\n\
+             {module}\
              {owners}\n\
              {}\
              {labels}\
@@ -5422,11 +6487,32 @@ impl<'a> Gen<'a> {
             arms.push_str(&format!("        {kw} en == {}:\n            print({m}.{}({m}.{ty}(v)))\n", str_lit(en), self.py_label_fn(en)));
         }
         (
-            owners.iter().map(|o| format!("import {o}\n")).collect(),
+            owners.iter().map(|o| self.py_read_module(o, o)).collect(),
             format!(
                 "if \"--labels\" in sys.argv[1:]:\n    for line in sys.stdin:\n        en, v = line.rstrip(\"\\n\").split(\"\\t\")\n{arms}    sys.exit(0)\n\n"
             ),
         )
+    }
+
+    /// Whether the Python beside the rule's module (the runner, the MCP server) reads the module as
+    /// a module of the package its directory makes (§15.327): where the module goes inside a
+    /// package (`--python-package`) and reads the modules of `enums` files by relative imports,
+    /// which a module read by its name at the top of a directory cannot do. A module that reads no
+    /// `enums` file is the same either way, and is read by its name.
+    pub(crate) fn py_reads_as_package(&self) -> bool {
+        self.python_package && !self.foreign_owners().is_empty()
+    }
+
+    /// The line that reads the module `module` beside this one as `name`: by its name, or from the
+    /// package of [`py_package_lines`] (§15.327).
+    pub(crate) fn py_read_module(&self, module: &str, name: &str) -> String {
+        if self.py_reads_as_package() {
+            format!("{name} = importlib.import_module(\"{PY_PACKAGE}.{module}\")\n")
+        } else if module == name {
+            format!("import {module}\n")
+        } else {
+            format!("import {module} as {name}\n")
+        }
     }
 
     /// A Go runner that does the same. encoding/json is in the standard library. An input is
@@ -5439,24 +6525,27 @@ impl<'a> Gen<'a> {
         let fname = pascal(&alias);
         // One field of a JSON object into one field of a struct. The element loop below reads
         // the same shapes out of its own object, so the two stay one piece of code.
-        let field = |name: &crate::ast::Name, ty: &Ty, into: &str, src: &str, ind: &str| -> String {
+        // `said` is what the sentences call the value: the name, or for a field of an element its
+        // place, `lines[\u{1}].amount`, which takes the index `i` of the element (§15.324).
+        let field = |name: &crate::ast::Name, said: &str, ty: &Ty, into: &str, src: &str, ind: &str| -> String {
             let jp = &name.text;
+            let lit = |x: String| -> String { go_said_with(&x, "i", "", &|p| format!("{p:?}")) };
             let g = pascal(&pub_name(name));
             let optional = matches!(ty, Ty::Opt(_));
-            let take = format!("take({src}, {jp:?}, {:?}, {optional})", crate::door::missing(jp));
+            let take = format!("take({src}, {jp:?}, {}, {optional})", lit(crate::door::missing(said)));
             let one = |v: &str| -> String {
                 match ty.present() {
                     Ty::Enum(n) => {
                         let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                        format!("member(r.Parse{cls}, {v}, {:?})", crate::door::not_in_enum(jp, n))
+                        format!("member(r.Parse{cls}, {v}, {})", lit(crate::door::not_in_enum(said, n)))
                     }
-                    Ty::Bool => format!("boolean({v}, {:?})", crate::door::not_bool(jp)),
-                    Ty::Date => format!("date({v}, {:?})", crate::door::not_date(jp)),
-                    Ty::Str => format!("text({v}, {:?})", crate::door::not_string(jp)),
+                    Ty::Bool => format!("boolean({v}, {})", lit(crate::door::not_bool(said))),
+                    Ty::Date => format!("date({v}, {})", lit(crate::door::not_date(said))),
+                    Ty::Str => format!("text({v}, {})", lit(crate::door::not_string(said))),
                     // A number is a plain int64, not a type the package declares, so it must
                     // not be qualified with the package name.
-                    Ty::Number => format!("integer({v}, {:?}, {:?})", crate::door::not_integer(jp), crate::door::out_of_range(jp)),
-                    other => format!("r.{}(integer({v}, {:?}, {:?}))", self.go_ty(other), crate::door::not_integer(jp), crate::door::out_of_range(jp)),
+                    Ty::Number => format!("integer({v}, {}, {})", lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said))),
+                    other => format!("r.{}(integer({v}, {}, {}))", self.go_ty(other), lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said))),
                 }
             };
             if optional {
@@ -5471,7 +6560,7 @@ impl<'a> Gen<'a> {
         // The values carried along with the state (§15.217), each in a local of its own.
         let more = if self.machine_consts().is_some() { self.more_carried() } else { Vec::new() };
         for i in &self.f.inputs {
-            let one = field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t\t");
+            let one = field(&i.name, &i.name.text, &self.ty_of(&i.name.text), "in", "d", "\t\t\t\t");
             // A machine's traces (§15.148): the carried input is the state this language
             // answered to the call before, handed over as the value it is.
             if carried.as_deref() == Some(i.name.text.as_str()) {
@@ -5481,22 +6570,23 @@ impl<'a> Gen<'a> {
                 let g = pascal(&pub_name(&i.name));
                 fields.push(format!("\t\t\tif stepping {{\n\t\t\t\tin.{g} = carried{}\n\t\t\t}} else {{\n{one}\t\t\t}}\n", pascal(&mc.in_alias)));
             } else {
-                fields.push(field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t"));
+                fields.push(field(&i.name, &i.name.text, &self.ty_of(&i.name.text), "in", "d", "\t\t\t"));
             }
         }
         // A sequence arrives as an array of objects (§10.2), one per element; each its own (§15.219).
         for (s, el) in self.f.elements.iter().enumerate() {
             let jp = &el.name.text;
             let g = pascal(&pub_name(&el.name));
+            // A sentence about an element names it by its index `i` (§15.324).
             let mut body = format!(
-                "\t\t\tfor _, ev := range list(take(d, {jp:?}, {:?}, false), {:?}) {{\n\t\t\t\te := object(ev, {:?})\n\t\t\t\tvar el r.{}\n",
+                "\t\t\tfor i, ev := range list(take(d, {jp:?}, {:?}, false), {:?}) {{\n\t\t\t\te := object(ev, {})\n\t\t\t\tvar el r.{}\n",
                 crate::door::missing(jp),
                 crate::door::not_sequence(jp),
-                crate::door::not_object(jp),
+                go_said_with(&crate::door::not_object(jp, crate::door::HERE), "i", "", &|p| format!("{p:?}")),
                 self.element_type(s)
             );
             for fd in &el.fields {
-                body.push_str(&field(&fd.name, &self.ty_of(&fd.name.text), "el", "e", "\t\t\t\t"));
+                body.push_str(&field(&fd.name, &crate::door::element(jp, crate::door::HERE, &fd.name.text), &self.ty_of(&fd.name.text), "el", "e", "\t\t\t\t"));
             }
             body.push_str(&format!("\t\t\t\tin.{g} = append(in.{g}, el)\n\t\t\t}}\n"));
             fields.push(body);
@@ -5507,15 +6597,19 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t"))
+            .map(|i| field(&i.name, &i.name.text, &self.ty_of(&i.name.text), "in", "d", "\t\t\t"))
             .chain(fields[self.f.inputs.len()..].iter().cloned())
             .collect();
+        // A rule that reads no input reads nothing out of the record's `in`, which Go does not let
+        // stand unread (§15.330).
+        let unread = if self.f.inputs.is_empty() && self.f.elements.is_empty() { "_ = rec.In" } else { "d := rec.In" };
         let (mut head, mut read, mut tail) = (
             String::new(),
-            "\t\tvar rec struct {\n\t\t\tIn map[string]any `json:\"in\"`\n\t\t}\n\t\t\
-             if err := decode(sc.Bytes(), &rec); err != nil {\n\t\t\tpanic(err)\n\t\t}\n\t\t\
-             d := rec.In\n"
-                .to_string(),
+            format!(
+                "\t\tvar rec struct {{\n\t\t\tIn map[string]any `json:\"in\"`\n\t\t}}\n\t\t\
+                 if err := decode(sc.Bytes(), &rec); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
+                 {unread}\n"
+            ),
             String::new(),
         );
         if let (Some((en, _, _)), Some(out)) = (self.machine_consts(), self.carried_out_alias()) {
@@ -5538,7 +6632,7 @@ impl<'a> Gen<'a> {
                 };
                 more_meta.push(format!("\"{key}:\" + {shown}"));
                 let decl = crate::ast::Name { text: mc.input.clone(), ascii: Some(mc.in_alias.clone()), span: crate::diag::Span::new(0, 0, 0) };
-                let one = field(&decl, &mc.ty, "start", "cv", "\t\t\t\t");
+                let one = field(&decl, &mc.input, &mc.ty, "start", "cv", "\t\t\t\t");
                 more_start.push_str(&format!("\t\t\t{{\n\t\t\t\tvar start r.Input\n{one}\t\t\t\t{local} = start.{}\n\t\t\t}}\n", pascal(&mc.in_alias)));
                 more_tail.push_str(&format!("\t\t\t\t{local} = got.{}\n", pascal(&mc.out_alias)));
             }
@@ -5680,6 +6774,24 @@ fn bigint_literals(s: &str) -> String {
     }
     out
 }
+
+/// The TypeScript parser of the enum `ascii`: a string that is one of its values is that value, and
+/// any other is refused with `error`, `RuleInputError` in a rule's module (§15.212, §15.319).
+fn ts_parser(ascii: &str, error: &str) -> String {
+    format!(
+        "export function parse{ascii}(s: string): {ascii} {{\n  \
+         const v = Object.values({ascii}).find((x) => x === s);\n  \
+         if (v === undefined) {{\n    \
+         throw new {error}(`{}`);\n  }}\n  \
+         return v;\n}}\n\n",
+        tr!("${{s}} は列挙 {ascii} の値ではありません", "${{s}} is not a value of enum {ascii}")
+    )
+}
+
+/// The helpers of the TypeScript module that are written only where the module calls them
+/// (§15.342): the two comparisons and the five modes of [`round_ts`], and the date of a record.
+/// `tsc --noUnusedLocals` refuses a function nothing reads.
+const TS_CALLED: &[&str] = &["_min", "_max", "_roundDown", "_roundUp", "_roundHalf", "_roundHalfDown", "_roundBankers", "_civil"];
 
 /// The five modes of §7.3 on `bigint`. `/` on a bigint truncates toward zero, the same as
 /// Go's integer division, so these mirror the Go helpers rather than the Python ones.
@@ -5918,6 +7030,209 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// A value of an enum or a truth value as the code writes it, which is how the values a local
+    /// holds are told apart below.
+    fn ts_key(&self, w: &str, ty: &Ty) -> String {
+        if w == crate::kw::TRUE {
+            "true".into()
+        } else if w == crate::kw::FALSE {
+            "false".into()
+        } else {
+            self.ts_value(w, ty)
+        }
+    }
+
+    /// The values a local of an enum or a truth value holds as `tsc` reads the code (§15.342).
+    /// `tsc` narrows a local of a union type to the values it was given, and refuses a `===` with
+    /// a value outside them (TS2367). A table's column holds what its rows write (`null` for
+    /// `none`, and what a local a row hands on holds); a value worked out as another local, what
+    /// that one holds; a fold's answer, what its arms, its `empty` and its `exhausted` give, where
+    /// the verdict an arm hands on holds that arm's value; a `max` or a `min`, its `empty` and
+    /// what the column it reads holds, which a `where` that tests that column for a value narrows
+    /// to that value. None where one of them is a value read as its whole type (an input, or what
+    /// an expression works out), and for every other local, which holds its whole type.
+    fn ts_narrowed(&self, name: &str) -> Option<std::collections::BTreeSet<String>> {
+        self.ts_narrowed_in(name, 0)
+    }
+
+    /// `ts_narrowed`, `depth` locals into what hands a value on to another.
+    fn ts_narrowed_in(&self, name: &str, depth: usize) -> Option<std::collections::BTreeSet<String>> {
+        use std::collections::BTreeSet;
+        let ty = self.ty_of(name);
+        if !matches!(ty.present(), Ty::Enum(_) | Ty::Bool) || depth > 64 {
+            return None;
+        }
+        let value = |w: &str| (w == crate::kw::TRUE || w == crate::kw::FALSE || self.is_value(w)).then(|| self.ts_key(w, &ty));
+        // What a value written, or a local read, holds.
+        let holds = |w: &str| value(w).map(|k| BTreeSet::from([k])).or_else(|| self.ts_narrowed_in(w, depth + 1));
+        for (i, it) in self.f.items.iter().enumerate() {
+            match it {
+                Item::Table(t) => {
+                    let Some(t) = self.c.table_at(t) else { continue };
+                    let Some(oi) = t.outputs.iter().position(|oc| oc.name.text == name) else { continue };
+                    let mut s = BTreeSet::new();
+                    for row in &t.rows {
+                        match row.outs.get(oi)? {
+                            OutCell::Nothing => {
+                                s.insert("null".to_string());
+                            }
+                            OutCell::Lit(Lit::Word(w)) | OutCell::Name(w) => s.extend(holds(w)?),
+                            _ => return None,
+                        }
+                    }
+                    return Some(s);
+                }
+                Item::Derived(crate::ast::DerivedDecl { name: n, expr, .. }) | Item::Define(crate::ast::DefineDecl { name: n, expr, .. })
+                    if n.text == name =>
+                {
+                    return match expr {
+                        Expr::Name(other, _) => self.ts_narrowed_in(other, depth + 1),
+                        _ => None,
+                    };
+                }
+                Item::Agg(d) if d.name.text == name && d.kind.extreme() => {
+                    let column = self.ts_narrowed_in(&d.column.text, depth + 1);
+                    // A `where` that tests the column it reads for a value narrows the column to that
+                    // value where it is read, unless the test reads it as its whole type.
+                    let read = match &d.filter {
+                        Some((w, Some(want))) if w.text == d.column.text => {
+                            let k = self.ts_key(&want.text, &self.ty_of(&w.text));
+                            if Self::ts_refuses(column.as_ref(), &k) {
+                                column
+                            } else {
+                                Some(match column {
+                                    Some(c) => c.into_iter().filter(|v| *v == k).collect(),
+                                    None => BTreeSet::from([k]),
+                                })
+                            }
+                        }
+                        _ => column,
+                    };
+                    let mut s = read?;
+                    s.insert(value(&self.extreme_empty_word(d)?)?);
+                    return Some(s);
+                }
+                Item::Fold(fold) if self.fold_target(fold).0 == name => {
+                    let ends = self.fold_alone(i) && !self.stop_keeps_door(i);
+                    let vty = self.ty_of(&fold.verdict);
+                    // What an answer holds. Inside the arm for a value (`arm`: that value, and what
+                    // the verdict holds at that arm), the verdict holds that value, unless the arm
+                    // reads it as its whole type.
+                    let answers = |x: &Expr, arm: Option<(&String, &Option<BTreeSet<String>>)>| -> Option<BTreeSet<String>> {
+                        match (x, arm) {
+                            (Expr::Name(n, _), Some((k, at))) if *n == fold.verdict => {
+                                if Self::ts_refuses(at.as_ref(), k) {
+                                    at.clone()
+                                } else {
+                                    Some(match at {
+                                        Some(s) => s.iter().filter(|v| *v == k).cloned().collect(),
+                                        None => BTreeSet::from([k.clone()]),
+                                    })
+                                }
+                            }
+                            (Expr::Lit(Lit::Word(w), _) | Expr::Name(w, _), _) => holds(w),
+                            _ => None,
+                        }
+                    };
+                    let mut s = answers(fold.empty.as_ref()?, None)?;
+                    // What the arms take or keep, which only `held` hands on.
+                    let mut taken = Some(BTreeSet::new());
+                    // What the verdict holds at each arm, as the arms test it (`ts_fold`).
+                    let mut at = self.ts_narrowed_in(&fold.verdict, depth + 1);
+                    for (arm_name, arm, _) in &fold.arms {
+                        let k = self.ts_key(&arm_name.text, &vty);
+                        match arm {
+                            Arm::Stop(Some(x)) => s.extend(answers(x, Some((&k, &at)))?),
+                            Arm::Take { expr, .. } | Arm::KeepMax { expr, .. } | Arm::TakeWeighted { expr, .. } => {
+                                let got = answers(expr, Some((&k, &at)));
+                                taken = taken.zip(got).map(|(mut t, g)| {
+                                    t.extend(g);
+                                    t
+                                });
+                            }
+                            _ => {}
+                        }
+                        if ends && matches!(arm, Arm::Stop(_)) {
+                            if let Some(a) = at.as_mut() {
+                                a.remove(&k);
+                            }
+                        }
+                    }
+                    match fold.exhausted.as_ref()? {
+                        // What is held: what the arms took or kept, or else the `empty` answer.
+                        Expr::Name(n, _) if n == crate::kw::HELD => s.extend(taken?),
+                        x => s.extend(answers(x, None)?),
+                    }
+                    return Some(s);
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// Whether `tsc` refuses a `===` of a local that holds `narrowed` with `key` (TS2367): it
+    /// holds a value, and not that one. A local that holds nothing, or only `null`, compares with
+    /// any value.
+    fn ts_refuses(narrowed: Option<&std::collections::BTreeSet<String>>, key: &str) -> bool {
+        narrowed.is_some_and(|s| s.iter().any(|v| v != "null") && !s.contains(key))
+    }
+
+    /// The value a cell of a table tests its column for with `===`, if it tests one so: a value of
+    /// an enum, `true` or `false` of a truth value that may be absent, and `null` for `none`.
+    fn ts_took(&self, cell: &Cell, col: &str) -> Option<String> {
+        let ty = self.ty_of(col);
+        match cell {
+            Cell::Nothing => Some("null".into()),
+            Cell::Lit(Lit::Word(w)) if !self.c.groups.contains_key(w) => match ty.present() {
+                Ty::Enum(_) => Some(self.ts_key(w, &ty)),
+                Ty::Bool if matches!(ty, Ty::Opt(_)) => Some(self.ts_key(w, &ty)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// The local a cell tests, as the code names it there (§15.342). Where the local never holds
+    /// the value the cell tests it for, which a table that another rule's apply brings in can ask
+    /// (its rows are the other rule's), `tsc --strict` refuses the comparison (TS2367); the local
+    /// is read there as its whole type, which the JavaScript leaves out with the other types.
+    fn ts_compared(&self, cell: &Cell, col: &str, var: &str, narrowed: Option<&std::collections::BTreeSet<String>>) -> String {
+        match self.ts_took(cell, col) {
+            Some(key) if Self::ts_refuses(narrowed, &key) => format!("({var} as {})", self.ts_ty(&self.ty_of(col))),
+            _ => var.to_string(),
+        }
+    }
+
+    /// The text of an expression with each `=` of two locals that never hold the same value read
+    /// as the type of the first (§15.342): `tsc --strict` refuses `lift == floor` where `lift` was
+    /// only ever given silver or gold and `floor` only basic (TS2367).
+    fn ts_meeting(&self, x: &Expr, mut text: String, local: &dyn Fn(&str) -> String) -> String {
+        fn pairs<'e>(x: &'e Expr, out: &mut Vec<(&'e str, &'e str)>) {
+            match x {
+                Expr::Bin(a, op, b, _) => {
+                    if let (BinOp::Eq, Expr::Name(a, _), Expr::Name(b, _)) = (op, a.as_ref(), b.as_ref()) {
+                        out.push((a, b));
+                    }
+                    pairs(a, out);
+                    pairs(b, out);
+                }
+                Expr::Call(_, args, _) => args.iter().for_each(|a| pairs(a, out)),
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        pairs(x, &mut found);
+        for (a, b) in found {
+            let (Some(sa), Some(sb)) = (self.ts_narrowed(a), self.ts_narrowed(b)) else { continue };
+            if sa.iter().any(|v| v != "null") && sb.iter().any(|v| v != "null") && sa.is_disjoint(&sb) {
+                let (la, lb) = (local(a), local(b));
+                text = text.replace(&format!("({la} == {lb})"), &format!("(({la} as {}) == {lb})", self.ts_ty(&self.ty_of(a))));
+            }
+        }
+        text
+    }
+
     /// Render a cell as a TypeScript condition. A don't-care yields None (no condition).
     fn ts_cell(&self, cell: &Cell, var: &str, ty: &Ty, col_scale: i128) -> Option<String> {
         let inner = match ty {
@@ -5971,7 +7286,7 @@ impl<'a> Gen<'a> {
                 .collect::<Vec<_>>()
                 .join(" || "),
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
-                format!("_{}.has({var})", self.ident(w))
+                format!("{}.has({var})", self.ts_group(w))
             }
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE && present => format!("{var} === true"),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE && present => format!("{var} === false"),
@@ -5983,7 +7298,7 @@ impl<'a> Gen<'a> {
             Cell::Set(ls) => format!("{}.includes({var})", widened(members(ls))),
             Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
                 let Lit::Word(w) = &ls[0] else { unreachable!() };
-                format!("!_{}.has({var})", self.ident(w))
+                format!("!{}.has({var})", self.ts_group(w))
             }
             Cell::Not(ls) => format!("!{}.includes({var})", widened(members(ls))),
             Cell::Cmp(cs) => {
@@ -6019,6 +7334,10 @@ impl<'a> Gen<'a> {
     }
 
     pub fn typescript(&self) -> String {
+        self.apart_text(clash::Syntax::Script, |g| g.typescript_text())
+    }
+
+    fn typescript_text(&self) -> String {
         let mut o = self.header("//");
         o.push('\n');
 
@@ -6080,11 +7399,7 @@ impl<'a> Gen<'a> {
 
         for g in &self.f.groups {
             let ms: Vec<String> = g.members.iter().map(|m| self.ts_value(&m.text, &self.group_ty(&g.name.text))).collect();
-            o.push_str(&format!(
-                "const _{}: ReadonlySet<string> = new Set([{}]);\n",
-                self.ident(&g.name.text),
-                ms.join(", ")
-            ));
+            o.push_str(&format!("const {}: ReadonlySet<string> = new Set([{}]);\n", self.ts_group(&g.name.text), ms.join(", ")));
         }
         if !self.f.groups.is_empty() {
             o.push('\n');
@@ -6102,7 +7417,21 @@ impl<'a> Gen<'a> {
             o.push('\n');
             o.push_str(&self.ts_chances());
         }
+        let o = self.ts_called(o);
         self.ts_imports(o)
+    }
+
+    /// The module without the helpers of [`TS_CALLED`] it does not call (§15.342). Where the
+    /// rule's function has the name of one, only the module written with the marks tells a call of
+    /// the one from a call of the other (§15.336), and the module written without them leaves out
+    /// what that one leaves out: the second writing is the first with the marks in it.
+    fn ts_called(&self, text: String) -> String {
+        if !self.marks && TS_CALLED.contains(&pub_name(&self.f.name).as_str()) {
+            let marked = self.marked().typescript_text();
+            let gone: Vec<&str> = TS_CALLED.iter().copied().filter(|h| !from::ts_declares(&marked, h)).collect();
+            return from::ts_without(&text, &gone);
+        }
+        from::ts_without_unread(&text, TS_CALLED)
     }
 
     /// The frozen objects and union types of the enums this module declares, each with its
@@ -6122,15 +7451,17 @@ impl<'a> Gen<'a> {
             // A file of enums has no door of its own, and so no `RuleInputError`: what it refuses
             // is the language's own error for a value outside a range (§15.212).
             let error = if self.f.kind == FileKind::Enums { "RangeError" } else { "RuleInputError" };
-            o.push_str(&format!(
-                "export function parse{ascii}(s: string): {ascii} {{\n  \
-                 const v = Object.values({ascii}).find((x) => x === s);\n  \
-                 if (v === undefined) {{\n    \
-                 throw new {error}(`{}`);\n  }}\n  \
-                 return v;\n}}\n\n",
-                tr!("${{s}} は列挙 {ascii} の値ではありません", "${{s}} is not a value of enum {ascii}")
-            ));
+            o.push_str(&ts_parser(&ascii, error));
             o.push_str(&self.ts_enum_fns(&jp, &ascii));
+        }
+        // An enum of an `enums` file is that file's module's, imported at the top (§15.212). Its
+        // parser is the rule's as well, as one of the rule's own enums has (§15.319): what imports
+        // the rule's module finds the same names for both, and a value outside the enum is the
+        // rule's `RuleInputError` there.
+        for (_, _, types) in self.foreign_owners() {
+            for (_, ascii) in types {
+                o.push_str(&ts_parser(&ascii, "RuleInputError"));
+            }
         }
         o
     }
@@ -6151,6 +7482,10 @@ impl<'a> Gen<'a> {
         let Some(vals) = self.c.enums.get(jp) else { return String::new() };
         let mut o = String::new();
         let chain = |o: &mut String, ret: &dyn Fn(usize, &String) -> String| {
+            // Over an enum of one value, the answer does not look at `x` (§15.342).
+            if vals.len() == 1 {
+                o.push_str("  void x;\n");
+            }
             for (i, v) in vals.iter().enumerate() {
                 if i + 1 == vals.len() {
                     o.push_str(&format!("  return {};\n}}\n\n", ret(i, v)));
@@ -6198,8 +7533,10 @@ impl<'a> Gen<'a> {
     }
 
     /// The module with the import of what it uses of each `enums` file it reads from, after its
-    /// head (§15.212). The types are exported again, so that what imports this rule's module
-    /// finds them where it found the rule's own enums.
+    /// head (§15.212). What the module has of each such enum is exported again, so that what
+    /// imports this rule's module finds it where it finds what the rule's own enums have
+    /// (§15.319): the type, and the functions of its order and its display names. The parser is
+    /// the module's own (`ts_enums`).
     fn ts_imports(&self, o: String) -> String {
         let foreign = self.foreign_owners();
         if foreign.is_empty() {
@@ -6209,6 +7546,8 @@ impl<'a> Gen<'a> {
         for (module, dir, types) in foreign {
             let mut names: Vec<String> = Vec::new();
             let mut again: Vec<String> = Vec::new();
+            // the functions of the enums, as a module that declares them has them
+            let mut handed: Vec<String> = Vec::new();
             for (jp, t) in &types {
                 if has_word(&o, t) {
                     names.push(t.clone());
@@ -6219,14 +7558,34 @@ impl<'a> Gen<'a> {
                         names.push(n);
                     }
                 }
+                if self.c.ordered.contains(jp) {
+                    handed.push(self.ts_rank_fn(jp));
+                }
+                if self.c.labels.contains_key(jp) {
+                    handed.push(self.ts_label_fn(jp));
+                }
             }
             if names.is_empty() {
                 continue;
             }
+            // An enum whose names meet the rule's own is taken under the type it has here
+            // (`Size as Size2`, §15.326).
+            let named = |ns: &[String]| -> String {
+                ns.iter()
+                    .map(|n| match types.iter().map(|(jp, _)| self.theirs("typescript", jp, n)).find(|o| o != n) {
+                        Some(o) => format!("{o} as {n}"),
+                        None => n.clone(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
             let from = if self.package.is_some() { self.place.ts_path(&self.rules_dir(), &format!("{dir}rules/{module}")) } else { format!("./{module}.ts") };
-            lines.push_str(&format!("import {{ {} }} from \"{from}\";\n", names.join(", ")));
+            lines.push_str(&format!("import {{ {} }} from \"{from}\";\n", named(&names)));
             if !again.is_empty() {
                 lines.push_str(&format!("export {{ {} }};\n", again.join(", ")));
+            }
+            if !handed.is_empty() {
+                lines.push_str(&format!("export {{ {} }} from \"{from}\";\n", named(&handed)));
             }
         }
         // after the head: its comment lines and the blank line under them
@@ -6242,7 +7601,7 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for (s, el) in self.f.elements.iter().enumerate() {
             if let Some(cap) = self.count_cap_of(s) {
-                let seq = pub_name(&el.name);
+                let seq = self.held(&el.name);
                 o.push_str(&format!(
                     "  if ({seq}.length > {cap}) {{\n    throw new RuleInputError(`{}`, {seq}.length);\n  }}\n",
                     crate::door::too_many(&el.name.text, cap)
@@ -6262,7 +7621,7 @@ impl<'a> Gen<'a> {
     /// One walk over sequence `s`, in TypeScript (§15.219).
     fn ts_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = &self.f.elements[s];
-        let seq = pub_name(&el.name);
+        let seq = self.held(&el.name);
         let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
         let e = self.elem_var(s);
         let local = |n: &str| -> String {
@@ -6272,11 +7631,21 @@ impl<'a> Gen<'a> {
             }
         };
         let mut o = String::new();
-        let mut body = self.ts_element_guards(s, &local);
+        let index = self.index_var(s);
+        self.walk_begin(s, &index);
+        let mut body = self.ts_element_ranges(s, &local);
         let (seen, step) = self.ts_unique(s, sums, &local);
         o.push_str(&seen);
         body.push_str(&step);
+        // Past a `stop`, the door alone (§15.328).
+        if let Some(i) = self.walk_goes_past_stop(sums) {
+            body.push_str(&format!("  if ({}) {{\n    continue;\n  }}\n", self.fold_names(i).done));
+        }
+        // What the walk's own items bind and no one in the walk reads is said to be read, as Go
+        // says it (§15.219, §15.342).
+        *self.reads_here.borrow_mut() = Some(self.walk_reads(body_items, sums));
         body.push_str(&self.ts_items(&local, trace, Phase::Only(body_items)));
+        *self.reads_here.borrow_mut() = None;
         let mut after = String::new();
         for &i in sums {
             match &self.f.items[i] {
@@ -6301,6 +7670,14 @@ impl<'a> Gen<'a> {
                             crate::door::out_of_range(&d.name.text)
                         ));
                     }
+                    // The bottom of its range, where a walk can come in under it (§15.314).
+                    if let Some(floor) = self.walk_floor(d) {
+                        let n = self.ident(&d.name.text);
+                        after.push_str(&format!(
+                            "  if ({n} < {floor}n) {{\n    throw new RuleInputError(`{}`, {n});\n  }}\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
                 }
                 Item::Fold(fold) => {
                     let (init, step, fin) = self.ts_fold(i, fold, &seq, &local);
@@ -6311,7 +7688,18 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
-        o.push_str(&format!("  for ({} {e} of {seq}) {{\n", self.ts_elem_binding(s)));
+        // An element no line of the walk reads, as where each row of its tables tests a field with
+        // `-`, is said to be left unread, which `tsc --noUnusedLocals` asks for, as Go, Rust and
+        // Swift say it (§15.342).
+        if !clash::reads_word(&body, &e, clash::Syntax::Script) {
+            body.insert_str(0, &format!("  void {e};\n"));
+        }
+        // The index of the element is bound where a sentence of the walk says it (§15.324).
+        if self.walk_end() {
+            o.push_str(&format!("  for ({} [{index}, {e}] of {seq}.entries()) {{\n", self.ts_elem_binding(s)));
+        } else {
+            o.push_str(&format!("  for ({} {e} of {seq}) {{\n", self.ts_elem_binding(s)));
+        }
         o.push_str(&Self::indent_block(&body, "  "));
         o.push_str("  }\n");
         o.push_str(&after);
@@ -6328,7 +7716,12 @@ impl<'a> Gen<'a> {
             (_, Some(w)) => {
                 let cls = self.ts_ty(&ty);
                 let member = self.value_name(&w.text, &ty).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| w.text.clone());
-                format!("{v} === {cls}.{member}")
+                // A column never given that value is read as its whole type there (§15.342).
+                if Self::ts_refuses(self.ts_narrowed(col).as_ref(), &self.ts_key(&w.text, &ty)) {
+                    format!("({v} as {cls}) === {cls}.{member}")
+                } else {
+                    format!("{v} === {cls}.{member}")
+                }
             }
             (_, None) => v.to_string(),
         }
@@ -6368,8 +7761,10 @@ impl<'a> Gen<'a> {
     /// A fold, in TypeScript (§15.56).
     fn ts_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
         let names = self.fold_names(i);
-        let FoldNames { answer, stopped, done, taken, kept, best, held, key, .. } = &names;
+        let FoldNames { answer, stopped, done, taken, kept, best, held, key, taken_at_camel: taken_at, .. } = &names;
         let alone = self.fold_alone(i);
+        // Ends the loop at a `stop`: a fold alone in its walk with no door to keep past it (§15.328).
+        let ends = alone && !self.stop_keeps_door(i);
         let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
         let (out_name, out_ty) = self.fold_target(fold);
         let acc_ty = if out_ty.is_numeric() { "bigint".to_string() } else { self.ts_ty(&out_ty) };
@@ -6388,12 +7783,20 @@ impl<'a> Gen<'a> {
         let mut init = String::new();
         init.push_str(&format!("  let {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         init.push_str(&format!("  let {stopped} = false;\n"));
-        if !alone {
+        if !ends {
             init.push_str(&format!("  let {done} = false;\n"));
         }
         init.push_str(&format!("  let {taken}: {acc_ty} | null = null;\n"));
+        // The element a `take_unique` took, which the sentence says beside the one that matched
+        // again (§15.324).
+        if fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { unique: true, .. })) {
+            init.push_str(&format!("  let {taken_at} = 0;\n"));
+        }
         init.push_str(&format!("  let {kept}: {acc_ty} | null = null;\n"));
-        init.push_str(&format!("  let {best}: bigint | null = null;\n"));
+        // The key kept so far, which only `keep_max` reads (§15.342).
+        if fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. })) {
+            init.push_str(&format!("  let {best}: bigint | null = null;\n"));
+        }
         if weighted {
             init.push_str(&format!("  let {} = 0n; // {}\n", names.total, tr!("重みの合計", "the running total of the weights")));
             init.push_str(&format!("  const {}: bigint[] = [];\n", names.cuts));
@@ -6401,17 +7804,28 @@ impl<'a> Gen<'a> {
 
         let mut arms = String::new();
         let v = local(&fold.verdict);
+        // What the verdict holds at each arm: an arm that leaves the loop leaves its value out of
+        // the arms after it, and an arm for a value it never holds reads it as its whole type
+        // (§15.342).
+        let mut narrowed = self.ts_narrowed(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.ts_ty(&self.ty_of(&fold.verdict));
             let member = self.value_name(&name.text, &self.ty_of(&fold.verdict)).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| name.text.clone());
-            arms.push_str(&format!("  if ({v} === {cls}.{member}) {{ // {}\n", name.text));
+            let value = self.ts_key(&name.text, &self.ty_of(&fold.verdict));
+            let tested = if Self::ts_refuses(narrowed.as_ref(), &value) { format!("({v} as {cls})") } else { v.clone() };
+            if ends && matches!(arm, Arm::Stop(_)) {
+                if let Some(s) = narrowed.as_mut() {
+                    s.remove(&value);
+                }
+            }
+            arms.push_str(&format!("  if ({tested} === {cls}.{member}) {{ // {}\n", name.text));
             match arm {
                 Arm::Next => arms.push_str("    // next\n"),
-                Arm::Stop(None) if alone => arms.push_str("    break;\n"),
+                Arm::Stop(None) if ends => arms.push_str("    break;\n"),
                 Arm::Stop(None) => arms.push_str(&format!("    {done} = true;\n")),
                 Arm::Stop(Some(x)) => {
                     arms.push_str(&format!("    {answer} = {};\n", val(x, local)));
-                    if alone {
+                    if ends {
                         arms.push_str(&format!("    {stopped} = true;\n    break;\n"));
                     } else {
                         arms.push_str(&format!("    {stopped} = true;\n    {done} = true;\n"));
@@ -6419,12 +7833,14 @@ impl<'a> Gen<'a> {
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
+                        let here = self.here_used();
                         arms.push_str(&format!("    if ({taken} !== null) {{\n"));
                         arms.push_str(&format!(
                             "      throw new RuleContradictionError(`{}`);\n    }}\n",
-                            tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
+                            ts_said(&crate::door::fold_contradiction(&fold.verdict, &fold.over, crate::door::BEFORE, crate::door::HERE), &here, taken_at)
                         ));
                         arms.push_str(&format!("    {taken} = {};\n", val(expr, local)));
+                        arms.push_str(&format!("    {taken_at} = {here};\n"));
                     } else {
                         arms.push_str(&format!("    if ({taken} === null) {{\n"));
                         arms.push_str(&format!("      {taken} = {};\n    }}\n", val(expr, local)));
@@ -6467,58 +7883,130 @@ impl<'a> Gen<'a> {
         }
         fin.push_str(&format!("  if ({seq}.length > 0 && !{stopped}) {{\n"));
         fin.push_str(&format!("    const {held} = {taken} !== null ? {taken} : ({kept} !== null ? {kept} : {});\n", text(&fold.empty)));
-        fin.push_str(&format!("    {answer} = {};\n  }}\n", text(&fold.exhausted)));
+        let ex = text(&fold.exhausted);
+        // An answer that does not read what is held, where Go says it too (§15.342).
+        if !has_word(&ex, held) {
+            fin.push_str(&format!("    void {held};\n"));
+        }
+        fin.push_str(&format!("    {answer} = {ex};\n  }}\n"));
         fin.push_str(&format!("  const {} = {answer};\n", self.ident(&out_name)));
+        fin.push_str(&self.ts_unread(&out_name));
         (init, step, fin)
     }
 
-    fn ts_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
+    /// A number whose value is whole, `1000` from a caller's `JSON.parse`, is that integer, here as
+    /// at the inputs (§15.205): what reads the element next reads a copy that holds it as a bigint.
+    fn ts_element_whole(&self, v: &str, ty: &Ty) -> String {
+        let Some((e, field)) = v.rsplit_once('.') else { return String::new() };
+        format!("  if (typeof {v} === \"number\" && Number.isInteger({v})) {{\n    {e} = {{ ...{e}, {field}: BigInt({v}) as {} }};\n  }}\n", self.ts_ty(ty))
+    }
+
+    /// The first look at each element of every sequence, in TypeScript (§15.328): before any input
+    /// is held to its range, each element in turn, and each of its fields in the order the rule
+    /// declares them, of its kind — a value of its enum, a truth value, a string (§15.339), an
+    /// integer, and a number one that int64 holds, as a reader of the wire takes it.
+    fn ts_element_kinds(&self) -> String {
+        let mut out = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+            let e = self.elem_var(s);
+            let local = |n: &str| -> String { fields.get(n).map(|f| format!("{e}.{f}")).unwrap_or_else(|| n.to_string()) };
+            let index = self.index_var(s);
+            self.walk_begin(s, &index);
+            let mut o = String::new();
+            let here = self.here();
+            for i in self.element_fields(s) {
+                let v = local(&i.name.text);
+                // The sentences name the field by its place on the element (§15.324).
+                let said = || self.said_name(&i.name.text);
+                let ty = self.ty_of(&i.name.text);
+                // An optional field is looked at as the type it wraps when it has a value (§15.201).
+                let optional = matches!(ty, Ty::Opt(_));
+                let ty = ty.present().clone();
+                let mut o = Guarded::new(&mut o, optional.then(|| (format!("  if ({v} !== null) {{\n"), "  }\n".to_string())), "  ");
+                match &ty {
+                    Ty::Bool => o.push_str(&format!(
+                        "  if (typeof {v} !== \"boolean\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                        ts_said(&not_bool(&said()), &here, "")
+                    )),
+                    Ty::Str => o.push_str(&format!(
+                        "  if (typeof {v} !== \"string\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                        ts_said(&crate::door::not_string(&said()), &here, "")
+                    )),
+                    Ty::Enum(n) => {
+                        let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                        o.push_str(&format!(
+                            "  if (!Object.values({cls}).includes({v})) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                            ts_said(&crate::door::not_in_enum(&said(), n), &here, "")
+                        ));
+                    }
+                    Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                        if ty != Ty::Date {
+                            o.push_str(&self.ts_element_whole(&v, &ty));
+                        }
+                        o.push_str(&format!(
+                            "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                            ts_said(&crate::door::not_integer(&said()), &here, "")
+                        ));
+                        if ty != Ty::Date {
+                            o.push_str(&format!(
+                                "  if ({}) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                                or_out_of(&v, INT64_ENDS, "n").unwrap_or_default(),
+                                ts_said(&crate::door::out_of_range(&said()), &here, "")
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let used = self.walk_end();
+            if !o.is_empty() {
+                let seq = self.held(&el.name);
+                let bind = self.ts_elem_binding(s);
+                if used {
+                    out.push_str(&format!("  for ({bind} [{index}, {e}] of {seq}.entries()) {{\n"));
+                } else {
+                    out.push_str(&format!("  for ({bind} {e} of {seq}) {{\n"));
+                }
+                out.push_str(&Self::indent_block(&o, "  "));
+                out.push_str("  }\n");
+            }
+        }
+        out
+    }
+
+    /// The door's look at one element where the walk comes to it (§15.328): each field inside the
+    /// range it declares, in the order the rule declares them, on the values the first look found
+    /// of their kinds.
+    fn ts_element_ranges(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
+        let here = self.here();
         for i in self.element_fields(s) {
             let v = local(&i.name.text);
+            // The sentences name the field by its place on the element (§15.324). Asked for only
+            // where one is written: a walk binds the index only where a sentence reads it.
+            let said = || self.said_name(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("  if ({v} !== null) {{\n"), "  }\n".to_string())), "  ");
-            if ty == Ty::Bool {
-                o.push_str(&format!(
-                    "  if (typeof {v} !== \"boolean\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
-                    not_bool(&i.name.text)
-                ));
-            }
-            match &ty {
-                Ty::Enum(n) => {
-                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+            if let Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date = &ty {
+                // The walk reads the element again from the sequence, so a whole number is made the
+                // bigint it is again.
+                if ty != Ty::Date {
+                    o.push_str(&self.ts_element_whole(&v, &ty));
+                }
+                if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, true), "n") {
+                    // A copy of the element made above reads the field as the optional it is
+                    // declared, inside the `!== null` of the field, so the test says it again
+                    // (§15.343).
+                    let test = if optional && ty != Ty::Date { format!("{v} !== null && ({test})") } else { test };
                     o.push_str(&format!(
-                        "  if (!Object.values({cls}).includes({v})) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
-                        crate::door::not_in_enum(&i.name.text, n)
+                        "  if ({test}) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                        ts_said(&crate::door::out_of_range(&said()), &here, "")
                     ));
                 }
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
-                    // A number whose value is whole, `1000` from a caller's `JSON.parse`, is
-                    // that integer, here as at the inputs (§15.205); the walk goes on with a
-                    // copy of the element that holds it as a bigint.
-                    if ty != Ty::Date {
-                        if let Some((e, field)) = v.rsplit_once('.') {
-                            o.push_str(&format!(
-                                "  if (typeof {v} === \"number\" && Number.isInteger({v})) {{\n    {e} = {{ ...{e}, {field}: BigInt({v}) as {} }};\n  }}\n",
-                                self.ts_ty(&ty)
-                            ));
-                        }
-                    }
-                    o.push_str(&format!(
-                        "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
-                        crate::door::not_integer(&i.name.text)
-                    ));
-                    if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, true), "n") {
-                        o.push_str(&format!(
-                            "  if ({test}) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
-                            crate::door::out_of_range(&i.name.text)
-                        ));
-                    }
-                }
-                _ => {}
             }
         }
         o
@@ -6533,10 +8021,13 @@ impl<'a> Gen<'a> {
         for fd in self.unique_fields(s, sums) {
             let seen = self.temp(&format!("{}Seen", self.ident(&fd.name.text)));
             let v = local(&fd.name.text);
-            init.push_str(&format!("  const {seen}: Set<unknown> = new Set();\n"));
+            // Where each value was first seen, which the sentence says beside the element it came
+            // round again on (§15.324).
+            let here = self.here_used();
+            init.push_str(&format!("  const {seen}: Map<unknown, number> = new Map();\n"));
             step.push_str(&format!(
-                "  if ({seen}.has({v})) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n  {seen}.add({v});\n",
-                crate::door::duplicate(seq, &fd.name.text)
+                "  if ({seen}.has({v})) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n  {seen}.set({v}, {here});\n",
+                ts_said(&crate::door::duplicate(seq, &fd.name.text, crate::door::BEFORE, crate::door::HERE), &here, &format!("{seen}.get({v})"))
             ));
         }
         (init, step)
@@ -6561,22 +8052,33 @@ impl<'a> Gen<'a> {
             }
             match it {
                 Item::Derived(d) => {
-                    let e = self.expr(&d.expr, local);
+                    let e = self.ts_meeting(&d.expr, self.expr(&d.expr, local).text, local);
                     o.push_str(&format!(
                         "  const {} = {}; // {}\n",
                         self.ident(&d.name.text),
-                        ts_expr(unparen(&e.text)),
+                        ts_expr(unparen(&e)),
                         tr!("導出", "derived value")
                     ));
+                    o.push_str(&self.ts_unread(&d.name.text));
                 }
                 Item::Define(d) => {
-                    let e = self.expr(&d.expr, local);
+                    let e = self.ts_meeting(&d.expr, self.expr(&d.expr, local).text, local);
                     o.push_str(&format!(
                         "  const {} = {}; // {}\n",
                         self.ident(&d.name.text),
-                        ts_expr(unparen(&e.text)),
+                        ts_expr(unparen(&e)),
                         tr!("定義", "definition")
                     ));
+                    // The range the rule accepts for it, held where it is worked out (§15.313).
+                    let n = self.ident(&d.name.text);
+                    match self.accepted_ends(d).and_then(|ends| or_out_of(&n, ends, "n")) {
+                        Some(test) => {
+                            let said = ts_said(&crate::door::out_of_range(&self.said_name(&d.name.text)), &self.here(), "");
+                            o.push_str(&format!("  if ({test}) {{\n    throw new RuleInputError(`{said}`, {n});\n  }}\n"));
+                        }
+                        // What the check does not read either (§15.342).
+                        None => o.push_str(&self.ts_unread(&d.name.text)),
+                    }
                 }
                 Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
@@ -6595,10 +8097,10 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
+            .map(|i| format!("{}: {}", self.held(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: readonly {}[]", pub_name(&el.name), self.element_type(s)));
+            params.push(format!("{}: readonly {}[]", self.held(&el.name), self.element_type(s)));
         }
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 {
@@ -6636,14 +8138,15 @@ impl<'a> Gen<'a> {
 
         // The public function keeps the plain signature; the branches live in its traced
         // twin, which also returns the rows that matched (§15.33).
-        let mut args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| self.held(&i.name)).collect();
         for el in &self.f.elements {
-            args.push(pub_name(&el.name));
+            args.push(self.held(&el.name));
         }
         let traced = format!("{fname}_traced");
         o.push_str(&format!("/** {} */\n", plain_doc(&self.f.name.text, &self.f.version, &traced)));
         o.push_str(&format!(
-            "export function {fname}({}): {ret} {{\n  return {traced}({})[0];\n}}\n\n",
+            "export function {}({}): {ret} {{\n  return {traced}({})[0];\n}}\n\n",
+            self.fam(&fname),
             params.join(", "),
             args.join(", ")
         ));
@@ -6657,22 +8160,29 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("/** {} */\nexport function {w}({}): [{ret}, Fired[], bigint[]] {{\n", walked_doc(), params.join(", ")));
         }
 
+        // An input with two or more things wrong with it is refused for the first of them in the
+        // order every door looks (§15.328): each input of its kind, then each element of each
+        // sequence, then each input inside its range, then the constraints.
         let local = |n: &str| -> String { self.ident(n) };
         for i in &self.f.inputs {
-            let v = pub_name(&i.name);
+            let v = self.held(&i.name);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("  if ({v} !== null) {{\n"), "  }\n".to_string())), "  ");
-            // A truth value is `true` or `false` and nothing else (§15.203).
-            if ty == Ty::Bool {
-                o.push_str(&format!(
+            match &ty {
+                // A truth value is `true` or `false` and nothing else (§15.203).
+                Ty::Bool => o.push_str(&format!(
                     "  if (typeof {v} !== \"boolean\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
                     not_bool(&i.name.text)
-                ));
-            }
-            match &ty {
+                )),
+                // A string is a string and nothing else (§15.339): a number given for it is equal
+                // to no cell of the table, and fell to another row without a word.
+                Ty::Str => o.push_str(&format!(
+                    "  if (typeof {v} !== \"string\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                    crate::door::not_string(&i.name.text)
+                )),
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                     o.push_str(&format!(
@@ -6680,16 +8190,6 @@ impl<'a> Gen<'a> {
                          throw new RuleInputError(`{}`, {v});\n  }}\n",
                         crate::door::not_in_enum(&i.name.text, n)
                     ));
-                    // The values the range of an ordered enum lets in, first to last (§15.210).
-                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
-                        let r = self.ts_rank_fn(n);
-                        o.push_str(&format!(
-                            "  if ({r}({v}) < {r}({}) || {r}({v}) > {r}({})) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
-                            self.ts_value(lo, &ty),
-                            self.ts_value(hi, &ty),
-                            crate::door::out_of_range(&i.name.text)
-                        ));
-                    }
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     // The type says bigint, but a JavaScript caller can pass anything, and a
@@ -6706,8 +8206,41 @@ impl<'a> Gen<'a> {
                         "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
                         crate::door::not_integer(&i.name.text)
                     ));
-                    // Each end the range writes, and nothing past ±(2^63−1), which a bigint can
-                    // be and no int64 can (§15.295).
+                    // A whole number int64 does not hold, where a reader of the wire refuses it.
+                    if ty != Ty::Date {
+                        o.push_str(&format!(
+                            "  if ({}) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                            or_out_of(&v, INT64_ENDS, "n").unwrap_or_default(),
+                            crate::door::out_of_range(&i.name.text)
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&self.ts_element_kinds());
+        for i in &self.f.inputs {
+            let v = self.held(&i.name);
+            let ty = self.ty_of(&i.name.text);
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = Guarded::new(&mut o, optional.then(|| (format!("  if ({v} !== null) {{\n"), "  }\n".to_string())), "  ");
+            match &ty {
+                // The values the range of an ordered enum lets in, first to last (§15.210).
+                Ty::Enum(n) => {
+                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                        let r = self.ts_rank_fn(n);
+                        o.push_str(&format!(
+                            "  if ({r}({v}) < {r}({}) || {r}({v}) > {r}({})) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                            self.ts_value(lo, &ty),
+                            self.ts_value(hi, &ty),
+                            crate::door::out_of_range(&i.name.text)
+                        ));
+                    }
+                }
+                // Each end the range writes, and nothing past ±(2^63−1), which a bigint can be and
+                // no int64 can (§15.295).
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, true), "n") {
                         o.push_str(&format!(
                             "  if ({test}) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
@@ -6813,16 +8346,29 @@ impl<'a> Gen<'a> {
             };
             o.push_str(&format!("  let {}: {decl};\n", self.ident(&oc.name.text)));
         }
+        // What each column's local holds on the branch a row is tested on (§15.342).
+        let mut narrowed: Vec<_> = t.inputs.iter().map(|(col, _)| self.ts_narrowed(col)).collect();
         for (ri, row) in t.rows.iter().enumerate() {
-            let conds: Vec<String> = t
+            let tests: Vec<(usize, String)> = t
                 .inputs
                 .iter()
                 .enumerate()
                 .filter_map(|(ci, (col, _))| {
                     let ty = self.ty_of(col);
-                    self.ts_cell(row.cells.get(ci)?, &local(col), &ty, self.scale(col))
+                    let cell = row.cells.get(ci)?;
+                    let var = self.ts_compared(cell, col, &local(col), narrowed[ci].as_ref());
+                    self.ts_cell(cell, &var, &ty, self.scale(col)).map(|c| (ci, c))
                 })
                 .collect();
+            // A row that tests one column alone leaves the value it tests out of that local on the
+            // rows after it, as `tsc` reads an `else`.
+            if let [(ci, _)] = tests.as_slice() {
+                let took = row.cells.get(*ci).and_then(|cell| self.ts_took(cell, &t.inputs[*ci].0));
+                if let (Some(s), Some(k)) = (narrowed[*ci].as_mut(), took) {
+                    s.remove(&k);
+                }
+            }
+            let conds: Vec<String> = tests.into_iter().map(|(_, c)| c).collect();
             let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
             let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
             let head = if ri == 0 { "  if" } else { " else if" };
@@ -6878,6 +8424,9 @@ impl<'a> Gen<'a> {
             "  }} else {{\n    throw new Error(\"{}\");\n  }}\n",
             tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
         ));
+        for oc in &t.outputs {
+            o.push_str(&self.ts_unread(&oc.name.text));
+        }
         o.push_str(&self.guards(t, local, Lang::Ts, "  ", |name, i, j| {
             format!(
                 "      throw new RuleContradictionError(\"{}\");\n",
@@ -6887,7 +8436,13 @@ impl<'a> Gen<'a> {
         o
     }
 
+    /// The runner imports the enums' types by their names, which hide a global of a name of theirs
+    /// there as well (§15.336).
     pub fn ts_runner(&self) -> String {
+        self.apart_types(clash::Syntax::Script, |g| g.ts_runner_text())
+    }
+
+    fn ts_runner_text(&self) -> String {
         let alias = pub_name(&self.f.name);
         let d = runner_local("d", &alias);
         let r = runner_local("r", &alias);
@@ -6904,9 +8459,13 @@ impl<'a> Gen<'a> {
         // One input read off the wire the way every door reads it (§15.204): there at all, of
         // its kind, and then built into the module's type. A refusal is the module's own
         // `RuleInputError`, with the sentence every language says.
-        fn ts_read(g: &Gen, ty: &Ty, src: &str, name: &str, imports: &mut Vec<String>, type_imports: &mut Vec<String>) -> String {
+        // `said` is what the sentences call the value: the name, or for a field of an element its
+        // place, `lines[\u{1}].amount`, which takes the index `at` of the element (§15.324).
+        #[allow(clippy::too_many_arguments)]
+        fn ts_read(g: &Gen, ty: &Ty, src: &str, name: &str, said: &str, at: &str, imports: &mut Vec<String>, type_imports: &mut Vec<String>) -> String {
+            let lit = |x: String| -> String { if names_element(&x) { format!("`{}`", ts_said(&x, at, "")) } else { format!("{x:?}") } };
             let optional = matches!(ty, Ty::Opt(_));
-            let take = format!("_take({src}, {name:?}, {:?}{})", crate::door::missing(name), if optional { ", true" } else { "" });
+            let take = format!("_take({src}, {name:?}, {}{})", lit(crate::door::missing(said)), if optional { ", true" } else { "" });
             let q = if optional { "q" } else { "" };
             match ty.present() {
                 Ty::Enum(n) => {
@@ -6914,64 +8473,92 @@ impl<'a> Gen<'a> {
                     if !imports.contains(&cls) {
                         imports.push(cls.clone());
                     }
-                    format!("_enum{q}(Object.values({cls}), {take}, {:?}) as {cls}", crate::door::not_in_enum(name, n))
+                    format!("_enum{q}(Object.values({cls}), {take}, {}) as {cls}", lit(crate::door::not_in_enum(said, n)))
                 }
-                Ty::Bool => format!("_bool{q}({take}, {:?})", crate::door::not_bool(name)),
-                Ty::Date => format!("_date{q}({take}, {:?})", crate::door::not_date(name)),
-                Ty::Str => format!("_str{q}({take}, {:?})", crate::door::not_string(name)),
-                Ty::Number => format!("_int{q}({take}, {:?})", crate::door::not_integer(name)),
+                Ty::Bool => format!("_bool{q}({take}, {})", lit(crate::door::not_bool(said))),
+                Ty::Date => format!("_date{q}({take}, {})", lit(crate::door::not_date(said))),
+                Ty::Str => format!("_str{q}({take}, {})", lit(crate::door::not_string(said))),
+                Ty::Number => format!("_int{q}({take}, {}, {})", lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said))),
                 t => {
                     let brand = g.ts_ty(t);
                     if !type_imports.contains(&brand) {
                         type_imports.push(brand.clone());
                     }
-                    format!("_int{q}({take}, {:?}) as {brand}", crate::door::not_integer(name))
+                    format!("_int{q}({take}, {}, {}) as {brand}", lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said)))
                 }
             }
         }
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
-            args.push(ts_read(self, &ty, &d, &i.name.text, &mut imports, &mut type_imports));
+            args.push(ts_read(self, &ty, &d, &i.name.text, &i.name.text, "", &mut imports, &mut type_imports));
         }
-        // The sequence a walk reads, one element at a time (§15.56).
-        let mut prelude = String::new();
+        // The sequence a walk reads, one element at a time (§15.56), after the inputs: every reader
+        // takes the arguments in the order the function does (§15.328).
+        let mut sequences: Vec<(String, String)> = Vec::new();
         for (s, el) in self.f.elements.iter().enumerate() {
             let seq = &el.name.text;
             let e = runner_local("e", &alias);
-            let obj = format!("_obj({e}, {:?})", crate::door::not_object(seq));
+            // A sentence about an element names it by its index (§15.324).
+            let at = runner_local("i", &alias);
+            let obj = format!("_obj({e}, `{}`)", ts_said(&crate::door::not_object(seq, crate::door::HERE), &at, ""));
             let fields: Vec<String> = el
                 .fields
                 .iter()
                 .map(|fd| {
                     let ty = self.ty_of(&fd.name.text);
-                    format!("{}: {}", pub_name(&fd.name), ts_read(self, &ty, &obj, &fd.name.text, &mut imports, &mut type_imports))
+                    let said = crate::door::element(seq, crate::door::HERE, &fd.name.text);
+                    format!("{}: {}", pub_name(&fd.name), ts_read(self, &ty, &obj, &fd.name.text, &said, &at, &mut imports, &mut type_imports))
                 })
                 .collect();
             let rows = runner_local(&if s == 0 { "rows".to_string() } else { format!("rows{}", s + 1) }, &alias);
-            prelude.push_str(&format!(
-                "    const {rows} = _seq(_take({d}, {seq:?}, {:?}), {:?}).map(({e}) => ({{ {} }}));\n",
-                crate::door::missing(seq),
-                crate::door::not_sequence(seq),
-                fields.join(", ")
+            sequences.push((
+                rows,
+                format!(
+                    "_seq(_take({d}, {seq:?}, {:?}), {:?}).map(({e}, {at}) => ({{ {} }}))",
+                    crate::door::missing(seq),
+                    crate::door::not_sequence(seq),
+                    fields.join(", ")
+                ),
             ));
-            args.push(rows);
         }
+        // The lines that read the arguments before the call, and what the tuple of them is made
+        // of: the inputs read first, into a tuple of their own, and then each sequence.
+        let ins_name = runner_local("ins", &alias);
+        let call = |ins: &[String]| -> (String, Vec<String>) {
+            if sequences.is_empty() {
+                return (String::new(), ins.to_vec());
+            }
+            let (mut prelude, mut args) = (String::new(), Vec::new());
+            if !ins.is_empty() {
+                prelude.push_str(&format!("    const {ins_name} = [{}] as const;\n", ins.join(", ")));
+                args.push(format!("...{ins_name}"));
+            }
+            for (rows, read) in &sequences {
+                prelude.push_str(&format!("    const {rows} = {read};\n"));
+                args.push(rows.clone());
+            }
+            (prelude, args)
+        };
         // `--chances` reads a line's inputs as the vectors are read (§15.225).
-        let read_args = args.clone();
+        let (chance_prelude, read_args) = call(&args);
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is.
         let v = runner_local("v", &alias);
         let state = runner_local("state", &alias);
         let (mut head, mut tail) = (String::new(), String::new());
-        let mut body = format!("  const {d} = JSON.parse({line}, _exact).in as unknown;\n");
-        // The parser of a machine's state read from an `enums` file is that file's module's, which
-        // the rule's module does not re-export (§15.238).
+        // A rule that takes nothing reads nothing of what a line hands it (§15.342).
+        let unread = if args.is_empty() && sequences.is_empty() { format!("  void {d};\n") } else { String::new() };
+        let mut body = format!("  const {d} = JSON.parse({line}, _exact).in as unknown;\n{unread}");
+        // The parser of a machine's state read from an `enums` file is imported from that file's
+        // module, once (§15.238). The rule's module has one of its own for the enum (§15.319), which
+        // the runner does not import beside it.
         let mut state_owner: Option<(String, String)> = None;
         if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
             let parse = format!("parse{cls}");
             let mut ws = vec!["INITIAL".to_string(), "isFinal".to_string(), cls.clone()];
-            match self.c.owners.get(&en) {
+            // the module's own parser for an enum it hands on under another type (§15.326)
+            match self.c.owners.get(&en).filter(|_| !self.handed_here(&en)) {
                 Some(o) => state_owner = Some((pub_name(&o.module), parse)),
                 None => ws.push(parse),
             }
@@ -6996,7 +8583,7 @@ impl<'a> Gen<'a> {
                 }
                 more_head.push_str(&format!("let {local}: {} = {};\n", self.ts_ty(&mc.ty), mc.upper()));
                 more_meta.push(format!("{}: {}", mc.key(), mc.upper()));
-                let read = ts_read(self, &mc.ty, &format!("({v}.carried as unknown)"), &mc.input, &mut imports, &mut type_imports);
+                let read = ts_read(self, &mc.ty, &format!("({v}.carried as unknown)"), &mc.input, &mc.input, "", &mut imports, &mut type_imports);
                 more_start.push_str(&format!("    {local} = {read};\n"));
                 more_tail.push_str(&format!("      {local} = {r}.{};\n", mc.out_alias));
             }
@@ -7007,7 +8594,7 @@ impl<'a> Gen<'a> {
                  if (\"machine\" in {v}) {{\n    \
                    console.log(JSON.stringify({{ initial: INITIAL, final: Object.values({cls}).filter((s) => isFinal(s)){carried_meta} }}, _raw));\n    \
                    continue;\n  }}\n  \
-                 const {d} = {v}.in as unknown;\n  \
+                 const {d} = {v}.in as unknown;\n{unread}  \
                  if ({v}.step === \"start\") {{\n    {state} = parse{cls}(String({v}.state));\n{more_start}  }}\n"
             );
             tail = format!("    if (\"step\" in {v}) {{\n      {state} = {};\n{more_tail}    }}\n", self.next_state_of(&r, &format!(".{out}")));
@@ -7016,7 +8603,8 @@ impl<'a> Gen<'a> {
         // And with `--prerequisites`, what each block's functions answer (§15.222): a parser of an
         // `enums` file's enum the labels have not imported already comes from that file's module.
         let mut prereq_owners: Vec<(String, Vec<String>)> = Vec::new();
-        let labels = labels + &self.ts_prereq_mode(&lines, &mut imports, &mut prereq_owners) + &self.ts_chances_mode(&d, &lines, &read_args, &prelude, &mut imports);
+        let labels = labels + &self.ts_prereq_mode(&lines, &mut imports, &mut prereq_owners) + &self.ts_chances_mode(&d, &lines, &read_args, &chance_prelude, &mut imports);
+        let (prelude, args) = call(&args);
         if let Some((m, n)) = state_owner {
             match prereq_owners.iter_mut().find(|(x, _)| *x == m) {
                 Some((_, ns)) if ns.contains(&n) => {}
@@ -7032,7 +8620,7 @@ impl<'a> Gen<'a> {
             })
             .collect();
         let owner_imports = owner_imports + &more_owners;
-        format!(
+        let text = format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
              import {{ readFileSync }} from \"node:fs\";\n\
              import {{ {} }} from \"./{alias}.ts\";\n{owner_imports}{}\n\
@@ -7063,7 +8651,9 @@ impl<'a> Gen<'a> {
             },
             prelude,
             args.join(", ")
-        )
+        );
+        // Only the readers of the wire the rule's inputs go through, and what they read (§15.342).
+        from::ts_without_unread(&text, TS_WIRE_READS)
     }
 }
 
@@ -7096,8 +8686,8 @@ impl<'a> Gen<'a> {
             }
             arms.push_str(&format!("    if (en === {}) {{\n      console.log({label}({parse}(v)));\n    }}\n", str_lit(en)));
         }
-        // A name the rule's module is already imported for — the parser of a machine's state,
-        // which the module re-exports (§15.238) — is not imported a second time from the owner.
+        // A name the runner imports from the rule's module already is not imported a second time
+        // from the owner (§15.238).
         (
             owners
                 .iter()
@@ -7140,21 +8730,87 @@ fn round_rs() -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleError {{
     /// {input}
-    Input {{ what: &'static str, value: Option<i64> }},
+    Input {{ what: Said, value: Option<i64> }},
     /// {contra}
-    Contradiction {{ what: &'static str }},
+    Contradiction {{ what: Said }},
 }}
 
 impl std::fmt::Display for RuleError {{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{
         match self {{
             RuleError::Input {{ what, value: Some(v) }} => write!(f, "{{what}}: {{v}}"),
-            RuleError::Input {{ what, .. }} | RuleError::Contradiction {{ what }} => f.write_str(what),
+            RuleError::Input {{ what, .. }} | RuleError::Contradiction {{ what }} => write!(f, "{{what}}"),
         }}
     }}
 }}
 
 impl std::error::Error for RuleError {{}}
+
+/// {said}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Said {{
+    words: [&'static str; 3],
+    places: [usize; 2],
+    count: usize,
+}}
+
+impl Said {{
+    /// {said_of}
+    pub const fn of(sentence: &'static str) -> Said {{
+        Said {{ words: [sentence, "", ""], places: [0, 0], count: 0 }}
+    }}
+
+    /// {said_at}
+    pub const fn at(before: &'static str, index: usize, after: &'static str) -> Said {{
+        Said {{ words: [before, after, ""], places: [index, 0], count: 1 }}
+    }}
+
+    /// {said_two}
+    pub const fn two(first: &'static str, i: usize, between: &'static str, j: usize, last: &'static str) -> Said {{
+        Said {{ words: [first, between, last], places: [i, j], count: 2 }}
+    }}
+
+    /// {said_words}
+    pub fn words(&self) -> &[&'static str] {{
+        &self.words[..self.count + 1]
+    }}
+
+    /// {said_places}
+    pub fn places(&self) -> &[usize] {{
+        &self.places[..self.count]
+    }}
+}}
+
+impl std::fmt::Display for Said {{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{
+        f.write_str(self.words[0])?;
+        for k in 0..self.count {{
+            write!(f, "{{}}{{}}", self.places[k], self.words[k + 1])?;
+        }}
+        Ok(())
+    }}
+}}
+
+impl PartialEq<&str> for Said {{
+    fn eq(&self, other: &&str) -> bool {{
+        // {said_rest}
+        struct Rest<'a>(&'a str);
+        impl std::fmt::Write for Rest<'_> {{
+            fn write_str(&mut self, piece: &str) -> std::fmt::Result {{
+                self.0 = self.0.strip_prefix(piece).ok_or(std::fmt::Error)?;
+                Ok(())
+            }}
+        }}
+        let mut rest = Rest(other);
+        std::fmt::write(&mut rest, format_args!("{{self}}")).is_ok() && rest.0.is_empty()
+    }}
+}}
+
+impl From<&'static str> for Said {{
+    fn from(sentence: &'static str) -> Said {{
+        Said::of(sentence)
+    }}
+}}
 
 pub(crate) fn min_i64(a: i64, b: i64) -> i64 {{
     if a < b {{ a }} else {{ b }}
@@ -7205,6 +8861,19 @@ pub(crate) fn round_bankers(x: i64, g: i64) -> i64 {{
         err = tr!("この規則が返しうる誤り。", "Everything this rule can go wrong with."),
         input = tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
         contra = tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller."),
+        said = tr!(
+            "誤りの文。並びの要素を言う文は、要素の番号（0 から）を整数のまま持ち、表示するときに文に入れる。文字列と == で比べられる。",
+            "The sentence of an error. One that names an element of a sequence holds the element's index (from 0)\n/// as an integer and puts it into the sentence when shown. It compares with a string by ==."
+        ),
+        said_of = tr!("番号の無い文。", "A sentence with no index in it."),
+        said_at = tr!("要素を一つ言う文: before、番号、after。", "A sentence that names one element: before, the index, after."),
+        said_two = tr!("要素を二つ言う文: 前の要素の番号 i と、あとの要素の番号 j。", "A sentence that names two elements: the earlier one's index i, the later one's j."),
+        said_words = tr!("番号の前と間とあとの文の切れ。番号の数より一つ多い。", "The pieces of the sentence before, between and after the indices: one more than there are indices."),
+        said_places = tr!("文が言う要素の番号。言う順に。", "The indices of the elements the sentence names, in the order it names them."),
+        said_rest = tr!(
+            "比べる文字列の、まだ比べていない残り。表示する文の切れを一つずつ頭から比べ、文字列は作らない。",
+            "What is left of the string to compare: each piece the sentence is shown in is held to its head, and no string is made."
+        ),
         down = tr!("0 へ寄せる。-4.8円 → -4円。", "Toward zero: -4.8 yen → -4 yen."),
         up = tr!("0 から遠ざける。-4.2円 → -5円。", "Away from zero: -4.2 yen → -5 yen."),
         half = tr!("半分ちょうどは 0 から遠ざける。", "An exact half goes away from zero."),
@@ -7352,25 +9021,32 @@ impl<'a> Gen<'a> {
     }
 
     pub fn rust(&self) -> String {
-        self.rust_with(false)
+        self.apart_text(clash::Syntax::Rust, |g| g.rust_with(false))
     }
 
     /// The Rust module as the Wasm crate holds it: the crate is the rule's alone, so the types
     /// of an `enums` file are written into it rather than read from a sibling (§15.212).
     pub fn rust_wasm(&self) -> String {
-        self.rust_with(true)
+        self.apart_text(clash::Syntax::Rust, |g| g.rust_with(true))
     }
 
     fn rust_with(&self, inline: bool) -> String {
         // The module of a package of ritsu's (ritsu's DESIGN 9.3): one module of a library crate,
         // beside the other rules', so what one rule does not call of its helpers is no warning
-        // there, nor is a lint of clippy's on the shapes every rule's module shares.
+        // there, nor is a lint of clippy's on the shapes every rule's module shares. The module
+        // `rulec gen` writes allows the same itself, as every file of Rust it writes does: no one
+        // edits it, the helpers and the tables keep the shapes the proof reads, and a lint a later
+        // clippy adds does not stop a crate built with `-D warnings` (§15.340). The letters of the
+        // names are a lint of the crate's (`uncommon_codepoints`), which this line allows where
+        // the module is the crate; where it is a module of one, as in the runner and the WASI
+        // module beside it, rustc says the line is ignored there, which `unused_attributes` keeps
+        // from a build with `-D warnings`.
         let package = self.package.is_some() && !inline;
         let mut o = self.header("//");
         o.push_str(if package {
             RS_PACKAGE_ALLOW
         } else {
-            "\n#![allow(non_snake_case, uncommon_codepoints, unused_parens)]\n\n"
+            "\n#![allow(non_snake_case, uncommon_codepoints, unused_attributes, unused_parens, dead_code, clippy::all)]\n\n"
         });
         // The types of an `enums` file are its module's, which the crate declares at its root
         // (`#[path = "content.rs"] mod content;`, as the runner here does), and are re-exported
@@ -7394,9 +9070,10 @@ impl<'a> Gen<'a> {
         // from it and handed on, so that what one rule returns is what another rule and a book
         // take; a rate keeps its brand here.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
-        for v in self.branded() {
+        for v in self.branded().into_iter().chain(self.branded_columns()) {
             // An optional amount is the same brand when it is there: the runner builds it, and
-            // a rule whose only amount is optional declared none (§15.201).
+            // a rule whose only amount is optional declared none (§15.201), nor one whose only
+            // amount is a column a table writes that may be absent (§15.343).
             let ty = self.ty_of(v).present().clone();
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
@@ -7583,18 +9260,33 @@ impl<'a> Gen<'a> {
                 continue;
             }
             match it {
-                Item::Derived(d) => o.push_str(&format!(
-                    "    let {} = {}; // {}\n",
-                    self.ident(&d.name.text),
-                    rs_expr(unparen(&self.expr(&d.expr, local).text)),
-                    tr!("導出", "derived value")
-                )),
-                Item::Define(d) => o.push_str(&format!(
-                    "    let {} = {}; // {}\n",
-                    self.ident(&d.name.text),
-                    rs_expr(unparen(&self.expr(&d.expr, local).text)),
-                    tr!("定義", "definition")
-                )),
+                Item::Derived(d) => {
+                    o.push_str(&format!(
+                        "    let {} = {}; // {}\n",
+                        self.ident(&d.name.text),
+                        rs_expr(unparen(&self.expr(&d.expr, local).text)),
+                        tr!("導出", "derived value")
+                    ));
+                    o.push_str(&self.rs_unread(&d.name.text));
+                }
+                Item::Define(d) => {
+                    o.push_str(&format!(
+                        "    let {} = {}; // {}\n",
+                        self.ident(&d.name.text),
+                        rs_expr(unparen(&self.expr(&d.expr, local).text)),
+                        tr!("定義", "definition")
+                    ));
+                    // The range the rule accepts for it, held where it is worked out (§15.313).
+                    let n = self.ident(&d.name.text);
+                    match self.accepted_ends(d).and_then(|ends| or_out_of(&n, ends, "")) {
+                        Some(test) => o.push_str(&format!(
+                            "    if {test} {{\n        return Err(RuleError::Input {{ what: {}, value: Some({n}) }});\n    }}\n",
+                            rs_said(&crate::door::out_of_range(&self.said_name(&d.name.text)), &self.here(), "")
+                        )),
+                        // What the check does not read either (§15.340).
+                        None => o.push_str(&self.rs_unread(&d.name.text)),
+                    }
+                }
                 Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
@@ -7612,9 +9304,9 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for (s, el) in self.f.elements.iter().enumerate() {
             if let Some(cap) = self.count_cap_of(s) {
-                let seq = pub_name(&el.name);
+                let seq = self.held(&el.name);
                 o.push_str(&format!(
-                    "    if {seq}.len() > {cap} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({seq}.len() as i64) }});\n    }}\n",
+                    "    if {seq}.len() > {cap} {{\n        return Err(RuleError::Input {{ what: Said::of(\"{}\"), value: Some({seq}.len() as i64) }});\n    }}\n",
                     crate::door::too_many(&el.name.text, cap)
                 ));
             }
@@ -7633,7 +9325,7 @@ impl<'a> Gen<'a> {
     /// an expression is unwrapped exactly as an input is (§8.1).
     fn rs_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = &self.f.elements[s];
-        let seq = pub_name(&el.name);
+        let seq = self.held(&el.name);
         let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
         let e = self.elem_var(s);
         let local = |n: &str| -> String {
@@ -7650,12 +9342,18 @@ impl<'a> Gen<'a> {
             }
         };
         let mut o = String::new();
+        let index = self.index_var(s);
+        self.walk_begin(s, &index);
         let mut body = self.rs_element_guards(s, &local);
         let (seen, step) = self.rs_unique(s, sums, &local);
         o.push_str(&seen);
         body.push_str(&step);
+        // Past a `stop`, the door alone (§15.328).
+        if let Some(i) = self.walk_goes_past_stop(sums) {
+            body.push_str(&format!("    if {} {{\n        continue;\n    }}\n", self.fold_names(i).done));
+        }
         body.push_str(&self.rs_items(&local, trace, Phase::Only(body_items)));
-        let mut after = String::new();
+        let (mut after, mut unread) = (String::new(), String::new());
         for &i in sums {
             match &self.f.items[i] {
                 Item::Agg(d) if d.kind.extreme() => {
@@ -7672,12 +9370,27 @@ impl<'a> Gen<'a> {
                         let test = self.rs_test(&v, &d.column.text, &d.value);
                         body.push_str(&format!("    if {test} {{ // {}\n        {} += 1;\n    }}\n", d.name.text, self.ident(&d.name.text)));
                     }
+                    let mut checked = false;
                     if let Some((_, cap)) = self.sum_caps().into_iter().find(|(x, _)| x.name.text == d.name.text) {
                         let n = self.ident(&d.name.text);
                         after.push_str(&format!(
-                            "    if {n} > {cap} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({n}) }});\n    }}\n",
+                            "    if {n} > {cap} {{\n        return Err(RuleError::Input {{ what: Said::of(\"{}\"), value: Some({n}) }});\n    }}\n",
                             crate::door::out_of_range(&d.name.text)
                         ));
+                        checked = true;
+                    }
+                    // The bottom of its range, where a walk can come in under it (§15.314).
+                    if let Some(floor) = self.walk_floor(d) {
+                        let n = self.ident(&d.name.text);
+                        after.push_str(&format!(
+                            "    if {n} < {floor} {{\n        return Err(RuleError::Input {{ what: Said::of(\"{}\"), value: Some({n}) }});\n    }}\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                        checked = true;
+                    }
+                    // rustc does not count `+=` as a read (§15.340).
+                    if !checked {
+                        unread.push_str(&self.rs_unread(&d.name.text));
                     }
                 }
                 Item::Fold(fold) => {
@@ -7689,10 +9402,21 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
-        o.push_str(&format!("    for {e} in {seq} {{\n"));
+        // The index of the element is bound where a sentence of the walk says it (§15.324). An
+        // element no line of the walk reads is said to be left unread on purpose: rustc warns of
+        // a local nothing reads (§15.340).
+        if !clash::reads_word(&body, &e, clash::Syntax::Rust) {
+            body.insert_str(0, &format!("    let _ = {e};\n"));
+        }
+        if self.walk_end() {
+            o.push_str(&format!("    for ({index}, {e}) in {seq}.iter().enumerate() {{\n"));
+        } else {
+            o.push_str(&format!("    for {e} in {seq} {{\n"));
+        }
         o.push_str(&Self::indent_block(&body, "    "));
         o.push_str("    }\n");
         o.push_str(&after);
+        o.push_str(&unread);
         o
     }
 
@@ -7747,6 +9471,8 @@ impl<'a> Gen<'a> {
         let names = self.fold_names(i);
         let FoldNames { answer, stopped, done, taken, kept, best, held, key, .. } = &names;
         let alone = self.fold_alone(i);
+        // Ends the loop at a `stop`: a fold alone in its walk with no door to keep past it (§15.328).
+        let ends = alone && !self.stop_keeps_door(i);
         let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
         let (out_name, out_ty) = self.fold_target(fold);
         let acc_ty = if out_ty.is_numeric() { "i64".to_string() } else { self.rs_ty(&out_ty) };
@@ -7762,15 +9488,28 @@ impl<'a> Gen<'a> {
         let weighted = fold.weighted();
         let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
 
+        // A flag or a value no arm of the fold sets is not `mut`, and the key of a `keep_max` is
+        // declared only with one: rustc says so of each, and a crate built with `-D warnings`
+        // stops there (§15.340).
+        let has = |f: &dyn Fn(&Arm) -> bool| fold.arms.iter().any(|(_, a, _)| f(a));
+        let mutable = |set: bool| if set { "mut " } else { "" };
         let mut init = String::new();
         init.push_str(&format!("    let mut {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
-        init.push_str(&format!("    let mut {stopped} = false;\n"));
-        if !alone {
-            init.push_str(&format!("    let mut {done} = false;\n"));
+        init.push_str(&format!("    let {}{stopped} = false;\n", mutable(has(&|a| matches!(a, Arm::Stop(Some(_)))))));
+        if !ends {
+            init.push_str(&format!("    let {}{done} = false;\n", mutable(has(&|a| matches!(a, Arm::Stop(_))))));
         }
-        init.push_str(&format!("    let mut {taken}: Option<{acc_ty}> = None;\n"));
-        init.push_str(&format!("    let mut {kept}: Option<{acc_ty}> = None;\n"));
-        init.push_str(&format!("    let mut {best}: Option<i64> = None;\n"));
+        init.push_str(&format!("    let {}{taken}: Option<{acc_ty}> = None;\n", mutable(has(&|a| matches!(a, Arm::Take { .. } | Arm::TakeWeighted { .. })))));
+        let keeps = has(&|a| matches!(a, Arm::KeepMax { .. }));
+        init.push_str(&format!("    let {}{kept}: Option<{acc_ty}> = None;\n", mutable(keeps)));
+        if keeps {
+            init.push_str(&format!("    let mut {best}: Option<i64> = None;\n"));
+        }
+        // The element a `take_unique` took, which the sentence says beside the one that matched
+        // again (§15.324).
+        if fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { unique: true, .. })) {
+            init.push_str(&format!("    let mut {}: usize = 0;\n", names.taken_at));
+        }
         if weighted {
             init.push_str(&format!("    let mut {}: i64 = 0; // {}\n", names.total, tr!("重みの合計", "the running total of the weights")));
             init.push_str(&format!("    let mut {}: Vec<i64> = Vec::new();\n", names.cuts));
@@ -7784,11 +9523,11 @@ impl<'a> Gen<'a> {
             arms.push_str(&format!("    if {v} == {cls}::{member} {{ // {}\n", name.text));
             match arm {
                 Arm::Next => arms.push_str("        // next\n"),
-                Arm::Stop(None) if alone => arms.push_str("        break;\n"),
+                Arm::Stop(None) if ends => arms.push_str("        break;\n"),
                 Arm::Stop(None) => arms.push_str(&format!("        {done} = true;\n")),
                 Arm::Stop(Some(x)) => {
                     arms.push_str(&format!("        {answer} = {};\n", val(x, local)));
-                    if alone {
+                    if ends {
                         arms.push_str(&format!("        {stopped} = true;\n        break;\n"));
                     } else {
                         arms.push_str(&format!("        {stopped} = true;\n        {done} = true;\n"));
@@ -7796,12 +9535,13 @@ impl<'a> Gen<'a> {
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
+                        let here = self.here_used();
                         arms.push_str(&format!("        if {taken}.is_some() {{\n"));
                         arms.push_str(&format!(
-                            "            return Err(RuleError::Contradiction {{ what: \"{}\" }});\n        }}\n",
-                            tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
+                            "            return Err(RuleError::Contradiction {{ what: {} }});\n        }}\n",
+                            rs_said(&crate::door::fold_contradiction(&fold.verdict, &fold.over, crate::door::BEFORE, crate::door::HERE), &here, &names.taken_at)
                         ));
-                        arms.push_str(&format!("        {taken} = Some({});\n", val(expr, local)));
+                        arms.push_str(&format!("        {taken} = Some({});\n        {} = {here};\n", val(expr, local), names.taken_at));
                     } else {
                         arms.push_str(&format!("        if {taken}.is_none() {{\n"));
                         arms.push_str(&format!("            {taken} = Some({});\n        }}\n", val(expr, local)));
@@ -7821,7 +9561,7 @@ impl<'a> Gen<'a> {
                     let (w, t, c) = (&names.weight, &names.total, &names.cuts);
                     arms.push_str(&format!("        let {w}: i64 = {};\n", rs_expr(unparen(&self.expr(weight, local).text))));
                     arms.push_str(&format!(
-                        "        if {w} > i64::MAX - {t} {{\n            return Err(RuleError::Input {{ what: \"{}\", value: None }});\n        }}\n",
+                        "        if {w} > i64::MAX - {t} {{\n            return Err(RuleError::Input {{ what: Said::of(\"{}\"), value: None }});\n        }}\n",
                         crate::door::weights_past(&fold.over)
                     ));
                     arms.push_str(&format!("        {t} += {w};\n        {c}.push({t});\n"));
@@ -7839,12 +9579,18 @@ impl<'a> Gen<'a> {
         if weighted {
             let t = &names.total;
             let what = fold.draw.as_ref().map(|d| crate::door::draw_past(&d.text)).unwrap_or_default();
-            fin.push_str(&format!("    if {t} > 0 && {draw} >= {t} {{\n        return Err(RuleError::Input {{ what: \"{what}\", value: Some({draw}) }});\n    }}\n"));
+            fin.push_str(&format!("    if {t} > 0 && {draw} >= {t} {{\n        return Err(RuleError::Input {{ what: Said::of(\"{what}\"), value: Some({draw}) }});\n    }}\n"));
         }
         fin.push_str(&format!("    if !{seq}.is_empty() && !{stopped} {{\n"));
         fin.push_str(&format!("        let {held} = {taken}.or({kept}).unwrap_or({});\n", text(&fold.empty)));
-        fin.push_str(&format!("        {answer} = {};\n    }}\n", text(&fold.exhausted)));
+        // An `exhausted` that does not read what was held, as Go's (§15.340).
+        let ex = text(&fold.exhausted);
+        if !clash::has_word(&ex, held) {
+            fin.push_str(&format!("        let _ = {held};\n"));
+        }
+        fin.push_str(&format!("        {answer} = {ex};\n    }}\n"));
         fin.push_str(&format!("    let {} = {answer};\n", self.ident(&out_name)));
+        fin.push_str(&self.rs_unread(&out_name));
         (init, step, fin)
     }
 
@@ -7865,9 +9611,10 @@ impl<'a> Gen<'a> {
             let mut o = Guarded::new(&mut o, wrap, "    ");
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
+                    // The sentence names the field by its place on the element (§15.324).
                     o.push_str(&format!(
-                        "    if {test} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({v}) }});\n    }}\n",
-                        crate::door::out_of_range(&i.name.text)
+                        "    if {test} {{\n        return Err(RuleError::Input {{ what: {}, value: Some({v}) }});\n    }}\n",
+                        rs_said(&crate::door::out_of_range(&self.said_name(&i.name.text)), &self.here(), "")
                     ));
                 }
             }
@@ -7890,10 +9637,14 @@ impl<'a> Gen<'a> {
                 Ty::Str => ("String".to_string(), format!("{v}.clone()")),
                 other => (self.rs_ty(other), v.clone()),
             };
+            // The list holds one value per element, at the element's index: where a value was first
+            // seen is the sentence's earlier element (§15.324).
+            let here = self.here_used();
+            let first = self.temp("first");
             init.push_str(&format!("    let mut {seen}: Vec<{t}> = Vec::new();\n"));
             step.push_str(&format!(
-                "    if {seen}.contains(&{v}) {{\n        return Err(RuleError::Input {{ what: \"{}\", value: None }});\n    }}\n    {seen}.push({kept});\n",
-                crate::door::duplicate(seq, &fd.name.text)
+                "    if let Some({first}) = {seen}.iter().position(|x| *x == {v}) {{\n        return Err(RuleError::Input {{ what: {}, value: None }});\n    }}\n    {seen}.push({kept});\n",
+                rs_said(&crate::door::duplicate(seq, &fd.name.text, crate::door::BEFORE, crate::door::HERE), &here, &first)
             ));
         }
         (init, step)
@@ -7946,22 +9697,23 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
+            .map(|i| format!("{}: {}", self.held(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: &[{}]", pub_name(&el.name), self.element_type(s)));
+            params.push(format!("{}: &[{}]", self.held(&el.name), self.element_type(s)));
         }
 
         // The public function keeps the plain signature; the branches live in its traced
         // twin, which also returns the rows that matched (§15.33).
-        let mut args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| self.held(&i.name)).collect();
         for el in &self.f.elements {
-            args.push(pub_name(&el.name));
+            args.push(self.held(&el.name));
         }
         let traced = format!("{fname}_traced");
         o.push_str(&format!("/// {}\n", plain_doc(&self.f.name.text, &self.f.version, &format!("`{traced}`"))));
         o.push_str(&format!(
-            "pub fn {fname}({}) -> Result<{ret}, RuleError> {{\n    {traced}({}).map(|(out, _)| out)\n}}\n\n",
+            "pub fn {}({}) -> Result<{ret}, RuleError> {{\n    {traced}({}).map(|(out, _)| out)\n}}\n\n",
+            self.fam(&fname),
             params.join(", "),
             args.join(", ")
         ));
@@ -7977,12 +9729,14 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("    {w}({}).map(|(out, trace, _)| (out, trace))\n}}\n\n", args.join(", ")));
             o.push_str(&format!("/// {}\nfn {w}({}) -> Result<({ret}, Vec<Fired>, Vec<i64>), RuleError> {{\n", walked_doc(), params.join(", ")));
         }
+        // Where the body that reads the inputs begins.
+        let body_at = o.len();
 
         // A branded input is an i64 inside; unwrap it once, where it is read.
         let local = |n: &str| -> String {
             match self.f.inputs.iter().find(|i| i.name.text == n) {
                 Some(i) => {
-                    let v = pub_name(&i.name);
+                    let v = self.held(&i.name);
                     if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                         format!("{v}.0")
                     } else {
@@ -8010,7 +9764,7 @@ impl<'a> Gen<'a> {
                 };
                 let mut o = Guarded::new(&mut o, wrap, "    ");
                 o.push_str(&format!(
-                    "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: None }});\n    }}\n",
+                    "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input {{ what: Said::of(\"{}\"), value: None }});\n    }}\n",
                     self.rs_value(lo, &ty),
                     self.rs_value(hi, &ty),
                     crate::door::out_of_range(&i.name.text)
@@ -8035,13 +9789,13 @@ impl<'a> Gen<'a> {
             };
             let mut o = Guarded::new(&mut o, wrap, "    ");
             o.push_str(&format!(
-                "    if {test} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({v}) }});\n    }}\n",
+                "    if {test} {{\n        return Err(RuleError::Input {{ what: Said::of(\"{}\"), value: Some({v}) }});\n    }}\n",
                 crate::door::out_of_range(&i.name.text)
             ));
         }
 
         o.push_str(&self.constraint_guards(&local, Lang::Rs, "    ", |m| {
-            format!("        return Err(RuleError::Input {{ what: \"{m}\", value: None }});\n")
+            format!("        return Err(RuleError::Input {{ what: Said::of(\"{m}\"), value: None }});\n")
         }));
 
         let trace = self.temp("trace");
@@ -8122,6 +9876,19 @@ impl<'a> Gen<'a> {
             let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
             o.push_str(&format!("    Ok((Output {{ {} }}, {trace}{cuts}))\n}}\n", fields.join(", ")));
         }
+        // An input or a sequence nothing in the body reads: no table names it, and no check of
+        // the door does (§15.340).
+        let unread: String = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| &i.name)
+            .chain(self.f.elements.iter().map(|el| &el.name))
+            .map(|n| self.held(n))
+            .filter(|h| !clash::reads_word(&o[body_at..], h, clash::Syntax::Rust))
+            .map(|h| format!("    let _ = {h};\n"))
+            .collect();
+        o.insert_str(body_at, &unread);
         o
     }
 
@@ -8221,9 +9988,12 @@ impl<'a> Gen<'a> {
             "    }} else {{\n        unreachable!(\"{}\");\n    }}\n",
             tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
         ));
+        for oc in &t.outputs {
+            o.push_str(&self.rs_unread(&oc.name.text));
+        }
         o.push_str(&self.guards(t, local, Lang::Rs, "    ", |name, i, j| {
             format!(
-                "        return Err(RuleError::Contradiction {{ what: \"{}\" }});\n",
+                "        return Err(RuleError::Contradiction {{ what: Said::of(\"{}\") }});\n",
                 tr!("表 {name}: {i} と {j} が同時に当てはまりました", "table {name}: {i} and {j} matched at the same time")
             )
         }));
@@ -8243,7 +10013,13 @@ impl<'a> Gen<'a> {
     /// and every arithmetic operation is the int64 claim, which Kani checks by default. The
     /// fourth, the overlap, is *not* in the artifact — the if/else chain has already settled
     /// the priority — so the rows are counted here instead.
+    /// The proofs read the module's names through `use super::r::*`, where an enum's type hides one
+    /// of the prelude's (§15.336).
     pub fn rs_proof(&self) -> String {
+        self.apart_types(clash::Syntax::Rust, |g| g.rs_proof_text())
+    }
+
+    fn rs_proof_text(&self) -> String {
         let alias = pub_name(&self.f.name);
         let mut o = self.header("//");
         o.push_str(&format!(
@@ -8274,7 +10050,7 @@ impl<'a> Gen<'a> {
                 "What is proved is this Rust, not the table and not the checker."
             ),
         ));
-        o.push_str("#![allow(non_snake_case, uncommon_codepoints, unused_parens, unused_mut, unused_variables)]\n\n");
+        o.push_str("#![allow(non_snake_case, uncommon_codepoints, unused_parens, unused_mut, unused_variables, dead_code, clippy::all)]\n\n");
         // The modules of the `enums` files the rule reads its types from sit at the root, beside
         // it (§15.212).
         let owners: String = self.rs_owner_mods().lines().map(|l| if l.starts_with("#[path") { format!("#[cfg(kani)]\n{l}\n") } else { format!("{l}\n") }).collect();
@@ -8289,8 +10065,8 @@ impl<'a> Gen<'a> {
         let mut whole = blocked.is_none();
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
-            params.push(format!("{}: {}", pub_name(&i.name), self.rs_ty(&ty)));
-            match self.rs_any(&i.name.text, &pub_name(&i.name), &ty, "        ") {
+            params.push(format!("{}: {}", self.held(&i.name), self.rs_ty(&ty)));
+            match self.rs_any(&i.name.text, &self.held(&i.name), &ty, "        ") {
                 Some((d, e)) => {
                     decls.push_str(&d);
                     args.push(e);
@@ -8304,7 +10080,7 @@ impl<'a> Gen<'a> {
         // own entry guard turns away. Both sides are inputs (E018), and an input here is the
         // plain i64, before it is branded for the call.
         for k in &self.f.constraints {
-            let name = |n: &str| self.f.inputs.iter().find(|i| i.name.text == n).map(|i| pub_name(&i.name));
+            let name = |n: &str| self.f.inputs.iter().find(|i| i.name.text == n).map(|i| self.held(&i.name));
             if k.names().all(|n| name(n).is_some()) {
                 let (a, b) = self.constraint_sides(k, &|n| name(n).unwrap_or_default(), false);
                 decls.push_str(&format!("        kani::assume({a} {} {b});\n", k.op.word()));
@@ -8312,7 +10088,7 @@ impl<'a> Gen<'a> {
         }
         // A `never` line is part of the declared domain the same way (§15.282).
         for n in self.f.door_nevers() {
-            let name = |m: &str| self.f.inputs.iter().find(|i| i.name.text == m).map(|i| pub_name(&i.name)).unwrap_or_default();
+            let name = |m: &str| self.f.inputs.iter().find(|i| i.name.text == m).map(|i| self.held(&i.name)).unwrap_or_default();
             let conds = self.never_conds(n, Lang::Rs, &name);
             decls.push_str(&format!("        kani::assume(!({}));\n", conds.join(" && ")));
         }
@@ -8320,7 +10096,7 @@ impl<'a> Gen<'a> {
         let mut unwound = 0;
         for (s, el) in self.f.elements.iter().enumerate() {
             let cap = self.count_cap_of(s).unwrap_or(0);
-            let seq = pub_name(&el.name);
+            let seq = self.held(&el.name);
             let n = if s == 0 { "n".to_string() } else { format!("n{}", s + 1) };
             let ty = self.element_type(s);
             let mut lines = String::new();
@@ -8387,13 +10163,97 @@ impl<'a> Gen<'a> {
             }
         }
 
+        // A value the rule works out outside the range it accepts for it is refused where it is
+        // worked out (§15.313), so a call that comes to one is outside the declared domain as one
+        // a `constraint` rules out is. The harness assumes away the refusal the code gives for
+        // it — that refusal, and only with a value outside the range, so a door that refused a
+        // value inside would still be caught — and holds every other call to an answer. The
+        // sentence is compared as bytes of a fixed length: two strings are compared by a loop
+        // over a length the model checker cannot bound, and it does not come back. The bytes are
+        // a loop of that length, so a harness that bounds its loops for a walk bounds them past
+        // the longest sentence too. A rule with none is written as before.
+        // A `define` worked out for each element is said with the element's index (§15.324): the
+        // pieces of the sentence around the index are compared one by one, the index left free.
+        let mut assumed = String::new();
+        let mut longest = 0;
+        let said_is = |sentence: &str| -> (String, i128) {
+            let words: Vec<&str> = pieces(sentence).into_iter().filter_map(|p| if let Piece::Text(t) = p { Some(t) } else { None }).collect();
+            let test = words.iter().enumerate().map(|(k, w)| format!(" && said::<{}>(what.words()[{k}], \"{w}\")", w.len())).collect::<String>();
+            (format!("what.words().len() == {}{test}", words.len()), words.iter().map(|w| w.len() as i128).max().unwrap_or(0))
+        };
+        for (i, it) in self.f.items.iter().enumerate() {
+            let Item::Define(d) = it else { continue };
+            let Some(test) = self.accepted_ends(d).and_then(|ends| or_out_of("refused", ends, "")) else { continue };
+            let name = match self.walked_in(i) {
+                Some(s) => crate::door::element(&self.f.elements[s].name.text, crate::door::HERE, &d.name.text),
+                None => d.name.text.clone(),
+            };
+            let (is, len) = said_is(&crate::door::out_of_range(&name));
+            longest = longest.max(len);
+            assumed.push_str(&format!(
+                "        kani::assume(!matches!(answer, Err(RuleError::Input {{ what, value: Some(refused) }}) if {is} && ({test})));\n"
+            ));
+        }
+        // So is a call whose `sum` or `count` ends its walk outside the range it declares
+        // (§15.100, §15.314): past the top of a sum, where the longest sequence the harness
+        // builds, every element at the top of what is summed, passes it; or under the bottom of
+        // either, where a walk can come in under it. The refusal is assumed away with a total
+        // outside the range only, so a walk that refused a total inside it is still caught.
+        let mut summaries = false;
+        for d in self.f.aggs().filter(|d| !d.kind.extreme()) {
+            let longest_walk = self.f.elements.iter().position(|el| el.name.text == d.over).and_then(|s| self.count_cap_of(s)).unwrap_or(0);
+            let held = self.c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi);
+            let each = self.c.ranges.get(&d.column.text).and_then(|(_, hi)| *hi);
+            let passed = match (held, each) {
+                (Some(hi), Some(each)) => each.checked_mul(crate::num::Rat::int(longest_walk)).is_none_or(|r| r.cmp_to(hi) == std::cmp::Ordering::Greater),
+                _ => true,
+            };
+            let top = self.sum_caps().into_iter().find(|(x, _)| x.name.text == d.name.text).map(|(_, cap)| cap).filter(|_| passed);
+            let Some(test) = or_out_of("refused", (self.walk_floor(d), top), "") else { continue };
+            let (is, len) = said_is(&crate::door::out_of_range(&d.name.text));
+            longest = longest.max(len);
+            summaries = true;
+            assumed.push_str(&format!(
+                "        kani::assume(!matches!(answer, Err(RuleError::Input {{ what, value: Some(refused) }}) if {is} && ({test})));\n"
+            ));
+        }
+        if !unwind.is_empty() && !assumed.is_empty() {
+            unwind = format!("    #[kani::unwind({})]\n", unwound.max(longest + 2));
+        }
+        let (call, accepted_doc) = if assumed.is_empty() {
+            (format!("        assert!({alias}({}).is_ok());\n", args.join(", ")), String::new())
+        } else {
+            o.push_str(&format!(
+                "    /// {}\n    fn said<const N: usize>(what: &str, said: &str) -> bool {{\n        use std::convert::TryFrom;\n        match (<[u8; N]>::try_from(what.as_bytes()), <[u8; N]>::try_from(said.as_bytes())) {{\n            (Ok(a), Ok(b)) => a == b,\n            _ => false,\n        }}\n    }}\n\n",
+                tr!(
+                    "`what` が `said` か。長さ N のバイトの並びとして比べる。文字列どうしの比較は長さの決まらないループになり、モデル検査器が返ってこない。",
+                    "Whether `what` is `said`, compared as N bytes: comparing two strings is a loop over a length the model checker cannot bound, and it does not come back."
+                )
+            ));
+            (
+                format!("        let answer = {alias}({});\n{assumed}        assert!(answer.is_ok());\n", args.join(", ")),
+                format!(
+                    "    /// {}\n",
+                    if summaries {
+                        tr!(
+                            "計算した値や、並びの `sum`・`count` が、規則がその値に受け付ける範囲の外になる呼び出しは、宣言した範囲の外にある。`constraint` を満たさない呼び出しと同じに、コードがその値で返す誤りを仮定で除く。範囲の中の値で返る誤りは除かないので、ここで見つかる。",
+                            "A call on which a value the rule works out, or a `sum` or a `count` over a sequence, falls outside the range the rule accepts for it is outside the declared domain, and is assumed away by the refusal the code gives with that value, as one outside a `constraint` is. A refusal with a value inside the range is not, and is caught here."
+                        )
+                    } else {
+                        tr!(
+                            "計算した値が、規則がその値に受け付ける範囲の外になる呼び出しは、宣言した範囲の外にある。`constraint` を満たさない呼び出しと同じに、コードがその値で返す誤りを仮定で除く。範囲の中の値で返る誤りは除かないので、ここで見つかる。",
+                            "A call whose value the rule works out falls outside the range it accepts for that value is outside the declared domain, and is assumed away by the refusal the code gives with that value, as one outside a `constraint` is. A refusal with a value inside the range is not, and is caught here."
+                        )
+                    }
+                ),
+            )
+        };
         o.push_str(&format!(
-            "    /// {}\n    #[kani::proof]\n{unwind}    fn {alias}_answers() {{\n{decls}        assert!({alias}({}).is_ok());\n    }}\n\n",
+            "    /// {}\n{accepted_doc}    #[kani::proof]\n{unwind}    fn {alias}_answers() {{\n{decls}{call}    }}\n\n",
             tr!(
                 "宣言した範囲のどの入力にも、この規則は答えを返す。返らないのは、完全性に穴があるとき、W114 の対が実在したとき、入口のガードに当たったときの三つ。三つめが起きないことは、ここで仮定した範囲が宣言した範囲そのものだ、という確認でもある。",
                 "For every input in the declared domain the rule answers. There are three ways not to — a gap in the completeness, a W114 pair that was real, and the entry guard — and the third not happening is also the check that the domain assumed here is the declared one."
             ),
-            args.join(", ")
         ));
         o.push_str(&harnesses);
         o.push_str("}\n");
@@ -8562,7 +10422,7 @@ impl<'a> Gen<'a> {
         let local = |n: &str| -> String {
             match self.f.inputs.iter().find(|i| i.name.text == n) {
                 Some(i) => {
-                    let v = pub_name(&i.name);
+                    let v = self.held(&i.name);
                     if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                         format!("{v}.0")
                     } else {
@@ -8584,11 +10444,19 @@ impl<'a> Gen<'a> {
                     self.ident(&d.name.text),
                     rs_expr(unparen(&self.expr(&d.expr, &local).text))
                 )),
-                Item::Define(d) => body.push_str(&format!(
-                    "    let {} = {};\n",
-                    self.ident(&d.name.text),
-                    rs_expr(unparen(&self.expr(&d.expr, &local).text))
-                )),
+                Item::Define(d) => {
+                    body.push_str(&format!(
+                        "    let {} = {};\n",
+                        self.ident(&d.name.text),
+                        rs_expr(unparen(&self.expr(&d.expr, &local).text))
+                    ));
+                    // A call whose value falls outside the range the rule accepts for it never
+                    // reaches the table (§15.313): it is outside the domain the rows cover.
+                    let n = self.ident(&d.name.text);
+                    if let Some(test) = self.accepted_ends(d).and_then(|ends| or_out_of(&n, ends, "")) {
+                        body.push_str(&format!("    kani::assume(!({test}));\n"));
+                    }
+                }
                 Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     let t = self.c.table_at(t)?;
@@ -8636,19 +10504,26 @@ impl<'a> Gen<'a> {
     /// an expression that `?` stops with the module's own `RuleError`, inside a closure that
     /// returns one. The Rust runner, its WASI build and the Wasm entry all read with it.
     fn rs_bind(&self, ty: &Ty, src: &str, name: &str) -> String {
+        self.rs_bind_as(ty, src, name, name, "")
+    }
+
+    /// [`Gen::rs_bind`], with the sentences calling the value `said`: for a field of an element
+    /// `lines[\u{1}].amount`, which takes the index `at` of the element as `r::Said` (§15.324).
+    fn rs_bind_as(&self, ty: &Ty, src: &str, name: &str, said: &str, at: &str) -> String {
+        let lit = |x: String| -> String { if names_element(&x) { format!("r::{}", rs_said(&x, at, "")) } else { format!("{x:?}") } };
         let optional = matches!(ty, Ty::Opt(_));
-        let take = format!("take({src}, {name:?}, {:?}, {optional})?", crate::door::missing(name));
+        let take = format!("take({src}, {name:?}, {}, {optional})?", lit(crate::door::missing(said)));
         let one = |v: &str| -> String {
             match ty.present() {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                    format!("member(r::{cls}::parse, {v}, {:?})?", crate::door::not_in_enum(name, n))
+                    format!("member(r::{cls}::parse, {v}, {})?", lit(crate::door::not_in_enum(said, n)))
                 }
-                Ty::Bool => format!("boolean({v}, {:?})?", crate::door::not_bool(name)),
-                Ty::Date => format!("date({v}, {:?})?", crate::door::not_date(name)),
-                Ty::Number => format!("int({v}, {:?}, {:?})?", crate::door::not_integer(name), crate::door::out_of_range(name)),
-                Ty::Str => format!("text({v}, {:?})?", crate::door::not_string(name)),
-                other => format!("r::{}(int({v}, {:?}, {:?})?)", self.rs_ty(other), crate::door::not_integer(name), crate::door::out_of_range(name)),
+                Ty::Bool => format!("boolean({v}, {})?", lit(crate::door::not_bool(said))),
+                Ty::Date => format!("date({v}, {})?", lit(crate::door::not_date(said))),
+                Ty::Number => format!("int({v}, {}, {})?", lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said))),
+                Ty::Str => format!("text({v}, {})?", lit(crate::door::not_string(said))),
+                other => format!("r::{}(int({v}, {}, {})?)", self.rs_ty(other), lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said))),
             }
         };
         if optional {
@@ -8671,6 +10546,7 @@ impl<'a> Gen<'a> {
                 None => o.push_str(&format!("{indent}let a{i} = {read};\n")),
             }
         }
+        // A sentence about an element names it by its index `i` (§15.324).
         for (s, el) in self.f.elements.iter().enumerate() {
             let n = self.f.inputs.len() + s;
             let seq = &el.name.text;
@@ -8678,13 +10554,13 @@ impl<'a> Gen<'a> {
             let fields: Vec<String> = el
                 .fields
                 .iter()
-                .map(|fd| format!("{}: {}", pub_name(&fd.name), self.rs_bind(&self.ty_of(&fd.name.text), "e", &fd.name.text)))
+                .map(|fd| format!("{}: {}", pub_name(&fd.name), self.rs_bind_as(&self.ty_of(&fd.name.text), "e", &fd.name.text, &crate::door::element(seq, crate::door::HERE, &fd.name.text), "i")))
                 .collect();
             o.push_str(&format!(
-                "{indent}let mut a{n}: Vec<r::{ty}> = Vec::new();\n{indent}for e in &list(take({d}, {seq:?}, {:?}, false)?, {:?}, {:?})? {{\n{indent}    a{n}.push(r::{ty} {{ {} }});\n{indent}}}\n",
+                "{indent}let mut a{n}: Vec<r::{ty}> = Vec::new();\n{indent}for (i, e) in list(take({d}, {seq:?}, {:?}, false)?, {:?}, |i| r::{})?.iter().enumerate() {{\n{indent}    a{n}.push(r::{ty} {{ {} }});\n{indent}}}\n",
                 crate::door::missing(seq),
                 crate::door::not_sequence(seq),
-                crate::door::not_object(seq),
+                rs_said(&crate::door::not_object(seq, crate::door::HERE), "i", ""),
                 fields.join(", ")
             ));
         }
@@ -8709,8 +10585,14 @@ impl<'a> Gen<'a> {
     }
 
     pub fn rs_runner(&self) -> String {
+        // A rule that reads no input reads nothing out of what it is given, which Rust warns of
+        // (§15.330).
+        let d_var = if self.f.inputs.is_empty() && self.f.elements.is_empty() { "_d" } else { "d" };
         let alias = pub_name(&self.f.name);
         let (first, second) = (self.rs_pass(true), self.rs_pass(false));
+        // the record call's own arguments, each with the `, ` after it: none for a rule that
+        // reads no input
+        let second = if second.is_empty() { second } else { format!("{second}, ") };
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is.
         let (mut head, mut meta, mut tail, mut keep, mut next) = (String::new(), String::new(), String::new(), String::new(), "()".to_string());
@@ -8779,7 +10661,7 @@ impl<'a> Gen<'a> {
         let labels = self.rs_labels_mode() + &self.rs_prereq_mode() + &self.rs_chances_mode(&self.rs_binds("&d", "                ", &[]));
         format!(
             r#"// Code generated by rulec {ver}. DO NOT EDIT.
-#![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code)]
+#![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code, clippy::all)]
 
 {owners}#[path = "{alias}.rs"]
 mod r;
@@ -8793,24 +10675,24 @@ use std::io::Read;
         if line.trim().is_empty() {{
             continue;
         }}
-{meta}        let d = fields(line);
+{meta}        let {d_var} = fields(line);
         // One call, or the refusal its door gives, in the place of the record (§15.204).
         let res = (|| -> Result<_, r::RuleError> {{
 {binds}            let (got, trace) = r::{alias}_traced({first})?;
-{keep}            Ok((r::{alias}_record({second}, got, &trace, ""), {next}))
+{keep}            Ok((r::{alias}_record({second}got, &trace, ""), {next}))
         }})();
         match res {{
             {ok} => {{
                 println!("{{record}}");
 {tail}            }}
-            Err(r::RuleError::Input {{ what, .. }}) => println!("{{{{\"refused\":\"input\",\"error\":{{}}}}}}", json_str(what)),
-            Err(r::RuleError::Contradiction {{ what }}) => println!("{{{{\"refused\":\"contradiction\",\"error\":{{}}}}}}", json_str(what)),
+            Err(r::RuleError::Input {{ what, .. }}) => println!("{{{{\"refused\":\"input\",\"error\":{{}}}}}}", json_str(&what.to_string())),
+            Err(r::RuleError::Contradiction {{ what }}) => println!("{{{{\"refused\":\"contradiction\",\"error\":{{}}}}}}", json_str(&what.to_string())),
         }}
     }}
 }}
 "#,
             ver = ritsu_emit::header::VERSION,
-            helpers = RS_JSON_HELPERS,
+            helpers = rs_json_helpers(!self.f.elements.is_empty()),
             json_str = RS_JSON_STR,
         )
     }
@@ -8839,19 +10721,25 @@ use std::io::Read;
     /// bytes that are not UTF-8 among them: a host gets a line it can read, not a trap. The three
     /// functions of the ABI are ritsu-emit's (§15.278).
     pub fn rs_wasm(&self) -> String {
+        // A rule that reads no input reads nothing out of what it is given, which Rust warns of
+        // (§15.330).
+        let d_var = if self.f.inputs.is_empty() && self.f.elements.is_empty() { "_d" } else { "d" };
         let alias = pub_name(&self.f.name);
         let (first, second) = (self.rs_pass(true), self.rs_pass(false));
+        // the record call's own arguments, each with the `, ` after it: none for a rule that
+        // reads no input
+        let second = if second.is_empty() { second } else { format!("{second}, ") };
         let binds = self.rs_binds("&d", "        ", &[]);
         let mut o = format!(
-            "// Code generated by rulec {}. DO NOT EDIT.\n#![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code)]\n\n#[path = \"{alias}.rs\"]\nmod r;\n\n{}\n",
+            "// Code generated by rulec {}. DO NOT EDIT.\n#![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code, clippy::all)]\n\n#[path = \"{alias}.rs\"]\nmod r;\n\n{}\n",
             ritsu_emit::header::VERSION,
             ritsu_emit::wasm::ALLOC_USE
         );
-        o.push_str(RS_JSON_HELPERS);
+        o.push_str(&rs_json_helpers(!self.f.elements.is_empty()));
         o.push_str(RS_JSON_STR);
         o.push_str(&rs_wasm_abi());
         o.push_str(&format!(
-            "/// The inputs read, the rule called, the record line written — or the refusal.\nfn answer(input: &str) -> String {{\n    let chars: Vec<char> = input.chars().collect();\n    let top = pairs_from(&chars, 0).0;\n    // A record carries the inputs under \"in\"; a bare object is the inputs themselves.\n    let inner: Option<String> = top.iter().find(|(k, _)| k == \"in\").map(|(_, v)| v.clone());\n    let d = match inner {{\n        Some(v) => pairs_from(&v.chars().collect::<Vec<_>>(), 0).0,\n        None => top,\n    }};\n    let res = (|| -> Result<String, r::RuleError> {{\n{binds}        let (got, trace) = r::{alias}_traced({first})?;\n        Ok(r::{alias}_record({second}, got, &trace, \"\"))\n    }})();\n    match res {{\n        Ok(record) => record,\n        Err(e) => refusal(&e),\n    }}\n}}\n"
+            "/// The inputs read, the rule called, the record line written — or the refusal.\nfn answer(input: &str) -> String {{\n    let chars: Vec<char> = input.chars().collect();\n    let top = pairs_from(&chars, 0).0;\n    // A record carries the inputs under \"in\"; a bare object is the inputs themselves.\n    let inner: Option<String> = top.iter().find(|(k, _)| k == \"in\").map(|(_, v)| v.clone());\n    let {d_var} = match inner {{\n        Some(v) => pairs_from(&v.chars().collect::<Vec<_>>(), 0).0,\n        None => top,\n    }};\n    let res = (|| -> Result<String, r::RuleError> {{\n{binds}        let (got, trace) = r::{alias}_traced({first})?;\n        Ok(r::{alias}_record({second}got, &trace, \"\"))\n    }})();\n    match res {{\n        Ok(record) => record,\n        Err(e) => refusal(&e),\n    }}\n}}\n"
         ));
         o
     }
@@ -8955,6 +10843,25 @@ fn api_wasm_answers() -> String {
     ])
 }
 
+/// The package the Python runner and MCP server make of their own directory, to read the modules
+/// written to go inside a package (§15.327). Each of them is a program of its own, so the name
+/// meets nothing of the caller's.
+const PY_PACKAGE: &str = "_rulec";
+
+/// The lines, after the imports, that make the directory of the file a package of the name
+/// [`PY_PACKAGE`] (§15.327): the modules beside the file are then read as the modules of that
+/// package, and their relative imports find one another. They want `os`, `sys` and `types`.
+pub(crate) fn py_package_lines() -> String {
+    format!(
+        "{}_package = sys.modules.setdefault(\"{PY_PACKAGE}\", types.ModuleType(\"{PY_PACKAGE}\"))\n\
+         _package.__path__ = [os.path.dirname(os.path.abspath(__file__))]\n",
+        tr!(
+            "# 規則のモジュールはパッケージの中に置く形で書いてあり（--python-package）、隣のモジュールを\n# 相対の import で読む。この置き場を一つのパッケージとして読む。\n",
+            "# The rule's module is written to go inside a package (--python-package) and reads the\n# modules beside it by relative imports, so this directory is read as a package.\n"
+        )
+    )
+}
+
 /// How the generated Python runners read the wire (§15.204): an input there at all, of its
 /// kind, refused with the module's own `RuleInputError` and the sentence every language says;
 /// and the line a refusal prints in the place of the record. The Python runner and the Connect
@@ -8974,12 +10881,15 @@ def _take(d: Any, k: str, missing: str, optional: bool = False) -> Any:
     return d[k]
 
 
-def _int(v: Any, what: str) -> int:
+def _int(v: Any, what: str, past: str) -> int:
     # A whole number written with a point or an exponent, 1000.0 or 1e3, is that integer.
     if isinstance(v, float) and v.is_integer():
-        return int(v)
+        v = int(v)
     if not isinstance(v, int) or isinstance(v, bool):
         raise m.RuleInputError(what, repr(v))
+    # One int64 does not hold is past what a reader of every language takes, there and not later.
+    if not -9223372036854775808 <= v <= 9223372036854775807:
+        raise m.RuleInputError(past, repr(v))
     return v
 
 
@@ -9037,6 +10947,12 @@ def _refused(kind: str, what: str) -> None:
 /// How the generated TypeScript runner reads the wire (§15.204), and the JavaScript one with its
 /// types taken off: the readers of `PY_WIRE`, one per kind, with a second for an optional input
 /// that takes `null`, and no generics, which the type stripping does not read.
+/// The functions and the types of [`TS_WIRE`] a runner holds only where it reads them (§15.342).
+const TS_WIRE_READS: &[&str] = &[
+    "_take", "JsonSource", "JsonRaw", "_exact", "_raw", "_int", "_intq", "_bool", "_boolq", "_str", "_strq", "_date", "_dateq", "_enum", "_enumq", "_seq", "_obj",
+    "_refused",
+];
+
 pub(crate) const TS_WIRE: &str = r#"function _take(d: unknown, k: string, missing: string, optional = false): unknown {
   if (typeof d !== "object" || d === null || Array.isArray(d) || !(k in d)) {
     throw new RuleInputError(missing);
@@ -9070,18 +10986,20 @@ function _raw(_k: string, v: unknown): unknown {
   return json.rawJSON !== undefined ? json.rawJSON(String(v)) : Number(v);
 }
 
-function _int(v: unknown, what: string): bigint {
-  if (typeof v === "bigint") {
-    return v;
-  }
-  if (typeof v !== "number" || !Number.isInteger(v)) {
+function _int(v: unknown, what: string, past: string): bigint {
+  const n = typeof v === "bigint" ? v : typeof v === "number" && Number.isInteger(v) ? BigInt(v) : null;
+  if (n === null) {
     throw new RuleInputError(what, v);
   }
-  return BigInt(v);
+  // One int64 does not hold is past what a reader of every language takes, there and not later.
+  if (n < -9223372036854775808n || n > 9223372036854775807n) {
+    throw new RuleInputError(past, v);
+  }
+  return n;
 }
 
-function _intq(v: unknown, what: string): bigint | null {
-  return v === null ? null : _int(v, what);
+function _intq(v: unknown, what: string, past: string): bigint | null {
+  return v === null ? null : _int(v, what, past);
 }
 
 function _bool(v: unknown, what: string): boolean {
@@ -9476,6 +11394,36 @@ pub const WASI_RUSTC_FLAGS: &str = "-O --target wasm32-wasip1";
 
 /// The JSON reading the generated Rust runner and the Wasm entry share: one flat object as
 /// (key, value) pairs, values kept as their source text, and a reader for each wire type.
+/// [`RS_JSON_HELPERS`] for a rule that reads sequences: a reader takes the sentence it refuses with
+/// as anything that is a `Said`, so that a field of an element is refused at its index (§15.324),
+/// and the reader of a sequence says an element that is not an object at its index. A rule with no
+/// sequence keeps the readers that take a sentence of text, as before.
+fn rs_json_helpers(walks: bool) -> String {
+    if !walks {
+        return RS_JSON_HELPERS.to_string();
+    }
+    let mut h = RS_JSON_HELPERS.to_string();
+    for (old, new) in [
+        ("missing: &'static str, optional: bool", "missing: impl Into<r::Said>, optional: bool"),
+        ("what: r::Said::of(missing), value: None", "what: missing.into(), value: None"),
+        ("fn refused(what: &'static str) -> r::RuleError {\n    r::RuleError::Input { what: r::Said::of(what), value: None }", "fn refused(what: impl Into<r::Said>) -> r::RuleError {\n    r::RuleError::Input { what: what.into(), value: None }"),
+        ("fn int(v: &str, what: &'static str, past: &'static str)", "fn int(v: &str, what: impl Into<r::Said>, past: impl Into<r::Said>)"),
+        ("fn boolean(v: &str, what: &'static str)", "fn boolean(v: &str, what: impl Into<r::Said>)"),
+        ("fn text(v: &str, what: &'static str)", "fn text(v: &str, what: impl Into<r::Said>)"),
+        ("fn date(v: &str, what: &'static str)", "fn date(v: &str, what: impl Into<r::Said> + Copy)"),
+        ("v: &str, what: &'static str) -> Result<T, r::RuleError>", "v: &str, what: impl Into<r::Said>) -> Result<T, r::RuleError>"),
+        (
+            "/// The elements of an array, each an object read as its pairs: the sequence a walk reads.\nfn list(v: &str, not_sequence: &'static str, not_object: &'static str)",
+            "/// The elements of an array, each an object read as its pairs: the sequence a walk reads. An\n/// element that is not an object is said at its index (§15.324).\nfn list(v: &str, not_sequence: &'static str, not_object: impl Fn(usize) -> r::Said)",
+        ),
+        ("return Err(refused(not_object));", "return Err(refused(not_object(out.len())));"),
+    ] {
+        debug_assert_eq!(h.matches(old).count(), 1, "{old}");
+        h = h.replacen(old, new, 1);
+    }
+    h
+}
+
 pub(crate) const RS_JSON_HELPERS: &str = r##"/// One flat JSON object as (key, value) pairs, values kept as their source text.
 fn fields(line: &str) -> Vec<(String, String)> {
     let b: Vec<char> = line.chars().collect();
@@ -9607,12 +11555,12 @@ fn string_at(b: &[char], i: usize) -> (String, usize) {
 fn take<'a>(d: &'a [(String, String)], k: &str, missing: &'static str, optional: bool) -> Result<&'a str, r::RuleError> {
     match d.iter().find(|(a, _)| a == k) {
         Some((_, v)) if optional || v != "null" => Ok(v.as_str()),
-        _ => Err(r::RuleError::Input { what: missing, value: None }),
+        _ => Err(r::RuleError::Input { what: r::Said::of(missing), value: None }),
     }
 }
 
 fn refused(what: &'static str) -> r::RuleError {
-    r::RuleError::Input { what, value: None }
+    r::RuleError::Input { what: r::Said::of(what), value: None }
 }
 
 /// A JSON number whose value is a whole number, as that integer: digits with a minus before them
@@ -9945,7 +11893,7 @@ for (const line of readFileSync(0, "utf8").split("\n")) {
 /// vectors as every other language (§8.5).
 pub fn round_wasm_rust(u: &Uses) -> String {
     let mut o = format!(
-        "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n#![allow(dead_code, unused_parens)]\n",
+        "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n#![allow(dead_code, unused_parens, clippy::all)]\n",
         ritsu_emit::header::VERSION,
         tr!(
             "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
@@ -9987,7 +11935,7 @@ pub fn round_tests_wasm_js(u: &Uses) -> String {
 
 pub fn round_tests_rust(u: &Uses) -> String {
     let mut o = format!(
-        "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n#![allow(unused_parens)]\n",
+        "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n#![allow(unused_parens, dead_code, clippy::all)]\n",
         ritsu_emit::header::VERSION,
         tr!(
             "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
@@ -10100,7 +12048,8 @@ pub fn round_tests_typescript(u: &Uses) -> String {
     o.push_str("if (bad > 0) {\n  process.exit(1);\n}\n");
     let count = if n == 0 { "CASES.length" } else { "CASES.length + ARITH.length" };
     o.push_str(&format!("console.log(`{}`);\n", tr!("ok ${{{count}}} 件", "ok ${{{count}}} cases")));
-    o
+    // The two comparisons, which the cases do not call (§15.342).
+    from::ts_without_unread(&o, TS_CALLED)
 }
 
 pub fn round_tests_go(pkg: &str, u: &Uses) -> String {
@@ -10413,13 +12362,14 @@ impl Gen<'_> {
     fn enum_fns(&self, lang: &str, en: &str) -> (Option<String>, Option<String>) {
         let t = self.enum_type(en);
         let owner = self.c.owners.get(en).map(|o| pub_name(&o.module));
-        let qualified = |f: String| match &owner {
-            Some(m) => format!("{m}.{f}"),
+        // the file's module's name for a function of an enum of an `enums` file (§15.326)
+        let qualified = |lang: &str, f: String| match &owner {
+            Some(m) => format!("{m}.{}", self.theirs(lang, en, &f)),
             None => f,
         };
         match lang {
-            "python" => (Some(qualified(self.py_rank_fn(en))), Some(qualified(self.py_label_fn(en)))),
-            "typescript" | "javascript" => (Some(qualified(self.ts_rank_fn(en))), Some(qualified(self.ts_label_fn(en)))),
+            "python" => (Some(qualified("python", self.py_rank_fn(en))), Some(qualified("python", self.py_label_fn(en)))),
+            "typescript" | "javascript" => (Some(qualified("typescript", self.ts_rank_fn(en))), Some(qualified("typescript", self.ts_label_fn(en)))),
             "rust" => (Some(format!("{t}::rank")), Some(format!("{t}::label"))),
             "ruby" => {
                 let m = self.rb_module();
@@ -10452,10 +12402,14 @@ impl Gen<'_> {
                     alias: self.enum_names.get(jp).cloned().unwrap_or_else(|| pascal(jp)),
                     values: self.c.enums[jp]
                         .iter()
-                        .map(|v| ritsu_ports::EnumValue {
+                        .enumerate()
+                        .map(|(i, v)| ritsu_ports::EnumValue {
                             name: v.clone(),
                             alias: self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.clone()).unwrap_or_else(|| v.clone()),
                             public: public_value(self.f, jp, v),
+                            // the display name written after the value (§15.211), as the generated
+                            // label functions return it
+                            title: self.c.labels.get(jp).and_then(|ls| ls.get(i).cloned().flatten()),
                         })
                         .collect(),
                     public: decl.map(|e| pub_name(&e.name)).unwrap_or_else(|| jp.clone()),
@@ -10485,32 +12439,35 @@ impl Gen<'_> {
     /// lists, from the same helpers (for ritsu's port of rules, `crate::ports`).
     pub fn calls(&self) -> (ritsu_ports::Call, ritsu_ports::Call, ritsu_ports::Call, ritsu_ports::Call) {
         let alias = pub_name(&self.f.name);
-        let (ts_params, ts_outputs) = self.param_list(|n| pub_name(n), |t| self.ts_ty(t), "readonly Element[]");
+        // each language's call with its enums under the types they take there (§15.326)
+        let (ts, py, go) = (self.for_target("typescript"), self.for_target("python"), self.for_target("go"));
+        let (ts, py, go) = (ts.as_ref().unwrap_or(self), py.as_ref().unwrap_or(self), go.as_ref().unwrap_or(self));
+        let (ts_params, ts_outputs) = ts.param_list(|n| pub_name(n), |t| ts.ts_ty(t), "readonly Element[]");
         let typescript = ritsu_ports::Call {
             module: format!("{alias}.ts"),
             function: alias.clone(),
             input_type: String::new(),
             params: ts_params,
             outputs: ts_outputs,
-            enums: self.enum_list(|_, a| a.to_uppercase()),
+            enums: ts.enum_list(|_, a| a.to_uppercase()),
         };
-        let (py_params, py_outputs) = self.param_list(|n| pub_name(n), |t| self.py_ty(t), "list[Element]");
+        let (py_params, py_outputs) = py.param_list(|n| pub_name(n), |t| py.py_ty(t), "list[Element]");
         let python = ritsu_ports::Call {
             module: alias.clone(),
             function: alias.clone(),
             input_type: String::new(),
             params: py_params,
             outputs: py_outputs,
-            enums: self.enum_list(|_, a| a.to_uppercase()),
+            enums: py.enum_list(|_, a| a.to_uppercase()),
         };
-        let (go_params, go_outputs) = self.param_list(|n| pascal(&pub_name(n)), |t| self.go_ty(t), "[]Element");
+        let (go_params, go_outputs) = go.param_list(|n| pascal(&pub_name(n)), |t| go.go_ty(t), "[]Element");
         let go = ritsu_ports::Call {
             module: crate::backend::go_package(&alias),
             function: pascal(&alias),
             input_type: "Input".into(),
             params: go_params,
             outputs: go_outputs,
-            enums: self.enum_list(|t, a| format!("{t}{a}")),
+            enums: go.enum_list(|t, a| format!("{t}{a}")),
         };
         // a Rust enum's member is the value's alias in Pascal case on the enum's type, as `api`
         // lists it
@@ -10643,6 +12600,36 @@ impl Gen<'_> {
         if self.f.kind == FileKind::Enums {
             return self.api_enums();
         }
+        let whole = self.api_whole();
+        // What it says of a language where some enum takes another type than elsewhere (§15.326)
+        // comes from the generator of that language, field by field under the language's name.
+        let mut spliced: Option<crate::json::Json> = None;
+        let langs: [(&str, &[&str]); 6] = [
+            ("python", &["python", "numpy"]),
+            ("typescript", &["typescript", "javascript"]),
+            ("go", &["go"]),
+            ("java", &["java"]),
+            ("ruby", &["ruby"]),
+            ("php", &["php"]),
+        ];
+        for (id, keys) in langs {
+            let Some(t) = self.for_target(id) else { continue };
+            let Ok(theirs) = crate::json::parse(&t.api_whole()) else { continue };
+            if spliced.is_none() {
+                spliced = crate::json::parse(&whole).ok();
+            }
+            if let Some(base) = spliced.as_mut() {
+                splice_fields(base, &theirs, keys);
+            }
+        }
+        match spliced {
+            Some(j) => j.compact(),
+            None => whole,
+        }
+    }
+
+    /// [`Gen::api`], every language as this generator writes it.
+    fn api_whole(&self) -> String {
         let alias = pub_name(&self.f.name);
         let pkg = crate::backend::go_package(&alias);
         // The two errors of the languages that raise or return one of their own (§15.202). Most
@@ -10706,8 +12693,8 @@ impl Gen<'_> {
             .str("traced_signature", &py_traced)
             .str("record", &format!("{alias}_record"))
             .str("record_signature", &format!(
-                "def {alias}_record({}, {r_out}: {py_ret}, {r_trace}: _Trace, {r_tag}: str = \"\") -> str:",
-                py_args.join(", ")
+                "def {alias}_record({}{r_out}: {py_ret}, {r_trace}: _Trace, {r_tag}: str = \"\") -> str:",
+                leading_params(&py_args)
             ))
             .raw("params", crate::json::arr(&params))
             .str("returns", &py_ret)
@@ -10766,8 +12753,8 @@ impl Gen<'_> {
             .str("traced_signature", &ts_traced)
             .str("record", &format!("{alias}_record"))
             .str("record_signature", &format!(
-                "export function {alias}_record({}, {r_out}: {ts_ret}, {r_trace}: Fired[], {r_tag} = \"\"): string",
-                ts_args.join(", ")
+                "export function {alias}_record({}{r_out}: {ts_ret}, {r_trace}: Fired[], {r_tag} = \"\"): string",
+                leading_params(&ts_args)
             ))
             .raw("params", crate::json::arr(&ts_in))
             .str("returns", &ts_ret)
@@ -10833,7 +12820,7 @@ impl Gen<'_> {
             .str("traced", &format!("{alias}_traced"))
             .str("traced_signature", &format!("export function {alias}_traced({js_params})"))
             .str("record", &format!("{alias}_record"))
-            .str("record_signature", &format!("export function {alias}_record({js_params}, {r_out}, {r_trace}, {r_tag} = \"\")"))
+            .str("record_signature", &format!("export function {alias}_record({}{r_out}, {r_trace}, {r_tag} = \"\")", leading_param(&js_params)))
             .raw("params", crate::json::arr(&js_in))
             .str("returns", &js_ret)
             .raw("outputs", crate::json::arr(&js_outs))
@@ -10888,8 +12875,8 @@ impl Gen<'_> {
             .str("traced_signature", &rs_traced)
             .str("record", &format!("{alias}_record"))
             .str("record_signature", &format!(
-                "pub fn {alias}_record({}, {r_out}: {rs_ret}, {r_trace}: &[Fired], {r_tag}: &str) -> String",
-                rs_args.join(", ")
+                "pub fn {alias}_record({}{r_out}: {rs_ret}, {r_trace}: &[Fired], {r_tag}: &str) -> String",
+                leading_params(&rs_args)
             ))
             .raw("params", crate::json::arr(&rs_in))
             .str("returns", &rs_ret)
@@ -10952,8 +12939,9 @@ impl Gen<'_> {
             .str("traced_signature", &rb_traced)
             .str("record", &format!("{alias}_record"))
             .str("record_signature", &format!(
-                "{}.{alias}_record({rb_args}, {r_out}, {r_trace}, {r_tag} = \"\")",
-                self.rb_module()
+                "{}.{alias}_record({}{r_out}, {r_trace}, {r_tag} = \"\")",
+                self.rb_module(),
+                leading_param(&rb_args)
             ))
             // The signature file that ships with it; `steep` reads this, not the entry.
             .str("rbs", &format!("sig/{alias}.rbs"))
@@ -11028,8 +13016,8 @@ impl Gen<'_> {
             .str("traced_signature", &php_traced)
             .str("record", &format!("{php_fname}_record"))
             .str("record_signature", &format!(
-                "function {php_fname}_record({}, {php_ret} {}, array {}, string {} = ''): string",
-                php_args.join(", "),
+                "function {php_fname}_record({}{php_ret} {}, array {}, string {} = ''): string",
+                leading_params(&php_args),
                 crate::codegen::php::php_var_pub(&r_out),
                 crate::codegen::php::php_var_pub(&r_trace),
                 crate::codegen::php::php_var_pub(&r_tag)
@@ -11092,8 +13080,8 @@ impl Gen<'_> {
             .str("traced_signature", &sw_traced)
             .str("record", &format!("{sw_fname}Record"))
             .str("record_signature", &format!(
-                "func {sw_fname}Record({}, {}: {sw_ret}, {}: [Fired], {}: String = \"\") -> String",
-                sw_args.join(", "),
+                "func {sw_fname}Record({}{}: {sw_ret}, {}: [Fired], {}: String = \"\") -> String",
+                leading_params(&sw_args),
                 sw_name(&r_out),
                 sw_name(&r_trace),
                 sw_name(&r_tag)
@@ -11156,8 +13144,8 @@ impl Gen<'_> {
             .str("traced_signature", &format!("public static Traced {jv_fname}Traced({})", jv_args.join(", ")))
             .str("record", &format!("{jv_fname}Record"))
             .str("record_signature", &format!(
-                "public static String {jv_fname}Record({}, {jv_ret} {}, List<Fired> {}, String {})",
-                jv_args.join(", "),
+                "public static String {jv_fname}Record({}{jv_ret} {}, List<Fired> {}, String {})",
+                leading_params(&jv_args),
                 self.java_name_of(&r_out),
                 self.java_name_of(&r_trace),
                 self.java_name_of(&r_tag)
@@ -11397,6 +13385,10 @@ pub(crate) fn ruby_module(alias: &str) -> String {
 }
 
 fn rb_const(n: &str) -> String {
+    // an enum's type that `Gen::apart_text` marks keeps the mark at its head
+    if let Some(rest) = n.strip_prefix(clash::MARK) {
+        return format!("{}{}", clash::MARK, rb_const(rest));
+    }
     if n.starts_with(|c: char| c.is_ascii_uppercase()) {
         n.to_string()
     } else {
@@ -11588,6 +13580,12 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    ALL = [{}].freeze\n  end\n\n", names.join(", ")));
         let cls = rb_const(ascii);
         let chain = |o: &mut String, ret: &dyn Fn(usize, &String) -> String| {
+            // An enum of one value has no `when` to write, and Ruby reads no `case` without one:
+            // the one value's answer is the function's.
+            if vals.len() == 1 {
+                o.push_str(&format!("    {}\n  end\n\n", ret(0, &vals[0])));
+                return;
+            }
             o.push_str("    case x\n");
             for (i, (v, n)) in vals.iter().zip(&names).enumerate() {
                 if i + 1 == vals.len() {
@@ -11617,6 +13615,30 @@ impl<'a> Gen<'a> {
         o
     }
 
+    /// The functions a module has for an enum it declares, beside the type (§15.210, §15.211): the
+    /// place of a value in its order, when the values are ordered, and a value's display name, when
+    /// the enum gives any. Each by its name in snake case (`tier_rank`, `kind_label`), whether it is
+    /// the order's, and the sentence that says what it is. What a rule's module hands on of an enum
+    /// of an `enums` file in Ruby and PHP, which name the functions so (§15.319).
+    pub(crate) fn handed_fns(&self, jp: &str, ascii: &str) -> Vec<(String, bool, String)> {
+        let mut out = Vec::new();
+        if self.c.ordered.contains(jp) {
+            out.push((
+                format!("{}_rank", snake(&self.enum_type(jp))),
+                true,
+                tr!("x が {ascii} の順序の何番目か（0 から）。", "The place of x in the order of {ascii}, counting from 0."),
+            ));
+        }
+        if self.c.labels.contains_key(jp) {
+            out.push((
+                format!("{}_label", snake(&self.enum_type(jp))),
+                false,
+                tr!("x の表示名。表示名の無い値は値の名前。", "The display name of x: a value without one is shown by its name."),
+            ));
+        }
+        out
+    }
+
     /// `era_rank`, the place of a value of an ordered enum, as this module calls it: the
     /// module of an `enums` file holds its own (§15.212).
     fn rb_rank_fn(&self, en: &str) -> String {
@@ -11630,7 +13652,7 @@ impl<'a> Gen<'a> {
 
     fn rb_qualified(&self, en: &str, f: &str) -> String {
         match self.c.owners.get(en) {
-            Some(o) => format!("{}.{f}", ruby_module(&pub_name(&o.module))),
+            Some(o) => format!("{}.{}", ruby_module(&pub_name(&o.module)), self.theirs("ruby", en, f)),
             None => f.to_string(),
         }
     }
@@ -11679,6 +13701,10 @@ impl<'a> Gen<'a> {
     }
 
     pub fn ruby(&self) -> String {
+        self.apart_text(clash::Syntax::Ruby, |g| g.ruby_text())
+    }
+
+    fn ruby_text(&self) -> String {
         let mut o = self.header("#");
         o.insert_str(0, "# frozen_string_literal: true\n");
         // The module of each `enums` file the rule reads its types from, beside it (§15.212).
@@ -11694,10 +13720,18 @@ impl<'a> Gen<'a> {
         for (jp, ascii) in self.own_enums() {
             o.push_str(&self.rb_enum(&jp, &ascii));
         }
-        // An enum of an `enums` file is that module's, named here as well (§15.212).
+        // An enum of an `enums` file is that module's, named here as well (§15.212), with the
+        // functions of its order and its display names as the rule's own enums have them, each
+        // calling that module's (§15.319).
         for (module, types) in self.foreign_enums() {
-            for (_, ascii) in types {
-                o.push_str(&format!("  {} = {}::{}\n\n", rb_const(&ascii), ruby_module(&module), rb_const(&ascii)));
+            let owner = ruby_module(&module);
+            for (jp, ascii) in types {
+                // what the file's module calls each, should the enum be handed on under another
+                // type here (§15.326)
+                o.push_str(&format!("  {} = {owner}::{}\n\n", rb_const(&ascii), rb_const(&self.owner_type(&jp))));
+                for (f, _, doc) in self.handed_fns(&jp, &ascii) {
+                    o.push_str(&format!("  # {doc}\n  def self.{f}(x)\n    {owner}.{}(x)\n  end\n\n", self.theirs("ruby", &jp, &f)));
+                }
             }
         }
         o.push_str(&self.rb_enum_helpers());
@@ -11796,10 +13830,21 @@ impl<'a> Gen<'a> {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("導出", "derived value")));
+                    o.push_str(&self.rb_unread(&d.name.text));
                 }
                 Item::Define(d) => {
                     let e = self.expr(&d.expr, local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("定義", "definition")));
+                    // The range the rule accepts for it, held where it is worked out (§15.313).
+                    let n = self.ident(&d.name.text);
+                    match self.accepted_ends(d).and_then(|ends| rb_out_of(&n, ends)) {
+                        Some(test) => {
+                            let said = rb_said(&crate::door::out_of_range(&self.said_name(&d.name.text)), &self.here(), "");
+                            o.push_str(&format!("    raise RuleInputError.new({said}, {n}) {test}\n"));
+                        }
+                        // What the check does not read either (§15.340).
+                        None => o.push_str(&self.rb_unread(&d.name.text)),
+                    }
                 }
                 Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
@@ -11818,7 +13863,7 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for (s, el) in self.f.elements.iter().enumerate() {
             if let Some(cap) = self.count_cap_of(s) {
-                let seq = pub_name(&el.name);
+                let seq = self.held(&el.name);
                 o.push_str(&format!(
                     "    raise RuleInputError.new(\"{}\", {seq}.length) if {seq}.length > {cap}\n",
                     crate::door::too_many(&el.name.text, cap)
@@ -11838,7 +13883,7 @@ impl<'a> Gen<'a> {
     /// One walk over sequence `s`, in Ruby (§15.219).
     fn rb_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = &self.f.elements[s];
-        let seq = pub_name(&el.name);
+        let seq = self.held(&el.name);
         let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
         let e = self.elem_var(s);
         let local = |n: &str| -> String {
@@ -11848,10 +13893,16 @@ impl<'a> Gen<'a> {
             }
         };
         let mut o = String::new();
-        let mut body = self.rb_element_guards(s, &local);
+        let index = self.index_var(s);
+        self.walk_begin(s, &index);
+        let mut body = self.rb_element_ranges(s, &local);
         let (seen, step) = self.rb_unique(s, sums, &local);
         o.push_str(&seen);
         body.push_str(&step);
+        // Past a `stop`, the door alone (§15.328).
+        if let Some(i) = self.walk_goes_past_stop(sums) {
+            body.push_str(&format!("    next if {}\n", self.fold_names(i).done));
+        }
         body.push_str(&self.rb_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -11877,6 +13928,14 @@ impl<'a> Gen<'a> {
                             crate::door::out_of_range(&d.name.text)
                         ));
                     }
+                    // The bottom of its range, where a walk can come in under it (§15.314).
+                    if let Some(floor) = self.walk_floor(d) {
+                        let n = self.ident(&d.name.text);
+                        after.push_str(&format!(
+                            "    raise RuleInputError.new(\"{}\", {n}) if {n} < {floor}\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
                 }
                 Item::Fold(fold) => {
                     let (init, step, fin) = self.rb_fold(i, fold, &seq, &local);
@@ -11887,7 +13946,12 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
-        o.push_str(&format!("    {seq}.each do |{e}|\n"));
+        // The index of the element is bound where a sentence of the walk says it (§15.324).
+        if self.walk_end() {
+            o.push_str(&format!("    {seq}.each_with_index do |{e}, {index}|\n"));
+        } else {
+            o.push_str(&format!("    {seq}.each do |{e}|\n"));
+        }
         o.push_str(&Self::indent_block(&body, "    "));
         o.push_str("    end\n");
         o.push_str(&after);
@@ -11939,8 +14003,10 @@ impl<'a> Gen<'a> {
     /// A fold, in Ruby (§15.56).
     fn rb_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
         let names = self.fold_names(i);
-        let FoldNames { answer, stopped, done, taken, kept, best, held, key, .. } = &names;
+        let FoldNames { answer, stopped, done, taken, kept, best, held, key, taken_at, .. } = &names;
         let alone = self.fold_alone(i);
+        // Ends the loop at a `stop`: a fold alone in its walk with no door to keep past it (§15.328).
+        let ends = alone && !self.stop_keeps_door(i);
         let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
         let (out_name, out_ty) = self.fold_target(fold);
         // An answer is read in the type the fold answers with: a value of its enum is that
@@ -11956,14 +14022,23 @@ impl<'a> Gen<'a> {
         let mut init = String::new();
         init.push_str(&format!("    {answer} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         init.push_str(&format!("    {stopped} = false\n"));
-        if !alone {
+        if !ends {
             init.push_str(&format!("    {done} = false\n"));
         }
         // steep reads the first assignment as the whole type of a local, so a `nil` that
         // later holds a value needs the annotation (§15.23). The value is the fold's answer; a
         // `keep_max` key is ordered, so it is always an integer.
         let acc = if out_ty == Ty::Unknown { "untyped".to_string() } else { self.rbs_ty(&out_ty) };
-        init.push_str(&format!("    {taken} = nil #: {acc}?\n    {kept} = nil #: {acc}?\n    {best} = nil #: Integer?\n"));
+        init.push_str(&format!("    {taken} = nil #: {acc}?\n    {kept} = nil #: {acc}?\n"));
+        // The key of a `keep_max`, only with one: Ruby warns under `-w` of a local never read (§15.340).
+        if fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. })) {
+            init.push_str(&format!("    {best} = nil #: Integer?\n"));
+        }
+        // The element a `take_unique` took, which the sentence says beside the one that matched
+        // again (§15.324).
+        if fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { unique: true, .. })) {
+            init.push_str(&format!("    {taken_at} = 0\n"));
+        }
         let weighted = fold.weighted();
         let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
         if weighted {
@@ -11978,11 +14053,11 @@ impl<'a> Gen<'a> {
             arms.push_str(&format!("    if {v} == {is}  # {}\n", name.text));
             match arm {
                 Arm::Next => arms.push_str("      # next\n"),
-                Arm::Stop(None) if alone => arms.push_str("      break\n"),
+                Arm::Stop(None) if ends => arms.push_str("      break\n"),
                 Arm::Stop(None) => arms.push_str(&format!("      {done} = true\n")),
                 Arm::Stop(Some(x)) => {
                     arms.push_str(&format!("      {answer} = {}\n", val(x, local)));
-                    if alone {
+                    if ends {
                         arms.push_str(&format!("      {stopped} = true\n      break\n"));
                     } else {
                         arms.push_str(&format!("      {stopped} = true\n      {done} = true\n"));
@@ -11990,11 +14065,12 @@ impl<'a> Gen<'a> {
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
+                        let here = self.here_used();
                         arms.push_str(&format!(
-                            "      raise RuleContradictionError.new(\"{}\") unless {taken}.nil?\n",
-                            tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
+                            "      raise RuleContradictionError.new({}) unless {taken}.nil?\n",
+                            rb_said(&crate::door::fold_contradiction(&fold.verdict, &fold.over, crate::door::BEFORE, crate::door::HERE), &here, taken_at)
                         ));
-                        arms.push_str(&format!("      {taken} = {}\n", val(expr, local)));
+                        arms.push_str(&format!("      {taken} = {}\n      {taken_at} = {here}\n", val(expr, local)));
                     } else {
                         arms.push_str(&format!("      {taken} = {} if {taken}.nil?\n", val(expr, local)));
                     }
@@ -12032,8 +14108,14 @@ impl<'a> Gen<'a> {
         }
         fin.push_str(&format!("    unless {seq}.empty? || {stopped}\n"));
         fin.push_str(&format!("      {held} = {taken} || {kept} || {}\n", text(&fold.empty)));
-        fin.push_str(&format!("      {answer} = {}\n    end\n", text(&fold.exhausted)));
+        // An `exhausted` that does not read what was held, as Go's (§15.340).
+        let ex = text(&fold.exhausted);
+        if !clash::has_word(&ex, held) {
+            fin.push_str(&format!("      _ = {held}\n"));
+        }
+        fin.push_str(&format!("      {answer} = {ex}\n    end\n"));
         fin.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
+        fin.push_str(&self.rb_unread(&out_name));
         (init, step, fin)
     }
 
@@ -12046,59 +14128,132 @@ impl<'a> Gen<'a> {
         for fd in self.unique_fields(s, sums) {
             let seen = self.temp(&format!("{}_seen", self.ident(&fd.name.text)));
             let v = local(&fd.name.text);
+            // Where each value was first seen, which the sentence says beside the element it came
+            // round again on (§15.324).
+            let here = self.here_used();
             init.push_str(&format!("    {seen} = {{}}\n"));
             step.push_str(&format!(
-                "    raise RuleInputError.new(\"{}\", {v}) if {seen}.key?({v})\n    {seen}[{v}] = true\n",
-                crate::door::duplicate(seq, &fd.name.text)
+                "    raise RuleInputError.new({}, {v}) if {seen}.key?({v})\n    {seen}[{v}] = {here}\n",
+                rb_said(&crate::door::duplicate(seq, &fd.name.text, crate::door::BEFORE, crate::door::HERE), &here, &format!("{seen}[{v}]"))
             ));
         }
         (init, step)
     }
 
-    fn rb_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
+    /// A whole float of an element's field is the integer it is, here as at the inputs (§15.205):
+    /// what reads the element next reads a copy that holds the integer. The value is taken in a
+    /// local first: steep 1.10 narrows a method call under `is_a?`, and a Float is not what the
+    /// signature gives the field, so `elem.amount` after it would read as one and `total +=` of
+    /// an Integer would not take it (§15.347).
+    fn rb_element_whole(&self, v: &str) -> String {
+        let Some((e, field)) = v.rsplit_once('.') else { return String::new() };
+        let w = self.temp(&format!("{field}_w"));
+        format!("    {w} = {v}\n    {e} = {e}.dup.tap {{ |x| x[:{field}] = {w}.to_i }} if {w}.is_a?(Float) && {w}.finite? && {w} == {w}.floor\n")
+    }
+
+    /// The first look at each element of every sequence, in Ruby (§15.328): before any input is
+    /// held to its range, each element in turn, and each of its fields in the order the rule
+    /// declares them, of its kind — a value of its enum, a truth value, a String (§15.339), an
+    /// Integer, and one that int64 holds, as a reader of the wire takes it.
+    fn rb_element_kinds(&self) -> String {
+        let mut out = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+            let e = self.elem_var(s);
+            let local = |n: &str| -> String { fields.get(n).map(|f| format!("{e}.{f}")).unwrap_or_else(|| n.to_string()) };
+            let index = self.index_var(s);
+            self.walk_begin(s, &index);
+            let mut o = String::new();
+            let here = self.here();
+            for i in self.element_fields(s) {
+                let v = local(&i.name.text);
+                // The sentences name the field by its place on the element (§15.324).
+                let said = || self.said_name(&i.name.text);
+                let ty = self.ty_of(&i.name.text);
+                // An optional field is looked at as the type it wraps when it has a value (§15.201).
+                let optional = matches!(ty, Ty::Opt(_));
+                let ty = ty.present().clone();
+                let mut o = Guarded::new(&mut o, optional.then(|| (format!("    unless {v}.nil?\n"), "    end\n".to_string())), "  ");
+                match &ty {
+                    Ty::Bool => o.push_str(&format!(
+                        "    raise RuleInputError.new({}, {v}) unless {v} == true || {v} == false\n",
+                        rb_said(&not_bool(&said()), &here, "")
+                    )),
+                    Ty::Str => o.push_str(&format!(
+                        "    raise RuleInputError.new({}, {v}) unless {v}.is_a?(String)\n",
+                        rb_said(&crate::door::not_string(&said()), &here, "")
+                    )),
+                    // A field of an enum is held to its values, as the main door holds an input
+                    // and the other languages' element doors hold a field (§15.204).
+                    Ty::Enum(n) => {
+                        let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
+                        o.push_str(&format!(
+                            "    raise RuleInputError.new({}, {v}) unless {cls}::ALL.include?({v})\n",
+                            rb_said(&crate::door::not_in_enum(&said(), n), &here, "")
+                        ));
+                    }
+                    Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                        if ty != Ty::Date {
+                            o.push_str(&self.rb_element_whole(&v));
+                        }
+                        o.push_str(&format!(
+                            "    raise RuleInputError.new({}, {v}) unless {v}.is_a?(Integer)\n",
+                            rb_said(&crate::door::not_integer(&said()), &here, "")
+                        ));
+                        if ty != Ty::Date {
+                            o.push_str(&format!(
+                                "    raise RuleInputError.new({}, {v}) {}\n",
+                                rb_said(&crate::door::out_of_range(&said()), &here, ""),
+                                rb_out_of(&v, INT64_ENDS).unwrap_or_default()
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let used = self.walk_end();
+            if !o.is_empty() {
+                let seq = self.held(&el.name);
+                if used {
+                    out.push_str(&format!("    {seq}.each_with_index do |{e}, {index}|\n"));
+                } else {
+                    out.push_str(&format!("    {seq}.each do |{e}|\n"));
+                }
+                out.push_str(&Self::indent_block(&o, "    "));
+                out.push_str("    end\n");
+            }
+        }
+        out
+    }
+
+    /// The door's look at one element where the walk comes to it (§15.328): each field inside the
+    /// range it declares, in the order the rule declares them, on the values the first look found
+    /// of their kinds.
+    fn rb_element_ranges(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
+        let here = self.here();
         for i in self.element_fields(s) {
             let v = local(&i.name.text);
+            // The sentences name the field by its place on the element (§15.324). Asked for only
+            // where one is written: a walk binds the index only where a sentence reads it.
+            let said = || self.said_name(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("    unless {v}.nil?\n"), "    end\n".to_string())), "  ");
-            if ty == Ty::Bool {
-                o.push_str(&format!(
-                    "    raise RuleInputError.new(\"{}\", {v}) unless {v} == true || {v} == false\n",
-                    not_bool(&i.name.text)
-                ));
-            }
-            // A field of an enum is held to its values, as the main door holds an input and the
-            // other languages' element doors hold a field (§15.204).
-            if let Ty::Enum(n) = &ty {
-                let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
-                o.push_str(&format!(
-                    "    raise RuleInputError.new(\"{}\", {v}) unless {cls}::ALL.include?({v})\n",
-                    crate::door::not_in_enum(&i.name.text, n)
-                ));
-            }
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
-                // A whole float is the integer it is, here as at the inputs (§15.205); the walk
-                // goes on with a copy of the element that holds the integer.
+                // The walk reads the element again from the sequence, so a whole float is made the
+                // integer it is again.
                 if ty != Ty::Date {
-                    if let Some((e, field)) = v.rsplit_once('.') {
-                        o.push_str(&format!(
-                            "    {e} = {e}.dup.tap {{ |x| x[:{field}] = x.{field}.to_i }} if {v}.is_a?(Float) && {v}.finite? && {v} == {v}.floor\n"
-                        ));
-                    }
+                    o.push_str(&self.rb_element_whole(&v));
                 }
-                o.push_str(&format!(
-                    "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(Integer)\n",
-                    crate::door::not_integer(&i.name.text)
-                ));
                 // Ruby's integers have no end, so the door holds a field to both ends its type
                 // has where its range writes none (§15.295).
                 if let Some(test) = rb_out_of(&v, crate::door::ends(self.c, &i.name.text, true)) {
                     o.push_str(&format!(
-                        "    raise RuleInputError.new(\"{}\", {v}) {test}\n",
-                        crate::door::out_of_range(&i.name.text),
+                        "    raise RuleInputError.new({}, {v}) {test}\n",
+                        rb_said(&crate::door::out_of_range(&said()), &here, ""),
                     ));
                 }
             }
@@ -12145,12 +14300,13 @@ impl<'a> Gen<'a> {
 
         // The public method keeps the plain shape; the branches live in its traced twin,
         // which also returns the rows that matched (§15.33).
-        let mut params: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let mut params: Vec<String> = self.f.inputs.iter().map(|i| self.held(&i.name)).collect();
         for el in &self.f.elements {
-            params.push(pub_name(&el.name));
+            params.push(self.held(&el.name));
         }
         o.push_str(&format!(
-            "  def self.{fname}({})\n    {traced}({})[0]\n  end\n\n",
+            "  def self.{}({})\n    {traced}({})[0]\n  end\n\n",
+            self.fam(&fname),
             params.join(", "),
             params.join(", ")
         ));
@@ -12164,10 +14320,12 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("  # {}\n  def self.{w}({})\n", walked_doc(), params.join(", ")));
         }
 
-        // Entry guards (§8.5).
+        // Entry guards (§8.5). An input with two or more things wrong with it is refused for the
+        // first of them in the order every door looks (§15.328): each input of its kind, then each
+        // element of each sequence, then each input inside its range, then the constraints.
         let local = |n: &str| -> String { self.ident(n) };
         for i in &self.f.inputs {
-            let v = pub_name(&i.name);
+            let v = self.held(&i.name);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
             let optional = matches!(ty, Ty::Opt(_));
@@ -12179,22 +14337,18 @@ impl<'a> Gen<'a> {
                     "    raise RuleInputError.new(\"{}\", {v}) unless {v} == true || {v} == false\n",
                     not_bool(&i.name.text)
                 )),
+                // A string is a String and nothing else (§15.339): a number given for it is equal
+                // to no cell of the table, and fell to another row without a word.
+                Ty::Str => o.push_str(&format!(
+                    "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(String)\n",
+                    crate::door::not_string(&i.name.text)
+                )),
                 Ty::Enum(n) => {
                     let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
                     o.push_str(&format!(
                         "    raise RuleInputError.new(\"{}\", {v}) unless {cls}::ALL.include?({v})\n",
                         crate::door::not_in_enum(&i.name.text, n)
                     ));
-                    // The values the range of an ordered enum lets in, first to last (§15.210).
-                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
-                        let r = self.rb_rank_fn(n);
-                        o.push_str(&format!(
-                            "    raise RuleInputError.new(\"{}\", {v}) unless ({r}({})..{r}({})).cover?({r}({v}))\n",
-                            crate::door::out_of_range(&i.name.text),
-                            self.rb_value(lo, &ty),
-                            self.rb_value(hi, &ty)
-                        ));
-                    }
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     // `cover?` is true of a Float inside the range, so the kind is checked
@@ -12207,8 +14361,41 @@ impl<'a> Gen<'a> {
                         "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(Integer)\n",
                         crate::door::not_integer(&i.name.text)
                     ));
-                    // Each end the range writes, and the end of the type where it writes none:
-                    // an Integer here can be any size (§15.295).
+                    // A whole number int64 does not hold, where a reader of the wire refuses it.
+                    if ty != Ty::Date {
+                        o.push_str(&format!(
+                            "    raise RuleInputError.new(\"{}\", {v}) {}\n",
+                            crate::door::out_of_range(&i.name.text),
+                            rb_out_of(&v, INT64_ENDS).unwrap_or_default()
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&self.rb_element_kinds());
+        for i in &self.f.inputs {
+            let v = self.held(&i.name);
+            let ty = self.ty_of(&i.name.text);
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = Guarded::new(&mut o, optional.then(|| (format!("    unless {v}.nil?\n"), "    end\n".to_string())), "  ");
+            match &ty {
+                // The values the range of an ordered enum lets in, first to last (§15.210).
+                Ty::Enum(n) => {
+                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                        let r = self.rb_rank_fn(n);
+                        o.push_str(&format!(
+                            "    raise RuleInputError.new(\"{}\", {v}) unless ({r}({})..{r}({})).cover?({r}({v}))\n",
+                            crate::door::out_of_range(&i.name.text),
+                            self.rb_value(lo, &ty),
+                            self.rb_value(hi, &ty)
+                        ));
+                    }
+                }
+                // Each end the range writes, and the end of the type where it writes none: an
+                // Integer here can be any size (§15.295).
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     if let Some(test) = rb_out_of(&v, crate::door::ends(self.c, &i.name.text, true)) {
                         o.push_str(&format!(
                             "    raise RuleInputError.new(\"{}\", {v}) {test}\n",
@@ -12344,6 +14531,9 @@ impl<'a> Gen<'a> {
             "    else\n      raise RuleContradictionError.new(\"{}\")\n    end\n",
             tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
         ));
+        for oc in &t.outputs {
+            o.push_str(&self.rb_unread(&oc.name.text));
+        }
         o.push_str(&self.guards(t, local, Lang::Rb, "    ", |name, i, j| {
             format!(
                 "      raise RuleContradictionError.new(\"{}\")\n",
@@ -12363,19 +14553,22 @@ impl<'a> Gen<'a> {
         // One input read off the wire the way every door reads it (§15.204): there at all, of
         // its kind, a date turned into its day number. A refusal is the module's own
         // `RuleInputError`, with the sentence every language says.
-        let read = |ty: &Ty, src: &str, name: &str| -> String {
+        // `said` is what the sentences call the value: the name, or for a field of an element its
+        // place, `lines[\u{1}].amount`, which takes the index `i` of the element (§15.324).
+        let read = |ty: &Ty, src: &str, name: &str, said: &str| -> String {
+            let lit = |x: String| -> String { if names_element(&x) { rb_said(&x, "i", "") } else { format!("{x:?}") } };
             let optional = matches!(ty, Ty::Opt(_));
-            let take = format!("_take({src}, {name:?}, {:?}{})", crate::door::missing(name), if optional { ", true" } else { "" });
+            let take = format!("_take({src}, {name:?}, {}{})", lit(crate::door::missing(said)), if optional { ", true" } else { "" });
             let one = |v: &str| -> String {
                 match ty.present() {
                     Ty::Enum(n) => {
                         let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
-                        format!("_enum({m}::{cls}::ALL, {v}, {:?})", crate::door::not_in_enum(name, n))
+                        format!("_enum({m}::{cls}::ALL, {v}, {})", lit(crate::door::not_in_enum(said, n)))
                     }
-                    Ty::Bool => format!("_bool({v}, {:?})", crate::door::not_bool(name)),
-                    Ty::Date => format!("_date({v}, {:?})", crate::door::not_date(name)),
-                    Ty::Str => format!("_str({v}, {:?})", crate::door::not_string(name)),
-                    _ => format!("_int({v}, {:?})", crate::door::not_integer(name)),
+                    Ty::Bool => format!("_bool({v}, {})", lit(crate::door::not_bool(said))),
+                    Ty::Date => format!("_date({v}, {})", lit(crate::door::not_date(said))),
+                    Ty::Str => format!("_str({v}, {})", lit(crate::door::not_string(said))),
+                    _ => format!("_int({v}, {}, {})", lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said))),
                 }
             };
             if optional {
@@ -12384,14 +14577,19 @@ impl<'a> Gen<'a> {
                 one(&take)
             }
         };
-        let mut args: Vec<String> = self.f.inputs.iter().map(|i| read(&self.ty_of(&i.name.text), "d", &i.name.text)).collect();
-        // The sequences a walk reads, one element at a time (§15.56, §15.219).
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| read(&self.ty_of(&i.name.text), "d", &i.name.text, &i.name.text)).collect();
+        // The sequences a walk reads, one element at a time (§15.56, §15.219). A sentence about an
+        // element names it by its index `i` (§15.324).
         for (s, el) in self.f.elements.iter().enumerate() {
             let seq = &el.name.text;
-            let obj = format!("_obj(e, {:?})", crate::door::not_object(seq));
-            let fields: Vec<String> = el.fields.iter().map(|fd| read(&self.ty_of(&fd.name.text), &obj, &fd.name.text)).collect();
+            let obj = format!("_obj(e, {})", rb_said(&crate::door::not_object(seq, crate::door::HERE), "i", ""));
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| read(&self.ty_of(&fd.name.text), &obj, &fd.name.text, &crate::door::element(seq, crate::door::HERE, &fd.name.text)))
+                .collect();
             args.push(format!(
-                "_seq(_take(d, {seq:?}, {:?}), {:?}).map {{ |e| {m}::{}.new({}) }}",
+                "_seq(_take(d, {seq:?}, {:?}), {:?}).each_with_index.map {{ |e, i| {m}::{}.new({}) }}",
                 crate::door::missing(seq),
                 crate::door::not_sequence(seq),
                 self.element_type(s),
@@ -12402,7 +14600,10 @@ impl<'a> Gen<'a> {
         let read_args = args.clone();
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is.
-        let (mut head, mut body, mut tail) = (String::new(), "d = JSON.parse(line)[\"in\"]\n  ".to_string(), String::new());
+        // A rule that reads no input reads nothing out of the record's `in`, which `ruby -w` warns
+        // of where it is held unread (§15.330).
+        let unread = if self.f.inputs.is_empty() && self.f.elements.is_empty() { "_d" } else { "d" };
+        let (mut head, mut body, mut tail) = (String::new(), format!("{unread} = JSON.parse(line)[\"in\"]\n  "), String::new());
         if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
             let cls = rb_const(&self.enum_names.get(&en).cloned().unwrap_or_default());
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
@@ -12418,7 +14619,7 @@ impl<'a> Gen<'a> {
                 }
                 more_head.push_str(&format!("{local} = {m}::{}\n", mc.upper()));
                 more_meta.push(format!("{} => {m}::{}", mc.key(), mc.upper()));
-                more_start.push_str(&format!("{local} = {} if v[\"step\"] == \"start\"\n  ", read(&mc.ty, "v[\"carried\"]", &mc.input)));
+                more_start.push_str(&format!("{local} = {} if v[\"step\"] == \"start\"\n  ", read(&mc.ty, "v[\"carried\"]", &mc.input, &mc.input)));
                 more_tail.push_str(&format!("  {local} = r.{} if v.key?(\"step\")\n", mc.out_alias));
             }
             let carried_meta = if more_meta.is_empty() { String::new() } else { format!(", \"carried\" => {{ {} }}", more_meta.join(", ")) };
@@ -12476,11 +14677,9 @@ impl<'a> Gen<'a> {
         }
         let m = self.rb_module();
         let mut arms = String::new();
-        for (en, _, owner) in &enums {
-            let f = match owner {
-                Some(_) => self.rb_label_fn(en),
-                None => format!("{m}.{}", self.rb_label_fn(en)),
-            };
+        for (en, _, _) in &enums {
+            // the function of an `enums` file's enum by its module, as the rule's code calls it
+            let f = if self.c.owners.contains_key(en) { self.rb_label_fn(en) } else { format!("{m}.{}", self.rb_label_fn(en)) };
             arms.push_str(&format!("    when {} then puts {f}(v)\n", rb_str(en)));
         }
         format!(
@@ -12502,12 +14701,14 @@ def _take(d, k, missing, optional = false)
   d[k]
 end
 
-def _int(v, what)
+def _int(v, what, past)
   # A whole number written with a point or an exponent, 1000.0 or 1e3, is that integer.
-  return v.to_i if v.is_a?(Float) && v.finite? && v == v.floor
-  raise @M@::RuleInputError.new(what, v) unless v.is_a?(Integer)
+  n = v.is_a?(Float) && v.finite? && v == v.floor ? v.to_i : v
+  raise @M@::RuleInputError.new(what, v) unless n.is_a?(Integer)
+  # One int64 does not hold is past what a reader of every language takes, there and not later.
+  raise @M@::RuleInputError.new(past, v) unless n.between?(-9223372036854775808, 9223372036854775807)
 
-  v
+  n
 end
 
 def _bool(v, what)
@@ -12672,7 +14873,13 @@ impl<'a> Gen<'a> {
         o
     }
 
+    /// The signatures name a type from inside the rule's module, where an enum's type hides a class
+    /// of its name (§15.336).
     pub fn rbs(&self) -> String {
+        self.apart_types(clash::Syntax::Ruby, |g| g.rbs_text())
+    }
+
+    fn rbs_text(&self) -> String {
         let m = self.rb_module();
         let mut o = self.header("#");
         o.push_str(&format!("\nmodule {m}\n"));
@@ -12682,12 +14889,23 @@ impl<'a> Gen<'a> {
             o.push_str(&self.rbs_enum(&jp, &ascii));
         }
         // An enum of an `enums` file is that module's: its type and its module by another name
-        // (§15.212).
+        // (§15.212), and the functions of its order and its display names (§15.319).
         for (module, types) in self.foreign_enums() {
             let owner = ruby_module(&module);
-            for (_, ascii) in types {
-                o.push_str(&format!("  type {} = {owner}::{}\n", snake(&ascii), snake(&ascii)));
-                o.push_str(&format!("  module {} = {owner}::{}\n\n", rb_const(&ascii), rb_const(&ascii)));
+            for (jp, ascii) in types {
+                // the file's module's names, should the enum be handed on under another type here
+                // (§15.326)
+                let owned = self.owner_type(&jp);
+                o.push_str(&format!("  type {} = {owner}::{}\n", snake(&ascii), snake(&owned)));
+                o.push_str(&format!("  module {} = {owner}::{}\n\n", rb_const(&ascii), rb_const(&owned)));
+                let fns = self.handed_fns(&jp, &ascii);
+                for (f, rank, _) in &fns {
+                    let ret = if *rank { "Integer" } else { "String" };
+                    o.push_str(&format!("  def self.{f}: ({}) -> {ret}\n", snake(&ascii)));
+                }
+                if !fns.is_empty() {
+                    o.push('\n');
+                }
             }
         }
         for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
@@ -12804,9 +15022,9 @@ impl<'a> Gen<'a> {
         o.push_str(&self.rbs_chances());
         let (out, trace, tag) = (self.temp("out"), self.temp("trace"), self.temp("tag"));
         o.push_str(&format!(
-            "  def self.{}_record: ({}, {ret} {out}, Array[Fired] {trace}, ?String {tag}) -> String\n",
+            "  def self.{}_record: ({}{ret} {out}, Array[Fired] {trace}, ?String {tag}) -> String\n",
             pub_name(&self.f.name),
-            params.join(", ")
+            leading_params(&params)
         ));
         o.push_str("  private def self._json_str: (String) -> String\n");
         if civil_needed(self.f, self.c) {
@@ -12840,6 +15058,9 @@ impl<'a> Gen<'a> {
 
 /// PascalCase to snake_case, for an RBS type alias — those have to start lowercase.
 fn snake(s: &str) -> String {
+    if let Some(rest) = s.strip_prefix(clash::MARK) {
+        return format!("{}{}", clash::MARK, snake(rest));
+    }
     let mut o = String::with_capacity(s.len() + 4);
     for (i, c) in s.chars().enumerate() {
         if c.is_ascii_uppercase() {
@@ -12879,7 +15100,7 @@ const SWIFT_KEYWORDS: &[&str] = &[
 
 /// Lower the leading run of capitals: all of it, unless the run is longer than one and the
 /// character after it is lowercase, in which case that last capital begins the next word.
-/// `rulec import` spells an alias for a word of the sheet so too (`Zone(zone)`, §15.266).
+/// `rulec import` spells an alias for a word of the sheet so too (`URLPath(urlPath)`, §15.266).
 pub(crate) fn lower_lead(w: &str) -> String {
     let cs: Vec<char> = w.chars().collect();
     let run = cs.iter().take_while(|c| c.is_uppercase()).count();
@@ -12904,6 +15125,9 @@ pub(crate) fn lower_lead(w: &str) -> String {
 /// a generated temporary unique by appending one, so a `camel` that dropped it would hand
 /// `raw_` and `raw` the same Swift identifier — the collision `temp` exists to prevent.
 fn camel(s: &str) -> String {
+    if let Some(rest) = s.strip_prefix(clash::MARK) {
+        return format!("{}{}", clash::MARK, camel(rest));
+    }
     let lead = s.len() - s.trim_start_matches('_').len();
     let end = s.trim_end_matches('_').len();
     if end <= lead {
@@ -13077,6 +15301,18 @@ impl<'a> Gen<'a> {
         sw_name(&self.ident(n))
     }
 
+    /// A parameter of a Swift function that takes the declared name `n`, of the type `ty`: its
+    /// label is the name, and where the value is bound apart from it inside the functions
+    /// (§15.336), the parameter takes it under that identifier after the label.
+    fn sw_param(&self, n: &Name, ty: &str) -> String {
+        let (label, held) = (sw_name(&pub_name(n)), sw_name(&self.held(n)));
+        if label == held {
+            format!("{label}: {ty}")
+        } else {
+            format!("{label} {held}: {ty}")
+        }
+    }
+
     /// The name of the set a group is declared as. The underscore goes on *before* the
     /// keyword escaping: `_` + `` `internal` `` is not an identifier, and `_internal` needs
     /// no backticks in the first place.
@@ -13127,6 +15363,46 @@ impl<'a> Gen<'a> {
             property(&mut o, tr!("宣言の順序の何番目か（0 から）。", "The place in the order declared, counting from 0."), "rank", "Int", &|i, _| i.to_string());
         }
         if let Some(labels) = self.c.labels.get(jp) {
+            property(
+                &mut o,
+                tr!("表示名。表示名の無い値は値の名前。", "The display name: a value without one is shown by its name."),
+                "label",
+                "String",
+                &|i, v| str_lit(&labels.get(i).cloned().flatten().unwrap_or_else(|| v.clone())),
+            );
+        }
+        o.push_str("}\n\n");
+        o
+    }
+
+    /// The `extension` for an enum an `enums` file the rule reads declares as the same enum
+    /// (§15.355): the file's module declares the type, and this one adds each member the rule's
+    /// own declaration had and the file's does not — `rank` for an ordered enum, `label` for a
+    /// labelled one — so the type is written once and the names the rule's code reads stay.
+    /// Written to nothing where the file's declaration holds every member it needs.
+    fn sw_shared_ext(&self, jp: &str, ascii: &str, d: &crate::ast::EnumDecl) -> String {
+        let rank = self.c.ordered.contains(jp) && !d.ordered;
+        let labels = self.c.labels.get(jp).filter(|_| !d.has_labels());
+        if !rank && labels.is_none() {
+            return String::new();
+        }
+        let Some(vals) = self.c.enums.get(jp) else { return String::new() };
+        let names: Vec<String> = vals
+            .iter()
+            .map(|v| self.value_names.get(&(jp.to_string(), v.clone())).map(|(_, a)| sw_name(a)).unwrap_or_else(|| sw_name(v)))
+            .collect();
+        let property = |o: &mut String, doc: String, name: &str, ty: &str, ret: &dyn Fn(usize, &String) -> String| {
+            o.push_str(&format!("\n    /// {doc}\n    public var {name}: {ty} {{\n        switch self {{\n"));
+            for (i, (v, n)) in vals.iter().zip(&names).enumerate() {
+                o.push_str(&format!("        case .{n}: return {}\n", ret(i, v)));
+            }
+            o.push_str("        }\n    }\n");
+        };
+        let mut o = format!("/// {}\nextension {ascii} {{\n", tr!("`enums` ファイルが宣言する同じ列挙に足す、この規則の宣言が持っていた要素。", "The members the rule's own declaration had, added to the same enum the `enums` file declares."));
+        if rank {
+            property(&mut o, tr!("宣言の順序の何番目か（0 から）。", "The place in the order declared, counting from 0."), "rank", "Int", &|i, _| i.to_string());
+        }
+        if let Some(labels) = labels {
             property(
                 &mut o,
                 tr!("表示名。表示名の無い値は値の名前。", "The display name: a value without one is shown by its name."),
@@ -13248,15 +15524,22 @@ impl<'a> Gen<'a> {
     }
 
     pub fn swift(&self) -> String {
+        self.apart_text(clash::Syntax::Swift, |g| g.sw_module(g.sw_alone()))
+    }
+
+    /// The rule's Swift. `alone`: the module declares the enums it reads from `enums` files as
+    /// well, and is built without their modules (§15.326).
+    fn sw_module(&self, alone: bool) -> String {
         let mut o = self.header("//");
         o.push('\n');
 
         // Brands. A struct with one stored property is laid out as that property, so the
         // type costs nothing at run time — the same bargain the Rust backend makes.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
-        for v in self.branded() {
+        for v in self.branded().into_iter().chain(self.branded_columns()) {
             // An optional amount is the same brand when it is there: the runner builds it, and
-            // a rule whose only amount is optional declared none (§15.201).
+            // a rule whose only amount is optional declared none (§15.201), nor one whose only
+            // amount is a column a table writes that may be absent (§15.343).
             let ty = self.ty_of(v).present().clone();
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
@@ -13281,9 +15564,23 @@ impl<'a> Gen<'a> {
         // Enums. The raw value is the source name, which is also what the wire carries
         // (§10.2), so `rawValue` and `init(rawValue:)` are the whole conversion and no
         // hand-written parser is needed on either side. An enum of an `enums` file is that
-        // file's, compiled into the same module (§15.212).
+        // file's, compiled into the same module (§15.212); where that module and this one would
+        // declare one name twice, this one declares the enums it reads itself (§15.326). One it
+        // would declare that the file declares as the same enum, the file's module declares,
+        // and this one adds what the rule's own declaration had in an `extension` (§15.355).
+        let shared = if alone { BTreeMap::new() } else { self.sw_shared_enums() };
         for (jp, ascii) in self.own_enums() {
-            o.push_str(&self.sw_enum(&jp, &ascii));
+            match shared.get(&jp) {
+                Some(d) => o.push_str(&self.sw_shared_ext(&jp, &ascii, d)),
+                None => o.push_str(&self.sw_enum(&jp, &ascii)),
+            }
+        }
+        if alone {
+            for (_, types) in self.foreign_enums() {
+                for (jp, ascii) in types {
+                    o.push_str(&self.sw_enum(&jp, &ascii));
+                }
+            }
         }
         o.push_str(&self.sw_enum_helpers());
         // Which values need which before them (§15.222).
@@ -13377,6 +15674,14 @@ impl<'a> Gen<'a> {
                         sw_typed(&sw_expr(unparen(&self.expr(&d.expr, local).text))),
                         tr!("定義", "definition")
                     ));
+                    // The range the rule accepts for it, held where it is worked out (§15.313).
+                    let n = self.sw_ident(&d.name.text);
+                    if let Some(test) = self.accepted_ends(d).and_then(|ends| or_out_of(&n, ends, "")) {
+                        o.push_str(&format!(
+                            "    if {test} {{\n        throw RuleError.input(what: {}, value: Int64({n}))\n    }}\n",
+                            sw_said(&crate::door::out_of_range(&self.said_name(&d.name.text)), &self.here(), "")
+                        ));
+                    }
                     o.push_str(&self.sw_unread(&d.name.text));
                 }
                 Item::Agg(_) | Item::Fold(_) => {}
@@ -13396,7 +15701,7 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for (s, el) in self.f.elements.iter().enumerate() {
             if let Some(cap) = self.count_cap_of(s) {
-                let seq = sw_name(&pub_name(&el.name));
+                let seq = sw_name(&self.held(&el.name));
                 o.push_str(&format!(
                     "    if {seq}.count > {cap} {{\n        throw RuleError.input(what: \"{}\", value: Int64({seq}.count))\n    }}\n",
                     crate::door::too_many(&el.name.text, cap)
@@ -13416,7 +15721,7 @@ impl<'a> Gen<'a> {
     /// One walk over sequence `s`, in Swift (§15.219).
     fn sw_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = &self.f.elements[s];
-        let seq = sw_name(&pub_name(&el.name));
+        let seq = sw_name(&self.held(&el.name));
         let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), sw_name(&pub_name(&fd.name)))).collect();
         let e = sw_name(&self.elem_var(s));
         // Inside the walk a field is read off the element.
@@ -13434,10 +15739,16 @@ impl<'a> Gen<'a> {
             }
         };
         let mut o = String::new();
+        let index = self.index_var(s);
+        self.walk_begin(s, &index);
         let mut body = self.sw_element_guards(s, &local);
         let (seen, step) = self.sw_unique(s, sums, &local);
         o.push_str(&seen);
         body.push_str(&step);
+        // Past a `stop`, the door alone (§15.328).
+        if let Some(i) = self.walk_goes_past_stop(sums) {
+            body.push_str(&format!("    if {} {{\n        continue\n    }}\n", sw_name(&self.fold_names(i).done)));
+        }
         body.push_str(&self.sw_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -13463,6 +15774,14 @@ impl<'a> Gen<'a> {
                             crate::door::out_of_range(&d.name.text)
                         ));
                     }
+                    // The bottom of its range, where a walk can come in under it (§15.314).
+                    if let Some(floor) = self.walk_floor(d) {
+                        let n = self.sw_ident(&d.name.text);
+                        after.push_str(&format!(
+                            "    if {n} < {floor} {{\n        throw RuleError.input(what: \"{}\", value: Int64({n}))\n    }}\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
                 }
                 Item::Fold(fold) => {
                     let (init, step, fin) = self.sw_fold(i, fold, &seq, &local);
@@ -13473,7 +15792,17 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
-        o.push_str(&format!("    for {e} in {seq} {{\n"));
+        // The index of the element is bound where a sentence of the walk says it (§15.324). An
+        // element no line of the walk reads is said to be left unread on purpose: swiftc warns of
+        // a value never used (§15.340).
+        if !clash::reads_word(&body, &e, clash::Syntax::Swift) {
+            body.insert_str(0, &format!("    _ = {e}\n"));
+        }
+        if self.walk_end() {
+            o.push_str(&format!("    for ({index}, {e}) in {seq}.enumerated() {{\n"));
+        } else {
+            o.push_str(&format!("    for {e} in {seq} {{\n"));
+        }
         o.push_str(&Self::indent_block(&body, "    "));
         o.push_str("    }\n");
         o.push_str(&after);
@@ -13528,7 +15857,10 @@ impl<'a> Gen<'a> {
         let (answer, stopped, done) = (sw_name(&names.answer), sw_name(&names.stopped), sw_name(&names.done));
         let (taken, kept, best) = (sw_name(&names.taken), sw_name(&names.kept), sw_name(&names.best));
         let (held, key) = (sw_name(&names.held), sw_name(&names.key));
+        let taken_at = sw_name(&names.taken_at_camel);
         let alone = self.fold_alone(i);
+        // Ends the loop at a `stop`: a fold alone in its walk with no door to keep past it (§15.328).
+        let ends = alone && !self.stop_keeps_door(i);
         let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
         let (out_name, out_ty) = self.fold_target(fold);
         let acc_ty = if out_ty.is_numeric() { "Int64".to_string() } else { self.sw_ty(&out_ty) };
@@ -13547,14 +15879,21 @@ impl<'a> Gen<'a> {
         let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
         let (total, weight, cuts) = (sw_name(&names.total), sw_name(&names.weight), sw_name(&names.cuts));
 
+        // A flag no arm of the fold sets is a `let`: swiftc warns of a `var` never changed (§15.340).
+        let set = |stop: fn(&Arm) -> bool| if fold.arms.iter().any(|(_, a, _)| stop(a)) { "var" } else { "let" };
         let mut init = String::new();
         init.push_str(&format!("    var {answer}: {acc_ty} = {}  // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
-        init.push_str(&format!("    var {stopped} = false\n"));
-        if !alone {
-            init.push_str(&format!("    var {done} = false\n"));
+        init.push_str(&format!("    {} {stopped} = false\n", set(|a| matches!(a, Arm::Stop(Some(_))))));
+        if !ends {
+            init.push_str(&format!("    {} {done} = false\n", set(|a| matches!(a, Arm::Stop(_)))));
         }
         if takes {
             init.push_str(&format!("    var {taken}: {acc_ty}? = nil\n"));
+        }
+        // The element a `take_unique` took, which the sentence says beside the one that matched
+        // again (§15.324).
+        if fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { unique: true, .. })) {
+            init.push_str(&format!("    var {taken_at} = 0\n"));
         }
         if weighted {
             init.push_str(&format!("    var {total}: Int64 = 0  // {}\n", tr!("重みの合計", "the running total of the weights")));
@@ -13571,11 +15910,11 @@ impl<'a> Gen<'a> {
             arms.push_str(&format!("    if {v} == {} {{  // {}\n", self.sw_value(&name.text, &self.ty_of(&fold.verdict)), name.text));
             match arm {
                 Arm::Next => arms.push_str(&format!("        // {}\n", crate::kw::NEXT)),
-                Arm::Stop(None) if alone => arms.push_str("        break\n"),
+                Arm::Stop(None) if ends => arms.push_str("        break\n"),
                 Arm::Stop(None) => arms.push_str(&format!("        {done} = true\n")),
                 Arm::Stop(Some(x)) => {
                     arms.push_str(&format!("        {answer} = {}\n", val(x, local)));
-                    if alone {
+                    if ends {
                         arms.push_str(&format!("        {stopped} = true\n        break\n"));
                     } else {
                         arms.push_str(&format!("        {stopped} = true\n        {done} = true\n"));
@@ -13583,16 +15922,13 @@ impl<'a> Gen<'a> {
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
+                        let here = self.here_used();
                         arms.push_str(&format!("        if {taken} != nil {{\n"));
                         arms.push_str(&format!(
-                            "            throw RuleError.contradiction(what: \"{}\")\n        }}\n",
-                            tr!(
-                                "畳み込み {}: take_unique に二件当たりました",
-                                "fold {}: two elements matched a take_unique",
-                                fold.verdict
-                            )
+                            "            throw RuleError.contradiction(what: {})\n        }}\n",
+                            sw_said(&crate::door::fold_contradiction(&fold.verdict, &fold.over, crate::door::BEFORE, crate::door::HERE), &here, &taken_at)
                         ));
-                        arms.push_str(&format!("        {taken} = {}\n", val(expr, local)));
+                        arms.push_str(&format!("        {taken} = {}\n        {taken_at} = {here}\n", val(expr, local)));
                     } else {
                         arms.push_str(&format!("        if {taken} == nil {{\n"));
                         arms.push_str(&format!("            {taken} = {}\n        }}\n", val(expr, local)));
@@ -13664,10 +16000,14 @@ impl<'a> Gen<'a> {
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => "Int64".to_string(),
                 other => self.sw_ty(&other),
             };
-            init.push_str(&format!("    var {seen}: Set<{t}> = []\n"));
+            // Where each value was first seen, which the sentence says beside the element it came
+            // round again on (§15.324).
+            let here = self.here_used();
+            let first = sw_name(&self.temp("first"));
+            init.push_str(&format!("    var {seen}: [{t}: Int] = [:]\n"));
             step.push_str(&format!(
-                "    if {seen}.contains({v}) {{\n        throw RuleError.input(what: \"{}\", value: nil)\n    }}\n    {seen}.insert({v})\n",
-                crate::door::duplicate(seq, &fd.name.text)
+                "    if let {first} = {seen}[{v}] {{\n        throw RuleError.input(what: {}, value: nil)\n    }}\n    {seen}[{v}] = {here}\n",
+                sw_said(&crate::door::duplicate(seq, &fd.name.text, crate::door::BEFORE, crate::door::HERE), &here, &first)
             ));
         }
         (init, step)
@@ -13675,6 +16015,7 @@ impl<'a> Gen<'a> {
 
     fn sw_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
+        let here = self.here();
         for i in self.element_fields(s) {
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
@@ -13697,9 +16038,10 @@ impl<'a> Gen<'a> {
                 continue;
             };
             let mut o = Guarded::new(&mut o, wrap, "    ");
+            // The sentence names the field by its place on the element (§15.324).
             o.push_str(&format!(
-                "    if {test} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
-                crate::door::out_of_range(&i.name.text)
+                "    if {test} {{\n        throw RuleError.input(what: {}, value: Int64({v}))\n    }}\n",
+                sw_said(&crate::door::out_of_range(&self.said_name(&i.name.text)), &here, "")
             ));
         }
         o
@@ -13763,7 +16105,7 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
+            .map(|i| self.sw_param(&i.name, &self.sw_ty(&self.ty_of(&i.name.text))))
             .collect();
 
         // The public function keeps the plain signature; the branches live in its traced
@@ -13772,12 +16114,12 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| format!("{}: {}", sw_label(&pub_name(&i.name)), sw_name(&pub_name(&i.name))))
+            .map(|i| format!("{}: {}", sw_label(&pub_name(&i.name)), sw_name(&self.held(&i.name))))
             .collect();
         // A sequence a walk reads is a parameter like the rest (§15.56, §15.219).
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: [{}]", sw_name(&pub_name(&el.name)), self.element_type(s)));
-            args.push(format!("{}: {}", sw_label(&pub_name(&el.name)), sw_name(&pub_name(&el.name))));
+            params.push(self.sw_param(&el.name, &format!("[{}]", self.element_type(s))));
+            args.push(format!("{}: {}", sw_label(&pub_name(&el.name)), sw_name(&self.held(&el.name))));
         }
         let traced = format!("{fname}Traced");
         o.push_str(&format!("/// {}\n", plain_doc(&self.f.name.text, &self.f.version, &format!("`{traced}`"))));
@@ -13803,7 +16145,7 @@ impl<'a> Gen<'a> {
         let local = |n: &str| -> String {
             match self.f.inputs.iter().find(|i| i.name.text == n) {
                 Some(i) => {
-                    let v = sw_name(&pub_name(&i.name));
+                    let v = sw_name(&self.held(&i.name));
                     if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                         format!("{v}.value")
                     } else {
@@ -14063,11 +16405,19 @@ impl<'a> Gen<'a> {
     /// `@main` needs the runner not to be the module's main file, which is why it is
     /// `{alias}_runner.swift` and not `main.swift`.
     pub fn swift_runner(&self) -> String {
+        // the runner is built with the module, whose enums' types it reads by their names (§15.336)
+        self.apart_types(clash::Syntax::Swift, |g| g.swift_runner_text())
+    }
+
+    fn swift_runner_text(&self) -> String {
         // The module takes its name from the binary, so the call has to be the function's
         // own spelling: a plain `shipping_fee(...)` resolves to the *module* and fails to
         // compile, which is how this was found.
         let fname = sw_name(&pub_name(&self.f.name));
         let d = runner_local("d", &fname);
+        // A rule that reads no input reads nothing out of the record's `in`, which Swift warns of
+        // where it is held unread (§15.330).
+        let d_decl = if self.f.inputs.is_empty() && self.f.elements.is_empty() { "_".to_string() } else { d.clone() };
         let got = runner_local("got", &fname);
         let line = runner_local("line", &fname);
         let root = runner_local("root", &fname);
@@ -14076,20 +16426,23 @@ impl<'a> Gen<'a> {
         // One input read off the wire the way every door reads it (§15.204). Every reader
         // throws the module's own `RuleError.input`, with the sentence every language says; a
         // statement that reads one starts with `try`, which covers the whole of it.
-        let read = |ty: &Ty, src: &str, name: &str| -> String {
+        // `said` is what the sentences call the value: the name, or for a field of an element its
+        // place, `lines[\u{1}].amount`, which takes the index `at` of the element (§15.324).
+        let read = |ty: &Ty, src: &str, name: &str, said: &str, at: &str| -> String {
+            let lit = |x: String| -> String { if names_element(&x) { sw_said(&x, at, "") } else { format!("{x:?}") } };
             let optional = matches!(ty, Ty::Opt(_));
-            let take = format!("_take({src}, {name:?}, {:?}{})", crate::door::missing(name), if optional { ", true" } else { "" });
+            let take = format!("_take({src}, {name:?}, {}{})", lit(crate::door::missing(said)), if optional { ", true" } else { "" });
             let one = |v: &str| -> String {
                 match ty.present() {
                     Ty::Enum(n) => {
                         let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                        format!("_enum({cls}.self, {v}, {:?})", crate::door::not_in_enum(name, n))
+                        format!("_enum({cls}.self, {v}, {})", lit(crate::door::not_in_enum(said, n)))
                     }
-                    Ty::Bool => format!("_bool({v}, {:?})", crate::door::not_bool(name)),
-                    Ty::Date => format!("_date({v}, {:?})", crate::door::not_date(name)),
-                    Ty::Str => format!("_str({v}, {:?})", crate::door::not_string(name)),
-                    Ty::Number => format!("_int({v}, {:?}, {:?})", crate::door::not_integer(name), crate::door::out_of_range(name)),
-                    other => format!("{}(_int({v}, {:?}, {:?}))", self.sw_ty(other), crate::door::not_integer(name), crate::door::out_of_range(name)),
+                    Ty::Bool => format!("_bool({v}, {})", lit(crate::door::not_bool(said))),
+                    Ty::Date => format!("_date({v}, {})", lit(crate::door::not_date(said))),
+                    Ty::Str => format!("_str({v}, {})", lit(crate::door::not_string(said))),
+                    Ty::Number => format!("_int({v}, {}, {})", lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said))),
+                    other => format!("{}(_int({v}, {}, {}))", self.sw_ty(other), lit(crate::door::not_integer(said)), lit(crate::door::out_of_range(said))),
                 }
             };
             if optional {
@@ -14106,7 +16459,7 @@ impl<'a> Gen<'a> {
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
             let label = sw_label(&pub_name(&i.name));
-            let v = read(&ty, &d, &i.name.text);
+            let v = read(&ty, &d, &i.name.text, &i.name.text, "");
             let local = runner_local(&format!("a{}", args.len()), &fname);
             plain.push(format!("                let {local} = try {v}\n"));
             // A machine's traces (§15.148): the carried input is the state this language
@@ -14133,11 +16486,19 @@ impl<'a> Gen<'a> {
             let label = sw_label(&pub_name(&el.name));
             let local = runner_local(&format!("a{}", args.len()), &fname);
             let ev = runner_local("e", &fname);
-            let obj = format!("_obj({ev}, {:?})", crate::door::not_object(seq));
-            let inner: Vec<String> =
-                el.fields.iter().map(|fd| format!("{}: {}", sw_name(&pub_name(&fd.name)), read(&self.ty_of(&fd.name.text), &obj, &fd.name.text))).collect();
+            // A sentence about an element names it by its index (§15.324).
+            let at = runner_local("i", &fname);
+            let obj = format!("_obj({ev}, {})", sw_said(&crate::door::not_object(seq, crate::door::HERE), &at, ""));
+            let inner: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let said = crate::door::element(seq, crate::door::HERE, &fd.name.text);
+                    format!("{}: {}", sw_name(&pub_name(&fd.name)), read(&self.ty_of(&fd.name.text), &obj, &fd.name.text, &said, &at))
+                })
+                .collect();
             binds.push(format!(
-                "                let {local} = try _seq(_take({d}, {seq:?}, {:?}), {:?}).map {{ {ev} in try {}({}) }}\n",
+                "                let {local} = try _seq(_take({d}, {seq:?}, {:?}), {:?}).enumerated().map {{ {at}, {ev} in try {}({}) }}\n",
                 crate::door::missing(seq),
                 crate::door::not_sequence(seq),
                 self.element_type(s),
@@ -14158,6 +16519,8 @@ impl<'a> Gen<'a> {
             .chain(args[self.f.inputs.len()..].iter().cloned())
             .collect();
         let args = args.join(", ");
+        // the record's arguments, before what it is told came out (§15.330)
+        let record_args = leading_param(&args);
         // The record function's own parameter names, which are the call's labels.
         let (p_out, p_trace) = (sw_name(&self.temp("out")), sw_name(&self.temp("trace")));
         let (mut head, mut meta, mut tail) = (String::new(), String::new(), String::new());
@@ -14176,7 +16539,7 @@ impl<'a> Gen<'a> {
                     _ => format!("\\({})", mc.swift()),
                 };
                 more_meta.push(format!("{key}:{shown}"));
-                more_start.push_str(&format!("                {local} = try {}\n", read(&mc.ty, &format!("{root}[\"carried\"]"), &mc.input)));
+                more_start.push_str(&format!("                {local} = try {}\n", read(&mc.ty, &format!("{root}[\"carried\"]"), &mc.input, &mc.input, "")));
                 more_tail.push_str(&format!("                    {local} = {got}.{}\n", sw_name(&mc.out_alias)));
             }
             let carried_meta = if more_meta.is_empty() { String::new() } else { format!(",\\\"carried\\\":{{{}}}", more_meta.join(",")) };
@@ -14205,11 +16568,11 @@ enum Runner {{
                 continue
             }}
             let {root} = try JSONSerialization.jsonObject(with: Data({line}.utf8)) as! [String: Any]
-{meta}            let {d}: Any? = {root}["in"]
+{meta}            let {d_decl}: Any? = {root}["in"]
             // One call, or the refusal its door gives, in the place of the record (§15.204).
             do {{
 {binds}                let ({got}, {trace}) = try {fname}Traced({args})
-                print({fname}Record({args}, {p_out}: {got}, {p_trace}: {trace}))
+                print({fname}Record({record_args}{p_out}: {got}, {p_trace}: {trace}))
 {tail}            }} catch RuleError.input(let what, _) {{
                 _refused("input", what)
             }} catch RuleError.contradiction(let what) {{
@@ -14311,7 +16674,7 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| {
                 let ty = self.ty_of(&i.name.text);
-                (i.name.text.clone(), input(&pub_name(&i.name), &ty), wire_of(&ty))
+                (i.name.text.clone(), input(&self.held(&i.name), &ty), wire_of(&ty))
             })
             .collect();
         let outs = self
@@ -14371,10 +16734,18 @@ impl<'a> Gen<'a> {
             );
         }
         o.push_str(&format!(
-            "def {fname}_record({}, {out}: {ret}, {trace}: _Trace, {tag}: str = \"\") -> str:\n    \"\"\"{}\"\"\"\n",
-            params.join(", "),
+            "def {fname}_record({}{out}: {ret}, {trace}: _Trace, {tag}: str = \"\") -> str:\n    \"\"\"{}\"\"\"\n",
+            leading_params(&params),
             record_doc()
         ));
+        // As the traced function does, where some input is bound apart from its name (§15.336).
+        if let Some((held, _)) = self.py_held_params() {
+            let mut args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+            args.extend(self.f.elements.iter().map(|el| pub_name(&el.name)));
+            let inner = self.py_inner(&format!("{fname}_record"));
+            o.push_str(&format!("    return {inner}({}{out}, {trace}, {tag})\n\n\n", leading_params(&args)));
+            o.push_str(&format!("def {inner}({}{out}: {ret}, {trace}: _Trace, {tag}: str = \"\") -> str:\n", leading_params(&held)));
+        }
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("        '\"{jp}\":' + {},\n", Self::py_wire(e, w));
         // The sequence goes in first, and one element is written the way one record's inputs
@@ -14398,11 +16769,16 @@ impl<'a> Gen<'a> {
                 "    {seq} = '\"{}\":[' + \",\".join(\"{{\" + {} + \"}}\" for e in {}) + \"]\"\n",
                 el.name.text,
                 inner.join(" + \",\" + "),
-                pub_name(&el.name)
+                self.held(&el.name)
             ));
             seq_first.push_str(&format!("        {seq},\n"));
         }
-        o.push_str(&format!("    {v_ins} = [\n{seq_first}{}    ]\n", ins.iter().map(field).collect::<String>()));
+        if seq_first.is_empty() && ins.is_empty() {
+            // an empty list has no type mypy can tell
+            o.push_str(&format!("    {v_ins}: list[str] = []\n"));
+        } else {
+            o.push_str(&format!("    {v_ins} = [\n{seq_first}{}    ]\n", ins.iter().map(field).collect::<String>()));
+        }
         o.push_str(&format!("    {v_obs} = [\n{}    ]\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
             "    {v_rows} = ['{{\"table\":' + _json_str(f.table) + ',\"row\":' + f\"{{f.row}}\" + (',\"label\":' + _json_str(f.label) if f.label != \"\" else \"\") + \"}}\" for f in {trace}]\n"
@@ -14437,10 +16813,10 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
+            .map(|i| format!("{}: {}", self.held(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: readonly {}[]", pub_name(&el.name), self.element_type(s)));
+            params.push(format!("{}: readonly {}[]", self.held(&el.name), self.element_type(s)));
         }
         let mut o = String::new();
         if civil_needed(self.f, self.c) {
@@ -14450,8 +16826,8 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&format!("/** {} */\n", record_doc()));
         o.push_str(&format!(
-            "export function {fname}_record({}, {out}: {ret}, {trace}: Fired[], {tag} = \"\"): string {{\n",
-            params.join(", ")
+            "export function {fname}_record({}{out}: {ret}, {trace}: Fired[], {tag} = \"\"): string {{\n",
+            leading_params(&params)
         ));
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("    '\"{jp}\":' + {},\n", Self::ts_wire(e, w));
@@ -14474,7 +16850,7 @@ impl<'a> Gen<'a> {
             seq_first.push_str(&format!(
                 "    '\"{}\":[' + {}.map(({e}) => \"{{\" + {} + \"}}\").join(\",\") + \"]\",\n",
                 el.name.text,
-                pub_name(&el.name),
+                self.held(&el.name),
                 inner.join(" + \",\" + ")
             ));
         }
@@ -14498,6 +16874,10 @@ impl<'a> Gen<'a> {
             Wire::Brand => format!("{e}.0.to_string()"),
             Wire::Date => format!("json_str(&civil({e}))"),
             Wire::Str => format!("json_str(&{e})"),
+            // A string is not Copy: one that may be absent is borrowed, not taken out of what holds
+            // it, which is an element the record reads through a reference (§15.343). The values of
+            // the other types are Copy, and are written as they were.
+            Wire::Opt(w) if matches!(**w, Wire::Str) => format!("{e}.as_deref().map(json_str).unwrap_or_else(|| \"null\".to_string())"),
             Wire::Opt(w) => format!("{e}.map(|v| {}).unwrap_or_else(|| \"null\".to_string())", Self::rs_wire("v", w)),
         }
     }
@@ -14515,10 +16895,10 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
+            .map(|i| format!("{}: {}", self.held(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: &[{}]", pub_name(&el.name), self.element_type(s)));
+            params.push(format!("{}: &[{}]", self.held(&el.name), self.element_type(s)));
         }
         let mut o = String::new();
         o.push_str(RS_JSON_STR);
@@ -14529,8 +16909,8 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&format!("/// {}\n", record_doc()));
         o.push_str(&format!(
-            "pub fn {fname}_record({}, {out}: {ret}, {trace}: &[Fired], {tag}: &str) -> String {{\n",
-            params.join(", ")
+            "pub fn {fname}_record({}{out}: {ret}, {trace}: &[Fired], {tag}: &str) -> String {{\n",
+            leading_params(&params)
         ));
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("        String::from(\"\\\"{jp}\\\":\") + &{},\n", Self::rs_wire(e, w));
@@ -14552,11 +16932,16 @@ impl<'a> Gen<'a> {
             seq_first.push_str(&format!(
                 "        String::from(\"\\\"{}\\\":[\") + &{}.iter().map(|e| String::from(\"{{\") + &({}) + \"}}\").collect::<Vec<_>>().join(\",\") + \"]\",\n",
                 el.name.text,
-                pub_name(&el.name),
+                self.held(&el.name),
                 inner.join(" + \",\" + &")
             ));
         }
-        o.push_str(&format!("    let {v_ins} = [\n{seq_first}{}    ]\n    .join(\",\");\n", ins.iter().map(field).collect::<String>()));
+        if seq_first.is_empty() && ins.is_empty() {
+            // an empty array has no type Rust can tell
+            o.push_str(&format!("    let {v_ins} = String::new();\n"));
+        } else {
+            o.push_str(&format!("    let {v_ins} = [\n{seq_first}{}    ]\n    .join(\",\");\n", ins.iter().map(field).collect::<String>()));
+        }
         o.push_str(&format!("    let {v_obs} = [\n{}    ]\n    .join(\",\");\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
             "    let {v_rows} = {trace}\n        .iter()\n        .map(|f| String::from(\"{{\\\"table\\\":\") + &json_str(f.table) + \",\\\"row\\\":\" + &f.row.to_string() + &(if f.label.is_empty() {{ String::new() }} else {{ String::from(\",\\\"label\\\":\") + &json_str(f.label) }}) + \"}}\")\n        .collect::<Vec<_>>()\n        .join(\",\");\n"
@@ -14583,6 +16968,24 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The function that writes a field of an element of type `ty` where the type may hold no
+    /// value (§15.343): what tells it from the others (the pointer's type and how what it points
+    /// at is written), the word its name ends with, the pointer's type, and the value it writes
+    /// of `*p`. `None` for a type that always holds one.
+    fn go_or_null(&self, ty: &Ty) -> Option<(String, String, String, String)> {
+        let Wire::Opt(w) = wire_of(ty) else { return None };
+        let gt = self.go_ty(ty);
+        let write = Self::go_wire(if matches!(*w, Wire::Enum) { "(*p)" } else { "*p" }, &w);
+        let base = match *w {
+            Wire::Date => "Date".to_string(),
+            _ => {
+                let t = gt.trim_start_matches('*');
+                t.chars().next().map(|c| c.to_uppercase().collect::<String>() + &t[c.len_utf8()..]).unwrap_or_default()
+            }
+        };
+        Some((format!("{gt} {write}"), base, gt, write))
+    }
+
     pub fn go_record(&self) -> String {
         let fname = pascal(&pub_name(&self.f.name));
         let single = self.f.outputs.len() == 1;
@@ -14601,6 +17004,25 @@ impl<'a> Gen<'a> {
                 "func civil(days int64) string {\n\tz := days + 719468\n\tera := z\n\tif z < 0 {\n\t\tera = z - 146096\n\t}\n\tera /= 146097\n\tdoe := z - era*146097\n\tyoe := (doe - doe/1460 + doe/36524 - doe/146096) / 365\n\tdoy := doe - (365*yoe + yoe/4 - yoe/100)\n\tmp := (5*doy + 2) / 153\n\td := doy - (153*mp+2)/5 + 1\n\tm := mp - 9\n\tif mp < 10 {\n\t\tm = mp + 3\n\t}\n\ty := yoe + era*400\n\tif m <= 2 {\n\t\ty++\n\t}\n\treturn fmt.Sprintf(\"%04d-%02d-%02d\", y, m, d)\n}\n\n",
             );
         }
+        // A field of an element that may hold no value is a pointer, written by a function of its
+        // type: `null` where it is nil, and what it points at otherwise. The record's line calls
+        // it by its name, where a function literal of more than one statement would be one gofmt
+        // writes on lines of its own (§15.343). Two types the rule spells alike take a number.
+        let mut or_null: Vec<(String, String)> = Vec::new();
+        for fd in self.f.elements.iter().flat_map(|el| el.fields.iter()) {
+            let Some((key, base, gt, write)) = self.go_or_null(&self.ty_of(&fd.name.text)) else { continue };
+            if or_null.iter().any(|(k, _)| *k == key) {
+                continue;
+            }
+            let base = format!("jsonOrNull{base}");
+            let (mut name, mut k) = (base.clone(), 1);
+            while or_null.iter().any(|(_, m)| *m == name) {
+                k += 1;
+                name = format!("{base}{k}");
+            }
+            o.push_str(&format!("func {name}(p {gt}) string {{\n\tif p == nil {{\n\t\treturn \"null\"\n\t}}\n\treturn {write}\n}}\n\n"));
+            or_null.push((key, name));
+        }
         o.push_str(&format!("// {fname}Record {}\n", record_doc()));
         o.push_str(&format!("func {fname}Record(in Input, out {ret}, trace []Fired, tag string) string {{\n"));
         // The sequence goes in first, and one element is written the way one record's inputs
@@ -14615,11 +17037,11 @@ impl<'a> Gen<'a> {
                 .map(|fd| {
                     let ty = self.ty_of(&fd.name.text);
                     let at = format!("e.{}", pascal(&pub_name(&fd.name)));
-                    // An optional field is a pointer: `null` when it is nil, and what it points at
-                    // otherwise. It was read through with no test, and a nil one panicked (§15.201).
-                    let value = match wire_of(&ty) {
-                        Wire::Opt(w) => format!("func() string {{ if {at} == nil {{ return \"null\" }}; return {} }}()", Self::go_wire(&format!("(*{at})"), &w)),
-                        w => Self::go_wire(&at, &w),
+                    // An optional field is a pointer, written by the function of its type above. It
+                    // was read through with no test once, and a nil one panicked (§15.201).
+                    let value = match self.go_or_null(&ty) {
+                        Some((key, ..)) => format!("{}({at})", or_null.iter().find(|(k, _)| *k == key).map(|(_, n)| n.as_str()).unwrap_or_default()),
+                        None => Self::go_wire(&at, &wire_of(&ty)),
                     };
                     format!("\"\\\"{}\\\":\" + {}", fd.name.text, value)
                 })
@@ -14673,9 +17095,9 @@ impl<'a> Gen<'a> {
             |a, _| a.to_string(),
             |_, a, _| if single { out.clone() } else { format!("{out}.{a}") },
         );
-        let mut params: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let mut params: Vec<String> = self.f.inputs.iter().map(|i| self.held(&i.name)).collect();
         for el in &self.f.elements {
-            params.push(pub_name(&el.name));
+            params.push(self.held(&el.name));
         }
         let mut o = String::new();
         o.push_str(
@@ -14688,8 +17110,8 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&format!("  # {}\n", record_doc()));
         o.push_str(&format!(
-            "  def self.{fname}_record({}, {out}, {trace}, {tag} = \"\")\n",
-            params.join(", ")
+            "  def self.{fname}_record({}{out}, {trace}, {tag} = \"\")\n",
+            leading_params(&params)
         ));
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("      \"\\\"{jp}\\\":#{{{}}}\",\n", Self::rb_wire(e, w));
@@ -14711,7 +17133,7 @@ impl<'a> Gen<'a> {
             seq_first.push_str(&format!(
                 "      \"\\\"{}\\\":[\" + {}.map {{ |e| \"{{{}}}\" }}.join(\",\") + \"]\",\n",
                 el.name.text,
-                pub_name(&el.name),
+                self.held(&el.name),
                 inner.join(",")
             ));
         }
@@ -14752,10 +17174,10 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
+            .map(|i| self.sw_param(&i.name, &self.sw_ty(&self.ty_of(&i.name.text))))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: [{}]", sw_name(&pub_name(&el.name)), self.element_type(s)));
+            params.push(self.sw_param(&el.name, &format!("[{}]", self.element_type(s))));
         }
         let mut o = String::new();
         o.push_str(
@@ -14768,8 +17190,8 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&format!("/// {}\n", record_doc()));
         o.push_str(&format!(
-            "public func {fname}Record({}, {}: {ret}, {}: [Fired], {}: String = \"\") -> String {{\n",
-            params.join(", "),
+            "public func {fname}Record({}{}: {ret}, {}: [Fired], {}: String = \"\") -> String {{\n",
+            leading_params(&params),
             sw_name(&out),
             sw_name(&trace),
             sw_name(&tag)
@@ -14796,7 +17218,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!(
                 "    let {seq} = \"\\\"{}\\\":[\" + {}.map {{ \"{{{}}}\" }}.joined(separator: \",\") + \"]\"\n",
                 el.name.text,
-                sw_name(&pub_name(&el.name)),
+                sw_name(&self.held(&el.name)),
                 inner.join(",")
             ));
             seq_first.push_str(&format!("        {seq},\n"));
@@ -14834,6 +17256,15 @@ pub(crate) fn py_out_of(v: &str, (lo, hi): (Option<i128>, Option<i128>)) -> Opti
         (None, Some(h)) => Some(format!("{v} > {h}")),
         (None, None) => None,
     }
+}
+
+/// The ends of int64, which a reader of the wire holds a whole number to as it takes it (§15.328):
+/// a number past them is refused in the first look, before any value is held to its range.
+pub(crate) const INT64_ENDS: (Option<i128>, Option<i128>) = (Some(i64::MIN as i128), Some(i64::MAX as i128));
+
+/// The test of the first look for a number of a language whose integers go past int64, in Python.
+pub(crate) fn py_past_int64(v: &str) -> String {
+    py_out_of(v, INT64_ENDS).unwrap_or_default()
 }
 
 /// The same test where a language writes `||` between two comparisons and may put a suffix on an
@@ -14892,8 +17323,9 @@ pub fn strip_types(ts: &str) -> String {
             continue;
         }
         // Comment lines carry prose, and prose says "as" too. An import's `as` is a
-        // binding, not a cast, and stays.
-        if t.starts_with("//") || t.starts_with("/*") || t.starts_with("* ") || t == "*/" || t.starts_with("import ") {
+        // binding, not a cast, and stays, as a re-export's does (`export { sizeLabel as
+        // size2Label } from`, §15.326).
+        if t.starts_with("//") || t.starts_with("/*") || t.starts_with("* ") || t == "*/" || t.starts_with("import ") || t.starts_with("export {") {
             out.push(line.to_string());
             continue;
         }
@@ -15028,6 +17460,10 @@ fn strip_casts(l: &str) -> String {
         while after[n..].starts_with("[]") {
             n += 2;
         }
+        // A type that may be absent (`as Tier | null`, §15.342).
+        while after[n..].starts_with(" | null") {
+            n += " | null".len();
+        }
         rest = &after[n..];
     }
     o.push_str(rest);
@@ -15078,7 +17514,8 @@ pub(crate) struct Proj<'x> {
     /// How the path is read when the shape is a `.proto`: its JSON form (§15.133).
     pub(crate) proto: Option<crate::projection::ProtoPath>,
     /// The path as the rule writes it, which a refusal names (§15.234): `order.shipping.zone`,
-    /// `order.lines` for a walk, `order.lines[].amount_usd` for a field of an element.
+    /// `order.lines` for a walk, `order.lines[1].amount_usd` for a field of an element, the index
+    /// left open (`door::HERE`) for the generated code to put in (§15.324).
     pub(crate) shown: String,
     /// What the contract carries at the field a `where` tests (§15.234).
     pub(crate) test_kind: Option<crate::projection::At>,
@@ -15165,7 +17602,9 @@ impl<'a> Gen<'a> {
                             path: p.steps(),
                             kind: &p.kind,
                             proto: reads.get(&fd.name.text).cloned(),
-                            shown: format!("{shown}[].{}", p.steps().join(".")),
+                            // The index of the element is left open for the generated code to put
+                            // in (§15.324): `order.lines[1].quantity`.
+                            shown: format!("{shown}[{}].{}", crate::door::HERE, p.steps().join(".")),
                             test_kind: None,
                         })
                     })
@@ -15184,7 +17623,8 @@ impl<'a> Gen<'a> {
             .shapes
             .iter()
             .filter(|d| self.f.inputs.iter().any(|i| roots(&i.from, d)) || self.f.elements.iter().any(|e| roots(&e.from, d)))
-            .map(pub_name_of_shape)
+            // under the identifier it is bound under apart from its name, where it has one (§15.336)
+            .map(|d| self.binds.get(&d.name.text).cloned().unwrap_or_else(|| pub_name_of_shape(d)))
             .collect()
     }
 
@@ -15394,9 +17834,9 @@ impl<'a> Gen<'a> {
     /// `py_from_params` gives them (§15.223).
     fn ts_from_params(&self) -> Vec<String> {
         let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("{r}: _Obj")).collect();
-        params.extend(self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text)))));
+        params.extend(self.proj_rest().iter().map(|i| format!("{}: {}", self.held(&i.name), self.ts_ty(&self.ty_of(&i.name.text)))));
         for s in self.proj_seq_rest() {
-            params.push(format!("{}: {}[]", pub_name(&self.f.elements[s].name), self.element_type(s)));
+            params.push(format!("{}: {}[]", self.held(&self.f.elements[s].name), self.element_type(s)));
         }
         params
     }
@@ -15404,8 +17844,8 @@ impl<'a> Gen<'a> {
     /// The parameters with no types, as JavaScript and Ruby write them.
     fn plain_from_params(&self) -> Vec<String> {
         let mut params: Vec<String> = self.proj_params();
-        params.extend(self.proj_rest().iter().map(|i| pub_name(&i.name)));
-        params.extend(self.proj_seq_rest().into_iter().map(|s| pub_name(&self.f.elements[s].name)));
+        params.extend(self.proj_rest().iter().map(|i| self.held(&i.name)));
+        params.extend(self.proj_seq_rest().into_iter().map(|s| self.held(&self.f.elements[s].name)));
         params
     }
 }
@@ -15460,12 +17900,23 @@ pub fn package_parts_at(src: &str, path: &str, shown: &str, target: &str, go_mod
         return Err(tr!("`{path}` は検査を通っていないので生成しません", "`{path}` does not pass check, so nothing is generated"));
     }
     let (f, c) = crate::prepare(src, path).map_err(|_| tr!("`{path}` は検査を通っていないので生成しません", "`{path}` does not pass check, so nothing is generated"))?;
-    let g = Gen::new(&f, &c, src, path).shown(shown).in_package(go_module).at(place);
+    package_parts_of(&f, &c, src, path, shown, target, go_module, place)
+}
+
+/// [`package_parts_at`], of a rule already checked and prepared (`f`, `c`, of the text `src` at
+/// `path`): what `ritsu gen` writes from the check the ports kept, so that the rule is checked once
+/// in the run (ritsu's DESIGN 4.15).
+#[allow(clippy::too_many_arguments)]
+pub fn package_parts_of(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &str, target: &str, go_module: &str, place: ritsu_emit::package::Place) -> Result<(String, String, Vec<ritsu_units::Unit>), String> {
+    let g = Gen::new(f, c, src, path).shown(shown).in_package(go_module).at(place);
     if f.kind == FileKind::Enums {
         let (rel, body) = g.enums_module_for(target).ok_or_else(|| format!("a package is written in {}, not in {target}", PACKAGE_TARGETS.join(", ")))?;
         return Ok((rel, body, Vec::new()));
     }
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
+    // each enum under the type it takes in the language (§15.326)
+    let here = g.for_target(target);
+    let g = here.as_ref().unwrap_or(&g);
     let (rel, body) = match target {
         "typescript" => (format!("{alias}.ts"), g.typescript()),
         "python" => (format!("{alias}.py"), g.python()),
@@ -15657,17 +18108,21 @@ impl<'a> Gen<'a> {
     pub fn enums_module_files(&self) -> Vec<(String, String)> {
         let alias = pub_name(&self.f.name);
         let pkg = crate::backend::go_package(&alias);
+        // The generator of a language where an enum's type of the file hides a builtin the module
+        // reads, which reaches the builtin past it (§15.336).
+        let (ts, rs, sw) = (self.for_target("typescript"), self.for_target("rust"), self.for_target("swift"));
+        let (ts, rs, sw) = (ts.as_ref().unwrap_or(self), rs.as_ref().unwrap_or(self), sw.as_ref().unwrap_or(self));
         vec![
             (format!("python/{alias}.py"), self.py_enums_module()),
-            (format!("typescript/{alias}.ts"), self.ts_enums_module()),
-            (format!("javascript/{alias}.mjs"), strip_types(&self.ts_enums_module())),
-            (format!("rust/{alias}.rs"), self.rs_enums_module()),
+            (format!("typescript/{alias}.ts"), ts.ts_enums_module()),
+            (format!("javascript/{alias}.mjs"), strip_types(&ts.ts_enums_module())),
+            (format!("rust/{alias}.rs"), rs.rs_enums_module()),
             (format!("ruby/{alias}.rb"), self.rb_enums_module()),
             (format!("ruby/sig/{alias}.rbs"), self.rbs_enums_module()),
             (format!("php/{alias}.php"), self.php_enums_module()),
             (format!("go/{pkg}/{alias}.go"), self.go_enums_module()),
             (format!("go/{pkg}/go.mod"), format!("module {pkg}\n\ngo {}\n", crate::backend::GO_MIN)),
-            (format!("swift/{alias}.swift"), self.sw_enums_module()),
+            (format!("swift/{alias}.swift"), sw.sw_enums_module()),
             (format!("java/{}.java", crate::codegen::java_class(&alias)), self.java_enums_module()),
         ]
     }
@@ -15676,11 +18131,13 @@ impl<'a> Gen<'a> {
     /// 9.3): Python, TypeScript, Go or Rust.
     pub fn enums_module_for(&self, target: &str) -> Option<(String, String)> {
         let alias = pub_name(&self.f.name);
+        let lang = self.for_target(target);
+        let g = lang.as_ref().unwrap_or(self);
         Some(match target {
-            "python" => (format!("{alias}.py"), self.py_enums_module()),
-            "typescript" => (format!("{alias}.ts"), self.ts_enums_module()),
-            "go" => (format!("{}/{alias}.go", crate::backend::go_package(&alias)), self.go_enums_module()),
-            "rust" => (format!("{alias}.rs"), self.rs_enums_module_as(true)),
+            "python" => (format!("{alias}.py"), g.py_enums_module()),
+            "typescript" => (format!("{alias}.ts"), g.ts_enums_module()),
+            "go" => (format!("{}/{alias}.go", crate::backend::go_package(&alias)), g.go_enums_module()),
+            "rust" => (format!("{alias}.rs"), g.rs_enums_module_as(true)),
             _ => return None,
         })
     }
@@ -15695,7 +18152,13 @@ impl<'a> Gen<'a> {
         pep8_blanks(&o)
     }
 
+    /// The module of an `enums` file in TypeScript, with a builtin an enum's type hides there read
+    /// past it (`globalThis.Object`, §15.336).
     fn ts_enums_module(&self) -> String {
+        self.apart_types(clash::Syntax::Script, |g| g.ts_enums_module_text())
+    }
+
+    fn ts_enums_module_text(&self) -> String {
         let mut o = self.header("//");
         o.push('\n');
         o.push_str(&self.ts_enums());
@@ -15710,8 +18173,15 @@ impl<'a> Gen<'a> {
     /// The same, as `rulec gen` writes it or (`package`) as a module of a package's crate, whose
     /// root allows the lints of the names' letters.
     fn rs_enums_module_as(&self, package: bool) -> String {
+        self.apart_types(clash::Syntax::Rust, |g| g.rs_enums_module_text(package))
+    }
+
+    /// The module of [`Gen::rs_enums_module_as`] as it is written where no enum's type hides a
+    /// builtin it reads; where one does, the module reaches it by its path (`::std::vec::Vec`).
+    fn rs_enums_module_text(&self, package: bool) -> String {
         let mut o = self.header("//");
-        o.push_str(if package { "\n#![allow(non_snake_case, dead_code)]\n\n" } else { "\n#![allow(non_snake_case, uncommon_codepoints, dead_code)]\n\n" });
+        // As the rule's module does: a module of the runner's crate where a rule reads the file.
+        o.push_str(if package { "\n#![allow(non_snake_case, dead_code)]\n\n" } else { "\n#![allow(non_snake_case, uncommon_codepoints, unused_attributes, dead_code, clippy::all)]\n\n" });
         for (jp, ascii) in self.own_enums() {
             o.push_str(&self.rs_enum(&jp, &ascii));
         }
@@ -15765,7 +18235,13 @@ impl<'a> Gen<'a> {
         o.trim_end_matches('\n').to_string() + "\n"
     }
 
+    /// The module of an `enums` file in Swift, with a type an enum's type hides there read through
+    /// the module `Swift` (`public enum String: Swift.String`, §15.336).
     fn sw_enums_module(&self) -> String {
+        self.apart_types(clash::Syntax::Swift, |g| g.sw_enums_module_text())
+    }
+
+    fn sw_enums_module_text(&self) -> String {
         let mut o = self.header("//");
         o.push('\n');
         for (jp, ascii) in self.own_enums() {
@@ -15775,7 +18251,16 @@ impl<'a> Gen<'a> {
         o.trim_end_matches('\n').to_string() + "\n"
     }
 
+    /// An `enums` file's class in Java: where an enum's type of the file has the name of a class of
+    /// the JDK the class reads by its simple name, the class reads that one by its full name
+    /// (§15.336, [`Gen::java_apart`]).
     fn java_enums_module(&self) -> String {
+        self.java_apart(self.java_hidden(true), |g| g.java_enums_module_text())
+    }
+
+    /// The class of [`Gen::java_enums_module`] as it is written where no name meets a class of the
+    /// JDK.
+    fn java_enums_module_text(&self) -> String {
         let cls = self.java_class();
         let mut o = ritsu_emit::header::for_unicode_comment(&self.header("//"));
         o.push_str(&format!(
@@ -15796,11 +18281,72 @@ impl<'a> Gen<'a> {
 fn owner_modules(f: &RuleFile) -> Result<Vec<(String, Vec<(String, String)>)>, String> {
     let mut out = Vec::new();
     for p in crate::enums::owner_paths(f) {
-        let ef = crate::enums::read_enums_file(&p).map_err(|_| tr!("`{p}` が check を通りません", "`{p}` does not pass check"))?;
+        let ef = crate::enums::read_enums_file(&p).map_err(|_| crate::i18n::said(|| tr!("`{p}` が check を通りません", "`{p}` does not pass check")))?;
         let g = Gen::new(&ef.file, &ef.checked, &ef.src, &ef.path);
         out.push((p.clone(), g.enums_module_files()));
     }
     Ok(out)
+}
+
+/// The JavaScript module `js` with the module of an `enums` file (`code`, written as
+/// `./<module>.mjs`) put inside it, for a page (§15.319): the module's text in a function that
+/// answers the names it exports, bound once before the first line that reads from it; then
+/// `import { A, B } from "./<module>.mjs";` takes A and B from that answer, and `export { a, b }
+/// from "./<module>.mjs";` takes them and exports them as the module's own.
+fn module_inside(js: &str, module: &str, code: &str) -> String {
+    let from = format!(" from \"./{module}.mjs\";");
+    let mut exported: Vec<String> = Vec::new();
+    let mut body = String::new();
+    for line in code.lines() {
+        let decl = ["export const ", "export function ", "export class "].into_iter().find(|k| line.starts_with(k));
+        match decl {
+            Some(k) => {
+                exported.push(line[k.len()..].chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$').collect());
+                body.push_str(&line["export ".len()..]);
+            }
+            None => body.push_str(line),
+        }
+        body.push('\n');
+    }
+    let answer = format!("_{module}_module");
+    let mut bound: Vec<String> = Vec::new();
+    let mut out = String::new();
+    for line in js.lines() {
+        let Some(head) = line.strip_suffix(&from) else {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        };
+        let (export, list) = match (head.strip_prefix("import "), head.strip_prefix("export ")) {
+            (Some(l), _) => (false, l),
+            (_, Some(l)) => (true, l),
+            _ => (false, head),
+        };
+        let names: Vec<&str> = list.trim().trim_start_matches('{').trim_end_matches('}').split(',').map(str::trim).filter(|n| !n.is_empty()).collect();
+        if bound.is_empty() {
+            out.push_str(&format!("const {answer} = (() => {{\n{body}return {{ {} }};\n}})();\n", exported.join(", ")));
+        }
+        // `X as Y` is the module's X by the name Y here; a line that hands it on exports X as Y
+        let mut taken: Vec<String> = Vec::new();
+        for n in &names {
+            let (theirs, ours) = match n.split_once(" as ") {
+                Some((x, y)) if !export => (x.trim(), y.trim()),
+                Some((x, _)) => (x.trim(), x.trim()),
+                None => (*n, *n),
+            };
+            if !bound.iter().any(|b| b == ours) {
+                bound.push(ours.to_string());
+                taken.push(if theirs == ours { ours.to_string() } else { format!("{theirs}: {ours}") });
+            }
+        }
+        if !taken.is_empty() {
+            out.push_str(&format!("const {{ {} }} = {answer};\n", taken.join(", ")));
+        }
+        if export {
+            out.push_str(&format!("export {{ {} }};\n", names.join(", ")));
+        }
+    }
+    out
 }
 
 /// Why the module `gen` writes cannot hold two contracts at one path when one of them is a
@@ -15809,8 +18355,8 @@ fn owner_modules(f: &RuleFile) -> Result<Vec<(String, Vec<(String, String)>)>, S
 fn contracts_clash(rel: &str, a: &std::path::Path, b: &std::path::Path) -> String {
     let (a, b) = (a.display(), b.display());
     tr!(
-        "error: `{a}` と `{b}` は中身の違うファイルですが、どちらも生成するモジュールの `proto/{rel}` になり、`{rel}` として import されます。protoc は一つの名前を一つのファイルとして読むので、生成しません",
-        "error: `{a}` and `{b}` are two different files, and both would be `proto/{rel}` of the module generated, imported as `{rel}`; protoc reads one name as one file, so nothing is generated"
+        "`{a}` と `{b}` は中身の違うファイルですが、どちらも生成するモジュールの `proto/{rel}` になり、`{rel}` として import されます。protoc は一つの名前を一つのファイルとして読むので、生成しません",
+        "`{a}` and `{b}` are two different files, and both would be `proto/{rel}` of the module generated, imported as `{rel}`; protoc reads one name as one file, so nothing is generated"
     )
 }
 
@@ -15820,8 +18366,8 @@ fn contracts_clash(rel: &str, a: &std::path::Path, b: &std::path::Path) -> Strin
 fn contracts_two_names(file: &std::path::Path, a: &str, b: &str) -> String {
     let file = file.display();
     tr!(
-        "error: `{file}` は、`{a}` と `{b}` の二つの名前で import され、生成するモジュールの `proto/{a}` と `proto/{b}` の二つになります。protoc は二つを別のファイルとして読み、同じ型を二度宣言するので、生成しません",
-        "error: `{file}` is imported by two names, `{a}` and `{b}`, and would be both `proto/{a}` and `proto/{b}` of the module generated; protoc reads the two as two files that declare the same types, so nothing is generated"
+        "`{file}` は、`{a}` と `{b}` の二つの名前で import され、生成するモジュールの `proto/{a}` と `proto/{b}` の二つになります。protoc は二つを別のファイルとして読み、同じ型を二度宣言するので、生成しません",
+        "`{file}` is imported by two names, `{a}` and `{b}`, and would be both `proto/{a}` and `proto/{b}` of the module generated; protoc reads the two as two files that declare the same types, so nothing is generated"
     )
 }
 
@@ -15831,22 +18377,25 @@ fn contracts_two_names(file: &std::path::Path, a: &str, b: &str) -> String {
 fn contract_over_own(rel: &str, contract: &std::path::Path, rule: &str) -> String {
     let contract = contract.display();
     tr!(
-        "error: `{contract}` のコピー先の `proto/{rel}` は、`{rule}` から生成する `.proto` と同じパスで、二つは中身が違うので、生成しません。生成した `.proto` をコピーして契約にしたのなら、`{rule}` に `implements proto \"<ファイル>\" <サービス>` を書いてください。規則の `.proto` は生成せず、契約をそのままコピーします",
-        "error: `{contract}` would be copied to `proto/{rel}`, the path of the `.proto` generated from `{rule}`, and the two differ, so nothing is generated. If the contract is a copy of a generated `.proto`, write `implements proto \"<file>\" <Service>` in `{rule}`: its own `.proto` is then not generated, and the contract is copied as it stands"
+        "`{contract}` のコピー先の `proto/{rel}` は、`{rule}` から生成する `.proto` と同じパスで、二つは中身が違うので、生成しません。生成した `.proto` をコピーして契約にしたのなら、`{rule}` に `implements proto \"<ファイル>\" <サービス>` を書いてください。規則の `.proto` は生成せず、契約をそのままコピーします",
+        "`{contract}` would be copied to `proto/{rel}`, the path of the `.proto` generated from `{rule}`, and the two differ, so nothing is generated. If the contract is a copy of a generated `.proto`, write `implements proto \"<file>\" <Service>` in `{rule}`: its own `.proto` is then not generated, and the contract is copied as it stands"
     )
 }
 
 /// A rule of a run of `gen`, read: its text and what `prepare` made of it, once its check passed; or
 /// what the check found, which stops the run there; or nothing, when the file does not read.
 enum RuleRead {
-    Unread,
+    Unread(std::io::Error),
     Fails(String, Vec<crate::diag::Diag>),
     Ready(String, Box<(RuleFile, Checked)>),
 }
 
 /// The rule at `path` read and checked as `gen` reads it before it writes anything of it.
 fn read_rule(path: &str) -> RuleRead {
-    let Ok(src) = ritsu_base::fs::read_to_string(path) else { return RuleRead::Unread };
+    let src = match ritsu_base::fs::read_to_string(path) {
+        Ok(src) => src,
+        Err(e) => return RuleRead::Unread(e),
+    };
     // Nothing is generated from a rule that does not pass (README, AGENTS.md, the generate page).
     // `prepare` only gets as far as the types, so the checks the tables themselves carry —
     // completeness, overlap, dead rows, overflow and the examples — are run here, the way `doc`
@@ -15949,12 +18498,12 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
     });
     let mut early: Vec<Option<RuleRead>> = Vec::new();
     if in_a_module {
-        let read: Vec<RuleRead> = files.iter().map(|p| read_rule(p)).collect();
+        let read: Vec<RuleRead> = files.iter().map(|p| crate::i18n::said(|| read_rule(p))).collect();
         // What it makes sure of is the module of the `.proto` files, which `--target proto` writes.
         if asked.target(PROTO)
-            && let Some(stop) = dependencies_hold(files, &read)
+            && let Some(stop) = crate::i18n::said(|| dependencies_hold(files, &read))
         {
-            let _ = writeln!(err, "{stop}");
+            let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&stop, crate::i18n::base())));
             return 2;
         }
         early = read.into_iter().map(Some).collect();
@@ -15988,10 +18537,10 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
             let p = format!("{out_dir}/{rel}");
             match enum_modules.get(&p) {
                 Some(prev) if !same_file(prev, from) => {
-                    let _ = writeln!(err, "{}", tr!(
-                        "error: `{prev}` と `{from}` が、同じ `{rel}` を作ります。どちらかの名前を変えてください",
-                        "error: `{prev}` and `{from}` both make `{rel}`; rename one of them"
-                    ));
+                    let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&tr!(
+                        "`{prev}` と `{from}` が、同じ `{rel}` を作ります。どちらかの名前を変えてください",
+                        "`{prev}` and `{from}` both make `{rel}`; rename one of them"
+                    ), crate::i18n::base())));
                     return None;
                 }
                 Some(_) => {}
@@ -16004,15 +18553,13 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
         Some(fresh)
     };
     for (k, path) in files.iter().enumerate() {
-        let (src, f, c) = match early.get_mut(k).and_then(Option::take).unwrap_or_else(|| read_rule(path)) {
-            RuleRead::Unread => {
-                let _ = writeln!(err, "{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-                return 2;
-            }
+        let (src, f, c) = match early.get_mut(k).and_then(Option::take).unwrap_or_else(|| crate::i18n::said(|| read_rule(path))) {
+            // what stops the run, as every command of ritsu says it (ritsu's DESIGN 6.2, item 10)
+            RuleRead::Unread(e) => return crate::i18n::refuse(err, &ritsu_base::cli::cannot_read(path, &e)),
             RuleRead::Fails(src, ds) => {
                 let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
-                let _ = write!(out, "{}", crate::findings_text(&ds, &lines));
-                let _ = writeln!(err, "{}", tr!("error: `{path}` は検査を通っていないので生成しません", "error: `{path}` does not pass check, so nothing is generated"));
+                let _ = write!(out, "{}", crate::i18n::said(|| crate::findings_text(&ds, &lines)));
+                let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&tr!("`{path}` は検査を通っていないので生成しません", "`{path}` does not pass check, so nothing is generated"), crate::i18n::base())));
                 return 1;
             }
             RuleRead::Ready(src, fc) => {
@@ -16040,7 +18587,7 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
                 }
                 if !json {
                     for b in crate::backend::ALL.iter().filter(|b| asked.target(b.id) && (!b.prereqs || b.id == "numpy")) {
-                        let _ = writeln!(out, "{}", if b.prereqs { prereq_not_here(b.name) } else { prereq_skipped(b.name) });
+                        let _ = writeln!(out, "{}", crate::i18n::said(|| if b.prereqs { prereq_not_here(b.name) } else { prereq_skipped(b.name) }));
                     }
                 }
             }
@@ -16049,7 +18596,7 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
             }
             continue;
         }
-        let g = crate::codegen::Gen::new(&f, &c, &src, path);
+        let g = crate::codegen::Gen::new(&f, &c, &src, path).in_python_package(asked.python_package());
         let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
         let pkg = crate::backend::go_package(&alias);
         // The modules of the `enums` files it reads its types from, beside its own, whether or
@@ -16057,7 +18604,7 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
         let owners = match owner_modules(&f) {
             Ok(v) => v,
             Err(e) => {
-                let _ = writeln!(err, "error: {e}");
+                let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&e, crate::i18n::base())));
                 return 1;
             }
         };
@@ -16078,11 +18625,11 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
                 if !json {
                     let _ = writeln!(out,
                         "{}",
-                        tr!(
+                        crate::i18n::said(|| tr!(
                             "{}: この言語には並びをたどる規則を生成しません",
                             "{}: a rule that walks a sequence is not generated for this target",
                             b.name
-                        )
+                        ))
                     );
                 }
                 continue;
@@ -16099,11 +18646,11 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
                 if !json {
                     let _ = writeln!(out,
                         "{}",
-                        tr!(
+                        crate::i18n::said(|| tr!(
                             "{}: この言語には文字列の列を持つ表を生成しません",
                             "{}: a table with a column of strings is not generated for this target",
                             b.name
-                        )
+                        ))
                     );
                 }
                 continue;
@@ -16111,20 +18658,22 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
             // The functions of `prerequisites` where the language has no room for them (§15.222):
             // the rule is generated, and the reader told what it lacks.
             if !b.prereqs && !f.prerequisites.is_empty() && !json {
-                let _ = writeln!(out, "{}", prereq_skipped(b.name));
+                let _ = writeln!(out, "{}", crate::i18n::said(|| prereq_skipped(b.name)));
             }
             // The function that reads a rule's inputs out of the caller's object, where the
             // language has no object to read them from (§15.125, §15.223): the rule is generated,
             // and the reader told which function it lacks.
             if !b.projects && g.projects() && !json {
-                let _ = writeln!(out, "{}", proj_skipped(b.name, b.id, &alias));
+                let _ = writeln!(out, "{}", crate::i18n::said(|| proj_skipped(b.name, b.id, &alias)));
             }
             // The same for the function that counts the answers over the random inputs (§15.225).
             if !b.chances && f.has_random() && !json {
-                let _ = writeln!(out, "{}", chances_skipped(b.name, b.id, &alias));
+                let _ = writeln!(out, "{}", crate::i18n::said(|| chances_skipped(b.name, b.id, &alias)));
             }
-            // Its library, and the extras asked for (§15.277).
-            for (rel, body, part) in (b.files)(&g, &alias, &pkg) {
+            // Its library, and the extras asked for (§15.277), each enum under the type it takes
+            // in the language (§15.326).
+            let here = g.for_target(b.id);
+            for (rel, body, part) in (b.files)(here.as_ref().unwrap_or(&g), &alias, &pkg) {
                 if asked.wants(b.id, part) {
                     targets.push((format!("{out_dir}/{rel}"), body));
                 } else {
@@ -16143,7 +18692,7 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
             if f.implements.is_none() {
                 let (p, body) = (format!("{out_dir}/proto/{}", g.proto_path()), g.proto());
                 if let Some((_, _, disk)) = contracts.get(&p).filter(|(prev, _, _)| *prev != body) {
-                    let _ = writeln!(err, "{}", contract_over_own(&g.proto_path(), disk, path));
+                    let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&contract_over_own(&g.proto_path(), disk, path), crate::i18n::base())));
                     return if ritsu_base::modules::under_dependency(disk) { 2 } else { 1 };
                 }
                 own_protos.insert(p.clone(), (body.clone(), path.to_string()));
@@ -16157,37 +18706,37 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
             // from the BSR goes into the module's `buf.yaml` and `buf.lock`, written once below.
             let found = g.proto_contracts();
             if let Some((rel, a, b)) = &found.clash {
-                let _ = writeln!(err, "{}", contracts_clash(rel, a, b));
+                let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&contracts_clash(rel, a, b), crate::i18n::base())));
                 return 2;
             }
             if let Some((file, a, b)) = &found.two_names {
-                let _ = writeln!(err, "{}", contracts_two_names(file, a, b));
+                let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&contracts_two_names(file, a, b), crate::i18n::base())));
                 return 2;
             }
-            if let Err(e) = module_deps.merge(found.deps) {
-                let _ = writeln!(err, "error: {e}");
+            if let Err(e) = crate::i18n::said(|| module_deps.merge(found.deps)) {
+                let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&e, crate::i18n::base())));
                 return 1;
             }
             for ((rel, body), disk) in found.files.into_iter().zip(found.from) {
                 let p = format!("{out_dir}/proto/{rel}");
                 // a contract that would be copied over a rule's own `.proto`, or under it
                 if let Some((_, rule)) = own_protos.get(&p).filter(|(prev, _)| *prev != body) {
-                    let _ = writeln!(err, "{}", contract_over_own(&rel, &disk, rule));
+                    let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&contract_over_own(&rel, &disk, rule), crate::i18n::base())));
                     return if ritsu_base::modules::under_dependency(&disk) { 2 } else { 1 };
                 }
                 if let Some((_, from, prev_disk)) = contracts.get(&p).filter(|(prev, _, _)| *prev != body) {
                     // in a module of ritsu's, with a dependency's file among the two, the run stops as
                     // it does for one rule's (ritsu's DESIGN 17.6)
                     if ritsu_base::modules::under_dependency(prev_disk) || ritsu_base::modules::under_dependency(&disk) {
-                        let _ = writeln!(err, "{}", contracts_clash(&rel, prev_disk, &disk));
+                        let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&contracts_clash(&rel, prev_disk, &disk), crate::i18n::base())));
                         return 2;
                     }
                     let _ = writeln!(err,
                         "{}",
-                        tr!(
-                            "error: `{from}` と `{path}` が、違う内容の契約を同じ `proto/{rel}` として取り込んでいます",
-                            "error: `{from}` and `{path}` import two different contracts as the same `proto/{rel}`"
-                        )
+                        crate::i18n::said(|| ritsu_base::cli::refusal(&tr!(
+                            "`{from}` と `{path}` が、違う内容の契約を同じ `proto/{rel}` として取り込んでいます",
+                            "`{from}` and `{path}` import two different contracts as the same `proto/{rel}`"
+                        ), crate::i18n::base()))
                     );
                     return 1;
                 }
@@ -16198,7 +18747,7 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
                         Some(prev) if *prev != rel => {
                             let mut names = [prev.clone(), rel.clone()];
                             names.sort();
-                            let _ = writeln!(err, "{}", contracts_two_names(&disk, &names[0], &names[1]));
+                            let _ = writeln!(err, "{}", crate::i18n::said(|| ritsu_base::cli::refusal(&contracts_two_names(&disk, &names[0], &names[1]), crate::i18n::base())));
                             return 2;
                         }
                         Some(_) => {}
@@ -16216,16 +18765,18 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
         if asked.extra("vectors") {
             let suite = crate::vectors::suite(&f, &c);
             let vs = &suite.vectors;
-            let vec_body: String =
-                vs.iter().map(|v| crate::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
-            let exp_body: String =
-                vs.iter().map(|v| crate::vectors::expected_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
+            // One line a vector, each ended; a suite with no answered case — every input found is
+            // one the rule refuses — is a file with no line, not one empty line (§15.314).
+            let lines = |of: &dyn Fn(&crate::vectors::Vector) -> String| -> String { vs.iter().map(|v| of(v) + "\n").collect() };
+            let vec_body: String = lines(&|v| crate::vectors::to_json(&f, &c, v));
+            let exp_body: String = lines(&|v| crate::vectors::expected_json(&f, &c, v));
             targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));
             targets.push((format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body));
             // The modules of the `enums` files the rule reads, for a language that builds them
-            // together with it (§15.212): `rulec test` reads this beside the vectors.
+            // together with it (§15.212): `rulec test` reads this beside the vectors. None for a
+            // rule whose Swift declares those enums itself (§15.326).
             let owners: Vec<String> = g.foreign_enums().into_iter().map(|(m, _)| m).collect();
-            if !owners.is_empty() {
+            if !owners.is_empty() && !g.sw_alone() {
                 targets.push((format!("{out_dir}/vectors/{alias}.owners.json"), crate::json::strs(&owners) + "\n"));
             }
             // The display names every language has to give back, value by value (§15.211).
@@ -16248,12 +18799,7 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
             // refusing is the expectation — so they get a file of their own, and `rulec test` holds
             // every generated language to refusing each of them with the reference's sentence
             // (§15.56).
-            let refused: Vec<String> = suite
-                .refused
-                .iter()
-                .map(|v| crate::vectors::refused_json(&f, &c, v))
-                .chain(crate::vectors::door_cases(&f, &c, &suite.vectors))
-                .collect();
+            let refused: Vec<String> = crate::vectors::refused_lines(&f, &c, &suite);
             if !refused.is_empty() {
                 targets.push((format!("{out_dir}/vectors/{alias}.refused.jsonl"), refused.join("\n") + "\n"));
             }
@@ -16278,7 +18824,7 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
     // is written once: the BSR modules the contracts of every rule depend on, and their pins
     // when the `buf.lock` files beside the contracts give every one (§15.161).
     for n in &module_deps.notes {
-        let _ = writeln!(err, "{}", tr!("注意: {n}", "warning: {n}"));
+        let _ = writeln!(err, "{}", crate::i18n::said(|| tr!("注意: {n}", "warning: {n}")));
     }
     // It is the target `proto`'s; `buf.gen.yaml`, which builds the stubs of the Python service and
     // nothing else, is the Connect service's (§15.277).
@@ -16309,7 +18855,7 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
         }
         st.left.push(p.clone());
         if !json {
-            let _ = writeln!(out, "{}", left_behind(p, rule));
+            let _ = writeln!(out, "{}", crate::i18n::said(|| left_behind(p, rule)));
         }
     }
     // The files of the extras this run is not asked for, found where it would have written them:
@@ -16323,11 +18869,11 @@ pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, ch
         st.left.push(p.clone());
         extras_left.extend(asked.not_asked(*part));
         if !json {
-            let _ = writeln!(out, "{}", tr!("もう生成しないファイルが残っています: {p}", "generated no more, and still there: {p}"));
+            let _ = writeln!(out, "{}", crate::i18n::said(|| tr!("もう生成しないファイルが残っています: {p}", "generated no more, and still there: {p}")));
         }
     }
     if !json && !extras_left.is_empty() {
-        let _ = writeln!(out, "{}", crate::targets::left_note(&extras_left));
+        let _ = writeln!(out, "{}", crate::i18n::said(|| crate::targets::left_note(&extras_left)));
     }
     if json {
         let _ = writeln!(out,
@@ -16462,21 +19008,23 @@ fn emit(targets: Vec<(String, String)>, check_only: bool, json: bool, st: &mut E
         if check_only {
             if existing.is_none() { st.missing.push(p.clone()) } else { st.stale.push(p.clone()) }
             if !json {
-                let _ = writeln!(out, "{}", tr!("生成物が古いか手で編集されています: {p}", "generated file is stale or hand-edited: {p}"));
+                let _ = writeln!(out, "{}", crate::i18n::said(|| tr!("生成物が古いか手で編集されています: {p}", "generated file is stale or hand-edited: {p}")));
             }
             st.dirty = 1;
             continue;
         }
-        if let Some(dir) = std::path::Path::new(&p).parent() {
-            let _ = ritsu_base::fs::create_dir_all(dir);
+        // what stops the run, as every command of ritsu says it (ritsu's DESIGN 6.2, item 10)
+        if let Some(dir) = std::path::Path::new(&p).parent()
+            && let Err(e) = ritsu_base::fs::create_dir_all(dir)
+        {
+            return Some(crate::i18n::refuse(err, &ritsu_base::cli::cannot_create(&dir.to_string_lossy(), &e)));
         }
-        if ritsu_base::fs::write(&p, &body).is_err() {
-            let _ = writeln!(err, "{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
-            return Some(2);
+        if let Err(e) = ritsu_base::fs::write(&p, &body) {
+            return Some(crate::i18n::refuse(err, &ritsu_base::cli::cannot_write(&p, &e)));
         }
         st.written.push(p.clone());
         if !json {
-            let _ = writeln!(out, "{}", tr!("生成しました: {p}", "generated: {p}"));
+            let _ = writeln!(out, "{}", crate::i18n::said(|| tr!("生成しました: {p}", "generated: {p}")));
         }
     }
     None

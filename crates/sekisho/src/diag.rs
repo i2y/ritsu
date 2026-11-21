@@ -18,16 +18,33 @@ pub type Diag = ritsu_base::diag::Diag<Example>;
 /// A combination that shows what a diagnostic says: each value by what it is the value of
 /// (`principal`, `clerk`, `suspended`, `amount`, `refund_band`), in the order the check walks
 /// them. Empty for a diagnostic that is not about combinations.
+///
+/// Beside it, for each group of computed values an input was run through the rules for, that
+/// input ([`crate::walk::Confirmed`]).
 #[derive(Clone, Debug, Default)]
 pub struct Example {
     pub values: Vec<(String, Text)>,
+    pub inputs: Vec<crate::walk::Confirmed>,
 }
 
 impl Extra for Example {
-    /// The JSON has `example` between `notes` and `fix`: the values by name, or null.
+    /// The JSON has `example` between `notes` and `fix`: the values by name, or null. After it,
+    /// where an input was run for computed values of the example, `example_inputs`: for each
+    /// group of them, the values it explains (`computed`), whether it is one input or a region
+    /// every input of which comes to them (`kind`: `point` or `region`), and each attribute and
+    /// input the rules are given (`given`: its `name` as the gate writes it, the `type` whose
+    /// attribute it is or null for an input, its `value`).
     fn json(&self, lang: Lang) -> Vec<(String, Json)> {
         let v = if self.values.is_empty() { Json::Null } else { Json::obj(self.values.iter().map(|(k, v)| (k.clone(), Json::str(v.get(lang))))) };
-        vec![("example".into(), v)]
+        let mut out = vec![("example".to_string(), v)];
+        if !self.inputs.is_empty() {
+            let one = |c: &crate::walk::Confirmed| {
+                let given = c.given.iter().map(|x| Json::obj([("name", Json::str(x.name.clone())), ("type", x.ty.clone().map(Json::str).unwrap_or(Json::Null)), ("value", Json::str(x.value.get(lang)))]));
+                Json::obj([("computed", Json::arr(c.computed.iter().map(|n| Json::str(n.clone())))), ("kind", Json::str(if c.region { "region" } else { "point" })), ("given", Json::arr(given))])
+            };
+            out.push(("example_inputs".to_string(), Json::arr(self.inputs.iter().map(one))));
+        }
+        out
     }
 
     fn say(&self, t: &Text, lang: Lang) -> String {

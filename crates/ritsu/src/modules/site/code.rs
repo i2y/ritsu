@@ -218,8 +218,8 @@ mod tests {
     }
 
     #[test]
-    fn the_nine_languages_each_have_their_words() {
-        for (rel, word) in [("a.rule", "rule"), ("a.flow", "workflow"), ("a.cal", "calendar"), ("a.book", "book"), ("a.gate", "gate"), ("a.req", "requirements"), ("a.ctx", "context"), ("a.geas", "claim"), ("a.kn", "module"), ("a.proto", "message"), ("ritsu.mod", "signature")] {
+    fn the_languages_each_have_their_words() {
+        for (rel, word) in [("a.rule", "rule"), ("a.flow", "workflow"), ("a.cal", "calendar"), ("a.book", "book"), ("a.gate", "gate"), ("a.req", "requirements"), ("a.ctx", "context"), ("a.geas", "claim"), ("a.kn", "module"), ("a.ringi", "request"), ("a.proto", "message"), ("ritsu.mod", "signature")] {
             assert!(language_of(rel).unwrap().words.contains(word), "{rel} has no `{word}`");
         }
         assert!(language_of("a.csv").is_none() && language_of("README.md").is_none() && language_of("LICENSE").is_none());

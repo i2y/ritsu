@@ -1,0 +1,20 @@
+rule single_course v1
+description "A catalog of one course, which needs nothing before it. The code of its block never tests which course it is given (fictional)"
+
+enum course = intro
+
+inputs
+  enrolled : bool
+
+outputs
+  open : bool
+
+table open_by_enrolled
+policy unique
+| enrolled | -> open |
+| true     | false   |
+| false    | true    |
+
+# The one course needs nothing
+prerequisites path over course
+  start intro

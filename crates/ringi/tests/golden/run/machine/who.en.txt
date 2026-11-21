@@ -1,0 +1,11 @@
+2026-12-01 10:00  submit     by e1201  -> manager (e1101), due 2026-12-03 end of day
+2026-12-01 11:00  send back  by e1101  -> with requester, resubmit by 2026-12-08 end of day
+2026-12-02 10:00  resubmit   by e1201  -> manager (e1101), due 2026-12-04 end of day
+2026-12-02 11:00  approve    by e1101  -> approved
+scenario `a_proxy_asks_for_someone`: as written (4 rows)
+
+2027-03-31 10:00  submit     by e1201  -> manager (e1101), due 2027-04-02 end of day
+2027-03-31 11:00  send back  by e1101  -> with requester, resubmit by 2027-04-07 end of day
+2027-04-01 10:00  resubmit   by e1201  -> manager (e3101), due 2027-04-05 end of day
+2027-04-01 11:00  approve    by e3101  -> approved
+scenario `made_again_after_the_organization_changed`: as written (4 rows)

@@ -2,7 +2,7 @@
 
 Pays a refund out of what is left of the order
 
-`examples/refund_request/refund_request.flow`, drawn by `dandori doc`. Inputs: `amount: money[USDc] range >=1 <=1000000`, `reason: string`, `balance: Balance`. Outputs: `paid: bool`. `amount`: Comes from `openapi "specs/refunds.json" schema RefundCreate property amount` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). `reason`: Comes from `openapi "specs/refunds.json" schema RefundCreate property reason` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). `Balance.left`: Comes from `chobo "books/refunds.book" account remaining` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked).
+`examples/refund_request/refund_request.flow`, drawn by `dandori doc`. Inputs: `amount: money[USDc] range >=1USDc <=1_000_000USDc`, `reason: string`, `balance: Balance`. Outputs: `paid: bool`. `amount`: Comes from `openapi "specs/refunds.json" schema RefundCreate property amount` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). `reason`: Comes from `openapi "specs/refunds.json" schema RefundCreate property reason` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). `Balance.left`: Comes from `chobo "books/refunds.book" account remaining` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked).
 
 ## flow
 

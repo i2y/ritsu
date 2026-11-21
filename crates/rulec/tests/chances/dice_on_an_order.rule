@@ -1,0 +1,32 @@
+rule dice_on_an_order v1
+description "Two dice are rolled for each order. An order over 5,000 JPY wins the large prize on a total of 8 or more, and a smaller order always gets the small one. The amount runs up to a million yen: too many amounts to run each one with every roll, so the check runs the rolls once for each band of amounts the table cuts"
+
+enum prize = small | large
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+  first  : number  range >=1 <=6  random
+  second : number  range >=1 <=6  random
+
+define total : number = first + second
+
+outputs
+  prize : prize
+
+table prize_of
+policy unique
+| amount     | total | -> prize |
+| <=5_000JPY | -     | small    |
+| >5_000JPY  | <8    | small    |
+| >5_000JPY  | >=8   | large    |
+
+chances
+| amount     | -> prize | chance |
+| >5_000JPY  | large    | 5/12   |
+| <=5_000JPY | small    | 1      |
+
+examples
+| amount  | first | second | -> prize |
+| 5000JPY | 6     | 6      | small    |
+| 5001JPY | 3     | 5      | large    |
+| 5001JPY | 1     | 1      | small    |

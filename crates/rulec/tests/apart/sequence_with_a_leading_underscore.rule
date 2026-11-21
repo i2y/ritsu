@@ -1,0 +1,30 @@
+rule parcel_count v1
+description "A sequence whose name starts with an underscore"
+
+elements _parcels
+  heavy : bool
+
+count heavy_parcels over _parcels where heavy  range >=0 <=5
+
+outputs
+  padding : bool
+
+table padding_of
+policy unique
+| heavy_parcels | -> padding |
+| 0             | false      |
+| >=1           | true       |
+
+examples
+| _parcels | -> padding |
+| light    | false      |
+| heavy    | true       |
+
+sequence light
+| heavy |
+| false |
+
+sequence heavy
+| heavy |
+| true  |
+| false |

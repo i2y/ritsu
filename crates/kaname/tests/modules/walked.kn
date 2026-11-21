@@ -1,0 +1,31 @@
+module walked v1
+description "Elements of the lists rules walk, given by a host: a parcel the rule weighs at more than 0g and less than 30001g, a list of them, a task due in 2026 or 2027, and a line of a basket with a day, a day it may be held to, a price and a rate, passed on to the rule. The entry holds each field to the rule's column, as it holds a record's, and the rule holds them again where it is called"
+
+use rule batch from "../rulec/tests/corpus/parcel_batch.rule"
+use rule due from "../rulec/tests/corpus/earliest_due.rule"
+use rule basket from "tests/rules/basket.rule"
+
+# the weight of a parcel
+fn weight_of(p: batch.parcels) -> mass[g]
+  p.weight
+
+# how many of the parcels are fragile
+fn fragile(ps: list[batch.parcels] count <=3) -> number
+  count(ps, p => p.fragile)
+
+# the due date of a task
+fn due_of(t: due.tasks) -> date
+  t.due
+
+# a line of a basket, written out: its day, whether more than 10% is taken off it, its price, and the
+# day it is held to when it is held
+fn line_of(l: basket.lines) -> string
+  let cut = if l.off > 10% then "deep" else "light"
+  let head = concat(text(l.on), " ", cut, " ", text(l.price))
+  match l.held_to
+    none => head
+    some d => concat(head, " held to ", text(d))
+
+# the earliest day of the lines, which the rule works out
+fn first_of(ls: list[basket.lines] count <=3) -> date
+  basket(lines: ls).first

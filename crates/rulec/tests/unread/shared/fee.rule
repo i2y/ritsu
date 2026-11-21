@@ -1,0 +1,22 @@
+rule fee v1
+description "A fee of three percent, and whether the amount needs a review (fictional)"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  fee    : money[JPY]  round down(1JPY)
+  review : bool
+
+table review_of
+policy unique
+| amount     | -> review |
+| <30000JPY  | false     |
+| >=30000JPY | true      |
+
+result fee = down(amount * 3%, 1JPY)
+
+examples
+| amount    | -> fee  | review |
+| 1_000JPY  | 30JPY   | false  |
+| 50_000JPY | 1500JPY | true   |

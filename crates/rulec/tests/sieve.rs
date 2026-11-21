@@ -202,8 +202,8 @@ fn a_gap_inside_the_reach_is_still_named() {
             let (example, input) = match (stem.contains("define") || stem.contains("定義"), lang) {
                 (true, Lang::En) => ("An input that matches no row: share = 50%", "An input producing this example: score = 100"),
                 (true, Lang::Ja) => ("当てはまらない例: 割合 = 50%", "この例を作る入力: 得点 = 100"),
-                (false, Lang::En) => ("An input that matches no row: refund_size = small, excess = 1GBP", "An input producing this example: amount = 1, limit = 0"),
-                (false, Lang::Ja) => ("当てはまらない例: 返金の大きさ = 少額, 超過額 = 1円", "この例を作る入力: 上限 = 0, 金額 = 1"),
+                (false, Lang::En) => ("An input that matches no row: refund_size = small, excess = 1GBP", "An input producing this example: amount = 1GBP, limit = 0GBP"),
+                (false, Lang::Ja) => ("当てはまらない例: 返金の大きさ = 少額, 超過額 = 1円", "この例を作る入力: 上限 = 0円, 金額 = 1円"),
             };
             assert!(notes.contains(example), "{rel}: {notes}");
             assert!(notes.contains(input), "{rel}: {notes}");

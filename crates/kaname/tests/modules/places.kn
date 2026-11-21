@@ -35,3 +35,25 @@ fn or_zero(x: number? range >=0 <=9) -> number
 
 fn share(r: rate[step 1%]) -> rate[step 1%]
   r
+
+fn kept_share(r: rate[step 0.25%]?) -> rate[step 0.25%]?
+  match r
+    none => none
+    some x => x
+
+fn unread(r: rate[step 0.25%], s: rate[step 0.25%]?, m: money[USDc], n: money[USDc]?) -> number
+  0
+
+record Wide
+  share : rate[step 0.25%]  range >=-2_305_843_009_213_693_952% <=2305843009213693951.75%
+
+fn whole(n: number range >=-9_223_372_036_854_775_808 <=9_223_372_036_854_775_807) -> number range >=-9_223_372_036_854_775_808 <=9_223_372_036_854_775_807
+  n
+
+fn whole_share(r: rate[step 0.25%] range >=-2_305_843_009_213_693_952% <=2305843009213693951.75%, s: rate[step 0.25%]? range >=-2_305_843_009_213_693_952% <=2305843009213693951.75%) -> rate[step 0.25%] range >=-2_305_843_009_213_693_952% <=2305843009213693951.75%
+  match s
+    none => r
+    some x => x
+
+fn wide_share(w: Wide) -> rate[step 0.25%] range >=-2_305_843_009_213_693_952% <=2305843009213693951.75%
+  w.share

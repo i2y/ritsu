@@ -1,0 +1,16 @@
+rule 任意の決裁者(optional_decider) v1
+description "金額で決める決裁者。少額なら決裁者は要らない（架空）"
+
+enum 決裁者(decider) = 上長(manager) "上長" | 財務責任者(cfo) "財務責任者"
+
+inputs
+  金額(amount) : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  決裁者(decider) : 決裁者?
+
+table 決裁(decide)
+| 金額                   | -> 決裁者  |
+| <=10_000JPY            | none       |
+| >10_000JPY <=50_000JPY | 上長       |
+| >50_000JPY             | 財務責任者 |

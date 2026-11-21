@@ -1,0 +1,61 @@
+警告[W904]: tests/fixtures/reached_values.ja.flow:13:1: 入力 `鍵` は秘密の値で、ワークフローの履歴に残ります
+    13 |   鍵     : string  secret
+  = 印は reached_values.ja.flow:13 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/reached_values.ja.flow:32:1: 秘密の値 `鍵` が、`挨拶` の引数 `文` として、ワークフローの履歴に残ります
+    32 |   挨拶(文: 文面)
+  = 印は reached_values.ja.flow:13 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/reached_values.ja.flow:36:1: 秘密の値 `鍵` が、`挨拶` の引数 `文` として、ワークフローの履歴に残ります
+    36 |     挨拶(文: 控え)
+  = 印は reached_values.ja.flow:13 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+エラー[E011]: tests/fixtures/reached_values.ja.flow:62:1: 分岐 `ゴールド` は通りません。ここで `段` がとりうる値は 一般・シルバー だけです
+    62 |         ゴールド => pass
+  そうなる例:
+      26  文面 = 名前
+      31  match 内密: false
+      34  控え = 名前
+      35  repeat（3 回まで）
+      37  控え = 鍵
+      38  答え = 挨拶(…)
+      41  match 答え.済み: false
+      43  メモ = 名前
+      44  repeat（3 回まで）
+      46  返事1 = 挨拶(…)
+      51  match 返事1.済み: false
+      53  段 = 狭い
+      58  match 内密: false
+エラー[E010]: tests/fixtures/reached_values.ja.flow:78:1: `match` に ゴールド・プラチナ の分岐がありません。ここで `段2` はその値を取りえます
+    78 |     match 段2
+  そうなる例:
+      26  文面 = 名前
+      31  match 内密: false
+      34  控え = 名前
+      35  repeat（3 回まで）
+      37  控え = 鍵
+      38  答え = 挨拶(…)
+      41  match 答え.済み: false
+      43  メモ = 名前
+      44  repeat（3 回まで）
+      46  返事1 = 挨拶(…)
+      51  match 返事1.済み: false
+      53  段 = 狭い
+      58  match 内密: false
+      60  match 段: 一般
+      64  段3 = 狭い
+      65  repeat（3 回まで）
+      67  match 段3: 一般
+      69  段3 = 狭い
+      70  返事3 = 挨拶(…)
+      73  match 返事3.済み: false
+      74  段3 = 広い
+      76  段2 = 狭い
+      77  repeat（3 回まで）
+      79  match 段2: 一般
+      81  段2 = 広い
+      82  返り = 挨拶(…)
+      85  match 返り.済み: false

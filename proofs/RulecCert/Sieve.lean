@@ -137,6 +137,13 @@ structure AboveRow where
   index : Nat
   nums : List (Nat × List Coord)
   words : List (Nat × List Nat)
+  /-- Boxes of this table the way never fires in (rulec's §15.325): a row of it is in a `policy first`
+      table and the rows above it take all of what its box leaves in the box, its box narrowed to the
+      box is empty on the grid of some column, a value the rule works out never comes there to what
+      the row takes, the row writes a value the box does not take, or two of its rows take values of
+      one column that never meet there. The reader puts a box here only once it has worked the
+      reason out itself. -/
+  taken : List Box := []
   deriving Repr, Inhabited
 
 /-- A column a table above decides, at one of its values: the coordinate `coord` of axis `axis`
@@ -145,6 +152,10 @@ structure AboveCol where
   axis : Nat
   coord : Nat
   rows : List AboveRow
+  /-- Whether the ways are joined besides through the columns the deciding table reads that this
+      table reads too (rulec's §15.325). Each reading counts every way the value arrives, so both
+      can stand for one value. -/
+  through : Bool := false
   deriving Repr, Inhabited
 
 /-- A boolean `define` of one comparison, read on its axis (rulec's §15.196): the comparison, the
@@ -216,10 +227,12 @@ def Sieve.coordAt (s : Sieve) (i c : Nat) : Option Coord :=
                | some x => x
 
 /-- A row of a table above fires on these values at this point: every value it bounds lies in
-    one of the coordinates it takes, and this table's axis of words holds a word it lets in. -/
+    one of the coordinates it takes, this table's axis of words holds a word it lets in, and the
+    point lies in none of the boxes the way never decides in. -/
 def AboveRow.fires (r : AboveRow) (p : Point) (v : List Rat) : Prop :=
   (∀ q ∈ r.nums, ∃ w, v[q.1]? = some w ∧ ∃ x ∈ q.2, x.holds w) ∧
-  (∀ q ∈ r.words, ∃ c, p[q.1]? = some c ∧ c ∈ q.2)
+  (∀ q ∈ r.words, ∃ c, p[q.1]? = some c ∧ c ∈ q.2) ∧
+  (∀ b ∈ r.taken, inBox b p = false)
 
 /-- **The point is asked about**: values exist behind its coordinates that satisfy
     everything the rule declares. -/
@@ -891,13 +904,14 @@ def AboveRow.firesB (r : AboveRow) (p : Point) (v : List Rat) : Bool :=
     | none => false) &&
   r.words.all (fun q => match p[q.1]? with
     | some c => q.2.contains c
-    | none => false)
+    | none => false) &&
+  r.taken.all (fun b => !inBox b p)
 
 theorem AboveRow.fires_of_firesB {r : AboveRow} {p : Point} {v : List Rat}
     (h : r.firesB p v = true) : r.fires p v := by
   simp only [AboveRow.firesB, Bool.and_eq_true, List.all_eq_true] at h
-  obtain ⟨hn, hw⟩ := h
-  refine ⟨?_, ?_⟩
+  obtain ⟨⟨hn, hw⟩, ht⟩ := h
+  refine ⟨?_, ?_, ?_⟩
   · intro q hq
     have hq' := hn q hq
     cases hv : v[q.1]? with
@@ -914,6 +928,8 @@ theorem AboveRow.fires_of_firesB {r : AboveRow} {p : Point} {v : List Rat}
     | some c =>
       rw [hc] at hq'
       exact ⟨c, rfl, by simpa using hq'⟩
+  · intro b hb
+    simpa using ht b hb
 
 /-- Some pair of values the two sides can take gives the comparison the truth value `b`: the two
     intervals are not empty, and the pair at the ends that suits `b` does. -/
@@ -1101,11 +1117,10 @@ def endHolds (s : Sieve) (box : Box) (i : Nat) (hi : Bool) (at_ : Rat) (opn : Bo
   | none => false
 
 /-- Whether an end holds of every coordinate a row above takes on the axis of the numbered value
-    `j`, read from the row's entry for it. -/
+    `j`, read from one of the row's entries for it. A way a value arrives joins the rows of several
+    tables (rulec's §15.322), and two of them can bound the same value: the end of either holds. -/
 def condHolds (conds : List (Nat × List Coord)) (j : Nat) (hi : Bool) (at_ : Rat) (opn : Bool) : Bool :=
-  match conds.find? (fun q => q.1 == j) with
-  | some q => q.2.all (fun x => beyondEnd x hi at_ opn)
-  | none => false
+  conds.any (fun q => q.1 == j && q.2.all (fun x => beyondEnd x hi at_ opn))
 
 /-- The inequalities a refutation names, built again from the sieve, the box and — for a
     refutation about a row of a table above — what that row takes on the numbered values
@@ -1224,15 +1239,13 @@ theorem refIneqsIn_hold {s : Sieve} {box : Box} {conds : List (Nat × List Coord
           simp only [List.mem_cons] at he
           rcases he with rfl | he
           · unfold condHolds at hend
-            split at hend
-            · rename_i q hq
-              have hmem := List.mem_of_find?_eq_some hq
-              have hj : q.1 = j := by simpa using List.find?_some hq
-              obtain ⟨w, hw, x, hx, hxw⟩ := hc q hmem
-              have hall := List.all_eq_true.1 hend x hx
-              rw [hj] at hw
-              exact endIneq_holds hall hxw (getD_of_getElem? hw)
-            · exact absurd hend (by simp)
+            obtain ⟨q, hmem, hq⟩ := List.any_eq_true.1 hend
+            simp only [Bool.and_eq_true, beq_iff_eq] at hq
+            obtain ⟨hj, hall'⟩ := hq
+            obtain ⟨w, hw, x, hx, hxw⟩ := hc q hmem
+            have hall := List.all_eq_true.1 hall' x hx
+            rw [hj] at hw
+            exact endIneq_holds hall hxw (getD_of_getElem? hw)
           · exact ih e he
         · simp only [hend, Bool.false_eq_true, ite_false] at h
           exact absurd h (by simp)
@@ -1273,24 +1286,47 @@ inductive RowOut where
   | clash : Nat → RowOut
   /-- The multipliers of a refutation that may name the row's own ends. -/
   | farkas : List (Ref × Rat) → RowOut
+  /-- The box lies inside one the way never decides in, for the rows above a row of it (rulec's
+      §15.325). -/
+  | taken : RowOut
   deriving Repr, Inhabited
+
+/-- Every coordinate the first box takes on each axis, the second takes too. -/
+def boxWithin : Box → Box → Bool
+  | [], [] => true
+  | x :: xs, y :: ys => x.all (fun c => y.contains c) && boxWithin xs ys
+  | _, _ => false
+
+theorem inBox_of_boxWithin : ∀ {a b : Box} {p : Point}, boxWithin a b = true → inBox a p = true →
+    inBox b p = true
+  | [], [], [], _, _ => rfl
+  | [], [], _ :: _, _, hp => by simp [inBox] at hp
+  | [], _ :: _, _, h, _ => by simp [boxWithin] at h
+  | _ :: _, [], _, h, _ => by simp [boxWithin] at h
+  | _ :: _, _ :: _, [], _, hp => by simp [inBox] at hp
+  | x :: xs, y :: ys, c :: cs, h, hp => by
+    simp only [boxWithin, inBox, Bool.and_eq_true, List.all_eq_true] at h hp ⊢
+    exact ⟨h.1 c (List.contains_iff_mem.1 hp.1), inBox_of_boxWithin h.2 hp.2⟩
 
 def rowOutOk (s : Sieve) (box : Box) (r : AboveRow) : RowOut → Bool
   | .clash j =>
-    match r.words.find? (fun q => q.1 == j), box[j]? with
-    | some q, some cs => cs.all (fun c => !q.2.contains c)
-    | _, _ => false
+    -- Any entry of the row's for the axis: a way joins rows of several tables (rulec's §15.322).
+    match box[j]? with
+    | some cs => r.words.any (fun q => q.1 == j && cs.all (fun c => !q.2.contains c))
+    | none => false
   | .farkas refs =>
     match refIneqsIn s box r.nums refs with
     | some ps => farkasOk ps
     | none => false
+  | .taken => r.taken.any (fun b => boxWithin box b)
 
 /-- **The rows above leave the box no values**: the box fixes the axis to one coordinate, the
-    sieve has the rows that write its value, and each of them comes with a reason that holds. -/
-def aboveRuledOut (s : Sieve) (box : Box) (axis : Nat) (outs : List RowOut) : Bool :=
+    sieve has the rows that write its value — the ways joined through the columns both tables cut
+    where `through` says so (rulec's §15.325) — and each of them comes with a reason that holds. -/
+def aboveRuledOut (s : Sieve) (box : Box) (axis : Nat) (through : Bool) (outs : List RowOut) : Bool :=
   match box[axis]? with
   | some [coord] =>
-    match s.above.find? (fun e => e.axis == axis && e.coord == coord) with
+    match s.above.find? (fun e => e.axis == axis && e.coord == coord && e.through == through) with
     | some e => e.rows.length == outs.length && (e.rows.zip outs).all (fun ro => rowOutOk s box ro.1 ro.2)
     | none => false
   | _ => false
@@ -1303,24 +1339,22 @@ theorem rowOut_sound {s : Sieve} {box : Box} {r : AboveRow} {o : RowOut} {p : Po
   cases o with
   | clash j =>
     simp only [rowOutOk] at h
-    cases hq : r.words.find? (fun q => q.1 == j) with
-    | none => rw [hq] at h; exact absurd h (by simp)
-    | some q =>
-      cases hbj : box[j]? with
-      | none => rw [hq, hbj] at h; exact absurd h (by simp)
-      | some cs =>
-        rw [hq, hbj] at h
-        have hmem := List.mem_of_find?_eq_some hq
-        have hj : q.1 = j := by simpa using List.find?_some hq
-        obtain ⟨c, hpc, hcok⟩ := hr.2 q hmem
-        obtain ⟨c', hpc', hc'⟩ := inBox_getElem hin hbj
-        rw [hj, hpc'] at hpc
-        obtain rfl : c' = c := Option.some.inj hpc
-        have hall := List.all_eq_true.1 h c' (List.contains_iff_mem.1 hc')
-        simp only [Bool.not_eq_true'] at hall
-        have hin' : q.2.contains c' = true := List.contains_iff_mem.2 hcok
-        rw [hall] at hin'
-        exact absurd hin' (by simp)
+    cases hbj : box[j]? with
+    | none => rw [hbj] at h; exact absurd h (by simp)
+    | some cs =>
+      rw [hbj] at h
+      obtain ⟨q, hmem, hq⟩ := List.any_eq_true.1 h
+      simp only [Bool.and_eq_true, beq_iff_eq] at hq
+      obtain ⟨hj, hall'⟩ := hq
+      obtain ⟨c, hpc, hcok⟩ := hr.2.1 q hmem
+      obtain ⟨c', hpc', hc'⟩ := inBox_getElem hin hbj
+      rw [hj, hpc'] at hpc
+      obtain rfl : c' = c := Option.some.inj hpc
+      have hall := List.all_eq_true.1 hall' c' (List.contains_iff_mem.1 hc')
+      simp only [Bool.not_eq_true'] at hall
+      have hin' : q.2.contains c' = true := List.contains_iff_mem.2 hcok
+      rw [hall] at hin'
+      exact absurd hin' (by simp)
   | farkas refs =>
     simp only [rowOutOk] at h
     cases hps : refIneqsIn s box r.nums refs with
@@ -1328,11 +1362,18 @@ theorem rowOut_sound {s : Sieve} {box : Box} {r : AboveRow} {o : RowOut} {p : Po
     | some ps =>
       rw [hps] at h
       exact farkas_sound h v (refIneqsIn_hold hin hf hfa hr.1 refs ps hps)
+  | taken =>
+    simp only [rowOutOk, List.any_eq_true] at h
+    obtain ⟨b, hb, hw⟩ := h
+    have hout := hr.2.2 b hb
+    rw [inBox_of_boxWithin hw hin] at hout
+    exact absurd hout (by simp)
 
 /-- **A box the rows of a table above leave no values in holds no point the rule is asked
     about.** -/
-theorem not_asked_of_aboveRuledOut {s : Sieve} {box : Box} {axis : Nat} {outs : List RowOut}
-    {p : Point} (h : aboveRuledOut s box axis outs = true) (hin : inBox box p = true) :
+theorem not_asked_of_aboveRuledOut {s : Sieve} {box : Box} {axis : Nat} {through : Bool}
+    {outs : List RowOut} {p : Point} (h : aboveRuledOut s box axis through outs = true)
+    (hin : inBox box p = true) :
     ¬ s.asked p := by
   rintro ⟨v, hf, _, _, _, _, hfa, _, hab, _⟩
   unfold aboveRuledOut at h
@@ -1345,7 +1386,7 @@ theorem not_asked_of_aboveRuledOut {s : Sieve} {box : Box} {axis : Nat} {outs : 
       have hmem : e ∈ s.above := List.mem_of_find?_eq_some he
       have hpred := List.find?_some he
       simp only [Bool.and_eq_true, beq_iff_eq] at hpred
-      obtain ⟨hax, hco⟩ := hpred
+      obtain ⟨⟨hax, hco⟩, _⟩ := hpred
       obtain ⟨c, hpc, hcc⟩ := inBox_getElem hin hbx
       have hc : c = coord := by simpa using hcc
       obtain ⟨r, hr, hfires⟩ := hab e hmem (by rw [hax, hco, ← hc]; exact hpc)
@@ -1503,15 +1544,15 @@ theorem inBox_set {b : Box} {p : Point} {i c : Nat} (h : inBox b p = true) (hp :
 /-- Two boxes the rows of a table above part: for every coordinate both take on the axis of the
     column that table decides, the box they share narrowed to it is one `aboveRuledOut` settles,
     with the reasons given for that coordinate. -/
-def abovePart (s : Sieve) (a b : Box) (axis : Nat) (at_ : List (Nat × List RowOut)) : Bool :=
+def abovePart (s : Sieve) (a b : Box) (axis : Nat) (at_ : List (Nat × Bool × List RowOut)) : Bool :=
   match (pairBox a b)[axis]? with
   | some cs => cs.all (fun c => match at_.find? (fun q => q.1 == c) with
-      | some q => aboveRuledOut s ((pairBox a b).set axis [c]) axis q.2
+      | some q => aboveRuledOut s ((pairBox a b).set axis [c]) axis q.2.1 q.2.2
       | none => false)
   | none => false
 
 /-- **No point the rule is asked about lies in two boxes the rows of a table above part.** -/
-theorem not_asked_of_abovePart {s : Sieve} {a b : Box} {axis : Nat} {at_ : List (Nat × List RowOut)}
+theorem not_asked_of_abovePart {s : Sieve} {a b : Box} {axis : Nat} {at_ : List (Nat × Bool × List RowOut)}
     {p : Point} (h : abovePart s a b axis at_ = true) (ha : inBox a p = true) (hb : inBox b p = true) :
     ¬ s.asked p := by
   have hpb := inBox_pairBox ha hb

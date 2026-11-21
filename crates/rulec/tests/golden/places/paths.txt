@@ -1,0 +1,12 @@
+error: `a.rule` writes out/python/size_label.py and `b.rule` writes out/python/Size_Label.py, which differ only in the case of their letters and are one file where the file system does not tell upper from lower case; give one of them another alias
+エラー: `a.rule` の out/python/size_label.py と `b.rule` の out/python/Size_Label.py は、大文字と小文字だけが違います。大文字と小文字を区別しないファイルシステムでは一つのファイルなので、どちらかの別名を変えてください
+error: `one/x.rule` and `two/x.rule` both write out/typescript/x.ts; give one of them another alias
+エラー: `one/x.rule` と `two/x.rule` が、同じ out/typescript/x.ts を書きます。どちらかの別名を変えてください
+error: `sizes.rule` and `a.rule` both write out/python/size_label.py; give one of them another alias
+エラー: `sizes.rule` と `a.rule` が、同じ out/python/size_label.py を書きます。どちらかの別名を変えてください
+error: `a.rule` declares the PHP namespace `SizeLabel` (out/php/size_label.php) and `c.rule` declares `Sizelabel` (out/php/sizelabel.php), which differ only in the case of their letters and are one namespace to PHP, so loading the two declares the same classes twice; give one of them another alias
+エラー: `a.rule` の PHP の名前空間 `SizeLabel`（out/php/size_label.php）と `c.rule` の `Sizelabel`（out/php/sizelabel.php）は、大文字と小文字だけが違い、PHP には一つの名前空間です。二つを読み込むと同じクラスを二度宣言するので、どちらかの別名を変えてください
+error: `a.rule` writes out/java/SizeLabel.java and `c.rule` writes out/java/Sizelabel.java, which differ only in the case of their letters and are one file where the file system does not tell upper from lower case; give one of them another alias
+エラー: `a.rule` の out/java/SizeLabel.java と `c.rule` の out/java/Sizelabel.java は、大文字と小文字だけが違います。大文字と小文字を区別しないファイルシステムでは一つのファイルなので、どちらかの別名を変えてください
+error: `a.rule` and `c.rule` both write into the Go package out/go/sizelabel/ (out/go/sizelabel/size_label.go and out/go/sizelabel/sizelabel.go), which then declares the same names twice and does not build; give one of them another alias
+エラー: `a.rule` と `c.rule` が、どちらも Go のパッケージ out/go/sizelabel/ に書きます（out/go/sizelabel/size_label.go と out/go/sizelabel/sizelabel.go）。一つのパッケージで同じ名前を二度宣言するので組めません。どちらかの別名を変えてください

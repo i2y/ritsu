@@ -21,12 +21,12 @@
 
 `old/fine.rule` → `new/fine.rule`
 
-- `most` — an output changed range (`100..100` → `200..200`)
+- `most` — an output changed range (`100USD..100USD` → `200USD..200USD`)
 
 | where they differ | answer | example | cells |
 |---|---|---|---|
-| violation = serious | most: 100 → 200 | violation=serious | 1 |
-| violation = other | most: 100 → 200 | violation=other | 1 |
+| violation = serious | most: 100USD → 200USD | violation=serious | 1 |
+| violation = other | most: 100USD → 200USD | violation=other | 1 |
 
 Outside this region the two versions answer alike.
 

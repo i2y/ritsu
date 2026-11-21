@@ -1,0 +1,21 @@
+rule 包む品の最安値の補償額(least_gift_cover_ja) v1
+description "小包にかける保険の額。明細の価格の合計の三倍に、贈り物として包む明細でいちばん安い価格を足す（包む明細が無ければ 0 円）。9,999 円から保険をかける"
+
+# 小包の明細の一件ぶん
+elements 明細(lines)
+  価格(price)  : money[円]  range >=0円 <=9999円
+  贈り物(gift) : bool
+
+sum 合計(total) over 明細 of 価格  range >=0円 <=100000円
+min 包む品の最安値(cheapest_gift) over 明細 of 価格 where 贈り物 empty 0円
+
+define 補償額(cover) : money[円] = 合計 * 3 + 包む品の最安値
+
+outputs
+  保険(insured) : bool
+
+table 保険の判定(insure)
+policy unique
+| 補償額   | -> 保険 |
+| <9999円  | false   |
+| >=9999円 | true    |

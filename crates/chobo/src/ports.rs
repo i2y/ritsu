@@ -11,19 +11,57 @@ use ritsu_base::text::Text;
 use ritsu_ports::{Account, Balance, BookCall, BookFacts, BookOutcome, BookUnit, Bound as PBound, Found, Item, Ledger, Machine, MachineRow, Move as PMove, MoveAmount, MoveRef, Said, Transfer, TransferParam};
 use std::path::Path;
 
-/// chobo, as the ports reach it.
+/// chobo, as the ports reach it. A book the ports or `ritsu check` ask about is checked once, and
+/// its check is kept for the next question on the thread while the book reads the same (a flow asks
+/// one book its facts, the refusals of each transfer, and a ledger for each run; ritsu's DESIGN
+/// 4.15). A book is kept by the file, however its path is written. The engine holds no value of its
+/// own, so that every program that names it as `chobo::ports::Engine` keeps doing so; the kept checks
+/// belong to the thread, as koyomi's do.
 #[derive(Default)]
 pub struct Engine;
 
+thread_local! {
+    /// The checks made on this thread, by the file (its path made absolute and folded): the book's
+    /// text and what its check came to.
+    static KEPT: std::cell::RefCell<std::collections::BTreeMap<std::path::PathBuf, (String, std::rc::Rc<Checked>)>> = const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+    /// How many times a book has been checked whole on this thread.
+    static CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many checks a thread keeps; one more starts the keeping over.
+const KEEP: usize = 256;
+
+/// The book at `file`, its path the way the run writes its paths (ritsu's DESIGN 4.15), its text,
+/// and its check: the one kept, while the book reads the same; else checked now, and kept. Err when
+/// it cannot be read: its path, and why.
+fn kept(file: &Path) -> Result<(String, String, std::rc::Rc<Checked>), (String, std::io::Error)> {
+    let shown = ritsu_base::paths::show(file);
+    let src = ritsu_base::fs::read_to_string(&shown).map_err(|e| (shown.clone(), e))?;
+    let id = ritsu_base::paths::opened(file);
+    if let Some((text, c)) = KEPT.with(|k| k.borrow().get(&id).cloned())
+        && text == src
+    {
+        return Ok((shown, src, c));
+    }
+    ritsu_base::tally::count("chobo", file);
+    CHECKS.with(|c| c.set(c.get() + 1));
+    let c = std::rc::Rc::new(check::check_source(&src));
+    KEPT.with(|k| {
+        let mut k = k.borrow_mut();
+        if k.len() >= KEEP {
+            k.clear();
+        }
+        k.insert(id, (src.clone(), c.clone()));
+    });
+    Ok((shown, src, c))
+}
+
 /// The book, checked as `chobo check` checks it; else what check says.
-fn checked(file: &Path) -> Result<(String, Book, Checked), Vec<Said>> {
-    let path = file.to_string_lossy().to_string();
-    // read here, so that what cannot be read says why once (check_file's error says it cannot read too)
-    let src = ritsu_base::fs::read_to_string(file).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
-    let c = check::check_source(&src);
+fn checked(file: &Path) -> Result<(String, Book, std::rc::Rc<Checked>), Vec<Said>> {
+    let (path, src, c) = kept(file).map_err(|(path, e)| vec![Said::unreadable(&path, &e)])?;
     let errors: Vec<Said> = c.diags.iter().filter(|d| d.is_error()).map(|d| Said { file: path.clone(), ..Said::of(d) }).collect();
     match &c.book {
-        Some(b) if errors.is_empty() => Ok((src, b.clone(), c)),
+        Some(b) if errors.is_empty() => Ok((src, b.clone(), c.clone())),
         _ => Err(errors),
     }
 }
@@ -50,7 +88,7 @@ fn hold_machine(t: &TransferKind) -> Machine {
         finals: vec![1, 2, 3],
         held: vec![],
         policy: "first".into(),
-        axes: vec![ritsu_ports::Axis { column: "event".into(), coords: events.iter().map(|e| e.to_string()).collect() }, ritsu_ports::Axis { column: "state".into(), coords: states.clone() }],
+        axes: vec![ritsu_ports::Axis { column: "event".into(), coords: events.iter().map(|e| e.to_string()).collect(), ends: vec![None; events.len()] }, ritsu_ports::Axis { column: "state".into(), coords: states.clone(), ends: vec![None; states.len()] }],
         state_axis: Some(1),
         decides: vec!["next_state".into(), "refused".into(), "reason".into()],
         rows: rows
@@ -67,6 +105,20 @@ fn hold_machine(t: &TransferKind) -> Machine {
 }
 
 impl Engine {
+    /// The book at `file`, its text and its check, as the engine keeps them ([`kept`]): what `ritsu
+    /// gen` makes a book's client from, so that the book is checked once in the run (ritsu's DESIGN
+    /// 4.15). Err is why it cannot be read, as every command of ritsu says it (ritsu-base's
+    /// `cli::cannot_read`).
+    pub fn kept(&self, file: &Path) -> Result<(String, std::rc::Rc<Checked>), ritsu_base::text::Text> {
+        kept(file).map(|(_, src, c)| (src, c)).map_err(|(shown, e)| ritsu_base::cli::cannot_read(&shown, &e))
+    }
+
+    /// How many times a book has been checked whole on this thread (a question about a book whose
+    /// check is kept checks nothing): what a test of the keeping counts.
+    pub fn checks(&self) -> usize {
+        CHECKS.with(|c| c.get())
+    }
+
     /// `chobo check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3): every finding,
     /// as the command prints it and as its `--format json` prints it, then the line that sums them
     /// up and the report. `files` are as the person gave them, from where the program runs; `root`
@@ -78,8 +130,9 @@ impl Engine {
         let mut earlier = Vec::new();
         files
             .iter()
-            .map(|f| match check::check_file(Path::new(f)) {
-                Ok((src, mut c)) => {
+            .map(|f| match kept(Path::new(f)) {
+                Ok((_, src, c)) => {
+                    let mut c = (*c).clone();
                     check::compare_across(f, &mut c, &mut earlier);
                     let file = ritsu_base::paths::from_root(root, Path::new(f));
                     let mut parts: Vec<Part> = c
@@ -96,7 +149,7 @@ impl Engine {
                     let json = ritsu_base::json::parse(&check::to_json(f, &src, &c, lang).to_string()).unwrap_or(ritsu_base::json::Json::Null);
                     Unit { label: f.clone(), parts, verdict, json }
                 }
-                Err(e) => Unit::unchecked(f, format!("{e}\n")),
+                Err((path, why)) => Unit::unchecked(f, format!("cannot read {path}: {why}\n")),
             })
             .collect()
     }
@@ -210,7 +263,7 @@ impl ritsu_ports::Books for Engine {
             )));
         }
         let Some(k) = book.transfers.iter().position(|t| t.name == transfer) else {
-            let path = file.to_string_lossy().to_string();
+            let path = ritsu_base::paths::show(file);
             return Err(vec![Said { code: String::new(), file: path.clone(), line: None, message: ritsu_base::tr!("`{path}` に振替 `{transfer}` はありません", "`{path}` has no transfer `{transfer}`") }]);
         };
         let rep = crate::witness::within(lo, hi, || crate::check::report(&book));
@@ -265,9 +318,9 @@ impl Ledger for Run {
             }
         };
         let c = Call { op, kind, args, amounts };
-        // what is wrong with a call is chobo's own words, which are English
-        crate::interp::validate(book, &c).map_err(Text::same)?;
-        let out = self.state.apply(book, &c).map_err(Text::same)?;
+        // what is wrong with a call, in chobo's words, in both languages
+        crate::interp::validate(book, &c)?;
+        let out = self.state.apply(book, &c)?;
         if matches!(c.op, Op::Do | Op::Hold) {
             for id in c.accounts(book) {
                 if !self.named.contains(&id) {

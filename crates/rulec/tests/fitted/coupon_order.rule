@@ -1,0 +1,47 @@
+rule coupon_order v1
+description "The rebate and the fee of an order, and whether it holds a dear line. An order has two shipped lines or more: an order of one line is refused, and so are the calls the rows of the fee and the rounding of the rebate are looked for with on a line at rest"
+
+enum Region = north | east | south
+
+inputs
+  member : bool
+  region : Region
+  coupon : money[JPY]  range >=0JPY <=1_000JPY
+
+# A line of the order
+elements lines
+  price   : money[JPY]  range >=1JPY <=100JPY
+  shipped : bool
+
+count shipped_lines over lines where shipped  range >=2 <=5
+max dearest over lines of price empty 0JPY
+
+outputs
+  rebate : money[JPY]  round half_up(1JPY)
+  pricey : bool
+  fee    : money[JPY]  round down(1JPY)
+
+# A member gets back 1.5% of the coupon
+table share_of
+policy unique
+| member | -> share : rate |
+| true   | 1.5%            |
+| false  | 0%              |
+
+result rebate = coupon * share
+
+table pricey_of
+policy unique
+| dearest | -> pricey |
+| <50JPY  | false     |
+| >=50JPY | true      |
+
+table fee_of
+policy first
+| member | region | coupon   | -> fee |
+| true   | -      | -        | 0JPY   |
+| false  | north  | <300JPY  | 500JPY |
+| false  | north  | >=300JPY | 300JPY |
+| false  | east   | <600JPY  | 400JPY |
+| false  | east   | >=600JPY | 200JPY |
+| false  | -      | -        | 600JPY |

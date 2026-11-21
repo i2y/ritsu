@@ -191,7 +191,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                         Diag::error("E039", tr!("出典 `{name}` のコピー `{path}` を読めません", "The copy `{path}` of source `{name}` cannot be read"))
                             .at(at(d.span.line, name))
                             .mark(d.span.clone(), "")
-                            .note(tr!("パスは規則ファイルのある場所からたどります（探した先: {}）。", "The path is followed from the directory of the rule file (looked for: {}).", p.display()))
+                            .note(tr!("パスは規則ファイルのある場所からたどります（探した先: {}）。", "The path is followed from the directory of the rule file (looked for: {}).", ritsu_base::paths::show(&p)))
                             .maybe_note(crate::vfs::outside_note(&dir, path)),
                     );
                     continue;
@@ -258,7 +258,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                             Diag::error("E039", tr!("出典 `{name}` の `{frag}` のコピーがありません", "There is no copy of fragment `{frag}` of source `{name}`"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
-                                .note(tr!("探した先: {}", "Looked for: {}", fp.display()))
+                                .note(tr!("探した先: {}", "Looked for: {}", ritsu_base::paths::show(&fp)))
                                 .note(how)
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
                         );
@@ -280,7 +280,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                                 .mark(pin.span.clone(), tr!("固定: sha256:{}", "pinned: sha256:{}", pin.hash))
                                 .note(tr!("いまのコピー: sha256:{fh}", "The copy now: sha256:{fh}"))
                                 .note(tr!("読み直す定義: {}", "Definitions to reread: {}", whos_text(whos)))
-                                .note(tr!("コピーの差分（{}）を読み、転記した行がまだ正しければ、この行を次のとおり書き換えて固定し直してください。", "Read the copy's diff ({}), and if what was transcribed still holds, rewrite this line as follows to pin the new copy.", fp.display()))
+                                .note(tr!("コピーの差分（{}）を読み、転記した行がまだ正しければ、この行を次のとおり書き換えて固定し直してください。", "Read the copy's diff ({}), and if what was transcribed still holds, rewrite this line as follows to pin the new copy.", ritsu_base::paths::show(&fp)))
                                 .fix(crate::diag::FixKind::PinSource, pin_line(frag, &fh)),
                         ),
                         _ => {}
@@ -319,7 +319,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                             Diag::error("E039", tr!("出典 `{name}` の `{frag}` のコピーがありません", "There is no copy of fragment `{frag}` of source `{name}`"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
-                                .note(tr!("探した先: {}", "Looked for: {}", p.display()))
+                                .note(tr!("探した先: {}", "Looked for: {}", ritsu_base::paths::show(&p)))
                                 .note(tr!(
                                     "`rulec source fetch {rule_path}` を走らせると、{d} から取ってきて、コピーとして保存します。check は通信しません。",
                                     "`rulec source fetch {rule_path}` fetches it from {d} into the copies. check never reads the network.",
@@ -345,7 +345,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                                 .mark(pin.span.clone(), tr!("固定: sha256:{}", "pinned: sha256:{}", pin.hash))
                                 .note(tr!("いまのコピー: sha256:{h}", "The copy now: sha256:{h}"))
                                 .note(tr!("読み直す定義: {}", "Definitions to reread: {}", whos_text(whos)))
-                                .note(tr!("コピーの差分（{}）を読み、転記した行がまだ正しければ、この行を次のとおり書き換えて固定し直してください。", "Read the copy's diff ({}), and if what was transcribed still holds, rewrite this line as follows to pin the new copy.", p.display()))
+                                .note(tr!("コピーの差分（{}）を読み、転記した行がまだ正しければ、この行を次のとおり書き換えて固定し直してください。", "Read the copy's diff ({}), and if what was transcribed still holds, rewrite this line as follows to pin the new copy.", ritsu_base::paths::show(&p)))
                                 .fix(crate::diag::FixKind::PinSource, pin_line(frag, &h)),
                         ),
                         _ => {}
@@ -936,7 +936,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str, via: &[String]) -> Result<Outcome, S
                 continue;
             };
             let (xml, rev) = fetch_fragment(*db, id, asof, asof, &fr, &mut cache)?;
-            std::fs::create_dir_all(&cdir).map_err(|e| format!("{}: {e}", cdir.display()))?;
+            std::fs::create_dir_all(&cdir).map_err(|e| format!("{}: {e}", ritsu_base::paths::show(&cdir)))?;
             let p = cdir.join(fr.file());
             let before = std::fs::read(&p).ok();
             // A copy whose text the fetch did not change keeps its bytes, so that the pin
@@ -944,7 +944,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str, via: &[String]) -> Result<Outcome, S
             // `check` (E038) over an amendment that changed nothing.
             let same = before.as_deref().is_some_and(|b| same_text(b, &xml));
             if !same {
-                std::fs::write(&p, &xml).map_err(|e| format!("{}: {e}", p.display()))?;
+                std::fs::write(&p, &xml).map_err(|e| format!("{}: {e}", ritsu_base::paths::show(&p)))?;
             }
             if !rev.is_empty() {
                 let _ = std::fs::write(cdir.join("revision.txt"), format!("{rev}\n"));
@@ -1002,9 +1002,9 @@ pub fn fetch(f: &RuleFile, rule_path: &str, via: &[String]) -> Result<Outcome, S
         let same = before.as_deref() == Some(body.as_slice());
         if !same {
             if let Some(parent) = p.parent() {
-                std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+                std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", ritsu_base::paths::show(parent)))?;
             }
-            std::fs::write(&p, &body).map_err(|e| format!("{}: {e}", p.display()))?;
+            std::fs::write(&p, &body).map_err(|e| format!("{}: {e}", ritsu_base::paths::show(&p)))?;
         }
         let h = crate::sha256::short(&body);
         lines.push(match before {
@@ -1086,11 +1086,11 @@ fn fragments(
             continue;
         };
         let text = crate::extract::tsv(g);
-        std::fs::create_dir_all(&cdir).map_err(|e| format!("{}: {e}", cdir.display()))?;
+        std::fs::create_dir_all(&cdir).map_err(|e| format!("{}: {e}", ritsu_base::paths::show(&cdir)))?;
         let fp = cdir.join(crate::extract::fragment_file(&frag));
         let before = std::fs::read_to_string(&fp).ok();
         if before.as_deref() != Some(text.as_str()) {
-            std::fs::write(&fp, &text).map_err(|e| format!("{}: {e}", fp.display()))?;
+            std::fs::write(&fp, &text).map_err(|e| format!("{}: {e}", ritsu_base::paths::show(&fp)))?;
         }
         let h = crate::sha256::short(text.as_bytes());
         let (rows, cols) = (g.len(), g.iter().map(|r| r.len()).max().unwrap_or(0));
@@ -1200,7 +1200,9 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
                             if let Some(p) = d.pins.iter().find(|p| p.fragment == frag) {
                                 new_pins.push(pin_line(&frag, &p.hash));
                             }
-                            report.push(tr!("{}: {frag} のコピーがありません。先に `rulec source fetch` を走らせてください", "{}: no copy of {frag}; run `rulec source fetch` first", d.name.text));
+                            // the command named the way the person ran this one (ritsu's DESIGN 6.2, item 10)
+                            let run = ritsu_base::cli::command_name("rulec");
+                            report.push(tr!("{}: {frag} のコピーがありません。先に `{run} source fetch` を走らせてください", "{}: no copy of {frag}; run `{run} source fetch` first", d.name.text));
                         }
                     }
                 }
@@ -1230,7 +1232,9 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
                             if let Some(p) = d.pins.iter().find(|p| p.fragment == frag) {
                                 new_pins.push(pin_line(&frag, &p.hash));
                             }
-                            report.push(tr!("{}: {frag} のコピーがありません。先に `rulec source fetch` を走らせてください", "{}: no copy of {frag}; run `rulec source fetch` first", d.name.text));
+                            // the command named the way the person ran this one (ritsu's DESIGN 6.2, item 10)
+                            let run = ritsu_base::cli::command_name("rulec");
+                            report.push(tr!("{}: {frag} のコピーがありません。先に `{run} source fetch` を走らせてください", "{}: no copy of {frag}; run `{run} source fetch` first", d.name.text));
                         }
                     }
                 }

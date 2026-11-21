@@ -1,5 +1,5 @@
 module names v1
-description "Names the generated code keeps apart: two parameters with one name in Go's mixed caps, parameters, locals and fields that are words of a target, records, enums and functions that take the names of Rust's own types and values, and locals with letters a target does not take"
+description "Names the generated code keeps apart: two parameters with one name in Go's mixed caps, parameters, locals and fields that are words of a target, records, enums and functions that take the names of Rust's own types and values, locals with letters a target does not take, and a function named as the module of units the code imports"
 
 record Item
   qty : number  range >=0 <=9
@@ -48,6 +48,11 @@ fn wrap(v: Vec, s: String, o: Option) -> Result
 
 fn units(n: number range >=0 <=9) -> number
   n + 1
+
+# TypeScript and Python: the function units has the name the code imports the module of units as
+# (Python's inner function _units), which takes another name (units_2, _units_2)
+fn price_of(p: money[JPY] range >=0JPY <=9JPY) -> money[JPY]
+  p
 
 fn kaname_like(dyn: number range >=0 <=9, where: number range >=0 <=9) -> number
   let loop = dyn + where

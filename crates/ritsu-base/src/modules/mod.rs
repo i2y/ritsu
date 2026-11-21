@@ -1,4 +1,4 @@
-//! Modules (DESIGN 17): the sources of the nine languages carried across projects and repositories.
+//! Modules (DESIGN 17): the sources of the ten languages carried across projects and repositories.
 //! A module is a directory with a `ritsu.mod` at its root and the files under it (those of a module
 //! below it with a `ritsu.mod` of its own left out); it has a version, and it requires other
 //! modules, by a path, from an OCI registry or from the tags of a git repository. A file names a
@@ -42,7 +42,7 @@ pub mod tar;
 pub mod vendor;
 
 pub use graph::{Node, Problem, Tree};
-pub use refer::{Refused, dependency_root, forget, from_own_root, given, given_all, join, map, missing, module_of, module_words, module_words_from, outside_note, outside_note_for, prefix_of, refer, refer_shown, tree, under_dependency};
+pub use refer::{Refused, dependency_root, forget, from_own_root, given, given_all, join, join_opened, map, missing, module_of, module_words, module_words_from, outside_note, outside_note_for, prefix_of, refer, refer_shown, tree, under_dependency};
 
 /// A diagnostic of a module's files: no part of a language's own.
 pub type Diag = crate::diag::Diag<()>;

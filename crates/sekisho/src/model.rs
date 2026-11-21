@@ -120,6 +120,10 @@ pub struct Enum {
     pub values: Vec<Named>,
     /// Where it was read from, for an `import enum`'s; None for one written in the file.
     pub from: Option<EnumFrom>,
+    /// The first enum of the gate that is one type with it (DESIGN 28): declared at the same place,
+    /// with the same values in the same order. Itself, unless the gate reads one enum of an `enums`
+    /// file by two names (`import enum … -> <name>`, or through a file read with `use gate`).
+    pub one: usize,
 }
 
 /// The `enums` file an enum was imported from.
@@ -184,6 +188,37 @@ pub struct Workflow {
     /// The `.flow` as written, and as the tools reach it.
     pub flow: String,
     pub file: PathBuf,
+    /// What the gate says the flow holds of the resources it acts on (DESIGN 2.12), in the order
+    /// written.
+    pub holds: Vec<Holds>,
+}
+
+/// `resource Order from order.id` under a workflow, with the lines under it (DESIGN 2.12): where
+/// the flow gives `order.id` as the id of an `Order`, each attribute written is the value of the
+/// flow beside it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Holds {
+    /// The resource type, by index into [`Gate::types`].
+    pub resource: usize,
+    /// The value of the flow that is the resource's id, as written (`order.id`).
+    pub id: String,
+    pub line: usize,
+    /// Each attribute (by its index in the type) with the value of the flow it is (`amount =
+    /// order.total`), and its line.
+    pub attrs: Vec<(usize, String, usize)>,
+}
+
+impl Holds {
+    /// A line under it, as the gate writes it: `amount = order.total`.
+    pub fn line_text(&self, g: &Gate, k: usize) -> String {
+        let (a, value, _) = &self.attrs[k];
+        format!("{} = {value}", g.types[self.resource].attrs[*a].named.name)
+    }
+
+    /// Its own line, as the gate writes it: `resource Order from order.id`.
+    pub fn head_text(&self, g: &Gate) -> String {
+        format!("resource {} from {}", g.types[self.resource].named.name, self.id)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -519,6 +554,15 @@ pub fn same_name(x: &Named, y: &Named) -> bool {
     x.name == y.name || x.alias == y.alias
 }
 
+impl Computed {
+    /// Whether it is no value the gate writes: the answer of a rule the flow calls on the way to
+    /// one of its calls, which the question of that call counts beside the action's own
+    /// ([`crate::at`]). It has no line, and no example of a combination says it.
+    pub fn of_flow(&self) -> bool {
+        self.named.line == 0
+    }
+}
+
 impl Type {
     pub fn attr(&self, name: &str) -> Option<(usize, &Field)> {
         self.attrs.iter().enumerate().find(|(_, f)| f.named.is(name))
@@ -565,18 +609,30 @@ pub fn build(f: &ast::File, imports: &[&ast::File], root: &std::path::Path) -> G
     let mut principals: Vec<&ast::EntityDecl> = Vec::new();
     let mut resources: Vec<&ast::EntityDecl> = Vec::new();
     let mut workflows: Vec<Workflow> = Vec::new();
+    let mut workflow_holds: Vec<&[ast::Holds]> = Vec::new();
+    // where each enum is declared, as one is told from another, and its values there
+    let mut declared: Vec<(PathBuf, String, Vec<String>)> = Vec::new();
     for x in &scope {
         let xdir = std::path::Path::new(&x.path).parent().map(|p| p.to_path_buf()).unwrap_or_default();
         for e in &x.enums {
             let from = e.from.as_ref().map(|o| EnumFrom { path: o.path.clone(), enum_name: o.enum_name.clone(), ordered: o.ordered });
-            enums.push(Enum { named: named(&e.name), values: e.values.iter().map(named).collect(), from });
+            let canonical = |p: PathBuf| ritsu_base::fs::canonicalize(&p).unwrap_or(p);
+            let at = match &e.from {
+                Some(o) => (canonical(crate::names::beside(&x.path, &o.path).unwrap_or_else(|_| xdir.join(&o.path))), o.enum_name.clone()),
+                None => (canonical(PathBuf::from(&x.path)), e.name.text.clone()),
+            };
+            let place = (at.0, at.1, e.values.iter().map(|v| v.text.clone()).collect::<Vec<_>>());
+            let one = declared.iter().position(|d| *d == place).unwrap_or(declared.len());
+            declared.push(place);
+            enums.push(Enum { named: named(&e.name), values: e.values.iter().map(named).collect(), from, one });
         }
         roles_ast.extend(x.roles.iter());
         principals.extend(x.principals.iter());
         resources.extend(x.resources.iter());
         for w in &x.workflows {
             let file = crate::names::beside(&x.path, &w.flow.0).unwrap_or_else(|_| if xdir.as_os_str().is_empty() { PathBuf::from(&w.flow.0) } else { xdir.join(&w.flow.0) });
-            workflows.push(Workflow { named: named(&w.name), flow: w.flow.0.clone(), file });
+            workflows.push(Workflow { named: named(&w.name), flow: w.flow.0.clone(), file, holds: Vec::new() });
+            workflow_holds.push(&w.holds);
         }
     }
     let role_of = |word: &str| roles_ast.iter().position(|r| r.name.is(word));
@@ -626,6 +682,15 @@ pub fn build(f: &ast::File, imports: &[&ast::File], root: &std::path::Path) -> G
     }
     if needs_workflow {
         types.push(Type { named: Named::new(ast::WORKFLOW_TYPE, "", 0), kind: Kind::Workflow, roles: vec![], attrs: vec![] });
+    }
+    // what each workflow's flow holds of a resource: the type and its attributes, by index (a name
+    // `names.rs` did not find, which it has said, is left out)
+    for (w, holds) in workflows.iter_mut().zip(&workflow_holds) {
+        for h in holds.iter() {
+            let Some(t) = type_of(&h.resource.word).filter(|t| types[*t].kind == Kind::Resource) else { continue };
+            let attrs = h.lines.iter().filter_map(|l| Some((types[t].attr(&l.attribute.word)?.0, l.value.0.clone(), l.span.line))).collect();
+            w.holds.push(Holds { resource: t, id: h.id.0.clone(), line: h.span.line, attrs });
+        }
     }
 
     // the uses and the actions are the file's own

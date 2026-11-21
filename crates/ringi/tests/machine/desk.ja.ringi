@@ -1,0 +1,216 @@
+request 机(desk_ja) v1 "机の申請"
+description "社員の机の申請（架空の決まり）。チケットの遷移を一つずつ、シナリオ一つで"
+
+use organization 組織(org) from "../../examples/shared/company.ringi"
+use calendar 本社(office) from "../../examples/shared/office.cal"
+
+form
+  品目(what)  : text "品目"  count >=1 <=100
+  金額(price) : money[円] "金額"  range >=1円 <=1_000_000円
+  メモ(note)  : long text "メモ"  count <=200  approvers only  optional
+
+route
+  一次(first)   上長
+  役員(board)   at least 2 of 取締役  when 金額 > 100_000円
+  決裁(decide)  部長
+
+who
+  上長(manager)   = manager of requester
+  取締役(board)   = team board
+  部長(dept_head) = head of requester.department
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval     not allowed
+  send back         to any earlier stage, at most 2 times
+  resubmit          within 3 business days
+  withdraw          until 役員
+  retract approval  until the next stage answers
+  pause             at most 5 business days
+  approvers edit    金額, メモ
+
+# (なし) -- submit --> in progress。議決に届く承認と、届かない承認
+scenario 議決に届いて承認
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 一次     | in progress |
+| 2026-11-16 11:00 | approve | e1101 | 役員     | in progress |
+| 2026-11-16 13:00 | approve | e0201 | 役員     | in progress |
+| 2026-11-16 14:00 | approve | e0202 | 決裁     | in progress |
+| 2026-11-17 09:30 | approve | e3101 |          | approved    |
+
+# 却下は、議決にまだ届きうるあいだ（五人のうち二人、反対が三人）ステップを開けたままにし、
+# 届かなくなったとき（反対が四人）にチケットを終える
+scenario 議決に届かなくなって却下
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 一次     | in progress |
+| 2026-11-16 11:00 | approve | e1101 | 役員     | in progress |
+| 2026-11-16 13:00 | reject  | e0201 | 役員     | in progress |
+| 2026-11-16 14:00 | reject  | e0202 | 役員     | in progress |
+| 2026-11-16 15:00 | reject  | e0203 | 役員     | in progress |
+| 2026-11-16 16:00 | reject  | e0204 |          | rejected    |
+
+# 申請者へ戻り、出し直す。次の round の最初のステップから
+scenario 差し戻して出し直す
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event                   | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit                  | e1201 | 一次     | in progress    |
+| 2026-11-16 11:00 | send back               | e1101 |          | with requester |
+| 2026-11-17 10:00 | resubmit(金額: 90_000円) | e1201 | 一次     | in progress    |
+| 2026-11-17 11:00 | approve                 | e1101 | 決裁     | in progress    |
+
+# 通ったステップへ戻す。そのステップの答えは空に戻る
+scenario ステップへ差し戻す
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event               | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit              | e1201 | 一次     | in progress |
+| 2026-11-16 11:00 | approve             | e1101 | 役員     | in progress |
+| 2026-11-16 13:00 | send back(to: 一次) | e0201 | 一次     | in progress |
+| 2026-11-16 15:00 | approve             | e1101 | 役員     | in progress |
+
+# 申請者が取り下げ、そのあと破棄する
+scenario 取り下げて破棄
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event    | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit   | e1201 | 一次     | in progress    |
+| 2026-11-16 11:00 | withdraw | e1201 |          | with requester |
+| 2026-11-16 12:00 | discard  | e1201 |          | withdrawn      |
+
+# 差し戻されて、期限までに出し直さない
+scenario 期限までに出し直さない
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event         | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit        | e1201 | 一次     | in progress    |
+| 2026-11-16 11:00 | send back     | e1101 |          | with requester |
+| 2026-11-20 00:00 | resubmit late |       |          | expired        |
+
+# 次のステップが答える前に承認を取り消す。前のステップへ戻り、その期限は元のまま
+scenario 承認を取り消す
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 一次     | in progress |
+| 2026-11-17 11:00 | approve | e1101 | 役員     | in progress |
+| 2026-11-17 12:00 | retract | e1101 | 一次     | in progress |
+| 2026-11-17 13:00 | approve | e1101 | 役員     | in progress |
+
+# 期限を過ぎる。上の長へ回り、期限と催促は回した時刻から数え直す。
+# もう一度過ぎると、期限切れで終わる
+scenario 期限を過ぎて上へ回る
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit | e1201 | 一次     | in progress |
+| 2026-11-18 09:00 | remind |       | 一次     | in progress |
+| 2026-11-20 00:00 | late   |       | 一次     | in progress |
+| 2026-11-24 09:00 | remind |       | 一次     | in progress |
+| 2026-11-26 00:00 | late   |       |          | expired     |
+
+# ステップの時計は、チケットを出した日からでなく、そのステップが始まった日から数える。
+# 役員の催促は、チケットを役員へ進めた承認から 2 営業日あと
+scenario 時計はステップの始まりから
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 一次     | in progress |
+| 2026-11-17 11:00 | approve | e1101 | 役員     | in progress |
+| 2026-11-19 09:00 | remind  |       | 役員     | in progress |
+| 2026-11-21 00:00 | late    |       | 役員     | in progress |
+| 2026-11-24 09:00 | remind  |       | 役員     | in progress |
+| 2026-11-26 00:00 | late    |       |          | expired     |
+
+# 回した先の人が承認して、その承認を取り消す。ステップは回した先のままで、催促と期限は
+# 元の時刻に置き直す（役員の時刻でも、取り消した時刻から数え直した時刻でもない）
+scenario 回した先で承認を取り消す
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 一次     | in progress |
+| 2026-11-18 09:00 | remind  |       | 一次     | in progress |
+| 2026-11-20 00:00 | late    |       | 一次     | in progress |
+| 2026-11-23 10:00 | approve | e3101 | 役員     | in progress |
+| 2026-11-23 11:00 | retract | e3101 | 一次     | in progress |
+| 2026-11-24 09:00 | remind  |       | 一次     | in progress |
+| 2026-11-26 00:00 | late    |       |          | expired     |
+
+# 保留して、再開する。あいだの営業日は時計が止まる
+scenario 保留して再開
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 一次     | in progress |
+| 2026-11-17 10:00 | pause   | e1101 | 一次     | paused      |
+| 2026-11-19 10:00 | resume  | e1101 | 一次     | in progress |
+| 2026-11-19 11:00 | approve | e1101 | 役員     | in progress |
+
+# 保留して、保留の日数を使い切る
+scenario 保留を使い切る
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event      | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit     | e1201 | 一次     | in progress |
+| 2026-11-17 10:00 | pause      | e1101 | 一次     | paused      |
+| 2026-11-25 00:00 | pause ends |       | 一次     | in progress |
+
+# 回した先の人が保留する。回した時刻から数えた催促と期限は、最初の催促と期限と同じく、
+# あいだの営業日だけ後ろへずれる
+scenario 回した先で保留する
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit | e1201 | 一次     | in progress |
+| 2026-11-18 09:00 | remind |       | 一次     | in progress |
+| 2026-11-20 00:00 | late   |       | 一次     | in progress |
+| 2026-11-20 10:00 | pause  | e3101 | 一次     | paused      |
+| 2026-11-24 10:00 | resume | e3101 | 一次     | in progress |
+| 2026-11-26 09:00 | remind |       | 一次     | in progress |
+| 2026-11-28 00:00 | late   |       |          | expired     |
+
+# 承認者が、経路の読む値を直す。このステップより後のステップを決め直す
+scenario 承認者が直す
+  requester e1201
+  form 品目 = "立って使う机", 金額 = 180_000円
+| at               | event               | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit              | e1201 | 一次     | in progress |
+| 2026-11-16 11:00 | edit(金額: 90_000円) | e1101 | 一次     | in progress |
+| 2026-11-16 11:05 | approve             | e1101 | 決裁     | in progress |
+
+# 期限を過ぎた人の上にだれもいない。その期限で `then expire`
+scenario いちばん上で期限を過ぎる
+  requester e0101
+  form 品目 = "立って使う机", 金額 = 90_000円
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit | e0101 | 一次     | in progress |
+| 2026-11-18 09:00 | remind |       | 一次     | in progress |
+| 2026-11-20 00:00 | late   |       |          | expired     |
+
+# 社長の上にはだれもおらず、社長に部は無い。どちらのステップも飛ばされ、
+# チケットは出したとたんに承認で終わる
+scenario 社長にはだれも答えない
+  requester e0001
+  form 品目 = "立って使う机", 金額 = 90_000円
+| at               | event  | by    | -> stage | status   |
+| 2026-11-16 10:00 | submit | e0001 |          | approved |
+
+# チケットが進むあいだに、申請者が組織からいなくなる。次のステップは申請者の部の長を
+# 尋ねるが、だれもおらず、管理者を待つ（組織のいちばん上の人のステップのようには飛ばさない）
+scenario 申請者がいなくなる
+  requester e9001
+  form 品目 = "立って使う机", 金額 = 90_000円
+| at               | event                                  | by    | -> stage | status      |
+| 2027-03-31 10:00 | submit                                 | e9001 | 一次     | in progress |
+| 2027-04-01 10:00 | approve                                | e0102 | 決裁     | in progress |
+| 2027-04-01 11:00 | add approver(approver: person "e0102") |       | 決裁     | in progress |
+| 2027-04-01 12:00 | approve                                | e0102 |          | approved    |

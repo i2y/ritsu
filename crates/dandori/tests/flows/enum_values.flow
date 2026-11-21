@@ -1,0 +1,27 @@
+workflow enum_values v1
+description "Writes values of an enum where nothing says their type: the lists a for goes through, one round after another and in parallel, a list put in a variable with no type, whose other item says its type, and a value put in a variable with no type. Each is a value of the one enum that has it, and the code of every platform writes its type"
+
+enum role = manager | accounting | legal
+
+task ask(claim_id: string, role: role)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:ask"
+
+inputs
+  claim_id : string
+  first    : role
+
+outputs
+  asked : list[role]
+  last  : role
+
+flow
+  for r in [manager, accounting] at most 2
+    ask(claim_id: claim_id, role: r)
+  let asked = for party in [legal, manager] at most 2 in parallel
+    ask(claim_id: claim_id, role: party)
+    yield party
+  let reviewers = [legal, first]
+  for reviewer in reviewers at most 2
+    ask(claim_id: claim_id, role: reviewer)
+  let last = accounting
+  succeed asked = asked, last = last

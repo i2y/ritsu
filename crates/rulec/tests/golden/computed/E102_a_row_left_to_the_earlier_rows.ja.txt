@@ -1,0 +1,13 @@
+エラー[E102]: 行4 はどの入力にも当てはまりません
+  --> tests/computed/shapes/E102_a_row_left_to_the_earlier_rows.rule:20 表 pick
+   |
+20 | | <52JPY          | -     | one  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行4: ここに到達する入力はありません
+ 9 | define big : bool = amount > 56JPY
+   |                     ^^^^^^^^^^^^^^ この行の `amount` の値では、いつも false です
+   |
+ `big` は `amount` から決まる真偽値です。この行がとる `amount` の値では、`big` はいつも false です。
+ `policy first` なので、この行の残りの値は、上にある行が先に取ります。
+ ヒント: 計算の式とこの行の条件を見比べてください。どの入力もこの行に当たらないので、不要なら削除してください。
+
+note tests/computed/shapes/E102_a_row_left_to_the_earlier_rows.rule: 隠れ 1 対（階段 1、同じ答え 0、要確認 0）

@@ -1,0 +1,2 @@
+error[E003]: tests/mutants/E003_同じステップが二つ.ringi:8:3: `確かめ` is declared twice in the stages of the route (first on line 7)
+     8 |   確かめ(review) 経理

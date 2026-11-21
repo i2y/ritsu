@@ -1,0 +1,56 @@
+workflow unread_uses v1
+description "Uses that could not be read: a rule that does not pass rulec's check, a dates file that does not pass koyomi's, a book that is not there, and an import enum of a rule, which is no enums file. Each is said once, at its own line (E005). A line that writes a name one of them would give, or a name made from one (a variable given its answer, a field, an input, an output or a parameter of its type, a task that holds one), says nothing more: the name is not wrong, only unread. The rest of the flow is checked, and what is wrong there is said: the field the record does not have and the task that is not there (E002), and so is a field a variable does not have whose type is written, and read, though it is set from one, and one of another record that has a field of the same name"
+
+use rule quote from "rules/broken_quote.rule"
+use dates terms from "dates/壊れた.cal"
+use book stock from "books/no_such_stock.book"
+import enum zone from "rules/delivery_fee.rule"
+
+record Parcel
+  id     : string
+  zone   : zone
+  weight : int
+
+record Label
+  zone : string
+  text : string
+
+inputs
+  parcel : Parcel
+  band   : quote.band
+  label  : Label
+
+outputs
+  band : quote.band
+  due  : date
+  sent : bool
+
+task notify(band: quote.band, note: string)
+  http POST "https://notify.example.com/bands"
+  idempotent
+
+task reserve(sku: string, qty: int)
+  book stock.parcels.hold
+
+task send(id: string) -> bool
+  http POST "https://send.example.com/parcels"
+  idempotent
+
+task tag(text: string)
+  http POST "https://tag.example.com/labels"
+  idempotent
+
+flow
+  let q = quote(weight: parcel.weight)
+  notify(band: q.band, note: "{parcel.id} is {q.band}")
+  let due = terms.due(origin: now)
+  reserve(sku: parcel.id, qty: parcel.weight)
+  match band
+    light => pass
+    heavy => pass
+  let sent = send(id: parcel.code)
+  let again = sned(id: parcel.id)
+  let copy: Parcel = {id: parcel.id, zone: parcel.zone, weight: parcel.weight}
+  tag(text: copy.idd)
+  tag(text: "{label.zone} {label.txt}")
+  succeed band = q.band, due = due.at, sent = sent

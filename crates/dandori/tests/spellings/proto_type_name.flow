@@ -1,0 +1,25 @@
+workflow proto_type_name v1
+description "A record whose name in the code of TypeScript, Python and Go is that of a message of a .proto."
+
+use proto shop from "protos/proto_type_name.proto"
+
+record shop_Line
+  note : string
+
+inputs
+  id : string
+
+outputs
+  sku  : string
+  note : string
+
+task find_line(id: string) -> shop.Line
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:find-line"
+
+task find_note(id: string) -> shop_Line
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:find-note"
+
+flow
+  let a = find_line(id: id)
+  let b = find_note(id: id)
+  succeed sku = a.sku, note = b.note

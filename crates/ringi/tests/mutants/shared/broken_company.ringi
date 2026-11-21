@@ -1,0 +1,4 @@
+organization company v1 "Company"
+
+team kinds
+  department "Department"

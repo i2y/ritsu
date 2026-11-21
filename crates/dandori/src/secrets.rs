@@ -11,8 +11,13 @@
 //! `format: password`). A record holds the secrets of its fields, a list those of its items, a string
 //! with values put in is a secret when one of them is, and a `json` value made from a secret is one.
 //! What a rule answers is a decision, not a secret, and the answer of a task with no mark is none.
-//! What a variable holds is gathered from every value put in it anywhere in the flow, as its range is
-//! (DESIGN 1.3): not along the runs, so a value put in on a run that never happens counts too.
+//! What a variable holds at a statement is what the runs that reach the statement last put in it,
+//! as the walk of the runs follows them (`crossings::secrets_here`, as the range of a variable is
+//! read, DESIGN 1.3): a secret put in on a way that does not reach the statement is not counted
+//! there. Where the walk does not follow a variable (a loop past the most rounds it goes, a case, a
+//! statement no run reaches), the variable holds every secret put in it anywhere in the flow
+//! (`variables`): reading less than a run can hold would hide a leak, so only a value shown not to
+//! reach the statement is left out.
 
 use crate::diag::{Diag, Text};
 use crate::model::*;
@@ -57,12 +62,39 @@ fn host_of(url: &str) -> Option<(String, bool)> {
 /// does not say it discloses. W901, a key in the text, is `keys`, which needs no model.
 pub fn check(m: &Model) -> Vec<Diag> {
     let mut out = Vec::new();
-    let vars = variables(m);
+    let vars = Reached::of(m);
     if m.history_encrypted.is_none() {
         out.extend(kept(m, &vars));
     }
     out.extend(sent_outside(m, &vars));
     out
+}
+
+/// What each variable holds at each statement: what the runs that reach it last put in it, where
+/// the walk follows them, else every secret put in it anywhere in the flow.
+struct Reached {
+    all: BTreeMap<String, Vec<Held>>,
+    here: BTreeMap<usize, BTreeMap<String, Vec<Held>>>,
+}
+
+impl Reached {
+    fn of(m: &Model) -> Reached {
+        let all = variables(m);
+        let here = crate::crossings::secrets_here(m, &all);
+        Reached { all, here }
+    }
+
+    /// What the variables hold at the statement at `site`.
+    fn at(&self, site: usize) -> std::borrow::Cow<'_, BTreeMap<String, Vec<Held>>> {
+        match self.here.get(&site) {
+            Some(h) => {
+                let mut vars = self.all.clone();
+                vars.extend(h.iter().map(|(k, v)| (k.clone(), v.clone())));
+                std::borrow::Cow::Owned(vars)
+            }
+            None => std::borrow::Cow::Borrowed(&self.all),
+        }
+    }
 }
 
 // ── W901 ────────────────────────────────────────────────────────────────────
@@ -133,7 +165,7 @@ pub fn of_type(m: &Model, t: &Ty, shown: &str) -> Vec<Held> {
 }
 
 /// A `json` value holds what it was made from as a whole: it cannot be read into.
-fn as_json(t: &Ty, held: Vec<Held>) -> Vec<Held> {
+pub(crate) fn as_json(t: &Ty, held: Vec<Held>) -> Vec<Held> {
     let json = matches!(t.inner(), Ty::Json) || matches!(t.inner(), Ty::List(x) if matches!(x.inner(), Ty::Json));
     if !json {
         return held;
@@ -145,8 +177,10 @@ fn as_json(t: &Ty, held: Vec<Held>) -> Vec<Held> {
     out
 }
 
-/// The secrets of a value: what its type marks, and what the variables it reads hold.
-pub fn of_expr(m: &Model, vars: &BTreeMap<String, Vec<Held>>, e: &TExpr) -> Vec<Held> {
+/// The secrets of a value: what its type marks, and what the variables it reads hold. `at` is the
+/// statement and the place in it the value is written at (`Model::shown_at`), so that a number
+/// written with a unit is said as written (`300000JPY`, DESIGN 40); None where no statement writes it.
+pub fn of_expr(m: &Model, vars: &BTreeMap<String, Vec<Held>>, e: &TExpr, at: Option<(usize, &str)>) -> Vec<Held> {
     match e {
         TExpr::Var { name, fields, ty } => read(m, vars, name, fields, ty),
         TExpr::Record { fields, ty } => {
@@ -156,10 +190,16 @@ pub fn of_expr(m: &Model, vars: &BTreeMap<String, Vec<Held>>, e: &TExpr) -> Vec<
             };
             let mut out = Vec::new();
             for (f, x) in fields {
+                let here = at.map(|(site, path)| (site, crate::model::field_place(path, f)));
+                let here = here.as_ref().map(|(site, path)| (*site, path.as_str()));
                 if let Some(mark) = marked.and_then(|s| s.get(f)) {
-                    add(&mut out, Held { path: vec![f.clone()], shown: x.show(), mark: mark.clone() });
+                    let shown = match here {
+                        Some((site, path)) => m.shown_at(site, path, x),
+                        None => x.show(),
+                    };
+                    add(&mut out, Held { path: vec![f.clone()], shown, mark: mark.clone() });
                 }
-                for h in of_expr(m, vars, x) {
+                for h in of_expr(m, vars, x, here) {
                     let path = std::iter::once(f.clone()).chain(h.path).collect();
                     add(&mut out, Held { path, ..h });
                 }
@@ -168,8 +208,9 @@ pub fn of_expr(m: &Model, vars: &BTreeMap<String, Vec<Held>>, e: &TExpr) -> Vec<
         }
         TExpr::List { items, ty } => {
             let mut out = Vec::new();
-            for x in items {
-                for h in of_expr(m, vars, x) {
+            for (i, x) in items.iter().enumerate() {
+                let here = at.map(|(site, path)| (site, crate::model::item_place(path, i)));
+                for h in of_expr(m, vars, x, here.as_ref().map(|(site, path)| (*site, path.as_str()))) {
                     add(&mut out, h);
                 }
             }
@@ -180,7 +221,7 @@ pub fn of_expr(m: &Model, vars: &BTreeMap<String, Vec<Held>>, e: &TExpr) -> Vec<
             let mut out = Vec::new();
             for p in parts {
                 if let IPart::Hole(x) = p {
-                    for h in of_expr(m, vars, x) {
+                    for h in of_expr(m, vars, x, None) {
                         add(&mut out, Held { path: vec![], ..h });
                     }
                 }
@@ -246,20 +287,19 @@ pub fn variables(m: &Model) -> BTreeMap<String, Vec<Held>> {
                         Target::Let(x) => x.clone(),
                         Target::Case(c) => m.cases[*c].name.clone(),
                     };
-                    let held = m.tasks[*t].result_secrets.iter().map(|(p, mark)| Held { path: p.split('.').filter(|s| !s.is_empty()).map(String::from).collect(), shown: joined(&x, &p.split('.').filter(|s| !s.is_empty()).map(String::from).collect::<Vec<_>>()), mark: mark.clone() }).collect();
-                    put(&x, held);
+                    put(&x, of_answer(m, *t, &x));
                 }
-                TK::Assign { name, expr } => put(name, of_expr(m, &vars, expr)),
+                TK::Assign { name, expr } => put(name, of_expr(m, &vars, expr, Some((s.site, "")))),
                 TK::For { var, list, result, .. } => {
-                    put(var, of_expr(m, &vars, list));
+                    put(var, of_expr(m, &vars, list, Some((s.site, "in"))));
                     if let Some((r, y)) = result {
-                        put(r, of_expr(m, &vars, y));
+                        put(r, of_expr(m, &vars, y, Some((s.site, ""))));
                     }
                 }
                 TK::Match { expr, arms } => {
                     for a in arms {
                         if let Some(x) = &a.some {
-                            put(x, of_expr(m, &vars, expr));
+                            put(x, of_expr(m, &vars, expr, None));
                         }
                     }
                 }
@@ -274,13 +314,26 @@ pub fn variables(m: &Model) -> BTreeMap<String, Vec<Held>> {
     vars
 }
 
-/// The secrets a call gives as `param`: what the value holds, and the parameter's own marks.
-fn given(m: &Model, vars: &BTreeMap<String, Vec<Held>>, callee: &Callee, param: &str, e: &TExpr) -> Vec<Held> {
-    let mut out = of_expr(m, vars, e);
+/// The secrets the answer of the task `t` holds, put in the variable `x`: what its marks say.
+pub(crate) fn of_answer(m: &Model, t: usize, x: &str) -> Vec<Held> {
+    m.tasks[t]
+        .result_secrets
+        .iter()
+        .map(|(p, mark)| {
+            let path: Vec<String> = p.split('.').filter(|s| !s.is_empty()).map(String::from).collect();
+            Held { shown: joined(x, &path), path, mark: mark.clone() }
+        })
+        .collect()
+}
+
+/// The secrets a call at the statement `site` gives as `param`: what the value holds, and the
+/// parameter's own marks.
+fn given(m: &Model, vars: &BTreeMap<String, Vec<Held>>, site: usize, callee: &Callee, param: &str, e: &TExpr) -> Vec<Held> {
+    let mut out = of_expr(m, vars, e, Some((site, param)));
     if let Callee::Task(t) = callee {
         for (p, mark) in m.tasks[*t].param_secrets.get(param).into_iter().flatten() {
             let path: Vec<String> = p.split('.').filter(|s| !s.is_empty()).map(String::from).collect();
-            add(&mut out, Held { shown: joined(&e.show(), &path), path, mark: mark.clone() });
+            add(&mut out, Held { shown: joined(&m.shown_at(site, param, e), &path), path, mark: mark.clone() });
         }
     }
     out
@@ -345,7 +398,7 @@ fn pass_a_reference() -> Text {
 
 /// W904: each secret the history of a run keeps — an input or an output of the workflow, the
 /// answer of a task it calls, a value given to a call, the reason of a `fail`.
-fn kept(m: &Model, vars: &BTreeMap<String, Vec<Held>>) -> Vec<Diag> {
+fn kept(m: &Model, reached: &Reached) -> Vec<Diag> {
     let mut out = Vec::new();
     let whole_or_part = |held: &Held, whole: Text, part: Text| if held.path.is_empty() { whole } else { part };
     for (n, t) in &m.inputs {
@@ -407,11 +460,12 @@ fn kept(m: &Model, vars: &BTreeMap<String, Vec<Held>>) -> Vec<Diag> {
         }
     }
     for s in m.all_stmts() {
+        let vars = &*reached.at(s.site);
         match &s.kind {
             TK::Call { callee, args, .. } => {
                 let who = callee_name(m, callee);
                 for (p, e) in args {
-                    for (h, marks) in by_value(given(m, vars, callee, p, e)) {
+                    for (h, marks) in by_value(given(m, vars, s.site, callee, p, e)) {
                         let shown = &h.shown;
                         out.push(keep(s.line, tr!("秘密の値 `{shown}` が、`{who}` の引数 `{p}` として、ワークフローの履歴に残ります", "the secret `{shown}` is kept in the history of the workflow, as the argument `{p}` of `{who}`"), &marks, pass_a_reference()));
                     }
@@ -421,7 +475,7 @@ fn kept(m: &Model, vars: &BTreeMap<String, Vec<Held>>) -> Vec<Diag> {
                 for (o, e) in fields {
                     // what the output's own mark or type says is said at its declaration
                     let declared: Vec<Held> = m.outputs.iter().filter(|(n, _)| n == o).flat_map(|(_, t)| of_type(m, t, o)).collect();
-                    let held: Vec<Held> = of_expr(m, vars, e).into_iter().filter(|h| !m.output_secrets.contains_key(o) && !declared.iter().any(|d| d.path == h.path && d.mark == h.mark)).collect();
+                    let held: Vec<Held> = of_expr(m, vars, e, Some((s.site, o))).into_iter().filter(|h| !m.output_secrets.contains_key(o) && !declared.iter().any(|d| d.path == h.path && d.mark == h.mark)).collect();
                     for (h, marks) in by_value(held) {
                         let shown = &h.shown;
                         out.push(keep(s.line, tr!("秘密の値 `{shown}` が、出力 `{o}` として、ワークフローの履歴に残ります", "the secret `{shown}` is kept in the history of the workflow, as the output `{o}`"), &marks, tr!("出力には値の代わりに参照（ID やシークレットの名前）を書いてください。", "Write a reference into the output instead (an ID, the name of a secret).")));
@@ -429,7 +483,7 @@ fn kept(m: &Model, vars: &BTreeMap<String, Vec<Held>>) -> Vec<Diag> {
                 }
             }
             TK::Fail { error, cause: Some(e), .. } => {
-                for (h, marks) in by_value(of_expr(m, vars, e)) {
+                for (h, marks) in by_value(of_expr(m, vars, e, None)) {
                     let shown = &h.shown;
                     out.push(keep(s.line, tr!("秘密の値 `{shown}` が、`fail {error}` の理由として、ワークフローの履歴に残ります", "the secret `{shown}` is kept in the history of the workflow, in the reason of `fail {error}`"), &marks, tr!("理由には秘密の値を埋め込まず、参照（ID など）を書いてください。", "Leave the secret out of the reason, and write a reference (an ID, say) instead.")));
                 }
@@ -467,10 +521,11 @@ pub fn outside(t: &TaskDef) -> Option<String> {
 
 /// E906: each secret a call gives a task that sends it outside the project, unless the task says
 /// it discloses the parameter.
-fn sent_outside(m: &Model, vars: &BTreeMap<String, Vec<Held>>) -> Vec<Diag> {
+fn sent_outside(m: &Model, reached: &Reached) -> Vec<Diag> {
     let mut out = Vec::new();
     for s in m.all_stmts() {
         let TK::Call { callee: callee @ Callee::Task(t), args, .. } = &s.kind else { continue };
+        let vars = &*reached.at(s.site);
         let task = &m.tasks[*t];
         let Some(dest) = outside(task) else { continue };
         let name = &task.name;
@@ -478,7 +533,7 @@ fn sent_outside(m: &Model, vars: &BTreeMap<String, Vec<Held>>) -> Vec<Diag> {
             if task.discloses.iter().any(|(d, _)| d == p) {
                 continue;
             }
-            for (h, marks) in by_value(given(m, vars, callee, p, e)) {
+            for (h, marks) in by_value(given(m, vars, s.site, callee, p, e)) {
                 let shown = &h.shown;
                 let mut d = Diag::error("E906", s.line, 1, tr!("タスク `{name}` が、秘密の値 `{shown}` をプロジェクトの外の {dest} に送ります", "the task `{name}` sends the secret `{shown}` to {dest}, outside the project"));
                 for mark in &marks {
@@ -498,7 +553,7 @@ fn sent_outside(m: &Model, vars: &BTreeMap<String, Vec<Held>>) -> Vec<Diag> {
 /// Connect service, a child `.flow`, an operation of a book, a date of a dates file. The paths are
 /// as dandori reaches them.
 pub fn sends(m: &Model) -> Vec<Sent> {
-    let vars = variables(m);
+    let reached = Reached::of(m);
     let dir = std::path::Path::new(&m.source_reached).parent().map(|d| d.to_path_buf()).unwrap_or_default();
     let mut out = Vec::new();
     for s in m.all_stmts() {
@@ -522,9 +577,10 @@ pub fn sends(m: &Model) -> Vec<Sent> {
             }
         };
         let Some(to) = to else { continue };
+        let vars = reached.at(s.site);
         let mut secrets = Vec::new();
         for (p, e) in args {
-            for h in given(m, &vars, callee, p, e) {
+            for h in given(m, &vars, s.site, callee, p, e) {
                 secrets.push((p.clone(), h));
             }
         }

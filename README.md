@@ -13,13 +13,13 @@ Where each requirement came from, and what still satisfies it.
 ritsu gives each of those a small language of its own, in a file people can read. Each language
 checks what it says as far as it can be checked — over every input, every day, every path, not a
 sample — generates code where code is needed, and draws pages for whoever needs to understand
-it. Because the nine share one toolchain, a proof does not stop at a language's edge: a
+it. Because the ten share one toolchain, a proof does not stop at a language's edge: a
 workflow knows the preconditions of the rules it calls, a rule knows the days a calendar can
 come to, a ledger knows the amounts a rule can return.
 
 Agents write the glue. ritsu holds what it all has to carry out.
 
-## The nine languages
+## The ten languages
 
 | | File | What it is for | What it generates |
 |---|---|---|---|
@@ -32,10 +32,13 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | [sakai](#sakai--the-map-of-bounded-contexts) | `.ctx` | the map of bounded contexts | settings for import linters; Context Mapper |
 | [sekisho](#sekisho--who-may-do-what) | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | Cedar, and the TypeScript, Python and Go that ask it |
 | [kaname](#kaname--a-functional-core) | `.kn` | a functional core: general code with no input or output, which can call rules, dates and books in their types | TypeScript, Python, Go and Rust, in the package `ritsu gen` writes, and Wasm from the Rust |
+| [ringi](#ringi--applications-and-approvals) | `.ringi` | applications and approvals of any department: forms, routes and who approves each stage, the organization, and each request as a ticket moved by events | the ticket's TypeScript, Python, Go and Rust, in the package `ritsu gen` writes; with `--target requests`, A2UI screens, the server's API as OpenAPI, the tools an agent uses and vectors |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different
-people.
+people. A `.ringi` file writes its tables, conditions and deadlines in ringi's own words, and ringi
+lowers them to rules, dates and a module that rulec, koyomi and kaname check, so a file still holds
+one language.
 
 ### rulec — business rules
 
@@ -513,6 +516,98 @@ The [pages on the site](https://i2y.github.io/ritsu/kaname/) go through how a mo
 four functional cores with their hosts in TypeScript, Python and Go, and what the check guarantees;
 [kaname's README](crates/kaname/README.md) has the rest.
 
+### ringi — applications and approvals
+
+A request type (a `.ringi` file) is one kind of application a company handles — an expense claim,
+a purchase, leave, an account on a system, a contract to review, in any department. It holds the
+form, the route (who approves each stage: a person, the requester's manager, the nearest head of a
+given position, a team, a row of a master, or an agent that only passes a request on), the
+deadlines and reminders, and what the ticket does when it is submitted, approved or dropped. The
+route's table, the conditions, the computed fields and the deadlines are lowered to rules, dates
+and a module, which rulec, koyomi and kaname check, so a request no row takes is named with its
+amount. Given the organization's data, `ringi check` reads each of its versions and names the
+stages that would find no approver and for whom, and shows that every ticket ends, and in how many
+business days at most.
+
+```ringi
+request expense v1 "Expense request"
+…
+form
+  category : choice "Category"
+    travel   "Travel"
+    expense  "Expenses"
+    purchase "Purchase"
+  items : rows "Items"  count >=1 <=20
+    what  : text "What"  count <=100
+    price : money[JPY] "Price"  range >=1JPY <=1_000_000JPY
+  amount  : money[JPY] "Amount" = sum(items.price)  range >=1JPY <=10_000_000JPY
+…
+route
+| category | amount                     | -> precheck | first   | second                   | decide        |
+| travel   | <=30_000JPY                |             |         |                          | travel_agent  |
+| travel   | >30_000JPY <=100_000JPY    |             |         |                          | manager       |
+| travel   | >100_000JPY                |             | manager |                          | dept_head     |
+| expense  | <=100_000JPY               | check       |         |                          | manager       |
+| expense  | >100_000JPY <=1_000_000JPY | check       | manager |                          | dept_head     |
+| expense  | >1_000_000JPY              |             | manager | dept_head                | division_head |
+| purchase | <=1_000_000JPY             |             | manager | accounting               | dept_head     |
+| purchase | >1_000_000JPY              |             | manager | dept_head and accounting | division_head |
+
+who
+  manager       = manager of requester
+  dept_head     = head of requester.department
+  accounting    = team accounting
+  division_head = nearest division_head above requester
+  check         = agent precheck_agent, else manager
+  travel_agent  = agent travel_decision, else manager
+  board         = team board
+…
+```
+
+```console
+$ cd crates/ringi/examples
+$ ringi check expense.ringi
+warning[W502]: expense.ringi:33:93: In the organization from 2027-04-01, the stage `decide` goes elsewhere or is skipped for lack of an approver
+    33 | | travel   | >100_000JPY                |             | manager |                          | dept_head     |
+  = `dept_head` comes to the team legal (Legal), whose head is empty.
+  = The stage is `when empty escalate, then board`, and it goes up.
+  = It goes up to e0102 (Head of Corporate Division) for 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Correct the data of the version, or make sure this is meant.
+  = The same on the rows of lines 33, 35, 37.
+…
+ok expense.ringi: a request, 8 fields, 4 stages
+  used from 2026-04-01: the first version of the organization `shared/company.ringi` (data `../org`)
+  used with no end: no data it reads ends
+  ends within 93 business days at the most (4 × 21 at its stages, 3 × 3 with the requester)
+…
+$ ringi simulate expense.ringi --requester e1201 --on 2026-12-29
+expense.ringi on 2026-12-29, in the organization from 2026-04-01
+  without `--form`: every stage the route can come to, by each way to choose its approver; which come depends on the form
+requester e1201 (Sales staff 1)
+  precheck  check (manager when the agent doubts): e1101 (Manager of Section 1A)
+  first     manager: e1101 (Manager of Section 1A)
+  second    dept_head: e3101 (Head of Sales Department 1) [e1101 (Manager of Section 1A) too, as the proxy of e3101]
+            accounting: one of e1001 (Head of Accounting), e1002 (Accountant)
+  decide    travel_agent (manager when the agent doubts): e1101 (Manager of Section 1A)
+            manager: e1101 (Manager of Section 1A)
+            dept_head: e3101 (Head of Sales Department 1) [e1101 (Manager of Section 1A) too, as the proxy of e3101]
+            division_head: e0101 (Head of Sales Division)
+```
+
+From 2026-12-28 to 2027-01-08, the organization's data names e1101 as the proxy of e3101 for the
+approvals of expense and purchase requests, so on 2026-12-29 either of them can answer the stages
+that come to the head of the department.
+
+`ringi run` plays the scenarios a request type holds against the ticket machine, `ringi doc` writes
+the page for the people who manage and approve the requests, and `ringi diff` says which requests,
+and whose approvers, a change moves. `ritsu gen` writes the ticket's code beside the rules and dates
+it calls, and `ritsu gen --target requests` writes, apart from any language, the screens as A2UI
+messages, the server's API as OpenAPI, the tools an agent uses and the vectors a server is tested
+with; the server that keeps the tickets, signs people in and sends the reminders is not ritsu's.
+The [pages on the site](https://i2y.github.io/ritsu/ringi/) go through how a request type is
+written, what the check guarantees, how its pages are read and what the server does, and
+[ringi's README](crates/ringi/README.md) has the rest.
+
 ## Where the languages meet
 
 The languages share one toolchain so that what one has checked, another can take as given.
@@ -578,8 +673,8 @@ ok refund_check.rule
 refund.flow: ok
 error[ritsu E201]: refund.flow:21:1: The call of the rule check can give it values that break its precondition `asked <= paid`
     21 |   let decision = check(paid: paid, asked: asked)
-  = `asked` is `>=0 <=10000` and `paid` is `>=0 <=10000`, and at asked = 10000, paid = 0 `asked <= paid` does not hold
-  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, gathered from every place the values come from.
+  = `asked` is `>=0 <=10_000` and `paid` is `>=0 <=10_000`, and at asked = 10_000, paid = 0 `asked <= paid` does not hold
+  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, from what the runs that reach this call last put in the values.
   = Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result).
 ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided
 ```
@@ -601,6 +696,12 @@ them:
 - money and units, one type across rulec, dandori, chobo and kaname;
 - every operation a context of sakai's map opens, held to the action of a gate that guards it, and
   every operation a workflow calls, to what its gate allows the workflow;
+- a request's route, against the gate it reads: every operation of a ticket has an action, the
+  approvers the route decides are allowed to decide, and self approval is what the route says;
+- a hold a request makes when it is submitted, against how long a round of approvals can take: the
+  hold does not expire before the ticket posts or voids it;
+- what a ticket gives a workflow (the values of a `launch`, the form an agent or a summary reads),
+  against what the workflow takes;
 - yuen pins each table, date, claim, task and function one by one, and sakai checks each
   reference that crosses contexts, with its line.
 
@@ -836,8 +937,11 @@ reads what the project says.
 | E906 | a secret sent outside the project: to a model's provider, the API of a decision model (Jev, OpenAI's Decisions API, a server that is not this machine), a host named by its URL alone, an AWS service | `dandori check` |
 | E905, W905 | a secret sent to a file outside the map, or to a context the map does not relate to the one that marked it; or, with a map that does not pass sakai's check, where it goes cannot be decided | `ritsu check` |
 | W910 | an input of a gate's action that a policy reads and that the contract of the operation it guards marks secret: the value goes into the request Cedar is asked, and stays in the record of the decision | `sekisho check` |
+| W109 (ringi) | a text field of a request type whose name or title reads as a secret (`password`, `secret`, `token`, `api key`): what is filled in stays in the ticket's history, where the approvers, the pages and the logs show it | `ringi check` |
 | E907, W907 | an operation a context opens (`open host service`) that no action of a gate guards; a context none of whose operations is guarded yet | `ritsu check`, in a project with a gate |
 | E908, W908, W909 | a call of a workflow its gate allows in no combination; an action the workflow is allowed and never calls; a call that can be denied, or whether it is allowed cannot be decided, with no error declared for a denial | `ritsu check` |
+| E909 | a call of a workflow gives an argument a number the gate's `input` of its name counts in another unit or step (`rate[step 0.1%]` and `rate[step 1%]`): the gate reads the flow's 0.5% as 5% | `ritsu check` |
+| E911, W911 | a gate a request reads that does not say what the request's route says: an operation of a ticket or of the server's administration with no action, approvers the route decides who are allowed nothing an approver does, a requester allowed to decide their own request where the route does not allow it; or whether it does cannot be decided | `ritsu check` |
 
 A value is secret where a contract marks it (`debug_redact` in a `.proto`; `x-data-classification`,
 `x-sensitive-data` or `format: password` in an OpenAPI schema) or where a `.flow` writes `secret`
@@ -877,6 +981,9 @@ team that signs off on its rules can sign off on these pages too.
 - `sekisho doc` — who may do what, action by action, beside the Cedar it compiles to;
 - `kaname doc` — a module: the decisions in its tables, its functions by their effects and where
   each can fail, and the decisions written in its code;
+- `ringi doc` — a request type: its form, who may submit it, its route on one page with who approves
+  each stage for which requests, and the longest a ticket can take; `ringi diff` — which requests,
+  and whose approvers, a change moves, and how it reaches the tickets in progress;
 - `yuen trace` — a requirement back to its source and on to what satisfies it;
 - `explain <code>` — every diagnostic, with a reproduction you can run.
 
@@ -891,15 +998,15 @@ own.
 
 ## For AI agents
 
-ritsu and its languages are made to be used by AI agents, and [skills/](skills) holds ten
+ritsu and its languages are made to be used by AI agents, and [skills/](skills) holds eleven
 [Agent Skills](https://agentskills.io) for them: [skills/ritsu](skills/ritsu) for a project of more
 than one language (the loop from `ritsu check` to a run and a package, how to read each diagnostic
 across the languages and fix it, and which language's skill to read for the rest), and one for each
-of the nine languages, in `skills/<language>/`. [skills/README.md](skills/README.md) lists them.
+of the ten languages, in `skills/<language>/`. [skills/README.md](skills/README.md) lists them.
 There are four ways to install them:
 
 - **Claude Code**: ritsu's site publishes a plugin marketplace whose plugin `ritsu` holds the
-  ten. Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then
+  eleven. Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then
   `/plugin install ritsu@ritsu`; Claude Code fetches the folder `skills/` alone, not the whole
   repository.
 - **Any agent, from the binary**: `ritsu skills install` writes them into the project's
@@ -908,7 +1015,7 @@ There are four ways to install them:
   `ritsu skills list` lists them.
 - **By hand**: copy the folders you need from `skills/` into `~/.claude/skills/`, or into a
   project's `.claude/skills/`.
-- **From a release**: `ritsu-skills-v<version>.zip` holds the ten folders; unzip it where your
+- **From a release**: `ritsu-skills-v<version>.zip` holds the eleven folders; unzip it where your
   agent reads skills.
 
 ## Commands
@@ -921,15 +1028,21 @@ ritsu gen --check …       whether the packages are current; with --format json
 ritsu gen --library …     a module as libraries for npm, PyPI and Go
 ritsu mod <command> …     modules: add, lock, fetch, push, diff, report and the rest
 ritsu impact --base …     whether a change moved an answer, who it concerns, where a rule sends it
-ritsu explain <code>      what a diagnostic means, with a reproduction
+ritsu explain <code>...   what diagnostics mean, with a reproduction
 ritsu skills install      the Agent Skills, written where an agent reads them
 ritsu <language> …        a language's own commands, as in ritsu rulec doc fee.rule
 ```
 
-A release archive holds `ritsu` and nine links to it — `rulec`, `dandori`, `koyomi`, `chobo`,
-`geas`, `yuen`, `sakai`, `sekisho`, `kaname` — and each runs as its language. `cargo install` installs the `ritsu`
+Every language's `explain`, and `ritsu explain`, takes any number of codes and explains them in the order given; for two or more it writes what `--all` writes, with only those codes.
+
+A release archive holds `ritsu` and ten links to it — `rulec`, `dandori`, `koyomi`, `chobo`,
+`geas`, `yuen`, `sakai`, `sekisho`, `kaname`, `ringi` — and each runs as its language. `cargo install` installs the `ritsu`
 binary alone: call a language as `ritsu <language> …`, or make the link yourself, named for the
-language (`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec`). Add `--lang ja` for Japanese.
+language (`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec`). Add `--lang ja` for Japanese. The
+`RITSU_LANG` environment variable (and a language's own, such as `SEKISHO_LANG`) chooses the
+language of what a command prints, and nothing else: what it writes — generated code, pages, the
+JSON of `api`, vectors — follows `--lang` alone, and is in English without it, so the same files
+make the same output on every machine.
 [Publishing libraries](https://i2y.github.io/ritsu/libraries/) on ritsu's site says what
 `ritsu gen --library` writes and how to publish it, and [Modules](#modules) above says what
 `ritsu mod` does.
@@ -972,7 +1085,7 @@ native binary.
   [koyomi](crates/koyomi/README.md), [chobo](crates/chobo/README.md),
   [geas](crates/geas/README.md), [yuen](crates/yuen/README.md),
   [sakai](crates/sakai/README.md), [sekisho](crates/sekisho/README.md),
-  [kaname](crates/kaname/README.md)
+  [kaname](crates/kaname/README.md), [ringi](crates/ringi/README.md)
 - `crates/ritsu-*` — the shared base, units, ports, project reading, the checks across
   languages, the `.proto` reader, the emitters, the browser build
 - `modules/holidays` — a module of the public holidays of the United Kingdom and of Japan, for other

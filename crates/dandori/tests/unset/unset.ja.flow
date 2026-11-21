@@ -1,0 +1,39 @@
+workflow 値の無い変数 v1
+description "検査が値のあると言うところで変数を読みます。試験は、値を入れる文を取り除きます（検査はフローにそうさせません）。実行は、読むところで Dandori.UnexpectedValue で失敗します。"
+
+record 注文
+  番号 : string
+  メモ : string?
+
+inputs
+  番号 : string
+
+outputs
+  文 : string
+  メモの一覧 : list[string]
+  残したもの : list[string]
+
+task 取得(番号: string) -> 注文
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:fetch"
+
+task 記録(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+
+task 保存(番号: string, あれば: string?) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:keep"
+
+flow
+  let 受注 = 取得(番号: 番号)
+  let 文 = 記録(番号: 受注.番号)
+  let あれば : string? = none
+  let メモの一覧 = for x in [番号] at most 2 in parallel
+    let n = 記録(番号: x)
+    yield n
+  let 残したもの = for y in [番号] at most 2
+    let k = 保存(番号: y, あれば: あれば)
+    yield k
+  succeed 文 = 文, メモの一覧 = メモの一覧, 残したもの = 残したもの
+
+# タスクの失敗をどこも受けなかったときだけ走る。値の無い変数の読み出しでは走らない。
+on failure
+  fail Stopped "on failure が走りました"

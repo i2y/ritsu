@@ -267,10 +267,10 @@ pub fn list(ctx: &Ctx, _a: &Args) -> u8 {
         Err(t) => return ctx.refuse(t),
     };
     let store = Store::located();
-    let main = match std::fs::read(root.join(manifest::FILE)).ok().map(|b| manifest::parse(&b, manifest::FILE)) {
-        Some(Ok(m)) => m,
-        Some(Err(ds)) => return super::stopped(ctx, &root, &Problem::Diags(ds)),
-        None => return ctx.refuse(tr!("ritsu.mod を読めません", "cannot read ritsu.mod")),
+    let main = match std::fs::read(root.join(manifest::FILE)).map(|b| manifest::parse(&b, manifest::FILE)) {
+        Ok(Ok(m)) => m,
+        Ok(Err(ds)) => return super::stopped(ctx, &root, &Problem::Diags(ds)),
+        Err(e) => return ctx.refuse(ritsu_base::cli::cannot_read(&ritsu_base::paths::show(&root.join(manifest::FILE)), &e)),
     };
     let lock = match std::fs::read(root.join(lockfile::FILE)).ok().map(|b| lockfile::parse(&b, lockfile::FILE)) {
         Some(Ok(l)) => Some(l),
@@ -390,7 +390,7 @@ pub fn where_is(ctx: &Ctx, a: &Args) -> u8 {
         Err(r) => return ctx.refuse(r.text()),
     };
     if !ritsu_base::fs::exists(&view) {
-        return ctx.refuse(ritsu_base::modules::missing(&view).unwrap_or_else(|| tr!("`{p}` がありません", "`{p}` is not there")));
+        return ctx.refuse(ritsu_base::modules::missing(&view).unwrap_or_else(|| ritsu_base::cli::not_there(p)));
     }
     let Some(real) = ritsu_base::modules::map(&view) else {
         return ctx.refuse(tr!("`{p}` は依存を指していません", "`{p}` names no dependency"));

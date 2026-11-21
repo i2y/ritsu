@@ -1,0 +1,3 @@
+エラー[E002]: tests/mutants/E002_a_kind_named_with_an_underscore_first.ringi:1:9: `_example` は `_` で始まるので、申請の種類の名前にできません
+     1 | request _example v1 "Example"
+  = 申請の種類の名前は、下ろしたファイルと、そこから生成するコードのモジュールやパッケージの名前の頭になります（`_example_route`）。Go は `_` で始まる名前のファイルを読まず、Rust は `_` が二つ続くモジュールの名前を警告します。英字で始まり、英字か数字で終わり、`_` が続かない名前にしてください。

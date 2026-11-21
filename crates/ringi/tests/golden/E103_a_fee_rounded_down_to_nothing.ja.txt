@@ -1,0 +1,4 @@
+エラー[E103]: tests/mutants/E103_a_fee_rounded_down_to_nothing.ringi:6:62: フィールド fee の範囲 `>0JPY` に、計算した値は一度も入りません
+     6 |   fee    : money[JPY] "Fee" = amount * 3%  round down(1JPY)  range >0JPY
+  = 計算した値がとるのは `>=0JPY <=0JPY` です（読む値の範囲から）。この範囲では、どの申請も出せません。
+  = 範囲を、計算した値と重なるように直してください。範囲の外の値になる申請は出せず、範囲が計算した値より広くても狭くても誤りではありません。

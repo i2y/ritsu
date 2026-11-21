@@ -1,0 +1,26 @@
+rule 上の表が外す行(row_the_table_above_leaves_out) v1
+description "70 円未満の行のあとに、どの金額でも区分が中の行を置く。区分が中になるのは 29 円未満だけで、そこは二行目が先にとるので、三行目にはどの入力も当たらない"
+
+enum 選択(choice) = 一(one) | 二(two)
+enum 大きさ(size) = 小(small) | 中(medium) | 大(large)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=79円
+
+outputs
+  答え(x) : 選択
+
+table 区分の表(band_of)
+| 金額          | -> 区分(band) : 大きさ |
+| <29円         | 中                     |
+| >=29円 <=52円 | 小                     |
+| >=53円        | 大                     |
+
+table 選ぶ(pick)
+policy first
+| 金額   | 区分 | -> 答え |
+| <70円  | 小   | 一      |
+| <70円  | 中   | 二      |
+| -      | 中   | 一      |
+| >=70円 | 大   | 二      |
+| <70円  | 大   | 一      |

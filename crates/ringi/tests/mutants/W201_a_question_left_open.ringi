@@ -1,0 +1,17 @@
+# rulec cannot settle the question: `spread` is a sum of two squares, not a linear form over the integers; while `note` is hidden (both 3 or less), 16 is within the range `spread` spans, and no two squares there sum to it
+request example v1 "Example"
+
+form
+  asked  : number "Days asked for"  range >=0 <=20
+  left   : number "Days left"  range >=0 <=20
+  spread : number "Sum of the squares of the two" = asked * asked + left * left
+  note   : attachment "Note"  required when spread > 15 and spread < 17  shown when asked >= 4 or left >= 4
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

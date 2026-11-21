@@ -1,0 +1,25 @@
+masters company_masters v1
+description "The lists the requests choose from or look up approvers in (fictional): account codes, vendors and the company's systems with their owners. Each row says from when and until when it may be chosen"
+use organization org from "company.ringi"
+
+master accounts "Account codes"
+  key code
+  fields
+    code  : text "Code"  count <=10
+    label : text "Name"  count <=60
+  data "../masters/accounts.csv"
+
+master vendors "Vendors"
+  key id
+  fields
+    id   : text "Vendor ID"  count <=12
+    name : text "Name"  count <=100
+  data "../masters/vendors.csv"
+
+master systems "Systems"
+  key id
+  fields
+    id    : text "System"  count <=30
+    name  : text "Name"  count <=100
+    owner : person "Owner"
+  data "../masters/systems.csv"

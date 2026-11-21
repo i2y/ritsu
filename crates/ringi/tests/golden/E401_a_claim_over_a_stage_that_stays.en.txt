@@ -1,0 +1,4 @@
+error[E401]: tests/mutants/E401_a_claim_over_a_stage_that_stays.ringi:22:3: The claim `ends_in_time` says every ticket ends within 30 business days, and a ticket may never end
+    22 |   ends_in_time : every ticket ends within 30 business days
+  = Line 16: the stage `check` waits on when it is late (`when late stay`).
+  = For it to end, write `expire` or `escalate` in place of `stay`; if it may wait, take the claim out.

@@ -1,0 +1,10 @@
+module wide v1
+description "A dict whose values and a set whose members reach the ends of int64: one past an end does not fit in int64, which TypeScript and Python are given and refuse as outside the range"
+
+# how many prices the dict holds
+fn priced(d: dict[string, number] count <=3 range >=0 <=9_223_372_036_854_775_807) -> number total
+  d.count()
+
+# how many marks the set holds
+fn marked(s: set[number] count <=3 range >=-9_223_372_036_854_775_808 <=0) -> number total
+  s.count()

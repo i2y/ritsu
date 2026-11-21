@@ -32,20 +32,35 @@ fn name_of(b: &Behavior) -> String {
     if let Some(n) = s.json.get("new").and_then(|h| h.get("name")).and_then(Json::as_str) {
         return n.to_string();
     }
+    // ringi's diff names the request type, the route, the organization or the masters at the top
+    if b.tool == Tool::Ringi
+        && let Some(n) = s.json.get("name").and_then(Json::as_str)
+    {
+        return n.to_string();
+    }
     b.file.rsplit('/').next().unwrap_or(&b.file).split('.').next().unwrap_or(&b.file).to_string()
 }
 
-/// How many places a rule's answers differ in, or how many days of a calendar change.
+/// How many places a rule's answers differ in, how many days of a calendar change, or how many
+/// things `ringi diff` lists of a request type (as `ritsu impact` counts them): the boxes of the route
+/// whose stages differ, the lines of its page that say something else, and the requesters' stages
+/// answered by someone else where the route stays.
 fn places_of(b: &Behavior) -> Option<i128> {
     let s = b.result.as_ref().ok()?;
     match b.tool {
         Tool::Rulec => s.json.get("changes").and_then(Json::as_arr).map(|c| c.len() as i128),
         Tool::Koyomi => s.json.get("total").and_then(|t| t.get("changed_days")).and_then(Json::as_int),
+        Tool::Ringi => {
+            let list = |k: &str| s.json.get(k).and_then(Json::as_arr).unwrap_or_default();
+            let inner = |k: &str| list(k).iter().map(|x| x.get("changes").and_then(Json::as_arr).map_or(0, <[Json]>::len)).sum::<usize>();
+            Some((list("route").len() + inner("sections") + inner("approvers")) as i128)
+        }
         _ => None,
     }
 }
 
-/// The words for a set of compared files: rules, calendars, gates, or files when they are mixed.
+/// The words for a set of compared files: rules, calendars, gates, request types, or files when they
+/// are mixed.
 fn word_of(d: &ModDiff) -> Text {
     let tools: Vec<Tool> = d.behavior.iter().map(|b| b.tool).collect();
     let all = |t: Tool| tools.iter().all(|x| *x == t);
@@ -56,6 +71,9 @@ fn word_of(d: &ModDiff) -> Text {
         if one { tr!("カレンダー", "calendar") } else { tr!("カレンダー", "calendars") }
     } else if all(Tool::Sekisho) {
         if one { tr!("ゲート", "gate") } else { tr!("ゲート", "gates") }
+    } else if all(Tool::Ringi) && d.behavior.iter().all(|b| b.result.as_ref().is_ok_and(|s| s.json.get("kind").and_then(Json::as_str) == Some("request"))) {
+        // a shared route, an organization or masters is a file of ringi, but no request type
+        if one { tr!("申請の種類", "request type") } else { tr!("申請の種類", "request types") }
     } else if one {
         tr!("ファイル", "file")
     } else {
@@ -160,6 +178,8 @@ fn headline(d: &ModDiff) -> Text {
                     tr!("{name} の {n} 日が変わります。", "{n} days of {name} change.")
                 }
                 (Tool::Sekisho, _) => tr!("{name} で、だれが何をしてよいかが変わります。", "Who may do what changes in {name}."),
+                (Tool::Ringi, Some(1)) => tr!("{name} が 1 か所で変わります。", "{name} changes in one place."),
+                (Tool::Ringi, Some(n)) if n > 1 => tr!("{name} が {n} か所で変わります。", "{name} changes in {n} places."),
                 _ => tr!("{name} の答えが変わります。", "{name} answers differently."),
             };
             first.then(&tr!("", " ")).then(&rest)
@@ -196,6 +216,10 @@ pub(super) fn latest_line(d: &ModDiff, version: &str) -> Text {
                     let w = if n == 1 { "day" } else { "days" };
                     let n = number(&n.to_string());
                     tr!("{version} で {name} の {n} 日が変わります", "{version} changes {n} {w} of {name}")
+                }
+                (Tool::Ringi, Some(n)) if n > 0 => {
+                    let w = if n == 1 { "place" } else { "places" };
+                    tr!("{version} で {name} が {n} か所で変わります", "{version} changes {name} in {n} {w}")
                 }
                 _ => tr!("{version} で {name} が変わります", "{version} changes {name}"),
             }
@@ -902,7 +926,7 @@ pub(super) fn pane(d: &ModDiff, from: &str, to_select: &str, lang: Lang, code: &
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::modules::diff::{IChange, Iface};
+    use crate::modules::diff::{IChange, Iface, Said};
     use rulec::vdiff::{MapAxis, MapCell, MapOutput};
 
     fn answers(a: &[(&str, &str)]) -> Option<Vec<(String, String)>> {
@@ -1015,6 +1039,31 @@ mod tests {
         };
         let html = map_html(&m, Lang::En);
         assert!(html.contains("<td class=\"chg\">most: <s>1,000</s> 2,000<br><span class=\"same\">per: day</span></td>"), "{html}");
+    }
+
+    /// A request type that changed is named by its name in ringi's diff, and counted by what that diff
+    /// lists: the boxes of the route, the lines of the sections and the requesters' stages, as `ritsu
+    /// impact` counts them. A shared route is no request type, so a pair of them is two files.
+    #[test]
+    fn a_request_type_is_said_by_what_its_diff_lists() {
+        let said = |json: &str| Said { text: String::new(), markdown: String::new(), json: ritsu_base::json::parse(json).unwrap(), differs: true, total: true, more: false, map: None };
+        let request = Behavior {
+            file: "requests/expense.ja.ringi".to_string(),
+            tool: Tool::Ringi,
+            result: Ok(said(r#"{"kind": "request", "name": "expense_ja", "route": [{"stages": []}], "sections": [{"changes": [{}, {}]}, {"changes": [{}]}], "approvers": [{"changes": [{}]}, {"changes": []}]}"#)),
+        };
+        assert_eq!(name_of(&request), "expense_ja");
+        assert_eq!(places_of(&request), Some(5));
+        let d = ModDiff { behavior: vec![request], ..ModDiff::default() };
+        assert_eq!(headline(&d).en, "expense_ja changes in 5 places. Of the inputs both versions accept, everything else gets the same answer.");
+        assert_eq!(headline(&d).ja, "expense_ja が 5 か所で変わります。両方の版が受け取る入力のうち、それ以外は同じ答えです。");
+        assert_eq!(latest_line(&d, "1.1.0").en, "1.1.0 changes expense_ja in 5 places");
+        assert_eq!(latest_line(&d, "1.1.0").ja, "1.1.0 で expense_ja が 5 か所で変わります");
+        assert_eq!(word_of(&d).en, "request type");
+        let route = Behavior { file: "shared/r.ringi".to_string(), tool: Tool::Ringi, result: Ok(said(r#"{"kind": "route", "name": "r", "route": [], "sections": [{"changes": [{}]}], "approvers": []}"#)) };
+        let d = ModDiff { behavior: vec![route], ..d };
+        assert_eq!(headline(&d).en, "r changes in one place. Of the inputs both versions accept, everything else gets the same answer.");
+        assert_eq!(word_of(&d).en, "file");
     }
 
     /// A change a rule says for each language it generates is one change, and what a file says of its

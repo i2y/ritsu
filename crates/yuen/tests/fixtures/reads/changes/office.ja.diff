@@ -1,0 +1,11 @@
+diff --git a/dates/office.ja.cal b/dates/office.ja.cal
+index 9d8b144..3623657 100644
+--- a/dates/office.ja.cal
++++ b/dates/office.ja.cal
+@@ -6,5 +6,5 @@ source 休業日 = file "../data/closures.csv" sha256:c3e308e099ceebbf
+   format csv
+   covers 2027-01-01..2027-12-31
+ 
+-closed weekly sat, sun
++closed weekly sun
+ closed 休業日

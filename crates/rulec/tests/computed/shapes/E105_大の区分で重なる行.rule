@@ -1,0 +1,21 @@
+rule 大の区分で重なる行(overlap_occurs) v1
+description "5 万円からの大の区分を、二つの行がどちらも受ける。区分が大になる 100,001 円から重なり、例はそういう金額の一つ"
+
+enum 選択(choice) = 一(one) | 二(two) | 三(three) | 四(four)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+apply 区分け(t) = "shared/金額の区分.rule" meaning:e7d6953fd795c588
+  金額 = 金額
+  区分 -> 受けた区分
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 金額        | 受けた区分 | -> 答え |
+| <50_000円   | -          | 一      |
+| >=50_000円  | 中         | 二      |
+| >=50_000円  | 大         | 三      |
+| -           | 大         | 四      |

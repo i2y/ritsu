@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_a_column_named_as_a_field.ringi:22:3: The column `approver` has the name of the field `approver` (line 8), so it holds the field's values, and its rows name ways to choose an approver
+    22 | | approver | -> goes_to |
+  = An input column of a named table holds the values of the field of the form it is named as, and any other the names of the ways to choose an approver. A field's name is a key of the JSON of a ticket, and cannot be written under another name: give the column of the ways a name no field has (`| current | -> goes_to |`).

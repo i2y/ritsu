@@ -1,0 +1,2 @@
+エラー[E002]: tests/mutants/E002_a_field_named_ticket.ringi:4:3: `ticket` は式が読む語（`ticket.…`）なので、フィールドの名前にできません
+     4 |   ticket : text "Ticket number"  count <=20

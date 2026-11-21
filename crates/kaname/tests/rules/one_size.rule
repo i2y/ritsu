@@ -1,0 +1,16 @@
+rule one_size v1
+description "The size of box a quantity takes: a rule of one output, an enum"
+
+enum size = small | large
+
+inputs
+  qty : number  range >=0 <=99
+
+outputs
+  size : size
+
+table size_of
+policy unique
+| qty  | -> size : size |
+| <10  | small          |
+| >=10 | large          |

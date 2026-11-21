@@ -1,0 +1,6 @@
+エラー[E307]: tests/mutants/E307_an_input_the_route_does_not_take.ringi:8:7: 共有の経路 `standard` に `long` を渡していません
+     8 | route standard(days: 5)
+  = `route standard(long: …)` のように渡してください。
+エラー[E307]: tests/mutants/E307_an_input_the_route_does_not_take.ringi:8:16: 共有の経路 `standard` は `days` を受け取りません
+     8 | route standard(days: 5)
+  = 宣言されている入力: `long`

@@ -1,0 +1,23 @@
+rule 引き上げて順に読む値引き(lifted_in_order) v1
+description "準用で読む値引き。シルバーとゴールドの行が、引き上げ先のとらない段階の行より前にある（架空）"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+# 会員を引き上げる先の段階。シルバーかゴールドで、一般にもプラチナにもならない
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員       | -> 引き上げ先(lift) : 段階 |
+| 一般       | シルバー                   |
+| シルバー   | ゴールド                   |
+| >=ゴールド | ゴールド                   |
+
+# 元の規則の一般とプラチナの行は、引き上げ先のとる段階を覆う二行のあとにある
+apply 引き上げ(lifted) = "段階の順の値引き.rule" meaning:dd4613ba8d0d04cd
+  段階 = 引き上げ先
+  値引き -> 値引き

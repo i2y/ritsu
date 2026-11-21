@@ -1,0 +1,23 @@
+request example v1 "Example"
+
+use calendar office from "shared/office.cal"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+every stage
+  due in 3 business days at 17:00
+  when late escalate, then escalate
+
+ticket
+  self approval  not allowed
+  send back      to the requester, at most 2 times
+
+claims
+  ends_in_time : every ticket ends within 30 business days

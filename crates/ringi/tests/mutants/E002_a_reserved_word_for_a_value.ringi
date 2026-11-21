@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+form
+  kind : choice "Kind"
+    none  "None"
+    paid  "Paid"
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

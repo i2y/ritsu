@@ -1,0 +1,72 @@
+module variants v1
+description "Values of a sum's values where the place holds the sum: given to the helpers whose type a collection and a value both give (Go writes the types, kaname.Append[Shape]), built, with no fields, read in an arm and updated in part; and values whose every field is written, which Rust builds with no base and whose name it does not read"
+
+enum Shape
+  circle
+    r : number range >=0 <=10
+  square
+    s : number range >=0 <=10
+  dot
+
+record Box
+  r : number range >=0 <=10
+  s : number range >=0 <=10
+
+fn shape_of(n: number range >=0 <=10) -> Shape
+  Shape.circle { r: n }
+
+fn built(xs: list[Shape] count <=5) -> list[Shape] count <=6 total
+  xs.append(Shape.circle { r: 1 })
+
+fn bare(xs: list[Shape] count <=5) -> list[Shape] count <=6 total
+  xs.append(Shape.dot)
+
+fn named(xs: list[Shape] count <=5) -> list[Shape] count <=6 total
+  let c = Shape.square { s: 2 }
+  xs.append(c)
+
+fn armed(xs: list[Shape] count <=5, s: Shape) -> list[Shape] count <=6 total
+  match s
+    circle c => xs.append(c)
+    else => xs
+
+fn updated(xs: list[Shape] count <=5, s: Shape) -> list[Shape] count <=6 total
+  match s
+    circle c => xs.append(Shape.circle { ..c, r: 2 })
+    else => xs
+
+fn called(xs: list[Shape] count <=5) -> list[Shape] count <=6 total
+  xs.append(shape_of(n: 3))
+
+fn put_built(d: dict[string, Shape] count <=5) -> dict[string, Shape] count <=6 total
+  d.put("a", Shape.circle { r: 1 })
+
+fn put_armed(d: dict[string, Shape] count <=5, s: Shape) -> dict[string, Shape] count <=6 total
+  match s
+    square q => d.put("q", q)
+    else => d
+
+fn optional(xs: list[Shape?] count <=5) -> list[Shape?] count <=6 total
+  xs.append(Shape.dot)
+
+fn held() -> Shape? total
+  Shape.circle { r: 1 }
+
+fn listed() -> list[Shape] count <=2 total
+  [Shape.dot, Shape.circle { r: 2 }]
+
+fn pick[T](xs: list[T] count <=5, d: T) -> T total
+  match xs.first()
+    none => d
+    some x => x
+
+fn picked(xs: list[Shape] count <=5) -> Shape total
+  pick(xs: xs, d: Shape.dot)
+
+fn whole(b: Box) -> Box total
+  Box { ..b, r: 1, s: 2 }
+
+fn whole_arm(s: Shape) -> Shape total
+  match s
+    circle c => Shape.circle { ..c, r: 2 }
+    else => s

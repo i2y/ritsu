@@ -1,0 +1,4 @@
+error[E505]: org/proxies.csv:2:1: `e09`, whom this row's proxy stands in for, is not in the organization from 2026-04-01
+     2 | e09,e02,approve,2026-04-01,2026-06-30,
+  = The proxy is in effect 2026-04-01 to 2026-06-30, which overlaps the days of the organization from 2026-04-01.
+  = If the person has left, take this row out; if the ID is wrong, correct it.

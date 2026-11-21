@@ -1,0 +1,22 @@
+rule stay v1
+description "A stay's nights, passed on as they are, or none when the stay has no end yet; and whether the stay is long"
+
+inputs
+  nights : number?  range >=0 <=60
+  member : bool
+
+outputs
+  counted : number?  round down(1)
+  long    : bool
+
+table pass
+policy unique
+| member | -> counted : number? |
+| true   | nights               |
+| false  | nights               |
+
+table long
+| nights | -> long |
+| >=7    | true    |
+| <7     | false   |
+| none   | false   |

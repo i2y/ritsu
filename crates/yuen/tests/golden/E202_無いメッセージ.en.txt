@@ -1,4 +1,4 @@
-error[E202]: tests/mutants/E202_無いメッセージ/例.req:8:16: tests/mutants/E202_無いメッセージ/a.proto has no message Orders
+error[E202]: tests/mutants/E202_無いメッセージ/例.req:8:16: a.proto has no message Orders
      8 |   satisfied by proto "a.proto" message Orders
   = The ones of the same kind no link names.
   = Did you mean: proto "a.proto" message Order

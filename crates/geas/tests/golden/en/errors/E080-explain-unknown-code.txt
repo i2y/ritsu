@@ -1,2 +1,1 @@
-error[E080]: `E999` is not a code geas has
-  = `geas explain --all` prints every code
+error[E080]: there is no code `E999`; run `geas explain --all`

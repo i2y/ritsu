@@ -1,0 +1,3 @@
+person,proxy,kind,from,to,requests
+e3101,e1101,approve,2026-12-28,2027-01-08,expense expense_ja purchase purchase_ja
+e1203,e1201,submit,2026-12-01,2026-12-31,leave leave_ja

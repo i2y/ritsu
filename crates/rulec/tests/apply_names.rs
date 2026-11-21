@@ -38,6 +38,7 @@ use rulec::i18n::{self, Lang};
 use rulec::json::Json;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -335,9 +336,14 @@ fn no_identifier_rulec_makes_meets_another_in_the_tree() {
     assert!(seen >= 30, "fewer rules of the tree bring names in than there were: {seen}");
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 fn rulec(cwd: &Path, tmp: &Path, args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp).current_dir(cwd).args(args).output().expect("cannot start rulec");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp).current_dir(cwd).args(args), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 /// Generate the rules into one directory and run what was generated: every language that runs gives
@@ -352,7 +358,9 @@ fn runs_alike(cwd: &Path, rels: &[String], what: &str) -> Vec<String> {
     args.extend(["--out", out.to_str().unwrap()]);
     args.extend(rulec::targets::UP_TO_0_40);
     let (code, said, e) = rulec(cwd, &tmp, &args);
-    assert_eq!(code, 0, "{what}: {said}{e}");
+    // A target a W121 names cannot take the names as they stand: gen says E153 and writes only
+    // the targets it does not name (§15.345), and those are the ones `rulec test` runs below.
+    assert!(code == 0 || said.contains("[E153]"), "{what}: {said}{e}");
     let (_, said, e) = rulec(cwd, &tmp, &["test", out.to_str().unwrap(), "--format", "json"]);
     let j = rulec::json::parse(said.lines().next().unwrap_or_else(|| panic!("{what}: no result\n{e}"))).unwrap_or_else(|x| panic!("{what}: {x}: {said}"));
     for why in j.get("skipped").and_then(Json::as_arr).unwrap_or_default() {
@@ -442,6 +450,10 @@ fn every_rule_of_the_tree_that_applies_another_runs_alike() {
         let path = base.join(&rel);
         let Ok(src) = std::fs::read_to_string(&path) else { continue };
         if !src.lines().any(|l| l.starts_with("apply ")) {
+            continue;
+        }
+        // A rule `check` refuses is not generated: the material of a report that does not pass.
+        if i18n::with(Lang::En, || rulec::check_source(&src, &path.to_string_lossy())).iter().any(|d| d.severity == rulec::diag::Severity::Error) {
             continue;
         }
         let Ok((f, _)) = i18n::with(Lang::En, || rulec::prepare(&src, &path.to_string_lossy())) else { continue };

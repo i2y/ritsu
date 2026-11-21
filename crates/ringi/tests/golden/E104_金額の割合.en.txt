@@ -1,0 +1,4 @@
+error[E104]: tests/mutants/E104_金額の割合.ringi:5:31: `手数料` is computed with no rounding
+     5 |   手数料(fee) : money[円] "手数料" = 金額 * 3%
+  = `金額 * 3%` can leave a fraction: say how it rounds and to what, as in `round down(1円)` (`up`, `down`, `half_up`, `half_down`, `half_even`).
+  = The line, fixed: 手数料(fee) : money[円] "手数料" = 金額 * 3%  round down(1円)

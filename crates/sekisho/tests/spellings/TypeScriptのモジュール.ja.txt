@@ -1,0 +1,5 @@
+警告[W402]: tests/spellings/TypeScriptのモジュール.gate:1:1: ファイル `private` は、TypeScript のコードで `private` と書かれ、その言語の予約語です
+     1 | gate 非公開(private) v1
+  = TypeScript（`--target typescript`）: ファイル `private` をモジュールの名前として `private` と書きますが、`private` は TypeScript の strict モードの予約語です。`ritsu gen` がパッケージに書く索引の `export * as private from …` が、型の検査を通りません。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。ファイルの別名は、生成するファイルとモジュールとパッケージの名前でもあるので、それを読むコードも合わせて直してください。
+tests/spellings/TypeScriptのモジュール.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

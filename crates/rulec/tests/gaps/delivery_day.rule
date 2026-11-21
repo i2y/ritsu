@@ -1,0 +1,23 @@
+rule delivery_day v1
+description "A timing read off the delivery day: the table above writes two days between the first and the last, and the table below has a row for the first and the last only"
+
+enum zone = local | regional | remote | national
+enum timing = early | middle | late
+
+inputs
+  zone : zone
+
+outputs
+  timing : timing
+
+table days
+| zone     | -> day : date |
+| local    | 2026-08-01    |
+| regional | 2026-08-04    |
+| remote   | 2026-08-06    |
+| national | 2026-08-10    |
+
+table timings
+| day          | -> timing |
+| <=2026-08-01 | early     |
+| >=2026-08-10 | late      |

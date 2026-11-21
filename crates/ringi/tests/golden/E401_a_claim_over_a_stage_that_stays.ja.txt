@@ -1,0 +1,4 @@
+エラー[E401]: tests/mutants/E401_a_claim_over_a_stage_that_stays.ringi:22:3: 主張 `ends_in_time` は、どのチケットも 30 営業日のうちに終わると言いますが、終わらないチケットがあります
+    22 |   ends_in_time : every ticket ends within 30 business days
+  = 16 行目: ステップ `check` は、期限を過ぎても待ち続けます（`when late stay`）。
+  = 終わらせるなら、`stay` を `expire` か `escalate` にしてください。待ってよいなら、主張を消してください。

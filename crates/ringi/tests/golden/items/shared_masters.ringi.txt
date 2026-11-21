@@ -1,0 +1,22 @@
+5-10 ringi "examples/shared/masters.ringi" master accounts
+    master accounts "Account codes"
+    key code
+    fields
+    code : text "Code" count <=10
+    label : text "Name" count <=60
+    data "../masters/accounts.csv"
+12-17 ringi "examples/shared/masters.ringi" master vendors
+    master vendors "Vendors"
+    key id
+    fields
+    id : text "Vendor ID" count <=12
+    name : text "Name" count <=100
+    data "../masters/vendors.csv"
+19-25 ringi "examples/shared/masters.ringi" master systems
+    master systems "Systems"
+    key id
+    fields
+    id : text "System" count <=30
+    name : text "Name" count <=100
+    owner : person "Owner"
+    data "../masters/systems.csv"

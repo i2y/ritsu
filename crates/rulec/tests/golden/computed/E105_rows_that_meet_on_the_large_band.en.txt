@@ -1,0 +1,12 @@
+error[E105]: Overlapping rows: the same input matches row 3 and row 4
+  --> tests/computed/shapes/E105_rows_that_meet_on_the_large_band.rule:21 table pick
+   |
+20 | | >=50_000JPY | large  | three |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3
+21 | | -           | large  | four  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 4
+   |
+ Every input the cells of row 3 take, those of row 4 take too.
+ Both rows match: amount = 100_001JPY, t_band = large
+ `policy unique` does not allow overlapping rows. Decide which row is right, or declare `policy first` if the order is meant to matter.
+

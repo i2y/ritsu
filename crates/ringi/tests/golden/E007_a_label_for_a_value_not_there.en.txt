@@ -1,0 +1,2 @@
+error[E007]: tests/mutants/E007_a_label_for_a_value_not_there.ringi:20:3: The label `kind.taxi` is for nothing: `kind` has no such value and no such field of its row
+    20 |   kind.taxi  "タクシー"

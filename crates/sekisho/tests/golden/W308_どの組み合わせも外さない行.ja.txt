@@ -1,0 +1,5 @@
+警告[W308]: tests/mutants/W308_どの組み合わせも外さない行.gate:28:1: permit `係は支払済の注文を返金できる` の行 `unless resource.状態 is 返金済` は、起こりうるどの組み合わせも外しません
+    28 |   unless resource.状態 is 返金済
+  = `principal` の行とほかの行が満たされる 1 通りで満たされます。
+  = 行を消すか、外すつもりの組み合わせを外すよう行を直してください。
+tests/mutants/W308_どの組み合わせも外さない行.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

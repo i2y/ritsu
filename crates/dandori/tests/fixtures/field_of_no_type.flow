@@ -1,0 +1,24 @@
+workflow field_of_no_type v1
+description "A field whose type is not there, said once at the field's line (E002). The record has the field all the same: where it is read as the field of a value, or written in a record written out, nothing more is said, the rest of that record is checked, and the fields the record is said to have name it too (E002 for a field it does not have)"
+
+record Parcel
+  id     : string
+  zone   : Zon
+  weight : int
+
+inputs
+  parcel : Parcel
+
+outputs
+  sent : bool
+
+task send(id: string) -> bool
+  http POST "https://send.example.com/parcels"
+  idempotent
+
+flow
+  let a = send(id: parcel.zone)
+  let b = send(id: parcel.code)
+  let p: Parcel = {id: parcel.id, zone: "north", weight: 1}
+  let q: Parcel = {zone: "south", id: parcel.id, size: 2, weight: 1}
+  succeed sent = a

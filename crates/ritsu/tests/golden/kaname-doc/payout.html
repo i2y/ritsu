@@ -115,10 +115,10 @@ body.sheet-open { overflow: hidden; }
 <p>The module&#39;s decisions are all in tables.</p>
 <h2 id="examples">Examples</h2>
 <p><code>kaname check</code> runs each line of <code>examples</code> in the reference interpreter, as a host would call the function, and compares the answer with the one written. The reference interpreter answers these.</p>
-<pre><code class="language-kn">settle(payment: Payment { id: &quot;pay_1&quot;, seller: &quot;s_1&quot;, amount: 10000USDc, international: false })
-  = Settlement { capture: ledger.capture.do(payment: &quot;pay_1&quot;, seller: &quot;s_1&quot;, amount: 10000USDc), fee: ledger.processing_fee.do(payment: &quot;pay_1&quot;, seller: &quot;s_1&quot;, fee: 398USDc) }
-settle(payment: Payment { id: &quot;pay_2&quot;, seller: &quot;s_1&quot;, amount: 10000USDc, international: true })
-  = Settlement { capture: ledger.capture.do(payment: &quot;pay_2&quot;, seller: &quot;s_1&quot;, amount: 10000USDc), fee: ledger.processing_fee.do(payment: &quot;pay_2&quot;, seller: &quot;s_1&quot;, fee: 548USDc) }</code></pre>
+<pre><code class="language-kn">settle(payment: Payment { id: &quot;pay_1&quot;, seller: &quot;s_1&quot;, amount: 10_000USDc, international: false })
+  = Settlement { capture: ledger.capture.do(payment: &quot;pay_1&quot;, seller: &quot;s_1&quot;, amount: 10_000USDc), fee: ledger.processing_fee.do(payment: &quot;pay_1&quot;, seller: &quot;s_1&quot;, fee: 398USDc) }
+settle(payment: Payment { id: &quot;pay_2&quot;, seller: &quot;s_1&quot;, amount: 10_000USDc, international: true })
+  = Settlement { capture: ledger.capture.do(payment: &quot;pay_2&quot;, seller: &quot;s_1&quot;, amount: 10_000USDc), fee: ledger.processing_fee.do(payment: &quot;pay_2&quot;, seller: &quot;s_1&quot;, fee: 548USDc) }</code></pre>
 <div class="sheet" id="kn-sheet" role="dialog" aria-modal="true" aria-label="doc" hidden><div class="bar"><span class="what"></span><button class="close" type="button" title="Close" aria-label="Close">×</button></div><iframe sandbox="allow-scripts" title="doc"></iframe></div>
 <script type="application/json" id="kn-pages">[the pages]</script>
 <script>

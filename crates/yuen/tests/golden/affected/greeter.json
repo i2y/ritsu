@@ -52,6 +52,7 @@
         }
       ],
       "spec_changed": [],
+      "contract_changed": [],
       "unclaimed": [],
       "deleted": [],
       "baseline_changed": false,
@@ -90,6 +91,7 @@
       ]
     }
   ],
+  "reads": [],
   "unreached": [],
   "others": [],
   "requirements": [
@@ -102,7 +104,8 @@
       "from": [
         "contract"
       ],
-      "decided": null
+      "decided": null,
+      "only_through_reads": false
     },
     {
       "name": "rejects_an_empty_name",
@@ -117,7 +120,8 @@
         "date": "2026-10-03",
         "by": "api",
         "why": "an empty name is a client error, not a greeting"
-      }
+      },
+      "only_through_reads": false
     },
     {
       "name": "totals_accumulate",
@@ -128,7 +132,8 @@
       "from": [
         "contract"
       ],
-      "decided": null
+      "decided": null,
+      "only_through_reads": false
     },
     {
       "name": "unknown_paths_are_404",
@@ -139,7 +144,8 @@
       "from": [
         "contract"
       ],
-      "decided": null
+      "decided": null,
+      "only_through_reads": false
     }
   ],
   "owners": [

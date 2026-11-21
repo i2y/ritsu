@@ -1,0 +1,7 @@
+order.flow: ok
+ok purchase.ringi: a request, 1 field, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+error[ritsu E210]: purchase.ringi:15: `purchase` starts the flow `order` without its input `amount` (`money[JPY]`)
+    15 |   on approved  launch order(request_id: ticket.id)
+  = Give it in the call (`amount: …`), or write the input as `amount : money[JPY]?` in "order.flow" (line 6).
+ritsu check: 2 files (dandori 1, ringi 1): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided

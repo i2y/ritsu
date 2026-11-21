@@ -66,7 +66,7 @@ Whether an order goes out in a hurry, and by which carrier: a member's always do
 | 名前 | 型 | 範囲 | 注記 |
 |---|---|---|---|
 | member | bool |  |  |
-| amount | money[JPY, incl_tax] | 0JPY 〜 100万JPY |  |
+| amount | money[JPY, incl_tax] | 0JPY 〜 1_000_000JPY |  |
 
 ## 出力
 
@@ -271,7 +271,7 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 | 名前 | 型 | 範囲 | 注記 |
 |---|---|---|---|
 | 急ぎ | bool |  |  |
-| 返金 | money[JPY, incl_tax] | 0JPY 〜 100万JPY |  |
+| 返金 | money[JPY, incl_tax] | 0JPY 〜 1_000_000JPY |  |
 
 ## 出力
 
@@ -327,7 +327,7 @@ Where an online order goes on a payment, a shipment, a delivery or a request to 
 |---|---|---|---|
 | state | state（5 値） |  |  |
 | event | event（4 値） |  |  |
-| amount_paid | money[JPY, incl_tax] | 0JPY 〜 100万JPY |  |
+| amount_paid | money[JPY, incl_tax] | 0JPY 〜 1_000_000JPY |  |
 
 ## 出力
 

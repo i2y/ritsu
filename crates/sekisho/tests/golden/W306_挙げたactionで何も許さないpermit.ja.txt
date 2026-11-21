@@ -1,0 +1,7 @@
+警告[W306]: tests/mutants/W306_挙げたactionで何も許さないpermit.gate:26:1: permit `職員は読めて消せる` は action `文書を消す` を挙げていますが、`文書を消す` では何も許しません。許すはずの組み合わせを、どれも forbid が拒みます
+    26 | permit 職員は読めて消せる(staff_read_and_purge)
+  = `文書を消す` で許すはずの組み合わせは 1 通りで、`だれも消せない` が 1 通りを拒みます。
+  = 例：職員を持つ利用者、文書。`だれも消せない` が拒みます。
+  = ほかに挙げた action では、`文書を読む` の 1 通りを許します。
+  = `action` の行から `文書を消す` を外すか、`文書を消す` も許すつもりなら forbid を狭めてください。
+tests/mutants/W306_挙げたactionで何も許さないpermit.gate: ok — action 2、ポリシー 2（permit 1、forbid 1）、期待 0、職務の分離 0

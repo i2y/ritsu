@@ -602,6 +602,48 @@ examples
 - `paid / 100JPY` **does not divide the integer**. It multiplies the internal step by 100, so 1050 yen stays 10.5 points all the way to the end, where `round down(1)` makes it 10 exactly once. Python's `//` and Go's `/` truncate in different directions; neither gets a say here.
 - Division is allowed **by a constant only**. If the divisor is business data, it belongs in the table as a rate or a constant column.
 
+## A cap on the fee the rule works out
+
+The fee on a card payment is 3% of the amount, and a fee is accepted only up to 20,000 yen. `range` at the end of a `define` line is the range the rule accepts for the value.
+
+```rule
+rule card_fee v1
+description "The fee on a card payment: 3% of the amount, cut down to the yen. The fee is accepted only up to 20,000 yen, so a payment whose fee would pass it is refused where the fee is worked out, and a fee of 10,000 yen or more is reviewed. An example of a range on a value the rule works out"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+# The range is what the rule accepts for the fee, not what the fee can come to: 3% of 1,000,000 yen
+# is 30,000 yen. A payment of 666,700 yen or more works out a fee past 20,000 yen and is refused.
+define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0JPY <=20_000JPY
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+  review  : bool
+
+table review_of
+policy unique
+| fee         | -> review |
+| <10_000JPY  | false     |
+| >=10_000JPY | true      |
+
+result charged = fee
+
+examples
+| amount     | -> charged | review |
+| 1_000JPY   | 30JPY      | false  |
+| 333_333JPY | 9_999JPY   | false  |
+| 333_334JPY | 10_000JPY  | true   |
+| 666_699JPY | 20_000JPY  | true   |
+```
+
+**What this one shows**
+
+- **`range >=0JPY <=20_000JPY` is the range the rule accepts, not what the fee can come to.** 3% of 1,000,000 yen is 30,000 yen, so a payment of 666,700 yen or more is refused where the fee is worked out: `fee is out of range`. It is not a `derive`'s range, which is a claim the check verifies (E112).
+- **What reads the fee reads only the fees the rule accepts.** The table is complete when it covers 0 to 20,000 yen, and a row that asks only for a fee past 20,000 yen is E102.
+- **A relation between inputs is a `constraint`; a cap on a value worked out from them is a `define`'s range.** `constraint amount * 3% <= 20_000JPY` cannot be written (E017).
+- **The vectors take the payment whose fee is exactly 20,000 yen as a case with an answer, and the one whose fee is a yen past it as an input to refuse**, which every generated language refuses with the same sentence.
+
 ## Three tables stacked, two outputs returned
 
 Weight gives a weight class, the class and the membership give a tier, and the tier with the amount payable gives shipping and a multiplier. What one table produces is a column of the next. Two things come back: the amount charged and the points.
@@ -871,6 +913,60 @@ sequence no_lines
 - **`sum total over lines of amount` leaves one amount behind.** From there it is an ordinary column, so `>=5000JPY` becomes a boundary and completeness and overlap are checked as they always are.
 - **The summed column cannot go negative** (E029). The running total then only rises, so the entry guard can refuse the moment it leaves the declared range — which is what keeps the int64 claim true of a sequence whose length nothing caps. For a difference, sum two non-negative columns and subtract.
 - **An average divides inside a rounding**: the total over the count is a division by a value, so it is written as a rounding's outermost operation, `half_up(total / max(n, 1), 1JPY)` — "Dividing by a value: the average unit price" below.
+
+## A cap on each line of an order
+
+A line's subtotal is its quantity times its price, and one line is accepted up to 10,000,000 yen. The range of a `define` worked out from the fields of `elements` holds each element.
+
+```rule
+rule order_line_subtotals v1
+description "The amount of an order, and whether its shipping is free. A line's subtotal is its quantity times its price, and one line is accepted up to 10,000,000 yen: a line past that is refused where its subtotal is worked out. An example of a range on a value the rule works out for each element"
+
+# One line of the order. The caller passes as many as it has
+elements lines
+  quantity : number  range >=1 <=10_000
+  price    : money[JPY]  range >=1JPY <=50_000_000JPY
+
+# The range is what the rule accepts for a line's subtotal, not what a subtotal can come to:
+# 10,000 of 50,000,000 yen is 500,000,000,000 yen.
+define subtotal : money[JPY] = quantity * price  range >=1JPY <=10_000_000JPY
+
+sum amount over lines of subtotal  range >=0JPY <=100_000_000JPY
+
+outputs
+  amount        : money[JPY]  round down(1JPY)
+  free_shipping : bool
+
+table shipping
+policy unique
+| amount      | -> free_shipping |
+| <10_000JPY  | false            |
+| >=10_000JPY | true             |
+
+examples
+| lines     | -> amount     | free_shipping |
+| two_lines | 7_000JPY      | false         |
+| one_large | 10_000_000JPY | true          |
+| no_lines  | 0JPY          | false         |
+
+sequence two_lines
+| quantity | price    |
+| 2        | 1_500JPY |
+| 1        | 4_000JPY |
+
+sequence one_large
+| quantity | price      |
+| 100      | 100_000JPY |
+
+sequence no_lines
+| quantity | price |
+```
+
+**What this one shows**
+
+- **`define subtotal … range >=1JPY <=10_000_000JPY` holds the subtotal of every line.** A line of ten at 1,000,001 yen is refused, whichever line it is, and the sentence names the line by its index from 0: the second is `lines[1].subtotal is out of range`.
+- **A `sum`'s range holds the total; a `define`'s range holds each line.** A cap on one line cannot be written on the `sum`, and `constraint quantity * price <= …` is E017.
+- **The `sum` adds only the subtotals the rule accepts.** No line passes 10,000,000 yen, so the total passes its cap of 100,000,000 yen only on an order of more than ten lines.
 
 ## Sorting by the head of a part number
 
@@ -2048,7 +2144,7 @@ sequence bulk_order
 - **`elements lines from order.lines` takes the lines from the contract's array as they are.** Each field says where it is read in an element, as `from quantity`. The elements taken are checked and walked exactly as a sequence the caller passes would be.
 - **The contract's validation is held to the rule too.** The contract lets through up to 20 lines of at most 5000 each, so the total reaches 100,000, the same as the range of `total`. Take `maxItems` away, and an order whose total passes the range and an order of 21 lines both pass the contract; each stops at E122.
 - **The `order_handling_fee_from(order)` that `rulec gen` writes takes the order as it is.** The lines are built inside the function, so the order is its only argument. It is written for Python, TypeScript, JavaScript, Ruby and PHP; Go, Swift, Java, Rust, SQL, NumPy and Wasm do not get it.
-- **Every value it reads is held to the rule's type.** An `amount_usd` of `1.5` or `"7"` gets no answer: the function stops with `RuleInputError` and says where the value is, `order.lines[].amount_usd is not an integer: 1.5`, the same sentence in all five languages.
+- **Every value it reads is held to the rule's type.** An `amount_usd` of `1.5` or `"7"` on the second line gets no answer: the function stops with `RuleInputError` and says where the value is, `order.lines[1].amount_usd is not an integer: 1.5`, the line by its index from 0, which is the index the rule's own door names it by. The sentence is the same in all five languages.
 
 ## The chances on the poster, held to the table
 
@@ -2103,6 +2199,50 @@ examples
 - **A row of `chances` claims the chance of an answer for every combination of the inputs that are not random.** A chance is written `1/1000`, `0.9%` or `>=1/2`. The rows of a table are boxes, so `rulec check` counts the numbers interval by interval and compares exact rationals.
 - **A poster that disagrees with the table stops the check.** Write 6% for the third prize out of a campaign, and E133 says: "With campaign = false, the chance of prize = third is 1/20 (5.0%)."
 - **`rulec gen` writes a function that counts the chances, too.** `prize_lottery_chances(campaign)` returns how many numbers win each prize and how many numbers there are. It is written for every target but SQL and Wasm, and the panel of the HTML page shows each prize's chance with it.
+
+## The chances, counted over the rolls the rule accepts
+
+Two dice are rolled for a prize. The total is accepted only up to 10, so a roll of 11 or 12 is refused, and `chances` counts only the rolls the rule answers.
+
+```rule
+rule dice_total v1
+description "Two dice are rolled for a prize. The total is accepted only up to 10, so a roll of 11 or 12 is refused, and a total of 8 or more wins the large prize. The chances count only the rolls the rule answers. An example of a range on a value the rule works out from random inputs"
+
+enum prize = small | large
+
+inputs
+  first  : number  range >=1 <=6  random
+  second : number  range >=1 <=6  random
+
+# The range is what the rule accepts for the total: a roll of 11 or 12 is refused.
+define total : number = first + second  range <=10
+
+outputs
+  prize : prize
+
+table prize_of
+policy unique
+| total | -> prize |
+| <8    | small    |
+| >=8   | large    |
+
+# Of the 36 rolls the rule answers 33, and 12 of those total 8 to 10.
+chances
+| -> prize | chance |
+| large    | 4/11   |
+| small    | 7/11   |
+
+examples
+| first | second | -> prize |
+| 1     | 1      | small    |
+| 3     | 5      | large    |
+| 4     | 6      | large    |
+```
+
+**What this one shows**
+
+- **`define total : number = first + second  range <=10` is the range of a value worked out from random inputs.** Of the 36 rolls, the rule answers 33.
+- **The chances are counted over the rolls the rule accepts.** A total of 8 or more is 12 of the 33, so the large prize is 4/11, which `rulec check` counts from the rows and confirms.
 
 ## Stacking, exclusive and capped discounts, left open
 

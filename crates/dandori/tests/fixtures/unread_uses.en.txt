@@ -1,0 +1,20 @@
+error[E005]: tests/fixtures/unread_uses.flow:4:10: could not read the rule `rules/broken_quote.rule`
+     4 | use rule quote from "rules/broken_quote.rule"
+  = E101: Completeness gap: some input matches no row (tests/fixtures/rules/broken_quote.rule, line 13)
+error[E005]: tests/fixtures/unread_uses.flow:5:11: could not read the dates file `dates/壊れた.cal`
+     5 | use dates terms from "dates/壊れた.cal"
+  = E010: The public name 起点 has no ASCII alias (tests/fixtures/dates/壊れた.cal, line 6)
+error[E005]: tests/fixtures/unread_uses.flow:6:10: could not read the book `books/no_such_stock.book`
+     6 | use book stock from "books/no_such_stock.book"
+  = `tests/fixtures/books/no_such_stock.book` is not there
+error[E005]: tests/fixtures/unread_uses.flow:7:23: `rules/delivery_fee.rule` is a rule, not an `enums` file
+     7 | import enum zone from "rules/delivery_fee.rule"
+  = `import enum` reads the enums of a file that starts `enums <name> v1`; the enum of a rule's output is read with `use rule` and written `<rule>.<enum>`.
+error[E002]: tests/fixtures/unread_uses.flow:51:30: `Parcel` has no field `code` (id, zone, weight)
+    51 |   let sent = send(id: parcel.code)
+error[E002]: tests/fixtures/unread_uses.flow:52:15: there is no task or rule `sned`
+    52 |   let again = sned(id: parcel.id)
+error[E002]: tests/fixtures/unread_uses.flow:54:18: `Parcel` has no field `idd` (id, zone, weight)
+    54 |   tag(text: copy.idd)
+error[E002]: tests/fixtures/unread_uses.flow:55:13: `Label` has no field `txt` (zone, text)
+    55 |   tag(text: "{label.zone} {label.txt}")

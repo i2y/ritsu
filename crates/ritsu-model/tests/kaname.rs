@@ -1112,7 +1112,6 @@ impl<'a> Ex<'a> {
 
     fn rule_json(&self, canon: &Path) -> J {
         let facts = &self.p.rules[canon];
-        let file = self.p.file(canon);
         let mut inputs: Vec<J> = facts
             .inputs
             .iter()
@@ -1128,9 +1127,7 @@ impl<'a> Ex<'a> {
                 // X3 (a) holds a day given to a date input to the range it declares; an input whose
                 // range is a koyomi date takes the date's days as a precondition, which X2 decides
                 let days = facts.preconditions.iter().any(|p| matches!(p, ritsu_ports::Precondition::Days { input, .. } if *input == c.name));
-                let date_ranged = matches!(strip(&slot.ty), Ty::Date)
-                    && !days
-                    && self.suite.rules.as_ref().and_then(|r| r.date_range(&file, &c.name).ok()).is_some_and(|(lo, hi)| lo.is_some() || hi.is_some());
+                let date_ranged = matches!(strip(&slot.ty), Ty::Date) && !days && slot.range.is_some();
                 // an input of an ordered enum held to a range: the values it lets in (ritsu's DESIGN 3.2)
                 let values = if matches!(strip(&slot.ty), Ty::Enum(_)) { column_values(c).map(|vs| json!(vs)).unwrap_or(J::Null) } else { J::Null };
                 json!({"name": c.name, "range": r, "step": step, "opt": matches!(slot.ty, Ty::Opt(_)), "date_ranged": date_ranged, "values": values, "elements": null})
@@ -1141,7 +1138,8 @@ impl<'a> Ex<'a> {
                 .iter()
                 .map(|c| {
                     let slot = column_slot(c, canon);
-                    json!([c.name, if matches!(strip(&slot.ty), Ty::Num(_)) { range(&slot.range) } else { J::Null }])
+                    // a number's field and a date's (as day numbers), held to the range of the column
+                    json!([c.name, if matches!(strip(&slot.ty), Ty::Num(_) | Ty::Date) { range(&slot.range) } else { J::Null }])
                 })
                 .collect();
             inputs.push(json!({"name": seq, "range": null, "step": null, "opt": false, "date_ranged": false, "values": null, "elements": fields}));

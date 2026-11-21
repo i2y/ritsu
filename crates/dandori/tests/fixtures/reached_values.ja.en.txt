@@ -1,0 +1,61 @@
+warning[W904]: tests/fixtures/reached_values.ja.flow:13:1: the input `鍵` is a secret, kept in the history of the workflow
+    13 |   鍵     : string  secret
+  = The mark is `secret` at reached_values.ja.flow:13.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Start the workflow with a reference instead (an ID, the name of a secret), and fetch the value inside the task that uses it. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+warning[W904]: tests/fixtures/reached_values.ja.flow:32:1: the secret `鍵` is kept in the history of the workflow, as the argument `文` of `挨拶`
+    32 |   挨拶(文: 文面)
+  = The mark is `secret` at reached_values.ja.flow:13.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Pass a reference instead (an ID, the name of a secret) and fetch the value inside the task. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+warning[W904]: tests/fixtures/reached_values.ja.flow:36:1: the secret `鍵` is kept in the history of the workflow, as the argument `文` of `挨拶`
+    36 |     挨拶(文: 控え)
+  = The mark is `secret` at reached_values.ja.flow:13.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Pass a reference instead (an ID, the name of a secret) and fetch the value inside the task. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+error[E011]: tests/fixtures/reached_values.ja.flow:62:1: the arm `ゴールド` can never be taken: `段` is one of 一般, シルバー here
+    62 |         ゴールド => pass
+  the run that gets there:
+      26  文面 = 名前
+      31  match 内密: false
+      34  控え = 名前
+      35  repeat (at most 3 times)
+      37  控え = 鍵
+      38  答え = 挨拶(…)
+      41  match 答え.済み: false
+      43  メモ = 名前
+      44  repeat (at most 3 times)
+      46  返事1 = 挨拶(…)
+      51  match 返事1.済み: false
+      53  段 = 狭い
+      58  match 内密: false
+error[E010]: tests/fixtures/reached_values.ja.flow:78:1: `match` has no arm for ゴールド, プラチナ, which `段2` can be here
+    78 |     match 段2
+  the run that gets there:
+      26  文面 = 名前
+      31  match 内密: false
+      34  控え = 名前
+      35  repeat (at most 3 times)
+      37  控え = 鍵
+      38  答え = 挨拶(…)
+      41  match 答え.済み: false
+      43  メモ = 名前
+      44  repeat (at most 3 times)
+      46  返事1 = 挨拶(…)
+      51  match 返事1.済み: false
+      53  段 = 狭い
+      58  match 内密: false
+      60  match 段: 一般
+      64  段3 = 狭い
+      65  repeat (at most 3 times)
+      67  match 段3: 一般
+      69  段3 = 狭い
+      70  返事3 = 挨拶(…)
+      73  match 返事3.済み: false
+      74  段3 = 広い
+      76  段2 = 狭い
+      77  repeat (at most 3 times)
+      79  match 段2: 一般
+      81  段2 = 広い
+      82  返り = 挨拶(…)
+      85  match 返り.済み: false

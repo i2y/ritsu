@@ -1,0 +1,17 @@
+request 例(example) v1 "例"
+
+form
+  種別(category) : choice "種別"
+    出張(travel)  "出張"
+    経費(expense) "経費"
+  金額(amount)  : money[円] "金額"  range >=1円 <=100_000円
+  領収書(receipt) : attachment "領収書"  shown when 種別 is 出張  required when 金額 > 30_000円
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

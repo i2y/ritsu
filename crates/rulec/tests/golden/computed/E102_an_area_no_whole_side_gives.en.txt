@@ -1,0 +1,9 @@
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/computed/shapes/E102_an_area_no_whole_side_gives.rule:15 table band_of
+   |
+15 | | 2    | 2       |
+   | ^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+   |
+ `area` never comes to what this row asks for.
+ hint: compare the expression with this row's conditions. No input reaches this row, so if it is not needed, delete it.
+

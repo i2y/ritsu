@@ -23,11 +23,11 @@ pub mod harness;
 pub mod lean;
 pub mod module;
 pub mod plan;
+pub mod taken;
 pub mod wasm;
 
 use crate::check::Checked;
 use ritsu_base::text::Lang;
-use ritsu_base::tr;
 use ritsu_units::Unit;
 use std::rc::Rc;
 
@@ -133,25 +133,15 @@ pub fn helper(t: Target, lang: Lang) -> (String, String) {
     (path.to_string(), src.replace("@HEAD@", &head).replace("@LANG@", word))
 }
 
-/// What stops the code of `t` of a module that passes its check (DESIGN 36.3): E008, the W001 of a
-/// module whose name the generated Rust cannot take, as that warning says it, at the same place, and
-/// in place of its last note what to do. `ritsu gen` asks this before it makes a package; the other
-/// targets take the name.
+/// What stops the code of `t` of a module that passes its check (DESIGN 10.3): E008, each warning of
+/// a name the code of `t` cannot write as a host reads it (W001) or writes as another's (W002), as the
+/// warning says it, at the same place, and in place of its last note what to do. `ritsu gen` asks
+/// this before it makes a package; a target it does not name does not stop.
 pub fn stops(c: &Checked, t: Target) -> Vec<crate::diag::Diag> {
-    if t != Target::Rust {
-        return Vec::new();
-    }
-    crate::names::no_rust_module(&c.module, &c.path, &c.src)
-        .map(|mut d| {
-            d.code = "E008";
-            d.severity = crate::diag::Severity::Error;
-            d.notes.pop();
-            d.note(tr!(
-                "別の名前か別名にしてください。使わない出力先なら、`--target` で使う出力先を挙げてください。",
-                "Choose another name or alias. For a target you do not use, name the ones you use with `--target`."
-            ))
-        })
+    crate::names::unwritten(&c.module, &c.decls, c.decls.fns.len(), &c.path, &c.src)
         .into_iter()
+        .filter(|u| u.diag.severity == crate::diag::Severity::Warning && u.targets.contains(&t))
+        .map(crate::names::Unwritten::stop)
         .collect()
 }
 

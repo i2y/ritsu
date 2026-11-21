@@ -1,0 +1,38 @@
+workflow chain_variables v1
+description "Values set from an expression with an error, and the lines that read them"
+
+record Step
+  approver : string
+
+record Quote
+  total : int
+
+inputs
+  id    : string
+  steps : list[Step]
+
+outputs
+  approvers : list[string]
+  total     : int
+  names     : list[string]
+  copy      : int
+
+task fetch(id: string) -> Quote
+task note(text: string)
+
+flow
+  # a field written wrong in a `yield`: the list `both` has no type
+  let both = for s in steps at most 3
+    yield s.approvr
+  # a task that is not there: nor has its answer
+  let q = fetsh(id: id)
+  # a record with no type written
+  let r = {total: 3}
+  # a loop over what is no list: nor has the loop's variable, nor what it yields
+  let names = for n in id at most 3
+    yield n
+  # an arm of a value that is always there names a value of no type
+  match id
+    some x => note(text: x)
+    none => pass
+  succeed approvers = both, total = q.total, names = names, copy = r.total

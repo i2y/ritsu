@@ -200,38 +200,42 @@ fn fix_of(file: &str, code: &str) -> (String, String, usize) {
 }
 
 #[test]
-fn e101のfixを貼り続けると穴が閉じる() {
-    // One row closes the witness it was built for, and the next run names the next gap. What
-    // "the fix does not lie" means here is that every application really removes the witness
-    // it named and the loop ends — not that one paste finishes the job.
-    let mut src = std::fs::read_to_string(root().join("tests/mutants/m_e101.rule")).unwrap();
+fn e101のfixを貼ると一度で穴が閉じる() {
+    // The rows of `fix.text` are the parts no row takes, cut where the table already cuts its
+    // columns, with `?` where the answer goes (§15.317). What "the fix does not lie" means here:
+    // pasted as they are they do not pass — the `?` is no value, and nobody chose one — and with
+    // an answer written in place of each `?` the gap is closed by the one paste, not a witness
+    // at a time.
+    let src = std::fs::read_to_string(root().join("tests/mutants/m_e101.rule")).unwrap();
     let tmp = TempDir::new("fix");
-    let dir = tmp.path().to_path_buf();
-    let p = dir.join("t.rule");
-    let mut seen: Vec<String> = Vec::new();
-    for round in 0..30 {
-        std::fs::write(&p, &src).unwrap();
-        let (_, out) = run(&["check", p.to_str().unwrap(), "--format", "json"]);
-        let Some(line) = out.lines().find(|l| l.contains("\"code\":\"E101\"")) else {
-            assert!(round > 0, "そもそも E101 が出ていない");
-            return;
-        };
-        let j = rulec::json::parse(line).unwrap();
-        let w = format!("{:?}", j.get("witness").unwrap());
-        assert!(!seen.contains(&w), "同じ証人が二度出た（進んでいない）: {w}");
-        seen.push(w);
-        let fix = j.get("fix").unwrap();
-        assert_eq!(fix.get("kind").unwrap().as_str(), Some("add_row"));
-        let row = fix.get("text").unwrap().as_str().unwrap().to_string();
-        assert!(row.starts_with("| ") && row.ends_with(" |"), "貼れる行でない: {row}");
-        let at = j.get("line").unwrap().as_int().unwrap() as usize;
-        src = paste_row(&src, &row, at);
-        // Pasting must never break the file.
-        let codes: Vec<&str> =
-            rulec::check_source(&src, "patched.rule").iter().map(|d| d.code).collect();
-        assert!(!codes.iter().any(|c| c.starts_with("E0")), "fix の行が構文を壊した: {codes:?}\n{row}");
+    let p = tmp.path().join("t.rule");
+    std::fs::write(&p, &src).unwrap();
+    let (_, out) = run(&["check", p.to_str().unwrap(), "--format", "json"]);
+    let line = out.lines().find(|l| l.contains("\"code\":\"E101\"")).expect("そもそも E101 が出ていない");
+    let j = rulec::json::parse(line).unwrap();
+    let fix = j.get("fix").unwrap();
+    assert_eq!(fix.get("kind").unwrap().as_str(), Some("add_row"));
+    let rows = fix.get("text").unwrap().as_str().unwrap().to_string();
+    let at = j.get("line").unwrap().as_int().unwrap() as usize;
+    for row in rows.lines() {
+        assert!(row.starts_with("| ") && row.ends_with(" | ? |"), "貼れる行でない: {row}");
     }
-    panic!("30 回貼っても E101 が閉じない");
+    // as they are: the check stops on the cell that holds no value, and says nothing else
+    let mut as_is = src.clone();
+    for row in rows.lines().rev() {
+        as_is = paste_row(&as_is, row, at);
+    }
+    let codes: Vec<&str> = rulec::check_source(&as_is, "patched.rule").iter().filter(|d| d.severity == rulec::diag::Severity::Error).map(|d| d.code).collect();
+    assert!(!codes.is_empty() && codes.iter().all(|c| *c == "E063"), "`?` のままの行が通った、またはほかの誤りになった: {codes:?}\n{rows}");
+    // with an answer in place of each `?` (the first row's, which parses): no gap is left
+    let answer = src.lines().skip(at).filter(|l| l.trim_start().starts_with('|')).nth(1).and_then(|l| l.trim().trim_end_matches('|').rsplit('|').next()).map(|c| c.trim().to_string()).expect("表に行が無い");
+    let mut closed = src.clone();
+    for row in rows.lines().rev() {
+        closed = paste_row(&closed, &row.replace('?', &answer), at);
+    }
+    let codes: Vec<&str> = rulec::check_source(&closed, "patched.rule").iter().map(|d| d.code).collect();
+    assert!(!codes.contains(&"E101"), "一度貼っても E101 が残る: {codes:?}\n{rows}");
+    assert!(!codes.iter().any(|c| c.starts_with("E0")), "fix の行が構文を壊した: {codes:?}\n{rows}");
 }
 
 /// Insert `row` at the end of the table whose header is on line `at` (1-based).

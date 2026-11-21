@@ -36,13 +36,14 @@ structure Certified where
       on which every coordinate both rows take holds none of the days. -/
   daysApart : Nat → Nat → Option Nat := fun _ _ => none
   /-- The cover's leaves the rows of a table above rule out (rulec's §15.195), by the path to
-      each: the axis of the column that table decides, and a reason for each row of it that
-      writes the value the path holds there. -/
-  aboveAt : Point → Option (Nat × List RowOut) := fun _ => none
+      each: the axis of the column that table decides, whether the ways are joined through the
+      columns both tables cut (rulec's §15.325), and a reason for each way the value the path holds
+      there arrives. -/
+  aboveAt : Point → Option (Nat × Bool × List RowOut) := fun _ => none
   /-- The pairs the axes do not part and the rows of a table above do (rulec's §15.196): the axis
-      of the column that table decides, and for each value both rows take there, a reason for each
-      row of it that writes the value. -/
-  aboveApart : Nat → Nat → Option (Nat × List (Nat × List RowOut)) := fun _ _ => none
+      of the column that table decides, and for each value both rows take there, whether the ways are
+      joined through the columns both tables cut and a reason for each way the value arrives. -/
+  aboveApart : Nat → Nat → Option (Nat × List (Nat × Bool × List RowOut)) := fun _ _ => none
 
 /-- The table the certificate is about. Its `asked` is the sieve's: a combination counts
     when the values behind it satisfy everything the rule declares. -/
@@ -60,7 +61,7 @@ def Certified.ruledOut (C : Certified) (path : Point) : Bool :=
      | some refs => farkasRuledOut C.sieve (pathBox C.arities path) refs
      | none => false) ||
     (match C.aboveAt path with
-     | some (axis, outs) => aboveRuledOut C.sieve (pathBox C.arities path) axis outs
+     | some (axis, through, outs) => aboveRuledOut C.sieve (pathBox C.arities path) axis through outs
      | none => false)
 
 theorem Certified.not_asked_of_ruledOut (C : Certified) {path p : Point}
@@ -103,7 +104,7 @@ def Certified.pairChecks (C : Certified) : Bool :=
 def pairsApart (s : Sieve) (rows : List Row) (told : Nat → Nat → Option Nat)
     (refuted : Nat → Nat → Option (List (Ref × Rat))) (undecided : Nat → Nat → Bool)
     (daysApart : Nat → Nat → Option Nat := fun _ _ => none)
-    (aboveApart : Nat → Nat → Option (Nat × List (Nat × List RowOut)) := fun _ _ => none) : Bool :=
+    (aboveApart : Nat → Nat → Option (Nat × List (Nat × Bool × List RowOut)) := fun _ _ => none) : Bool :=
   rows.all (fun r =>
     rows.all (fun q =>
       if r.index < q.index then
@@ -123,7 +124,7 @@ def pairsApart (s : Sieve) (rows : List Row) (told : Nat → Nat → Option Nat)
 
 theorem disjointAsked_of_pairsApart {s : Sieve} {rows : List Row} {told : Nat → Nat → Option Nat}
     {refuted : Nat → Nat → Option (List (Ref × Rat))} {undecided : Nat → Nat → Bool}
-    {daysApart : Nat → Nat → Option Nat} {aboveApart : Nat → Nat → Option (Nat × List (Nat × List RowOut))}
+    {daysApart : Nat → Nat → Option Nat} {aboveApart : Nat → Nat → Option (Nat × List (Nat × Bool × List RowOut))}
     (hshape : rowsDistinct rows = true) (hnone : ∀ a b, undecided a b = false)
     (h : pairsApart s rows told refuted undecided daysApart aboveApart = true) :
     ∀ p, s.asked p → ((rows.filter (fun r => inBox r.box p)).length ≤ 1) := by

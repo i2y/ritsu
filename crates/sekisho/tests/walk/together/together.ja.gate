@@ -1,0 +1,176 @@
+gate 一緒に数える(together_ja) v1
+description "同じデータを読む値。一つの呼び出しの二つの出力、二つの表の出力、同じ属性を渡す二つの規則、二つの入力に渡す一つの属性（属性で答えが変わる規則と、変わらない規則）、無いことのある属性。起こりうる組だけを数える"
+namespace DocsJa
+
+use rule 金額の区分 from "金額の区分.rule"
+use rule 金額の段階 from "金額の段階.rule"
+use rule 二つの金額 from "二つの金額.rule"
+use rule 同じ側か from "同じ側か.rule"
+
+role 職員(staff)
+  description "職員のだれでも"
+
+principal 利用者(User)
+  description "職員"
+  roles 職員
+
+resource 文書(Doc)
+  description "金額のある文書。価格はまだ無いことがある"
+  attributes
+    金額(amount) : money[JPY]   range >=1JPY <=1_000JPY
+    価格(price)  : money[JPY]?  range >=1JPY <=1_000JPY
+
+action 読む(read_doc)
+  description "文書を読む。一つの呼び出しの二つの出力で、同じ表が一緒に書く"
+  principal 利用者
+  resource 文書
+  context
+    甲(a) = 金額の区分(金額: resource.金額).甲
+    乙(b) = 金額の区分(金額: resource.金額).乙
+
+action 綴じる(file_doc)
+  description "文書を綴じる。一つの呼び出しの二つの出力で、それぞれ別の表が書く"
+  principal 利用者
+  resource 文書
+  context
+    甲(a) = 金額の区分(金額: resource.金額).甲
+    丙(c) = 金額の区分(金額: resource.金額).丙
+
+action 送る(send_doc)
+  description "文書を送る。二つの規則に同じ金額を渡す"
+  principal 利用者
+  resource 文書
+  context
+    甲(a)     = 金額の区分(金額: resource.金額).甲
+    段階(step) = 金額の段階(金額: resource.金額).段階
+
+action 量る(weigh_doc)
+  description "文書を量る。一つの金額を、規則の二つの入力の両方に渡す"
+  principal 利用者
+  resource 文書
+  context
+    どちら側(kind) = 二つの金額(一つ目: resource.金額, 二つ目: resource.金額).どちら側
+
+action 見比べる(compare_doc)
+  description "文書をそれ自身と見比べる。一つの金額を、規則の二つの入力の両方に渡す。二つが同じ金額なら、規則の答えはどこでも同じになる"
+  principal 利用者
+  resource 文書
+  context
+    側(side) = 同じ側か(一つ目: resource.金額, 二つ目: resource.金額).側
+
+action 値を付ける(price_doc)
+  description "文書に値を付ける。無いことのある金額から出す二つの出力"
+  principal 利用者
+  resource 文書
+  context
+    甲(a) = 金額の区分(金額: resource.価格).甲
+    乙(b) = 金額の区分(金額: resource.価格).乙
+
+permit 甲が低なら読める(staff_read_low_a)
+  description "職員は、甲が低の文書を読める"
+  principal in 職員
+  action 読む
+  when 甲 is 低
+
+permit 乙が高なら読める(staff_read_high_b)
+  description "職員は、乙が高の文書を読める"
+  principal in 職員
+  action 読む
+  when 乙 is 高
+
+permit 甲が低なら綴じられる(staff_file_low_a)
+  description "職員は、甲が低の文書を綴じられる"
+  principal in 職員
+  action 綴じる
+  when 甲 is 低
+
+permit 丙が高なら綴じられる(staff_file_high_c)
+  description "職員は、丙が高の文書を綴じられる"
+  principal in 職員
+  action 綴じる
+  when 丙 is 高
+
+permit 甲が低なら送れる(staff_send_low_a)
+  description "職員は、甲が低の文書を送れる"
+  principal in 職員
+  action 送る
+  when 甲 is 低
+
+permit 大口なら送れる(staff_send_large)
+  description "職員は、大口の文書を送れる"
+  principal in 職員
+  action 送る
+  when 段階 is 大口
+
+permit 片方ずつでなければ量れる(staff_weigh_what_is_not_mixed)
+  description "職員は、二つの金額が同じ側にある文書を量れる"
+  principal in 職員
+  action 量る
+  unless どちら側 is 片方ずつ
+
+permit 同じ側なら見比べられる(staff_compare_what_is_on_one_side)
+  description "職員は、二つの金額が 500 円の同じ側にある文書を見比べられる"
+  principal in 職員
+  action 見比べる
+  when 側 is 同じ
+
+permit 甲が低なら値を付けられる(staff_price_low_a)
+  description "職員は、甲が低の文書に値を付けられる"
+  principal in 職員
+  action 値を付ける
+  when 甲 is 低
+
+permit 乙が高なら値を付けられる(staff_price_high_b)
+  description "職員は、乙が高の文書に値を付けられる"
+  principal in 職員
+  action 値を付ける
+  when 乙 is 高
+
+expect allow 職員はどの文書も読める
+  description "甲と乙は同じ値なので、二つの permit のどちらかが必ず当てはまる"
+  principal in 職員
+  action 読む
+
+expect allow 職員は少額の文書を読める
+  description "職員は、100 円以下の文書を読める"
+  principal in 職員
+  action 読む
+  when resource.金額 <= 100JPY
+
+expect allow 職員はどの文書も綴じられる
+  description "甲が高の所では丙も高なので、二つの permit のどちらかが必ず当てはまる"
+  principal in 職員
+  action 綴じる
+
+expect allow 職員はどの文書も送れる
+  description "500 円を超える文書は大口なので、二つの permit のどちらかが必ず当てはまる"
+  principal in 職員
+  action 送る
+
+expect allow 職員はどの文書も量れる
+  description "一つの金額が 500 円の両側にあることはない"
+  principal in 職員
+  action 量る
+
+expect allow 職員はどの文書も見比べられる
+  description "一つの金額は、どちらの側であれ、500 円の片側にある"
+  principal in 職員
+  action 見比べる
+
+expect deny 価格の無い文書には値を付けない
+  description "甲が低でなく乙が高でもないのは、どちらも無いときだけ。価格の無い文書である"
+  action 値を付ける
+  when 甲 is not 低
+  when 乙 is not 高
+
+expect deny 甲と乙は食い違わない
+  description "規則は甲と乙に同じ値を出すので、これが選ぶ組み合わせは無い"
+  principal in 職員
+  action 読む
+  when 甲 is 低 and 乙 is 高
+
+expect deny 金額はそれ自身と別の側にはない
+  description "一つの金額が 500 円の両側にあることはないので、これが選ぶ組み合わせは無い"
+  principal in 職員
+  action 見比べる
+  when 側 is 別

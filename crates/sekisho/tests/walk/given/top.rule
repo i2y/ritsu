@@ -1,0 +1,23 @@
+rule top v1
+description "Whether a tier is the high one: an enum input that may be left out, which the gate gives only when the tier is there"
+
+enum tier = low | high
+
+inputs
+  tier : tier?
+
+outputs
+  top : bool
+
+table top_of
+policy unique
+| tier | -> top |
+| none | false  |
+| low  | false  |
+| high | true   |
+
+examples
+| tier | -> top |
+| none | false  |
+| low  | false  |
+| high | true   |

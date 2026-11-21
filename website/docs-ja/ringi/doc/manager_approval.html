@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="ringi 0.55.2">
+<title>Approval by the manager</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 40px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 28px 0 8px; }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+th { background: var(--soft); white-space: nowrap; }
+:target { scroll-margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- ringi 0.55.2 が shared/manager_approval.ringi（sha256:2f5a89113095fbf9）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<main>
+<header>
+<h1>Approval by the manager</h1>
+<p class="desc">A route several requests share (fictional rules): the requester&#39;s manager approves, and the head of the department too when the request says it is long</p>
+</header>
+<p>ファイル：<code>shared/manager_approval.ringi</code>（共有の経路 <code>manager_approval</code> の版 1、sha256:2f5a89113095fbf9）</p>
+<p>組織は、置いてある版のそれぞれ（2026-04-01、2027-04-01 から）で読んでいます。</p>
+<nav class="toc" aria-label="目次">
+<ul>
+<li><a href="#usable">使える期間</a></li>
+<li><a href="#inputs">受け取る物</a></li>
+<li><a href="#route">経路</a></li>
+<li><a href="#ways">承認者の決め方</a></li>
+<li><a href="#deadlines">期限と催促</a></li>
+<li><a href="#requests">使う申請の種類</a></li>
+</ul>
+</nav>
+<h2 id="usable">使える期間</h2>
+<ul>
+<li>2026-04-01 から使えます。決めているのは、組織 <code>company.ringi</code> の最初の版（データ <code>../org</code>）です。</li>
+<li>終わりの日はありません。読む物に終わりがありません。</li>
+</ul>
+<h2 id="inputs">受け取る物</h2>
+<p>経路を使う申請の種類は、どれにも自分のフォームについての条件を渡します（<code>route manager_approval(long: days &gt; 5)</code> の形）。</p>
+<div class="scroll"><table>
+<thead><tr><th>受け取る物</th><th>型</th></tr></thead>
+<tbody>
+<tr><td><code>long</code></td><td>はい・いいえ</td></tr>
+</tbody>
+</table></div>
+<h2 id="route">経路</h2>
+<p>ステップを順に並べています。条件のあるステップは、条件が成り立つときだけ来ます。各ステップにだれが答えるかは「承認者の決め方」にあります。</p>
+<div class="scroll"><table>
+<thead><tr><th>ステップ</th><th>答える人</th><th>来るとき</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>上長</td><td>いつも</td></tr>
+<tr><td>部長</td><td>部長</td><td>「long」が「はい」のとき</td></tr>
+</tbody>
+</table></div>
+<h2 id="ways">承認者の決め方</h2>
+<div class="scroll"><table>
+<thead><tr><th>承認者</th><th>決まる人</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>申請者の上長。申請者が主に属するチームの長で、その長が申請者自身か空なら、上のチームの長です</td></tr>
+<tr><td>部長</td><td>申請者から上へたどって最初の、種類が <code>department</code> のチームの長</td></tr>
+</tbody>
+</table></div>
+<p>承認者は、ステップが始まるときに、そのときに効いている組織の版で決めます。その日に有効な代理も、並んで答えられます。</p>
+<h2 id="deadlines">期限と催促</h2>
+<p>どのステップも：</p>
+<ul>
+<li>期限は、始まった日から 2 営業日の日の終わりです。</li>
+<li>始まった日から 1 営業日の日の 09:00 に、承認者へ催促が届きます。</li>
+<li>期限を過ぎると上の長へ回ります。期限は、そこから数え直されます。また過ぎるとチケットは期限切れで終わります。</li>
+<li>答える人がいなければ、上の長へ回ります。組織のいちばん上では、ステップは飛ばされます。</li>
+</ul>
+<p>2026-04-03（金）に始まるステップでは、次のとおりです。申請の種類のカレンダーの休みは数えません（時刻は UTC+09:00）。</p>
+<div class="scroll"><table>
+<thead><tr><th>ステップ</th><th>催促</th><th>期限</th><th>上へ回したあとの期限</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>2026-04-06（月）09:00</td><td>2026-04-07（火）の終わり</td><td>2026-04-10（金）の終わり</td></tr>
+<tr><td>部長</td><td>2026-04-06（月）09:00</td><td>2026-04-07（火）の終わり</td><td>2026-04-10（金）の終わり</td></tr>
+</tbody>
+</table></div>
+<p>この経路のステップは、続けて通って長くても 10 営業日です。経路を使う申請の種類は、差し戻せる回数と、申請者が出し直す日数を足します。申請の種類のページがそれを数えます。</p>
+<h2 id="requests">使う申請の種類</h2>
+<p>プロジェクトの中で、<code>route</code> の行でこの経路を使う申請の種類です。経路を変えると、これらのチケットが変わります。渡す条件は、それぞれの申請の種類のページが経路と一緒に見せます。</p>
+<div class="scroll"><table>
+<thead><tr><th>申請の種類</th><th>ファイル</th></tr></thead>
+<tbody>
+<tr><td>休暇の申請（<code>leave_ja</code>）</td><td><code>leave.ja.ringi</code></td></tr>
+<tr><td>休暇の申請（<code>leave</code>）</td><td><code>leave.ringi</code></td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

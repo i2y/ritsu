@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":null,"diagnostics":[{"code":"E080","severity":"error","file":null,"line":null,"col":null,"message":"there is no command `chekc`; run `geas --help`","notes":[],"path":[]}]}

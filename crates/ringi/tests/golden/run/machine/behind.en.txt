@@ -1,0 +1,22 @@
+2026-11-16 10:00  submit     by e1201  -> decide (e1101), due 2026-11-18 end of day
+2026-11-16 12:00  comment    by e1101  -> decide (e1101), due 2026-11-18 end of day; comment "Which drill?"
+2026-11-16 23:00  remind               -> decide (e1101), due 2026-11-18 end of day; reminded e1101
+2026-11-18 11:00  send back  by e1101  -> with requester, resubmit by 2026-11-20 14:00
+2026-11-20 13:00  resubmit   by e1201  -> decide (e1101), due 2026-11-24 end of day
+2026-11-20 23:00  remind               -> decide (e1101), due 2026-11-24 end of day; reminded e1101
+2026-11-24 10:00  approve    by e1101  -> approved
+scenario `two_offsets`: as written (7 rows)
+
+2026-11-16 10:00  submit   by e1201  -> decide (e1101), due 2026-11-18 end of day
+2026-11-16 11:00  pause    by e1101  -> paused at decide (e1101), until 2026-11-19 14:00
+2026-11-19 13:00  resume   by e1101  -> decide (e1101), due 2026-11-23 end of day
+2026-11-19 23:00  remind             -> decide (e1101), due 2026-11-23 end of day; reminded e1101
+2026-11-20 10:00  approve  by e1101  -> approved
+scenario `paused_in_the_plants_days`: as written (5 rows)
+
+2026-11-30 10:00  submit   by e1201  -> decide (e1101), due 2026-12-02 end of day
+2026-11-30 11:00  pause    by e1101  -> paused at decide (e1101), until 2026-12-04 14:00
+2026-12-04 13:00  resume   by e1101  -> decide (e1101), due 2026-12-08 end of day
+2026-12-04 23:00  remind             -> decide (e1101), due 2026-12-08 end of day; reminded e1101
+2026-12-07 10:00  approve  by e1101  -> approved
+scenario `paused_over_the_plants_inventory`: as written (5 rows)

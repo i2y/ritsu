@@ -1,0 +1,14 @@
+module deadline v1
+description "the word `until`, a keyword of Lean's, as a field, a value of an enum and a parameter"
+
+record Withdraw
+  until  : date    range >=2026-01-01 <=2026-12-31
+  amount : number  range >=0 <=100
+
+enum step = until | done
+
+fn on_or_after(w: Withdraw, until: date range >=2026-01-01 <=2026-12-31) -> bool
+  w.until <= until
+
+fn flag(s: step) -> bool
+  s = step.until

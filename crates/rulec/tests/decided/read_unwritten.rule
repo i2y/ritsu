@@ -1,0 +1,19 @@
+rule read_unwritten v1
+description "The table of the grade left out: the review reads a grade that nothing decides"
+
+enum level = low "Low" | high "High"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+  member : bool
+
+outputs
+  grade  : level
+  review : bool
+
+table review_of
+policy unique
+| grade | member | -> review |
+| low   | -      | false     |
+| high  | true   | false     |
+| high  | false  | true      |

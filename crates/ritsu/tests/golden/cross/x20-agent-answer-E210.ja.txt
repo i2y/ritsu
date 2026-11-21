@@ -1,0 +1,8 @@
+precheck.flow: 検査を通りました
+ok purchase.ringi: 申請の種類、フィールド 3 個、ステップ 2 個
+  終わらないことがあります: ステップ `decide`、`check` には期限がありません（`due in …`）。答えが来るまで待ちます
+エラー[ritsu E210]: purchase.ringi:17: flow `precheck` は `purchase` の決め方 `small` のステップに答えますが、出力 `reason` がありません
+    17 |   small   = agent precheck, else finance
+  = ringi は、エージェントの答えを二つの出力から読みます。`verdict`（値が `ok` と `doubt` の列挙）と、`reason`（string）です。
+  = "precheck.flow" に、`enum Check = ok | doubt` と、出力 `verdict : Check`、`reason : string` を書いてください。
+ritsu check: ファイル 2 個（dandori 1、ringi 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 4 か所、決められない 0 か所

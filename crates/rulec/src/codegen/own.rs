@@ -182,8 +182,13 @@ pub(super) struct Has {
     /// Python's function reads the length of a sequence: to hold it to the most a count allows,
     /// to tell whether a fold's walk read any element, or to read one out of the caller's objects.
     pub py_len: bool,
+    /// Python's walk counts the elements of its sequence, to name one in a sentence (§15.324).
+    pub py_enumerate: bool,
     /// A fold picks by weight (§15.226), which Java's walk returns as a `Walked`.
     pub weighted: bool,
+    /// Java's functions read a class of the JDK by its full name where a name of the rule's hides
+    /// it (`Gen::java_hidden`): `java.util.ArrayList`, `java.lang.String`.
+    pub java_full: bool,
     /// The locals the folds' walks keep, as Swift and Java declare them (`Gen::fold_names`): the
     /// answer and the flag of a stop, the flag of a walk shared with other summaries, the taken,
     /// the kept and the best, the running total of a pick by weight, and what the walk holds.
@@ -393,7 +398,9 @@ impl Has {
             py_len: (0..f.elements.len()).any(|s| g.count_cap_of(s).is_some())
                 || f.folds().count() > 0
                 || g.projections().iter().any(|p| matches!(p.kind, crate::ast::ProjKind::Count(None))),
+            py_enumerate: g.py_walks_count(),
             weighted: g.weighted_fold().is_some(),
+            java_full: !g.java_hidden(true).is_empty(),
             fold_locals_sw: fold_locals(f, &g, false),
             fold_locals_java: fold_locals(f, &g, true),
             extremes: f.aggs().filter(|d| d.kind.extreme()).map(|d| g.ident(&d.name.text)).collect(),
@@ -684,6 +691,11 @@ pub(super) fn reads(t: Target, f: &RuleFile, has: &Has) -> Vec<Own> {
             if has.py_len {
                 out.add("_len", What::Helper, a);
             }
+            // The walk counts the elements with `enumerate` under this name where a sentence names
+            // one (§15.324); a value of the name hides it in the function that walks.
+            if has.py_enumerate {
+                out.add("_enumerate", What::Helper, a);
+            }
             if has.tables {
                 out.add("Fired", What::Type, a);
                 // A row that falls through raises it, which no call reaches: rulec has checked that no
@@ -710,6 +722,10 @@ pub(super) fn reads(t: Target, f: &RuleFile, has: &Has) -> Vec<Own> {
             }
             for e in &has.enum_types {
                 out.add(e, What::Type, a);
+            }
+            // A group is a set of the module's, `_<group>`, which a row reads.
+            for g in &tables.groups {
+                out.add(&format!("_{g}"), What::Constant, a);
             }
             if has.folds > 0 {
                 // The accumulator of a walk is declared with its type, `answer: int = 0`, which only
@@ -901,6 +917,14 @@ pub(super) fn reads(t: Target, f: &RuleFile, has: &Has) -> Vec<Own> {
             for n in locals(has, true) {
                 out.push(own(&n, What::Local, a).apart());
             }
+            // The package a class of the JDK is read from by its full name, which a variable of
+            // the name obscures (JLS 6.4.2): every function reads it where a name of the rule's
+            // hides a class, and the one that counts the answers reads `java.util.Objects`.
+            if has.java_full {
+                out.push(own("java", What::Builtin, a));
+            } else if has.random {
+                out.push(own("java", What::Builtin, a).inputs_only());
+            }
         }
         // A variable is written with `$`, which no function, class or constant is; a method is
         // called with its arguments in parentheses, which a local variable does not take.
@@ -984,7 +1008,8 @@ fn fold_locals(f: &RuleFile, g: &Gen, java: bool) -> Vec<String> {
         if java {
             out.push(n.held);
         }
-        if !g.fold_alone(i) {
+        // A fold alone in its walk declares it too where the walk goes on past its `stop`.
+        if !g.fold_alone(i) || g.stop_keeps_door(i) {
             out.push(n.done);
         }
         let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, crate::ast::Arm::Take { .. } | crate::ast::Arm::TakeWeighted { .. }));
@@ -1018,7 +1043,8 @@ pub(super) fn tops(t: Target, has: &Has) -> Vec<Own> {
         Target::Python | Target::Connect => &["Fired", "RuleInputError", "RuleContradictionError", "NamedTuple", "ValueError", "AssertionError"],
         Target::TypeScript => &["Fired", "RuleInputError", "RuleContradictionError"],
         Target::JavaScript => &["RuleInputError", "RuleContradictionError"],
-        Target::Rust | Target::Wasm => &["Fired", "RuleError"],
+        // `Said` is the sentence of a `RuleError` (§15.324).
+        Target::Rust | Target::Wasm => &["Fired", "RuleError", "Said"],
         Target::Go => &["Fired", "Input", "RuleInputError", "RuleContradictionError"],
         Target::Swift => &["Fired", "RuleError"],
         Target::Java => &["Fired", "Traced", "RuleInputError", "RuleContradictionError"],
@@ -1250,7 +1276,8 @@ mod tests {
                 if !b.folds && !f.elements.is_empty() {
                     continue;
                 }
-                let text: String = (b.files)(&g, &alias, &pkg).into_iter().map(|(_, body, _)| body).collect::<Vec<_>>().join("\n");
+                let here = g.for_target(b.id);
+                let text: String = (b.files)(here.as_ref().unwrap_or(&g), &alias, &pkg).into_iter().map(|(_, body, _)| body).collect::<Vec<_>>().join("\n");
                 let mut listed: Vec<Own> = reads(t, &f, &has);
                 listed.extend(tops(t, &has));
                 for o in listed.iter().filter(|o| o.what != What::Builtin) {

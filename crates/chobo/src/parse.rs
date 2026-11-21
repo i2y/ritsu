@@ -348,10 +348,14 @@ fn account_ref(c: &mut Cur) -> Result<AccountRef, Diag> {
     Ok(AccountRef { name, args: Some(args), span })
 }
 
+#[derive(Clone, Copy)]
 enum Open {
     None,
     Account(usize),
     Transfer(usize),
+    /// An `account` or a `transfer` line that does not read: the lines under it are its, and are
+    /// not said again (ritsu's DESIGN 8.3).
+    Lost,
 }
 
 /// Read the lines into a book. A line that does not read is reported (E001) and left out;
@@ -436,6 +440,7 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
                         tr!("字下げした行を書けるのは `account` と `transfer` の下だけです", "only lines under `account` and `transfer` are indented"),
                     ));
                 }
+                Open::Lost => {}
                 Open::Account(a) => match account_line(l) {
                     Ok(AccountLine::Description(s, sp)) => book.accounts[a].descriptions.push((s, sp)),
                     Ok(AccountLine::Bound(b)) => book.accounts[a].bounds.push(b),
@@ -451,6 +456,32 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
             }
             continue;
         }
+        // A line of an account or a transfer that is not indented is said once, and read as the
+        // block's: the indented lines after it are still the block's (ritsu's DESIGN 8.3).
+        if matches!(head_word, "key" | "pending" | "move" | "at" | "description") && matches!(open, Open::Account(_) | Open::Transfer(_)) {
+            diags.push(diag::error(
+                "E001",
+                l.no,
+                1,
+                tr!("`{head_word}` の行は、`account` か `transfer` の下に字下げして書いてください", "a `{head_word}` line goes indented under an `account` or a `transfer`"),
+            ));
+            match open {
+                Open::Account(a) => match account_line(l) {
+                    Ok(AccountLine::Description(s, sp)) => book.accounts[a].descriptions.push((s, sp)),
+                    Ok(AccountLine::Bound(b)) => book.accounts[a].bounds.push(b),
+                    Err(d) => diags.push(d),
+                },
+                Open::Transfer(t) => match transfer_line(l) {
+                    Ok(TransferLine::Description(s, sp)) => book.transfers[t].descriptions.push((s, sp)),
+                    Ok(TransferLine::Key(k)) => book.transfers[t].keys.push(k),
+                    Ok(TransferLine::Pending(p)) => book.transfers[t].pendings.push(p),
+                    Ok(TransferLine::Move(m)) => book.transfers[t].moves.push(m),
+                    Err(d) => diags.push(d),
+                },
+                _ => {}
+            }
+            continue;
+        }
         body_indent = None;
         open = Open::None;
         match head_word {
@@ -463,14 +494,20 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
                     book.accounts.push(a);
                     open = Open::Account(book.accounts.len() - 1);
                 }
-                Err(d) => diags.push(d),
+                Err(d) => {
+                    diags.push(d);
+                    open = Open::Lost;
+                }
             },
             "transfer" => match transfer_head(l) {
                 Ok(t) => {
                     book.transfers.push(t);
                     open = Open::Transfer(book.transfers.len() - 1);
                 }
-                Err(d) => diags.push(d),
+                Err(d) => {
+                    diags.push(d);
+                    open = Open::Lost;
+                }
             },
             "book" => diags.push(diag::error("E001", l.no, 1, tr!("`book` の行は、先頭に一度だけ書いてください", "`book` comes once, on the first line"))),
             "description" => diags.push(diag::error(
@@ -499,6 +536,8 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
                         "unexpected `{s}`; a line starts with `unit`, `account` or `transfer`"
                     ),
                 ));
+                // the lines indented under it are its
+                open = Open::Lost;
             }
         }
     }

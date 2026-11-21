@@ -46,14 +46,13 @@ pub fn install(dir: &Path, force: bool) -> Result<PathBuf, Diag> {
             "with `--force`, the skill's files are written again and any other file in the folder is left as it is",
         )));
     }
-    if let Err(e) = std::fs::create_dir_all(&folder) {
-        return Err(e081(format!("cannot make {shown}: {e}"), format!("{shown} を作れません: {e}")));
+    if let Err(e) = ritsu_base::fs::create_dir_all(&folder) {
+        return Err(crate::diag::named("E081", ritsu_base::cli::cannot_create(&shown, &e)));
     }
     for (name, text) in FILES {
         let p = folder.join(name);
-        if let Err(e) = std::fs::write(&p, text) {
-            let p = p.display();
-            return Err(e081(format!("cannot write {p}: {e}"), format!("{p} を書けません: {e}")));
+        if let Err(e) = ritsu_base::fs::write(&p, text) {
+            return Err(crate::diag::named("E081", ritsu_base::cli::cannot_write(&p.display().to_string(), &e)));
         }
     }
     Ok(folder)

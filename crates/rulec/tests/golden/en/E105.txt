@@ -6,5 +6,7 @@ error[E105]: Overlapping rows: the same input matches row 8 and row 22
 58 | | 近距離圏   | S60    | 1150円                             |
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 22
    |
+ The cells of the two rows take the same inputs.
  Both rows match: あて先 = 青森県, サイズ = S60
+ An input producing this example: あて先 = 青森県, 三辺合計 = 1cm, 重量 = 1g
  `policy unique` does not allow overlapping rows. Decide which row is right, or declare `policy first` if the order is meant to matter.

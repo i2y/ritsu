@@ -1,0 +1,18 @@
+organization company v1 "Company"
+description "The shape of the company's organization (fictional): the positions from the lowest, the kinds of teams from the widest, and the folder that holds the data of each version"
+
+positions
+  staff         "Staff"
+  manager       "Manager"
+  dept_head     "Head of department"
+  division_head "Head of division"
+  president     "President"
+
+team kinds
+  company    "Company"
+  division   "Division"
+  department "Department"
+  section    "Section"
+  committee  "Committee"
+
+data "../org"

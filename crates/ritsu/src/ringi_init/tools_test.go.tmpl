@@ -1,0 +1,119 @@
+package {{package}}
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	server "{{framework}}"
+	"{{framework}}/serve"
+	"{{framework}}/servertest"
+)
+
+// TestTools serves the project as cmd/server does, with the agents' tools at /mcp (HandleTools) and
+// the person in the header X-Person: a request with no one signed in is answered 401, and an agent
+// of s1201 makes a purchase request with the tools and reads it.
+func TestTools(t *testing.T) {
+	url := servedWithTools(t)
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("no one signed in: %d, want 401", res.StatusCode)
+	}
+
+	agent, err := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "test", Version: "0"}, nil).Connect(t.Context(),
+		&sdkmcp.StreamableClientTransport{Endpoint: url, HTTPClient: &http.Client{Transport: as("s1201")}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer agent.Close()
+	made := callTool(t, agent, "submit_purchase", map[string]any{"idempotency_key": "k1", "form": map[string]any{"amount": 30000, "purpose": "Books for the section"}})
+	read := callTool(t, agent, "get_ticket", map[string]any{"id": made.ID})
+	if read.ID != made.ID || read.Status != "in_progress" || read.Stage == nil || *read.Stage != "manager" {
+		t.Errorf("the request, read with the tools: %+v", read)
+	}
+}
+
+// servedWithTools serves the project with the agents' tools until the test ends, on a loopback
+// address of its own, the tickets in memory and the clock on monday: it answers the URL of /mcp.
+func servedWithTools(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	l.Close()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	st, err := serve.Open(t.Context(), serve.Flags{Addr: addr, Getenv: func(string) string { return "" }}, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	HandleTools(st, log)
+	cfg, err := Parts(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Clock = servertest.NewClock(monday)
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan error, 1)
+	go func() { served <- st.Serve(ctx, cfg, func(srv *server.Server) { Started(cfg, srv) }) }()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-served; err != nil {
+			t.Errorf("Serve: %v", err)
+		}
+	})
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(20 * time.Millisecond) {
+		if c, err := net.Dial("tcp", addr); err == nil {
+			c.Close()
+			return "http://" + addr + "/mcp"
+		}
+	}
+	t.Fatal("the server does not listen")
+	return ""
+}
+
+// as sends each request of an agent as a person, in the header X-Person.
+type as string
+
+func (p as) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("X-Person", string(p))
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+// callTool calls a tool, and answers the ticket of its result.
+func callTool(t *testing.T, agent *sdkmcp.ClientSession, name string, args map[string]any) ticket {
+	t.Helper()
+	r, err := agent.CallTool(t.Context(), &sdkmcp.CallToolParams{Name: name, Arguments: args})
+	if err != nil {
+		t.Fatalf("%s: %v", name, err)
+	}
+	b, err := json.Marshal(r.StructuredContent)
+	var result struct {
+		Ticket ticket `json:"ticket"`
+	}
+	if err != nil || r.IsError || json.Unmarshal(b, &result) != nil {
+		t.Fatalf("%s: %s", name, b)
+	}
+	return result.Ticket
+}

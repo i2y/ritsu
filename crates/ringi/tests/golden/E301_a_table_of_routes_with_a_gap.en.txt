@@ -1,0 +1,6 @@
+error[E301]: tests/mutants/E301_a_table_of_routes_with_a_gap.ringi:9:1: No row of the route takes some requests
+     9 | route
+  = The requests no row takes: amount from 100_001JPY to 200_000JPY
+  = A request no row takes: amount = 100_001JPY
+  = Add this row to the table, writing in place of `?` the shared route those requests take (the alias of a `use route` line): | >100_000JPY <=200_000JPY | ? |
+  = The cells are cut only at the bounds the table already writes and at the ends of the ranges, so the rows close the gap as they are; where the route changes inside a row, split it there.

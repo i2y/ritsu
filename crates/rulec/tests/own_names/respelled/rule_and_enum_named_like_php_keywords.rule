@@ -1,0 +1,16 @@
+rule print v1
+description "A print fee by its class, from a rule, an enum and a value named like keywords of PHP's, which its generated code writes with an underscore after them"
+
+enum class = draft | final
+
+inputs
+  quality : class
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_quality
+policy unique
+| quality | -> fee |
+| draft   | 1USD   |
+| final   | 3USD   |

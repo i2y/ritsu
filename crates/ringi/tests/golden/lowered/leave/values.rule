@@ -1,0 +1,15 @@
+rule leave_values v1
+description "What ringi writes from the form of leave.ringi for the code it generates: the totals and computations over all the values what they read can take, and when a field is shown and asked for; the code holds each computation to its range"
+
+import enum kind from "choices.rule"
+
+inputs
+  kind : kind
+
+outputs
+  reason_required : bool
+
+table reason_required
+| kind         | -> reason_required |
+| not: special | false              |
+| special      | true               |

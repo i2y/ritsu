@@ -61,6 +61,23 @@ function matches(names, err) {
   return names.some((n) => n === err || (n === "States.ALL" && err !== "States.Runtime" && err !== "States.DataLimitExceeded") || (n === "States.TaskFailed" && err !== "States.Timeout"));
 }
 
+// A URL-encoded body as the pairs Step Functions sends for it: a list's items under its name with
+// the ArrayFormat REPEAT, which is how dandori writes a list that repeats its name (DESIGN 43), and
+// otherwise as the other formats write them: `name[0]` and on for INDICES, the default, `name[]` for
+// BRACKETS, and the items joined with commas for COMMAS. A body that is not URL-encoded is as it is.
+function urlEncoded(body, transform) {
+  if (transform?.RequestBodyEncoding !== "URL_ENCODED" || body === null || typeof body !== "object" || Array.isArray(body)) return body;
+  const format = transform.RequestEncodingOptions?.ArrayFormat ?? "INDICES";
+  const out = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (!Array.isArray(v) || format === "REPEAT") out[k] = v;
+    else if (format === "BRACKETS") out[`${k}[]`] = v;
+    else if (format === "COMMAS") out[k] = v.join(",");
+    else v.forEach((x, i) => (out[`${k}[${i}]`] = x));
+  }
+  return out;
+}
+
 export function wire(resource, args) {
   if (resource.startsWith("arn:aws:states:::lambda:invoke")) {
     const payload = { ...(args.Payload ?? {}) };
@@ -79,10 +96,11 @@ export function wire(resource, args) {
     return { state_machine: args.StateMachineArn, input: args.Input };
   }
   if (resource === "arn:aws:states:::http:invoke") {
+    // the query is in the URL, and the cookies in the headers (dandori's DESIGN 43); headers that
+    // JSONata put together out of none are none
     const w = { http: args.Method, url: args.ApiEndpoint };
-    if (args.Headers !== undefined) w.headers = args.Headers;
-    if (args.RequestBody !== undefined) w.body = args.RequestBody;
-    if (args.QueryParameters !== undefined) w.query = args.QueryParameters;
+    if (args.Headers !== undefined && Object.keys(args.Headers).length > 0) w.headers = args.Headers;
+    if (args.RequestBody !== undefined) w.body = urlEncoded(args.RequestBody, args.Transform);
     return w;
   }
   return { resource, args };

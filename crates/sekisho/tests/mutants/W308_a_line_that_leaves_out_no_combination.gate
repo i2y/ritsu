@@ -1,0 +1,28 @@
+gate shop v1
+description "A shop's orders; a line of a permit is met wherever its other line is"
+
+enum status = paid | refunded | returned
+
+role clerk
+  description "Answers customers"
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Order
+  description "An order"
+  attributes
+    status : status
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+
+permit clerks_refund_paid_orders
+  description "A clerk refunds a paid order that is not refunded yet"
+  principal in clerk
+  action refund_order
+  when resource.status is paid
+  unless resource.status is refunded

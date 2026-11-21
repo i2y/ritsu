@@ -1,0 +1,10 @@
+diff --git a/proto/money.proto b/proto/money.proto
+index f5fe088..e9623d2 100644
+--- a/proto/money.proto
++++ b/proto/money.proto
+@@ -5,4 +5,5 @@ package refunds.v1;
+ message Money {
+   string currency = 1;
+   int64 units = 2;
++  int32 nanos = 3;
+ }

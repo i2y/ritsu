@@ -1,0 +1,33 @@
+gate library v1
+description "Who may read a document of the library and remove it; a permit names an action a forbid keeps from everyone"
+namespace Library
+
+role staff
+  description "Works in the library"
+
+principal User
+  description "A member of the staff"
+  roles staff
+
+resource Doc
+  description "A document"
+
+action read_doc
+  description "Read a document"
+  principal User
+  resource Doc
+
+action purge_doc
+  description "Remove a document for good"
+  principal User
+  resource Doc
+  nobody "documents are kept"
+
+permit staff_read_and_purge
+  description "Staff read documents, and would remove them"
+  principal in staff
+  action read_doc, purge_doc
+
+forbid no_one_purges
+  description "Documents are kept"
+  action purge_doc

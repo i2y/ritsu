@@ -12,6 +12,7 @@ use ritsu_testkit::{Need, TempDir, need, ready};
 use ritsu_testkit::tmp::tmpdir_in;
 
 use rulec::json::Json;
+use ritsu_testkit::run::finish;
 
 const RULE: &str = "tests/corpus/注文の状態.rule";
 
@@ -20,16 +21,21 @@ fn root() -> PathBuf {
 }
 
 fn rulec(args: &[&str]) -> (i32, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).output().expect("rulec を起動できない");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] }).output().expect("rulec を起動できない");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
 }
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 /// `rulec`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
 /// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
 /// with that.
 fn rulec_tmp(tmp: &Path, args: &[&str]) -> (i32, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args).output().expect("rulec を起動できない");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args).args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] }), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout)
 }
 
 fn objects(out: &str) -> Vec<Json> {
@@ -1147,14 +1153,9 @@ fn enumsのファイルから状態を読む機械も全部のrunnerで走る() 
     let out_dir = d.join("gen").to_string_lossy().into_owned();
     let (c, out) = rulec(&rulec::targets::up_to_0_40(&["gen", &door, &lamp, &gate, "--out", &out_dir]));
     assert_eq!(c, 0, "{out}");
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmpdir_in(Path::new(&out_dir)))
-        .args(["test", &out_dir])
-        .output()
-        .expect("rulec を起動できない");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-    assert!(o.status.success(), "{said}");
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(Path::new(&out_dir))).args(["test", &out_dir]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
     assert!(!said.contains("FAIL"), "{said}");
     let have = |cmd: &str, arg: &str| Command::new(cmd).arg(arg).output().is_ok_and(|o| o.status.success());
     let numpy = Command::new("python3").args(["-c", "import numpy"]).output().is_ok_and(|o| o.status.success());

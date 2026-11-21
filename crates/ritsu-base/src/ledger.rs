@@ -142,11 +142,43 @@ fn fence_of(name: &str) -> &'static str {
     KNOWN.iter().find(|k| **k == ext).copied().unwrap_or("")
 }
 
+/// What `explain` writes: text for a terminal, Markdown, or JSON.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shape {
+    Text,
+    Markdown,
+    Json,
+}
+
 impl Ledger {
     /// The entry of a code, written in either case.
     pub fn find(&self, code: &str) -> Option<&Entry> {
         let code = code.to_ascii_uppercase();
         self.entries.iter().find(|e| e.code == code)
+    }
+
+    /// The entries of the codes `explain` was given, in the order given; or, when some are not in
+    /// the ledger, those codes as given ([`crate::cli::no_codes`] names them all).
+    pub fn look_up(&self, codes: &[String]) -> Result<Vec<&Entry>, Vec<String>> {
+        let unknown: Vec<String> = codes.iter().filter(|c| self.find(c).is_none()).cloned().collect();
+        if !unknown.is_empty() {
+            return Err(unknown);
+        }
+        Ok(codes.iter().filter_map(|c| self.find(c)).collect())
+    }
+
+    /// `<tool> explain <CODE>...` (ritsu's DESIGN 6.2, item 10): one code as it is written alone;
+    /// several in the order given, the way `--all` writes every code — the text with a blank line
+    /// between, the JSON one array — and in Markdown each code's section, without the page's head.
+    pub fn explained(&self, entries: &[&Entry], shape: Shape, lang: Lang) -> String {
+        match (entries, shape) {
+            ([e], Shape::Text) => self.render_text(e, lang),
+            ([e], Shape::Markdown) => self.render_markdown_one(e, lang),
+            ([e], Shape::Json) => format!("{}\n", self.to_json(e, lang).pretty()),
+            (_, Shape::Text) => entries.iter().map(|e| self.render_text(e, lang)).collect::<Vec<_>>().join("\n"),
+            (_, Shape::Markdown) => entries.iter().map(|e| self.render_markdown_one(e, lang)).collect::<Vec<_>>().join("\n"),
+            (_, Shape::Json) => format!("{}\n", Json::arr(entries.iter().map(|e| self.to_json(e, lang))).pretty()),
+        }
     }
 
     /// The sentence that says how to run a reproduction. A command that starts with `ritsu`

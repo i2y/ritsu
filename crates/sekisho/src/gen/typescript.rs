@@ -44,7 +44,7 @@ const GLOBALS: &[&str] = &[
 
 /// The types the module declares for itself. A name of the gate's that is one of them is W402, and
 /// `gen` stops (E401), as in the Python and the Go (DESIGN 24).
-const OWN: [&str; 11] = ["Store", "Principal", "Role", "Uid", "Value", "Entity", "Request", "Answer", "SekishoError", "SekishoErrorKind", "VerifiedPermissions"];
+const OWN: [&str; 13] = ["Store", "Principal", "Role", "Uid", "Value", "Entity", "Request", "Answer", "SekishoError", "SekishoErrorKind", "VerifiedPermissions", "roles", "rolesOf"];
 
 /// `refund_order` → `refundOrder`.
 pub fn camel(alias: &str) -> String {
@@ -98,6 +98,10 @@ pub struct Names {
     pub error: String,
     pub error_kind: String,
     pub avp: String,
+    /// the function that lists the roles the gate declares
+    pub roles: String,
+    /// the function that lists the roles a type of principal takes
+    pub roles_of: String,
     pub inputs: Vec<String>,
 }
 
@@ -117,6 +121,21 @@ pub fn global(id: &str) -> bool {
     GLOBALS.contains(&id)
 }
 
+/// Whether `id` is a reserved word of TypeScript, or one strict mode reserves. A name the module
+/// declares at its top level cannot be one; none of a gate's is, as each starts with a capital, and
+/// the gate's other names are written where a reserved word is a name too (a property, a method).
+pub fn reserved(id: &str) -> bool {
+    ritsu_emit::words::typescript::RESERVED.contains(&id) || ritsu_emit::words::typescript::STRICT.contains(&id)
+}
+
+/// Whether tsc refuses `id` as the name an index exports a module under, `export * as <id> from …`,
+/// as the index of a package of `ritsu gen`'s does the module of each gate, by the file's alias: the
+/// words strict mode reserves, and `yield` and `await` (TypeScript 5.9, TS1214 and TS1262; DESIGN
+/// 32). The other reserved words are names there.
+pub fn index_word(id: &str) -> bool {
+    ritsu_emit::words::typescript::STRICT.contains(&id) || ["yield", "await"].contains(&id)
+}
+
 /// The names the module declares ([`declared`]), which `check` holds apart.
 pub fn names(g: &Gate, shape: &Shape) -> Names {
     let read: Vec<usize> = (0..g.types.len()).filter(|&t| raw::reads(g, shape, t)).collect();
@@ -127,9 +146,9 @@ pub fn names(g: &Gate, shape: &Shape) -> Names {
         types[t] = next();
     }
     let enums = g.enums.iter().map(|_| next()).collect();
-    let [store, principal, role, uid, value, entity, request, answer, error, error_kind, avp] = OWN.map(|_| next());
+    let [store, principal, role, uid, value, entity, request, answer, error, error_kind, avp, roles, roles_of] = OWN.map(|_| next());
     let inputs = g.actions.iter().map(|_| next()).collect();
-    Names { types, enums, store, principal, role, uid, value, entity, request, answer, error, error_kind, avp, inputs }
+    Names { types, enums, store, principal, role, uid, value, entity, request, answer, error, error_kind, avp, roles, roles_of, inputs }
 }
 
 /// The module of a gate that passes its check. `shown` is the path the head names; the rules,
@@ -228,7 +247,7 @@ impl<'a> Writer<'a> {
             }
             FieldType::Entity(t) => {
                 let n = &g.types[*t].named.alias;
-                self.t(tr!("{n} の ID", "The id of a {n}"))
+                self.t(tr!("{n} の ID", "The id of an entity of type {n}"))
             }
         }
     }
@@ -257,6 +276,7 @@ impl<'a> Writer<'a> {
         for ai in 0..g.actions.len() {
             self.action(ai)?;
         }
+        self.by_name();
         self.ask();
         self.write_helpers();
         Ok(self.out)
@@ -443,12 +463,12 @@ impl<'a> Writer<'a> {
         self.line("");
         // the error, the request, the answer
         let doc = self.t(tr!(
-            "拒んだ理由の種類。Cedar に尋ねる前のもの：principal、resource、input（無い、範囲や列挙の外）、today（範囲の外の日）、rule と date（規則と日付の生成物のエラー）。尋ねたあとのもの：cedar（Cedar がエラーを言った、尋ねられなかった）",
-            "Why the request was refused. Before Cedar is asked: the principal, the resource or the input (not there, or outside its range or its enum), today (a day outside the range the gate was checked over), or a rule or a date (an error of the code rulec or koyomi wrote). When it is asked: cedar (Cedar met an error, or could not be asked)"
+            "拒んだ理由の種類。Cedar に尋ねる前のもの：principal、resource、input（無い、範囲や列挙の外）、today（範囲の外の日）、rule と date（規則と日付の生成物のエラー）、action（authorize に、ゲートに無い action の名前が渡された）。尋ねたあとのもの：cedar（Cedar がエラーを言った、尋ねられなかった）",
+            "Why the request was refused. Before Cedar is asked: the principal, the resource or the input (not there, or outside its range or its enum), today (a day outside the range the gate was checked over), a rule or a date (an error of the code rulec or koyomi wrote), or action (authorize was given a name the gate has no action of). When it is asked: cedar (Cedar met an error, or could not be asked)"
         ));
         self.doc("", &doc);
         let (error, kind, uid, value, entity) = (self.names.error.clone(), self.names.error_kind.clone(), self.names.uid.clone(), self.names.value.clone(), self.names.entity.clone());
-        self.line(format!("export type {kind} = \"principal\" | \"resource\" | \"input\" | \"today\" | \"rule\" | \"date\" | \"cedar\";"));
+        self.line(format!("export type {kind} = \"principal\" | \"resource\" | \"input\" | \"today\" | \"rule\" | \"date\" | \"cedar\" | \"action\";"));
         self.line("");
         self.line(format!("export class {error} extends Error {{"));
         self.line(format!("  readonly kind: {kind};"));
@@ -517,6 +537,36 @@ impl<'a> Writer<'a> {
         let g = self.g;
         let ns = self.ns();
         self.line(format!("const _NS = {};", q(&ns)));
+        // the lists of the roles the gate declares and of the roles each type of principal takes, for
+        // the service to pass a person's roles through (DESIGN 33)
+        let declared: Vec<String> = g.roles.iter().map(|r| q(&r.named.alias)).collect();
+        let of = self.names.roles_of.clone();
+        let doc = self.t(tr!(
+            "ゲートが宣言した役割の別名を、宣言の順に、呼ぶたびに新しい配列で返す。レコードに入れる役割は {of} で絞る",
+            "The aliases of the roles the gate declares, in the order it declares them, in a new array each call. The roles to put into a record are narrowed with {of}"
+        ));
+        self.doc("", &doc);
+        self.line(format!("export function {}(): string[] {{", self.names.roles));
+        self.line(format!("  return [{}];", declared.join(", ")));
+        self.line("}");
+        let doc = self.t(tr!(
+            "Cedar での名前が t の principal の型が持てる役割（その型の roles の行に書いたもの）の別名を、ゲートが宣言した順に、呼ぶたびに新しい配列で返す。principal の型でない名前と、ゲートに無い名前には、空の配列を返す。レコードの roles には、この中の役割だけを入れられる。ほかの役割を一つでも持つ人は、どの action でも拒まれるので、サインインが運ぶ役割は、これで絞ってから入れる",
+            "The aliases of the roles a principal of the type named t in Cedar can hold (those its roles line names), in the order the gate declares them, in a new array each call; an empty one for a name that is not a principal's type, or that the gate does not declare. A record's roles holds only these: one who holds any other is refused every action, so pass the roles a sign-in carries through it first"
+        ));
+        self.doc("", &doc);
+        self.line(format!("export function {of}(t: string): string[] {{"));
+        let held = super::plan::roles_of(g);
+        if !held.is_empty() {
+            self.line("  switch (t) {");
+            for (ty, rs) in &held {
+                let rs: Vec<String> = rs.iter().map(|r| q(r)).collect();
+                self.line(format!("    case {}:", q(ty)));
+                self.line(format!("      return [{}];", rs.join(", ")));
+            }
+            self.line("  }");
+        }
+        self.line("  return [];");
+        self.line("}");
         // the roles, as entities with the roles they include as their parents
         if !g.roles.is_empty() {
             self.line(format!("const _ROLES: {}[] = [", self.names.entity));
@@ -722,6 +772,90 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
+    /// The entry by the action's name (DESIGN 5.7): `authorize`, given the action as Cedar names it
+    /// and the ids of resources by the names of their types in Cedar, answers through the action's
+    /// own function, with the id of the one type of the action's that it is given. A name the gate
+    /// has no action of, an action that takes inputs of its own, and no id, or ids of two types, of
+    /// the action's resource are refused, as the action's own function refuses what it cannot ask.
+    fn by_name(&mut self) {
+        let g = self.g;
+        let (store, principal, answer, err) = (self.names.store.clone(), self.names.principal.clone(), self.names.answer.clone(), self.names.error.clone());
+        let how = match self.authorizer {
+            // the comma closes the English aside, as the doc of each action's function writes it
+            Authorizer::Cedar => self.t(tr!("このプロセスの Cedar（cedar-wasm）", "Cedar, in this process (cedar-wasm),")),
+            Authorizer::Avp => "Amazon Verified Permissions".to_string(),
+        };
+        let eg = match g.actions.first() {
+            Some(a) => {
+                let (alias, f) = (&a.named.alias, authorize_fn(&a.named.alias));
+                self.t(tr!("（{alias} なら {f}）", " ({f} for {alias})"))
+            }
+            None => String::new(),
+        };
+        let doc = self.t(tr!(
+            "action という名前の action が許されるかを、{how}に尋ねる。尋ねるのは、その action の関数である{eg}。action は Cedar での action の名前で、resources は、resource の ID を、その型の Cedar での名前ごとに持つ。action がとらない型の ID は読まない。ゲートに無い名前（種類は action）、自分の入力を受け取る action（input。その action の関数で尋ねる）、action の resource の ID が無いか、二つの型の ID があるとき（resource）は、{err} を持つ拒む答えになる。Store の失敗は、そのまま投げる",
+            "Asks {how} whether the action named action is allowed, through the action's own function{eg}. action is the action's name in Cedar, and resources holds the id of a resource by the name of its type in Cedar; the ids of types the action does not take are left alone. A name the gate has no action of (the kind action), an action that takes inputs of its own (input: ask it through its own function), and no id, or ids of two types, of the action's resource (resource) are a deny, with a {err}. A failure of the store is thrown as it is"
+        ));
+        self.doc("", &doc);
+        let resources = "{ readonly [type: string]: string | undefined }";
+        let (params, avp) = match self.authorizer {
+            Authorizer::Cedar => (format!("store: {store}, principal: {principal}, action: string, resources: {resources}, now: Date = new Date()"), ""),
+            Authorizer::Avp => (format!("avp: {}, store: {store}, principal: {principal}, action: string, resources: {resources}, now: Date = new Date()", self.names.avp), "avp, "),
+        };
+        self.line(format!("export async function authorize({params}): Promise<{answer}> {{"));
+        let mut given = false;
+        if !g.actions.is_empty() {
+            self.line("  switch (action) {");
+            for a in &g.actions {
+                let alias = a.named.alias.clone();
+                let f = authorize_fn(&alias);
+                self.line(format!("    case {}: {{", q(&alias)));
+                if !a.inputs.is_empty() {
+                    let own: Vec<String> = a.inputs.iter().map(|x| x.named.alias.clone()).collect();
+                    let m = self.t(tr!("{alias} は自分の入力（{}）を受け取ります。{f} で尋ねてください", "{alias} takes inputs of its own ({}): ask it through {f}", own.join("、"); own.join(", ")));
+                    self.line(format!("      return {{ allowed: false, policies: [], error: new {err}(\"input\", {}) }};", q(&m)));
+                    self.line("    }");
+                    continue;
+                }
+                let types: Vec<String> = a.resources.iter().map(|&x| g.types[x].named.alias.clone()).collect();
+                let (ja_types, en_types) = (types.join("、"), types.join(", "));
+                let none = self.t(tr!("resources に {alias} の resource（{ja_types}）の ID がありません", "resources holds no id of the resource of {alias} ({en_types})"));
+                let lits: Vec<String> = types.iter().map(|x| q(x)).collect();
+                let rf = prop(&raw::resource_field(a));
+                if types.len() == 1 {
+                    self.line(format!("      const id = resources[{}];", lits[0]));
+                    self.line(format!("      if (typeof id !== \"string\") return {{ allowed: false, policies: [], error: new {err}(\"resource\", {}) }};", q(&none)));
+                    self.line(format!("      return {f}({avp}store, principal, {{ {rf}: id }}, now);"));
+                } else {
+                    given = true;
+                    let two = self.t(tr!("resources に {alias} の resource（{ja_types}）の ID が二つ以上あります。尋ねる一つだけを渡してください", "resources holds ids of more than one type of the resource of {alias} ({en_types}): give the one it is asked of"));
+                    self.line(format!("      const t = _given(resources, [{}], {}, {});", lits.join(", "), q(&none), q(&two)));
+                    self.line(format!("      if (t instanceof {err}) return {{ allowed: false, policies: [], error: t }};"));
+                    self.line(format!("      return {f}({avp}store, principal, {{ {rf}: resources[t] as string, resource_type: t as {} }}, now);", lits.join(" | ")));
+                }
+                self.line("    }");
+            }
+            self.line("  }");
+        }
+        let unknown = self.t(tr!("ゲートに action ${{JSON.stringify(action)}} はありません", "the gate has no action ${{JSON.stringify(action)}}"));
+        self.line(format!("  return {{ allowed: false, policies: [], error: new {err}(\"action\", `{unknown}`) }};"));
+        self.line("}");
+        self.line("");
+        if given {
+            let doc = self.t(tr!(
+                "resource の型をいくつかとる action の、types のうち resources が ID を持つ一つの型。一つも無いか、二つ以上あれば、種類 resource の {err} にする（文は none と two）",
+                "The one type of types, the types of the resource of an action that takes several, that resources holds an id of. None, or more than one, is a {err} of the kind resource, saying none or two"
+            ));
+            self.doc("", &doc);
+            self.line(format!("function _given(resources: {resources}, types: readonly string[], none: string, two: string): string | {err} {{"));
+            self.line("  const found = types.filter((t) => typeof resources[t] === \"string\");");
+            self.line("  if (found.length === 1) return found[0];");
+            self.line(format!("  return new {err}(\"resource\", found.length === 0 ? none : two);"));
+            self.line("}");
+            self.line("");
+        }
+    }
+
     /// The expression that checks a value of the data and gives it, or refuses with the kind the
     /// expression `kind` gives.
     fn check(&mut self, f: &Field, get: &str, kind: &str, what: &str) -> String {
@@ -921,6 +1055,10 @@ impl<'a> Writer<'a> {
         let key = q(&cv.named.alias);
         let mut out: Vec<String> = Vec::new();
         let mut guards: Vec<String> = Vec::new();
+        // an attribute that may be absent, read inside the closure that calls the rule or the date:
+        // tsc does not carry the narrowing of `p_X.attr != null` into the closure, so the value is
+        // bound to a const first, as the Python's `a0 = …` is
+        let mut binds: Vec<String> = Vec::new();
         match (&cv.how, kn) {
             (How::Rule { rule, args, output }, Kn::Rule { domain, .. }) => {
                 let facts = self.rule_facts(*rule)?;
@@ -934,7 +1072,7 @@ impl<'a> Writer<'a> {
                         params.push("null".to_string());
                         continue;
                     };
-                    let is_date = col.is_some_and(|c| matches!(&c.ty, ColumnType::Date) || matches!(&c.ty, ColumnType::Opt(x) if **x == ColumnType::Date));
+                    let is_date = col.is_some_and(|c| c.ty.is_date());
                     let enum_ty = call.enums.iter().find(|e| e.alias == p.ty || format!("{} | null", e.alias) == p.ty);
                     let v = match src {
                         Source::Lit(Literal::Num(num)) => {
@@ -956,15 +1094,16 @@ impl<'a> Writer<'a> {
                         }
                         Source::Lit(Literal::Word(w)) => {
                             let e = enum_ty.ok_or_else(|| format!("{w} is not a value of an enum of {}", p.name))?;
-                            let rv = facts.enums.iter().find(|x| x.alias == e.alias).and_then(|x| x.values.iter().find(|v| v.name == *w || v.alias == *w || v.public == *w)).ok_or_else(|| format!("{w} is not a value of {}", e.alias))?;
+                            // The rule's enum by its name: the call's enum is the TypeScript the
+                            // rule's module has, whose type takes a number where its names meet the
+                            // rule's (rulec's §15.326), and the facts' is the type of every language.
+                            let rv = facts.enums.iter().find(|x| x.name == e.name).and_then(|x| x.values.iter().find(|v| v.name == *w || v.alias == *w || v.public == *w)).ok_or_else(|| format!("{w} is not a value of {}", e.alias))?;
                             let member = e.values.iter().find(|(n, _)| *n == rv.name).map(|(_, m)| m.clone()).unwrap_or_default();
                             format!("{m}.{}.{member}", e.alias)
                         }
                         _ => {
                             let Expr::Code(code) = self.source(ai, src, pt, rt) else { return Ok(Vec::new()) };
-                            if self.optional(ai, src, pt, rt) {
-                                guards.push(format!("{code} != null"));
-                            }
+                            let code = if self.optional(ai, src, pt, rt) { guarded(src, code, &mut binds, &mut guards) } else { code };
                             if is_date {
                                 self.helpers.insert("days");
                                 format!("_days({code})")
@@ -995,7 +1134,7 @@ impl<'a> Writer<'a> {
                             .values
                             .iter()
                             .filter_map(|(name, member)| {
-                                let public = facts.enums.iter().find(|x| x.alias == e.alias)?.values.iter().find(|v| v.name == *name)?.public.clone();
+                                let public = facts.enums.iter().find(|x| x.name == e.name)?.values.iter().find(|v| v.name == *name)?.public.clone();
                                 vs.iter().any(|v| v.alias == public).then(|| format!("[{m}.{}.{member}]: {}", e.alias, q(&public)))
                             })
                             .collect();
@@ -1021,9 +1160,7 @@ impl<'a> Writer<'a> {
                         Source::Lit(_) => return Err(format!("{pname} is given a constant koyomi does not take")),
                         _ => {
                             let Expr::Code(code) = self.source(ai, src, pt, rt) else { return Ok(Vec::new()) };
-                            if self.optional(ai, src, pt, rt) {
-                                guards.push(format!("{code} != null"));
-                            }
+                            let code = if self.optional(ai, src, pt, rt) { guarded(src, code, &mut binds, &mut guards) } else { code };
                             if kind == DateKind::Int { format!("Number({code})") } else { code }
                         }
                     };
@@ -1049,7 +1186,8 @@ impl<'a> Writer<'a> {
         if guards.is_empty() {
             Ok(out)
         } else {
-            let mut wrapped = vec![format!("if ({}) {{", guards.join(" && "))];
+            let mut wrapped = binds;
+            wrapped.push(format!("if ({}) {{", guards.join(" && ")));
             wrapped.extend(out.into_iter().map(|l| format!("  {l}")));
             wrapped.push("}".to_string());
             Ok(wrapped)
@@ -1070,7 +1208,7 @@ impl<'a> Writer<'a> {
             _ => None,
         };
         let Some(Field { ty: FieldType::Enum(ge), .. }) = field else { return Err("an enum input of a rule is given what is not an enum".into()) };
-        let re = facts.enums.iter().find(|x| x.alias == e.alias).ok_or("no enum")?;
+        let re = facts.enums.iter().find(|x| x.name == e.name).ok_or("no enum")?;
         let mut pairs = Vec::new();
         for v in &g.enums[ge].values {
             let rv = re.values.iter().find(|x| x.name == v.name || x.alias == v.name || x.public == v.name || x.name == v.alias || x.alias == v.alias || x.public == v.alias);
@@ -1333,6 +1471,21 @@ fn ts_op(op: crate::ast::Op) -> &'static str {
         Op::Ge => ">=",
         Op::Is => "===",
     }
+}
+
+/// The code of a value that may be absent, given to a rule or a date: the guard the call waits on,
+/// and the value. An attribute is bound to a const first (`const a0 = p_Guest.age;`), since its
+/// narrowing does not reach the closure the call is made in; an input is a const already.
+fn guarded(src: &Source, code: String, binds: &mut Vec<String>, guards: &mut Vec<String>) -> String {
+    let code = if matches!(src, Source::Attr(..)) {
+        let local = format!("a{}", binds.len());
+        binds.push(format!("const {local} = {code};"));
+        local
+    } else {
+        code
+    };
+    guards.push(format!("{code} != null"));
+    code
 }
 
 fn source_text(s: &Source) -> String {

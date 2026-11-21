@@ -1,0 +1,4 @@
+summary.flow: 検査を通りました
+ok contract.ringi: 申請の種類、フィールド 4 個、ステップ 2 個
+  終わらないことがあります: ステップ `summary`、`review` には期限がありません（`due in …`）。答えが来るまで待ちます
+ritsu check: ファイル 2 個（dandori 1、ringi 1）。どれも検査を通りました。言語の境目: 確かめた 5 か所、決められない 0 か所

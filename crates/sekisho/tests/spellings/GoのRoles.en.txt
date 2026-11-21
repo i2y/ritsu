@@ -1,0 +1,5 @@
+warning[W402]: tests/spellings/GoのRoles.gate:13:1: The type `Roles` is written `Roles` in the code of Go, a name the code uses itself
+    13 | resource 係の表(Roles)
+  = Go (`--target go`): the type `Roles` is written `Roles`, and the code declares that name itself: the package does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, change its alias. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/GoのRoles.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

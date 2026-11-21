@@ -1,0 +1,19 @@
+rule 上限を超える品数(items_over_the_limit) v1
+description "1 から 5 品の上限に対する、かごの品数の超えた分。品数も上限も整数なので、2 品未満では超えた分が 0 を上回ることはない。整数でなければ、1.5 品で上回る"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  品数(items) : number  range >=0 <=10
+  上限(limit) : number  range >=1 <=5
+
+define 超えた分(excess) : number = 品数 - 上限
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 品数 | 超えた分 | -> 答え |
+| <2   | <=0      | 一      |
+| >=2  | <=0      | 二      |
+| >=2  | >0       | 一      |

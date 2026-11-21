@@ -1,0 +1,17 @@
+rule fee_by_step v1
+description "A value of an enum named begin, which Ruby writes as the constant BEGIN, one of its keywords"
+
+enum step = begin | middle | finish
+
+inputs
+  at : step
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_at
+policy unique
+| at     | -> fee |
+| begin  | 1USD   |
+| middle | 2USD   |
+| finish | 3USD   |

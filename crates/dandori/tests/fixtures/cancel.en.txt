@@ -11,6 +11,7 @@ error[E020]: tests/fixtures/cancel.flow:33:1: the workflow can end cancelled her
       33  `on cancel` ends and the workflow ends cancelled
 warning[W101]: tests/fixtures/cancel.flow:36:1: if `取消を頼む` fails while `on cancel` is settling `受注`, the workflow fails with `受注` in 受付, 入金済 (1 such call(s))
     36 |       受注 <- 取消を頼む(id: 受注.id)
+  = Once a call fails inside `on cancel`, `on cancel` cannot settle `受注` any more: handle the failure at the call of `取消を頼む`, and hand `受注` over as it is (`on failure, timeout => fail <Error> "…" leaving 受注`).
   the run that gets there:
       28  注文を見る: 受注 is 受付
       29  wait 1 day

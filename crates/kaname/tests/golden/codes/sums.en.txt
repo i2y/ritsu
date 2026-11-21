@@ -24,7 +24,7 @@ error[E105]: example.kn:9:5: A field of a value of Order is not read before a `m
   = Its fields depend on its value: split it with a `match`, and read the field of the value an arm names, as in `placed p => p.on`.
 
 ── E105
-error[E105]: example.kn:9:3: Order.draft is a value with no fields, which `{ … }` does not build
+error[E105]: example.kn:9:3: The value Order.draft has no fields, so `{ … }` does not build it
      9 |   Order.draft { on: 2026-01-01 }
   = A value with no fields is written `Order.draft` alone.
 
@@ -62,10 +62,12 @@ error[E006]: example.kn:5:3: The generated code would name two types `OrderPlace
      5 |   placed
   = The type of a value of an enum whose values have fields is named by the enum's name and the value's, joined (`Order.placed` is `OrderPlaced`); rename one of them, or give it another alias.
 
-── E007
-error[E007]: example.kn:5:5: The generated code cannot take `kind` as the name of a field of `Order.draft`
+── W001
+warning[W001]: example.kn:5:5: The generated TypeScript cannot take `kind` as the name of a field
      5 |     kind : string
-  = The generated TypeScript tells the values of an enum whose values have fields apart by the field `kind`; choose another name or alias.
+  = The generated TypeScript tells the values of an enum whose values have fields apart by the field `kind`.
+  = `ritsu gen --target typescript` stops at this module (E008). If you do not generate TypeScript, leave it; if you do, choose another name or alias.
+ok example.kn: 0 functions
 
 ── E110
 error[E110]: example.kn:12:3: `placed` reads both as a record and as a value of the enum `Order`

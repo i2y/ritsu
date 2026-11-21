@@ -15,8 +15,11 @@
 //! 3. each policy as the `.gate` writes it beside the Cedar it compiles to, with what it decides;
 //! 4. each computed value: what computes it, its values, and the rule's or the date's page;
 //! 5. the expectations, the separations, and how far each role alone is allowed each action;
-//! 6. each workflow: the actions it is allowed and, given what its flow calls (`FlowCalls`, from
-//!    dandori's answer), each call with the action that guards it;
+//! 6. each workflow: the actions it is allowed; what the gate says its flow holds of a resource
+//!    (the `resource` lines under it, shown as the gate's assumption, which nothing checks of the
+//!    resource the service reads: DESIGN 2.12); and, given what its flow calls (`FlowCalls`, from
+//!    dandori's answer), each call with the action that guards it and how far the workflow is
+//!    allowed it at that call (`at::allowed_at`), marked where the answer rests on those lines;
 //! 7. the operations each action guards, by their references, and the actions that guard none;
 //!
 //! and last what `sekisho check` warns of, when it warns.
@@ -231,6 +234,8 @@ struct PolStat {
     alone: u128,
     /// A forbid: those a permit applies to as well (and Cedar denies, since the forbid wins).
     overturns: u128,
+    /// The combinations its `principal` line holds on (all of them, without the line).
+    scope: u128,
 }
 
 /// What one action's walk comes to, for the page.
@@ -258,6 +263,9 @@ fn stats(s: &Space) -> ActStat {
         }
         let permit_applies = (0..s.policies.len()).any(|k| c.applies[k] && s.permit[k]);
         for (k, &pi) in s.policies.iter().enumerate() {
+            if s.frames[c.frame].policies[k].scope.holds(c.env) {
+                a.policies.entry(pi).or_default().scope += 1;
+            }
             if !c.applies[k] {
                 continue;
             }
@@ -654,6 +662,7 @@ impl<'a> Builder<'a> {
         facts.push(match (st.combinations, st.allowed) {
             (1, 1) => self.t(tr!("組み合わせは 1 通りで、それを許します。", "1 combination, allowed.")),
             (1, _) => self.t(tr!("組み合わせは 1 通りで、それを拒みます。", "1 combination, denied.")),
+            (k, 0) => self.t(tr!("組み合わせは {} 通りで、どれも許しません。", "{} combinations, none of them allowed.", n(k))),
             _ => self.t(tr!(
                 "組み合わせは {} 通りで、そのうち {} 通りを許します。",
                 "{} {}, {} of them allowed.",
@@ -664,10 +673,20 @@ impl<'a> Builder<'a> {
         self.push(Block::List(facts));
         let Some(s) = self.checked.report.spaces[ai].as_ref() else { return };
         if s.inexact() {
-            self.push(Block::Note(self.t(tr!(
-                "この action の組み合わせには、ほかの言語が起こるかどうかを言えなかった値を、起こるかもしれないものとして数えたものがあります。下の表にもその行が入っています（「検査の警告」）。",
-                "Some combinations of this action rest on a value another language could not say can happen, and are counted in case it can; the tables below hold them too (see What check warns of)."
-            ))));
+            // the warnings are a section of the page only when there are some: the note points
+            // there when an answer could not be decided (W303), and nowhere otherwise
+            let mut note = self.t(tr!(
+                "この action の組み合わせには、ほかの言語が起こるかどうかを言えなかった値を、起こるかもしれないものとして数えたものがあります。下の表にもその行が入っています。",
+                "Some combinations of this action rest on a value another language could not say can happen, and are counted in case it can; the tables below hold them too."
+            ));
+            if self.o.diags.iter().any(|d| d.code == "W303") {
+                note.push_str(if self.ja() { "" } else { " " });
+                note.push_str(&self.t(tr!(
+                    "そのために決められなかった答えは、下の「検査の警告」にあります。",
+                    "The answers that could not be decided for it are under What check warns of below."
+                )));
+            }
+            self.push(Block::Note(note));
         }
         let t = crate::table::table(g, s);
         let policies_of = |pol: &[usize]| -> String {
@@ -707,13 +726,35 @@ impl<'a> Builder<'a> {
                 continue;
             }
             let ps = st.policies.get(&pi).copied().unwrap_or_default();
+            // a forbid that applies to no combination of this action denies nothing here: its own
+            // section says why
+            if ps.holds == 0 {
+                continue;
+            }
             let when = self.policy_lines(pi);
-            lines.push(self.t(tr!(
-                "{}（{when}）は {} 通りに当てはまり、どれも拒みます。そのうち {} 通りには permit も当てはまりますが、forbid が勝ちます。",
-                "{} ({when}) applies to {} {}, and denies each; a permit applies to {} of them too, and the forbid wins.",
-                code(&p.named.name), n(ps.holds), n(ps.overturns);
-                code(&p.named.name), n(ps.holds), combos(ps.holds), n(ps.overturns)
-            )));
+            let name = code(&p.named.name);
+            lines.push(match (ps.holds, ps.overturns) {
+                (1, 0) => self.t(tr!("{name}（{when}）は 1 通りに当てはまり、それを拒みます。permit は当てはまりません。", "{name} ({when}) applies to 1 combination, and denies it; no permit applies to it.")),
+                (1, _) => self.t(tr!(
+                    "{name}（{when}）は 1 通りに当てはまり、それを拒みます。permit も当てはまりますが、forbid が勝ちます。",
+                    "{name} ({when}) applies to 1 combination, and denies it; a permit applies to it too, and the forbid wins."
+                )),
+                (k, 0) => self.t(tr!(
+                    "{name}（{when}）は {} 通りに当てはまり、どれも拒みます。permit は、どれにも当てはまりません。",
+                    "{name} ({when}) applies to {} combinations, and denies each; no permit applies to any of them.",
+                    n(k)
+                )),
+                (k, o) if o == k => self.t(tr!(
+                    "{name}（{when}）は {} 通りに当てはまり、どれも拒みます。どれにも permit も当てはまりますが、forbid が勝ちます。",
+                    "{name} ({when}) applies to {} combinations, and denies each; a permit applies to each of them too, and the forbid wins.",
+                    n(k)
+                )),
+                (k, o) => self.t(tr!(
+                    "{name}（{when}）は {} 通りに当てはまり、どれも拒みます。そのうち {} 通りには permit も当てはまりますが、forbid が勝ちます。",
+                    "{name} ({when}) applies to {} combinations, and denies each; a permit applies to {} of them too, and the forbid wins.",
+                    n(k), n(o)
+                )),
+            });
         }
         if st.no_permit > 0 && lines.is_empty() {
             lines.push(self.t(tr!(
@@ -816,9 +857,56 @@ impl<'a> Builder<'a> {
                 )));
             }
             for &ai in &p.actions {
+                // an action that was not walked has no page (its check stops with an error)
+                if self.checked.report.spaces[ai].is_none() {
+                    continue;
+                }
                 let ps = self.stats[ai].policies.get(&pi).copied().unwrap_or_default();
                 let an = code(&g.actions[ai].named.name);
-                lines.push(if p.permit && ps.alone == ps.decides && ps.decides == 1 {
+                lines.push(if ps.holds == 0 {
+                    // it applies to no combination of this action: why
+                    let who = decl.and_then(|d| d.body.principal.as_ref()).map(|(w, _)| code(&who_text(w)));
+                    let why = match (ps.scope, who) {
+                        (0, Some(who)) => {
+                            let types = joined(lang, &g.actions[ai].principals.iter().map(|&t| code(&g.types[t].named.name)).collect::<Vec<_>>());
+                            self.t(tr!("{an} の principal（{types}）は、{who} の行を満たしません。", "no principal of {an} ({types}) meets its line {who}."))
+                        }
+                        (0, None) => self.t(tr!("この action には、組み合わせが一つもありません。", "the action has no combination.")),
+                        // one line of condition: that line is met on none
+                        (k, Some(_)) if p.conds.len() == 1 => {
+                            let line = code(&format!("{} {}", if p.conds[0].when { "when" } else { "unless" }, p.conds[0].text));
+                            self.t(tr!(
+                                "`principal` の行は {} 通りで満たされますが、{line} の行は、そのどれでも満たされません。",
+                                "its `principal` line is met on {} {}, and its line {line} on none of them.",
+                                n(k);
+                                n(k), combos(k)
+                            ))
+                        }
+                        (_, None) if p.conds.len() == 1 => {
+                            let line = code(&format!("{} {}", if p.conds[0].when { "when" } else { "unless" }, p.conds[0].text));
+                            self.t(tr!("{line} の行は、この action のどの組み合わせでも満たされません。", "its line {line} is met on no combination of the action."))
+                        }
+                        (k, Some(_)) => self.t(tr!(
+                            "`principal` の行は {} 通りで満たされますが、`when` と `unless` の行が、そこで同時に満たされることがありません。",
+                            "its `principal` line is met on {} {}, and its `when` and `unless` lines are never all met there.",
+                            n(k);
+                            n(k), combos(k)
+                        )),
+                        (_, None) => self.t(tr!(
+                            "`when` と `unless` の行が、この action のどの組み合わせでも、同時に満たされることがありません。",
+                            "its `when` and `unless` lines are never all met on a combination of the action."
+                        )),
+                    };
+                    self.t(tr!("{an} では、どの組み合わせにも当てはまりません。{why}", "On {an}, it applies to no combination: {why}"))
+                } else if p.permit && ps.decides == 0 && ps.holds == 1 {
+                    self.t(tr!("{an} では 1 通りに当てはまりますが、forbid がそれを拒むので、許す組み合わせはありません。", "On {an}, it applies to 1 combination, which a forbid denies: it allows none."))
+                } else if p.permit && ps.decides == 0 {
+                    self.t(tr!(
+                        "{an} では {} 通りに当てはまりますが、forbid がどれも拒むので、許す組み合わせはありません。",
+                        "On {an}, it applies to {} combinations, and a forbid denies each: it allows none.",
+                        n(ps.holds)
+                    ))
+                } else if p.permit && ps.alone == ps.decides && ps.decides == 1 {
                     self.t(tr!("{an} では 1 通りを許します。ほかの permit は、それを許しません。", "On {an}, it allows 1 combination, which no other permit allows."))
                 } else if p.permit && ps.alone == ps.decides {
                     self.t(tr!(
@@ -844,12 +932,25 @@ impl<'a> Builder<'a> {
                         n(ps.decides), combos(ps.decides), n(ps.alone)
                     ))
                 } else {
-                    self.t(tr!(
-                        "{an} では {} 通りに当てはまり、どれも拒みます。そのうち {} 通りには permit も当てはまります。",
-                        "On {an}, it applies to {} {} and denies them; a permit applies to {} of them too.",
-                        n(ps.holds), n(ps.overturns);
-                        n(ps.holds), combos(ps.holds), n(ps.overturns)
-                    ))
+                    match (ps.holds, ps.overturns) {
+                        (1, 0) => self.t(tr!("{an} では 1 通りに当てはまり、それを拒みます。permit は当てはまりません。", "On {an}, it applies to 1 combination and denies it; no permit applies to it.")),
+                        (1, _) => self.t(tr!("{an} では 1 通りに当てはまり、それを拒みます。permit も当てはまります。", "On {an}, it applies to 1 combination and denies it; a permit applies to it too.")),
+                        (k, 0) => self.t(tr!(
+                            "{an} では {} 通りに当てはまり、どれも拒みます。permit は、どれにも当てはまりません。",
+                            "On {an}, it applies to {} combinations and denies them; no permit applies to any of them.",
+                            n(k)
+                        )),
+                        (k, o) if o == k => self.t(tr!(
+                            "{an} では {} 通りに当てはまり、どれも拒みます。どれにも permit も当てはまります。",
+                            "On {an}, it applies to {} combinations and denies them; a permit applies to each of them too.",
+                            n(k)
+                        )),
+                        (k, o) => self.t(tr!(
+                            "{an} では {} 通りに当てはまり、どれも拒みます。そのうち {} 通りには permit も当てはまります。",
+                            "On {an}, it applies to {} combinations and denies them; a permit applies to {} of them too.",
+                            n(k), n(o)
+                        )),
+                    }
                 });
             }
             self.push(Block::List(lines));
@@ -1403,6 +1504,7 @@ impl<'a> Builder<'a> {
                 let marks = vec![Mark::Plain; rows.len()];
                 self.push(Block::Table { head: vec!["action".into(), self.t(tr!("許されるか", "Allowed"))], rows, marks });
             }
+            self.holds(wi);
             let Some(fc) = calls.and_then(|cs| cs.iter().find(|c| c.workflow == wi)) else { continue };
             self.heading(4, self.t(tr!("フローが呼ぶ操作", "What the flow calls")), format!("{}-calls", id_of("workflow", &w.named.alias)));
             match &fc.calls {
@@ -1414,17 +1516,35 @@ impl<'a> Builder<'a> {
                 Ok(cs) if cs.is_empty() => self.push(Block::Para(self.t(tr!("フローは、契約の操作をどれも呼びません。", "The flow calls no operation of a contract.")))),
                 Ok(cs) => {
                     self.push(Block::Para(self.t(tr!(
-                        "フローのタスクが呼ぶ操作と、それを守る action、そのワークフローがその action を許されるかです。`ritsu check` は、これを言語をまたいで確かめます。",
-                        "Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action: what `ritsu check` holds across the languages."
+                        "フローのタスクが呼ぶ操作と、それを守る action、その呼び出しでワークフローがその action を許されるかです。答えは、その呼び出しまで進んだ実行で起こりうる組み合わせの上のものです（呼び出しが渡す値と、途中の `match` が残す値）。`ritsu check` は、これを言語をまたいで確かめます。",
+                        "Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action at the call: over the combinations the runs that reach the call can come to (what the call gives, and what the arms of each `match` on the way leave). It is what `ritsu check` holds across the languages."
                     ))));
                     let mut rows = Vec::new();
+                    // what each answer is held to, and whether it rests on the gate's lines
+                    let mut held: Vec<String> = Vec::new();
+                    let mut rests = false;
                     for c in cs {
                         let guard = g.actions.iter().position(|a| a.references().iter().any(|(r, _)| *r == c.operation));
                         let (by, allowed) = match guard {
                             Some(ai) => (
                                 self.action_name(ai),
                                 match answers.get(&ai) {
-                                    Some(f) => allowance_word(lang, f),
+                                    Some(over_all) => {
+                                        let at = self.at_call(ai, &w.named.alias, c);
+                                        let found = at.as_ref().map_or(over_all, |a| &a.allowance);
+                                        let mut word = allowance_word(lang, found);
+                                        if let Some(a) = &at {
+                                            if !a.held.is_empty() {
+                                                let l = Text::join(&a.held, "、", "; ");
+                                                held.push(self.t(tr!("{} 行目：{}。", "Line {}: {}.", c.line, l.ja; c.line, l.en)));
+                                            }
+                                            if !a.rests_on.is_empty() {
+                                                rests = true;
+                                                word = self.t(tr!("{word}（ゲートの `resource` の行を前提に）", "{word} (given the gate's `resource` lines)"));
+                                            }
+                                        }
+                                        word
+                                    }
                                     None => tr!("許さない（Workflow を取らない）", "never (it takes no Workflow)").get(lang).to_string(),
                                 },
                             ),
@@ -1446,9 +1566,71 @@ impl<'a> Builder<'a> {
                         self.t(tr!("拒まれたときのエラー", "Error on a denial")),
                     ];
                     self.push(Block::Table { head, rows, marks });
+                    if !held.is_empty() {
+                        self.push(Block::Para(self.t(tr!("呼び出しまで進んだ実行で決まっていること：", "What the runs that reach a call hold there:"))));
+                        self.push(Block::List(held));
+                    }
+                    if rests {
+                        self.push(Block::Note(self.t(tr!(
+                            "「ゲートの `resource` の行を前提に」と書いた答えは、ワークフローの下の `resource` の行のとおりに、サービスが読む resource がフローの値を持つときの答えです。そのとおりであることは、どの検査も確かめていません。",
+                            "An answer marked \"given the gate's `resource` lines\" is the answer where the resource the service reads holds what the `resource` lines under the workflow say the flow holds. Nothing checks that it does."
+                        ))));
+                    }
                 }
             }
         }
+    }
+
+    /// The `resource` lines under a workflow (DESIGN 2.12): what the gate says the flow holds of
+    /// the resources it acts on, shown as what it is, the gate's word that nothing checks.
+    fn holds(&mut self, wi: usize) {
+        let g = self.g;
+        let w = &g.workflows[wi];
+        if w.holds.is_empty() {
+            return;
+        }
+        self.heading(4, self.t(tr!("フローが resource について持つ値（ゲートが書いた前提）", "What the gate says the flow holds of a resource")), format!("{}-holds", id_of("workflow", &w.named.alias)));
+        self.push(Block::Para(self.t(tr!(
+            "ワークフローの下の `resource` の行です。フローがその値を resource の ID として渡す呼び出しでは、resource の属性は、横に書いたフローの値と同じだとゲートが言っています。`ritsu check` は、フローの呼び出しをゲートが許すかを、この行を前提にして確かめます。",
+            "The `resource` lines under the workflow. Where the flow gives the value as the id of the resource, the gate says each attribute of the resource is the value of the flow beside it. `ritsu check` rests on these lines when it asks whether the gate allows the calls of the flow."
+        ))));
+        let mut rows = Vec::new();
+        for h in &w.holds {
+            let ty = &g.types[h.resource];
+            if h.attrs.is_empty() {
+                rows.push(vec![h.line.to_string(), named(self.lang, &ty.named), code(&h.id), "-".to_string(), "-".to_string()]);
+            }
+            for (a, value, line) in &h.attrs {
+                rows.push(vec![line.to_string(), named(self.lang, &ty.named), code(&h.id), code(&ty.attrs[*a].named.name), code(value)]);
+            }
+        }
+        let marks = vec![Mark::Plain; rows.len()];
+        let head = vec![
+            self.t(tr!("行", "Line")),
+            "resource".to_string(),
+            self.t(tr!("ID になるフローの値", "The flow's value that is its id")),
+            self.t(tr!("属性", "Attribute")),
+            self.t(tr!("フローの値", "The flow's value")),
+        ];
+        self.push(Block::Table { head, rows, marks });
+        self.push(Block::Note(self.t(tr!(
+            "これはゲートを書いた人が置いた前提です。サービスが読む resource が、フローの持つ値と同じであることは、どの検査も確かめていません。フローの値がその属性のとりうる値であることは、`ritsu sekisho check` が確かめます（E212）。",
+            "These lines are an assumption whoever wrote the gate makes. Nothing checks that the resource the service reads holds what the flow holds. That each value of the flow is one its attribute takes is checked by `ritsu sekisho check` (E212)."
+        ))));
+    }
+
+    /// How far the workflow is allowed the action at one call of its flow (`at::allowed_at`), where
+    /// dandori is joined; None where it is not, and the answer over every combination stands.
+    fn at_call(&self, ai: usize, workflow: &str, call: &Call) -> Option<ritsu_ports::AllowedAt> {
+        let flows = self.suite.flows.as_ref()?;
+        let ports = ritsu_ports::Ports { rules: self.suite.rules.clone()?, dates: self.suite.dates.clone()?, books: self.suite.books.clone()? };
+        let langs = crate::borders::Langs {
+            rules: self.suite.rules.as_deref().filter(|r| r.joined()),
+            dates: self.suite.dates.as_deref().filter(|d| d.joined()),
+            books: None,
+            flows: Some((flows.as_ref(), ports)),
+        };
+        Some(crate::at::allowed_at(self.checked, &langs, crate::check::DEFAULT_BUDGET as u128, ai, workflow, call))
     }
 
     // -----------------------------------------------------------------------------------------
@@ -1521,7 +1703,7 @@ fn who_text(w: &crate::ast::Who) -> String {
     }
 }
 
-/// A field's type as the page says it: `money[GBP, incl_tax], 1GBP to 10,000GBP`.
+/// A field's type as the page says it: `money[GBP, incl_tax], 1GBP to 10_000GBP`.
 fn field_type(lang: Lang, g: &Gate, f: &Field) -> String {
     let opt = if f.optional { "?" } else { "" };
     match &f.ty {

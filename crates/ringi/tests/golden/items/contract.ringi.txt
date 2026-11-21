@@ -1,0 +1,122 @@
+11-11 ringi "examples/contract.ringi" field counterparty
+    counterparty : text "Counterparty" count >=1 <=100
+12-15 ringi "examples/contract.ringi" field kind
+    kind : choice "Kind of contract"
+    nda "Non-disclosure agreement"
+    service "Service agreement"
+    license "License agreement"
+16-16 ringi "examples/contract.ringi" field value
+    value : money[JPY] "Contract value" range >=0JPY <=1_000_000_000JPY
+17-17 ringi "examples/contract.ringi" field months
+    months : number "Term in months" range >=1 <=60
+18-18 ringi "examples/contract.ringi" field document
+    document : attachment "Contract"
+19-19 ringi "examples/contract.ringi" field text
+    text : long text "Text of the contract" count >=1 <=20_000
+20-20 ringi "examples/contract.ringi" field reviewer
+    reviewer : person "Reviewer" approvers only
+22-22 ringi "examples/contract.ringi" field risks
+    risks : long text "Risks legal notes" count <=2_000 approvers only optional shown when kind is not nda
+26-27 ringi "examples/contract.ringi" stage manager
+    manager manager
+    when empty escalate, then skip
+28-28 ringi "examples/contract.ringi" stage summary
+    summary note from summarize
+29-29 ringi "examples/contract.ringi" stage intake
+    intake legal
+30-30 ringi "examples/contract.ringi" stage review
+    review reviewer
+31-31 ringi "examples/contract.ringi" stage second
+    second at least 2 of legal when value > 5_000_000JPY
+33-34 ringi "examples/contract.ringi" stage counsel
+    counsel counsel when value > 10_000_000JPY
+    when empty escalate
+35-35 ringi "examples/contract.ringi" stage finance
+    finance circulate to finance when kind is license
+38-38 ringi "examples/contract.ringi" who manager
+    manager = manager of requester
+39-39 ringi "examples/contract.ringi" who legal
+    legal = team legal
+40-40 ringi "examples/contract.ringi" who reviewer
+    reviewer = chosen by previous approver in reviewer
+41-41 ringi "examples/contract.ringi" who counsel
+    counsel = person "e9001"
+42-42 ringi "examples/contract.ringi" who finance
+    finance = team finance
+44-48 ringi "examples/contract.ringi" deadline every_stage
+    every stage
+    due in 3 business days at end of day
+    remind after 2 business days at 09:00
+    when late escalate, then expire
+    when empty stay
+27-27 ringi "examples/contract.ringi" deadline manager
+    when empty escalate, then skip
+34-34 ringi "examples/contract.ringi" deadline counsel
+    when empty escalate
+51-51 ringi "examples/contract.ringi" ticket self_approval
+    self approval not allowed
+52-52 ringi "examples/contract.ringi" ticket send_back
+    send back to any earlier stage, at most 3 times
+53-53 ringi "examples/contract.ringi" ticket resubmit
+    resubmit within 10 business days
+54-54 ringi "examples/contract.ringi" ticket withdraw
+    withdraw until counsel
+55-55 ringi "examples/contract.ringi" ticket pause
+    pause at most 10 business days
+56-56 ringi "examples/contract.ringi" ticket approvers_edit
+    approvers edit risks, reviewer
+59-59 ringi "examples/contract.ringi" claim counsel_decides_large_contracts
+    counsel_decides_large_contracts : counsel is counsel only when value > 10_000_000JPY
+60-60 ringi "examples/contract.ringi" claim ends_in_time
+    ends_in_time : every ticket ends within 192 business days
+62-76 ringi "examples/contract.ringi" scenario a_large_license
+    scenario a_large_license
+    requester e1201
+    form counterparty = "Example Software (fictional)", kind = license, value = 12_000_000JPY, months = 12, document = "contract.pdf", text = "The licensee may use the software for twelve months (fictional)."
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | manager | in progress |
+    | 2026-11-16 11:00 | approve | e1101 | summary | in progress |
+    | 2026-11-16 11:05 | note ready(summary: "A one-year license; the liability is capped at the fee") | | intake | in progress |
+    | 2026-11-16 14:00 | edit(reviewer: person "e9003") | e9002 | intake | in progress |
+    | 2026-11-16 14:05 | approve | e9002 | review | in progress |
+    | 2026-11-17 10:00 | pause | e9003 | review | paused |
+    | 2026-11-18 10:00 | resume | e9003 | review | in progress |
+    | 2026-11-18 15:00 | approve | e9003 | second | in progress |
+    | 2026-11-19 10:00 | approve | e9001 | second | in progress |
+    | 2026-11-19 11:00 | approve | e9002 | counsel | in progress |
+    | 2026-11-20 10:00 | approve | e9001 | | approved |
+80-88 ringi "examples/contract.ringi" scenario a_draft_that_does_not_come
+    scenario a_draft_that_does_not_come
+    requester e1201
+    form counterparty = "Example Logistics (fictional)", kind = service, value = 3_000_000JPY, months = 12, document = "contract.pdf", text = "The contractor carries the goods of the company for twelve months (fictional)."
+    | at | event | by | comment | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | | manager | in progress |
+    | 2026-11-16 11:00 | approve | e1101 | | summary | in progress |
+    | 2026-11-16 11:05 | note ready(summary: "A one-year contract for carrying goods") | | | intake | in progress |
+    | 2026-11-16 14:00 | send back | e9002 | "Attach the draft the counterparty sent: we check what both sign" | | with requester |
+    | 2026-12-01 00:00 | resubmit late | | | | expired |
+92-101 ringi "examples/contract.ringi" scenario a_non_disclosure_agreement
+    scenario a_non_disclosure_agreement
+    requester e1201
+    form counterparty = "Example Research (fictional)", kind = nda, value = 0JPY, months = 24, document = "nda.pdf", text = "Each side keeps secret what the other discloses, for two years (fictional)."
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | manager | in progress |
+    | 2026-11-16 11:00 | approve | e1101 | summary | in progress |
+    | 2026-11-16 11:05 | note ready(summary: "A two-year NDA, the same for both") | | intake | in progress |
+    | 2026-11-16 14:00 | edit(reviewer: person "e9003") | e9002 | intake | in progress |
+    | 2026-11-16 14:05 | approve | e9002 | review | in progress |
+    | 2026-11-17 10:00 | approve | e9003 | | approved |
+106-118 ringi "examples/contract.ringi" scenario a_lawyer_after_the_team_shrinks
+    scenario a_lawyer_after_the_team_shrinks
+    requester e9003
+    form counterparty = "Example Printing (fictional)", kind = service, value = 6_000_000JPY, months = 12, document = "contract.pdf", text = "The contractor prints the catalogs of the company for twelve months (fictional)."
+    | at | event | by | -> stage | status |
+    | 2027-04-12 10:00 | submit | e9003 | manager | in progress |
+    | 2027-04-12 11:00 | approve | e0102 | summary | in progress |
+    | 2027-04-12 11:05 | note ready(summary: "A one-year contract for printing") | | intake | in progress |
+    | 2027-04-12 14:00 | edit(reviewer: person "e9002") | e9002 | intake | in progress |
+    | 2027-04-12 14:05 | approve | e9002 | review | in progress |
+    | 2027-04-13 10:00 | approve | e9002 | second | in progress |
+    | 2027-04-13 11:00 | add approver(approver: person "e0102") | | second | in progress |
+    | 2027-04-13 15:00 | approve | e9002 | second | in progress |
+    | 2027-04-14 10:00 | approve | e0102 | | approved |

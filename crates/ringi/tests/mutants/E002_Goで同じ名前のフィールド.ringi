@@ -1,0 +1,15 @@
+request 例(example) v1 "例"
+
+form
+  金額(amount)                 : money[円] "金額"  range >=1円 <=100_000円
+  費用コード(cost_code)        : text "費用コード"  count <=20
+  案件の費用コード(costCode)   : text "案件の費用コード"  count <=20  optional
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

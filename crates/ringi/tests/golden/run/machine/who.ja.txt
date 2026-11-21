@@ -1,0 +1,11 @@
+2026-12-01 10:00  submit     e1201  -> manager（e1101）、期限は 2026-12-03 の終わり
+2026-12-01 11:00  send back  e1101  -> with requester、再申請は 2026-12-08 の終わりまで
+2026-12-02 10:00  resubmit   e1201  -> manager（e1101）、期限は 2026-12-04 の終わり
+2026-12-02 11:00  approve    e1101  -> approved
+シナリオ `a_proxy_asks_for_someone`: 書いたとおり（4 行）
+
+2027-03-31 10:00  submit     e1201  -> manager（e1101）、期限は 2027-04-02 の終わり
+2027-03-31 11:00  send back  e1101  -> with requester、再申請は 2027-04-07 の終わりまで
+2027-04-01 10:00  resubmit   e1201  -> manager（e3101）、期限は 2027-04-05 の終わり
+2027-04-01 11:00  approve    e3101  -> approved
+シナリオ `made_again_after_the_organization_changed`: 書いたとおり（4 行）

@@ -1,0 +1,39 @@
+rule おもちゃの箱(toy_box_ja) v1
+description "注文がどんな箱になるか。おもちゃが二つでおもちゃの箱、数量が十で大きな箱、贈り物が三つで包む箱になる。箱は 200 円以上で、一件は 100 円まで。明細の種類を読む表は無く、読むのはおもちゃの数だけ"
+
+enum 種類(kind_of_line) = 食品(food) | おもちゃ(toy) | 本(book) | 道具(tool)
+
+# 箱の明細の一件ぶん
+elements 明細(lines)
+  価格(price)  : money[円]  range >=1円 <=100円
+  数量(qty)    : number  range >=1 <=9
+  品目(kind)   : 種類
+  贈り物(gift) : bool
+
+count おもちゃの数(toys) over 明細 where 品目 = おもちゃ  range >=0 <=5
+count 贈り物の数(gifts) over 明細 where 贈り物  range >=0 <=5
+sum 金額(total) over 明細 of 価格  range >=200円 <=2000円
+sum 総数量(units) over 明細 of 数量  range >=0 <=100
+
+outputs
+  おもちゃ箱(toy_box) : bool
+  大きな箱(bulky)     : bool
+  包む箱(wrapped)     : bool
+
+table おもちゃ箱の判定(toy_box_of)
+policy unique
+| おもちゃの数 | -> おもちゃ箱 |
+| <2           | false         |
+| >=2          | true          |
+
+table 大きさの判定(bulky_of)
+policy unique
+| 総数量 | -> 大きな箱 |
+| <10    | false       |
+| >=10   | true        |
+
+table 包むかの判定(wrapped_of)
+policy unique
+| 贈り物の数 | -> 包む箱 |
+| <3         | false     |
+| >=3        | true      |

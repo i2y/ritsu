@@ -1,0 +1,26 @@
+rule parse_band v1
+description "The band of an age, the rule named like the function that reads a band (fictional)"
+
+enum band = child "Child" < adult "Adult"
+
+inputs
+  age : number  range >=0 <=120
+
+outputs
+  band : band
+  adult : bool
+
+table band
+| age  | -> band |
+| <18  | child   |
+| >=18 | adult   |
+
+table adult
+| band     | -> adult |
+| >=adult  | true     |
+| child    | false    |
+
+examples
+| age | -> band | adult |
+| 0   | child   | false |
+| 18  | adult   | true  |

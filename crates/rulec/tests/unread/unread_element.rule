@@ -1,0 +1,27 @@
+rule unread_element v1
+description "The box fee of an order: in a rush, any line calls for a box, whatever its size, so the walk names each line and reads none of its fields (fictional)"
+
+enum parcel_size = small | large
+enum call = box | wait
+
+elements lines
+  size : parcel_size
+
+inputs
+  rush : bool
+
+outputs
+  fee : money[JPY]  round down(1JPY)
+
+table box_for
+policy unique
+| size | rush  | -> step : call |
+| -    | true  | box            |
+| -    | false | wait           |
+
+fold step over lines -> fee
+  box -> stop with 200JPY
+  wait -> next
+  empty -> 0JPY
+  exhausted -> 0JPY
+

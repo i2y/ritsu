@@ -135,7 +135,7 @@ body.sheet-open { overflow: hidden; }
 <ul>
 <li>It guards <code>openapi &quot;api/orders.json&quot; operation refundOrder</code>.</li>
 <li>Principals: <code>User</code>, <code>Workflow</code>. Resources: <code>Order</code>, the id read from the operation&#39;s argument <code>orderId</code>.</li>
-<li>Input <code>amount</code>: <code>money[GBP, incl_tax]</code>, 1GBP to 10,000GBP.</li>
+<li>Input <code>amount</code>: <code>money[GBP, incl_tax]</code>, 1GBP to 10_000GBP.</li>
 <li>Computed: <code>refund_band</code>, <code>in_period</code>, <code>business_day</code> (under Computed values below).</li>
 <li>1,056 combinations, 88 of them allowed.</li>
 </ul>
@@ -490,13 +490,17 @@ when { principal.suspended };</code></pre></figure>
 </tbody>
 </table></div>
 <h4 id="workflow-returns-calls">What the flow calls</h4>
-<p>Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action: what <code>ritsu check</code> holds across the languages.</p>
+<p>Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action at the call: over the combinations the runs that reach the call can come to (what the call gives, and what the arms of each <code>match</code> on the way leave). It is what <code>ritsu check</code> holds across the languages.</p>
 <div class="scroll"><table>
 <thead><tr><th>Line</th><th>Task</th><th>Operation</th><th>Guarded by</th><th>Allowed</th><th>Error on a denial</th></tr></thead>
 <tbody>
 <tr><td>22</td><td><code>refund_order</code></td><td><code>openapi &quot;api/orders.json&quot; operation refundOrder</code></td><td><code>refund_order</code></td><td>sometimes</td><td><code>denied</code></td></tr>
 </tbody>
 </table></div>
+<p>What the runs that reach a call hold there:</p>
+<ul>
+<li>Line 22: <code>amount</code> (what the call gives, <code>amount</code>) is 1GBP to 50GBP.</li>
+</ul>
 <h2 id="operations">Operations guarded</h2>
 <p>The operations of the contracts each action guards: before it does an operation, the service asks Cedar about the action. The paths of the references are from the root.</p>
 <div class="scroll"><table>

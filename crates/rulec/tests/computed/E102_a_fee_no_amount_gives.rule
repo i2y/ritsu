@@ -1,0 +1,17 @@
+rule card_fee_flag v1
+description "Whether a card payment is held for a look, by its fee: 3% of the amount, rounded down to the yen. The first row asks for a fee over 900 yen on an amount up to 30,000 yen, which no amount gives: the fee passes 900 yen only from an amount of 30,034 yen"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)
+
+outputs
+  fee    : money[JPY]  round down(1JPY)
+  hidden : bool
+
+table hidden
+| fee      | amount      | -> hidden |
+| >900JPY  | <=30_000JPY | true      |
+| >900JPY  | >30_000JPY  | false     |
+| <=900JPY | -           | false     |

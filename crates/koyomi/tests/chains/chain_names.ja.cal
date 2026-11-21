@@ -1,0 +1,21 @@
+dates 承認の期限(approval_terms) v1
+description "宣言で書き誤った名前。最初に使う所で一度だけ言い、例に列が無いとは言わない。chain_names.cal の日本語の版"
+
+inputs
+  # 日付と例は `受付日` と書いたまま
+  受け付け日(received) : date  range >=2026-01-01 <=2027-12-31
+
+date 催促(reminder) = 受付日
+  + 2 days
+  at 09:00
+
+date 期限(due) = 受付日
+  + 3 days
+  at end of day
+
+claims
+  催促は期限の前 : 催促 < 期限
+
+examples
+| 受付日     | -> 催促    | -> 期限    |
+| 2026-11-13 | 2026-11-15 | 2026-11-16 |

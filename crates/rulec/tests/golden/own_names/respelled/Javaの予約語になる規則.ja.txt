@@ -1,0 +1,10 @@
+警告[W121]: 別名 `transient` は Java で書くと予約語になるので、その生成コードでは後ろに `_` を付けて書きます
+  --> tests/own_names/respelled/Javaの予約語になる規則.rule:1
+  |
+1 | rule 短期滞在(transient) v1
+  |      ^^^^^^^^ 規則の別名
+  |
+ Java: 規則のクラス `Transient` のメソッドを `transient_` と書きます。呼ぶ側もその名前で呼びます。
+ 生成コードはこのままで組めます。どの言語でも `_` の付かない名前にするなら、別名を変えてください。
+
+ok tests/own_names/respelled/Javaの予約語になる規則.rule

@@ -2,8 +2,8 @@
 //! Node, as `packaging/npm/build.sh` packs it.
 //!
 //! - `the_package_answers_as_the_binary_does`: the commands a person runs on the examples of the
-//!   nine languages (rulec's corpus is its examples), ritsu's test projects, the shops of the
-//!   playground, sekisho's examples and kaname's, in English and in Japanese, each run by the native binary
+//!   ten languages (rulec's corpus is its examples), ritsu's test projects, the shops of the
+//!   playground, sekisho's examples, kaname's and ringi's, in English and in Japanese, each run by the native binary
 //!   (`ritsu`, and a link to it named for each language) and by the package (`node
 //!   bin/<name>.js`) in the same copy of the files: standard output, standard error, exit code, and
 //!   every file the command wrote, byte for byte.
@@ -57,8 +57,8 @@ mod npm {
     use std::sync::Mutex;
     use std::time::Duration;
 
-    const LANGUAGES: [&str; 9] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname"];
-    const LANG_VARS: [&str; 10] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"];
+    const LANGUAGES: [&str; 10] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname", "ringi"];
+    const LANG_VARS: [&str; 11] = crate::common::LANG_VARS;
     /// A run of the debug build on the largest rule of the corpus takes seconds; one that takes this
     /// long is stuck.
     const LIMIT: Duration = Duration::from_secs(600);
@@ -130,7 +130,7 @@ mod npm {
         Said { code: r.code, stdout: r.stdout, stderr: r.stderr }
     }
 
-    /// A directory holding a link to the native `ritsu` for `ritsu` and for each of the nine
+    /// A directory holding a link to the native `ritsu` for `ritsu` and for each of the ten
     /// languages, as a release's archive does.
     fn links(t: &TempDir) -> PathBuf {
         for name in std::iter::once("ritsu").chain(LANGUAGES) {
@@ -656,6 +656,7 @@ mod npm {
                 let r = p.rsplit_once('/').map_or(".", |(d, _)| d);
                 let action = match r {
                     "examples/approvals" => "request_approval",
+                    "examples/claims" => "pay_claim",
                     "examples/documents" => "delete_document",
                     _ => "refund_order",
                 };
@@ -709,6 +710,37 @@ mod npm {
                 reads.push(case("kaname", ".", both("kaname", &["explain", &code]).to_vec()));
             }
             gs.push(Group { from: "crates/kaname/examples".into(), into: "examples".into(), reads, writes });
+        }
+
+        // ringi: each request kind and each shared file of its examples, with the organization's data
+        // and the masters beside them (the whole of `examples`, copied). `simulate` and `gen` are
+        // not here: `simulate` wants a requester, and `gen --target requests` has kaname check the
+        // module of every request, which takes the package's wasm a long time (it is
+        // tests/gen_requests.rs's).
+        {
+            let mut reads = vec![case("ritsu", ".", vec![en("ritsu", &["check", "examples/expense.ringi"]), ja("ritsu", &["check", "examples/leave.ja.ringi"])])];
+            for f in files("crates/ringi/examples", ".ringi") {
+                let p = format!("examples/{f}");
+                let p = p.as_str();
+                let args: Vec<Vec<&str>> = if f.starts_with("shared/") {
+                    vec![vec!["check", p], vec!["doc", p]]
+                } else {
+                    vec![vec!["check", p], vec!["check", p, "--format", "json"], vec!["doc", p], vec!["vectors", p], vec!["api", p], vec!["run", p]]
+                };
+                for a in &args {
+                    // the output is the same in each language but for its words: both are held for
+                    // the pages and the checks, English alone for what is JSON
+                    if a[0] == "doc" || (a[0] == "check" && a.len() == 2) {
+                        reads.push(case("ringi", ".", both("ringi", a).to_vec()));
+                    } else {
+                        reads.push(case("ringi", ".", vec![en("ringi", a)]));
+                    }
+                }
+            }
+            for code in codes(links, "ringi") {
+                reads.push(case("ringi", ".", both("ringi", &["explain", &code]).to_vec()));
+            }
+            gs.push(Group { from: "crates/ringi/examples".into(), into: "examples".into(), reads, writes: Vec::new() });
         }
         gs
     }
@@ -943,7 +975,7 @@ for (let l = line(); l !== null; l = line()) {
             let q = serde_json::json!({ "cwd": at, "dir": root, "args": args, "stdin": hex });
             let sent = self.stdin.as_mut().map(|i| writeln!(i, "{q}").and_then(|_| i.flush()));
             let stopped = |me: &mut InDirs| {
-                let _ = me.child.wait();
+                ended(&mut me.child);
                 std::thread::sleep(Duration::from_millis(100));
                 format!("the process of the API stopped: {}", String::from_utf8_lossy(&me.stderr.lock().unwrap()))
             };
@@ -971,13 +1003,20 @@ for (let l = line(); l !== null; l = line()) {
         /// The end of its standard input ends it.
         fn drop(&mut self) {
             drop(self.stdin.take());
-            let started = std::time::Instant::now();
-            while matches!(self.child.try_wait(), Ok(None)) && started.elapsed() < Duration::from_secs(30) {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            let _ = self.child.kill();
-            let _ = self.child.wait();
+            ended(&mut self.child);
         }
+    }
+
+    /// Wait for a process of the API that is ending (its input or its output closed) for 30 s at
+    /// the most, and stop it past them, so that a process that hangs as it ends does not hold the
+    /// test until the limit of the job.
+    fn ended(child: &mut std::process::Child) {
+        let started = std::time::Instant::now();
+        while matches!(child.try_wait(), Ok(None)) && started.elapsed() < Duration::from_secs(30) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let _ = child.kill();
+        let _ = child.wait();
     }
 
     thread_local! {
@@ -1065,7 +1104,10 @@ for (let l = line(); l !== null; l = line()) {
             (".", vec!["rulec", "mcp"], 2, &programs, false),
             (".", vec!["rulec", "check", "--diff-base", "HEAD", "corpus/parcel_rate.rule"], 2, &git, false),
             (".", vec!["rulec", "diff", "corpus/parcel_rate.rule@HEAD", "corpus/parcel_rate.rule"], 2, &git, false),
-            (".", vec!["rulec", "replay", "corpus/parcel_rate.rule@HEAD"], 2, &git, false),
+            // replay asks for `--fixtures` before it reads anything, but opens the records' file
+            // only after the rule at the revision — which `git` refuses to fetch under WASI — so
+            // the file need not be there
+            (".", vec!["rulec", "replay", "corpus/parcel_rate.rule@HEAD", "--fixtures", "corpus/parcel_rate.jsonl"], 2, &git, false),
             (".", vec!["rulec", "verify", "corpus/parcel_rate.rule", "--adapter", "python3", "adapter.py"], 2, &python, false),
             (".", vec!["chobo", "check", "--diff-base", "HEAD", "chobo/refunds/refunds.book"], 2, &git, false),
             (".", vec!["ritsu", "chobo", "check", "--diff-base", "HEAD", "chobo/refunds/refunds.book", "--lang", "ja"], 2, &git, true),
@@ -1663,19 +1705,24 @@ process.stdout.write(JSON.stringify({ code: r.code, stdout: r.stdout, stderr: r.
         // a temporary directory of their own: they count what the package leaves in it, and the
         // other tests here run the package beside them
         let tmp = TempDir::new("npm-js-tmp");
-        let out = Command::new("node")
-            .args(["--test", "--test-reporter=tap", "--test-concurrency=1"])
-            // a pattern node expands itself (a directory is taken for a file)
-            .arg(root().join("packaging/npm/test/*.test.js"))
-            .env("RITSU_NPM_PACKAGE", &pkg)
-            .env("RITSU_NPM", tgz())
-            .env("TMPDIR", tmp.path())
-            .current_dir(root())
-            .output()
-            .unwrap();
-        let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        // they start the package's programs and npm, and wait for them (spawnSync, which no timeout
+        // of node's own can cut short): past half an hour (this file takes about eight minutes on
+        // the full test), node is stopped with every process it started, and the test fails there
+        let out = ritsu_testkit::run::finish(
+            Command::new("node")
+                .args(["--test", "--test-reporter=tap", "--test-concurrency=1"])
+                // a pattern node expands itself (a directory is taken for a file)
+                .arg(root().join("packaging/npm/test/*.test.js"))
+                .env("RITSU_NPM_PACKAGE", &pkg)
+                .env("RITSU_NPM", tgz())
+                .env("TMPDIR", tmp.path())
+                .current_dir(root()),
+            Duration::from_secs(30 * 60),
+            "node --test running the package's JavaScript tests",
+        );
+        let said = out.both();
         println!("{said}");
-        assert!(out.status.success(), "node --test failed");
+        assert!(out.ok, "node --test failed");
         assert!(said.contains("\n# fail 0\n") && said.contains("\n# skipped 0\n"), "node --test says it failed none and skipped none");
     }
 

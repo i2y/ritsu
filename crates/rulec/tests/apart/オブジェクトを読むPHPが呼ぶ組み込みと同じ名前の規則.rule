@@ -1,0 +1,18 @@
+rule 明細の合計(array_sum) v1
+description "呼ぶ側のオブジェクトを読む規則で、PHP のモジュールが読んだ値を合計する組み込みの関数と同じ名前の規則"
+# 呼ぶ側は注文の形を JSON Schema で決めてある。明細の合計はそこから読む。注文を読むコードは
+# 生成され、読んだ値を合計する。
+shape 注文(order) = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  合計(total) : money[USD]  range >=0USD <=100_000USD  from sum 注文.lines of amount_usd
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+# 小さい注文は取扱の手数料を払う
+table 合計ごとの手数料(fee_by_total)
+policy unique
+| 合計     | -> 手数料 |
+| <100USD  | 10USD     |
+| >=100USD | 0USD      |

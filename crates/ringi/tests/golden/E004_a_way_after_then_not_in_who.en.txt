@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_a_way_after_then_not_in_who.ringi:15:29: `board` is not declared in `who`
+    15 |   when empty escalate, then board
+  = The ways to choose an approver declared: `manager`

@@ -1,0 +1,38 @@
+request reasons v1 "Reasons asked"
+description "A request whose reject and send back say why (fictional rules): the machine refuses either with no comment, or with one of white space alone, and takes an approval with none"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  first   manager
+  decide  dept_head
+
+who
+  manager   = manager of requester
+  dept_head = head of requester.department
+
+every stage
+  due in 3 business days at end of day
+  when late expire
+  when empty skip
+
+ticket
+  self approval     not allowed
+  send back         to the requester, at most 2 times
+  resubmit          within 3 business days
+  comment required  for reject, send back
+
+# Sent back with what to write, made again, approved with no comment, then rejected with why.
+scenario sent_back_approved_and_rejected_with_reasons
+  requester e1201
+  form what = "A standing desk"
+| at               | event                                    | by    | comment                           | -> stage | status         |
+| 2026-11-16 10:00 | submit                                   | e1201 |                                   | first    | in progress    |
+| 2026-11-16 11:00 | send back                                | e1101 | "Say which desk, please"          |          | with requester |
+| 2026-11-16 12:00 | resubmit(what: "The desk by the window") | e1201 | "The one by the window"           | first    | in progress    |
+| 2026-11-16 13:00 | approve                                  | e1101 |                                   | decide   | in progress    |
+| 2026-11-16 14:00 | reject                                   | e3101 | "The budget of the year is spent" |          | rejected       |

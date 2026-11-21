@@ -1,0 +1,8 @@
+error[E002]: chain_declarations.book:8:42: no unit `USD` is declared
+     8 | account seller_balance(seller: string) : USD
+  = `USD` is written on lines 11, 12 and 15 too
+error[E030]: chain_declarations.book:17:7: `payment` in the key is not a parameter of `capture`
+    17 |   key payment
+error[E002]: chain_declarations.book:21:63: there is no type `dollars`; a type is string or a declared unit
+    21 | transfer processing_fee(payment: string, seller: string, fee: dollars)
+chain_declarations.book: 3 error(s), 0 warning(s)

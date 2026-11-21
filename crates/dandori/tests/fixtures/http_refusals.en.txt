@@ -1,0 +1,56 @@
+error[E016]: tests/fixtures/http_refusals.flow:22:1: the parameter `x_id` matches `x_id` in the query and `X-Id` in a header of `places` GET /either, so where it goes cannot be told; give it a name that matches only one of them
+    22 | task either(x_id: string) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:26:1: the parameters `x_key` and `X_Key` both go to `X-Key` in a header of `places` GET /keys
+    26 | task keys(x_key: string, X_Key: string) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:30:1: `places` GET /tabs writes `days` in the style `tabDelimited`, which OpenAPI does not have
+    30 | task tabs(days: list[string]) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:34:1: `places` GET /content says how `filter` is written with `content` (a media type); dandori writes what `schema` and `style` say
+    34 | task by_content(filter: Years) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:38:1: the header `Host` is one the HTTP client writes itself, which a parameter cannot set
+    38 | task with_host(host: string) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:41:1: a cookie goes as a parameter that is `in: cookie`, not as the header `Cookie`
+    41 | task with_cookie_header(cookie: string) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:45:1: `X-印` cannot be the name of a header (HTTP's names are letters, digits and `!#$%&'*+-.^_`|~`)
+    45 | task odd_names(x_印: string, セッション: string) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:45:1: `セッション` cannot be the name of a cookie (HTTP's names are letters, digits and `!#$%&'*+-.^_`|~`)
+    45 | task odd_names(x_印: string, セッション: string) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:49:1: the parameter `x_tags` is not what `places` GET /header-form takes: a header takes the style simple, not form
+    49 | task header_form(x_tags: list[string]) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:52:1: the parameter `ids` is not what `places` GET /path-form/{ids} takes: the path takes the style simple, label or matrix, not form
+    52 | task path_form(ids: list[string]) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:55:1: the parameter `prefs` is not what `places` GET /cookie-simple takes: a cookie takes the style form, not simple
+    55 | task cookie_simple(prefs: list[string]) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:60:1: the parameter `prefs` is not what `places` GET /cookie-list takes: form with explode: true does not write a list or a record as a cookie; it takes explode: false
+    60 | task cookie_list(prefs: list[string]) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:63:1: the parameter `ids` is not what `places` GET /deep-list takes: deepObject writes an object, and has no form for a list
+    63 | task deep_list(ids: list[string]) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:66:1: the parameter `codes` is not what `places` GET /pipes takes: pipeDelimited with explode: true is a form OpenAPI does not define; it takes explode: false
+    66 | task pipes(codes: list[string]) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:69:1: the parameter `sort` is not what `places` GET /deep-false takes: deepObject with explode: false is a form OpenAPI does not define; it takes explode: true
+    69 | task deep_false(sort: Sort) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:73:1: the parameter `filter` is not what `places` GET /deep-json takes: a `json` value goes as its JSON text, which deepObject does not write; declare it a list or a record
+    73 | task deep_json(filter: json) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:76:1: the parameter `tags` is not what `places` GET /json-list takes: a `json` value goes as its JSON text, which is not how the list or the object `tags` is written; declare it a list or a record
+    76 | task json_list(tags: json) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:80:1: the parameter `ranges` is not what `places` GET /nested takes: no style writes a list or a record that holds a list or a record in the query
+    80 | task nested(ranges: list[Years]) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:84:1: `places` GET /needs needs a header `X-Board-Key`, and the parameter `x_board_key` may be absent
+    84 | task needs_maybe(x_board_key: string?, session: string) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:87:1: `places` GET /needs needs a cookie `session`, which `needs_none` does not pass
+    87 | task needs_none(x_board_key: string) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:91:1: `years` and `first` both put a value under `first` in the query, where the other side cannot tell them apart
+    91 | task clash(years: Years, first: int) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:95:1: dandori puts the idempotency key of `key` in the header `Idempotency-Key`; leave out the parameter `idempotency_key`
+    95 | task order(item: string, idempotency_key: string) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:100:1: `places` POST /orders needs a header `Idempotency-Key`, which `order_again` does not pass; write `key` on the task and dandori puts its idempotency key there
+   100 | task order_again(item: string) -> Done
+error[E016]: tests/fixtures/http_refusals.flow:104:1: `places` POST /notes says `meta` of the URL-encoded body is written as `application/json`; dandori writes there what style and explode say
+   104 | task note(text: string, meta: Years) -> Done
+error[E003]: tests/fixtures/http_refusals.flow:110:3: the parameter `ranges` cannot be sent: no style writes a list or a record that holds a list or a record in the query
+   110 |   http GET "https://places.example.com/plain"
+error[E003]: tests/fixtures/http_refusals.flow:113:3: `years` and `first` both put a value under `first` in the query, where the other side cannot tell them apart
+   113 |   http GET "https://places.example.com/plain"
+error[E003]: tests/fixtures/http_refusals.flow:116:3: the parameter `ranges` cannot be sent: no style writes a list or a record that holds a list or a record in the URL-encoded body
+   116 |   http POST "https://places.example.com/plain" form
+error[E003]: tests/fixtures/http_refusals.flow:116:3: `place` and `room` both put a value under `room` in the URL-encoded body, where the other side cannot tell them apart
+   116 |   http POST "https://places.example.com/plain" form

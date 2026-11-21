@@ -1,0 +1,218 @@
+request desk v1 "Desk request"
+description "A desk for a member of the staff (fictional rules): every transition of a ticket, one scenario each"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  what  : text "What"  count >=1 <=100
+  price : money[JPY] "Price"  range >=1JPY <=1_000_000JPY
+  note  : long text "Note"  count <=200  approvers only  optional
+
+route
+  first   manager
+  board   at least 2 of board  when price > 100_000JPY
+  decide  dept_head
+
+who
+  manager   = manager of requester
+  board     = team board
+  dept_head = head of requester.department
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval     not allowed
+  send back         to any earlier stage, at most 2 times
+  resubmit          within 3 business days
+  withdraw          until board
+  retract approval  until the next stage answers
+  pause             at most 5 business days
+  approvers edit    price, note
+
+# (none) -- submit --> in progress; an approval that reaches the quorum, and one that does not
+scenario approved_by_a_quorum
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | board    | in progress |
+| 2026-11-16 13:00 | approve | e0201 | board    | in progress |
+| 2026-11-16 14:00 | approve | e0202 | decide   | in progress |
+| 2026-11-17 09:30 | approve | e3101 |          | approved    |
+
+# a rejection leaves the stage open while the quorum can still be reached (two of the five, with
+# three against), and ends the ticket when it no longer can (four against)
+scenario rejected_when_the_quorum_is_out_of_reach
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | board    | in progress |
+| 2026-11-16 13:00 | reject  | e0201 | board    | in progress |
+| 2026-11-16 14:00 | reject  | e0202 | board    | in progress |
+| 2026-11-16 15:00 | reject  | e0203 | board    | in progress |
+| 2026-11-16 16:00 | reject  | e0204 |          | rejected    |
+
+# back to the requester, and made again: the first stage of the next round
+scenario sent_back_and_made_again
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event                      | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit                     | e1201 | first    | in progress    |
+| 2026-11-16 11:00 | send back                  | e1101 |          | with requester |
+| 2026-11-17 10:00 | resubmit(price: 90_000JPY) | e1201 | first    | in progress    |
+| 2026-11-17 11:00 | approve                    | e1101 | decide   | in progress    |
+
+# back to a stage the ticket passed: its answers are empty again
+scenario sent_back_to_a_stage
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event                | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit               | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve              | e1101 | board    | in progress |
+| 2026-11-16 13:00 | send back(to: first) | e0201 | first    | in progress |
+| 2026-11-16 15:00 | approve              | e1101 | board    | in progress |
+
+# withdrawn by the requester, and then discarded
+scenario withdrawn_and_discarded
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event    | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit   | e1201 | first    | in progress    |
+| 2026-11-16 11:00 | withdraw | e1201 |          | with requester |
+| 2026-11-16 12:00 | discard  | e1201 |          | withdrawn      |
+
+# sent back, and not made again in time
+scenario not_made_again_in_time
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event         | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit        | e1201 | first    | in progress    |
+| 2026-11-16 11:00 | send back     | e1101 |          | with requester |
+| 2026-11-20 00:00 | resubmit late |       |          | expired        |
+
+# an approval taken back before the next stage answers: the stage before, its deadline as it was
+scenario an_approval_taken_back
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-17 11:00 | approve | e1101 | board    | in progress |
+| 2026-11-17 12:00 | retract | e1101 | first    | in progress |
+| 2026-11-17 13:00 | approve | e1101 | board    | in progress |
+
+# late: up to the head above, with a deadline and a reminder counted from the time it went up;
+# late again: expired
+scenario late_and_up
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit | e1201 | first    | in progress |
+| 2026-11-18 09:00 | remind |       | first    | in progress |
+| 2026-11-20 00:00 | late   |       | first    | in progress |
+| 2026-11-24 09:00 | remind |       | first    | in progress |
+| 2026-11-26 00:00 | late   |       |          | expired     |
+
+# each stage's clocks are counted from the day it starts, not from the day the ticket was made:
+# the board's reminder is two business days after the approval that brought the ticket to it
+scenario clocks_from_each_start
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-17 11:00 | approve | e1101 | board    | in progress |
+| 2026-11-19 09:00 | remind  |       | board    | in progress |
+| 2026-11-21 00:00 | late    |       | board    | in progress |
+| 2026-11-24 09:00 | remind  |       | board    | in progress |
+| 2026-11-26 00:00 | late    |       |          | expired     |
+
+# the one the stage went up to approves and takes the approval back: the stage is where it went up
+# to, and its reminder and its deadline are set again at the times they had (not the board's, and
+# not counted again from the time of the taking back)
+scenario taken_back_where_it_went_up_to
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-18 09:00 | remind  |       | first    | in progress |
+| 2026-11-20 00:00 | late    |       | first    | in progress |
+| 2026-11-23 10:00 | approve | e3101 | board    | in progress |
+| 2026-11-23 11:00 | retract | e3101 | first    | in progress |
+| 2026-11-24 09:00 | remind  |       | first    | in progress |
+| 2026-11-26 00:00 | late    |       |          | expired     |
+
+# paused and resumed: the clocks stop for the business days in between
+scenario paused_and_resumed
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-17 10:00 | pause   | e1101 | first    | paused      |
+| 2026-11-19 10:00 | resume  | e1101 | first    | in progress |
+| 2026-11-19 11:00 | approve | e1101 | board    | in progress |
+
+# paused, and the pause used up
+scenario a_pause_used_up
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event      | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit     | e1201 | first    | in progress |
+| 2026-11-17 10:00 | pause      | e1101 | first    | paused      |
+| 2026-11-25 00:00 | pause ends |       | first    | in progress |
+
+# paused by the one the stage went up to: the reminder and the deadline counted from the time it
+# went up move later by the business days in between, as the first ones do
+scenario paused_where_it_went_up_to
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit | e1201 | first    | in progress |
+| 2026-11-18 09:00 | remind |       | first    | in progress |
+| 2026-11-20 00:00 | late   |       | first    | in progress |
+| 2026-11-20 10:00 | pause  | e3101 | first    | paused      |
+| 2026-11-24 10:00 | resume | e3101 | first    | in progress |
+| 2026-11-26 09:00 | remind |       | first    | in progress |
+| 2026-11-28 00:00 | late   |       |          | expired     |
+
+# an approver corrects a value the route reads: the stages after this one are decided again
+scenario edited_by_an_approver
+  requester e1201
+  form what = "A standing desk", price = 180_000JPY
+| at               | event                  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                 | e1201 | first    | in progress |
+| 2026-11-16 11:00 | edit(price: 90_000JPY) | e1101 | first    | in progress |
+| 2026-11-16 11:05 | approve                | e1101 | decide   | in progress |
+
+# late with nobody above the one who is late: `then expire` at that deadline
+scenario late_at_the_top
+  requester e0101
+  form what = "A standing desk", price = 90_000JPY
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit | e0101 | first    | in progress |
+| 2026-11-18 09:00 | remind |       | first    | in progress |
+| 2026-11-20 00:00 | late   |       |          | expired     |
+
+# nobody is above the president, and the president has no department: both stages are skipped,
+# and the ticket is approved as it is made
+scenario nobody_answers_the_president
+  requester e0001
+  form what = "A standing desk", price = 90_000JPY
+| at               | event  | by    | -> stage | status   |
+| 2026-11-16 10:00 | submit | e0001 |          | approved |
+
+# the requester leaves the organization while the ticket is on its way: the next stage asks for
+# the head of the requester's department, finds nobody, and waits for an administrator (it is not
+# skipped, as it is for the one at the top of the organization)
+scenario the_requester_has_left
+  requester e9001
+  form what = "A standing desk", price = 90_000JPY
+| at               | event                                  | by    | -> stage | status      |
+| 2027-03-31 10:00 | submit                                 | e9001 | first    | in progress |
+| 2027-04-01 10:00 | approve                                | e0102 | decide   | in progress |
+| 2027-04-01 11:00 | add approver(approver: person "e0102") |       | decide   | in progress |
+| 2027-04-01 12:00 | approve                                | e0102 |          | approved    |

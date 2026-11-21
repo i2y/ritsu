@@ -1,0 +1,20 @@
+rule row_left_to_the_earlier_rows v1
+description "Whether an order is big, read with its amount under policy first: below 52 yen an order is never big, and the row before takes those that are not, so no input reaches the last row"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=0JPY <=93JPY
+
+define big : bool = amount > 56JPY
+
+outputs
+  x : choice
+
+table pick
+policy first
+| amount          | big   | -> x |
+| >=52JPY <=56JPY | false | one  |
+| >56JPY          | true  | two  |
+| <52JPY          | false | two  |
+| <52JPY          | -     | one  |

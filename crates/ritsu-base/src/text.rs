@@ -37,8 +37,8 @@ impl Lang {
 
     /// The language a run prints in (DESIGN 4.1): `--lang` wins, then the tool's own variable
     /// (`KOYOMI_LANG`, say), then `RITSU_LANG`, then English. The system locale is not read: what
-    /// a CI job prints must not change with the machine it runs on, and the generated code that
-    /// is committed must not either.
+    /// a CI job prints must not change with the machine it runs on. What the run writes for others
+    /// to keep is in [`Lang::made`], which reads no variable.
     pub fn pick(flag: Option<&str>, tool_var: &str) -> Lang {
         let tool = std::env::var(tool_var).ok();
         let ritsu = std::env::var("RITSU_LANG").ok();
@@ -49,6 +49,23 @@ impl Lang {
     /// over, as one that is not there.
     pub fn choose(flag: Option<&str>, tool: Option<&str>, ritsu: Option<&str>) -> Lang {
         [flag, tool, ritsu].into_iter().flatten().find_map(Lang::parse).unwrap_or(Lang::En)
+    }
+
+    /// The language of what a run writes for others to read and keep (DESIGN 4.1): the code a
+    /// command generates (its comments, and the sentences the code says), a page, the JSON of
+    /// `api`, the vectors, the files of a new project. `--lang` says it, and without the flag it
+    /// is English. No variable of the environment changes it (`RITSU_LANG` and the tools' own are
+    /// for the text the run prints, [`Lang::pick`]): the same sources make the same files whoever
+    /// runs the command, and `--check` finds them the same on every machine.
+    pub fn made(flag: Option<&str>) -> Lang {
+        flag.and_then(Lang::parse).unwrap_or(Lang::En)
+    }
+
+    /// The value of `--lang` on a command line (`--lang ja` or `--lang=ja`, the first one), as the
+    /// commands read it before anything else, so that [`Lang::pick`] and [`Lang::made`] read the
+    /// same flag. A `--lang` with no value after it is no value.
+    pub fn flag_of(args: &[String]) -> Option<String> {
+        args.iter().enumerate().find_map(|(i, a)| if a == "--lang" { args.get(i + 1).cloned() } else { a.strip_prefix("--lang=").map(str::to_string) })
     }
 }
 

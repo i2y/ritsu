@@ -9,8 +9,19 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 use ritsu_testkit::{Need, TempDir, need, ready, skip};
+use ritsu_testkit::run::finish;
 use ritsu_testkit::tmp::tmpdir_in;
+
+/// How long `rulec test` may take: it stands every service up and sends it every vector, in each
+/// language whose toolchain is here, and the whole file takes well under a minute on a machine
+/// that has them all. Past it, the test fails with what it printed, long before the job's limit.
+const RULEC_TEST_LIMIT: Duration = Duration::from_secs(10 * 60);
+
+/// How long a client that stands a service up and talks to it may take, and `buf build` that
+/// fetches a dependency from the registry: seconds each.
+const CLIENT_LIMIT: Duration = Duration::from_secs(5 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -25,7 +36,7 @@ fn generate(tag: &str, rules: &[&str]) -> (TempDir, PathBuf) {
     let dir = t.path().to_path_buf();
     let mut args: Vec<&str> = vec!["gen"];
     args.extend_from_slice(rules);
-    args.extend_from_slice(&["--out", dir.to_str().unwrap()]);
+    args.extend_from_slice(&["--out", dir.to_str().unwrap(), "--lang", "ja"]);
     args.extend_from_slice(rulec::targets::UP_TO_0_40);
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
@@ -41,7 +52,7 @@ fn api(rule: &str) -> rulec::json::Json {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["api", rule])
+        .args(["api", rule, "--lang", "ja"])
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -138,7 +149,7 @@ fn 取り込んだ列挙は宣言し直さずに_import_する() {
     let out = d.join("out");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
-        .args(["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap()]).args(rulec::targets::UP_TO_0_40)
+        .args(["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap(), "--lang", "ja"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -164,7 +175,7 @@ fn 取り込んだ列挙は宣言し直さずに_import_する() {
         let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
             .env("RULEC_LANG", "ja")
             .current_dir(&cwd)
-            .args(["api", rule.to_str().unwrap()])
+            .args(["api", rule.to_str().unwrap(), "--lang", "ja"])
             .output()
             .expect("rulec を起動できない");
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -286,7 +297,7 @@ fn アダプタのテンプレートは呼び先を包む() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["adapter", RULE, "--template", "connect-python"])
+        .args(["adapter", RULE, "--template", "connect-python", "--lang", "ja"])
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -417,7 +428,7 @@ fn 承認者のページは走らせた場所によらない() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(&dir)
-        .args(["gen", rule, "--out", "out"]).args(rulec::targets::UP_TO_0_40)
+        .args(["gen", rule, "--out", "out", "--lang", "ja"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -427,7 +438,7 @@ fn 承認者のページは走らせた場所によらない() {
         let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
             .env("RULEC_LANG", "ja")
             .current_dir(&cwd)
-            .args(["doc", rule, "--format", "html"])
+            .args(["doc", rule, "--format", "html", "--lang", "ja"])
             .output()
             .expect("rulec を起動できない");
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -563,7 +574,7 @@ fn 名前は_buf_と同じに切る() {
     let out = d.join("out");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
-        .args(["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap()]).args(rulec::targets::UP_TO_0_40)
+        .args(["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap(), "--lang", "ja"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -674,14 +685,13 @@ fn 生成したまま立ち_名前の誤りと省いた入力を受け付けな�
             let _ = std::fs::remove_dir_all(e.path());
         }
     }
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmpdir_in(&out))
-        .args(["test", out.to_str().unwrap()])
-        .output()
-        .expect("rulec を起動できない");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned();
-    assert!(o.status.success() && said.contains("delivery_fee (Python, Connect/WSGI) "), "{said}{}", String::from_utf8_lossy(&o.stderr));
+    let o = finish(
+        Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap()]),
+        RULEC_TEST_LIMIT,
+        "rulec test of delivery_fee's service as gen left it",
+    );
+    let said = o.stdout.clone();
+    assert!(o.ok && said.contains("delivery_fee (Python, Connect/WSGI) "), "{said}{}", o.stderr);
     assert!(!said.contains("FAIL"), "{said}");
     // The stubs, the way the documentation builds them, but with the plugins on this machine.
     let o = Command::new("buf")
@@ -725,16 +735,16 @@ print(json.dumps(out, ensure_ascii=False))
           {{\"m\": \"MEMBER_TIER_GOLD\", \"s\": \"STATUS_ACTIVE\", \"amount\": \"1000\"}}, \
           {{\"m\": \"MEMBER_TIER_GOLD\", \"s\": \"STATUS_CLOSD\", \"express\": false, \"amount\": \"1000\"}}, \
           {{\"m\": \"MEMBER_TIER_GOLD\", \"s\": \"STATUS_ACTIVE\", \"express\": false, \"amonut\": \"1000\"}}, \
-          {{\"m\": \"MEMBER_TIER_UNSPECIFIED\", \"s\": \"STATUS_ACTIVE\", \"express\": false, \"amount\": \"1000\"}}]"
+          {{\"m\": \"MEMBER_TIER_UNSPECIFIED\", \"s\": \"STATUS_ACTIVE\", \"express\": false, \"amount\": \"1000\"}}, \
+          {{\"m\": \"MEMBER_TIER_UNSPECIFIED\", \"express\": false, \"amount\": \"1000\"}}]"
     );
-    let o = Command::new("python3")
-        .current_dir(out.join("python"))
-        .env_remove("PYTHONPATH")
-        .args(["-c", client, &bodies])
-        .output()
-        .expect("python3 を起動できない");
-    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-    let got = rulec::json::parse(String::from_utf8_lossy(&o.stdout).trim()).expect("JSON でない");
+    let o = finish(
+        Command::new("python3").current_dir(out.join("python")).env_remove("PYTHONPATH").args(["-c", client, &bodies]),
+        CLIENT_LIMIT,
+        "a Python client that stands delivery_fee's service up and sends it eight requests",
+    );
+    assert!(o.ok, "{}", o.stderr);
+    let got = rulec::json::parse(o.stdout.trim()).expect("JSON でない");
     let got: Vec<(i128, String)> = items(&got)
         .iter()
         .map(|r| {
@@ -759,6 +769,10 @@ print(json.dumps(out, ensure_ascii=False))
     assert_eq!(got[5].0, 400, "知らないフィールドが通った: {}", got[5].1);
     assert!(got[5].1.contains("amonut"), "{}", got[5].1);
     assert_eq!(got[6].0, 400, "未設定の値が通った: {}", got[6].1);
+    // A value the enum does not have in the first input and the second left out: the first,
+    // read before the second, as every door reads the arguments in order (§15.328).
+    assert_eq!(got[7], (400, got[6].1.clone()), "後の引数の省略を先に言った");
+    assert!(got[7].1.starts_with("会員 "), "{}", got[7].1);
 }
 
 /// A pin of protovalidate as `buf dep update` writes it, for the fixtures below. The tests
@@ -838,7 +852,7 @@ fn 契約の依存を_buf_yaml_と_buf_lock_に引き継ぐ() {
     assert!(got.contains(PROTOVALIDATE_PIN) && got.contains("buf.build/googleapis/googleapis"), "{got}");
     let gen_yaml = std::fs::read_to_string(d.join("out/proto/buf.gen.yaml")).unwrap();
     assert!(gen_yaml.contains("include_imports: true"), "{gen_yaml}");
-    let a = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["api", "rules/fee.rule"]).output().unwrap();
+    let a = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["api", "rules/fee.rule", "--lang", "ja"]).output().unwrap();
     let a = rulec::json::parse(&String::from_utf8_lossy(&a.stdout)).expect("JSON でない");
     let deps: Vec<&str> = a.get("connect").and_then(|c| c.get("deps")).map(items).unwrap().iter().filter_map(|x| x.as_str()).collect();
     assert_eq!(deps, ["buf.build/bufbuild/protovalidate"]);
@@ -908,9 +922,13 @@ fn 依存のある契約のサービスが立つ() {
     let (code, err) = gen_in(&d, &["rules/fee.rule"]);
     assert_eq!(code, 0, "{err}");
     let out = d.join("out");
-    let o = Command::new("buf").current_dir(out.join("proto")).args(["build", "-o", "/dev/null"]).output().expect("buf を起動できない");
-    let said = String::from_utf8_lossy(&o.stderr).into_owned();
-    if !o.status.success()
+    let o = finish(
+        Command::new("buf").current_dir(out.join("proto")).args(["build", "-o", "/dev/null"]),
+        CLIENT_LIMIT,
+        "buf build of a module that fetches protovalidate from the registry",
+    );
+    let said = o.stderr.clone();
+    if !o.ok
         && ["no such host", "dial tcp", "connection refused", "i/o timeout", "unavailable", "TLS handshake", "network is unreachable"]
             .iter()
             .any(|w| said.contains(w))
@@ -918,16 +936,20 @@ fn 依存のある契約のサービスが立つ() {
         skip(&format!("BSR に届かないので飛ばします: {said}"));
         return;
     }
-    assert!(o.status.success(), "buf build が失敗しました:\n{said}");
+    assert!(o.ok, "buf build が失敗しました:\n{said}");
     for e in std::fs::read_dir(&out).unwrap().flatten() {
         let n = e.file_name().to_string_lossy().into_owned();
         if !["python", "proto", "vectors"].contains(&n.as_str()) {
             let _ = std::fs::remove_dir_all(e.path());
         }
     }
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap()]).output().unwrap();
-    let said = String::from_utf8_lossy(&o.stdout).into_owned();
-    assert!(o.status.success() && said.contains("delivery_fee (Python, Connect/WSGI) "), "{said}{}", String::from_utf8_lossy(&o.stderr));
+    let o = finish(
+        Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap()]),
+        RULEC_TEST_LIMIT,
+        "rulec test of a service whose contract depends on protovalidate",
+    );
+    let said = o.stdout.clone();
+    assert!(o.ok && said.contains("delivery_fee (Python, Connect/WSGI) "), "{said}{}", o.stderr);
     assert!(!said.contains("FAIL"), "{said}");
     assert!(out.join("python/stubs/buf/validate/validate_pb.py").is_file(), "protovalidate の stub が書かれていない");
 }
@@ -977,14 +999,13 @@ fn 契約を実装した規則は契約の番号で話す() {
             let _ = std::fs::remove_dir_all(e.path());
         }
     }
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmpdir_in(&out))
-        .args(["test", out.to_str().unwrap()])
-        .output()
-        .expect("rulec を起動できない");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned();
-    assert!(o.status.success() && !said.contains("FAIL"), "{said}{}", String::from_utf8_lossy(&o.stderr));
+    let o = finish(
+        Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap()]),
+        RULEC_TEST_LIMIT,
+        "rulec test of the services of two rules that implement a contract",
+    );
+    let said = o.stdout.clone();
+    assert!(o.ok && !said.contains("FAIL"), "{said}{}", o.stderr);
     for rule in ["member_tier_shipping", "cart_fee"] {
         for pass in ["Connect/ASGI", "Connect/ASGI+GET", "Connect/WSGI", "Connect/WSGI+GET"] {
             assert!(said.contains(&format!("ok    {rule} (Python, {pass}) ")), "{rule} の {pass} が走っていない:\n{said}");
@@ -1056,14 +1077,13 @@ print("compared", n)
 for w in wrong:
     print("wrong", json.dumps(w))
 "#;
-    let o = Command::new("python3")
-        .current_dir(&client)
-        .env_remove("PYTHONPATH")
-        .args(["-c", script, py.to_str().unwrap(), out.join("vectors/member_tier_shipping.jsonl").to_str().unwrap()])
-        .output()
-        .expect("python3 を起動できない");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned();
-    assert!(o.status.success(), "{said}{}", String::from_utf8_lossy(&o.stderr));
+    let o = finish(
+        Command::new("python3").current_dir(&client).env_remove("PYTHONPATH").args(["-c", script, py.to_str().unwrap(), out.join("vectors/member_tier_shipping.jsonl").to_str().unwrap()]),
+        CLIENT_LIMIT,
+        "a Python client of the contract that stands member_tier_shipping's service up and sends it every vector",
+    );
+    let said = o.stdout.clone();
+    assert!(o.ok, "{said}{}", o.stderr);
     // member is field 2 and its value platinum is 7; subtotal is 5 and campaign 9
     assert!(said.contains("bytes 1007 1007280a4801\n"), "{said}");
     let vectors = std::fs::read_to_string(out.join("vectors/member_tier_shipping.jsonl")).unwrap().lines().count();

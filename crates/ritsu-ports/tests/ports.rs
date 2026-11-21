@@ -43,9 +43,12 @@ fn an_item_is_named_by_its_last_pair() {
 
 #[test]
 fn what_a_language_says_keeps_both_languages() {
-    let s = Said::unreadable("rules/a.rule", "No such file");
+    // in the words every command of ritsu says a file it cannot read in
+    let s = Said::unreadable("rules/a.rule", &std::io::Error::from(std::io::ErrorKind::NotFound));
     assert_eq!(s.code, "");
-    assert!(s.message.ja.contains("rules/a.rule") && s.message.en.starts_with("cannot read"), "{:?}", s.message);
+    assert_eq!((s.message.ja.as_str(), s.message.en.as_str()), ("`rules/a.rule` がありません", "`rules/a.rule` is not there"));
+    let s = Said::unreadable("rules/a.rule", &std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+    assert!(s.message.ja.starts_with("`rules/a.rule` を読めません: ") && s.message.en.starts_with("cannot read `rules/a.rule`: "), "{:?}", s.message);
     let d: ritsu_base::diag::Diag = ritsu_base::diag::Diag::error("E101", "a.cal", 3, 5, ritsu_base::tr!("穴があります", "there is a hole"));
     let s = Said::of(&d);
     assert_eq!((s.code.as_str(), s.file.as_str(), s.line), ("E101", "a.cal", Some(3)));
@@ -62,7 +65,7 @@ impl Items for Two {
     fn items(&self, _root: &std::path::Path, file: &str) -> Result<Vec<Item>, Vec<Said>> {
         self.asked.set(self.asked.get() + 1);
         if file == "bad.rule" {
-            return Err(vec![Said::unreadable(file, "no")]);
+            return Err(vec![Said::unreadable(file, &std::io::Error::from(std::io::ErrorKind::NotFound))]);
         }
         let n = Name::file(Tool::Rulec, file);
         Ok(vec![
@@ -111,9 +114,9 @@ struct Bare;
 
 impl Rules for Bare {
     fn facts(&self, rule: &std::path::Path) -> Result<ritsu_ports::RuleFacts, Vec<Said>> {
-        Err(vec![Said::unreadable(&rule.display().to_string(), "bare")])
+        Err(vec![Said::unreadable(&rule.display().to_string(), &std::io::Error::from(std::io::ErrorKind::Unsupported))])
     }
-    fn preconditions_hold(&self, _: &std::path::Path, _: &[(String, Option<i128>, Option<i128>)], _: Option<i128>) -> Result<Vec<(ritsu_ports::Precondition, ritsu_ports::Answer<ritsu_ports::Values>)>, Vec<Said>> {
+    fn preconditions_hold(&self, _: &std::path::Path, _: &[(String, Option<i128>, Option<i128>)], _: Option<i128>, _: Option<i128>) -> Result<Vec<(ritsu_ports::Precondition, ritsu_ports::Answer<ritsu_ports::Values>)>, Vec<Said>> {
         Ok(vec![])
     }
     fn output_values(&self, _: &std::path::Path, _: &str) -> Result<ritsu_ports::Found<ritsu_ports::OutputValues>, Vec<Said>> {
@@ -132,7 +135,7 @@ impl Rules for Bare {
 
 impl Dates for Bare {
     fn facts(&self, file: &std::path::Path) -> Result<ritsu_ports::DateFacts, Vec<Said>> {
-        Err(vec![Said::unreadable(&file.display().to_string(), "bare")])
+        Err(vec![Said::unreadable(&file.display().to_string(), &std::io::Error::from(std::io::ErrorKind::Unsupported))])
     }
     fn values(&self, _: &std::path::Path, _: &str) -> Result<ritsu_ports::Found<ritsu_ports::DaySet>, Vec<Said>> {
         Ok(ritsu_ports::Found::Value(Default::default()))
@@ -155,6 +158,12 @@ fn the_questions_added_for_sekisho_answer_by_default() {
         ritsu_ports::Found::Undecided(t) => assert!(!t.ja.is_empty() && !t.en.is_empty() && t.ja != t.en, "{t:?}"),
         other => panic!("{other:?}"),
     }
+    // what several outputs come to together: undecided too, so a reader counts each output
+    // alone and says the pairs are not decided, rather than taking every pair as one that happens
+    match Bare.outputs_together(std::path::Path::new("a.rule"), &["band".into(), "size".into()], &[("amount".into(), Some(1), Some(50))]).unwrap() {
+        ritsu_ports::Found::Undecided(t) => assert!(!t.ja.is_empty() && !t.en.is_empty() && t.ja != t.en, "{t:?}"),
+        other => panic!("{other:?}"),
+    }
     for said in [Bare.calendar(p).unwrap_err(), Dates::doc(&Bare, p, "a.cal", true, ritsu_base::text::Lang::Ja).unwrap_err()] {
         assert_eq!((said.len(), said[0].file.as_str(), said[0].code.as_str(), said[0].line), (1, "a.cal", "", None));
         assert!(!said[0].message.ja.is_empty() && said[0].message.ja != said[0].message.en, "{:?}", said[0].message);
@@ -168,6 +177,36 @@ fn the_questions_added_for_sekisho_answer_by_default() {
 #[test]
 fn the_values_of_a_numeric_output_over_ranges_are_undecided_by_default() {
     match Bare.output_values_over(std::path::Path::new("a.rule"), "fee", &[("kind".into(), Some(1), Some(2))]).unwrap() {
+        ritsu_ports::Found::Undecided(t) => assert!(!t.ja.is_empty() && !t.en.is_empty() && t.ja != t.en, "{t:?}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// The questions added for ringi (its DESIGN 6.5, 9.4) have answers by default too: a port of rules
+/// or of dates that does not hand over its diagnostics says so, in both languages, rather than
+/// handing over none, which would read as a file with nothing wrong.
+#[test]
+fn the_findings_are_undecided_by_default() {
+    let rule = Rules::findings(&Bare, std::path::Path::new("route.rule"), ritsu_base::text::Lang::En).unwrap();
+    let dates = Dates::findings(&Bare, std::path::Path::new("terms.cal"), ritsu_base::text::Lang::Ja).unwrap();
+    for f in [rule, dates] {
+        match f {
+            ritsu_ports::Found::Undecided(t) => assert!(!t.ja.is_empty() && !t.en.is_empty() && t.ja != t.en, "{t:?}"),
+            other => panic!("{other:?}"),
+        }
+    }
+}
+
+/// ringi's port can be held as a trait object, as every other port.
+#[allow(dead_code)]
+fn held_requests(_: &dyn ritsu_ports::Requests) {}
+
+/// A port that does not compare two versions of a rule says so, in both languages, rather than
+/// handing over a diff with no box in it, which would read as two versions that answer alike.
+#[test]
+fn the_diff_of_two_versions_is_undecided_by_default() {
+    let side = |p: &str| ritsu_ports::DiffSide::new(p, None);
+    match Bare.diff(&side("v1.rule"), &side("v2.rule"), None).unwrap() {
         ritsu_ports::Found::Undecided(t) => assert!(!t.ja.is_empty() && !t.en.is_empty() && t.ja != t.en, "{t:?}"),
         other => panic!("{other:?}"),
     }

@@ -194,8 +194,12 @@ fn 端の無い_range_は_e149で止まる() {
         assert_eq!(got, ["E149"], "{what}: E149 だけのはず\n{src}");
     };
     let input = |tail: &str| format!("rule t(t) v1\n\ninputs\n  x(x) : number  range >=0 <=100\n  n(n) : number{tail}\n\noutputs\n  y(y) : number  round down(1)\n\nresult y = x + n\n");
-    for tail in ["  range", "  range random", "  range contract_only", "  range @gov table1", "  range range >=0 <=5", "  range >=0 <=5 range"] {
+    for tail in ["  range", "  range random", "  range contract_only", "  range @gov table1"] {
         only(tail, &input(tail));
+    }
+    // A `range` written a second time is also E155 (§15.348), whether the first had ends or not.
+    for tail in ["  range range >=0 <=5", "  range >=0 <=5 range"] {
+        assert_eq!(codes_of(&input(tail)), ["E149", "E155"], "{tail}");
     }
     for tail in ["  range 5", "  range >=", "  range foo"] {
         assert_eq!(codes_of(&input(tail)), ["E047"], "{tail}");
@@ -212,7 +216,8 @@ fn 端の無い_range_は_e149で止まる() {
     let open = |tail: &str| format!("rule t(t) v1\n\ninputs\n  s(s) : money[円]  range >=0円 <=5000円\n\noutputs\n  d(d) : money[円]  round down(1円)\n\nopen cap(cap) : money[円]  {tail}\n\ndefine v(v) : money[円] = min(cap, s)\n\nresult d = v\n");
     only("open の行の終わり", &open("combine min  empty 50円  range"));
     only("open の行の途中", &open("range combine min  empty 50円"));
-    only("open の二つめの range", &open("combine min  empty 50円  range >=0円 <=50円 range"));
+    // A `range` written a second time is also E155 (§15.348), on an `open` line too.
+    assert_eq!(codes_of(&open("combine min  empty 50円  range >=0円 <=50円 range")), ["E155", "E149"], "open の二つめの range");
 }
 
 /// Rules that passed the check and whose generated code then failed: found by generating code

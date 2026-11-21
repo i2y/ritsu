@@ -1,0 +1,51 @@
+module kinds v1
+description "Lines of an order a host gives, with a field of every kind a line of a rule can have (a string, an enum, a number, an amount, a rate, a date and a yes or no, and each of them that may be missing, one whose name is a word Rust keeps among them): each read at the entry, written back as it was given, read one field at a time, and passed on to the rule, whose whole answer is given back"
+
+use rule order from "tests/rules/order_lines.rule"
+
+# a line, as it was given
+fn line(l: order.lines) -> order.lines
+  l
+
+# the lines, as they were given
+fn lines(ls: list[order.lines] count <=3) -> list[order.lines]
+  ls
+
+# what a line says: its label, its note when it has one, and whether it is boxed
+fn said(l: order.lines) -> string
+  let head =
+    match l.note
+      none => l.label
+      some n => concat(l.label, " (", n, ")")
+  match l.box
+    none => head
+    some b => concat(head, " boxed")
+
+# the fields of a line that may be missing, written out: the spare, the tip, the rate taken off it
+# more, the day it is held to and whether it is a rush
+fn extras(l: order.lines) -> string
+  let spare =
+    match l.spare
+      none => "no spare"
+      some s => concat("spare ", text(s))
+  let tip =
+    match l.tip
+      none => "no tip"
+      some t => concat("tip ", text(t))
+  let extra =
+    match l.extra
+      none => "no extra"
+      some e => if e > 10% then "extra past 10%" else "extra up to 10%"
+  let held =
+    match l.upto
+      none => "not held"
+      some d => concat("held to ", text(d))
+  let rush =
+    match l.rush
+      none => "no rush"
+      some r => if r then "rush" else "no hurry"
+  concat(spare, ", ", tip, ", ", extra, ", ", held, ", ", rush)
+
+# the whole answer of the rule for the lines: a count, a day, a rate and an amount
+fn order_of(ls: list[order.lines] count <=3) -> order.outputs
+  order(lines: ls)

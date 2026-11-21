@@ -1,0 +1,20 @@
+rule 上乗せ率(markup_ja) v1
+description "品物の値段。定価に、種類ごとの上乗せ率を掛けて足す。上乗せ率は規則が答えない率で、表の見出しで 1% の刻みにしている"
+
+enum 種類(kind) = 本(books) | 音楽(music) | おもちゃ(toys)
+
+inputs
+  品目(item_kind) : 種類
+  定価(list_price) : money[円]  range >=0円 <=100000円
+
+outputs
+  値段(price) : money[円]  round half_up(1円)
+
+table 上乗せ率の判定(markup_of)
+policy unique
+| 品目     | -> 上乗せ率(markup) : rate[step 1%] |
+| 本       | 0.5%                                |
+| 音楽     | 10%                                 |
+| おもちゃ | 20%                                 |
+
+define 値段(price) : money[円] = 定価 + 定価 * 上乗せ率

@@ -262,7 +262,7 @@ fn the_materials_of_design_12() {
     assert_eq!(common::codes(&o), ["E301"]);
     let text = common::shown(&o, Lang::En);
     assert!(text.contains(":22:52: `late` can be outside >=1 <=1500, the range of the input `days_late` of the rule `charges`\n"), "{text}");
-    assert!(text.contains("  = For example, `claim(invoice: Invoice { id: \"a\", invoiced: 2026-01-01, amount: 50000000GBPc }, paid_on: 2026-01-01, reference_rate: 0%)` gives it -29.\n"), "{text}");
+    assert!(text.contains("  = For example, `claim(invoice: Invoice { id: \"a\", invoiced: 2026-01-01, amount: 50_000_000GBPc }, paid_on: 2026-01-01, reference_rate: 0%)` gives it -29.\n"), "{text}");
 
     let t = TempDir::new("kaname-effects-weight");
     ritsu_testkit::tmp::copy_dir(std::path::Path::new("examples/media_mail"), t.path());

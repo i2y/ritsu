@@ -1,0 +1,20 @@
+dates 承認の期限(approval_terms) v1
+description "字下げしていない日付の操作。一度だけ言い、その次の行は言い直さない。chain_lines.cal の日本語の版"
+
+inputs
+  受付日(received) : date  range >=2026-01-01 <=2027-12-31
+
+date 催促(reminder) = 受付日
+  + 2 days
+  at 09:00
+
+date 期限(due) = 受付日
++ 3 days
+  at end of day
+
+claims
+  催促は期限の前 : 催促 < 期限
+
+examples
+| 受付日     | -> 催促    | -> 期限    |
+| 2026-11-13 | 2026-11-15 | 2026-11-16 |

@@ -1,0 +1,4 @@
+エラー[E509]: example.ringi:15:3: 2026-04-01 からの組織では、この申請をだれも出せません
+    15 |   submitted by   team finance except position 部長
+  = 2026-04-01 からの組織では、`team finance except position 部長` に当たる人がいません。
+  = `submitted by` を広げるか、版のデータを直してください。

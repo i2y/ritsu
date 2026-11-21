@@ -3,17 +3,23 @@
 //! the rest of the contract: the shape of the file, the entry in `rulec api`, and that the
 //! query really runs as a relation — many rows in one statement, in order.
 
-use std::io::Write as _;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::time::Duration;
+use ritsu_testkit::run::{finish, finish_with_input};
 use ritsu_testkit::{Need, TempDir, ready};
+
+/// How long psql, or a runner of the rule's function, may take with the machine's PostgreSQL: a
+/// second or two each. Past it, the program is stopped and the test fails with what it printed, not
+/// at the limit of the job with nothing said.
+const DATABASE_LIMIT: Duration = Duration::from_secs(5 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 fn run(args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).output().expect("rulec を起動できない");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).args(["--lang", "ja"]).output().expect("rulec を起動できない");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
@@ -244,32 +250,29 @@ fn 同じデータベースで走る関数は互いにもデータベースの�
     let dir = t.path().join("out");
     let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", rule.to_str().unwrap(), "--out", dir.to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
-    let psql = |sql: &str| Command::new("psql").args(["-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", sql]).output().unwrap();
+    let psql = |sql: &str| finish(Command::new("psql").args(["-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", sql]), DATABASE_LIMIT, "psql on the machine's PostgreSQL");
     let theirs = psql("CREATE OR REPLACE FUNCTION period_side_by_side(n integer) RETURNS text LANGUAGE sql AS $$ SELECT 'theirs' $$;");
-    assert!(theirs.status.success(), "{}", String::from_utf8_lossy(&theirs.stderr));
+    assert!(theirs.ok, "{}", theirs.stderr);
 
     let cases = ["2026-03-31", "2026-04-01", "2026-12-01"].map(|d| format!("{{\"in\":{{\"注文日\":\"{d}\"}}}}\n")).concat();
-    let runs: Vec<_> = (0..4)
-        .map(|_| {
-            let mut p = Command::new("python3")
-                .args(["-B", dir.join("sql/period_side_by_side_function_runner.py").to_str().unwrap()])
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .unwrap();
-            p.stdin.take().unwrap().write_all(cases.as_bytes()).unwrap();
-            p
-        })
-        .collect();
-    let outs: Vec<_> = runs.into_iter().map(|p| p.wait_with_output().unwrap()).collect();
+    // the four at once, each in a thread of its own
+    let runner = dir.join("sql/period_side_by_side_function_runner.py");
+    let outs: Vec<_> = std::thread::scope(|s| {
+        let runs: Vec<_> = (0..4)
+            .map(|i| {
+                let (runner, cases) = (&runner, &cases);
+                s.spawn(move || finish_with_input(Command::new("python3").arg("-B").arg(runner), Some(cases.as_bytes()), DATABASE_LIMIT, &format!("runner {} of four of the rule's function on the machine's PostgreSQL", i + 1)))
+            })
+            .collect();
+        runs.into_iter().map(|h| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e))).collect()
+    });
     let after = psql("SELECT period_side_by_side(1);");
     psql("DROP FUNCTION IF EXISTS period_side_by_side(integer);");
 
     for o in &outs {
-        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        assert!(o.ok, "{}", o.stderr);
         assert_eq!(
-            String::from_utf8_lossy(&o.stdout),
+            o.stdout,
             concat!(
                 r#"{"in":{"注文日":"2026-03-31"},"observed":{"区分":"改定前"},"trace":[{"table":"期間判定","row":1}]}"#, "\n",
                 r#"{"in":{"注文日":"2026-04-01"},"observed":{"区分":"春季"},"trace":[{"table":"期間判定","row":2}]}"#, "\n",
@@ -277,5 +280,5 @@ fn 同じデータベースで走る関数は互いにもデータベースの�
             )
         );
     }
-    assert_eq!(String::from_utf8_lossy(&after.stdout).trim(), "theirs", "{}", String::from_utf8_lossy(&after.stderr));
+    assert_eq!(after.stdout.trim(), "theirs", "{}", after.stderr);
 }

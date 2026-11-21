@@ -1,0 +1,23 @@
+request 例(example) v1 "例"
+
+use calendar 事務所(office) from "shared/事務所.cal"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+every stage
+  due in 3 business days at 17:00
+  when late escalate, then escalate
+
+ticket
+  self approval  not allowed
+  send back      to the requester, at most 2 times
+
+claims
+  期限のうちに終わる : every ticket ends within 30 business days

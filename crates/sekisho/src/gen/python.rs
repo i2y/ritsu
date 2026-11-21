@@ -46,6 +46,10 @@ struct Names {
     answer: String,
     role: String,
     avp: String,
+    /// the function that lists the roles the gate declares
+    roles: String,
+    /// the function that lists the roles a type of principal takes
+    roles_of: String,
     /// Each type's record, by index.
     records: BTreeMap<usize, String>,
     /// Each enum's `Literal`, by index.
@@ -56,18 +60,37 @@ struct Names {
 
 /// What the module declares at its top level, in the order [`names`] reads them: the records of the
 /// types it reads, the enums' `Literal`s, its own, then the inputs. Two of them that are one name
-/// are W402 and E401 (`crate::spellings`), and so is one that [`global`] holds.
+/// are W402 and E401 (`crate::spellings`), and so is one that [`imported`] or [`keyword`] holds.
 pub fn declared(g: &Gate, shape: &crate::cedar::Shape) -> Vec<Declared> {
     let mut d: Vec<Declared> = plan::types_used(g).into_iter().filter(|&t| plan::reads(g, shape, t)).map(|t| Declared::new(g.types[t].named.alias.clone(), From::Type(t))).collect();
     d.extend(g.enums.iter().enumerate().map(|(i, e)| Declared::new(plan::pascal(&e.named.alias), From::Enum(i))));
-    d.extend(["Principal", "Store", "SekishoError", "Request", "Answer", "Role", "VerifiedPermissions"].iter().map(|w| Declared::new(w.to_string(), From::Own)));
+    d.extend(["Principal", "Store", "SekishoError", "Request", "Answer", "Role", "VerifiedPermissions", "roles", "roles_of"].iter().map(|w| Declared::new(w.to_string(), From::Own)));
     d.extend(g.actions.iter().enumerate().map(|(i, a)| Declared::new(format!("{}Input", plan::pascal(&a.named.alias)), From::Input(i))));
     d
 }
 
-/// Whether `id` is a word of Python, or a name the module imports.
-pub fn global(id: &str) -> bool {
-    ritsu_emit::words::python::KEYWORDS.contains(&id) || ["Literal", "Protocol", "TypedDict", "NotRequired", "dataclass", "date", "datetime", "timedelta", "timezone", "cedarpy", "json"].contains(&id)
+/// Whether `id` is a name the module imports.
+pub fn imported(id: &str) -> bool {
+    ["Literal", "Protocol", "TypedDict", "NotRequired", "dataclass", "date", "datetime", "timedelta", "timezone", "cedarpy", "json"].contains(&id)
+}
+
+/// Whether `id` is a reserved word of Python: a keyword. A soft keyword (`match`, `type`) is a name
+/// where the code writes one.
+pub fn keyword(id: &str) -> bool {
+    ritsu_emit::words::python::KEYWORDS.contains(&id)
+}
+
+/// The fields of the record of type `t` that hold its attributes, each its alias (the fields of the
+/// roles and the groups move aside from the attributes and from Python's words, [`record`]). One
+/// that [`keyword`] holds is W402 and E401.
+pub fn declared_fields(g: &Gate, t: usize) -> Vec<Declared> {
+    g.types[t].attrs.iter().enumerate().map(|(i, f)| Declared::new(f.named.alias.clone(), From::Attr(t, i))).collect()
+}
+
+/// The methods of `Store`, one for each type of `types` (the types whose records the module
+/// declares), each the type's alias in snake case. One that [`keyword`] holds is W402 and E401.
+pub fn store_methods(g: &Gate, types: &[usize]) -> Vec<Declared> {
+    types.iter().map(|&t| Declared::new(plan::snake(&g.types[t].named.alias), From::Type(t))).collect()
 }
 
 fn names(p: &Plan) -> Names {
@@ -83,11 +106,13 @@ fn names(p: &Plan) -> Names {
     for i in 0..g.enums.len() {
         enums.insert(i, it.next().unwrap_or_default());
     }
-    let mut fixed: Vec<String> = (0..7).map(|_| it.next().unwrap_or_default()).collect();
+    let mut fixed: Vec<String> = (0..9).map(|_| it.next().unwrap_or_default()).collect();
     let mut inputs = BTreeMap::new();
     for i in 0..g.actions.len() {
         inputs.insert(i, it.next().unwrap_or_default());
     }
+    let roles_of = fixed.pop().unwrap_or_default();
+    let roles = fixed.pop().unwrap_or_default();
     let avp = fixed.pop().unwrap_or_default();
     let role = fixed.pop().unwrap_or_default();
     let answer = fixed.pop().unwrap_or_default();
@@ -95,7 +120,7 @@ fn names(p: &Plan) -> Names {
     let error = fixed.pop().unwrap_or_default();
     let store = fixed.pop().unwrap_or_default();
     let principal = fixed.pop().unwrap_or_default();
-    Names { principal, store, error, request, answer, role, avp, records, enums, inputs }
+    Names { principal, store, error, request, answer, role, avp, roles, roles_of, records, enums, inputs }
 }
 
 /// The fields of a type's record: its roles, the groups it is a member of, and its attributes, each
@@ -163,9 +188,9 @@ pub fn module(p: &Plan, o: &Options) -> String {
     // the imports
     let has_date = g.types.iter().any(|ty| ty.attrs.iter().any(|f| matches!(f.ty, FieldType::Date { .. }))) || g.actions.iter().any(|a| a.inputs.iter().any(|f| matches!(f.ty, FieldType::Date { .. })));
     t.push_str("from __future__ import annotations\n\n");
-    if o.authorizer == Authorizer::Avp {
-        t.push_str("import json\n");
-    }
+    // json: the name `authorize` is not given is said as JSON writes it (and the Verified
+    // Permissions' context and entities are sent in JSON)
+    t.push_str("import json\n");
     t.push_str("from dataclasses import dataclass\n");
     let today = p.today().is_some() && p.actions.iter().any(|a| a.reads_today);
     let mut dt = vec!["datetime"];
@@ -214,6 +239,7 @@ pub fn module(p: &Plan, o: &Options) -> String {
     for a in &p.actions {
         action(p, &n, o, a, &mut t);
     }
+    by_name(p, &n, o, &mut t);
     ask(p, &n, o, &mut t);
     while t.ends_with("\n\n") {
         t.pop();
@@ -322,7 +348,7 @@ fn types(p: &Plan, n: &Names, o: &Options, t: &mut String) {
         }
         for (gt, field) in &r.groups {
             let gn = &g.types[*gt].named.alias;
-            t.push_str(&format!("    {field}: list[str]  # {}\n", tr(o, &format!("メンバーである {gn} の ID"), &format!("the ids of the {gn}s it is a member of"))));
+            t.push_str(&format!("    {field}: list[str]  # {}\n", tr(o, &format!("メンバーである {gn} の ID"), &format!("the ids of the groups of type {gn} it is a member of"))));
         }
         for (i, f) in ty.attrs.iter().enumerate() {
             t.push_str(&format!("    {}: {}{}\n", r.attrs[i], field_type(n, f), field_comment(g, f, o.lang)));
@@ -389,14 +415,14 @@ fn types(p: &Plan, n: &Names, o: &Options, t: &mut String) {
     t.push_str(&py_doc(
         &[tr(
             o,
-            "ゲートに尋ねられなかった理由。このとき答えは「拒む」です。kind は principal、resource、input、today、rule、date（リクエストを組み立てられない）、cedar（Cedar がエラーを返したか、尋ねられなかった）のどれかです。",
-            "Why the gate could not be asked, and the answer is a deny: kind is principal, resource, input, today, rule or date (the request could not be built), or cedar (Cedar answered with an error, or could not be asked).",
+            "ゲートに尋ねられなかった理由。このとき答えは「拒む」です。kind は principal、resource、input、today、rule、date（リクエストを組み立てられない）、cedar（Cedar がエラーを返したか、尋ねられなかった）、action（authorize に、ゲートに無い action の名前が渡された）のどれかです。",
+            "Why the gate could not be asked, and the answer is a deny: kind is principal, resource, input, today, rule or date (the request could not be built), cedar (Cedar answered with an error, or could not be asked), or action (authorize was given a name the gate has no action of).",
         )],
         "    ",
     ));
     t.push('\n');
-    t.push_str("    def __init__(self, kind: Literal[\"principal\", \"resource\", \"input\", \"today\", \"rule\", \"date\", \"cedar\"], message: str) -> None:\n");
-    t.push_str("        super().__init__(message)\n        self.kind: Literal[\"principal\", \"resource\", \"input\", \"today\", \"rule\", \"date\", \"cedar\"] = kind\n\n\n");
+    t.push_str("    def __init__(self, kind: Literal[\"principal\", \"resource\", \"input\", \"today\", \"rule\", \"date\", \"cedar\", \"action\"], message: str) -> None:\n");
+    t.push_str("        super().__init__(message)\n        self.kind: Literal[\"principal\", \"resource\", \"input\", \"today\", \"rule\", \"date\", \"cedar\", \"action\"] = kind\n\n\n");
     t.push_str("@dataclass(frozen=True)\n");
     t.push_str(&format!("class {}:\n", n.request));
     t.push_str(&py_doc(&[tr(o, "Cedar に尋ねるもの。principal、action、resource、context と、ポリシーが読むエンティティ（Cedar の JSON の形）。", "What Cedar is asked: the principal, the action, the resource and the context, with the entities the policies read, in Cedar's JSON.")], "    "));
@@ -446,6 +472,33 @@ fn helpers(p: &Plan, n: &Names, o: &Options, t: &mut String) {
     let g = p.g;
     let e = &n.error;
     t.push_str("def _uid(type: str, id: str) -> dict[str, str]:\n    return {\"type\": type, \"id\": id}\n\n\n");
+    // the lists of the roles the gate declares and of the roles each type of principal takes, for the
+    // service to pass a person's roles through (DESIGN 33)
+    let declared: Vec<String> = g.roles.iter().map(|r| s(&r.named.alias)).collect();
+    t.push_str(&format!("def {}() -> list[str]:\n", n.roles));
+    t.push_str(&py_doc(
+        &[tr(
+            o,
+            &format!("ゲートが宣言した役割の別名を、宣言の順に、呼ぶたびに新しいリストで返します。レコードに入れる役割は {} で絞ります。", n.roles_of),
+            &format!("The aliases of the roles the gate declares, in the order it declares them, in a new list each call. The roles to put into a record are narrowed with {}.", n.roles_of),
+        )],
+        "    ",
+    ));
+    t.push_str(&format!("    return [{}]\n\n\n", declared.join(", ")));
+    t.push_str(&format!("def {}(t: str) -> list[str]:\n", n.roles_of));
+    t.push_str(&py_doc(
+        &[tr(
+            o,
+            "Cedar での名前が t の principal の型が持てる役割（その型の roles の行に書いたもの）の別名を、ゲートが宣言した順に、呼ぶたびに新しいリストで返します。principal の型でない名前と、ゲートに無い名前には、空のリストを返します。レコードの roles には、この中の役割だけを入れられます。ほかの役割を一つでも持つ人は、どの action でも拒まれるので、サインインが運ぶ役割は、これで絞ってから入れてください。",
+            "The aliases of the roles a principal of the type named t in Cedar can hold (those its roles line names), in the order the gate declares them, in a new list each call; an empty one for a name that is not a principal's type, or that the gate does not declare. A record's roles holds only these: one who holds any other is refused every action, so pass the roles a sign-in carries through it first.",
+        )],
+        "    ",
+    ));
+    for (ty, rs) in plan::roles_of(g) {
+        let rs: Vec<String> = rs.iter().map(|r| s(r)).collect();
+        t.push_str(&format!("    if t == {}:\n        return [{}]\n", s(ty), rs.join(", ")));
+    }
+    t.push_str("    return []\n\n\n");
     // the roles as entities
     if !g.roles.is_empty() {
         t.push_str("_ROLES: list[dict[str, object]] = [\n");
@@ -479,7 +532,7 @@ fn helpers(p: &Plan, n: &Names, o: &Options, t: &mut String) {
             s(&outside)
         ));
     }
-    if p.actions.iter().any(|a| a.values.iter().any(|v| matches!(&v.call, Call::Rule { args, .. } if args.iter().any(|(c, s)| matches!(plan::strip(&c.ty), ritsu_ports::ColumnType::Date) && s.is_some())))) {
+    if p.actions.iter().any(|a| a.values.iter().any(|v| matches!(&v.call, Call::Rule { args, .. } if args.iter().any(|(c, s)| matches!(plan::strip(&c.ty), ritsu_ports::ColumnType::Date { .. }) && s.is_some())))) {
         t.push_str(&format!("def _days(day: date) -> int:\n{}    return (day - date(1970, 1, 1)).days\n\n\n", py_doc(&[tr(o, "rulec のコードが受け取る日：1970-01-01 からの日数。", "A day as rulec's code takes it: the days since 1970-01-01.")], "    ")));
     }
     if let Some(td) = p.today() {
@@ -748,8 +801,11 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
             t.push_str(&format!("    context[{}] = {v}\n", s(&f.named.alias)));
         }
     }
+    // the locals that hold an attribute that may be absent (`a0 = p_guest.age`) are numbered
+    // through the function: Python's scope is the function's, and mypy holds a name to one type
+    let mut bound = 0;
     for vp in &ap.values {
-        value(p, n, o, a, vp, t);
+        value(p, n, o, a, vp, t, &mut bound);
     }
     for &k in &ap.asked {
         asked(p, n, o, ai, k, t);
@@ -778,6 +834,93 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
     }
 }
 
+
+/// The entry by the action's name (DESIGN 5.7): `authorize`, given the action as Cedar names it and
+/// the ids of resources by the names of their types in Cedar, answers through the action's own
+/// function, with the id of the one type of the action's that it is given. A name the gate has no
+/// action of, an action that takes inputs of its own, and no id, or ids of two types, of the
+/// action's resource are refused, as the action's own function refuses what it cannot ask.
+fn by_name(p: &Plan, n: &Names, o: &Options, t: &mut String) {
+    let g = p.g;
+    let (e, answer) = (&n.error, &n.answer);
+    let mut params = vec![format!("store: {}", n.store), format!("principal: {}", n.principal), "action: str".to_string(), "resources: dict[str, str]".to_string(), "now: datetime | None = None".to_string()];
+    let avp = if o.authorizer == Authorizer::Avp {
+        params.insert(0, format!("avp: {}", n.avp));
+        "avp, "
+    } else {
+        ""
+    };
+    t.push_str(&format!("def authorize({}) -> {answer}:\n", params.join(", ")));
+    let how = match o.authorizer {
+        Authorizer::Cedar => tr(o, "このプロセスの中の cedarpy", "cedarpy, in this process"),
+        Authorizer::Avp => "Amazon Verified Permissions".to_string(),
+    };
+    let (ja_eg, en_eg) = match p.actions.first() {
+        Some(ap) => {
+            let alias = &g.actions[ap.index].named.alias;
+            (format!("（{alias} なら authorize_{alias}）"), format!(" (authorize_{alias} for {alias})"))
+        }
+        None => (String::new(), String::new()),
+    };
+    t.push_str(&py_doc(
+        &[tr(
+            o,
+            &format!("action という名前の action を許すかを Cedar（{how}）に尋ねます。尋ねるのは、その action の関数です{ja_eg}。action は Cedar での action の名前で、resources は、resource の ID を、その型の Cedar での名前ごとに持ちます。action がとらない型の ID は読みません。ゲートに無い名前（種類は action）、自分の入力を受け取る action（input。その action の関数で尋ねてください）、action の resource の ID が無いか、二つの型の ID があるとき（resource）は、{e} を持つ拒む答えを返します。Store の失敗は、そのまま投げます。"),
+            &format!("Asks Cedar ({how}) whether the action named action is allowed, through the action's own function{en_eg}. action is the action's name in Cedar, and resources holds the id of a resource by the name of its type in Cedar; the ids of types the action does not take are left alone. A name the gate has no action of (the kind action), an action that takes inputs of its own (input: ask it through its own function), and no id, or ids of two types, of the action's resource (resource) are a deny, with a {e}. A failure of the store is raised as it is."),
+        )],
+        "    ",
+    ));
+    let mut given = false;
+    for ap in &p.actions {
+        let a = &g.actions[ap.index];
+        let alias = &a.named.alias;
+        t.push_str(&format!("    if action == {}:\n", s(alias)));
+        if !a.inputs.is_empty() {
+            let own: Vec<String> = a.inputs.iter().map(|f| f.named.alias.clone()).collect();
+            let m = tr(o, &format!("{alias} は自分の入力（{}）を受け取ります。authorize_{alias} で尋ねてください", own.join("、")), &format!("{alias} takes inputs of its own ({}): ask it through authorize_{alias}", own.join(", ")));
+            t.push_str(&format!("        return {answer}(False, [], None, {e}({}, {}))\n", s("input"), s(&m)));
+            continue;
+        }
+        let types: Vec<String> = a.resources.iter().map(|&x| g.types[x].named.alias.clone()).collect();
+        let (ja_types, en_types) = (types.join("、"), types.join(", "));
+        let none = tr(o, &format!("resources に {alias} の resource（{ja_types}）の ID がありません"), &format!("resources holds no id of the resource of {alias} ({en_types})"));
+        let lits: Vec<String> = types.iter().map(|x| s(x)).collect();
+        let rf = s(&plan::resource_field(a));
+        if types.len() == 1 {
+            let lit = &lits[0];
+            t.push_str(&format!("        if {lit} not in resources:\n            return {answer}(False, [], None, {e}({}, {}))\n", s("resource"), s(&none)));
+            t.push_str(&format!("        return authorize_{alias}({avp}store, principal, {{{rf}: resources[{lit}]}}, now)\n"));
+        } else {
+            given = true;
+            let two = tr(o, &format!("resources に {alias} の resource（{ja_types}）の ID が二つ以上あります。尋ねる一つだけを渡してください"), &format!("resources holds ids of more than one type of the resource of {alias} ({en_types}): give the one it is asked of"));
+            t.push_str(&format!("        t = _given(resources, ({}), {}, {})\n", lits.join(", "), s(&none), s(&two)));
+            t.push_str(&format!("        if isinstance(t, {e}):\n            return {answer}(False, [], None, t)\n"));
+            // the type as the input's Literal holds it, one return for each
+            for (k, lit) in lits.iter().enumerate() {
+                let call = format!("authorize_{alias}({avp}store, principal, {{{rf}: resources[t], {}: {lit}}}, now)", s("resource_type"));
+                if k + 1 < lits.len() {
+                    t.push_str(&format!("        if t == {lit}:\n            return {call}\n"));
+                } else {
+                    t.push_str(&format!("        return {call}\n"));
+                }
+            }
+        }
+    }
+    let unknown = tr(o, "ゲートに action {json.dumps(action, ensure_ascii=False)} はありません", "the gate has no action {json.dumps(action, ensure_ascii=False)}");
+    t.push_str(&format!("    return {answer}(False, [], None, {e}({}, f{}))\n\n\n", s("action"), s(&unknown)));
+    if given {
+        t.push_str(&format!("def _given(resources: dict[str, str], types: tuple[str, ...], none: str, two: str) -> str | {e}:\n"));
+        t.push_str(&py_doc(
+            &[tr(
+                o,
+                &format!("resource の型をいくつかとる action の、types のうち resources が ID を持つ一つの型。一つも無いか、二つ以上あれば、種類 resource の {e}（文は none と two）。"),
+                &format!("The one type of types, the types of the resource of an action that takes several, that resources holds an id of. None, or more than one, is a {e} of the kind resource, saying none or two."),
+            )],
+            "    ",
+        ));
+        t.push_str(&format!("    found = [x for x in types if x in resources]\n    if len(found) == 1:\n        return found[0]\n    return {e}({}, two if found else none)\n\n\n", s("resource")));
+    }
+}
 
 /// The code that reads an owner's entity of type `t` (when the action reads it, by the type of the
 /// other owner, `other`) and makes its entity for Cedar; `id` is its id.
@@ -817,7 +960,7 @@ fn read_entity(p: &Plan, ai: usize, owner: Owner, t: usize, indent: &str, other:
 }
 
 /// The code of one value the action computes, put into `context` under its alias.
-fn value(p: &Plan, n: &Names, o: &Options, a: &Action, vp: &ValuePlan, t: &mut String) {
+fn value(p: &Plan, n: &Names, o: &Options, a: &Action, vp: &ValuePlan, t: &mut String, bound: &mut usize) {
     let g = p.g;
     let cv = &a.computed[vp.index];
     let e = &n.error;
@@ -847,6 +990,7 @@ fn value(p: &Plan, n: &Names, o: &Options, a: &Action, vp: &ValuePlan, t: &mut S
             let mut body = String::new();
             let mut binds: Vec<String> = Vec::new();
             let mut optional: Vec<String> = Vec::new();
+            let base = *bound;
             let source = |src: &Source, binds: &mut Vec<String>, optional: &mut Vec<String>| -> String {
                 match src {
                     Source::Attr(owner, name) => {
@@ -858,7 +1002,7 @@ fn value(p: &Plan, n: &Names, o: &Options, a: &Action, vp: &ValuePlan, t: &mut S
                         let (i, f) = g.types[ty].attr(name).unwrap_or((0, &g.types[ty].attrs[0]));
                         let expr = format!("{}.{}", var(*owner, &g.types[ty].named.alias), r.attrs[i]);
                         if f.optional {
-                            let local = format!("a{}", binds.len());
+                            let local = format!("a{}", base + binds.len());
                             binds.push(format!("{local} = {expr}"));
                             optional.push(format!("{local} is not None"));
                             local
@@ -969,6 +1113,7 @@ fn value(p: &Plan, n: &Names, o: &Options, a: &Action, vp: &ValuePlan, t: &mut S
                 lines.push(format!("{}if {}:", "    ".repeat(depth), conds.join(" and ")));
                 depth += 1;
             }
+            *bound += binds.len();
             for b in &binds {
                 lines.push(format!("{}{b}", "    ".repeat(depth)));
             }
@@ -1137,8 +1282,8 @@ fn rule_arg(p: &Plan, facts: &ritsu_ports::RuleFacts, m: &str, col: &ritsu_ports
     use ritsu_ports::ColumnType as C;
     let g = p.g;
     match (plan::strip(&col.ty), src) {
-        (C::Date, Source::Lit(Literal::Date(d))) => d.to_string(),
-        (C::Date, _) => format!("_days({raw})"),
+        (C::Date { .. }, Source::Lit(Literal::Date(d))) => d.to_string(),
+        (C::Date { .. }, _) => format!("_days({raw})"),
         (C::Bool, Source::Lit(Literal::Bool(b))) => if *b { "True".into() } else { "False".into() },
         (C::Bool, _) => raw.to_string(),
         (C::Num { unit, .. }, Source::Lit(Literal::Num(num))) => {

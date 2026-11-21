@@ -2,7 +2,7 @@
 
 Pays a refund back at once or sends it to review, and settles it on a payment day. ritsu cannot decide the rules' preconditions here (the amount asked and the day come from tasks with no range), so the workflow checks each as soon as its values are made: right after the task that answers them, at the start of the arm that calls the rule, at the start of each round. Runs on every platform
 
-`tests/flows/preconditions.flow` を `dandori doc` で描いたものです。入力は `order: string`・`paid: int range >=0 <=10000` です。
+`tests/flows/preconditions.flow` を `dandori doc` で描いたものです。入力は `order: string`・`paid: int range >=0 <=10_000` です。
 
 ## flow
 
@@ -87,8 +87,8 @@ Whether a refund is paid back at once or reviewed. A refund never asks for more 
 
 | 名前 | 型 | 範囲 | 注記 |
 |---|---|---|---|
-| paid | number | 0 〜 1万 |  |
-| asked | number | 0 〜 1万 |  |
+| paid | number | 0 〜 10_000 |  |
+| asked | number | 0 〜 10_000 |  |
 
 ## 出力
 
@@ -200,10 +200,10 @@ The settlement run a payment day falls in. The days are the ones payment_terms.c
 `dandori check` の結果です。それぞれにそうなる例が付いています。
 
 ```text
-警告[W104]: tests/flows/preconditions.flow:41:1: `asked` の範囲が分かりません（`ask_amount` の結果に範囲がありません）。規則 `check` の `asked` が受け取るのは `>=0 <=10000` です
+警告[W104]: tests/flows/preconditions.flow:41:1: `asked` の範囲が分かりません（`ask_amount` の結果に範囲がありません）。規則 `check` の `asked` が受け取るのは `>=0 <=10_000` です
     41 |   let decision = check(paid: paid, asked: asked)
-警告[W104]: tests/flows/preconditions.flow:52:1: `claim.asked` の範囲が分かりません（`Claim` のフィールド `asked` に範囲がありません）。規則 `check` の `asked` が受け取るのは `>=0 <=10000` です
+警告[W104]: tests/flows/preconditions.flow:52:1: `claim.asked` の範囲が分かりません（`Claim` のフィールド `asked` に範囲がありません）。規則 `check` の `asked` が受け取るのは `>=0 <=10_000` です
     52 |     let one = check(paid: paid, asked: claim.asked)
-警告[W104]: tests/flows/preconditions.flow:54:1: `item.asked` の範囲が分かりません（`Claim` のフィールド `asked` に範囲がありません）。規則 `check` の `asked` が受け取るのは `>=0 <=10000` です
+警告[W104]: tests/flows/preconditions.flow:54:1: `item.asked` の範囲が分かりません（`Claim` のフィールド `asked` に範囲がありません）。規則 `check` の `asked` が受け取るのは `>=0 <=10_000` です
     54 |     let each = check(paid: paid, asked: item.asked)
 ```

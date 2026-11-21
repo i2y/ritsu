@@ -18,18 +18,29 @@ export class KanameError extends Error {
   readonly kind: Kind;
   readonly module: string;
   readonly line: number;
-  constructor(kind: Kind, module: string, line: number, message: string, cause?: unknown) {
+  /**
+   * For the kind `input`, the place of what is not taken, from the argument's name:
+   * `submit.form.days`, `organization.people[0]`, `now`; undefined for the other kinds.
+   */
+  readonly path: string | undefined;
+  constructor(kind: Kind, module: string, line: number, message: string, cause?: unknown, path?: string) {
     super(spaced(message), cause === undefined ? undefined : { cause });
     this.name = "KanameError";
     this.kind = kind;
     this.module = module;
     this.line = line;
+    this.path = path;
   }
 }
 
 /** Throw the error of `kind` at `line` of `module`; `cause` is what another language threw. */
 export function fail(kind: Kind, module: string, line: number, message: string, cause?: unknown): never {
   throw new KanameError(kind, module, line, message, cause);
+}
+
+/** Throw the error of the kind `input` at `line` of `module`: the argument is not taken at `path`. */
+export function failInput(module: string, line: number, path: string, message: string): never {
+  throw new KanameError("input", module, line, message, undefined, path);
 }
 
 /** A message as kaname writes it: an English sentence begins with a capital; Japanese has a space
@@ -333,10 +344,38 @@ export function ratText(x: Q): string {
   return `${sign}${num}/${x.d}`;
 }
 
-/** A number as a literal of its unit writes it: `1150GBPc`, `0.5%`, `30`. */
+/** A number as `text` writes it, a literal of its unit with its digits as they are: `1150GBPc`,
+ * `100000000GBPc`, `30` (a rate as a percentage, `0.5%`). */
 export function numText(x: Q, unit: string): string {
   if (unit === "%") return ratText(mul(x, q(100n))) + "%";
   return ratText(x) + unit;
+}
+
+/** A number as a message writes it, as the languages write numbers: a literal of its unit with its
+ * whole part's digits grouped by `_` from five on: `100_000_000GBPc`, `5000JPY`, `0.5%`, `30`. */
+export function numShown(x: Q, unit: string): string {
+  return grouped(unit === "%" ? ratText(mul(x, q(100n))) : ratText(x)) + unit;
+}
+
+/** A count as a message writes it: `12`, `5000`, `10_000`. */
+export function itoa(n: number | null): string {
+  return n === null ? "" : grouped(String(n));
+}
+
+/** A number `ratText` writes, with the digits of its whole part grouped by `_` from five on
+ * (`12_345.5`); a fraction (`1/3`) as it is. */
+function grouped(t: string): string {
+  const sign = t.startsWith("-") ? "-" : "";
+  const body = t.slice(sign.length);
+  const dot = body.indexOf(".");
+  const whole = dot < 0 ? body : body.slice(0, dot);
+  if (whole.length < 5 || !/^[0-9]+$/.test(whole)) return t;
+  let out = sign;
+  for (let i = 0; i < whole.length; i++) {
+    if (i > 0 && (whole.length - i) % 3 === 0) out += "_";
+    out += whole.charAt(i);
+  }
+  return out + (dot < 0 ? "" : body.slice(dot));
 }
 
 /** Where a value a function is given or answers is outside what its place declares: the place

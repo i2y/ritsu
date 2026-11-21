@@ -1,0 +1,20 @@
+request outlay v1 "Outlay"
+
+use organization org from "shared/small.ringi"
+
+form
+  category : choice "Category"
+    travel   "Travel"
+    supplies "Supplies"
+  items : rows "Items"  count >=1 <=10
+    what   : text "What"  count <=100
+    serial : number "Serial number"  range >=1 <=99_999_999_999_999_999
+
+route
+  check  manager
+
+who
+  manager = manager of requester
+
+ticket
+  self approval  not allowed

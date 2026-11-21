@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_Goで同じ名前のフィールド.ringi:6:12: `costCode` and the field `cost_code` (line 5) are one name in the code generated for Go, `CostCode`
+     6 |   案件の費用コード(costCode)   : text "案件の費用コード"  count <=20  optional
+  = The JSON of a ticket holds each field by its ASCII name, and the records of the generated code hold it as a field of theirs, which Go writes in PascalCase, so the two cannot be told apart there. A key of the JSON cannot be written under another name. Choose another name for one of the two, or give it another ASCII name in brackets, as in `name(ascii_name)`.

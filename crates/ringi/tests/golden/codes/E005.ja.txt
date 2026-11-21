@@ -1,0 +1,2 @@
+エラー[E005]: example.ringi:3:30: `use calendar` が読むのは `.cal` のファイルです。`予算.book` はそうではありません
+     3 | use calendar 本社(office) from "予算.book"

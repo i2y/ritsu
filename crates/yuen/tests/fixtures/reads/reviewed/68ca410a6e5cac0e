@@ -1,0 +1,2 @@
+band "How large a refund is, by the items sent back"
+means rulec "../rules/refund_band.rule" output band

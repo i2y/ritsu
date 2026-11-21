@@ -1,0 +1,39 @@
+rule まとめ(batch) v1
+description "誤りのある型と、宣言した物を読むほかの種類の行。どの誤りも、宣言の行で一度だけ言う。chain_reads.rule の日本語の版"
+
+enum 大きさ(size) = 小(small) "小" | 大(big) "大"
+
+inputs
+  # 型の書き誤り。それを読む `constraint` は確かめない
+  上限(limit) : 数字  range >=0 <=10
+  枠(cap) : number  range >=0 <=10
+
+elements 小包(parcels)
+  # 型の書き誤り。それを数える行、最大、合計は確かめない
+  種類(kind) : 大きい
+  段階(level) : 数字  range >=0 <=10
+  重さ(weight) : mas[g]  range >0g <30001g
+
+constraint 上限 <= 枠
+
+count 大の数(bigs) over 小包 where 種類 = 大  range >=0 <=3
+max 最高(top) over 小包 of 段階 empty 0
+sum 総重量(total) over 小包 of 重さ  range >=0g <=90000g
+
+outputs
+  # 単位の書き誤り。ここと表の見出しの二か所。一度だけ言い、範囲とセルは確かめない
+  料金(fee) : money[UDS]  round up(1USD)  range >=0USD <=100USD
+
+table 料金の判定(fee_of)
+policy unique
+| 上限 | 枠 | 最高 | 総重量 | 大の数 | -> 料金 : money[UDS] |
+| -    | -  | -    | -      | >=2    | 10USD                |
+| -    | -  | -    | -      | <2     | 0USD                 |
+
+examples
+| 上限 | 枠 | 小包     | -> 料金 |
+| 1    | 2  | 最も軽い | 0USD    |
+
+sequence 最も軽い(lightest)
+| 種類 | 段階 | 重さ  |
+| 小   | 1    | 1000g |

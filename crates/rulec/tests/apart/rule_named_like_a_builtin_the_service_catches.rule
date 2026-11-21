@@ -1,0 +1,14 @@
+rule value_error v1
+description "A rule named like a builtin the service of Connect catches where the rule reads a date"
+
+inputs
+  due : date  range >=2020-01-01 <=2030-12-31
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_due
+policy unique
+| due          | -> fee |
+| <2025-01-01  | 3USD   |
+| >=2025-01-01 | 1USD   |

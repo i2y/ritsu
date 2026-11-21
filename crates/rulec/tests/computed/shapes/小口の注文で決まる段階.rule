@@ -1,0 +1,28 @@
+rule 小口の注文で決まる段階(tier_of_small_orders) v1
+description "注文が小口かと金額から表が書く段階を、小口かと一緒に読む。金になるのは小口でない注文だけなので、小口で金の行は求められない"
+
+enum 窓口(route) = 窓口(desk) | 郵送(post)
+enum 経路(channel_kind) = 店頭(shop) | 通販(online)
+enum 段階(level) = 金(gold) | 銅(bronze)
+
+inputs
+  金額(amount) : money[円]  range >=0円 <=130円
+  経路(channel) : 経路
+
+define 小口(small) : bool = 金額 <= 55円
+
+outputs
+  答え(x) : 窓口
+
+table 段階を決める(tier_of)
+| 小口  | 金額    | -> 段階(tier) : 段階 |
+| false | <=127円 | 銅                   |
+| false | >127円  | 金                   |
+| true  | <=127円 | 銅                   |
+
+table 選ぶ(pick)
+| 経路 | 小口  | 段階    | -> 答え |
+| 店頭 | true  | 銅      | 窓口    |
+| 店頭 | false | 金      | 郵送    |
+| 店頭 | false | 銅      | 窓口    |
+| 通販 | -     | 金, 銅  | 郵送    |

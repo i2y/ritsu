@@ -21,10 +21,8 @@ fn restore_sigpipe() {}
 fn main() -> ExitCode {
     restore_sigpipe();
     // A panic is a bug in sekisho: exit 2, as the other exits that are not the file's fault, rather
-    // than Rust's 101.
-    std::panic::set_hook(Box::new(|info| {
-        eprintln!("sekisho: a bug in sekisho, please report it: {info}");
-    }));
+    // than Rust's 101, in the words of every binary of the toolchain.
+    ritsu_base::cli::on_panic("sekisho");
     let args: Vec<String> = std::env::args().skip(1).collect();
     match std::panic::catch_unwind(|| {
         let (mut out, mut err) = (std::io::stdout(), std::io::stderr());

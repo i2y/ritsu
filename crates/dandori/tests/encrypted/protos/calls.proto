@@ -1,11 +1,15 @@
 // The service tests/encrypted/names.flow implements, whose history is encrypted. Its methods and
-// messages have the names the client dandori writes declares for such a workflow: the method
-// Connect is `connect` in Python, EncryptedClient and Encrypted are `encryptedClient` and
-// `encrypted` in TypeScript, and EncryptedClient, Dial and CodecFailureConverter are Go's own; the
-// messages Connection, PayloadCodec and ClientOptions are TypeScript's, NewType, PayloadCodec and
-// DataConverter Python's, and CodecDataConverter Go's. So check says W105 of each, for the
-// language whose client has it, and gen stops there (E051). (A method cannot have the name of a message the
-// service takes: inside the service, protoc reads the name as the method's.)
+// messages have the names the client dandori writes declares for such a workflow. A caller reads
+// some of them: the method Connect is `connect` in Python, EncryptedClient is `encryptedClient` in
+// TypeScript, and EncryptedClient and Dial are Go's. So check says W105 of these, for the language
+// whose client has them, and gen stops there (E051). The client has the others for itself alone
+// (the method Encrypted is `encrypted` in TypeScript; the messages Connection, PayloadCodec and
+// ClientOptions are TypeScript's, NewType, PayloadCodec and DataConverter Python's, and
+// CodecFailureConverter and CodecDataConverter Go's), and gives its own other names where the
+// service takes them. In Go, the method CodecFailureConverter and the message CodecDataConverter
+// are one name with the record and the enum of the flow, which W105 says. (A method cannot have
+// the name of a message the service takes: inside the service, protoc reads the name as the
+// method's.)
 syntax = "proto3";
 
 package calls.v1;

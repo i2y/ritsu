@@ -16,8 +16,8 @@ pub struct Engine;
 
 fn read(root: &Path, file: &str) -> Result<(String, File), Vec<Said>> {
     let disk = ritsu_base::paths::on_disk(root, file);
-    let path = disk.to_string_lossy().to_string();
-    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+    let path = ritsu_base::paths::show(&disk);
+    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e)])?;
     match crate::parse::parse(file, &src) {
         (Some(f), ds) if !ds.iter().any(|d| d.is_error()) => Ok((src, f)),
         (_, ds) => Err(ds.iter().filter(|d| d.is_error()).map(|d| Said { file: path.clone(), ..Said::of(d) }).collect()),
@@ -215,6 +215,16 @@ impl ritsu_ports::References for Engine {
         out.sort_by_key(|r| r.line);
         Ok(out)
     }
+
+    /// What a `.ctx` reads, of what it names: a map, its contexts; a context, its published
+    /// language and the services of it, the enums a layer maps to, and what each term means. The
+    /// rest says where things sit and who holds them — what a map covers and leaves out, where its
+    /// protos and its code are, what a context owns, where its code is generated, the artifacts its
+    /// layers and kernels are — and nothing a context or a map says is made of what those hold.
+    fn reads(&self, _root: &Path, _file: &str, named: Vec<Reference>) -> Vec<ritsu_ports::Read> {
+        const PLACES: [&str; 8] = ["covers", "except", "proto root", "code", "owns", "generated", "layer", "shared kernel"];
+        ritsu_ports::Read::of_named(named.into_iter().filter(|r| !PLACES.contains(&r.how.as_str())).collect())
+    }
 }
 
 /// What the stages of sakai's check say is wrong, as the ports say it: the file from the root.
@@ -229,7 +239,7 @@ fn said(ds: &[crate::diag::Diag]) -> Vec<Said> {
 /// of which context a file is in, and are left to the map's own check.
 fn map_model(root: &Path, map: &str) -> Result<Option<crate::model::Model>, Vec<Said>> {
     let disk = ritsu_base::paths::on_disk(root, map);
-    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(map, &e.to_string())])?;
+    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(map, &e)])?;
     match crate::parse::kind_of(&src) {
         Some(k) if k == crate::kw::MAP => {}
         Some(_) => return Ok(None),

@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":null,"diagnostics":[{"code":"E080","severity":"error","file":null,"line":null,"col":null,"message":"there are no codes `E998`, `E999`; run `geas explain --all`","notes":[],"path":[]}]}

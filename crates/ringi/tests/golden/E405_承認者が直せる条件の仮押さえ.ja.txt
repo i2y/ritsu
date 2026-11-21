@@ -1,0 +1,6 @@
+エラー[E405]: tests/mutants/E405_承認者が直せる条件の仮押さえ.ringi:26:107: 仮押さえ `予算.reserve` が、承認者の直せるフィールド `種別` を読みます
+    26 |   on submitted    hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: 部, amount: 金額)  when 種別 is 予算
+  = 仮押さえの条件（`when 種別 is 予算`）が `種別` を読み、25 行目の `approvers edit` が、承認者に `種別` を直させます。
+  = 仮押さえは、申請を出したときの値で一度だけ行い、承認者が直しても押さえ直しません。
+  = 直して条件が成り立たなくなると、同じ条件の `post` と `void` は行われず、仮押さえが開いたまま終わります。
+  = `approvers edit` から `種別` を外してください（ほかのフィールドが無ければ、行ごと）。

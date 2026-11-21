@@ -1,0 +1,30 @@
+  The request `expense` (v1 → v2): `expense_old.ringi` → `expense_new.ringi`
+Route:
+  Requests where “Category” is “Expenses” and “Amount” is from 50,001 JPY to 100,000 JPY: the stage “first” (manager) comes; the stage “decide” is answered by dept_head instead of manager.
+  In the organization from 2026-04-01, the approvers change for 24 of 24 requesters.
+    e0001 (President (fictional)), first: does not come → manager: no head is above the requester; it goes to `board`: one of e0201 (Director 1), e0202 (Director 2), e0203 (Director 3), e0204 (Director 4)
+    e0101 (Head of Sales Division), first: does not come → manager: e0001 (President (fictional))
+    e0101 (Head of Sales Division), decide: manager: e0001 (President (fictional)) → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e0102 (Head of Corporate Division), first: does not come → manager: e0001 (President (fictional))
+    e0102 (Head of Corporate Division), decide: manager: e0001 (President (fictional)) → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e0201 (Director 1), first: does not come → manager: e0001 (President (fictional))
+    e0201 (Director 1), decide: manager: e0001 (President (fictional)) → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e0202 (Director 2), first: does not come → manager: e0001 (President (fictional))
+    e0202 (Director 2), decide: manager: e0001 (President (fictional)) → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e0203 (Director 3), first: does not come → manager: e0001 (President (fictional))
+  And 31 more: `--format json` lists them all.
+  In the organization from 2027-04-01, the approvers change for 23 of 23 requesters.
+    e0001 (President (fictional)), first: does not come → manager: no head is above the requester; it goes to `board`: one of e0201 (Director 1), e0202 (Director 2), e0203 (Director 3), e0204 (Director 4)
+    e0101 (Head of Sales Division), first: does not come → manager: e0001 (President (fictional))
+    e0101 (Head of Sales Division), decide: manager: e0001 (President (fictional)) → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e0102 (Head of Corporate Division), first: does not come → manager: e0001 (President (fictional))
+    e0102 (Head of Corporate Division), decide: manager: e0001 (President (fictional)) → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e0201 (Director 1), first: does not come → manager: e0001 (President (fictional))
+    e0201 (Director 1), decide: manager: e0001 (President (fictional)) → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e0202 (Director 2), first: does not come → manager: e0001 (President (fictional))
+    e0202 (Director 2), decide: manager: e0001 (President (fictional)) → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e0203 (Director 3), first: does not come → manager: e0001 (President (fictional))
+  And 29 more: `--format json` lists them all.
+  Every other request comes to the same stages.
+Tickets in progress:
+  A ticket finishes with the version of the request it was submitted with: tickets submitted with version 1 finish as version 1 says, and what changes here applies to requests submitted with version 2.

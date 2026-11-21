@@ -6,6 +6,7 @@
 
 use super::{FileLines, Report};
 use crate::tree;
+use ritsu_base::text::Text;
 use std::path::Path;
 
 /// The pid and the signature in a profile's name, as geas asks for it
@@ -18,7 +19,7 @@ pub fn profile_name(name: &str) -> Option<(u32, &str)> {
 }
 
 /// The files under `root` an lcov export names.
-pub fn read_lcov(text: &str, root: &Path) -> Result<Report, String> {
+pub fn read_lcov(text: &str, root: &Path) -> Result<Report, Text> {
     let mut out = Report::new();
     let mut file: Option<(String, FileLines)> = None;
     let mut inside = false;
@@ -31,10 +32,12 @@ pub fn read_lcov(text: &str, root: &Path) -> Result<Report, String> {
             let (Some(Ok(n)), Some(Ok(count))) =
                 (parts.next().map(str::parse::<u32>), parts.next().map(str::parse::<u64>))
             else {
-                return Err(format!("line {} of the lcov export does not read: {line}", i + 1));
+                let n = i + 1;
+                return Err(tr!("lcov の書き出しの {n} 行目を読めません: {line}", "line {n} of the lcov export does not read: {line}"));
             };
             if !inside {
-                return Err(format!("line {} of the lcov export comes before any `SF:`", i + 1));
+                let n = i + 1;
+                return Err(tr!("lcov の書き出しの {n} 行目が、`SF:` の行より前にあります", "line {n} of the lcov export comes before any `SF:`"));
             }
             if let Some((_, f)) = file.as_mut()
                 && n > 0

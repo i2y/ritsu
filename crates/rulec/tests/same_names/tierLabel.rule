@@ -1,0 +1,26 @@
+rule tierLabel v1
+description "The tier of an age, the rule named in another case like a name the code makes of the tier (fictional)"
+
+enum tier = junior "Junior" < senior "Senior"
+
+inputs
+  age : number  range >=0 <=120
+
+outputs
+  tier : tier
+  adult : bool
+
+table tier
+| age  | -> tier |
+| <18  | junior   |
+| >=18 | senior   |
+
+table adult
+| tier     | -> adult |
+| >=senior  | true     |
+| junior    | false    |
+
+examples
+| age | -> tier | adult |
+| 0   | junior   | false |
+| 18  | senior   | true  |

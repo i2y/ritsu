@@ -2,7 +2,7 @@
 
 注文の残りから返金を払う
 
-`examples/refund_request/refund_request.ja.flow` を `dandori doc` で描いたものです。入力は `申請額: money[USDc] range >=1 <=1000000`・`理由: string`・`残高: 残高`、出力は `支払い済み: bool` です。`申請額`: 出どころ: `openapi "specs/refunds.ja.json" schema 返金の申請 property 金額`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。`理由`: 出どころ: `openapi "specs/refunds.ja.json" schema 返金の申請 property 理由`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。`残高.残り`: 出どころ: `chobo "books/refunds.ja.book" account 返金できる残り`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。
+`examples/refund_request/refund_request.ja.flow` を `dandori doc` で描いたものです。入力は `申請額: money[USDc] range >=1USDc <=1_000_000USDc`・`理由: string`・`残高: 残高`、出力は `支払い済み: bool` です。`申請額`: 出どころ: `openapi "specs/refunds.ja.json" schema 返金の申請 property 金額`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。`理由`: 出どころ: `openapi "specs/refunds.ja.json" schema 返金の申請 property 理由`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。`残高.残り`: 出どころ: `chobo "books/refunds.ja.book" account 返金できる残り`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）。
 
 ## flow
 

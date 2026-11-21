@@ -27,11 +27,11 @@
 
 `@pricing@1.1.0/rules/shipping_fee.rule (sha256:<head>)` → `@pricing@1.1.0/rules/shipping_fee.rule (sha256:<head>)`
 
-- `fee` — an output changed range (`395..2950` → `395..3150`)
+- `fee` — an output changed range (`395GBPc..2950GBPc` → `395GBPc..3150GBPc`)
 
 | where they differ | answer | example | cells |
 |---|---|---|---|
-| region = world  and  weight >=2501g <=30000g | fee: 2950 → 3150 | region=world, weight=2501 | 2 |
+| region = world  and  weight >=2501g <=30_000g | fee: 2950GBPc → 3150GBPc | region=world, weight=2501g | 2 |
 
 Outside this region the two versions answer alike.
 

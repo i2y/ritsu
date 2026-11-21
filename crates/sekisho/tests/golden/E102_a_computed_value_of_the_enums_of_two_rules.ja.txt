@@ -1,0 +1,3 @@
+エラー[E102]: tests/mutants/E102_a_computed_value_of_the_enums_of_two_rules.gate:40:8: `tier` の型が action によって違います（規則 `tier_by_size` の列挙 `tier` と、`hold_order` では 規則 `tier_of_its_own` の列挙 `tier`）
+    40 |   when tier is gold
+  = 規則 `tier_by_size` の列挙 `tier` は、`enums` ファイル `read/order_states.rule` の列挙 `tier` です。規則 `tier_of_its_own` の列挙 `tier` は、規則 `tier_of_its_own`（`read/tier_of_its_own.rule`）が自分で宣言した列挙 `tier` です。別の場所で宣言した列挙は、値が同じでも別の型です。一つの型にするには、列挙を `enums` ファイルに置き、使うファイルのそれぞれで `import enum` で読んでください。

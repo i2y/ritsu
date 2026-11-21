@@ -1,0 +1,33 @@
+rule くじ引き(prize_draw) v1
+description "Java で答えを数える関数がクラスを読むパッケージと同じ名前の入力"
+
+enum 賞(prize) = 一等(first) | 二等(second) | はずれ(no_prize)
+
+inputs
+  番号(ticket) : number  range >=0 <=99  random
+  会員(java)   : bool
+
+outputs
+  賞(prize) : 賞
+
+table 番号ごとの賞(numbers)
+policy unique
+| 番号    | 会員  | -> 賞  |
+| 0       | -     | 一等   |
+| >=1 <=9 | true  | 二等   |
+| >=1 <=9 | false | はずれ |
+| >=10    | -     | はずれ |
+
+chances
+| 会員  | -> 賞  | chance |
+| -     | 一等   | 1%     |
+| true  | 二等   | 9%     |
+| true  | はずれ | 90%    |
+| false | はずれ | 99%    |
+
+examples
+| 番号 | 会員  | -> 賞  |
+| 0    | false | 一等   |
+| 5    | true  | 二等   |
+| 5    | false | はずれ |
+| 50   | true  | はずれ |

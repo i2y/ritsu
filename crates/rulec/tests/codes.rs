@@ -75,7 +75,13 @@ fn printed(e: &rulec::codes::Entry, r: rulec::codes::Repro) -> Vec<(&'static str
     // koyomi is joined as `ritsu rulec` joins it, but for E129, which is what a rulec with
     // no koyomi says (§15.174).
     let port: Option<rulec::days::Port> = (e.code != "E129").then(|| std::sync::Arc::new(koyomi::ports::Engine) as rulec::days::Port);
-    let ds = rulec::days::with(port, || rulec::report_with(r.example, &path, budget).diags);
+    let mut ds = rulec::days::with(port, || rulec::report_with(r.example, &path, budget).diags);
+    // E153 is what `gen` says of a W121 when it is asked for the targets the W121 names (§15.335):
+    // the check says the warning.
+    if e.code == "E153" {
+        let stops = rulec::places::stops(&ds, &|_| true);
+        ds.extend(stops);
+    }
     ds.iter()
         .map(|d| {
             let line = d.where_.strip_prefix(&format!("{path}:")).and_then(|t| t.split(' ').next()).and_then(|n| n.parse().ok());
@@ -110,18 +116,20 @@ fn 台帳の例は本当にそのコードを出す() {
 
 /// The other forms an entry reproduces are those forms, not the first one again: E102's are a row
 /// past what a derive reaches (§15.189), past what a `define` reaches, past what a derive reaches
-/// while a table above writes the value the row asks for (§15.195), and at the truth value a
-/// boolean `define` never takes (§15.196), and each note says what the value comes to, in both
+/// while a table above writes the value the row asks for (§15.195), past what a `define` comes to
+/// over the values the row gives the input it reads (§15.322), and at the truth value a boolean
+/// `define` never takes (§15.196), and each note says what the value comes to, in both
 /// languages. Each English twin says the same things in the same places
 /// as the Japanese one.
 #[test]
 fn 台帳の別の形の再現はその形を出す() {
     let e = rulec::codes::find("E102").unwrap();
-    assert_eq!(e.also.len(), 4);
-    let says: [[(Lang, &str); 2]; 4] = [
+    assert_eq!(e.also.len(), 5);
+    let says: [[(Lang, &str); 2]; 5] = [
         [(Lang::En, "can only come to >=-99JPY <=100JPY"), (Lang::Ja, "が取りうる値は、入力の範囲から計算すると >=-99円 <=100円 です。")],
         [(Lang::En, "`share` can only come to >=0% <=100%"), (Lang::Ja, "`割合` が取りうる値は、入力の範囲から計算すると >=0% <=100% です。")],
         [(Lang::En, "`band` is small only where row 1 of table k (amount <= 50JPY) fires. There `excess` can only come to >=-99JPY <=50JPY"), (Lang::Ja, "`区分` が 少額 になるのは、表 k の 行1（額 <= 50円）が当たるときだけです。そのとき `超過` が取りうる値は >=-99円 <=50円 で")],
+        [(Lang::En, "Over the values of `amount` this row takes, `fee` only comes to >=0JPY <=900JPY"), (Lang::Ja, "この行がとる `額` の値では、`手数料` は >=0円 <=900円 の値しかとらず")],
         [(Lang::En, "Over the ranges of the inputs, `in_period` is always true, and this row asks for it to be false."), (Lang::Ja, "入力の範囲では、`期間内` はいつも true です。この行は false を求めています。")],
     ];
     for (a, said) in e.also.iter().zip(says) {
@@ -142,14 +150,19 @@ fn 台帳の別の形の再現はその形を出す() {
     // may be absent (§15.255); E121 with a path that goes on through a collection (§15.254); E034
     // with an enum's value written twice, two names of one identifier, a column twice in a table's
     // heading, and the label of two rows (§15.262), and two enums whose types take one name; W121 with
-    // two names Swift and Java spell alike, two SQLite reads as one column, two PostgreSQL cuts to
-    // one, and a name Ruby reads as a constant (§15.263), a name the generated code uses itself and a
-    // name of `_` alone (§15.265), and a name with a character a target takes in no name (§15.311);
+    // two names Swift and Java spell alike, two SQLite reads as one column, and two PostgreSQL cuts to
+    // one (§15.263), an enum named like the rule, whose type Go and Java number (§15.337), a name the
+    // generated code shows its callers and an output named `_` alone (§15.265, §15.336), and a name
+    // with a character a target takes in no name (§15.311);
     // E011 with a sequence that has no ASCII alias (§15.265); E140 with an output's range that cannot
     // be checked (§15.268); E076 with each other way a rule and the contract it implements part
-    // (§15.274); E123 with inputs read with an aggregate of `from` (§15.281)
+    // (§15.274); E123 with inputs read with an aggregate of `from` (§15.281); E150 with the range of
+    // a `sum` or a `count` no sequence comes to (§15.314); E151 with an output read above the
+    // definition that decides it (§15.323); E114 with a cell under a heading that writes a step on a
+    // rate the rule does not answer, and with a definition typed with a step whose expression comes
+    // off it, and E150 with a range that holds none of the points a value takes (§15.323)
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
-    assert_eq!(with, ["E011", "E022", "E031", "E033", "E034", "E040", "E043", "E044", "E076", "E102", "E103", "E108", "E121", "E123", "E140", "W121"]);
+    assert_eq!(with, ["E011", "E022", "E031", "E033", "E034", "E040", "E043", "E044", "E076", "E102", "E103", "E108", "E114", "E121", "E123", "E140", "W121", "E150", "E151"]);
     // Each by its place among the entry's other forms; `None` is the last.
     for (code, form, says) in [
         ("E033", None, [(Lang::En, "The added value z has neither a row of table t nor `default`"), (Lang::Ja, "足した値 z に、表 t の行も `default` もありません")]),
@@ -167,9 +180,9 @@ fn 台帳の別の形の再現はその形を出す() {
         ("W121", Some(0), [(Lang::En, "`base_fee` and `baseFee` are one identifier in the code generated for Swift and Java"), (Lang::Ja, "`基本料金` と `追加料金` は、Swift・Java の生成コードで同じ識別子になります")]),
         ("W121", Some(1), [(Lang::En, "`afee` and `aFee` are one identifier in the code generated for SQL (SQLite)"), (Lang::Ja, "`基本料金` と `追加料金` は、SQL（SQLite）の生成コードで同じ識別子になります")]),
         ("W121", Some(2), [(Lang::En, "are one identifier in the code generated for SQL (PostgreSQL)"), (Lang::Ja, "は、SQL（PostgreSQL）の生成コードで同じ識別子になります")]),
-        ("W121", Some(3), [(Lang::En, "`Base` starts with a capital letter, which the code generated for Ruby cannot take"), (Lang::Ja, "`Base` は大文字で始まるので、Ruby の生成コードでは使えません")]),
+        ("W121", Some(3), [(Lang::En, "The type of enum `tier` is written `Tier2` in the code generated for Go and Java"), (Lang::Ja, "列挙 `区分` の型は、Go・Java の生成コードでは `Tier2` と書きます")]),
         ("W121", Some(4), [(Lang::En, "`trace` takes a name the code generated for Connect uses itself"), (Lang::Ja, "`記録` は、Connect の生成コードが自分で使う名前と同じになります")]),
-        ("W121", Some(5), [(Lang::En, "`_` is a name the code generated for Rust, Go, Swift, Java and Wasm cannot take"), (Lang::Ja, "`_` は、Rust・Go・Swift・Java・Wasm の生成コードでは使えません")]),
+        ("W121", Some(5), [(Lang::En, "`_` is a name the code generated for Python, Rust, Go, Swift, Java, Wasm and Connect cannot take"), (Lang::Ja, "`_` は、Python・Rust・Go・Swift・Java・Wasm・Connect の生成コードでは使えません")]),
         ("W121", None, [(Lang::En, "Some target languages take no `²` in a name, so the generated code writes `area_m²` as `area_m_`"), (Lang::Ja, "`面積㎡` の `㎡` を名前に取らない言語があるので、生成コードでは `面積_` と書きます")]),
         ("E011", None, [(Lang::En, "A public name has no ASCII alias"), (Lang::Ja, "公開される名前に ASCII の別名がありません")]),
         ("E034", None, [(Lang::En, "The row label `r1` appears twice"), (Lang::Ja, "行ラベル `r1` が二度あります")]),
@@ -184,6 +197,13 @@ fn 台帳の別の形の再現はその形を出す() {
         ("E076", Some(5), [(Lang::En, "The contract's service `ShippingService` is not shaped as a rule's service"), (Lang::Ja, "契約のサービス `ShippingService` は、規則のサービスの形ではありません")]),
         ("E076", Some(6), [(Lang::En, "The contract's `QuoteRequest` writes `subtotal` in a way a rule's service does not"), (Lang::Ja, "契約の `QuoteRequest` の `subtotal` は、規則のサービスが読まない書き方です")]),
         ("E076", None, [(Lang::En, "The contract `shipping.proto` is not proto3"), (Lang::Ja, "契約 `shipping.proto` は proto3 ではありません")]),
+        ("E150", Some(0), [(Lang::En, "The range of the sum does not meet the values it can reach"), (Lang::Ja, "合計の範囲が、その値の届く範囲と重なりません")]),
+        ("E150", Some(1), [(Lang::En, "The range of the sum does not meet the values it can reach"), (Lang::Ja, "合計の範囲が、その値の届く範囲と重なりません")]),
+        ("E150", Some(2), [(Lang::En, "The range of the count does not meet the values it can reach"), (Lang::Ja, "数え上げの範囲が、その値の届く範囲と重なりません")]),
+        ("E150", None, [(Lang::En, "The range of the definition does not meet the values it can reach"), (Lang::Ja, "定義の範囲が、その値の届く範囲と重なりません")]),
+        ("E114", Some(0), [(Lang::En, "`0.5%` does not sit on this column's step"), (Lang::Ja, "`0.5%` はこの列の刻みに載っていません")]),
+        ("E114", None, [(Lang::En, "The value of `sale_markup` does not always sit on its step"), (Lang::Ja, "`セールの上乗せ率` の値は、宣言した刻みに載らないことがあります")]),
+        ("E151", None, [(Lang::En, "The output `charged` is read before it is decided"), (Lang::Ja, "出力 `請求額` を、決まる前に読んでいます")]),
     ] {
         let e = rulec::codes::find(code).unwrap();
         let a = match form {
@@ -201,6 +221,19 @@ fn 台帳の別の形の再現はその形を出す() {
             assert!(titles.contains(said), "{code} {lang:?}:\n{titles}");
         }
     }
+    // E150's two forms of a `sum` share a title, and the note says which end no sequence comes to
+    // (§15.314): the bottom the most elements come short of, and the top the fewest come past.
+    let e = rulec::codes::find("E150").unwrap();
+    for (a, says) in e.also.iter().zip([
+        [(Lang::En, "5 × 50_000JPY = 250_000JPY, short of the bottom 300_000JPY of this range"), (Lang::Ja, "5 × 50_000円 = 250_000円 は、この範囲の下限 300_000円 に届きません")],
+        [(Lang::En, "3 × 1000JPY = 3000JPY, past the top 2000JPY of this range"), (Lang::Ja, "3 × 1000円 = 3000円 は、この範囲の上限 2000円 を越えます")],
+    ]) {
+        for (lang, said) in says {
+            let r = a.repro(lang);
+            let notes = rulec::i18n::with(lang, || rulec::check_source(r.example, "explain.rule").iter().filter(|d| d.code == "E150").flat_map(|d| d.notes.clone()).collect::<Vec<_>>().join("\n"));
+            assert!(notes.contains(said), "{lang:?}:\n{notes}");
+        }
+    }
     // `explain` shows each under a heading of its own, in the language asked for, and the JSON
     // under `also`, a key no other entry has
     let (_, en) = run(&["explain", "E102", "--lang", "en"]);
@@ -211,7 +244,7 @@ fn 台帳の別の形の再現はその形を出す() {
     assert!(ja.contains("`define` の取りうる値の外にある行") && ja.contains("define 割合(s) : rate = 点 / 200"), "{ja}");
     let (_, j) = run(&["explain", "E102", "--format", "json", "--lang", "en"]);
     let j = rulec::json::parse(&j).unwrap();
-    assert!(j.get("also").and_then(|a| a.as_arr()).is_some_and(|a| a.len() == 4), "{j:?}");
+    assert!(j.get("also").and_then(|a| a.as_arr()).is_some_and(|a| a.len() == 5), "{j:?}");
     let (_, j) = run(&["explain", "E101", "--format", "json", "--lang", "en"]);
     assert!(rulec::json::parse(&j).unwrap().get("also").is_none());
 }
@@ -234,8 +267,9 @@ fn 英語の再現は日本語の再現と同じ診断を同じ行に出す() {
     // W128 came with their twins (§15.208, §15.209), and so did E066 and E069 (§15.210, §15.212) and
     // E132 and E139 (§15.213, §15.215), and E074 (§15.223), and E140 (§15.268), and W133 (§15.281),
     // and E141, E142 and E143 (§15.282), and E144 (§15.285), and W134 (§15.286), and E145, E146 and
-    // W135 (§15.287), and E147 and E148 (§15.290), and E149 (§15.299).
-    assert_eq!(twins, 77, "英語の再現を持つ項目の数が変わった: {twins}");
+    // W135 (§15.287), and E147 and E148 (§15.290), and E149 (§15.299), and E150 (§15.313), and
+    // E151 and E152 (§15.323), and E153 (§15.335), and E154 (§15.341).
+    assert_eq!(twins, 83, "英語の再現を持つ項目の数が変わった: {twins}");
 }
 
 /// Japanese is left in a reproduction shown in English only where being Japanese is the point of
@@ -285,8 +319,9 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     // E073, E133, W129 and W131 (§15.224–§15.226) 133, E067, E068, E131 and W132 (§15.227)
     // 137, E140 (§15.268) 138, E076 (§15.274) 139, W133 (§15.281) 140, and E141, E142 and E143
     // (§15.282) 143, E144 (§15.285) 144, W134 (§15.287) 145, E145, E146 and W135 (§15.287) 148,
-    // and E147 and E148 (§15.290) 150, and E149 (§15.299) 151.
-    assert_eq!(all.len(), 151, "台帳の件数が変わった: {}", all.len());
+    // and E147 and E148 (§15.290) 150, E149 (§15.299) 151, E150 (§15.313) 152, E151 and E152
+    // (§15.323) 154, E153 (§15.335) 155, and E154 (§15.341) 156.
+    assert_eq!(all.len(), 157, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {
@@ -340,8 +375,9 @@ fn explainは言語ごとの再現を見せる() {
     // One that stays Japanese in both.
     let (en, ja) = (repro_of("E011", "en"), repro_of("E011", "ja"));
     assert!(en.contains("重量 : bool") && ja.contains("重量 : bool"));
-    // The JSON follows the language in `example` and `files`, with the same keys.
-    let line = |lang: &str| run(&["explain", "E043", "--format", "json", "--lang", lang]).1;
+    // The JSON follows the language in `example` and `files`, with the same keys (the document,
+    // read and written on one line).
+    let line = |lang: &str| rulec::json::parse(&run(&["explain", "E043", "--format", "json", "--lang", lang]).1).unwrap().compact();
     let (en, ja) = (line("en"), line("ja"));
     assert!(en.contains("\"name\":\"callee.rule\"") && en.contains("round down(1)"), "{en}");
     assert!(ja.contains("\"name\":\"呼び先.rule\"") && ja.contains("round down(1)"), "{ja}");
@@ -360,22 +396,21 @@ fn 知らないコードは2で止まる() {
 fn jsonは鍵が英語で読み戻せる() {
     let (c, out) = run(&["explain", "--all", "--format", "json", "--lang", "ja"]);
     assert_eq!(c, 0);
-    let lines: Vec<&str> = out.lines().filter(|l| !l.trim().is_empty()).collect();
-    assert_eq!(lines.len(), rulec::codes::ledger().len(), "一行一件でない");
-    for l in &lines {
-        let j = rulec::json::parse(l).unwrap_or_else(|e| panic!("JSON として読めない: {e}\n{l}"));
+    // one indented array, an entry for each code
+    let all = rulec::json::parse(&out).unwrap_or_else(|e| panic!("一つの JSON として読めない: {e}\n{out}"));
+    let items = all.as_arr().unwrap_or_else(|| panic!("配列でない: {out}"));
+    assert!(out.starts_with("[\n  {\n"), "字下げしていない: {out}");
+    assert_eq!(items.len(), rulec::codes::ledger().len(), "台帳の件数でない");
+    for j in items {
         for k in ["code", "severity", "title", "when", "fix", "example", "related", "lang"] {
-            assert!(j.get(k).is_some(), "{k} が無い: {l}");
+            assert!(j.get(k).is_some(), "{k} が無い: {}", j.compact());
         }
         assert_eq!(j.get("lang").unwrap().as_str(), Some("ja"));
     }
     // The keys are the stable API; only the prose follows `--lang`.
     let (_, en) = run(&["explain", "--all", "--format", "json", "--lang", "en"]);
     let key_of = |s: &str| -> Vec<String> {
-        s.lines()
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| rulec::json::parse(l).unwrap().get("code").unwrap().as_str().unwrap().to_string())
-            .collect()
+        rulec::json::parse(s).unwrap().as_arr().unwrap().iter().map(|j| j.get("code").unwrap().as_str().unwrap().to_string()).collect()
     };
     assert_eq!(key_of(&out), key_of(&en));
 }

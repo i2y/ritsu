@@ -1,0 +1,28 @@
+rule card_fee v1
+description "The fee on a card payment: 3% of the amount, cut down to the yen. The fee is accepted only up to 20,000 yen, so a payment whose fee would pass it is refused where the fee is worked out, and a fee of 10,000 yen or more is reviewed. An example of a range on a value the rule works out"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+# The range is what the rule accepts for the fee, not what the fee can come to: 3% of 1,000,000 yen
+# is 30,000 yen. A payment of 666,700 yen or more works out a fee past 20,000 yen and is refused.
+define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0JPY <=19_999JPY
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+  review  : bool
+
+table review_of
+policy unique
+| fee         | -> review |
+| <10_000JPY  | false     |
+| >=10_000JPY | true      |
+
+result charged = fee
+
+examples
+| amount     | -> charged | review |
+| 1_000JPY   | 30JPY      | false  |
+| 333_333JPY | 9_999JPY   | false  |
+| 333_334JPY | 10_000JPY  | true   |
+| 666_699JPY | 20_000JPY  | true   |

@@ -62,16 +62,81 @@ fn the_answer_of_a_run_is_the_examples() {
     assert!(text.ends_with("= 請求 { 期日: 2026-03-31, 遅れた日数: 50, 定額の補償: 70GBP, 利息: 1150GBPc }\n"), "{text}");
 }
 
+/// The entry holds what a host gives inside the records the built-in functions answer, and the fields
+/// of an element of a list a rule walks to the rule's columns, numbers and days (DESIGN 4.4): an input
+/// outside them, or a day of no calendar, is the failure `input` with the place of the field, and one
+/// at the ends of the rule's range is answered.
+#[test]
+fn the_entry_holds_the_inside_of_a_built_in_record_and_of_an_element() {
+    let t = ritsu_testkit::TempDir::new("kaname-run-inside");
+    t.write("rules/parcel_batch.rule", std::fs::read("../rulec/tests/corpus/parcel_batch.rule").unwrap());
+    t.write("rules/earliest_due.rule", std::fs::read("../rulec/tests/corpus/earliest_due.rule").unwrap());
+    t.write("rules/basket.rule", std::fs::read("tests/rules/basket.rule").unwrap());
+    let kn = t.write(
+        "inside.kn",
+        "module inside v1\n\nuse rule batch from \"rules/parcel_batch.rule\"\nuse rule due from \"rules/earliest_due.rule\"\nuse rule basket from \"rules/basket.rule\"\n\nrecord Category\n  name     : string          count <=20\n  children : list[Category]  count <=3\n\nfn under_indexed(x: indexed[Category]) -> number\n  x.item.children.count()\n\nfn under_entry(e: entry[string, Category]) -> number\n  e.value.children.count()\n\nfn under_running(r: running[Category, number]) -> number\n  r.item.children.count()\n\nfn weight_of(p: batch.parcels) -> mass[g]\n  p.weight\n\nfn fragile(ps: list[batch.parcels] count <=3) -> number\n  count(ps, p => p.fragile)\n\nfn due_of(t: due.tasks) -> date\n  t.due\n\nfn lines_of(ls: list[basket.lines] count <=3) -> number\n  count(ls)\n",
+    );
+    let kn = kn.to_str().unwrap();
+    let category = format!(r#"{{"name": "{}", "children": []}}"#, "a".repeat(21));
+    for (function, input, path) in [
+        ("under_indexed", format!(r#"{{"x": {{"index": 0, "item": {category}}}}}"#), "x.item.name"),
+        ("under_entry", format!(r#"{{"e": {{"key": "k", "value": {category}}}}}"#), "e.value.name"),
+        ("under_running", format!(r#"{{"r": {{"item": {category}, "before": 0, "upto": 0, "total": 0}}}}"#), "r.item.name"),
+        ("weight_of", r#"{"p": {"weight": 0, "fragile": false}}"#.to_string(), "p.weight"),
+        ("weight_of", r#"{"p": {"weight": 30001, "fragile": false}}"#.to_string(), "p.weight"),
+        ("weight_of", r#"{"p": {"weight": 40000, "fragile": false}}"#.to_string(), "p.weight"),
+        ("fragile", r#"{"ps": [{"weight": 1, "fragile": true}, {"weight": 40000, "fragile": true}]}"#.to_string(), "ps[1].weight"),
+        // a day of an element: past the column's range, and a day of no calendar, which the entry
+        // reads no day number of
+        ("due_of", r#"{"t": {"due": "2025-12-31", "done": false}}"#.to_string(), "t.due"),
+        ("due_of", r#"{"t": {"due": "2028-01-01", "done": false}}"#.to_string(), "t.due"),
+        ("due_of", r#"{"t": {"due": "2026-13-01", "done": false}}"#.to_string(), "t.due"),
+        ("lines_of", r#"{"ls": [{"on": "2025-12-31", "held_to": null, "price": 0, "off": 0, "gift": false}]}"#.to_string(), "ls[0].on"),
+        ("lines_of", r#"{"ls": [{"on": "2026-01-01", "held_to": null, "price": 0, "off": 0, "gift": false}, {"on": "2026-01-01", "held_to": "10000-01-01", "price": 0, "off": 0, "gift": false}]}"#.to_string(), "ls[1].held_to"),
+    ] {
+        let i = t.write("in.json", input.as_str());
+        let (code, json, err) = joined(&["run", kn, function, "--input", i.to_str().unwrap(), "--format", "json"]);
+        assert_eq!((code, err.as_str()), (0, ""), "{function} {input}: {json}");
+        let o = ritsu_base::json::parse(&json).unwrap();
+        let failure = o.get("failure").unwrap_or_else(|| panic!("{function} {input}: {json}"));
+        assert_eq!(failure.get("kind").and_then(ritsu_base::json::Json::as_str), Some("input"), "{json}");
+        assert_eq!(failure.get("path").and_then(ritsu_base::json::Json::as_str), Some(path), "{json}");
+    }
+    let said = |function: &str, input: &str| -> String {
+        let i = t.write("in.json", input);
+        let (code, text, err) = joined(&["run", kn, function, "--input", i.to_str().unwrap()]);
+        assert_eq!((code, err.as_str()), (0, ""), "{text}");
+        text
+    };
+    assert_eq!(
+        said("weight_of", r#"{"p": {"weight": 40000, "fragile": false}}"#),
+        "fails: input (`weight_of`, declared on line 20): The argument `p.weight` of `weight_of` is 40_000g, outside its range >=1g <=30_000g\n"
+    );
+    assert_eq!(
+        said("under_indexed", &format!(r#"{{"x": {{"index": 0, "item": {category}}}}}"#)),
+        "fails: input (`under_indexed`, declared on line 11): The argument `x.item.name` of `under_indexed` has 21 code points, outside its count <=20\n"
+    );
+    assert_eq!(
+        said("due_of", r#"{"t": {"due": "2028-01-01", "done": false}}"#),
+        "fails: input (`due_of`, declared on line 26): The argument `t.due` of `due_of` is 2028-01-01, outside its range >=2026-01-01 <=2027-12-31\n"
+    );
+    assert!(said("weight_of", r#"{"p": {"weight": 1, "fragile": false}}"#).ends_with("\n= 1g\n"));
+    assert!(said("weight_of", r#"{"p": {"weight": 30000, "fragile": false}}"#).ends_with("\n= 30_000g\n"));
+    assert!(said("due_of", r#"{"t": {"due": "2026-01-01", "done": false}}"#).ends_with("\n= 2026-01-01\n"));
+    assert!(said("due_of", r#"{"t": {"due": "2027-12-31", "done": false}}"#).ends_with("\n= 2027-12-31\n"));
+    assert!(said("lines_of", r#"{"ls": [{"on": "2027-12-31", "held_to": "9999-12-31", "price": 0, "off": 0, "gift": false}]}"#).ends_with("\n= 1\n"));
+}
+
 #[test]
 fn a_failure_is_an_answer_of_the_run() {
     let t = ritsu_testkit::TempDir::new("kaname-run-fails");
     // an argument outside its range is the failure `input`, said as the answer: exit 0
     let input = t.write("in.json", r#"{"invoice": {"id": "inv_1", "invoiced": "2026-03-02", "amount": 0}, "paid_on": "2026-05-20", "reference_rate": 50}"#);
     let (code, text, _) = joined(&["run", "examples/late_payment/late_payment.kn", "claim", "--input", input.to_str().unwrap()]);
-    assert_eq!((code, text.as_str()), (0, "fails: input (`claim`, declared on line 18): The argument `invoice.amount` of `claim` is 0GBPc, outside its range >=1GBPc <=100000000GBPc\n"));
+    assert_eq!((code, text.as_str()), (0, "fails: input (`claim`, declared on line 18): The argument `invoice.amount` of `claim` is 0GBPc, outside its range >=1GBPc <=100_000_000GBPc\n"));
     let (code, text, _) = joined(&["run", "examples/late_payment/late_payment.ja.kn", "遅れの請求", "--input", input.to_str().unwrap(), "--lang", "ja"]);
     assert_eq!(code, 0);
-    assert_eq!(text, "失敗: input（18 行目で宣言した関数 `遅れの請求`）: 関数 `遅れの請求` の引数 `請求書.金額` の 0GBPc は、範囲 >=1GBPc <=100000000GBPc の外です\n");
+    assert_eq!(text, "失敗: input（18 行目で宣言した関数 `遅れの請求`）: 関数 `遅れの請求` の引数 `請求書.金額` の 0GBPc は、範囲 >=1GBPc <=100_000_000GBPc の外です\n");
 }
 
 /// A value of the wrong kind in the input (DESIGN 32): what is said names the type, how a value of it
@@ -121,9 +186,11 @@ fn a_value_of_the_wrong_kind_says_how_its_type_is_written() {
     );
     // the help says how a value of each type is written, a line a type under `--input`
     let (_, help, _) = joined(&["run", "--help"]);
-    for kind in ["number, money, mass", "rate: a whole number of its steps", "bool:", "string:", "date: a string \"YYYY-MM-DD\"", "enum:", "record:", "list:", "set:", "dict:", "T?: as T, or null", "result:", "a transfer:"] {
+    for kind in ["number, money, mass", "rate: a whole number of its steps", "bool:", "string:", "date: a string \"YYYY-MM-DD\"", "enum:", "record:", "list:", "set:", "dict:", "T?: as T, or null", "result:"] {
         assert!(help.lines().any(|l| l.starts_with("                         ") && l.trim_start().starts_with(kind)), "{kind}:\n{help}");
     }
+    // no function a host calls takes a transfer (E116), so the help says nothing of how one is written
+    assert!(!help.contains("a transfer:"), "{help}");
     // what `vectors` writes in `in`, `run` reads: no input of the function fails `input`
     let (code, lines, err) = joined(&["vectors", kn]);
     assert_eq!((code, err.as_str()), (0, ""), "{lines}");
@@ -143,9 +210,11 @@ fn a_value_of_the_wrong_kind_says_how_its_type_is_written() {
 #[test]
 fn what_stops_the_command() {
     let (code, _, err) = joined(&["run", "examples/late_payment/late_payment.kn", "claim"]);
-    assert_eq!((code, err.as_str()), (2, "error: `kaname run` needs `--input <file.json|->`\n"));
+    assert_eq!(code, 2);
+    assert!(err.starts_with("error: `kaname run` needs `--input <file.json|->`\nusage: kaname run <file.kn> <function> --input <file.json|-> "), "{err}");
     let (code, _, err) = joined(&["run", "examples/late_payment/late_payment.kn", "--input", "tests/inputs/late_payment.json"]);
-    assert_eq!((code, err.as_str()), (2, "error: `kaname run` takes a .kn file and the name of a function\n"));
+    assert_eq!(code, 2);
+    assert!(err.starts_with("error: `kaname run` takes <file.kn> <function>\nusage: kaname run <file.kn> <function> --input <file.json|-> "), "{err}");
     let (code, _, err) = joined(&["run", "examples/late_payment/late_payment.kn", "settle", "--input", "tests/inputs/late_payment.json"]);
     assert_eq!((code, err.as_str()), (2, "error: `examples/late_payment/late_payment.kn` has no function `settle` (its functions are `claim`)\n"));
     let t = ritsu_testkit::TempDir::new("kaname-run-stops");

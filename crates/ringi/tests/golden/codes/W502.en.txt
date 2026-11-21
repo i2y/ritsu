@@ -1,0 +1,12 @@
+warning[W502]: example.ringi:9:10: In the organization from 2026-04-01, the stage `check` goes elsewhere or is skipped for lack of an approver
+     9 |   check  head
+  = `head` comes to the team finance (Finance), whose head is empty.
+  = The stage is `when empty escalate`, and it goes up.
+  = It goes up to e01 (President (fictional)) for 1 requester: e04 (Head of Finance).
+  = Correct the data of the version, or make sure this is meant.
+ok example.ringi: a request, 1 field, 1 stage
+  used from 2026-04-01: the first version of the organization `company.ringi` (data `org`)
+  used with no end: no data it reads ends
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+  requesters whose stages (`check`) go elsewhere or are skipped by the shape of the organization: 1 of 4 in the organization from 2026-04-01
+  who they are, and where their stages go: `ringi simulate example.ringi --every-requester`

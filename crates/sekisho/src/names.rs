@@ -55,6 +55,10 @@ pub struct Scope {
     pub rules: BTreeMap<String, Read<RuleFacts>>,
     /// What koyomi says of each dates file the file reads, by the name of its `use dates`.
     pub dates: BTreeMap<String, Read<DateFacts>>,
+    /// The names of the `import enum` lines that brought no enum: the file is not there, does not
+    /// pass rulec's check, is a rule, or has no such enum. What is wrong is said once, at the line;
+    /// the name is in the file all the same, and a type that names it says nothing more.
+    pub unread: BTreeSet<String>,
 }
 
 /// The type of an attribute or an input, once its names hold.
@@ -464,23 +468,6 @@ fn is_upper(s: &str) -> bool {
     matches!(cs.next(), Some('A'..='Z')) && cs.all(|c| c.is_ascii_alphanumeric())
 }
 
-/// The targets whose reserved words have `alias` (DESIGN 10, E008): TypeScript's reserved words
-/// and strict mode's, Python's keywords, Go's keywords (ritsu-emit's lists, from their standards).
-fn targets_refusing(alias: &str) -> Vec<&'static str> {
-    use ritsu_emit::words::{go, python, typescript};
-    let mut out = Vec::new();
-    if typescript::RESERVED.contains(&alias) || typescript::STRICT.contains(&alias) {
-        out.push("TypeScript");
-    }
-    if python::KEYWORDS.contains(&alias) {
-        out.push("Python");
-    }
-    if go::KEYWORDS.contains(&alias) {
-        out.push("Go");
-    }
-    out
-}
-
 /// A name the form of an alias: lower case with `_` for what is not a letter or a digit.
 fn suggest_lower(s: &str) -> String {
     let mut out = String::new();
@@ -586,8 +573,8 @@ fn check_reading(file: File, suite: &Suite, reading: &mut Vec<PathBuf>) -> Named
     let mut diags = Vec::new();
     held_paths(&file, &mut diags);
     let mut file = file;
-    import_enums(&mut file, suite, &mut diags);
-    let mut scope = Scope { files: vec![file], rules: BTreeMap::new(), dates: BTreeMap::new() };
+    let unread = import_enums(&mut file, suite, &mut diags);
+    let mut scope = Scope { files: vec![file], rules: BTreeMap::new(), dates: BTreeMap::new(), unread };
     read_gates(&mut scope, suite, reading, &mut diags);
     // a file read with `use gate` reads what this run cannot: that alone is said (E209), as for this file
     if diags.iter().any(|d| d.code == "E209") {
@@ -600,6 +587,8 @@ fn check_reading(file: File, suite: &Suite, reading: &mut Vec<PathBuf>) -> Named
     ck.references();
     ck.circles_of_allowed();
     diags.append(&mut ck.diags);
+    // a name declared nowhere is said once, where it is first written (ritsu's DESIGN 8.3)
+    ritsu_base::diag::once(&mut diags);
     crate::diag::sort(&mut diags);
     let ok = !crate::diag::has_errors(&diags);
     Named { diags, scope: ok.then_some(scope) }
@@ -619,9 +608,12 @@ fn read_gates(scope: &mut Scope, suite: &Suite, reading: &mut Vec<PathBuf>, diag
         if said_already(&path, &u.path.0) {
             continue;
         }
-        let shown = target.display().to_string();
+        // the file as this one wrote it, in what is said of what it wrote; as the run writes its
+        // paths, in where to look and what to run (ritsu's DESIGN 6.2, item 8)
+        let shown = u.path.0.clone();
+        let reached = ritsu_base::paths::show(&target);
         let at = |msg: Text| Diag::error("E201", &path, u.span.line, u.span.col, msg).source(&src);
-        let key = normal(&shown);
+        let key = normal(&reached);
         if reading.contains(&key) {
             diags.push(at(tr!("`{shown}` を読むと、このファイルに戻ってきます（`use gate` が輪になっています）", "reading `{shown}` comes back to this file (the `use gate` lines go round in a circle)")).note(tr!(
                 "読む向きを一つにしてください。共通の役割や型は、両方が読む別のファイルに置けます。",
@@ -639,7 +631,7 @@ fn read_gates(scope: &mut Scope, suite: &Suite, reading: &mut Vec<PathBuf>, diag
                 continue;
             }
         };
-        let parsed = crate::parse::parse(&shown, &text);
+        let parsed = crate::parse::parse(&reached, &text);
         let refused = |ds: &[Diag]| -> Diag {
             let mut d = at(tr!("`{shown}` は sekisho の検査を通りません", "`{shown}` does not pass sekisho's check"));
             // the code first and the place after the message, as dandori lists what rulec says: a
@@ -649,7 +641,7 @@ fn read_gates(scope: &mut Scope, suite: &Suite, reading: &mut Vec<PathBuf>, diag
                 let (code, place) = (x.code, x.place());
                 d = d.note(tr!("{code}: {}（{place}）", "{code}: {} ({place})", x.message.ja; capitalize(&x.message.en)));
             }
-            d.note(tr!("`sekisho check {shown}` で、そのファイルの誤りを全部読めます。", "`sekisho check {shown}` says everything that is wrong with it."))
+            d.note(tr!("`sekisho check {reached}` で、そのファイルの誤りを全部読めます。", "`sekisho check {reached}` says everything that is wrong with it."))
         };
         let Some(g) = parsed.file else {
             diags.push(refused(&parsed.diags));
@@ -726,7 +718,11 @@ fn same_in_two_files(scope: &Scope, via: &[Span], path: &str, src: &str, diags: 
                 let other = keys.iter().find_map(|key| spaces[space].get(key).filter(|(file, _)| *file != g.path).cloned());
                 if let Some((file, theirs)) = other {
                     let at = via.get(k).copied().unwrap_or_default();
-                    let (this, name) = (&g.path, &n.text);
+                    // the two files from this file's directory, as a `use gate` line here would
+                    // write them (ritsu's DESIGN 6.2, item 8)
+                    let file = ritsu_base::paths::seen_from(FsPath::new(path), FsPath::new(&file));
+                    let this = ritsu_base::paths::seen_from(FsPath::new(path), FsPath::new(&g.path));
+                    let (this, name) = (&this, &n.text);
                     let (nj, ne) = (&noun.ja, &noun.en);
                     let mut d = Diag::error("E211", path, at.line, at.col, tr!("`{this}` と `{file}` が、どちらも{nj} `{name}` を宣言しています", "`{this}` and `{file}` both declare the {ne} `{name}`")).source(src);
                     if theirs != *name {
@@ -772,9 +768,18 @@ fn refused_by(path: &str, src: &str, at: Span, shown: &str, tool: &str, said: &[
 /// among the file's `enums`, in the line it is written on, as if it were written there. The file is
 /// not read here; what rulec says of it is. A file that is not there or outside the module is
 /// E201 already ([`held_paths`]); one rulec refuses, or that is a rule, is E201; an enum the file
-/// does not have is E101.
-fn import_enums(f: &mut File, suite: &Suite, diags: &mut Vec<Diag>) {
-    let Some(rules) = &suite.rules else { return };
+/// does not have is E101. It answers the names of the lines that brought no enum
+/// ([`Scope::unread`]).
+fn import_enums(f: &mut File, suite: &Suite, diags: &mut Vec<Diag>) -> BTreeSet<String> {
+    // the name each line gives the enum, as a type of the file writes it
+    let names_of = |im: &crate::ast::ImportEnum| -> Vec<String> {
+        match &im.rename {
+            Some(n) => std::iter::once(n.text.clone()).chain(n.alias.iter().map(|(a, _)| a.clone())).collect(),
+            None => vec![im.enum_name.0.clone()],
+        }
+    };
+    let mut unread: BTreeSet<String> = f.imports.iter().flat_map(names_of).collect();
+    let Some(rules) = &suite.rules else { return unread };
     let (path, src) = (f.path.clone(), f.src.clone());
     let mut brought = Vec::new();
     for im in f.imports.clone() {
@@ -782,7 +787,8 @@ fn import_enums(f: &mut File, suite: &Suite, diags: &mut Vec<Diag>) {
         if said_already(&path, &im.path.0) {
             continue;
         }
-        let shown = target.display().to_string();
+        // the file as this one wrote it (ritsu's DESIGN 6.2, item 8)
+        let shown = im.path.0.clone();
         let facts = match rules.facts(&target) {
             Ok(x) => x,
             Err(said) => {
@@ -818,9 +824,13 @@ fn import_enums(f: &mut File, suite: &Suite, diags: &mut Vec<Diag>) {
         };
         let values = e.values.iter().map(|v| named(&v.name, &v.public)).collect();
         brought.push(EnumDecl { name, span: at, values, from: Some(EnumOrigin { path: im.path.0.clone(), enum_name: e.name.clone(), ordered: e.ordered, renamed: im.rename.is_some() }) });
+        for n in names_of(&im) {
+            unread.remove(&n);
+        }
     }
     f.enums.extend(brought);
     f.enums.sort_by_key(|e| e.span.line);
+    unread
 }
 
 /// What rulec says of each `use rule`, and koyomi of each `use dates`: into the scope, or E201.
@@ -834,7 +844,8 @@ fn read_facts(scope: &mut Scope, suite: &Suite, diags: &mut Vec<Diag>) {
         if said_already(&path, &u.path.0) {
             continue;
         }
-        let shown = target.display().to_string();
+        // the file as this one wrote it (ritsu's DESIGN 6.2, item 8)
+        let shown = u.path.0.clone();
         match u.kind {
             UseKind::Rule => {
                 let Some(rules) = &suite.rules else { continue };
@@ -887,6 +898,11 @@ struct Env<'s> {
     actions: Vec<&'s ActionDecl>,
     principals: Vec<String>,
     resources: Vec<String>,
+    /// An action's `principal` or `resource` line names a type that is not there (E101, said on
+    /// that line): an attribute none of the types it knows has is not said again (ritsu's DESIGN
+    /// 8.3).
+    unread_principals: bool,
+    unread_resources: bool,
 }
 
 impl<'a> Ck<'a> {
@@ -907,6 +923,88 @@ impl<'a> Ck<'a> {
             }
             other => other.text(),
         }
+    }
+
+    /// Where the enum of a value of `ty` is declared (DESIGN 28): the file, made canonical, the
+    /// enum's name there, and its values there, in their order. An enum read with `import enum` is
+    /// its `enums` file's; a rule's enum, the `enums` file the rule reads it from, or else the
+    /// rule's own file; an enum written with `enum`, the file of the `.gate` that writes it. None
+    /// for what is no enum.
+    fn declared(&self, ty: &Ty) -> Option<(PathBuf, String, Vec<String>)> {
+        match ty {
+            Ty::Enum(e) => {
+                let (f, d) = self.scope.files.iter().find_map(|f| f.enum_decl(e).map(|d| (f, d)))?;
+                let values = d.values.iter().map(|v| v.text.clone()).collect();
+                Some(match &d.from {
+                    Some(o) => (normal(&beside(&f.path, &o.path).ok()?.to_string_lossy()), o.enum_name.clone(), values),
+                    None => (normal(&f.path), d.name.text.clone(), values),
+                })
+            }
+            Ty::RuleEnum(r, e) => {
+                let read = self.scope.rules.get(r)?;
+                let en = read.facts.enums.iter().find(|x| x.name == *e || x.alias == *e)?;
+                let values = en.values.iter().map(|v| v.name.clone()).collect();
+                Some(match &en.origin {
+                    Some((f, n)) => (normal(&f.to_string_lossy()), n.clone(), values),
+                    None => (normal(&read.path.to_string_lossy()), en.name.clone(), values),
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether two types are one (DESIGN 28): two enums are one type when they are declared at one
+    /// place with the same values in the same order, by whatever names the file reads them (an
+    /// `enums` file's enum read with `import enum` twice, or read by the rules the file calls);
+    /// any other two, when they are equal.
+    fn same_ty(&self, a: &Ty, b: &Ty) -> bool {
+        match (a, b) {
+            (Ty::Enum(_) | Ty::RuleEnum(..), Ty::Enum(_) | Ty::RuleEnum(..)) => a == b || self.declared(a).is_some_and(|x| self.declared(b).is_some_and(|y| x == y)),
+            _ => a == b,
+        }
+    }
+
+    /// When two types that are not one are two enums, not both written with `enum` in this file: a
+    /// note that says where each is declared, and, when the two have the same values, how to make
+    /// them one type (DESIGN 28). None otherwise.
+    fn enums_apart(&self, a: &Ty, b: &Ty) -> Option<Text> {
+        let (x, y) = (self.declared(a)?, self.declared(b)?);
+        let own = |t: &Ty| matches!(t, Ty::Enum(e) if self.file().enum_decl(e).is_some_and(|d| d.from.is_none()));
+        if x == y || (own(a) && own(b)) {
+            return None;
+        }
+        let me = normal(&self.file().path);
+        let dir = me.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+        let whence = |t: &Ty, (file, there, _): &(PathBuf, String, Vec<String>)| -> Text {
+            let n = self.ty_text(t);
+            let path = ritsu_base::paths::relative(&dir, &file.to_string_lossy());
+            let rule_own = match t {
+                Ty::RuleEnum(r, e) => self.scope.rules.get(r).and_then(|read| read.facts.enums.iter().find(|x| x.name == *e || x.alias == *e)).is_some_and(|en| en.origin.is_none()),
+                _ => false,
+            };
+            let gate_own = matches!(t, Ty::Enum(e) if self.scope.enum_decl(e).is_some_and(|d| d.from.is_none()));
+            match (t, rule_own, gate_own) {
+                (Ty::RuleEnum(r, _), true, _) => tr!("{} は、規則 `{r}`（`{path}`）が自分で宣言した列挙 `{there}` です", "{} is the enum `{there}` that the rule `{r}` (`{path}`) declares itself", n.ja; n.en),
+                (_, _, true) if *file == me => tr!("{} は、このゲートが宣言した列挙です", "{} is an enum this gate declares", n.ja; n.en),
+                (_, _, true) => tr!("{} は、`{path}` が宣言した列挙です", "{} is an enum `{path}` declares", n.ja; n.en),
+                _ => tr!("{} は、`enums` ファイル `{path}` の列挙 `{there}` です", "{} is the enum `{there}` of the `enums` file `{path}`", n.ja; n.en),
+            }
+        };
+        let (wx, wy) = (whence(a, &x), whence(b, &y));
+        let sorted = |v: &[String]| {
+            let mut v = v.to_vec();
+            v.sort();
+            v
+        };
+        let (ja, en) = (format!("{}。{}。", wx.ja, wy.ja), capitalize(&format!("{}; {}.", wx.en, wy.en)));
+        if sorted(&x.2) != sorted(&y.2) {
+            return Some(Text::new(ja, en));
+        }
+        let advice = tr!(
+            "別の場所で宣言した列挙は、値が同じでも別の型です。一つの型にするには、列挙を `enums` ファイルに置き、使うファイルのそれぞれで `import enum` で読んでください。",
+            "Enums declared at two places are two types, even with the same values; to make them one, put the enum in an `enums` file, and read it with `import enum` in each file that uses it."
+        );
+        Some(Text::new(format!("{ja}{}", advice.ja), format!("{en} {}", advice.en)))
     }
 
     /// A principal's or a resource's type as the file writes it (`職員`, not `User`).
@@ -1129,14 +1227,10 @@ impl<'a> Ck<'a> {
                 tr!("Cedar の組み込みの型（`Bool`・`Long`・`String`）と、JSON のスキーマが型に使う語（`Boolean`・`Entity`・`Extension`・`Record`・`Set`）は、型の名前にしません。", "Cedar's builtin types (`Bool`, `Long`, `String`) and the words its JSON schema writes types with (`Boolean`, `Entity`, `Extension`, `Record`, `Set`) are not taken as a type's name.")
             };
             self.err("E008", s, tr!("型の名前 `{a}` は、Cedar か sekisho がもう使っています", "The type name `{a}` is one Cedar or sekisho uses already")).notes.push(note);
-            return;
         }
-        let refusing = targets_refusing(&a);
-        if !refusing.is_empty() {
-            let ts = refusing.join("、");
-            let ts_en = refusing.join(", ");
-            self.err("E008", s, tr!("`{a}` は {ts} の予約語なので、生成するコードの名前にできません", "`{a}` is a reserved word of {ts_en}, and cannot be a name in the generated code")).notes.push(tr!("別の名前か別名にしてください。", "Choose another name or alias."));
-        }
+        // a reserved word of the code of one target is that target's, where its code writes the name
+        // as an identifier (W402 and E401, `crate::spellings`), and not the check's: no target's
+        // breaks another's
     }
 
     /// One declared name in its namespace: E006 when its name or alias is already there.
@@ -1230,6 +1324,9 @@ impl<'a> Ck<'a> {
         }
         for a in &f.actions {
             self.action(a);
+        }
+        for w in &f.workflows {
+            self.holds(w);
         }
         for p in &f.policies {
             self.body(&p.body, Some(p.effect), false);
@@ -1392,7 +1489,7 @@ impl<'a> Ck<'a> {
             None => {
                 let known = names_of(scope.files.iter().flat_map(|f| f.roles.iter().map(|r| &r.name)));
                 let w = &r.word;
-                self.err("E101", r.span, tr!("役割 `{w}` はありません", "There is no role `{w}`")).notes.push(known_note(&tr!("役割", "roles"), &known));
+                self.err("E101", r.span, tr!("役割 `{w}` はありません", "There is no role `{w}`")).same_in_mut("role", w.clone()).notes.push(known_note(&tr!("役割", "roles"), &known));
                 None
             }
         }
@@ -1407,7 +1504,7 @@ impl<'a> Ck<'a> {
                 let w = &r.word;
                 let other = self.scope.files[1..].iter().find(|g| g.action(w).is_some()).map(|g| g.path.clone());
                 let known = names_of(f.actions.iter().map(|a| &a.name));
-                let d = self.err("E101", r.span, tr!("action `{w}` はありません", "There is no action `{w}`"));
+                let d = self.err("E101", r.span, tr!("action `{w}` はありません", "There is no action `{w}`")).same_in_mut("action", w.clone());
                 if let Some(p) = other {
                     d.notes.push(tr!("`{p}` の action です。ポリシーと期待が書けるのは、このファイルの action だけです。", "It is an action of `{p}`; a policy or an expectation names only the actions of its own file."));
                 } else {
@@ -1450,7 +1547,7 @@ impl<'a> Ck<'a> {
                     names_of(scope.files.iter().flat_map(|f| f.resources.iter().map(|e| &e.name)))
                 };
                 let what = if principal { tr!("principal の型", "principal types") } else { tr!("resource の型", "resource types") };
-                self.err("E101", r.span, tr!("型 `{w}` はありません", "There is no type `{w}`")).notes.push(known_note(&what, &known));
+                self.err("E101", r.span, tr!("型 `{w}` はありません", "There is no type `{w}`")).same_in_mut("type", w.clone()).notes.push(known_note(&what, &known));
                 None
             }
         }
@@ -1532,9 +1629,11 @@ impl<'a> Ck<'a> {
                         self.err("E102", r.span, tr!("`Workflow` は属性の型にできません", "`Workflow` is not the type of an attribute"));
                         None
                     }
+                    // the enum of an `import enum` line that brought none: said there, once
+                    None if scope.unread.contains(w) => None,
                     None => {
                         let dim = [kw::MONEY, "mass", "length", "area", "volume", "duration", "temperature", "sound"].contains(&w.as_str());
-                        let d = self.err("E101", r.span, tr!("型 `{w}` はありません", "There is no type `{w}`"));
+                        let d = self.err("E101", r.span, tr!("型 `{w}` はありません", "There is no type `{w}`")).same_in_mut("type", w.clone());
                         if ["string", "String", "str", "text"].contains(&w.as_str()) {
                             d.notes.push(tr!(
                                 "自由な文字列は、属性にも入力にもできません。比べる相手が限りなくあり、全部の組み合わせを数えられないからです。値が決まっているなら列挙（`enum`）にしてください。",
@@ -1598,6 +1697,20 @@ impl<'a> Ck<'a> {
     fn miss(&mut self, m: &Miss, s: Span, num: &Num, unit: &Unit, what: &str) {
         let raw = &num.raw;
         let msg = match m {
+            // a rate's unit is the percent, which its spelling leaves out; where the rate counts
+            // steps of another size than 1%, the same number of steps is shown as the percent it
+            // comes to, for a constant written as a count of the steps
+            Miss::NoUnit if unit.dim == ritsu_units::Dim::Rate => {
+                let hundred = ritsu_units::Rat::int(100);
+                let steps = unit.step.and_then(|s| Some((s.checked_mul(hundred)?, num.value.checked_mul(s)?.checked_mul(hundred)?))).filter(|(_, pct)| *pct != num.value);
+                match steps {
+                    Some((step, pct)) => tr!(
+                        "`{what}` は {unit} の数なので、定数 `{raw}` も百分率で書いてください（`{raw}%` など。{step}% の刻みを {raw} 数えるなら `{pct}%`）",
+                        "`{what}` is a number of {unit}, so the constant `{raw}` is written in percent too (`{raw}%`, say; {raw} steps of {step}% are `{pct}%`)"
+                    ),
+                    None => tr!("`{what}` は {unit} の数なので、定数 `{raw}` も百分率で書いてください（`{raw}%` など）", "`{what}` is a number of {unit}, so the constant `{raw}` is written in percent too (`{raw}%`, say)"),
+                }
+            }
             Miss::NoUnit => tr!("`{what}` は {unit} の数なので、定数 `{raw}` にも単位を付けてください（`{raw}{}` など）", "`{what}` is a number of {unit}, so the constant `{raw}` takes a unit too (`{raw}{}`, say)", unit.unit; unit.unit),
             Miss::UnknownUnit => tr!("`{raw}` の単位 `{}` は単位の表にありません", "The unit `{}` of `{raw}` is not in the table of units", num.unit; num.unit),
             Miss::OtherUnit => tr!("定数 `{raw}` は、`{what}` の単位 {unit} の値ではありません", "The constant `{raw}` is not a value of {unit}, the unit of `{what}`"),
@@ -1619,6 +1732,48 @@ impl<'a> Ck<'a> {
             }
             Miss::TooLarge(_) => d.notes.push(tr!("生成するコードは値を JSON の数として渡し、TypeScript の `number` が正確に表せる整数は 2⁵³ − 1 までです。", "The generated code passes a value as a JSON number, and TypeScript's `number` holds every integer only up to 2⁵³ − 1.")),
             _ => {}
+        }
+    }
+
+    // ── What a workflow's flow holds of a resource ───────────────────────────
+
+    /// A workflow's `resource` lines (DESIGN 2.12): each names a resource type, once for one value
+    /// of the flow as its id, and under it attributes of the type, each once, none of them one
+    /// that points to an entity (E101, E102, E006). What the values of the flow are is the
+    /// borders' to check, which ask dandori (E212).
+    fn holds(&mut self, w: &'a WorkflowDecl) {
+        let mut seen: Vec<(String, String)> = Vec::new();
+        for h in &w.holds {
+            let Some(EntityRef::Declared(e)) = self.type_ref(&h.resource, false) else { continue };
+            let ty = e.name.ascii().to_string();
+            let (shown, id) = (&e.name.text, &h.id.0);
+            if seen.contains(&(ty.clone(), id.clone())) {
+                self.err("E006", h.span, tr!("`resource {shown} from {id}` が、このワークフローに二度書かれています", "`resource {shown} from {id}` is written twice under this workflow"))
+                    .notes
+                    .push(tr!("属性は、一つの `resource` の行の下にまとめて書いてください。", "Write the attributes under one `resource` line."));
+            }
+            seen.push((ty.clone(), id.clone()));
+            let mut said: Vec<String> = Vec::new();
+            for l in &h.lines {
+                let word = &l.attribute.word;
+                let Some(a) = e.attribute(word) else {
+                    let known = names_of(e.attributes.iter().map(|a| &a.name));
+                    self.err("E101", l.attribute.span, tr!("resource `{shown}` に属性 `{word}` はありません", "The resource `{shown}` has no attribute `{word}`")).notes.push(known_note(&tr!("属性", "attributes"), &known));
+                    continue;
+                };
+                let name = a.name.ascii().to_string();
+                if said.contains(&name) {
+                    self.err("E006", l.attribute.span, tr!("属性 `{word}` が、この `resource` の下に二度書かれています", "The attribute `{word}` is written twice under this `resource`"));
+                }
+                said.push(name.clone());
+                if let Some((Ty::Entity(t), _)) = self.attrs.get(&(ty.clone(), name)) {
+                    let t = self.type_name(t);
+                    self.err("E102", l.attribute.span, tr!("`{word}` は `{t}` のエンティティを指す属性なので、フローの値に当てられません", "`{word}` points to an entity of `{t}`, and no value of a flow is said to be it")).notes.push(tr!(
+                        "フローの値に当てられるのは、真偽、列挙、数、日付の属性です。",
+                        "A value of a flow is said for an attribute that is a bool, an enum, a number or a date."
+                    ));
+                }
+            }
         }
     }
 
@@ -1753,7 +1908,7 @@ impl<'a> Ck<'a> {
                             .params
                             .iter()
                             .filter_map(|p| facts.inputs.iter().find(|i| i.name == *p))
-                            .map(|i| (i.name.clone(), i.alias.clone(), if i.kind == DateKind::Date { ColumnType::Date } else { ColumnType::Num { written: "int".into(), unit: Some(Unit::number()), min: Some(i.min as i128), max: Some(i.max as i128) } }))
+                            .map(|i| (i.name.clone(), i.alias.clone(), if i.kind == DateKind::Date { ColumnType::Date { min: Some(i.min), max: Some(i.max) } } else { ColumnType::Num { written: "int".into(), unit: Some(Unit::number()), min: Some(i.min as i128), max: Some(i.max as i128), round: None } }))
                             .collect();
                         let empty = RuleFacts { rule: String::new(), alias: String::new(), version: String::new(), sha256: String::new(), rulec: String::new(), inputs: vec![], outputs: vec![], elements: vec![], enums: vec![], machine: None, preconditions: vec![], connect: None, typescript: dummy_call(), python: dummy_call(), go: dummy_call(), rust: dummy_call() };
                         self.call_args(a, args, date.span, &date.word, &inputs, &empty, "", &of_the_dates_file());
@@ -1837,12 +1992,12 @@ impl<'a> Ck<'a> {
                 if !self.needs_today(*ts) {
                     return;
                 }
-                if *a_ct != ColumnType::Date {
+                if !matches!(a_ct, ColumnType::Date { .. }) {
                     self.err("E102", s, tr!("入力 `{input}` は {want} なので、`today` を渡せません", "The input `{input}` is {want}, and does not take `today`"));
                 }
             }
             ArgValue::Lit(l, _) => match (a_ct, l) {
-                (ColumnType::Bool, Lit::Bool(_)) | (ColumnType::Date, Lit::Date(_)) => {}
+                (ColumnType::Bool, Lit::Bool(_)) | (ColumnType::Date { .. }, Lit::Date(_)) => {}
                 (ColumnType::Num { unit: Some(u), .. }, Lit::Num(n)) => {
                     if let Err(m) = types::count(n, u) {
                         self.miss(&m, s, n, u, input);
@@ -1869,7 +2024,7 @@ impl<'a> Ck<'a> {
                 }
                 let Some(ty) = self.arg_path(a, p) else { return };
                 let fits = match (a_ct, &ty) {
-                    (ColumnType::Bool, Ty::Bool) | (ColumnType::Date, Ty::Date) => true,
+                    (ColumnType::Bool, Ty::Bool) | (ColumnType::Date { .. }, Ty::Date) => true,
                     (ColumnType::Num { unit: Some(u), .. }, Ty::Num(t)) => u.same(t),
                     (ColumnType::Num { unit: None, .. }, Ty::Num(_)) => true,
                     (ColumnType::Enum { name: e, .. }, Ty::Enum(g)) => {
@@ -1930,6 +2085,8 @@ impl<'a> Ck<'a> {
                 let ty = self.attr_of_action(a, p)?;
                 if let Ty::Entity(t) = &ty {
                     let shown = p.text();
+                    // the type as the file writes it, not as Cedar calls it
+                    let t = self.type_name(t);
                     self.err("E105", p.word().span, tr!("`{shown}` は型 `{t}` のエンティティなので、規則や日付の入力に渡せません", "`{shown}` is an entity of the type `{t}`, which is not given to a rule or a date"));
                     return None;
                 }
@@ -1942,17 +2099,20 @@ impl<'a> Ck<'a> {
     /// one of the action's types (E101), the same type in each that has it (E102).
     fn attr_of_action(&mut self, a: &ActionDecl, p: &Path) -> Option<Ty> {
         let (ps, rs) = self.action_types(a);
+        let (ps_len, rs_len) = (ps.len(), rs.len());
         let (types, principal) = match p {
             Path::Principal(_) => (ps, true),
             Path::Resource(_) => (rs, false),
             Path::Local(_) => return None,
         };
-        self.attr_in(&types, p, principal)
+        let unread = if principal { a.principals.0.len() > ps_len } else { a.resources.0.len() > rs_len };
+        self.attr_in(&types, p, principal, unread)
     }
 
     /// The type of an attribute among some types: E101 when none of them has it, E102 when two have
-    /// it of different types.
-    fn attr_in(&mut self, types: &[String], p: &Path, principal: bool) -> Option<Ty> {
+    /// it of different types. When a type the action names is not there (`unread`, E101 on its
+    /// line), an attribute none of the others has may be that type's, and is not said.
+    fn attr_in(&mut self, types: &[String], p: &Path, principal: bool, unread: bool) -> Option<Ty> {
         let w = &p.word().word;
         let mut found: Vec<(String, Ty)> = Vec::new();
         let mut declared = false;
@@ -1970,6 +2130,9 @@ impl<'a> Ck<'a> {
             return None;
         }
         let Some((_, first)) = found.first().cloned() else {
+            if unread {
+                return None;
+            }
             let (whose, whose_en) = if principal { ("principal", "the principal") } else { ("resource", "the resource") };
             let names = self.type_names(types);
             let (ts, ts_en) = (names.ja, names.en);
@@ -1977,10 +2140,11 @@ impl<'a> Ck<'a> {
             self.err("E101", p.word().span, tr!("`{shown}` はありません。{whose} の型（{ts}）のどれにも属性 `{w}` がありません", "There is no `{shown}`: none of the types of {whose_en} ({ts_en}) has an attribute `{w}`"));
             return None;
         };
-        if let Some((t, other)) = found.iter().find(|(_, ty)| *ty != first) {
+        if let Some((t, other)) = found.iter().find(|(_, ty)| !self.same_ty(ty, &first)) {
             let shown = p.text();
             let (a, b) = (self.ty_text(&first), self.ty_text(other));
-            self.err("E102", p.word().span, tr!("`{shown}` の型が、型によって違います（{} と、`{t}` では {}）", "`{shown}` is of different types in different types ({}, and {} in `{t}`)", a.ja, b.ja; a.en, b.en));
+            let note = self.enums_apart(&first, other);
+            self.err("E102", p.word().span, tr!("`{shown}` の型が、型によって違います（{} と、`{t}` では {}）", "`{shown}` is of different types in different types ({}, and {} in `{t}`)", a.ja, b.ja; a.en, b.en)).notes.extend(note);
             return None;
         }
         Some(first)
@@ -2025,7 +2189,9 @@ impl<'a> Ck<'a> {
                 }
             }
         }
-        let env = Env { actions, principals, resources };
+        let unread_principals = actions.iter().any(|a| self.action_types(a).0.len() < a.principals.0.len());
+        let unread_resources = actions.iter().any(|a| self.action_types(a).1.len() < a.resources.0.len());
+        let env = Env { actions, principals, resources, unread_principals, unread_resources };
         for c in &b.conds {
             self.expr(&env, &c.expr);
         }
@@ -2099,7 +2265,8 @@ impl<'a> Ck<'a> {
             match what {
                 What::Actions(_) => {
                     for (a, p) in actions.iter().zip(&per) {
-                        if p.is_empty() {
+                        // an action whose `principal` line names a type that is not there: E101 said it
+                        if p.is_empty() && self.action_types(a).0.len() == a.principals.0.len() {
                             say(self, a);
                         }
                     }
@@ -2323,7 +2490,7 @@ impl<'a> Ck<'a> {
             }
         };
         let want_days = days(self, f);
-        // the input's range as a message says it: `1GBP〜20,000GBP`, `2026-09-01〜2026-10-31`
+        // the input's range as a message says it: `1GBP〜20_000GBP`, `2026-09-01〜2026-10-31`
         let range_text = match (&want, want_range, want_days) {
             (Ty::Num(unit), Some((lo, hi)), _) => {
                 let (a, b) = (crate::cells::show(lo, unit), crate::cells::show(hi, unit));
@@ -2417,11 +2584,15 @@ impl<'a> Ck<'a> {
                         let range = if ty == Ty::Date { days(self, x) } else { range };
                         let fits = match (&want, &ty) {
                             (Ty::Num(u), Ty::Num(t)) => u.same(t),
-                            (w, t) => w == t,
+                            (w, t) => self.same_ty(w, t),
                         };
                         if !fits {
-                            let t = self.ty_text(&ty);
-                            return other_type(self, w, t);
+                            let (t, note) = (self.ty_text(&ty), self.enums_apart(&want, &ty));
+                            other_type(self, w, t);
+                            if let (Some(d), Some(n)) = (self.diags.last_mut(), note) {
+                                d.notes.push(n);
+                            }
+                            return None;
                         }
                         if !within(range, if want == Ty::Date { want_days } else { want_range }) {
                             return outside(self, w, false);
@@ -2484,11 +2655,15 @@ impl<'a> Ck<'a> {
                 let fits = match (&want, &ty) {
                     (Ty::Num(u), Ty::Num(t)) => u.same(t),
                     (Ty::Entity(_), _) | (_, Ty::Entity(_)) => false,
-                    (w, t) => w == t,
+                    (w, t) => self.same_ty(w, t),
                 };
                 if !fits {
-                    let t = self.ty_text(&ty);
-                    return other_type(self, &shown, t);
+                    let (t, note) = (self.ty_text(&ty), self.enums_apart(&want, &ty));
+                    other_type(self, &shown, t);
+                    if let (Some(d), Some(n)) = (self.diags.last_mut(), note) {
+                        d.notes.push(n);
+                    }
+                    return None;
                 }
                 let range_want = if want == Ty::Date { want_days } else { want_range };
                 if ranges.iter().any(|r| !within(*r, range_want)) {
@@ -2647,12 +2822,13 @@ impl<'a> Ck<'a> {
                     self.err("E101", w.span, tr!("規則 `{rule}` の列挙 `{e}` に値 `{x}` はありません", "The enum `{e}` of the rule `{rule}` has no value `{x}`")).notes.extend(notes);
                 }
             }
-            (Ty::Enum(e), Rhs::Path(p)) => {
+            (Ty::Enum(_), Rhs::Path(p)) => {
                 let Some(t) = self.path_ty(env, p) else { return };
-                if t != Ty::Enum(e.clone()) {
+                if !self.same_ty(ty, &t) {
                     let (a, b) = (self.ty_text(ty), self.ty_text(&t));
                     let other = p.text();
-                    self.err("E104", p.word().span, tr!("`{shown}`（{}）と `{other}`（{}）は型が違うので、比べられません", "`{shown}` ({}) and `{other}` ({}) are of different types, and do not compare", a.ja, b.ja; a.en, b.en));
+                    let note = self.enums_apart(ty, &t);
+                    self.err("E104", p.word().span, tr!("`{shown}`（{}）と `{other}`（{}）は型が違うので、比べられません", "`{shown}` ({}) and `{other}` ({}) are of different types, and do not compare", a.ja, b.ja; a.en, b.en)).notes.extend(note);
                 }
             }
             (Ty::Entity(t), Rhs::Principal(s)) => {
@@ -2699,8 +2875,8 @@ impl<'a> Ck<'a> {
     /// The type of a value a condition reads (E101, E102).
     fn path_ty(&mut self, env: &Env<'a>, p: &Path) -> Option<Ty> {
         match p {
-            Path::Principal(_) => self.attr_in(&env.principals.clone(), p, true),
-            Path::Resource(_) => self.attr_in(&env.resources.clone(), p, false),
+            Path::Principal(_) => self.attr_in(&env.principals.clone(), p, true, env.unread_principals),
+            Path::Resource(_) => self.attr_in(&env.resources.clone(), p, false, env.unread_resources),
             Path::Local(r) => {
                 let w = &r.word;
                 let mut ty: Option<Ty> = None;
@@ -2719,10 +2895,11 @@ impl<'a> Ck<'a> {
                     let t = self.locals.get(&key)?.0.clone();
                     match &ty {
                         None => ty = Some(t),
-                        Some(prev) if *prev != t => {
+                        Some(prev) if !self.same_ty(prev, &t) => {
                             let (x, y) = (self.ty_text(prev), self.ty_text(&t));
                             let n = &a.name.text;
-                            self.err("E102", r.span, tr!("`{w}` の型が action によって違います（{} と、`{n}` では {}）", "`{w}` is of different types in different actions ({}, and {} in `{n}`)", x.ja, y.ja; x.en, y.en));
+                            let note = self.enums_apart(prev, &t);
+                            self.err("E102", r.span, tr!("`{w}` の型が action によって違います（{} と、`{n}` では {}）", "`{w}` is of different types in different actions ({}, and {} in `{n}`)", x.ja, y.ja; x.en, y.en)).notes.extend(note);
                             return None;
                         }
                         _ => {}
@@ -2881,7 +3058,7 @@ fn column_text(t: &ColumnType) -> String {
     match t {
         ColumnType::Bool => "bool".into(),
         ColumnType::Str => "string".into(),
-        ColumnType::Date => "date".into(),
+        ColumnType::Date { .. } => "date".into(),
         ColumnType::Enum { name: e, .. } => e.clone(),
         // the unit with a rate's step, which rulec's declaration of the input says and its type
         // does not (`rate[step 1%]`, where rulec writes `rate`)

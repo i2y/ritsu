@@ -1,0 +1,8 @@
+error[E016]: tests/fixtures/date_messages.ja.flow:22:1: the parameter `day` is not what `日` DayService/Shift takes: `int` is not a date; declare it `date`
+    22 | task ずらす(day: int, by: int) -> ずらした日
+error[E016]: tests/fixtures/date_messages.ja.flow:22:1: what `日` DayService/Shift answers is not `ずらした日`: in `day`, a date is not `年月日`; declare it `date`
+    22 | task ずらす(day: int, by: int) -> ずらした日
+error[E016]: tests/fixtures/date_messages.ja.flow:22:1: what `日` DayService/Shift answers is not `ずらした日`: in `also`, a date is not `int`; declare it `date`
+    22 | task ずらす(day: int, by: int) -> ずらした日
+error[E016]: tests/fixtures/date_messages.ja.flow:22:1: what `日` DayService/Shift answers is not `ずらした日`: in `more`, a date is not `int`; declare it `date`
+    22 | task ずらす(day: int, by: int) -> ずらした日

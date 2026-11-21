@@ -44,48 +44,54 @@ pub struct Value {
 /// One enum declared in a `.proto`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Enum {
+    /// Its own name: `Status`.
     pub name: String,
+    /// Its name in the file's package, after the messages it is nested in: `Order.Status`, or
+    /// `Status` for one declared at the top of the file.
+    pub path: String,
     pub values: Vec<Value>,
 }
 
 impl Enum {
-    /// The ASCII aliases this enum asks a rule for, in declaration order.
-    pub fn aliases(&self) -> Vec<String> {
-        self.named().into_iter().map(|(a, _)| a).collect()
+    /// How its values read (§15.59 has the table): each number once, with every name the file
+    /// gives it, and the value proto3 reads as not set. The reading is ritsu's one reading of a
+    /// contract's enum (`ritsu_proto::validate::names`), which sekisho's `use proto` and the check
+    /// across the languages read with too.
+    pub fn names(&self) -> ritsu_proto::validate::EnumNames {
+        ritsu_proto::validate::names(&self.name, self.values.iter().map(|v| (v.name.as_str(), v.number)))
     }
 
-    /// Each value a table answers for, with the alias it asks the rule to declare for it, in
-    /// declaration order.
+    /// The name this enum asks a rule for, one for each value a table answers for, in the order
+    /// the file gives them: the first name of each number, read. A rule may name a value by any
+    /// of its names (`names`).
+    pub fn aliases(&self) -> Vec<String> {
+        self.names().values.iter().map(|v| v.read().to_string()).collect()
+    }
+
+    /// Each value a table answers for, with the name it is read by, and the value as the file
+    /// first writes its number — the name protojson writes it as.
     ///
-    /// Two conventions are read, and only two. The value names carry the enum's own name as a
-    /// prefix (`MemberTier` → `MEMBER_TIER_`), which `buf lint` enforces and which is there to
-    /// keep C++ scoping from colliding; it is not part of the value. And the zero value is
-    /// proto3's "not set", so `MEMBER_TIER_UNSPECIFIED` is not a value a table answers for —
-    /// the generated code refuses it at the door like any other input that is not a member.
+    /// The enum's own name in front of a value's name (`MemberTier` → `MEMBER_TIER_`, which
+    /// `buf lint` asks for to keep C++ scoping from colliding) is no part of the value. The zero
+    /// value read `unspecified` is proto3's "not set", so `MEMBER_TIER_UNSPECIFIED` is not a
+    /// value a table answers for — the generated code refuses it at the door like any other
+    /// input that is not a member. `names` has the whole reading.
     ///
     /// A zero value named anything else is **not** dropped. A file that puts a real value at 0
     /// is unusual, and quietly deciding it means nothing is the one thing this must not do.
     pub fn named(&self) -> Vec<(String, &Value)> {
-        self.values.iter().filter(|v| !self.is_unset(v)).map(|v| (self.local(v).to_ascii_lowercase(), v)).collect()
+        self.names().values.iter().filter_map(|v| Some((v.read().to_string(), self.first(v.number)?))).collect()
     }
 
-    /// The value proto3 reads as "not set", when the file has one: number 0, named
-    /// `…_UNSPECIFIED`. A field left out of a message arrives as this value.
+    /// The value proto3 reads as "not set", when the file has one: number 0, read `unspecified`.
+    /// A field left out of a message arrives as this value.
     pub fn unset(&self) -> Option<&Value> {
-        self.values.iter().find(|v| self.is_unset(v))
+        self.names().unset.and_then(|v| self.first(v.number))
     }
 
-    fn is_unset(&self, v: &Value) -> bool {
-        v.number == 0 && self.local(v).eq_ignore_ascii_case("unspecified")
-    }
-
-    /// A value's name with the enum's prefix taken off, when what is left is a name of its own.
-    ///
-    /// It is not when it begins with a digit — `SIZE_60` would leave `60`, which no alias can
-    /// be — or when it is another value's whole name, which would make two values one. The
-    /// name then stays as written, prefix and all, which is also what protobuf-py does with it.
-    fn local<'v>(&self, v: &'v Value) -> &'v str {
-        ritsu_proto::validate::value_local(&self.name, &v.name, |n| self.values.iter().any(|o| o.name == n))
+    /// The first value the file writes with the number.
+    fn first(&self, number: i64) -> Option<&Value> {
+        self.values.iter().find(|v| v.number == number)
     }
 }
 
@@ -107,6 +113,9 @@ pub struct Field {
     /// The `oneof` it is a member of. A member has presence of its own, like an `optional`
     /// field, and `optional` is set on it too (§15.140).
     pub oneof: Option<String>,
+    /// The full name of the message it is declared in (`shop.v1.Line`): where the name of its
+    /// type is looked up from ([`declared`]).
+    pub scope: String,
 }
 
 impl Field {
@@ -139,11 +148,14 @@ pub use ritsu_proto::validate::{IntRules, Rules};
 
 pub use ritsu_proto::validate::int_bounds;
 
-/// One message declared in a `.proto`, named as it is written. A nested message is listed
-/// under its own short name as well, which is how a path names it.
+/// One message declared in a `.proto`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Message {
+    /// Its own name: `Item`.
     pub name: String,
+    /// Its name in the file's package, after the messages it is nested in: `Order.Item`, or
+    /// `Order` for one declared at the top of the file.
+    pub path: String,
     pub fields: Vec<Field>,
     /// What Protovalidate asks of the message as a whole (§15.140).
     pub rules: MsgRules,
@@ -165,9 +177,10 @@ pub enum Scalar {
 
 /// The kind a proto type word travels as, or `None` for a message or an enum. An enum is a
 /// message-shaped name here and resolves to nothing, which is right: what a rule takes from
-/// an enum is its value set (§15.59), and that is `import proto`'s business, not a path's.
+/// an enum is its value set (§15.59), and that is `import proto`'s business, not a path's. A
+/// scalar's name is never written with a package: `.shop.v1.string` is a message.
 pub fn scalar(ty: &str) -> Option<Scalar> {
-    match ty.rsplit('.').next().unwrap_or(ty) {
+    match ty {
         "string" => Some(Scalar::Str),
         "bool" => Some(Scalar::Bool),
         "double" | "float" => Some(Scalar::Frac),
@@ -179,23 +192,83 @@ pub fn scalar(ty: &str) -> Option<Scalar> {
     }
 }
 
-/// Whether a message name written one way is the one written another. A `.proto` may name a
-/// message bare, package-qualified or nested-qualified, and a `shape` line may name it any
-/// of those ways; the last segment is what they always agree on.
-pub fn same_message(declared: &str, wanted: &str) -> bool {
-    let last = |s: &str| s.rsplit('.').next().unwrap_or(s).to_string();
-    declared == wanted || last(declared) == last(wanted)
+/// A message or an enum a `.proto` declares.
+#[derive(Debug, Clone, Copy)]
+pub enum Declared<'a> {
+    Message(&'a Message),
+    Enum(&'a Enum),
+}
+
+/// What the type of the field `fd` is, among the messages and enums of a file of `package`: found
+/// as protobuf finds a name, from the message the field is in outward (§15.346). In `message Line`,
+/// `Status` is `Line.Status` when `Line` nests one, whatever other message nests a `Status` too.
+/// The rule is `ritsu_proto::resolve_name`, which sekisho and the check across the languages find a
+/// field's type by. `None` for a scalar, and for a type the file does not declare.
+pub fn declared<'a>(package: Option<&str>, messages: &'a [Message], enums: &'a [Enum], fd: &Field) -> Option<Declared<'a>> {
+    let full = |path: &str| match package {
+        Some(p) => format!("{p}.{path}"),
+        None => path.to_string(),
+    };
+    ritsu_proto::resolve_name(&fd.scope, &fd.ty, |name| {
+        messages
+            .iter()
+            .find(|m| full(&m.path) == name)
+            .map(Declared::Message)
+            .or_else(|| enums.iter().find(|e| full(&e.path) == name).map(Declared::Enum))
+    })
+}
+
+/// The one of `items` a line names: by its path from the package (`Order.Status`), with the
+/// package before it or not, or by its own name where one item has it. The ones the name could
+/// mean when it is none of them, or more than one.
+fn named<'a, T>(package: Option<&str>, items: &'a [T], path: impl Fn(&T) -> &str, name: impl Fn(&T) -> &str, written: &str) -> Result<&'a T, Vec<&'a T>> {
+    let written = written.strip_prefix('.').unwrap_or(written);
+    let bare = match package {
+        Some(p) => written.strip_prefix(&format!("{p}.")).unwrap_or(written),
+        None => written,
+    };
+    if let Some(x) = items.iter().find(|x| path(x) == bare) {
+        return Ok(x);
+    }
+    let by_name: Vec<&T> = items.iter().filter(|x| name(x) == bare).collect();
+    match by_name.as_slice() {
+        [one] => Ok(one),
+        _ => Err(by_name),
+    }
 }
 
 /// What rulec reads of one `.proto`: the package, the imports as written, every enum, and every
-/// message with the fields a path can follow. A nested enum or message is listed under its own
-/// short name, which is how a rule names it; the order is the file's.
+/// message with the fields a path can follow. A nested message or enum has its own name and its
+/// path from the package, either of which a `shape` or an `import proto` line names it by. The
+/// order is the file's.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct File {
     pub package: Option<String>,
     pub imports: Vec<String>,
     pub enums: Vec<Enum>,
     pub messages: Vec<Message>,
+}
+
+impl File {
+    /// The enum an `import proto` line names (§15.59): by its own name where one enum of the file
+    /// has it (`Status`), or by its name after the messages it is nested in (`Order.Status`), with
+    /// the file's package before them or not (`shop.v1.Order.Status`). The enums the name could
+    /// mean when it is none of the file's, or more than one: two messages may each nest a
+    /// `Status`, and the line then says which.
+    pub fn enum_named(&self, written: &str) -> Result<&Enum, Vec<&Enum>> {
+        named(self.package.as_deref(), &self.enums, |e| &e.path, |e| &e.name, written)
+    }
+
+    /// The message a `shape` line names, the same way (§15.346): `Order`, `Cart.Item`,
+    /// `shop.v1.Cart.Item`, or `Item` where only one message of the file is called that.
+    pub fn message_named(&self, written: &str) -> Result<&Message, Vec<&Message>> {
+        named(self.package.as_deref(), &self.messages, |m| &m.path, |m| &m.name, written)
+    }
+
+    /// What the type of the field `fd` of this file is ([`declared`]).
+    pub fn declared(&self, fd: &Field) -> Option<Declared<'_>> {
+        declared(self.package.as_deref(), &self.messages, &self.enums, fd)
+    }
 }
 
 /// Read a `.proto` with ritsu's reader and take what a rule asks of it, or say where the file
@@ -211,12 +284,13 @@ pub fn read(path: &str, src: &str) -> Result<File, ritsu_proto::ReadError> {
     Ok(File {
         package: (!f.package.is_empty()).then(|| f.package.clone()),
         imports: f.imports.iter().map(|i| i.path.clone()).collect(),
-        enums: f.enums.iter().map(|e| Enum { name: short(&e.name), values: e.values.iter().map(|v| Value { name: v.name.clone(), number: v.number }).collect() }).collect(),
+        enums: f.enums.iter().map(|e| Enum { name: short(&e.name), path: e.name.clone(), values: e.values.iter().map(|v| Value { name: v.name.clone(), number: v.number }).collect() }).collect(),
         messages: f
             .messages
             .iter()
             .map(|m| Message {
                 name: short(&m.name),
+                path: m.name.clone(),
                 fields: m
                     .fields
                     .iter()
@@ -235,6 +309,7 @@ pub fn read(path: &str, src: &str) -> Result<File, ritsu_proto::ReadError> {
                             _ => None,
                         }),
                         oneof: x.oneof.clone(),
+                        scope: f.full(&m.name),
                     })
                     .collect(),
                 rules: m.rules.clone(),

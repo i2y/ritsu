@@ -1,0 +1,30 @@
+rule net_by_amount_band v1
+description "A rebate of 7% rounded down less a charge of 5% rounded up, and a tier decided by the net and the amount together. The first tier comes only from 82 yen on, where the net is never -1 yen: the check works the net out again on the amounts that row of the tier table takes, and cuts them into pieces where one span is not enough"
+
+enum choice = one | two
+enum tier = t1 | t2
+
+inputs
+  amount : money[JPY]  range >=0JPY <=115JPY
+
+define net : money[JPY] = down(amount * 7%, 1JPY) - up(amount * 5%, 1JPY)
+
+outputs
+  x : choice
+
+table tier_of
+| net    | amount  | -> tier : tier |
+| <=0JPY | <82JPY  | t2             |
+| <=0JPY | >=82JPY | t1             |
+| >=1JPY | <82JPY  | t2             |
+| >=1JPY | >=82JPY | t1             |
+
+table pick
+| amount          | net              | tier | -> x |
+| <=9JPY          | -1JPY            | t2   | one  |
+| <=9JPY          | 0JPY, 1JPY, 2JPY | t2   | two  |
+| >=10JPY <=19JPY | -1JPY            | t2   | one  |
+| >=10JPY <=19JPY | 0JPY, 1JPY, 2JPY | t2   | two  |
+| >19JPY          | -1JPY            | t2   | one  |
+| >19JPY          | 0JPY, 1JPY, 2JPY | t1   | two  |
+| >19JPY          | 0JPY, 1JPY, 2JPY | t2   | one  |

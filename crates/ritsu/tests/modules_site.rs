@@ -8,7 +8,8 @@
 //!   files that name the registry, and the version of ritsu masked; `RITSU_BLESS=1` writes them),
 //!   the files it writes, the pages each language's `doc` draws, and `module.json`, whose files are
 //!   a project that `ritsu check` passes with no store, and whose copy of the store `ritsu mod
-//!   vendor --check` holds to the lock.
+//!   vendor --check` holds to the lock. Without `--lang`, the site is the English one byte for
+//!   byte, whatever `RITSU_LANG` says (it says only what the run prints).
 //! - The list's `signature` lines check every version, with a cosign of the test's own that writes
 //!   down how it is called; when it says no, each version is said unverified on its pages and on
 //!   stderr, and the command exits 1.
@@ -24,6 +25,7 @@
 //!   mistakes said at its line and column; a list that is not there; no `--out`; and a registry
 //!   that does not answer.
 
+mod common;
 #[path = "common/fines.rs"]
 mod fines;
 
@@ -41,7 +43,7 @@ fn root() -> PathBuf {
     here().join("../..")
 }
 
-const LANG_VARS: [&str; 10] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"];
+const LANG_VARS: [&str; 11] = common::LANG_VARS;
 
 /// A cosign of the test's own: it writes the arguments it is called with, a line each call, and
 /// says no when `FAKE_COSIGN_EXIT` is not 0.
@@ -55,6 +57,18 @@ fn executable(path: &Path) {
 
 fn said(o: Output) -> (i32, String, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+}
+
+/// How long ritsu may take with the test's registry: seconds each. Past it, the test
+/// fails with what the program printed, not at the limit of the job with nothing said.
+const LIMIT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+/// A program that talks to the test's registry, run to its end for no longer than [`LIMIT`]
+/// (ritsu-testkit's `finish`, which fails the test past it, saying `what` it was): what it said,
+/// as [`said`] has it.
+fn finished(c: &mut Command, what: &str) -> (i32, String, String) {
+    let r = ritsu_testkit::run::finish(c, LIMIT, what);
+    (r.code.unwrap_or(-1), r.stdout, r.stderr)
 }
 
 fn golden(path: &str, got: &str, failures: &mut Vec<String>) {
@@ -159,7 +173,7 @@ impl Acme {
     /// ritsu, run in the directory `dir` of the test with the store at `store`, and `env` over the
     /// rest.
     fn run_in(&self, dir: &str, store: &Path, args: &[&str], env: &[(&str, &str)]) -> (i32, String, String) {
-        said(self.command(dir, store, args, env).output().expect("could not run ritsu"))
+        finished(&mut self.command(dir, store, args, env), &format!("ritsu {args:?} in {dir}, with the test's registry"))
     }
 
     /// `ritsu mod site <list> --out <out>` in the test's directory, with the store `store-<out>`
@@ -335,6 +349,19 @@ fn the_site_of_the_example_held_to_golden_files() {
         assert!(page(&format!("<registry>/acme/shop/0.2.0/files/{data}.html")).contains("<pre class=\"source lines"), "{lang}");
         assert!(!site.join(host.replace(':', "%3A")).join(format!("acme/shop/0.2.0/code/{data}.html")).exists() && !site.join(&host).join(format!("acme/shop/0.2.0/code/{data}.html")).exists(), "{lang}");
     }
+    // without --lang the site is in English, whatever the environment says: only what the run
+    // prints follows RITSU_LANG (DESIGN 4.1)
+    let (code, stdout, err) = a.site("modules.list", "site-env", &[], &[("RITSU_LANG", "ja")]);
+    assert_eq!((code, stdout.as_str(), err.as_str()), (0, "ritsu mod site: モジュール 3 個のページを 44 枚、site-env に書きました\n", ""));
+    let bytes = |dir: &str| -> Vec<(String, Vec<u8>)> {
+        let site = a.path(dir);
+        files_under(&site).into_iter().map(|f| (f.clone(), std::fs::read(site.join(&f)).unwrap())).collect()
+    };
+    let (english, by_env) = (bytes("site-en"), bytes("site-env"));
+    assert_eq!(english.iter().map(|(f, _)| f).collect::<Vec<_>>(), by_env.iter().map(|(f, _)| f).collect::<Vec<_>>());
+    for ((f, x), (_, y)) in english.iter().zip(&by_env) {
+        assert!(x == y, "{f}: RITSU_LANG=ja changes the page the site writes");
+    }
     // every version checked against the list's line, once in each run
     let refs: Vec<String> = [("tax", "1.0.0"), ("tax", "1.1.0"), ("pricing", "1.0.0"), ("pricing", "1.1.0"), ("shop", "0.1.0"), ("shop", "0.2.0")]
         .iter()
@@ -343,7 +370,7 @@ fn the_site_of_the_example_held_to_golden_files() {
     let calls = a.cosign_calls();
     for r in &refs {
         let n = calls.iter().filter(|c| c.ends_with(&format!(" {r}"))).count();
-        assert_eq!(n, 2, "{r} in {calls:#?}");
+        assert_eq!(n, 3, "{r} in {calls:#?}");
         assert!(calls.contains(&format!("verify --certificate-identity-regexp ^https://github[.]com/acme/ --certificate-oidc-issuer https://token.actions.githubusercontent.com --allow-http-registry {r}")), "{calls:#?}");
     }
     // module.json of shop 0.2.0: its files, and pricing 1.1.0 and tax 1.0.0 as a copy of the store
@@ -557,6 +584,93 @@ fn working_trees_and_the_playground_they_open_in() {
     assert!(err.contains(&format!("備考: `{host}/acme/shop` 0.1.0 はレジストリにもうあるので、作業ツリーではなくレジストリの版を載せました\n")), "{err}");
 }
 
+/// A module of requests (ringi), two working trees of it: every `.ringi` has the page `ringi doc`
+/// draws, the organization's and the masters' too; the page of a shared route makes each request of
+/// the version that takes it a link to that request's page; the files are listed by their kind, with
+/// what `ringi api` says of each; and what the newer version changes in a request type is said in a
+/// sentence, with ringi's own report under it, in English and in Japanese.
+#[test]
+fn a_module_of_requests_has_the_pages_ringi_draws() {
+    let t = TempDir::new("mod-site-ringi");
+    let examples = root().join("crates/ringi/examples");
+    for dir in ["requests-0.1.0", "requests"] {
+        for f in ["leave.ringi", "leave.ja.ringi", "shared/manager_approval.ringi", "shared/company.ringi", "shared/masters.ringi", "shared/office.cal", "shared/leave.book", "shared/company.gate"] {
+            t.write(&format!("{dir}/{f}"), std::fs::read(examples.join(f)).unwrap());
+        }
+        for d in ["org", "masters"] {
+            ritsu_testkit::tmp::copy_dir(&examples.join(d), &t.path().join(dir).join(d));
+        }
+    }
+    t.write("requests-0.1.0/ritsu.mod", "module example.com/acme/requests\nversion 0.1.0\ndescription \"The requests of the company\"\n");
+    t.write("requests/ritsu.mod", "module example.com/acme/requests\nversion 0.2.0\ndescription \"The requests of the company\"\n");
+    // 0.2.0: the head of the department approves a leave of more than three business days, not five
+    edit(&t, "requests/leave.ringi", "request leave v1", "request leave v2");
+    edit(&t, "requests/leave.ringi", "route standard(long: days > 5)", "route standard(long: days > 3)");
+    t.write("requests.list", "title \"Requests\"\nlocal \"requests-0.1.0\"\nlocal \"requests\"\n");
+    let run = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
+        c.current_dir(t.path()).args(args).env(store::VARIABLE, t.path().join("store"));
+        for v in LANG_VARS {
+            c.env_remove(v);
+        }
+        finished(&mut c, &format!("ritsu {args:?}"))
+    };
+    for (out, lang) in [("en", "en"), ("ja", "ja")] {
+        let (code, stdout, err) = run(&["mod", "site", "requests.list", "--out", out, "--lang", lang]);
+        assert_eq!(code, 0, "{stdout}{err}");
+        assert!(err.is_empty(), "{err}");
+    }
+    let page = |rel: &str| std::fs::read_to_string(t.path().join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"));
+    let v = "example.com/acme/requests/0.2.0";
+    for (out, title) in [("en", "Leave request"), ("ja", "休暇の申請")] {
+        // the shared route's page: each request that takes it, a link to its page
+        let route = page(&format!("{out}/{v}/files/shared/manager_approval.ringi.html"));
+        assert!(route.starts_with("<!doctype html>") || route.starts_with("<!DOCTYPE html>"), "{route}");
+        for f in ["leave.ringi", "leave.ja.ringi"] {
+            assert!(route.contains(&format!("<td><a href=\"../{f}.html\"><code>{f}</code></a></td>")), "{out}: {f} is no link:\n{route}");
+        }
+        // each version of the request, under the title of the site's language (each file carries
+        // the other language's title too)
+        for f in ["leave.ringi", "leave.ja.ringi"] {
+            let request = page(&format!("{out}/{v}/files/{f}.html"));
+            assert!(request.contains(&format!("<h1>{title}</h1>")), "{out}: {f} is not under `{title}`:\n{request}");
+        }
+        // the organization's page and the masters'
+        let organization = page(&format!("{out}/{v}/files/shared/company.ringi.html"));
+        assert!(organization.contains("<h2 id=\"shape\">"), "{organization}");
+        let masters = page(&format!("{out}/{v}/files/shared/masters.ringi.html"));
+        assert!(masters.contains("systems"), "{masters}");
+    }
+    // the files by their kind, with what `ringi api` says
+    let module = page("en/example.com/acme/requests/index.html");
+    for said in [
+        "<h2 class=\"h3\">Request types</h2>",
+        "<a href=\"./0.2.0/code/leave.ringi.html\">leave.ringi</a>",
+        "<h2 class=\"h3\">Shared routes</h2>",
+        "<a href=\"./0.2.0/code/shared/manager_approval.ringi.html\">shared/manager_approval.ringi</a>",
+        "<h2 class=\"h3\">Organizations</h2>",
+        "<a href=\"./0.2.0/code/shared/company.ringi.html\">shared/company.ringi</a>",
+        "<h2 class=\"h3\">Masters files</h2>",
+        "<a href=\"./0.2.0/code/shared/masters.ringi.html\">shared/masters.ringi</a>",
+    ] {
+        assert!(module.contains(said), "{said}:\n{module}");
+    }
+    // the changes of 0.2.0: the sentence, the tiles, and ringi's own report
+    let changes = &module[module.find("<section class=\"pane\" id=\"changes\">").unwrap()..];
+    let changes = &changes[..changes.find("</section>").unwrap()];
+    for said in [
+        "<h2 class=\"headline\">leave changes in one place. Of the inputs both versions accept, everything else gets the same answer.</h2>",
+        "<div><dt>Behavior</dt><dd>1 of 7 files answers differently</dd></div>",
+        "<div class=\"filehead\"><h3 class=\"mono\">leave.ringi</h3><span class=\"tag differ\">Answers differ</span></div>",
+        "<h3>Leave request: what changes</h3>",
+    ] {
+        assert!(changes.contains(said), "{said}:\n{changes}");
+    }
+    assert!(page("en/index.html").contains("<a href=\"./example.com/acme/requests/index.html#changes\">0.2.0 changes leave in 1 place</a>"));
+    let module = page("ja/example.com/acme/requests/index.html");
+    assert!(module.contains("<h2 class=\"headline\">leave が 1 か所で変わります。両方の版が受け取る入力のうち、それ以外は同じ答えです。</h2>"), "{module}");
+}
+
 /// What stops the command, with nothing written (exit 2): a list with mistakes (each said at its
 /// line and its column, held to golden files), a list that is not there, a list with no module, a
 /// playground that is not https on the command line, no `--out`, and a registry that does not
@@ -585,14 +699,16 @@ fn what_stops_the_site_writes_nothing() {
         assert_eq!((code, out.as_str()), (2, ""), "{err}");
         golden(&format!("tests/golden/modules/site-bad-list.{lang}.txt"), &err, &mut failures);
     }
-    assert_eq!(run(&["mod", "site", "nope.list", "--out", "out"]), (2, String::new(), "error: cannot read nope.list (No such file or directory (os error 2)); nothing was written\n".into()));
+    assert_eq!(run(&["mod", "site", "nope.list", "--out", "out"]), (2, String::new(), "error: `nope.list` is not there\n".into()));
     assert_eq!(run(&["mod", "site", "empty.list", "--out", "out"]), (2, String::new(), "error: empty.list has no `module` line, no `git` line and no `local` line\nerror: the list cannot be read; nothing was written\n".into()));
     assert_eq!(
         run(&["mod", "site", "ok.list", "--out", "out", "--playground", "http://example.com/play/"]),
         (2, String::new(), "error: the playground's URL `http://example.com/play/` is an https URL (or an http one on this machine) with no user, no query and no `#`\n".into())
     );
-    assert_eq!(run(&["mod", "site", "ok.list"]), (2, String::new(), "error: say where the site goes with `--out <dir>`\n".into()));
-    assert_eq!(run(&["mod", "site", "ok.list", "--lang", "ja"]), (2, String::new(), "エラー: 書く先のディレクトリを `--out <ディレクトリ>` で渡してください\n".into()));
+    // `--lang` is site's own: the pages are in `--lang` alone (DESIGN 4.1)
+    let usage = "ritsu mod site <list> [--out <dir>] [--playground <URL>] [--alternate <lang>=<path>] [--lang ja|en]";
+    assert_eq!(run(&["mod", "site", "ok.list"]), (2, String::new(), format!("error: `ritsu mod site` needs `--out <dir>`\nusage: {usage}\n")));
+    assert_eq!(run(&["mod", "site", "ok.list", "--lang", "ja"]), (2, String::new(), format!("エラー: `ritsu mod site` には `--out <dir>` が要ります\n使い方: {usage}\n")));
     assert!(!t.path().join("out").exists());
     // a registry that does not answer: what curl said, after its tries
     let r = Registry::start();

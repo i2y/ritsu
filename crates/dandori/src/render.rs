@@ -81,26 +81,32 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
     match task.via(view.platform()) {
         Some(Via::Lambda(f)) => json!({ "lambda": f, "payload": with_key("idempotency_key") }),
         Some(Via::Http { method, url, form }) => {
-            let (url, rest) = fill_url(url, args);
-            let mut headers = Map::new();
+            // dandori's own headers, then where the arguments go (DESIGN 43): the path and the query
+            // in the URL, the headers and the cookies, and the body
+            let mut own = Map::new();
             if form {
-                headers.insert("Content-Type".into(), json!("application/x-www-form-urlencoded"));
+                own.insert("Content-Type".into(), json!("application/x-www-form-urlencoded"));
             }
             if task.connect.is_some() {
-                headers.insert("Connect-Protocol-Version".into(), json!("1"));
+                own.insert("Connect-Protocol-Version".into(), json!("1"));
             }
             if let Some(k) = key {
-                headers.insert("Idempotency-Key".into(), json!(k));
+                own.insert("Idempotency-Key".into(), json!(k));
             }
+            let c = crate::wire::compose(m, task, url, form, args, own);
             let mut w = Map::new();
             w.insert("http".into(), json!(method));
-            w.insert("url".into(), json!(url));
-            if !headers.is_empty() {
-                w.insert("headers".into(), Value::Object(headers));
+            w.insert("url".into(), json!(c.url));
+            if !c.headers.is_empty() {
+                w.insert("headers".into(), Value::Object(c.headers));
             }
-            if !rest.is_empty() {
-                let place = if method == "GET" || method == "DELETE" { "query" } else { "body" };
-                w.insert(place.into(), Value::Object(rest));
+            if let Some(body) = c.body {
+                // a `connect` task's dates, as protobuf's JSON writes a `google.type.Date` (DESIGN 44)
+                let body = match &task.request_days {
+                    Some(t) => crate::apis::wire_days(&body, t),
+                    None => body,
+                };
+                w.insert("body".into(), body);
             }
             Value::Object(w)
         }
@@ -644,7 +650,7 @@ pub fn json_schema(m: &Model, t: &Ty, rg: Option<Range>, p: Provider) -> Option<
                 o.insert("type".into(), json!("string"));
                 o.insert("pattern".into(), json!(if *t == Ty::Date { DATE_RE } else { TIMESTAMP_RE }));
                 if let Some(r) = rg {
-                    o.insert("description".into(), json!(m.range_text(t, &r)));
+                    o.insert("description".into(), json!(m.range_wire(t, &r)));
                 }
                 Value::Object(o)
             }
@@ -866,18 +872,6 @@ pub fn has_cased_enum(m: &Model, t: &Ty) -> bool {
     enums_of(m, t).iter().any(|e| m.enums[*e].values.iter().any(|v| v.chars().next().is_some_and(|c| c.is_lowercase() || c.is_uppercase())))
 }
 
-/// `https://…/{id}/confirm` with `id` put in; the arguments the URL did not take.
-pub fn fill_url(url: &str, args: &Map<String, Value>) -> (String, Map<String, Value>) {
-    let used = crate::lower::placeholders(url);
-    let mut out = url.to_string();
-    for p in &used {
-        let v = args.get(p).map(value_text).unwrap_or_default();
-        out = out.replace(&format!("{{{p}}}"), &url_segment(&v));
-    }
-    let rest = args.iter().filter(|(k, _)| !used.contains(k)).map(|(k, v)| (k.clone(), v.clone())).collect();
-    (out, rest)
-}
-
 /// A value's text as it goes into a URL, as JavaScript's `encodeURIComponent` writes it: letters,
 /// digits and `-_.!~*'()` as they are, every other byte of the UTF-8 as `%` and two capital hex
 /// digits. A `/`, a `?` or a `#` in an argument stays inside its part of the URL.
@@ -895,13 +889,13 @@ pub fn url_segment(s: &str) -> String {
 
 /// An argument put into a URL, in JSONata: its text as [`value_text`] has it, escaped as
 /// [`url_segment`] escapes it.
-pub fn jsonata_segment(e: &TExpr) -> String {
+pub fn jsonata_segment(vars: &Vars, e: &TExpr) -> String {
     if let Some(v) = literal(e) {
         return jsonata_string(&url_segment(&value_text(&v)));
     }
     match e.ty() {
-        Ty::Str | Ty::Timestamp | Ty::Date | Ty::Enum(_) => format!("$encodeUrlComponent({})", jsonata_expr(e)),
-        _ => format!("($dd_v := {}; $encodeUrlComponent($type($dd_v) = \"string\" ? $dd_v : $type($dd_v) = \"null\" ? \"\" : $string($dd_v)))", jsonata_expr(e)),
+        Ty::Str | Ty::Timestamp | Ty::Date | Ty::Enum(_) => format!("$encodeUrlComponent({})", jsonata_expr(vars, e)),
+        _ => format!("($dd_v := {}; $encodeUrlComponent($type($dd_v) = \"string\" ? $dd_v : $type($dd_v) = \"null\" ? \"\" : $string($dd_v)))", jsonata_expr(vars, e)),
     }
 }
 
@@ -956,6 +950,478 @@ pub fn asl_var(name: &str) -> String {
     }
 }
 
+/// A variable of the state machine as [`asl_var`] writes it, with `_` after one that begins with
+/// `dd_`, as the machine's own variables do (`$dd_error`, the `$dd_v` of an expression): none of
+/// those ends with `_`.
+pub fn asl_spell(name: &str) -> String {
+    let s = asl_var(name);
+    if s.starts_with("dd_") {
+        format!("{s}_")
+    } else {
+        s
+    }
+}
+
+/// The identifiers the code of one target gives the flow's variables (the inputs, the `let`s and
+/// the cases: `Model::vars`), one each (DESIGN 22). A variable whose name the target takes as it
+/// is, which `spell` gives back unchanged and which the function that holds the variables keeps for
+/// nothing of its own (`code`), keeps it. Each other takes what `spell` writes for it (a word of the
+/// language, or a name of the code's own, with `_` after it; a name that cannot begin an identifier
+/// begun with `v`), with one `_` more while that is already another's or one the code keeps there:
+/// no name of the code's own ends with `_`. So `class` and `class_` stay two variables, as do `_x`
+/// and `v_x`, and the variables of a flow whose names the code has no claim on keep the identifiers
+/// they had.
+pub struct Vars {
+    names: std::collections::BTreeMap<String, String>,
+    spell: fn(&str) -> String,
+}
+
+impl Vars {
+    pub fn new(m: &Model, spell: fn(&str) -> String, code: Option<&CodeNames>) -> Vars {
+        let kept = |i: usize, s: &str| code.is_some_and(|c| c.keeps(i, s));
+        let mut names = std::collections::BTreeMap::new();
+        let mut taken = std::collections::BTreeSet::new();
+        for (i, (n, _)) in m.vars.iter().enumerate() {
+            if spell(n) == *n && !kept(i, n) && !names.contains_key(n) {
+                taken.insert(n.clone());
+                names.insert(n.clone(), n.clone());
+            }
+        }
+        for (i, (n, _)) in m.vars.iter().enumerate() {
+            if names.contains_key(n) {
+                continue;
+            }
+            let mut s = spell(n);
+            while taken.contains(&s) || kept(i, &s) {
+                s.push('_');
+            }
+            taken.insert(s.clone());
+            names.insert(n.clone(), s);
+        }
+        Vars { names, spell }
+    }
+
+    /// Each variable as a placeholder that no identifier is (`\u{1}<i>\u{2}`, `i` its place in
+    /// `Model::vars`), for a first writing of a function whose identifiers are then all the code's
+    /// own ([`CodeNames`]).
+    pub fn probe(m: &Model) -> Vars {
+        let names = m.vars.iter().enumerate().map(|(i, (n, _))| (n.clone(), format!("\u{1}{i}\u{2}"))).collect();
+        Vars { names, spell: |_| "\u{1}\u{2}".to_string() }
+    }
+
+    /// No variable of a flow: each name as `spell` writes it.
+    pub fn none(spell: fn(&str) -> String) -> Vars {
+        Vars { names: std::collections::BTreeMap::new(), spell }
+    }
+
+    /// The identifier of the variable `n`.
+    pub fn get(&self, n: &str) -> String {
+        self.names.get(n).cloned().unwrap_or_else(|| (self.spell)(n))
+    }
+}
+
+/// The words of TypeScript's types that are no names: a variable of one hides nothing.
+const TS_TYPE_WORDS: &[&str] = &["any", "as", "async", "bigint", "boolean", "from", "is", "keyof", "never", "number", "object", "of", "satisfies", "string", "symbol", "type", "unknown"];
+
+/// What the function of the code of TypeScript or of Go that holds the flow's variables keeps for
+/// itself, read from a first writing of it with each variable as a placeholder ([`Vars::probe`]):
+/// every name left in it is the code's own. A variable cannot take a name the function reads and
+/// does not bind (an import, a global, a function or a type of the package, a type of TypeScript's
+/// library), nor one the function binds in a block where it reads or writes the variable: its
+/// parameters and what its body declares, which hold for every variable, and the locals of an inner
+/// block (the `var r` of the closure that calls a child workflow in Go), which hold for the
+/// variables that block reads. The function would read the variable where it reads its own name,
+/// or declare a name twice.
+#[derive(Default)]
+pub struct CodeNames {
+    /// the names read that no block binds
+    free: std::collections::BTreeSet<String>,
+    /// for each variable, by its place in `Model::vars`: the names bound in the blocks it is in
+    near: std::collections::BTreeMap<usize, std::collections::BTreeSet<String>>,
+}
+
+/// A token of the code [`CodeNames`] reads.
+enum Token {
+    /// a name, and whether the code reads it there: not a field (after `.`), a key (before `:`, the
+    /// `? x :` of a conditional aside) or a label (after `break`, `continue` or `goto`)
+    Name(String, bool),
+    /// a variable of the flow: a placeholder of [`Vars::probe`], by its place in `Model::vars`
+    Var(usize),
+    /// `{`, `}`, `(`, `)`, `[`, `]`, `,`, `;`, `:=` or `=>`
+    Mark(&'static str),
+}
+
+/// The blocks open at a point of the code, outermost first: the names each binds, and the
+/// variables read or written in it.
+type Blocks = Vec<(std::collections::BTreeSet<String>, std::collections::BTreeSet<usize>)>;
+
+impl CodeNames {
+    /// What `code`, the function of TypeScript or of Go (`go`), keeps.
+    pub fn of(code: &str, go: bool) -> CodeNames {
+        let cs: Vec<char> = code.chars().collect();
+        let mut tokens = Vec::new();
+        code_tokens(&cs, &mut 0, go, false, &mut tokens);
+        let mut names = CodeNames::default();
+        let mut blocks: Blocks = vec![Default::default()];
+        // what is bound for the block that comes next: the parameters of a function or a `catch`,
+        // and what the head of an `if`, a `for` or a `switch` declares. A head (`in_head`) runs to
+        // its block, the first `{` outside the parentheses and brackets open in it (`depth` past
+        // `head_depth`), or to its first `;`.
+        let mut head = std::collections::BTreeSet::new();
+        let mut in_head = false;
+        let (mut depth, mut head_depth) = (0usize, 0usize);
+        let mut k = 0;
+        while k < tokens.len() {
+            match &tokens[k] {
+                Token::Var(v) => {
+                    blocks.last_mut().unwrap().1.insert(*v);
+                }
+                // the braces of a literal inside a head take nothing of it
+                Token::Mark("{") if in_head && depth > head_depth => blocks.push(Default::default()),
+                Token::Mark("{") => {
+                    blocks.push((std::mem::take(&mut head), Default::default()));
+                    in_head = false;
+                }
+                // a stray `}` (in code the reading took for a string) leaves the outermost open
+                Token::Mark("}") if blocks.len() > 1 => names.close(&mut blocks),
+                Token::Mark(";") => in_head = false,
+                Token::Mark("[") => depth += 1,
+                Token::Mark(")") | Token::Mark("]") => depth = depth.saturating_sub(1),
+                Token::Mark("(") => {
+                    let end = closing(&tokens, k);
+                    // an arrow function, `(a, b) => …`
+                    if matches!(tokens.get(end + 1), Some(Token::Mark("=>"))) {
+                        let (bound, read) = parameters(&tokens[k + 1..end], go);
+                        for n in read {
+                            names.read(&n, &blocks, &head);
+                        }
+                        k = arrow(bound, &tokens, end + 2, &mut blocks);
+                        continue;
+                    }
+                    depth += 1;
+                }
+                Token::Name(n, read) => match n.as_str() {
+                    "if" | "for" | "switch" | "select" | "while" => {
+                        in_head = true;
+                        head_depth = depth;
+                    }
+                    // a function (its name, if it has one, is no read) or a `catch`: its parameters
+                    // are its block's
+                    "func" | "function" | "catch" => {
+                        let mut j = k + 1;
+                        if n != "catch" && matches!(tokens.get(j), Some(Token::Name(..))) {
+                            j += 1;
+                        }
+                        if matches!(tokens.get(j), Some(Token::Mark("("))) {
+                            let end = closing(&tokens, j);
+                            let (bound, read) = parameters(&tokens[j + 1..end], go);
+                            for n in read {
+                                names.read(&n, &blocks, &head);
+                            }
+                            head.extend(bound);
+                            in_head = true;
+                            head_depth = depth;
+                            k = end + 1;
+                            continue;
+                        }
+                    }
+                    // a declaration: one name, or the names of a pattern (`const [a, b] = …`)
+                    "var" | "let" | "const" => {
+                        let mut j = k + 1;
+                        let mut bound = Vec::new();
+                        match tokens.get(j) {
+                            Some(Token::Name(x, _)) => {
+                                bound.push(x.clone());
+                                j += 1;
+                            }
+                            Some(Token::Mark("[")) | Some(Token::Mark("{")) => {
+                                let end = closing(&tokens, j);
+                                bound.extend(tokens[j + 1..end].iter().filter_map(|t| match t {
+                                    Token::Name(x, true) => Some(x.clone()),
+                                    _ => None,
+                                }));
+                                j = end + 1;
+                            }
+                            _ => {}
+                        }
+                        bind(bound, !in_head, &mut blocks, &mut head);
+                        k = j;
+                        continue;
+                    }
+                    _ => {
+                        // `a := …` and `a, b := …` in Go: what it declares
+                        let mut j = k;
+                        let mut list = vec![n.clone()];
+                        while let (Some(Token::Mark(",")), Some(Token::Name(x, _))) = (tokens.get(j + 1), tokens.get(j + 2)) {
+                            list.push(x.clone());
+                            j += 2;
+                        }
+                        if go && matches!(tokens.get(j + 1), Some(Token::Mark(":="))) {
+                            list.retain(|x| x != "_");
+                            bind(list, !in_head, &mut blocks, &mut head);
+                            k = j + 2;
+                            continue;
+                        }
+                        // `a => …` in TypeScript: an arrow function's parameter
+                        if !go && matches!(tokens.get(k + 1), Some(Token::Mark("=>"))) {
+                            k = arrow(vec![n.clone()], &tokens, k + 2, &mut blocks);
+                            continue;
+                        }
+                        if *read {
+                            names.read(n, &blocks, &head);
+                        }
+                    }
+                },
+                _ => {}
+            }
+            k += 1;
+        }
+        while !blocks.is_empty() {
+            names.close(&mut blocks);
+        }
+        if !go {
+            for w in TS_TYPE_WORDS {
+                names.free.remove(*w);
+            }
+        }
+        names
+    }
+
+    /// Whether the variable at `i` cannot take the name `s` there.
+    pub fn keeps(&self, i: usize, s: &str) -> bool {
+        self.free.contains(s) || self.near.get(&i).is_some_and(|n| n.contains(s))
+    }
+
+    /// `n` read where `blocks` are open: one no block binds is the code's from outside.
+    fn read(&mut self, n: &str, blocks: &Blocks, head: &std::collections::BTreeSet<String>) {
+        if !head.contains(n) && !blocks.iter().any(|(bound, _)| bound.contains(n)) {
+            self.free.insert(n.to_string());
+        }
+    }
+
+    /// The innermost block ends: the variables in it cannot take what it binds, and are in the
+    /// block around it.
+    fn close(&mut self, blocks: &mut Blocks) {
+        if let Some((bound, vars)) = blocks.pop() {
+            for v in &vars {
+                self.near.entry(*v).or_default().extend(bound.iter().cloned());
+            }
+            if let Some((_, outer)) = blocks.last_mut() {
+                outer.extend(vars);
+            }
+        }
+    }
+}
+
+/// The parameters of an arrow function whose body is at `at`: a body that is a block binds them (it
+/// opens here), and one that is no block reads them in the block it is in. Where the reading goes on.
+fn arrow(bound: Vec<String>, tokens: &[Token], at: usize, blocks: &mut Blocks) -> usize {
+    if matches!(tokens.get(at), Some(Token::Mark("{"))) {
+        blocks.push((bound.into_iter().collect(), Default::default()));
+        at + 1
+    } else {
+        blocks.last_mut().unwrap().0.extend(bound);
+        at
+    }
+}
+
+/// Names bound: in the innermost block (`here`), or for the block that comes next.
+fn bind(names: Vec<String>, here: bool, blocks: &mut Blocks, head: &mut std::collections::BTreeSet<String>) {
+    if here {
+        blocks.last_mut().unwrap().0.extend(names);
+    } else {
+        head.extend(names);
+    }
+}
+
+/// The place of the mark that closes the one at `k` (`(`, `[` or `{`), or the end.
+fn closing(tokens: &[Token], k: usize) -> usize {
+    let mut depth = 0usize;
+    for (j, t) in tokens.iter().enumerate().skip(k) {
+        match t {
+            Token::Mark("(") | Token::Mark("[") | Token::Mark("{") => depth += 1,
+            Token::Mark(")") | Token::Mark("]") | Token::Mark("}") => {
+                depth -= 1;
+                if depth == 0 {
+                    return j;
+                }
+            }
+            _ => {}
+        }
+    }
+    tokens.len()
+}
+
+/// A list of parameters: the names it binds, and the names its types read. A parameter is its
+/// first name and its type the rest (`ctx workflow.Context`, `input: T.WorkflowInput`); in Go, a
+/// list whose parameters are one name each is one of types (`func(int, string)`), unless a
+/// parameter has a type (`a, b int`).
+fn parameters(tokens: &[Token], go: bool) -> (Vec<String>, Vec<String>) {
+    let mut parts: Vec<Vec<&Token>> = vec![vec![]];
+    let mut depth = 0usize;
+    for t in tokens {
+        match t {
+            Token::Mark("(") | Token::Mark("[") | Token::Mark("{") => depth += 1,
+            Token::Mark(")") | Token::Mark("]") | Token::Mark("}") => depth = depth.saturating_sub(1),
+            Token::Mark(",") if depth == 0 => {
+                parts.push(vec![]);
+                continue;
+            }
+            _ => {}
+        }
+        parts.last_mut().unwrap().push(t);
+    }
+    let named = !go || parts.iter().any(|p| p.iter().filter(|t| matches!(t, Token::Name(..))).count() > 1);
+    let (mut bound, mut read) = (Vec::new(), Vec::new());
+    for p in &parts {
+        let mut first = named;
+        // a pattern (`{ a, b }`, `[a, b]`) binds each of its names
+        let pattern = matches!(p.first(), Some(Token::Mark("{")) | Some(Token::Mark("[")));
+        for t in p {
+            if let Token::Name(n, r) = t {
+                if pattern && *r || first {
+                    bound.push(n.clone());
+                    first = false;
+                } else if *r {
+                    read.push(n.clone());
+                }
+            }
+        }
+    }
+    (bound, read)
+}
+
+/// The tokens of the code from `i` on, into `out`: to its end, or, in a `${…}` of a template of
+/// TypeScript (`inner`), to the `}` that closes it. Strings and comments are no tokens; a `${…}` is
+/// one in parentheses.
+fn code_tokens(cs: &[char], i: &mut usize, go: bool, inner: bool, out: &mut Vec<Token>) {
+    let ident = |c: char| c.is_alphanumeric() || c == '_' || c == '$';
+    let mut depth = 0usize;
+    // the last character before the current one that is not a space, and the word that ended there
+    let mut before = ' ';
+    let mut word = String::new();
+    while *i < cs.len() {
+        let c = cs[*i];
+        if c == '/' && cs.get(*i + 1) == Some(&'/') {
+            while *i < cs.len() && cs[*i] != '\n' {
+                *i += 1;
+            }
+            continue;
+        }
+        if c == '/' && cs.get(*i + 1) == Some(&'*') {
+            *i += 2;
+            while *i < cs.len() && !(cs[*i] == '*' && cs.get(*i + 1) == Some(&'/')) {
+                *i += 1;
+            }
+            *i += 2;
+            continue;
+        }
+        if c == '"' || c == '\'' || c == '`' {
+            *i += 1;
+            while *i < cs.len() && cs[*i] != c {
+                if c == '`' && !go && cs[*i] == '$' && cs.get(*i + 1) == Some(&'{') {
+                    *i += 2;
+                    out.push(Token::Mark("("));
+                    code_tokens(cs, i, go, true, out);
+                    out.push(Token::Mark(")"));
+                    continue;
+                }
+                if cs[*i] == '\\' && !(go && c == '`') {
+                    *i += 1;
+                }
+                *i += 1;
+            }
+            *i += 1;
+            before = c;
+            word.clear();
+            continue;
+        }
+        if c == '\u{1}' {
+            let mut j = *i + 1;
+            while j < cs.len() && cs[j] != '\u{2}' {
+                j += 1;
+            }
+            if let Ok(v) = cs[*i + 1..j].iter().collect::<String>().parse() {
+                out.push(Token::Var(v));
+            }
+            *i = j + 1;
+            before = 'a';
+            word.clear();
+            continue;
+        }
+        if ident(c) && !c.is_ascii_digit() {
+            let start = *i;
+            while *i < cs.len() && ident(cs[*i]) {
+                *i += 1;
+            }
+            let w: String = cs[start..*i].iter().collect();
+            let mut j = *i;
+            while j < cs.len() && cs[j].is_whitespace() {
+                j += 1;
+            }
+            let spread = start >= 3 && cs[start - 3..start].iter().all(|x| *x == '.');
+            let field = before == '.' && !spread;
+            let key = cs.get(j) == Some(&':') && cs.get(j + 1) != Some(&'=') && before != '?';
+            let label = matches!(word.as_str(), "break" | "continue" | "goto");
+            out.push(Token::Name(w.clone(), !field && !key && !label));
+            before = 'a';
+            word = w;
+            continue;
+        }
+        if ident(c) {
+            // a number, with what follows it (`1_000`, `0x1F`, `2.5`)
+            while *i < cs.len() && (ident(cs[*i]) || cs[*i] == '.') {
+                *i += 1;
+            }
+            before = '0';
+            word.clear();
+            continue;
+        }
+        if inner && c == '{' {
+            depth += 1;
+        }
+        if inner && c == '}' {
+            if depth == 0 {
+                *i += 1;
+                return;
+            }
+            depth -= 1;
+        }
+        let two = (c, cs.get(*i + 1).copied().unwrap_or(' '));
+        let mark = match two {
+            (':', '=') => Some(":="),
+            ('=', '>') => Some("=>"),
+            _ => None,
+        };
+        if let Some(m) = mark {
+            out.push(Token::Mark(m));
+            *i += 2;
+            before = '=';
+            word.clear();
+            continue;
+        }
+        if !c.is_whitespace() {
+            let m = match c {
+                '{' => Some("{"),
+                '}' => Some("}"),
+                '(' => Some("("),
+                ')' => Some(")"),
+                '[' => Some("["),
+                ']' => Some("]"),
+                ',' => Some(","),
+                ';' => Some(";"),
+                _ => None,
+            };
+            if let Some(m) = m {
+                out.push(Token::Mark(m));
+            }
+            before = c;
+            word.clear();
+        }
+        *i += 1;
+    }
+}
+
 /// A field in a JSONata path: plain when it is a plain ASCII name, in backquotes otherwise.
 pub fn jsonata_field(name: &str) -> String {
     let plain = !name.is_empty()
@@ -973,9 +1439,9 @@ pub fn jsonata_string(s: &str) -> String {
     serde_json::to_string(s).unwrap()
 }
 
-/// `$pi.status`
-pub fn jsonata_path(var: &str, fields: &[String]) -> String {
-    let mut s = format!("${}", asl_var(var));
+/// `$pi.status`: the variable by its name in the machine (`vars`)
+pub fn jsonata_path(vars: &Vars, var: &str, fields: &[String]) -> String {
+    let mut s = format!("${}", vars.get(var));
     for f in fields {
         s.push('.');
         s.push_str(&jsonata_field(f));
@@ -985,10 +1451,10 @@ pub fn jsonata_path(var: &str, fields: &[String]) -> String {
 
 /// The value of an expression, in JSONata. A field that may be absent (a `T?`, a `json`) reads as
 /// null, so that no expression the state machine evaluates comes out undefined.
-pub fn jsonata_expr(e: &TExpr) -> String {
+pub fn jsonata_expr(vars: &Vars, e: &TExpr) -> String {
     match e {
         TExpr::Var { name, fields, ty } => {
-            let p = jsonata_path(name, fields);
+            let p = jsonata_path(vars, name, fields);
             if !fields.is_empty() && matches!(ty, Ty::Opt(_) | Ty::Json) {
                 format!("($exists({p}) ? {p} : null)")
             } else {
@@ -1003,18 +1469,18 @@ pub fn jsonata_expr(e: &TExpr) -> String {
         TExpr::Now => JSONATA_NOW.into(),
         TExpr::NowAt(site) => format!("${}", now_name(*site)),
         TExpr::Record { fields, .. } => {
-            format!("{{{}}}", fields.iter().map(|(f, x)| format!("{}: {}", jsonata_string(f), jsonata_expr(x))).collect::<Vec<_>>().join(", "))
+            format!("{{{}}}", fields.iter().map(|(f, x)| format!("{}: {}", jsonata_string(f), jsonata_expr(vars, x))).collect::<Vec<_>>().join(", "))
         }
         TExpr::List { items, .. } => {
             if items.iter().any(|x| x.ty().inner() == &Ty::Json) {
                 // a `json` value may be an array itself, which `[…]` would flatten into the list
                 let mut acc = "[]".to_string();
                 for x in items {
-                    acc = format!("$append({acc}, {})", jsonata_one(&jsonata_expr(x), &x.ty()));
+                    acc = format!("$append({acc}, {})", jsonata_one(&jsonata_expr(vars, x), &x.ty()));
                 }
                 acc
             } else {
-                format!("[{}]", items.iter().map(jsonata_expr).collect::<Vec<_>>().join(", "))
+                format!("[{}]", items.iter().map(|x| jsonata_expr(vars, x)).collect::<Vec<_>>().join(", "))
             }
         }
         TExpr::Interp(parts) => {
@@ -1023,8 +1489,8 @@ pub fn jsonata_expr(e: &TExpr) -> String {
                 match p {
                     IPart::Lit(s) => out.push(jsonata_string(s)),
                     IPart::Hole(x) => match x.ty() {
-                        Ty::Str | Ty::Timestamp | Ty::Date | Ty::Enum(_) => out.push(jsonata_expr(x)),
-                        _ => out.push(format!("$string({})", jsonata_expr(x))),
+                        Ty::Str | Ty::Timestamp | Ty::Date | Ty::Enum(_) => out.push(jsonata_expr(vars, x)),
+                        _ => out.push(format!("$string({})", jsonata_expr(vars, x))),
                     },
                 }
             }
@@ -1076,14 +1542,52 @@ pub fn now_name(site: usize) -> String {
 pub const JSONATA_NOW: &str = "($substring($states.context.State.EnteredTime, 0, 19) & \"Z\")";
 
 /// A JSONata expression for `x` with the zero values filled in that protobuf's JSON leaves out
-/// (`apis::fill`): what a `connect` task's answer reads as.
+/// (`apis::fill`): what a `connect` task's answer reads as. Where `zeros` names a
+/// `google.type.Date`, it is read as a date as `apis::day_read` reads it (DESIGN 44).
 pub fn jsonata_fill(x: &str, zeros: &Value) -> String {
+    if crate::apis::has_days(zeros) {
+        return format!(
+            "({JSONATA_DAY_READ}; $dd_fill := function($v, $z) {{ $type($v) = \"object\" ? ($d := $z.f ? $sift($z.f, function($x, $k) {{ $not($exists($lookup($v, $k))) or $lookup($v, $k) = null }}) : {{}}; $o := $merge([$v, $d ? $d : {{}}]); \
+$t := $z.d ? $merge($map($z.d, function($k) {{ $exists($lookup($o, $k)) ? {{ $k: $type($lookup($o, $k)) = \"array\" ? [$map($lookup($o, $k), $dd_day)] : $dd_day($lookup($o, $k)) }} : {{}} }})) : {{}}; \
+$m := $z.m ? $merge($each($z.m, function($d, $k) {{ $type($lookup($o, $k)) = \"object\" ? {{ $k: $dd_fill($lookup($o, $k), $d) }} : {{}} }})) : {{}}; \
+$l := $z.l ? $merge($each($z.l, function($d, $k) {{ $type($lookup($o, $k)) = \"array\" ? {{ $k: [$map($lookup($o, $k), function($i) {{ $dd_fill($i, $d) }})] }} : {{}} }})) : {{}}; \
+$merge([$o, $t, $m, $l])) : $v }}; $dd_fill({x}, {}))",
+            zeros
+        );
+    }
     format!(
         "($dd_fill := function($v, $z) {{ $type($v) = \"object\" ? ($d := $z.f ? $sift($z.f, function($x, $k) {{ $not($exists($lookup($v, $k))) or $lookup($v, $k) = null }}) : {{}}; $o := $merge([$v, $d ? $d : {{}}]); \
 $m := $z.m ? $merge($each($z.m, function($d, $k) {{ $type($lookup($o, $k)) = \"object\" ? {{ $k: $dd_fill($lookup($o, $k), $d) }} : {{}} }})) : {{}}; \
 $l := $z.l ? $merge($each($z.l, function($d, $k) {{ $type($lookup($o, $k)) = \"array\" ? {{ $k: [$map($lookup($o, $k), function($i) {{ $dd_fill($i, $d) }})] }} : {{}} }})) : {{}}; \
 $merge([$o, $m, $l])) : $v }}; $dd_fill({x}, {}))",
         zeros
+    )
+}
+
+/// `$dd_day`: a `google.type.Date` as protobuf's JSON writes it, read as a date, as
+/// `apis::day_read` reads it: what is not a whole date (a 0 left out, another field, a number not
+/// whole or out of its range) is left as it is. Each test is one that cannot fail on its values,
+/// ahead of the next, since JSONata need not stop at a false `and`.
+pub const JSONATA_DAY_READ: &str = "$dd_day := function($x) { $type($x) = \"object\" ? ($y := $lookup($x, \"year\"); $mo := $lookup($x, \"month\"); $da := $lookup($x, \"day\"); \
+($type($y) = \"number\" and $type($mo) = \"number\" and $type($da) = \"number\" and $count($keys($x)[$not($ in [\"year\", \"month\", \"day\"])]) = 0) \
+? (($y = $floor($y) and $mo = $floor($mo) and $da = $floor($da) and $y >= 1 and $y <= 9999 and $mo >= 1 and $mo <= 12 and $da >= 1 and $da <= 31) \
+? $substring($string(10000 + $y), 1) & \"-\" & $substring($string(100 + $mo), 1) & \"-\" & $substring($string(100 + $da), 1) : $x) : $x) : $x }";
+
+/// `$dd_wday`: a date (`2026-11-16`) as protobuf's JSON writes a `google.type.Date`, as
+/// `apis::day_wire` writes it; what is not four, two and two digits between hyphens is left as it is.
+/// The digits are read behind a 1, so that `08` is read as a number JSONata takes.
+pub const JSONATA_DAY_WIRE: &str = "$dd_wday := function($s) { $type($s) = \"string\" ? ($contains($s, /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) \
+? { \"year\": $number(\"1\" & $substring($s, 0, 4)) - 10000, \"month\": $number(\"1\" & $substring($s, 5, 2)) - 100, \"day\": $number(\"1\" & $substring($s, 8, 2)) - 100 } : $s) : $s }";
+
+/// A JSONata expression for `x` with the dates where `t` says (`apis::days_of`) written as protobuf's
+/// JSON writes a `google.type.Date` (`apis::wire_days`): what a `connect` task sends (DESIGN 44).
+pub fn jsonata_wire(x: &str, t: &Value) -> String {
+    format!(
+        "({JSONATA_DAY_WIRE}; $dd_wire := function($v, $t) {{ $type($v) = \"object\" ? (\
+$d := $t.d ? $merge($map($t.d, function($k) {{ $exists($lookup($v, $k)) ? {{ $k: $type($lookup($v, $k)) = \"array\" ? [$map($lookup($v, $k), $dd_wday)] : $dd_wday($lookup($v, $k)) }} : {{}} }})) : {{}}; \
+$m := $t.m ? $merge($each($t.m, function($s, $k) {{ $type($lookup($v, $k)) = \"object\" ? {{ $k: $dd_wire($lookup($v, $k), $s) }} : {{}} }})) : {{}}; \
+$l := $t.l ? $merge($each($t.l, function($s, $k) {{ $type($lookup($v, $k)) = \"array\" ? {{ $k: [$map($lookup($v, $k), function($i) {{ $dd_wire($i, $s) }})] }} : {{}} }})) : {{}}; \
+$merge([$v, $d, $m, $l])) : $v }}; $dd_wire({x}, {t}))"
     )
 }
 
@@ -1226,7 +1730,7 @@ fn jsonata_enum_by_table(x: &str, table: &Value) -> String {
 /// The body of a rule's request as Step Functions' HTTP Task sends it: the fields by their JSON
 /// keys, each a value known now or a `{% … %}` JSONata expression that writes it as `rule_request`
 /// does (a number through `$string`, an enum's value through the table).
-pub fn jsonata_rule_request(c: &RuleConnect, args: &[(String, TExpr)]) -> Value {
+pub fn jsonata_rule_request(vars: &Vars, c: &RuleConnect, args: &[(String, TExpr)]) -> Value {
     use crate::rulec::WireKind;
     let mut body = Map::new();
     for f in &c.request {
@@ -1235,7 +1739,7 @@ pub fn jsonata_rule_request(c: &RuleConnect, args: &[(String, TExpr)]) -> Value 
             Some(Value::Null) => continue,
             Some(v) => wire_arg(f, &v),
             None => {
-                let x = jsonata_expr(e);
+                let x = jsonata_expr(vars, e);
                 match &f.kind {
                     WireKind::Int => json!(format!("{{% $string({x}) %}}")),
                     WireKind::Enum { values, .. } => json!(format!("{{% {} %}}", jsonata_enum_by_table(&x, &enum_table(values, false)))),
@@ -1579,10 +2083,10 @@ mod tests {
     fn jsonata_writes_what_the_functions_do() {
         let c = urgency();
         // a value known now is written out as the request writes it; the rest are expressions
-        let body = jsonata_rule_request(&c, &[("会員".into(), TExpr::Bool(true)), ("金額".into(), TExpr::Int(5000))]);
+        let body = jsonata_rule_request(&Vars::none(asl_spell), &c, &[("会員".into(), TExpr::Bool(true)), ("金額".into(), TExpr::Int(5000))]);
         assert_eq!(body, json!({ "member": true, "amount": "5000" }));
         let var = |n: &str, ty: Ty| TExpr::Var { name: "受注".into(), fields: vec![n.into()], ty };
-        let body = jsonata_rule_request(&c, &[("会員".into(), var("会員", Ty::Bool)), ("金額".into(), var("金額", Ty::Num(ritsu_units::Unit::parse("money[円]").unwrap())))]);
+        let body = jsonata_rule_request(&Vars::none(asl_spell), &c, &[("会員".into(), var("会員", Ty::Bool)), ("金額".into(), var("金額", Ty::Num(ritsu_units::Unit::parse("money[円]").unwrap())))]);
         assert_eq!(body["member"], json!("{% $受注.`会員` %}"));
         assert_eq!(body["amount"], json!("{% $string($受注.`金額`) %}"));
         let read = jsonata_rule_read(&c, "$states.result.ResponseBody");
@@ -1593,10 +2097,10 @@ mod tests {
 
     #[test]
     fn an_argument_stays_inside_its_part_of_the_url() {
-        let (url, rest) = fill_url("https://items.example.com/v1/items/{item}/tags/{tag}", &args(json!({ "item": "a/b c?d#e%f&g=h+i'(j)*!~é品", "tag": null, "n": 7 })));
-        assert_eq!(url, "https://items.example.com/v1/items/a%2Fb%20c%3Fd%23e%25f%26g%3Dh%2Bi'(j)*!~%C3%A9%E5%93%81/tags/");
-        assert_eq!(Value::Object(rest), json!({ "n": 7 }));
-        let (url, _) = fill_url("https://items.example.com/v1/counts/{n}", &args(json!({ "n": 7 })));
-        assert_eq!(url, "https://items.example.com/v1/counts/7");
+        // the marks of a URL in an argument are escaped, so that it stays one part (DESIGN 43 writes
+        // the parts with this, and with what the styles put between the items)
+        assert_eq!(url_segment(&value_text(&json!("a/b c?d#e%f&g=h+i'(j)*!~é品"))), "a%2Fb%20c%3Fd%23e%25f%26g%3Dh%2Bi'(j)*!~%C3%A9%E5%93%81");
+        assert_eq!(url_segment(&value_text(&json!(7))), "7");
+        assert_eq!(url_segment(&value_text(&Value::Null)), "");
     }
 }

@@ -1,7 +1,7 @@
 //! `doc` draws what the checker knows. Its Markdown for the examples, the flows of tests/flows and a
 //! first draft with errors is word for word the golden files in tests/doc, and the site's pages of
 //! the examples (website/dandori/docs/doc and docs-ja/doc, at the root of ritsu's workspace) are what
-//! it writes now. On every scenario, a
+//! it writes now. On every scenario the page draws, those `dandori scenarios` writes, a
 //! run lights up a way that holds together: every statement it passed is on the picture, and every
 //! step it lit but the first is reached by an edge it lit. Every Mermaid chart draws, in Mermaid 11
 //! and 12 in headless Chrome; and in Chrome, a page lights up what its data says.
@@ -64,7 +64,7 @@ struct EveryUndecided(std::rc::Rc<dyn ritsu_ports::Rules>);
 impl ritsu_ports::Undecided for EveryUndecided {
     fn preconditions(&self, file: &Path) -> Vec<ritsu_ports::UndecidedPrecondition> {
         use ritsu_ports::Flows;
-        let Ok(calls) = dandori::ports::Engine.rule_calls(file, self.0.clone()) else { return vec![] };
+        let Ok(calls) = dandori::ports::Engine::default().rule_calls(file, self.0.clone()) else { return vec![] };
         let mut out = Vec::new();
         for c in calls {
             for p in self.0.facts(&c.rule).map(|f| f.preconditions).unwrap_or_default() {
@@ -76,7 +76,7 @@ impl ritsu_ports::Undecided for EveryUndecided {
 }
 
 /// `dandori::check::drawable`, with the rules read through rulec.
-fn drawable(f: &Path) -> Result<(String, dandori::check::Drawable), String> {
+fn drawable(f: &Path) -> Result<(String, dandori::check::Drawable), dandori::diag::Text> {
     with_rules(|| dandori::check::drawable(f))
 }
 
@@ -220,8 +220,17 @@ fn every_run_lights_up_a_way_that_holds_together() {
             }
             continue;
         }
-        for sc in dandori::scenarios::generate(m) {
-            let (_, visits) = dandori::interp::run_visits(m, &sc, dandori::render::View::Temporal).unwrap();
+        // the runs the page draws: those `dandori scenarios` writes, each as the run makes it
+        let drawn: Vec<(Value, Vec<Visit>)> = with_rules(|| {
+            dandori::scenarios::generate_computed(m)
+                .into_iter()
+                .map(|sc| {
+                    let (_, visits, _) = dandori::scenarios::run_written(m, &sc, dandori::render::View::Temporal).unwrap_or_else(|| panic!("{file}: {sc} does not run"));
+                    (sc, visits)
+                })
+                .collect()
+        });
+        for (sc, visits) in drawn {
             runs += 1;
             let lit = doc::lit_by_visits(&g, &edges, &visits);
             let name = format!("{file} {}", sc["name"].as_str().unwrap_or(""));

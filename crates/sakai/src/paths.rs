@@ -11,7 +11,7 @@
 
 use ritsu_base::text::Text;
 
-pub use ritsu_base::paths::{PathError, Shown, SKIPPED, absolute, between, contains, depth, find_root, from_root, has_skipped_part, is_absolute, join, on_disk, parent, relative, skipped_name, walk};
+pub use ritsu_base::paths::{PathError, Shown, SKIPPED, absolute, between, contains, depth, find_root, from_root, has_skipped_part, is_absolute, join, on_disk, opened, parent, relative, skipped_name, walk};
 
 /// Why a written path cannot be a path from the root (E012), in sakai's words.
 pub fn error_text(e: PathError, written: &str) -> Text {

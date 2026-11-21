@@ -1,0 +1,12 @@
+error[E102]: Unreachable row: row 5 never matches
+  --> tests/computed/shapes/E102_a_first_tier_at_a_net_of_minus_one.rule:28 table pick
+   |
+28 | | >19JPY          | -1JPY            | t1   | two  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 5: no input reaches here
+10 | define net : money[JPY] = down(amount * 7%, 1JPY) - up(amount * 5%, 1JPY)
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the reachable interval is >=-6JPY <=8JPY
+   |
+ `net` is computed from `amount`. At some of the values of `amount` this row takes, `net` does not come to some of what this row asks for.
+ `tier` is t1 only where row 2 or row 4 of table tier_of fires, and where either does, no combination of values meets all of this row's conditions.
+ hint: rewrite the condition within the values `net` can come to, or delete this row.
+

@@ -1,0 +1,9 @@
+masters company_masters v1
+description "The account codes a request chooses from (fictional): no row is in effect in July 2026"
+
+master accounts "Account codes"
+  key code
+  fields
+    code  : text "Code"  count <=10
+    label : text "Name"  count <=60
+  data "accounts_with_a_hole.csv"

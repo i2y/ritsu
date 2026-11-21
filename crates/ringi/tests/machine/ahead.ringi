@@ -1,0 +1,142 @@
+request ahead v1 "Parts request"
+description "A stage due by a plant's days, five hours behind UTC, and reminded by the head office's days in Tokyo's time (fictional rules): the request reads its days in the plant's offset, and the head office counts from its own day of an event, which from 19:00 at the plant is the next. The end of a pause and of the requester's turn are counted in the head office's days"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar west from "west.cal"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  decide  manager
+
+who
+  manager = manager of requester
+
+every stage
+  due in 3 business days in west at 12:00
+  remind after 1 business day in office at 09:00
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+  send back      to the requester, at most 2 times
+  resubmit       within 2 business days in office
+  pause          at most 2 business days in office
+
+# submitted at 20:00 on Monday at the plant, 10:00 on Tuesday in Tokyo. The reminder is counted from
+# the head office's Tuesday, one business day to Wednesday, and rings at 09:00 there: 19:00 on
+# Tuesday at the plant. Sent back at 20:00 on Tuesday, Wednesday in Tokyo, the request is made again
+# within two of the head office's business days from that Wednesday, by the end of Friday there:
+# 10:00 on Friday at the plant
+scenario ahead_of_the_request
+  requester e1201
+  form what = "A bearing"
+| at               | event     | by    | -> stage | status         |
+| 2026-11-16 20:00 | submit    | e1201 | decide   | in progress    |
+| 2026-11-17 19:00 | remind    |       | decide   | in progress    |
+| 2026-11-17 20:00 | send back | e1101 |          | with requester |
+| 2026-11-20 09:00 | resubmit  | e1201 | decide   | in progress    |
+| 2026-11-22 19:00 | remind    |       | decide   | in progress    |
+| 2026-11-23 09:00 | approve   | e1101 |          | approved       |
+
+# late at 12:00 on Thursday at the plant, 02:00 on Friday in Tokyo, the stage goes up; the reminder
+# of the one it goes up to is counted from the head office's Friday, to Monday at 09:00 there: 19:00
+# on Sunday at the plant
+scenario late_and_up
+  requester e1201
+  form what = "A gear"
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 20:00 | submit | e1201 | decide   | in progress |
+| 2026-11-17 19:00 | remind |       | decide   | in progress |
+| 2026-11-19 12:00 | late   |       | decide   | in progress |
+| 2026-11-22 19:00 | remind |       | decide   | in progress |
+| 2026-11-24 12:00 | late   |       |          | expired     |
+
+# paused at 21:00 on Monday at the plant, Tuesday in Tokyo, for the two business days the head office
+# allows, counted from that Tuesday: to the end of Thursday there, 10:00 on Thursday at the plant.
+# Resumed an hour before, the two days are used, and the clocks count from two days after the stage
+# started: the reminder from the head office's Thursday, at 09:00 on Friday there, 19:00 on Thursday
+# at the plant
+scenario paused_in_the_offices_days
+  requester e1201
+  form what = "A shaft"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 20:00 | submit  | e1201 | decide   | in progress |
+| 2026-11-16 21:00 | pause   | e1101 | decide   | paused      |
+| 2026-11-19 09:00 | resume  | e1101 | decide   | in progress |
+| 2026-11-19 19:00 | remind  |       | decide   | in progress |
+| 2026-11-20 09:00 | approve | e1101 |          | approved    |
+
+# submitted at 08:00 on Monday 28 December at the plant, 22:00 in Tokyo. The reminder, counted from
+# the head office's Monday, comes after its New Year break, at 09:00 on 4 January in Tokyo, 19:00 on
+# the 3rd at the plant: after the deadline counted in the plant's days, noon on Thursday 31 December,
+# and it is not set. Paused an hour later and resumed at 20:00 on 4 January at the plant, the 5th in
+# Tokyo, the stage has used two of the head office's business days, the 4th and the 5th, and its
+# clocks count from eight days after it started. The reminder has not rung, and now comes before the
+# deadline: it is set, at 09:00 on 6 January in Tokyo, 19:00 on the 5th at the plant, before the
+# deadline at noon on Friday 8 January
+scenario set_after_the_new_year
+  requester e1201
+  form what = "A spring"
+| at               | event   | by    | -> stage | status      |
+| 2026-12-28 08:00 | submit  | e1201 | decide   | in progress |
+| 2026-12-28 09:00 | pause   | e1101 | decide   | paused      |
+| 2027-01-04 20:00 | resume  | e1101 | decide   | in progress |
+| 2027-01-05 19:00 | remind  |       | decide   | in progress |
+| 2027-01-06 09:00 | approve | e1101 |          | approved    |
+
+# the same, paused twice. The first pause, from 09:00 on 28 December at the plant to 20:00 on the
+# 29th, the 30th in Tokyo, falls in the head office's New Year break and uses none of its business
+# days: the clocks do not move, and the reminder still comes after the deadline and is not set. The
+# second, from an hour later to 20:00 on 4 January at the plant, uses two, and the clocks count from
+# eight days after the stage started: the reminder, which has not rung, now comes before the deadline
+# and is set, at 19:00 on 5 January at the plant
+scenario set_at_the_second_resume
+  requester e1201
+  form what = "A valve"
+| at               | event   | by    | -> stage | status      |
+| 2026-12-28 08:00 | submit  | e1201 | decide   | in progress |
+| 2026-12-28 09:00 | pause   | e1101 | decide   | paused      |
+| 2026-12-29 20:00 | resume  | e1101 | decide   | in progress |
+| 2026-12-29 21:00 | pause   | e1101 | decide   | paused      |
+| 2027-01-04 20:00 | resume  | e1101 | decide   | in progress |
+| 2027-01-05 19:00 | remind  |       | decide   | in progress |
+| 2027-01-06 09:00 | approve | e1101 |          | approved    |
+
+# paused twice, the reminder ringing in between. Paused at 21:00 on Monday at the plant and resumed
+# at 20:00 on Tuesday, the stage has used one of the head office's business days (its Wednesday),
+# and the reminder rings at 19:00 on Wednesday at the plant. Paused again and resumed at 18:00 on
+# Thursday at the plant, Friday in Tokyo, it has used the second, and its clocks count from two days
+# after it started: the reminder would come at 19:00 that Thursday at the plant, before the deadline
+# at noon on Monday 23 November, but it has rung, and it is not set again
+scenario rung_between_two_pauses
+  requester e1201
+  form what = "A belt"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 20:00 | submit  | e1201 | decide   | in progress |
+| 2026-11-16 21:00 | pause   | e1101 | decide   | paused      |
+| 2026-11-17 20:00 | resume  | e1101 | decide   | in progress |
+| 2026-11-18 19:00 | remind  |       | decide   | in progress |
+| 2026-11-18 20:00 | pause   | e1101 | decide   | paused      |
+| 2026-11-19 18:00 | resume  | e1101 | decide   | in progress |
+| 2026-11-20 09:00 | approve | e1101 |          | approved    |
+
+# paused at 09:00 on 28 December at the plant, an hour after it was submitted, and resumed at 10:00
+# on 1 January, still the head office's New Year break: none of its business days is used, the
+# clocks do not move, and the deadline, noon on 31 December at the plant, has passed. It is set at
+# the time of the resume and rings at once, and the reminder, which would come after it, is not set.
+# The stage goes up, with a deadline and a reminder of its own: the reminder at 09:00 on 4 January in
+# Tokyo, 19:00 on the 3rd at the plant, and the deadline at noon on 5 January at the plant
+scenario late_when_resumed
+  requester e1201
+  form what = "A pump"
+| at               | event  | by    | -> stage | status      |
+| 2026-12-28 08:00 | submit | e1201 | decide   | in progress |
+| 2026-12-28 09:00 | pause  | e1101 | decide   | paused      |
+| 2027-01-01 10:00 | resume | e1101 | decide   | in progress |
+| 2027-01-01 10:00 | late   |       | decide   | in progress |
+| 2027-01-03 19:00 | remind |       | decide   | in progress |
+| 2027-01-05 12:00 | late   |       |          | expired     |

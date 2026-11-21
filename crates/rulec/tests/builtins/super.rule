@@ -1,0 +1,14 @@
+rule super v1
+description "A fee by the quantity, of a rule named like the builtin the classes of its errors call (fictional)"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | 1USD   |
+| >5  | 2USD   |

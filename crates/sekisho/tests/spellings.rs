@@ -1,5 +1,5 @@
-//! The names of a gate that the code of a target writes as one identifier (W402 when the file is
-//! checked, E401 when `gen` writes the target; DESIGN 24).
+//! The names of a gate that the code of a target writes as one identifier, or as a reserved word
+//! (W402 when the file is checked, E401 when `gen` writes the target; DESIGN 24, 32).
 //!
 //! Every gate of tests/spellings gives W402 once, naming the targets [`FORMS`] gives it, and what
 //! `check` prints of it, in English and in Japanese, is the golden file beside it
@@ -11,7 +11,13 @@
 //!
 //! With each language's own tools, the code a target would write of each gate breaks for the
 //! targets W402 names and for no other, and the code of every renamed gate passes them all: tsc,
-//! `mypy --strict`, and `go vet`.
+//! `mypy --strict`, and `go vet`. The module is put in a package as `ritsu gen` lays one out, with
+//! the index that names it by the file's alias (`export * as <alias> from …`, `from . import <alias>
+//! as <alias>`), and Go's package is named by it.
+//!
+//! The gates of tests/spellings/words give every kind of name a reserved word of TypeScript, Python
+//! or Go where no code of theirs writes the name as it is: they give nothing, every target is
+//! written, and the tools pass their code.
 
 mod common;
 
@@ -55,7 +61,31 @@ const FORMS: &[(&str, &[&str])] = &[
     // an attribute that is the field of the roles of Go's
     ("go_roles", &["go"]),
     ("Goの役割", &["go"]),
+    // a type named as the Go package's entry by the action's name
+    ("go_authorize", &["go"]),
+    ("GoのAuthorize", &["go"]),
+    // a type named as the Go package's list of the roles (DESIGN 33)
+    ("go_roles_list", &["go"]),
+    ("GoのRoles", &["go"]),
+    // an attribute Python writes as a field of its record, a keyword of Python's (DESIGN 32)
+    ("python_field", &["python"]),
+    ("Pythonのフィールド", &["python"]),
+    // a type Python reads with a method of `Store`, a keyword of Python's in snake case
+    ("python_store", &["python"]),
+    ("PythonのStore", &["python"]),
+    // a file named as a reserved word of TypeScript's strict mode, as an index exports its module
+    ("ts_module", &["typescript"]),
+    ("TypeScriptのモジュール", &["typescript"]),
+    // a file named as a keyword of Python's, the name of its module
+    ("python_module", &["python"]),
+    ("Pythonのモジュール", &["python"]),
+    // a file named as a keyword of Go's, the name of its package
+    ("go_package", &["go"]),
+    ("Goのパッケージ", &["go"]),
 ];
+
+/// The gates whose names are reserved words where no code writes them as they are (DESIGN 32).
+const WORDS: &[&str] = &["tests/spellings/words/target_words.gate", "tests/spellings/words/生成先の予約語.gate"];
 
 fn every(dir: &str) -> Vec<(String, &'static [&'static str])> {
     FORMS.iter().map(|(stem, named)| (format!("{dir}{stem}.gate"), *named)).collect()
@@ -85,6 +115,43 @@ fn every_gate_gives_w402_once_for_the_targets_it_names_and_says_what_its_golden_
         }
         for (lang, ext) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
             golden(&Path::new(&path).with_extension(format!("{ext}.txt")), &sekisho::check::render(&o, lang));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The Go package's own names hold `RolesOf` too (DESIGN 33), so a type of that name is W402 for Go
+/// alone. TypeScript's `rolesOf` and Python's `roles_of` start with a lower-case letter, as no name
+/// a gate gives their top level does.
+#[test]
+fn a_type_named_as_the_go_list_of_the_roles_of_a_type_is_w402_for_go_alone() {
+    let src = "gate t v1\nnamespace Shop\n\nrole clerk\n  can reply\n\nprincipal Clerk\n  roles clerk\n\nresource RolesOf\n  attributes\n    open : bool\n\naction reply\n  principal Clerk\n  resource RolesOf\n\npermit clerks_reply\n  principal in clerk\n  action reply\n  when resource.open\n";
+    let o = sekisho::check::check_text("tests/spellings/t.gate", src, &common::joined(), &sekisho::check::Options::default());
+    let codes: Vec<&str> = o.diags.iter().map(|d| d.code).collect();
+    assert_eq!(codes, ["W402"], "{}", sekisho::check::render(&o, Lang::En));
+    let checked = o.walked.as_ref().unwrap();
+    let found = sekisho::spellings::find(&checked.gate, &sekisho::cedar::shape(&checked.gate, o.scope.as_ref().unwrap(), checked));
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].targets(), ["go"]);
+}
+
+/// A reserved word of TypeScript, Python or Go as every kind of name the code writes with more
+/// around it, as a property, a method or a string, or with a capital: nothing is said, and every
+/// target is written.
+#[test]
+fn reserved_words_no_code_writes_as_they_are_give_nothing_and_every_target_is_written() {
+    let t = TempDir::new("spellings-words");
+    let mut failures = Vec::new();
+    for (k, path) in WORDS.iter().enumerate() {
+        let o = check(path);
+        if !o.diags.is_empty() {
+            failures.push(format!("{path} gives {:?}", o.diags.iter().map(|d| d.code).collect::<Vec<_>>()));
+        }
+        for (i, target) in ["cedar", "typescript", "python", "go"].into_iter().enumerate() {
+            let (ok, said) = sekisho_gen(path, target, &t.path().join(format!("{k}-{i}")));
+            if !ok {
+                failures.push(format!("{path} {target}:\n{said}"));
+            }
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
@@ -174,6 +241,9 @@ fn gates() -> Vec<(String, bool, &'static str)> {
             out.extend(EVERY.iter().map(|l| (path.clone(), named && langs.contains(l), *l)));
         }
     }
+    for path in WORDS {
+        out.extend(EVERY.iter().map(|l| (path.to_string(), false, *l)));
+    }
     out
 }
 
@@ -214,13 +284,18 @@ fn typescript_breaks_where_w402_says() {
     )
     .unwrap();
     let list: Vec<(String, bool, &str)> = gates().into_iter().filter(|(_, _, l)| *l == "typescript").collect();
+    let mut modules = Vec::new();
     for (k, (path, _, _)) in list.iter().enumerate() {
         let o = check(path);
         let suite = common::joined();
         let text = typescript::module(o.scope.as_ref().unwrap(), o.walked.as_ref().unwrap(), &suite, &ritsu_emit::header::file_name(path), Lang::En, Authorizer::Cedar, &ritsu_emit::package::Place::here()).unwrap();
-        let p = root.join(dir_of(k)).join("m.ts");
+        // the module by the file's alias, and the index of a package of `ritsu gen`'s that exports it
+        let alias = o.walked.as_ref().unwrap().gate.named.alias.clone();
+        let p = root.join(dir_of(k)).join("authz").join(format!("{alias}.ts"));
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-        std::fs::write(p, text).unwrap();
+        std::fs::write(&p, text).unwrap();
+        std::fs::write(root.join(dir_of(k)).join("authz/index.ts"), format!("export * as {alias} from \"./{alias}.js\";\n")).unwrap();
+        modules.push(p);
     }
     let r = ritsu_testkit::run(Command::new(&tsc).args(["-p", ".", "--pretty", "false"]).current_dir(root), std::time::Duration::from_secs(300));
     let said = r.both();
@@ -231,7 +306,7 @@ fn typescript_breaks_where_w402_says() {
             let key = format!("{}/", dir_of(k));
             let mut errors: Vec<String> = said.lines().filter(|l| l.starts_with(&key)).map(String::from).collect();
             // two interfaces of one name are one to tsc, which asks of a caller what both ask
-            let text = std::fs::read_to_string(root.join(dir_of(k)).join("m.ts")).unwrap();
+            let text = std::fs::read_to_string(&modules[k]).unwrap();
             let heads: Vec<&str> = text.lines().filter(|l| l.starts_with("export interface ")).collect();
             errors.extend(heads.iter().enumerate().filter(|(i, h)| heads[..*i].contains(h)).map(|(_, h)| format!("two of `{h}`")));
             Broken { path: path.clone(), named: *named, why: (!errors.is_empty()).then(|| errors.join("\n")) }
@@ -259,12 +334,15 @@ fn python_breaks_where_w402_says() {
     let mut seen = Vec::new();
     for (k, (path, named, _)) in list.iter().enumerate() {
         let dir = t.path().join(dir_of(k));
+        let mut stem = String::new();
         for (rel, text) in code_of(path, "python", "") {
             let p = dir.join(rel.strip_prefix("python/").unwrap_or(&rel));
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            stem = p.file_stem().unwrap().to_string_lossy().to_string();
             std::fs::write(p, text).unwrap();
         }
-        std::fs::write(dir.join("authz/__init__.py"), "").unwrap();
+        // the index of a package of `ritsu gen`'s, which imports the module by the file's alias
+        std::fs::write(dir.join("authz/__init__.py"), format!("from . import {stem} as {stem}\n")).unwrap();
         let out = Command::new(&py).args(["-m", "mypy", "--strict", "--no-incremental", "--cache-dir", "/dev/null", "--no-color-output", "--no-error-summary", "."]).current_dir(&dir).output().unwrap();
         let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
         seen.push(Broken { path: path.clone(), named: *named, why: (!out.status.success()).then_some(said) });
@@ -296,16 +374,19 @@ fn go_breaks_where_w402_says() {
             std::fs::write(p, text).unwrap();
         }
     }
-    let out = Command::new("go").args(["vet", "./..."]).current_dir(module).env("GOWORK", "off").env("GOFLAGS", "-trimpath").env("GOPROXY", "off").env("GOTOOLCHAIN", "local").output().unwrap();
-    let said = String::from_utf8_lossy(&out.stderr).to_string();
-    let seen = list
-        .iter()
-        .enumerate()
-        .map(|(k, (path, named, _))| {
-            let key = format!("{}/", dir_of(k));
-            let errors: Vec<&str> = said.lines().filter(|l| l.contains(&key)).collect();
-            Broken { path: path.clone(), named: *named, why: (!errors.is_empty()).then(|| errors.join("\n")) }
-        })
-        .collect();
+    // each gate's packages vetted alone: a package that does not parse (a file named as a keyword)
+    // stops `go vet ./...` before it vets the others
+    let vet = |k: usize| {
+        let out = Command::new("go").args(["vet", &format!("./{}/...", dir_of(k))]).current_dir(module).env("GOWORK", "off").env("GOFLAGS", "-trimpath").env("GOPROXY", "off").env("GOTOOLCHAIN", "local").output().unwrap();
+        (!out.status.success()).then(|| String::from_utf8_lossy(&out.stderr).to_string())
+    };
+    let (n, vet) = (list.len(), &vet);
+    let whys: Vec<Option<String>> = std::thread::scope(|s| {
+        let handles: Vec<_> = (0..4).map(|w| s.spawn(move || (w..n).step_by(4).map(|k| (k, vet(k))).collect::<Vec<_>>())).collect();
+        let mut all: Vec<(usize, Option<String>)> = handles.into_iter().flat_map(|h| h.join().unwrap()).collect();
+        all.sort_by_key(|(k, _)| *k);
+        all.into_iter().map(|(_, why)| why).collect()
+    });
+    let seen = list.iter().zip(whys).map(|((path, named, _), why)| Broken { path: path.clone(), named: *named, why }).collect();
     hold("go vet", seen);
 }

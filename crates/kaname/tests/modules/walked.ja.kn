@@ -1,0 +1,30 @@
+module 規則の要素(walked_ja) v1
+description "規則が歩くリストの要素を、ホストから受ける：規則が 0g より重く 30001g より軽いとする小包、そのリスト、2026 年か 2027 年が期日の作業、日と取り置く日と価格と率を持つかごの明細（規則に渡す）。入口は、レコードと同じに、要素のフィールドを規則の列で確かめ、規則は呼ばれたところでもう一度確かめる。walked.kn の日本語の版"
+
+use rule 出荷 from "../rulec/tests/corpus/小包のまとめ出荷.rule"
+use rule 期日 from "../rulec/tests/corpus/最も早い期日.rule"
+use rule かご from "tests/rules/basket.rule"
+
+# 小包の重さ
+fn 重さ(weight_of)(小包(p): 出荷.小包) -> mass[g]
+  小包.重さ
+
+# 割れ物の小包の数
+fn 割れ物の数(fragile)(小包の並び(ps): list[出荷.小包] count <=3) -> number
+  count(小包の並び, x => x.割れ物)
+
+# 作業の期日
+fn 期日を読む(due_of)(作業(t): 期日.作業) -> date
+  作業.期日
+
+# かごの明細を文にする：日、10% より多く引くか、価格、取り置くときはその日
+fn 明細の文(line_of)(明細(l): かご.lines) -> string
+  let 引き方 = if 明細.off > 10% then "大きく引く" else "少し引く"
+  let 頭 = concat(text(明細.on), " ", 引き方, " ", text(明細.price))
+  match 明細.held_to
+    none => 頭
+    some d => concat(頭, "、", text(d), " まで取り置く")
+
+# 明細のいちばん早い日。規則が求める
+fn 最初の日(first_of)(明細の並び(ls): list[かご.lines] count <=3) -> date
+  かご(lines: 明細の並び).first

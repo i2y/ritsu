@@ -11,9 +11,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 fn refuse(err: &mut dyn Write, msg: Text, lang: Lang) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    let _ = writeln!(err, "{head}: {}", msg.get(lang));
-    2
+    // in the words of every command of ritsu (ritsu's DESIGN 6.2, item 10)
+    ritsu_base::cli::refuse(err, &msg, lang)
 }
 
 /// `--lang ja`, `--lang=ja`, anywhere on the line: decided before anything is printed.
@@ -33,6 +32,12 @@ fn lang_flag(args: &[String]) -> Option<String> {
 /// the binary of sakai's own crate, every one for `ritsu sakai`), and where to print. The exit
 /// code.
 pub fn run(args: &[String], suite: Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    // a line that asks for JSON is answered in JSON when the command stops before its work too: the
+    // last value on standard output is `{"error": …}` (ritsu's DESIGN 6.2, item 10)
+    ritsu_base::cli::answering(args, out, |out| command(args, suite, out, err))
+}
+
+fn command(args: &[String], suite: Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     crate::suite::COMMAND.with(|c| *c.borrow_mut() = Some(args.to_vec()));
     let code = run_command(args, &suite, out, err);
     crate::suite::COMMAND.with(|c| *c.borrow_mut() = None);
@@ -81,7 +86,7 @@ fn run_command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dy
                         let _ = write!(out, "{}", table.help_cmd(c, lang));
                         0
                     }
-                    None => refuse(err, tr!("`{n}` というコマンドはありません。`sakai --help` を読んでください", "there is no command `{n}`; run `sakai --help`"), lang),
+                    None => refuse(err, ritsu_base::cli::no_command("sakai", n), lang),
                 },
             };
         }
@@ -91,7 +96,7 @@ fn run_command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dy
         if first == "build" {
             return refuse(err, renamed_build(), lang);
         }
-        return refuse(err, tr!("`{first}` というコマンドはありません。`sakai --help` を読んでください", "there is no command `{first}`; run `sakai --help`"), lang);
+        return refuse(err, ritsu_base::cli::no_command("sakai", first), lang);
     };
     let a = match table.parse(cmd, &args[1..]) {
         Ok(a) => a,
@@ -105,6 +110,22 @@ fn run_command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dy
     if let Err(t) = ritsu_base::modules::given_all(&a.pos) {
         return refuse(err, t, lang);
     }
+    // The form `export` takes before its map and the code `explain` takes are no paths; every other
+    // positional argument is one.
+    let (first, end) = match cmd.name {
+        "export" => (1, a.pos.len()),
+        "explain" => (0, 0),
+        _ => (0, a.pos.len()),
+    };
+    // the paths the run holds are written the way the first path given was (ritsu's DESIGN 4.15),
+    // and so are the paths given: `./shop.ctx` and `x/../shop.ctx` are `shop.ctx` (6.2 item 8)
+    let _way = ritsu_base::paths::run_from(a.pos.get(first).filter(|_| first < end).map_or(".", String::as_str));
+    let mut a = a;
+    for p in a.pos.iter_mut().take(end).skip(first) {
+        *p = ritsu_base::paths::show_given(p);
+    }
+    // and so is the path `--out` takes: `--out ./docs` is `docs`
+    a.fold_paths(&["--out"]);
     match cmd.name {
         "check" => check_cmd(&a, lang, suite, out, err),
         "gen" => gen_cmd(&a, lang, suite, out, err),
@@ -126,7 +147,7 @@ fn root_of(a: &Args, first: &str) -> Result<PathBuf, Text> {
 fn root_from(flag: Option<&str>, first: &str) -> Result<PathBuf, Text> {
     match flag {
         Some(r) => {
-            let p = paths::absolute(Path::new(r));
+            let p = paths::opened(Path::new(r));
             if ritsu_base::fs::is_dir(&p) {
                 Ok(p)
             } else {
@@ -142,7 +163,7 @@ fn from_root(root: &Path, args: &[String]) -> Result<Vec<String>, Text> {
     args.iter()
         .map(|f| {
             if !ritsu_base::fs::exists(f) {
-                return Err(tr!("`{f}` がありません", "`{f}` is not there"));
+                return Err(ritsu_base::cli::not_there(f));
             }
             paths::from_root(root, Path::new(f)).ok_or_else(|| {
                 let r = root.display().to_string();
@@ -159,10 +180,7 @@ fn from_root(root: &Path, args: &[String]) -> Result<Vec<String>, Text> {
 pub fn checked(args: &[String], root: Option<&str>, suite: &Suite, lang: Lang) -> Vec<ritsu_ports::Checked> {
     use ritsu_ports::{Checked as Unit, Finding, Part, Verdict};
     let label = args.join(" ");
-    let refused = |e: Text| {
-        let head = if lang == Lang::Ja { "エラー" } else { "error" };
-        vec![Unit::unchecked(&label, format!("{head}: {}\n", e.get(lang)))]
-    };
+    let refused = |e: Text| vec![Unit::unchecked(&label, format!("{}\n", ritsu_base::cli::refusal(e.get(lang), lang)))];
     let Some(first) = args.first() else { return vec![] };
     let mut command = vec!["check".to_string()];
     command.extend(args.iter().cloned());
@@ -195,7 +213,7 @@ pub fn checked(args: &[String], root: Option<&str>, suite: &Suite, lang: Lang) -
 
 fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let Some(first) = a.pos.first() else {
-        return refuse(err, tr!("`sakai check` には map のファイルかディレクトリが要ります", "`sakai check` needs map files or directories"), lang);
+        return refuse(err, crate::cli::table().takes_of("check"), lang);
     };
     let root = match root_of(a, first) {
         Ok(r) => r,
@@ -242,18 +260,28 @@ fn exit_of(diags: &[crate::diag::Diag]) -> u8 {
     }
 }
 
-/// The one map file a command takes: the root, the map from it, and the paths shown from here.
-fn one_map(a: &Args, cmd: &str, lang: Lang, err: &mut dyn Write) -> Result<(PathBuf, String), u8> {
+/// The one map file a command takes (`name` the command in the table): the root, the map from it,
+/// and the paths shown from here.
+fn one_map(a: &Args, name: &str, lang: Lang, err: &mut dyn Write) -> Result<(PathBuf, String), u8> {
     let [map] = a.pos.as_slice() else {
-        return Err(refuse(err, tr!("`sakai {cmd}` には、map のファイルを一つ渡してください", "`sakai {cmd}` takes one map file"), lang));
+        return Err(refuse(err, crate::cli::table().takes_of(name), lang));
     };
-    if ritsu_base::fs::is_dir(map) {
-        return Err(refuse(err, tr!("`sakai {cmd}` には、ディレクトリではなく map のファイルを渡してください", "`sakai {cmd}` takes a map file, not a directory"), lang));
+    if let Some(stop) = a_directory(map, name) {
+        return Err(refuse(err, stop, lang));
     }
     let root = root_of(a, map).map_err(|e| refuse(err, e, lang))?;
     paths::show_from(paths::Shown::new(&root, map));
     let rel = from_root(&root, &a.pos).map_err(|e| refuse(err, e, lang))?;
     Ok((root, rel[0].clone()))
+}
+
+/// What stops a command that takes one map file (`name`) given a directory: it does not read, as
+/// every command of ritsu says of a directory given for a file.
+fn a_directory(map: &str, name: &str) -> Option<Text> {
+    ritsu_base::fs::is_dir(map).then(|| match ritsu_base::fs::read(map) {
+        Err(e) => ritsu_base::cli::cannot_read(map, &e),
+        Ok(_) => crate::cli::table().takes_of(name),
+    })
 }
 
 /// The verb up to 0.40.0 is not read as the new one (ritsu's DESIGN 9.6).
@@ -265,13 +293,15 @@ fn gen_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     let targets: Vec<crate::build::Target> = a.all("--target").into_iter().filter_map(crate::build::Target::from_word).collect();
     if targets.is_empty() {
         let t = crate::build::Target::ALL.map(|t| t.word()).join("|");
-        return refuse(err, tr!("`sakai gen` には `--target {t}` が一つ以上要ります", "`sakai gen` needs one or more `--target {t}`"), lang);
+        return refuse(err, crate::cli::table().needs_of("gen", &format!("--target {t}")), lang);
     }
     let (root, map) = match one_map(a, "gen", lang, err) {
         Ok(x) => x,
         Err(code) => return code,
     };
-    let g = match crate::build::gen_with(&root, &map, &targets, suite, a.get("--out").map(Path::new), a.has("--check"), lang) {
+    // what the settings say is in `--lang`, else English, whatever the environment says (ritsu's
+    // DESIGN 4.1); `lang` is what the run prints
+    let g = match crate::build::gen_with(&root, &map, &targets, suite, a.get("--out").map(Path::new), a.has("--check"), Lang::made(a.get("--lang"))) {
         Ok(g) => g,
         Err(e) => return refuse(err, e, lang),
     };
@@ -287,10 +317,10 @@ fn gen_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
 
 fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.pos.first().map(String::as_str) != Some("cml") {
-        return refuse(err, tr!("`sakai export` のあとには、書き出す形 `cml` を書いてください", "`sakai export` is followed by the form to write, `cml`"), lang);
+        return refuse(err, crate::cli::table().takes_of("export"), lang);
     }
     let rest = Args { got: a.got.clone(), pos: a.pos[1..].to_vec() };
-    let (root, map) = match one_map(&rest, "export cml", lang, err) {
+    let (root, map) = match one_map(&rest, "export", lang, err) {
         Ok(x) => x,
         Err(code) => return code,
     };
@@ -304,12 +334,11 @@ fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mu
     }
     let c = o.checked.as_ref().expect("a map with no errors is checked through");
     let name = Path::new(&map).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-    let text = crate::cml::render(c, &name, lang);
+    let text = crate::cml::render(c, &name, Lang::made(a.get("--lang")));
     match a.get("--out") {
         Some(f) => {
-            if let Err(e) = std::fs::write(f, &text) {
-                let e = e.to_string();
-                return refuse(err, tr!("{f} に書けません: {e}", "cannot write {f}: {e}"), lang);
+            if let Err(e) = ritsu_base::fs::write(f, &text) {
+                return refuse(err, ritsu_base::cli::cannot_write(f, &e), lang);
             }
         }
         None => {
@@ -333,15 +362,18 @@ fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
         return exit_of(&o.diags);
     }
     let format = if a.get("--format") == Some("html") { crate::doc::Format::Html } else { crate::doc::Format::Markdown };
-    let text = crate::doc::write(&o, suite, lang, format);
+    // the page is in `--lang`, else English, whatever the environment says (ritsu's DESIGN 4.1)
+    let text = crate::doc::write(&o, suite, Lang::made(a.get("--lang")), format);
     match a.get("--out") {
         Some(dir) => {
             let stem = Path::new(&map).file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
             let ext = if format == crate::doc::Format::Html { "html" } else { "md" };
             let path = Path::new(dir).join(format!("{stem}.{ext}"));
-            if let Err(e) = std::fs::create_dir_all(dir).and_then(|_| std::fs::write(&path, &text)) {
-                let (f, e) = (path.display().to_string(), e.to_string());
-                return refuse(err, tr!("{f} に書けません: {e}", "cannot write {f}: {e}"), lang);
+            if let Err(e) = ritsu_base::fs::create_dir_all(dir) {
+                return refuse(err, ritsu_base::cli::cannot_create(dir, &e), lang);
+            }
+            if let Err(e) = ritsu_base::fs::write(&path, &text) {
+                return refuse(err, ritsu_base::cli::cannot_write(&path.display().to_string(), &e), lang);
             }
             let f = path.display().to_string();
             let _ = writeln!(out, "{}", tr!("{f}: 書きました", "{f}: Written").get(lang));
@@ -377,10 +409,10 @@ fn vectors_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &m
 
 fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.pos.len() != 1 {
-        return refuse(err, tr!("`sakai api` には、map のファイルを一つ渡してください", "`sakai api` takes one map file"), lang);
+        return refuse(err, crate::cli::table().takes_of("api"), lang);
     }
-    if ritsu_base::fs::is_dir(&a.pos[0]) {
-        return refuse(err, tr!("`sakai api` には、ディレクトリではなく map のファイルを渡してください", "`sakai api` takes a map file, not a directory"), lang);
+    if let Some(stop) = a_directory(&a.pos[0], "api") {
+        return refuse(err, stop, lang);
     }
     let root = match root_of(a, &a.pos[0]) {
         Ok(r) => r,
@@ -405,36 +437,44 @@ fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
 }
 
 fn explain_cmd(a: &Args, lang: Lang, _suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
-    let md = a.get("--format") == Some("markdown");
+    let format = a.get("--format");
     let ledger = crate::codes::ledger();
     if a.has("--all") {
+        // codes and `--all` are the two ways to call it, not one: what it takes
         if !a.pos.is_empty() {
-            return refuse(err, tr!("`--all` とコードは一緒に書けません", "`--all` takes no code"), lang);
+            return refuse(err, crate::cli::table().takes_of("explain"), lang);
         }
-        if md {
-            let _ = write!(out, "{}", ledger.render_markdown(lang));
-        } else {
-            for (i, e) in ledger.entries.iter().enumerate() {
-                if i > 0 {
-                    let _ = writeln!(out, );
+        match format {
+            Some("markdown") => {
+                let _ = write!(out, "{}", ledger.render_markdown(lang));
+            }
+            Some("json") => {
+                let _ = writeln!(out, "{}", ritsu_base::json::Json::arr(ledger.entries.iter().map(|e| ledger.to_json(e, lang))).pretty());
+            }
+            _ => {
+                for (i, e) in ledger.entries.iter().enumerate() {
+                    if i > 0 {
+                        let _ = writeln!(out);
+                    }
+                    let _ = write!(out, "{}", ledger.render_text(e, lang));
                 }
-                let _ = write!(out, "{}", ledger.render_text(e, lang));
             }
         }
         return 0;
     }
-    let [code] = a.pos.as_slice() else {
-        return refuse(err, tr!("`sakai explain` には、`E201` のようなコードを一つ渡してください", "`sakai explain` takes one code, like `E201`"), lang);
-    };
-    match ledger.find(code) {
-        Some(e) => {
-            if md {
-                let _ = write!(out, "{}", ledger.render_markdown_one(e, lang));
-            } else {
-                let _ = write!(out, "{}", ledger.render_text(e, lang));
-            }
+    if a.pos.is_empty() {
+        return refuse(err, crate::cli::table().takes_of("explain"), lang);
+    }
+    match ledger.look_up(&a.pos) {
+        Ok(entries) => {
+            let shape = match format {
+                Some("markdown") => ritsu_base::ledger::Shape::Markdown,
+                Some("json") => ritsu_base::ledger::Shape::Json,
+                _ => ritsu_base::ledger::Shape::Text,
+            };
+            let _ = write!(out, "{}", ledger.explained(&entries, shape, lang));
             0
         }
-        None => refuse(err, tr!("`{code}` という診断のコードはありません", "there is no diagnostic code `{code}`"), lang),
+        Err(unknown) => refuse(err, ritsu_base::cli::no_codes("sakai", &unknown), lang),
     }
 }

@@ -1,0 +1,9 @@
+diff --git a/api/schemas.yaml b/api/schemas.yaml
+index ce04210..71809f3 100644
+--- a/api/schemas.yaml
++++ b/api/schemas.yaml
+@@ -5,3 +5,4 @@ Refund:
+       type: string
+     items:
+       type: integer
++      minimum: 1

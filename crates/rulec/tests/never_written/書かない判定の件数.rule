@@ -1,0 +1,19 @@
+rule 書かない判定の件数(count_never) v1
+description "表が書かない判定「飛ばす」になった明細の件数（架空）"
+
+enum 判定(verdict_kind) = 取る(take) | 保つ(hold) | 飛ばす(skip)
+
+elements 明細(lines)
+  額(amt) : money[円]  range >=0円 <=1000円
+
+outputs
+  飛ばした数(skips) : number  round down(1)
+
+# どの明細も、取るか保つかで、飛ばすにはならない
+table 判定する(decide)
+policy unique
+| 額      | -> 判定(verdict) : 判定 |
+| >=500円 | 取る                    |
+| <500円  | 保つ                    |
+
+count 飛ばした数 over 明細 where 判定 = 飛ばす  range >=0 <=100

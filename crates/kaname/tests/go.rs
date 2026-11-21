@@ -57,7 +57,7 @@ fn the_generated_go_answers_as_the_reference_does() {
                 std::fs::copy(tools().join("go").join(f), dir.join(f)).unwrap();
             }
             std::fs::create_dir_all(dir.join("harness")).unwrap();
-            std::fs::write(dir.join("harness/main.go"), kaname::r#gen::harness::program(&checked, Target::Go, PY_NAME, GO_PACKAGE)).unwrap();
+            std::fs::write(dir.join("harness/main.go"), kaname::r#gen::harness::program(&checked, Target::Go, PY_NAME, GO_PACKAGE, lang)).unwrap();
             let (cases, counts) = cases(&modules, lang, Target::Go);
             std::fs::write(dir.join("cases.json"), cases_json(&cases)).unwrap();
             let r = ritsu_testkit::run(Command::new("gofmt").arg("-l").arg(Path::new(PY_NAME).join("glue")).arg("harness").current_dir(&dir), LIMIT);
@@ -84,6 +84,73 @@ fn the_generated_go_answers_as_the_reference_does() {
     for line in report {
         println!("{line}");
     }
+}
+
+/// The module of [`a_sum_that_may_be_absent_is_split_by_none_and_some`].
+const OPTIONAL_SUM: &str = "module optsum v1
+
+enum Top
+  stay
+  to
+    n : number range >=0 <=10
+
+fn pick(top: Top?) -> number range >=0 <=10 total
+  match top
+    none => 0
+    some a =>
+      match a
+        stay => 1
+        to w => w.n
+
+examples
+  pick(top: none) = 0
+  pick(top: Top.stay) = 1
+  pick(top: Top.to { n: 7 }) = 7
+";
+
+/// A value of a sum that may be absent, split by `none` and `some x`, and the value `some x` names
+/// split by a match of its own: the Go tests the pointer against nil and switches on the type of the
+/// value it points to, and answers every vector as the reference interpreter does. Before, the Go was
+/// a type switch of the pointer itself whose cases named no type, which go does not build.
+#[test]
+fn a_sum_that_may_be_absent_is_split_by_none_and_some() {
+    if !ritsu_testkit::need(Need::Go) {
+        return;
+    }
+    if !ritsu_testkit::tools::runs("go", &["version"]) {
+        ritsu_testkit::skip("go is not on the PATH; the Go kaname generates is not run");
+        return;
+    }
+    let t = TempDir::new("kaname-go-optsum");
+    let dir = t.path().to_path_buf();
+    let cases = deep({
+        let dir = dir.clone();
+        move || {
+            let o = common::check_text("optsum.kn", OPTIONAL_SUM);
+            let c = o.analysed.clone().unwrap_or_else(|| panic!("{}", common::shown(&o, Lang::En)));
+            let modules = vec![(c.clone(), "optsum.kn".to_string())];
+            write_package(&dir, Target::Go, Lang::En, &modules);
+            std::fs::create_dir_all(dir.join("harness")).unwrap();
+            std::fs::write(dir.join("harness/main.go"), kaname::r#gen::harness::program(&[c], Target::Go, PY_NAME, GO_PACKAGE, Lang::En)).unwrap();
+            let (cases, _) = cases(&modules, Lang::En, Target::Go);
+            std::fs::write(dir.join("cases.json"), cases_json(&cases)).unwrap();
+            cases
+        }
+    });
+    for f in ["go.mod", "go.sum"] {
+        std::fs::copy(tools().join("go").join(f), dir.join(f)).unwrap();
+    }
+    let r = ritsu_testkit::run(go_in(&dir).args(["vet", "./..."]), LIMIT);
+    assert!(r.ok, "go vet finds fault with the Go kaname generates:\n{}", r.both());
+    let bin = dir.join("harness.bin");
+    let r = ritsu_testkit::run(go_in(&dir).args(["build", "-o"]).arg(&bin).arg("./harness"), LIMIT);
+    assert!(r.ok, "go build failed:\n{}", r.both());
+    let r = ritsu_testkit::run(Command::new(&bin).arg(dir.join("cases.json")).current_dir(&dir), LIMIT);
+    assert!(r.ok, "the harness failed:\n{}", r.both());
+    let (agree, wrong) = compare(&cases, &r.stdout);
+    assert!(wrong.is_empty(), "the Go answers otherwise than the reference:\n{}", wrong.join("\n"));
+    assert!(agree >= 3 && agree == cases.len(), "{agree} of {} cases agree", cases.len());
+    println!("{agree} of {} cases agree", cases.len());
 }
 
 /// The program of [`a_day_of_no_calendar_is_outside_every_range`]: the checks of the entry called as a

@@ -79,7 +79,7 @@ a transfer's amounts, refusals and holds (the ritsu skill has the codes).
    the code the generated wrappers import (`typescript`, `python` or `go`; `ritsu gen` writes a whole
    project as one package instead). A precondition of a rule
    that `ritsu check` could not decide (its W201) is checked by the built workflow when it runs,
-   and a run that breaks it fails with `Dandori.BrokenPrecondition`.
+   as `ritsu run` checks it, and a run that breaks it fails with `Dandori.BrokenPrecondition`.
    [platforms.md](platforms.md) says what each target writes.
 
 ## 2. The language on one page
@@ -198,14 +198,23 @@ on cancel                                 runs when the workflow is cancelled (T
 The types are `int`, `string`, `bool`, `timestamp`, `date` (a day, `YYYY-MM-DD`), `json` (passed along without being looked
 into; an input or a field that is not there reads as null), `list[T]`, `T?` (a value that may be absent), numbers with a unit as rulec has them
 (`money[JPY, incl_tax]`, `duration[h]`), a rule's enums and records (`hold.room`), a message or an
-enum of a `.proto` read by `use proto` (`warehouse.ReserveResponse`), and the file's own. A number
+enum of a `.proto` read by `use proto` (`warehouse.ReserveResponse`), and the file's own. An enum is
+compared by where it is declared: one enum of one `enums` file is one type by every name it is read
+by (`import enum`, `use rule` of the enums file, or the rules that `import enum` it), and enums
+declared at two places are two types even with the same values (E003, whose note says where). A number
 can say what it may be: `nights : int  range >=1 <=30`, either end may be left out,
-and the ends are integers in the type's unit. So can a value of an enum a rule declares in order
+and the ends are integers in the type's unit or written with a unit (`>=1kg`, `<=50%`). So can a value of an enum a rule declares in order
 (`enum tier = basic < silver < gold`), by its values: `campaign : tiers.tier  range >=basic <=gold`,
 and so can a date or a time, by days: `day : date  range >=2026-01-01 <=2027-12-31` (a time's days
 are UTC's, or written `offset +09:00` after them). A workflow says the period it runs in under its
 first line, `now range >=2026-01-01 <=2027-12-31`: a run that starts outside it calls nothing and
 fails with `Dandori.OutOfPeriod`, and a statement that reads `now` outside it goes to `on failure`.
+A value written where its type is known (an argument, a field, an item of a list, an output of
+`succeed`, a variable whose type is known, a case's `held` value) can carry its unit as the ends do:
+`pay(fee: 0.5%, weight: 1.5kg)`, `let fee: rate[step 0.1%] = 0.5%`. It is counted in the type's unit
+(`0.5%` of `rate[step 0.1%]` is 5), and the generated code is the same as for the whole number;
+where no type says the unit, or it does not count to a whole number, it is E003. Write a rate
+counted in steps other than 1% that way: a bare `5` there is 5 steps, 0.5% (W106).
 A record cannot contain itself, directly or through others (E003); carry what has no fixed depth,
 a tree, as `json`.
 
@@ -282,6 +291,28 @@ task get_intent(intent: string) -> PaymentIntent
   retry 3 times every 2 seconds
 ```
 
+A string an OpenAPI document marks `format: date` is a `date`, and one it marks `format: date-time` a
+`timestamp` (so are protobuf's `Timestamp` and Smithy's `timestamp`). A `date` goes as `2026-11-16`
+and a `timestamp` as `2026-11-16T09:00:00Z`, so neither goes where the document says the other (E016);
+a `string` goes where it says a day, and reads a day or a moment the document writes as a string.
+A Smithy timestamp is read only into a `timestamp`: the AWS SDK sends it in the form the model says
+(seconds since 1970 in a JSON body), and the default `Transport` gives it back as RFC 3339 in UTC.
+protobuf's `google.type.Date` is a `date` too, known by its name without its file: the code sends a
+`date` as `{"year": 2026, "month": 11, "day": 16}` and reads one back as `2026-11-16`; a date short
+of its year, month or day is refused (read the field as `json` to take it), and a run's output cannot
+go to one (E017).
+
+An `http` task's arguments go where its OpenAPI document puts them, by the document's names (`-` and
+`_` are one character there, and a header's name is one in any case: `x_board_key` is the header
+`X-Board-Key`): the path, the query (a `POST`'s too), a header, a cookie, or the body, each written in
+the style and explode the document says, or in OpenAPI's defaults (a list `tags=a&tags=b` in the
+query and `a,b` in the path, a record by its fields' names). Without a document, a `{placeholder}`
+takes its argument, and the rest go in those defaults to the query of a `GET` or a `DELETE` and to the
+body of the others. A value that is not there goes nowhere. A header or a cookie the operation needs
+that the task leaves out or passes as `T?`, an argument that matches two of its parameters, and a
+list or a record the style does not write are E016 (without a document, E003); the default
+`Transport`'s `headers` take the place of the call's of their names, and a cookie joins the call's.
+
 `retry` repeats failures and timeouts, but not the errors the task declares; `retry … on <name>, …`
 repeats only what it names, which may be `failure` or `timeout` too. A call of a rule or a date
 has ten seconds a try on every platform, and is retried twice, a second and then two apart. A task that changes something and is retried needs `key` (an idempotency key dandori makes from
@@ -332,10 +363,13 @@ pass
 
 Every value a `match` can meet needs an arm, and there is no default arm (E010): a value no arm
 names fails the run with `Dandori.UnexpectedValue`. The expressions are names and their fields
-(`booking.room`), literals, records (`{order_id: order.id, reservations: results}`), lists,
-`none`, `now` (the time the statement runs at, a `timestamp`, one moment for the statement), and strings with values put in
+(`booking.room`), literals, a value of an enum by its name (`accounting`), records (`{order_id: order.id, reservations: results}`), lists,
+`none`, `now` (the time the statement runs at, a `timestamp`, one moment for the statement), and strings with a variable or its field put in
 (`"Order {order.id}"`); nothing compares, adds or combines
-conditions. The rounds of a parallel `for` keep their own variables; when one fails, the others
+conditions. Where nothing says the type (a `let` with no type, the list a `for` goes through), a
+value of an enum is one of the one enum the flow sees that has it (a list takes the type of an item
+that is not a bare name, else of the one enum that has all its names); when two enums have it,
+write the type: `let roles : list[role] = [manager, accounting]` (E002). The rounds of a parallel `for` keep their own variables; when one fails, the others
 still run to their end, and the first failure in the list's order decides. From the fulfillment
 of an order:
 
@@ -395,7 +429,7 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 
 | Code | What it finds | The usual fix |
 |---|---|---|
-| E001 to E006 | syntax, names, types, arguments, rules, dates files or books that could not be read, a name declared twice | what the message says; a time given to a date whose calendar says no UTC offset is E003 |
+| E001 to E006 | syntax, names, types, arguments, rules, dates files or books that could not be read, a name declared twice | what the message says; a time given to a date whose calendar says no UTC offset is E003; enums declared at two places are two types (E003): put the enum in an `enums` file and `import enum` it in each rule and in the flow |
 | E007 | the clauses of a task that do not go together | the message names the clause |
 | E008 | a case declared wrongly, or a task doing to a case what it cannot | follow the machine's table |
 | E009 | a statement where it cannot be | `yield` last in its `for`; no `break`, `succeed` or call on a case inside a parallel round |
@@ -403,9 +437,9 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 | E011 | an arm no value reaches | remove it |
 | E012 | a variable read where it may not have a value yet | give it a value on every way there, or read it later |
 | E013 | a task on a case not started yet, or a case started twice | start it first, once |
-| E014, W104 | a value that can be outside a range, or whose range is unknown | say the range where the value comes from (the input, the field, the task's answer), for a number or an ordered enum's value alike; for an enum's value from where no range is written (a rule's output), branch with `match` and write out a value the range lets in |
+| E014, W104 | a value that can be outside a range, or whose range is unknown | say the range where the value comes from (the input, the field, the task's answer), for a number or an ordered enum's value alike; for an enum's value from where no range is written (a rule's output), branch on it with `match` and give it in the arms for values the range lets in |
 | E015 | a task that does not fit the child `.flow` it runs | match the child's inputs, outputs and `fail`s |
-| E016 | a task that does not fit its API's description, or the book's transfer it runs | follow it: `T?` for what the answer may leave out, every value of an enum; or use the `.proto`'s messages as the types; for a book, the transfer's parameters by name, the hold as the answer, only reasons the book refuses with |
+| E016 | a task that does not fit its API's description, or the book's transfer it runs | follow it: `T?` for what the answer may leave out, every value of an enum; every header and cookie it needs, by a name that matches one parameter; a style that writes the list or the record; or use the `.proto`'s messages as the types; for a book, the transfer's parameters by name, the hold as the answer, only reasons the book refuses with |
 | E017 | a workflow that does not fit the service it implements | follow the service: the inputs and outputs by their JSON names, every `fail` in `fails`, the events and callbacks it names; one of dandori's options on each method |
 | E020 | a case the workflow can leave in a state that is not final | settle it before the end, or `fail … leaving <case>` |
 | E021, E022 | an event refused in every state; a refusal no handler takes | do not send it there; handle the `refused as` error, or for a book, declare the reason in `errors` and handle it (a hold may have expired) |
@@ -413,10 +447,11 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 | E031 | what an Express workflow cannot do | `kind standard`, or less |
 | E040 | a run that can outgrow the platform's history | lower the loop bounds; on Temporal, a loop at the top of the flow goes on in a new run |
 | E050 | what the platform lacks or cannot do | give it what it needs (`connection`, `image`, a way of calling), or another platform |
-| W105, E051 | a name the code of a platform cannot keep: two names are one identifier there, or the code has the name itself (`Transport` in Go, `Array` in TypeScript, `str` in Python); `gen` of that platform stops | leave it for a platform you do not build; for one you do, rename it in the `.flow` or the `.proto` |
-| W101 | a failure that can leave a case unfinished | handle the error at the call, or settle the case in `on failure` |
+| W105, E051 | a name a caller reads that the code of a platform cannot keep: two such names are one identifier there (`send_mail` and `sendMail` in Go), or the code declares the name for a caller (`Transport` in Go, `WorkflowInput` in TypeScript and Python); `gen` of that platform stops. A name the code has for itself alone (`Array` in TypeScript, `str` in Python) stops nothing | leave it for a platform you do not build; for one you do, rename it in the `.flow` or the `.proto` |
+| W101 | a failure that can leave a case unfinished (a call with `retry` too: it fails once the retries run out) | handle the error at the call, or settle the case in `on failure`; a call that fails while `on failure` or `on cancel` settles the case: handle that failure at the call, and hand the case over with `fail … leaving <case>` |
 | W102 | an `on <refusal>` that cannot happen | remove it |
 | W103 | a task that starts a case without `key` | add `key` |
+| W106 | a whole number on a rate counted in steps other than 1% (`fee: 5` of `rate[step 0.1%]` is 0.5%), as a value or an end of a range | write it with `%`: `fee: 0.5%`, `range <=50%` (the generated code passes the same number) |
 | E906 | a secret sent outside the project: a model's provider, Jev, a host named by its URL alone, an AWS service | send a reference; or, when it is meant, `discloses <parameter> "<why>"` under the task |
 | W901 | a key in the shape a provider gives it, in the `.flow` | keep it where the code runs; for a value for tests, `# ritsu: test secret` on its line |
 | W902 | a call over plain HTTP to another machine | `https://`; or `plaintext "<why>"` where the URL is written |
@@ -438,7 +473,8 @@ checker looks at.
   where `path` is the run that gets there, as `[{"line", "step"}]`.
 - The exit code is 0 when there is no error (warnings may be), 1 when there is, and 2 for bad
   arguments or a file that cannot be read.
-- `--lang ja`, or `DANDORI_LANG=ja`, gives the messages in Japanese.
+- `--lang ja`, or `DANDORI_LANG=ja`, gives the messages in Japanese; the page `doc` writes is in
+  Japanese with `--lang ja` only.
 - `ritsu dandori explain --all --format json` prints every code as `[{"code", "severity", "title",
   "when", "fix", "repro", "related"}]`, where `repro` holds the files of the smallest example.
 - A workflow that uses rules, dates files or books (`use rule`, `use dates`, `use book`) runs as

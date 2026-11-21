@@ -1,0 +1,14 @@
+エラー[E002]: tests/fixtures/chain_declarations.flow:8:10: 型 `strng` はありません
+     8 |   id   : strng
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E002]: tests/fixtures/chain_declarations.flow:13:11: 型 `Labl` はありません
+    13 |   label : Labl
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E002]: tests/fixtures/chain_declarations.flow:16:27: 型 `Qoute` はありません
+    16 | task fetch(id: string) -> Qoute
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E002]: tests/fixtures/chain_declarations.flow:19:28: 型 `rol` はありません
+    19 | task ask(id: string, role: rol)
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E007]: tests/fixtures/chain_declarations.flow:25:22: `gone` と `late` がどちらも 410 で返ってきます。Step Functions はエラーをステータスで見分けるので、別々のステータスにしてください
+    25 |   errors gone = 410, late = 410

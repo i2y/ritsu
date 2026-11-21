@@ -1,0 +1,132 @@
+request 部品(ahead_ja) v1 "部品の申請"
+description "UTC から 5 時間遅れの工場の営業日で期限を数え、東京の時刻の本社の営業日で知らせを数えるステップ（架空の決まり）。申請の種類は日を工場のオフセットで読み、本社はイベントの日を自分のオフセットで読んで数える。工場の 19:00 からは、本社ではもう翌日である。保留の終わりと申請者に戻った期限は本社の営業日で数える"
+
+use organization 組織(org) from "../../examples/shared/company.ringi"
+use calendar 西工場(west) from "west.cal"
+use calendar 本社(office) from "../../examples/shared/office.cal"
+
+form
+  品目(what) : text "品目"  count >=1 <=100
+
+route
+  決裁(decide)  上長
+
+who
+  上長(manager) = manager of requester
+
+every stage
+  due in 3 business days in 西工場 at 12:00
+  remind after 1 business day in 本社 at 09:00
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+  send back      to the requester, at most 2 times
+  resubmit       within 2 business days in 本社
+  pause          at most 2 business days in 本社
+
+# 工場の月曜 20:00（東京の火曜 10:00）に出す。知らせは本社の火曜から 1 営業日の水曜の 09:00、工場
+# の火曜 19:00 に鳴る。工場の火曜 20:00（東京は水曜）に差し戻され、本社のその水曜から 2 営業日、
+# 本社の金曜の終わり（工場の金曜 10:00）までに出し直す
+scenario 本社が先
+  requester e1201
+  form 品目 = "軸受"
+| at               | event     | by    | -> stage | status         |
+| 2026-11-16 20:00 | submit    | e1201 | 決裁     | in progress    |
+| 2026-11-17 19:00 | remind    |       | 決裁     | in progress    |
+| 2026-11-17 20:00 | send back | e1101 |          | with requester |
+| 2026-11-20 09:00 | resubmit  | e1201 | 決裁     | in progress    |
+| 2026-11-22 19:00 | remind    |       | 決裁     | in progress    |
+| 2026-11-23 09:00 | approve   | e1101 |          | approved       |
+
+# 工場の木曜 12:00（東京の金曜 02:00）に遅れて上へ回す。回した先の知らせは、本社の金曜から数えて
+# 月曜の 09:00、工場の日曜 19:00 に鳴る
+scenario 遅れて上へ
+  requester e1201
+  form 品目 = "歯車"
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 20:00 | submit | e1201 | 決裁     | in progress |
+| 2026-11-17 19:00 | remind |       | 決裁     | in progress |
+| 2026-11-19 12:00 | late   |       | 決裁     | in progress |
+| 2026-11-22 19:00 | remind |       | 決裁     | in progress |
+| 2026-11-24 12:00 | late   |       |          | expired     |
+
+# 工場の月曜 21:00（東京は火曜）に、本社が許す 2 営業日の保留をする。本社のその火曜から数えて木曜
+# の終わり（工場の木曜 10:00）までで、その 1 時間前に再開して 2 日を使う。時計はステップが始まった
+# 時刻の 2 日後から数え、知らせは本社の木曜から 1 営業日の金曜 09:00、工場の木曜 19:00 に鳴る
+scenario 本社の営業日の保留
+  requester e1201
+  form 品目 = "軸"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 20:00 | submit  | e1201 | 決裁     | in progress |
+| 2026-11-16 21:00 | pause   | e1101 | 決裁     | paused      |
+| 2026-11-19 09:00 | resume  | e1101 | 決裁     | in progress |
+| 2026-11-19 19:00 | remind  |       | 決裁     | in progress |
+| 2026-11-20 09:00 | approve | e1101 |          | approved    |
+
+# 工場の 12 月 28 日（月）08:00（東京の 22:00）に出す。知らせは本社のその月曜から数えるので、本社の
+# 年末年始の休みのあと、東京の 1 月 4 日 09:00（工場の 3 日 19:00）に来る。工場の営業日で数える期限
+# の 12 月 31 日（木）正午より後なので、置かない。1 時間後に保留し、工場の 1 月 4 日 20:00（東京の 5
+# 日）に再開すると、本社の営業日を 2 日（4 日と 5 日）使い、時計はステップが始まった時刻の 8 日後
+# から数える。知らせはまだ鳴っておらず、今は期限より前に来るので置く。東京の 1 月 6 日 09:00、工場
+# の 5 日 19:00 で、期限の 1 月 8 日（金）正午より前である
+scenario 年始のあとに置く知らせ
+  requester e1201
+  form 品目 = "ばね"
+| at               | event   | by    | -> stage | status      |
+| 2026-12-28 08:00 | submit  | e1201 | 決裁     | in progress |
+| 2026-12-28 09:00 | pause   | e1101 | 決裁     | paused      |
+| 2027-01-04 20:00 | resume  | e1101 | 決裁     | in progress |
+| 2027-01-05 19:00 | remind  |       | 決裁     | in progress |
+| 2027-01-06 09:00 | approve | e1101 |          | approved    |
+
+# 同じ申請を二度保留する。一度目は工場の 12 月 28 日 09:00 から 29 日 20:00（東京の 30 日）までで、
+# 本社の年末年始の休みの中なので、本社の営業日を使わない。時計は動かず、知らせはまだ期限より後に
+# 来るので置かない。二度目は 1 時間後から工場の 1 月 4 日 20:00 までで、2 日を使い、時計はステップ
+# が始まった時刻の 8 日後から数える。知らせはまだ鳴っておらず、今は期限より前に来るので、工場の 1
+# 月 5 日 19:00 に置く
+scenario 二度目の再開で置く知らせ
+  requester e1201
+  form 品目 = "弁"
+| at               | event   | by    | -> stage | status      |
+| 2026-12-28 08:00 | submit  | e1201 | 決裁     | in progress |
+| 2026-12-28 09:00 | pause   | e1101 | 決裁     | paused      |
+| 2026-12-29 20:00 | resume  | e1101 | 決裁     | in progress |
+| 2026-12-29 21:00 | pause   | e1101 | 決裁     | paused      |
+| 2027-01-04 20:00 | resume  | e1101 | 決裁     | in progress |
+| 2027-01-05 19:00 | remind  |       | 決裁     | in progress |
+| 2027-01-06 09:00 | approve | e1101 |          | approved    |
+
+# 二度保留し、そのあいだに知らせが鳴る。工場の月曜 21:00 に保留し、火曜 20:00 に再開すると、本社の
+# 営業日を 1 日（本社の水曜）使い、知らせは工場の水曜 19:00 に鳴る。もう一度保留し、工場の木曜
+# 18:00（東京の金曜）に再開すると、2 日目を使い、時計はステップが始まった時刻の 2 日後から数える。
+# 知らせは工場のその木曜 19:00 に来ることになり、期限の 11 月 23 日（月）正午より前だが、もう鳴った
+# ので置き直さない
+scenario 二度の保留のあいだに鳴った知らせ
+  requester e1201
+  form 品目 = "ベルト"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 20:00 | submit  | e1201 | 決裁     | in progress |
+| 2026-11-16 21:00 | pause   | e1101 | 決裁     | paused      |
+| 2026-11-17 20:00 | resume  | e1101 | 決裁     | in progress |
+| 2026-11-18 19:00 | remind  |       | 決裁     | in progress |
+| 2026-11-18 20:00 | pause   | e1101 | 決裁     | paused      |
+| 2026-11-19 18:00 | resume  | e1101 | 決裁     | in progress |
+| 2026-11-20 09:00 | approve | e1101 |          | approved    |
+
+# 出してから 1 時間後、工場の 12 月 28 日 09:00 に保留し、1 月 1 日 10:00 に再開する。本社はまだ年末
+# 年始の休みなので、本社の営業日を使わず、時計は動かない。期限の工場の 12 月 31 日正午はもう過ぎて
+# いるので、再開した時刻に置き、すぐ鳴る。知らせは期限より後に来るので置かない。ステップは上へ回
+# り、回した先の期限と知らせを持つ。知らせは東京の 1 月 4 日 09:00（工場の 3 日 19:00）、期限は工場
+# の 1 月 5 日正午である
+scenario 再開したときに過ぎていた期限
+  requester e1201
+  form 品目 = "ポンプ"
+| at               | event  | by    | -> stage | status      |
+| 2026-12-28 08:00 | submit | e1201 | 決裁     | in progress |
+| 2026-12-28 09:00 | pause  | e1101 | 決裁     | paused      |
+| 2027-01-01 10:00 | resume | e1101 | 決裁     | in progress |
+| 2027-01-01 10:00 | late   |       | 決裁     | in progress |
+| 2027-01-03 19:00 | remind |       | 決裁     | in progress |
+| 2027-01-05 12:00 | late   |       |          | expired     |

@@ -1,0 +1,4 @@
+error[E202]: tests/mutants/E202_壊れた規則.ringi:3:29: `shared/壊れた権限.rule` does not pass rulec's check
+     3 | use rule 権限(authority) from "shared/壊れた権限.rule"
+  = E101: Completeness gap: some input matches no row (tests/mutants/shared/壊れた権限.rule:12)
+  = Correct that file until rulec's check passes.

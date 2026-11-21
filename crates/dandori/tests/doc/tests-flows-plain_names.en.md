@@ -1,6 +1,6 @@
 # plain_names v1
 
-Names the generated code has no claim on, though they read like its own: the nouns a Go package might have, and the builtins of Python and the globals of JavaScript the code never reads, as types and variables. Runs on every platform
+Names the generated code has no claim on, though they read like its own: the nouns a Go package might have, the builtins of Python and the globals of JavaScript the code never reads, and a name of Python's typing the code reads by another name, as types and variables. Runs on every platform
 
 `tests/flows/plain_names.flow`, drawn by `dandori doc`. Inputs: `id: string`. Outputs: `text: string`, `everything: Everything`.
 
@@ -28,7 +28,9 @@ flowchart TD
     s17["slice = note(…)<br>lambda note"]
     s18["sum = note(…)<br>lambda note"]
     s19["vars = note(…)<br>lambda note"]
-    s20(["succeed text = #quot;{bytes}{callable}{filter}{format}{froze…"])
+    s20["TypeError = note(…)<br>lambda note"]
+    s21["TypeGuard = note(…)<br>lambda note"]
+    s22(["succeed text = #quot;{bytes}{callable}{filter}{format}{froze…"])
     start --> s1
     s1 --> s2
     s2 --> s3
@@ -49,9 +51,11 @@ flowchart TD
     s17 --> s18
     s18 --> s19
     s19 --> s20
+    s20 --> s21
+    s21 --> s22
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s20 ok
+    class s22 ok
 ```
 
 A rectangle is a task, one with a line down each side a rule, a slanted one a task whose value comes from outside (an event, or the answer to a callback), a hexagon a `match`, a rounded box a wait, and a box around steps a loop. A dashed arrow is an error the call handles.
@@ -60,25 +64,27 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 114 | `everything = gather(…)` | `lambda gather`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 115 | `bytes = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 116 | `callable = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 117 | `filter = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 118 | `format = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 119 | `frozenset = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 120 | `hasattr = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 121 | `hash = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 122 | `iter = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 123 | `map = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 124 | `object = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 125 | `open = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 126 | `print = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 127 | `repr = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 128 | `reversed = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 129 | `setattr = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 130 | `slice = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 131 | `sum = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 132 | `vars = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 121 | `everything = gather(…)` | `lambda gather`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 122 | `bytes = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 123 | `callable = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 124 | `filter = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 125 | `format = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 126 | `frozenset = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 127 | `hasattr = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 128 | `hash = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 129 | `iter = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 130 | `map = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 131 | `object = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 132 | `open = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 133 | `print = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 134 | `repr = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 135 | `reversed = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 136 | `setattr = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 137 | `slice = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 138 | `sum = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 139 | `vars = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 140 | `TypeError = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 141 | `TypeGuard = note(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 
 ## Ends
 
@@ -86,5 +92,5 @@ Every way the workflow can end.
 
 | Line | End |
 |---:|---|
-| 133 | `succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", everything = everything` |
+| 142 | `succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}{TypeError}{TypeGuard}", everything = everything` |
 

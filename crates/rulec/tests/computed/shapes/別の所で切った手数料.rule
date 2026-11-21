@@ -1,0 +1,20 @@
+rule 別の所で切った手数料(fee_cut_elsewhere) v1
+description "取り込んだ手数料を 0 円以上なら何でもと読み、取り込んだ表の切らない所で金額を切る。どの行も、その区分の金額を取る"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=0円 <=360円
+
+apply 手数料(f) = "shared/一律の手数料.rule" meaning:14f35a1f85c5847c
+  金額 = 金額
+  手数料 -> 受けた手数料
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 金額           | 受けた手数料 | -> 答え |
+| <=154円        | >-1円        | 一      |
+| >154円 <=171円 | >-1円        | 二      |
+| >171円         | >-1円        | 一      |

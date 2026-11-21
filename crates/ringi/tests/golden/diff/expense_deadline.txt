@@ -1,0 +1,9 @@
+  The request `expense` (v1 → v2): `expense_old.ringi` → `expense_new.ringi`
+Deadlines and reminders:
+    precheck — Reminder: 2026-04-07 (Tue) 09:00 → 2026-04-06 (Mon) 09:00
+    first — Reminder: 2026-04-07 (Tue) 09:00 → 2026-04-06 (Mon) 09:00
+    second — Reminder: 2026-04-07 (Tue) 09:00 → 2026-04-06 (Mon) 09:00
+    decide — Reminder: 2026-04-07 (Tue) 09:00 → 2026-04-06 (Mon) 09:00
+    Its approvers are reminded 2 business days after it starts, at 09:00. → Its approvers are reminded 1 business day after it starts, at 09:00.
+Tickets in progress:
+  A ticket finishes with the version of the request it was submitted with: tickets submitted with version 1 finish as version 1 says, and what changes here applies to requests submitted with version 2.

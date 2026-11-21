@@ -1,0 +1,26 @@
+rule row_the_table_above_leaves_out v1
+description "A row for a medium band at any amount, after the rows below 70 yen: the band is medium only below 29 yen, which the second row takes first, so no input reaches the third"
+
+enum choice = one | two
+enum size = small | medium | large
+
+inputs
+  amount : money[JPY]  range >=1JPY <=79JPY
+
+outputs
+  x : choice
+
+table band_of
+| amount         | -> band : size |
+| <29JPY         | medium         |
+| >=29JPY <=52JPY | small         |
+| >=53JPY        | large          |
+
+table pick
+policy first
+| amount  | band   | -> x |
+| <70JPY  | small  | one  |
+| <70JPY  | medium | two  |
+| -       | medium | one  |
+| >=70JPY | large  | two  |
+| <70JPY  | large  | one  |

@@ -1,0 +1,31 @@
+rule approval v1
+description "Whether an order is large and the president decides it: the choices declare an enum named like the one the table of authority brings in (fictional)"
+
+import enum kind from "shapes.rule"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000JPY
+  what   : kind
+
+apply authority = "authority.rule" meaning:6a85060cb702b57f
+  amount = amount
+  decider -> who
+
+outputs
+  big  : bool
+  boss : bool
+
+table big
+| what  | -> big |
+| goods | false  |
+| capex | true   |
+
+table boss
+| who       | -> boss |
+| dept_head | false   |
+| president | true    |
+
+examples
+| amount | what  | -> big | boss  |
+| 1JPY   | goods | false  | false |
+| 501JPY | capex | true   | true  |

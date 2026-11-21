@@ -1,0 +1,17 @@
+  The request `expense` (v1): `expense_old.ringi` → `expense_new.ringi`
+Approvers:
+  Where the route does not change, these requesters' stages are answered by others:
+  In the organization from 2026-04-01, the approvers change for 24 of 24 requesters.
+    e0001 (President (fictional)), second (accounting): accounting: one of e1001 (Head of Accounting), e1002 (Accountant) → accounting: one of e1001 (Head of Accounting), e1002 (Accountant), e1201 (Sales staff 1)
+    e0001 (President (fictional)), second (dept_head and accounting): accounting: one of e1001 (Head of Accounting), e1002 (Accountant) → accounting: one of e1001 (Head of Accounting), e1002 (Accountant), e1201 (Sales staff 1)
+    e0101 (Head of Sales Division), second (accounting): accounting: one of e1001 (Head of Accounting), e1002 (Accountant) → accounting: one of e1001 (Head of Accounting), e1002 (Accountant), e1201 (Sales staff 1)
+    e0101 (Head of Sales Division), second (dept_head and accounting): accounting: one of e1001 (Head of Accounting), e1002 (Accountant) → accounting: one of e1001 (Head of Accounting), e1002 (Accountant), e1201 (Sales staff 1)
+    e0102 (Head of Corporate Division), second (accounting): accounting: one of e1001 (Head of Accounting), e1002 (Accountant) → accounting: one of e1001 (Head of Accounting), e1002 (Accountant), e1201 (Sales staff 1)
+    e0102 (Head of Corporate Division), second (dept_head and accounting): accounting: one of e1001 (Head of Accounting), e1002 (Accountant) → accounting: one of e1001 (Head of Accounting), e1002 (Accountant), e1201 (Sales staff 1)
+    e0201 (Director 1), second (accounting): accounting: one of e1001 (Head of Accounting), e1002 (Accountant) → accounting: one of e1001 (Head of Accounting), e1002 (Accountant), e1201 (Sales staff 1)
+    e0201 (Director 1), second (dept_head and accounting): accounting: one of e1001 (Head of Accounting), e1002 (Accountant) → accounting: one of e1001 (Head of Accounting), e1002 (Accountant), e1201 (Sales staff 1)
+    e0202 (Director 2), second (accounting): accounting: one of e1001 (Head of Accounting), e1002 (Accountant) → accounting: one of e1001 (Head of Accounting), e1002 (Accountant), e1201 (Sales staff 1)
+    e0202 (Director 2), second (dept_head and accounting): accounting: one of e1001 (Head of Accounting), e1002 (Accountant) → accounting: one of e1001 (Head of Accounting), e1002 (Accountant), e1201 (Sales staff 1)
+  And 44 more: `--format json` lists them all.
+Tickets in progress:
+  Where the request itself does not change, the approvers that change come from the data it reads: a stage whose approvers are decided keeps them, and a ticket in progress takes the change at the next stage it starts.

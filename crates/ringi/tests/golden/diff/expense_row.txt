@@ -1,0 +1,30 @@
+  The request `expense` (v1 → v2): `expense_old.ringi` → `expense_new.ringi`
+Route:
+  Requests where “Category” is “Expenses” and “Amount” is from 100,001 JPY to 1,000,000 JPY: the stage “precheck” (check) no longer comes.
+  In the organization from 2026-04-01, the approvers change for 24 of 24 requesters.
+    e0001 (President (fictional)), precheck: check (manager when the agent doubts): no head is above the requester; it goes to `board`: one of e0201 (Director 1), e0202 (Director 2), e0203 (Director 3), e0204 (Director 4) → does not come
+    e0101 (Head of Sales Division), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e0102 (Head of Corporate Division), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e0201 (Director 1), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e0202 (Director 2), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e0203 (Director 3), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e0204 (Director 4), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e1001 (Head of Accounting), precheck: check (manager when the agent doubts): e0102 (Head of Corporate Division) → does not come
+    e1002 (Accountant), precheck: check (manager when the agent doubts): e1001 (Head of Accounting) → does not come
+    e1101 (Manager of Section 1A), precheck: check (manager when the agent doubts): e3101 (Head of Sales Department 1) → does not come
+  And 14 more: `--format json` lists them all.
+  In the organization from 2027-04-01, the approvers change for 23 of 23 requesters.
+    e0001 (President (fictional)), precheck: check (manager when the agent doubts): no head is above the requester; it goes to `board`: one of e0201 (Director 1), e0202 (Director 2), e0203 (Director 3), e0204 (Director 4) → does not come
+    e0101 (Head of Sales Division), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e0102 (Head of Corporate Division), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e0201 (Director 1), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e0202 (Director 2), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e0203 (Director 3), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e0204 (Director 4), precheck: check (manager when the agent doubts): e0001 (President (fictional)) → does not come
+    e1001 (Head of Accounting), precheck: check (manager when the agent doubts): e0102 (Head of Corporate Division) → does not come
+    e1002 (Accountant), precheck: check (manager when the agent doubts): e1001 (Head of Accounting) → does not come
+    e1101 (Manager of Section 1A), precheck: check (manager when the agent doubts): e3101 (Head of Sales Department 1) → does not come
+  And 13 more: `--format json` lists them all.
+  Every other request comes to the same stages.
+Tickets in progress:
+  A ticket finishes with the version of the request it was submitted with: tickets submitted with version 1 finish as version 1 says, and what changes here applies to requests submitted with version 2.

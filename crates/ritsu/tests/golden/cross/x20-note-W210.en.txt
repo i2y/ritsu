@@ -1,0 +1,11 @@
+summary.flow: ok
+ok contract.ringi: a request, 4 fields, 2 stages
+  may never end: the stages `summary` and `review` have no deadline (`due in …`), and wait until they are answered
+warning[ritsu W210]: contract.ringi:12: Whether the input `amount` of the flow `summarize` takes what `contract` gives it cannot be decided
+    12 |   summary  note from summarize  when urgent or amount >= 1_000_000JPY
+  = Why it cannot be decided: it looks as if it can give 0JPY (the flow takes 1_000_000JPY or more); but the `when` of the stage may hold the value to less, which ringi does not follow.
+  = `amount` is money[JPY] >=0JPY <=100_000_000JPY.
+  = The input `amount` takes money[JPY] >=1_000_000JPY <=50_000_000JPY (line 8 of "summary.flow").
+  = At the stage `summary`, ringi gives the flow the ticket's ID (`request_id`) and the fields of the form the flow declares as its inputs.
+  = ringi holds a value to less by the rows of the route's table, and by a `when` that compares fields of the form with constants (`amount <= 500_000JPY`, and such comparisons joined with `and`).
+ritsu check: 2 files (dandori 1, ringi 1): all pass (1 warning); borders between the languages: 5 checked, 1 undecided

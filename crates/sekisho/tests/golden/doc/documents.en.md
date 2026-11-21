@@ -99,7 +99,7 @@ Delete a document for good
 
 #### Denied
 
-- `what_can_be_archived_is_not_deleted` (`when allowed archive_document`) applies to 1 combination, and denies each; a permit applies to 1 of them too, and the forbid wins.
+- `what_can_be_archived_is_not_deleted` (`when allowed archive_document`) applies to 1 combination, and denies it; a permit applies to it too, and the forbid wins.
 - No permit applies to the 14 other combinations that are denied.
 
 <details>
@@ -213,7 +213,7 @@ unless { resource.held };
 
 A document the person could archive is archived, not deleted
 
-- On `delete_document`, it applies to 1 combination and denies them; a permit applies to 1 of them too.
+- On `delete_document`, it applies to 1 combination and denies it; a permit applies to it too.
 
 `documents.gate`
 

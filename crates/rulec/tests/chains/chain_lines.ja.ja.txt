@@ -1,0 +1,28 @@
+エラー[E058]: 型の `[` が閉じていません
+  --> chain_lines.ja.rule:9
+  |
+9 |   定価(list_price) : money[USD  range >=0USD <=1000USD
+  |                           ^ この `[` を閉じる `]` がありません
+  |
+ 型のかっこは `]` で閉じます（`money[円]`、`rate[step 1%]`）。この行は、`]` のあるはずの所で型が終わったものとして読みました。
+
+エラー[E005]: `output` はこの位置に書けません
+  --> chain_lines.ja.rule:12
+   |
+12 | output
+   | ^^^^^^
+   |
+ `outputs` のことですか。
+ 書けるのは description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never / possible です
+ この行の下の 1 行も読んでいません。
+
+エラー[E005]: `polcy` はこの位置に書けません
+  --> chain_lines.ja.rule:17 表 上乗せ
+   |
+17 | polcy unique
+   | ^^^^^
+   |
+ `policy` のことですか。
+ 書けるのは description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never / possible です
+ この行の下の 4 行も読んでいません。
+

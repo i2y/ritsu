@@ -1,0 +1,2 @@
+error[E003]: example.ringi:11:3: `finance` is declared twice in `who` (first on line 10)
+    11 |   finance = team accounting

@@ -105,6 +105,9 @@ pub mod rulec {
         "Warning", "ZeroDivisionError",
     ];
 
+    /// PHP's keywords, and `true`, `false` and `null`. PHP writes a value as a variable (`$list`),
+    /// so these are a problem only where a bare name goes, the rule's function and an enum's type,
+    /// which a caller names: they are among PHP's globals rather than its keywords.
     pub const PHP_GLOBAL: &[&str] = &[
         "abstract", "and", "array", "as", "break", "callable", "case", "catch", "class", "clone",
         "const", "continue", "declare", "default", "die", "do", "echo", "else", "elseif", "empty",
@@ -112,9 +115,14 @@ pub mod rulec {
         "global", "goto", "if", "implements", "include", "instanceof", "insteadof", "interface",
         "isset", "list", "match", "namespace", "new", "or", "print", "private", "protected",
         "public", "readonly", "require", "return", "static", "switch", "throw", "trait", "try",
-        "unset", "use", "var", "while", "xor", "yield", "true", "false", "null", "count", "max",
-        "min", "round", "sort",
+        "unset", "use", "var", "while", "xor", "yield", "true", "false", "null",
     ];
+
+    /// The builtins among PHP's globals: functions the module calls by their names. PHP looks a
+    /// function up in the module's namespace before the global one, so where a function of the
+    /// rule's has the name of one, the module calls the builtin from the global namespace
+    /// (`\count(...)`, rulec's §15.336), and a rule may be named one.
+    pub const PHP_BUILTIN: &[&str] = &["count", "max", "min", "round", "sort"];
 
     /// Go's predeclared identifiers but `complex64` and `complex128`.
     pub const GO_GLOBAL: &[&str] = &[
@@ -150,9 +158,9 @@ pub mod rulec {
 
     /// The classes of `java.lang` the generated code names, and the ones its files import: the
     /// rule's class is its alias in PascalCase, and a class `List` beside `import java.util.List`
-    /// does not compile.
+    /// does not compile. The runner's reader of an integer catches `ArithmeticException`.
     pub const JAVA_GLOBAL: &[&str] = &[
-        "ArrayList", "Boolean", "BufferedReader", "Character", "Double", "Error", "Exception",
+        "ArithmeticException", "ArrayList", "Boolean", "BufferedReader", "Character", "Double", "Error", "Exception",
         "IOException", "IllegalArgumentException", "InputStreamReader", "Integer", "LinkedHashMap",
         "List", "Long", "Map", "Math", "Number", "NumberFormatException", "Object", "PrintStream",
         "Record", "RuntimeException", "StandardCharsets", "String", "StringBuilder", "System",
@@ -214,7 +222,7 @@ pub mod rulec {
     pub const JAVASCRIPT: Backend = Backend { id: "javascript", reserved: Words(&[typescript::RESERVED, JS_KW_MORE]), globals: Words(&[JS_GLOBAL]), modules: Words(&[NONE]) };
     pub const RUST: Backend = Backend { id: "rust", reserved: Words(&[RS_KW]), globals: Words(&[RS_GLOBAL]), modules: Words(&[NONE]) };
     pub const RUBY: Backend = Backend { id: "ruby", reserved: Words(&[RB_KW]), globals: Words(&[RB_GLOBAL]), modules: Words(&[RB_CORE]) };
-    pub const PHP: Backend = Backend { id: "php", reserved: Words(&[PHP_KW]), globals: Words(&[PHP_GLOBAL]), modules: Words(&[NONE]) };
+    pub const PHP: Backend = Backend { id: "php", reserved: Words(&[PHP_KW]), globals: Words(&[PHP_GLOBAL, PHP_BUILTIN]), modules: Words(&[NONE]) };
     pub const GO: Backend = Backend { id: "go", reserved: Words(&[go::KEYWORDS]), globals: Words(&[GO_GLOBAL]), modules: Words(&[GO_STD]) };
     pub const SWIFT: Backend = Backend { id: "swift", reserved: Words(&[SWIFT_KW]), globals: Words(&[SWIFT_GLOBAL]), modules: Words(&[NONE]) };
     pub const JAVA: Backend = Backend { id: "java", reserved: Words(&[JAVA_KW]), globals: Words(&[JAVA_GLOBAL]), modules: Words(&[NONE]) };
@@ -228,13 +236,18 @@ pub mod rulec {
 
 /// dandori's: the names the generated Python, Go and TypeScript keep for themselves — the language's
 /// words, the builtins and the globals the code reads, and the names it uses itself. A type, a
-/// task you implement or a message of one of these names is W105, which stops that target
-/// (dandori's DESIGN 22); a variable, which no caller reads, gets a `_` after it.
+/// task you implement or a message of the service that is a word of the language, or a name a
+/// caller reads (`GO_EXPORTED`, `TS_TYPES_OWN`), is W105, which stops that target; where one takes
+/// a name the code has for itself alone (a builtin, a global type, `GO_OWN`), the code gives its
+/// own another name (dandori's DESIGN 22). A variable, which no caller reads, gets a `_` after it
+/// (Python, Go) or before it (TypeScript).
 pub mod dandori {
     use super::*;
 
-    /// The builtins of Python the generated code reads, which a name of the flow would hide (no
-    /// other: `print` or `format` hide nothing, and stop nothing), and the names it uses.
+    /// The builtins of Python the generated code reads, which a variable of the flow would hide (no
+    /// other: `print` or `format` hide nothing), and the names it uses. A variable of one of these
+    /// names gets a `_` after it; where a type or a task takes one, the code reads the builtin
+    /// through `_builtins` and writes its own name with `_` before it (dandori's `PyOwn`).
     /// dandori's `tests/spellings.rs` holds the builtins to what the code of every flow reads.
     const PY_MORE: &[&str] = &[
         "abs", "all", "any", "BaseException", "bool", "dict", "enumerate", "Exception", "float",
@@ -258,22 +271,54 @@ pub mod dandori {
     /// `GO_RESERVED`: Go's keywords and predeclared identifiers, and [`GO_MORE`].
     pub const GO_RESERVED: Words = Words(&[go::KEYWORDS, go::PREDECLARED, GO_MORE]);
 
-    /// `GO_EXPORTED`: the exported names every generated package has, and `Service`, which one that
+    /// `GO_EXPORTED`: the exported names every generated package has that its callers read (the
+    /// ones the pages name, and the types those take and give), and `Service`, which one that
     /// implements a service has. Go has one namespace for types and functions, and exports both in
     /// upper case, so a record's, an enum's or a method's name cannot be one of them (W105); so the
     /// package keeps out of the nouns a business's types go by (`CallOutcome`, `RunHistory`,
     /// `AnswerCallback`, `RunStatus`). What a package has for some flows alone is in dandori's
     /// `own_names`.
     pub const GO_EXPORTED: &[&str] = &[
-        "WorkflowType", "TaskQueue", "Events", "Workflow", "RegisterWorkflow", "OwnTasks",
-        "OwnTasksBy", "Activities", "RegisterActivities", "BuildID", "WorkerOptions", "NewWorker",
-        "RunHistory", "ReplayFailure", "Replay", "Start", "CallbackAnswer", "AnswerCallback", "Send",
-        "SendOnce", "SentWithAnotherValueError", "Where", "RunStatus", "Histories", "CallOutcome",
-        "HTTPRequest", "HTTPResponse", "AgentCall", "Transport", "TransportOptions", "NewTransport",
-        "DefaultTransport", "AgentHTTPError", "AgentStopped", "JevURL", "DecisionsURL",
-        "ClaudeMaxTokens", "WorkflowInput", "WorkflowOutput", "IsWorkflowInput", "Decode", "TIMESTAMP",
-        "Service",
+        "Workflow", "OwnTasks", "Activities", "NewWorker", "RunHistory", "ReplayFailure", "Replay",
+        "Start", "CallbackAnswer", "AnswerCallback", "Send", "SendOnce", "SentWithAnotherValueError",
+        "Where", "RunStatus", "Histories", "CallOutcome", "HTTPRequest", "HTTPResponse", "AgentCall",
+        "Transport", "TransportOptions", "NewTransport", "WorkflowInput", "WorkflowOutput",
+        "IsWorkflowInput", "Decode", "Service",
     ];
+
+    /// `GO_OWN`: the exported names every generated package declares for its own use, which no
+    /// caller is told of: the parts of the worker, the default Transport's, and the regular
+    /// expression of a timestamp. A record's, an enum's or a method's name may be one of them; the
+    /// package's own then goes by the name with an `_` after it, which no name of a flow is, and the
+    /// flow's keeps its name (dandori's `renamed`, DESIGN 22). What a package has for some flows
+    /// alone is in dandori's `kept_names`.
+    pub const GO_OWN: &[&str] = &[
+        "WorkflowType", "TaskQueue", "Events", "RegisterWorkflow", "OwnTasksBy", "RegisterActivities",
+        "BuildID", "WorkerOptions", "DefaultTransport", "AgentHTTPError", "AgentStopped", "JevURL",
+        "DecisionsURL", "ClaudeMaxTokens", "TIMESTAMP",
+    ];
+
+    /// What `run`, the function of a workflow's TypeScript that runs the flow, reads besides its
+    /// variables: the globals of JavaScript it reads, its parameters, and what the file imports or
+    /// declares. A variable of the name would hide it. dandori's `tests/spellings.rs` holds the
+    /// table to what `run` reads in the code of every flow.
+    const TS_MORE: &[&str] = &[
+        "Array", "Date", "Math", "Number", "Promise", "String", "input", "context", "tasks", "T", "dd",
+        "CancellationScope", "continueAsNew", "executeChild", "isCancellation", "sleep",
+        "StepSemantics", "rule_calls", "local_rule_calls",
+    ];
+
+    /// `TS_RESERVED`: the words a name of strict-mode JavaScript cannot be, and [`TS_MORE`]. A
+    /// variable of one of these names goes by `_` and its name in the code (dandori's
+    /// `temporal::ts_var`, which keeps it from the activities of the tasks and from the
+    /// workflow's function too).
+    pub const TS_RESERVED: Words = Words(&[typescript::RESERVED, typescript::STRICT, typescript::UNBINDABLE, TS_MORE]);
+
+    /// `TS_TYPES_OWN`: what `types.ts` declares for itself that a caller reads, which a type's name
+    /// cannot be (W105). A type of the name of a global type the file reads keeps its name, and the
+    /// file reads the global through `globalThis` (dandori's `TYPES_READ`); a type hides no value
+    /// (`Number.isInteger` still reads the global), and the other files read a type as `T.Date`.
+    pub const TS_TYPES_OWN: &[&str] = &["WorkflowInput", "WorkflowOutput"];
 
     /// `TS_GLOBALS`: the names a type's name cannot be in `types.ts` (W105): the global types it
     /// reads, which a type of the name would hide, and what it declares for itself. A type hides no

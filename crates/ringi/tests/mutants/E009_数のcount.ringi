@@ -1,0 +1,13 @@
+request 例(example) v1 "例"
+
+form
+  日数(days) : number "日数"  range >=1 <=20  count <=5
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

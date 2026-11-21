@@ -1,0 +1,80 @@
+request top v1 "Request from the top"
+description "A request the president makes (fictional rules): a stage that asks the line above the requester finds nobody, and each way to say what happens then"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  skipped  manager
+    when empty escalate, then skip
+  turned   manager
+    when empty escalate, then board
+  stopped  manager
+    when empty escalate
+  nobody   manager
+    when empty escalate, then dept_head
+  stays    manager
+    when empty stay
+  last     board
+
+who
+  manager   = manager of requester
+  board     = team board
+  dept_head = head of requester.department
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+
+ticket
+  self approval  not allowed
+
+# nobody is above the president: the first stage is skipped, the second goes to the board, and
+# the three after it wait for an administrator to add an approver
+scenario the_president_asks
+  requester e0001
+  form what = "A new office"
+| at               | event                                   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                  | e0001 | turned   | in progress |
+| 2026-11-16 11:00 | approve                                 | e0201 | stopped  | in progress |
+| 2026-11-16 12:00 | add approver(approver: person "e0101")  |       | stopped  | in progress |
+| 2026-11-16 13:00 | approve                                 | e0101 | nobody   | in progress |
+| 2026-11-16 14:00 | add approver(approver: person "e0102")  |       | nobody   | in progress |
+| 2026-11-16 15:00 | approve                                 | e0102 | stays    | in progress |
+| 2026-11-16 16:00 | add approver(approver: person "e0101")  |       | stays    | in progress |
+| 2026-11-16 17:00 | approve                                 | e0101 | last     | in progress |
+| 2026-11-17 10:00 | approve                                 | e0202 |          | approved    |
+
+# a stage that waits for an administrator has its deadline all the same: nobody is added, and it
+# is late with nobody to go up from
+scenario nobody_is_added
+  requester e0001
+  form what = "A new office"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e0001 | turned   | in progress |
+| 2026-11-16 11:00 | approve | e0201 | stopped  | in progress |
+| 2026-11-20 00:00 | late    |       |          | expired     |
+
+# the board the stage turned to is late: nobody is above it but the requester
+scenario the_board_is_late
+  requester e0001
+  form what = "A new office"
+| at               | event  | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit | e0001 | turned   | in progress |
+| 2026-11-20 00:00 | late   |       |          | expired     |
+
+# somebody with a line above them comes to every stage
+scenario a_member_of_the_staff_asks
+  requester e1201
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | skipped  | in progress |
+| 2026-11-16 11:00 | approve | e1101 | turned   | in progress |
+| 2026-11-16 11:01 | approve | e1101 | stopped  | in progress |
+| 2026-11-16 11:02 | approve | e1101 | nobody   | in progress |
+| 2026-11-16 11:03 | approve | e1101 | stays    | in progress |
+| 2026-11-16 11:04 | approve | e1101 | last     | in progress |
+| 2026-11-16 12:00 | approve | e0001 |          | approved    |

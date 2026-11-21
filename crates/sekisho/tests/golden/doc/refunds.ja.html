@@ -135,7 +135,7 @@ body.sheet-open { overflow: hidden; }
 <ul>
 <li>守る操作：<code>openapi &quot;api/orders.json&quot; operation refundOrder</code></li>
 <li>principal の型：<code>職員</code>、<code>Workflow</code>。resource の型：<code>注文</code>（ID は操作の引数 <code>orderId</code> から読む）</li>
-<li>input <code>金額</code>（<code>amount</code>）：<code>money[GBP, incl_tax]</code>、1GBP〜10,000GBP</li>
+<li>input <code>金額</code>（<code>amount</code>）：<code>money[GBP, incl_tax]</code>、1GBP〜10_000GBP</li>
 <li>計算した値：<code>返金の区分</code>、<code>期間内</code>、<code>営業日</code>（下の「計算した値」）</li>
 <li>組み合わせは 1,056 通りで、そのうち 88 通りを許します。</li>
 </ul>
@@ -501,13 +501,17 @@ when { principal.suspended };</code></pre></figure>
 </tbody>
 </table></div>
 <h4 id="workflow-returns-calls">フローが呼ぶ操作</h4>
-<p>フローのタスクが呼ぶ操作と、それを守る action、そのワークフローがその action を許されるかです。<code>ritsu check</code> は、これを言語をまたいで確かめます。</p>
+<p>フローのタスクが呼ぶ操作と、それを守る action、その呼び出しでワークフローがその action を許されるかです。答えは、その呼び出しまで進んだ実行で起こりうる組み合わせの上のものです（呼び出しが渡す値と、途中の <code>match</code> が残す値）。<code>ritsu check</code> は、これを言語をまたいで確かめます。</p>
 <div class="scroll"><table>
 <thead><tr><th>行</th><th>タスク</th><th>操作</th><th>守る action</th><th>許されるか</th><th>拒まれたときのエラー</th></tr></thead>
 <tbody>
 <tr><td>22</td><td><code>refund_order</code></td><td><code>openapi &quot;api/orders.json&quot; operation refundOrder</code></td><td><code>返金する</code>（<code>refund_order</code>）</td><td>組み合わせによる</td><td><code>denied</code></td></tr>
 </tbody>
 </table></div>
+<p>呼び出しまで進んだ実行で決まっていること：</p>
+<ul>
+<li>22 行目：<code>金額</code>（呼び出しが渡す <code>amount</code>）は 1GBP〜50GBP。</li>
+</ul>
 <h2 id="operations">守る操作</h2>
 <p>action が守る契約の操作です。サービスは、操作を行う前に、その action について Cedar に尋ねます。参照のパスはルートからです。</p>
 <div class="scroll"><table>

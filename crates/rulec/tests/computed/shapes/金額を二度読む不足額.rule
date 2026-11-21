@@ -1,0 +1,17 @@
+rule 金額を二度読む不足額(amount_read_twice) v1
+description "金額が 30 円に足りない額を、金額と一緒に読む。定義は金額を二度読み、30 円からは 0 円になって、ほかの値にはならない"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=0円 <=40円
+
+define 不足額(shortfall) : money[円] = max(金額, 30円) - 金額
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 金額   | 不足額 | -> 答え |
+| <30円  | >0円   | 一      |
+| >=30円 | 0円    | 二      |

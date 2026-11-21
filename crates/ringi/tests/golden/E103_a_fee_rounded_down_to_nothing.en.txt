@@ -1,0 +1,4 @@
+error[E103]: tests/mutants/E103_a_fee_rounded_down_to_nothing.ringi:6:62: The range `>0JPY` of the field fee holds no value its computation comes to
+     6 |   fee    : money[JPY] "Fee" = amount * 3%  round down(1JPY)  range >0JPY
+  = The computation comes to `>=0JPY <=0JPY` (from the ranges of what it reads). With this range no request can be made.
+  = Correct the range so that it meets what the computation comes to. A request whose value falls outside the range is refused; a range wider or narrower than that is no mistake.

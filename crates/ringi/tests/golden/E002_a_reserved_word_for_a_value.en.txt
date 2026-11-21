@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_a_reserved_word_for_a_value.ringi:5:5: `none` is a word conditions are written with, and cannot be a name
+     5 |     none  "None"
+  = The seven words that cannot be names are `and` `or` `not` `is` `none` `true` `false`.

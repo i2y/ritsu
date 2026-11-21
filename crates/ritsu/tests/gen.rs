@@ -27,8 +27,10 @@
 //! `rust` where the crate is tested. A crate holds no workflow and no gate's code, so the rest of
 //! this list does not hold for it: it leaves them out, and says so.
 
+mod common;
 mod type_checkers;
 
+use ritsu_testkit::run::finish;
 use ritsu_testkit::{Need, TempDir, golden, ready};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -50,7 +52,7 @@ const MODULE: &str = "gocheck/generated";
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -126,6 +128,20 @@ fn a_rules_range_from_koyomi_generates() {
     let (code, _, err) = ritsu_in(&project, &["gen", "--root", ".", "--target", "python", "--out", out.to_str().unwrap()]);
     assert_eq!(code, 0, "ritsu gen of the project:\n{err}");
     assert_eq!(read(&out.join("python/generated/rules/settlement.py")), made);
+}
+
+/// A program these tests wait for (a type checker, a build, a harness) that does not end within its
+/// limit is stopped, and the test fails there, naming the program, its arguments and the directory
+/// it ran in (tests/type_checkers's `run_for`), not at the limit of the job with nothing said.
+#[test]
+fn a_program_past_its_limit_fails_the_test_naming_its_command_line() {
+    let t = TempDir::new("gen-limit");
+    let started = std::time::Instant::now();
+    let failed = std::panic::catch_unwind(|| run_for(Command::new("sleep").arg("60").current_dir(t.path()), std::time::Duration::from_secs(1)));
+    let said = failed.expect_err("sleep 60 ended within a second").downcast::<String>().expect("the failure is a sentence");
+    let want = format!("sleep 60 (in {}): it did not end within 1 seconds, and was stopped with every process it started.", t.path().display());
+    assert!(said.starts_with(&want), "{said}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(30), "sleep 60 was not stopped at its limit of a second: {:?}", started.elapsed());
 }
 
 /// The packages of the English project, with the books on PostgreSQL, on TigerBeetle and on the MySQL
@@ -219,9 +235,9 @@ fn a_file_of_enums_is_one_module_the_rules_of_the_package_import() {
              print(fee, back.window, back.free_return, catalog.category_label(goods))\n",
         )
         .unwrap();
-        let o = Command::new("python3").arg("app.py").current_dir(out.join("python")).output().unwrap();
-        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-        assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "21 14 True Electronics");
+        let o = run_for(Command::new("python3").arg("app.py").current_dir(out.join("python")), RUN);
+        assert!(o.ok, "{}", o.stderr);
+        assert_eq!(o.stdout.trim(), "21 14 True Electronics");
         std::fs::remove_file(&app).unwrap();
         match mypy() {
             Some((mypy, python, _)) => {
@@ -248,6 +264,126 @@ fn a_file_of_enums_is_one_module_the_rules_of_the_package_import() {
     }
 }
 
+/// A workflow that hands an enum of an `enums` file to the rule it calls (dandori's DESIGN 28), in a
+/// package: the workflow's code, the rule's module and the gate's code read the enum's one module,
+/// and the rule's module hands on the enum's display names too (rulec's §15.319). The packages pass
+/// `tsc --strict`, `mypy --strict` and `go vet`, and the workflow's activity of the rule, run, answers
+/// for the value it is given. The materials are `tests/projects/shared_states` (its English files
+/// and its Japanese ones, each a project of its own: their modules have the same names) and
+/// `tests/projects/product_line`.
+#[test]
+fn a_workflow_hands_an_enums_files_enum_to_its_rule_in_packages_the_type_checkers_pass() {
+    let t = TempDir::new("gen-one-enum");
+    let states = here().join("tests/projects/shared_states");
+    let mut gated = Vec::new();
+    for (name, files) in [
+        ("states", ["refunds.flow", "refunds.gate", "rules/order_states.rule", "rules/refund_window.rule"]),
+        ("states-ja", ["refunds.ja.flow", "refunds.ja.gate", "rules/注文の状態.rule", "rules/返金の期限.rule"]),
+    ] {
+        let project = t.path().join(format!("{name}-project"));
+        for f in files {
+            let to = project.join(f);
+            std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+            std::fs::copy(states.join(f), to).unwrap();
+        }
+        let out = t.path().join(name);
+        let (code, _, err) = generate(&project, &out, &[]);
+        assert_eq!(code, 0, "ritsu gen of {name}:\n{err}");
+        gated.push(out);
+    }
+    let line = t.path().join("product_line");
+    let (code, _, err) = generate(&here().join("tests/projects/product_line"), &line, &[]);
+    assert_eq!(code, 0, "ritsu gen of the product line:\n{err}");
+    // the rule's module hands on the enum's display names from the enums file's
+    let price = read(&line.join("python/generated/rules/product_price.py"));
+    assert!(price.contains("from .product_kinds import Kind as Kind, kind_label as kind_label"), "{price}");
+    let price = read(&line.join("typescript/rules/product_price.ts"));
+    assert!(price.contains("export { kindLabel } from \"./product_kinds\";"), "{price}");
+    let every: Vec<&PathBuf> = gated.iter().chain([&line]).collect();
+
+    if ritsu_testkit::need(Need::Python) {
+        match (mypy(), cedarpy()) {
+            (Some((mypy, python, tigerbeetle)), Some(cedarpy)) => {
+                for out in &every {
+                    type_check_python(&out.join("python"), &mypy, &python, &[tigerbeetle.clone(), cedarpy.clone()]);
+                }
+                println!("mypy --strict passes the Python of three packages");
+                // the workflow's activity of the rule, run with Temporal's SDK beside it, and the
+                // packages mypy read beside it above (extra/), which the gates import; nothing is
+                // written into them
+                for (out, app, want) in [
+                    (
+                        &gated[0],
+                        "import asyncio\nfrom generated.rules import order_states, refund_window\nfrom generated.flows.refunds import rules\n\n\
+                         assert refund_window.OrderState.SHIPPED is order_states.OrderState.SHIPPED\n\
+                         print(refund_window.refund_window(order_states.OrderState.SHIPPED), asyncio.run(rules.rule_refund_window({\"state\": \"shipped\"})))\n",
+                        "14 {'days': 14}",
+                    ),
+                    (
+                        &gated[1],
+                        "import asyncio\nfrom generated.flows.返金 import rules\n\nprint(asyncio.run(rules.rule_返金の期限({\"状態\": \"発送済\"})))\n",
+                        "{'日数': 14}",
+                    ),
+                    (
+                        &line,
+                        "from generated.rules import product_kinds, product_price\n\n\
+                         assert product_price.Kind.GARDEN is product_kinds.Kind.GARDEN\n\
+                         print(product_price.product_price(product_price.Kind.GARDEN, product_price.USD(20)), product_price.kind_label(product_kinds.Kind.GARDEN))\n",
+                        "23 Garden supplies",
+                    ),
+                ] {
+                    let file = out.join("python/app.py");
+                    std::fs::write(&file, app).unwrap();
+                    let o = run_for(Command::new(&python).arg("app.py").current_dir(out.join("python")).env("PYTHONPATH", out.join("python/extra")).env("PYTHONDONTWRITEBYTECODE", "1"), RUN);
+                    assert!(o.ok, "{}: {}", out.display(), o.stderr);
+                    assert_eq!(o.stdout.trim(), want, "{}", out.display());
+                    std::fs::remove_file(&file).unwrap();
+                }
+            }
+            _ => ritsu_testkit::skip("mypy, Temporal's Python SDK (crates/dandori/tools/temporal-python), tigerbeetle (crates/chobo/tools/runner) or cedarpy (crates/sekisho/tools/runner-py) is not installed; the Python of the packages is not type-checked"),
+        }
+    }
+    if ritsu_testkit::need(Need::Node) {
+        match (tsc(), cedar_wasm()) {
+            (Some((tsc, mut modules)), Some(cedar)) => {
+                modules.push(cedar);
+                for out in &every {
+                    type_check_typescript(&out.join("typescript"), &tsc, &modules);
+                }
+                println!("tsc --strict passes the TypeScript of three packages");
+            }
+            _ => ritsu_testkit::skip("TypeScript (crates/dandori/tools/temporal), tigerbeetle-node (crates/chobo/tools/runner) or cedar-wasm (crates/sekisho/tools/runner-ts) is not installed; the TypeScript of the packages is not type-checked"),
+        }
+    }
+    if ready(Need::Go, have_go, "go is not installed; the Go of the packages is not vetted") {
+        // the workflows with the rules, in a module that requires Temporal's SDK; the gates with the
+        // rules, in one that requires what sekisho's runner of Go locks (cedar-go)
+        let runner = workspace().join("crates/sekisho/tools/runner-go");
+        match go_module().filter(|_| runner.join("go.mod").exists()) {
+            Some(gomod) => {
+                let gates = (read(&runner.join("go.mod")).replacen("module sekisho-runner", "module gocheck", 1), read(&runner.join("go.sum")));
+                for (i, out) in every.iter().enumerate() {
+                    let mut vet = vec![(format!("go-flows-{i}"), &gomod, "authz")];
+                    if out.join("go/authz").exists() {
+                        vet.push((format!("go-gates-{i}"), &gates, "flows"));
+                    }
+                    for (dir, module, left_out) in vet {
+                        let dir = t.path().join(dir);
+                        go_module_in(&dir, &out.join("go"), module);
+                        let _ = std::fs::remove_dir_all(dir.join("generated").join(left_out));
+                        let o = run_for(go_in(&dir).args(["vet", "./..."]), LIMIT);
+                        assert!(o.ok, "{}: go vet finds fault with the package:\n{}", out.display(), o.both());
+                        let fmt = run_for(Command::new("gofmt").arg("-l").arg("generated").current_dir(&dir), RUN);
+                        assert!(fmt.ok && fmt.stdout.is_empty(), "{}: gofmt would write these otherwise:\n{}", out.display(), fmt.stdout);
+                    }
+                }
+                println!("go vet and gofmt pass the Go of three packages");
+            }
+            None => ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go, crates/chobo/tools/runner/go or crates/sekisho/tools/runner-go is missing; the Go of the packages is not vetted"),
+        }
+    }
+}
+
 /// The Go of a package put in a module as ritsu gen writes it, its directory named `go`
 /// (`--module gocheck/gen/go`): the root of the package cannot be `package go`, a word Go keeps, and
 /// is the package's name instead (`generated`), or, with Go keeping that too (`--name go`), `pgo`.
@@ -270,10 +406,10 @@ fn a_package_whose_directory_is_named_go_vets() {
         std::fs::create_dir_all(module.join("gen")).unwrap();
         std::fs::write(module.join("go.mod"), "module gocheck\n\ngo 1.24\n").unwrap();
         ritsu_testkit::tmp::copy_dir(&out.join("go"), &module.join("gen/go"));
-        let o = go_in(&module).args(["vet", "./..."]).output().unwrap();
-        assert!(o.status.success(), "go vet finds fault with the package at gen/go ({want}):\n{}", said(&o));
-        let fmt = Command::new("gofmt").args(["-l", "gen"]).current_dir(&module).output().unwrap();
-        assert!(fmt.status.success() && fmt.stdout.is_empty(), "gofmt would write these otherwise:\n{}", said(&fmt));
+        let o = run_for(go_in(&module).args(["vet", "./..."]), LIMIT);
+        assert!(o.ok, "go vet finds fault with the package at gen/go ({want}):\n{}", o.both());
+        let fmt = run_for(Command::new("gofmt").args(["-l", "gen"]).current_dir(&module), RUN);
+        assert!(fmt.ok && fmt.stdout.is_empty(), "gofmt would write these otherwise:\n{}", fmt.both());
     }
     println!("go vet and gofmt pass the package at a directory named go, as package generated and as package pgo");
 }
@@ -309,9 +445,11 @@ fn marketplace_module(app: &Path, gomod: &(String, String)) {
     std::fs::write(app.join("go.sum"), &gomod.1).unwrap();
 }
 
-fn said(o: &std::process::Output) -> String {
-    format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))
-}
+/// How long a program may take with a database the test starts: the schema of a book, or the
+/// checkout run against it (`go run` builds it first), a minute at most on a busy machine. Past it,
+/// the program is stopped with every process it started, and the test fails with what it printed
+/// (ritsu-testkit's `finish`), not at the limit of the job with nothing said.
+const DATABASE_LIMIT: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 /// The amounts of money and of the quantities are the package's one type of their unit (rulec's
 /// DESIGN §15.248): `units` declares it, the rule's module hands it on, and the book's client takes
@@ -355,8 +493,8 @@ fn the_checkout_hands_the_book_the_rules_amounts_in_their_units_type() {
                 }
                 // what it says is on chobo's site (website/chobo/docs/together.md)
                 let o = tsc_in(&dollars, &tsc, &modules);
-                assert!(!o.status.success(), "tsc --strict passes the checkout of a rule of dollars");
-                golden(here().join("tests/golden/gen/checkout-dollars.tsc.txt"), &said(&o));
+                assert!(!o.ok, "tsc --strict passes the checkout of a rule of dollars");
+                golden(here().join("tests/golden/gen/checkout-dollars.tsc.txt"), &o.both());
                 println!("tsc --strict passes the checkout on three books, and stops it where a rule of dollars meets the book's cents");
             }
             None => ritsu_testkit::skip("TypeScript (crates/dandori/tools/temporal) or tigerbeetle-node (crates/chobo/tools/runner) is not installed; the checkout is not type-checked"),
@@ -367,11 +505,11 @@ fn the_checkout_hands_the_book_the_rules_amounts_in_their_units_type() {
             Some((mypy, python, tigerbeetle)) => {
                 for app in apps.iter().chain([&dollars]) {
                     let o = mypy_in(app, &mypy, &python, std::slice::from_ref(&tigerbeetle), &["service/checkout.py"], &[app.join("generated/python")]);
-                    let s = said(&o);
+                    let s = o.both();
                     if app == &dollars {
-                        assert!(!o.status.success() && s.contains("service/checkout.py") && s.contains("incompatible type \"USD\"; expected \"USDc\""), "{s}");
+                        assert!(!o.ok && s.contains("service/checkout.py") && s.contains("incompatible type \"USD\"; expected \"USDc\""), "{s}");
                     } else {
-                        assert!(o.status.success(), "{}: mypy --strict finds fault with the checkout:\n{s}", app.display());
+                        assert!(o.ok, "{}: mypy --strict finds fault with the checkout:\n{s}", app.display());
                     }
                 }
                 println!("mypy --strict passes the checkout on three books, and stops it where a rule of dollars meets the book's cents");
@@ -384,14 +522,14 @@ fn the_checkout_hands_the_book_the_rules_amounts_in_their_units_type() {
             Some(gomod) => {
                 for app in apps.iter().chain([&dollars]) {
                     marketplace_module(app, &gomod);
-                    let o = go_in(app).args(["vet", "./..."]).output().unwrap();
-                    let s = said(&o);
+                    let o = run_for(go_in(app).args(["vet", "./..."]), LIMIT);
+                    let s = o.both();
                     if app == &dollars {
-                        assert!(!o.status.success() && s.contains("service/checkout.go") && s.contains("cannot use") && s.contains("units.USDc") && s.contains("salesplit.USD"), "{s}");
+                        assert!(!o.ok && s.contains("service/checkout.go") && s.contains("cannot use") && s.contains("units.USDc") && s.contains("salesplit.USD"), "{s}");
                     } else {
-                        assert!(o.status.success(), "{}: go vet finds fault with the checkout:\n{s}", app.display());
-                        let fmt = Command::new("gofmt").args(["-l", "gen", "service"]).current_dir(app).output().unwrap();
-                        assert!(fmt.status.success() && fmt.stdout.is_empty(), "{}: gofmt would write these otherwise:\n{}", app.display(), said(&fmt));
+                        assert!(o.ok, "{}: go vet finds fault with the checkout:\n{s}", app.display());
+                        let fmt = run_for(Command::new("gofmt").args(["-l", "gen", "service"]).current_dir(app), RUN);
+                        assert!(fmt.ok && fmt.stdout.is_empty(), "{}: gofmt would write these otherwise:\n{}", app.display(), fmt.both());
                     }
                 }
                 println!("go vet and gofmt pass the checkout on three books, and go vet stops it where a rule of dollars meets the book's cents");
@@ -447,10 +585,10 @@ fn a_unit_is_one_type_across_the_rules_however_they_spell_it() {
         match mypy() {
             Some((mypy, python, _)) => {
                 let o = mypy_in(&app, &mypy, &python, &[], &["app.py"], &[app.join("generated/python")]);
-                assert!(o.status.success(), "mypy --strict finds fault with the price given to the coupon:\n{}", said(&o));
-                let o = Command::new(&python).arg("app.py").env("PYTHONPATH", app.join("generated/python")).current_dir(&app).output().unwrap();
-                assert!(o.status.success(), "{}", said(&o));
-                assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "700");
+                assert!(o.ok, "mypy --strict finds fault with the price given to the coupon:\n{}", o.both());
+                let o = run_for(Command::new(&python).arg("app.py").env("PYTHONPATH", app.join("generated/python")).current_dir(&app), RUN);
+                assert!(o.ok, "{}", o.both());
+                assert_eq!(o.stdout.trim(), "700");
                 println!("mypy --strict passes the price of one rule given to the other, and it runs");
             }
             None => ritsu_testkit::skip("mypy or Temporal's Python SDK (crates/dandori/tools/temporal-python) is not installed; the two rules are not type-checked"),
@@ -458,11 +596,11 @@ fn a_unit_is_one_type_across_the_rules_however_they_spell_it() {
     }
     if ready(Need::Go, have_go, "go is not installed; the two rules are not vetted") {
         std::fs::write(app.join("go.mod"), "module spellings\n\ngo 1.24\n").unwrap();
-        let o = go_in(&app).args(["vet", "./..."]).output().unwrap();
-        assert!(o.status.success(), "go vet finds fault with the price given to the coupon:\n{}", said(&o));
-        let o = go_in(&app).args(["run", "./app"]).output().unwrap();
-        assert!(o.status.success(), "{}", said(&o));
-        assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "700");
+        let o = run_for(go_in(&app).args(["vet", "./..."]), LIMIT);
+        assert!(o.ok, "go vet finds fault with the price given to the coupon:\n{}", o.both());
+        let o = run_for(go_in(&app).args(["run", "./app"]), LIMIT);
+        assert!(o.ok, "{}", o.both());
+        assert_eq!(o.stdout.trim(), "700");
         println!("go vet passes the price of one rule given to the other, and it runs");
     }
 }
@@ -564,9 +702,9 @@ fn run_checkout_go(app: &Path, gomod: &(String, String), imports: &str, open: &s
     marketplace_module(app, gomod);
     std::fs::create_dir_all(app.join("cmd/run")).unwrap();
     std::fs::write(app.join("cmd/run/main.go"), checkout_go(imports, open)).unwrap();
-    let o = go_in(app).args(["run", "./cmd/run"]).envs(env.iter().map(|(k, v)| (*k, v.as_str()))).output().unwrap();
-    assert!(o.status.success(), "{}: the checkout's Go does not run:\n{}", app.display(), said(&o));
-    String::from_utf8_lossy(&o.stdout).trim().to_string()
+    let o = finish(go_in(app).args(["run", "./cmd/run"]).envs(env.iter().map(|(k, v)| (*k, v.as_str()))), DATABASE_LIMIT, "the checkout's Go against its database");
+    assert!(o.ok, "{}: the checkout's Go does not run:\n{}", app.display(), o.both());
+    o.stdout.trim().to_string()
 }
 
 /// The checkout runs, recording the sale: on a PostgreSQL the test starts, in TypeScript (compiled by
@@ -585,8 +723,8 @@ fn the_checkout_records_the_sale() {
         let pg = ritsu_testkit::pg::Postgres::start().unwrap_or_else(|e| panic!("{e}"));
         let app = t.path().join("app-postgres");
         marketplace(&app, "postgres", false);
-        let o = pg.psql("postgres").arg("-f").arg(app.join("generated/typescript/books/marketplace.sql")).output().unwrap();
-        assert!(o.status.success(), "the book's schema: {}", said(&o));
+        let o = finish(pg.psql("postgres").arg("-f").arg(app.join("generated/typescript/books/marketplace.sql")), DATABASE_LIMIT, "psql loading the book's schema");
+        assert!(o.ok, "the book's schema: {}", o.both());
         let env = [("PGHOST", pg.socket.to_string_lossy().to_string()), ("PGPORT", pg.port.to_string()), ("PGUSER", pg.user.clone()), ("PGDATABASE", "postgres".to_string())];
         let mut ran = Vec::new();
         let pg_module = workspace().join("crates/chobo/tools/runner/node_modules/pg");
@@ -598,14 +736,14 @@ fn the_checkout_records_the_sale() {
                         "include": ["service/**/*.ts", "generated/typescript/**/*.ts"]
                     });
                     std::fs::write(app.join("tsconfig.json"), serde_json::to_string_pretty(&tsconfig).unwrap()).unwrap();
-                    let o = Command::new(&tsc).arg("-p").arg(app.join("tsconfig.json")).output().unwrap();
-                    assert!(o.status.success(), "tsc of the checkout: {}", said(&o));
+                    let o = run_for(Command::new(&tsc).arg("-p").arg(app.join("tsconfig.json")), RUN);
+                    assert!(o.ok, "tsc of the checkout: {}", o.both());
                     std::fs::create_dir_all(app.join("node_modules")).unwrap();
                     std::os::unix::fs::symlink(&pg_module, app.join("node_modules/pg")).unwrap();
                     std::fs::write(app.join("run.js"), CHECKOUT_TS).unwrap();
-                    let o = Command::new("node").arg("run.js").envs(env.iter().map(|(k, v)| (*k, v.as_str()))).current_dir(&app).output().unwrap();
-                    assert!(o.status.success(), "the checkout's TypeScript does not run: {}", said(&o));
-                    assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), checkout_ran("typescript"));
+                    let o = finish(Command::new("node").arg("run.js").envs(env.iter().map(|(k, v)| (*k, v.as_str()))).current_dir(&app), DATABASE_LIMIT, "the checkout's TypeScript against PostgreSQL");
+                    assert!(o.ok, "the checkout's TypeScript does not run: {}", o.both());
+                    assert_eq!(o.stdout.trim(), checkout_ran("typescript"));
                     ran.push("TypeScript");
                 }
                 _ => ritsu_testkit::skip("TypeScript (crates/dandori/tools/temporal) or pg (crates/chobo/tools/runner) is not installed; the checkout's TypeScript is not run"),
@@ -614,9 +752,9 @@ fn the_checkout_records_the_sale() {
         let python = workspace().join("crates/chobo/tools/runner/.venv/bin/python");
         if ready(Need::Python, || python.exists(), "chobo's runner of Python (crates/chobo/tools/runner/.venv) is not installed; the checkout's Python is not run") {
             std::fs::write(app.join("run.py"), CHECKOUT_PY).unwrap();
-            let o = Command::new(&python).args(["-I", "run.py"]).envs(env.iter().map(|(k, v)| (*k, v.as_str()))).current_dir(&app).output().unwrap();
-            assert!(o.status.success(), "the checkout's Python does not run: {}", said(&o));
-            assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), checkout_ran("python"));
+            let o = finish(Command::new(&python).args(["-I", "run.py"]).envs(env.iter().map(|(k, v)| (*k, v.as_str()))).current_dir(&app), DATABASE_LIMIT, "the checkout's Python against PostgreSQL");
+            assert!(o.ok, "the checkout's Python does not run: {}", o.both());
+            assert_eq!(o.stdout.trim(), checkout_ran("python"));
             ran.push("Python");
         }
         if let Some(gomod) = &gomod {
@@ -641,8 +779,9 @@ fn the_checkout_records_the_sale() {
         let db = my.database("checkout").unwrap_or_else(|e| panic!("{e}"));
         let app = t.path().join("app-mysql");
         marketplace(&app, "mysql", false);
-        let o = my.mysql(&db).stdin(std::fs::File::open(app.join("generated/typescript/books/marketplace.sql")).unwrap()).output().unwrap();
-        assert!(o.status.success(), "the book's tables: {}", said(&o));
+        let tables = std::fs::read(app.join("generated/typescript/books/marketplace.sql")).unwrap();
+        let o = ritsu_testkit::run::finish_with_input(&mut my.mysql(&db), Some(&tables), DATABASE_LIMIT, "mysql loading the book's tables");
+        assert!(o.ok, "the book's tables: {}", o.both());
         let open = "\tcfg := mysql.NewConfig()\n\tcfg.User, cfg.Net, cfg.Addr, cfg.DBName = os.Getenv(\"MYSQL_USER\"), \"tcp\", os.Getenv(\"MYSQL_ADDR\"), os.Getenv(\"MYSQL_DB\")\n\tconnector, err := mysql.NewConnector(cfg)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdb := sql.OpenDB(connector)\n\tdefer db.Close()\n\tbook := marketplace.MySQL(db, \"go\", false)";
         let env = [("MYSQL_USER", my.user.clone()), ("MYSQL_ADDR", format!("{}:{}", my.host, my.port)), ("MYSQL_DB", db.clone())];
         assert_eq!(run_checkout_go(&app, &gomod, "\t\"database/sql\"\n\n\t\"github.com/go-sql-driver/mysql\"\n", open, &env), checkout_ran("go"));
@@ -792,7 +931,7 @@ fn gen_given_no_target_says_what_writes_what_0_40_0_wrote() {
     let t = TempDir::new("gen-no-target");
     let out = t.path().join("my out");
     let o = out.display().to_string();
-    let names = "`--target typescript|python|go|rust|cedar|lean`";
+    let names = "`--target typescript|python|go|rust|cedar|lean|requests`";
     let bare = |project: &Path, more: &[&str]| {
         let mut args = vec!["gen", "--root", ".", "--out", o.as_str()];
         args.extend_from_slice(more);
@@ -817,8 +956,11 @@ fn gen_given_no_target_says_what_writes_what_0_40_0_wrote() {
     );
     // what that line writes is what the gates' test writes
     let (code, stdout, err) = bare(&here().join(STOCKROOM), &["--format", "json"]);
-    assert_eq!((code, err.as_str()), (2, ""));
+    assert_eq!(code, 2);
     let v: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"));
+    // the standard error says it too, as every command that stops before its work does (DESIGN 6.2,
+    // item 10): the sentence of `error`, with its head
+    assert_eq!(err, format!("error: {}\n", v["error"]["message"].as_str().unwrap_or("")));
     assert_eq!((&v["targets"], &v["files"], &v["error"]["code"]), (&serde_json::json!([]), &serde_json::json!([]), &serde_json::json!(2)));
     assert_eq!(v["error"]["instead"], serde_json::json!(["ritsu", "gen", "--root", ".", "--out", o, "--format", "json", "--target", "typescript", "--target", "python", "--target", "go"]));
     assert!(v["error"]["message"].as_str().unwrap().starts_with("`ritsu gen` writes only the targets it is given: "), "{}", v["error"]);
@@ -869,10 +1011,10 @@ fn type_check_the_gates(t: &TempDir, out: &Path) {
         let gates = t.path().join("go-gates");
         go_module_in(&gates, &out.join("go"), &(gomod, read(&runner.join("go.sum"))));
         std::fs::remove_dir_all(gates.join("generated/flows")).unwrap();
-        let o = go_in(&gates).args(["vet", "./..."]).output().unwrap();
-        assert!(o.status.success(), "go vet finds fault with the Go of the gates:\n{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
-        let fmt = Command::new("gofmt").arg("-l").arg("generated").current_dir(&gates).output().unwrap();
-        assert!(fmt.status.success() && fmt.stdout.is_empty(), "gofmt would write these otherwise:\n{}", String::from_utf8_lossy(&fmt.stdout));
+        let o = run_for(go_in(&gates).args(["vet", "./..."]), LIMIT);
+        assert!(o.ok, "go vet finds fault with the Go of the gates:\n{}", o.both());
+        let fmt = run_for(Command::new("gofmt").arg("-l").arg("generated").current_dir(&gates), RUN);
+        assert!(fmt.ok && fmt.stdout.is_empty(), "gofmt would write these otherwise:\n{}", fmt.stdout);
         println!("go vet and gofmt pass the Go of the gates, with the rules and the dates they read");
     }
 }
@@ -927,9 +1069,9 @@ fn the_activities_of_a_workflow_answer_through_its_package() {
                       from generated.flows.order import io, rules\n\
                       from generated.books import stock\n\
                       print(json.dumps([asyncio.run(rules.rule_delivery({'member': False, 'amount': 299})), asyncio.run(rules.rule_delivery({'member': False, 'amount': 300})), asyncio.run(rules.dates_terms_payment({'received': '2026-04-01'})), io.Books.__annotations__['stock'] is stock.Book]))\n";
-        let o = Command::new(&python).args(["-B", "-c", script]).current_dir(out.join("python")).output().unwrap();
-        assert!(o.status.success(), "the Python activities do not run:\n{}", String::from_utf8_lossy(&o.stderr));
-        let got = String::from_utf8_lossy(&o.stdout).trim().to_string();
+        let o = run_for(Command::new(&python).args(["-B", "-c", script]).current_dir(out.join("python")), RUN);
+        assert!(o.ok, "the Python activities do not run:\n{}", o.stderr);
+        let got = o.stdout.trim().to_string();
         assert_eq!(got, r#"[{"carrier": "standard"}, {"carrier": "next_day"}, {"day": "2026-05-08", "at": "2026-05-08T09:00:00Z"}, true]"#);
         println!("the Python activities answer through the package: {got}");
     }
@@ -962,9 +1104,9 @@ fn the_activities_of_a_workflow_answer_through_its_package() {
              }}\n"
         );
         std::fs::write(module.join("generated/flows/order/package_test.go"), test).unwrap();
-        let o = go_in(&module).args(["test", "-count=1", "-run", "TestTheActivitiesAnswerThroughThePackage", "-v", "./generated/flows/order/"]).output().unwrap();
-        let text = String::from_utf8_lossy(&o.stdout).to_string();
-        assert!(o.status.success(), "the Go activities do not run:\n{text}{}", String::from_utf8_lossy(&o.stderr));
+        let o = run_for(go_in(&module).args(["test", "-count=1", "-run", "TestTheActivitiesAnswerThroughThePackage", "-v", "./generated/flows/order/"]), LIMIT);
+        let text = o.stdout.clone();
+        assert!(o.ok, "the Go activities do not run:\n{text}{}", o.stderr);
         let line = text.lines().find(|l| l.starts_with('[')).unwrap_or_default().to_string();
         assert_eq!(line, r#"[{"carrier":"standard"},{"carrier":"next_day"},{"at":"2026-05-08T09:00:00Z","day":"2026-05-08"},"*stock.Book"]"#);
         println!("the Go activities answer through the package: {line}");
@@ -1081,8 +1223,9 @@ fn gen_reads_the_apps_package_json_as_ritsus() {
 
 /// `--format json` (DESIGN 9.3): what the lines say, as one object for a program: every file of the
 /// packages with what became of it (the ones that stayed the same too), and, when nothing is
-/// generated, why, with the exit code and the diagnostics of the files that stopped it. Nothing goes
-/// to the standard error, and the exit codes are the text's.
+/// generated, why, with the exit code and the diagnostics of the files that stopped it. A run that
+/// stops with 2 says the sentence of `error` on the standard error too, as every command does (DESIGN
+/// 6.2, item 10); any other writes nothing there. The exit codes are the text's.
 #[test]
 fn gen_says_what_it_did_as_json() {
     let t = TempDir::new("gen-json");
@@ -1094,8 +1237,10 @@ fn gen_says_what_it_did_as_json() {
         let mut args = vec!["--target", "typescript", "--format", "json"];
         args.extend_from_slice(more);
         let (code, stdout, stderr) = generate(&project, &out, &args);
-        assert_eq!(stderr, "", "`ritsu gen {}` writes nothing to the standard error", args.join(" "));
-        (code, serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}")))
+        let v: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"));
+        let said = if code == 2 { format!("error: {}\n", v["error"]["message"].as_str().unwrap_or("")) } else { String::new() };
+        assert_eq!(stderr, said, "what `ritsu gen {}` writes to the standard error", args.join(" "));
+        (code, v)
     };
     // the files that did not stay the same, each with its state, in the order of the JSON
     let moved = |v: &serde_json::Value| -> Vec<(String, String)> {
@@ -1141,13 +1286,16 @@ fn gen_says_what_it_did_as_json() {
     std::fs::write(&src, read(&src).replacen("\nenum ", "\nenumx ", 1)).unwrap();
     let (code, v) = json(&[]);
     assert_eq!((code, &v["files"], &v["error"]["code"]), (1, &serde_json::json!([]), &serde_json::json!(1)));
-    assert_eq!(v["error"]["message"], "2 file(s) do not pass check, so nothing is generated: rules/delivery.rule, orders/order.flow");
+    // the flow that reads the rule waits for it (DESIGN 8.3): named apart, its line kept with what it waits for
+    assert_eq!(v["error"]["message"], "1 file(s) do not pass check, so nothing is generated: rules/delivery.rule; 1 file(s) wait for them: orders/order.flow");
     let tools: Vec<(&str, &str)> = v["diagnostics"].as_array().unwrap().iter().map(|d| (d["tool"].as_str().unwrap(), d["file"].as_str().unwrap())).collect();
     assert_eq!(tools.first(), Some(&("rulec", "rules/delivery.rule")), "rulec's diagnostic first, as `ritsu check --format json` writes it");
     assert!(tools.iter().skip(1).all(|t| *t == ("dandori", "orders/order.flow")) && tools.len() > 1, "{tools:?}");
     assert_eq!(v["diagnostics"][0]["code"], "E005");
+    assert!(v["diagnostics"][0].get("waits_for").is_none(), "the rule waits for nothing");
+    assert!(v["diagnostics"].as_array().unwrap()[1..].iter().all(|d| d["waits_for"] == serde_json::json!(["rules/delivery.rule"])), "{}", v["diagnostics"]);
     let (_, v) = json(&["--lang", "ja"]);
-    assert_eq!(v["error"]["message"], "検査を通らないファイルが 2 個あるので、何も生成しません: rules/delivery.rule, orders/order.flow");
+    assert_eq!(v["error"]["message"], "検査を通らないファイルが 1 個あるので、何も生成しません: rules/delivery.rule。それを待っているファイル 1 個: orders/order.flow");
 }
 
 // ── the heads ────────────────────────────────────────────────────────────────────────────────────
@@ -1264,9 +1412,9 @@ fn what_cannot_be_a_package_is_refused() {
     let (code, stdout, err) = generate(&project, &out, &[]);
     assert_eq!((code, stdout.as_str()), (1, ""));
     assert!(err.contains("[rulec E"), "the rule's diagnostics, with the tool's word: {err}");
-    // and the flow that reads it
-    assert!(err.contains("[dandori E005]"), "{err}");
-    assert!(err.ends_with("error: 2 file(s) do not pass check, so nothing is generated: rules/delivery.rule, orders/order.flow\n"), "{err}");
+    // and the flow's line that reads it, which waits for it (DESIGN 8.3)
+    assert!(err.contains("\n  orders/order.flow:8: [dandori E005] use rule delivery from \"../rules/delivery.rule\"\n"), "{err}");
+    assert!(err.ends_with("error: 1 file(s) do not pass check, so nothing is generated: rules/delivery.rule; 1 file(s) wait for them: orders/order.flow\n"), "{err}");
     assert!(!out.exists());
     // the flow alone: what it reads is not given
     let (code, _, err) = ritsu_in(&here().join(STOCKROOM), &["gen", "--root", ".", "orders/order.flow", "--out", out.to_str().unwrap(), "--target", "go"]);
@@ -1279,21 +1427,395 @@ fn what_cannot_be_a_package_is_refused() {
     assert_eq!(code, 1);
     assert_eq!(err, "error: `payout.kn` reads rules/card_fee.rule, which is not one of the project's files; a package is made of the project's files, so give ritsu gen that file too\n");
     assert!(!out.exists());
-    // a rule whose alias is a word Python keeps: rulec only warns of it (W121), and the package's
-    // Python cannot import it
+    // a rule whose alias is a word Python keeps: rulec's check warns of it (W121), the package's
+    // Python cannot import it, and gen says the warning as an error (rulec's E153)
     let kept = t.path().join("kept");
     ritsu_testkit::tmp::copy_dir(&here().join(STOCKROOM), &kept);
     let rule = kept.join("rules/delivery.rule");
     std::fs::write(&rule, read(&rule).replace("rule delivery v1", "rule pass v1")).unwrap();
-    let (code, _, err) = generate(&kept, &out, &["--target", "python"]);
-    assert_eq!(code, 2);
-    assert_eq!(err, "error: `rules/delivery.rule` makes the module `pass`, a word Python keeps, which the package cannot hold in its rules/; give it another name (an alias)\n");
+    let (code, stdout, err) = generate(&kept, &out, &["--target", "python"]);
+    assert_eq!((code, stdout.as_str()), (1, ""), "{err}");
+    assert!(err.starts_with("error[E153]: `pass` ") && err.contains("\n  --> rules/delivery.rule:1\n"), "{err}");
+    assert!(err.contains("\n The code `--target python` writes cannot be used with the name as it stands, so gen writes nothing of `--target python`; the targets it does not name are written.\n"), "{err}");
+    assert!(!out.exists());
     let (code, _, err) = generate(&kept, &out, &["--target", "typescript"]);
     assert_eq!(code, 0, "TypeScript takes the name: {err}");
     std::fs::remove_dir_all(&out).unwrap();
     let (code, _, err) = generate(&here().join(STOCKROOM), &out, &["--name", "Stock-Room"]);
     assert_eq!(code, 2);
     assert_eq!(err, "error: `--name Stock-Room` cannot name a package: it starts with a lowercase letter and has only lowercase letters, digits and `_` (and is not a word Python keeps)\n");
+}
+
+/// A rule that says whether a weight is large, named `name`.
+fn size_rule(name: &str) -> String {
+    format!(
+        "rule {name} v1\ndescription \"Whether a weight is large (fictional)\"\n\ninputs\n  weight : number  range >=1 <=100\n\noutputs\n  big : bool\n\ntable big_of\n| weight | -> big |\n| <=10   | false  |\n| >10    | true   |\n"
+    )
+}
+
+/// Two files of the project that write one place of a package (rulec's §15.334): two rules whose
+/// aliases make one Go package (`size_label` and `sizeLabel`, both `sizelabel`), whose files would
+/// declare the same names twice; two that write paths differing only in the case of their letters,
+/// one file where the file system does not tell upper from lower case; and a rule that writes a file
+/// the package writes for itself (`index`), or one differing from it only in case (`Index`). Each
+/// says the two and the place, in both languages, and writes nothing; a target with no such place
+/// writes them.
+#[test]
+fn two_files_that_write_one_place_of_a_package_are_refused() {
+    let t = TempDir::new("gen-one-place");
+    let out = t.path().join("out");
+    // the files of `rules/` (names that differ in more than case, for a file system that does not
+    // tell upper from lower), each with the rule it holds
+    let project = |name: &str, rules: &[(&str, &str)]| {
+        let d = t.path().join(name);
+        std::fs::create_dir_all(d.join("rules")).unwrap();
+        for (file, rule) in rules {
+            std::fs::write(d.join("rules").join(file), size_rule(rule)).unwrap();
+        }
+        d
+    };
+    let names = "(a rule or a dates file another alias, a book another name, a workflow a name or a file name in ASCII)";
+    let names_ja = "（規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で）";
+    // one Go package
+    let twins = project("twins", &[("size_label.rule", "size_label"), ("sizeLabel.rule", "sizeLabel")]);
+    let (code, stdout, err) = generate(&twins, &out, &["--target", "go"]);
+    assert_eq!((code, stdout.as_str()), (2, ""));
+    assert_eq!(
+        err,
+        format!("error: `rules/sizeLabel.rule` and `rules/size_label.rule` both write into the Go package go/rules/sizelabel/ of the package (go/rules/sizelabel/sizeLabel.go and go/rules/sizelabel/size_label.go), which then declares the same names twice and does not build; give one of them another name {names}\n")
+    );
+    let (code, _, err) = generate(&twins, &out, &["--target", "go", "--lang", "ja"]);
+    assert_eq!(code, 2);
+    assert_eq!(
+        err,
+        format!("エラー: `rules/sizeLabel.rule` と `rules/size_label.rule` が、どちらも Go のパッケージ go/rules/sizelabel/ に書きます（go/rules/sizelabel/sizeLabel.go と go/rules/sizelabel/size_label.go）。一つのパッケージで同じ名前を二度宣言するので組めません。どちらかの名前を変えてください{names_ja}\n")
+    );
+    assert!(!out.exists(), "nothing is written");
+    for target in ["typescript", "python", "rust"] {
+        let (code, _, err) = generate(&twins, &out, &["--target", target]);
+        assert_eq!(code, 0, "{target}: {err}");
+        std::fs::remove_dir_all(&out).unwrap();
+    }
+    // two paths that differ only in case
+    let case = project("case", &[("a.rule", "size_label"), ("b.rule", "Size_Label")]);
+    let (code, _, err) = generate(&case, &out, &["--target", "typescript"]);
+    assert_eq!(code, 2);
+    assert_eq!(
+        err,
+        format!("error: `rules/a.rule` writes typescript/rules/size_label.ts and `rules/b.rule` writes typescript/rules/Size_Label.ts of the package, which differ only in the case of their letters and are one file where the file system does not tell upper from lower case; give one of them another name {names}\n")
+    );
+    let (code, _, err) = generate(&case, &out, &["--target", "typescript", "--lang", "ja"]);
+    assert_eq!(code, 2);
+    assert_eq!(
+        err,
+        format!("エラー: `rules/a.rule` の typescript/rules/size_label.ts と `rules/b.rule` の typescript/rules/Size_Label.ts は、大文字と小文字だけが違います。大文字と小文字を区別しないファイルシステムでは一つのファイルなので、どちらかの名前を変えてください{names_ja}\n")
+    );
+    assert!(!out.exists());
+    // the package's own file, and one that differs from it only in case
+    let index = project("index", &[("index.rule", "index")]);
+    let (code, _, err) = generate(&index, &out, &["--target", "typescript"]);
+    assert_eq!(code, 2);
+    assert_eq!(err, format!("error: `rules/index.rule` writes typescript/rules/index.ts, which the package writes for itself; give `rules/index.rule` another name {names}\n"));
+    let (code, _, err) = generate(&index, &out, &["--target", "typescript", "--lang", "ja"]);
+    assert_eq!(code, 2);
+    assert_eq!(err, format!("エラー: `rules/index.rule` が、パッケージが自分で書く typescript/rules/index.ts を書きます。`rules/index.rule` の名前を変えてください{names_ja}\n"));
+    let upper = project("upper", &[("upper.rule", "Index")]);
+    let (code, _, err) = generate(&upper, &out, &["--target", "typescript"]);
+    assert_eq!(code, 2);
+    assert_eq!(
+        err,
+        format!("error: `rules/upper.rule` writes typescript/rules/Index.ts, which differs only in the case of its letters from typescript/rules/index.ts, a file the package writes for itself, and is one file with it where the file system does not tell upper from lower case; give `rules/upper.rule` another name {names}\n")
+    );
+    assert!(!out.exists());
+    let (code, _, err) = generate(&index, &out, &["--target", "python"]);
+    assert_eq!(code, 0, "Python's index of the rules is `rules/__init__.py`: {err}");
+}
+
+/// A name the code of a target cannot take stops the package of that target (rulec's E153,
+/// §15.335): `ritsu check` warns of it (W121) and passes; `ritsu gen` with the target says it as an
+/// error, in both languages and with the tool's word in JSON, and writes nothing of any target given
+/// with it; a target the warning does not name writes the rule.
+#[test]
+fn a_name_the_code_of_a_target_cannot_take_stops_its_package() {
+    let t = TempDir::new("gen-e153");
+    let out = t.path().join("out");
+    let d = t.path().join("flags");
+    std::fs::create_dir_all(d.join("rules")).unwrap();
+    std::fs::write(
+        d.join("rules/parcel_flags.rule"),
+        "rule parcel_flags v1\ndescription \"Whether a parcel is heavy, and whether to tell its sender (fictional)\"\n\ninputs\n  weight : number  range >=1 <=100\n\noutputs\n  heavy : bool\n  _tell : bool\n\ntable flags_of\n| weight | -> heavy | _tell |\n| <=10   | false    | false |\n| >10    | true     | true  |\n",
+    )
+    .unwrap();
+    let (code, stdout, err) = ritsu_in(&d, &["check", "--root", "."]);
+    assert_eq!((code, err.as_str()), (0, ""), "{stdout}");
+    assert!(stdout.contains("W121") && !stdout.contains("E153"), "{stdout}");
+    for targets in [&["--target", "python"][..], &["--target", "typescript", "--target", "python"]] {
+        let (code, stdout, err) = generate(&d, &out, targets);
+        assert_eq!((code, stdout.as_str()), (1, ""), "{targets:?}: {err}");
+        assert!(err.starts_with("error[E153]: `_tell` ") && err.contains("\n  --> rules/parcel_flags.rule:9\n"), "{err}");
+        assert!(err.contains("\n The code `--target python` writes cannot be used with the name as it stands, so gen writes nothing of `--target python`; the targets it does not name are written.\n"), "{err}");
+        assert!(!out.exists(), "{targets:?}: nothing is written");
+    }
+    let (_, _, err) = generate(&d, &out, &["--target", "python", "--lang", "ja"]);
+    assert!(err.starts_with("エラー[E153]: `_tell` "), "{err}");
+    assert!(err.contains("\n `--target python` が書くコードは、この名前のままでは使えないので、gen は`--target python`を書かず、ほかの出力先は書きます。\n"), "{err}");
+    let (code, stdout, _) = generate(&d, &out, &["--target", "python", "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"));
+    let f = &v["diagnostics"][0];
+    assert_eq!(
+        (code, &f["tool"], &f["code"], &f["severity"], &f["file"], &f["line"]),
+        (1, &serde_json::json!("rulec"), &serde_json::json!("E153"), &serde_json::json!("error"), &serde_json::json!("rules/parcel_flags.rule"), &serde_json::json!(9))
+    );
+    assert_eq!(v["error"], serde_json::json!({"code": 1, "message": "`rules/parcel_flags.rule` cannot be made into the python package"}));
+    assert!(!out.exists());
+    for target in ["typescript", "go", "rust"] {
+        let (code, _, err) = generate(&d, &out, &["--target", target]);
+        assert_eq!(code, 0, "{target}: {err}");
+        std::fs::remove_dir_all(&out).unwrap();
+    }
+    // a rule named like a module of the standard library: W121 names the target for `rulec gen`,
+    // which writes the rule's module beside the language's own, and the package holds it under
+    // `rules/`, where the two are told apart
+    let named = t.path().join("named");
+    std::fs::create_dir_all(named.join("rules")).unwrap();
+    std::fs::write(named.join("rules/calendar.rule"), size_rule("calendar")).unwrap();
+    std::fs::write(named.join("rules/strings.rule"), size_rule("strings")).unwrap();
+    let (code, stdout, _) = ritsu_in(&named, &["check", "--root", "."]);
+    assert!(code == 0 && stdout.matches("W121").count() == 2, "{stdout}");
+    for target in ["python", "go"] {
+        let (code, _, err) = generate(&named, &out, &["--target", target]);
+        assert_eq!(code, 0, "{target}: {err}");
+        std::fs::remove_dir_all(&out).unwrap();
+    }
+}
+
+/// The blocks of the errors in what `ritsu check` prints: each `error[…]` line with the lines under
+/// it, in order.
+fn error_blocks(text: &str) -> String {
+    let mut out = String::new();
+    let mut inside = false;
+    for line in text.lines() {
+        if line.starts_with("error[") {
+            inside = true;
+        } else if !line.starts_with(' ') {
+            inside = false;
+        }
+        if inside {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// What makes the code wrong stops `ritsu gen` wherever the check finds it (DESIGN 9.3): stockroom,
+/// whose every file passes its own language's check, with the period its workflow runs in (`now
+/// range`) starting half a year before the days its dates file takes. Only the check across the
+/// languages finds that (ritsu's E205: the call of the date can be given a day the date's code
+/// refuses). `ritsu gen` says the error as `ritsu check` says it and writes nothing (exit 1), and so
+/// do `--check` and `--format json`, whose diagnostics are the errors of `ritsu check --format json`.
+#[test]
+fn an_error_across_the_languages_stops_gen() {
+    let t = TempDir::new("gen-crossed");
+    let project = t.path().join("stockroom");
+    ritsu_testkit::tmp::copy_dir(&here().join(STOCKROOM), &project);
+    let flow = project.join("orders/order.flow");
+    std::fs::write(&flow, read(&flow).replacen("workflow order v1\n", "workflow order v1\n  now range >=2025-07-01 <=2027-12-31\n", 1)).unwrap();
+    let out = t.path().join("out");
+    let (code, checked, _) = ritsu_in(&project, &["check", "--format", "json"]);
+    assert_eq!(code, 1, "{checked}");
+    let v: serde_json::Value = serde_json::from_str(&checked).unwrap();
+    let errors: Vec<&serde_json::Value> = v["diagnostics"].as_array().unwrap().iter().filter(|d| d["severity"] == "error").collect();
+    let named: Vec<(&str, &str, &str)> = errors.iter().map(|d| (d["tool"].as_str().unwrap(), d["code"].as_str().unwrap(), d["file"].as_str().unwrap())).collect();
+    assert_eq!(named, [("ritsu", "E205", "orders/order.flow")], "every language's own check passes");
+    let (_, text, _) = ritsu_in(&project, &["check"]);
+    let said = error_blocks(&text);
+    assert!(said.starts_with("error[ritsu E205]: orders/order.flow:"), "{text}");
+    for more in [&[][..], &["--check"][..], &["--lang", "ja"][..]] {
+        let (code, stdout, err) = generate(&project, &out, &[&["--target", "typescript"][..], more].concat());
+        assert_eq!((code, stdout.as_str()), (1, ""), "{err}");
+        if more.contains(&"ja") {
+            assert!(err.starts_with("エラー[ritsu E205]: orders/order.flow:"), "{err}");
+            assert!(err.ends_with("エラー: 検査を通らないファイルが 1 個あるので、何も生成しません: orders/order.flow\n"), "{err}");
+        } else {
+            assert_eq!(err, format!("{said}error: 1 file(s) do not pass check, so nothing is generated: orders/order.flow\n"), "{}", more.join(" "));
+        }
+        assert!(!out.exists(), "nothing is written");
+    }
+    let (code, stdout, err) = generate(&project, &out, &["--target", "typescript", "--format", "json"]);
+    assert_eq!((code, err.as_str()), (1, ""));
+    let g: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!((&g["ok"], &g["files"], &g["error"]["code"]), (&serde_json::json!(false), &serde_json::json!([]), &serde_json::json!(1)));
+    assert_eq!(g["error"]["message"], "1 file(s) do not pass check, so nothing is generated: orders/order.flow");
+    assert_eq!(g["diagnostics"].as_array().unwrap().iter().collect::<Vec<_>>(), errors, "the errors of `ritsu check --format json`");
+    assert!(!out.exists());
+}
+
+/// An error across a request's borders stops `ritsu gen` as every error across the languages does
+/// (ringi's DESIGN 9.3): the reproductions of E911 (the gate lets a requester decide their own
+/// request), E209 (the hold can expire before the ticket ends) and E210 (the flow does not take what
+/// the ticket gives it), each a request with the gate, the book or the flow whose package would be
+/// written. `ritsu gen` says the error as `ritsu check` says it, names the request and writes
+/// nothing; with the border only undecided (W911, W209, W210) the package is written.
+#[test]
+fn an_error_across_a_requests_borders_stops_gen() {
+    let l = ritsu_cross::codes::ledger();
+    let lay = |code: &str| -> TempDir {
+        let t = TempDir::new(&format!("gen-request-{code}"));
+        let ritsu_base::ledger::Repro::Dir { files, .. } = &l.find(code).expect("the code is in the ledger").repro else { panic!("{code} has no files") };
+        for (name, body) in files {
+            t.write(name, body);
+        }
+        t
+    };
+    for code in ["E911", "E209", "E210"] {
+        let t = lay(code);
+        let out = t.path().join("out");
+        let (checked, text, _) = ritsu_in(t.path(), &["check"]);
+        let said = error_blocks(&text);
+        assert!(checked == 1 && said.starts_with(&format!("error[ritsu {code}]: purchase.ringi:")), "{text}");
+        let (exit, stdout, err) = generate(t.path(), &out, &["--target", "typescript"]);
+        assert_eq!((exit, stdout.as_str()), (1, ""), "{err}");
+        assert_eq!(err, format!("{said}error: 1 file(s) do not pass check, so nothing is generated: purchase.ringi\n"), "{code}");
+        assert!(!out.exists(), "{code}: nothing is written");
+        let (exit, stdout, _) = generate(t.path(), &out, &["--target", "typescript", "--format", "json"]);
+        let g: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+        let named: Vec<(&str, &str, &str)> = g["diagnostics"].as_array().unwrap().iter().map(|d| (d["tool"].as_str().unwrap(), d["code"].as_str().unwrap(), d["file"].as_str().unwrap())).collect();
+        assert_eq!((exit, named), (1, vec![("ritsu", code, "purchase.ringi")]), "{stdout}");
+    }
+    for code in ["W911", "W209", "W210"] {
+        let t = lay(code);
+        let out = t.path().join("out");
+        let (checked, text, _) = ritsu_in(t.path(), &["check"]);
+        assert!(checked == 0 && text.contains(&format!("warning[ritsu {code}]: purchase.ringi:")), "{text}");
+        let (exit, stdout, err) = generate(t.path(), &out, &["--target", "typescript"]);
+        assert_eq!((exit, err.as_str()), (0, ""), "{code}: {stdout}");
+        assert!(out.join("typescript").is_dir(), "{code}: {stdout}");
+    }
+}
+
+/// What `ritsu check` fails a project for without making its code wrong does not stop `ritsu gen`
+/// (DESIGN 9.3): links of a requirement that no person has looked at yet (yuen's E301), and a claim
+/// of geas's that fails, which is held to a program built from the code `ritsu gen` writes. Each
+/// project fails `ritsu check` (exit 1), and its package is written (exit 0).
+#[test]
+fn records_and_claims_do_not_stop_gen() {
+    let t = TempDir::new("gen-records");
+    let rule = "rule fee(fee) v1\ndescription \"A fee by amount\"\n\nenum level = low \"Low\" | high \"High\"\n\ninputs\n  amount : money[JPY]  range >=1JPY <=1_000JPY\n\noutputs\n  level : level\n\ntable t\n| amount   | -> level |\n| <=500JPY | low      |\n| >500JPY  | high     |\n\nexamples\n| amount | -> level |\n| 500JPY | low      |\n";
+    // yuen: the article the table comes from, and the requirement that links them, not looked at
+    let yuen = t.path().join("yuen");
+    std::fs::create_dir_all(&yuen).unwrap();
+    t.write("yuen/rules/fee.rule", rule);
+    t.write("yuen/requirements/regs/article-01.md", "# Fee rules (fictional), Article 1\n\nAn amount of 500 yen or less is low; above it, high.\n");
+    t.write(
+        "yuen/requirements/fee.req",
+        "requirements fee v1\ndescription \"Where the fee table comes from\"\n\nrole finance \"Owns the fee rules\"\n\nsource art1 = file \"regs/article-01.md\" sha256:25d949a5c9d2bda9\n\nrequirement fee_table\n  text \"An amount of 500 yen or less is low; above it, high\"\n  owner finance\n  from @art1\n  satisfied by rulec \"../rules/fee.rule\" table t\n  verified by rulec \"../rules/fee.rule\"\n",
+    );
+    // geas: a claim the program it runs does not keep
+    let geas = t.path().join("geas");
+    std::fs::create_dir_all(&geas).unwrap();
+    t.write("geas/rules/fee.rule", rule);
+    t.write("geas/checks/say.sh", "echo no\n");
+    t.write("geas/checks/say.geas", "target say {\n  run \"sh say.sh\"\n}\n\nclaim \"it says yes\" {\n  when say.run()\n  then stdout is \"yes\"\n}\n");
+    for (project, failing) in [(&yuen, "yuen E301"), (&geas, "not ok 1 - it says yes")] {
+        let (code, text, _) = ritsu_in(project, &["check"]);
+        assert!(code == 1 && text.contains(failing), "{text}");
+        let out = t.path().join("out");
+        let (code, _, err) = generate(project, &out, &["--target", "typescript"]);
+        assert_eq!((code, err.as_str()), (0, ""), "{}", project.display());
+        assert!(out.join("typescript/rules/fee.ts").is_file());
+        let (code, _, err) = generate(project, &out, &["--target", "typescript", "--check"]);
+        assert_eq!((code, err.as_str()), (0, ""));
+        std::fs::remove_dir_all(&out).unwrap();
+    }
+}
+
+/// A file that waits for another that does not pass stops `ritsu gen` too, and the refusal names it
+/// apart (DESIGN 8.3, 9.3): the approvals project with a claim of its dates file failing. What is
+/// said is what `ritsu check` says of the files a package is made from: koyomi's error once, then
+/// the lines that wait for it, and the refusal names the dates file as the one that does not pass
+/// and the three flows and the gate as the files that wait for it (the requirements are in no
+/// package). The JSON keeps each line that waits with what it reads and what it waits for.
+#[test]
+fn files_that_wait_are_named_apart_when_gen_stops() {
+    let t = TempDir::new("gen-waiting");
+    let project = t.path().join("approvals");
+    ritsu_testkit::tmp::copy_dir(&here().join("tests/projects/approvals"), &project);
+    let terms = project.join("dates/approval_terms.cal");
+    std::fs::write(&terms, read(&terms).replacen("due <= received + 11 days", "due <= received + 10 days", 1)).unwrap();
+    let out = t.path().join("out");
+    let (code, stdout, err) = generate(&project, &out, &["--target", "typescript"]);
+    assert_eq!((code, stdout.as_str()), (1, ""), "{err}");
+    assert_eq!(error_blocks(&err).lines().filter(|l| l.starts_with("error[")).collect::<Vec<_>>(), ["error[koyomi E301]: dates/approval_terms.cal:19:3: The claim due_within_eleven_days fails for 3 of the 730 days of received"], "{err}");
+    let waiting = "\
+waiting for dates/approval_terms.cal (koyomi E301 at line 19) to pass:
+  flows/approvals.flow:24: [dandori E015] flow \"joint.flow\"
+  flows/approvals.flow:29: [dandori E015] flow \"stage.flow\"
+  flows/joint.flow:20: [dandori E015] flow \"stage.flow\"
+  flows/stage.flow:5: [dandori E005] use dates terms from \"../dates/approval_terms.cal\"
+  gates/expense.gate:14: [sekisho E208] workflow approvals from \"../flows/approvals.flow\"
+error: 1 file(s) do not pass check, so nothing is generated: dates/approval_terms.cal; 4 file(s) wait for them: flows/approvals.flow, flows/joint.flow, flows/stage.flow, gates/expense.gate
+";
+    assert!(err.ends_with(waiting), "{err}");
+    assert!(!out.exists(), "nothing is written");
+    let (_, _, err) = generate(&project, &out, &["--target", "typescript", "--lang", "ja"]);
+    assert!(err.ends_with("エラー: 検査を通らないファイルが 1 個あるので、何も生成しません: dates/approval_terms.cal。それを待っているファイル 4 個: flows/approvals.flow, flows/joint.flow, flows/stage.flow, gates/expense.gate\n"), "{err}");
+    let (code, stdout, _) = generate(&project, &out, &["--target", "typescript", "--format", "json"]);
+    assert_eq!(code, 1);
+    let g: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let said: Vec<(&str, &str, Option<&str>)> = g["diagnostics"].as_array().unwrap().iter().map(|d| (d["file"].as_str().unwrap(), d["code"].as_str().unwrap(), d["reads"].as_str())).collect();
+    assert_eq!(
+        said,
+        [
+            ("dates/approval_terms.cal", "E301", None),
+            ("flows/approvals.flow", "E015", Some("flows/joint.flow")),
+            ("flows/approvals.flow", "E015", Some("flows/stage.flow")),
+            ("flows/joint.flow", "E015", Some("flows/stage.flow")),
+            ("flows/stage.flow", "E005", Some("dates/approval_terms.cal")),
+            ("gates/expense.gate", "E208", Some("flows/approvals.flow")),
+        ]
+    );
+    assert!(g["diagnostics"].as_array().unwrap().iter().skip(1).all(|d| d["waits_for"] == serde_json::json!(["dates/approval_terms.cal"])), "{stdout}");
+    assert!(!out.exists());
+}
+
+/// sakai's errors stop `ritsu gen` when a file of the package refers across a boundary as the map
+/// does not let it (its E2xx; DESIGN 9.3), and only then. A workflow that calls a service the other
+/// side does not open (E207) would make that call from its code: nothing is written (exit 1). A
+/// context that opens a service its published language does not have (E301) is said of the
+/// context's file, which is in no package, and the workflow, whose service is opened then, is
+/// written (exit 0), though `ritsu check` fails the project. So is a module whose dependency's rule
+/// reads a rule outside the map's scope (E103, sakai's tests of modules): the scope is the map's to
+/// change, and the rule's code is the same.
+#[test]
+fn sakai_stops_gen_at_a_file_of_the_package() {
+    let t = TempDir::new("gen-sakai");
+    t.write("a/a.proto", "syntax = \"proto3\";\npackage a;\nmessage A {}\n");
+    t.write("a/w.flow", "workflow w v1\n\nuse proto b from \"../b/v1/b.proto\"\n  url \"https://b.example.com\"\n\ninputs\n  kind : b.Kind\n\ntask get(kind: b.Kind) -> b.B\n  connect b \"BService/Get\"\n\nflow\n  let r = get(kind: kind)\n  succeed\n");
+    t.write("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta conformist\n  through b.v1\n");
+    t.write("b/v1/b.proto", "syntax = \"proto3\";\npackage b.v1;\nenum Kind {\n  KIND_UNSPECIFIED = 0;\n  KIND_ONE = 1;\n  KIND_TWO = 2;\n}\nmessage B { Kind kind = 1; }\nmessage Plain { string id = 1; }\nservice BService { rpc Get(B) returns (B); }\n");
+    let beta = "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n";
+    t.write("beta.ctx", beta);
+    t.write("map.ctx", "map Map(m) v1\nuse context \"alpha.ctx\"\nuse context \"beta.ctx\"\ncovers \".\"\n");
+    let out = t.path().join("out");
+    let (code, _, err) = generate(t.path(), &out, &["--target", "typescript"]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.starts_with("error[sakai E207]: a/w.flow:10:"), "{err}");
+    assert!(err.ends_with("error: 1 file(s) do not pass check, so nothing is generated: a/w.flow\n"), "{err}");
+    assert!(!out.exists());
+    t.write("beta.ctx", beta.replace("  proto \"b/v1/b.proto\"\n", "  proto \"b/v1/b.proto\"\n  open host service BService, NoService\n"));
+    let (code, text, _) = ritsu_in(t.path(), &["check"]);
+    assert!(code == 1 && text.contains("error[sakai E301]: beta.ctx:7:"), "{text}");
+    let (code, _, err) = generate(t.path(), &out, &["--target", "typescript"]);
+    assert_eq!((code, err.as_str()), (0, ""));
+    assert!(out.join("typescript/flows/w/workflow.ts").is_file());
+    let app = here().join("../sakai/tests/modules/en/app");
+    let (code, text, _) = ritsu_in(&app, &["check"]);
+    assert!(code == 1 && text.contains("error[sakai E103]: @lib/rules/order_total.rule:16:"), "{text}");
+    let out = t.path().join("app");
+    let (code, _, err) = generate(&app, &out, &["--target", "typescript"]);
+    assert_eq!((code, err.as_str()), (0, ""));
+    assert!(out.join("typescript/deps/lib/rules/order_total.ts").is_file(), "{:?}", files(&out));
 }
 
 /// A dates file whose names break the package's target (koyomi's E016, its DESIGN 15): `ritsu gen` of
@@ -1327,13 +1849,14 @@ fn a_dates_file_whose_names_break_the_target_stops_the_package() {
     }
     assert!(out.join("python/generated/dates/abc.py").is_file());
     if ready(Need::Python, || Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success()), "python3 is not installed; the package's abc is not imported") {
-        let o = Command::new("python3")
-            .args(["-c", "import abc, datetime\nfrom generated.dates import abc as dates\nprint(dates.due(datetime.date(2026, 1, 5)), abc.ABC.__name__)"])
-            .current_dir(out.join("python"))
-            .output()
-            .unwrap();
-        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-        assert_eq!(String::from_utf8_lossy(&o.stdout), "2026-02-04 ABC\n", "the package's module and the standard library's, side by side");
+        let o = run_for(
+            Command::new("python3")
+                .args(["-c", "import abc, datetime\nfrom generated.dates import abc as dates\nprint(dates.due(datetime.date(2026, 1, 5)), abc.ABC.__name__)"])
+                .current_dir(out.join("python")),
+            RUN,
+        );
+        assert!(o.ok, "{}", o.stderr);
+        assert_eq!(o.stdout, "2026-02-04 ABC\n", "the package's module and the standard library's, side by side");
     }
 }
 
@@ -1355,6 +1878,32 @@ fn a_gate_with_a_name_the_target_cannot_keep_stops_the_package() {
     assert_eq!(v["error"]["message"], "`own_store.gate` cannot be made into the go package");
     assert_eq!(v["files"], serde_json::json!([]));
     assert!(!out.exists());
+}
+
+/// A reserved word of one target is that target's alone (sekisho's DESIGN 32): a gate with an
+/// attribute `class`, which Python's code writes as a field of its record, passes `ritsu check` with
+/// W402 naming Python (exit 0), stops `ritsu gen --target python` with E401 (exit 1, nothing
+/// written), and every other target is written. sekisho's check said E008 of it, and stopped.
+#[test]
+fn a_reserved_word_of_one_target_stops_that_target_alone() {
+    let t = TempDir::new("gen-gate-word");
+    let (gates, out) = (t.path().join("gates"), t.path().join("out"));
+    std::fs::create_dir_all(&gates).unwrap();
+    std::fs::copy(here().join("../sekisho/tests/spellings/python_field.gate"), gates.join("seats.gate")).unwrap();
+    let (code, stdout, err) = ritsu_in(&gates, &["check", "."]);
+    assert_eq!(code, 0, "{stdout}{err}");
+    let said = format!("{stdout}{err}");
+    assert!(said.contains("warning[sekisho W402]") && said.contains("--target python") && !said.contains("E008"), "{said}");
+    let (code, stdout, err) = generate(&gates, &out, &["--target", "python"]);
+    assert_eq!((code, stdout.as_str()), (1, ""), "{err}");
+    assert!(err.contains("error[E401]") && err.contains("`class` is a reserved word of Python"), "{err}");
+    assert!(!out.exists());
+    let (code, _, err) = generate(&gates, &out, &["--target", "typescript", "--target", "go", "--target", "cedar"]);
+    assert_eq!(code, 0, "{err}");
+    for target in ["typescript", "go", "cedar"] {
+        assert!(out.join(target).is_dir(), "{target} is not written: {:?}", files(&out));
+    }
+    assert!(!out.join("python").exists());
 }
 
 /// A target that cannot be made stops the run before any target is written (DESIGN 9.6), whichever
@@ -1382,14 +1931,16 @@ fn a_target_that_cannot_be_made_leaves_every_target_unwritten() {
     assert_eq!((&v["targets"], &v["files"]), (&serde_json::json!(["typescript", "go"]), &serde_json::json!([])));
     assert_eq!(v["error"], serde_json::json!({"code": 1, "message": "`terms.cal` cannot be made into the go package"}));
     assert!(!out.exists());
-    // a rule named with a word Python keeps: the Python, after the TypeScript
+    // a rule named with a word Python keeps: the Python, after the TypeScript. rulec's check warns of
+    // it for Python (W121), so gen says the warning as an error (rulec's E153)
     let kept = t.path().join("kept");
     ritsu_testkit::tmp::copy_dir(&here().join(STOCKROOM), &kept);
     let rule = kept.join("rules/delivery.rule");
     std::fs::write(&rule, read(&rule).replace("rule delivery v1", "rule pass v1")).unwrap();
     let (code, stdout, err) = generate(&kept, &out, &["--target", "typescript", "--target", "python"]);
-    assert_eq!((code, stdout.as_str()), (2, ""));
-    assert_eq!(err, "error: `rules/delivery.rule` makes the module `pass`, a word Python keeps, which the package cannot hold in its rules/; give it another name (an alias)\n");
+    assert_eq!((code, stdout.as_str()), (1, ""), "{err}");
+    assert!(err.starts_with("error[E153]: `pass` ") && err.contains("\n  --> rules/delivery.rule:1\n"), "{err}");
+    assert!(err.contains("\n The code `--target python` writes cannot be used with the name as it stands, so gen writes nothing of `--target python`; the targets it does not name are written.\n"), "{err}");
     assert!(!out.exists());
     // two flows that write one file of the Go, the third target, after two that are made
     let shop = here().join(SHOP);
@@ -1434,9 +1985,9 @@ fn a_rules_module_is_the_rule_merged_with_the_projects_contributions() {
              print(product_price.product_price(product_kinds.Kind.GARDEN, product_price.USD(20)), product_kinds.kind_label(product_kinds.Kind.GARDEN))\n",
         )
         .unwrap();
-        let o = Command::new("python3").arg("app.py").current_dir(out.join("python")).output().unwrap();
-        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-        assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "23 Garden supplies");
+        let o = run_for(Command::new("python3").arg("app.py").current_dir(out.join("python")), RUN);
+        assert!(o.ok, "{}", o.stderr);
+        assert_eq!(o.stdout.trim(), "23 Garden supplies");
     }
 }
 
@@ -1678,7 +2229,7 @@ fn the_modules_answer_as_the_reference_does(t: &TempDir, out: &Path, modules: &[
         assert!(wrong.is_empty(), "the {target} answers otherwise than the reference:\n{}", wrong.join("\n"));
         println!("{target}: {agree} of {run} cases agree with the reference: {vectors} vectors and {outside} inputs outside what the parameters declare");
     };
-    let program = |target: kaname::r#gen::Target| kaname::r#gen::harness::program(modules, target, "generated", MODULE);
+    let program = |target: kaname::r#gen::Target| kaname::r#gen::harness::program(modules, target, "generated", MODULE, ritsu_base::text::Lang::En);
     let tools = workspace().join("crates/kaname/tools");
     let tsc = tools.join("node_modules/.bin/tsc");
     if ritsu_testkit::need(Need::Node) {
@@ -1695,11 +2246,11 @@ fn the_modules_answer_as_the_reference_does(t: &TempDir, out: &Path, modules: &[
                 "exclude": ["dist", "node_modules"]
             });
             std::fs::write(dir.join("tsconfig.json"), serde_json::to_string_pretty(&tsconfig).unwrap()).unwrap();
-            let o = Command::new(&tsc).arg("-p").arg("tsconfig.json").current_dir(&dir).output().unwrap();
-            assert!(o.status.success(), "tsc:\n{}", said(&o));
-            let o = Command::new("node").arg("dist/harness.js").arg("cases.json").current_dir(&dir).output().unwrap();
-            assert!(o.status.success(), "node:\n{}", said(&o));
-            held("TypeScript", &String::from_utf8_lossy(&o.stdout));
+            let o = run_for(Command::new(&tsc).arg("-p").arg("tsconfig.json").current_dir(&dir), RUN);
+            assert!(o.ok, "tsc:\n{}", o.both());
+            let o = run_for(Command::new("node").arg("dist/harness.js").arg("cases.json").current_dir(&dir), RUN);
+            assert!(o.ok, "node:\n{}", o.both());
+            held("TypeScript", &o.stdout);
         } else {
             ritsu_testkit::skip("tsc is not installed in crates/kaname/tools (npm ci --prefix crates/kaname/tools); the TypeScript of the modules is not run");
         }
@@ -1710,9 +2261,9 @@ fn the_modules_answer_as_the_reference_does(t: &TempDir, out: &Path, modules: &[
         let dir = out.join("python");
         std::fs::write(dir.join("harness.py"), program(kaname::r#gen::Target::Python)).unwrap();
         std::fs::write(dir.join("cases.json"), &json).unwrap();
-        let o = Command::new(&python).arg("harness.py").arg("cases.json").current_dir(&dir).output().unwrap();
-        assert!(o.status.success(), "python3:\n{}", said(&o));
-        held("Python", &String::from_utf8_lossy(&o.stdout));
+        let o = run_for(Command::new(&python).arg("harness.py").arg("cases.json").current_dir(&dir), RUN);
+        assert!(o.ok, "python3:\n{}", o.both());
+        held("Python", &o.stdout);
     }
     if ready(Need::Go, have_go, "go is not installed; the Go of the modules is not run") {
         match go_module() {
@@ -1723,11 +2274,11 @@ fn the_modules_answer_as_the_reference_does(t: &TempDir, out: &Path, modules: &[
                 std::fs::write(dir.join("harness/main.go"), program(kaname::r#gen::Target::Go)).unwrap();
                 std::fs::write(dir.join("cases.json"), &json).unwrap();
                 let bin = dir.join("harness.bin");
-                let o = go_in(&dir).args(["build", "-o"]).arg(&bin).arg("./harness").output().unwrap();
-                assert!(o.status.success(), "go build:\n{}", said(&o));
-                let o = Command::new(&bin).arg("cases.json").current_dir(&dir).output().unwrap();
-                assert!(o.status.success(), "the harness:\n{}", said(&o));
-                held("Go", &String::from_utf8_lossy(&o.stdout));
+                let o = run_for(go_in(&dir).args(["build", "-o"]).arg(&bin).arg("./harness"), LIMIT);
+                assert!(o.ok, "go build:\n{}", o.both());
+                let o = run_for(Command::new(&bin).arg("cases.json").current_dir(&dir), RUN);
+                assert!(o.ok, "the harness:\n{}", o.both());
+                held("Go", &o.stdout);
             }
             None => ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go or crates/chobo/tools/runner/go is missing; the Go of the modules is not run"),
         }
@@ -1749,11 +2300,11 @@ fn the_modules_answer_as_the_reference_does(t: &TempDir, out: &Path, modules: &[
         std::fs::create_dir_all(dir.join("harness")).unwrap();
         std::fs::write(dir.join("harness/main.rs"), program(kaname::r#gen::Target::Rust)).unwrap();
         std::fs::write(dir.join("calls.jsonl"), harness::call_lines(modules, &cases)).unwrap();
-        let o = cargo_in(&dir, "ritsu-rust").args(["build", "--offline", "--quiet", "--bin", &bin]).output().unwrap();
-        assert!(o.status.success(), "cargo build of the harness:\n{}", said(&o));
-        let o = Command::new(rust_target("ritsu-rust").join("debug").join(&bin)).arg("calls.jsonl").current_dir(&dir).output().unwrap();
-        assert!(o.status.success(), "the harness:\n{}", said(&o));
-        held("Rust", &String::from_utf8_lossy(&o.stdout));
+        let o = run_for(cargo_in(&dir, "ritsu-rust").args(["build", "--offline", "--quiet", "--bin", &bin]), LIMIT);
+        assert!(o.ok, "cargo build of the harness:\n{}", o.both());
+        let o = run_for(Command::new(rust_target("ritsu-rust").join("debug").join(&bin)).arg("calls.jsonl").current_dir(&dir), RUN);
+        assert!(o.ok, "the harness:\n{}", o.both());
+        held("Rust", &o.stdout);
         // the package's Wasm, built with the line its manifest says, through a host of Node
         if ready(Need::Node, have_wasm32, "rustc's wasm32-unknown-unknown target is missing; the package's Wasm is not built") {
             let module = rust_wasm(&dir, &format!("ritsu-wasm-{name}"));
@@ -1810,8 +2361,8 @@ fn the_units_written_with_a_sign_go_into_the_package() {
                 let dir = t.path().join("go-flows");
                 go_module_in(&dir, &out.join("go"), &gomod);
                 std::fs::remove_dir_all(dir.join("generated/authz")).unwrap();
-                let o = go_in(&dir).args(["vet", "./..."]).output().unwrap();
-                assert!(o.status.success(), "go vet finds fault with the Go of the flows:\n{}", said(&o));
+                let o = run_for(go_in(&dir).args(["vet", "./..."]), LIMIT);
+                assert!(o.ok, "go vet finds fault with the Go of the flows:\n{}", o.both());
                 println!("go vet passes the Go of the flows, with the rules and the modules");
             }
             None => ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go or crates/chobo/tools/runner/go is missing; the Go of the flows is not vetted"),
@@ -2002,10 +2553,51 @@ fn gen_check_holds_a_package_of_rust() {
     assert!(!old.exists() && dir.join("target/debug/copy.rs").is_file());
 }
 
+/// A kaname module with a name some targets cannot write (W001) or write as another's (W002): `ritsu
+/// check` warns and passes, and `ritsu gen` stops where it writes one of those targets (E008, nothing
+/// written, 1), and writes the others (kaname's DESIGN 10.3).
+#[test]
+fn what_some_targets_cannot_write_stops_those_targets() {
+    let t = TempDir::new("gen-kaname-stops");
+    let out = t.path().join("out");
+    let cases: [(&str, &str, &[&str], &[&str]); 2] = [
+        (
+            "module m v1\n\nfn total_weight() -> number\n  1\n\nfn totalWeight() -> number\n  2\n",
+            "warning[kaname W002]: m.kn:6:4: In the generated code, this function `totalWeight` and the function `total_weight` on line 3 are named alike: `TotalWeight` (Go)\n",
+            &["go"],
+            &["typescript", "python", "rust"],
+        ),
+        ("module m v1\n\nrecord Seat\n  class : string\n", "warning[kaname W001]: m.kn:4:3: The generated Python cannot take `class` as the name of a field\n", &["python"], &["typescript", "go", "rust"]),
+    ];
+    for (i, (src, warning, stopped, written)) in cases.into_iter().enumerate() {
+        let d = t.path().join(format!("m{i}"));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("m.kn"), src).unwrap();
+        let (code, stdout, err) = ritsu_in(&d, &["check", "--root", "."]);
+        assert_eq!((code, err.as_str()), (0, ""), "{stdout}");
+        assert!(stdout.starts_with(warning), "{stdout}");
+        for target in stopped {
+            let (code, stdout, err) = generate(&d, &out, &["--target", "typescript", "--target", target]);
+            assert_eq!((code, stdout.as_str()), (1, ""), "{target}: {err}");
+            // the warning's place and words
+            let (_, said) = warning.split_once("]: ").unwrap();
+            assert!(err.starts_with(&format!("error[E008]: {said}")), "{target}: {err}");
+            assert!(err.ends_with(". For a target you do not use, name the ones you use with `--target`.\n"), "{target}: {err}");
+            assert!(!out.exists(), "{target}: nothing is written");
+        }
+        let (code, _, err) = generate(&d, &out, written.iter().flat_map(|w| ["--target", *w]).collect::<Vec<_>>().as_slice());
+        assert_eq!(code, 0, "{err}");
+        for w in written {
+            assert!(out.join(w).is_dir(), "{w}");
+        }
+        std::fs::remove_dir_all(&out).unwrap();
+    }
+}
+
 /// What the languages say would break a package of Rust stops `--target rust`, and writes no target given
 /// with it: koyomi's E016 and chobo's E064, which their checks warn of as W001 and W108, kaname's E008
-/// (W001 of `ritsu check`), and a rule named `mod`, whose module no file of `rules/` can be. Each of the
-/// other targets writes the same project.
+/// (W001 of `ritsu check`), and rulec's E153 of a rule named `mod` (W121). Each of the other targets
+/// writes the same project.
 #[test]
 fn what_breaks_the_rust_stops_its_package() {
     let t = TempDir::new("gen-rust-stops");
@@ -2048,7 +2640,7 @@ fn what_breaks_the_rust_stops_its_package() {
     assert!(!out.exists());
     others(&books);
     // kaname: each name of a module, by itself and as an alias
-    for (i, name) in ["crate", "self", "Self", "mod", "door"].into_iter().enumerate() {
+    for (i, name) in ["crate", "self", "super", "Self", "mod", "door"].into_iter().enumerate() {
         let modules = project(&format!("modules{i}"));
         std::fs::write(modules.join("m.kn"), format!("module {name} v1\n\nfn one() -> number\n  1\n")).unwrap();
         let (code, stdout, err) = ritsu_in(&modules, &["check", "--root", "."]);
@@ -2069,13 +2661,16 @@ fn what_breaks_the_rust_stops_its_package() {
     let d = &v["diagnostics"][0];
     assert_eq!((code, &d["tool"], &d["code"], &d["severity"], &d["file"], &d["line"]), (1, &serde_json::json!("kaname"), &serde_json::json!("E008"), &serde_json::json!("error"), &serde_json::json!("m.kn"), &serde_json::json!(1)));
     assert_eq!(v["error"], serde_json::json!({"code": 1, "message": "`m.kn` cannot be made into the rust package"}));
-    // a rule whose module no file of `rules/` can be, where the others keep no such word
+    // rulec: a rule named `mod`, a word Rust keeps, which no file of `rules/` can be either (W121 of
+    // the check, E153 of gen), where the others keep no such word
     let rules = project("rules");
     ritsu_testkit::tmp::copy_dir(&here().join(STOCKROOM), &rules);
     let rule = rules.join("rules/delivery.rule");
     std::fs::write(&rule, read(&rule).replace("rule delivery v1", "rule mod v1")).unwrap();
     let (code, stdout, err) = generate(&rules, &out, &["--target", "typescript", "--target", "rust"]);
-    assert_eq!((code, stdout.as_str()), (2, ""));
-    assert_eq!(err, "error: `rules/delivery.rule` makes the module `mod`, a word Rust keeps, which the package cannot hold in its rules/; give it another name (an alias)\n");
+    assert_eq!((code, stdout.as_str()), (1, ""), "{err}");
+    assert!(err.starts_with("error[E153]: `mod` ") && err.contains("\n  --> rules/delivery.rule:1\n"), "{err}");
+    assert!(err.contains("\n The code `--target rust` writes cannot be used with the name as it stands, so gen writes nothing of `--target rust`; the targets it does not name are written.\n"), "{err}");
     assert!(!out.exists());
+    others(&rules);
 }

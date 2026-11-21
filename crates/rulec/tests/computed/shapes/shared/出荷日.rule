@@ -1,0 +1,15 @@
+rule 出荷日(ship_day) v1
+description "注文を出荷する日。届け先が県内なら 7 月 1 日、県外なら 7 月 3 日"
+
+enum 地域(zone) = 県内(local) | 県外(national)
+
+inputs
+  地域(zone) : 地域
+
+outputs
+  出荷日(ships) : date
+
+table 出荷日の表(ships_of)
+| 地域 | -> 出荷日  |
+| 県内 | 2026-07-01 |
+| 県外 | 2026-07-03 |

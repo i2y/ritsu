@@ -281,6 +281,42 @@ pub fn thresholds_pub(cell: &Cell, ty: &Ty, q: Rat) -> Vec<(Rat, Rat, Rat)> {
     thresholds(cell, ty, q)
 }
 
+/// The boundaries of a cell on `col`, with the two points of each pair on values the column takes
+/// (§15.323): on each side of the boundary, the point nearest it that the column takes. `thresholds`
+/// puts them one step of the axis apart, where they stand for a value that takes every point of its
+/// axis. A value worked out on a coarser step never stands on some of those points — `gifts × 2`
+/// is never 3 — and a pair that asked for one of them stayed missing, while generated code with
+/// the boundary of `<4` moved down to 2 passed `rulec test`: the pair of `<4` is now 2 and 4, and
+/// of `<4` over `gifts × 2 + 1`, 3 and 5. The points are read off the expression
+/// ([`Checked::taken`]); where it does not tell them, or where they are not points of the axis,
+/// the pair is the one `thresholds` gives. A cell that names a point the column never takes keeps
+/// that point: no input reaches it, and the obligation stays missing, as it was.
+pub fn pairs_on(c: &Checked, col: &str, cell: &Cell, ty: &Ty) -> Vec<(Rat, Rat, Rat)> {
+    use std::cmp::Ordering::*;
+    let q = quantum(c, col, ty);
+    let out = thresholds(cell, ty, q);
+    if matches!(ty, Ty::Date) {
+        return out;
+    }
+    let (s, o) = c.taken(col);
+    if s.num <= 0 || s.cmp_to(q) != Greater || !s.on_grid(q) || !o.on_grid(q) {
+        return out;
+    }
+    let point = matches!(cell, Cell::Lit(_) | Cell::Set(_) | Cell::Not(_));
+    out.into_iter()
+        .map(|(b, inside, outside)| {
+            if point && !b.sub(o).on_grid(s) {
+                return (b, inside, outside);
+            }
+            // The boundary cuts between the lower of the two points and the upper one.
+            let (lo, hi) = if inside.cmp_to(outside) == Less { (inside, outside) } else { (outside, inside) };
+            let down = o.add(crate::grid::floor_to(lo.sub(o), s));
+            let up = o.add(crate::grid::ceil_to(hi.sub(o), s));
+            if inside.cmp_to(lo) == Equal { (b, down, up) } else { (b, up, down) }
+        })
+        .collect()
+}
+
 fn thresholds(cell: &Cell, ty: &Ty, q: Rat) -> Vec<(Rat, Rat, Rat)> {
     let lit = |l: &Lit| -> Option<Rat> {
         match l {
@@ -344,17 +380,12 @@ pub fn in_range(c: &Checked, col: &str, v: Rat) -> bool {
         && hi.is_none_or(|h| v.cmp_to(h) != std::cmp::Ordering::Greater)
 }
 
+/// A value as the rule writes one of its type (`types::fmt_val`): a date as its calendar day, a
+/// rate as a percentage (it is stored as a fraction, and the boundary `0.5%` would otherwise be
+/// named `0.005`), and an amount in its unit with its digits grouped as the languages group them
+/// (`200_000JPY`; §15.333).
 pub fn show_rat(v: Rat, ty: &Ty) -> String {
-    match ty {
-        Ty::Date => {
-            let (y, m, d) = crate::types::ord_to_date(v);
-            format!("{y:04}-{m:02}-{d:02}")
-        }
-        // A rate is stored as a fraction and written as a percentage, and the two look
-        // nothing alike: the boundary `0.5%` would otherwise be named `0.005`.
-        Ty::Rate => format!("{}%", v.mul(Rat::int(100))),
-        _ => format!("{v}"),
-    }
+    crate::types::fmt_val(v, ty)
 }
 
 /// Judge whether a vector set satisfies the seven criteria of §9.2.
@@ -551,8 +582,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                     continue;
                 }
                 let Some(cell) = row.cells.get(ci) else { continue };
-                let q = quantum(c, col, &ty);
-                for (b, inside, outside) in thresholds(cell, &ty, q) {
+                for (b, inside, outside) in pairs_on(c, col, cell, &ty) {
                     // §9.1: an unrealizable side is not an obligation. Nor is a side no input
                     // satisfying the rule's `constraint`s reaches with the row's other cells held.
                     // A side that is not one of koyomi's days on an input of them (§15.174) is
@@ -924,8 +954,10 @@ fn later_set(f: &RuleFile, c: &Checked, st: &crate::types::Stages, si: usize) ->
 
 /// The orders of verdicts the fold at `fi` can take, when it runs in a second walk or later: those
 /// some case of one or two elements reaches (`vectors::second_walk_cases`), each read in the walk
-/// the fold runs in (§15.219). A case past a sum's range has no answer, and is left out, as is one
-/// whose drawn value is past the weights of its pick, or whose weights add up past int64 (§15.226).
+/// the fold runs in (§15.219). A case on which a `sum` or a `count` ends outside its range has no
+/// answer, and is left out, as is one
+/// whose drawn value is past the weights of its pick, whose weights add up past int64 (§15.226), or
+/// on which a `define` falls outside the range the rule accepts for it (§15.313).
 /// `None` for a fold of a first walk, whose elements land on their verdicts one at a time.
 fn later_orders(f: &RuleFile, c: &Checked, st: &crate::types::Stages, fi: usize) -> Option<BTreeSet<Vec<String>>> {
     let crate::types::Stage::Each { seq, walk } = st.at(fi) else { return None };
@@ -935,9 +967,10 @@ fn later_orders(f: &RuleFile, c: &Checked, st: &crate::types::Stages, fi: usize)
     let mut out = BTreeSet::new();
     for m in vectors::second_walk_cases(f, c, seq) {
         let inputs: HashMap<String, Val> = m.into_iter().collect();
-        if eval::sum_past_range(f, c, inputs.clone()).is_some()
+        if eval::summary_outside(f, c, inputs.clone()).is_some()
             || eval::drawn_past(f, c, inputs.clone()).is_some()
             || eval::weights_past(f, c, inputs.clone()).is_some()
+            || eval::define_outside(f, c, inputs.clone()).is_some()
         {
             continue;
         }

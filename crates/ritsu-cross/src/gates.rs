@@ -16,20 +16,34 @@
 //! or requirements name), which has nothing to cover its operations with.
 //!
 //! **X16**: each call a workflow a gate names (`workflow … from "…"`) makes of an operation an action
-//! of that gate guards is a border: the gate allows the workflow the action in some combination
-//! (held, when the task declares the error of a denial or the workflow is allowed in every one); in
-//! none (E908: every run that comes to the call is denied); in some only, and the task declares no
-//! error for the denial, the one that comes back with 403 or `permission_denied` (W909), or whether
-//! it does cannot be decided (W909, with why). An action the workflow is allowed whose operations
-//! the flow never calls is W908 (it is allowed more than it needs), which is no border. The
-//! calls of operations no action of the gate guards are not the gate's to say.
+//! of that gate guards is a border, asked over the combinations the runs of the flow that reach
+//! the call can come to (`Gates::allowed_at`: what the call gives the operation, what the gate
+//! says the flow holds of the resource, and what the arms of a `match` on the way leave of each).
+//! The gate allows the workflow the action in some of them (held, when the task declares the error
+//! of a denial, the one that comes back with 403 or `permission_denied`, or the workflow is allowed
+//! in every one whatever the resource holds); in none (E908: every run that comes to the call is
+//! denied); in every one only as far as the gate's `resource` lines say what the flow holds, in
+//! some only, or in some of the gate's with nothing written of what the flow holds of what the
+//! answer reads, and the task declares no error for the denial (W909); or whether it does cannot
+//! be decided (W909, with why). An action the workflow is allowed whose operations the flow never
+//! calls is W908 (it is allowed more than it needs), which is no border. The calls of operations
+//! no action of the gate guards are not the gate's to say.
+//!
+//! A call that gives an argument a number the action's `input` of its name counts in another unit
+//! or step is E909, once for each such argument (compared as `fed by` compares a place with its
+//! source: the unit, the step and the tax). The flow sends the number in its type, and the gate
+//! reads the same number in its own: one of the two is written wrong. The call's border fails;
+//! of the gate's answer at it, which reads no such argument, only E908 is said (allowed in no
+//! combination, whatever the argument is). Whether the call can be denied is asked again once
+//! the two types agree.
 
 use crate::{Border, Borders, Came, Check, Side};
 use ritsu_base::diag::Diag;
+use ritsu_base::json::Json;
 use ritsu_base::naming::{Name, Tool};
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
-use ritsu_ports::{Allowance, Asker, Finding, Flows, Found, GateFacts, Gates, Maps, OperationCall, Ports, PublishedOperation, References};
+use ritsu_ports::{AllowedAt, Allowance, Asker, Carried, Finding, FlowValue, Flows, Found, GateFacts, GateInput, Gates, Maps, OperationCall, Ports, PublishedOperation, References};
 use ritsu_project::{Joined, Project};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -155,27 +169,40 @@ pub fn judge_opened(ops: &[PublishedOperation], guarded: &BTreeMap<Name, Vec<(St
     out
 }
 
-/// What one call of a workflow comes to (X16).
+/// What one call of a workflow comes to (X16), over the combinations the runs that reach the call
+/// can come to.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Called {
     /// Allowed in some combination, and every way the call ends is the flow's to handle.
     Held,
     /// Allowed in no combination (E908).
     Never,
+    /// Allowed in every combination only as far as the gate's `resource` lines say what the flow
+    /// holds of the resource, which nothing checks of the resource the service reads, and the task
+    /// declares no error for a denial (W909).
+    Rests,
     /// Denied in some combinations, and the task declares no error for it (W909): one allowed
     /// combination and one denied.
     Unhandled { allowed: Text, denied: Text },
+    /// Allowed in some combinations of the gate and denied in others, with nothing written of
+    /// which of them the runs that reach the call come to — the answer reads attributes of the
+    /// resource no `resource` line under the workflow says of, or the flow holds something the
+    /// gate could not be asked with — and the task declares no error for a denial (W909): one
+    /// allowed combination and one denied.
+    Unsaid { allowed: Text, denied: Text },
     /// Whether the workflow is allowed cannot be decided, and the task declares no error for a
     /// denial (W909): why.
     Undecided(Text),
 }
 
-/// X16 for one call: what the gate's answer and the task's errors come to.
-pub fn judge_call(call: &OperationCall, allowance: &Found<Allowance>) -> Called {
-    match (allowance, &call.denied) {
+/// X16 for one call: what the gate's answer at the call and the task's errors come to.
+pub fn judge_call(call: &OperationCall, at: &AllowedAt) -> Called {
+    match (&at.allowance, &call.denied) {
         (Found::Value(Allowance::Never), _) => Called::Never,
+        (Found::Value(Allowance::Always), None) if !at.rests_on.is_empty() => Called::Rests,
         (Found::Value(Allowance::Always), _) | (_, Some(_)) => Called::Held,
-        (Found::Value(Allowance::Sometimes { allowed, denied }), None) => Called::Unhandled { allowed: allowed.clone(), denied: denied.clone() },
+        (Found::Value(Allowance::Sometimes { allowed, denied }), None) if at.unrelated.is_empty() && at.unheld.is_empty() => Called::Unhandled { allowed: allowed.clone(), denied: denied.clone() },
+        (Found::Value(Allowance::Sometimes { allowed, denied }), None) => Called::Unsaid { allowed: allowed.clone(), denied: denied.clone() },
         (Found::Undecided(why), None) => Called::Undecided(why.clone()),
     }
 }
@@ -329,18 +356,35 @@ fn called(project: &Project, read: &Read, gates: &dyn Gates, flows: &dyn Flows, 
             let flow_src = text_of(project, &w.flow.path);
             for c in &calls {
                 let Some(a) = guarding(&c.operation) else { continue };
-                let Ok(allowance) = gates.allowed(&project.root, file, &a.alias, &asker) else { continue };
-                let came = judge_call(c, &allowance);
+                let Ok(allowed) = gates.allowed_at(&project.root, file, &a.alias, &w.alias, c) else { continue };
+                let mut came = judge_call(c, &allowed);
+                // each argument the action's input of its name counts in another unit or step
+                // (E909): the gate's answer reads none of them, so of it only what holds whatever
+                // they are is said, that it allows the workflow in no combination (E908)
+                let differ: Vec<Diag> = c.args.iter().filter_map(|(p, v)| unit_differs(project, (&w.flow.path, &flow_src), file, c, &a.name, (p, v), a.inputs.iter().find(|i| i.name == *p || i.alias == *p)?)).collect();
+                if !differ.is_empty() && !matches!(came, Called::Never) {
+                    came = Called::Held;
+                }
                 let result = match &came {
+                    _ if !differ.is_empty() => Came::Failed,
                     Called::Held => Came::Held,
                     Called::Never => Came::Failed,
-                    Called::Unhandled { .. } | Called::Undecided(_) => Came::Undecided,
+                    Called::Rests | Called::Unhandled { .. } | Called::Unsaid { .. } | Called::Undecided(_) => Came::Undecided,
                 };
-                let said = call_said(project, &flow_src, file, &w.name, &w.flow, c, &a.name, &came);
+                // over every combination of the gate, whatever the flow holds: what the answer
+                // at the call is said beside
+                let over_all = match &came {
+                    Called::Never | Called::Rests => gates.allowed(&project.root, file, &a.alias, &asker).ok(),
+                    _ => None,
+                };
+                let said = call_said(project, &flow_src, file, w, c, &a.name, &came, &allowed, over_all.as_ref());
                 let at = Side::at(Tool::Dandori, &w.flow.path, c.line);
-                borders.add(Border::new(Check::WorkflowPermission, c.operation.text(), at, Some(read.guard_side(file, &a.name, &c.operation)), result, said.as_ref().map(|d| d.code)));
-                if let Some(d) = said {
-                    out.push(Finding::of(&d, Some(w.flow.path.clone()), lang));
+                let code = differ.first().or(said.as_ref()).map(|d| d.code);
+                let mut border = Border::new(Check::WorkflowPermission, c.operation.text(), at, Some(read.guard_side(file, &a.name, &c.operation)), result, code);
+                border.detail = vec![("assumes".into(), assumes(file, &came, &allowed, lang))];
+                borders.add(border);
+                for d in differ.iter().chain(&said) {
+                    out.push(Finding::of(d, Some(w.flow.path.clone()), lang));
                 }
             }
             // an action the workflow is allowed, none of whose operations the flow calls
@@ -370,19 +414,72 @@ fn called(project: &Project, read: &Read, gates: &dyn Gates, flows: &dyn Flows, 
     out
 }
 
-/// A piece of Japanese text a word follows: a space after it when it ends in a word of ASCII or in
-/// code, as the suite's Japanese writes it (`status：paid のとき`, `（status：paid）のとき`).
-fn spaced(piece: &str) -> String {
-    match piece.chars().last() {
-        Some(c) if c.is_ascii_alphanumeric() || c == '`' || c == '"' || c == '_' => format!("{piece} "),
-        _ => piece.to_string(),
-    }
+/// What the record of a call says after its code (DESIGN 7.15): `assumes`, the lines of the gate
+/// the answer rests on — what the gate says, under its `workflow`, the flow holds of the resource,
+/// which nothing checks of the resource the service reads. Each is the gate's file from the root,
+/// the line, and what the line says, in the language asked for. None where the answer rests on no
+/// such line: a call that holds because the flow handles a denial holds whatever the lines say.
+fn assumes(gate: &str, came: &Called, allowed: &AllowedAt, lang: Lang) -> Json {
+    let rests: &[(Text, usize)] = match came {
+        Called::Held | Called::Undecided(_) => &[],
+        Called::Never | Called::Rests | Called::Unhandled { .. } | Called::Unsaid { .. } => &allowed.rests_on,
+    };
+    Json::arr(rests.iter().map(|(t, line)| Json::obj([("file", Json::str(gate)), ("line", Json::from(*line)), ("says", Json::str(ja(t).get(lang)))])))
 }
 
-/// E908 and W909, at the call in the flow.
+/// A text of sekisho's, as a note of ritsu's holds it: sekisho words its Japanese without the
+/// spaces between a word of ASCII and the Japanese around it, and puts them in when it prints
+/// (`ritsu_base::text::ja_spacing`); a note that holds its text puts them in the same way.
+fn ja(t: &Text) -> Text {
+    Text { ja: ritsu_base::text::ja_spacing(&t.ja), en: t.en.clone() }
+}
+
+/// E909, at the call `c` in the flow (its file from the root, and its text): the argument `param`
+/// gives `v`, which the action `action` of `gate` reads as its input `input`, and both are numbers
+/// counted in another unit, step or tax, as `fed by` compares a place with its source. None where
+/// they are counted the same, or where either is no number: what the gate cannot read of another
+/// type, its answer says.
+fn unit_differs(project: &Project, flow: (&str, &str), gate: &str, c: &OperationCall, action: &str, (param, v): (&str, &FlowValue), input: &GateInput) -> Option<Diag> {
+    let (Carried::Num { written: fw, unit: fu, min, max }, Carried::Num { written: gw, unit: gu, .. }) = (v.holds.present().0, input.holds.present().0) else { return None };
+    if crate::fed::same_unit((fw, fu.as_ref()), (gw, gu.as_ref())) {
+        return None;
+    }
+    let (task, name) = (&c.task, &input.name);
+    let mut d = Diag::at(
+        "E909",
+        &shown_of(project, flow.0),
+        c.line,
+        0,
+        tr!(
+            "タスク `{task}` は `{param}` を {fw} として渡しますが、{gate} の action `{action}` は入力 `{name}` を {gw} として読みます",
+            "The task `{task}` gives `{param}` as {fw}, and the action `{action}` of {gate} reads its input `{name}` as {gw}"
+        ),
+    )
+    .source(flow.1)
+    .rel(flow.0);
+    // the number the call gives, where it gives one other than 0; else one step of it
+    let n = match (min, max) {
+        (Some(a), Some(b)) if a == b && *a != 0 => *a,
+        _ => 1,
+    };
+    let (theirs, ours) = (ritsu_units::written::value(n, fu.as_ref()), ritsu_units::written::value(n, gu.as_ref()));
+    if theirs != ours {
+        d = d.note(tr!(
+            "二つは、同じ数を違う値として読みます。フローの {theirs} は、ゲートでは {ours} です。",
+            "The two read one number as two values: the flow's {theirs} is {ours} to the gate."
+        ));
+    }
+    Some(d.note(tr!(
+        "どちらかの型を、もう一方に合わせてください。このタスクの引数 `{param}` か、{gate} の action `{action}` の入力 `{name}` です（範囲の端を単位なしで書いていれば、それも）。",
+        "Write one type as the other: the task's parameter `{param}` here, or the input `{name}` of the action `{action}` in {gate} (and the ends of its range, where they are written without a unit)."
+    )))
+}
+
+/// E908 and W909, at the call in the flow: `allowed` is the gate's answer at the call, `over_all`
+/// its answer over every combination, when the message says it beside.
 #[allow(clippy::too_many_arguments)]
-fn call_said(project: &Project, flow_src: &str, gate: &str, workflow: &str, flow: &Name, c: &OperationCall, action: &str, came: &Called) -> Option<Diag> {
-    let (task, op) = (&c.task, c.operation.text());
+fn call_said(project: &Project, flow_src: &str, gate: &str, w: &ritsu_ports::GateWorkflow, c: &OperationCall, action: &str, came: &Called, allowed: &AllowedAt, over_all: Option<&Found<Allowance>>) -> Option<Diag> {
+    let (task, op, workflow, flow) = (&c.task, c.operation.text(), &w.name, &w.flow);
     let at = |code: &'static str, message: Text| -> Diag { Diag::at(code, &shown_of(project, &flow.path), c.line, 0, message).source(flow_src).rel(&flow.path) };
     let declare = if c.operation.tool == Tool::Proto {
         tr!(
@@ -395,9 +492,31 @@ fn call_said(project: &Project, flow_src: &str, gate: &str, workflow: &str, flow
             "Declare the error on the task, `errors denied = 403`, and say under the call what happens when it is denied (`on denied => …`)."
         )
     };
+    // what the runs that reach the call hold, in the gate's words, and the lines of the gate that
+    // say what the flow holds of the resource: the notes every answer at a call is said with
+    let held = |d: Diag| -> Diag {
+        if allowed.held.is_empty() {
+            return d;
+        }
+        let l = ja(&Text::join(&allowed.held, "、", "; "));
+        d.note(tr!("この呼び出しまで進んだ実行で決まっていること：{}。", "Where the flow makes this call, {}.", l.ja; l.en))
+    };
+    let rests = |d: Diag| -> Diag {
+        if allowed.rests_on.is_empty() {
+            return d;
+        }
+        let lines: Vec<Text> = allowed.rests_on.iter().map(|(t, line)| tr!("{}（{gate} の {line} 行目）", "{} ({gate} line {line})", t.ja; t.en)).collect();
+        let l = ja(&Text::join(&lines, "、", ", "));
+        d.note(tr!(
+            "resource がフローのどの値を持つかは、ゲートが書いています：{}。サービスが読む resource がそのとおりであることは、どの検査も確かめていません。",
+            "The gate says what the flow holds of the resource: {}. Nothing checks that the resource the service reads holds the same.",
+            l.ja; l.en
+        ))
+    };
     match came {
         Called::Held => None,
-        Called::Never => Some(
+        // in no combination of the gate at all: nothing the flow holds changes it
+        Called::Never if !matches!(over_all, Some(Found::Value(Allowance::Sometimes { .. }))) => Some(
             at("E908", tr!(
                 "タスク `{task}` は {op} を呼びますが、それを守る {gate} の action `{action}` は、ワークフロー `{workflow}` をどの組み合わせでも許しません",
                 "The task `{task}` calls {op}, and the action `{action}` of {gate} that guards it allows the workflow `{workflow}` in no combination"
@@ -408,21 +527,72 @@ fn call_said(project: &Project, flow_src: &str, gate: &str, workflow: &str, flow
                 "Write a permit in {gate} that allows the workflow (`principal is workflow {workflow}`), or take the call out."
             )),
         ),
-        Called::Unhandled { allowed, denied } => Some(
-            at("W909", tr!(
+        Called::Never => {
+            let mut d = at("E908", tr!(
+                "タスク `{task}` は {op} を呼びますが、それを守る {gate} の action `{action}` は、この呼び出しで起こりうるどの組み合わせでも、ワークフロー `{workflow}` を許しません",
+                "The task `{task}` calls {op}, and the action `{action}` of {gate} that guards it allows the workflow `{workflow}` in no combination this call can come to"
+            ));
+            d = rests(held(d)).note(tr!("この呼び出しまで進んだ実行は、いつもそこで拒まれます。", "Every run that comes to the call is denied there."));
+            if let Some(Found::Value(Allowance::Sometimes { allowed, .. })) = over_all {
+                let allowed = ja(allowed);
+                d = d.note(tr!("ゲートがワークフローを許す組み合わせの例：{}。", "The gate allows the workflow, for example: {}.", allowed.ja; allowed.en));
+            }
+            Some(d.note(tr!(
+                "呼び出しを、ゲートがワークフローを許す所へ移すか、{gate} のポリシーを、ここでワークフローを許すように直してください。",
+                "Make the call where the gate allows the workflow, or change the policies of {gate} so that they allow it here."
+            )))
+        }
+        Called::Rests => {
+            let mut d = at("W909", tr!(
+                "タスク `{task}` の呼び出しを {gate} の action `{action}` がいつも許すのは、resource がゲートの書いたとおりにフローの値を持つときだけですが、タスクは拒まれたときのエラーを宣言していません",
+                "The action `{action}` of {gate} allows every call of the task `{task}` here only where the resource holds what the gate says the flow holds, and the task declares no error for a denial"
+            ));
+            d = rests(held(d));
+            if let Some(Found::Value(Allowance::Sometimes { denied, .. })) = over_all {
+                let denied = ja(denied);
+                d = d.note(tr!("resource がそのとおりでなければ、呼び出しは拒まれることがあります。拒まれる組み合わせの例：{}。", "Where the resource does not, the call can be denied, for example: {}.", denied.ja; denied.en));
+            }
+            Some(d.note(tr!("拒まれると、ワークフローは宣言していない失敗で止まります。", "A run that is denied stops with a failure the workflow does not declare.")).note(declare))
+        }
+        Called::Unhandled { allowed: yes, denied: no } => {
+            let d = at("W909", tr!(
                 "タスク `{task}` の呼び出しは、{gate} の action `{action}` に拒まれることがありますが、タスクは拒まれたときのエラーを宣言していません",
                 "The call of the task `{task}` can be denied by the action `{action}` of {gate}, and the task declares no error for it"
             ))
-            .note(tr!("たとえば、{}のときは許され、{}のときは拒まれます。", "Allowed, for example: {}. Denied, for example: {}.", spaced(&allowed.ja), spaced(&denied.ja); allowed.en, denied.en))
-            .note(tr!("拒まれると、ワークフローは宣言していない失敗で止まります。", "A run that is denied stops with a failure the workflow does not declare."))
-            .note(declare),
-        ),
+            .note(tr!("許される組み合わせの例：{}。拒まれる組み合わせの例：{}。", "Allowed, for example: {}. Denied, for example: {}.", ja(yes).ja, ja(no).ja; yes.en, no.en));
+            Some(rests(held(d)).note(tr!("拒まれると、ワークフローは宣言していない失敗で止まります。", "A run that is denied stops with a failure the workflow does not declare.")).note(declare))
+        }
+        Called::Unsaid { allowed: yes, denied: no } => {
+            let mut d = at("W909", tr!(
+                "タスク `{task}` の呼び出しを、{gate} の action `{action}` が許すかを決められず、タスクは拒まれたときのエラーを宣言していません",
+                "Whether the action `{action}` of {gate} allows the call of the task `{task}` cannot be decided, and the task declares no error for a denial"
+            ))
+            .note(tr!(
+                "ゲートがワークフローを許すかは、組み合わせによって違います。許す組み合わせの例：{}。拒む組み合わせの例：{}。",
+                "The gate allows the workflow in some combinations and denies it in others. Allowed, for example: {}. Denied, for example: {}.",
+                ja(yes).ja, ja(no).ja; yes.en, no.en
+            ));
+            d = rests(held(d));
+            if !allowed.unrelated.is_empty() {
+                let names: Vec<Text> = allowed.unrelated.iter().map(|n| Text::same(format!("`{n}`"))).collect();
+                let l = Text::list(&names);
+                d = d.note(tr!(
+                    "答えは {} によって変わりますが、フローがこの呼び出しをするときにその値がどうなっているかは、どこにも書いてありません。フローがその値を持っているなら、{gate} の `workflow {workflow} from …` の下に書いてください（`resource <型> from <フローが ID として渡す値>`、その下に `<属性> = <フローの値>`）。",
+                    "The answer reads {}, and nothing says what the flow holds of it at this call. If the flow holds it, say so under `workflow {workflow} from …` in {gate} (`resource <type> from <the value the flow gives as the id>`, with `<attribute> = <value of the flow>` under it).",
+                    l.ja; l.en
+                ));
+            }
+            for why in &allowed.unheld {
+                d = d.note(Text { ja: format!("{}。", ja(why).ja), en: format!("{}.", ritsu_base::text::capitalize(&why.en)) });
+            }
+            Some(d.note(tr!("拒まれると、ワークフローは宣言していない失敗で止まります。", "A run that is denied stops with a failure the workflow does not declare.")).note(declare))
+        }
         Called::Undecided(why) => Some(
             at("W909", tr!(
                 "タスク `{task}` の呼び出しを、{gate} の action `{action}` が許すかを決められず、タスクは拒まれたときのエラーを宣言していません",
                 "Whether the action `{action}` of {gate} allows the call of the task `{task}` cannot be decided, and the task declares no error for a denial"
             ))
-            .note(tr!("決められない理由: {}。", "Why it cannot be decided: {}.", why.ja; why.en))
+            .note(tr!("決められない理由：{}。", "Why it cannot be decided: {}.", ja(why).ja; why.en))
             .note(declare),
         ),
     }

@@ -1,8 +1,9 @@
-//! The nine languages, each made once (DESIGN 3.2, 6.4): the engine every language answers the
-//! ports with, the index of what the files hold and name, and the ports each language that reads
-//! others is handed. `ritsu dandori`, `ritsu yuen`, `ritsu sakai` and `ritsu check` take them from
-//! here, so the three readers share one rulec (which keeps each rule it has checked) and one index
-//! (which keeps what each file holds and names), and a file is asked once in a run.
+//! The ten languages, each made once (DESIGN 3.2, 6.4), ringi among them, which reads six of the others: the
+//! engine every language answers the ports with, the index of what the files hold and name, and the
+//! ports each language that reads others is handed. `ritsu dandori`, `ritsu yuen`, `ritsu sakai` and
+//! `ritsu check` take them from here, so the three readers share one rulec (which keeps each rule it
+//! has checked) and one index (which keeps what each file holds and names), and a file is asked once
+//! in a run.
 
 use ritsu_base::naming::Tool;
 use ritsu_ports::{Index, Rules};
@@ -22,9 +23,15 @@ pub struct Joined {
     /// questions the checks across the borders ask of it after the check (`Gates`).
     pub sekisho: Rc<sekisho::ports::Engine>,
     pub sakai: Rc<sakai::ports::Engine>,
+    /// ringi, with the languages a `.ringi` reads and is lowered to joined ([`Joined::ringi`]): the
+    /// engines above, so a rule or a gate it reads is the one the rest of the run checks. It
+    /// answers `Requests` (the files a request is lowered to, [`Joined::requests`]) and
+    /// `References` (the files its `use` lines read, which the index holds); `Items` comes with
+    /// ringi's stage C4.
+    pub ringi: Rc<ringi::ports::Engine>,
     /// What the files of rulec, koyomi, chobo, geas, dandori, kaname, sekisho and sakai hold, and what
-    /// the files of rulec, koyomi, dandori, kaname, sekisho and sakai name outside themselves (and the
-    /// files of Cedar written by hand, the operations their schemas guard). yuen's own things are named by no
+    /// the files of rulec, koyomi, dandori, kaname, sekisho, ringi and sakai name outside themselves
+    /// (and the files of Cedar written by hand, the operations their schemas guard). yuen's own things are named by no
     /// language yet: yuen's engine reads what it borrows through the other languages' ports, so it
     /// would have to hold this index itself, and the index is left without it until a reader of
     /// requirements needs it (the LSP, DESIGN 15).
@@ -56,7 +63,7 @@ impl Joined {
         let koyomi = Rc::new(koyomi::ports::Engine);
         let chobo = Rc::new(chobo::ports::Engine);
         let geas = Rc::new(geas::ports::Engine);
-        let dandori = Rc::new(dandori::ports::Engine);
+        let dandori = Rc::new(dandori::ports::Engine::default());
         let kaname = Rc::new(kaname::ports::Engine);
         let sekisho = sekisho::ports::Engine::new(
             ritsu_ports::GatePorts { rules: rulec.clone(), dates: koyomi.clone(), books: chobo.clone(), flows: dandori.clone(), items: dandori.clone() }.into(),
@@ -66,6 +73,7 @@ impl Joined {
             None => sekisho,
         });
         let sakai = Rc::new(sakai::ports::Engine);
+        let ringi = Rc::new(ringi::ports::Engine::new(ringi_suite(&rulec, &koyomi, &chobo, &dandori, &sekisho, &kaname)));
         let index = Index::new()
             .with_items(Tool::Rulec, rulec.clone())
             .with_references(Tool::Rulec, rulec.clone())
@@ -80,9 +88,11 @@ impl Joined {
             .with_items(Tool::Sekisho, sekisho.clone())
             .with_references(Tool::Sekisho, sekisho.clone())
             .with_references(Tool::Cedar, sekisho.clone())
+            .with_items(Tool::Ringi, ringi.clone())
+            .with_references(Tool::Ringi, ringi.clone())
             .with_items(Tool::Sakai, sakai.clone())
             .with_references(Tool::Sakai, sakai.clone());
-        Joined { rulec, koyomi, chobo, geas, dandori, kaname, sekisho, sakai, index: Rc::new(index) }
+        Joined { rulec, koyomi, chobo, geas, dandori, kaname, sekisho, sakai, ringi, index: Rc::new(index) }
     }
 
     /// The port of `fed by` of a language that has the form (DESIGN 7.16): rulec, koyomi, dandori,
@@ -102,6 +112,12 @@ impl Joined {
     /// (b)): koyomi's engine holds nothing, so one for each reader is the same one.
     pub fn dates() -> rulec::days::Port {
         std::sync::Arc::new(koyomi::ports::Engine)
+    }
+
+    /// The port of requests: the files ringi lowers a request to, and its form (ringi's DESIGN
+    /// 9.4), for what reads a request across a border.
+    pub fn requests(&self) -> Rc<dyn ritsu_ports::Requests> {
+        self.ringi.clone()
     }
 
     /// The port of rules, as dandori reads a flow's rules with it.
@@ -135,9 +151,12 @@ impl Joined {
         ritsu_ports::Ports { rules: self.rulec.clone(), dates: self.koyomi.clone(), books: self.chobo.clone() }
     }
 
-    /// Every language yuen reads (yuen's DESIGN 3.1): what a file holds, through the index; the
-    /// sources a rule or a calendar pins (`Sources`); the aliases of a rule's and a dates file's
-    /// names (`Rules`, `Dates`); and the claims of a spec with their records (`Claims`).
+    /// Every language yuen reads (yuen's DESIGN 3.1): what a file holds and what it names and
+    /// reads, through the index; the sources a rule or a calendar pins (`Sources`); the aliases of
+    /// a rule's and a dates file's names (`Rules`, `Dates`); and the claims of a spec with their
+    /// records (`Claims`). Once `affected` knows the root, rulec is given the rule files of the
+    /// root's project, as `ritsu check` gives them, so that a rule reads the contributions merged
+    /// into it (yuen's DESIGN 8).
     pub fn yuen(&self) -> yuen::suite::Suite {
         let mut s = yuen::suite::Suite::default();
         s.index = self.index.clone();
@@ -146,6 +165,13 @@ impl Joined {
         s.rules = Some(self.rulec.clone());
         s.dates = Some(self.koyomi.clone());
         s.claims = Some(self.geas.clone());
+        let rulec = self.rulec.clone();
+        s.at_root = Some(Rc::new(move |root: &std::path::Path| {
+            let at = root.to_string_lossy().into_owned();
+            if let Ok(p) = crate::Project::load(std::slice::from_ref(&at), Some(&at)) {
+                rulec.set_project(p.with_dependencies().of(Tool::Rulec).iter().map(|f| f.shown.clone()).collect());
+            }
+        }));
         s
     }
 
@@ -170,5 +196,32 @@ impl Joined {
     /// The contracts an action guards need no port (`ritsu_base::openapi`, ritsu-proto).
     pub fn sekisho(&self) -> ritsu_ports::GatePorts {
         ritsu_ports::GatePorts { rules: self.rulec.clone(), dates: self.koyomi.clone(), books: self.chobo.clone(), flows: self.dandori.clone(), items: self.dandori.clone() }
+    }
+
+    /// Every language ringi reads and lowers a request to (ringi's DESIGN 6.4, 16.3): rulec for the
+    /// form and the route (with koyomi's dates), koyomi for the deadlines, the business days and the
+    /// calendars, chobo for the books, dandori for the flows, sekisho for the gate, and kaname for
+    /// the module a request is lowered to. `ritsu ringi` runs with them.
+    pub fn ringi(&self) -> ringi::suite::Suite {
+        ringi_suite(&self.rulec, &self.koyomi, &self.chobo, &self.dandori, &self.sekisho, &self.kaname)
+    }
+}
+
+/// [`Joined::ringi`], from the engines as they are made.
+fn ringi_suite(
+    rulec: &Rc<rulec::ports::Engine>,
+    koyomi: &Rc<koyomi::ports::Engine>,
+    chobo: &Rc<chobo::ports::Engine>,
+    dandori: &Rc<dandori::ports::Engine>,
+    sekisho: &Rc<sekisho::ports::Engine>,
+    kaname: &Rc<kaname::ports::Engine>,
+) -> ringi::suite::Suite {
+    ringi::suite::Suite {
+        rules: Some(rulec.clone()),
+        dates: Some(koyomi.clone()),
+        books: Some(chobo.clone()),
+        flows: Some(dandori.clone()),
+        gates: Some(sekisho.clone()),
+        programs: Some(kaname.clone()),
     }
 }

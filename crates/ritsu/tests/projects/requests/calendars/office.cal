@@ -1,0 +1,5 @@
+calendar office v1
+description "The business days of the office (fictional): Saturdays and Sundays are closed, in Tokyo's time"
+offset +09:00
+
+closed weekly sat, sun

@@ -1,0 +1,11 @@
+error[E101]: Completeness gap: some input matches no row
+  --> tests/gaps/packing_fee.rule:22 table tiers
+   |
+22 | table tiers
+   |       ^^^^^ the input space is not fully covered
+   |
+ An input that matches no row: fee = 800JPY, zone = national
+ An input producing this example: size = medium, zone = national
+ hint: add this row, with what it answers written in place of `?`: `| 800JPY | national | ? |`
+ The cells are cut at the boundaries the table already writes, at the ends of the ranges, and at the values the tables above produce, the only values those columns take there: the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.
+

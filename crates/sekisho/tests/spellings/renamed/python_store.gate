@@ -1,0 +1,27 @@
+gate python_store_renamed v1
+description "python_store.gate with the type renamed GoodsReturn, as its note says"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can accept_return
+
+principal Clerk
+  description "The one who asks"
+  roles clerk
+
+resource GoodsReturn
+  description "Goods a customer sends back"
+  attributes
+    unopened : bool
+
+action accept_return
+  description "Take in goods sent back"
+  principal Clerk
+  resource GoodsReturn
+
+permit clerks_accept_returns
+  description "A clerk can: Take in goods sent back"
+  principal in clerk
+  action accept_return
+  when resource.unopened

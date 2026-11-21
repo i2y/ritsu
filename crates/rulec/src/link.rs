@@ -3,9 +3,10 @@
 //! A rule says where it may be added to — an `open` value and its terms, an `open` enum, a table
 //! or a clause marked `open`, an `open` block of prerequisites — and a `contribution` file adds to
 //! those places, naming the rule with `to`. Which contributions are merged into a rule is decided
-//! by the files a run is given (`with_set`): every contribution among them, and every one those
-//! come after (`after`), that reaches the rule. There is no list of what to load, and the four
-//! ways of combining a value do not depend on an order.
+//! by the files a run is given (`with_set`; a run that asks many rules chooses them once,
+//! `contributions`, and hands them on, `with_contributions`): every contribution among them, and
+//! every one those come after (`after`), that reaches the rule. There is no list of what to load,
+//! and the four ways of combining a value do not depend on an order.
 //!
 //! The merge happens on the parse tree, after the `apply`s are expanded and before anything is
 //! typed, so everything downstream — the checks, the evaluator, the twelve generators, the page,
@@ -45,41 +46,209 @@ pub(crate) fn open_shape_note() -> String {
 }
 
 thread_local! {
-    /// The contribution files of the run, as given (`with_set`). `None` outside any run that
-    /// gives files: then no contribution is merged, as before contributions were.
+    /// The contribution files of the run (`with_set`, `with_contributions`). `None` outside any run
+    /// that gives files: then no contribution is merged, as before contributions were.
     static SET: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
+    /// Whether the run's contributions are left out to check a rule they reach alone (`without`,
+    /// §15.231).
+    static ALONE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Puts the set back however the closure ends.
-struct Restore(Option<Vec<String>>);
+struct Restore(Option<Vec<String>>, bool);
 
 impl Drop for Restore {
     fn drop(&mut self) {
         let b = self.0.take();
         SET.with(|s| *s.borrow_mut() = b);
+        ALONE.with(|a| a.set(self.1));
     }
 }
 
 /// Runs `f` with the contributions among `files` (a run's files, directories expanded) as what is
-/// merged into the rules they reach (§15.227).
+/// merged into the rules they reach (§15.227): [`contributions`] of them, chosen now.
 pub fn with_set<R>(files: &[String], f: impl FnOnce() -> R) -> R {
-    let contribs: Vec<String> = files.iter().filter(|p| is_contribution_file(p)).map(|p| normalize(Path::new(p))).collect();
-    with_only(contribs, f)
+    with_contributions(contributions(files), f)
 }
 
-fn with_only<R>(contribs: Vec<String>, f: impl FnOnce() -> R) -> R {
-    let _r = Restore(SET.with(|s| s.replace(Some(contribs))));
+/// The contribution files among `files` (a run's files, directories expanded), each as the run
+/// writes it ([`folded`]): every file is read to tell ([`is_contribution_file`]), and counted
+/// as read for it (`ritsu_base::tally`, `rulec.contributions`). A run that merges them into many
+/// rules chooses them once and hands them to [`with_contributions`] (ritsu's DESIGN 4.15).
+pub fn contributions(files: &[String]) -> Vec<String> {
+    files
+        .iter()
+        .filter(|p| {
+            ritsu_base::tally::count("rulec.contributions", Path::new(p));
+            is_contribution_file(p)
+        })
+        .map(|p| folded(Path::new(p)))
+        .collect()
+}
+
+/// Runs `f` with `contribs`, the contribution files of a run as [`contributions`] chose them, as
+/// what is merged into the rules they reach (§15.227): no file is read to choose them again.
+pub fn with_contributions<R>(contribs: Vec<String>, f: impl FnOnce() -> R) -> R {
+    scoped(contribs, false, f)
+}
+
+fn scoped<R>(contribs: Vec<String>, alone: bool, f: impl FnOnce() -> R) -> R {
+    let _r = Restore(SET.with(|s| s.replace(Some(contribs))), ALONE.with(|a| a.replace(alone)));
     f()
 }
 
 /// Runs `f` with no contribution merged: what the rule claims when there are none (§15.231).
 pub fn without<R>(f: impl FnOnce() -> R) -> R {
-    with_only(Vec::new(), f)
+    scoped(Vec::new(), true, f)
+}
+
+/// Whether a rule a contribution of the run reaches is being checked alone (`without`): every
+/// file read now is read without the contributions.
+pub(crate) fn alone() -> bool {
+    ALONE.with(|a| a.get())
 }
 
 /// The contribution files of the run.
-fn active() -> Vec<String> {
+pub(crate) fn active() -> Vec<String> {
     SET.with(|s| s.borrow().clone().unwrap_or_default())
+}
+
+thread_local! {
+    /// The files whose contributions the checks watched now ([`covering`]) looked for, outermost
+    /// first.
+    static COVER: RefCell<Vec<Vec<String>>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Takes the innermost [`covering`] off however the closure ends.
+struct Uncover;
+
+impl Drop for Uncover {
+    fn drop(&mut self) {
+        COVER.with(|c| {
+            c.borrow_mut().pop();
+        });
+    }
+}
+
+/// `f` run with every file whose contributions of the run it looked for noted (`reaches`,
+/// `merge`): the files what it came to rests on the contributions of, each once, in the order
+/// looked for.
+pub(crate) fn covering<R>(f: impl FnOnce() -> R) -> (R, Vec<String>) {
+    COVER.with(|c| c.borrow_mut().push(Vec::new()));
+    let guard = Uncover;
+    let got = f();
+    let files = COVER.with(|c| c.borrow().last().cloned().unwrap_or_default());
+    drop(guard);
+    (got, files)
+}
+
+/// Notes `files` as files whose contributions are looked for, in every [`covering`] around now: an
+/// answer kept from another check rests on what that check looked for.
+pub(crate) fn cover(files: &[String]) {
+    COVER.with(|c| {
+        for frame in c.borrow_mut().iter_mut() {
+            for p in files {
+                if !frame.contains(p) {
+                    frame.push(p.clone());
+                }
+            }
+        }
+    });
+}
+
+/// The contributions of `set`, with what they come after and add to, that come down to one of
+/// `files` (the files a check looked for the contributions of, [`covering`]), each as the run shows
+/// it, in order: what of `set` that check merged (§15.227). A contribution that comes down to
+/// another file changes nothing the check read.
+pub(crate) fn reaching(set: &[String], files: &[String]) -> Vec<String> {
+    if set.is_empty() {
+        return Vec::new();
+    }
+    let looked: Vec<PathBuf> = files.iter().map(|p| canon(p)).collect();
+    walked(set).each.iter().filter(|(_, r)| r.as_ref().is_some_and(|(_, k)| looked.contains(k))).map(|(c, _)| c.clone()).collect()
+}
+
+thread_local! {
+    /// The walks of contribution files made on this thread ([`walked`]), the newest last.
+    static WALKS: RefCell<Vec<std::rc::Rc<Walk>>> = const { RefCell::new(Vec::new()) };
+}
+
+/// How many walks a thread keeps: the run's, and the few a run makes besides (of the contributions
+/// a contribution's own check is read with, §15.231; of the files of the run a kept check was made
+/// with, where they are others).
+const WALKS_KEPT: usize = 4;
+
+/// The contribution files of a run walked (§15.227): every contribution `set` names and every one
+/// those come after or add to ([`closure`]), in order, each with the rule or `enums` file it comes
+/// down to ([`root_of`]), as the run shows it and as the system opens it ([`canon`]). Made for the
+/// files the thread reads (`ritsu_base::fs::id`), from the directory the run is in, with what making
+/// it asked of the files.
+struct Walk {
+    set: Vec<String>,
+    files: usize,
+    at: PathBuf,
+    seen: ritsu_base::fs::Seen,
+    each: Vec<(String, Option<(String, PathBuf)>)>,
+    /// The files that watched the questions of the walk when they were last asked ([`walked`]).
+    asked: RefCell<Option<std::rc::Weak<dyn ritsu_base::fs::Files>>>,
+}
+
+/// The walk of `set` (§15.227): the one made before, while what it read reads the same, else one
+/// made now. A check looks for the contributions that reach a rule more than once, and a run checks
+/// many rules; the contribution files are read and followed once for them all (ritsu's DESIGN
+/// 4.15), and counted each time they are (`ritsu_base::tally`, `rulec.walks`). What the walk read is
+/// asked again through the files the thread reads now (`ritsu_base::fs::Seen::still`), so a check
+/// watched now rests on it as on what the check read itself, and a contribution written otherwise
+/// is read again. Under the files that watched it last (one check), it is not asked again: it is
+/// noted there already.
+fn walked(set: &[String]) -> std::rc::Rc<Walk> {
+    let files = ritsu_base::fs::id();
+    let now = ritsu_base::fs::current();
+    let made = WALKS.with(|w| w.borrow().iter().rev().find(|w| w.set == set && w.files == files).cloned());
+    if let Some(w) = made {
+        let watched_here = now
+            .as_ref()
+            .is_some_and(|n| n.stands_for().is_some() && w.asked.borrow().as_ref().is_some_and(|a| std::ptr::addr_eq(a.as_ptr(), std::rc::Rc::as_ptr(n))));
+        if watched_here {
+            return w;
+        }
+        if w.at == ritsu_base::fs::current_dir().unwrap_or_default() && w.seen.still() {
+            *w.asked.borrow_mut() = now.as_ref().map(std::rc::Rc::downgrade);
+            return w;
+        }
+    }
+    let at = ritsu_base::fs::current_dir().unwrap_or_default();
+    let (each, seen) = ritsu_base::fs::watched(|| {
+        closure(set)
+            .into_iter()
+            .map(|c| {
+                let root = root_of(&c).map(|r| {
+                    let k = canon(&r);
+                    (r, k)
+                });
+                (c, root)
+            })
+            .collect::<Vec<_>>()
+    });
+    for (c, _) in &each {
+        ritsu_base::tally::count("rulec.walks", Path::new(c));
+    }
+    let w = std::rc::Rc::new(Walk { set: set.to_vec(), files, at, seen, each, asked: RefCell::new(now.as_ref().map(std::rc::Rc::downgrade)) });
+    WALKS.with(|ws| {
+        let mut ws = ws.borrow_mut();
+        ws.retain(|x| !(x.set == w.set && x.files == w.files));
+        if ws.len() >= WALKS_KEPT {
+            ws.remove(0);
+        }
+        ws.push(w.clone());
+    });
+    w
+}
+
+/// The contributions of the walk that come down to the file at `path` ([`same_file`]), in order.
+fn down_to(w: &Walk, path: &str) -> Vec<String> {
+    let mine = std::cell::OnceCell::new();
+    w.each.iter().filter(|(_, r)| r.as_ref().is_some_and(|(r, k)| r == path || k == mine.get_or_init(|| canon(path)))).map(|(c, _)| c.clone()).collect()
 }
 
 /// Whether the file at `path` is a `contribution` file: its first line that is neither blank nor a
@@ -121,11 +290,21 @@ pub fn normalize(p: &Path) -> String {
     }
 }
 
-/// The file `rel` names from the directory of the file at `base`, as the run shows it. None for a
-/// path the module of ritsu's the file is in refuses (ritsu's DESIGN 17.6), which E067 says where
-/// the pins are checked ([`pin::check_pins`]).
+/// `p` with `.` and `..` folded as the system folds them, as the run shows it: [`normalize`]'s
+/// letters, unless a `..` crosses a symbolic link, where it is the file the system opens there,
+/// written from where the run is (ritsu's DESIGN 4.15, `ritsu_base::paths::show`). How a
+/// contribution, the file it adds to and the ones it comes after are named and read. The files are
+/// asked only where `p` has a `..` (`ritsu_base::paths::folds_by_letters`): a check joins these
+/// paths each time it looks for the contributions that reach a rule.
+pub(crate) fn folded(p: &Path) -> String {
+    if ritsu_base::paths::folds_by_letters(p) { normalize(p) } else { ritsu_base::paths::show(p) }
+}
+
+/// The file `rel` names from the directory of the file at `base`, as the run shows it ([`folded`]).
+/// None for a path the module of ritsu's the file is in refuses (ritsu's DESIGN 17.6), which E067
+/// says where the pins are checked ([`pin::check_pins`]).
 pub fn join(base: &str, rel: &str) -> Option<String> {
-    crate::vfs::follow(crate::vfs::dir_of(base, ""), rel).ok().map(|p| normalize(&p))
+    crate::vfs::follow(crate::vfs::dir_of(base, ""), rel).ok().map(|p| folded(&p))
 }
 
 /// The file a path names, its links followed: how two spellings of one file are told to be one.
@@ -208,18 +387,24 @@ fn root_of(path: &str) -> Option<String> {
 /// Whether a contribution of the run reaches the rule at `path`: what makes its check two, one of
 /// the rule alone and one of the rule merged (§15.231).
 pub fn reaches(path: &str) -> bool {
+    cover(&[path.to_string()]);
     let set = active();
     if set.is_empty() {
         return false;
     }
-    closure(&set).iter().any(|c| root_of(c).is_some_and(|r| same_file(&r, path)))
+    let mine = std::cell::OnceCell::new();
+    walked(&set).each.iter().any(|(_, r)| r.as_ref().is_some_and(|(r, k)| r == path || k == mine.get_or_init(|| canon(path))))
 }
 
 /// The contributions of the run merged into the rule at `path`, as the run shows them: for the
 /// generated header, `check`'s line and the page.
 pub fn merged_into(path: &str) -> Vec<String> {
+    cover(&[path.to_string()]);
     let set = active();
-    closure(&set).into_iter().filter(|c| root_of(c).is_some_and(|r| same_file(&r, path))).collect()
+    if set.is_empty() {
+        return Vec::new();
+    }
+    down_to(&walked(&set), path)
 }
 
 /// What a contribution names outside itself, its `to` and each `after`, with the line each is
@@ -258,15 +443,9 @@ pub fn merge(f: &mut RuleFile, path: &str) -> Vec<Diag> {
     match f.kind {
         FileKind::Contribution => scope(f, path),
         _ => {
+            cover(&[path.to_string()]);
             let set = active();
-            let mut cs: Vec<String> = Vec::new();
-            if !set.is_empty() {
-                for c in closure(&set) {
-                    if root_of(&c).is_some_and(|r| same_file(&r, path)) {
-                        cs.push(c);
-                    }
-                }
-            }
+            let cs: Vec<String> = if set.is_empty() { Vec::new() } else { down_to(&walked(&set), path) };
             let mut out = Vec::new();
             let mut read_cs: Vec<Contrib> = Vec::new();
             for c in &cs {
@@ -357,13 +536,16 @@ fn scope(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         out.push(Diag::error("E067", why).at(format!("{path}:{}", to.span.line)).mark(to.span.clone(), ""));
         return out;
     }
-    let target = followed.map(|p| normalize(&p)).unwrap_or_default();
+    let target = followed.map(|p| folded(&p)).unwrap_or_default();
     let Some(root) = root_of(&target) else {
         out.push(
             Diag::error("E067", tr!("足す先 `{}` を読めません", "The file `{}` it adds to cannot be read", to.file))
                 .at(format!("{path}:{}", to.span.line))
                 .mark(to.span.clone(), "")
-                .note(tr!("パスは寄与のファイルのある場所からたどります（探した先: {target}）。", "The path is followed from the directory of the contribution (looked for: {target})."))
+                .note({
+                    let looked = ritsu_base::paths::show_str(&target);
+                    tr!("パスは寄与のファイルのある場所からたどります（探した先: {looked}）。", "The path is followed from the directory of the contribution (looked for: {looked}).")
+                })
                 .maybe_note(crate::vfs::outside_note(dir, &to.file)),
         );
         return out;
@@ -383,7 +565,7 @@ fn scope(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         }
     }
     let src = crate::vfs::read(Path::new(path)).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();
-    cs.push(Contrib { shown: normalize(Path::new(path)), src, file: f.clone(), to: target.clone() });
+    cs.push(Contrib { shown: folded(Path::new(path)), src, file: f.clone(), to: target.clone() });
     if has_error(&out) {
         return out;
     }
@@ -401,10 +583,10 @@ fn scope(f: &mut RuleFile, path: &str) -> Vec<Diag> {
     // What the rule cites is followed from the rule's directory, not the contribution's (§15.235).
     cites_from(&mut rf, &root);
     let mut mine = others.clone();
-    mine.push(normalize(Path::new(path)));
+    mine.push(folded(Path::new(path)));
     // The rule is read as its own check reads it — its enums from their files, its applies
     // expanded — with only this scope's contributions merged into the files it reads.
-    let ds = with_only(mine, || {
+    let ds = with_contributions(mine, || {
         let mut ds = crate::diag::in_file(&root, &r.src, || crate::enums::read_imports(&mut rf, &root));
         if !has_error(&ds) {
             ds.extend(crate::diag::in_file(&root, &r.src, || crate::apply::expand(&mut rf, &root)));
@@ -767,6 +949,42 @@ pub fn range_text(r: &Range) -> String {
     }
 }
 
+/// Whether a contribution declares an input as the rule declares the input of its name (§15.227):
+/// the same type and the same range. A unit is the unit it is however it is spelled, and an end of
+/// the range is the value it is however it is written, so `money[JPY] range >=0JPY` is
+/// `money[円] range >=0円` (§15.332). Nothing has been checked yet here, so a word that is no type of
+/// rulec's is read as the enum it names.
+fn same_input(x: &VarDecl, i: &VarDecl) -> bool {
+    let ty = crate::types::written_ty(&x.ty, &|_| true);
+    if !ty.same(&crate::types::written_ty(&i.ty, &|_| true)) {
+        return false;
+    }
+    match (&x.range, &i.range) {
+        (None, None) => true,
+        (Some(a), Some(b)) => match (&a.days, &b.days) {
+            (None, None) => {
+                a.bounds.len() == b.bounds.len()
+                    && a.bounds.iter().zip(&b.bounds).all(|((oa, la), (ob, lb))| oa == ob && same_end(la, lb, &ty))
+            }
+            _ => range_text(a) == range_text(b),
+        },
+        _ => false,
+    }
+}
+
+/// Whether two ends of a range are one value of `ty`: a number read in the type (`0JPY` is `0円`, and
+/// `1_000g` is `1kg` in grams), anything else as it is written.
+fn same_end(a: &Lit, b: &Lit, ty: &crate::types::Ty) -> bool {
+    let value = |l: &Lit| match l {
+        Lit::Num(n) => crate::types::lit_value_in_pub(n, ty),
+        _ => None,
+    };
+    match (value(a), value(b)) {
+        (Some(p), Some(q)) => p == q,
+        _ => a.src() == b.src(),
+    }
+}
+
 /// A literal of the type with the value `digits` (`0`, `1`, `100%`): the start of `sum` and
 /// `product` when the line writes no `empty`.
 fn literal(ty: &TypeRef, digits: &str, rate_digits: &str, sp: &Span) -> Expr {
@@ -818,7 +1036,7 @@ fn place_opens(f: &mut RuleFile) {
     for k in idx {
         let o = f.opens[k].clone();
         let at = o.at.min(f.items.len());
-        f.items.insert(at, Item::Define(DefineDecl { name: o.name.clone(), ty: o.ty.clone(), expr: combination(&o), span: o.span.clone(), cite: None }));
+        f.items.insert(at, Item::Define(DefineDecl { name: o.name.clone(), ty: o.ty.clone(), expr: combination(&o), range: None, span: o.span.clone(), cite: None }));
         for (j, p) in f.opens.iter_mut().enumerate() {
             if j != k && p.at >= at && (p.at > at || j > k) {
                 p.at += 1;
@@ -996,9 +1214,7 @@ fn merge_into(f: &mut RuleFile, path: &str, cs: Vec<Contrib>, main: Option<usize
             }
             match f.inputs.iter().find(|x| x.name.text == i.name.text) {
                 Some(x) => {
-                    let same_ty = type_text(&x.ty) == type_text(&i.ty);
-                    let same_range = x.range.as_ref().map(range_text) == i.range.as_ref().map(range_text);
-                    if !same_ty || !same_range {
+                    if !same_input(x, i) {
                         out.push(
                             Diag::error("E042", tr!("寄与の入力 {} の型か範囲が、元の入力と違います", "The contribution's input {} differs from the rule's in type or range", i.name.text))
                                 .at(where_(&i.span))
@@ -1156,7 +1372,7 @@ fn merge_into(f: &mut RuleFile, path: &str, cs: Vec<Contrib>, main: Option<usize
             let o = f.opens[k].clone();
             let reads: Vec<String> = o.terms.iter().map(|t| t.name.text.clone()).collect();
             let at = last_binding(f, &reads).map(|i| i + 1).unwrap_or(0).min(f.items.len());
-            f.items.insert(at, Item::Define(DefineDecl { name: o.name.clone(), ty: o.ty.clone(), expr: combination(&o), span: o.span.clone(), cite: None }));
+            f.items.insert(at, Item::Define(DefineDecl { name: o.name.clone(), ty: o.ty.clone(), expr: combination(&o), range: None, span: o.span.clone(), cite: None }));
             for (j, p) in f.opens.iter_mut().enumerate() {
                 if j != k && p.at >= at {
                     p.at += 1;
@@ -1445,12 +1661,22 @@ fn prereq_lines(f: &mut RuleFile, block: &Name, lines: &[RequiresLine], cname: &
 }
 
 /// Every finding about a line of a file merged into the one being checked is written as being in
-/// that file (§15.227): the `--> path:line` of a finding whose first mark is there names it.
+/// that file (§15.227): the `--> path:line` names the file its line is in. The line is the first
+/// mark's in most findings; where it is another mark's — an overlap is placed at the later of its
+/// two rows — the file is that mark's, so that a line of the rule is not said with the path of the
+/// contribution, nor the other way round (§15.318).
 pub fn relocate(diags: &mut [Diag], path: &str) {
     let head = format!("{path}:");
     for d in diags.iter_mut() {
-        let Some(fp) = d.marks.first().and_then(|m| m.span.file_path()).map(str::to_string) else { continue };
-        if let Some(rest) = d.where_.strip_prefix(&head) {
+        let Some(rest) = d.where_.strip_prefix(&head).map(str::to_string) else { continue };
+        let digits = rest.chars().take_while(|c| c.is_ascii_digit()).count();
+        let line: Option<usize> = rest[..digits].parse().ok();
+        let first = d.marks.first();
+        let of = match first {
+            Some(m) if Some(m.span.line) == line => Some(m),
+            _ => d.marks.iter().find(|m| Some(m.span.line) == line).or(first),
+        };
+        if let Some(fp) = of.and_then(|m| m.span.file_path()) {
             d.where_ = format!("{fp}:{rest}");
         }
     }

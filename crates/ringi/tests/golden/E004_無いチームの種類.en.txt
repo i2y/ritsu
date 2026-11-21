@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_無いチームの種類.ringi:12:33: `division` is not a kind of team of the organization
+    12 |   本部長(head) = head of requester.division
+  = The kinds of team declared: `会社` and `部`

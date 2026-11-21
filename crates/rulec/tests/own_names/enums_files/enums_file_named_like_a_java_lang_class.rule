@@ -1,0 +1,4 @@
+enums system v1
+description "An enums file named like a class of java.lang, which the Java code reads by its simple name"
+
+enum zone = north | south

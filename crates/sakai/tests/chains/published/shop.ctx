@@ -1,0 +1,12 @@
+# A published language whose heading is not the package of its proto: it is said once, at the
+# heading, and the lines that read the language through the package are not said again.
+map Shop(shop) v1
+description "Takes orders and holds stock"
+
+use context "ctx/ordering.ctx"
+use context "ctx/inventory.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"

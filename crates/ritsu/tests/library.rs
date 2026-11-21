@@ -60,7 +60,7 @@ fn example(with: &[&str]) -> TempDir {
 fn ritsu_in(t: &TempDir, dir: &str, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(t.path().join(dir)).args(args).env(store::VARIABLE, t.path().join("store"));
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");

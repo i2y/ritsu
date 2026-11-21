@@ -1,0 +1,22 @@
+rule needs_manager v1
+description "Whether a manager reviews a claim, and the category it is reviewed as: training is reviewed as a purchase. Reads its category from expense_categories.rule"
+import enum category from "expense_categories.rule"
+
+inputs
+  category : category
+
+outputs
+  manager     : bool
+  reviewed_as : category
+
+table pick
+policy unique
+| category | -> manager | -> reviewed_as |
+| travel   | false      | travel         |
+| purchase | true       | purchase       |
+| training | true       | purchase       |
+
+examples
+| category | -> manager | -> reviewed_as |
+| travel   | false      | travel         |
+| training | true       | purchase       |

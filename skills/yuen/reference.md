@@ -194,7 +194,8 @@ checking side takes only what a tool checks and can fail (E403 otherwise):
 | `geas "<spec>" claim "<name>"` | a claim geas runs |
 | `koyomi "<file>" claim <name>` | a claim koyomi holds on every day of its range |
 | `sekisho "<file>" expect <name>`, `sekisho "<file>" separate <name>` | an expectation or a separation of duties sekisho holds over every combination |
-| `rulec "<file>"`, `koyomi "<file>"`, `chobo "<file>"`, `dandori "<file>"`, `geas "<spec>"`, `sekisho "<file>"`, `kaname "<file>"` | that tool's check of the file (for rulec: completeness, overlaps, examples; for kaname: types, units and rounding, the values a call passes, the effects written, examples) |
+| `rulec "<file>"`, `koyomi "<file>"`, `chobo "<file>"`, `dandori "<file>"`, `geas "<spec>"`, `sekisho "<file>"`, `kaname "<file>"`, `ringi "<file>"` | that tool's check of the file (for rulec: completeness, overlaps, examples; for kaname: types, units and rounding, the values a call passes, the effects written, examples; for ringi: the route, who answers each stage, the claims and the examples) |
+| `ringi "<file>" claim <name>`, `ringi "<file>" example <name>`, `ringi "<file>" scenario <name>` | a claim, an example or a scenario of a ringi file |
 | `file "<path>"` | a test file; yuen does not know what runs it |
 
 `not satisfied "<why>"` and `not verified "<why>"` waive a side, with the reason (it cannot be left
@@ -246,6 +247,7 @@ comes only right after its parent's pair (E012).
 | `sakai` | `.ctx` | `context` `term` |
 | `sekisho` | `.gate` | `principal` (`attribute` below) `resource` (`attribute` below) `role` `workflow` `enum` (`value` below) `action` (`input` and `context` below) `policy` `expect` `separate` |
 | `kaname` | `.kn` | `function` `record` (`field` below) `enum` (`value` below) |
+| `ringi` | `.ringi` | `field` `input` `table` `stage` `who` `deadline` `ticket` `claim` `example` `scenario` `position` `team_kind` `master` |
 
 - **Paths** are written in quotes, from the directory of the file the naming is written in, with
   `/` between parts; `.` and `..` fold away. An empty path, an absolute one and one that folds out
@@ -284,7 +286,7 @@ SHA-256.
 | a `file` source | the file |
 | a requirement of an OpenSpec spec | its block: its `### Requirement:` line and every line after it to the next requirement or `## ` header, the white space at its end removed, CR LF read as LF (the text OpenSpec's archive replaces) |
 | a file named by any tool | the file |
-| one thing in a file | the definition the language hands over for it: a rule's lines as `rulec fmt` writes them, a date's or claim's lines in koyomi, chobo's JSON of the unit, account or transfer (an operation's is its transfer's, with the operation and the names of the reasons it can be refused with), a claim's block in geas, a declaration's lines in dandori, a context's or term's lines in sakai, a declaration's lines in sekisho, a declaration's lines in kaname (a function's from its heading to the last line of its body), the fixed text of a `.proto` item |
+| one thing in a file | the definition the language hands over for it: a rule's lines as `rulec fmt` writes them, a date's or claim's lines in koyomi, chobo's JSON of the unit, account or transfer (an operation's is its transfer's, with the operation and the names of the reasons it can be refused with), a claim's block in geas, a declaration's lines in dandori, a context's or term's lines in sakai, a declaration's lines in sekisho, a declaration's lines in kaname (a function's from its heading to the last line of its body), a thing's lines in ringi (a table's are its heading and rows, a stage's its column, and a `ticket` rule's `on` lines every line that does the same to the same party), the fixed text of a `.proto` item |
 | an element of an OpenAPI or AsyncAPI document | its place (`#<JSON Pointer>`) on a line and its value as JSON (the keys in byte order, two spaces of indent), then the same for every value its `$ref`s reach, in the order of their files and pointers; an operation takes in its path's `parameters` and `servers`, a property says ` (required)` when its schema requires it, and a value of an `enum` is its place and itself |
 | a Cedar policy, action or entity type | the policy as `cedar format` lays it out, without its comments; the declaration in the Cedar schema format, in its namespace, with the common types it uses |
 | a requirement | the lines below |
@@ -351,15 +353,15 @@ Usage:
   yuen check <path>...                      check the names, the copies of the sources against their pins, every record against the hashes now, the periods, the coverage and the scope
   yuen review <path>...                     record what a person has looked at: under each chosen link and waiver that is marked, write who looked, when, and the hashes of its ends, and keep what was looked at in reviewed/
   yuen trace <path>...                      show why something is the way it is, from one requirement, artifact or article back to the sources
-  yuen affected <path>...                   answer which requirements a diff touches, with their owners, where they come from and the last decision on them; code is followed through geas's records to the claims, and on to the requirements
+  yuen affected <path>...                   answer which requirements a diff touches, with their owners, where they come from and the last decision on them; code is followed through geas's records to the claims, and on to the requirements; the files the linked files read are followed through every level
   yuen doc <path>...                        print the page of the requirements and where they come from (Markdown, or one HTML file), for whoever has to understand and check what the code is meant to do
   yuen api <path>...                        print the whole graph of the project as JSON, for other tools to read from the command's output alone
   yuen export reqif|prov <path>...          write the project out as ReqIF (for requirements tools) or W3C PROV (provenance); marks and gaps go in as states
   yuen source fetch|pin|outdated <path>...  fetch the copies of the sources, pin their hashes, or ask whether the originals moved on (only fetch and outdated read the network)
-  yuen explain <CODE>                       look a diagnostic code up: when it comes, how to fix it, the smallest reproduction
+  yuen explain <CODE>... | --all            look diagnostic codes up: when each comes, how to fix it, the smallest reproduction
 
 For one command in detail: `yuen <cmd> --help` (`yuen help <cmd>` is the same page).
-Every command takes --lang ja|en (default en; the YUEN_LANG or RITSU_LANG environment variable works too) and --root <dir>.
+Every command takes --lang ja|en (default en; the YUEN_LANG or RITSU_LANG environment variable sets the language of the text printed, and what doc and api write follows --lang alone) and --root <dir>.
 Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be read
 ```
 
@@ -375,10 +377,22 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
   requirements a unified diff touches, with their owners, where they come from and the last
   decision on them. Code is followed through geas's records (before and after the change) to the
   claims, and on to the requirements those claims check; exit 1 when a change reaches no
-  requirement. An OpenSpec spec the project reads is a copy of a source read a requirement at a
-  time (the requirements whose blocks differ between the two sides of the diff), and a change's
-  delta spec (`openspec/changes/<id>/specs/<capability>/spec.md`) says what the change does to the
-  requirements pinned, before it is archived.
+  requirement. A file that a linked file reads reaches the requirements of the link, through every
+  level, with the way it is read (`koyomi "pay.cal" line 3 (use calendar)`); a directory read
+  reaches them through any file under it. Each language says what its files read: rulec, the rules
+  a rule applies, the files it imports enums and shapes from, the dates its ranges come from, the
+  contributions merged into it and the rule a contribution adds to; koyomi, the calendar a dates
+  file uses and the tables a calendar is made of; dandori, kaname and sekisho, the files their
+  `use` lines name and the flows, books, services and operations they call or guard; ringi, the
+  organization, the masters, the routes, the calendars, the rules, the books, the gates and the
+  flows a request uses; sakai, the rules and the `.proto` files a context speaks in and the
+  contexts it uses. yuen itself follows what a document's `$ref` reaches and what a `.proto`
+  imports, and geas says which files a spec's contract reads. What a file only points at is not
+  read: a copy of a document it pins (a rule's `source`), the place a value comes from (`fed by`),
+  the code and the places a context owns. An OpenSpec spec the project reads is a copy of a source
+  read a requirement at a time (the requirements whose blocks differ between the two sides of the
+  diff), and a change's delta spec (`openspec/changes/<id>/specs/<capability>/spec.md`) says what
+  the change does to the requirements pinned, before it is archived.
 - `doc <path>... [--format markdown|html] [--out <dir>]`: the page of the project for whoever has
   to understand and check what the code is meant to do: the files and the check, a traceability
   table, the sources and the articles each requirement cites (quoted from the copies), why each
@@ -403,11 +417,12 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
   hashes of the requirements' blocks, and `outdated` reads the changes not yet archived under
   `openspec/changes/` (no network): what each modifies, removes, renames or adds, whom it reaches
   and how many links it will mark (exit 1 when one would change a requirement pinned).
-- `explain <CODE>`, `explain --all [--format markdown]`: a code, when it comes, how to fix it,
-  and the smallest reproduction.
+- `explain <CODE>...`, `explain --all [--format markdown|json]`: the codes in the order given, when each
+  comes, how to fix it, and the smallest reproduction.
 
-Every command takes `--lang ja|en` (else `YUEN_LANG`, then `RITSU_LANG`, else English) and
-`--root <dir>`.
+Every command takes `--lang ja|en` and `--root <dir>`. Without `--lang`, the text a command prints
+follows `YUEN_LANG`, then `RITSU_LANG`, else English, and what `doc` and `api` write is in English,
+whatever the environment says.
 
 ### Exit codes
 
@@ -416,6 +431,11 @@ Every command takes `--lang ja|en` (else `YUEN_LANG`, then `RITSU_LANG`, else En
 | 0 | no errors (there may be warnings); `doc` made its page |
 | 1 | errors (a marked link is one); for `affected`, a change no requirement reaches; for `source outdated`, an original that moved on |
 | 2 | bad arguments, a file that cannot be read, or an artifact of a language not joined (E206) |
+
+With `--format json` anywhere on the line, a run that stops before its work (exit 2: a file
+that is not there or not UTF-8, a flag it does not take, an argument missing) writes the sentence
+it says on stderr in JSON on stdout as well, `{"error": {"code": 2, "message": "…"}}`, without
+its `error: ` head.
 
 ## JSON
 
@@ -442,7 +462,7 @@ the root seen from where yuen runs.
 
 | Variable | What it does |
 |---|---|
-| `YUEN_LANG`, `RITSU_LANG` | the language of the text when `--lang` is not given (`en` or `ja`) |
+| `YUEN_LANG`, `RITSU_LANG` | the language of the text a command prints when `--lang` is not given (`en` or `ja`); what `doc` and `api` write follows `--lang` alone |
 | `YUEN_BLESS`, `RITSU_BLESS` | the tests write their golden files instead of comparing |
 | `YUEN_PYTHON` | a Python with `prov==3.2.2` and `reqif==0.1.0`, for the tests of the exports (else `tools/.venv`) |
 | `YUEN_XMLLINT` | xmllint, for the tests of ReqIF (else `xmllint` on PATH) |

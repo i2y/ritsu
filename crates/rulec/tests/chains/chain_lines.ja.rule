@@ -1,0 +1,28 @@
+rule 価格(price) v1
+description "読めない行。どれも一度だけ言い、そこから続く行は言い直さない。chain_lines.rule の日本語の版"
+
+enum 種類(kind) = 本(books) "本" | 音楽(music) "音楽" | おもちゃ(toys) "おもちゃ"
+
+inputs
+  品の種類(item_kind) : 種類
+  # 型の `[` が閉じていない。そのあとの範囲は単位の一部として読まない
+  定価(list_price) : money[USD  range >=0USD <=1000USD
+
+# 見出しの語の書き誤り。その下の行も読まない
+output
+  価格(price) : money[USD]  round half_up(1USD)
+
+# 表の見出しの下の語の書き誤り。表を読めないとは言わず、表の行も読まない
+table 上乗せ(markup_of)
+polcy unique
+| 品の種類 | -> 上乗せ率(markup) : rate[step 1%] |
+| 本       | 0%                                  |
+| 音楽     | 10%                                 |
+| おもちゃ | 20%                                 |
+
+define 価格 : money[USD] = 定価 + 定価 * 上乗せ率
+
+examples
+| 品の種類 | 定価   | -> 価格 |
+| 本       | 20USD  | 20USD   |
+| おもちゃ | 100USD | 120USD  |

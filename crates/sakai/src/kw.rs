@@ -80,13 +80,14 @@ pub const TABLE: &[(&str, &[&str])] = &[
             "separate ways from",
         ],
     ),
-    ("tool", &["rulec", "dandori", "koyomi", "chobo", "geas", "proto", "openapi", "asyncapi", "cedar", "file", "yuen", "sakai", "sekisho", "kaname", "jsonschema"]),
+    ("tool", &["rulec", "dandori", "koyomi", "chobo", "geas", "proto", "openapi", "asyncapi", "cedar", "file", "yuen", "sakai", "sekisho", "kaname", "jsonschema", "ringi"]),
     (
         "kind",
         &[
             "input", "output", "enum", "value", "table", "clause", "define", "derive", "machine", "source", "date", "claim", "unit", "account", "transfer", "service",
             "method", "message", "field", "requirement", "context", "term", "task", "case", "record", "schema", "channel", "operation", "property", "pointer", "policy",
-            "action", "entity", "principal", "resource", "attribute", "role", "workflow", "expect", "separate", "function", "def",
+            "action", "entity", "principal", "resource", "attribute", "role", "workflow", "expect", "separate", "function", "def", "stage", "who", "deadline",
+            "ticket", "example", "scenario", "position", "team_kind", "master",
         ],
     ),
 ];

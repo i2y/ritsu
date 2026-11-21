@@ -1,0 +1,10 @@
+company.gate: ok — 11 actions, 4 policies (3 permits, 1 forbid), 0 expectations, 0 separations
+ok purchase.ringi: a request, 1 field, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+error[ritsu E911]: purchase.ringi:15: `purchase` lets a requester decide their own request, and the gate company.gate allows a requester `approve` and `reject` on it in no combination
+    15 |   self approval  allowed
+  = Line 15 of the request says `self approval allowed`.
+  = Asked of the gate: `resource.requester` is the principal, the principal is in `resource.approvers` and `resource.self_approval` is true.
+  = Every answer a requester who is among a stage's approvers gives would be denied.
+  = Write `unless resource.self_approval` on the forbid of company.gate that keeps a requester from deciding their own request (`action approve`), or take `self approval allowed` out of the request.
+ritsu check: 2 files (sekisho 1, ringi 1): 1 fail (1 error); borders between the languages: 3 checked, 0 undecided

@@ -10,6 +10,12 @@
 use ritsu_testkit::{Need, TempDir, ready, skip};
 use std::path::Path;
 use std::process::Command;
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 /// A lower end only, which the table leans on: the rows start at 0JPY.
 const HALF_LOW: &str = "rule half_low v1\n\
@@ -174,14 +180,9 @@ fn generate_these(dir: &Path, out: &Path, aliases: &[&str], targets: &[&str], ex
 /// its digits (§15.297).
 fn agree(out: &Path) -> Vec<String> {
     let tmp = TempDir::new("door-ends-tmp");
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmp.path())
-        .args(["test", &out.to_string_lossy(), "--format", "json"])
-        .output()
-        .expect("cannot start rulec");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned();
-    let j = rulec::json::parse(said.lines().next().unwrap_or_else(|| panic!("no result: {}", String::from_utf8_lossy(&o.stderr)))).unwrap_or_else(|x| panic!("{x}: {said}"));
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp.path()).args(["test", &out.to_string_lossy(), "--format", "json"]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone();
+    let j = rulec::json::parse(said.lines().next().unwrap_or_else(|| panic!("no result: {}", o.stderr))).unwrap_or_else(|x| panic!("{x}: {said}"));
     for why in j.get("skipped").and_then(|v| v.as_arr()).unwrap_or_default() {
         skip(&format!("rulec test: {}", why.as_str().unwrap_or_default()));
     }
@@ -268,10 +269,12 @@ fn the_vectors_carry_the_one_past_each_end_the_door_holds() {
     assert!(r.contains(r#"{"in":{"r":-1},"refused":"input","error":"r is out of range","why":"r one below its range"}"#), "{r}");
 
     let r = refused("walk_half");
-    assert!(r.contains(r#""error":"amount is out of range","why":"amount one below its range, in an element of lines""#), "{r}");
+    assert!(r.contains(r#""error":"lines[1].amount is out of range","why":"amount one below its range, in an element of lines""#), "{r}");
     let r = refused("walk_none");
-    assert!(r.contains(r#"{"in":{"lines":[{"amount":-9223372036854775808}]},"refused":"input","error":"amount is out of range","why":"amount one below what its type holds, in an element of lines"}"#), "{r}");
-    assert!(r.contains(r#"{"in":{"lines":[{"amount":9223372036854775808}]},"refused":"input","error":"amount is out of range","why":"amount one above what its type holds, in an element of lines"}"#), "{r}");
+    // the element past the end is put second and third, after one the door takes, and the
+    // sentence names the first of them (§15.324)
+    assert!(r.contains(r#"{"in":{"lines":[{"amount":999},{"amount":-9223372036854775808},{"amount":-9223372036854775808}]},"refused":"input","error":"lines[1].amount is out of range","why":"amount one below what its type holds, in an element of lines"}"#), "{r}");
+    assert!(r.contains(r#"{"in":{"lines":[{"amount":999},{"amount":9223372036854775808},{"amount":9223372036854775808}]},"refused":"input","error":"lines[1].amount is out of range","why":"amount one above what its type holds, in an element of lines"}"#), "{r}");
 
     // Written at the ends of the type: the cases past them are those past what the type holds.
     let r = refused("at_the_ends");

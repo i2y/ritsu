@@ -1,0 +1,3 @@
+error[E602]: tests/mutants/E602_出たステップを書く.ringi:24:38: After `approve`, the ticket is `決裁`, `in progress`, and the scenario writes `確かめ`, `in progress`
+    24 | | 2026-06-01 10:00 | approve | e04 | 確かめ   | in progress |
+  = The ticket is at `決裁`, and is `in progress`. No clock is set.

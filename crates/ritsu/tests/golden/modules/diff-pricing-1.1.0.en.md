@@ -24,8 +24,8 @@
 
 | where they differ | answer | example | cells |
 |---|---|---|---|
-| region = domestic  and  weight >=2001g <=2500g | fee: 695 → 395 | region=domestic, weight=2001 | 2 |
-| region = world  and  weight >=2001g <=2500g | fee: 2950 → 1850 | region=world, weight=2001 | 2 |
+| region = domestic  and  weight >=2001g <=2500g | fee: 695GBPc → 395GBPc | region=domestic, weight=2001g | 2 |
+| region = world  and  weight >=2001g <=2500g | fee: 2950GBPc → 1850GBPc | region=world, weight=2001g | 2 |
 
 Of the inputs both versions accept, those outside this region get the same answer.
 

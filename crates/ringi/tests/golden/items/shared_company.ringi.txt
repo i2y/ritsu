@@ -1,0 +1,20 @@
+5-5 ringi "examples/shared/company.ringi" position staff
+    staff "Staff"
+6-6 ringi "examples/shared/company.ringi" position manager
+    manager "Manager"
+7-7 ringi "examples/shared/company.ringi" position dept_head
+    dept_head "Head of department"
+8-8 ringi "examples/shared/company.ringi" position division_head
+    division_head "Head of division"
+9-9 ringi "examples/shared/company.ringi" position president
+    president "President"
+12-12 ringi "examples/shared/company.ringi" team_kind company
+    company "Company"
+13-13 ringi "examples/shared/company.ringi" team_kind division
+    division "Division"
+14-14 ringi "examples/shared/company.ringi" team_kind department
+    department "Department"
+15-15 ringi "examples/shared/company.ringi" team_kind section
+    section "Section"
+16-16 ringi "examples/shared/company.ringi" team_kind committee
+    committee "Committee"

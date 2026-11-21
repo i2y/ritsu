@@ -283,7 +283,7 @@ fn 数の集合は値ごとの点になる() {
     let dir = tmp.path().to_path_buf();
     let p = dir.join("pieces.rule");
     std::fs::write(&p, src).unwrap();
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["vectors", p.to_str().unwrap()]).output().unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["vectors", p.to_str().unwrap(), "--lang", "ja"]).output().unwrap();
     let text = String::from_utf8_lossy(&out.stdout);
     let got = |n: i128| {
         text.lines()
@@ -348,5 +348,29 @@ fn 決められない行はw128で言い_例で決まる() {
     let direct = en.replace("| units | -> prize : bool |\n| 997   |", "| boxes | -> prize : bool |\n| 997   |").replace("| -     | false           |", "| -     | false           |");
     let ds = rulec::check_source(&direct, "region.rule");
     assert!(!ds.iter().any(|d| d.code == "W128"), "{:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>());
+}
+
+/// The same holds where a table of the same rule writes the column the row asks for: its value is
+/// not an input either, and the relation to the inputs is that table's rows (§15.322). The table
+/// writes the product of the two numbers, and the row that asks for 997 is said to be undecided
+/// rather than passed as reached; an example that reaches it decides it.
+#[test]
+fn 同じ規則の表が書く列でも決められない行はw128で言う() {
+    use rulec::i18n::{self, Lang};
+    let en = "rule lucky_batch v1\ndescription \"A batch of exactly 997 units gets a prize, the units a table of the same rule writes\"\n\ninputs\n  boxes   : number  range >=0 <=1000\n  per_box : number  range >=0 <=1000\n\noutputs\n  prize : bool\n\ndefine product : number = boxes * per_box\n\ntable units_of\n| boxes | -> units : number |\n| -     | product           |\n\ntable prize_of\npolicy first\n| units | -> prize : bool |\n| 997   | true            |\n| -     | false           |\n";
+    let ja = "rule 当たりの束(lucky_batch) v1\ndescription \"ちょうど 997 個の束に賞が出る。個数は同じ規則の表が書く\"\n\ninputs\n  箱の数(boxes)      : number  range >=0 <=1000\n  一箱の数(per_box)  : number  range >=0 <=1000\n\noutputs\n  賞(prize) : bool\n\ndefine 積(product) : number = 箱の数 * 一箱の数\n\ntable 個数の表(units_of)\n| 箱の数 | -> 個数(units) : number |\n| -      | 積                      |\n\ntable 賞の表(prize_of)\npolicy first\n| 個数 | -> 賞 : bool |\n| 997  | true         |\n| -    | false        |\n";
+    for (src, lang, title, example) in [
+        (en, Lang::En, "No input was found that reaches row 1, and none was shown not to", "\nexamples\n| boxes | per_box | -> prize |\n| 1     | 997     | true     |\n"),
+        (ja, Lang::Ja, "行1 に当たる入力を見つけられず、当たらないことも示せませんでした", "\nexamples\n| 箱の数 | 一箱の数 | -> 賞 |\n| 1      | 997      | true  |\n"),
+    ] {
+        let ds = i18n::with(lang, || rulec::check_source(src, "region.rule"));
+        let found: Vec<_> = ds.iter().map(|d| (d.code, d.title.as_str(), d.row)).collect();
+        assert_eq!(found, vec![("W128", title, Some(1))], "{src}");
+        let marked = ds[0].notes.join("\n");
+        assert!(marked.contains(if lang == Lang::En { "`units`" } else { "`個数`" }), "{marked}");
+        let with = format!("{src}{example}");
+        let ds = i18n::with(lang, || rulec::check_source(&with, "region.rule"));
+        assert!(ds.is_empty(), "{:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+    }
 }
 

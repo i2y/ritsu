@@ -1,0 +1,6 @@
+エラー[E405]: tests/mutants/E405_a_hold_on_a_condition_approvers_edit.ringi:26:118: 仮押さえ `budget.reserve` が、承認者の直せるフィールド `kind` を読みます
+    26 |   on submitted    hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)  when kind is budgeted
+  = 仮押さえの条件（`when kind is budgeted`）が `kind` を読み、25 行目の `approvers edit` が、承認者に `kind` を直させます。
+  = 仮押さえは、申請を出したときの値で一度だけ行い、承認者が直しても押さえ直しません。
+  = 直して条件が成り立たなくなると、同じ条件の `post` と `void` は行われず、仮押さえが開いたまま終わります。
+  = `approvers edit` から `kind` を外してください（ほかのフィールドが無ければ、行ごと）。

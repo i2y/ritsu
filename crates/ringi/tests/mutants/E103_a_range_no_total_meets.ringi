@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+form
+  price    : money[JPY] "Unit price"  range >=1JPY <=1_000JPY
+  quantity : number "Quantity"  range >=1 <=10
+  total    : money[JPY] "Total" = price * quantity  range >=20_000JPY <=30_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

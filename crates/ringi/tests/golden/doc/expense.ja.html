@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="ringi 0.55.2">
+<title>経費の申請</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 40px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 28px 0 8px; }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+th { background: var(--soft); white-space: nowrap; }
+:target { scroll-margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- ringi 0.55.2 が expense.ja.ringi（sha256:6fcdf162a1b59902）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<main>
+<header>
+<h1>経費の申請</h1>
+<p class="desc">経費・出張・購買の申請。種別と金額に応じて、決裁権限規程（架空）第 12 条の別表 2 が定める役が、確かめ、承認し、決裁する</p>
+</header>
+<p>ファイル：<code>expense.ja.ringi</code>（申請の種類 <code>expense_ja</code> の版 1、sha256:6fcdf162a1b59902）</p>
+<p>受け持つチーム：経理部（<code>accounting</code>）</p>
+<p>組織は、置いてある版のそれぞれ（2026-04-01、2027-04-01 から）で読んでいます。</p>
+<nav class="toc" aria-label="目次">
+<ul>
+<li><a href="#usable">使える期間</a></li>
+<li><a href="#submitters">出せる人</a></li>
+<li><a href="#form">フォーム</a></li>
+<li><a href="#route">経路</a></li>
+<li><a href="#ways">承認者の決め方</a></li>
+<li><a href="#deadlines">期限と催促</a></li>
+<li><a href="#rules">チケットの決まり</a></li>
+<li><a href="#comments">コメント</a></li>
+<li><a href="#proxies">代理</a></li>
+<li><a href="#after">帳簿と flow</a></li>
+<li><a href="#claims">主張</a></li>
+<li><a href="#examples">経路の例</a></li>
+<li><a href="#scenarios">シナリオ</a></li>
+</ul>
+</nav>
+<h2 id="usable">使える期間</h2>
+<ul>
+<li>2026-04-01 から使えます。決めているのは、組織 <code>shared/company.ringi</code> の最初の版（データ <code>../org</code>）です。</li>
+<li>終わりの日はありません。読む物に終わりがありません。</li>
+</ul>
+<h2 id="submitters">出せる人</h2>
+<p>組織のだれでも出せます。</p>
+<p>人数は、2026-04-01 からの組織の 24 人のうち 24 人、2027-04-01 からの 23 人のうち 23 人です。</p>
+<p>代わりに出す代理の人は、代わる人の名前で出せます。その申請は、代わられた人の申請になります。</p>
+<h2 id="form">フォーム</h2>
+<div class="scroll"><table>
+<thead><tr><th>フィールド</th><th>型</th><th>受け付ける値</th><th>必須</th><th>表示</th></tr></thead>
+<tbody>
+<tr><td>種別</td><td>出張、経費、購買のどれか</td><td>—</td><td>必須</td><td>いつも</td></tr>
+<tr><td>明細</td><td>明細の行</td><td>1行から20行まで</td><td>必須</td><td>いつも</td></tr>
+<tr><td>明細 › 品目</td><td>一行の文</td><td>100字まで</td><td>必須</td><td>いつも</td></tr>
+<tr><td>明細 › 金額</td><td>金額（円）</td><td>1円から1,000,000円まで</td><td>必須</td><td>いつも</td></tr>
+<tr><td>合計</td><td>金額（円）。計算：「明細」の行の「金額」の合計</td><td>1円から10,000,000円まで（計算した値は1円から20,000,000円までになりえます）</td><td>計算する</td><td>いつも</td></tr>
+<tr><td>目的</td><td>文</td><td>1字から200字まで</td><td>必須</td><td>いつも</td></tr>
+<tr><td>使った日</td><td>日付</td><td>2026-01-01から2027-12-31まで</td><td>必須</td><td>いつも</td></tr>
+<tr><td>行き先</td><td>一行の文</td><td>100字まで</td><td>必須</td><td>「種別」が「出張」のとき</td></tr>
+<tr><td>領収書</td><td>添付ファイル</td><td>—</td><td>「合計」が30,000円より大きいとき</td><td>いつも</td></tr>
+<tr><td>勘定科目</td><td><code>マスタ.accounts</code> の行</td><td>—</td><td>承認者が入れる</td><td>いつも</td></tr>
+</tbody>
+</table></div>
+<p class="note">空のフィールドは値を持ちません。任意のフィールド、条件つきで必須か表示のフィールド、承認者が入れるフィールド（入れるまで）がそうです。「〜でない」という条件は、値が無いときも成り立ちます。「〜である」という条件と大きさの比べは、値が無いときは成り立ちません。値の無いフィールドを読む計算も値を持ちません。合計は別で、セルが入っている行だけを足します。</p>
+<p>計算するフィールドが受け付けるのは、書いた範囲の値です。計算した値が範囲の外になる申請は断られます。経路の表は、受け付ける値を覆えば足ります。</p>
+<h2 id="route">経路</h2>
+<p>経路は「種別」と「合計」で決まります。表の一行が一つの場合で、通るステップを順に並べています。各ステップにだれが答えるかは「承認者の決め方」にあります。</p>
+<div class="scroll"><table>
+<thead><tr><th>種別</th><th>合計</th><th>経路</th></tr></thead>
+<tbody>
+<tr><td>出張</td><td>30,000円以下</td><td>エージェント決裁（決裁）</td></tr>
+<tr><td>出張</td><td>30,000円より大きく、100,000円以下</td><td>上長（決裁）</td></tr>
+<tr><td>出張</td><td>100,000円より大きい</td><td>上長（一次） → 部長（決裁）</td></tr>
+<tr><td>経費</td><td>100,000円以下</td><td>エージェント確認（確かめ） → 上長（決裁）</td></tr>
+<tr><td>経費</td><td>100,000円より大きく、1,000,000円以下</td><td>エージェント確認（確かめ） → 上長（一次） → 部長（決裁）</td></tr>
+<tr><td>経費</td><td>1,000,000円より大きい</td><td>上長（一次） → 部長（二次） → 本部長（決裁）</td></tr>
+<tr><td>購買</td><td>1,000,000円以下</td><td>上長（一次） → 経理（二次） → 部長（決裁）</td></tr>
+<tr><td>購買</td><td>1,000,000円より大きい</td><td>上長（一次） → 部長と経理（二次） → 本部長（決裁）</td></tr>
+</tbody>
+</table></div>
+<h2 id="ways">承認者の決め方</h2>
+<div class="scroll"><table>
+<thead><tr><th>承認者</th><th>決まる人</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>申請者の上長。申請者が主に属するチームの長で、その長が申請者自身か空なら、上のチームの長です</td></tr>
+<tr><td>部長</td><td>申請者から上へたどって最初の、種類が <code>department</code> のチームの長</td></tr>
+<tr><td>経理</td><td>経理部（<code>accounting</code>）の人。だれか一人が答えます</td></tr>
+<tr><td>本部長</td><td>申請者から上へチームの長をたどって、役職が <code>division_head</code> 以上の最初の人</td></tr>
+<tr><td>エージェント確認</td><td>flow <code>事前の確かめ</code> のエージェントが答えます。確かでないときと失敗したときは、代わりに「上長」が答えます</td></tr>
+<tr><td>エージェント決裁</td><td>flow <code>出張の決裁</code> のエージェントが答えます。確かでないときと失敗したときは、代わりに「上長」が答えます</td></tr>
+<tr><td>取締役</td><td>取締役会（<code>board</code>）の人。だれか一人が答えます</td></tr>
+</tbody>
+</table></div>
+<p>承認者は、ステップが始まるときに、そのときに効いている組織の版で決めます。その日に有効な代理も、並んで答えられます（「代理」を見てください）。</p>
+<h2 id="deadlines">期限と催促</h2>
+<p>どのステップも：</p>
+<ul>
+<li>期限は、始まった日から 3 営業日の日の終わりです。</li>
+<li>始まった日から 2 営業日の日の 09:00 に、承認者へ催促が届きます。</li>
+<li>期限を過ぎると表 <code>一段上</code> のとおりに上へ回ります。期限は、そこから数え直されます。また過ぎるとチケットは期限切れで終わります。</li>
+<li>答える人がいなければ、上の長へ回ります。組織のいちばん上では、「取締役」へ回ります。</li>
+</ul>
+<p>期限を過ぎたステップは、表 <code>一段上</code> のとおりに上へ回ります。</p>
+<div class="scroll"><table>
+<thead><tr><th>承認者</th><th>回す先</th></tr></thead>
+<tbody>
+<tr><td>エージェント確認</td><td>上長</td></tr>
+<tr><td>エージェント決裁</td><td>上長</td></tr>
+<tr><td>上長</td><td>部長</td></tr>
+<tr><td>部長</td><td>本部長</td></tr>
+<tr><td>経理</td><td>本部長</td></tr>
+<tr><td>本部長</td><td>本部長</td></tr>
+<tr><td>取締役</td><td>取締役</td></tr>
+</tbody>
+</table></div>
+<p>2026-04-03（金）に始まるステップでは、次のとおりです。申請の種類のカレンダーの休みは数えません（時刻は UTC+09:00）。</p>
+<div class="scroll"><table>
+<thead><tr><th>ステップ</th><th>催促</th><th>期限</th><th>上へ回したあとの期限</th></tr></thead>
+<tbody>
+<tr><td>確かめ</td><td>2026-04-07（火）09:00</td><td>2026-04-08（水）の終わり</td><td>2026-04-14（火）の終わり</td></tr>
+<tr><td>一次</td><td>2026-04-07（火）09:00</td><td>2026-04-08（水）の終わり</td><td>2026-04-14（火）の終わり</td></tr>
+<tr><td>二次</td><td>2026-04-07（火）09:00</td><td>2026-04-08（水）の終わり</td><td>2026-04-14（火）の終わり</td></tr>
+<tr><td>決裁</td><td>2026-04-07（火）09:00</td><td>2026-04-08（水）の終わり</td><td>2026-04-14（火）の終わり</td></tr>
+</tbody>
+</table></div>
+<p>チケットは、長くても 93 営業日で終わります（ステップに 4 × 21、申請者のもとで 3 × 3）。いちばん長い場合の日付は <code>ritsu ringi doc --longest</code> が見せます。</p>
+<h2 id="rules">チケットの決まり</h2>
+<ul>
+<li>申請者は、自分の申請を承認しません。どのステップの承認者からも外します。代わりに出した人も同じです。</li>
+<li>一人の承認者が、すぐ前のステップを承認していれば、そのステップはその承認で済みます。</li>
+<li>承認者は、申請者へ差し戻せます。取り下げと合わせて 3 回までです。使い切ったら、承認か却下を選びます。</li>
+<li>申請者へ戻ったら、戻った日から 3 営業日の日の終わりまでに出し直せます。過ぎると期限切れで終わります。出し直しでは、変えるフィールドだけを渡します。</li>
+<li>申請者は、ステップ「決裁」が答えるまで取り下げられます。取り下げたチケットは手元へ戻り、直して出し直すか、やめるかを選びます。</li>
+<li>承認者は却下できます。チケットは却下で終わり、出し直せません。</li>
+<li>申請の種類を受け持つチームは、今のステップに承認者を足せます。承認者の一人の受け持ちを、ほかの人に引き継ぐこともできます。どちらも期限を動かしません。</li>
+</ul>
+<h2 id="comments">コメント</h2>
+<ul>
+<li>人がする操作（申請、承認、差し戻し、却下、取り下げなど）には、コメントを一つ添えられます。コメントだけを書くこともできます。添えなくてもかまいません。</li>
+<li>だれが書けるかは、ほかの操作と同じく、gate <code>shared/company.gate</code> が決めます。</li>
+<li>コメントは 2000 字までです。チケットの履歴の、その人がしたことの行に、書いた人と時刻と一緒に残り、あとから変えません。コメントだけを書いても、チケットの状態と期限は変わりません。</li>
+<li>理由を書かずに却下も差し戻しもできますが、書けば、申請者は何を直せばよいかを履歴で読めます。</li>
+</ul>
+<h2 id="proxies">代理</h2>
+<ul>
+<li>承認の代理は、行の期間のあいだ、代わる人のステップに並んで答えます。答えは、代わる人の席で一票に数えます。保留と再開、承認者が直すフィールドの直し、自分がした承認の取り消しもできます。</li>
+<li>申請の代理は、代わる人の名前で申請を出します。取り下げ、出し直し、やめることも、申請者と同じくできます。</li>
+<li>代理がしたことは、だれの代わりにしたかと一緒に、履歴に残ります。</li>
+</ul>
+<p>組織のデータにある、この申請の種類の代理：</p>
+<div class="scroll"><table>
+<thead><tr><th>代わられる人</th><th>代わる人</th><th>種類</th><th>期間</th></tr></thead>
+<tbody>
+<tr><td>e3101（営業一部長）</td><td>e1101（営業一課長）</td><td>承認</td><td>2026-12-28〜2027-01-08</td></tr>
+</tbody>
+</table></div>
+<h2 id="after">帳簿と flow</h2>
+<ul>
+<li>出したとき、申請者の上に種類が <code>department</code> のチームがあるなら、帳簿に <code>予算.reserve</code> の仮押さえが入ります（<code>amount</code> に「合計」）。</li>
+<li>承認されたとき、仮押さえ <code>予算.reserve</code> が確定します。</li>
+<li>承認されたとき、flow <code>支払い</code> が始まります（<code>amount</code> に「合計」、<code>purpose</code> に「目的」）。</li>
+<li>差し戻されたか、却下されたか、取り下げられたか、期限切れになったとき、仮押さえ <code>予算.reserve</code> が取り消されます。</li>
+</ul>
+<h2 id="claims">主張</h2>
+<p>検査は、どれも成り立つことを確かめています。成り立たない主張があれば、この申請の種類は検査を通りません。</p>
+<ul>
+<li><code>エージェントが決裁するのは3万円まで</code>：ステップ「決裁」が「エージェント決裁」になるのは、「合計」が30,000円以下のときだけです。</li>
+<li><code>二次承認を部長と経理でする場合がある</code>：ステップ「二次」が「部長と経理」になる申請があります。</li>
+<li><code>催促は期限より前</code>：どのステップも、期限の前に承認者へ催促が届きます。</li>
+<li><code>期限内に終わる</code>：どのチケットも 93 営業日のうちに終わります。長くても 93 営業日です。</li>
+</ul>
+<h2 id="examples">経路の例</h2>
+<p>検査は、経路がどの例にも、横に書いたステップを与えることを確かめています。</p>
+<div class="scroll"><table>
+<thead><tr><th>種別</th><th>合計</th><th>経路</th></tr></thead>
+<tbody>
+<tr><td>出張</td><td>30,000円</td><td>エージェント決裁（決裁）</td></tr>
+<tr><td>出張</td><td>30,001円</td><td>上長（決裁）</td></tr>
+<tr><td>経費</td><td>100,000円</td><td>エージェント確認（確かめ） → 上長（決裁）</td></tr>
+<tr><td>経費</td><td>100,001円</td><td>エージェント確認（確かめ） → 上長（一次） → 部長（決裁）</td></tr>
+<tr><td>購買</td><td>1,000,001円</td><td>上長（一次） → 部長と経理（二次） → 本部長（決裁）</td></tr>
+</tbody>
+</table></div>
+<h2 id="scenarios">シナリオ</h2>
+<p>検査は、どのシナリオもチケットの機械で走らせ、イベントごとに、書いたステップと状態になることを確かめています。</p>
+<h3 id="scenario-e983a8e995b7e381a8e7b58ce79086e381a7e4ba8ce6aca1e689bfe8aa8de38292e38199e3828be8b3bce8b2b7"><code>部長と経理で二次承認をする購買</code></h3>
+<p>申請者：e1201（営業担当 1）</p>
+<ul>
+<li>種別：購買</li>
+<li>明細：「サーバー」、800,000円／「ストレージ」、400,000円</li>
+<li>目的：「検証用のサーバーとストレージ」</li>
+<li>使った日：2026-11-16</li>
+<li>領収書：「receipt.pdf」</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>時刻</th><th>イベント</th><th>する人</th><th>そのあとのステップ</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td>2026-11-16 10:00</td><td>申請</td><td>e1201（営業担当 1）</td><td>一次</td><td>進行中</td></tr>
+<tr><td>2026-11-16 15:00</td><td>承認</td><td>e1101（営業一課長）</td><td>二次</td><td>進行中</td></tr>
+<tr><td>2026-11-17 11:00</td><td>承認</td><td>e1001（経理部長）</td><td>二次</td><td>進行中</td></tr>
+<tr><td>2026-11-17 16:00</td><td>承認</td><td>e3101（営業一部長）</td><td>決裁</td><td>進行中</td></tr>
+<tr><td>2026-11-18 09:30</td><td>承認</td><td>e0101（営業本部長）</td><td>—</td><td>承認</td></tr>
+</tbody>
+</table></div>
+<h3 id="scenario-e382a8e383bce382b8e382a7e383b3e38388e3818ce6b1bae8a381e38199e3828be697a5e5b8b0e3828ae381aee587bae5bcb5"><code>エージェントが決裁する日帰りの出張</code></h3>
+<p>申請者：e1201（営業担当 1）</p>
+<ul>
+<li>種別：出張</li>
+<li>明細：「大阪までの往復の電車」、28,000円</li>
+<li>目的：「大阪の取引先の訪問」</li>
+<li>使った日：2026-11-20</li>
+<li>行き先：「大阪」</li>
+<li>領収書：「receipt.pdf」</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>時刻</th><th>イベント</th><th>する人</th><th>そのあとのステップ</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td>2026-11-16 10:00</td><td>申請</td><td>e1201（営業担当 1）</td><td>決裁</td><td>進行中</td></tr>
+<tr><td>2026-11-16 10:01</td><td>エージェントの答え（確か）</td><td>—</td><td>—</td><td>承認</td></tr>
+</tbody>
+</table></div>
+<h3 id="scenario-e382a8e383bce382b8e382a7e383b3e38388e3818ce6b1bae38281e3818de3828ce381aae38184e587bae5bcb5"><code>エージェントが決めきれない出張</code></h3>
+<p>申請者：e1201（営業担当 1）</p>
+<ul>
+<li>種別：出張</li>
+<li>明細：「札幌までの往復の航空券」、29,500円</li>
+<li>目的：「札幌の取引先の訪問」</li>
+<li>使った日：2026-11-27</li>
+<li>行き先：「札幌」</li>
+<li>領収書：「receipt.pdf」</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>時刻</th><th>イベント</th><th>する人</th><th>そのあとのステップ</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td>2026-11-16 10:00</td><td>申請</td><td>e1201（営業担当 1）</td><td>決裁</td><td>進行中</td></tr>
+<tr><td>2026-11-16 10:01</td><td>エージェントの答え（確かでない、「運賃がいつもより高い」）</td><td>—</td><td>決裁</td><td>進行中</td></tr>
+<tr><td>2026-11-16 14:00</td><td>承認</td><td>e1101（営業一課長）</td><td>—</td><td>承認</td></tr>
+</tbody>
+</table></div>
+<h3 id="scenario-e58f96e3828ae38284e38281e3819fe587bae5bcb5"><code>取りやめた出張</code></h3>
+<p>申請者：e1201（営業担当 1）</p>
+<ul>
+<li>種別：出張</li>
+<li>明細：「福岡までの往復の航空券」、64,000円／「ホテルの三泊」、54,000円</li>
+<li>目的：「福岡の取引先の訪問」</li>
+<li>使った日：2026-12-02</li>
+<li>行き先：「福岡」</li>
+<li>領収書：「receipt.pdf」</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>時刻</th><th>イベント</th><th>する人</th><th>コメント</th><th>そのあとのステップ</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td>2026-11-16 10:00</td><td>申請</td><td>e1201（営業担当 1）</td><td></td><td>一次</td><td>進行中</td></tr>
+<tr><td>2026-11-16 15:00</td><td>承認</td><td>e1101（営業一課長）</td><td></td><td>決裁</td><td>進行中</td></tr>
+<tr><td>2026-11-17 09:00</td><td>取り下げ</td><td>e1201（営業担当 1）</td><td>「取引先が訪問を春に延ばした」</td><td>—</td><td>申請者の手元</td></tr>
+<tr><td>2026-11-17 09:05</td><td>やめる</td><td>e1201（営業担当 1）</td><td></td><td>—</td><td>取り下げ</td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

@@ -1,0 +1,16 @@
+order.flow: 検査を通りました
+restock.flow: 検査を通りました
+ok purchase.ringi: 申請の種類、フィールド 1 個、ステップ 1 個
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます
+警告[ritsu W210]: purchase.ringi:15: `purchase` が flow `order` の入力 `amount` に渡す値を、入力が受け取るかを決められません
+    15 |   on approved  launch order(request_id: ticket.id, amount: amount)  when not (amount > 500_000JPY)
+  = 決められない理由: 1_000_000JPY を渡すことがあるように見えます（flow が受け取るのは 500_000JPY 以下です）。ただし、`on` の行の `when` の条件が値をもっと絞るかもしれず、ringi はそれを追いません。
+  = `amount` は money[JPY] >=1JPY <=1_000_000JPY です。
+  = 入力 `amount` が受け取るのは money[JPY] >=1JPY <=500_000JPY です（"order.flow" の 6 行目）。
+  = ringi が値を絞って読むのは、経路の表の行と、フォームのフィールドを定数と比べる `when`（`amount <= 500_000JPY`、`and` でつないだものも）です。
+警告[ritsu W210]: restock.flow:28: flow が呼ぶ "requests.json" の `submit_supplies` が、今の申請に合うかを決められません
+    28 |   let moved = submit_supplies(form: supplies)
+  = 文書は、この操作を申請 `supplies` の版 1 から書いたと言いますが、プロジェクトに `supplies.ringi` という申請のファイルはありません。
+  = dandori は、flow が送る値をこの文書とだけ比べます。
+  = 申請がこのプロジェクトにあるなら、プロジェクトの根から `ritsu gen --target requests` で "requests.json" を書き直してください。ほかのプロジェクトの申請なら、そのプロジェクトで書き直した文書に置き換えてください。
+ritsu check: ファイル 3 個（dandori 2、ringi 1）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 3 か所、決められない 2 か所

@@ -84,23 +84,52 @@ impl Ty {
         }
     }
     /// Do two types describe the same quantity? Money literals carry no tax brand,
-    /// so they unify with either.
+    /// so they unify with either. A unit is the unit it is, however it is spelled (§15.332).
     pub fn unifies(&self, o: &Ty) -> bool {
         match (self, o) {
             (Ty::Money { cur: a, tax: ta }, Ty::Money { cur: b, tax: tb }) => {
-                a == b && (ta.is_none() || tb.is_none() || ta == tb)
+                one_unit(a, b) && (ta.is_none() || tb.is_none() || ta == tb)
             }
             (Ty::Unknown, _) | (_, Ty::Unknown) => true,
+            _ => self.same(o),
+        }
+    }
+
+    /// Whether two types are one type, a unit read as the unit it is rather than as it is spelled
+    /// (§15.332): `money[JPY]` is `money[円]`, and `volume[mL]` is `volume[cm3]`. The rest is
+    /// compared as it is written: a tax brand, an enum, an optional. A sentence still says each type
+    /// the way its file writes it, and the generated code keeps each file's spelling.
+    pub fn same(&self, o: &Ty) -> bool {
+        match (self, o) {
+            (Ty::Money { cur: a, tax: ta }, Ty::Money { cur: b, tax: tb }) => ta == tb && one_unit(a, b),
+            (Ty::Qty { dim: da, unit: a }, Ty::Qty { dim: db, unit: b }) => da == db && one_unit(a, b),
+            (Ty::Opt(a), Ty::Opt(b)) => a.same(b),
             _ => self == o,
         }
     }
 }
 
+/// Whether two spellings of a unit name one unit: the same dimension, size and zero in ritsu's table
+/// of units, as `ritsu_units::Unit::same` reads two units (§15.332). `JPY` is another spelling of
+/// `円`, `mL` of `cm3` and `kL` of `m3`; `銭` is a hundredth of a yen, a unit of its own. A spelling
+/// the table does not have is one unit with itself alone.
+pub fn one_unit(a: &str, b: &str) -> bool {
+    a == b
+        || matches!(
+            (ritsu_units::table::unit(a), ritsu_units::table::unit(b)),
+            (Some(x), Some(y)) if x == y && unit_offset(a) == unit_offset(b)
+        )
+}
+
 /// The dimension a type belongs to, or `None` for one that carries no unit. A currency is a
-/// dimension of its own (§15.18), so two of them are as unrelated as grams and centimetres.
+/// dimension of its own (§15.18), so two of them are as unrelated as grams and centimetres. It is
+/// the currency the table of units reads the spelling as: `JPY` and `銭` are of the yen's.
 fn dim_of(t: &Ty) -> Option<String> {
     match t {
-        Ty::Money { cur, .. } => Some(format!("{}/{cur}", crate::kw::MONEY)),
+        Ty::Money { cur, .. } => {
+            let cur = ritsu_units::table::money(cur).map_or_else(|| cur.clone(), |(c, _)| c);
+            Some(format!("{}/{cur}", crate::kw::MONEY))
+        }
         Ty::Qty { dim, .. } => Some(dim.clone()),
         _ => None,
     }
@@ -377,6 +406,7 @@ pub enum SymKind {
     Output,
 }
 
+#[derive(Clone)]
 pub struct Checked {
     /// The built-in namespaces the rule imports (§15.182), for the hints of E012.
     pub imported: Vec<crate::prelude::Import>,
@@ -408,6 +438,12 @@ pub struct Checked {
     /// the step the values really take. [`Checked::value_step`] reads it, falling back to the
     /// storage step.
     pub grids: HashMap<String, Rat>,
+    /// A computed value → the points its values take, as a step and where on it they start
+    /// (§15.323): `gifts × 2 + 1` takes the odd numbers, a step of 2 from 1. `grids` holds the step
+    /// every value is a multiple of, which an offset brings down to the step both share (1 here).
+    /// The pairs the coverage audit asks for stand on these points, and a range that holds none of
+    /// them is E150. [`Checked::taken`] reads it.
+    pub points: HashMap<String, (Rat, Rat)>,
     /// A rate output → the reciprocal of the step it travels at: the step it declares, or
     /// with none declared its rounding grid, which every answer sits on (§15.144). `scales`
     /// holds the value inside the code, which may be finer; this is what a caller counts.
@@ -472,6 +508,15 @@ pub struct Checked {
     /// What each `derive` and each `define` computes, but an open value (§15.268): the difference
     /// of two shares is read through the names the shares are given.
     pub defs: HashMap<String, Expr>,
+    /// The range the rule accepts for a `define` (`define … range`, §15.313), as written, an end
+    /// written with `>` or `<` brought onto the value's step: what the door holds the value to
+    /// where it is worked out. What the rest of the rule reads it in, the part of what it reaches
+    /// inside this range, is in `ranges` (or `wide`, where an end is still open).
+    pub accepts: HashMap<String, (Option<Rat>, Option<Rat>)>,
+    /// The ends the `range` of an input or of a field of an element writes, each end included and
+    /// on the step the value is held at ([`bounds_of`], §15.314): what the tables' check runs the
+    /// column over, before a set of days or a port narrows what `ranges` holds.
+    pub declared: HashMap<String, (Option<Rat>, Option<Rat>)>,
     /// What a `derive`, a `define` or a column a table writes numbers into reaches for the int64
     /// claim where its range is not closed, an end an input does not write read as the end of its
     /// type ([`Checked::wide_range`], §15.294).
@@ -1373,6 +1418,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         at_most: HashSet::new(),
         scales: HashMap::new(),
         grids: HashMap::new(),
+        points: HashMap::new(),
         out_scales: HashMap::new(),
         outputs: HashMap::new(),
         enums: HashMap::new(),
@@ -1393,6 +1439,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         narrowed: HashSet::new(),
         opens: HashMap::new(),
         defs: HashMap::new(),
+        accepts: HashMap::new(),
+        declared: HashMap::new(),
         wide: HashMap::new(),
         written: HashMap::new(),
         later: Vec::new(),
@@ -1582,7 +1630,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             // bounds are read in the type it wraps. They were read in `T?` itself, where no
             // number is a value, so `number?` said E103 and `date?` dropped its bounds without a
             // word, leaving no range to prove completeness over or to guard (§15.201).
-            let (b, bad) = bounds_of(r, ty.present());
+            let (b, bad) = bounds_of(r, ty.present(), step_of_type(&i.ty, &ty));
             for n in bad {
                 c.diags.push(
                     Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
@@ -1596,6 +1644,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 );
             }
             c.ranges.insert(i.name.text.clone(), b);
+            c.declared.insert(i.name.text.clone(), b);
         } else if matches!(ty.present(), Ty::Rate) {
             // A rate input that declares no range is 0%..100%. The overflow proof always
             // assumed as much; recording it here is what makes the entry guard, the
@@ -1661,6 +1710,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         .filter_map(|o| o.range.as_ref().and_then(|r| r.days.as_ref().map(|d| (o.name.text.clone(), d.span.clone()))))
         .chain(f.items.iter().filter_map(|it| match it {
             Item::Derived(d) => d.range.as_ref().and_then(|r| r.days.as_ref().map(|x| (d.name.text.clone(), x.span.clone()))),
+            Item::Define(d) => d.range.as_ref().and_then(|r| r.days.as_ref().map(|x| (d.name.text.clone(), x.span.clone()))),
             _ => None,
         }))
         .collect::<Vec<_>>();
@@ -1670,8 +1720,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 .at(at(span.line))
                 .mark(span, tr!("{name} は入力ではありません", "{name} is not an input"))
                 .note(tr!(
-                    "koyomi の日付がとりうる日は、呼び出し側が渡す日付の範囲です。出力、導出、並びの要素の範囲は、規則が自分で確かめる主張なので、別のファイルから借りられません。",
-                    "The days a koyomi date comes to are the range of a date the caller passes. The range of an output, a derive or an element's field is a claim the rule checks itself, and cannot be borrowed from another file."
+                    "koyomi の日付がとりうる日は、呼び出し側が渡す日付の範囲です。出力、導出、並びの要素の範囲は、規則が自分で確かめる主張で、定義の範囲は、規則が計算した数として受け付ける値です。どちらも別のファイルから借りられません。",
+                    "The days a koyomi date comes to are the range of a date the caller passes. The range of an output, a derive or an element's field is a claim the rule checks itself, and a definition's is the values the rule accepts for a number it works out: neither can be borrowed from another file."
                 )),
         );
     }
@@ -1700,7 +1750,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 // read is the same error there — but the diagnostics were dropped on the
                 // floor here, so `額 : money[円] range >=0円 <=1000g` passed with no upper
                 // bound at all, over which completeness was then proved (§15.86).
-                let (b, bad) = bounds_of(r, ty.present());
+                let (b, bad) = bounds_of(r, ty.present(), step_of_type(&i.ty, &ty));
                 for n in bad {
                     c.diags.push(
                         Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
@@ -1714,8 +1764,16 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     );
                 }
                 c.ranges.insert(i.name.text.clone(), b);
+                c.declared.insert(i.name.text.clone(), b);
             } else if matches!(ty.present(), Ty::Rate) {
                 c.ranges.insert(i.name.text.clone(), (Some(Rat::zero()), Some(Rat::int(1))));
+            }
+            if let Some(given) = crate::over::held(&i.name.text) {
+                // ritsu's port, on the range a value worked out on an element is accepted in
+                // (`define_kept`, §15.313): the field takes only the values the caller gives
+                // its elements, inside what the rule declares for it.
+                let declared = c.ranges.get(&i.name.text).copied().unwrap_or((None, None));
+                c.ranges.insert(i.name.text.clone(), crate::over::meet(declared, given));
             }
             if let Some(n) = unreadable_step(&i.ty, ty.present()) {
                 c.diags.push(
@@ -1811,6 +1869,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 (Some(m), Some(g)) => {
                     c.roundings.insert(o.name.text.clone(), (m, g));
                 }
+                // The parser takes any word for the mode, and this is the one place that reads it
+                // for the check: a word none of the five passed, the checks that read the grid
+                // passed the output by, and the generated code rounded down, or NumPy's failed when
+                // run (§15.341).
+                (None, _) => c.diags.push(unknown_rounding(&rd.mode, rd.span.clone(), at(rd.span.line))),
                 (Some(_), None) if ty != Ty::Unknown => c.diags.push(
                     Diag::error("E103", tr!("丸めの刻み `{}` は {ty} の値ではありません", "The rounding grid `{}` is not a value of {ty}", rd.grid.raw))
                         .at(at(rd.span.line))
@@ -1860,9 +1923,17 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             }
         }
         for t in typed {
+            if let Some(d) = c.unknown_type(t, at(t.span.line)) {
+                // what its brackets hold is no matter of a type that is not there
+                c.diags.push(d);
+                continue;
+            }
             let ty = c.resolve(t);
             // E103: a money type whose tax is neither `incl_tax` nor `excl_tax`. It passed in
             // silence, with the word taken as a tax of its own (§15.169).
+            // A type written on several lines (an output's, and again in a table's heading) holds
+            // one mistake: it is said where the type is first written, with the other lines (§15.321).
+            let written = crate::link::type_text(t);
             if let Some(w) = unreadable_tax(t) {
                 c.diags.push(
                     Diag::error("E103", tr!("税区分 `{w}` は incl_tax でも excl_tax でもありません", "The tax `{w}` is neither incl_tax nor excl_tax"))
@@ -1871,13 +1942,14 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .note(tr!(
                             "お金の型の二つ目には、税込なら `incl_tax`、税抜なら `excl_tax` を書いてください。ほかの語では、税込か税抜かが決まりません。",
                             "The second word of a money type is `incl_tax` for an amount with tax and `excl_tax` for one without. Any other word leaves it unsaid which the amount is."
-                        )),
+                        ))
+                        .same_in("tax", written.clone()),
                 );
             }
             // E103: what the brackets of a type hold that the type does not take. `money[RUB]`
             // passed as long as no literal was written in the unit (§15.280).
             for (title, notes) in unreadable_brackets(t) {
-                let mut d = Diag::error("E103", title).at(at(t.span.line)).mark(t.span.clone(), "");
+                let mut d = Diag::error("E103", title.clone()).at(at(t.span.line)).mark(t.span.clone(), "").same_in(title, written.clone());
                 for n in notes {
                     d = d.note(n);
                 }
@@ -1902,37 +1974,41 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
         // E061: a range with no value in it. The completeness proof answered "complete" over
         // the empty set, and the generated code's entry guard refused every call (§15.156).
-        let mut ranged: Vec<(&crate::ast::Range, Ty)> = Vec::new();
+        // An input's and a field's are read on the step their type declares (§15.314); the step
+        // of a value the rule works out is known once the items are typed, and a range empty only
+        // on that step is said there ([`Checked::empty_on_step`]).
+        let mut ranged: Vec<(&crate::ast::Range, Ty, Option<Rat>)> = Vec::new();
         for i in f.inputs.iter().chain(f.elements.iter().flat_map(|el| el.fields.iter())) {
             if let Some(r) = &i.range {
                 // An optional input's range is read in the type it wraps (§15.201).
-                ranged.push((r, c.resolve(&i.ty).present().clone()));
+                let ty = c.resolve(&i.ty);
+                ranged.push((r, ty.present().clone(), step_of_type(&i.ty, &ty)));
             }
         }
         for it in &f.items {
             match it {
                 Item::Derived(d) => {
                     if let Some(r) = &d.range {
-                        ranged.push((r, c.resolve(&d.ty)));
+                        ranged.push((r, c.resolve(&d.ty), None));
                     }
                 }
                 Item::Agg(d) => {
                     if let Some(r) = &d.range {
-                        ranged.push((r, Ty::Unknown));
+                        ranged.push((r, Ty::Unknown, None));
                     }
                 }
                 _ => {}
             }
         }
-        for (r, ty) in ranged {
-            if let Some(d) = empty_range(r, &ty, at(r.span.line), false) {
+        for (r, ty, step) in ranged {
+            if let Some(d) = empty_range(r, &ty, step, at(r.span.line), false) {
                 c.diags.push(d);
             }
         }
         // An output's range (§15.268) is read in the type it holds when it has a value.
         for o in &f.outputs {
             if let Some(r) = &o.range
-                && let Some(d) = empty_range(r, c.resolve(&o.ty).present(), at(r.span.line), true)
+                && let Some(d) = empty_range(r, c.resolve(&o.ty).present(), None, at(r.span.line), true)
             {
                 c.diags.push(d);
             }
@@ -2077,33 +2153,40 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         // the body it is in.
         // (the alias, where, what it names, whether it is at the outermost level, whether the
         // generator writes it with `_` after it where a language keeps it as a keyword)
-        let mut aliases: Vec<(&str, &Span, String, bool, bool)> = Vec::new();
+        // (the name, where, what it names, whether it reaches the top of the file, whether the
+        // generator moves it off a keyword, whether it is a value's)
+        let mut aliases: Vec<(&str, &Span, String, bool, bool, bool)> = Vec::new();
         fn take<'n>(
             n: &'n Name,
             what: String,
             top: bool,
             renamed: bool,
-            v: &mut Vec<(&'n str, &'n Span, String, bool, bool)>,
+            v: &mut Vec<(&'n str, &'n Span, String, bool, bool, bool)>,
         ) {
             if let Some(a) = n.ascii.as_deref() {
                 // An alias is the author's identifier, and stays as written (§15.210): W121 says
                 // where a language does not take it.
-                v.push((a, &n.span, what, top, false));
+                v.push((a, &n.span, what, top, false, renamed));
             } else if renamed && n.text.is_ascii() && !crate::codegen::keyword_in(&n.text).is_empty() {
                 // A value's name with no alias is its own identifier — a parameter, a local, a
                 // field — and one a language keeps as a keyword is written with `_` after it
                 // there (§15.210, `codegen::assign_identifiers`): said as an alias would be.
-                v.push((n.text.as_str(), &n.span, what, top, renamed));
+                v.push((n.text.as_str(), &n.span, what, top, renamed, renamed));
             } else if renamed && !crate::codegen::takes_everywhere(&n.text) {
                 // One with a character some language takes in no name is written with `_` for it
                 // (§15.311): said too.
-                v.push((n.text.as_str(), &n.span, what, top, renamed));
+                v.push((n.text.as_str(), &n.span, what, top, renamed, renamed));
             }
         }
-        // The rule's name and an enum's are types and functions, not renamed; an enum's values
-        // become members in each language's own case, and a table's name is a string in the
-        // trace, so neither is renamed either.
-        take(&f.name, tr!("規則", "rule"), true, false, &mut aliases);
+        // The rule's name and an enum's are types and functions, not renamed. An enum's values are
+        // members in each language's own case, of which the keywords are said with the enum's
+        // other names (`spellings::member_keyword`), and a table's name is a string in the trace
+        // and the start of a longer identifier (`<table>_row`), which no keyword is: neither is
+        // taken here. An `enums` file's name is a module, a class or a package of its own in each
+        // language, which `spellings::own_warnings` holds to the language's words, alias or none.
+        if f.kind != crate::ast::FileKind::Enums {
+            take(&f.name, tr!("規則", "rule"), true, false, &mut aliases);
+        }
         for i in &f.inputs {
             take(&i.name, tr!("入力", "input"), false, true, &mut aliases);
         }
@@ -2112,9 +2195,6 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
         for e in &f.enums {
             take(&e.name, tr!("列挙", "enum"), true, false, &mut aliases);
-            for v in &e.values {
-                take(v, tr!("列挙の値", "enum value"), false, false, &mut aliases);
-            }
         }
         for el in &f.elements {
             take(&el.name, tr!("並び", "sequence"), false, true, &mut aliases);
@@ -2134,9 +2214,6 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     }
                 }
                 Item::Table(t) => {
-                    if let Some(n) = &t.name {
-                        take(n, tr!("表", "table"), false, false, &mut aliases);
-                    }
                     for oc in &t.outputs {
                         take(&oc.name, tr!("表の出力", "table output"), false, true, &mut aliases);
                     }
@@ -2148,7 +2225,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         // value's is (§15.311).
         for (n, what) in f.groups.iter().map(|g| (&g.name, tr!("グループ", "group"))).chain(f.shapes.iter().map(|s| (&s.name, tr!("`shape`", "shape")))) {
             if n.ascii.is_none() && !crate::codegen::takes_everywhere(&n.text) {
-                aliases.push((n.text.as_str(), &n.span, what, false, true));
+                aliases.push((n.text.as_str(), &n.span, what, false, true, true));
             }
         }
         // The public names, which E011 above holds to ASCII identifiers or their aliases: one with
@@ -2164,7 +2241,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         // What the generated code writes for a name rulec makes an identifier for (§15.260): a
         // keyword's `_` after it, or a number after that where another name is written so already.
         let made = crate::codegen::made_identifiers(f);
-        for (alias, sp, what, top, renames) in aliases {
+        for (alias, sp, what, top, renames, value) in aliases {
             // A name with a character some language takes in no name (§15.311): every language's
             // generated code writes it with `_` for that character, and it compiles, under another
             // name.
@@ -2227,22 +2304,79 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 )));
                 continue;
             }
-            let mut kw: Vec<&str> = Vec::new();
+            // (the language, the keyword it writes the name as)
+            let mut kw: Vec<(&str, String)> = Vec::new();
             let mut hides: Vec<&str> = Vec::new();
+            // The rule's class of Java's that hides a class of `java.lang`, which every file of the
+            // package reads by its simple name: said with its own note, as with no alias.
+            let mut java_hides: Option<String> = None;
             // The rule's alias also names a module or a package, which the standard library
             // may already have (§15.149): the generated `time.py` is what `import time` finds.
             let module = top && std::ptr::eq(sp, &f.name.span) && rule_alias == Some(alias);
             let mut collides: Vec<&str> = Vec::new();
+            // The targets the code of which does not build, or answers otherwise (`Diag::targets`),
+            // and those of them it does only where `rulec gen` writes the module beside the
+            // language's own (`Diag::beside`): Python's and Go's. Ruby's module is a constant at the
+            // top, which a class of the language's meets wherever the file is.
+            let mut ids: Vec<&'static str> = Vec::new();
+            let mut beside: Vec<&'static str> = Vec::new();
+            // A value's alias is written as it stands only by the languages that write names as
+            // they are (`codegen::keyword_in`), each of which keeps its keywords in one case. Swift
+            // puts a keyword a value is spelled as in backticks, Java puts `_` after one, PHP's
+            // value is a variable (`$int`), and the query quotes its columns: their code takes it.
+            let as_written = if value { crate::codegen::keyword_in(alias) } else { Vec::new() };
+            // The rule's alias names its function, and its module or package, and an enum's names
+            // its type, which each backend spells its own way: a keyword is one of that spelling
+            // (`spellings::rule_keyword`, `spellings::enum_type_keyword`), as for a name with no
+            // alias, so `float` is Java's `Float`, which no keyword is, and `fall_through` is Go's
+            // package `fallthrough`, which is one. A builtin of the spelling is hidden at the top of
+            // the module, PHP's in any case, unless the generated code reaches the builtin another
+            // way (§15.336). PHP keeps its classes apart from its functions, so a type meets only
+            // its keywords there.
+            let rule = std::ptr::eq(sp, &f.name.span);
             for b in crate::backend::ALL {
-                if b.reserved.iter().any(|w| w.eq_ignore_ascii_case(alias)) {
-                    kw.push(b.name);
-                } else if top && b.globals.iter().any(|w| w.eq_ignore_ascii_case(alias)) {
+                let keyword = if value {
+                    as_written.contains(&b.name).then(|| alias.to_string())
+                } else if rule {
+                    crate::codegen::spellings::rule_keyword(b.id, alias)
+                } else {
+                    crate::codegen::spellings::enum_type_keyword(b.id, alias)
+                };
+                // PHP writes the rule's function and namespace and an enum's class with `_` after a
+                // keyword, and Java the rule's method: the code builds, which is said below and keeps
+                // no target from being written (§15.344).
+                let of = if rule { crate::codegen::spellings::Of::Rule } else { crate::codegen::spellings::Of::Enum };
+                let keyword = keyword.filter(|_| value || crate::codegen::spellings::respelled(b.id, alias, of).is_empty());
+                let written = if rule { crate::codegen::spellings::rule_function(b.id, alias) } else { Some(crate::codegen::spellings::enum_type(alias)) };
+                let hidden = top
+                    && written.as_deref().is_some_and(|w| match b.id {
+                        "php" if !rule => false,
+                        // A keyword of PHP's is no builtin there: its function takes `_` after it (§15.344).
+                        "php" => b.globals.iter().any(|g| g.eq_ignore_ascii_case(w)) && !crate::codegen::spellings::php_keyword(w) && !crate::codegen::spellings::builtin_written_apart(b.id, w, false),
+                        _ => b.globals.iter().any(|g| g == w) && !crate::codegen::spellings::builtin_written_apart(b.id, w, !rule),
+                    });
+                if let Some(word) = keyword {
+                    kw.push((b.name, word));
+                    ids.push(b.id);
+                } else if hidden && b.id == "java" {
+                    java_hides = written;
+                    ids.push(b.id);
+                } else if hidden {
                     hides.push(b.name);
+                    ids.push(b.id);
                 } else if module && b.modules.iter().any(|w| w.eq_ignore_ascii_case(&(b.module_of)(alias))) {
                     collides.push(b.name);
+                    ids.push(b.id);
+                    if b.id != "ruby" {
+                        beside.push(b.id);
+                    }
                 }
             }
-            if kw.is_empty() && hides.is_empty() && collides.is_empty() {
+            if !value {
+                let of = if rule { crate::codegen::spellings::Of::Rule } else { crate::codegen::spellings::Of::Enum };
+                c.diags.extend(crate::codegen::spellings::respelled_warning(sp, alias, of, true, path));
+            }
+            if kw.is_empty() && hides.is_empty() && java_hides.is_none() && collides.is_empty() {
                 continue;
             }
             // A parameter, a local or a field is written with `_` after it where a language that
@@ -2278,19 +2412,44 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 tr!("別名 `{alias}` は生成先の言葉とぶつかります", "The alias `{alias}` collides with a word in a target language"),
             )
             .at(at(sp.line))
-            .mark(sp.clone(), tr!("{what}の別名", "the {what}'s alias"));
-            if !kw.is_empty() {
-                d = d.note(tr!(
-                    "{}: そこでは予約語です。生成コードはその名前をそのまま書くので、コンパイルできません。",
-                    "{}: it is a keyword there, so generated code that writes the name as it is does not compile.",
-                    kw.join(", ")
-                ));
+            .mark(sp.clone(), tr!("{what}の別名", "the {what}'s alias"))
+            .targets(&ids)
+            .beside(&beside);
+            // One note for each word the alias is written as, which is the alias itself where the
+            // language writes it as it stands.
+            let mut words: Vec<(&str, Vec<&str>)> = Vec::new();
+            for (lang, word) in &kw {
+                match words.iter_mut().find(|(w, _)| w == word) {
+                    Some((_, langs)) => langs.push(lang),
+                    None => words.push((word, vec![lang])),
+                }
+            }
+            for (word, langs) in words {
+                d = d.note(if word == alias {
+                    tr!(
+                        "{}: そこでは予約語です。生成コードはその名前をそのまま書くので、コンパイルできません。",
+                        "{}: it is a keyword there, so generated code that writes the name as it is does not compile.",
+                        langs.join(", ")
+                    )
+                } else {
+                    tr!(
+                        "{}: そこでは `{word}` と書かれ、それは予約語なので、生成コードはコンパイルできません。",
+                        "{}: it is written `{word}` there, which is a keyword, so the generated code does not compile.",
+                        langs.join(", ")
+                    )
+                });
             }
             if !hides.is_empty() {
                 d = d.note(tr!(
                     "{}: その名前はすでに使われています。この別名はファイルの一番外側に出るので、それを隠してしまいます。",
                     "{}: the name is already taken there, and this alias, which reaches the top level of the file, hides it.",
                     hides.join(", ")
+                ));
+            }
+            if let Some(class) = &java_hides {
+                d = d.note(tr!(
+                    "Java: 規則のクラス `{class}` は、パッケージの中で `java.lang` の `{class}` を隠します。同じディレクトリのほかのコードと丸めの試験もそれを単純名で読むので、組めないか、答えを違えます。",
+                    "Java: the rule's class `{class}` hides `java.lang`'s `{class}` in the whole package, which the other code of the directory and the rounding test read by its simple name as well: the code does not build, or answers otherwise."
                 ));
             }
             if !collides.is_empty() {
@@ -2307,36 +2466,15 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
 
-    // A rule and an enum it declares under one name (§15.239). Go's package of the rule declares
-    // the rule's functions and the enum's type side by side, and Java nests the enum in the class
-    // the rule is, so `rule size` with `enum size` compiles in neither: `func Size` and `type
-    // Size`, `class Size` and `enum Size`. An enum read from an `enums` file is that file's
-    // package's type, and the rule's package names it by that package where it would clash.
-    for (e, (go, java)) in crate::codegen::rule_name_clashes(f) {
-        let ty = crate::codegen::type_name_of(&e.name);
-        let mut d = Diag::warning(
-            "W121",
-            tr!("列挙 `{}` の型の名前が、規則の名前と同じになります", "The type of enum `{}` takes the name the rule takes", e.name.text),
-        )
-        .at(at(e.name.span.line))
-        .mark(e.name.span.clone(), tr!("型 {ty}", "the type {ty}"));
-        if let Some(fname) = go {
-            d = d.note(tr!(
-                "Go: 規則のパッケージに、規則の関数 `{fname}` と列挙の型 `{ty}` が並び、同じ名前は二つ置けないので、コンパイルできません。",
-                "Go: the rule's package declares the rule's function `{fname}` and the enum's type `{ty}` side by side, and one package holds one thing of a name, so it does not compile."
-            ));
-        }
-        if let Some(class) = java {
-            d = d.note(tr!(
-                "Java: 列挙は規則のクラス `{class}` の中に置かれ、クラスと同じ名前の型はその中に置けないので、コンパイルできません。",
-                "Java: the enum is nested in the class `{class}` the rule is, and a class holds no type of its own name, so it does not compile."
-            ));
-        }
-        c.diags.push(d.note(tr!(
-            "使わない生成先なら、このままで構いません。使うなら、規則か列挙の別名を変えてください（`rule size(parcel_fee)`）。列挙を `enums` のファイルに置いて読めば、その生成先は列挙をファイルのパッケージやクラスの名前で書きます。",
-            "For a target you do not generate, leave it. For one you do, change the alias of the rule or of the enum (`rule size(parcel_fee)`). An enum put in an `enums` file and read from there is written by that file's package or class in those targets."
-        )));
-    }
+    // An enum whose names meet the rule's own in a language whose module puts the two in one place
+    // (§15.239, §15.326): the generated code of that language writes the enum's type with a number
+    // after it, which W121 says with the type it takes there and the two names that met (§15.337).
+    let renamed = crate::codegen::spellings::renamed_warnings(f, &c, path);
+    c.diags.extend(renamed);
+
+    // The names but the rule's alias and an enum's, which the stage above says, that a language
+    // writes with `_` after them, a keyword of its own there (§15.344): said, and kept from no target.
+    c.diags.extend(crate::codegen::spellings::respelled_warnings(f, path));
 
     // Two names the author wrote that the generated code of some language spells as one
     // identifier, and a name some language cannot take where its code puts it (§15.263): said for
@@ -2361,6 +2499,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 c.derived_range(d, &ty, path);
                 c.overflow(&d.expr, &ty, &d.span, path, &d.name.text);
                 c.record_value(&d.name.text, &d.expr, &ty);
+                c.held_to_step(&d.name, &d.expr, &d.ty, &ty, tr!("{path}:{} 導出 {}", "{path}:{} derived value {}", d.span.line, d.name.text));
                 c.defs.insert(d.name.text.clone(), d.expr.clone());
                 let mut deps = Vec::new();
                 collect_names(&d.expr, &mut deps);
@@ -2377,6 +2516,12 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 c.check_same(&ty, &got, &d.span, path, &tr!("定義", "definition"));
                 c.overflow(&d.expr, &ty, &d.span, path, &d.name.text);
                 c.record_value(&d.name.text, &d.expr, &ty);
+                // The range it accepts (§15.313): what reads it reads it inside. Read after its
+                // own int64 claim, which is about the value before the door holds it.
+                if let Some(rg) = &d.range {
+                    c.accepted_range(d, rg, &ty, path);
+                }
+                c.held_to_step(&d.name, &d.expr, &d.ty, &ty, tr!("{path}:{} 定義 {}", "{path}:{} definition {}", d.span.line, d.name.text));
                 // An open value (§15.227): its declared range, not what its terms reach, is what
                 // the rest of the rule reads, and what they reach together has to stay inside it.
                 if let Some(o) = f.open_value(&d.name.text) {
@@ -2397,6 +2542,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
     c.overflow_later();
+    c.summaries_reached(f, path);
+    c.outputs_written(f, path);
 
     // After the items, so that a column naming a table's output or a `define` resolves.
     for ex in &f.examples {
@@ -2493,12 +2640,16 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             }
             seen.push(sq.name.text.clone());
             let fields: Vec<&str> = el.fields.iter().map(|fd| fd.name.text.as_str()).collect();
+            // A column that is no field is said, and the field it was written for is not said to be
+            // missing on top: the note lists the fields (§15.321).
+            let strays = sq.cols.iter().filter(|(n, _)| !fields.contains(&n.as_str())).count();
             for (n, sp) in &sq.cols {
                 if !fields.contains(&n.as_str()) {
                     c.diags.push(
                         Diag::error("E026", tr!("`{n}` は要素のフィールドではありません", "`{n}` is not a field of an element"))
                             .at(at_seq.clone())
                             .mark(sp.clone(), "")
+                            .same(n.clone())
                             .note(tr!(
                                 "書けるのは {} のフィールドだけです: {}。",
                                 "Only the fields of {} can be written here: {}.",
@@ -2509,7 +2660,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 }
             }
             for fd in &el.fields {
-                if !sq.cols.iter().any(|(n, _)| n == &fd.name.text) {
+                if !sq.cols.iter().any(|(n, _)| n == &fd.name.text) && strays == 0 {
                     c.diags.push(
                         Diag::error("E026", tr!("要素のフィールド `{}` が書かれていません", "The element's field `{}` is not written", fd.name.text))
                             .at(at_seq.clone())
@@ -2664,6 +2815,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         let Some(syms) = syms.into_iter().collect::<Option<Vec<Sym>>>() else {
             continue;
         };
+        // An input whose type names nothing has said so on its line (E012, or a unit E103 does not
+        // read; §15.321): whether it has an order is not known, and nothing more is said of it here.
+        if syms.iter().any(|s| *s.ty.present() == Ty::Unknown) {
+            continue;
+        }
         // Numbers and dates are what the region checker can narrow by arithmetic. An enum or a
         // boolean has no order, so `<=` between two of them would be a shape with no meaning.
         let ordered = |t: &Ty| matches!(t, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date);
@@ -3128,41 +3284,126 @@ impl Checked {
     }
 }
 
-impl Checked {
-    fn resolve(&mut self, t: &TypeRef) -> Ty {
-        let base = match t.base.as_str() {
-            crate::kw::MONEY => {
-                let mut it = t.args.iter().filter_map(|a| match a {
+/// A type a declaration writes, as [`Checked::resolve`] reads it, with `is_enum` saying which other
+/// words name an enum. `link` reads two declarations of one input with it before any rule is checked
+/// (§15.332), and takes every other word for the enum it names.
+pub fn written_ty(t: &TypeRef, is_enum: &dyn Fn(&str) -> bool) -> Ty {
+    let base = match t.base.as_str() {
+        crate::kw::MONEY => {
+            let mut it = t.args.iter().filter_map(|a| match a {
+                TypeArg::Word(w) => Some(w.clone()),
+                _ => None,
+            });
+            Ty::Money { cur: it.next().unwrap_or_else(|| "円".into()), tax: it.next() }
+        }
+        crate::kw::MASS
+        | crate::kw::LENGTH
+        | crate::kw::AREA
+        | crate::kw::VOLUME
+        | crate::kw::DURATION
+        | crate::kw::TEMPERATURE
+        | crate::kw::SOUND => {
+            let unit = t
+                .args
+                .iter()
+                .find_map(|a| match a {
                     TypeArg::Word(w) => Some(w.clone()),
                     _ => None,
-                });
-                Ty::Money { cur: it.next().unwrap_or_else(|| "円".into()), tax: it.next() }
+                })
+                .unwrap_or_default();
+            Ty::Qty { dim: t.base.clone(), unit }
+        }
+        crate::kw::RATE => Ty::Rate,
+        crate::kw::NUMBER => Ty::Number,
+        crate::kw::BOOL => Ty::Bool,
+        crate::kw::STRING => Ty::Str,
+        crate::kw::DATE => Ty::Date,
+        // A name that is no type: the declaration says so (E012, `unknown_type`), and what
+        // reads it is not held to a type nobody declared (§15.321).
+        other if !is_enum(other) => return Ty::Unknown,
+        other => Ty::Enum(other.to_string()),
+    };
+    // A unit its type does not have (`money[UDS]`): the declaration says so (E103), and what
+    // reads it is not held to it either.
+    if matches!(base, Ty::Money { .. } | Ty::Qty { .. }) && unit_is_unreadable(t) {
+        return Ty::Unknown;
+    }
+    if t.optional { Ty::Opt(Box::new(base)) } else { base }
+}
+
+impl Checked {
+    fn resolve(&mut self, t: &TypeRef) -> Ty {
+        written_ty(t, &|e| self.enums.contains_key(e))
+    }
+
+    /// E012 for a type a declaration writes that is no type: neither a type of rulec nor an enum
+    /// this file declares or reads. It was read as an enum nobody declared, and what was said came
+    /// from the lines that read it (§15.321).
+    fn unknown_type(&self, t: &TypeRef, at: String) -> Option<Diag> {
+        let base = t.base.as_str();
+        if BUILTIN_TYPES.contains(&base) || self.enums.contains_key(base) {
+            return None;
+        }
+        let enums: Vec<String> = self.enum_order.iter().map(|e| format!("`{e}`")).collect();
+        let near = BUILTIN_TYPES
+            .iter()
+            .map(|b| b.to_string())
+            .chain(self.enum_order.iter().cloned())
+            .map(|n| (crate::prelude::distance(base, &n), n))
+            .filter(|(d, n)| *d <= if n.chars().count() <= 4 { 1 } else { 2 })
+            .min_by_key(|(d, _)| *d)
+            .map(|(_, n)| n);
+        Some(
+            Diag::error("E012", tr!("`{base}` という型はありません", "There is no type `{base}`"))
+                .at(at)
+                .mark(Span { len: base.len(), ..t.span.clone() }, "")
+                .same(base)
+                .maybe_note(near.map(|n| tr!("`{n}` のことですか。", "Did you mean `{n}`?")))
+                .note(if enums.is_empty() {
+                    tr!(
+                        "型は `number`・`rate`・`bool`・`string`・`date`・単位の型（`money[円]`・`mass[kg]` など）か、このファイルの列挙です。このファイルに列挙はありません。",
+                        "A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. This file has no enum."
+                    )
+                } else if let [only] = enums.as_slice() {
+                    tr!(
+                        "型は `number`・`rate`・`bool`・`string`・`date`・単位の型（`money[円]`・`mass[kg]` など）か、このファイルの列挙です。このファイルの列挙は {} です。",
+                        "A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. The enum of this file is {}.",
+                        only
+                    )
+                } else {
+                    tr!(
+                        "型は `number`・`rate`・`bool`・`string`・`date`・単位の型（`money[円]`・`mass[kg]` など）か、このファイルの列挙です。このファイルの列挙は {} です。",
+                        "A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. The enums of this file are {}.",
+                        enums.join(if crate::i18n::ja() { "、" } else { ", " })
+                    )
+                }),
+        )
+    }
+
+    /// The declared name or value of an enum closest to a word that names nothing (E012): when the
+    /// name was misspelled where it is declared, the hint points there (§15.321).
+    fn near_declared(&self, w: &str) -> Option<String> {
+        let limit = if w.chars().count() <= 4 { 1 } else { 2 };
+        let mut near: Vec<(usize, usize, String, Option<String>)> = Vec::new();
+        for (n, s) in &self.syms {
+            let k = crate::prelude::distance(w, n);
+            if k <= limit && k > 0 && s.span.file.is_none() {
+                near.push((k, s.span.line, n.clone(), None));
             }
-            crate::kw::MASS
-            | crate::kw::LENGTH
-            | crate::kw::AREA
-            | crate::kw::VOLUME
-            | crate::kw::DURATION
-            | crate::kw::TEMPERATURE
-            | crate::kw::SOUND => {
-                let unit = t
-                    .args
-                    .iter()
-                    .find_map(|a| match a {
-                        TypeArg::Word(w) => Some(w.clone()),
-                        _ => None,
-                    })
-                    .unwrap_or_default();
-                Ty::Qty { dim: t.base.clone(), unit }
+        }
+        for e in &self.enum_order {
+            for v in self.enums.get(e).into_iter().flatten() {
+                let k = crate::prelude::distance(w, v);
+                if k <= limit && k > 0 {
+                    near.push((k, usize::MAX, v.clone(), Some(e.clone())));
+                }
             }
-            crate::kw::RATE => Ty::Rate,
-            crate::kw::NUMBER => Ty::Number,
-            crate::kw::BOOL => Ty::Bool,
-            crate::kw::STRING => Ty::Str,
-            crate::kw::DATE => Ty::Date,
-            other => Ty::Enum(other.to_string()),
-        };
-        if t.optional { Ty::Opt(Box::new(base)) } else { base }
+        }
+        near.sort();
+        near.into_iter().next().map(|(_, line, n, e)| match e {
+            Some(e) => tr!("`{n}`（列挙 {e} の値）のことですか。", "Did you mean `{n}`, a value of {e}?"),
+            None => tr!("`{n}`（{line} 行目）のことですか。", "Did you mean `{n}` (line {line})?"),
+        })
     }
 
     fn check_same(&mut self, want: &Ty, got: &Ty, span: &Span, path: &str, what: &str) {
@@ -3301,6 +3542,8 @@ impl Checked {
                             Diag::error("E012", tr!("`{n}` という名前は宣言されていません", "The name `{n}` is not declared"))
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
+                                .same(n.clone())
+                                .maybe_note(self.near_declared(n))
                                 .note(tr!("上の行までに 入力 / 導出 / 定義 / 表の出力 として宣言されている必要があります。", "It must be declared on an earlier line as an input, a derived value, a definition, or a table output.")),
                         );
                         Ty::Unknown
@@ -3347,6 +3590,7 @@ impl Checked {
                             Diag::error("E118", tr!("`{name}` という関数はありません", "There is no function called `{name}`"))
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
+                                .maybe_note(near_call(&name).map(|m| tr!("`{m}` のことですか。", "Did you mean `{m}`?")))
                                 .note(tr!(
                                     "書けるのは `min` `max` `allocate` `mod` `isqrt` と丸めの五つ（`down` `up` `half_up` `half_down` `half_even`）だけです。",
                                     "The calls are `min`, `max`, `allocate`, `mod`, `isqrt` and the five rounding modes (`down`, `up`, `half_up`, `half_down`, `half_even`)."
@@ -3602,10 +3846,11 @@ impl Checked {
                                         .at(format!("{path}:{}", sp.line))
                                         .mark(args[0].span().clone(), "")
                                         .note(tr!(
-                                            "とりうる値は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {stored} になります。",
-                                            "It ranges from {} to {} and the step is 1/{sc}, so the stored integer reaches {stored}.",
+                                            "とりうる値は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {} になります。",
+                                            "It ranges from {} to {} and the step is 1/{sc}, so the stored integer reaches {}.",
                                             fmt_val(lo, &t),
-                                            fmt_val(hi, &t)
+                                            fmt_val(hi, &t),
+                                            fmt_stored(Some(stored))
                                         ))
                                         .note(tr!("ヒント: 入力の範囲を狭めてください。", "Hint: narrow the input ranges.")),
                                 );
@@ -3732,7 +3977,7 @@ impl Checked {
                 match op {
                     Le | Ge | Lt | Gt | Eq => {
                         if !lt.unifies(&rt) {
-                            self.mix(&lt, &rt, sp, path);
+                            self.mix(&lt, &rt, sp, path, *op);
                         } else if *op != Eq {
                             // Two values of an enum are put in order by the order it declares, and
                             // one that declares none has nothing to put them in (§15.210). The
@@ -3749,7 +3994,7 @@ impl Checked {
                     }
                     Add | Sub => {
                         if !lt.unifies(&rt) {
-                            self.mix(&lt, &rt, sp, path);
+                            self.mix(&lt, &rt, sp, path, *op);
                             return Ty::Unknown;
                         }
                         if matches!(lt, Ty::Money { tax: None, .. }) { rt } else { lt }
@@ -4070,18 +4315,29 @@ impl Checked {
         );
     }
 
-    fn mix(&mut self, a: &Ty, b: &Ty, sp: &Span, path: &str) {
+    fn mix(&mut self, a: &Ty, b: &Ty, sp: &Span, path: &str, op: BinOp) {
+        let doing = match op {
+            BinOp::Add => tr!("{a} に {b} を足しています", "adding {b} to {a}"),
+            BinOp::Sub => tr!("{a} から {b} を引いています", "subtracting {b} from {a}"),
+            _ => tr!("{a} と {b} を比べています", "comparing {a} and {b}"),
+        };
         let note = match (a, b) {
             (Ty::Money { tax: Some(x), .. }, Ty::Money { tax: Some(y), .. }) if x != y => {
-                tr!("税の変換は変換式ではなく表として書いてください。", "Write a tax conversion as a table, not as a conversion formula.")
+                Some(tr!("税の変換は変換式ではなく表として書いてください。", "Write a tax conversion as a table, not as a conversion formula."))
             }
-            _ => tr!("単位の違う値は足せません。数量に応じた加算料金なら、それは表で書いてください。", "Values of different dimensions cannot be added. A surcharge that depends on a quantity is written as a table."),
+            _ if dim_of(a) != dim_of(b) => {
+                Some(tr!("次元の違う値です。数量に応じた加算料金なら、それは表で書いてください。", "The two are of different dimensions. A surcharge that depends on a quantity is written as a table."))
+            }
+            _ if dim_of(a).is_some() => {
+                Some(tr!("同じ次元の、単位の違う値です。換算は黙ってされないので、単位をそろえるか換算を表で書いてください。", "Different units of one dimension. No conversion is made silently — write the two in one unit, or the conversion as a table."))
+            }
+            _ => None,
         };
         self.diags.push(
-            Diag::error("E103", tr!("単位の混同: {a} に {b} を足しています", "Mixed units: adding {b} to {a}"))
+            Diag::error("E103", tr!("単位の混同: {doing}", "Mixed units: {doing}"))
                 .at(format!("{path}:{}", sp.line))
                 .mark(sp.clone(), "")
-                .note(tr!("ヒント: {note}", "Hint: {note}")),
+                .maybe_note(note.map(|n| tr!("ヒント: {n}", "Hint: {n}"))),
         );
     }
 
@@ -4183,7 +4439,9 @@ impl Checked {
             None => self.diags.push(
                 Diag::error("E012", tr!("`{}` という列はありません", "There is no column called `{}`", col))
                     .at(at.clone())
-                    .mark(d.column.span.clone(), tr!("宣言されていません", "not declared")),
+                    .mark(d.column.span.clone(), tr!("宣言されていません", "not declared"))
+                    .same(col.clone())
+                    .maybe_note(self.near_declared(&col)),
             ),
             Some(_) if other(&col).is_some() => bad(
                 self,
@@ -4203,6 +4461,16 @@ impl Checked {
                     "Only a field of an element, or a column a per-element table produces, can be summarised. A value there is one of per call says nothing about the sequence."
                 ),
             ),
+            // A column whose type names nothing has said so on its line (E012, or a unit E103 does
+            // not read; §15.321): what it can be summarised by is not known. A value its test names
+            // is still a value written (W111).
+            Some(sym) if *sym.ty.present() == Ty::Unknown => {
+                if let Some(v) = &d.value
+                    && let Some(e) = self.enum_of_value(&v.text)
+                {
+                    self.used_values.insert((e, v.text.clone()));
+                }
+            }
             // A sum reads a number; a count reads a value out of a closed set.
             Some(sym) if summing && !matches!(sym.ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate) => bad(
                 self,
@@ -4265,7 +4533,9 @@ impl Checked {
                 None => self.diags.push(
                     Diag::error("E012", tr!("`{}` という列はありません", "There is no column called `{}`", w.text))
                         .at(at.clone())
-                        .mark(w.span.clone(), tr!("宣言されていません", "not declared")),
+                        .mark(w.span.clone(), tr!("宣言されていません", "not declared"))
+                        .same(w.text.clone())
+                        .maybe_note(self.near_declared(&w.text)),
                 ),
                 Some(_) if other(&w.text).is_some() => bad(
                     self,
@@ -4285,6 +4555,13 @@ impl Checked {
                         "`where` decides, element by element, whether the element is looked at. A value there is one of per call decides nothing element by element."
                     ),
                 ),
+                Some(sym) if *sym.ty.present() == Ty::Unknown => {
+                    if let Some(v) = want
+                        && let Some(e) = self.enum_of_value(&v.text)
+                    {
+                        self.used_values.insert((e, v.text.clone()));
+                    }
+                }
                 Some(sym) if !matches!(sym.ty, Ty::Bool | Ty::Enum(_)) => bad(
                     self,
                     &w.span,
@@ -4314,10 +4591,20 @@ impl Checked {
         } else {
             Ty::Number
         };
-        let bounds = d.range.as_ref().map(|r| bounds_of(r, &ty).0);
+        // A count is a whole number, and a sum is on the step of the column it adds up: the ends
+        // are read there (§15.314), so `>0` on a count is `>=1`.
+        let step = Rat::new(1, self.scales.get(&d.column.text).copied().filter(|_| summing).unwrap_or(1).max(1));
+        let bounds = d.range.as_ref().map(|r| bounds_of(r, &ty, Some(step)).0);
+        if let Some(r) = &d.range {
+            self.empty_on_step(r, &ty, Some(step), at.clone(), false);
+        }
         match bounds {
             Some((Some(lo), Some(hi))) if lo.cmp_to(Rat::zero()) != std::cmp::Ordering::Less => {
                 self.ranges.insert(d.name.text.clone(), (Some(lo), Some(hi)));
+            }
+            // A sum of a column whose type names nothing: its range is values of nothing (§15.321).
+            Some(_) if *ty.present() == Ty::Unknown => {
+                self.ranges.insert(d.name.text.clone(), (Some(Rat::zero()), None));
             }
             other => {
                 let what = match other {
@@ -4343,6 +4630,380 @@ impl Checked {
             d.name.text.clone(),
             Sym { ty, span: d.name.span.clone(), kind: SymKind::Derived, contract_only: false },
         );
+    }
+
+    /// What decides each output, and whether it is decided before it is read, and a table with no
+    /// column to answer in (§15.323). An output takes its value from the items that bind its name —
+    /// a table's column after `->`, a `define` or a `derive` of the name, a summary or a fold that
+    /// answers it, what an `apply` brings in — or, the first output, from `result`, worked out after
+    /// every item. One that nothing decides answers no call with a value, and the generated code
+    /// returns a name it never set (E151). One read above what decides it is read with no value: the
+    /// items run in the order written (§5.1), the tables of one output together at the last of them
+    /// (§15.66), the stages of a walk in their order (§15.219), and `result` after all of them; the
+    /// rows that read it match nothing, and the generated code reads a name it has not set (E151).
+    /// A table with no column after `->` decides nothing and reads every column, an output's too,
+    /// as a condition (E152); the outputs at the end of its heading are the ones the `->` it asks
+    /// for would decide, so they are not said again. All of it is said before the tables are
+    /// checked: a gap or a dead row of a table that reads a value nothing decides is not the fault.
+    fn outputs_written(&mut self, f: &RuleFile, path: &str) {
+        let is_output = |n: &str| f.outputs.iter().any(|o| o.name.text == n);
+        let table_at = |t: &Table, line: usize| match &t.name {
+            Some(n) if t.clause => tr!("{path}:{line} 節 {}", "{path}:{line} clause {}", n.text),
+            Some(n) => tr!("{path}:{line} 表 {}", "{path}:{line} table {}", n.text),
+            None => format!("{path}:{line}"),
+        };
+        // E152: a table written with no `->`. A clause always has its output, and a table an `apply`
+        // brings in is held to this by the callee's own check.
+        let mut named: HashSet<String> = HashSet::new();
+        let mut no_out: HashSet<usize> = HashSet::new();
+        for (i, it) in f.items.iter().enumerate() {
+            let Item::Table(t) = it else { continue };
+            if !t.outputs.is_empty() || t.clause || t.applied.is_some() {
+                continue;
+            }
+            no_out.insert(i);
+            let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+            let line = t.inputs.first().map_or(t.span.line, |(_, s)| s.line);
+            let k = t.inputs.iter().rev().take_while(|(n, _)| is_output(n)).count();
+            let mut d = Diag::error("E152", tr!("表 {name} に出力の列がありません", "Table {name} has no output column"))
+                .at(table_at(t, line))
+                .table(name.clone());
+            match (k > 0).then(|| &t.inputs[t.inputs.len() - k]) {
+                Some((first, sp)) => {
+                    let from = t.inputs.len() - k;
+                    let cols: Vec<String> = t.inputs.iter().enumerate().map(|(j, (n, _))| if j == from { format!("-> {n}") } else { n.clone() }).collect();
+                    let header = format!("| {} |", cols.join(" | "));
+                    for (n, _) in &t.inputs[from..] {
+                        named.insert(n.clone());
+                    }
+                    d = d
+                        .mark(sp.clone(), tr!("出力 `{first}` の列ですが、`->` の前にあるので条件として読まれます", "the column of the output `{first}`, read as a condition because no `->` stands before it"))
+                        .note(tr!(
+                            "表は、`->` の後ろの列で答えます。見出しに `->` が無いと、どの行も何も決めず、出力の名前の列も条件として読まれます。",
+                            "A table answers in the columns after `->`. With no `->` in its heading, no row decides anything, and a column that names an output is read as a condition."
+                        ))
+                        .note(tr!(
+                            "ヒント: 行が答える最初の列 `{first}` の前に `->` を書いてください（`{header}`）。",
+                            "hint: write `->` before `{first}`, the first column the rows answer: `{header}`."
+                        ));
+                }
+                None => {
+                    if let Some((_, sp)) = t.inputs.first() {
+                        d = d.mark(sp.clone(), tr!("見出しに `->` がありません", "there is no `->` in the heading"));
+                    }
+                    d = d
+                        .note(tr!(
+                            "表は、`->` の後ろの列で答えます。見出しに `->` が無いと、どの列も条件として読まれ、どの行も何も決めません。",
+                            "A table answers in the columns after `->`. With no `->` in its heading, every column is read as a condition, and no row decides anything."
+                        ))
+                        .note(tr!("ヒント: 行が答える最初の列の前に `->` を書いてください。", "hint: write `->` before the first column the rows answer."));
+                }
+            }
+            self.diags.push(d);
+        }
+        let st = stages(f);
+        let binders = |name: &str| -> Vec<usize> { (0..f.items.len()).filter(|&j| item_binds(f, &f.items[j]).iter().any(|b| b == name)).collect() };
+        // Where an item runs among the others of its stage: a table with the tables of each output
+        // it writes, at the last of them; anything else where it is written.
+        let runs_at = |i: usize| match &f.items[i] {
+            Item::Table(t) => t.outputs.iter().flat_map(|o| binders(&o.name.text)).filter(|&j| matches!(f.items[j], Item::Table(_))).fold(i, usize::max),
+            _ => i,
+        };
+        // Where an item reads `r`, and where an item writes it.
+        let read_at = |it: &Item, r: &str| -> Option<Span> {
+            match it {
+                Item::Table(t) => t.inputs.iter().find(|(n, _)| n == r).map(|(_, s)| s.clone()).or_else(|| {
+                    t.rows.iter().find_map(|row| row.outs.iter().zip(&row.out_spans).find(|(o, _)| matches!(o, OutCell::Name(w) if w == r)).map(|(_, s)| s.clone()))
+                }),
+                Item::Derived(d) => Some(name_span_in(&d.expr, r).unwrap_or_else(|| d.span.clone())),
+                Item::Define(d) => Some(name_span_in(&d.expr, r).unwrap_or_else(|| d.span.clone())),
+                Item::Agg(_) | Item::Fold(_) => None,
+            }
+        };
+        let write_at = |it: &Item, r: &str| -> Span {
+            match it {
+                Item::Table(t) => t.outputs.iter().find(|o| o.name.text == r).map_or_else(|| t.span.clone(), |o| o.span.clone()),
+                Item::Derived(d) => d.name.span.clone(),
+                Item::Define(d) => d.name.span.clone(),
+                Item::Agg(d) => d.name.span.clone(),
+                Item::Fold(d) => d.answer.as_ref().map_or_else(|| d.span.clone(), |a| a.name.span.clone()),
+            }
+        };
+        let item_at = |it: &Item, line: usize| match it {
+            Item::Table(t) => table_at(t, line),
+            _ => format!("{path}:{line}"),
+        };
+        let first = f.outputs.first().map(|o| o.name.text.clone());
+        // The first place each output nothing writes is read, for the mark on E151.
+        let mut read_first: HashMap<String, Span> = HashMap::new();
+        let mut early: Vec<Diag> = Vec::new();
+        for (i, it) in f.items.iter().enumerate() {
+            if no_out.contains(&i) || matches!(it, Item::Agg(_) | Item::Fold(_)) {
+                continue;
+            }
+            let mut seen: HashSet<String> = HashSet::new();
+            for r in item_reads(it) {
+                if !is_output(&r) || named.contains(&r) || !seen.insert(r.clone()) {
+                    continue;
+                }
+                let Some(sp) = read_at(it, &r) else { continue };
+                let by = binders(&r);
+                if by.is_empty() {
+                    match (&f.result, first.as_deref()) {
+                        // Only `result` writes it, after every item.
+                        (Some(res), Some(fo)) if fo == r => early.push(
+                            Diag::error("E151", tr!("出力 `{r}` を、決まる前に読んでいます", "The output `{r}` is read before it is decided"))
+                                .at(item_at(it, sp.line))
+                                .mark(sp.clone(), tr!("ここで読んでいます", "it is read here"))
+                                .mark(res.span.clone(), tr!("`{r}` を決めるのは、この `result` の行です", "this `result` line is what decides `{r}`"))
+                                .note(tr!(
+                                    "`result` の行は、ほかのどの表と定義よりも後で、最初の出力を決めます。そのため、表や定義からは読めません。それを読む行はどれにも当たらず、生成したコードは値の入っていない名前を読んで止まります。",
+                                    "The `result` line decides the first output after every table and definition, so none of them can read it: the rows that read it match nothing, and the generated code reads a name it has not set."
+                                ))
+                                .note(tr!(
+                                    "ヒント: `result` の行の代わりに、読む所より上で `define {r} : <型> = <式>` と書いて決めてください。",
+                                    "hint: decide `{r}` above what reads it, with `define {r} : <type> = <expression>` in place of the `result` line."
+                                )),
+                        ),
+                        _ => {
+                            read_first.entry(r.clone()).or_insert(sp);
+                        }
+                    }
+                    continue;
+                }
+                if matches!(it, Item::Table(_)) && by.contains(&i) {
+                    continue;
+                }
+                let p = by.iter().copied().max().unwrap_or(i);
+                if st.at(p) != st.at(i) || !(runs_at(i) < p || p == i) {
+                    continue;
+                }
+                if p == i {
+                    // A definition of the output that reads the output: a name of any other kind
+                    // read on its own line is E012.
+                    early.push(
+                        Diag::error("E151", tr!("出力 `{r}` を、決まる前に読んでいます", "The output `{r}` is read before it is decided"))
+                            .at(item_at(it, sp.line))
+                            .mark(sp.clone(), tr!("`{r}` を決める式が、`{r}` 自身を読んでいます", "the expression that decides `{r}` reads `{r}` itself"))
+                            .note(tr!(
+                                "定義の式は、その定義が決める値を読めません。式を計算する所では、`{r}` にまだ値が入っていません。生成したコードは値の入っていない名前を読んで止まります。",
+                                "The expression of a definition cannot read the value the definition decides: where it is worked out, `{r}` has no value yet, and the generated code reads a name it has not set."
+                            ))
+                            .note(tr!(
+                                "ヒント: `{r}` の式を、入力と、それより上の行で決まる値で書いてください。",
+                                "hint: write the expression of `{r}` from the inputs and the values decided above it."
+                            )),
+                    );
+                    continue;
+                }
+                let w = write_at(&f.items[p], &r);
+                early.push(
+                    Diag::error("E151", tr!("出力 `{r}` を、決まる前に読んでいます", "The output `{r}` is read before it is decided"))
+                        .at(item_at(it, sp.line))
+                        .mark(sp.clone(), tr!("ここで読んでいます", "it is read here"))
+                        .mark(w.clone(), tr!("`{r}` を決めるのはここで、読む所より後です", "this is what decides `{r}`, after it is read"))
+                        .note(tr!(
+                            "表と定義は、書いた順に計算します（一つの出力を決める表は、そのうち最後の表の所でまとめて計算します）。`{r}` を読む所では、まだ値が入っていません。それを読む行はどれにも当たらず、生成したコードは値の入っていない名前を読んで止まります。",
+                            "The tables and definitions are worked out in the order they are written, the tables that decide one output together at the last of them, so `{r}` has no value yet where it is read: the rows that read it match nothing, and the generated code reads a name it has not set."
+                        ))
+                        .note(tr!(
+                            "ヒント: `{r}` を読む行を、決める行（{} 行目）より下へ移してください。",
+                            "hint: move what reads `{r}` below what decides it (line {}).",
+                            w.line
+                        )),
+                );
+            }
+        }
+        // E151: an output nothing writes, said on its declaration.
+        for (oi, o) in f.outputs.iter().enumerate() {
+            let r = &o.name.text;
+            if named.contains(r) || (oi == 0 && f.result.is_some()) || !binders(r).is_empty() {
+                continue;
+            }
+            let mut d = Diag::error("E151", tr!("出力 `{r}` を決めるものがありません", "Nothing decides the output `{r}`"))
+                .at(format!("{path}:{}", o.span.line))
+                .mark(o.name.span.clone(), tr!("どの表も定義も、この出力を決めていません", "no table or definition decides it"));
+            if let Some(sp) = read_first.get(r) {
+                d = d.mark(sp.clone(), tr!("ここで読んでいます", "it is read here"));
+            }
+            self.diags.push(
+                d.note(tr!(
+                    "出力の値は、それを決めるものから来ます。表の `->` の後ろの列、同じ名前の `define` か `derive`、その出力に答える `sum`・`count`・`max`・`min`・`fold`、`apply` が渡す出力、最初の出力なら `result` です。この規則には `{r}` を決めるものが無いので、どの呼び出しにも `{r}` の値は返らず、生成したコードは値を入れていない名前を返そうとして止まります。",
+                    "An output takes its value from what decides it: a table's column after `->`, a `define` or a `derive` of the same name, a `sum`, `count`, `max`, `min` or `fold` that answers it, an output an `apply` brings in, or, for the first output, `result`. Nothing in this rule decides `{r}`, so no call is answered with a value for it, and the generated code would return a name it never set."
+                ))
+                .note(tr!(
+                    "ヒント: `{r}` を決める表か定義を書いてください。この規則が `{r}` を答えないなら、`outputs` から消してください。値の無いことがある出力（`?`）でも同じです。値が無いときも、表の行（`none`）で決めてください。",
+                    "hint: write the table or the definition that decides `{r}`, or take `{r}` out of `outputs` if the rule does not answer it. An output that may have no value (`?`) is held to the same: decide when it has none with a row (`none`)."
+                )),
+            );
+        }
+        self.diags.extend(early);
+    }
+
+    /// A `sum` or a `count` whose range no walk comes to (§15.314): E150, as for a `define` whose
+    /// range meets nothing the value reaches. The walk refuses a total outside its range once it
+    /// is over, so such a range refuses every call. Three ways are counted, each from the ranges
+    /// the rule writes. A sequence has at most as many elements as the least top of the counts
+    /// over it — or as a field of an enum or a truth value marked `unique` has values, each of
+    /// them once at most (§15.290) — and at least as many as the greatest bottom of them: a count that starts above the
+    /// most elements there can be is never reached; neither is the bottom of a sum that the most
+    /// elements, each at the top of the summed column, come short of; and the top of a sum is
+    /// always passed where the fewest elements, each at the bottom of the column, come past it. A
+    /// range that meets part of what a walk comes to is said nothing of, as with a `define`.
+    fn summaries_reached(&mut self, f: &RuleFile, path: &str) {
+        use std::cmp::Ordering::*;
+        for el in &f.elements {
+            let seq = el.name.text.clone();
+            let counts: Vec<&AggDecl> = f.aggs().filter(|d| d.kind == AggKind::Count && d.over == seq && d.range.is_some()).collect();
+            let ends = |d: &AggDecl| self.ranges.get(&d.name.text).copied().unwrap_or((None, None));
+            // The most elements the sequence has, with why and with what would raise it: the least
+            // top a `count` gives it, or — a sequence holds each value of a `unique` field once at
+            // most (§15.290) — the number of values of a field of an enum or a truth value.
+            let by_count = counts.iter().filter_map(|d| Some((ends(d).1?, *d))).min_by(|a, b| a.0.cmp_to(b.0));
+            let by_unique = el
+                .fields
+                .iter()
+                .filter(|fd| fd.unique.is_some())
+                .filter_map(|fd| {
+                    let n = match self.ty_of(&fd.name.text)? {
+                        Ty::Enum(en) => self.enum_ranges.get(&fd.name.text).or_else(|| self.enums.get(&en))?.len(),
+                        Ty::Bool => 2,
+                        _ => return None,
+                    };
+                    Some((Rat::int(n as i128), fd))
+                })
+                .min_by(|a, b| a.0.cmp_to(b.0));
+            struct Most<'a> {
+                n: Rat,
+                count: Option<&'a AggDecl>,
+                why: String,
+                /// What to raise to have more elements, where the rule has such a thing.
+                lift: Option<String>,
+            }
+            let most: Option<Most> = match (by_count, by_unique) {
+                (Some((n, d)), u) if u.is_none_or(|(m, _)| n.cmp_to(m) != Greater) => {
+                    let by = &d.name.text;
+                    Some(Most { n, count: Some(d), why: tr!("数え上げ {by} の上限", "the top of the count {by}"), lift: Some(by.clone()) })
+                }
+                (_, Some((n, fd))) => {
+                    let field = &fd.name.text;
+                    Some(Most {
+                        n,
+                        count: None,
+                        why: tr!("`unique` の {field} が取る値は {n} 個で、同じ値の要素は二つ入りません", "`{field}` is `unique` and takes {n} values, each once at most"),
+                        lift: None,
+                    })
+                }
+                _ => None,
+            };
+            let fewest = counts.iter().filter_map(|d| Some((ends(d).0?, *d))).filter(|(lo, _)| lo.num > 0).max_by(|a, b| a.0.cmp_to(b.0));
+            let mut found: Vec<Diag> = Vec::new();
+            let refuses = tr!(
+                "生成コードは、並びをたどり終えたところで、どの呼び出しも受け付けないことになります。",
+                "The generated code would refuse every call once the walk is over."
+            );
+            // "1 element", "5 elements": the number with its word, in English.
+            let els = |n: Rat| if n.to_string() == "1" { "1 element".to_string() } else { format!("{n} elements") };
+            if let (Some((lo, a)), Some(m)) = (fewest, &most) {
+                let hi = m.n;
+                if !m.count.is_some_and(|b| std::ptr::eq(a, b)) && lo.cmp_to(hi) == Greater {
+                    let (name, why, n_els) = (&a.name.text, &m.why, els(hi));
+                    let rg = a.range.as_ref().map(|r| r.span.clone()).unwrap_or_else(|| a.span.clone());
+                    let hint = match &m.lift {
+                        Some(by) => tr!(
+                            "ヒント: {name} の下限を {hi} 以下にするか、{by} の上限を {lo} 以上にしてください。",
+                            "Hint: bring the bottom of {name} down to {hi} or less, or the top of {by} up to {lo} or more."
+                        ),
+                        None => tr!("ヒント: {name} の下限を {hi} 以下にしてください。", "Hint: bring the bottom of {name} down to {hi} or less."),
+                    };
+                    found.push(
+                        Diag::error("E150", tr!("数え上げの範囲が、その値の届く範囲と重なりません", "The range of the count does not meet the values it can reach"))
+                            .at(tr!("{path}:{} 数え上げ", "{path}:{} count", a.span.line))
+                            .mark(rg, tr!("{name} が取りうる値は <={hi} です", "{name} can only be <={hi}"))
+                            .note(tr!(
+                                "{seq} の要素は多くて {hi} 件です（{why}）。{name} の下限 {lo} には、どの並びも届きません。{refuses}",
+                                "{seq} has at most {n_els} ({why}), so no sequence comes to the bottom {lo} of {name}. {refuses}"
+                            ))
+                            .note(hint),
+                    );
+                }
+            }
+            for d in f.aggs().filter(|d| d.kind == AggKind::Sum && d.over == seq) {
+                let (Some(rg), (Some(lo), Some(hi))) = (&d.range, ends(d)) else { continue };
+                let Some(&(flo, fhi)) = self.ranges.get(&d.column.text) else { continue };
+                // A column that goes below zero is E029 already, and the products below count on
+                // one that does not.
+                if flo.map_or(true, |l| l.num < 0) {
+                    continue;
+                }
+                let Some(ty) = self.ty_of(&d.name.text) else { continue };
+                let (name, col) = (&d.name.text, &d.column.text);
+                let at = tr!("{path}:{} 合計", "{path}:{} sum", d.span.line);
+                let title = tr!("合計の範囲が、その値の届く範囲と重なりません", "The range of the sum does not meet the values it can reach");
+                let shown = |v: Rat| fmt_val(v, &ty);
+                // The most a walk comes to: the most elements, each at the top of the column.
+                if let (Some(m), Some(fhi)) = (&most, fhi) {
+                    let n = m.n;
+                    let top = n.mul(fhi);
+                    if lo.cmp_to(top) == Greater {
+                        let (why, n_els) = (&m.why, els(n));
+                        let hint = match &m.lift {
+                            Some(by) => tr!(
+                                "ヒント: 範囲の下限を {} 以下にしてください。{by} の上限か {col} の上限を上げても届きます。",
+                                "Hint: bring the bottom of the range down to {} or less. Raising the top of {by} or of {col} reaches it too.",
+                                shown(top)
+                            ),
+                            None => tr!(
+                                "ヒント: 範囲の下限を {} 以下にしてください。{col} の上限を上げても届きます。",
+                                "Hint: bring the bottom of the range down to {} or less. Raising the top of {col} reaches it too.",
+                                shown(top)
+                            ),
+                        };
+                        found.push(
+                            Diag::error("E150", title.clone())
+                                .at(at.clone())
+                                .mark(rg.span.clone(), tr!("{name} が取りうる値は <={} です", "{name} can only be <={}", shown(top)))
+                                .note(tr!(
+                                    "{seq} の要素は多くて {n} 件（{why}）で、{col} は一件につき多くて {} です。{n} × {} = {} は、この範囲の下限 {} に届きません。{refuses}",
+                                    "{seq} has at most {n_els} ({why}), and {col} is at most {} in each: {n} × {} = {}, short of the bottom {} of this range. {refuses}",
+                                    shown(fhi),
+                                    shown(fhi),
+                                    shown(top),
+                                    shown(lo)
+                                ))
+                                .note(hint),
+                        );
+                        continue;
+                    }
+                }
+                // The least a walk comes to: the fewest elements, each at the bottom of the column.
+                if let (Some((n, by)), Some(flo)) = (fewest, flo) {
+                    let bottom = n.mul(flo);
+                    if hi.cmp_to(bottom) == Less {
+                        let (by, n_els) = (&by.name.text, els(n));
+                        found.push(
+                            Diag::error("E150", title.clone())
+                                .at(at.clone())
+                                .mark(rg.span.clone(), tr!("{name} が取りうる値は >={} です", "{name} can only be >={}", shown(bottom)))
+                                .note(tr!(
+                                    "{seq} の要素は少なくとも {n} 件（数え上げ {by} の下限）で、{col} は一件につき少なくとも {} です。{n} × {} = {} は、この範囲の上限 {} を越えます。{refuses}",
+                                    "{seq} has at least {n_els} (the bottom of the count {by}), and {col} is at least {} in each: {n} × {} = {}, past the top {} of this range. {refuses}",
+                                    shown(flo),
+                                    shown(flo),
+                                    shown(bottom),
+                                    shown(hi)
+                                ))
+                                .note(tr!(
+                                    "ヒント: 範囲の上限を {} 以上にしてください。{by} の下限か {col} の下限を下げても収まります。",
+                                    "Hint: bring the top of the range up to {} or more. Lowering the bottom of {by} or of {col} fits it too.",
+                                    shown(bottom)
+                                )),
+                        );
+                    }
+                }
+            }
+            self.diags.extend(found);
+        }
     }
 
     /// The names and cells of one `never` line (§15.282).
@@ -4754,7 +5415,10 @@ impl Checked {
             };
             let mut range = (lo, hi);
             if let Some(rg) = &d.range {
-                let ((dl, dh), bad) = bounds_of(rg, &ty);
+                // The answer is a value of the column, on the column's step: the ends the rest of the
+                // rule reads are read there, and the claim as it is written (§15.314).
+                let step = Some(Rat::new(1, scale.max(1)));
+                let ((dl, dh), bad) = bounds_of(rg, &ty, step);
                 for n in bad {
                     self.diags.push(
                         Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
@@ -4763,9 +5427,11 @@ impl Checked {
                             .maybe_note(unit_note(&n)),
                     );
                 }
-                let too_low = matches!((dl, lo), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Less) || (dl.is_some() && lo.is_none());
-                let too_high = matches!((dh, hi), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Greater) || (dh.is_some() && hi.is_none());
-                if too_low || too_high {
+                let empty = self.empty_on_step(rg, &ty, step, at.to_string(), false);
+                let (too_low, too_high) = claim_misses(rg, &ty, lo, hi);
+                if empty {
+                    // E061 said it.
+                } else if too_low || too_high {
                     let shown = |v: Option<Rat>| v.map(|x| fmt_val(x, &ty)).unwrap_or_else(|| "…".to_string());
                     let mut e = Diag::error(
                         "E112",
@@ -4779,7 +5445,7 @@ impl Checked {
                         d.column.text
                     ));
                     if let (Some(l), Some(h)) = (lo, hi) {
-                        e = e.fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(l, &ty), fmt_val_fixed(h, &ty)));
+                        e = e.fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val(l, &ty), fmt_val(h, &ty)));
                     }
                     self.diags.push(e);
                 } else {
@@ -4857,7 +5523,7 @@ impl Checked {
             match (self.syms.get(&name.text).cloned(), ty) {
                 (Some(sym), Some(t)) if output => {
                     let want = self.resolve(t);
-                    if want != sym.ty && sym.ty != Ty::Unknown && want != Ty::Unknown {
+                    if !want.same(&sym.ty) && sym.ty != Ty::Unknown && want != Ty::Unknown {
                         fold_bad(
                             self,
                             &t.span,
@@ -4938,7 +5604,9 @@ impl Checked {
             None => self.diags.push(
                 Diag::error("E012", tr!("`{}` という列はありません", "There is no column called `{}`", fold.verdict))
                     .at(at_fold.clone())
-                    .mark(fold.span.clone(), tr!("どの表もこの列を出していません", "no table produces this column")),
+                    .mark(fold.span.clone(), tr!("どの表もこの列を出していません", "no table produces this column"))
+                    .same(fold.verdict.clone())
+                    .maybe_note(self.near_declared(&fold.verdict)),
             ),
         }
         self.used.insert(fold.verdict.clone());
@@ -5178,6 +5846,8 @@ impl Checked {
                             Diag::error("E012", tr!("列の名前 `{name}` は宣言されていません", "Column `{name}` is not a declared name"))
                                 .at(at(sp.line))
                                 .mark(sp.clone(), "")
+                                .same(name.clone())
+                                .maybe_note(self.near_declared(name))
                                 .note(tr!("列に書けるのは 入力・導出・真偽/列挙の中間値です。", "A column can only be an input, a derived value, or a boolean/enum intermediate value.")),
                         );
                         col_ty.push(Ty::Unknown);
@@ -5206,7 +5876,7 @@ impl Checked {
                     .outputs
                     .get(&oc.name.text)
                     .or_else(|| self.syms.get(&oc.name.text).filter(|s| s.kind == SymKind::TableOut))
-                    .filter(|s| s.ty != ty && s.ty != Ty::Unknown && ty != Ty::Unknown)
+                    .filter(|s| !s.ty.same(&ty) && s.ty != Ty::Unknown && ty != Ty::Unknown)
                     .cloned()
                     .map(|s| (tr.span.clone(), s)),
                 _ => None,
@@ -5343,6 +6013,10 @@ impl Checked {
                     if let Some(w) = wide {
                         self.wide.insert(oc.name.text.clone(), w);
                     }
+                } else if matches!(ty.present(), Ty::Date) {
+                    // A date is a whole number of days, stored as a date input is (§15.325): what
+                    // reads the column reads it on that step, and the certificate says so.
+                    self.scales.insert(oc.name.text.clone(), 1);
                 }
                 let ty = match had {
                     Some((_, s)) => s.ty,
@@ -5416,6 +6090,8 @@ impl Checked {
                 }
                 match oc {
                     OutCell::Lit(Lit::Num(n)) => match lit_value_in(n, want) {
+                        // a column of a type that is not there (E012) holds values of nothing
+                        None if *want.present() == Ty::Unknown => {}
                         None => self.diags.push(
                             Diag::error("E103", tr!("この列は {want} ですが `{}` が書かれています", "This column is {want}, but `{}` is written here", n.raw))
                                 .at(at(row.span.line))
@@ -5423,6 +6099,30 @@ impl Checked {
                                 .maybe_note(unit_note(n)),
                         ),
                         Some(v) => {
+                            // A rate the rule works with and does not answer, its step written on
+                            // the heading (`-> markup : rate[step 1%]`): its cells sit on that
+                            // step, as an input's do (§15.323).
+                            if let Some(x) = self.heading_step(t, oi, want) {
+                                if !v.on_grid(x) {
+                                    let step = fmt_val(x, want);
+                                    let k = v.div(x);
+                                    let half = if k.num < 0 { -k.den } else { k.den };
+                                    let near = fmt_val(x.mul(Rat::int((k.num * 2 + half) / (k.den * 2))), want);
+                                    self.diags.push(
+                                        Diag::error("E114", tr!("`{}` はこの列の刻みに載っていません", "`{}` does not sit on this column's step", n.raw))
+                                            .at(at(row.span.line))
+                                            .mark(osp.clone(), tr!("刻みは {step} です", "the step is {step}"))
+                                            .note(tr!(
+                                                "見出しの型が、この列の刻みを {step} と宣言しています。この列の値は、どれもその整数倍です。",
+                                                "The heading's type declares a step of {step} for this column, so every value it holds is a whole number of them."
+                                            ))
+                                            .note(tr!(
+                                                "`{near}` のように刻みに載る値に直すか、見出しの刻みを細かくしてください。黙って寄せると、読める値と計算する値が食い違います。",
+                                                "Write a value on the step, such as `{near}`, or declare a finer step on the heading. Rounding it quietly would make the value on the page differ from the value the rule works with."
+                                            )),
+                                    );
+                                }
+                            }
                             // §2.4: a tool that silently snaps to the declared rounding defeats
                             // itself as a tool for reviewing diffs. If the value is off the grid,
                             // let the author decide.
@@ -5461,6 +6161,37 @@ impl Checked {
                         // An enum value, or (§3.2) the name of an input / derived / define.
                         if let Some(s) = self.syms.get(w).cloned() {
                             self.used.insert(w.clone());
+                            // The values of the name, under a heading that writes a step on a rate
+                            // the rule does not answer, sit on that step (§15.323).
+                            if let Some(x) = self.heading_step(t, oi, want) {
+                                if let Some((v, (st, of))) = self.lattice_of(w).and_then(|p| Some((self.off_step(w, p, x)?, p))) {
+                                    let plain = of.num == 0;
+                                    // the step that holds every value: with an offset, the one the
+                                    // offset and the step share
+                                    let need = if plain { Some(st) } else { common_step(st, of) };
+                                    let (step, vv) = (fmt_val(x, want), fmt_val(v, want));
+                                    let need = need.map_or_else(|| fmt_val(st, want), |n| fmt_val(n, want));
+                                    let (st, of) = (fmt_val(st, want), fmt_val(of, want));
+                                    let takes = if plain {
+                                        tr!("{w} の値は {st} の倍数で、{vv} もその一つです。", "Every value {w} takes is a whole multiple of {st}, and {vv} is one of them.")
+                                    } else {
+                                        tr!("{w} の値は {st} の倍数に {of} を足したもので、{vv} もその一つです。", "Every value {w} takes is {of} plus a whole multiple of {st}, and {vv} is one of them.")
+                                    };
+                                    self.diags.push(
+                                        Diag::error("E114", tr!("`{w}` は、この列の刻みに載らないことがあります", "`{w}` does not always sit on this column's step"))
+                                            .at(at(row.span.line))
+                                            .mark(osp.clone(), tr!("刻みは {step} ですが、{w} は {vv} にもなります", "the step is {step}, and {w} can be {vv}"))
+                                            .note(tr!(
+                                                "見出しの型が、この列の刻みを {step} と宣言しています。{takes}{vv} は刻みと刻みの間にあり、規則はそのまま計算を続けます。",
+                                                "The heading's type declares a step of {step} for this column. {takes} It lies between two steps, and the rule works on with it."
+                                            ))
+                                            .note(tr!(
+                                                "ヒント: 刻みに載る値を書くか、見出しの刻みを {w} の取る刻み（`rate[step {need}]`）にしてください。",
+                                                "Hint: write a value on the step, or declare on the heading the step {w} takes (`rate[step {need}]`)."
+                                            )),
+                                    );
+                                }
+                            }
                             // A name still here that is also a value of the column's enum is the
                             // cell E075 stops on (`read_words`): it names the value as much as
                             // the input, so W111 does not add that the value appears nowhere.
@@ -5483,7 +6214,8 @@ impl Checked {
                                 Diag::error("E012", tr!("`{w}` は値の名前としても、宣言された名前としても見つかりません", "`{w}` is found neither as a value nor as a declared name"))
                                     .at(at(row.span.line))
                                     .mark(osp.clone(), "")
-                                    .maybe_note(crate::prelude::hint(w, &self.imported))
+                                    .same(w.clone())
+                                    .maybe_note(crate::prelude::hint(w, &self.imported).or_else(|| self.near_declared(w)))
                                     .note(tr!("出力セルに書けるのは リテラルか名前（入力・導出・定義）だけです。式は書けません。", "An output cell holds only a literal or a name (an input, derived value, or definition). Expressions are not allowed.")),
                             );
                         }
@@ -5554,6 +6286,8 @@ impl Checked {
                         Diag::error("E012", tr!("列の名前 `{name}` は宣言されていません", "Column `{name}` is not a declared name"))
                             .at(at(sp.line))
                             .mark(sp.clone(), "")
+                            .same(name.clone())
+                            .maybe_note(self.near_declared(name))
                             .note(tr!("例の列は、入力・導出・表の出力のどれかの名前です。", "A column of the examples names an input, a derived value, or a table's output.")),
                     );
                     col_ty.push(None);
@@ -5571,7 +6305,7 @@ impl Checked {
                     .outputs
                     .get(&oc.name.text)
                     .or_else(|| self.syms.get(&oc.name.text))
-                    .filter(|s| s.ty != written && s.ty != Ty::Unknown && written != Ty::Unknown)
+                    .filter(|s| !s.ty.same(&written) && s.ty != Ty::Unknown && written != Ty::Unknown)
                     .cloned();
                 if let Some(s) = had {
                     self.diags.push(retyped(&oc.name.text, &written, &tr.span, &s, at(tr.span.line), true));
@@ -5584,6 +6318,8 @@ impl Checked {
                         Diag::error("E012", tr!("列 `{}` という名前は宣言されていません", "Column `{}` is not a declared name", oc.name.text))
                             .at(at(oc.name.span.line))
                             .mark(oc.name.span.clone(), "")
+                            .same(oc.name.text.clone())
+                            .maybe_note(self.near_declared(&oc.name.text))
                             .note(tr!("`->` の右に書けるのは、この規則の出力の名前です。", "What stands to the right of `->` is the name of one of this rule's outputs.")),
                     );
                     out_ty.push(None);
@@ -5611,7 +6347,7 @@ impl Checked {
                     self.out_lit(l, &want, &osp, &at(row.span.line));
                 }
                 match oc {
-                    OutCell::Lit(Lit::Num(n)) if lit_value_in(n, &want).is_none() => {
+                    OutCell::Lit(Lit::Num(n)) if lit_value_in(n, &want).is_none() && *want.present() != Ty::Unknown => {
                         self.diags.push(
                             Diag::error("E103", tr!("この列は {want} ですが `{}` が書かれています", "This column is {want}, but `{}` is written here", n.raw))
                                 .at(at(row.span.line))
@@ -5643,7 +6379,8 @@ impl Checked {
                                 Diag::error("E012", tr!("`{w}` は値の名前としても、宣言された名前としても見つかりません", "`{w}` is found neither as a value nor as a declared name"))
                                     .at(at(row.span.line))
                                     .mark(osp, "")
-                                    .maybe_note(crate::prelude::hint(w, &self.imported)),
+                                    .same(w.clone())
+                                    .maybe_note(crate::prelude::hint(w, &self.imported).or_else(|| self.near_declared(w))),
                             );
                         }
                     }
@@ -5939,7 +6676,8 @@ impl Checked {
                         Diag::error("E012", tr!("`{w}` は、答えの型 {out_ty} の値でも、宣言された名前でもありません", "`{w}` is neither a value of {out_ty}, the type the fold answers with, nor a declared name"))
                             .at(at_fold.clone())
                             .mark(wsp.clone(), "")
-                            .maybe_note(crate::prelude::hint(w, &self.imported))
+                            .same(w.clone())
+                            .maybe_note(crate::prelude::hint(w, &self.imported).or_else(|| self.near_declared(w)))
                             .note(tr!("{into}その型の値か、上で宣言した名前を書いてください。", "{into} Write a value of its type, or a name declared above.")),
                     );
                 }
@@ -6518,6 +7256,8 @@ impl Checked {
             other => other,
         };
         let check_lit = |s: &mut Self, l: &Lit| match l {
+            // a column of a type that is not there (E012) holds values of nothing
+            Lit::Num(_) if *want == Ty::Unknown => {}
             Lit::Num(n) => {
                 let Some(v) = lit_value_in(n, want) else {
                     s.diags.push(
@@ -6628,7 +7368,8 @@ impl Checked {
                         Diag::error("E012", tr!("`{w}` は値としてもグループとしても見つかりません", "`{w}` is found neither as a value nor as a group"))
                             .at(at.to_string())
                             .mark(span.clone(), "")
-                            .maybe_note(crate::prelude::hint(w, &s.imported)),
+                            .same(w.clone())
+                            .maybe_note(crate::prelude::hint(w, &s.imported).or_else(|| s.near_declared(w))),
                     ),
                     (Some(e), _) => s.diags.push(
                         Diag::error("E103", tr!("この列は {want} ですが `{w}`（{e} の値）が書かれています", "This column is {want}, but `{w}` (a value of {e}) is written here"))
@@ -6847,6 +7588,175 @@ impl Checked {
         }
         if let Some(g) = self.lattice(e).filter(|g| g.num != 0) {
             self.grids.insert(name.to_string(), g);
+        }
+        if let Some(p) = self.lattice_at(e).filter(|(s, _)| s.num != 0) {
+            self.points.insert(name.to_string(), p);
+        }
+    }
+
+    /// The points every value of `name` takes, as a step and the point it starts from, below one
+    /// step (§15.323): for a computed value, what its expression lands on ([`Checked::points`]);
+    /// for anything else, its step ([`Checked::value_step`]) from zero. An open value takes what
+    /// its contributions bring, on the step it declares.
+    pub fn taken(&self, name: &str) -> (Rat, Rat) {
+        match self.points.get(name) {
+            Some(&p) if !self.opens.contains_key(name) => p,
+            _ => (self.value_step(name), Rat::zero()),
+        }
+    }
+
+    /// The points `name` takes, as a step and an offset, where they are known (§15.323): a value
+    /// worked out by an expression, from the expression itself — a constant is the one point it is
+    /// — and nothing for one whose expression they are not read off or that its contributions make;
+    /// anything else, [`Checked::taken`].
+    fn lattice_of(&self, name: &str) -> Option<(Rat, Rat)> {
+        match self.syms.get(name).map(|s| &s.kind) {
+            Some(SymKind::Define | SymKind::Derived) => {
+                let e = self.defs.get(name)?;
+                self.lattice_at(e)
+            }
+            Some(_) => Some(self.taken(name)),
+            None => None,
+        }
+    }
+
+    /// A value `name` can come to, on the points `(s, o)` it takes, that is not on the step `x`
+    /// (§15.323): the first of the points from the bottom of its range, or the one after it — of
+    /// two points one step apart, one is off `x` wherever `s` is — or `None` where every point in
+    /// its range is on `x`.
+    fn off_step(&self, name: &str, (s, o): (Rat, Rat), x: Rat) -> Option<Rat> {
+        use std::cmp::Ordering::*;
+        let (lo, hi) = self.ranges.get(name).copied().unwrap_or((None, None));
+        if s.num == 0 {
+            return (!o.on_grid(x)).then_some(o);
+        }
+        let first = match lo {
+            Some(lo) => o.add(crate::grid::ceil_to(lo.sub(o), s)),
+            None => o,
+        };
+        [first, first.add(s)].into_iter().find(|v| !hi.is_some_and(|h| v.cmp_to(h) == Greater) && !v.on_grid(x))
+    }
+
+    /// The step the heading of the answer column `oi` of `t` writes on a rate the rule does not
+    /// answer (`-> markup : rate[step 1%]`): what the cells under it are held to (§15.323).
+    fn heading_step(&self, t: &Table, oi: usize, want: &Ty) -> Option<Rat> {
+        let col = t.outputs.get(oi)?;
+        if self.outputs.contains_key(&col.name.text) || *want.present() != Ty::Rate {
+            return None;
+        }
+        declared_step(col.ty.as_ref()?)
+    }
+
+    /// E114 for a derive or a `define` of a rate the rule does not answer, typed with a step,
+    /// whose expression can come to a value off it (§15.323). The points are read off the
+    /// expression; where they are not, nothing is said.
+    fn held_to_step(&mut self, name: &Name, e: &Expr, written: &TypeRef, ty: &Ty, at: String) {
+        let n = &name.text;
+        let inner = ty.present().clone();
+        if inner != Ty::Rate || self.outputs.contains_key(n) {
+            return;
+        }
+        let Some(x) = declared_step(written) else { return };
+        let Some((st, of)) = self.lattice_at(e) else { return };
+        let Some(v) = self.off_step(n, (st, of), x) else { return };
+        let plain = of.num == 0;
+        // the step that holds every value: with an offset, the one the offset and the step share
+        let need = if plain { Some(st) } else { common_step(st, of) };
+        let need = need.map_or_else(|| fmt_val(st, &inner), |n| fmt_val(n, &inner));
+        let (step, vv, st, of) = (fmt_val(x, &inner), fmt_val(v, &inner), fmt_val(st, &inner), fmt_val(of, &inner));
+        let takes = if plain {
+            tr!("式の値は {st} の倍数で、{vv} もその一つです。", "Every value its expression takes is a whole multiple of {st}, and {vv} is one of them.")
+        } else {
+            tr!("式の値は {st} の倍数に {of} を足したもので、{vv} もその一つです。", "Every value its expression takes is {of} plus a whole multiple of {st}, and {vv} is one of them.")
+        };
+        self.diags.push(
+            Diag::error("E114", tr!("`{n}` の値は、宣言した刻みに載らないことがあります", "The value of `{n}` does not always sit on its step"))
+                .at(at)
+                .mark(name.span.clone(), tr!("刻みは {step} ですが、{n} は {vv} にもなります", "the step is {step}, and {n} can be {vv}"))
+                .note(tr!(
+                    "{n} の型は刻みを {step} と宣言しています。{takes}{vv} は刻みと刻みの間にあり、規則はそのまま計算を続けます。",
+                    "The type of {n} declares a step of {step}. {takes} It lies between two steps, and the rule works on with it."
+                ))
+                .note(tr!(
+                    "ヒント: 式を刻みに丸めるか（`half_up(…, {step})`。向きは選んでください）、{n} の取る刻み（`rate[step {need}]`）を宣言してください。",
+                    "Hint: round the expression to the step (`half_up(…, {step})`, in the direction you choose), or declare the step {n} takes (`rate[step {need}]`)."
+                )),
+        );
+    }
+
+    /// [`Checked::lattice`] with where the points start: every value of `e` is the offset plus a
+    /// whole multiple of the step, the offset at or above zero and below the step. A literal is
+    /// the one point it is (a step of zero); a sum or a difference is on the step both sides share,
+    /// from the sum or the difference of their offsets; a product with a literal is on the step
+    /// times it, and two values that both move are on the step their three cross terms share;
+    /// `min` and `max` give one side or the other, so the step that also holds the gap between
+    /// their offsets. A rounding lands on its grid from zero, and so do `allocate` and a whole
+    /// square root. `gifts × 2 + 1` is on the odd numbers. `None` where `lattice` reads nothing.
+    fn lattice_at(&self, e: &Expr) -> Option<(Rat, Rat)> {
+        let abs = |r: Rat| -> Option<Rat> { if r.num < 0 { Some(Rat { num: r.num.checked_neg()?, den: r.den }) } else { Some(r) } };
+        let share = |a: Rat, b: Rat| -> Option<Rat> {
+            if a.num == 0 {
+                Some(b)
+            } else if b.num == 0 {
+                Some(a)
+            } else {
+                common_step(a, b)
+            }
+        };
+        // The offset brought below the step, at or above zero; a point (a step of zero) as it is.
+        let norm = |s: Rat, o: Rat| -> Option<(Rat, Rat)> {
+            if s.num == 0 {
+                return Some((s, o));
+            }
+            let q = o.checked_div(s)?;
+            let whole = Rat::int(q.num.div_euclid(q.den));
+            Some((s, o.checked_sub(s.checked_mul(whole)?)?))
+        };
+        match e {
+            Expr::Name(n, _) => Some(self.taken(n)),
+            Expr::Lit(Lit::Num(n), _) => Some((Rat::zero(), lit_value_in(n, &lit_ty(n))?)),
+            Expr::Lit(..) => None,
+            Expr::Bin(l, op, r, _) => {
+                let ((sa, oa), (sb, ob)) = (self.lattice_at(l)?, self.lattice_at(r)?);
+                match op {
+                    BinOp::Add => norm(share(sa, sb)?, oa.checked_add(ob)?),
+                    BinOp::Sub => norm(share(sa, sb)?, oa.checked_sub(ob)?),
+                    BinOp::Mul => {
+                        // (oa + i·sa)(ob + j·sb) = oa·ob + i·sa·ob + j·sb·oa + i·j·sa·sb
+                        let mut step = Rat::zero();
+                        for t in [sa.checked_mul(ob)?, sb.checked_mul(oa)?, sa.checked_mul(sb)?] {
+                            step = share(step, abs(t)?)?;
+                        }
+                        norm(step, oa.checked_mul(ob)?)
+                    }
+                    // §2.3: the divisor is a whole constant, as `scale` reads it.
+                    BinOp::Div => {
+                        let k = Rat::int(const_value(r)?);
+                        norm(abs(sa.checked_div(k)?)?, oa.checked_div(k)?)
+                    }
+                    _ => None,
+                }
+            }
+            Expr::Call(name, args, _) => {
+                if name == crate::kw::MIN || name == crate::kw::MAX {
+                    let [x, y] = args.as_slice() else { return None };
+                    let ((sa, oa), (sb, ob)) = (self.lattice_at(x)?, self.lattice_at(y)?);
+                    return norm(share(share(sa, sb)?, abs(oa.checked_sub(ob)?)?)?, oa);
+                }
+                if crate::num::RoundMode::parse(name).is_some() {
+                    return match args.get(1)? {
+                        Expr::Lit(Lit::Num(g), _) => Some((abs(lit_value_in(g, &lit_ty(g))?)?, Rat::zero())),
+                        _ => None,
+                    };
+                }
+                // A remainder by n moves a value by multiples of n: the step the two share, from
+                // where the value starts (§15.214).
+                if let (crate::kw::MOD, [x, k]) = (name.as_str(), args.as_slice()) {
+                    let (sa, oa) = self.lattice_at(x)?;
+                    return norm(share(sa, Rat::int(const_value(k)?))?, oa);
+                }
+                (name == crate::kw::ALLOCATE || name == crate::kw::ISQRT).then_some((Rat::int(1), Rat::zero()))
+            }
         }
     }
 
@@ -7136,56 +8046,28 @@ pub fn lit_scale(n: &crate::lex::Num) -> Option<i128> {
     d.checked_mul(u)
 }
 
-/// The §1.6 rendering uses the same write-back. Showing a reader `1000000円` forces a
-/// mental conversion before it can be matched against the `100万円` in the rule source.
-pub fn fmt_big_pub(v: Rat) -> String {
-    fmt_big(v, crate::i18n::ja())
-}
-
-/// Large amounts are written back with 万 and 億. Answering `1000000円` to an author who
-/// wrote `100万円` forces a mental conversion before they can fix anything.
-///
-/// In English the same author writes `1_000_000JPY`, the way the language groups digits (a `,`
-/// is E049) and the way the corpus writes them, so that is what comes back: a whole number of
-/// five digits or more, in groups of three joined by `_`. Japanese is as it was.
-fn fmt_big(v: Rat, ja: bool) -> String {
-    if !v.is_int() {
-        return format!("{v}");
+/// A number as the languages write one (ritsu's DESIGN 6.2), in both languages of the output: a
+/// whole number with its digits grouped by `_` from five on (`5000`, `10_000`, `-12_345`, as
+/// `ritsu_units::written::digits` groups them), a decimal with its whole part so grouped
+/// (`12_345.5`), and a value no decimal writes as the fraction `Rat` writes (`1/3`). A rule reads
+/// `1_000_000円` and `100万円` alike; the checks of the other languages say `1_000_000円`, and so
+/// does rulec, in Japanese too, so that a number said can be found in a file and written into one
+/// as it is (§15.333).
+pub fn written_num(v: Rat) -> String {
+    let t = v.to_string();
+    let (sign, body) = match t.strip_prefix('-') {
+        Some(b) => ("-", b),
+        None => ("", t.as_str()),
+    };
+    let (whole, frac) = match body.split_once('.') {
+        Some((w, f)) => (w, Some(f)),
+        None => (body, None),
+    };
+    match (whole.parse::<i128>(), frac) {
+        (Ok(w), Some(f)) => format!("{sign}{}.{f}", ritsu_units::written::digits(w)),
+        (Ok(w), None) => format!("{sign}{}", ritsu_units::written::digits(w)),
+        _ => t,
     }
-    let n = v.num;
-    if !ja {
-        return group_digits(n);
-    }
-    if n != 0 && n % 1_000_000_000_000 == 0 {
-        return format!("{}兆", n / 1_000_000_000_000);
-    }
-    if n != 0 && n % 100_000_000 == 0 {
-        return format!("{}億", n / 100_000_000);
-    }
-    if n != 0 && n % 10_000 == 0 {
-        return format!("{}万", n / 10_000);
-    }
-    format!("{n}")
-}
-
-/// `1000000` is `1_000_000`, and `-12345` is `-12_345`; four digits or fewer are left alone, as
-/// the corpus writes `5000JPY` and `10_000JPY`.
-fn group_digits(n: i128) -> String {
-    let digits = n.unsigned_abs().to_string();
-    if digits.len() < 5 {
-        return n.to_string();
-    }
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 1);
-    if n < 0 {
-        out.push('-');
-    }
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
-            out.push('_');
-        }
-        out.push(c);
-    }
-    out
 }
 
 /// One unit of the type, as it is written: `1円`, `1g`, `1%`. It is the finest grid a
@@ -7203,25 +8085,22 @@ fn unit_one(ty: &Ty) -> String {
     }
 }
 
-/// A value the way the rule writes one of its type: `1000円`, `2kg`, `1%`. Amounts of many digits
-/// are written back as the language of the output writes them (see `fmt_big`).
+/// A value the way the rule writes one of its type, with its digits as [`written_num`] groups them:
+/// `1000円`, `1_000_000円`, `12_000g`, `0.5%`, `20_000`, and a date as the calendar day it is
+/// (`2026-04-01`; a date is held as its day number, §2.1). The same in both languages, and in
+/// what a fix writes into the rule (`fix.text`, which the JSON tests hold), so a number said is a
+/// number the file can take as it is.
 pub fn fmt_val(v: Rat, ty: &Ty) -> String {
-    fmt_val_in(v, ty, crate::i18n::ja())
-}
-
-/// The same for what a fix writes into the rule (`fix.text`). A fix is data, the same in both
-/// languages (the JSON tests hold it), so its amounts are written back as they always were.
-pub fn fmt_val_fixed(v: Rat, ty: &Ty) -> String {
-    fmt_val_in(v, ty, true)
-}
-
-fn fmt_val_in(v: Rat, ty: &Ty, ja: bool) -> String {
     // A value of `T?` that is there is a value of `T`, and is written as one.
     match ty.present() {
-        Ty::Money { cur, .. } => format!("{}{cur}", fmt_big(v, ja)),
-        Ty::Qty { unit, .. } => format!("{v}{unit}"),
-        Ty::Rate => format!("{}%", v.mul(Rat::int(100))),
-        _ => format!("{v}"),
+        Ty::Money { cur, .. } => format!("{}{cur}", written_num(v)),
+        Ty::Qty { unit, .. } => format!("{}{unit}", written_num(v)),
+        Ty::Rate => format!("{}%", written_num(v.mul(Rat::int(100)))),
+        Ty::Date => {
+            let (y, m, d) = ord_to_date(v);
+            format!("{y:04}-{m:02}-{d:02}")
+        }
+        _ => written_num(v),
     }
 }
 
@@ -7245,6 +8124,12 @@ fn held_one(d: i64, lo: Option<Rat>, hi: Option<Rat>) -> bool {
 fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFrom, path: &str, at: &dyn Fn(usize) -> String) {
     let name = &i.name.text;
     if !matches!(ty, Ty::Date) {
+        // A type that names nothing has said so on its line (E012; §15.321), and may have meant a
+        // date. A money or a quantity whose unit E103 does not read is no date either way.
+        if *ty.present() == Ty::Unknown && !unit_is_unreadable(&i.ty) {
+            return;
+        }
+        let ty = if *ty.present() == Ty::Unknown { crate::link::type_text(&i.ty) } else { ty.to_string() };
         c.diags.push(
             Diag::error("E065", tr!("`range from koyomi` を書けるのは日付の入力だけです", "Only a date input takes `range from koyomi`"))
                 .at(at(from.span.line))
@@ -7309,7 +8194,9 @@ fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFro
                 })
                 .chain(crate::vfs::outside_note(from.dir(path), &from.file))
                 .collect();
-            stop(c, tr!("{naming} の日を、koyomi から得られません", "koyomi does not answer for the days of {naming}"), tr!("{shown} を読めないか、koyomi の検査を通りません", "{shown} cannot be read, or does not pass koyomi's check"), notes)
+            // the file as the rule writes it (ritsu's DESIGN 6.2, item 8); where koyomi looked is in its notes
+            let written = &from.file;
+            stop(c, tr!("{naming} の日を、koyomi から得られません", "koyomi does not answer for the days of {naming}"), tr!("{written} を読めないか、koyomi の検査を通りません", "{written} cannot be read, or does not pass koyomi's check"), notes)
         }
         crate::days::Read::Undecided(why) => {
             let why = if crate::i18n::ja() { why.ja } else { why.en };
@@ -7394,9 +8281,28 @@ fn enum_range(c: &mut Checked, i: &VarDecl, en: &str, r: &Range, at: &dyn Fn(usi
     c.enum_ranges.insert(i.name.text.clone(), values);
 }
 
-fn bounds_of(r: &Range, ty: &Ty) -> ((Option<Rat>, Option<Rat>), Vec<crate::lex::Num>) {
+/// The two ends a range lets values in between, each end included, with the bounds that are no
+/// value of the type (§15.314). A range is read on the step its value is held at, wherever it is
+/// written: `>=` and `<=` take the value they write, `>` and `<` do not, and an end that is not on
+/// the step is the first value on it inside the range. In yen `>0JPY` is `>=1JPY` and `<100JPY` is
+/// `<=99JPY`; on a rate's step of 1%, `>=0.5%` is `>=1%`; for a date, the step is one day. Every
+/// reader takes the ends from here — the checks, the door of the reference evaluator and of the
+/// generated code, the vectors, the page, `api`, `schema`, the certificate and the port — so no two
+/// of them read one range two ways. 0.55.2 read `>` as `>=` and `<` as `<=`: the door took the
+/// value an end said it left out, and a `derive` or a `max` written `>0` passed while it came to 0.
+///
+/// `step` is `None` where the value has no step to read the ends on — a rate that declares none
+/// (E103), a step that is not positive (E060) — and the ends are then left as they are written:
+/// the rule does not pass, and what is said of it besides stays what it was.
+pub(crate) fn bounds_of(r: &Range, ty: &Ty, step: Option<Rat>) -> ((Option<Rat>, Option<Rat>), Vec<crate::lex::Num>) {
     let (mut lo, mut hi) = (None, None);
     let mut bad = Vec::new();
+    if *ty.present() == Ty::Unknown {
+        // A type that is not there (E012, or a unit E103 does not read): its bounds are values of
+        // nothing, and said nothing of (§15.321).
+        return ((lo, hi), bad);
+    }
+    let step = step.filter(|s| s.num > 0);
     for (op, l) in &r.bounds {
         let v = match l {
             Lit::Num(n) => match lit_value_in(n, ty) {
@@ -7409,12 +8315,59 @@ fn bounds_of(r: &Range, ty: &Ty) -> ((Option<Rat>, Option<Rat>), Vec<crate::lex:
             Lit::Date(y, m, d) if *ty == Ty::Date => date_ord(*y, *m, *d),
             _ => continue,
         };
-        match op {
-            CmpOp::Ge | CmpOp::Gt => lo = Some(v),
-            CmpOp::Le | CmpOp::Lt => hi = Some(v),
+        match (op, step) {
+            (CmpOp::Ge, Some(s)) => lo = Some(crate::grid::ceil_to(v, s)),
+            (CmpOp::Gt, Some(s)) => lo = Some(crate::grid::floor_to(v, s).add(s)),
+            (CmpOp::Le, Some(s)) => hi = Some(crate::grid::floor_to(v, s)),
+            (CmpOp::Lt, Some(s)) => hi = Some(crate::grid::ceil_to(v, s).sub(s)),
+            (CmpOp::Ge | CmpOp::Gt, None) => lo = Some(v),
+            (CmpOp::Le | CmpOp::Lt, None) => hi = Some(v),
         }
     }
     ((lo, hi), bad)
+}
+
+/// [`bounds_of`] for another module: the ends alone, `None` where a bound is no value of the type.
+pub(crate) fn range_ends(r: &Range, ty: &Ty, step: Option<Rat>) -> Option<(Option<Rat>, Option<Rat>)> {
+    let (ends, bad) = bounds_of(r, ty, step);
+    bad.is_empty().then_some(ends)
+}
+
+/// The step a value declared with this type is held at: one unit of money, of a quantity or of
+/// `number`, the step a rate declares, one day of a date. `None` for a rate whose type declares no
+/// step that can be read (E103, E060): there is none to read its range on.
+pub(crate) fn step_of_type(tr: &TypeRef, ty: &Ty) -> Option<Rat> {
+    let ty = ty.present();
+    if matches!(ty, Ty::Rate) {
+        let read = tr.args.iter().any(|a| matches!(a, TypeArg::Scaled(w, n) if w == crate::kw::STEP && lit_value_in(n, ty).is_some_and(|v| v.num > 0)));
+        if !read {
+            return None;
+        }
+    }
+    Some(Rat::new(1, scale_of_type(tr, ty).max(1)))
+}
+
+/// Whether a range written as a claim — on a `derive`, a `max` or a `min`, an output — leaves out a
+/// value between `lo` and `hi`, at its lower end and at its upper one (§15.314). The claim is read
+/// as it is written: `>0JPY` does not hold 0 yen, whatever step the value is on.
+fn claim_misses(r: &Range, ty: &Ty, lo: Option<Rat>, hi: Option<Rat>) -> (bool, bool) {
+    use std::cmp::Ordering::{Greater, Less};
+    let (mut low, mut high) = (false, false);
+    for (op, l) in &r.bounds {
+        let v = match l {
+            Lit::Num(n) => lit_value_in(n, ty),
+            Lit::Date(y, m, d) if *ty.present() == Ty::Date => Some(date_ord(*y, *m, *d)),
+            _ => None,
+        };
+        let Some(v) = v else { continue };
+        match op {
+            CmpOp::Ge => low |= lo.is_none_or(|x| x.cmp_to(v) == Less),
+            CmpOp::Gt => low |= lo.is_none_or(|x| x.cmp_to(v) != Greater),
+            CmpOp::Le => high |= hi.is_none_or(|x| x.cmp_to(v) == Greater),
+            CmpOp::Lt => high |= hi.is_none_or(|x| x.cmp_to(v) != Less),
+        }
+    }
+    (low, high)
 }
 
 impl Checked {
@@ -7424,12 +8377,18 @@ impl Checked {
     /// value declares would be cut in silence where the value is stored, and is E068.
     fn open_value(&mut self, o: &crate::ast::OpenDecl, e: &Expr, ty: &Ty, path: &str) {
         let name = o.name.text.clone();
-        let declared = o.range.as_ref().map(|r| bounds_of(r, ty).0).unwrap_or((None, None));
         let declares_step = o.ty.args.iter().any(|a| matches!(a, TypeArg::Scaled(w, _) if w == crate::kw::STEP));
+        // The ends of its range are read on the step it is held at (§15.314): the one its type
+        // declares, or the one its terms are stored at.
+        let step = if declares_step { step_of_type(&o.ty, ty) } else { Some(Rat::new(1, self.scales.get(&name).copied().unwrap_or(1).max(1))) };
+        let declared = o.range.as_ref().map(|r| bounds_of(r, ty, step).0).unwrap_or((None, None));
         let at = |sp: &Span| match sp.file_path() {
             Some(p) => format!("{p}:{}", sp.line),
             None => format!("{path}:{}", sp.line),
         };
+        if let Some(d) = o.range.as_ref().and_then(|r| empty_range(r, ty, step, at(&r.span), false)) {
+            self.diags.push(d);
+        }
         if declares_step {
             let dsc = scale_of_type(&o.ty, ty);
             if let Some(esc) = self.scale(e) {
@@ -7718,8 +8677,16 @@ impl Checked {
                 }
                 continue;
             };
+            // An output whose type names nothing has said so on its line (§15.321): its range is
+            // values of nothing.
+            if inner == Ty::Unknown {
+                continue;
+            }
             let at = tr!("{path}:{} 出力 {name}", "{path}:{} output {name}", rg.span.line);
-            let ((dl, dh), bad) = bounds_of(rg, &inner);
+            // The ends other languages read the answer in are on the step it travels at (§15.314):
+            // `>0JPY` is told them as 1 yen, not as the 0 it leaves out.
+            let step = Some(Rat::new(1, self.wire_scale(&name).max(1)));
+            let ((dl, dh), bad) = bounds_of(rg, &inner, step);
             for n in &bad {
                 self.diags.push(
                     Diag::error("E103", tr!("範囲の `{}` は {inner} の値ではありません", "The bound `{}` is not a value of {inner}", n.raw))
@@ -7729,7 +8696,7 @@ impl Checked {
                 );
             }
             // A bound that cannot be read is E103's, and a range with no value in it E061's.
-            if !bad.is_empty() || empty_range(rg, &inner, String::new(), true).is_some() {
+            if !bad.is_empty() || self.empty_on_step(rg, &inner, step, at.clone(), true) {
                 continue;
             }
             let Some((lo, hi)) = wide.filter(|_| numeric) else {
@@ -7771,19 +8738,7 @@ impl Checked {
                 );
                 continue;
             };
-            let holds = rg.bounds.iter().all(|(op, l)| {
-                let v = match l {
-                    Lit::Num(n) => lit_value_in(n, &inner),
-                    _ => None,
-                };
-                let Some(v) = v else { return true };
-                match op {
-                    CmpOp::Ge => lo.cmp_to(v) != std::cmp::Ordering::Less,
-                    CmpOp::Gt => lo.cmp_to(v) == std::cmp::Ordering::Greater,
-                    CmpOp::Le => hi.cmp_to(v) != std::cmp::Ordering::Greater,
-                    CmpOp::Lt => hi.cmp_to(v) == std::cmp::Ordering::Less,
-                }
-            });
+            let holds = claim_misses(rg, &inner, Some(lo), Some(hi)) == (false, false);
             if holds {
                 self.written_outputs.insert(name.clone());
                 // An end the range does not write is the interval's where the ranges it reads write
@@ -7823,7 +8778,7 @@ impl Checked {
             // An interval with an end read at the end of the type is not one to widen the range
             // to: the names it reads say where it comes from (§15.299).
             if open.is_none() {
-                d = d.fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(lo, &inner), fmt_val_fixed(hi, &inner)));
+                d = d.fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val(lo, &inner), fmt_val(hi, &inner)));
             }
             d = d
                 .mark(rg.span.clone(), tr!("とりうる値は >={} <={} です", "it can take >={} <={}", fmt_val(lo, &inner), fmt_val(hi, &inner)))
@@ -7860,7 +8815,8 @@ impl Checked {
         let Some((rl, rh)) = self.reach(&d.expr, ty) else { return };
         let open = if narrow.is_none() { self.open_of(&d.expr, ty) } else { None };
         let Some(rg) = &d.range else { return };
-        let ((dl, dh), bad) = bounds_of(rg, ty);
+        let step = self.scale(&d.expr).map(|sc| Rat::new(1, sc.max(1)));
+        let (_, bad) = bounds_of(rg, ty, step);
         for n in bad {
             self.diags.push(
                 Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
@@ -7873,14 +8829,20 @@ impl Checked {
         if narrow.is_none() && !fits() {
             return;
         }
-        let too_low = matches!((dl, Some(rl)), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Less);
-        let too_high = matches!((dh, Some(rh)), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Greater);
+        // A range with no value on the step the value is held at holds nothing it reaches (E061).
+        if self.empty_on_step(rg, ty, step, format!("{path}:{}", rg.span.line), false) {
+            return;
+        }
+        // The claim is read as it is written (§15.314): `>0JPY` does not hold a value that comes to
+        // 0 yen. 0.55.2 read `>` as `>=` and `<` as `<=`, and passed a claim narrower than what the
+        // value reaches.
+        let (too_low, too_high) = claim_misses(rg, ty, Some(rl), Some(rh));
         if too_low || too_high {
             let mut e = Diag::error("E112", tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of the derived value does not contain the values it can actually reach"))
                 .at(tr!("{path}:{} 導出 {}", "{path}:{} derived value {}", rg.span.line, d.name.text));
             // An interval with an end read at the end of the type is not one to widen the range to.
             if open.is_none() {
-                e = e.fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(rl, ty), fmt_val_fixed(rh, ty)));
+                e = e.fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val(rl, ty), fmt_val(rh, ty)));
             }
             e = e
                 .mark(rg.span.clone(), tr!("実際に取りうる値は >={} <={} です", "the reachable interval is >={} <={}", fmt_val(rl, ty), fmt_val(rh, ty)))
@@ -7896,6 +8858,151 @@ impl Checked {
                 )),
             };
             self.diags.push(e);
+        }
+    }
+
+    /// `define <name> : <type> = <expression>  range >=… <=…` (§15.313): the range the rule
+    /// accepts for the value. Its bounds are read as an input's are (E103 for one that is no value
+    /// of the type, E061 for a range no value lies in), on a number only — a date is never worked
+    /// out (E048); an end written with `>` or `<` is brought onto the value's step, so that the door
+    /// compares whole integers.
+    /// What the rest of the rule reads the value in becomes the part of what it reaches that lies
+    /// inside, in `ranges` where both ends are known and in `wide` where one is still the end of
+    /// the type. A range that meets nothing it reaches refuses every call: E150. A range wider
+    /// than what it reaches, or one that meets part of it, is said nothing of: narrowing what a
+    /// value reaches is what such a range is written for.
+    fn accepted_range(&mut self, d: &crate::ast::DefineDecl, rg: &Range, ty: &Ty, path: &str) {
+        if rg.days.is_some() {
+            // E065, with the other places that cannot take `range from koyomi`.
+            return;
+        }
+        let name = d.name.text.clone();
+        let at = tr!("{path}:{} 定義 {}", "{path}:{} definition {}", rg.span.line, name);
+        let inner = ty.present().clone();
+        let numeric = matches!(inner, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number);
+        if !numeric {
+            if inner != Ty::Unknown {
+                self.diags.push(
+                    Diag::error("E103", tr!("範囲を書けるのは、数の定義だけです", "Only a definition of a number takes a range"))
+                        .at(at)
+                        .mark(rg.span.clone(), tr!("{name} は {inner} です", "{name} is {inner}"))
+                        .note(tr!(
+                            "定義の範囲は、規則が計算した数として受け付ける値で、その外になる呼び出しは、値を計算したところで受け付けません。真偽、文字列、列挙には端のある範囲が無く、日付は計算しない（E048）ので、範囲は日付の入力に書きます。",
+                            "The range of a definition is the values the rule accepts for the number it works out: a call whose value falls outside it is refused where the value is worked out. A truth value, a string or an enum has no range with ends, and a date is never worked out (E048), so its range goes on the date input."
+                        )),
+                );
+            }
+            return;
+        }
+        // The ends are read on the step the value is stored at, as every range's are (§15.314): the
+        // door compares the integer it holds.
+        let step = Rat::new(1, self.scales.get(&name).copied().unwrap_or(1).max(1));
+        let ((lo, hi), bad) = bounds_of(rg, &inner, Some(step));
+        for n in &bad {
+            self.diags.push(
+                Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
+                    .at(at.clone())
+                    .mark(d.name.span.clone(), tr!("この宣言の範囲", "the range on this declaration"))
+                    .maybe_note(unit_note(n)),
+            );
+        }
+        if !bad.is_empty() {
+            return;
+        }
+        if let Some(e) = empty_range(rg, &inner, Some(step), at.clone(), false) {
+            self.diags.push(e);
+            return;
+        }
+        self.accepts.insert(name.clone(), (lo, hi));
+        // What it reaches: its interval where its expression's ends are all written, and otherwise
+        // with an end no range writes read as the end of its type (§15.294).
+        let known = self.ranges.get(&name).copied().filter(|(a, b)| a.is_some() && b.is_some());
+        let wide = self.wide.get(&name).copied();
+        let Some((rl, rh)) = known.map(|(a, b)| (a.unwrap_or(Rat::zero()), b.unwrap_or(Rat::zero()))).or(wide) else { return };
+        let ol = lo.map_or(rl, |l| crate::grid::max_rat(l, rl));
+        let oh = hi.map_or(rh, |h| crate::grid::min_rat(h, rh));
+        if ol.cmp_to(oh) == std::cmp::Ordering::Greater {
+            let shown = |v: Option<Rat>, op: &str| v.map(|v| format!("{op}{}", fmt_val(v, &inner)));
+            let written: Vec<String> = [shown(lo, ">="), shown(hi, "<=")].into_iter().flatten().collect();
+            self.diags.push(
+                Diag::error("E150", tr!("定義の範囲が、その値の届く範囲と重なりません", "The range of the definition does not meet the values it can reach"))
+                    .at(at)
+                    .mark(rg.span.clone(), tr!("{name} が取りうる値は >={} <={} です", "{name} can only be >={} <={}", fmt_val(rl, &inner), fmt_val(rh, &inner)))
+                    .note(tr!(
+                        "この範囲（{}）に入る値を、{name} はどの入力でも取りません。生成コードは、{name} を計算したところで、どの呼び出しも受け付けないことになります。",
+                        "{name} takes no value in this range ({}) on any input, so the generated code would refuse every call where it works {name} out.",
+                        written.join(" ")
+                    ))
+                    .note(tr!(
+                        "ヒント: 範囲の端を、届く範囲 >={} <={} と重なるように直してください。範囲を取り去れば、{name} は届く範囲のどの値も受け付けます。",
+                        "Hint: write ends that meet the reachable values >={} <={}. Without the range, {name} takes every value it reaches.",
+                        fmt_val(rl, &inner),
+                        fmt_val(rh, &inner)
+                    )),
+            );
+            return;
+        }
+        // What it reaches meets the range and may still take no value in it: `gifts × 2 + 1` is
+        // odd, and `range >=2 <=2` holds no odd number (§15.323). The points it takes are read off
+        // its expression; where they are not, the range is read as before.
+        if let Some(&(s, o)) = self.points.get(&name).filter(|(s, _)| s.num > 0) {
+            let first = o.add(crate::grid::ceil_to(ol.sub(o), s));
+            if first.cmp_to(oh) == std::cmp::Ordering::Greater {
+                let shown = |v: Option<Rat>, op: &str| v.map(|v| format!("{op}{}", fmt_val(v, &inner)));
+                let written: Vec<String> = [shown(lo, ">="), shown(hi, "<=")].into_iter().flatten().collect();
+                let written = written.join(" ");
+                let (st, of) = (fmt_val(s, &inner), fmt_val(o, &inner));
+                let takes = if o.num == 0 {
+                    tr!("{name} が取るのは {st} の倍数だけです", "{name} takes only multiples of {st}")
+                } else {
+                    tr!("{name} が取るのは、{st} の倍数に {of} を足した値だけです", "{name} takes only {of} plus a multiple of {st}")
+                };
+                // The values it takes from the bottom of what it reaches, as the note shows them.
+                let start = o.add(crate::grid::ceil_to(rl.sub(o), s));
+                let some: Vec<String> = (0..3).map(|k| start.add(s.mul(Rat::int(k)))).filter(|v| v.cmp_to(rh) != std::cmp::Ordering::Greater).map(|v| fmt_val(v, &inner)).collect();
+                let some = format!("{}{}…", some.join(&tr!("、", ", ")), tr!("、", ", "));
+                // The values it takes nearest the range, inside what it reaches.
+                let near: Vec<String> = [first.sub(s), first]
+                    .into_iter()
+                    .filter(|v| v.cmp_to(rl) != std::cmp::Ordering::Less && v.cmp_to(rh) != std::cmp::Ordering::Greater)
+                    .map(|v| fmt_val(v, &inner))
+                    .collect();
+                let hint = match near.as_slice() {
+                    [a, b] => tr!(
+                        "ヒント: 範囲の端を、{name} の取る値（{a} や {b}）が入るように直してください。範囲を取り去れば、{name} は届く範囲のどの値も受け付けます。",
+                        "Hint: write ends that hold a value {name} takes: {a} or {b}, say. Without the range, {name} takes every value it reaches."
+                    ),
+                    [a] => tr!(
+                        "ヒント: 範囲の端を、{name} の取る値（{a}）が入るように直してください。範囲を取り去れば、{name} は届く範囲のどの値も受け付けます。",
+                        "Hint: write ends that hold a value {name} takes: {a}, say. Without the range, {name} takes every value it reaches."
+                    ),
+                    _ => tr!(
+                        "ヒント: 範囲の端を、{name} の取る値が入るように直してください。範囲を取り去れば、{name} は届く範囲のどの値も受け付けます。",
+                        "Hint: write ends that hold a value {name} takes. Without the range, {name} takes every value it reaches."
+                    ),
+                };
+                self.diags.push(
+                    Diag::error("E150", tr!("定義の範囲が、その値の届く範囲と重なりません", "The range of the definition does not meet the values it can reach"))
+                        .at(at)
+                        .mark(rg.span.clone(), takes)
+                        .note(tr!(
+                            "{name} の値は、どの入力でも {st} の倍数に {of} を足したもの（{some}）です。この範囲（{written}）には、その値が一つもありません。生成コードは、{name} を計算したところで、どの呼び出しも受け付けないことになります。",
+                            "Every value {name} takes is {of} plus a whole multiple of {st} ({some}), on any input, and none of them lies in this range ({written}). The generated code would refuse every call where it works {name} out."
+                        ))
+                        .note(hint),
+                );
+                return;
+            }
+        }
+        // Both ends known, from what it reaches or from the range: what the rest reads it in. An
+        // end that is still the end of its type stays in `wide`, as one no range writes does.
+        let closed_lo = known.is_some() || lo.is_some();
+        let closed_hi = known.is_some() || hi.is_some();
+        if closed_lo && closed_hi {
+            self.ranges.insert(name.clone(), (Some(ol), Some(oh)));
+            self.wide.remove(&name);
+        } else {
+            self.wide.insert(name.clone(), (ol, oh));
         }
     }
 
@@ -8004,12 +9111,22 @@ impl Checked {
     }
 
     fn interval_in(&self, e: &Expr, ty: &Ty, wide: bool) -> Option<(Rat, Rat)> {
+        self.interval_by(e, ty, wide, None)
+    }
+
+    /// The same arithmetic, with `look` asked first for each name: `Some` is the interval to read
+    /// the name in (or none at all), `None` leaves the name to the ranges as above. The reading of a
+    /// table holds the values its axes read to the coordinates a box takes this way (§15.322).
+    pub(crate) fn interval_by(&self, e: &Expr, ty: &Ty, wide: bool, look: Option<&dyn Fn(&str) -> Option<Option<(Rat, Rat)>>>) -> Option<(Rat, Rat)> {
         match e {
             // A name without a range bounds nothing. A rate used to be assumed to lie within
             // 0..100% here, which a table column holding 150% quietly contradicted (§15.34);
             // a column's range now comes from its cells, and a name that still has none
             // leaves the expression unbounded rather than bounded wrongly.
             Expr::Name(n, _) => {
+                if let Some(v) = look.and_then(|l| l(n)) {
+                    return v;
+                }
                 if wide {
                     return self.wide_range(n);
                 }
@@ -8024,8 +9141,8 @@ impl Checked {
                 Some((v, v))
             }
             Expr::Bin(l, op, r, _) => {
-                let (al, ah) = self.interval_in(l, ty, wide)?;
-                let (bl, bh) = self.interval_in(r, ty, wide)?;
+                let (al, ah) = self.interval_by(l, ty, wide, look)?;
+                let (bl, bh) = self.interval_by(r, ty, wide, look)?;
                 // Each end is held to ±2^80 (`far`): three values with no upper bound multiplied
                 // pass 128 bits, which wrapped in a release build and stopped `check` in a debug one
                 // (§15.296).
@@ -8079,7 +9196,7 @@ impl Checked {
                     // was said to reach 2,000 yen.
                     (m, [x, g]) if RoundMode::parse(m).is_some() => {
                         let mode = RoundMode::parse(m)?;
-                        let (lo, hi) = self.interval_in(x, ty, wide)?;
+                        let (lo, hi) = self.interval_by(x, ty, wide, look)?;
                         let Expr::Lit(Lit::Num(n), _) = g else { return None };
                         let grid = lit_value_in(n, ty).or_else(|| lit_value_in(n, &lit_ty(n)))?;
                         Some((round_far(lo, mode, grid), round_far(hi, mode, grid)))
@@ -8091,9 +9208,9 @@ impl Checked {
                     // (§15.102). Reading the ranges alone would give T×C÷S, which is the
                     // product of two ranges and says nothing useful.
                     (crate::kw::ALLOCATE, [t, cc, ss]) => {
-                        let (tl, th) = self.interval_in(t, ty, wide)?;
-                        let (cl, _) = self.interval_in(cc, ty, wide)?;
-                        let (sl, sh) = self.interval_in(ss, ty, wide)?;
+                        let (tl, th) = self.interval_by(t, ty, wide, look)?;
+                        let (cl, _) = self.interval_by(cc, ty, wide, look)?;
+                        let (sl, sh) = self.interval_by(ss, ty, wide, look)?;
                         // Both ends: a range written upside down (`>=1円 <=0円`) has a
                         // positive lower end and a zero upper one, and the division below
                         // panicked on it before the range itself was reported (§15.156).
@@ -8114,8 +9231,8 @@ impl Checked {
                         Some((down(far(tl.checked_mul(cl).and_then(|p| p.checked_div(sh)), false)), down(th)))
                     }
                     (crate::kw::MIN, [x, y]) | (crate::kw::MAX, [x, y]) => {
-                        let (al, ah) = self.interval_in(x, ty, wide)?;
-                        let (bl, bh) = self.interval_in(y, ty, wide)?;
+                        let (al, ah) = self.interval_by(x, ty, wide, look)?;
+                        let (bl, bh) = self.interval_by(y, ty, wide, look)?;
                         let pick = |a: Rat, b: Rat| {
                             let less = a.cmp_to(b) == std::cmp::Ordering::Less;
                             if (name == crate::kw::MIN) == less { a } else { b }
@@ -8128,7 +9245,7 @@ impl Checked {
                     // which is what the re-checkers read.
                     (crate::kw::MOD, [x, k]) => {
                         let n = const_value(k)?;
-                        let (lo, hi) = self.interval_in(x, ty, wide)?;
+                        let (lo, hi) = self.interval_by(x, ty, wide, look)?;
                         let (a, b) = (lo.num.div_euclid(lo.den), hi.num.div_euclid(hi.den));
                         if a.div_euclid(n) == b.div_euclid(n) {
                             let base = a.div_euclid(n) * n;
@@ -8140,7 +9257,7 @@ impl Checked {
                     // A whole square root rises with its argument, so its ends are the roots of the
                     // argument's ends (§15.215). Below zero there is none, and E139 has said so.
                     (crate::kw::ISQRT, [x]) => {
-                        let (lo, hi) = self.interval_in(x, ty, wide)?;
+                        let (lo, hi) = self.interval_by(x, ty, wide, look)?;
                         Some((isqrt_rat(lo)?, isqrt_rat(hi)?))
                     }
                     _ => None,
@@ -8233,6 +9350,14 @@ fn scale_of_type(tr: &TypeRef, ty: &Ty) -> i128 {
         }
     }
     1
+}
+
+/// The step a type writes (`rate[step 1%]` is 1%), where it reads as a rate above zero.
+fn declared_step(tr: &TypeRef) -> Option<Rat> {
+    tr.args.iter().find_map(|a| match a {
+        TypeArg::Scaled(w, n) if w == crate::kw::STEP => lit_value_in(n, &Ty::Rate).filter(|v| v.num > 0),
+        _ => None,
+    })
 }
 
 /// Whether the type declares a step at all (`rate[step 1%]`), readable or not.
@@ -8355,14 +9480,26 @@ fn missing_step(name: &crate::ast::Name, tr: &TypeRef, ty: &Ty, line: usize, pat
     )
 }
 
-/// E061 when no value satisfies the range: the lower end above the upper, or the two equal
-/// with one of them strict. A bound that cannot be read is E103's, and is not looked at here.
-fn empty_range(r: &crate::ast::Range, ty: &Ty, at: String, output: bool) -> Option<Diag> {
+/// E061 when no value satisfies the range: the lower end above the upper, the two equal with one
+/// of them written `>` or `<`, or — read on the `step` the value is held at, where one is given —
+/// no value of the step between them (§15.314): `>0JPY <1JPY` lets no whole yen in. A bound that
+/// cannot be read is E103's, and is not looked at here.
+fn empty_range(r: &crate::ast::Range, ty: &Ty, step: Option<Rat>, at: String, output: bool) -> Option<Diag> {
     let (mut lo, mut hi) = (None, None);
+    let mut read_in = ty.present().clone();
     for (op, l) in &r.bounds {
         let v = match l {
-            Lit::Num(n) => lit_value_in(n, ty).or_else(|| lit_value_in(n, &lit_ty(n)))?,
-            Lit::Date(y, m, d) => date_ord(*y, *m, *d),
+            Lit::Num(n) => match lit_value_in(n, ty) {
+                Some(v) => v,
+                None => {
+                    read_in = lit_ty(n);
+                    lit_value_in(n, &read_in)?
+                }
+            },
+            Lit::Date(y, m, d) => {
+                read_in = Ty::Date;
+                date_ord(*y, *m, *d)
+            }
             _ => continue,
         };
         match op {
@@ -8373,24 +9510,74 @@ fn empty_range(r: &crate::ast::Range, ty: &Ty, at: String, output: bool) -> Opti
         }
     }
     let ((l, l_in), (h, h_in)) = (lo?, hi?);
-    let empty = match l.cmp_to(h) {
+    let written = match l.cmp_to(h) {
         std::cmp::Ordering::Greater => true,
         std::cmp::Ordering::Equal => !(l_in && h_in),
         std::cmp::Ordering::Less => false,
     };
-    empty.then(|| {
+    // The ends as [`bounds_of`] reads them on the step: the first value inside at each end.
+    let step = step.filter(|s| s.num > 0);
+    let on_step = step.is_some_and(|s| {
+        let first = if l_in { crate::grid::ceil_to(l, s) } else { crate::grid::floor_to(l, s).add(s) };
+        let last = if h_in { crate::grid::floor_to(h, s) } else { crate::grid::ceil_to(h, s).sub(s) };
+        first.cmp_to(last) == std::cmp::Ordering::Greater
+    });
+    if !written && !on_step {
+        return None;
+    }
+    let why = if written {
+        tr!("下限が上限を超えています。", "The lower end is past the upper one.")
+    } else if read_in == Ty::Date {
+        tr!(
+            "二つの端のあいだに日がありません。`>` と `<` は、書いた日を含みません。",
+            "No day lies between the two ends: `>` and `<` do not take the day they write."
+        )
+    } else {
+        let s = fmt_val(step.unwrap_or(Rat::int(1)), &read_in);
+        tr!(
+            "値は {s} 刻みで、二つの端のあいだに入る値がありません。`>` と `<` は、書いた値を含みません。",
+            "The value is on a step of {s}, and no value of it lies between the two ends: `>` and `<` do not take the value they write."
+        )
+    };
+    let then = if output {
+        tr!("出力のどの値も、この範囲に入りません。", "No value of the output lies in it.")
+    } else {
+        tr!(
+            "取りうる値が無いと、完全性の証明は空の集合について「漏れなし」と判定し、生成コードの入口はどの呼び出しも受け付けません。",
+            "With no value to take, the completeness proof answers \"complete\" over nothing, and the generated code's entry refuses every call."
+        )
+    };
+    Some(
         Diag::error("E061", tr!("範囲が空です", "The range is empty"))
             .at(at)
             .mark(r.span.clone(), tr!("この範囲に入る値は一つもありません", "no value lies in this range"))
-            .note(if output {
+            .note(if written && output {
                 tr!("下限が上限を超えています。出力のどの値も、この範囲に入りません。", "The lower end is past the upper one: no value of the output lies in it.")
+            } else if crate::i18n::ja() {
+                format!("{why}{then}")
             } else {
-                tr!(
-                    "下限が上限を超えています。取りうる値が無いと、完全性の証明は空の集合について「漏れなし」と判定し、生成コードの入口はどの呼び出しも受け付けません。",
-                    "The lower end is past the upper one. With no value to take, the completeness proof answers \"complete\" over nothing, and the generated code's entry refuses every call."
-                )
-            })
-    })
+                format!("{why} {then}")
+            }),
+    )
+}
+
+impl Checked {
+    /// E061 for a range that is empty only on the step its value is held at (§15.314), which is
+    /// known once the items are typed: a `sum` over a computed column, a `derive`, a `max`, an
+    /// output, a `define`, an open value. A range empty as it is written was said before that, and
+    /// is not said twice. Whether the range is empty either way.
+    fn empty_on_step(&mut self, r: &crate::ast::Range, ty: &Ty, step: Option<Rat>, at: String, output: bool) -> bool {
+        if empty_range(r, ty, None, String::new(), output).is_some() {
+            return true;
+        }
+        match empty_range(r, ty, step, at, output) {
+            Some(d) => {
+                self.diags.push(d);
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 /// E060 for a step or a rounding grid of zero or less.
@@ -8404,6 +9591,62 @@ fn nonpositive(n: &crate::lex::Num, span: Span, at: String, what: String) -> Dia
         ))
 }
 
+/// E154 for the word after an output's `round` that is none of the five modes of §7.3, with the
+/// mode it is nearest, if one is.
+fn unknown_rounding(word: &str, span: Span, at: String) -> Diag {
+    let modes = [crate::kw::DOWN, crate::kw::UP, crate::kw::HALF_UP, crate::kw::HALF_DOWN, crate::kw::HALF_EVEN];
+    let ticked: Vec<String> = modes.iter().map(|m| format!("`{m}`")).collect();
+    let listed = if crate::i18n::ja() { ticked.join("・") } else { format!("{} and {}", ticked[..4].join(", "), ticked[4]) };
+    Diag::error("E154", tr!("`{word}` という丸め方はありません", "There is no rounding mode `{word}`"))
+        .at(at)
+        .mark(span, tr!("丸め方は {listed} のどれかです", "a rounding mode is one of {listed}"))
+        .maybe_note(near_rounding(word).map(|m| tr!("`{m}` のことですか。", "Did you mean `{m}`?")))
+        .note(tr!(
+            "`down` は 0 に向けて、`up` は 0 から離れる向きに、刻みの倍数へ丸めます。`half_up`・`half_down`・`half_even` は一番近い倍数へ丸め、ちょうど半分のときだけ、0 から離れる向き・0 に向けて・偶数の側へと分かれます。",
+            "`down` rounds toward zero and `up` away from it, onto a multiple of the grid; `half_up`, `half_down` and `half_even` round to the nearest multiple, and part only on an exact half, which goes away from zero, toward zero and to the even neighbour."
+        ))
+}
+
+/// The call a word inside `…(…)` that is none of the callable names is nearest, for E118's hint:
+/// the same distance rule as E154's (§15.341), one letter off (two for a word longer than four),
+/// the start or the end of one (`half`, `sqrt`), or a common name of one (`maximum`, `余り`).
+fn near_call(word: &str) -> Option<&'static str> {
+    use crate::kw::{ALLOCATE, DOWN, HALF_DOWN, HALF_EVEN, HALF_UP, ISQRT, MAX, MIN, MOD, UP};
+    let w = word.to_lowercase().replace('-', "_");
+    let named = [("maximum", MAX), ("minimum", MIN), ("sqrt", ISQRT), ("remainder", MOD), ("modulo", MOD), ("round_down", DOWN), ("round_up", UP), ("ceiling", UP), ("floor", DOWN), ("truncate", DOWN), ("trunc", DOWN), ("最大", MAX), ("最小", MIN), ("余り", MOD)];
+    if let Some((_, m)) = named.iter().find(|(n, _)| *n == w) {
+        return Some(m);
+    }
+    let n = w.chars().count();
+    let limit = if n <= 4 { 1 } else { 2 };
+    [MIN, MAX, ALLOCATE, MOD, ISQRT, DOWN, UP, HALF_UP, HALF_DOWN, HALF_EVEN]
+        .into_iter()
+        .map(|m| (crate::prelude::distance(&w, m), m))
+        .filter(|(d, m)| *d <= limit || (n >= 3 && (m.starts_with(w.as_str()) || m.ends_with(w.as_str()))))
+        .min_by_key(|(d, _)| *d)
+        .map(|(_, m)| m)
+}
+
+/// The mode a word after `round` that is none of the five is nearest, for E154's hint: the same word
+/// in other letters' case, one letter off (two for a word longer than four letters), the start or
+/// the end of one (`half`, `even`), or a common name of one (`truncate`, `切り捨て`, `四捨五入`).
+fn near_rounding(word: &str) -> Option<&'static str> {
+    use crate::kw::{DOWN, HALF_DOWN, HALF_EVEN, HALF_UP, UP};
+    let w = word.to_lowercase().replace('-', "_");
+    let named = [("truncate", DOWN), ("trunc", DOWN), ("bankers", HALF_EVEN), ("banker", HALF_EVEN), ("切り捨て", DOWN), ("切捨て", DOWN), ("切り上げ", UP), ("切上げ", UP), ("四捨五入", HALF_UP), ("銀行家丸め", HALF_EVEN), ("偶数丸め", HALF_EVEN)];
+    if let Some((_, m)) = named.iter().find(|(n, _)| *n == w) {
+        return Some(m);
+    }
+    let n = w.chars().count();
+    let limit = if n <= 4 { 1 } else { 2 };
+    [DOWN, UP, HALF_UP, HALF_DOWN, HALF_EVEN]
+        .into_iter()
+        .map(|m| (crate::prelude::distance(&w, m), m))
+        .filter(|(d, m)| *d <= limit || (n >= 3 && (m.starts_with(w.as_str()) || m.ends_with(w.as_str()))))
+        .min_by_key(|(d, _)| *d)
+        .map(|(_, m)| m)
+}
+
 /// The tax of a money type, when it is written and is neither `incl_tax` nor `excl_tax`
 /// (`money[円, foo]`). The currency is the first word, the tax the second.
 fn unreadable_tax(tr: &TypeRef) -> Option<String> {
@@ -8415,6 +9658,42 @@ fn unreadable_tax(tr: &TypeRef) -> Option<String> {
         _ => None,
     }).collect();
     words.get(1).filter(|w| ritsu_units::Tax::parse(w).is_none()).map(|w| w.to_string())
+}
+
+/// The types rulec has, by the word that writes them; any other word is an enum's name.
+const BUILTIN_TYPES: [&str; 13] = [
+    crate::kw::NUMBER,
+    crate::kw::RATE,
+    crate::kw::BOOL,
+    crate::kw::STRING,
+    crate::kw::DATE,
+    crate::kw::MONEY,
+    crate::kw::MASS,
+    crate::kw::LENGTH,
+    crate::kw::AREA,
+    crate::kw::VOLUME,
+    crate::kw::DURATION,
+    crate::kw::TEMPERATURE,
+    crate::kw::SOUND,
+];
+
+/// Whether a money or a quantity type has no unit of its own in its brackets (`money[UDS]`,
+/// `mass[USD]`, `money`): [`unreadable_brackets`] says so, and the type is not read.
+fn unit_is_unreadable(t: &TypeRef) -> bool {
+    use ritsu_units::{Dim, table};
+    let money = t.base == crate::kw::MONEY;
+    let quantity = Dim::of_word(&t.base);
+    if !money && quantity.is_none() {
+        return false;
+    }
+    let first = t.args.iter().find_map(|a| match a {
+        TypeArg::Word(w) => Some(w.as_str()),
+        TypeArg::Scaled(..) => None,
+    });
+    match first.and_then(table::unit).map(|(d, _)| d) {
+        Some(d) => !(if money { matches!(d, Dim::Money(_)) } else { Some(d) == quantity }),
+        None => true,
+    }
 }
 
 /// What the brackets of a type hold that the type does not take, each with what to write instead
@@ -8493,6 +9772,9 @@ fn unreadable_brackets(t: &TypeRef) -> Vec<(String, Vec<String>)> {
 /// back on a scale of 1 above, which for `rate[step 1g]` made the runtime value count whole
 /// units and turned the declared `0%..100%` into `0..1` in the generated guard (§15.86).
 fn unreadable_step(tr: &TypeRef, ty: &Ty) -> Option<crate::lex::Num> {
+    if *ty.present() == Ty::Unknown {
+        return None;
+    }
     tr.args.iter().find_map(|a| match a {
         TypeArg::Scaled(w, n) if w == crate::kw::STEP && lit_value_in(n, ty).is_none() => {
             Some(n.clone())
@@ -8714,6 +9996,35 @@ impl Checked {
         let mut names = Vec::new();
         self.open_names(e, &mut names);
         if names.is_empty() { None } else { self.int64_interval(e, ty) }
+    }
+
+    /// The ends of the range the rule accepts for a `define` that what it reaches can pass
+    /// (§15.313): where the door refuses a call, and what the code generators test, the
+    /// preconditions name and the certificate carries. `None` for a `define` with no range, and for
+    /// one whose range holds every value it reaches: no call is refused for it.
+    pub(crate) fn refusing_ends(&self, d: &crate::ast::DefineDecl) -> Option<(Option<Rat>, Option<Rat>)> {
+        let (lo, hi) = self.accepts.get(&d.name.text).copied()?;
+        let ty = self.ty_of(&d.name.text)?;
+        let (rl, rh) = self.reach(&d.expr, ty.present())?;
+        let lo = lo.filter(|l| rl.cmp_to(*l) == std::cmp::Ordering::Less);
+        let hi = hi.filter(|h| rh.cmp_to(*h) == std::cmp::Ordering::Greater);
+        if lo.is_none() && hi.is_none() { None } else { Some((lo, hi)) }
+    }
+
+    /// The bottom a `sum` or a `count` is held to once its walk is over (§15.314): the lower end of
+    /// its range, where a walk can come in under it. A total starts at zero and only rises
+    /// (§15.100) — an empty sequence adds nothing, and so does one no element of which is counted —
+    /// so zero is the least any walk comes to: a bottom above zero refuses those walks, and a bottom
+    /// at zero refuses none. `None` for the second, and for `max` and `min`: no test is written, no
+    /// precondition named, and the code of a rule whose ranges start at zero is as it was.
+    /// 0.55.2 held no walk to the bottom, while the tables over the total were checked from the
+    /// bottom up: a table that passed as complete had no row for an empty sequence.
+    pub(crate) fn walk_floor(&self, d: &crate::ast::AggDecl) -> Option<Rat> {
+        if d.kind.extreme() {
+            return None;
+        }
+        let lo = self.ranges.get(&d.name.text).and_then(|(lo, _)| *lo)?;
+        (lo.num > 0).then_some(lo)
     }
 
     /// [`Checked::reach`] of a value by its name, as [`Checked::wide_range`] reads it.
@@ -9232,7 +10543,8 @@ fn reach_note(lo: Rat, hi: Rat, sc: i128, stored: Option<i128>, ty: &Ty) -> Stri
 /// A stored integer as E108 writes it; one past 128 bits is said so.
 fn fmt_stored(stored: Option<i128>) -> String {
     match stored {
-        Some(s) => s.to_string(),
+        // a count of steps, so digits alone, grouped as every number a sentence says (§15.333)
+        Some(s) => ritsu_units::written::digits(s),
         None => tr!("2^127 を越える数", "a number past 2^127"),
     }
 }
@@ -9393,5 +10705,15 @@ pub fn collect_names(e: &Expr, out: &mut Vec<String>) {
             }
         }
         _ => {}
+    }
+}
+
+/// Where an expression first reads `name`.
+fn name_span_in(e: &Expr, name: &str) -> Option<Span> {
+    match e {
+        Expr::Name(n, sp) if n == name => Some(sp.clone()),
+        Expr::Bin(l, _, r, _) => name_span_in(l, name).or_else(|| name_span_in(r, name)),
+        Expr::Call(_, args, _) => args.iter().find_map(|a| name_span_in(a, name)),
+        _ => None,
     }
 }

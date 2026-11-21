@@ -1,0 +1,5 @@
+警告[W402]: tests/spellings/python_module.gate:1:1: ファイル `pass` は、Python のコードで `pass` と書かれ、その言語の予約語です
+     1 | gate pass v1
+  = Python（`--target python`）: ファイル `pass` をモジュールの名前として `pass` と書きますが、`pass` は Python の予約語です。`import` でモジュール（`authz/pass.py`）を読めず、`ritsu gen` がパッケージに書く `__init__.py` の `from . import pass as pass` も読み込めません（`SyntaxError`）。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。ファイルの別名は、生成するファイルとモジュールとパッケージの名前でもあるので、それを読むコードも合わせて直してください。
+tests/spellings/python_module.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

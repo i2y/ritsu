@@ -1,0 +1,55 @@
+request 経費(expense) v1 "経費の精算"
+description "申請者が会社のために立て替えた経費。上長が承認すると、申請者に払い戻す。ritsu ringi init が始めの形として書いたので、自分の決まりに書き換える"
+owner general_affairs
+
+use organization 組織(org) from "shared/company.ringi"
+use calendar 本社(office) from "shared/office.cal"
+use gate "shared/company.gate"
+use flow 支払い(pay) from "shared/pay.flow"
+
+form
+  金額(amount)  : money[JPY] "金額"  range >=1JPY <=1_000_000JPY
+  目的(purpose) : long text "目的"  count >=1 <=500
+
+route
+  上長(manager)  上長
+
+who
+  上長(manager) = manager of requester
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late expire
+  when empty escalate
+
+ticket
+  # 社長は組織のいちばん上にいて、精算を承認する上長がいない。
+  submitted by   everyone except position president
+  self approval  not allowed
+  send back      to the requester, at most 2 times
+  resubmit       within 5 business days
+  withdraw       until it is decided
+  # 承認されると、サーバーが Temporal の上で支払いを始め、cmd/worker が動かす。
+  on approved    launch 支払い(request_id: ticket.id, requester: requester.id, amount: 金額, purpose: 目的)
+
+scenario 承認されて支払われる
+  requester s1201
+  form 金額 = 4_800JPY, 目的 = "お客様の所へ行くタクシー"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1201 | 上長     | in progress |
+| 2026-11-16 15:00 | approve | s1101 |          | approved    |
+
+scenario 上長が却下する
+  requester s1202
+  form 金額 = 52_000JPY, 目的 = "課の食事会"
+| at               | event  | by    | comment                    | -> stage | status      |
+| 2026-11-16 10:00 | submit | s1202 |                            | 上長     | in progress |
+| 2026-11-16 15:00 | reject | s1101 | "課の食事会は経費にしません" |          | rejected    |
+
+labels en
+  request     "Expense claim"
+  金額        "Amount"
+  目的        "Purpose"
+  stage 上長  "Manager"
+  who 上長    "Manager"

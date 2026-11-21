@@ -1,0 +1,166 @@
+{
+  "diff": "tests/fixtures/reads/changes/closures.diff",
+  "root": "tests/fixtures/reads",
+  "requirement_files": [],
+  "copies": [],
+  "openspec_changes": [],
+  "specs": [],
+  "files": [],
+  "reads": [
+    {
+      "file": "data/closures.csv",
+      "read_by": [
+        {
+          "artifact": {
+            "text": "sekisho \"gates/refunds.gate\"",
+            "tool": "sekisho",
+            "path": "gates/refunds.gate",
+            "items": []
+          },
+          "way": [
+            {
+              "reader": {
+                "text": "sekisho \"gates/refunds.gate\"",
+                "tool": "sekisho",
+                "path": "gates/refunds.gate",
+                "items": []
+              },
+              "line": 6,
+              "how": "use dates",
+              "read": {
+                "text": "koyomi \"dates/refund_terms.cal\"",
+                "tool": "koyomi",
+                "path": "dates/refund_terms.cal",
+                "items": []
+              }
+            },
+            {
+              "reader": {
+                "text": "koyomi \"dates/refund_terms.cal\"",
+                "tool": "koyomi",
+                "path": "dates/refund_terms.cal",
+                "items": []
+              },
+              "line": 3,
+              "how": "use calendar",
+              "read": {
+                "text": "koyomi \"dates/office.cal\"",
+                "tool": "koyomi",
+                "path": "dates/office.cal",
+                "items": []
+              }
+            },
+            {
+              "reader": {
+                "text": "koyomi \"dates/office.cal\"",
+                "tool": "koyomi",
+                "path": "dates/office.cal",
+                "items": []
+              },
+              "line": 5,
+              "how": "source",
+              "read": {
+                "text": "file \"data/closures.csv\"",
+                "tool": "file",
+                "path": "data/closures.csv",
+                "items": []
+              }
+            }
+          ],
+          "requirements": [
+            {
+              "name": "who_refunds",
+              "version": 1,
+              "role": "satisfied"
+            }
+          ]
+        },
+        {
+          "artifact": {
+            "text": "koyomi \"dates/refund_terms.cal\"",
+            "tool": "koyomi",
+            "path": "dates/refund_terms.cal",
+            "items": []
+          },
+          "way": [
+            {
+              "reader": {
+                "text": "koyomi \"dates/refund_terms.cal\"",
+                "tool": "koyomi",
+                "path": "dates/refund_terms.cal",
+                "items": []
+              },
+              "line": 3,
+              "how": "use calendar",
+              "read": {
+                "text": "koyomi \"dates/office.cal\"",
+                "tool": "koyomi",
+                "path": "dates/office.cal",
+                "items": []
+              }
+            },
+            {
+              "reader": {
+                "text": "koyomi \"dates/office.cal\"",
+                "tool": "koyomi",
+                "path": "dates/office.cal",
+                "items": []
+              },
+              "line": 5,
+              "how": "source",
+              "read": {
+                "text": "file \"data/closures.csv\"",
+                "tool": "file",
+                "path": "data/closures.csv",
+                "items": []
+              }
+            }
+          ],
+          "requirements": [
+            {
+              "name": "refund_period",
+              "version": 1,
+              "role": "satisfied"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "unreached": [],
+  "others": [],
+  "requirements": [
+    {
+      "name": "who_refunds",
+      "version": 1,
+      "file": "refunds.req",
+      "line": 15,
+      "owner": "finance",
+      "from": [],
+      "decided": {
+        "date": "2026-11-02",
+        "by": "finance",
+        "why": "Written for this test"
+      },
+      "only_through_reads": true
+    },
+    {
+      "name": "refund_period",
+      "version": 1,
+      "file": "refunds.req",
+      "line": 24,
+      "owner": "finance",
+      "from": [],
+      "decided": {
+        "date": "2026-11-02",
+        "by": "finance",
+        "why": "Written for this test"
+      },
+      "only_through_reads": true
+    }
+  ],
+  "owners": [
+    "finance"
+  ],
+  "exit": 0
+}

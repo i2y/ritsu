@@ -1,0 +1,141 @@
+scenario inside_every_range, line 39: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario inside_every_range, line 40: approve by e1101 at 2026-11-16 11:00 -> approved
+scenario inside_every_range, after it ended: comment by e1201 at 2026-11-16 11:00 -> refused (state)
+scenario inside_every_range, after line 39: approvals: approve by e1101 at 2026-11-16 10:00 -> approved
+scenario inside_every_range, after line 39: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario inside_every_range, after line 39: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario inside_every_range, after line 39: the requester: withdraw by e1201 at 2026-11-16 10:00 -> refused (event)
+scenario inside_every_range, after line 39: sent back: send back by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario inside_every_range, after line 39: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario inside_every_range, after line 39: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario inside_every_range, after line 39: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario inside_every_range, after line 39: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario inside_every_range, after line 39: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario inside_every_range, after line 39: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario inside_every_range, after line 39: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario inside_every_range, after line 39: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario inside_every_range, after line 39: an administrator, by name: add approver by e0101 at 2026-11-16 10:00 -> first, in progress
+scenario inside_every_range, after line 39: an administrator, by name: hand over by e0101 at 2026-11-16 10:00 -> first, in progress
+scenario inside_every_range, after line 39: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario inside_every_range, after line 39: clocks: late at 2026-11-26 00:00 -> expired
+scenario inside_every_range, after line 39: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario inside_every_range, after line 39: clocks: approve by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario inside_every_range, after line 39: clocks: comment by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario inside_every_range, after line 39: comments: comment by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario inside_every_range, after line 39: comments: comment by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario inside_every_range, after line 39: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario inside_every_range, after line 39: comments: comment by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario inside_every_range, after line 39: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario inside_every_range, after line 39: comments: approve by e1101 at 2026-11-16 10:00 -> approved
+scenario inside_every_range, after line 39: comments: send back by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario inside_every_range, after line 39: comments: approve by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario below_zero_and_past_a_hundred, line 46: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario below_zero_and_past_a_hundred, line 47: reject by e1101 at 2026-11-16 11:00 -> rejected
+scenario below_zero_and_past_a_hundred, after line 46: approvals: approve by e1101 at 2026-11-16 10:00 -> approved
+scenario below_zero_and_past_a_hundred, after line 46: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario below_zero_and_past_a_hundred, after line 46: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario below_zero_and_past_a_hundred, after line 46: the requester: withdraw by e1201 at 2026-11-16 10:00 -> refused (event)
+scenario below_zero_and_past_a_hundred, after line 46: sent back: send back by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario below_zero_and_past_a_hundred, after line 46: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario below_zero_and_past_a_hundred, after line 46: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario below_zero_and_past_a_hundred, after line 46: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario below_zero_and_past_a_hundred, after line 46: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario below_zero_and_past_a_hundred, after line 46: clocks: late at 2026-11-26 00:00 -> expired
+scenario below_zero_and_past_a_hundred, after line 46: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario below_zero_and_past_a_hundred, after line 46: clocks: approve by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario inside_every_range, after line 40: made on the revision before: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: reject by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: send back by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: retract by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: pause by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: resume by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: edit by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: withdraw by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: discard by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: resubmit by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: add approver at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: hand over at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: agent answered at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: note ready at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: made on the revision before: flow failed at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: no revision: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, after line 40: a comment, which says no revision: comment by e1101 at 2026-11-16 11:00 -> refused (state)
+scenario inside_every_range, after line 40: made on the revision before, with a comment too long: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario inside_every_range, made on 2026-11-20 (closed from 2026-11-21): submit by e1201 at 2026-11-20 10:00 -> first, in progress
+scenario inside_every_range, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-26 00:00 -> first, in progress
+scenario inside_every_range, made on 2026-11-20 (closed from 2026-11-21): late at 2026-12-02 00:00 -> expired
+scenario inside_every_range, made on 2026-12-28 (closed from 2026-12-29): submit by e1201 at 2026-12-28 10:00 -> first, in progress
+scenario inside_every_range, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-07 00:00 -> first, in progress
+scenario inside_every_range, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-13 00:00 -> expired
+scenario inside_every_range, made with a comment: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario inside_every_range, made with a comment: submit by e1201 at 2026-11-16 10:00 -> refused (comment)
+requester e0001: submit by e0001 at 2026-11-16 10:00 -> approved
+requester e0101: submit by e0101 at 2026-11-16 10:00 -> first, in progress
+requester e0102: submit by e0102 at 2026-11-16 10:00 -> first, in progress
+requester e0201: submit by e0201 at 2026-11-16 10:00 -> first, in progress
+requester e0202: submit by e0202 at 2026-11-16 10:00 -> first, in progress
+requester e0203: submit by e0203 at 2026-11-16 10:00 -> first, in progress
+requester e0204: submit by e0204 at 2026-11-16 10:00 -> first, in progress
+requester e1001: submit by e1001 at 2026-11-16 10:00 -> first, in progress
+requester e1002: submit by e1002 at 2026-11-16 10:00 -> first, in progress
+requester e1101: submit by e1101 at 2026-11-16 10:00 -> first, in progress
+requester e1203: submit by e1203 at 2026-11-16 10:00 -> first, in progress
+requester e3101: submit by e3101 at 2026-11-16 10:00 -> first, in progress
+requester e4001: submit by e4001 at 2026-11-16 10:00 -> first, in progress
+requester e5001: submit by e5001 at 2026-11-16 10:00 -> first, in progress
+requester e6001: submit by e6001 at 2026-11-16 10:00 -> first, in progress
+requester e7001: submit by e7001 at 2026-11-16 10:00 -> first, in progress
+requester e7101: submit by e7101 at 2026-11-16 10:00 -> first, in progress
+requester e7102: submit by e7102 at 2026-11-16 10:00 -> first, in progress
+requester e7201: submit by e7201 at 2026-11-16 10:00 -> first, in progress
+requester e7202: submit by e7202 at 2026-11-16 10:00 -> first, in progress
+requester e9001: submit by e9001 at 2026-11-16 10:00 -> first, in progress
+requester e9002: submit by e9002 at 2026-11-16 10:00 -> first, in progress
+requester e9003: submit by e9003 at 2026-11-16 10:00 -> first, in progress
+proxy e0001 for e1201: submit by e0001 at 2026-11-16 10:00 -> refused (person)
+across the versions of the organization: submit by e1201 at 2027-03-31 10:00 -> first, in progress
+across the versions of the organization: approve by e1101 at 2027-04-01 10:00 -> approved
+across the versions of the organization: send back by e1101 at 2027-03-31 10:00 -> refused (event)
+edge of share, going up: 150%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of share, going up: 150.25%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of share, going down: -10%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of share, going down: -10.25%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of margin, going up: 500%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of margin, going up: 502.5%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of margin, going down: 0%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of margin, going down: -2.5%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of plain, going up: 100%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of plain, going up: 101%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of plain, going down: 1%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of plain, going down: 0%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of tenth, going up: 100%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of tenth, going up: 100.1%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of tenth, going down: 0%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of tenth, going down: -0.1%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of cap, going up: 100%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of cap, going up: 100.25%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of cap, going down: 0%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of cap, going down: -0.25%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of cents, going up: 1_000_000USDc: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of cents, going up: 1_000_001USDc: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of cents, going down: 1USDc: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of cents, going down: 0USDc: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of sen, going up: 100_000銭: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of sen, going up: 100_001銭: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of sen, going down: 1銭: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of sen, going down: 0銭: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of lines.cut, going up: 50%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of lines.cut, going up: 50.5%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of lines.cut, going down: 0%: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of lines.cut, going down: -0.5%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of lines.price, going up: 100_000USDc: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of lines.price, going up: 100_001USDc: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of lines.price, going down: 1USDc: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of lines.price, going down: 0USDc: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of the rows of lines: 3 rows: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of the rows of lines: 4 rows: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of the number of rows of lines: 3 rows: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of the number of rows of lines: 4 rows: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of the number of rows of lines: 1 row: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of the number of rows of lines: 0 rows: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+scenario inside_every_range, with cap left empty: submit by e1201 at 2026-11-16 10:00 -> refused (form)

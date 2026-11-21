@@ -268,6 +268,12 @@ pub fn fill_expr(x: &str, zeros: &Value) -> String {
         let key = q(k);
         sets.push(format!("sprig.set({x}, {key}, {x}[{key}] ?? {})", expr_literal(z)));
     }
+    // a `google.type.Date`, or a list of them, read as a date where it is there (DESIGN 44)
+    for k in zeros["d"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        let key = q(k);
+        let inner = format!("{x}[{key}]");
+        sets.push(format!("({inner} != nil ? sprig.set({x}, {key}, type({inner}) == \"array\" ? map({inner}, {{{}}}) : {}) : nil)", expr_day("#"), expr_day(&inner)));
+    }
     // a message inside fills itself in place, or is left as it is, when it is not one (not there)
     for (k, sub) in zeros["m"].as_object().into_iter().flatten() {
         sets.push(fill_expr(&format!("{x}[{}]", q(k)), sub));
@@ -283,6 +289,31 @@ pub fn fill_expr(x: &str, zeros: &Value) -> String {
     let n = sets.len();
     sets.push(x.to_string());
     format!("(type({x}) == \"map\" ? [{}][{n}] : {x})", sets.join(", "))
+}
+
+/// An expression of expr-lang for the value `e`, a `google.type.Date` as protobuf's JSON writes it,
+/// read as a date as `apis::day_read` reads it: a map of a whole year, month and day in their ranges,
+/// and nothing else, as `2026-11-16`; anything else as it is. `e` is read more than once; `&&` stops
+/// at the first test that fails, so a number is compared only once it is one.
+fn expr_day(e: &str) -> String {
+    let num = |f: &str| format!("type({e}.{f}) in [\"int\", \"float\"]");
+    let whole = |f: &str, hi: u32| format!("{e}.{f} >= 1 && {e}.{f} <= {hi} && {e}.{f} == int({e}.{f})");
+    let pad = |f: &str, width: u32| {
+        let zeros: Vec<String> = (1..width).rev().map(|p| format!("({e}.{f} < {} ? \"0\" : \"\")", 10u32.pow(p))).collect();
+        format!("{} + string(int({e}.{f}))", zeros.join(" + "))
+    };
+    format!(
+        "(type({e}) == \"map\" && all(keys({e}), {{# in [\"year\", \"month\", \"day\"]}}) && {} && {} && {} && {} && {} && {} ? {} + \"-\" + {} + \"-\" + {} : {e})",
+        num("year"),
+        num("month"),
+        num("day"),
+        whole("year", 9999),
+        whole("month", 12),
+        whole("day", 31),
+        pad("year", 4),
+        pad("month", 2),
+        pad("day", 2)
+    )
 }
 
 /// A JSON value as an expression of expr-lang: `""`, `0`, `false`, `[]`, `{}`, `nil`.

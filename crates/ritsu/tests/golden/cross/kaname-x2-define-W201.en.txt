@@ -1,0 +1,8 @@
+ok card_fee.rule
+ok pay.kn: 1 function, fails rule
+warning[ritsu W201]: pay.kn:7:3: Whether the call of the rule card_fee keeps its precondition `fee range >=0 <=20_000` cannot be decided
+     7 |   card_fee(amount: mod(amount, 300_000) + mod(amount, 400_000) + 1).fee
+  = The analysis of ranges finds `mod(amount, 300_000) + mod(amount, 400_000) + 1` in >=1 <=699_999; at amount = 666_701 the `fee` the rule works out falls outside the range it accepts, `>=0 <=20_000`, and no input among the function's vectors gives such values.
+  = kaname's generated code checks it there when it runs: if the rule's generated code refuses the call where it works the value out, the function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`), and it is shown.
+ritsu check: 2 files (rulec 1, kaname 1): all pass (1 warning); borders between the languages: 1 checked, 1 undecided

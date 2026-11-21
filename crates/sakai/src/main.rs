@@ -20,10 +20,9 @@ fn restore_sigpipe() {}
 
 fn main() -> ExitCode {
     restore_sigpipe();
-    // A panic is a bug in sakai: exit 2, as DESIGN 5.1 says, rather than Rust's 101.
-    std::panic::set_hook(Box::new(|info| {
-        eprintln!("sakai: a bug in sakai, please report it: {info}");
-    }));
+    // A panic is a bug in sakai: exit 2, as DESIGN 5.1 says, rather than Rust's 101, in the words of
+    // every binary of the toolchain.
+    ritsu_base::cli::on_panic("sakai");
     let args: Vec<String> = std::env::args().skip(1).collect();
     match std::panic::catch_unwind(|| {
         let (mut out, mut err) = (std::io::stdout(), std::io::stderr());

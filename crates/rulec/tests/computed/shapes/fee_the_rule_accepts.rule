@@ -1,0 +1,19 @@
+rule fee_the_rule_accepts v1
+description "A fee of 19 yen less 30% of the amount, which the rule accepts only from 5 yen to 12 yen. Under 10 yen the fee would be 17 yen or more, so the rule refuses such a call where the fee is worked out, and no row is asked for it"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=1JPY <=48JPY
+
+define fee : money[JPY] = 19JPY - down(amount * 30%, 1JPY)  range >=5JPY <=12JPY
+
+outputs
+  x : choice
+
+table pick
+| amount        | fee    | -> x |
+| >9JPY <37JPY  | >=6JPY | one  |
+| >36JPY <38JPY | >=6JPY | two  |
+| >=38JPY       | <=5JPY | one  |
+| >=38JPY       | >=6JPY | two  |

@@ -24,7 +24,7 @@ use std::rc::Rc;
 #[derive(Default, Clone)]
 pub struct Suite {
     pub rules: Option<Rc<dyn Rules>>,
-    /// What the files of rulec, koyomi, dandori, sekisho and kaname (and Cedar's written by hand)
+    /// What the files of rulec, koyomi, dandori, sekisho, kaname and ringi (and Cedar's written by hand)
     /// name outside themselves, and what a rule holds, by the naming of ritsu's DESIGN 6.2.
     pub index: Rc<Index>,
     pub books: Option<Rc<dyn Books>>,

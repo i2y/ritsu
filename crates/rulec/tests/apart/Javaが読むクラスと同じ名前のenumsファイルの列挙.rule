@@ -1,0 +1,9 @@
+enums 断り方(refusals) v1
+description "Java のモジュールが読む JDK のクラスと同じ名前の、enums ファイルの列挙。ファイルのクラスの中の型になる"
+
+enum 断り(illegal_argument_exception) = 柔らかい(soft) | 強い(firm) | 最後(last)
+
+prerequisites 段階(escalation) over 断り
+  start    柔らかい
+  強い     requires 柔らかい
+  最後     requires 強い

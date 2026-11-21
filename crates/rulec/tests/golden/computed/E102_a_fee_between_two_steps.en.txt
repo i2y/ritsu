@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/computed/shapes/E102_a_fee_between_two_steps.rule:17 table pick
+   |
+17 | | 15JPY   | two  |
+   | ^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+ 9 | define fee : money[JPY] = up(amount * 10%, 10JPY)
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^ only multiples of 10JPY
+   |
+ `fee` only comes to multiples of 10JPY, and this row asks for none of them.
+ hint: compare the expression with this row's conditions. No input reaches this row, so if it is not needed, delete it.
+

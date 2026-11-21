@@ -20,6 +20,7 @@ fn run(args: &[&str]) -> (i32, String) {
         .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
+        .args(["--lang", "ja"])
         .output()
         .expect("rulec を起動できない");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
@@ -91,7 +92,10 @@ fn 証人の率は書き戻せる形で出る() {
     // Written back into a cell, so it is percent, and on the declared step: one step past
     // 10% is 11%, not the stored 0.11 and not the midpoint 11.5%.
     assert!(text.contains("当てはまらない例: 割引率 = 11%"), "証人が率になっていない:\n{text}");
-    assert!(text.contains("`| 11% | true |`"), "書き戻せる行になっていない:\n{text}");
+    // The part no row takes is said in percent too, and the row that takes it is cut at the
+    // boundaries the table writes.
+    assert!(text.contains("どの行にも当てはまらない入力: 割引率が 11% から 12%"), "穴が率になっていない:\n{text}");
+    assert!(text.contains("`| >10% <13% | ? |`"), "書き戻せる行になっていない:\n{text}");
 
     let (_, js) = run(&["check", &p, "--format", "json"]);
     let first = js.lines().find(|l| l.contains("E101")).expect("E101 が無い");
@@ -101,26 +105,29 @@ fn 証人の率は書き戻せる形で出る() {
 
 #[test]
 fn 証人の行を貼ると穴が閉じる() {
-    // The point of `fix.text`: pasting it has to actually remove that witness. With the
-    // wrong unit it pastes `0.11%`, which closes nothing and the same witness comes back.
-    let mut text = HOLE.to_string();
-    let mut seen = Vec::new();
-    for _ in 0..6 {
-        let (_tmp, p) = write_tmp("close", &text);
+    // The point of `fix.text`: with its `?` answered, pasting it closes the gap in one run.
+    // With the wrong unit it pasted `0.11%`, which closed nothing and the same witness came
+    // back. Left with its `?`, the row does not pass: the answer is not the tool's to give.
+    let fix_of = |text: &str| -> (i32, Option<String>, String) {
+        let (_tmp, p) = write_tmp("close", text);
         let p = p.to_string_lossy().to_string();
         let (code, js) = run(&["check", &p, "--format", "json"]);
-        if code == 0 {
-            return;
-        }
-        let Some(line) = js.lines().find(|l| l.contains("E101")) else { return };
-        let j = rulec::json::parse(line.trim()).expect("JSON として読めない");
-        let row = j.get("fix").and_then(|f| f.get("text")).and_then(|t| t.as_str()).expect("fix.text が無い").to_string();
-        assert!(!seen.contains(&row), "同じ行がまた出た。貼っても穴が閉じていない: {row}\n{seen:?}");
-        seen.push(row.clone());
-        // Insert the row above the `result` line.
-        text = text.replace("\nresult ", &format!("{row}\n\nresult "));
-    }
-    panic!("6 回貼っても穴が閉じない: {seen:?}");
+        let row = js.lines().find(|l| l.contains("\"code\":\"E101\"")).map(|line| {
+            let j = rulec::json::parse(line.trim()).expect("JSON として読めない");
+            j.get("fix").and_then(|f| f.get("text")).and_then(|t| t.as_str()).expect("fix.text が無い").to_string()
+        });
+        (code, row, js)
+    };
+    let (code, row, js) = fix_of(HOLE);
+    assert_eq!((code, row.as_deref()), (1, Some("| >10% <13% | ? |")), "{js}");
+    let row = row.unwrap();
+    // Insert the row above the `result` line.
+    let pasted = |row: &str| HOLE.replace("\nresult ", &format!("{row}\n\nresult "));
+    let (code, again, js) = fix_of(&pasted(&row));
+    assert_eq!((code, again), (1, None), "`?` を残した行は通らない:\n{js}");
+    assert!(js.contains("\"code\":\"E063\""), "{js}");
+    let (code, again, js) = fix_of(&pasted(&row.replace('?', "true")));
+    assert_eq!((code, again), (0, None), "答えを書いた行を貼っても穴が閉じていない:\n{js}");
 }
 
 #[test]

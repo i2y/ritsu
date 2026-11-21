@@ -1,0 +1,3 @@
+error[E308]: tests/mutants/E308_無いステップの主張.ringi:16:20: The route has no stage `法務`
+    16 |   法務が見る : possible 法務 is 経理
+  = The stages declared: `確かめ`

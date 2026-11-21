@@ -1,0 +1,26 @@
+rule 種類と金額で先に決まる区分(first_band_by_kind) v1
+description "policy first の表が注文の種類と金額から書く区分を、その二つと一緒に読む。100 円未満の物品は小、100 円以上の物品は中、それ以外は中になる。100 円未満の物品は、最後の行より先に一行目がとる。だから物品が 100 円未満で中になることはなく、その組み合わせの行は求められない"
+
+enum 選択(choice) = 一(one) | 二(two)
+enum 注文の種類(order_kind) = 物品(goods) | 役務(service)
+enum 大きさ(size) = 小(small) | 中(medium)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=200円
+  種類(kind)   : 注文の種類
+
+outputs
+  答え(x) : 選択
+
+table 区分の表(band_of)
+policy first
+| 金額    | 種類 | -> 区分(band) : 大きさ |
+| <100円  | 物品 | 小                     |
+| >=100円 | 物品 | 中                     |
+| -       | -    | 中                     |
+
+table 選ぶ(pick)
+| 金額    | 種類 | 区分 | -> 答え |
+| <100円  | 物品 | 小   | 一      |
+| >=100円 | 物品 | 中   | 二      |
+| -       | 役務 | 中   | 一      |

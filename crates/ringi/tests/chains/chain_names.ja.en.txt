@@ -1,0 +1,18 @@
+error[E004]: tests/chains/chain_names.ja.ringi:15:43: The rows `明細` have no column `費用`
+    15 |   金額(amount)     : money[円] "金額" = sum(明細.費用)  range >=1円 <=1_000_000円
+  = The columns declared: `品目` and `単価`
+error[E004]: tests/chains/chain_names.ja.ringi:16:44: The rows `手数料` have no column `費用`
+    16 |   請求額(charged)  : money[円] "請求額" = sum(手数料.費用)  range >=1円 <=1_000_000円
+  = The columns declared: `品目` and `料金`
+error[E004]: tests/chains/chain_names.ja.ringi:23:30: `確認者` is not declared
+    23 |   技術(technical)  確認する人  when 確認者 is not none
+  = The fields declared: `明細`, `手数料`, `金額`, `請求額` and `確認社`
+  = `確認者` is written on lines 30 and 43 too.
+error[E004]: tests/chains/chain_names.ja.ringi:25:18: `財務部` is not declared in `who`
+    25 |   財務(finance)    財務部      when 金額 > 100_000円
+  = The ways to choose an approver declared: `上長` and `確認する人`
+  = `財務部` is written on line 26 too.
+error[E308]: tests/chains/chain_names.ja.ringi:39:24: The route has no stage `最初`
+    39 |   withdraw       until 最初
+  = The stages declared: `最所`, `技術`, `財務` and `監査`
+  = `最初` is written on line 45 too.

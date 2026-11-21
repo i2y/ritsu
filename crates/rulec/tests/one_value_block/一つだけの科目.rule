@@ -1,0 +1,20 @@
+rule 一つだけの科目(single_course) v1
+description "科目が一つだけの一覧。その前に要る科目は無い。前提のつながりのコードは、渡された科目がどれかを確かめない（架空）"
+
+enum 科目(course) = 入門(intro)
+
+inputs
+  登録済み(enrolled) : bool
+
+outputs
+  空き(open) : bool
+
+table 登録で決める空き(open_by_enrolled)
+policy unique
+| 登録済み | -> 空き |
+| true     | false   |
+| false    | true    |
+
+# 一つだけの科目は何も要らない
+prerequisites 履修の順(path) over 科目
+  start 入門

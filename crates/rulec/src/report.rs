@@ -280,12 +280,20 @@ pub(crate) fn unit_of(c: &Checked, name: &str) -> Option<String> {
 }
 
 /// Two versions' answers to one output as a person reads them, each in its own version's terms
-/// (§15.199). Where the versions count the output in different units, each number carries its
-/// unit — `2000円` beside `200050銭` — because the two numbers alone would read as one unit.
+/// (§15.199): each number carries the unit its version counts it in, `2000円` beside `200_050銭`,
+/// as every value said to a person does (§15.333).
 pub fn shown_pair(name: &str, a: Option<&Val>, ac: &Checked, b: Option<&Val>, bc: &Checked) -> (Option<String>, Option<String>) {
+    (a.map(|v| vectors::show_named(ac, name, v)), b.map(|v| vectors::show_named(bc, name, v)))
+}
+
+/// The same two answers as data a page lays out (`vdiff::MapCell`): the digits with no grouping
+/// (`vectors::show_plain`), each number carrying its unit only where the two versions count the
+/// output in different units — `2000円` beside `200050銭` — since the page says the unit once, in
+/// the output's heading, where they count it in one.
+pub fn plain_pair(name: &str, a: Option<&Val>, ac: &Checked, b: Option<&Val>, bc: &Checked) -> (Option<String>, Option<String>) {
     let (ua, ub) = (unit_of(ac, name), unit_of(bc, name));
     let label = |v: &Val, c: &Checked, u: &Option<String>| {
-        let t = vectors::show_named(c, name, v);
+        let t = vectors::show_plain(c, name, v);
         match (v, u) {
             (Val::Num(_), Some(u)) if ua != ub => format!("{t}{u}"),
             _ => t,
@@ -443,22 +451,17 @@ impl Report {
     }
 }
 
-/// Thousands separators. An amount means nothing if the reader cannot count its digits.
-/// The sign is always written (for a difference, the direction is the substance).
+/// A whole difference with its digits grouped as the languages group them, by `_` from five on
+/// (`+1000`, `+10_000`, `-12_345`): an amount means nothing if the reader cannot count its digits,
+/// and so grouped it can be written into a rule as it is said (§15.333). The sign is always written
+/// (for a difference, the direction is the substance).
 fn group(n: i128) -> String {
-    let d = n.unsigned_abs().to_string();
-    let mut out = String::new();
-    for (i, ch) in d.chars().enumerate() {
-        if i > 0 && (d.len() - i) % 3 == 0 {
-            out.push(',');
-        }
-        out.push(ch);
-    }
-    format!("{}{out}", if n < 0 { "-" } else { "+" })
+    let d = ritsu_units::written::digits(n);
+    format!("{}{}", if n < 0 { "-" } else { "+" }, d.strip_prefix('-').unwrap_or(&d))
 }
 
-/// An exact difference, the way `group` writes a whole one: the sign always and thousands
-/// separators, with the decimals it has where the counterpart answered finer than the step,
+/// An exact difference, the way `group` writes a whole one: the sign always and the digits
+/// grouped, with the decimals it has where the counterpart answered finer than the step,
 /// and as a fraction where no decimal writes it (§15.199). Never rounded.
 fn group_rat(r: Rat) -> String {
     if r.is_int() {
@@ -474,6 +477,12 @@ fn group_rat(r: Rat) -> String {
 }
 
 /// The word after a record count: `件` in Japanese, `record`/`records` in English.
+/// A count as a sentence says it: grouped by `_` from five digits, as every number rulec says
+/// (§15.333).
+fn count(n: usize) -> String {
+    ritsu_units::written::digits(i128::try_from(n).unwrap_or(i128::MAX))
+}
+
 fn records(n: usize) -> &'static str {
     if crate::i18n::ja() { "件" } else if n == 1 { "record" } else { "records" }
 }
@@ -671,6 +680,7 @@ fn refused_head(rep: &Report) -> String {
     let n = rep.total - rep.errored;
     let k = rep.refused.len();
     let pct = if n == 0 { 0.0 } else { k as f64 * 100.0 / n as f64 };
+    let k = count(k);
     tr!("新しい版が受け付けない入力 {k} 件 ({pct:.3}%)", "Not accepted by the new version {k} ({pct:.3}%)")
 }
 
@@ -698,19 +708,19 @@ fn provenance(rep: &Report) -> Vec<String> {
         o.push(tr!(
             "相手が答えられなかった {} 件は、一致率の分母から外しています",
             "The counterpart could not answer {} of the records; those are excluded from the match-rate denominator",
-            rep.errored
+            count(rep.errored)
         ));
     }
     for (_, why, n) in &rep.excluded {
-        let unit = records(*n);
+        let (unit, n) = (records(*n), count(*n));
         o.push(tr!("{why}記録を {n} {unit}外しました", "Excluded {n} {unit} ({why})"));
     }
     // §15.199: what the counterpart answered that the rule cannot produce is compared, not
     // left out, and the count stands beside the headline.
     if rep.beyond > 0 {
-        let by: Vec<String> = rep.out_of_reach.iter().map(|(n, k)| tr!("{n} {k} 件", "{n}: {k}")).collect();
+        let by: Vec<String> = rep.out_of_reach.iter().map(|(n, k)| (n, count(*k))).map(|(n, k)| tr!("{n} {k} 件", "{n}: {k}")).collect();
         let by = by.join(if crate::i18n::ja() { "、" } else { ", " });
-        let (theirs, n) = (&rep.theirs, rep.beyond);
+        let (theirs, n) = (&rep.theirs, count(rep.beyond));
         o.push(if rep.records {
             tr!(
                 "{theirs}の値が規則の取りうる範囲の外にある記録 {n} 件（{by}）。不一致に数えています",
@@ -725,13 +735,13 @@ fn provenance(rep: &Report) -> Vec<String> {
     }
     if rep.filled_total > 0 {
         let by: Vec<String> =
-            rep.filled.iter().map(|(n, k)| tr!("{n} {k} 件", "{n}: {k}")).collect();
+            rep.filled.iter().map(|(n, k)| (n, count(*k))).map(|(n, k)| tr!("{n} {k} 件", "{n}: {k}")).collect();
         o.push(tr!(
             "補った記録 {} 件（{}）。一致 {} 件。見出しの一致率には入れていません",
             "Filled records: {} ({}); matched {}. Not included in the headline match rate",
-            rep.filled_total,
+            count(rep.filled_total),
             by.join(if crate::i18n::ja() { "、" } else { ", " }),
-            rep.filled_agreed
+            count(rep.filled_agreed)
         ));
         let used: Vec<String> =
             rep.fills_used.iter().map(|(n, v)| format!("{n} = {v}")).collect();
@@ -762,7 +772,7 @@ fn impact(rep: &Report, c: &Checked) -> String {
     tr!(
         "影響 {} 件 ({pct:.3}%){}",
         "Affected {} ({pct:.3}%){}",
-        all.len(),
+        count(all.len()),
         money.join("")
     )
 }
@@ -773,8 +783,8 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
     let mut o = tr!(
         "照合 {} 件 / 一致 {} ({:.3}%)\n",
         "Compared {} / matched {} ({:.3}%)\n",
-        rep.total,
-        rep.agreed,
+        count(rep.total),
+        count(rep.agreed),
         rep.rate() * 100.0
     );
     if !rep.impl_id.is_empty() {
@@ -806,7 +816,7 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
         o.push_str(&format!("\n{}\n", impact(rep, c)));
         for cl in clusters(rep, f, c) {
             let money = money_text(&cl.deltas, rep.multi);
-            o.push_str(&format!("  {:<48} {:>5} {}{money}\n", cl.label, cl.count, records(cl.count)));
+            o.push_str(&format!("  {:<48} {:>5} {}{money}\n", cl.label, count(cl.count), records(cl.count)));
             if let Some(q) = &cl.suspect_grid {
                 // §10.4: a cluster made up solely of differences below the output grid is most
                 // likely a difference in rounding convention, not in the values themselves. Flag
@@ -826,7 +836,7 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
     if !rep.refused.is_empty() {
         o.push_str(&format!("\n{}\n", refused_head(rep)));
         for cl in refused_clusters(rep) {
-            o.push_str(&format!("  {:<48} {:>5} {}\n", cl.what, cl.count, records(cl.count)));
+            o.push_str(&format!("  {:<48} {:>5} {}\n", cl.what, count(cl.count), records(cl.count)));
             if !terse {
                 o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
             }
@@ -842,10 +852,10 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
         o.push_str(&tr!(
             "\n値は同じで、当てはまった行が記録と違う記録 {} 件\n",
             "\nRecords whose values match but whose rows differ from the record: {}\n",
-            rep.moved.len()
+            count(rep.moved.len())
         ));
         for cl in moved_clusters(rep, f, c) {
-            o.push_str(&format!("  {:<48} {:>5} {}\n", cl.label, cl.count, records(cl.count)));
+            o.push_str(&format!("  {:<48} {:>5} {}\n", cl.label, count(cl.count), records(cl.count)));
             if !terse {
                 o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
             }
@@ -862,24 +872,24 @@ pub fn cases_text(cs: &Cases) -> String {
     let mut o = tr!(
         "案件（同じ tag の記録を、一つの案件の呼び出しの並びとして）: {} 件\n",
         "Cases (the records that share a tag, as one case's calls): {}\n",
-        cs.total
+        count(cs.total)
     );
-    o.push_str(&tr!("  前と同じに進んだ: {} 件\n", "  played as before: {}\n", cs.followed));
+    o.push_str(&tr!("  前と同じに進んだ: {} 件\n", "  played as before: {}\n", count(cs.followed)));
     if !cs.diverged.is_empty() {
-        o.push_str(&tr!("  途中で答えが変わる: {} 件{}\n", "  answered differently partway: {}{}\n", cs.diverged.len(), first(&cs.diverged)));
+        o.push_str(&tr!("  途中で答えが変わる: {} 件{}\n", "  answered differently partway: {}{}\n", count(cs.diverged.len()), first(&cs.diverged)));
     }
     if !cs.refused.is_empty() {
-        o.push_str(&tr!("  途中でエラーになる: {} 件{}\n", "  refused partway: {}{}\n", cs.refused.len(), first(&cs.refused)));
+        o.push_str(&tr!("  途中でエラーになる: {} 件{}\n", "  refused partway: {}{}\n", count(cs.refused.len()), first(&cs.refused)));
     }
     if !cs.stranded.is_empty() {
         let (t, st) = &cs.stranded[0];
         o.push_str(&tr!(
             "  終わりの状態に着けなくなる: {} 件（例: {t} は {st} で止まる）\n",
             "  left where no final state can be reached: {} (e.g. {t} stops at {st})\n",
-            cs.stranded.len()
+            count(cs.stranded.len())
         ));
     }
-    o.push_str(&tr!("  終わりの状態で終わる: {} 件\n", "  ending in a final state: {}\n", cs.ended));
+    o.push_str(&tr!("  終わりの状態で終わる: {} 件\n", "  ending in a final state: {}\n", count(cs.ended)));
     o
 }
 
@@ -899,17 +909,17 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
     o.push_str(&tr!(
         "| 照合（そのままの記録） | {} 件 |\n",
         "| Compared (observed records) | {} |\n",
-        rep.total - rep.errored
+        count(rep.total - rep.errored)
     ));
     o.push_str(&tr!(
         "| 一致 | {} 件 ({:.3}%) |\n",
         "| Matched | {} ({:.3}%) |\n",
-        rep.agreed,
+        count(rep.agreed),
         rep.rate() * 100.0
     ));
-    o.push_str(&tr!("| 不一致 | {} 件 |\n", "| Mismatches | {} |\n", rep.mismatches.len()));
+    o.push_str(&tr!("| 不一致 | {} 件 |\n", "| Mismatches | {} |\n", count(rep.mismatches.len())));
     if !rep.refused.is_empty() {
-        o.push_str(&tr!("| 新しい版が受け付けない | {} 件 |\n", "| Not accepted by the new version | {} |\n", rep.refused.len()));
+        o.push_str(&tr!("| 新しい版が受け付けない | {} 件 |\n", "| Not accepted by the new version | {} |\n", count(rep.refused.len())));
     }
     if !rep.impl_id.is_empty() {
         o.push_str(&tr!("| 相手 | `{}` |\n", "| Counterpart | `{}` |\n", esc(&rep.impl_id)));
@@ -959,7 +969,7 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
                     "<br>suspected rounding difference (below grid {q})"
                 ));
             }
-            o.push_str(&format!("| {} | {} | {} |{}\n", esc(&cl.label), cl.count, esc(&money), ex(cl.example)));
+            o.push_str(&format!("| {} | {} | {} |{}\n", esc(&cl.label), count(cl.count), esc(&money), ex(cl.example)));
         }
     }
     if !rep.refused.is_empty() {
@@ -972,14 +982,14 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
         }
         .as_str());
         for cl in refused_clusters(rep) {
-            o.push_str(&format!("| {} | {} |{}\n", esc(&cl.what), cl.count, ex(cl.example)));
+            o.push_str(&format!("| {} | {} |{}\n", esc(&cl.what), count(cl.count), ex(cl.example)));
         }
     }
     if !rep.moved.is_empty() {
         o.push_str(&tr!(
             "\n#### 行の移動（値は同じ、{} 件）\n\n",
             "\n#### Moved rows (values match, {})\n\n",
-            rep.moved.len()
+            count(rep.moved.len())
         ));
         o.push_str(if terse {
             tr!("| 記録の行 → 規則の行 | 件数 |\n|---|---:|\n", "| Recorded row → rule's row | Count |\n|---|---:|\n")
@@ -991,7 +1001,7 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
         }
         .as_str());
         for cl in moved_clusters(rep, f, c) {
-            o.push_str(&format!("| {} | {} |{}\n", esc(&cl.label), cl.count, ex(cl.example)));
+            o.push_str(&format!("| {} | {} |{}\n", esc(&cl.label), count(cl.count), ex(cl.example)));
         }
     }
     if let Some(cs) = &rep.cases {

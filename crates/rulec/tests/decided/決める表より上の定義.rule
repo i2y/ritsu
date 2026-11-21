@@ -1,0 +1,18 @@
+rule 決める表より上の定義(define_reads_above_ja) v1
+description "合計の定義が手数料を読み、その手数料は下の表が決める形"
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100000円
+  会員(member) : bool
+
+outputs
+  手数料(fee) : money[円]  round down(1円)
+  合計(total) : money[円]  round down(1円)
+
+define 合計 : money[円] = 金額 + 手数料
+
+table 手数料を決める(fee_of)
+policy unique
+| 会員  | -> 手数料 |
+| true  | 0円       |
+| false | 300円     |

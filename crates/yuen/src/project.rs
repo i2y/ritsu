@@ -160,11 +160,11 @@ pub fn load(args: &[String], root_flag: Option<&str>) -> Result<(Option<Project>
 /// [`load`], with the languages `suite` joins.
 pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::Suite) -> Result<(Option<Project>, Vec<Diag>), Refusal> {
     let Some(first) = args.first() else {
-        return Err(Refusal(tr!(".req のファイルかディレクトリを渡してください", "Give .req files or directories")));
+        return Err(Refusal(tr!(".req のファイルかディレクトリを渡してください", "give .req files or directories")));
     };
     for a in args {
         if !ritsu_base::fs::exists(a) {
-            return Err(Refusal(tr!("`{a}` がありません", "`{a}` does not exist")));
+            return Err(Refusal(ritsu_base::cli::not_there(a)));
         }
     }
     let root = match root_flag {
@@ -172,7 +172,7 @@ pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::
             Ok(p) if ritsu_base::fs::is_dir(&p) => p,
             _ => return Err(Refusal(tr!("`--root {r}` はディレクトリではありません", "`--root {r}` is not a directory"))),
         },
-        None => find_root(Path::new(first)).ok_or_else(|| Refusal(tr!("`{first}` のルートを決められません", "Cannot tell the root of `{first}`")))?,
+        None => find_root(Path::new(first)).ok_or_else(|| Refusal(tr!("`{first}` のルートを決められません", "cannot tell the root of `{first}`")))?,
     };
     let cwd = ritsu_base::fs::current_dir().ok().and_then(|c| ritsu_base::fs::canonicalize(c).ok()).unwrap_or_default();
     let root_shown = relative(&cwd, &root);
@@ -183,10 +183,10 @@ pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::
     for a in args {
         let found = expand(a);
         if found.is_empty() {
-            return Err(Refusal(tr!("`{a}` の下に .req のファイルがありません", "There is no .req file under `{a}`")));
+            return Err(Refusal(ritsu_base::cli::no_files_under(a, &[".req"])));
         }
         for display in found {
-            let abs = ritsu_base::fs::canonicalize(&display).map_err(|e| Refusal(tr!("`{display}` を読めません: {e}", "Cannot read `{display}`: {e}")))?;
+            let abs = ritsu_base::fs::canonicalize(&display).map_err(|e| Refusal(ritsu_base::cli::cannot_read(&display, &e)))?;
             if !seen.insert(abs.clone()) {
                 continue;
             }
@@ -196,9 +196,9 @@ pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::
             };
             let rel = rel_path.to_string_lossy().replace('\\', "/");
             let dir = rel_path.parent().map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_default();
-            let bytes = ritsu_base::fs::read(&abs).map_err(|e| Refusal(tr!("`{display}` を読めません: {e}", "Cannot read `{display}`: {e}")))?;
+            let bytes = ritsu_base::fs::read(&abs).map_err(|e| Refusal(ritsu_base::cli::cannot_read(&display, &e)))?;
             let Ok(src) = String::from_utf8(bytes) else {
-                return Err(Refusal(tr!("`{display}` は UTF-8 ではありません", "`{display}` is not UTF-8")));
+                return Err(Refusal(ritsu_base::cli::not_utf8(&display)));
             };
             // the keys written in the file (W901), whatever else it holds
             diags.extend(diag::keys(&display, &rel, &src));
@@ -482,7 +482,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                 "持ち主は、要件が変わるときに承認する役割です。`affected` は、持ち主から「誰に聞くか」を答えます。",
                 "The owner is the role that approves a change to the requirement; `affected` answers whom to ask with it."
             ))),
-            Some((o, s)) if !role_known(o) => diags.push(p.err(fi, "E008", *s, tr!("役割「{o}」は宣言されていません", "The role {o} is not declared")).note(tr!("{}", "{}", ROLES_HOW.0; ROLES_HOW.1))),
+            Some((o, s)) if !role_known(o) => diags.push(p.err(fi, "E008", *s, tr!("役割「{o}」は宣言されていません", "The role {o} is not declared")).note(tr!("{}", "{}", ROLES_HOW.0; ROLES_HOW.1)).same_in("role", o.clone())),
             _ => {}
         }
         if d.from.is_empty() && d.decided.is_empty() {
@@ -494,7 +494,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
         for dc in &d.decided {
             if !role_known(&dc.by.0) {
                 let o = &dc.by.0;
-                diags.push(p.err(fi, "E008", dc.by.1, tr!("役割「{o}」は宣言されていません", "The role {o} is not declared")).note(tr!("{}", "{}", ROLES_HOW.0; ROLES_HOW.1)));
+                diags.push(p.err(fi, "E008", dc.by.1, tr!("役割「{o}」は宣言されていません", "The role {o} is not declared")).note(tr!("{}", "{}", ROLES_HOW.0; ROLES_HOW.1)).same_in("role", o.clone()));
             }
         }
         let records = d.from.iter().filter_map(|f| f.record.as_ref()).chain(d.links.iter().filter_map(|l| l.record.as_ref())).chain(d.waivers.iter().filter_map(|w| w.record.as_ref()));
@@ -503,7 +503,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                 && !role_known(&rc.by)
             {
                 let o = &rc.by;
-                diags.push(p.err(fi, "E008", rc.by_span, tr!("役割「{o}」は宣言されていません", "The role {o} is not declared")).note(tr!("{}", "{}", ROLES_HOW.0; ROLES_HOW.1)));
+                diags.push(p.err(fi, "E008", rc.by_span, tr!("役割「{o}」は宣言されていません", "The role {o} is not declared")).note(tr!("{}", "{}", ROLES_HOW.0; ROLES_HOW.1)).same_in("role", o.clone()));
             }
         }
         let mut targets = Vec::new();
@@ -640,6 +640,8 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
     }
     p.names.scopes = scopes;
     p.names.sources = sources;
+    // a name declared nowhere is said once in a file, where it is first written (ritsu's DESIGN 8.3)
+    ritsu_base::diag::once(&mut diags);
     diags.sort_by(|a, b| (a.file.as_str(), a.line, a.col).cmp(&(b.file.as_str(), b.line, b.col)));
     diags
 }
@@ -653,7 +655,7 @@ fn name_diag(p: &Project, fi: usize, line: usize, e: names::NameError) -> Diag {
 fn resolve_ref(p: &Project, fi: usize, rr: &ReqRef, diags: &mut Vec<Diag>) -> Option<usize> {
     let n = &rr.name;
     let Some(vs) = p.by_name.get(n) else {
-        diags.push(p.err(fi, "E008", rr.span, tr!("要件「{n}」は宣言されていません", "The requirement {n} is not declared")));
+        diags.push(p.err(fi, "E008", rr.span, tr!("要件「{n}」は宣言されていません", "The requirement {n} is not declared")).same_in("requirement", n.clone()));
         return None;
     };
     match rr.version {
@@ -721,14 +723,15 @@ pub fn placed(n: &Name, place: Place) -> Result<(), Refused> {
             (n.tool, kind),
             (Tool::Geas | Tool::Koyomi, Some("claim"))
                 | (Tool::Sekisho, Some("expect" | "separate"))
-                | (Tool::Rulec | Tool::Koyomi | Tool::Chobo | Tool::Dandori | Tool::Geas | Tool::Sekisho | Tool::Sakai | Tool::Kaname | Tool::File, None)
+                | (Tool::Ringi, Some("claim" | "example" | "scenario"))
+                | (Tool::Rulec | Tool::Koyomi | Tool::Chobo | Tool::Dandori | Tool::Geas | Tool::Sekisho | Tool::Sakai | Tool::Kaname | Tool::Ringi | Tool::File, None)
         );
         if !ok {
             let t = n.text();
             return Err(("E403", tr!("{t} は何も確かめないので、`verified by` に書けません", "{t} checks nothing, so it cannot be written after `verified by`"), vec![
                 tr!(
-                    "確かめる側に書けるのは、geas と koyomi の主張（`claim`）、sekisho の期待と職務の分離（`expect`、`separate`）、検査するツールのファイル全体（`rulec \"x.rule\"` なら rulec の検査）、テストのファイル（`file \"…\"`）のような、落ちることのあるものです。",
-                    "The side that verifies takes what can fail: a geas or koyomi claim (`claim`), a sekisho expectation or separation (`expect`, `separate`), the whole file of a tool that checks it (`rulec \"x.rule\"` stands for rulec's check), or a test file (`file \"…\"`)."
+                    "確かめる側に書けるのは、geas と koyomi の主張（`claim`）、sekisho の期待と職務の分離（`expect`、`separate`）、ringi の主張と例とシナリオ（`claim`、`example`、`scenario`）、検査するツールのファイル全体（`rulec \"x.rule\"` なら rulec の検査）、テストのファイル（`file \"…\"`）のような、落ちることのあるものです。",
+                    "The side that verifies takes what can fail: a geas or koyomi claim (`claim`), a sekisho expectation or separation (`expect`, `separate`), a ringi claim, example or scenario (`claim`, `example`, `scenario`), the whole file of a tool that checks it (`rulec \"x.rule\"` stands for rulec's check), or a test file (`file \"…\"`)."
                 ),
                 tr!("満たす成果物なら `satisfied by` に書いてください。", "If it is what meets the requirement, it goes after `satisfied by`."),
             ]));

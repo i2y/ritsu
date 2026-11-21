@@ -1,0 +1,10 @@
+error[E002]: tests/fixtures/chain_variables.flow:26:13: `Step` has no field `approvr` (approver)
+    26 |     yield s.approvr
+error[E002]: tests/fixtures/chain_variables.flow:28:11: there is no task or rule `fetsh`
+    28 |   let q = fetsh(id: id)
+error[E003]: tests/fixtures/chain_variables.flow:30:11: write the record's type: `let r: <record> = {…}`
+    30 |   let r = {total: 3}
+error[E003]: tests/fixtures/chain_variables.flow:32:24: `for` goes through a list; this is `string`
+    32 |   let names = for n in id at most 3
+error[E009]: tests/fixtures/chain_variables.flow:35:9: `match` works on an enum, a bool, or a value that may be absent (`T?`); this is `string`
+    35 |   match id

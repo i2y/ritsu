@@ -1,0 +1,26 @@
+rule 梱包料(packing_fee) v1
+description "梱包料と地域から読む段階。上の表は二つの帯の間の料金を地域ごとに書き、下の表には県内の行しかない"
+
+enum 大きさ(size) = 小(small) | 中(medium) | 大(large)
+enum 地域(zone) = 県内(local) | 県外(national)
+enum 段階(tier) = 軽い(light) | 普通(standard) | 重い(heavy)
+
+inputs
+  大きさ(size) : 大きさ
+  地域(zone)   : 地域
+
+outputs
+  段階(tier) : 段階
+
+table 料金の表(fees)
+| 大きさ | 地域 | -> 料金 : money[JPY] |
+| 小     | -    | 300JPY               |
+| 中     | 県内 | 700JPY               |
+| 中     | 県外 | 800JPY               |
+| 大     | -    | 1_500JPY             |
+
+table 段階の表(tiers)
+| 料金              | 地域 | -> 段階 |
+| <=500JPY          | -    | 軽い    |
+| >=1_000JPY        | -    | 重い    |
+| >500JPY <1_000JPY | 県内 | 普通    |

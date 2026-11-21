@@ -28,7 +28,7 @@ Obj(
                     "Both rows match: bulk = true, member = platinum",
                 ),
                 Str(
-                    "An input producing this example: dest = Hokkaido, member = platinum, total = 30000, weight = 1",
+                    "An input producing this example: dest = Hokkaido, member = platinum, total = 30_000JPY, weight = 1g",
                 ),
                 Str(
                     "Because of `policy first`, row 1 wins. Is this intended?",
@@ -169,7 +169,7 @@ Obj(
                     "Both rows match: bulk = true, member = basic",
                 ),
                 Str(
-                    "An input producing this example: dest = Hokkaido, member = basic, total = 30000, weight = 1",
+                    "An input producing this example: dest = Hokkaido, member = basic, total = 30_000JPY, weight = 1g",
                 ),
                 Str(
                     "Because of `policy first`, row 1 wins. Is this intended?",
@@ -307,10 +307,10 @@ Obj(
         "notes": Arr(
             [
                 Str(
-                    "Both rows match: bulk = true, member = platinum",
+                    "Both rows match: bulk = false, member = platinum",
                 ),
                 Str(
-                    "An input producing this example: dest = Hokkaido, member = platinum, total = 0, weight = 1",
+                    "An input producing this example: dest = Hokkaido, member = platinum, total = 0JPY, weight = 1g",
                 ),
                 Str(
                     "Because of `policy first`, row 2 wins. Is this intended?",
@@ -410,7 +410,7 @@ Obj(
                 "inputs": Obj(
                     {
                         "bulk": Bool(
-                            true,
+                            false,
                         ),
                         "member": Str(
                             "platinum",

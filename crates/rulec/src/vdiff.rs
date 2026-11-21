@@ -91,6 +91,11 @@ pub struct DomainChange {
     pub name: String,
     pub old: Option<String>,
     pub new: Option<String>,
+    /// `old` and `new` as a person reads them, for a range of numbers or dates: each end as the rule
+    /// writes a value of its type (`0JPY..100_000JPY`, a rate in percent, a date as its day;
+    /// §15.333). The text and the markdown say this; `old` and `new` are the data form the two
+    /// versions are compared on and JSON carries (`0..100000`).
+    pub said: Option<(String, String)>,
 }
 
 /// One region where the two versions answer differently, with what they answer.
@@ -253,17 +258,16 @@ fn expr_cuts(e: &Expr, c: &Checked, out: &mut Vec<(String, Rat)>) {
 /// The columns that get an axis, in dependency order.
 ///
 /// The inputs always. A `derive`, a `define` or a walk's summary **only when some table
-/// tests it**: that is the one case where its own boundaries cut the space and a point on
-/// it has to be quantified over. One that is merely read by an expression is computed from
-/// the columns above it, and giving it an axis would multiply the space by a factor whose
-/// every value but one is an input no caller can send. A declared output never: it is the
-/// answer, not a coordinate.
-fn columns(f: &RuleFile, also: &RuleFile) -> Vec<(String, Kind)> {
-    columns_with(f, also, &BTreeSet::new())
-}
-
-/// `columns`, with `more` counted as tested: the names a question about the rule tests that no
-/// table does (§15.148).
+/// tests it** or it is one of `more`: that is the one case where its own boundaries cut the space
+/// and a point on it has to be quantified over. A `derive` or a `define` that is merely read by an
+/// expression is computed from the columns above it, and giving it an axis would multiply the
+/// space by a factor whose every value but one is an input no caller can send. A declared output
+/// never: it is the answer, not a coordinate.
+///
+/// `more` is counted as tested: the names a question about the rule tests that no table does
+/// (§15.148), and for two versions compared, what each walk comes to — a summary is computed
+/// from no column above it, so one an expression reads and no table tests is still a column the
+/// answer moves with (§15.314).
 pub(crate) fn columns_with(f: &RuleFile, also: &RuleFile, more: &BTreeSet<String>) -> Vec<(String, Kind)> {
     let outs: BTreeSet<&str> = f.outputs.iter().map(|o| o.name.text.as_str()).collect();
     let mut tested: BTreeSet<&str> = more.iter().map(|s| s.as_str()).collect();
@@ -580,22 +584,43 @@ pub(crate) fn holds(ax: &Axis, ci: usize, v: &Val) -> bool {
 // Realizing a cell: an input the cell actually stands for
 // ---------------------------------------------------------------------------------------
 
-/// The element values worth trying, when the rule walks a sequence. One per combination of
-/// the element's own fields at their first candidate — enough to reach every verdict the
-/// per-element table can give, because a field is cut at every boundary its cells name.
-fn element_menu(f: &RuleFile, c: &Checked, cap: usize) -> Vec<BTreeMap<String, Val>> {
+/// What a sequence is built from, when the rule walks one.
+pub(crate) struct Menu {
+    /// The element values worth trying. One per combination of the element's own fields at their
+    /// first candidate — enough to reach every verdict the per-element table can give, because a
+    /// field is cut at every boundary its cells name, in every version the sequence is for.
+    elems: Vec<BTreeMap<String, Val>>,
+    /// The fields a version holds `unique` (§15.290), each with the axis its values were cut on:
+    /// no two elements of a built sequence share a value of one.
+    unique: Vec<Axis>,
+    /// The top of the range of each field of a number: the least one a version gives it.
+    tops: HashMap<String, Rat>,
+}
+
+/// The menu for the sequence of `versions`, the first of which names the fields. A field's
+/// candidates are values every version takes, as an input's are: a sequence only one version
+/// takes is a change to the door (`domain`), and what the other answers on it is no difference.
+fn element_menu(versions: &[(&RuleFile, &Checked)], cap: usize) -> Menu {
+    let mut menu = Menu { elems: Vec::new(), unique: Vec::new(), tops: HashMap::new() };
+    let (f, c) = versions[0];
     // One sequence: a rule that walks more never comes this far (`walks_beyond_cells`).
-    let Some(el) = f.elements.first() else { return Vec::new() };
-    let mut menu: Vec<BTreeMap<String, Val>> = vec![BTreeMap::new()];
+    let Some(el) = f.elements.first() else { return menu };
+    let field_of = |g: &RuleFile, name: &str| g.elements.first().and_then(|e| e.fields.iter().find(|x| x.name.text == name)).is_some();
+    let mut elems: Vec<BTreeMap<String, Val>> = vec![BTreeMap::new()];
     for fld in &el.fields {
-        let Some(ty) = c.ty_of(&fld.name.text) else { continue };
-        let Some(ax) = axis_for(&fld.name.text, Kind::Input, &ty, &[(f, c)]) else { continue };
+        let name = &fld.name.text;
+        let Some(ty) = c.ty_of(name) else { continue };
+        // The versions that have the field with this type: one that gives it another is said in
+        // `domain`, and its range and its cells are of other values.
+        let with: Vec<(&RuleFile, &Checked)> =
+            versions.iter().copied().filter(|(g, d)| field_of(g, name) && d.ty_of(name).is_some_and(|t| t == ty)).collect();
+        let Some(ax) = axis_for(name, Kind::Input, &ty, &with) else { continue };
         let mut next = Vec::new();
-        for base in &menu {
+        for base in &elems {
             for ci in 0..ax.coords.len() {
                 let Some(v) = coord_val(&ax, ci) else { continue };
                 let mut m = base.clone();
-                m.insert(fld.name.text.clone(), v);
+                m.insert(name.clone(), v);
                 next.push(m);
                 if next.len() >= cap {
                     break;
@@ -605,9 +630,78 @@ fn element_menu(f: &RuleFile, c: &Checked, cap: usize) -> Vec<BTreeMap<String, V
                 break;
             }
         }
-        menu = next;
+        elems = next;
+        let tops: Vec<Rat> = with.iter().filter_map(|(_, d)| d.ranges.get(name).and_then(|(_, h)| *h)).collect();
+        if let Some(top) = tops.into_iter().reduce(crate::grid::min_rat) {
+            menu.tops.insert(name.clone(), top);
+        }
+        let held = |g: &RuleFile| g.elements.first().is_some_and(|e| e.fields.iter().any(|x| x.name.text == *name && x.unique.is_some()));
+        if versions.iter().any(|(g, _)| held(g)) {
+            menu.unique.push(ax);
+        }
     }
+    menu.elems = elems;
     menu
+}
+
+/// The coordinate of its axis a value of a field is in. A string is in the first pattern it starts
+/// with — the longest, as the axis lists them — and in the last coordinate with none.
+fn coord_in(ax: &Axis, v: &Val) -> Option<usize> {
+    match v {
+        Val::Str(s) if matches!(ax.ty.present(), Ty::Str) => (0..ax.coords.len()).find(|&ci| match &ax.coords[ci] {
+            Coord::Word(p) => s.starts_with(p.as_str()),
+            _ => true,
+        }),
+        _ => (0..ax.coords.len()).find(|&ci| holds(ax, ci, v)),
+    }
+}
+
+/// No two elements of a built sequence with the same value of a field a version holds `unique`
+/// (§15.290): a version does not take a sequence that repeats one, and what the versions answer
+/// on it is no difference between them. An element after the first to hold a value takes the
+/// nearest other value of the same coordinate of the field, so what the rule's cells say of the
+/// element stays. Whether it came out so: with no other value left in a coordinate — an enum, a
+/// `bool`, the one value at an end of a range — two elements still share one, and the sequence
+/// is not one to build a cell on.
+#[must_use]
+fn distinct(seq: &mut [BTreeMap<String, Val>], menu: &Menu) -> bool {
+    let reach = seq.len() as i128 + 1;
+    let mut all = true;
+    for ax in &menu.unique {
+        let mut seen: Vec<Val> = Vec::new();
+        for e in seq.iter_mut() {
+            let Some(v) = e.get(&ax.col).cloned() else { continue };
+            if !seen.contains(&v) {
+                seen.push(v);
+                continue;
+            }
+            let Some(ci) = coord_in(ax, &v) else { continue };
+            let free = |w: &Val| coord_in(ax, w) == Some(ci) && !seen.contains(w);
+            let other = match &v {
+                Val::Num(_) | Val::Date(..) => {
+                    let r = match &v {
+                        Val::Date(y, m, d) => crate::types::date_ord(*y, *m, *d),
+                        Val::Num(r) => *r,
+                        _ => Rat::zero(),
+                    };
+                    (1..=reach)
+                        .flat_map(|k| [r.add(ax.step.mul(Rat::int(k))), r.sub(ax.step.mul(Rat::int(k)))])
+                        .map(|r| val_of(ax, r))
+                        .find(|w| free(w))
+                }
+                Val::Str(s) => (2..=reach + 1).map(|k| Val::Str(format!("{s}-{k}"))).find(|w| free(w)),
+                _ => None,
+            };
+            match other {
+                Some(w) => {
+                    e.insert(ax.col.clone(), w.clone());
+                    seen.push(w);
+                }
+                None => all = false,
+            }
+        }
+    }
+    all
 }
 
 /// The value that stands for a coordinate.
@@ -652,12 +746,40 @@ pub(crate) fn run(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> An
     Answer { outs, rows, binds }
 }
 
+/// Whether a cell is one input that the version refuses: every input of the cell on a point, and
+/// that assignment broken by a `constraint` or a `never` line, or with a `define` outside the range
+/// the version accepts for it (§15.313). The last is what no linear model of the cell can see.
+fn point_refused(axes: &[Axis], cell: &[usize], f: &RuleFile, c: &Checked) -> bool {
+    let mut m: HashMap<String, Val> = HashMap::new();
+    for (i, a) in axes.iter().enumerate() {
+        if a.kind != Kind::Input {
+            continue;
+        }
+        // An enum's value and a truth value are one value each; a string class is many.
+        let one = match a.coords.get(cell[i]) {
+            Some(Coord::Point(_)) => true,
+            Some(Coord::Word(_)) => a.ty != Ty::Str,
+            _ => false,
+        };
+        if !one {
+            return false;
+        }
+        let Some(v) = coord_val(a, cell[i]) else { return false };
+        m.insert(a.col.clone(), v);
+    }
+    f.inputs.iter().all(|i| m.contains_key(&i.name.text)) && !constraints_hold(f, c, &m)
+}
+
 /// Whether the `constraint` lines hold of an assignment. They are a promise the caller
 /// makes, not something the evaluator enforces, so a cell realized by inputs that break one
 /// is a cell no caller reaches (§15.55). Two dates compare by their day numbers, as the
-/// vectors' filter compares them (§15.198).
+/// vectors' filter compares them (§15.198). An assignment on which a `define` falls outside the
+/// range the rule accepts for it is refused where the value is worked out (§15.313), and is no
+/// call of this version either.
 fn constraints_hold(f: &RuleFile, c: &Checked, m: &HashMap<String, Val>) -> bool {
-    f.constraints.iter().all(|k| crate::vectors::constraint_holds(k, &|n| m.get(n))) && f.door_nevers().all(|n| crate::vectors::never_clear(n, c, &|x| m.get(x)))
+    f.constraints.iter().all(|k| crate::vectors::constraint_holds(k, &|n| m.get(n)))
+        && f.door_nevers().all(|n| crate::vectors::never_clear(n, c, &|x| m.get(x)))
+        && (c.accepts.is_empty() || crate::eval::define_outside(f, c, m.clone()).is_none())
 }
 
 /// A value on the axis's own grid, inside the coordinate.
@@ -870,7 +992,7 @@ fn realize(
     cell: &[usize],
     f: &RuleFile,
     c: &Checked,
-    menu: &[BTreeMap<String, Val>],
+    menu: &Menu,
     scalars: &[(String, Expr)],
     cone: &[usize],
     memo: &mut HashMap<Vec<usize>, Solved>,
@@ -1070,7 +1192,7 @@ fn finish(
     cell: &[usize],
     f: &RuleFile,
     c: &Checked,
-    menu: &[BTreeMap<String, Val>],
+    menu: &Menu,
     base: HashMap<String, Val>,
     computed: &[usize],
 ) -> Option<(HashMap<String, Val>, Answer)> {
@@ -1093,15 +1215,16 @@ fn finish(
 
 /// A sequence whose summaries land on the cell's coordinates. Each element of the menu is
 /// weighed once — what one of it does to each summary — and then taken as many times as the
-/// target needs. `sum` adds, `count` counts, and both are monotone in the number of copies,
-/// so this reaches every reachable total.
+/// target needs, alone or beside one other kind of element. `sum` adds, `count` counts, and both
+/// are monotone in the number of copies. A sequence no kind and no two kinds land is not built,
+/// and the cell is left as one nothing was compared in.
 fn build_seq(
     axes: &[Axis],
     cell: &[usize],
     f: &RuleFile,
     c: &Checked,
     scalars: &HashMap<String, Val>,
-    menu: &[BTreeMap<String, Val>],
+    menu: &Menu,
     walks: &[usize],
 ) -> Option<HashMap<String, Val>> {
     let over = f.items.iter().find_map(|it| if let Item::Agg(a) = it { Some(a.over.clone()) } else { None })?;
@@ -1162,7 +1285,7 @@ fn build_seq(
                 (None, None) => Rat::zero(),
             };
             let target = Rat::int(target.num.div_euclid(target.den));
-            let cap_each = c.ranges.get(field).and_then(|(_, h)| *h).unwrap_or(Rat::int(1));
+            let cap_each = menu.tops.get(field).copied().or_else(|| c.ranges.get(field).and_then(|(_, h)| *h)).unwrap_or(Rat::int(1));
             if cap_each.cmp_to(Rat::zero()) != Ordering::Greater {
                 built.clear();
                 break;
@@ -1196,16 +1319,17 @@ fn build_seq(
                 for e in &mut built {
                     for fld in &el.fields {
                         if !e.contains_key(&fld.name.text) {
-                            if let Some(v) = menu.first().and_then(|m| m.get(&fld.name.text)).cloned() {
+                            if let Some(v) = menu.elems.first().and_then(|m| m.get(&fld.name.text)).cloned() {
                                 e.insert(fld.name.text.clone(), v);
                             }
                         }
                     }
                 }
             }
+            let apart = distinct(&mut built, menu);
             let mut m = scalars.clone();
             m.insert(over.clone(), Val::Seq(built));
-            if fits(&run(f, c, m.clone())) {
+            if apart && fits(&run(f, c, m.clone())) {
                 return Some(m);
             }
         }
@@ -1213,7 +1337,8 @@ fn build_seq(
     // How many copies of one element to try before giving up on it. A `count` is small by
     // construction and a `sum` is built outright above, so this only bounds the fallback.
     let cap = 64;
-    for e in menu {
+    let mut weighed: Vec<(&BTreeMap<String, Val>, Vec<Rat>)> = Vec::new();
+    for e in &menu.elems {
         let w = weigh(e);
         if w.iter().all(|r| r.cmp_to(Rat::zero()) == Ordering::Equal) {
             continue;
@@ -1221,8 +1346,12 @@ fn build_seq(
         let mut seq: Vec<BTreeMap<String, Val>> = Vec::new();
         for _ in 0..cap {
             seq.push(e.clone());
+            let mut held = seq.clone();
+            if !distinct(&mut held, menu) {
+                break;
+            }
             let mut m = scalars.clone();
-            m.insert(over.clone(), Val::Seq(seq.clone()));
+            m.insert(over.clone(), Val::Seq(held));
             let a = run(f, c, m.clone());
             if fits(&a) {
                 return Some(m);
@@ -1230,6 +1359,56 @@ fn build_seq(
             // Past every target and still climbing: this element cannot land it.
             if want.iter().all(|(i, _, hi)| hi.is_some_and(|h| at(&a, *i).cmp_to(h) == Ordering::Greater)) {
                 break;
+            }
+        }
+        weighed.push((e, w));
+    }
+    // Two kinds of element, where no one kind lands every walk: a `sum` at its top beside a
+    // `count` under the length takes elements the count counts and elements it passes. What one
+    // element of a kind adds to each walk was weighed above, so how many of each to take is
+    // arithmetic — for each number of the first, the numbers of the second every walk allows —
+    // and the sequence that comes of it is run, as every sequence built here is.
+    if walks.len() > 1 {
+        let base: Vec<Rat> = walks.iter().map(|&i| at(&zero, i)).collect();
+        for (x, (ea, wa)) in weighed.iter().enumerate() {
+            for (eb, wb) in &weighed[x + 1..] {
+                for na in 1..cap as i128 {
+                    let (mut least, mut most) = (1i128, cap as i128 - na);
+                    for (k, (_, lo, hi)) in want.iter().enumerate() {
+                        let rest = base[k].add(wa[k].mul(Rat::int(na)));
+                        let (lo, hi) = (lo.map(|l| l.sub(rest)), hi.map(|h| h.sub(rest)));
+                        match wb[k].cmp_to(Rat::zero()) {
+                            Ordering::Equal => {
+                                if lo.is_some_and(|l| l.cmp_to(Rat::zero()) == Ordering::Greater) || hi.is_some_and(|h| h.cmp_to(Rat::zero()) == Ordering::Less) {
+                                    most = 0;
+                                }
+                            }
+                            sign => {
+                                // `lo <= wb * nb <= hi`, the ends changing places under a weight below zero.
+                                let (lo, hi) = if sign == Ordering::Greater { (lo, hi) } else { (hi, lo) };
+                                if let Some(q) = lo.map(|l| l.div(wb[k])) {
+                                    least = least.max(-(-q.num).div_euclid(q.den));
+                                }
+                                if let Some(q) = hi.map(|h| h.div(wb[k])) {
+                                    most = most.min(q.num.div_euclid(q.den));
+                                }
+                            }
+                        }
+                    }
+                    for nb in least..=most.min(least.saturating_add(3)) {
+                        let mut seq: Vec<BTreeMap<String, Val>> = Vec::new();
+                        seq.extend((0..na).map(|_| (*ea).clone()));
+                        seq.extend((0..nb).map(|_| (*eb).clone()));
+                        if !distinct(&mut seq, menu) {
+                            continue;
+                        }
+                        let mut m = scalars.clone();
+                        m.insert(over.clone(), Val::Seq(seq));
+                        if fits(&run(f, c, m.clone())) {
+                            return Some(m);
+                        }
+                    }
+                }
             }
         }
     }
@@ -1433,12 +1612,16 @@ pub(crate) fn constant_here(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[us
 /// Whether each of `names` is one value over the whole cell, given the rows that fired there
 /// (§15.148 asks this of the carried output and of the outputs a `once` line counts).
 pub(crate) fn names_constant(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[usize], rows: &[(String, usize)], names: &[String]) -> bool {
-    let open: BTreeSet<&str> = axes
+    let mut open: BTreeSet<&str> = axes
         .iter()
         .enumerate()
         .filter(|(i, a)| matches!(a.coords[cell[*i]], Coord::Open(_, _)))
         .map(|(_, a)| a.col.as_str())
         .collect();
+    // A walk's summary that was given no axis (`columns_with`) has no coordinate to hold it: it
+    // takes whatever the sequence comes to, anywhere in the cell, and an answer that reads it is
+    // not one value there.
+    open.extend(f.aggs().map(|d| d.name.text.as_str()).filter(|n| !axes.iter().any(|a| a.col == *n)));
     names_constant_over(f, c, &open, rows, names)
 }
 
@@ -1522,18 +1705,38 @@ fn show_range(c: &Checked, n: &str) -> String {
     }
 }
 
+/// [`show_range`] as a person reads it ([`DomainChange::said`]): the ends of a range of numbers or
+/// dates as the rule writes a value of the name's type (§15.333); the values at the ends of an
+/// ordered enum's, as they are.
+fn said_range(c: &Checked, n: &str) -> String {
+    if c.enum_ranges.get(n).is_some_and(|vs| !vs.is_empty()) {
+        return show_range(c, n);
+    }
+    match c.ranges.get(n) {
+        Some((lo, hi)) => said_ends(c, n, (*lo, *hi)),
+        None => String::new(),
+    }
+}
+
+/// Two ends of what a value of `n` takes, each as the rule writes a value of its type (§15.333).
+fn said_ends(c: &Checked, n: &str, (lo, hi): (Option<Rat>, Option<Rat>)) -> String {
+    let ty = c.ty_of(n).unwrap_or(Ty::Unknown);
+    let end = |v: Option<Rat>| v.map(|x| crate::types::fmt_val(x, &ty)).unwrap_or_default();
+    format!("{}..{}", end(lo), end(hi))
+}
+
 fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<DomainChange> {
     let mut out = Vec::new();
     let oi: Vec<&VarDecl> = o.0.inputs.iter().collect();
     let ni: Vec<&VarDecl> = n.0.inputs.iter().collect();
     for a in &oi {
         if !ni.iter().any(|b| b.name.text == a.name.text) {
-            out.push(DomainChange { what: "input_removed", name: a.name.text.clone(), old: None, new: None });
+            out.push(DomainChange { what: "input_removed", name: a.name.text.clone(), old: None, new: None, said: None });
         }
     }
     for b in &ni {
         match oi.iter().find(|a| a.name.text == b.name.text) {
-            None => out.push(DomainChange { what: "input_added", name: b.name.text.clone(), old: None, new: None }),
+            None => out.push(DomainChange { what: "input_added", name: b.name.text.clone(), old: None, new: None, said: None }),
             Some(a) => {
                 let (ta, tb) = (o.1.ty_of(&a.name.text), n.1.ty_of(&b.name.text));
                 if ta.as_ref().map(|x| x.to_string()) != tb.as_ref().map(|x| x.to_string()) {
@@ -1542,9 +1745,11 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
                         name: b.name.text.clone(),
                         old: ta.map(|x| x.to_string()),
                         new: tb.map(|x| x.to_string()),
+                        said: None,
                     });
                 }
                 let (mut ra, mut rb) = (show_range(o.1, &a.name.text), show_range(n.1, &b.name.text));
+                let (mut sa, mut sb) = (said_range(o.1, &a.name.text), said_range(n.1, &b.name.text));
                 // The side of an enum's input with no range takes every value of the enum.
                 let whole = |c: &Checked, name: &str| match c.ty_of(name).as_ref().map(|t| t.present().clone()) {
                     Some(Ty::Enum(e)) => c.enums.get(&e).and_then(|vs| Some(format!("{}..{}", vs.first()?, vs.last()?))),
@@ -1552,13 +1757,69 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
                 };
                 if ra.is_empty() && !rb.is_empty() {
                     ra = whole(o.1, &a.name.text).unwrap_or(ra);
+                    sa = ra.clone();
                 }
                 if rb.is_empty() && !ra.is_empty() {
                     rb = whole(n.1, &b.name.text).unwrap_or(rb);
+                    sb = rb.clone();
                 }
                 if ra != rb {
-                    out.push(DomainChange { what: "input_range", name: b.name.text.clone(), old: Some(ra), new: Some(rb) });
+                    out.push(DomainChange { what: "input_range", name: b.name.text.clone(), old: Some(ra), new: Some(rb), said: Some((sa, sb)) });
                 }
+            }
+        }
+    }
+    // The sequences a rule walks, and the fields of one element (§15.314): the door holds each
+    // field of each element as it holds an input — of its type, inside its range, and with no
+    // value twice where it is `unique` (§15.290) — so what a version takes moves with them. A
+    // field is named with its sequence, `lines[].price`, as the records hold it.
+    for a in &o.0.elements {
+        if !n.0.elements.iter().any(|b| b.name.text == a.name.text) {
+            out.push(DomainChange { what: "sequence_removed", name: a.name.text.clone(), old: None, new: None, said: None });
+        }
+    }
+    for b in &n.0.elements {
+        let Some(a) = o.0.elements.iter().find(|a| a.name.text == b.name.text) else {
+            out.push(DomainChange { what: "sequence_added", name: b.name.text.clone(), old: None, new: None, said: None });
+            continue;
+        };
+        let named = |field: &str| format!("{}[].{field}", b.name.text);
+        for fa in &a.fields {
+            if !b.fields.iter().any(|fb| fb.name.text == fa.name.text) {
+                out.push(DomainChange { what: "field_removed", name: named(&fa.name.text), old: None, new: None, said: None });
+            }
+        }
+        for fb in &b.fields {
+            let field = &fb.name.text;
+            let Some(fa) = a.fields.iter().find(|fa| fa.name.text == *field) else {
+                out.push(DomainChange { what: "field_added", name: named(field), old: None, new: None, said: None });
+                continue;
+            };
+            let (ta, tb) = (o.1.ty_of(field).map(|x| x.to_string()), n.1.ty_of(field).map(|x| x.to_string()));
+            if ta != tb {
+                out.push(DomainChange { what: "field_type", name: named(field), old: ta, new: tb, said: None });
+            }
+            let (mut ra, mut rb) = (show_range(o.1, field), show_range(n.1, field));
+            let (mut sa, mut sb) = (said_range(o.1, field), said_range(n.1, field));
+            // The side of an enum's field with no range takes every value of the enum, as an input's.
+            let whole = |c: &Checked| match c.ty_of(field).as_ref().map(|t| t.present().clone()) {
+                Some(Ty::Enum(e)) => c.enums.get(&e).and_then(|vs| Some(format!("{}..{}", vs.first()?, vs.last()?))),
+                _ => None,
+            };
+            if ra.is_empty() && !rb.is_empty() {
+                ra = whole(o.1).unwrap_or(ra);
+                sa = ra.clone();
+            }
+            if rb.is_empty() && !ra.is_empty() {
+                rb = whole(n.1).unwrap_or(rb);
+                sb = rb.clone();
+            }
+            if ra != rb {
+                out.push(DomainChange { what: "field_range", name: named(field), old: Some(ra), new: Some(rb), said: Some((sa, sb)) });
+            }
+            if fa.unique.is_some() != fb.unique.is_some() {
+                let what = if fb.unique.is_some() { "field_unique_added" } else { "field_unique_removed" };
+                out.push(DomainChange { what, name: named(field), old: None, new: None, said: None });
             }
         }
     }
@@ -1571,28 +1832,65 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
             (Some(a), Some(b)) => {
                 for v in a {
                     if !b.contains(v) {
-                        out.push(DomainChange { what: "enum_value_removed", name: format!("{en}.{v}"), old: None, new: None });
+                        out.push(DomainChange { what: "enum_value_removed", name: format!("{en}.{v}"), old: None, new: None, said: None });
                     }
                 }
                 for v in b {
                     if !a.contains(v) {
-                        out.push(DomainChange { what: "enum_value_added", name: format!("{en}.{v}"), old: None, new: None });
+                        out.push(DomainChange { what: "enum_value_added", name: format!("{en}.{v}"), old: None, new: None, said: None });
                     }
                 }
             }
-            (Some(_), None) => out.push(DomainChange { what: "enum_removed", name: en.clone(), old: None, new: None }),
-            (None, Some(_)) => out.push(DomainChange { what: "enum_added", name: en.clone(), old: None, new: None }),
+            (Some(_), None) => out.push(DomainChange { what: "enum_removed", name: en.clone(), old: None, new: None, said: None }),
+            (None, Some(_)) => out.push(DomainChange { what: "enum_added", name: en.clone(), old: None, new: None, said: None }),
             (None, None) => {}
+        }
+    }
+    // The values a `define` is accepted at, where either version writes a range for it (§15.313):
+    // a version refuses a call whose value falls outside, so what it takes moves with them. Each
+    // side is the part of what the value reaches that its version accepts — all it reaches, where
+    // that version writes no range — so a range that only moves past what the value reaches
+    // changes nothing.
+    let defines = |f: &RuleFile| -> Vec<String> {
+        f.items.iter().filter_map(|it| if let crate::ast::Item::Define(d) = it { Some(d.name.text.clone()) } else { None }).collect()
+    };
+    for name in defines(n.0).into_iter().filter(|x| defines(o.0).contains(x)) {
+        if !o.1.accepts.contains_key(&name) && !n.1.accepts.contains_key(&name) {
+            continue;
+        }
+        let shown = |c: &Checked| match c.reach_range(&name) {
+            Some((lo, hi)) => format!("{}..{}", lo.map(|x| x.to_string()).unwrap_or_default(), hi.map(|x| x.to_string()).unwrap_or_default()),
+            None => String::new(),
+        };
+        let said = |c: &Checked| c.reach_range(&name).map(|ends| said_ends(c, &name, ends)).unwrap_or_default();
+        let (ra, rb) = (shown(o.1), shown(n.1));
+        if ra != rb {
+            let said = Some((said(o.1), said(n.1)));
+            out.push(DomainChange { what: "define_range", name, old: Some(ra), new: Some(rb), said });
+        }
+    }
+    // The range a `sum` or a `count` is held to once its walk is over (§15.100, §15.314): a version
+    // refuses a call that ends outside it — past the top of a sum, under a bottom above zero, or
+    // with more elements than the top of a count — so what it takes moves with the range.
+    for d in n.0.aggs().filter(|d| !d.kind.extreme()) {
+        if !o.0.aggs().any(|a| a.name.text == d.name.text && a.kind == d.kind) {
+            continue;
+        }
+        let (ra, rb) = (show_range(o.1, &d.name.text), show_range(n.1, &d.name.text));
+        if ra != rb {
+            let what = if d.kind == crate::ast::AggKind::Count { "count_range" } else { "sum_range" };
+            let said = Some((said_range(o.1, &d.name.text), said_range(n.1, &d.name.text)));
+            out.push(DomainChange { what, name: d.name.text.clone(), old: Some(ra), new: Some(rb), said });
         }
     }
     for a in &o.0.outputs {
         if !n.0.outputs.iter().any(|b| b.name.text == a.name.text) {
-            out.push(DomainChange { what: "output_removed", name: a.name.text.clone(), old: None, new: None });
+            out.push(DomainChange { what: "output_removed", name: a.name.text.clone(), old: None, new: None, said: None });
         }
     }
     for b in &n.0.outputs {
         match o.0.outputs.iter().find(|a| a.name.text == b.name.text) {
-            None => out.push(DomainChange { what: "output_added", name: b.name.text.clone(), old: None, new: None }),
+            None => out.push(DomainChange { what: "output_added", name: b.name.text.clone(), old: None, new: None, said: None }),
             Some(_) => {
                 // Answers are compared as values (§15.199), so a version that counts an output in
                 // another unit or at another step moves no answer; what its callers receive does
@@ -1600,15 +1898,15 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
                 let name = &b.name.text;
                 let (ta, tb) = (o.1.ty_of(name).map(|x| x.to_string()), n.1.ty_of(name).map(|x| x.to_string()));
                 if ta != tb {
-                    out.push(DomainChange { what: "output_type", name: name.clone(), old: ta, new: tb });
+                    out.push(DomainChange { what: "output_type", name: name.clone(), old: ta, new: tb, said: None });
                 } else if o.1.wire_scale(name) != n.1.wire_scale(name) {
                     let step = |c: &Checked| Some(format!("{}%", Rat::new(100, c.wire_scale(name))));
-                    out.push(DomainChange { what: "output_step", name: name.clone(), old: step(o.1), new: step(n.1) });
+                    out.push(DomainChange { what: "output_step", name: name.clone(), old: step(o.1), new: step(n.1), said: None });
                 }
                 let r = |c: &Checked| c.roundings.get(&b.name.text).map(|(m, g)| format!("{} {g}", m.name()));
                 let (ra, rb) = (r(o.1), r(n.1));
                 if ra != rb {
-                    out.push(DomainChange { what: "output_rounding", name: b.name.text.clone(), old: ra, new: rb });
+                    out.push(DomainChange { what: "output_rounding", name: b.name.text.clone(), old: ra, new: rb, said: None });
                 }
                 // The range of a numeric output is what its callers are told it comes to, as an
                 // input's is what it takes: the schema, `api` and the port say it, written on the
@@ -1623,7 +1921,8 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
                     };
                     let (ra, rb) = (shown(o.1), shown(n.1));
                     if ra != rb {
-                        out.push(DomainChange { what: "output_range", name: name.clone(), old: Some(ra), new: Some(rb) });
+                        let said = |c: &Checked| c.output_range(name).map(|ends| said_ends(c, name, ends)).unwrap_or_default();
+                        out.push(DomainChange { what: "output_range", name: name.clone(), old: Some(ra), new: Some(rb), said: Some((said(o.1), said(n.1))) });
                     }
                 }
             }
@@ -2007,16 +2306,25 @@ pub(crate) fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), bud
     // Two versions that do not take the same inputs cannot be compared point by point:
     // there is no input to give them both. What changed is in `domain`, which is the honest
     // answer, and no region is invented on top of it.
+    // The same of the sequences and of the fields of one element: a sequence built for one version
+    // has no value for a field only the other has.
     let (oi, ni): (BTreeSet<&str>, BTreeSet<&str>) =
         (o.0.inputs.iter().map(|i| i.name.text.as_str()).collect(), n.0.inputs.iter().map(|i| i.name.text.as_str()).collect());
-    if oi != ni {
+    let fields = |f: &RuleFile| -> BTreeSet<(String, Option<String>)> {
+        f.elements.iter().flat_map(|el| std::iter::once((el.name.text.clone(), None)).chain(el.fields.iter().map(|fd| (el.name.text.clone(), Some(fd.name.text.clone()))))).collect()
+    };
+    if oi != ni || fields(o.0) != fields(n.0) {
         out.blocked = Some(tr!(
             "二つの版が取る入力が違うので、同じ入力を両方に渡せません。何が変わったかは上のとおりです",
             "the two versions do not take the same inputs, so there is no input to give them both; what changed is listed above"
         ));
         return out;
     }
-    let cols = columns(n.0, o.0);
+    // What a walk comes to is a column whether a table tests it or an expression reads it: nothing
+    // above it computes it, so with no axis no coordinate would hold it, and the one sequence a
+    // cell was tried on would stand for every sequence there is.
+    let summaries: BTreeSet<String> = n.0.aggs().chain(o.0.aggs()).map(|d| d.name.text.clone()).collect();
+    let cols = columns_with(n.0, o.0, &summaries);
     let mut axes: Vec<Axis> = Vec::new();
     for (col, kind) in &cols {
         let Some(ty) = n.1.ty_of(col).or_else(|| o.1.ty_of(col)) else {
@@ -2055,7 +2363,7 @@ pub(crate) fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), bud
 
     let (om, nm) = (row_map(o.1), row_map(n.1));
     let machinery = same_machinery(o, n);
-    let menu = element_menu(n.0, n.1, 24);
+    let menu = element_menu(&[(n.0, n.1), (o.0, o.1)], 24);
     let input_names: BTreeSet<String> = o.0.inputs.iter().map(|i| i.name.text.clone()).collect();
     let scalars = scalar_derives(o.0, &input_names);
     let cone = cone_of(&axes, o.0, o.1, &scalars);
@@ -2156,7 +2464,7 @@ pub(crate) fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), bud
             // version with its own derives.
             let mut empty = |side: usize| -> bool {
                 let (v, sc, cn) = if side == 0 { (o, &scalars, &cone) } else { (n, &scalars_n, &cone_n) };
-                if linearly_empty(&axes, &cell, v) || never_empties(&axes, &cell, v.0, v.1) {
+                if linearly_empty(&axes, &cell, v) || never_empties(&axes, &cell, v.0, v.1) || point_refused(&axes, &cell, v.0, v.1) {
                     return true;
                 }
                 let k: Vec<usize> = cn.iter().map(|&i| cell[i]).collect();
@@ -2469,13 +2777,19 @@ fn cluster(diffs: &[Diffed], reached: &[bool], axes: &[Axis], strides: &[usize])
 // Writing it down
 // ---------------------------------------------------------------------------------------
 
+/// A count as a sentence says it, grouped by `_` from five digits (§15.333).
+fn count(n: usize) -> String {
+    ritsu_units::written::digits(i128::try_from(n).unwrap_or(i128::MAX))
+}
+
 fn num_text(ax: &Axis, r: Rat) -> String {
     if ax.date {
         let (y, m, d) = crate::types::ord_to_date(r);
         return format!("{y:04}-{m:02}-{d:02}");
     }
     let v = if ax.shown == 100 { r.mul(Rat::int(100)) } else { r };
-    format!("{}{}", v, ax.unit)
+    // grouped as the cell would be written (§15.333)
+    format!("{}{}", crate::types::written_num(v), ax.unit)
 }
 
 /// One axis of a box, written the way a cell is written. An axis that takes every
@@ -2568,6 +2882,17 @@ pub fn domain_word(what: &str) -> String {
         "output_type" => tr!("出力の型が変わった", "an output changed type"),
         "output_step" => tr!("出力の刻みが変わった", "an output changed step"),
         "output_range" => tr!("出力の範囲が変わった", "an output changed range"),
+        "define_range" => tr!("定義が受け付ける範囲が変わった", "a definition changed the range it accepts"),
+        "sequence_added" => tr!("並びが増えた", "a sequence was added"),
+        "sequence_removed" => tr!("並びが消えた", "a sequence was removed"),
+        "field_added" => tr!("要素のフィールドが増えた", "a field of an element was added"),
+        "field_removed" => tr!("要素のフィールドが消えた", "a field of an element was removed"),
+        "field_type" => tr!("要素のフィールドの型が変わった", "a field of an element changed type"),
+        "field_range" => tr!("要素のフィールドの範囲が変わった", "a field of an element changed range"),
+        "field_unique_added" => tr!("要素のフィールドが `unique` になった", "a field of an element became `unique`"),
+        "field_unique_removed" => tr!("要素のフィールドが `unique` でなくなった", "a field of an element is no longer `unique`"),
+        "sum_range" => tr!("合計の範囲が変わった", "a sum changed range"),
+        "count_range" => tr!("数え上げの範囲が変わった", "a count changed range"),
         other => other.to_string(),
     }
 }
@@ -2577,8 +2902,8 @@ pub fn domain_word(what: &str) -> String {
 fn domain_text(d: &VDiff) -> String {
     let mut s = String::new();
     for x in &d.domain {
-        let extra = match (&x.old, &x.new) {
-            (Some(a), Some(b)) => format!("  {a} → {b}"),
+        let extra = match (&x.said, &x.old, &x.new) {
+            (Some((a, b)), _, _) | (None, Some(a), Some(b)) => format!("  {a} → {b}"),
             _ => String::new(),
         };
         s.push_str(&format!("  {}: {}{extra}\n", domain_word(x.what), x.name));
@@ -2608,7 +2933,7 @@ fn machine_block(d: &VDiff, m: &MachineDiff, c: &Checked) -> String {
         s.push_str(&tr!(
             "  答えが変わる呼び出しの並びのうち、いちばん短いもの（{} 回）:\n",
             "  the shortest sequence of calls the two answer differently ({} calls):\n",
-            m.shortest.len()
+            count(m.shortest.len())
         ));
         for (k, st) in m.shortest.iter().enumerate() {
             s.push_str(&mstep_text(c, st, cin, cout, k + 1));
@@ -2619,7 +2944,7 @@ fn machine_block(d: &VDiff, m: &MachineDiff, c: &Checked) -> String {
         s.push_str(&tr!(
             "  上の範囲のうち {} 件は、古い版ではどの案件も着かない状態のものです。\n",
             "  {} of the regions above lie in states no case reaches under the old version.\n",
-            m.unreached
+            count(m.unreached)
         ));
     }
     if !m.migration.is_empty() {
@@ -2648,14 +2973,16 @@ pub fn render(d: &VDiff, c: &Checked, terse: bool) -> String {
             tr!(
                 "入力の組み合わせが {} 通りあり、`--budget` の上限を超えました。どこで違うかは出していません。",
                 "the space of columns holds {} cells, over the budget; no region was worked out",
-                d.cells
+                count(d.cells)
             )
         ));
         return s;
     }
     // Nothing that decides an answer changed, so the space was never walked. Printing a
-    // count of one cell would be answering a question that was not asked.
-    if d.axes.is_empty() {
+    // count of one cell would be answering a question that was not asked. A rule with no column
+    // to cut has no axes either, and its one cell is said like any other where it differs or was
+    // not settled.
+    if d.axes.is_empty() && d.changes.is_empty() && d.unknown.is_empty() {
         s.push_str(&format!(
             "{}\n",
             if d.accepts_alike() {
@@ -2677,12 +3004,12 @@ pub fn render(d: &VDiff, c: &Checked, terse: bool) -> String {
         tr!(
             "入力の組み合わせ {} 通り。うち起きうるのは {} 通りで、同じ {} / 違う {} / 決められず {} / 入力を作れず {}",
             "{} cells, of which {} are inputs that can occur: {} same, {} differ, {} unsettled, {} unrealized",
-            d.cells,
-            d.feasible,
-            d.same,
-            d.differing,
-            d.unsettled,
-            d.unrealized
+            count(d.cells),
+            count(d.feasible),
+            count(d.same),
+            count(d.differing),
+            count(d.unsettled),
+            count(d.unrealized)
         )
     ));
     if d.changes.is_empty() && d.unknown.is_empty() && d.unrealized == 0 {
@@ -2894,8 +3221,8 @@ pub fn markdown(d: &VDiff, c: &Checked, old: &str, new: &str, terse: bool) -> St
     s.push_str(&format!("### {}\n\n", tr!("版の差分（入力の全体で比べたもの）", "Version diff (over the whole input space)")));
     s.push_str(&format!("`{old}` → `{new}`\n\n"));
     for x in &d.domain {
-        let extra = match (&x.old, &x.new) {
-            (Some(a), Some(b)) => format!(" (`{a}` → `{b}`)"),
+        let extra = match (&x.said, &x.old, &x.new) {
+            (Some((a, b)), _, _) | (None, Some(a), Some(b)) => format!(" (`{a}` → `{b}`)"),
             _ => String::new(),
         };
         s.push_str(&format!("- `{}` — {}{extra}\n", x.name, domain_word(x.what)));
@@ -2910,7 +3237,7 @@ pub fn markdown(d: &VDiff, c: &Checked, old: &str, new: &str, terse: bool) -> St
     if d.over_budget {
         s.push_str(&format!(
             "{}\n",
-            tr!("入力の組み合わせが {} 通りあり、`--budget` の上限を超えました。", "the space of columns holds {} cells, over the budget.", d.cells)
+            tr!("入力の組み合わせが {} 通りあり、`--budget` の上限を超えました。", "the space of columns holds {} cells, over the budget.", count(d.cells))
         ));
         return s;
     }
@@ -2945,9 +3272,9 @@ pub fn markdown(d: &VDiff, c: &Checked, old: &str, new: &str, terse: bool) -> St
         let outs: Vec<String> = ch.shown.iter().map(|(k, a, b)| format!("{k}: {a} → {b}{mark}")).collect();
         let region = show_region(&ch.region, &d.axes, c);
         if terse {
-            s.push_str(&format!("| {region} | {} | {} |\n", outs.join("<br>"), ch.cells));
+            s.push_str(&format!("| {region} | {} | {} |\n", outs.join("<br>"), count(ch.cells)));
         } else {
-            s.push_str(&format!("| {region} | {} | {} | {} |\n", outs.join("<br>"), witness_text(c, &ch.witness), ch.cells));
+            s.push_str(&format!("| {region} | {} | {} | {} |\n", outs.join("<br>"), witness_text(c, &ch.witness), count(ch.cells)));
         }
     }
     for (r, _) in &d.unknown {
@@ -3617,7 +3944,7 @@ pub(crate) struct Walker<'a> {
     pub(crate) axes: Vec<Axis>,
     f: &'a RuleFile,
     c: &'a Checked,
-    menu: Vec<BTreeMap<String, Val>>,
+    menu: Menu,
     scalars: Vec<(String, Expr)>,
     cone: Vec<usize>,
     memo: HashMap<Vec<usize>, Solved>,
@@ -3657,7 +3984,7 @@ impl<'a> Walker<'a> {
         let scalars = scalar_derives(f, &input_names);
         let cone = cone_of(&axes, f, c, &scalars);
         Ok(Walker {
-            menu: element_menu(f, c, 24),
+            menu: element_menu(&[(f, c)], 24),
             axes,
             f,
             c,
@@ -3757,8 +4084,10 @@ pub struct MapAxis {
     pub coords: Vec<MapCoord>,
 }
 
-/// One cell of a [`Map`]: each version's answers, an output a line, as a person reads them; `None`
-/// for a version that does not take the input.
+/// One cell of a [`Map`]: each version's answers, an output a line, as data a page lays out
+/// (`vectors::show_plain`: digits with no unit and no grouping, a rate in percent; the page groups
+/// the digits its own way and the unit is the output's, [`MapOutput`]); `None` for a version that
+/// does not take the input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapCell {
     pub old: Option<Vec<(String, String)>>,
@@ -3804,7 +4133,7 @@ pub fn map_of(d: &VDiff, o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> 
         return None;
     }
     let axes = &d.axes;
-    let menu = element_menu(n.0, n.1, 24);
+    let menu = element_menu(&[(n.0, n.1), (o.0, o.1)], 24);
     let input_names: BTreeSet<String> = o.0.inputs.iter().map(|i| i.name.text.clone()).collect();
     let scalars = scalar_derives(o.0, &input_names);
     let cone = cone_of(axes, o.0, o.1, &scalars);
@@ -3820,8 +4149,9 @@ pub fn map_of(d: &VDiff, o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> 
             _ => (Some(0), 1),
         },
     };
+    // the cells are data the page groups its own way (`MapCell`), not a sentence
     let answers = |a: &Answer, f: &Checked| -> Vec<(String, String)> {
-        a.outs.iter().map(|(k, v)| (k.clone(), v.as_ref().map_or_else(|| "-".to_string(), |v| crate::vectors::show_named(f, k, v)))).collect()
+        a.outs.iter().map(|(k, v)| (k.clone(), v.as_ref().map_or_else(|| "-".to_string(), |v| crate::vectors::show_plain(f, k, v)))).collect()
     };
     let names = |a: &Answer, b: &Answer| -> Vec<String> {
         let mut out: Vec<String> = a.outs.iter().map(|(k, _)| k.clone()).collect();
@@ -3846,7 +4176,7 @@ pub fn map_of(d: &VDiff, o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> 
         for k in &keys {
             let a = ao.outs.iter().find(|(x, _)| x == k).and_then(|(_, v)| v.as_ref());
             let b = an.outs.iter().find(|(x, _)| x == k).and_then(|(_, v)| v.as_ref());
-            let (so, sn) = crate::report::shown_pair(k, a, o.1, b, n.1);
+            let (so, sn) = crate::report::plain_pair(k, a, o.1, b, n.1);
             old.push((k.clone(), so.unwrap_or_else(|| "-".to_string())));
             new.push((k.clone(), sn.unwrap_or_else(|| "-".to_string())));
         }

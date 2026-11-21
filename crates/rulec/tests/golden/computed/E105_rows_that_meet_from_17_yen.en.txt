@@ -1,0 +1,12 @@
+error[E105]: Overlapping rows: the same input matches row 2 and row 4
+  --> tests/computed/shapes/E105_rows_that_meet_from_17_yen.rule:19 table pick
+   |
+17 | | <=22JPY | true  | two  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
+19 | | <=20JPY | true  | one  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ row 4
+   |
+ Every input the cells of row 4 take, those of row 2 take too.
+ Both rows match: amount = 17JPY, big = true
+ `policy unique` does not allow overlapping rows. Decide which row is right, or declare `policy first` if the order is meant to matter.
+

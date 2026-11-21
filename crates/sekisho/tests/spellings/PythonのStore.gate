@@ -1,0 +1,27 @@
+gate pythonのstore(python_store_ja) v1
+description "Python が Store のメソッドで読み、Python の予約語になる型"
+namespace Shop
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 返品を受ける
+
+principal 係の人(Clerk)
+  description "尋ねる人"
+  roles 係
+
+resource 返品(Return)
+  description "客が送り返した品物"
+  attributes
+    未開封(unopened) : bool
+
+action 返品を受ける(accept_return)
+  description "送り返された品物を受け取る"
+  principal 係の人
+  resource 返品
+
+permit 係は返品を受けられる(clerks_accept_returns)
+  description "係は次のことができる: 送り返された品物を受け取る"
+  principal in 係
+  action 返品を受ける
+  when resource.未開封

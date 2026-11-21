@@ -1,0 +1,15 @@
+company.gate: ok — action 11、ポリシー 3（permit 3、forbid 0）、期待 0、職務の分離 0
+ok purchase.ringi: 申請の種類、フィールド 1 個、ステップ 1 個
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます
+エラー[ritsu E911]: purchase.ringi:3: ゲート company.gate は、`purchase` の経路が決めた承認者に、`approve`、`reject` をどの組み合わせでも許しません
+     3 | use gate "company.gate"
+  = ゲートに尋ねた形: principal が `resource.approvers` に入っている、`resource.requester` が principal でない、`resource.self_approval` が false。action が受け取るどの型の principal でも、どの役割でも、ほかの属性がどの値でも、許されません。
+  = 承認者がステップに答えても、いつも拒まれます。
+  = company.gate に、ステップの承認者を許す permit を書いてください（`action approve` と `when principal in resource.approvers`）。forbid がそれを打ち消さないようにします。
+エラー[ritsu E911]: purchase.ringi:15: `purchase` は申請者に自分の申請を決めさせませんが、ゲート company.gate は申請者に `approve`、`reject` を許します
+    15 |   self approval  not allowed
+  = 申請の 15 行目が `self approval not allowed` と書いています。
+  = ゲートに尋ねた形: `resource.requester` が principal 自身、`resource.self_approval` が false。
+  = その形のどの組み合わせでも、`approve` が許されます。
+  = company.gate に forbid を書くか（`action approve`、`when resource.requester is principal`、`unless resource.self_approval`）、申請の種類で自己承認を許してください（`self approval allowed`）。
+ritsu check: ファイル 2 個（sekisho 1、ringi 1）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 3 か所、決められない 0 か所

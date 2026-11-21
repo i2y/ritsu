@@ -1,0 +1,15 @@
+diff --git a/rules/extra/courier.rule b/rules/extra/courier.rule
+index 387f07a..2f9ed65 100644
+--- a/rules/extra/courier.rule
++++ b/rules/extra/courier.rule
+@@ -6,8 +6,8 @@ extend way with courier "Picked up by a courier"
+ 
+ clause courier_fee -> fee
+   when way courier
+-  then 8
++  then 9
+ 
+ examples
+ | way     | -> fee |
+-| courier | 8      |
++| courier | 9      |

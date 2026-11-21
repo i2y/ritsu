@@ -1,0 +1,176 @@
+14-17 ringi "examples/purchase.ringi" field kind
+    kind : choice from authority.kind "Kind"
+    goods "Goods and services"
+    capex "Capital expenditure"
+    software "Software"
+18-18 ringi "examples/purchase.ringi" field vendor
+    vendor : choice from m.vendors "Vendor"
+19-23 ringi "examples/purchase.ringi" field lines
+    lines : rows "Lines" count >=1 <=30
+    item : text "Item" count <=100
+    quantity : number "Quantity" range >=1 <=10_000
+    price : money[JPY] "Unit price" range >=1JPY <=50_000_000JPY
+    subtotal : money[JPY] "Subtotal" = quantity * price range >=1JPY <=100_000_000JPY
+20-20 ringi "examples/purchase.ringi" field lines.item
+    item : text "Item" count <=100
+21-21 ringi "examples/purchase.ringi" field lines.quantity
+    quantity : number "Quantity" range >=1 <=10_000
+22-22 ringi "examples/purchase.ringi" field lines.price
+    price : money[JPY] "Unit price" range >=1JPY <=50_000_000JPY
+23-23 ringi "examples/purchase.ringi" field lines.subtotal
+    subtotal : money[JPY] "Subtotal" = quantity * price range >=1JPY <=100_000_000JPY
+24-24 ringi "examples/purchase.ringi" field amount
+    amount : money[JPY] "Amount" = sum(lines.subtotal) range >=1JPY <=100_000_000JPY
+25-25 ringi "examples/purchase.ringi" field summary
+    summary : long text "What it is for" count >=1 <=1000
+26-26 ringi "examples/purchase.ringi" field quote
+    quote : attachment "Quotation"
+27-27 ringi "examples/purchase.ringi" field advance
+    advance : rate[step 5%] "Paid in advance" range >=0% <=100%
+28-30 ringi "examples/purchase.ringi" field others
+    others : rows "Other quotations" count >=0 <=3
+    company : text "Company" count >=1 <=100
+    bid : money[JPY] "Amount quoted" range >=1JPY <=100_000_000JPY
+29-29 ringi "examples/purchase.ringi" field others.company
+    company : text "Company" count >=1 <=100
+30-30 ringi "examples/purchase.ringi" field others.bid
+    bid : money[JPY] "Amount quoted" range >=1JPY <=100_000_000JPY
+31-31 ringi "examples/purchase.ringi" field reviewer
+    reviewer : person "Technical reviewer" optional
+35-36 ringi "examples/purchase.ringi" stage first
+    first manager
+    when empty escalate, then skip
+37-37 ringi "examples/purchase.ringi" stage technical
+    technical reviewer when reviewer is not none
+39-39 ringi "examples/purchase.ringi" stage finance
+    finance finance when authority.finance or advance > 30%
+40-42 ringi "examples/purchase.ringi" stage board
+    board at least 60% of board when authority.board
+    due in 10 business days at end of day
+    when late expire
+45-46 ringi "examples/purchase.ringi" stage decide
+    decide authority.decider
+    when empty escalate, then board
+47-47 ringi "examples/purchase.ringi" stage inform
+    inform circulate to general_affairs
+50-50 ringi "examples/purchase.ringi" who manager
+    manager = manager of requester
+51-51 ringi "examples/purchase.ringi" who reviewer
+    reviewer = chosen by requester in reviewer
+52-52 ringi "examples/purchase.ringi" who finance
+    finance = team finance
+53-53 ringi "examples/purchase.ringi" who board
+    board = team board
+54-54 ringi "examples/purchase.ringi" who general_affairs
+    general_affairs = team general_affairs
+55-55 ringi "examples/purchase.ringi" who dept_head
+    dept_head = head of requester.department
+56-56 ringi "examples/purchase.ringi" who division_head
+    division_head = nearest division_head above requester
+57-57 ringi "examples/purchase.ringi" who president
+    president = nearest president above requester
+59-63 ringi "examples/purchase.ringi" deadline every_stage
+    every stage
+    due in 5 business days at end of day
+    remind after 3 business days at 09:00
+    when late escalate, then expire
+    when empty escalate
+36-36 ringi "examples/purchase.ringi" deadline first
+    when empty escalate, then skip
+41-42 ringi "examples/purchase.ringi" deadline board
+    due in 10 business days at end of day
+    when late expire
+46-46 ringi "examples/purchase.ringi" deadline decide
+    when empty escalate, then board
+66-66 ringi "examples/purchase.ringi" ticket self_approval
+    self approval not allowed
+69-69 ringi "examples/purchase.ringi" ticket same_approver
+    same approver approves once, at the last stage
+70-70 ringi "examples/purchase.ringi" ticket send_back
+    send back to any earlier stage, at most 3 times
+71-71 ringi "examples/purchase.ringi" ticket resubmit
+    resubmit within 10 business days
+72-72 ringi "examples/purchase.ringi" ticket withdraw
+    withdraw until decide
+73-73 ringi "examples/purchase.ringi" ticket retract
+    retract approval until the next stage answers
+74-74 ringi "examples/purchase.ringi" ticket approvers_edit
+    approvers edit summary
+77-77 ringi "examples/purchase.ringi" ticket hold_budget.reserve
+    on submitted hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: requester.department, amount: amount) when requester.department is not none
+78-78 ringi "examples/purchase.ringi" ticket post_budget.reserve
+    on approved post budget.reserve(request: ticket.id, attempt: ticket.attempt)
+79-79 ringi "examples/purchase.ringi" ticket launch_order
+    on approved launch order(request_id: ticket.id, vendor: vendor, amount: amount, summary: summary)
+80-80 ringi "examples/purchase.ringi" ticket void_budget.reserve
+    on sent back, rejected, withdrawn, expired void budget.reserve(request: ticket.id, attempt: ticket.attempt)
+83-83 ringi "examples/purchase.ringi" claim the_board_votes_on_large_purchases
+    the_board_votes_on_large_purchases : possible board is at least 60% of board
+84-84 ringi "examples/purchase.ringi" claim ends_in_time
+    ends_in_time : every ticket ends within 246 business days
+86-97 ringi "examples/purchase.ringi" scenario a_board_purchase
+    scenario a_board_purchase
+    requester e1201
+    given budget.allocate(dept: "sales1", period: "2026", amount: 10_000_000JPY)
+    form kind = capex, vendor = "V-0031", lines = [{item: "Press line", quantity: 1, price: 8_000_000JPY}], summary = "A second press line for the plant", quote = "quote.pdf", advance = 20%, others = [{company: "Example Presses (fictional)", bid: 8_600_000JPY}]
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | first | in progress |
+    | 2026-11-16 14:00 | approve | e1101 | finance | in progress |
+    | 2026-11-17 10:00 | approve | e4001 | board | in progress |
+    | 2026-11-18 10:00 | approve | e0201 | board | in progress |
+    | 2026-11-18 11:00 | approve | e0202 | board | in progress |
+    | 2026-11-18 15:00 | approve | e0203 | decide | in progress |
+    | 2026-11-19 10:00 | approve | e0001 | | approved |
+101-109 ringi "examples/purchase.ringi" scenario half_paid_in_advance
+    scenario half_paid_in_advance
+    requester e1201
+    given budget.allocate(dept: "sales1", period: "2026", amount: 10_000_000JPY)
+    form kind = goods, vendor = "V-0012", lines = [{item: "Booth for the trade fair", quantity: 1, price: 400_000JPY}], summary = "A booth for the spring trade fair", quote = "quote.pdf", advance = 50%, others = []
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | first | in progress |
+    | 2026-11-16 11:00 | approve | e1101 | finance | in progress |
+    | 2026-11-16 14:00 | approve | e4001 | decide | in progress |
+    | 2026-11-17 10:00 | approve | e3101 | | approved |
+113-120 ringi "examples/purchase.ringi" scenario the_manager_decides_after_finance
+    scenario the_manager_decides_after_finance
+    requester e3101
+    given budget.allocate(dept: "sales1", period: "2026", amount: 10_000_000JPY)
+    form kind = goods, vendor = "V-0012", lines = [{item: "Demo units", quantity: 4, price: 500_000JPY}], summary = "Demo units for the sales offices", quote = "quote.pdf", advance = 0%, others = []
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e3101 | finance | in progress |
+    | 2026-11-16 14:00 | approve | e4001 | decide | in progress |
+    | 2026-11-17 10:00 | approve | e0101 | | approved |
+124-134 ringi "examples/purchase.ringi" scenario the_decision_goes_up_and_the_manager_answers_after
+    scenario the_decision_goes_up_and_the_manager_answers_after
+    requester e3101
+    given budget.allocate(dept: "sales1", period: "2026", amount: 10_000_000JPY)
+    form kind = goods, vendor = "V-0012", lines = [{item: "Demo units", quantity: 4, price: 500_000JPY}], summary = "Demo units for the sales offices", quote = "quote.pdf", advance = 0%, others = []
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e3101 | finance | in progress |
+    | 2026-11-16 14:00 | approve | e4001 | decide | in progress |
+    | 2026-11-19 09:00 | remind | | decide | in progress |
+    | 2026-11-24 00:00 | late | | decide | in progress |
+    | 2026-11-24 10:00 | approve | e0001 | first | in progress |
+    | 2026-11-24 15:00 | approve | e0101 | | approved |
+139-146 ringi "examples/purchase.ringi" scenario the_organization_changes_while_the_manager_waits
+    scenario the_organization_changes_while_the_manager_waits
+    requester e9002
+    given budget.allocate(dept: "legal", period: "2026", amount: 3_000_000JPY)
+    form kind = goods, vendor = "V-0012", lines = [{item: "Document scanner", quantity: 1, price: 300_000JPY}], summary = "A scanner for the contract archive", quote = "quote.pdf", advance = 0%, others = [], reviewer = person "e7201"
+    | at | event | by | -> stage | status |
+    | 2027-03-30 10:00 | submit | e9002 | technical | in progress |
+    | 2027-04-01 11:00 | approve | e7201 | decide | in progress |
+    | 2027-04-01 15:00 | approve | e0102 | | approved |
+151-162 ringi "examples/purchase.ringi" scenario the_board_votes_it_down
+    scenario the_board_votes_it_down
+    requester e1201
+    given budget.allocate(dept: "sales1", period: "2026", amount: 10_000_000JPY)
+    form kind = capex, vendor = "V-0031", lines = [{item: "Robot arm for the packing line", quantity: 2, price: 3_500_000JPY}], summary = "Two robot arms for the packing line", quote = "quote.pdf", advance = 0%, others = []
+    | at | event | by | comment | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | | first | in progress |
+    | 2026-11-16 14:00 | approve | e1101 | | finance | in progress |
+    | 2026-11-17 10:00 | approve | e4001 | | board | in progress |
+    | 2026-11-18 10:00 | approve | e0201 | | board | in progress |
+    | 2026-11-18 11:00 | reject | e0202 | "The packing line runs at half its capacity" | board | in progress |
+    | 2026-11-18 13:00 | reject | e0203 | "Two arms are more than the line needs" | board | in progress |
+    | 2026-11-18 15:00 | reject | e0204 | "Ask again with a quote for one arm" | | rejected |

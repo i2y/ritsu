@@ -1,0 +1,24 @@
+# 誤りのある宣言と、宣言した物を使う行。どの誤りも一度だけ言う。chain_declarations.book の日本語の版
+book 売上金 v1
+description "マーケットプレイスのお金を銭で数える。カードの支払いが店の分として入り、決済の手数料が店の売上金から出る"
+
+# 単位の名前を宣言で書き誤った。どの勘定も額も `円` と書いている
+unit 圓
+
+account 売上金(店: string) : 円
+  description "マーケットプレイスが店に払う分"
+  at least 0 refused as 売上金不足
+account カード : 円 outside
+account 決済会社 : 円 outside
+
+# 引数の名前を宣言で書き誤った。キーは `支払い` と書いたまま
+transfer 売上(支払: string, 店: string, 額: 円)
+  description "店の分として受けたカードの支払い"
+  key 支払い
+  move 額 from カード to 売上金(店)
+
+# 引数の型の書き誤り。`手数料` を動かす行は確かめない
+transfer 決済手数料(支払い: string, 店: string, 手数料: ドル)
+  description "その支払いにかかる決済の手数料。店の売上金から出す"
+  key 支払い
+  move 手数料 from 売上金(店) to 決済会社

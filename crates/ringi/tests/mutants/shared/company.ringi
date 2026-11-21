@@ -1,0 +1,10 @@
+organization company v1 "Company"
+
+positions
+  staff     "Staff"
+  manager   "Manager"
+  dept_head "Head of department"
+
+team kinds
+  company    "Company"
+  department "Department"

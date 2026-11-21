@@ -1,0 +1,112 @@
+# HTTP の呼び出しの引数がどこに入り、リストやレコードがそこでどう書かれるか（DESIGN 43）。
+# 図書館の記述は、引数ごとに、パス・クエリ・ヘッダー・クッキー・本文のどこに入れるかと、その
+# 書き方（style と explode）を言う。リストは項目ごとに名前を繰り返すか、つないで一つにする。
+# レコードはフィールドの名前で書くか、`sort[by]` の形か、パスの matrix と label の形で書く。
+# 記述の名前の `-` はフローでは `_` で書き、ヘッダーの名前は大文字と小文字を区別しない。
+# 検索と印付けの呼び出しには記述が無く、OpenAPI の既定の形で送る。日本語の名前もそのまま送る。
+# 無い値はどこにも入らない。メモ・トレース・備考は実行によっては無い入力で、並び順・棚の一つ・
+# テーマは none を渡す。どのプラットフォームでも動く。既定の Transport は、実行が持つ値を送る。
+workflow 図書館の本 v1
+description "図書館の本を探し、棚の場所を見て、本を貸し、メモを付ける。引数は、記述が言う置き場と書き方で送る。記述の無い検索と印付けは、既定の形で送る"
+
+use openapi library from "apis/library.json"
+
+record 年の幅
+  first : int
+  last  : int
+
+record 並び順
+  by    : string
+  order : string?
+
+record 場所
+  row : int
+  col : int
+
+record 置き場
+  room  : string
+  shelf : int
+
+record 印の位置
+  page : int
+  line : int
+
+record 件数
+  count : int  range >=0 <=1000
+
+record 見た棚
+  shelf : string
+
+record 貸し出し
+  id : string
+
+record 書いたもの
+  id : string
+
+record 年の範囲
+  最初 : int
+  最後 : int
+
+record 置き場所
+  部屋 : string
+  棚   : int
+
+inputs
+  棚     : string
+  借りる人 : string
+  返す日 : date
+  メモ   : string?
+  トレース : string?
+  備考   : string?
+
+outputs
+  見つけた数 : int  range >=0 <=1000
+  棚の名前   : string
+  貸し出しの番号 : string
+  メモの番号 : string
+  検索の数   : int  range >=0 <=1000
+  印の番号   : string
+
+# パスのリストはコンマでつなぐ。クエリのリスト・レコード・値は、それぞれの書き方で。
+task 本を探す(ids: list[string], tags: list[string], authors: list[string], years: 年の幅, sort: 並び順, words: list[string], codes: list[string], lost: bool, note: string?) -> 件数
+  http GET library "/books/{ids}"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/library/5a6b7c8d"
+  idempotent
+
+# パスの matrix と label、ヘッダー（ASCII でない文字は UTF-8 のバイトで）、クッキー。
+task 棚を見る(shelf: string, spot: 場所, labels: list[string], x_library_key: string, x_trace_id: string?, x_shelves: list[string?], x_spot: 場所, session_id: string, prefs: list[string], theme: string?) -> 見た棚
+  http GET library "/shelves/{shelf}/spots{spot}/labels/{labels}"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/library/5a6b7c8d"
+  idempotent
+
+# POST でも、記述がクエリに置く返す日はクエリに入る。借りる人は JSON の本文に入る。
+task 貸す(book_id: string, due: date, reader: string) -> 貸し出し
+  http POST library "/books/{book-id}/loans"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/library/5a6b7c8d"
+
+# URL エンコードの本文。リストは項目ごとに名前を繰り返し、レコードはフィールドの名前と
+# `marks[page]` の形で書き、リストを `|` でつなぎ、無いことのある備考を渡す。
+task メモを付ける(id: string, text: string, tags: list[string], place: 置き場, marks: 印の位置, words: list[string], memo: string?) -> 書いたもの
+  http POST library "/books/{id}/notes"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/library/5a6b7c8d"
+
+# 記述が無い。パスのリストはコンマでつなぎ、クエリのリストは項目ごとに名前を繰り返し、
+# レコードはフィールドの名前で書く。
+task 検索する(部屋: list[string], 語: list[string], 年: 年の範囲, ページ: int?) -> 件数
+  http GET "https://search.example.com/v1/rooms/{部屋}/books"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/search/9e8d7c6b"
+  idempotent
+
+# 記述が無く、URL エンコードの本文。クエリと同じ書き方。
+task 印を付ける(id: string, タグ: list[string], 置き場所: 置き場所, 備考: string?) -> 書いたもの
+  http POST "https://search.example.com/v1/books/{id}/marks" form
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/search/9e8d7c6b"
+
+flow
+  let 見つけた = 本を探す(ids: ["b-1", "b/2"], tags: ["old", "rare map"], authors: ["伊藤", "O'Neil"], years: {first: 1901, last: 1950}, sort: {by: "title", order: none}, words: ["海", "塩 & 胡椒"], codes: ["A|1", "B"], lost: false, note: メモ)
+  let 見た = 棚を見る(shelf: 棚, spot: {row: 3, col: 12}, labels: ["赤", "青"], x_library_key: "key-1", x_trace_id: トレース, x_shelves: ["東", none, "西"], x_spot: {row: 3, col: 12}, session_id: "s 1;2", prefs: ["dark", "large"], theme: none)
+  let 貸した = 貸す(book_id: "b-1", due: 返す日, reader: 借りる人)
+  let 付けた = メモを付ける(id: "b-1", text: "ページが破れている", tags: ["修理", "急ぎ"], place: {room: "東", shelf: 3}, marks: {page: 12, line: 4}, words: ["のり", "テープ"], memo: 備考)
+  let 検索した = 検索する(部屋: ["東", "西 2"], 語: ["海", "塩"], 年: {最初: 1901, 最後: 1950}, ページ: none)
+  let 印を付けた = 印を付ける(id: "b/1", タグ: ["修理", "急ぎ"], 置き場所: {部屋: "東", 棚: 3}, 備考: 備考)
+  succeed 見つけた数 = 見つけた.count, 棚の名前 = 見た.shelf, 貸し出しの番号 = 貸した.id, メモの番号 = 付けた.id, 検索の数 = 検索した.count, 印の番号 = 印を付けた.id

@@ -1,0 +1,4 @@
+enums 経費の区分(expense_categories_ja) v1
+description "経費の申請の区分。shared_enums.ja.flow と、そこから呼ぶ二つの規則が、それぞれ import enum で読む"
+
+enum 区分(category) = 旅費(travel) | 購入(purchase) | 研修(training)

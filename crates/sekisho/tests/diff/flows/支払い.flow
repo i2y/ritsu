@@ -1,0 +1,27 @@
+workflow 支払い v1
+description "請求を支払う。sekisho の diff の試験のために書いた。横の gate が、フローが支払う請求について何を持っているかを言う"
+
+use openapi 窓口 from "../../../examples/claims/api/desk.json"
+
+record 支払いの結果
+  paid : bool
+
+inputs
+  請求番号 : string
+  金額     : money[JPY]  range >=1JPY <=10_000JPY
+  求めた額 : money[JPY]  range >=1JPY <=10_000JPY
+  確認済み : bool
+  急ぎ     : bool
+
+outputs
+  済み : bool
+
+task 請求を支払う(claimId: string) -> 支払いの結果
+  http POST 窓口 "/claims/{claimId}/payments"
+  errors denied = 403
+  key
+
+flow
+  let 支払い = 請求を支払う(claimId: 請求番号)
+    on denied => fail Denied "gate が、ワークフローがこの請求を支払うことを認めませんでした"
+  succeed 済み = 支払い.paid

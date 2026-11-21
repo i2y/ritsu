@@ -7,14 +7,18 @@
   ritsu-model dandori <flow.json>   each line of stdin a scenario; each line out the run
   ritsu-model cross <file.json>     each line of stdin a check across a border; each line out its answer
   ritsu-model kaname <module.json>  each line of stdin a run of a function, or the analysis; each line out its answer
+  ritsu-model ringi <request.json>  each line of stdin a vector of a ticket and the answers given so far; each line out
+                                    the answer, or what the model asks next
   ```
 
   The first argument names the model and the second is the file the Rust test wrote for it: a
   book, a dates or calendar file, a flow, a module of kaname, resolved the way the model reads them;
-  for `cross`, a dates file whose days the lines ask for, or nothing. Every line in is answered by exactly one
-  line out, in order, so the test can compare them a line at a time. What runs here is the
-  functions the theorems of `ChoboModel`, `KoyomiModel`, `DandoriCore`, `RitsuCross` and
-  `KanameCore` are about; nothing in this file decides anything.
+  for `cross`, a dates file whose days the lines ask for, or nothing; for `ringi`, the data of a
+  request's glue. Every line in is answered by exactly one line out, in order, so the test can
+  compare them a line at a time; `ringi` writes each line out as soon as it is made, for the test
+  answers what the model asks and gives the line again. What runs here is the
+  functions the theorems of `ChoboModel`, `KoyomiModel`, `DandoriCore`, `RitsuCross`,
+  `KanameCore` and `RingiCore` are about; nothing in this file decides anything.
 -/
 import Lean.Data.Json
 import ChoboModel
@@ -22,6 +26,7 @@ import KoyomiModel
 import DandoriCore
 import RitsuCross
 import KanameCore
+import RingiCore
 
 open Lean
 
@@ -39,13 +44,27 @@ partial def eachLine (answer : String → String) : IO Unit := do
   loop
   stdout.flush
 
+/-- `eachLine`, each line out written at once: the test reads it before it writes the next. -/
+partial def eachLineFlushed (answer : String → String) : IO Unit := do
+  let stdin ← IO.getStdin
+  let stdout ← IO.getStdout
+  let rec loop : IO Unit := do
+    let line ← stdin.getLine
+    if line.isEmpty then return
+    let l := line.trimAsciiEnd.toString
+    unless l.isEmpty do
+      stdout.putStrLn (answer l)
+      stdout.flush
+    loop
+  loop
+
 def jsonAnswer (f : Json → Json) (line : String) : String :=
   match Json.parse line with
   | .ok j => (f j).compress
   | .error e => (Json.mkObj [("error", Json.str s!"unreadable line: {e}")]).compress
 
 def usage : String :=
-  "ritsu-model chobo <book.json> | koyomi <file.json> | dandori <flow.json> | cross <file.json> | kaname <module.json>, with the inputs on stdin, a JSON value a line"
+  "ritsu-model chobo <book.json> | koyomi <file.json> | dandori <flow.json> | cross <file.json> | kaname <module.json> | ringi <request.json>, with the inputs on stdin, a JSON value a line"
 
 def main (args : List String) : IO UInt32 := do
   match args with
@@ -80,5 +99,9 @@ def main (args : List String) : IO UInt32 := do
       match KanameCore.readModule j with
       | .ok m => eachLine (jsonAnswer (KanameCore.answerLine m)); return 0
       | .error e => IO.eprintln s!"ritsu-model: cannot read the module: {e}"; return 2
+    | "ringi" =>
+      match RingiCore.Run.readRequest j with
+      | .ok r => eachLineFlushed (jsonAnswer (RingiCore.Run.answer r)); return 0
+      | .error e => IO.eprintln s!"ritsu-model: cannot read the request: {e}"; return 2
     | _ => IO.eprintln usage; return 2
   | _ => IO.eprintln usage; return 2

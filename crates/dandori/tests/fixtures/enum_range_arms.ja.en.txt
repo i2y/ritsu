@@ -1,0 +1,18 @@
+error[E014]: tests/fixtures/enum_range_arms.ja.flow:42:1: `広い` can be outside `>=シルバー <=ゴールド`, the range of the parameter `キャンペーン` of `送る`: it can be `一般`
+    42 |       送る(キャンペーン: 広い)
+  = Write `range >=シルバー <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+error[E014]: tests/fixtures/enum_range_arms.ja.flow:45:1: `広い` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
+    45 |   let b = 送料(会員: 広い, キャンペーン: 広い, 小計: 小計)
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+error[E014]: tests/fixtures/enum_range_arms.ja.flow:65:1: `選んだ段階` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
+    65 |       let e = 送料(会員: 広い, キャンペーン: 選んだ段階, 小計: 小計)
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+error[E014]: tests/fixtures/enum_range_arms.ja.flow:72:1: `順番` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
+    72 |         let f = 送料(会員: 広い, キャンペーン: 順番, 小計: 小計)
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+error[E014]: tests/fixtures/enum_range_arms.ja.flow:74:1: `順番` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
+    74 |       let g = 送料(会員: 広い, キャンペーン: 順番, 小計: 小計)
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+error[E014]: tests/fixtures/enum_range_arms.ja.flow:80:1: `広い` can be outside `>=シルバー <=ゴールド`, the range of the parameter `キャンペーン` of `送る`: it can be `一般`
+    80 |   送る(キャンペーン: 広い)
+  = Write `range >=シルバー <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in

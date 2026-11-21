@@ -1,0 +1,3 @@
+error[E001]: tests/mutants/E001_escalate_twice_when_empty.ringi:15:29: `when empty` does not go up twice: after `then`, write `skip`, `stay` or a way to choose an approver
+    15 |   when empty escalate, then escalate
+  = A stage goes up as long as someone is above. `then` says what it does where nobody is above (the top of the organization): it is skipped (`skip`), waits for an administrator (`stay`), or goes to a way to choose declared in `who` (`then board`).

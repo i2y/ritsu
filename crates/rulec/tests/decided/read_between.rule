@@ -1,0 +1,27 @@
+rule read_between v1
+description "The grade decided by two tables, and the table that reads it written between them. The tables of one output are worked out together, at the last of them"
+
+enum level = low "Low" | high "High"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+  member : bool
+
+outputs
+  grade  : level
+  review : bool
+
+table grade_small
+| amount     | -> grade |
+| <10_000JPY | low      |
+
+table review_of
+policy unique
+| grade | member | -> review |
+| low   | -      | false     |
+| high  | true   | false     |
+| high  | false  | true      |
+
+table grade_large
+| amount      | -> grade |
+| >=10_000JPY | high     |

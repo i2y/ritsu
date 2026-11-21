@@ -1,0 +1,7 @@
+エラー[E005]: tests/fixtures/unread_tasks.flow:4:10: 規則 `rules/broken_quote.rule` を読めませんでした
+     4 | use rule quote from "rules/broken_quote.rule"
+  = E101: 完全性の欠落: どの行にも当てはまらない入力があります（tests/fixtures/rules/broken_quote.rule の 13 行目）
+エラー[E007]: tests/fixtures/unread_tasks.flow:31:10: Jev が答えるのは、列挙の値のどれか、列挙の値を低いものから並べた段階のどこか（`score`）、はいかいいえ（`bool`）と、それらを並べたレコードです。文章は書きません。フィールド `note` は `string` です
+    31 |     note "What does the sender say of it?"
+エラー[E002]: tests/fixtures/unread_tasks.flow:49:20: `Parcel` にフィールド `code` はありません（あるのは id・weight）
+    49 |   tag(text: parcel.code)

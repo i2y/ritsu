@@ -1,5 +1,5 @@
 workflow plain_names v1
-description "Names the generated code has no claim on, though they read like its own: the nouns a Go package might have, and the builtins of Python and the globals of JavaScript the code never reads, as types and variables. Runs on every platform"
+description "Names the generated code has no claim on, though they read like its own: the nouns a Go package might have, the builtins of Python and the globals of JavaScript the code never reads, and a name of Python's typing the code reads by another name, as types and variables. Runs on every platform"
 
 # the nouns of a business, which a Go package could have had
 enum Outcome = won | lost
@@ -25,6 +25,7 @@ enum reversed = a | b
 enum setattr = a | b
 enum sum = a | b
 enum vars = a | b
+enum TypeError = a | b
 
 record format
   width : int
@@ -34,6 +35,10 @@ record hash
 
 record slice
   start : int
+
+# a name of Python's typing the code reads by another name
+record TypeGuard
+  value : int
 
 # the globals of JavaScript no type of the code reads as a type
 enum Boolean = a | b
@@ -80,6 +85,8 @@ record Everything
   the_slice : slice
   the_sum : sum
   the_vars : vars
+  the_typeerror : TypeError
+  the_typeguard : TypeGuard
   the_boolean : Boolean
   the_date : Date
   the_error : Error
@@ -130,4 +137,6 @@ flow
   let slice = note(id: id)
   let sum = note(id: id)
   let vars = note(id: id)
-  succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", everything = everything
+  let TypeError = note(id: id)
+  let TypeGuard = note(id: id)
+  succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}{TypeError}{TypeGuard}", everything = everything

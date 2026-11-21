@@ -191,8 +191,8 @@ pub fn ledger() -> Ledger {
             "E008",
             tr!("宣言されていない名前です", "A name that is not declared"),
             tr!(
-                "`owner`、`decided … by`、確かめた記録の `by`、`review --by` の役割が宣言されていないとき、`from` と `replaces` の要件がプロジェクトに無いとき。",
-                "The role of an `owner`, a `decided … by`, the `by` of a record or `review --by` is not declared, or the requirement of a `from` or `replaces` is not in the project."
+                "`owner`、`decided … by`、確かめた記録の `by`、`review --by` の役割が宣言されていないとき、`from` と `replaces` の要件がプロジェクトに無いとき。同じ役割や要件を何か所にも書いたときは、最初に書いた所で一度だけ出て、ほかの行の番号を注に挙げます。",
+                "The role of an `owner`, a `decided … by`, the `by` of a record or `review --by` is not declared, or the requirement of a `from` or `replaces` is not in the project. A role or a requirement written in several places is said once, where it is first written, and the note gives the lines of the others."
             ),
             tr!("`role 法務 \"…\"` で役割を宣言するか、名前の書き間違いを直してください。", "Declare the role with `role legal \"…\"`, or correct the misspelling."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務部\n  decided 2026-10-03 by 法務 \"例\"\n",
@@ -227,10 +227,10 @@ pub fn ledger() -> Ledger {
             "E011",
             tr!("参照の最初の語が、ツール名ではありません", "A tool that does not exist"),
             tr!(
-                "参照の最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai、sekisho、kaname、jsonschema のどれでもないとき（`dir` も、ツール名ではありません）。",
-                "The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai, sekisho, kaname and jsonschema (`dir` is not a word of a naming either)."
+                "参照の最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai、sekisho、kaname、jsonschema、ringi のどれでもないとき（`dir` も、ツール名ではありません）。",
+                "The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai, sekisho, kaname, jsonschema and ringi (`dir` is not a word of a naming either)."
             ),
-            tr!("この十五のツール名のどれかを書いてください。ほかのファイルは `file \"…\"` で指してください。", "Write one of the fifteen; name any other file with `file \"…\"`."),
+            tr!("この十六のツール名のどれかを書いてください。ほかのファイルは `file \"…\"` で指してください。", "Write one of the sixteen; name any other file with `file \"…\"`."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by excel \"a.xlsx\"\n",
             &["E012", "E013"],
         )
@@ -306,8 +306,8 @@ pub fn ledger() -> Ledger {
             "E105",
             tr!("引用が使えません", "A citation cannot be used"),
             tr!(
-                "引用の条が読めない形のとき、同じファイルで宣言されていない出典を引いたとき、法令を条なしで、OpenSpec の仕様を要件なしで引いたとき、`file` の出典に条を書いたとき。",
-                "The article of a citation is not in a form read, the source is not declared in the same file, a law is cited without an article or an OpenSpec spec without a requirement, or a `file` source is cited with one."
+                "引用の条が読めない形のとき、同じファイルで宣言されていない出典を引いたとき、法令を条なしで、OpenSpec の仕様を要件なしで引いたとき、`file` の出典に条を書いたとき。宣言されていない同じ出典を何か所にも引いたときは、最初の一か所で一度だけ出て、ほかの行の番号を注に挙げます。",
+                "The article of a citation is not in a form read, the source is not declared in the same file, a law is cited without an article or an OpenSpec spec without a requirement, or a `file` source is cited with one. A source that is not declared, cited in several places, is said once, at the first, and the note gives the lines of the others."
             ),
             tr!("出典を同じファイルで宣言し、法令は `@民法 第142条` のように条で、`file` の出典は `@約款` と丸ごと引いてください。", "Declare the source in the same file; cite a law by article or section (`@cfr \"§1.7\"`) and a `file` source whole (`@terms`)."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @商法 第1条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",

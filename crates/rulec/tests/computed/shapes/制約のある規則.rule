@@ -1,0 +1,24 @@
+rule 制約のある規則(callee_constraint) v1
+description "入力どうしに constraint のある規則を取り込み、両端と一緒に読む"
+
+enum 判定(verdict) = よい(ok) | 確かめる(check)
+
+inputs
+  下端(lo) : number  range >=0 <=100
+  上端(hi) : number  range >=0 <=100
+
+constraint 下端 <= 上端
+
+apply 幅を見る(s) = "shared/幅.rule" meaning:9f480830086a89aa
+  下端 = 下端
+  上端 = 上端
+  幅の広さ -> 受けた広さ
+
+outputs
+  答え(v) : 判定
+
+table 選ぶ(pick)
+| 下端 | 上端 | 受けた広さ | -> 答え  |
+| <=50 | <=50 | 狭い       | よい     |
+| <=50 | >50  | 広い       | 確かめる |
+| >50  | -    | 狭い       | よい     |

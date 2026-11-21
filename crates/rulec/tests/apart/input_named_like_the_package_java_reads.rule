@@ -1,0 +1,33 @@
+rule prize_draw v1
+description "An input named like the package Java's function that counts the answers reads a class from"
+
+enum prize = first | second | no_prize
+
+inputs
+  ticket : number  range >=0 <=99  random
+  java   : bool
+
+outputs
+  prize : prize
+
+table numbers
+policy unique
+| ticket  | java  | -> prize |
+| 0       | -     | first    |
+| >=1 <=9 | true  | second   |
+| >=1 <=9 | false | no_prize |
+| >=10    | -     | no_prize |
+
+chances
+| java  | -> prize | chance |
+| -     | first    | 1%     |
+| true  | second   | 9%     |
+| true  | no_prize | 90%    |
+| false | no_prize | 99%    |
+
+examples
+| ticket | java  | -> prize |
+| 0      | false | first    |
+| 5      | true  | second   |
+| 5      | false | no_prize |
+| 50     | true  | no_prize |

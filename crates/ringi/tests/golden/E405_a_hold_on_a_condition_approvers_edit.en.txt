@@ -1,0 +1,6 @@
+error[E405]: tests/mutants/E405_a_hold_on_a_condition_approvers_edit.ringi:26:118: The hold `budget.reserve` reads `kind`, a field approvers may edit
+    26 |   on submitted    hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)  when kind is budgeted
+  = The condition of the hold (`when kind is budgeted`) reads `kind`, and `approvers edit` on line 25 lets an approver edit `kind`.
+  = A hold is made once, with the values the request is submitted with, and is not made again when an approver edits them.
+  = Once an edit makes the condition fail, a `post` or a `void` on the same condition is not done, and the hold is left open.
+  = Take `kind` out of `approvers edit` (the line itself, where it lists no other field).

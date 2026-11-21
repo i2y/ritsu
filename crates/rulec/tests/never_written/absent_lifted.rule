@@ -1,0 +1,26 @@
+rule absent_lifted v1
+description "A tier and a priority the table writes, either of which may be absent, read through an apply whose first rows take values they never hold (fictional)"
+
+enum tier = basic < silver < gold
+
+inputs
+  member : tier
+
+outputs
+  tier_credit : money[USD]  round down(1USD)
+  priority_credit : money[USD]  round down(1USD)
+
+# The tier is silver, gold or absent, never basic; the priority is true or absent, never false
+table lift_by_member
+policy unique
+| member | -> lift : tier? | priority : bool? |
+| basic  | silver          | none             |
+| silver | none            | true             |
+| gold   | gold            | true             |
+
+# The callee's `basic` row and its `false` row come first, with nothing to take
+apply lifted = "absent_credit.rule" meaning:ae781e794e7eec62
+  tier = lift
+  priority = priority
+  tier_credit -> tier_credit
+  priority_credit -> priority_credit

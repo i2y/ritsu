@@ -1,0 +1,2 @@
+error[E212]: tests/mutants/E212_a_value_of_another_type.gate:12:1: The flow's `claim_id` is a string, and the attribute `urgent` is a bool
+    12 |     urgent = claim_id

@@ -20,6 +20,8 @@
 //! its `ritsu.mod` and its READMEs say of it, and the notices of what it copies; and the workflow that
 //! publishes them, which runs by hand only.
 
+mod common;
+
 use ritsu_base::modules::lock::{Lock, Locked};
 use ritsu_base::modules::semver::Version;
 use ritsu_base::modules::store::{self, Store};
@@ -36,7 +38,7 @@ fn here() -> PathBuf {
 fn ritsu_in(dir: &Path, store: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args).env(store::VARIABLE, store);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -340,7 +342,8 @@ fn the_page_of_each_language_names_the_module_of_a_dependencys_file() {
 }
 
 /// An error in a file of a dependency is said as the module's own are, and fails the check (exit 1):
-/// on the line of the dependencies, and in the module's own files that read it.
+/// on the line of the dependencies, and the module's own files that read it wait for it (DESIGN 8.3),
+/// one line for the line that reads it, under the dependency's file.
 #[test]
 fn an_error_in_a_dependency_fails_the_check() {
     let t = example();
@@ -349,12 +352,16 @@ fn an_error_in_a_dependency_fails_the_check() {
     let (code, out, _) = ritsu_in(&shop, t.path(), &["check"]);
     assert_eq!(code, 1, "{out}");
     assert!(out.starts_with("error[rulec E107]: Example does not hold: fee should be 999GBPc but came out as 395GBPc\n  --> @pricing/rules/shipping_fee.rule:27 examples\n"), "{out}");
-    assert!(out.contains("error[dandori E005]: orders/place_order.flow:7:10: could not read the rule `@pricing/rules/shipping_fee.rule`"), "{out}");
+    assert!(
+        out.contains("\nwaiting for @pricing/rules/shipping_fee.rule (rulec E107 at line 27) to pass:\n  orders/place_order.flow:7: [dandori E005] use rule shipping from \"@pricing/rules/shipping_fee.rule\"\n"),
+        "{out}"
+    );
+    assert!(!out.contains("error[dandori"), "the flow says nothing more than that it waits: {out}");
     assert_eq!(
         last_lines(&out, 2),
         [
             "dependencies: 2 modules, 3 files (rulec 3): 1 fail (1 error)",
-            "ritsu check: 2 files (kaname 1, dandori 1): 1 fail (4 errors); borders between the languages: 0 checked, 0 undecided"
+            "ritsu check: 2 files (kaname 1, dandori 1): 1 waiting; borders between the languages: 0 checked, 0 undecided"
         ]
     );
     let (code, out, _) = ritsu_in(&shop, t.path(), &["check", "--lang", "ja"]);
@@ -371,9 +378,11 @@ fn an_error_in_a_dependency_fails_the_check() {
     let at = keys.iter().position(|k| *k == "file").unwrap();
     assert_eq!((keys[0], keys[at + 1]), ("tool", "dependency"));
     assert_eq!((e107["file"].as_str(), e107["dependency"].as_str()), (Some("@pricing/rules/shipping_fee.rule"), Some("@pricing")));
+    let flow = v["files"].as_array().unwrap().iter().find(|f| f["file"] == "orders/place_order.flow").unwrap();
+    assert_eq!((&flow["ok"], &flow["waits_for"]), (&serde_json::json!(false), &serde_json::json!(["@pricing/rules/shipping_fee.rule"])));
 }
 
-/// A rule of `tax` with two warnings (W111, W105): counted for `@pricing/@tax` on the line of the
+/// A rule of `tax` with three warnings (W121, W111, W105): counted for `@pricing/@tax` on the line of the
 /// dependencies and left out of the text and the JSON's diagnostics, unless `--deps-warnings` asks
 /// for each. A warning does not fail the check.
 #[test]
@@ -391,34 +400,34 @@ fn the_warnings_of_the_dependencies_are_counted_and_shown_when_asked() {
     assert_eq!(
         last_lines(&out, 2),
         [
-            "dependencies: 2 modules, 4 files (rulec 4): all pass (2 warnings); warnings by dependency: @pricing/@tax 2 (`--deps-warnings` shows each)",
+            "dependencies: 2 modules, 4 files (rulec 4): all pass (3 warnings); warnings by dependency: @pricing/@tax 3 (`--deps-warnings` shows each)",
             "ritsu check: 2 files (kaname 1, dandori 1): all pass; borders between the languages: 0 checked, 0 undecided"
         ]
     );
     let (_, out, _) = ritsu_in(&shop, t.path(), &["check", "--lang", "ja"]);
     assert_eq!(
         last_lines(&out, 2)[0],
-        "依存: モジュール 2 個、ファイル 4 個（rulec 4）。どれも検査を通りました（警告 2 件）。依存ごとの警告: @pricing/@tax 2 件（一つずつは `--deps-warnings` で出ます）"
+        "依存: モジュール 2 個、ファイル 4 個（rulec 4）。どれも検査を通りました（警告 3 件）。依存ごとの警告: @pricing/@tax 3 件（一つずつは `--deps-warnings` で出ます）"
     );
     let (code, out, _) = ritsu_in(&shop, t.path(), &["check", "--deps-warnings"]);
     assert_eq!(code, 0);
-    assert!(out.starts_with("warning[rulec W111]: Values of type kind appear in no row\n  --> @pricing/@tax/rules/promo.rule:4\n"), "{out}");
-    assert!(out.contains("warning[rulec W105]: "), "{out}");
+    assert!(out.starts_with("warning[rulec W121]: `new` is a keyword as written in PHP, so the generated code there writes it with `_` after it\n  --> @pricing/@tax/rules/promo.rule:4\n"), "{out}");
+    assert!(out.contains("warning[rulec W111]: ") && out.contains("warning[rulec W105]: "), "{out}");
     assert!(!out.contains("ok @"), "{out}");
-    assert_eq!(last_lines(&out, 2)[0], "dependencies: 2 modules, 4 files (rulec 4): all pass (2 warnings); warnings by dependency: @pricing/@tax 2");
-    for (flag, shown) in [(None, 0), (Some("--deps-warnings"), 2)] {
+    assert_eq!(last_lines(&out, 2)[0], "dependencies: 2 modules, 4 files (rulec 4): all pass (3 warnings); warnings by dependency: @pricing/@tax 3");
+    for (flag, shown) in [(None, 0), (Some("--deps-warnings"), 3)] {
         let mut args = vec!["check", "--format", "json"];
         args.extend(flag);
         let (_, out, _) = ritsu_in(&shop, t.path(), &args);
         let v = json(&out);
         assert_eq!(v["ok"], true);
-        assert_eq!(v["dependencies"][1]["warnings"], 2);
+        assert_eq!(v["dependencies"][1]["warnings"], 3);
         let ws: Vec<&serde_json::Value> = v["diagnostics"].as_array().unwrap().iter().filter(|d| d["dependency"] == "@pricing/@tax").collect();
         assert_eq!(ws.len(), shown, "{flag:?}");
     }
     // Checked as the module at hand, `tax` says them as its own.
     let (_, out, _) = ritsu_in(&t.path().join("tax"), t.path(), &["check"]);
-    assert!(out.contains("warning[rulec W105]: ") && out.ends_with("ritsu check: 2 files (rulec 2): all pass (2 warnings); borders between the languages: 0 checked, 0 undecided\n"), "{out}");
+    assert!(out.contains("warning[rulec W105]: ") && out.ends_with("ritsu check: 2 files (rulec 2): all pass (3 warnings); borders between the languages: 0 checked, 0 undecided\n"), "{out}");
 }
 
 /// The claims of a dependency's `.geas` are not run: the program its target serves would leave a
@@ -776,8 +785,11 @@ fn modules_from_a_registry_are_held_to_the_lock() {
     assert_eq!((code, out.as_str()), (2, ""));
     assert_eq!(err, "error: the dependency `example.com/acme/pricing` 1.1.0 is neither in the store nor in this module's copy of it; run `ritsu mod fetch`\n");
     let (code, out, err) = ritsu_in(&shop, empty.path(), &["check", "--format", "json", "--lang", "ja"]);
-    assert_eq!((code, out.as_str()), (2, ""));
+    assert_eq!(code, 2);
     assert!(err.starts_with("エラー: "), "{err}");
+    // the line asks for JSON: the same sentence, without its head, as JSON (DESIGN 6.2, item 10)
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
+    assert_eq!((&v["error"]["code"], v["error"]["message"].as_str()), (&serde_json::json!(2), err.trim_end().strip_prefix("エラー: ")), "{out}");
     // a lock a newer ritsu wrote: stop
     let lock = t.read("shop/ritsu.lock");
     t.write("shop/ritsu.lock", lock.replacen("lock 1\n", "lock 2\n", 1));
@@ -820,7 +832,7 @@ fn a_walk_outside_a_module_passes_over_a_module_and_says_so() {
     assert_eq!((code, out.as_str()), (2, ""));
     assert_eq!(
         err,
-        "error: there is no file of ritsu's languages (.rule, .flow, .cal, .book, .geas, .req, .ctx, .gate, .kn, .proto) in loose\nnote: `loose/tax` has a `ritsu.mod` of its own: it is another module, and was not read; run `ritsu check loose/tax` to read it\n"
+        "error: there is no .rule, .flow, .cal, .book, .geas, .req, .ctx, .gate, .kn or .proto file under `loose`\nnote: `loose/tax` has a `ritsu.mod` of its own: it is another module, and was not read; run `ritsu check loose/tax` to read it\n"
     );
 }
 

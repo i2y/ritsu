@@ -1,0 +1,96 @@
+workflow Goの名前 v1
+description "Go のパッケージが自分のために宣言し、呼ぶ側には知らせない名前を、型に付けたフローです。ワークフローを動かすプログラムが読むワーカーの部品、既定のトランスポート、エージェントのエラー、判断のサービスの置き場、時刻と日付の形を使います。パッケージは自分の名前を別の名前にし、プログラムはその名前を読みます。フローはどのプラットフォームでも動きます"
+
+# ワークフローを動かすプログラムが読む、ワーカーの部品
+record WorkflowType
+  名前 : string
+
+enum TaskQueue = 速い | 遅い
+
+record Events
+  数 : int
+
+enum BuildID = 一つ目 | 二つ目
+
+record RegisterWorkflow
+  済み : bool
+
+record RegisterActivities
+  済み : bool
+
+enum OwnTasksBy = 手 | 機械
+
+record WorkerOptions
+  ワーカーの数 : int
+
+# ほかに、パッケージが自分のために持つ名前
+record DefaultTransport
+  経路 : string
+
+enum AgentHTTPError = 時間切れ | 拒否
+
+enum AgentStopped = 早い | 遅い
+
+record JevURL
+  URL : string
+
+record DecisionsURL
+  URL : string
+
+record ClaudeMaxTokens
+  上限 : int
+
+enum TIMESTAMP = 前 | 後
+
+# 日付のあるフローは DATE も持つ
+enum DATE = 平日 | 休日
+
+# 動かす側の組み立てがどのパッケージにも足す、点検と `now` の時計の名前
+record DDSetNows
+  時刻 : string
+
+enum DDReadRule = 電文 | 本文
+
+enum DDJev = 問う | 答える
+
+record 全部
+  WorkflowTypeの値 : WorkflowType
+  TaskQueueの値 : TaskQueue
+  Eventsの値 : Events
+  BuildIDの値 : BuildID
+  RegisterWorkflowの値 : RegisterWorkflow
+  RegisterActivitiesの値 : RegisterActivities
+  OwnTasksByの値 : OwnTasksBy
+  WorkerOptionsの値 : WorkerOptions
+  DefaultTransportの値 : DefaultTransport
+  AgentHTTPErrorの値 : AgentHTTPError
+  AgentStoppedの値 : AgentStopped
+  JevURLの値 : JevURL
+  DecisionsURLの値 : DecisionsURL
+  ClaudeMaxTokensの値 : ClaudeMaxTokens
+  TIMESTAMPの値 : TIMESTAMP
+  DATEの値 : DATE
+  DDSetNowsの値 : DDSetNows
+  DDReadRuleの値 : DDReadRule
+  DDJevの値 : DDJev
+
+inputs
+  番号 : string
+  日   : date
+
+outputs
+  全部の値 : 全部
+  日       : date
+  注記     : string
+
+task 集める(番号: string, 日: date) -> 全部
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:gather"
+  idempotent
+
+# 自分で実装するタスク。ワーカーの OwnTasksBy がパッケージに渡す
+task 書き留める(番号: string) -> string
+
+flow
+  let 全部の値 = 集める(番号: 番号, 日: 日)
+  let 注記 = 書き留める(番号: 番号)
+  succeed 全部の値 = 全部の値, 日 = 日, 注記 = 注記

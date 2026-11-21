@@ -1,0 +1,4 @@
+id,name,name_ja,kind,parent,head
+company,Example Co. (fictional),株式会社サンプル（架空）,company,,
+sales,Sales,営業部,department,company,e02
+finance,Finance,財務部,department,company,e04

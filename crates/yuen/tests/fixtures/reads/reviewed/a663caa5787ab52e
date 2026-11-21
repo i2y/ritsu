@@ -1,0 +1,6 @@
+permit 係は期間内に少数を返金できる(clerks_refund_small_amounts)
+  description "係は期間内に少数を返金できる"
+  principal in 係
+  action 返金する
+  when 大きさ is 少数
+  when 期間内

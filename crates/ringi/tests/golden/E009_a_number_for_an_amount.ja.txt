@@ -1,0 +1,2 @@
+エラー[E009]: tests/mutants/E009_a_number_for_an_amount.ringi:5:49: `amount` と `30_000` は比べられません（`money[JPY]` と `number`）
+     5 |   receipt : attachment "Receipt"  required when amount > 30_000

@@ -68,9 +68,9 @@ fn every_example_gives_its_code_alone() {
 fn the_ledger_has_each_code_once() {
     let l = kaname::codes::ledger();
     assert!(ledger::duplicates(&l).is_empty(), "{:?}", ledger::duplicates(&l));
-    // DESIGN 12: E001–E008, W001, E101–E115, E201–E204, E301–W303, E401, E402, W501, E601–E605,
+    // DESIGN 12: E001–E008, W001, W002, E101–E116, E201–E204, E301–W303, E401, E402, W501, E601–E605,
     // W603–W605, W901
-    assert_eq!(l.entries.len(), 47);
+    assert_eq!(l.entries.len(), 49);
     // every code is printed by now, and has its example
     let later: Vec<&str> = l.entries.iter().filter(|e| matches!(e.repro, Repro::Later)).map(|e| e.code).collect();
     assert!(later.is_empty(), "{later:?}");
@@ -136,7 +136,7 @@ fn the_cases_of_values_with_fields_say_their_codes() {
         ("E108", "enum Tree\n  node\n    left : Tree\n".into(), "enum 木(Tree)\n  節(node)\n    左(left) : 木\n".into()),
         // the names of the generated code: a value's type and a record, the field `kind`
         ("E006", format!("{order_en}record OrderPlaced\n  on : date\n"), format!("{order_ja}record 確定した注文(OrderPlaced)\n  日(on) : date\n")),
-        ("E007", "enum Order\n  draft\n    kind : string\n  cancelled\n".into(), "enum 注文(Order)\n  下書き(draft)\n    種類(kind) : string\n  取り消し(cancelled)\n".into()),
+        ("W001", "enum Order\n  draft\n    kind : string\n  cancelled\n".into(), "enum 注文(Order)\n  下書き(draft)\n    種類(kind) : string\n  取り消し(cancelled)\n".into()),
         // a record and a value of one name, where the enum goes
         ("E110", format!("{order_en}record placed\n  on : date\n\nfn start() -> Order\n  placed {{ on: 2026-03-01 }}\n"), format!("{order_ja}record 確定(placed_record)\n  日(on) : date\n\nfn 始め(start)() -> 注文\n  確定 {{ 日: 2026-03-01 }}\n")),
     ];
@@ -282,6 +282,97 @@ fn the_cases_of_types_that_hold_themselves_say_their_codes() {
         ("E108", "record Wrap[T]\n  value : T\n  inner : Wrap[list[T]]?\n".into(), "record 包み(Wrap)[T]\n  値(value)   : T\n  中身(inner) : 包み[list[T]]?\n".into()),
     ];
     say_their_codes("trees", &cases);
+}
+
+/// What the codes say of the names a host reads as the targets write them (DESIGN 10.3): two names
+/// every target writes alike (E006) and two some targets write alike (W002, the other named, with the
+/// targets that write them so), a name of the helper module (E007), and a name some targets cannot
+/// write (W001, with the rule). Each case, in English names and in Japanese ones, gives its code
+/// alone, and the text a person reads is held to `tests/golden/codes/spelled.*.txt`; of a warning,
+/// `gen::stops` says E008 of the targets it names and of no other, in the words held to
+/// `tests/golden/codes/stopped.*.txt`.
+#[test]
+fn the_names_the_targets_write_say_their_codes() {
+    let cases: Vec<(&str, &[&str], String, String)> = vec![
+        // a type, in every target
+        ("E006", &[], "record line_item\n  sku : string\n\nrecord LineItem\n  sku : string\n".into(), "record 明細(line_item)\n  品番(sku) : string\n\nrecord 明細行(LineItem)\n  品番(sku) : string\n".into()),
+        // Go's functions, in Pascal case
+        ("W002", &["go"], "fn total_weight() -> number\n  1\n\nfn totalWeight() -> number\n  2\n".into(), "fn 総重量(total_weight)() -> number\n  1\n\nfn 重量の合計(totalWeight)() -> number\n  2\n".into()),
+        // TypeScript's and Python's values of an enum, in upper case
+        ("W002", &["typescript", "python"], "enum tier = gold | GOLD\n".into(), "enum 区分(tier) = 金(gold) | 金色(GOLD)\n".into()),
+        // Go's fields
+        ("W002", &["go"], "record Line\n  unit_price : string\n  unitPrice  : string\n".into(), "record 明細(Line)\n  単価(unit_price)     : string\n  税込みの単価(unitPrice) : string\n".into()),
+        // Go's constant of a value and a type
+        ("W002", &["go"], "enum way = ab | cd\n\nrecord WayAb\n  n : number  range >=0 <=9\n".into(), "enum 道(way) = 甲(ab) | 乙(cd)\n\nrecord 甲の道(WayAb)\n  数(n) : number  range >=0 <=9\n".into()),
+        // Python's class and function
+        ("W002", &["python"], "record total\n  n : number  range >=0 <=9\n\nfn Total() -> number\n  1\n".into(), "record 合計(total)\n  数(n) : number  range >=0 <=9\n\nfn 合計の値(Total)() -> number\n  1\n".into()),
+        // TypeScript's frozen object of an enum and a function, and Python's class and function
+        ("W002", &["typescript", "python"], "enum kind = a | b\n\nfn Kind() -> number\n  1\n".into(), "enum 種類(kind) = 甲(a) | 乙(b)\n\nfn 種類の数(Kind)() -> number\n  1\n".into()),
+        // a name of the helper module, which every target reads by it
+        ("E007", &[], "record KanameError\n  a : string\n".into(), "record 誤り(KanameError)\n  値(a) : string\n".into()),
+        // a target's word where it writes the name as it is: Python's field, a function a host calls
+        // in TypeScript and in Python, and Python's parameter of one
+        ("W001", &["python"], "record Seat\n  class : string\n".into(), "record 座席(Seat)\n  等級(class) : string\n".into()),
+        ("W001", &["typescript"], "fn delete() -> number\n  1\n".into(), "fn 消す(delete)() -> number\n  1\n".into()),
+        ("W001", &["typescript", "python"], "fn class() -> number\n  1\n".into(), "fn 等級(class)() -> number\n  1\n".into()),
+        ("W001", &["python"], "fn scaled(lambda: number range >=0 <=9) -> number\n  lambda * 2\n".into(), "fn 倍(scaled)(係数(lambda): number range >=0 <=9) -> number\n  係数 * 2\n".into()),
+        // Python's fields: renamed in the class, kept by the language; TypeScript's prototype
+        ("W001", &["python"], "record Line\n  __sku : string\n".into(), "record 明細(Line)\n  品番(__sku) : string\n".into()),
+        ("W001", &["python"], "record Line\n  __init__ : string\n".into(), "record 明細(Line)\n  始め(__init__) : string\n".into()),
+        ("W001", &["typescript", "python"], "record Line\n  __proto__ : string\n".into(), "record 明細(Line)\n  原型(__proto__) : string\n".into()),
+        // Python's value of an enum, and its function
+        ("W001", &["python"], "enum tier = _gold_ | silver\n".into(), "enum 区分(tier) = 金(_gold_) | 銀(silver)\n".into()),
+        ("W001", &["python"], "fn __getattr__() -> number\n  1\n".into(), "fn 属性(__getattr__)() -> number\n  1\n".into()),
+        // a type with no name in Pascal case, a type Python reads as a keyword, Rust's value of an enum
+        ("W001", &["typescript", "python", "rust"], "record _1\n  a : string\n".into(), "record 一(_1)\n  値(a) : string\n".into()),
+        ("W001", &["python"], "record none_\n  a : string\n".into(), "record 無し(none)\n  値(a) : string\n".into()),
+        ("W001", &["rust"], "enum tier = _1 | gold\n".into(), "enum 区分(tier) = 一(_1) | 金(gold)\n".into()),
+    ];
+    let said: Vec<(&str, String, String)> = cases.iter().map(|(code, _, en, ja)| (*code, en.clone(), ja.clone())).collect();
+    say_their_codes("spelled", &said);
+    // of a warning, `ritsu gen` stops at the targets it names (E008), each in the same words
+    let scratch = ritsu_testkit::TempDir::new("codes-stopped");
+    let (mut en, mut ja) = (String::new(), String::new());
+    let mut wrong = Vec::new();
+    for (i, (code, targets, src_en, src_ja)) in cases.iter().enumerate() {
+        for (lang, head, src, out) in [(Lang::En, "module example v1\n\n", src_en, &mut en), (Lang::Ja, "module 例(example) v1\n\n", src_ja, &mut ja)] {
+            let dir = scratch.path().join(format!("{i}-{}", lang.code()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("example.kn");
+            std::fs::write(&path, format!("{head}{src}")).unwrap();
+            let o = Run::new(common::joined()).file(path.to_str().unwrap()).unwrap();
+            let Some(c) = o.checked.as_ref() else {
+                if !targets.is_empty() {
+                    wrong.push(format!("{code} ({lang:?}): no module passes its check"));
+                }
+                continue;
+            };
+            let mut stopped = Vec::new();
+            let mut texts = Vec::new();
+            for t in kaname::r#gen::Target::ALL {
+                let diags = kaname::r#gen::stops(c, t);
+                if diags.is_empty() {
+                    continue;
+                }
+                stopped.push(t.key());
+                let shown = kaname::check::Outcome { path: o.path.clone(), diags, checked: None, analysed: None, properties: Vec::new() };
+                texts.push(kaname::check::render(&shown, lang));
+            }
+            if stopped != *targets {
+                wrong.push(format!("{code} ({lang:?}): stops {stopped:?}, not {targets:?}"));
+            }
+            if texts.windows(2).any(|w| w[0] != w[1]) {
+                wrong.push(format!("{code} ({lang:?}): the targets say it in other words"));
+            }
+            if let Some(text) = texts.first() {
+                let prefix = format!("{}/", dir.display());
+                out.push_str(&format!("── {code} ({})\n{}\n", stopped.join(", "), text.replace(&prefix, "")));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    ritsu_testkit::golden("tests/golden/codes/stopped.en.txt", &en);
+    ritsu_testkit::golden("tests/golden/codes/stopped.ja.txt", &ja);
 }
 
 /// Each case, its English module and its Japanese one, gives its code alone; what `check` prints of

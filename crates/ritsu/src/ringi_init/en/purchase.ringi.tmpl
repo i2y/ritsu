@@ -1,0 +1,84 @@
+request purchase v1 "Purchase request"
+description "A purchase the requester's manager approves, then the head of their department. ritsu ringi init wrote it as a start: change it into your own rules"
+owner general_affairs
+
+use organization org from "shared/company.ringi"
+use calendar office from "shared/office.cal"
+use gate "shared/company.gate"
+
+form
+  amount  : money[JPY] "Amount"  range >=1JPY <=10_000_000JPY
+  purpose : long text "Purpose"  count >=1 <=500
+
+route
+  manager  manager
+  head     dept_head
+
+who
+  manager   = manager of requester
+  dept_head = head of requester.department
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late expire
+  when empty escalate
+
+ticket
+  # The president is at the top of the organization, with no manager to approve their purchases.
+  submitted by   everyone except position president
+  self approval  not allowed
+  # A manager who is also the head of the department approves once for both stages.
+  same approver  approves once
+  send back      to the requester, at most 2 times
+  resubmit       within 5 business days
+  withdraw       until it is decided
+
+claims
+  ends_in_time : every ticket ends within 28 business days
+
+scenario approved_at_both_stages
+  requester s1201
+  form amount = 120_000JPY, purpose = "A laptop for the new member of the section"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1201 | manager  | in progress |
+| 2026-11-16 15:00 | approve | s1101 | head     | in progress |
+| 2026-11-17 11:00 | approve | s1001 |          | approved    |
+
+# The manager asks what the purchase is for, and the requester says it in the request made again.
+scenario sent_back_and_submitted_again
+  requester s1201
+  form amount = 120_000JPY, purpose = "A laptop"
+| at               | event                                                               | by    | comment                         | -> stage | status         |
+| 2026-11-16 10:00 | submit                                                              | s1201 |                                 | manager  | in progress    |
+| 2026-11-16 15:00 | send back                                                           | s1101 | "Who will use it?"              |          | with requester |
+| 2026-11-17 09:00 | resubmit(purpose: "A laptop for the new member of the section")    | s1201 | "It is for the new member"      | manager  | in progress    |
+| 2026-11-17 10:00 | approve                                                             | s1101 |                                 | head     | in progress    |
+| 2026-11-17 11:00 | approve                                                             | s1001 |                                 |          | approved       |
+
+scenario rejected_by_the_head
+  requester s1202
+  form amount = 9_000_000JPY, purpose = "A car for the section"
+| at               | event   | by    | comment                       | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1202 |                               | manager  | in progress |
+| 2026-11-16 15:00 | approve | s1101 |                               | head     | in progress |
+| 2026-11-17 11:00 | reject  | s1001 | "Not in this year's budget"   |          | rejected    |
+
+# Nobody answers: the manager is reminded after two business days, and the request expires after
+# the third.
+scenario expired_when_no_one_answers
+  requester s1202
+  form amount = 30_000JPY, purpose = "Books for the section"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1202 | manager  | in progress |
+| 2026-11-18 09:00 | remind  |       | manager  | in progress |
+| 2026-11-20 00:00 | late    |       |          | expired     |
+
+labels ja
+  request        "購買の申請"
+  amount         "金額"
+  purpose        "目的"
+  stage manager  "上長"
+  stage head     "部長"
+  who manager    "上長"
+  who dept_head  "部長"

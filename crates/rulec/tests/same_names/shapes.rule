@@ -1,0 +1,7 @@
+enums shapes v1
+description "The choices of an order form, shared by the rules beside it (fictional)"
+
+enum size = small "Small" < large "Large"
+enum kind = goods | capex
+enum first_by = manager | clerk
+enum authority_decider = dept_head | board

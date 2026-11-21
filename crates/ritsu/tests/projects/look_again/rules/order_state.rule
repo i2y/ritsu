@@ -1,0 +1,54 @@
+rule order_state v1
+description "Where an online order goes on a payment, a shipment, a delivery or a request to cancel it, and how much is refunded. The caller keeps the state; the rule decides one event at a time. Written for the example"
+
+enum state = received | paid | shipped | delivered | cancelled
+enum event = pay | ship | deliver | cancel
+
+inputs
+  state       : state
+  event       : event
+  amount_paid : money[JPY, incl_tax]  range >=0JPY <=1000000JPY
+
+outputs
+  next_state : state
+  refund     : money[JPY, incl_tax]  round down(1JPY)
+  accepted   : bool
+
+table step
+policy unique
+| state     | event             | -> next_state | refund      | accepted |
+| received  | pay               | paid          | 0JPY        | true     |
+| received  | cancel            | cancelled     | 0JPY        | true     |
+| received  | ship, deliver     | state         | 0JPY        | false    |
+| paid      | ship              | shipped       | 0JPY        | true     |
+| paid      | cancel            | cancelled     | amount_paid | true     |
+| paid      | pay, deliver      | state         | 0JPY        | false    |
+| shipped   | deliver           | delivered     | 0JPY        | true     |
+| shipped   | pay, ship, cancel | state         | 0JPY        | false    |  # a cancel after the shipment goes through a return
+| delivered | -                 | state         | 0JPY        | false    |
+| cancelled | -                 | state         | 0JPY        | false    |  # a payment that comes after a cancel does not bring the order back
+
+machine order over step
+  carry   state -> next_state
+  held    amount_paid
+  initial received
+  final   delivered, cancelled
+  never   shipped after cancelled
+  once    refund >0JPY
+
+scenario delivered
+| event   | amount_paid | -> next_state | refund | accepted |
+| pay     | 3000JPY     | paid          | 0JPY   | true     |
+| ship    | 3000JPY     | shipped       | 0JPY   | true     |
+| deliver | 3000JPY     | delivered     | 0JPY   | true     |
+
+scenario late_pay
+| event  | amount_paid | -> next_state | refund  | accepted |
+| pay    | 3000JPY     | paid          | 0JPY    | true     |
+| cancel | 3000JPY     | cancelled     | 3000JPY | true     |
+| pay    | 3000JPY     | cancelled     | 0JPY    | false    |
+
+examples
+| state    | event  | amount_paid | -> next_state | refund | accepted |
+| received | cancel | 0JPY        | cancelled     | 0JPY   | true     |
+| shipped  | cancel | 3000JPY     | shipped       | 0JPY   | false    |

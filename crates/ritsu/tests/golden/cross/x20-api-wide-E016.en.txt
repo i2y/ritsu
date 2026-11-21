@@ -1,0 +1,9 @@
+error[dandori E016]: restock.flow:23:1: the parameter `form` is not what `requests` POST /requests/purchase/tickets takes: in `amount`, it is `>=1JPY <=2_000_000JPY`, and `>=1JPY <=1_000_000JPY` is taken
+    23 | task submit_purchase(form: Purchase) -> Moved
+ok company.ringi: an organization, 3 positions, 2 kinds of team
+  data `org`: 1 version (2026-04-01), 3 teams and 5 people, no proxies
+ok purchase.ringi: a request, 2 fields, 1 stage
+  used from 2026-04-01: the first version of the organization `company.ringi` (data `org`)
+  used with no end: no data it reads ends
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+ritsu check: 3 files (dandori 1, ringi 2): 1 fail (1 error); borders between the languages: 0 checked, 0 undecided

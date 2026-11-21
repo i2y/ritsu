@@ -1,0 +1,4 @@
+enums 標準(std) v1
+description "std という名前の enums ファイル（Rust の標準のライブラリと go コマンドが取ってある名前）"
+
+enum 地域(zone) = 北(north) | 南(south)

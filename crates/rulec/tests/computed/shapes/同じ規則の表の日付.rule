@@ -1,0 +1,23 @@
+rule 同じ規則の表の日付(same_rule_date) v1
+description "同じ規則の表が書く日付を、それだけで読む。店で受け取る注文には日付が無い"
+
+enum 地域(zone) = 県内(local) | 県外(national) | 店で受け取る(pickup)
+enum 時期(timing) = 早い(early) | 遅い(late) | 受け取り(collected)
+
+inputs
+  地域(zone) : 地域
+
+outputs
+  答え(x) : 時期
+
+table 出荷日の表(ships_of)
+| 地域         | -> 出荷日 : date? |
+| 県内         | 2026-07-01        |
+| 県外         | 2026-07-03        |
+| 店で受け取る | none              |
+
+table 選ぶ(pick)
+| 出荷日       | -> 答え  |
+| <=2026-07-01 | 早い     |
+| >=2026-07-03 | 遅い     |
+| none         | 受け取り |

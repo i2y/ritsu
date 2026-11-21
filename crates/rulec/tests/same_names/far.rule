@@ -1,0 +1,22 @@
+rule far v1
+description "Whether an order goes far: the two files the rule reads both declare a kind (fictional)"
+
+import enum kind from "shapes.rule"
+import enum region from "places.rule"
+
+inputs
+  what  : kind
+  place : region
+
+outputs
+  far : bool
+
+table far
+| what | place | -> far |
+| -    | east  | false  |
+| -    | west  | true   |
+
+examples
+| what  | place | -> far |
+| goods | east  | false  |
+| capex | west  | true   |

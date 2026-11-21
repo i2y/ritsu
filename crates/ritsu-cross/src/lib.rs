@@ -33,6 +33,14 @@
 //! workflow calls is what the gate that names it allows it (X16, E908, W908 and W909). What can
 //! come from where a place says its value comes from is what the place takes (`fed by`, X17, E207,
 //! W207 and E208).
+//!
+//! Three hold a request of ringi's to what its ticket crosses into (ringi's DESIGN 9.3), over what
+//! ringi says a ticket does (`Requests::ticket`): the route against the gate the request reads
+//! ([`ticket_gates`], X18, E911 and W911), a hold against how long a round keeps it open
+//! ([`ticket_holds`], X19, E209 and W209), and what a flow is given against what it takes
+//! ([`ticket_flows`], X20, E210 and W210). On the other side of X20, a flow that opens a ticket
+//! through the server's API is held to the request as it is now ([`ticket_opened`]): the operation
+//! it calls is what ringi writes of the request now.
 
 pub mod borders;
 pub mod codes;
@@ -41,10 +49,15 @@ pub mod egress;
 mod fed;
 pub mod gates;
 mod holds;
+mod numbers;
 mod preconditions;
 mod programs;
 mod protos;
 pub mod secrets;
+pub mod ticket_flows;
+pub mod ticket_opened;
+pub mod ticket_gates;
+pub mod ticket_holds;
 mod transfers;
 
 pub use preconditions::UndecidedCalls;
@@ -59,7 +72,7 @@ use std::path::Path;
 
 /// Which of ritsu's checks a border is (DESIGN 7.2): the word `ritsu check --format json` writes
 /// it with. A word is never changed, nor given to another check; a new check takes a new word,
-/// after the others (the records are in this order). The marks of DESIGN (X2 to X17) are no
+/// after the others (the records are in this order). The marks of DESIGN (X2 to X20) are no
 /// words of the output (DESIGN 4.3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Check {
@@ -91,11 +104,20 @@ pub enum Check {
     /// What can come from where a place says its value comes from, against what the place takes
     /// (X17: E207, W207, E208).
     FedBy,
+    /// A request's route, against the gate the request reads (X18: E911, W911).
+    TicketGate,
+    /// A hold a ticket makes, against the book: its expiry and how long a round keeps it open, and
+    /// the arguments not every requester has a value for (X19: E209, W209).
+    TicketHold,
+    /// What a ticket gives a flow and reads from it, against what the flow declares; and what a
+    /// flow gives a ticket through the server's API, against the request as it is now (X20: E210,
+    /// W210).
+    TicketFlow,
 }
 
 impl Check {
     /// Every check, in the order of the records.
-    pub const ALL: [Check; 11] = [
+    pub const ALL: [Check; 14] = [
         Check::Precondition,
         Check::RuleDateInput,
         Check::RangeFromKoyomi,
@@ -107,6 +129,9 @@ impl Check {
         Check::OperationGuard,
         Check::WorkflowPermission,
         Check::FedBy,
+        Check::TicketGate,
+        Check::TicketHold,
+        Check::TicketFlow,
     ];
 
     pub fn word(self) -> &'static str {
@@ -122,6 +147,9 @@ impl Check {
             Check::OperationGuard => "operation_guard",
             Check::WorkflowPermission => "workflow_permission",
             Check::FedBy => "fed_by",
+            Check::TicketGate => "ticket_gate",
+            Check::TicketHold => "ticket_hold",
+            Check::TicketFlow => "ticket_flow",
         }
     }
 
@@ -300,6 +328,10 @@ pub fn check_with(project: &Project, joined: &Joined, programs: &ProgramVerdicts
     findings.extend(egress::check(project, joined, lang, &mut borders));
     findings.extend(gates::check(project, joined, lang, &mut borders));
     findings.extend(fed::check(project, joined, lang, &mut borders));
+    findings.extend(ticket_gates::check(project, joined, lang, &mut borders));
+    findings.extend(ticket_holds::check(project, joined, lang, &mut borders));
+    findings.extend(ticket_flows::check(project, joined, lang, &mut borders));
+    findings.extend(ticket_opened::check(project, joined, lang, &mut borders));
     borders.sort();
     Crossed { findings, borders }
 }
@@ -333,9 +365,11 @@ fn then_ja(piece: &str, rest: &str) -> String {
     if piece.ends_with('`') { format!("{piece} {rest}") } else { format!("{piece}{rest}") }
 }
 
-/// A file a flow reaches, as the project names it: from the root, else as dandori reached it.
+/// A file a flow reaches, as the project names it: from the root (DESIGN 6.2, item 9); one outside
+/// the root the way the run writes its paths (DESIGN 4.15): folded, from where the run is, and
+/// absolute only when the paths given to the run were.
 fn named(project: &Project, path: &std::path::Path) -> String {
-    ritsu_base::paths::from_root(&project.root, path).unwrap_or_else(|| path.to_string_lossy().to_string())
+    ritsu_base::paths::from_root(&project.root, path).unwrap_or_else(|| ritsu_base::paths::show(path))
 }
 
 /// X3 (b): each rule input of the project whose range is a koyomi date (`range from koyomi`,

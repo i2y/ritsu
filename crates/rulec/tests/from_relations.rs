@@ -856,10 +856,17 @@ fn hold_gaps(s: &S, tmp: &Path) -> (usize, usize) {
                 let note = gap.notes.iter().any(|n| n.contains("never comes out of the definitions"));
                 let reached = vals.iter().any(|v| ha(v[a]) && hb(v[b]));
                 // A gap that occurs is shown ahead of one that does not, so the note says it of all
-                // the table left out; and with no note the example is what occurs.
-                let shown: Vec<f64> = [a, b].iter().map(|i| witness_value(gap, &s.reads[*i].name)).collect();
-                let at_example = vals.iter().any(|v| key(v[a]) == key(shown[0]) && key(v[b]) == key(shown[1]));
+                // the table left out; and with no note the example is what occurs. An example no
+                // collection was built for is not called an input, and the witness has nothing.
+                let shown: Option<Vec<f64>> = (!gap.witness.inputs.is_empty()).then(|| [a, b].iter().map(|i| witness_value(gap, &s.reads[*i].name)).collect());
+                let at_example = shown.as_ref().is_some_and(|shown| vals.iter().any(|v| key(v[a]) == key(shown[0]) && key(v[b]) == key(shown[1])));
                 let say = format!("{tell}: {:#?}", gap.notes);
+                assert!(shown.is_some() || gap.notes.iter().any(|n| n.starts_with("A combination no row takes: ")), "the witness has nothing, and the example is called an input: {say}");
+                // A read through `from` is an input of a call that does not read `from`, which the
+                // reference evaluator runs; a table that reads summaries alone has no such call.
+                let summary = gap.notes.iter().any(|n| n.contains("reads a summary as one column"));
+                let from = gap.notes.iter().any(|n| n.contains("does not read through `from`"));
+                assert!(!(note && summary && !from && shown.is_some()), "the note says the summaries never come to it, and the example is called an input: {say}");
                 assert!(!(note && reached), "the note says it never occurs, and a request reaches the part of the table left out: {say}");
                 if s.exact && !not_linear(s, &[a, b]) {
                     assert!(note || reached, "nothing gives it, and E101 has no note: {say}");
@@ -1872,8 +1879,13 @@ fn a_gap_no_definition_reaches_keeps_e101_and_says_so() {
 fn a_gap_over_a_sequence_says_the_check_reads_a_summary_as_a_column() {
     let rule = "rule t(t) v1\n\nelements lines\n  is_tool : bool\n  weight  : number  range >=1 <=100\n\ncount tools over lines where is_tool  range >=0 <=5\nsum total over lines of weight  range >=0 <=1000\nmax heaviest over lines of weight empty 0\n\noutputs\n  fee : money[USD]  round up(1USD)\n\ntable fee_of\npolicy unique\n| tools | total | heaviest | -> fee : money[USD] |\n| 0     | 0     | 0        | 0USD                |\n| >=1   | >=1   | >=1      | 5USD                |\n| 0     | >=1   | >=1      | 2USD                |\n";
     let (_t, _, ds) = checked("gap-seq", rule, Lang::En);
-    let said = one(&ds, "E101").notes.join("\n");
-    assert!(said.contains("An input that matches no row: tools = 0, total = 0, heaviest = 1"), "{said}");
+    let gap = one(&ds, "E101");
+    let said = gap.notes.join("\n");
+    // no request gives the combination, so it is not called an input, and the witness has nothing
+    assert!(said.contains("A combination no row takes: tools = 0, total = 0, heaviest = 1"), "{said}");
+    assert!(!said.contains("No input that gives it was found"), "{said}");
+    assert!(gap.witness.inputs.is_empty(), "{:?}", gap.witness.inputs);
+    assert_eq!(gap.title, "Completeness gap: some combination matches no row");
     assert!(said.contains("(`tools` is `count over lines where is_tool`, `total` is `sum over lines of weight`, `heaviest` is `max over lines of weight empty 0`)"), "{said}");
     assert!(said.contains("The check of a table reads a summary as one column"), "{said}");
     assert!(!said.contains("does not read `from`"), "{said}");

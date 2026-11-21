@@ -117,6 +117,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ringi"
+version = "0.55.2"
+dependencies = [
+ "chobo",
+ "dandori",
+ "kaname",
+ "koyomi",
+ "ritsu-base",
+ "ritsu-emit",
+ "ritsu-ports",
+ "ritsu-testkit",
+ "ritsu-units",
+ "rulec",
+ "sekisho",
+]
+
+[[package]]
 name = "ritsu"
 version = "0.55.2"
 dependencies = [
@@ -125,6 +142,7 @@ dependencies = [
  "geas",
  "kaname",
  "koyomi",
+ "ringi",
  "ritsu-base",
  "ritsu-cross",
  "ritsu-emit",
@@ -179,6 +197,7 @@ dependencies = [
  "dandori",
  "kaname",
  "koyomi",
+ "ringi",
  "ritsu-base",
  "ritsu-cross",
  "ritsu-ports",
@@ -186,6 +205,7 @@ dependencies = [
  "ritsu-testkit",
  "ritsu-units",
  "rulec",
+ "sekisho",
  "serde_json",
 ]
 
@@ -206,6 +226,7 @@ dependencies = [
  "geas",
  "kaname",
  "koyomi",
+ "ringi",
  "ritsu-base",
  "ritsu-ports",
  "ritsu-proto",

@@ -1,0 +1,13 @@
+request example v1 "Example"
+
+form
+  days : number "Days"
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

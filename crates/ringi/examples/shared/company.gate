@@ -1,0 +1,281 @@
+gate company v1
+description "Company-wide rules for every request type (fictional): only the approvers a route resolved answer a stage, no one decides their own request unless its route allows it, and a suspended member of the staff does nothing. An administrator of a department administers only the request types it owns, a system administrator administers every one and the organization, and an auditor reads every record and changes nothing"
+namespace Ringi
+
+role staff
+  description "Anyone on the staff"
+role workflow_admin
+  description "Administers the request types of their own department"
+  includes staff
+role system_admin
+  description "Administers every request type and the organization's data"
+  includes staff
+role auditor
+  description "Reads the record of every request type and of the organization, and changes nothing"
+  includes staff
+
+principal Staff
+  description "A member of the staff, signed in"
+  roles staff, workflow_admin, system_admin, auditor
+  attributes
+    department : Team
+    suspended  : bool
+
+resource Team
+  description "A team of the organization, as the organization data of the version in force has it"
+
+resource Organization
+  description "The organization's data: its versions, with their people and teams, and the masters"
+
+resource Approvers
+  description "The approvers ringi resolved for one stage of one ticket, proxies included, or, while the ticket is back with its requester, the one who sent it back; the server passes it as a parent of each of them"
+
+resource Requesters
+  description "The requester's side of one ticket: its requester, the one who made the request for them, and the proxies who may submit it for them that day; the server passes it as a parent of each of them"
+
+resource Stage
+  description "One stage of one ticket, as its approvers answer it"
+  attributes
+    requester     : Staff
+    requesters    : Requesters
+    approvers     : Approvers
+    owner         : Team
+    self_approval : bool
+
+resource Ticket
+  description "One request, as its requester's side handles it, and as others see it"
+  attributes
+    requester  : Staff
+    requesters : Requesters
+    owner      : Team
+
+resource RequestType
+  description "One version of a request type: one .ringi file"
+  attributes
+    owner : Team
+
+action submit
+  description "Submit a request, or submit it again after it was sent back"
+  principal Staff
+  resource Ticket
+
+action withdraw
+  description "Withdraw a request that is not decided, or drop one that came back to its requester"
+  principal Staff
+  resource Ticket
+
+action approve
+  description "Approve the stage that waits for the caller"
+  principal Staff
+  resource Stage
+
+action send_back
+  description "Send the ticket back to the requester or to an earlier stage"
+  principal Staff
+  resource Stage
+
+action reject
+  description "Reject the ticket at the caller's stage"
+  principal Staff
+  resource Stage
+
+action pause
+  description "Pause the stage that waits for the caller, or let it go on"
+  principal Staff
+  resource Stage
+
+action add_approver
+  description "Add an approver to the stage a ticket waits at"
+  principal Staff
+  resource Stage
+
+action hand_over
+  description "Hand what one approver of the stage a ticket waits at has to answer over to another person"
+  principal Staff
+  resource Stage
+
+action retract
+  description "Take back one's approval of a stage while the next stage has not answered"
+  principal Staff
+  resource Stage
+
+action comment
+  description "Write a comment on a ticket, at the stage it is at"
+  principal Staff
+  resource Stage
+
+action see
+  description "See a ticket one is not on: the requester's side and the approvers' side see theirs without asking"
+  principal Staff
+  resource Ticket
+
+action change_request_type
+  description "Decide when a version of a request type takes new requests: from now, from a day, as its file says, or never"
+  principal Staff
+  resource RequestType
+
+action read_audit
+  description "Read the record of a version of a request type: the moves of its tickets, their forms among them, and the switches of the version"
+  principal Staff
+  resource RequestType
+
+action import_organization
+  description "Check a new version of the organization's data, and import it"
+  principal Staff
+  resource Organization
+
+action read_organization_audit
+  description "Read the record of the organization: the imports of its data"
+  principal Staff
+  resource Organization
+
+permit staff_submit
+  description "Anyone on the staff submits a request"
+  principal in staff
+  action submit
+
+permit the_requesters_side_withdraws
+  description "The requester's side withdraws a request: its requester, the one who made it for them, or a proxy who may submit it for them that day"
+  principal is Staff
+  action withdraw
+  when principal in resource.requesters
+
+permit approvers_answer_their_stage
+  description "The approvers the route resolved for a stage answer it"
+  principal is Staff
+  action approve, send_back, reject, pause, retract
+  when principal in resource.approvers
+
+permit the_people_of_a_ticket_comment
+  description "The requester's side, the approvers of the stage a ticket is at (while it is back with the requester, the one who sent it back), and the department that owns its request type write comments on it"
+  principal is Staff
+  action comment
+  when principal in resource.requesters or principal in resource.approvers or resource.owner is principal.department
+
+permit the_owning_department_sees
+  description "The department that owns a request type, its administrators among them, sees the tickets of it"
+  principal is Staff
+  action see
+  when resource.owner is principal.department
+
+forbid no_one_decides_their_own
+  description "No one approves, sends back or rejects their own request, unless its route allows it"
+  principal is Staff
+  action approve, send_back, reject
+  when resource.requester is principal
+  unless resource.self_approval
+
+permit admins_add_approvers_in_their_department
+  description "An administrator adds an approver to a stage of a request type their department owns"
+  principal in workflow_admin
+  action add_approver
+  when resource.owner is principal.department
+
+permit admins_hand_over_in_their_department
+  description "An administrator hands an approver's part of a stage over to another person, on a request type their department owns"
+  principal in workflow_admin
+  action hand_over
+  when resource.owner is principal.department
+
+permit admins_change_their_own_departments
+  description "An administrator changes the request types their department owns"
+  principal in workflow_admin
+  action change_request_type
+  when resource.owner is principal.department
+
+permit admins_read_their_own_departments
+  description "An administrator reads the record of the request types their department owns"
+  principal in workflow_admin
+  action read_audit
+  when resource.owner is principal.department
+
+permit system_admins_administer_everything
+  description "A system administrator switches every request type, imports the organization's data, and reads every record"
+  principal in system_admin
+  action change_request_type, read_audit, import_organization, read_organization_audit
+
+permit auditors_read_every_record
+  description "An auditor reads the record of every request type and of the organization"
+  principal in auditor
+  action read_audit, read_organization_audit
+
+forbid suspended_staff_do_nothing
+  description "A suspended member of the staff does nothing"
+  principal is Staff
+  action any
+  when principal.suspended
+
+expect deny requesters_never_approve_on_a_strict_route
+  description "On a route that does not allow it, a requester never approves their own request"
+  principal is Staff
+  action approve
+  when resource.requester is principal
+  unless resource.self_approval
+
+expect deny admins_never_change_other_departments
+  description "An administrator of a department who is no system administrator never changes a request type another department owns"
+  principal in workflow_admin
+  action change_request_type
+  unless principal in system_admin
+  unless resource.owner is principal.department
+
+expect deny admins_never_read_other_departments
+  description "An administrator of a department who is neither a system administrator nor an auditor never reads the record of a request type another department owns"
+  principal in workflow_admin
+  action read_audit
+  unless principal in system_admin
+  unless principal in auditor
+  unless resource.owner is principal.department
+
+expect deny only_system_admins_import_the_organization
+  description "No one but a system administrator imports the organization's data"
+  principal in staff
+  action import_organization
+  unless principal in system_admin
+
+expect deny auditors_change_nothing
+  description "An auditor with no role of an administrator switches no request type, imports nothing, adds no approver and hands no one's part over"
+  principal in auditor
+  action change_request_type, import_organization, add_approver, hand_over
+  unless principal in system_admin
+  unless principal in workflow_admin
+
+expect deny the_suspended_administer_nothing
+  description "A suspended system administrator switches no request type and imports nothing"
+  principal in system_admin
+  action change_request_type, import_organization
+  when principal.suspended
+
+expect allow system_admins_import_the_organization
+  description "A system administrator who is not suspended imports the organization's data"
+  principal in system_admin
+  action import_organization
+  unless principal.suspended
+
+expect allow an_approver_approves
+  description "An approver the route resolved approves a stage of someone else's request"
+  principal in staff
+  action approve
+  unless principal.suspended
+  unless resource.requester is principal
+  when principal in resource.approvers
+
+expect allow the_requesters_side_withdraws_it
+  description "One on the requester's side, such as the one who made the request for its requester, withdraws it"
+  principal in staff
+  action withdraw
+  unless principal.suspended
+  when principal in resource.requesters
+
+expect allow the_owning_department_sees_its_tickets
+  description "One of the department that owns a request type sees a ticket of it"
+  principal in staff
+  action see
+  unless principal.suspended
+  when resource.owner is principal.department
+
+expect deny other_departments_do_not_see
+  description "One of another department does not see a ticket they are not on"
+  principal in staff
+  action see
+  unless resource.owner is principal.department

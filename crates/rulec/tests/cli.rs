@@ -4,12 +4,14 @@
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need};
 use ritsu_testkit::tmp::tmpdir_in;
+use ritsu_testkit::run::finish;
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(args)
+        .args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] })
         .output()
         .expect("rulec を起動できない");
     (
@@ -19,22 +21,17 @@ fn run(args: &[&str]) -> (i32, String, String) {
     )
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 /// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
 /// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
 /// with that.
 fn run_tmp(tmp: &std::path::Path, args: &[&str]) -> (i32, String, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "ja")
-        .env("TMPDIR", tmp)
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args(args)
-        .output()
-        .expect("rulec を起動できない");
-    (
-        out.status.code().unwrap_or(-1),
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-    )
+    let out = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(env!("CARGO_MANIFEST_DIR")).args(args).args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] }), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (out.code.unwrap_or(-1), out.stdout, out.stderr)
 }
 
 #[test]
@@ -174,6 +171,7 @@ fn run_in(dir: &std::path::Path, args: &[&str]) -> (i32, String) {
         .env("RULEC_LANG", "ja")
         .current_dir(dir)
         .args(args)
+        .args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] })
         .output()
         .expect("rulec を起動できない");
     (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned())
@@ -227,6 +225,20 @@ fn diff_base_は新たに生じた発見だけを出す() {
     let (_, diffed) = run_in(&dir, &["check", "t.rule", "--diff-base", "HEAD"]);
     assert_eq!(diffed.matches("警告[W105]").count(), 1, "新規の一件だけ: {diffed}");
     assert!(diffed.contains("伏せました"), "伏せた件数を言う: {diffed}");
+
+    // ritsu's DESIGN 4.15: run in a directory below the top of the repository, the file at the base is
+    // the one the path names from there, however it is written (`u.rule`, `./u.rule`, `x/../u.rule`),
+    // not a file of that name at the top
+    let sub = dir.join("sub");
+    std::fs::create_dir_all(sub.join("x")).unwrap();
+    std::fs::write(sub.join("u.rule"), BASE).unwrap();
+    git(&dir, &["add", "sub/u.rule"]);
+    git(&dir, &["commit", "-qm", "sub"]);
+    std::fs::write(sub.join("u.rule"), &after).unwrap();
+    let said: Vec<String> = ["u.rule", "./u.rule", "x/../u.rule"].iter().map(|f| run_in(&sub, &["check", f, "--diff-base", "HEAD"]).1).collect();
+    assert_eq!(said[0].matches("警告[W105]").count(), 1, "新規の一件だけ: {}", said[0]);
+    assert!(said[0].contains("伏せました"), "{}", said[0]);
+    assert!(said.iter().all(|s| *s == said[0]), "書き方で変わる: {said:#?}");
 }
 
 /// §8.4: generated code is committed to git, and `--check` in CI verifies that it matches a fresh
@@ -416,7 +428,7 @@ fn 一文字のフラグは何もせずに2で止まる() {
     let before = std::fs::read_to_string(&rule).unwrap().replacen("->", "→", 1);
     std::fs::write(&rule, &before).unwrap();
     let err_of = |args: &[&str]| {
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).output().unwrap();
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] }).output().unwrap();
         (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stderr).into_owned())
     };
     let (code, err) = err_of(&["gen", "r.rule", "-o", "out"]);

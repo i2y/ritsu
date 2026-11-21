@@ -1,0 +1,27 @@
+gate go_authorize v1
+description "A type named as the entry by the action's name of the Go package"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can reply
+
+principal Clerk
+  description "The one who asks"
+  roles clerk
+
+resource Authorize
+  description "A slip that lets its holder be answered"
+  attributes
+    open : bool
+
+action reply
+  description "Reply to a request"
+  principal Clerk
+  resource Authorize
+
+permit clerks_reply
+  description "A clerk can: Reply to a request"
+  principal in clerk
+  action reply
+  when resource.open

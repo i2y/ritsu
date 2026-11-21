@@ -27,9 +27,9 @@ message Order {
 
 ## E201 — 規則を呼ぶところで、前提を破る値を渡すことがあります
 
-**いつ出るか**: ワークフローか kaname の関数が規則を呼ぶところで、規則の前提（入力どうしの関係 `constraint`、起こらない組み合わせ `never`、並びの合計と長さの上限、並びの要素どうしで同じ値をとらない `unique` のフィールド、`range from koyomi` の日）を破る値を渡すことがあるとき。ワークフローでは、dandori が知っている値の範囲の中に、前提を破る組み合わせがあるときです。範囲は dandori が値を入れるすべての場所から集めたもので、dandori の E014 と同じ読み方です。範囲を `range from koyomi` にした日付の入力では、渡す値が koyomi の日付の日か、範囲を書いた日付（`range >=2026-01-01 <=2026-12-31`）で、その日のどれかが規則の日でないときも、このエラーです。kaname の関数では、関数のベクタを流したときに前提を破る値を渡す入力があるときです。kaname の範囲は上からの見積もりで、範囲の角は起きないことがあるので、角だけでは例にしません。前提を破る呼び出しは、規則から生成したコードが入口で受け付けないので、走らせたときに初めて落ちます。注には、値の範囲と前提を破る組み合わせや日か、前提を破る関数の入力が出ます。
+**いつ出るか**: ワークフローか kaname の関数が規則を呼ぶところで、規則の前提（入力どうしの関係 `constraint`、起こらない組み合わせ `never`、並びの合計の範囲、並びを数えた数の下限、並びの長さの上限、並びの要素どうしで同じ値をとらない `unique` のフィールド、`range from koyomi` の日、入力から計算した値を受け付ける範囲 `define … range`）を破る値を渡すことがあるとき。ワークフローでは、dandori が知っている値の範囲の中に、前提を破る組み合わせがあるときです。範囲は、dandori が、呼び出しに届く実行が最後に入れた値から集めたもので、dandori の E014 と同じ読み方です。`never` の行が読む真偽と列挙の値は、呼び出しに届く実行で、その値がどれも条件に当たるとき（書き出した値、`match` の分岐が残した値、`range` に入る値。変数なら、届く実行が最後に入れた値）に、条件に当たると数えます。呼び出しが一つの値を渡して `never` の行に当たるとき（`express: true` と書いた、`let fast = true` のあとで `express: fast` と渡した）は、注がその値と、何を渡せば行が保たれるかを `never` の行から言います。範囲を `range from koyomi` にした日付の入力では、渡す値が koyomi の日付の日か、範囲を書いた日付（`range >=2026-01-01 <=2026-12-31`）で、その日のどれかが規則の日でないときも、このエラーです。kaname の関数では、関数のベクタを流したときに前提を破る値を渡す入力があるときです。kaname の範囲は上からの見積もりで、範囲の角は起きないことがあるので、角だけでは例にしません。前提を破る呼び出しは、規則から生成したコードが入口で（計算した値の範囲なら、その値を計算したところで）受け付けないので、走らせたときに初めて落ちます。注には、値の範囲と前提を破る組み合わせや日か、前提を破る関数の入力が出ます。
 
-**直し方**: 呼ぶ前に前提が保たれるよう分岐するか、値の範囲を狭めてください（入力やタスクの結果の `range`。kaname では、呼ぶ前の `if`）。前提のほうが業務に合っていないなら、規則の `constraint` か `never` の行を直してください。
+**直し方**: 呼ぶ前に前提が保たれるよう分岐するか、値の範囲を狭めてください（入力やタスクの結果の `range`。kaname では、呼ぶ前の `if`）。書いた値で `never` の行に当たるなら、注が言う値を渡してください。前提のほうが業務に合っていないなら、規則の `constraint` か `never` の行、`define` の範囲を直してください。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -104,9 +104,9 @@ fn route(paid: number range >=0 <=10000, asked: number range >=0 <=10000) -> che
 
 ## W201 — 規則を呼ぶところで、前提が保たれるかを決められません
 
-**いつ出るか**: ワークフローか kaname の関数が規則を呼ぶところで、前提が保たれるかを決められないとき。ワークフローでは、渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計や長さの上限か、要素どうしで同じ値をとらない `unique` のフィールドである（dandori は並びの長さも中身も知りません）、前提が真偽か列挙を読む `never` の行である（範囲で数えられません）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（範囲を書いていない入力やタスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori gen` が書くワークフローのコードが実行時に確かめます。値ができたところですぐに確かめ、前提を破る実行を `Dandori.BrokenPrecondition` で失敗させます。kaname の関数では、範囲の解析が見積もった範囲と、kaname が知っている入力どうしの関係で示せず、関数のベクタにも前提を破る入力が無いときです。kaname の生成したコードがその場所で確かめ、規則が受け付けない呼び出しでは、関数が `rule` で失敗します。
+**いつ出るか**: ワークフローか kaname の関数が規則を呼ぶところで、前提が保たれるかを決められないとき。ワークフローでは、渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計の範囲や、数えた数の下限、長さの上限か、要素どうしで同じ値をとらない `unique` のフィールドである（dandori は並びの長さも中身も知りません）、前提が真偽か列挙を読む `never` の行で、呼び出しが渡すその値が、条件に当たることも当たらないこともある（値を書き出すか、その値の `match` の分岐の中で呼ぶか、呼び出しに届く実行で一つの値だけを入れた変数を渡せば決まります）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（範囲を書いていない入力やタスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori gen` が書くワークフローのコードも `ritsu run` も、値ができたところですぐに確かめ、前提を破る実行を `Dandori.BrokenPrecondition` で失敗させます。ただし、入力から計算した値を受け付ける範囲は、ワークフローのコードが規則の計算を繰り返さないので確かめません。範囲の外になる呼び出しは、規則から生成したコードが、その値を計算したところで受け付けません。kaname の関数では、範囲の解析が見積もった範囲と、kaname が知っている入力どうしの関係で示せず、関数のベクタにも前提を破る入力が無いときです。kaname の生成したコードがその場所で確かめ、規則が受け付けない呼び出しでは、関数が `rule` で失敗します。
 
-**直し方**: 値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`。日付にも `range >=2026-01-01 <=2026-12-31` と書けます）。範囲を書けないなら、このままで構いません。ワークフローのコードが実行時に確かめます。kaname では、呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡してください。
+**直し方**: 値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`。日付にも `range >=2026-01-01 <=2026-12-31` と書けます）。範囲を書けないなら、このままで構いません。ワークフローのコードと `ritsu run` が、値ができたところで確かめます（計算した値の範囲は、規則のコードが確かめます）。kaname では、呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡してください。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -1090,9 +1090,9 @@ flow
 
 ## E207 — 出どころがとりうる値を、受け取る側が受け取りません
 
-**いつ出るか**: 入力やフィールドの行に `fed by <参照>` と書いてあり、出どころがとりうる値のどれかを、その行が受け取らないとき。比べるのは、数なら単位と刻みと範囲（単位が違えば成り立ちません）、列挙なら公開名の値、日付なら日、真偽と文字列なら型です。文には値の例と、規則や日付のファイルならそれを出す入力を書きます。契約（proto、OpenAPI、JSON Schema）の上限が無いときと帳簿の上限が無いとき（chobo の上限の 2⁶³ − 1 まで）も、その値は来るので例になります。契約のプロパティが省略でき、null を通すのに、受け取る側が `T?` でないときも同じです。受け取る側が書いていない端は比べません。`fed by` は生成コードを変えず、手書きのコードが本当にその値を運ぶかも確かめません。確かめるのは値の範囲です。
+**いつ出るか**: 入力やフィールドの行に `fed by <参照>` と書いてあり、出どころがとりうる値のどれかを、その行が受け取らないとき。比べるのは、数なら単位と刻みと範囲（単位が違えば成り立ちません）、列挙なら公開名の値、日付なら日、真偽と文字列なら型です。OpenAPI の文書や JSON Schema が `format: date-time` と書いた文字列は、時刻（時刻の付いた日時）として読みます。日付を受け取る行には来ず、ワークフローの `timestamp` は受け取ります（ほかのワークフローの `timestamp` と、`.proto` の `google.protobuf.Timestamp` も同じです）。`.proto` の `google.type.Date` は、dandori と同じく名前で分かる日付として読みます。`.proto` の列挙の値の名前は、rulec の `import proto` と同じに読みます（頭にある列挙の名前を落として小文字にし、同じ番号の名前は一つの値。受け取る側はそのどれか一つを持てば足ります。表は rulec の reference の `import proto` にあります）。`repeated` のフィールドは値の並びなので、一つの値を受け取る行には来ません。文には値の例と、規則や日付のファイルならそれを出す入力を書きます。契約（proto、OpenAPI、JSON Schema）の上限が無いときと帳簿の上限が無いとき（chobo の上限の 2⁶³ − 1 まで）も、その値は来るので例になります。契約のプロパティが省略できるか null を通すとき、`.proto` のフィールドを設定しないことがあるとき（`optional`、`oneof` の中、メッセージ型。規則か proto2 の `required` が付いたものを除く）も、受け取る側が `T?` でなければ同じです。受け取る側が書いていない端は比べません。`fed by` は生成コードを変えず、手書きのコードが本当にその値を運ぶかも確かめません。確かめるのは値の範囲です。
 
-**直し方**: 受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。
+**直し方**: 受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。契約が `format: date-time` と書いた文字列が日だけを運ぶなら、契約のほうを `format: date` にします。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -1140,9 +1140,9 @@ policy unique
 
 ## W207 — 出どころの値を受け取るかを決められません
 
-**いつ出るか**: `fed by` の出どころが値の全部を言わないとき。rulec が規則の出力の端を数えられないとき、数えた範囲が受け取る側を外れるのに規則のベクタにその値になる入力が無いとき（rulec は出力の範囲を、入力をそれぞれの範囲で動かして数えます）、出どころのファイルをその言語が通さないとき（誤りはその言語が言います）、契約の日付に受け取る側が範囲を書いているとき（契約は日付を文字列として運ぶだけです）、レコードやリストどうしのときです。
+**いつ出るか**: `fed by` の出どころが値の全部を言わないとき。rulec が規則の出力の端や、規則が渡す列挙の値を数えられないとき、数えた範囲が受け取る側を外れるのに規則のベクタにその値になる入力が無いとき（rulec は出力の範囲を、入力をそれぞれの範囲で動かして数えます）、出どころのファイルをその言語が通さないとき（誤りはその言語が言います）、契約の日付に受け取る側が範囲を書いているとき（契約は日付を、文字列か `.proto` の `google.type.Date` として運ぶだけで、日を並べていません）、レコードやリストどうしのときです。
 
-**直し方**: 規則なら、出力の端を数えられるように書くか（`min(…, 上限)` など）、受け取る側の範囲を広げてください。契約なら、とりうる値を並べてください（JSON Schema の `enum`、Protovalidate の `in`）。ワークフローや kaname なら、出どころの行に範囲を書いてください。
+**直し方**: 規則なら、出力の端を数えられるように書くか（`min(…, 上限)` など）、受け取る側の範囲を広げてください。列挙の値を数えられないときは、受け取る側が足りない値も受け取るようにします。契約なら、とりうる値を並べてください（JSON Schema の `enum`、Protovalidate の `in`）。`.proto` の `google.type.Date` は日を並べられないので、日を並べた文字列のフィールドにします。ワークフローや kaname なら、出どころの行に範囲を書いてください。二つのレコードやリストは値を比べないので、出どころの行の書き方では決まりません。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -1238,6 +1238,329 @@ policy unique
 ```
 
 関連: [E207](#e207)
+
+<a id="e209"></a>
+
+## E209 — チケットの仮押さえの期限が、確定や取消の前に切れることがあります
+
+**いつ出るか**: 申請の種類が `on submitted hold` で作る仮押さえが、その `round` の終わり（承認、却下、差し戻し、取り下げ、期限切れ）で確定か取消にされる前に、帳簿の有効期限（振替の `pending expires after`）に届くとき。仮押さえが開いている長さは、ringi の検査が数える営業日です。一つの `round` と保留（`pause at most`）で、前のステップへ差し戻せる申請（`send back to any earlier stage`）では、差し戻しても `round` が変わらないので、差し戻すたびに同じ `round` を歩き直す分を足します。その営業日を、申請を出せるどの日からもカレンダーに置き、いちばん長くなる日を注に出します。長さは、出した日の 00:00 から最後の営業日の終わりまでです。営業日は ringi の検査が主張（`ends within`）を確かめるのと同じ上限で、そこまでかかるチケットがあるとは限りません。期限の切れた仮押さえの確定と取消を、帳簿は `expired` で拒否するので、承認されたチケットに押さえた分が残っていません。期限の切れない仮押さえ（`pending never expires`）と、期限に届かないと示せたときは、何も出しません。
+
+**直し方**: 仮押さえの期限を延ばすか（振替の `pending expires after`）、ステップの期限を短くしてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`購買.ringi`:
+
+```
+request 購買(purchase) v1 "購買の申請"
+effective from 2026-04-01
+
+use calendar 本社(office) from "本社.cal"
+use book 予算(budget) from "予算.book"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+  部(dept)     : text "部"  count >=1 <=20
+
+route
+  確認(check)  経理
+
+who
+  経理(finance) = team finance
+
+every stage
+  due in 10 business days at end of day
+  when late expire
+
+ticket
+  on submitted  hold 予算.押さえる(申請: ticket.id, 試み: ticket.attempt, 部: 部, 金額: 金額)
+  on approved   post 予算.押さえる(申請: ticket.id, 試み: ticket.attempt)
+  on rejected, expired  void 予算.押さえる(申請: ticket.id, 試み: ticket.attempt)
+```
+
+`本社.cal`:
+
+```cal
+calendar 本社(office) v1
+description "本社の営業日。土曜と日曜は休み"
+offset +09:00
+
+closed weekly sat, sun
+```
+
+`予算.book`:
+
+```book
+book 予算 v1
+description "部ごとの予算。購買の申請は、承認されるまで金額を押さえる"
+
+unit 円
+
+account 部の予算(部: string) : 円
+  at least 0 refused as 予算不足
+account 配賦元 : 円 outside
+account 支払先 : 円 outside
+
+transfer 配賦(部: string, 期: string, 金額: 円)
+  key 部, 期
+  move 金額 from 配賦元 to 部の予算(部)
+
+transfer 押さえる(申請: string, 試み: string, 部: string, 金額: 円)
+  key 申請, 試み
+  pending expires after 7 days
+  move 金額 from 部の予算(部) to 支払先
+```
+
+関連: [W209](#w209), [E206](#e206)
+
+<a id="w209"></a>
+
+## W209 — チケットの仮押さえの期限が切れるかを決められないか、仮押さえを作れない申請者がいます
+
+**いつ出るか**: 二つの場合があります。一つは、仮押さえが確定か取消の前に期限に届くかを決められないとき。`round` に終わりの無い待ちがある（期限の無いステップ、期限を過ぎても待つステップ）、営業日をいくつかのカレンダーで数えていて、どれかが休む日を休みとして数えた長さが期限に届く（そこまでかかるチケットがあるとは限りません）、カレンダーのデータが `round` の営業日に足りない、のどれかです。もう一つは、仮押さえの引数が申請者の上のチームを読み（`dept: requester.department`）、申請を出せる人の中に、その種類のチームが上に無い人がいるとき。仮押さえを作れないので、その人の `submit` は断られます。組織の版ごとに、何人のうち何人かと、その人の ID を注に出します。組織にデータが無ければ、決められないと言います。行の `when` が `requester.department is not none` なら、チームのある申請者だけが押さえるので、何も出しません。
+
+**直し方**: 期限のほうは、どのステップにも期限を書くか（`due in …`）、仮押さえの期限を延ばしてください。引数のほうは、その人が出さない申請なら `submitted by … except …` で外し、出す申請なら、だれにもある値を渡すか、行に `when requester.<種類> is not none` を書いて、その人の申請では押さえないようにしてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`購買.ringi`:
+
+```
+request 購買(purchase) v1 "購買の申請"
+
+use book 予算(budget) from "予算.book"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+  部(dept)     : text "部"  count >=1 <=20
+
+route
+  確認(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  on submitted  hold 予算.押さえる(申請: ticket.id, 試み: ticket.attempt, 部: 部, 金額: 金額)
+  on approved   post 予算.押さえる(申請: ticket.id, 試み: ticket.attempt)
+  on rejected   void 予算.押さえる(申請: ticket.id, 試み: ticket.attempt)
+```
+
+`予算.book`:
+
+```book
+book 予算 v1
+description "部ごとの予算。購買の申請は、承認されるまで金額を押さえる"
+
+unit 円
+
+account 部の予算(部: string) : 円
+  at least 0 refused as 予算不足
+account 配賦元 : 円 outside
+account 支払先 : 円 outside
+
+transfer 配賦(部: string, 期: string, 金額: 円)
+  key 部, 期
+  move 金額 from 配賦元 to 部の予算(部)
+
+transfer 押さえる(申請: string, 試み: string, 部: string, 金額: 円)
+  key 申請, 試み
+  pending expires after 7 days
+  move 金額 from 部の予算(部) to 支払先
+```
+
+関連: [E209](#e209)
+
+<a id="e210"></a>
+
+## E210 — チケットと flow の間で渡す値が合いません
+
+**いつ出るか**: 申請の種類が flow に渡す値のどれかを、flow の入力が受け取らないとき。渡すのは、`on … launch` なら呼び出しに書いた値、エージェントの決め方（`agent <flow>, else …`）と要約（`note from <flow>`）なら、チケットの ID（`request_id`）と、flow が入力に宣言したフォームのフィールドです。比べるのは、数と金額なら単位と範囲、日付なら日、選択なら値の名前、ほかは型です。値の無いことがあるのに入力が `T?` でないときも成り立ちません。値は、flow に渡す所で絞って読みます。エージェントと要約なら、そのステップを決める経路の表の行。`when` の付いた行やステップなら、フォームのフィールドを定数と比べる条件（`and` でつないだものも）です。`launch` が渡していない必須の入力、flow に無い名前の引数、エージェントと要約の flow の、`request_id` でもフォームのフィールドでもない入力も、このエラーです。エージェントの flow は、答えを出力 `verdict`（値が `ok` と `doubt` の列挙）と `reason`（string）で返し、要約の flow は出力を一つ以上持ち、どの出力も要約が持てる型です。要約が持てるのは、文（string、date、timestamp、列挙）、整数（int と単位の付いた数）、真偽（bool）、行（レコードの list。レコードのフィールドもこれらの型）と、それらの `T?` で、一つのレコード、レコードでない物の list、`json` は持てません。そうでない flow も、このエラーです。反対の向きに、flow がサーバーの API（`ritsu gen --target requests` が書く `openapi.json`）で申請を出すときは、flow が呼ぶ操作を、今の申請から ringi が書く操作と比べます。比べるのは、操作の場所、本文が受け取る値（フォームのスキーマ）、操作が名指す申請（`x-ritsu-request` の名前と版）です。違うなら、文書は申請の前の姿から書いたもので、dandori が flow を比べた相手は今の申請ではありません。これもこのエラーです。今の申請に無い操作を呼ぶときも同じです。文書が今の申請のものなら、flow が送る値の型と範囲は、dandori が文書と比べます（dandori の E016）。
+
+**直し方**: 渡す値を flow が受け取る範囲に収めるか（フォームの `range`、`on` の行の `when`）、flow の入力を広げてください。どちらにするかは人が決めることです。flow が呼ぶ API が今の申請のものでないときは、`ritsu gen --target requests` で書き直してから、もう一度検査してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`購買.ringi`:
+
+```
+request 購買(purchase) v1 "購買の申請"
+
+use flow 発注(order) from "発注.flow"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=1_000_000円
+
+route
+  確認(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  on approved  launch 発注(申請番号: ticket.id, 金額: 金額)
+```
+
+`発注.flow`:
+
+```flow
+workflow 発注 v1
+description "承認された購買の申請を、仕入先に発注する"
+
+inputs
+  申請番号 : string
+  金額     : money[円]  range >=1円 <=500_000円
+
+outputs
+  発注番号 : string
+
+record 発注の控え
+  発注番号 : string
+
+task 発注する(申請番号: string, 金額: money[円]) -> 発注の控え
+  timeout 1 day
+  idempotent
+
+flow
+  let 控え = 発注する(申請番号: 申請番号, 金額: 金額)
+  succeed 発注番号 = 控え.発注番号
+```
+
+関連: [W210](#w210), [E207](#e207)
+
+<a id="w210"></a>
+
+## W210 — チケットと flow の間で渡す値が合うかを決められません
+
+**いつ出るか**: flow の入力が、渡される値を受け取ると示せないとき。ringi が追わない値を渡している、値を一つずつ比べない型どうしである（明細の `rows` とレコードのリスト）、組織にデータが無く `requester.<種類>` に値があるかを決められない、値が合わないように見えるが渡す所の条件を ringi が追わない、のどれかです。追わない条件は、`or` や `not` のある `when`、渡す値と一緒に計算するフィールドを読む `when`、規則の出力が決め方を決める行、ほかの行が回してくるステップ、共有の経路です。型や単位が違うときは、条件に関係なく E210 です。flow がサーバーの API で申請を出すとき、API の操作が名指す申請のファイルがプロジェクトに無い（根の外、無いファイル、申請でないファイル）か、ringi がその申請の API を書けない（組織を読まない申請）ときも、決められません。flow は文書とだけ比べます。
+
+**直し方**: `when` を、フォームのフィールドを定数と比べる形（`amount <= 500_000JPY`、`and` でつないだものも）で書くと、ringi が追います。書けないなら、flow の入力を、フォームの範囲を受け取るように広げてください。flow が呼ぶ API の申請がこのプロジェクトにあるなら、プロジェクトの根から `ritsu gen --target requests` で書き直してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`購買.ringi`:
+
+```
+request 購買(purchase) v1 "購買の申請"
+
+use flow 発注(order) from "発注.flow"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=1_000_000円
+
+route
+  確認(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  on approved  launch 発注(申請番号: ticket.id, 金額: 金額)  when not (金額 > 500_000円)
+```
+
+`発注.flow`:
+
+```flow
+workflow 発注 v1
+description "承認された購買の申請を、仕入先に発注する"
+
+inputs
+  申請番号 : string
+  金額     : money[円]  range >=1円 <=500_000円
+
+outputs
+  発注番号 : string
+
+record 発注の控え
+  発注番号 : string
+
+task 発注する(申請番号: string, 金額: money[円]) -> 発注の控え
+  timeout 1 day
+  idempotent
+
+flow
+  let 控え = 発注する(申請番号: 申請番号, 金額: 金額)
+  succeed 発注番号 = 控え.発注番号
+```
+
+`申請.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Requests", "version": "1" },
+  "paths": {
+    "/requests/supplies/tickets": {
+      "post": {
+        "operationId": "submit_supplies",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["form"],
+            "properties": {
+              "form": {
+                "type": "object",
+                "required": ["item", "count"],
+                "properties": {
+                  "item": { "type": "string", "maxLength": 100 },
+                  "count": { "type": "integer", "minimum": 1, "maximum": 100 }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          } } }
+        },
+        "responses": {
+          "200": { "description": "The ticket", "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["ticket"],
+            "properties": { "ticket": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } } }
+          } } } }
+        },
+        "x-ritsu-request": { "file": "備品.ringi", "name": "supplies", "version": 1 }
+      }
+    }
+  }
+}
+```
+
+`補充.flow`:
+
+```flow
+workflow 補充 v1
+description "足りなくなった備品を、申請のサーバーで申請する"
+
+use openapi 申請 from "申請.json"
+  url "https://requests.example.com"
+
+record 備品
+  item  : string
+  count : int  range >=1 <=50
+
+record 票
+  id : string
+
+record 動いた票
+  ticket : 票
+
+inputs
+  足りない物 : 備品
+
+outputs
+  票番号 : string
+
+task 備品を申請する(form: 備品) -> 動いた票
+  http POST 申請 "/requests/supplies/tickets"
+  key
+
+flow
+  let 動き = 備品を申請する(form: 足りない物)
+  succeed 票番号 = 動き.ticket.id
+```
+
+関連: [E210](#e210)
 
 <a id="e301"></a>
 
@@ -2709,9 +3032,9 @@ permit 会計係は受け取れる(cashiers_charge)
 
 ## E908 — ワークフローが呼ぶ操作を、ゲートがそのワークフローにどの組み合わせでも許しません
 
-**いつ出るか**: `.gate` が `workflow … from` で書いたワークフローが、そのゲートの action が守る操作を呼び（`use openapi` の `http`、`use proto` の `connect`）、その action がワークフローをどの組み合わせでも許さないとき。その呼び出しまで進んだ実行は、いつもそこで拒まれます。
+**いつ出るか**: `.gate` が `workflow … from` で書いたワークフローが、そのゲートの action が守る操作を呼び（`use openapi` の `http`、`use proto` の `connect`）、その action が、その呼び出しで起こりうるどの組み合わせでもワークフローを許さないとき。その呼び出しまで進んだ実行は、いつもそこで拒まれます。呼び出しで起こりうる組み合わせは、呼び出しが操作に渡す値（action の `input`）、ゲートが `workflow` の下の `resource` の行で書いた、resource の属性に当たるフローの値、そこまでの `match` の分岐が残した値（フローが呼んだ規則の答えも）で決まります。
 
-**直し方**: ゲートに、ワークフローを許す permit を書くか（`principal is workflow <名前>`）、呼び出しを消してください。
+**直し方**: 呼び出しを、ゲートがワークフローを許す所へ移すか、ゲートのポリシーを直してください。ワークフローを許す permit が無ければ、書いてください（`principal is workflow <名前>`）。要らない呼び出しなら消してください。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -2915,11 +3238,107 @@ permit 返品は注文を見て返金できる(returns_look_and_refund)
 
 関連: [E908](#e908)
 
+<a id="e909"></a>
+
+## E909 — 呼び出しが渡す数を、ゲートが違う単位か刻みで読みます
+
+**いつ出るか**: `.gate` が `workflow … from` で書いたワークフローが、そのゲートの action が守る操作を呼び、引数に渡す数の型が、同じ名前の action の `input` と違う単位か刻みか税で数えるとき（タスクの `fee: rate[step 0.1%]` とゲートの `fee : rate[step 1%]`、`money[GBP]` と `money[GBPc]`）。フローから生成したコードは数を自分の型で送り、ゲートから生成したコードは同じ数を自分の型で読むので、二つは一つの呼び出しを違う値として読みます（フローの 0.5% は、ゲートでは 5%）。型は、`fed by` が受け取る側と出どころを比べるのと同じに比べます。呼び出しでのゲートの答えは、そうした引数を読みません。答えのうちで言うのは E908（引数がどうであれ、どの組み合わせでも許さない）だけで、拒まれうるか（W909）は、型をそろえたあとで確かめ直します。
+
+**直し方**: どちらかの型を、もう一方に合わせてください。タスクの引数か、action の `input` です（範囲の端を単位なしで書いていれば、それも）。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "注文", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["fee"], "properties": {"fee": {"type": "integer", "minimum": 0, "maximum": 100}}}}}},
+        "responses": {"201": {"description": "返金した"}, "403": {"description": "許されていない"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`返品.flow`:
+
+```flow
+workflow 返品 v1
+description "品物が戻ったら、手数料を引いて注文を返金する"
+
+use openapi 注文 from "orders.json"
+
+inputs
+  注文番号 : string
+
+task 返金する(orderId: string, fee: rate[step 0.1%] range >=0% <=10%)
+  http POST 注文 "/orders/{orderId}/refunds"
+  errors denied = 403
+  key
+
+flow
+  返金する(orderId: 注文番号, fee: 0.5%)
+    on denied => fail Denied "ゲートが返金を許さなかった"
+```
+
+`返金.gate`:
+
+```
+gate 返金(refunds) v1
+description "注文を返金してよい人"
+
+use openapi 注文 from "orders.json"
+
+role 係(clerk)
+  description "客に応対し、返金する"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+workflow 返品(returns) from "返品.flow"
+  description "品物が戻ったら、手数料を引いて注文を返金する"
+
+resource 注文(Order)
+  description "注文"
+
+action 返金する(refund_order)
+  description "手数料を引いて、注文を返金する"
+  guards 注文 refundOrder
+  principal 職員, Workflow
+  resource 注文 from orderId
+  input
+    手数料(fee) : rate[step 1%]  range >=0% <=10%
+
+permit 係は返金できる(clerks_refund)
+  description "係は注文を返金できる"
+  principal in 係
+  action 返金する
+
+permit 返品は少しの手数料で返金できる(returns_keeps_a_small_fee)
+  description "返品のワークフローは、1% までの手数料を引いて、注文を返金できる"
+  principal is workflow 返品
+  action 返金する
+  when 手数料 <= 1%
+```
+
+関連: [E908](#e908), [W909](#w909)
+
 <a id="w909"></a>
 
 ## W909 — 拒まれることのある呼び出しが、拒まれたときのエラーを宣言していません
 
-**いつ出るか**: ワークフローが呼ぶ操作を守る action が、ワークフローを組み合わせによっては拒む（拒むかを決められないときも）のに、呼ぶタスクが、拒まれたときのエラー（HTTP の 403、Connect の `permission_denied`）を宣言していないとき。拒まれると、ワークフローは宣言していない失敗で止まります。
+**いつ出るか**: ワークフローが呼ぶ操作を守る action が、その呼び出しで起こりうる組み合わせによってはワークフローを拒むのに、呼ぶタスクが、拒まれたときのエラー（HTTP の 403、Connect の `permission_denied`）を宣言していないとき。拒まれると、ワークフローは宣言していない失敗で止まります。次のときも出ます。答えが resource の属性によって変わるのに、フローがその値について何を持つかをゲートが書いていないとき（`workflow` の下の `resource` の行）。いつも許されるのが、その `resource` の行のとおりのときだけのとき（サービスが読む resource がそのとおりであることは、どの検査も確かめていません）。拒むかを決められないとき。
 
 **直し方**: タスクに `errors denied = 403`（Connect なら `errors denied = permission_denied`）と書き、拒まれたときにどうするかを呼び出しの下に書いてください（`on denied => …`）。
 
@@ -3016,3 +3435,207 @@ permit 返品は戻った注文を返金できる(returns_refunds_returned_order
 ```
 
 関連: [E908](#e908)
+
+<a id="e911"></a>
+
+## E911 — 申請の経路の決めと、ゲートが許すことが食い違っています
+
+**いつ出るか**: 申請の種類が読むゲート（`use gate`）が、その申請の経路の決めと違うことを言うとき。確かめるのは三つです。一つ目は、チケットの操作とサーバーの管理の操作のどれにも、ゲートに action があり、その action が自分の入力（`input`）を受け取らないこと。チケットの操作は、`submit`、`approve`、`reject`、`add_approver`、`hand_over`、`comment`、チケットに載っていない人に見せるかを尋ねる `see` と、申請が書いていれば `withdraw`、`send_back`、`pause`、`retract` です。管理の操作は、申請の種類の版を切り替える `change_request_type` とその記録を読む `read_audit`、組織のデータを取り込む `import_organization` とその記録を読む `read_organization_audit` です。サーバーは操作を受け付ける前にゲートに尋ね、ゲートに無い action はだれにも許されません。サーバーが渡すのは人と resource と時刻だけなので、自分の入力を受け取る action は、どのチケットでも拒まれます。二つ目は、経路が決めた承認者に、承認者のする操作が許されること。principal が `resource.approvers` に入っていて申請者ではない、という形で尋ね、どの組み合わせでも許されなければエラーです。利用を止められた職員を拒むゲートのように、組み合わせによって許すのは成り立ちます。三つ目は自己承認です。経路が許さないなら（`self approval not allowed`、または行が無い）、`resource.requester` が principal 自身で `resource.self_approval` が false のとき、ステップを決める操作（`approve`、`reject`、`send_back`）がどの組み合わせでも許されないこと。経路が許すなら、申請者が承認者に入っていて `resource.self_approval` が true のとき、許される組み合わせがあること。ゲートには、ringi が渡す属性をその値に固定して尋ね、役割とほかの属性はどの値でも歩くので、組織のデータは読みません。
+
+**直し方**: ゲートに、足りない action を宣言し、操作が尋ねる action から `input` の行を外し、ステップの承認者を許す permit（`when principal in resource.approvers`）と、自分の申請を決めさせない forbid（`when resource.requester is principal`、`unless resource.self_approval`）を書いてください。経路のほうを変えるなら、`self approval` の行を直してください。どちらに合わせるかは人が決めることです。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`購買.ringi`:
+
+```
+request 購買(purchase) v1 "購買の申請"
+
+use gate "全社.gate"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確認(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed
+```
+
+`全社.gate`:
+
+```
+gate 全社(company) v1
+description "チケットにだれが何をしてよいか。ステップの承認者が、そのステップに答える"
+namespace Ringi
+
+principal 職員(Staff)
+resource 承認者の組(Approvers)
+resource チケット(Ticket)
+resource 申請の種類(RequestType)
+resource 組織(Organization)
+resource ステップ(Stage)
+  attributes
+    申請者(requester)       : 職員
+    承認者(approvers)       : 承認者の組
+    自己承認(self_approval) : bool
+
+action 出す(submit)
+  principal 職員
+  resource チケット
+action 見る(see)
+  principal 職員
+  resource チケット
+action 承認する(approve)
+  principal 職員
+  resource ステップ
+action 却下する(reject)
+  principal 職員
+  resource ステップ
+action 承認者を足す(add_approver)
+  principal 職員
+  resource ステップ
+action 引き継ぐ(hand_over)
+  principal 職員
+  resource ステップ
+action コメントする(comment)
+  principal 職員
+  resource ステップ
+action 申請の種類を変える(change_request_type)
+  principal 職員
+  resource 申請の種類
+action 申請の種類の記録を読む(read_audit)
+  principal 職員
+  resource 申請の種類
+action 組織を取り込む(import_organization)
+  principal 職員
+  resource 組織
+action 組織の記録を読む(read_organization_audit)
+  principal 職員
+  resource 組織
+
+permit 職員は出せて管理できる(staff_submit_and_administer)
+  principal is 職員
+  action 出す, 見る, 承認者を足す, 引き継ぐ, 申請の種類を変える, 申請の種類の記録を読む, 組織を取り込む, 組織の記録を読む
+
+permit 職員はコメントを書ける(staff_comment)
+  principal is 職員
+  action コメントする
+
+permit 承認者は自分のステップに答える(approvers_answer_their_stage)
+  principal is 職員
+  action 承認する, 却下する
+  when principal in resource.承認者
+```
+
+関連: [W911](#w911), [E908](#e908)
+
+<a id="w911"></a>
+
+## W911 — ゲートが、申請の経路の決めどおりに許すかを決められません
+
+**いつ出るか**: E911 の二つ目か三つ目の問いに、sekisho が答えを出せないとき。ゲートが ringi の渡す属性を別の型で宣言しているとき（`self_approval` が bool でない、`requester` や `approvers` がエンティティを指さない）と、ゲートの答えが、ほかの言語に尋ねる条件の、その言語が決められない組み合わせによるときです。理由を注に出します。
+
+**直し方**: ゲートの resource に、`requester`（principal と同じ型のエンティティ）、`approvers`（承認者がメンバーであるエンティティ）、`self_approval`（bool）を宣言してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`購買.ringi`:
+
+```
+request 購買(purchase) v1 "購買の申請"
+
+use gate "全社.gate"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確認(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed
+```
+
+`全社.gate`:
+
+```
+gate 全社(company) v1
+description "チケットにだれが何をしてよいか。ステップの承認者がそのステップに答え、経路が許さなければ自分の申請は決めない"
+namespace Ringi
+
+enum 自分で決める(own_decision) = 許す(permitted) | 許さない(not_permitted)
+
+principal 職員(Staff)
+resource 承認者の組(Approvers)
+resource チケット(Ticket)
+resource 申請の種類(RequestType)
+resource 組織(Organization)
+resource ステップ(Stage)
+  attributes
+    申請者(requester)       : 職員
+    承認者(approvers)       : 承認者の組
+    自己承認(self_approval) : 自分で決める
+
+action 出す(submit)
+  principal 職員
+  resource チケット
+action 見る(see)
+  principal 職員
+  resource チケット
+action 承認する(approve)
+  principal 職員
+  resource ステップ
+action 却下する(reject)
+  principal 職員
+  resource ステップ
+action 承認者を足す(add_approver)
+  principal 職員
+  resource ステップ
+action 引き継ぐ(hand_over)
+  principal 職員
+  resource ステップ
+action コメントする(comment)
+  principal 職員
+  resource ステップ
+action 申請の種類を変える(change_request_type)
+  principal 職員
+  resource 申請の種類
+action 申請の種類の記録を読む(read_audit)
+  principal 職員
+  resource 申請の種類
+action 組織を取り込む(import_organization)
+  principal 職員
+  resource 組織
+action 組織の記録を読む(read_organization_audit)
+  principal 職員
+  resource 組織
+
+permit 職員は出せて管理できる(staff_submit_and_administer)
+  principal is 職員
+  action 出す, 見る, 承認者を足す, 引き継ぐ, 申請の種類を変える, 申請の種類の記録を読む, 組織を取り込む, 組織の記録を読む
+
+permit 職員はコメントを書ける(staff_comment)
+  principal is 職員
+  action コメントする
+
+permit 承認者は自分のステップに答える(approvers_answer_their_stage)
+  principal is 職員
+  action 承認する, 却下する
+  when principal in resource.承認者
+
+forbid 自分の申請は決めない(no_one_decides_their_own)
+  principal is 職員
+  action 承認する, 却下する
+  when resource.申請者 is principal
+  unless resource.自己承認 is 許す
+```
+
+関連: [E911](#e911)

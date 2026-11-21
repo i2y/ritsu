@@ -10,8 +10,8 @@
 //! writes gives koyomi.
 //!
 //! - X3 (a): each value given to a rule's date input that can be the day of a koyomi date, or a
-//!   day of a range, is a border, held to the range the rule declares for the input
-//!   (`Rules::date_range`). An input whose range is a koyomi date (`range from koyomi`) is not: its
+//!   day of a range, is a border, held to the range the rule declares for the input (its column
+//!   in the rule's facts). An input whose range is a koyomi date (`range from koyomi`) is not: its
 //!   days are a precondition of the rule, and X2 holds the value's days to them, a day at a time.
 //! - X6: each call of a koyomi date is a border, the day given to its date input held to the range
 //!   of that input. The date's integer inputs are dandori's own to check (its E014), as a rule's are.
@@ -238,7 +238,8 @@ fn input_text(joined: &Joined, disk: &std::path::Path, date: &str, day: i64) -> 
         .iter()
         .map(|(n, v)| match facts.inputs.iter().find(|i| i.name == *n).map(|i| i.kind) {
             Some(DateKind::Date) => format!("{n} = {}", day_text(*v)),
-            _ => format!("{n} = {v}"),
+            // a whole number of koyomi has no unit (DESIGN 6.2 item 8)
+            _ => format!("{n} = {}", ritsu_units::written::digits(i128::from(*v))),
         })
         .collect();
     Some(shown.join(", "))
@@ -277,14 +278,17 @@ pub(crate) fn days_to_rules(project: &Project, flows: &[Flow], joined: &Joined, 
                 if !a.from.iter().any(|o| matches!(o, Origin::Day { .. } | Origin::Range(..))) {
                     continue;
                 }
-                if !facts.inputs.iter().any(|c| c.name == a.input && matches!(c.ty, ColumnType::Date)) {
+                // the range the rule declares for the input, as its column carries it
+                let Some(range) = facts.inputs.iter().find(|c| c.name == a.input).and_then(|c| match c.ty {
+                    ColumnType::Date { min, max } => Some((min, max)),
+                    _ => None,
+                }) else {
                     continue;
-                }
+                };
                 // an input whose range is a koyomi date is the rule's precondition, which X2 holds
                 if facts.preconditions.iter().any(|p| matches!(p, Precondition::Days { input, .. } if *input == a.input)) {
                     continue;
                 }
-                let range = joined.rulec.date_range(&call.rule, &a.input).unwrap_or((None, None));
                 // a rule takes no time: a time given to it says no day here
                 let d = days(project, joined, &a.shown, &a.from, None, lang);
                 let sets: Vec<Found<DaySet>> = d.dates.iter().map(|x| x.days.clone()).collect();

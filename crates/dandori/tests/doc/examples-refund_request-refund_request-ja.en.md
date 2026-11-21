@@ -2,7 +2,7 @@
 
 注文の残りから返金を払う
 
-`examples/refund_request/refund_request.ja.flow`, drawn by `dandori doc`. Inputs: `申請額: money[USDc] range >=1 <=1000000`, `理由: string`, `残高: 残高`. Outputs: `支払い済み: bool`. `申請額`: Comes from `openapi "specs/refunds.ja.json" schema 返金の申請 property 金額` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). `理由`: Comes from `openapi "specs/refunds.ja.json" schema 返金の申請 property 理由` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). `残高.残り`: Comes from `chobo "books/refunds.ja.book" account 返金できる残り` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked).
+`examples/refund_request/refund_request.ja.flow`, drawn by `dandori doc`. Inputs: `申請額: money[USDc] range >=1USDc <=1_000_000USDc`, `理由: string`, `残高: 残高`. Outputs: `支払い済み: bool`. `申請額`: Comes from `openapi "specs/refunds.ja.json" schema 返金の申請 property 金額` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). `理由`: Comes from `openapi "specs/refunds.ja.json" schema 返金の申請 property 理由` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). `残高.残り`: Comes from `chobo "books/refunds.ja.book" account 返金できる残り` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked).
 
 ## flow
 

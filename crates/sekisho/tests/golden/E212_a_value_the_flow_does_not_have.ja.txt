@@ -1,0 +1,8 @@
+エラー[E212]: tests/mutants/E212_a_value_the_flow_does_not_have.gate:10:1: フロー `../../examples/claims/flows/pay.flow` に値 `claim_no` はありません
+    10 |   resource Claim from claim_no
+  = `workflow` の下の `resource` の行には、フローの入力か変数、またはそのフィールド（`order.total`）を書きます。
+  = フローの入力と変数は `amount`、`claim_id`、`p`、`r` です。
+エラー[E212]: tests/mutants/E212_a_value_the_flow_does_not_have.gate:11:1: フロー `../../examples/claims/flows/pay.flow` に値 `claim.total` はありません
+    11 |     amount = claim.total
+  = `workflow` の下の `resource` の行には、フローの入力か変数、またはそのフィールド（`order.total`）を書きます。
+  = フローの入力と変数は `amount`、`claim_id`、`p`、`r` です。

@@ -1,0 +1,8 @@
+2026-11-16 10:00  submit   by r0001  -> first (h0030), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by h0030  -> decide (e0001), due 2026-11-19 end of day
+2026-11-16 12:00  approve  by e0001  -> approved
+scenario `the_head_thirty_teams_up`: as written (3 rows)
+
+2026-11-16 10:00  submit   by u0001  -> decide (e0001), due 2026-11-19 end of day; first skipped (no head is above the requester; nobody is above to go up to)
+2026-11-16 12:00  approve  by e0001  -> approved
+scenario `nobody_within_thirty_teams_up`: as written (2 rows)

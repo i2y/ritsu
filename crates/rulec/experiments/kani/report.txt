@@ -9,6 +9,8 @@ baggage_fee                2s  Complete - 2 successfully verified harnesses, 0 f
 box_reward                 3s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 cancel_verdict             1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 cancellation_verdict       1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+card_fee_ja                1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+card_fee                   2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 cart_shipping_fee          2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 cart_shipping              2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 case_assignment            2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
@@ -30,6 +32,8 @@ coupon_step                2s  Complete - 3 successfully verified harnesses, 0 f
 course_catalog             2s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 course_enrollment          3s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 daily_proration            0s  no harness written — see the head of daily_proration_proof.rs
+dice_total_ja              1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+dice_total                 1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 discount_allocation        1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 discount_fill              1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 duty_rotation              1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
@@ -47,6 +51,8 @@ food_storage_standard      4s  Complete - 4 successfully verified harnesses, 0 f
 fragile_lines_fee_ja       1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 fragile_lines_fee          1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 freight                    2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
+gift_basket_ja             6s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
+gift_basket                4s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 goods_delivery             1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 goods_price                1s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 goods_returns              2s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
@@ -61,6 +67,7 @@ japan_income_tax           2s  Complete - 2 successfully verified harnesses, 0 f
 japan_stamp_duty           5s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 japan_stamp_duty_split     4s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 kenpo_premium             27s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
+line_subtotals             6s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 lottery_prize              1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 member_benefits            4s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
 member_perk                4s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
@@ -82,6 +89,7 @@ order_handling            36s  Complete - 1 successfully verified harnesses, 0 f
 order_happens_ja           2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 order_happens              3s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 order_lifecycle            2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+order_line_subtotals       6s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 order_lot                  0s  no harness written — see the head of order_lot_proof.rs
 order_period               1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 order_savings              4s  Complete - 5 successfully verified harnesses, 0 failures, 5 total.
@@ -93,6 +101,8 @@ order_state                2s  Complete - 2 successfully verified harnesses, 0 f
 osha_excavation            1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 osha_extinguisher          2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 osha_noise                 2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+parcel_batch_ja            5s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
+parcel_batch               5s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 parcel_fee_ja              2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 parcel_fee                 3s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 parcel_rate                5s  Complete - 5 successfully verified harnesses, 0 failures, 5 total.
@@ -136,6 +146,8 @@ retry_attempts             1s  Complete - 2 successfully verified harnesses, 0 f
 retry_count                2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 return_eligibility         1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 reward_box                 3s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+season_ticket_ja           2s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
+season_ticket              3s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
 shipment_delivery_fee      5s  Complete - 5 successfully verified harnesses, 0 failures, 5 total.
 shipment_fee               4s  Complete - 5 successfully verified harnesses, 0 failures, 5 total.
 shipment_surcharge         2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
@@ -160,4 +172,4 @@ us_income_tax              2s  Complete - 2 successfully verified harnesses, 0 f
 yupack_base_fee            9s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 yupack_fee                 9s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 
-総計 888s
+総計 930s

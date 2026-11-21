@@ -1,0 +1,28 @@
+workflow purchase_order v1
+  now range >=2026-01-01 <=2027-12-31 offset +09:00
+description "The order placed after a purchase ringi is approved: the purchasing system orders from the vendor the ringi names, and the requester is told the order number. ringi starts it when the ticket is approved"
+
+inputs
+  request_id : string
+  vendor     : string
+  amount     : money[JPY]  range >=1JPY <=100_000_000JPY
+  summary    : string
+
+outputs
+  order_no : string
+
+record Order
+  order_no : string
+
+task place_order(request_id: string, vendor: string, amount: money[JPY], summary: string) -> Order
+  timeout 1 day
+  retry 3 times every 10 minutes
+  idempotent
+
+task tell_requester(request_id: string, text: string)
+  idempotent
+
+flow
+  let o = place_order(request_id: request_id, vendor: vendor, amount: amount, summary: summary)
+  tell_requester(request_id: request_id, text: "The order for request {request_id} was placed: {o.order_no}")
+  succeed order_no = o.order_no

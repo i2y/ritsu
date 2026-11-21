@@ -1,0 +1,16 @@
+openapi: 3.0.3
+info:
+  title: Refunds
+  version: "1"
+paths:
+  /refunds:
+    post:
+      operationId: refundOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "schemas.yaml#/Refund"
+      responses:
+        "201":
+          description: Refunded

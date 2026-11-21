@@ -1,0 +1,16 @@
+rule 品目の手数料(array_list) v1
+description "Java のモジュールと runner が読み込む JDK のクラスと同じ名前の規則。入力の一つは、コードがそのクラスを読むパッケージと同じ名前"
+
+inputs
+  品目の数(items) : number  range >=0 <=100
+  急ぎ(java)      : bool
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 品目の数ごとの手数料(fee_by_items)
+policy unique
+| 品目の数 | 急ぎ  | -> 手数料 |
+| <=10     | -     | 2USD      |
+| >10      | true  | 5USD      |
+| >10      | false | 6USD      |

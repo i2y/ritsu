@@ -422,9 +422,10 @@ pub(crate) fn rows_write_words(c: &Checked, name: &str) -> bool {
 /// in one unit, else as they are spelled.
 pub(crate) fn in_order<'a>(vs: impl IntoIterator<Item = &'a String>) -> Vec<String> {
     let vs: Vec<&String> = vs.into_iter().collect();
+    // The digits as a sentence writes them, grouped by `_` from five on (`1_000_001`, §15.333).
     let split = |s: &str| -> Option<(f64, String)> {
-        let end = s.char_indices().find(|&(i, ch)| !(ch.is_ascii_digit() || ch == '.' || (i == 0 && ch == '-'))).map_or(s.len(), |(i, _)| i);
-        Some((s[..end].parse::<f64>().ok()?, s[end..].to_string()))
+        let end = s.char_indices().find(|&(i, ch)| !(ch.is_ascii_digit() || ch == '.' || (ch == '_' && i > 0) || (i == 0 && ch == '-'))).map_or(s.len(), |(i, _)| i);
+        Some((s[..end].replace('_', "").parse::<f64>().ok()?, s[end..].to_string()))
     };
     let keyed: Option<Vec<(f64, String)>> = vs.iter().map(|s| split(s)).collect();
     let mut out: Vec<(f64, String)> = match keyed {

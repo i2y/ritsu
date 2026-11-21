@@ -1,0 +1,77 @@
+2026-11-16 10:00  submit   by e1101  -> first (e3101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e3101  -> decide (e0101), due 2026-11-19 end of day; second done with the approval of first (e3101)
+2026-11-16 12:00  approve  by e0101  -> approved
+scenario `done_with_the_approval_before`: as written (3 rows)
+
+2026-11-16 10:00  submit   by e1101  -> first (e3101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e3101  -> middle (one of e1001, e1002), due 2026-11-19 end of day
+2026-11-16 12:00  approve  by e1001  -> second (e3101), due 2026-11-19 end of day
+2026-11-16 13:00  approve  by e3101  -> decide (e0101), due 2026-11-19 end of day
+scenario `not_across_a_stage_between`: as written (4 rows); the ticket is left `in progress`; the clocks set: late 2026-11-20 00:00 (decide)
+
+2026-11-16 10:00  submit   by e1101  -> first (e3101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e3101  -> middle (accounting: one of e1001, e1002), due 2026-11-19 end of day; middle done with the approval of first (e3101)
+2026-11-16 12:00  approve  by e1002  -> decide (e0101), due 2026-11-19 end of day
+scenario `one_part_of_a_joint_stage`: as written (3 rows); the ticket is left `in progress`; the clocks set: late 2026-11-20 00:00 (decide)
+
+2026-11-16 10:00  submit             by e1101  -> first (e3101), due 2026-11-19 end of day
+2026-11-16 11:00  approve            by e3101  -> middle (flow precheck_agent), due 2026-11-19 end of day; ask flow precheck_agent
+2026-11-16 11:01  agent answered ok            -> second (e3101), due 2026-11-19 end of day
+2026-11-16 12:00  approve            by e3101  -> decide (e0101), due 2026-11-19 end of day
+scenario `not_across_an_agent`: as written (4 rows); the ticket is left `in progress`; the clocks set: late 2026-11-20 00:00 (decide)
+
+2026-11-16 10:00  submit   by e3101  -> first (e0101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e0101  -> approved; second went up to e0101 (it comes to the requester alone); second done with the approval of first (e0101); decide done with the approval of first (e0101)
+scenario `done_where_it_went_up_to_for_lack_of_an_approver`: as written (2 rows)
+
+2026-11-16 10:00  submit   by e1201  -> first (e3101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e3101  -> second (e1101), due 2026-11-19 end of day
+2026-11-20 00:00  late               -> second (e3101), due 2026-11-25 end of day; second went up to e3101
+2026-11-20 10:00  approve  by e3101  -> decide (e0101), due 2026-11-25 end of day
+scenario `not_done_where_it_went_up_to_late`: as written (4 rows); the ticket is left `in progress`; the clocks set: late 2026-11-26 00:00 (decide)
+
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-20 00:00  late               -> first (e3101), due 2026-11-25 end of day; first went up to e3101
+2026-11-20 10:00  approve  by e3101  -> decide (e0101), due 2026-11-25 end of day; second done with the approval of first (e3101)
+scenario `done_after_the_one_it_went_up_to_approves`: as written (3 rows); the ticket is left `in progress`; the clocks set: late 2026-11-26 00:00 (decide)
+
+2026-12-28 10:00  submit   by e1201  -> first (e3101), due 2027-01-06 end of day
+2026-12-28 11:00  approve  by e1101  -> second (e1101), due 2027-01-06 end of day; for e3101
+2026-12-28 12:00  approve  by e1101  -> decide (e0101), due 2027-01-06 end of day
+scenario `a_proxy_answers_for_one_and_then_for_themselves`: as written (3 rows); the ticket is left `in progress`; the clocks set: late 2027-01-07 00:00 (decide)
+
+2026-11-16 10:00  submit               by e1101  -> first (e3101), due 2026-11-19 end of day
+2026-11-16 11:00  approve              by e3101  -> decide (e0101), due 2026-11-19 end of day; second done with the approval of first (e3101)
+2026-11-16 12:00  send back to second  by e0101  -> second (e3101), due 2026-11-19 end of day
+2026-11-16 13:00  approve              by e3101  -> decide (e0101), due 2026-11-19 end of day
+scenario `sent_back_to_a_stage_that_was_done`: as written (4 rows); the ticket is left `in progress`; the clocks set: late 2026-11-20 00:00 (decide)
+
+2026-11-16 10:00  submit               by e1201  -> first (e3101), due 2026-11-19 end of day
+2026-11-16 11:00  approve              by e3101  -> decide (e0101), due 2026-11-19 end of day; middle done with the approval of first (e3101); second done with the approval of first (e3101)
+2026-11-16 12:00  send back to middle  by e0101  -> middle (e3101), due 2026-11-19 end of day
+2026-11-16 13:00  approve              by e3101  -> decide (e0101), due 2026-11-19 end of day; second done with the approval of middle (e3101)
+scenario `done_with_the_answer_the_stage_gave`: as written (4 rows); the ticket is left `in progress`; the clocks set: late 2026-11-20 00:00 (decide)
+
+2026-12-28 10:00  submit               by e1201  -> first (e3101), due 2027-01-06 end of day
+2026-12-28 11:00  approve              by e1101  -> decide (e0101), due 2027-01-06 end of day; for e3101; middle done with the approval of first (e1101 for e3101); second done with the approval of first (e1101 for e3101)
+2026-12-28 12:00  send back to middle  by e0101  -> middle (e3101), due 2027-01-06 end of day
+2026-12-28 13:00  approve              by e3101  -> decide (e0101), due 2027-01-06 end of day; second done with the approval of middle (e3101)
+scenario `done_with_the_answer_the_stage_gave_after_a_proxy`: as written (4 rows); the ticket is left `in progress`; the clocks set: late 2027-01-07 00:00 (decide)
+
+2026-11-16 10:00  submit     by e1101  -> first (e3101), due 2026-11-19 end of day
+2026-11-16 11:00  approve    by e3101  -> decide (e0101), due 2026-11-19 end of day; second done with the approval of first (e3101)
+2026-11-16 12:00  send back  by e0101  -> with requester, resubmit by 2026-11-19 end of day
+2026-11-17 10:00  resubmit   by e1101  -> first (e3101), due 2026-11-20 end of day
+2026-11-17 11:00  approve    by e3101  -> decide (e0101), due 2026-11-20 end of day; second done with the approval of first (e3101)
+scenario `made_again_after_it_was_done`: as written (5 rows); the ticket is left `in progress`; the clocks set: late 2026-11-21 00:00 (decide)
+
+2026-11-16 10:00  submit   by e1101  -> first (e3101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e3101  -> decide (e0101), due 2026-11-19 end of day; second done with the approval of first (e3101)
+2026-11-16 12:00  retract  by e3101  -> first (e3101), due 2026-11-19 end of day
+2026-11-16 13:00  approve  by e3101  -> decide (e0101), due 2026-11-19 end of day; second done with the approval of first (e3101)
+scenario `taken_back_with_the_stage_it_did`: as written (4 rows); the ticket is left `in progress`; the clocks set: late 2026-11-20 00:00 (decide)
+
+2026-12-28 10:00  submit   by e1201  -> first (manager: e1101; dept_head: e3101), due 2027-01-06 end of day
+2026-12-28 11:00  approve  by e1101  -> first (dept_head: e3101), due 2027-01-06 end of day
+2026-12-28 12:00  approve  by e1101  -> decide (e0101), due 2027-01-06 end of day; for e3101
+scenario `a_proxy_with_a_part_of_their_own`: as written (3 rows); the ticket is left `in progress`; the clocks set: late 2027-01-07 00:00 (decide)

@@ -1,0 +1,27 @@
+gate pass v1
+description "A file named as a keyword of Python, the name of its module"
+namespace Air
+
+role agent
+  description "Works at the gate of a flight"
+  can scan_pass
+
+principal Agent
+  description "The one who asks"
+  roles agent
+
+resource BoardingPass
+  description "A boarding pass of a flight"
+  attributes
+    checked_in : bool
+
+action scan_pass
+  description "Scan a boarding pass at the gate"
+  principal Agent
+  resource BoardingPass
+
+permit agents_scan_checked_in_passes
+  description "An agent can: Scan a boarding pass at the gate"
+  principal in agent
+  action scan_pass
+  when resource.checked_in

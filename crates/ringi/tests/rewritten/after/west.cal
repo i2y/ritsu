@@ -1,0 +1,6 @@
+calendar west v1
+description "A plant's calendar (fictional): Saturdays and Sundays are closed, five hours behind UTC"
+offset -05:00
+
+closed weekly sat, sun
+closed 2026-12-29..2026-12-31 "Year-end shutdown"

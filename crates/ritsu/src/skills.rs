@@ -1,6 +1,6 @@
-//! `ritsu skills` (PLAN F.3): the ten Agent Skills, carried in the binary, so that an agent that
+//! `ritsu skills` (PLAN F.3): the eleven Agent Skills, carried in the binary, so that an agent that
 //! has only `ritsu` gets the guides this repository has. The files are `skills/<name>/` at the root,
-//! taken in as they are (`include_str!`), one skill for ritsu and one for each of the nine
+//! taken in as they are (`include_str!`), one skill for ritsu and one for each of the ten
 //! languages, as geas's `geas skill --install` takes in its own.
 //!
 //! `ritsu skills list` names them; `ritsu skills install` writes them as `<dir>/<name>/`, where
@@ -22,7 +22,7 @@ pub struct Skill {
     pub files: &'static [(&'static str, &'static str)],
 }
 
-/// The ten skills, ritsu's first and then the languages in the order `ritsu --help` lists them.
+/// The eleven skills, ritsu's first and then the languages in the order `ritsu --help` lists them.
 pub const SKILLS: &[Skill] = &[
     Skill {
         name: "ritsu",
@@ -129,6 +129,14 @@ pub const SKILLS: &[Skill] = &[
             ("reference.md", include_str!("../../../skills/kaname/reference.md")),
         ],
     },
+    Skill {
+        name: "ringi",
+        files: &[
+            ("SKILL.md", include_str!("../../../skills/ringi/SKILL.md")),
+            ("codes.md", include_str!("../../../skills/ringi/codes.md")),
+            ("reference.md", include_str!("../../../skills/ringi/reference.md")),
+        ],
+    },
 ];
 
 /// What `ritsu skills list` says of a skill, in a line.
@@ -146,7 +154,8 @@ pub fn purpose(name: &str) -> Text {
         "yuen" => tr!("要件の来歴（.req）", "where requirements come from (.req)"),
         "sakai" => tr!("境界づけられたコンテキストの地図（.ctx）", "maps of bounded contexts (.ctx)"),
         "sekisho" => tr!("だれが何をしてよいかを書き、Cedar を生成する（.gate）", "who may do what, compiled to Cedar (.gate)"),
-        _ => tr!("Functional Core。入出力を持たない汎用のコード（.kn）", "functional cores: general code with no input or output (.kn)"),
+        "kaname" => tr!("Functional Core。入出力を持たない汎用のコード（.kn）", "functional cores: general code with no input or output (.kn)"),
+        _ => tr!("会社の申請と承認（.ringi）", "a company's applications and approvals (.ringi)"),
     }
 }
 
@@ -188,10 +197,9 @@ pub fn plan(dir: &Path, skills: &[&'static Skill]) -> Plan {
     plan
 }
 
+/// What stops the command, as every command of the toolchain says it (DESIGN 6.2, item 10), and 2.
 fn refuse(msg: Text, lang: Lang) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    eprintln!("{head}: {}", msg.get(lang));
-    2
+    ritsu_base::cli::refuse(&mut std::io::stderr(), &msg, lang)
 }
 
 /// `ritsu skills list | install [<name>...] [--dir <dir> | --user] [--force]`: the exit code.
@@ -208,14 +216,13 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         print!("{}", table.help_cmd(cmd, lang));
         return 0;
     }
-    let usage = tr!(
-        "使い方: ritsu skills list | ritsu skills install [<name>...] [--dir <dir> | --user] [--force]",
-        "usage: ritsu skills list | ritsu skills install [<name>...] [--dir <dir> | --user] [--force]"
-    );
     match a.pos.first().map(String::as_str) {
         Some("list") => {
-            if a.pos.len() > 1 || a.has("--dir") || a.has("--user") || a.has("--force") {
-                return refuse(tr!("`ritsu skills list` は引数もフラグも取りません", "`ritsu skills list` takes no arguments and no flags"), lang);
+            if a.pos.len() > 1 {
+                return refuse(ritsu_base::cli::takes("ritsu skills list", "", "ritsu skills list"), lang);
+            }
+            if a.has("--dir") || a.has("--user") || a.has("--force") {
+                return refuse(tr!("`ritsu skills list` はフラグを取りません", "`ritsu skills list` takes no flags"), lang);
             }
             let w = SKILLS.iter().map(|s| width(s.name)).max().unwrap_or(0);
             for s in SKILLS {
@@ -223,12 +230,10 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
             }
             0
         }
-        Some("install") => install(&a.pos[1..], a.get("--dir"), a.has("--user"), a.has("--force"), lang),
-        Some(other) => {
-            let other = other.to_string();
-            refuse(tr!("`ritsu skills {other}` というコマンドはありません。{}", "there is no `ritsu skills {other}`; {}", usage.get(lang)), lang)
-        }
-        None => refuse(usage, lang),
+        // the directory as the run holds a path a flag takes (DESIGN 4.15): `--dir ./skills` is `skills`
+        Some("install") => install(&a.pos[1..], a.get("--dir").map(ritsu_base::paths::fold_given).as_deref(), a.has("--user"), a.has("--force"), lang),
+        Some(other) => refuse(ritsu_base::cli::no_command("ritsu skills", other), lang),
+        None => refuse(table.takes(cmd), lang),
     }
 }
 
@@ -264,13 +269,12 @@ fn install(names: &[String], dir: Option<&str>, user: bool, force: bool, lang: L
     let plan = plan(&dir, &skills);
     if !plan.differ.is_empty() && !force {
         let n = plan.differ.len();
-        let head = if lang == Lang::Ja { "エラー" } else { "error" };
         let (some, them) = if n == 1 { ("1 file there differs from the one".to_string(), "it") } else { (format!("{n} files there differ from the ones"), "them") };
         let msg = tr!(
             "{n} 個のファイルが、この ritsu の持つものと違います（手で変えたか、別の版の ritsu が書いたもの）。何も書いていません。`--force` を付けると上書きします:",
             "{some} this ritsu carries (changed by hand, or written by another version of ritsu), so nothing was written; `--force` writes over {them}:"
         );
-        eprintln!("{head}: {}", msg.get(lang));
+        eprintln!("{}", ritsu_base::cli::refusal(msg.get(lang), lang));
         for p in &plan.differ {
             eprintln!("  {}", p.display());
         }
@@ -282,13 +286,12 @@ fn install(names: &[String], dir: Option<&str>, user: bool, force: bool, lang: L
             println!("{}", tr!("{shown} はすでに同じです（ファイル {} 個）", "{shown} is already the same ({})", same ; files(*same)).get(lang));
             continue;
         }
-        if let Err(e) = std::fs::create_dir_all(folder) {
-            return refuse(tr!("{shown} を作れません: {e}", "cannot make {shown}: {e}"), lang);
+        if let Err(e) = ritsu_base::fs::create_dir_all(folder) {
+            return refuse(ritsu_base::cli::cannot_create(&shown, &e), lang);
         }
         for (p, text) in writes {
-            if let Err(e) = std::fs::write(p, text) {
-                let p = p.display();
-                return refuse(tr!("{p} を書けません: {e}", "cannot write {p}: {e}"), lang);
+            if let Err(e) = ritsu_base::fs::write(p, text) {
+                return refuse(ritsu_base::cli::cannot_write(&p.display().to_string(), &e), lang);
             }
         }
         let n = writes.len();

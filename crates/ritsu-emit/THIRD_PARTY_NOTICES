@@ -3,8 +3,8 @@ Third-party notices for ritsu-emit
 
 ritsu-emit's tables of the characters a name of ritsu's languages may hold and a name of Rust's,
 Python's, TypeScript's or Go's may not (src/xid.rs, tools/xid/README.md), which chobo (E063 and
-its Rust clients) and kaname (the names of the code it writes) read, are made from two files of
-the Unicode Character Database:
+its Rust clients), kaname (the names of the code it writes) and ringi (the names of a request type)
+read, are made from two files of the Unicode Character Database:
 
   Unicode Character Database 17.0.0, https://www.unicode.org/Public/17.0.0/ucd/
     DerivedCoreProperties.txt        the properties Alphabetic, XID_Start, XID_Continue,
@@ -18,7 +18,9 @@ each file's date and SHA-256. The tables are lists of ranges of code points; rit
 nothing at run time.
 
 ritsu-emit's tables of NFC and NFKC (src/normal_table.rs), which chobo's W108 reads to compare
-names as Rust and Python compare identifiers, are made from two more files of the database:
+names as Rust and Python compare identifiers, and ringi's search of the organization reads to
+compare what is looked for with the names of people, teams and rows, are made from two more files
+of the database:
 
   Unicode Character Database 17.0.0, https://www.unicode.org/Public/17.0.0/ucd/
     UnicodeData.txt                  the decompositions and the canonical combining classes

@@ -18,5 +18,8 @@ fn restore_sigpipe() {}
 
 fn main() -> ExitCode {
     restore_sigpipe();
-    rulec::cli::run(std::env::args().skip(1).collect())
+    // A panic is a bug in rulec: exit 2 (ritsu's DESIGN 8.4) rather than Rust's 101, in the words of
+    // every binary of the toolchain.
+    ritsu_base::cli::on_panic("rulec");
+    std::panic::catch_unwind(|| rulec::cli::run(std::env::args().skip(1).collect())).unwrap_or(ExitCode::from(2))
 }

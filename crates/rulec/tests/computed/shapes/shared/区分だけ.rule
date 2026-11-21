@@ -1,0 +1,16 @@
+rule 区分だけ(band_only) v1
+description "金額の区分だけを決める"
+
+enum 大きさ(size) = 小(small) | 中(medium) | 大(large)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+outputs
+  区分(band) : 大きさ
+
+table 区分の表(bands)
+| 金額                  | -> 区分 |
+| <=10_000円            | 小      |
+| >10_000円 <=100_000円 | 中      |
+| >100_000円            | 大      |

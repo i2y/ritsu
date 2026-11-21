@@ -1,0 +1,26 @@
+package {{package}}
+
+import (
+	"os"
+	"testing"
+
+	server "{{framework}}"
+	"{{framework}}/conformance"
+	"{{framework}}/memstore"
+)
+
+// TestVectors gives every vector ritsu wrote in requests/vectors/ (from the scenarios and the rules
+// of project/) to a server through its API, and checks that it answers what they say: the server
+// and the generated package agree on every rule of the kinds.
+func TestVectors(t *testing.T) {
+	p, err := PackageFrom(os.DirFS("requests"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := conformance.Setup{
+		Packages:     []*server.Package{p},
+		Organization: Organization(),
+		Store:        func(testing.TB) server.Store { return memstore.New() },
+	}
+	t.Log("\n" + conformance.Summary(conformance.Vectors(t, s)))
+}

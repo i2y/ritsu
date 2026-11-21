@@ -155,7 +155,8 @@ impl Error {
                 let w = what.text();
                 tr!("tar の {at} バイト目が、ritsu の書く形ではありません。{}", "the tar is not as ritsu writes one at byte {at}: {}", w.ja; w.en)
             }
-            Error::Disk(p, e) => tr!("`{p}` を書けません（{e}）", "cannot write `{p}` ({e})"),
+            // as `cli::cannot_write` says it, of the system's words kept
+            Error::Disk(p, e) => tr!("`{p}` に書けません: {e}", "cannot write `{p}`: {e}"),
             Error::Clash(p) => tr!(
                 "`{p}` は、tar のほかの項目とファイルシステムの上で同じファイルになります（大文字と小文字、Unicode の正規化など）",
                 "`{p}` is the same file as another entry of the tar on this file system (by case, or by the normal forms of Unicode)"

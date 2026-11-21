@@ -1,0 +1,263 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Leave",
+    "version": "1.0.0",
+    "description": "A leave service whose days are dates (format: date) and whose moments are dates and times (format: date-time), for tests/flows/api_dates.flow and tests/fixtures/date_formats.flow"
+  },
+  "servers": [
+    {
+      "url": "https://leave.example.com"
+    }
+  ],
+  "paths": {
+    "/leaves": {
+      "post": {
+        "operationId": "bookLeave",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "employee": {
+                    "type": "string"
+                  },
+                  "period": {
+                    "$ref": "#/components/schemas/Period"
+                  }
+                },
+                "required": [
+                  "employee",
+                  "period"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The leave, booked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Leave"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/leaves/{id}/move": {
+      "post": {
+        "operationId": "moveLeave",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "first_day": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "The day the leave began on before"
+                  },
+                  "asked_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "first_day"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The leave, moved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Leave"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/days/{day}": {
+      "get": {
+        "operationId": "dayOff",
+        "parameters": [
+          {
+            "name": "day",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What the day is, and the day the year's leave closes on",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Day"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/closings": {
+      "post": {
+        "operationId": "closeYear",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "day": {
+                    "$ref": "#/components/schemas/Closing"
+                  }
+                },
+                "required": [
+                  "day"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The day the year's leave closes on",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "day": {
+                      "$ref": "#/components/schemas/Closing"
+                    }
+                  },
+                  "required": [
+                    "day"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Period": {
+        "type": "object",
+        "properties": {
+          "first_day": {
+            "type": "string",
+            "format": "date"
+          },
+          "last_day": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "first_day",
+          "last_day"
+        ]
+      },
+      "Leave": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "first_day": {
+            "type": "string",
+            "format": "date"
+          },
+          "booked_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "first_day",
+          "booked_at"
+        ]
+      },
+      "Day": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "working",
+              "holiday"
+            ]
+          },
+          "closing": {
+            "$ref": "#/components/schemas/Closing"
+          }
+        },
+        "required": [
+          "day",
+          "kind",
+          "closing"
+        ]
+      },
+      "Closing": {
+        "type": "string",
+        "format": "date",
+        "enum": [
+          "2026-12-28",
+          "2026-12-29"
+        ]
+      }
+    }
+  }
+}

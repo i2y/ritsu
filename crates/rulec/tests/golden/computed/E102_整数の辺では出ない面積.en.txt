@@ -1,0 +1,9 @@
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/computed/shapes/E102_整数の辺では出ない面積.rule:15 table 区分表
+   |
+15 | | 2    | 2       |
+   | ^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+   |
+ `面積` never comes to what this row asks for.
+ hint: compare the expression with this row's conditions. No input reaches this row, so if it is not needed, delete it.
+

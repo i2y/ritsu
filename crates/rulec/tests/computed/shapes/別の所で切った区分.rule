@@ -1,0 +1,22 @@
+rule 別の所で切った区分(bands_cut_elsewhere) v1
+description "上の表が 50 円で切る区分を、80 円でも切った金額と一緒に読む。51 円から 80 円までは区分が小で、2 行目がその金額を取る"
+
+enum 大きさ(size) = 小(small) | 大(large)
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=300円
+
+outputs
+  答え(x) : 選択
+
+table 区分の表(band_of)
+| 金額   | -> 区分(band) : 大きさ |
+| <=50円 | 大                     |
+| >50円  | 小                     |
+
+table 選ぶ(pick)
+| 金額         | 区分 | -> 答え |
+| <=50円       | 大   | 一      |
+| >50円 <=80円 | 小   | 二      |
+| >80円        | 小   | 一      |

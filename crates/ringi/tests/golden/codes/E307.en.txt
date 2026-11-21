@@ -1,0 +1,6 @@
+error[E307]: example.ringi:8:7: The shared route `standard` is not given `long`
+     8 | route standard(days: 5)
+  = Give it, as in `route standard(long: …)`.
+error[E307]: example.ringi:8:16: The shared route `standard` does not take `days`
+     8 | route standard(days: 5)
+  = The inputs declared: `long`

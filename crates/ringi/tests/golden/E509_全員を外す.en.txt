@@ -1,0 +1,4 @@
+error[E509]: tests/mutants/E509_全員を外す.ringi:15:3: In the organization from 2026-04-01, no one may submit the request
+    15 |   submitted by   position 部長 or higher in sales except person "e02"
+  = `position 部長 or higher in sales except person "e02"` comes to nobody in the organization from 2026-04-01.
+  = Widen `submitted by`, or correct the data of the version.

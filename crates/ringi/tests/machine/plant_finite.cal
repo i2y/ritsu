@@ -1,0 +1,10 @@
+calendar plant v1
+description "The plant's calendar with a table of holidays that ends with 2027 (fictional): Sundays, Mondays and the holidays are closed"
+offset +09:00
+
+source holidays = file "../mutants/shared/holidays.csv" sha256:5927e83156e00064
+  format csv
+  covers 2026-01-01..2027-12-31
+
+closed weekly sun, mon
+closed holidays

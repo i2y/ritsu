@@ -167,7 +167,237 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
         }
         out.insert(name.clone(), vs);
     }
+    add_accepted_edges(f, c, &mut out);
     out
+}
+
+/// The values at which each `define` with a range the rule accepts lands on an end of that range
+/// (§15.313), added to the candidates of what it is worked out from: the inputs of the call and,
+/// for a value of one element, that element's fields. The ends of the range are where the door
+/// starts to refuse, and a row over the value near an end is reached only there: a fee of 3%
+/// accepted up to 20,000 yen comes to its top only at an amount near 666,667 yen, which no range or
+/// cell writes. A rule with no such range has the candidates it always had.
+fn add_accepted_edges(f: &RuleFile, c: &Checked, out: &mut BTreeMap<String, Vec<Val>>) {
+    if c.accepts.is_empty() {
+        return;
+    }
+    // Every name at its first candidate, then each other candidate of one name at a time: a value
+    // that reaches an end only beside one value of an enum (a base of 500 yen for one zone) is
+    // solved from there.
+    let first: BTreeMap<String, Val> = out.iter().filter_map(|(k, vs)| Some((k.clone(), vs.first()?.clone()))).collect();
+    let mut seeds = vec![first.clone()];
+    for (k, vs) in out.iter() {
+        for v in vs.iter().skip(1) {
+            if seeds.len() >= EDGE_SEEDS {
+                break;
+            }
+            let mut s = first.clone();
+            s.insert(k.clone(), v.clone());
+            seeds.push(s);
+        }
+    }
+    for e in accepted_edges(f, c, &seeds) {
+        if !e.inside {
+            continue;
+        }
+        for (k, v) in e.values {
+            if let Some(vs) = out.get_mut(&k) {
+                if !vs.contains(&v) {
+                    vs.push(v);
+                }
+            }
+        }
+    }
+}
+
+/// Where a `define` with a range the rule accepts sits at one end of the range (§15.313).
+pub(crate) struct Edge {
+    /// The `define`.
+    pub define: String,
+    /// The sequence whose elements it is worked out on, by its place among the rule's `elements`;
+    /// `None` for a value of the call.
+    pub seq: Option<usize>,
+    /// The top end, or the bottom.
+    pub hi: bool,
+    /// On the end, which the door takes, or one step past it, which it refuses.
+    pub inside: bool,
+    /// The seed it was solved from, by its place among those given.
+    pub from: usize,
+    /// What it is worked out from at that point: the inputs of the call and, for a value of one
+    /// element, that element's fields, side by side.
+    pub values: BTreeMap<String, Val>,
+}
+
+/// How many points the ends of an accepted range are solved from at most: past these, an end not
+/// reached is left without a vector rather than searched for at length.
+const EDGE_SEEDS: usize = 16;
+
+/// For each end each `define` with a range the rule accepts writes, the values it is worked out
+/// from at which it lands on the end, and at which it lands past it (§15.313), each solved from
+/// the first of `seeds` it can be solved from, as `place` solves a column, and confirmed by the
+/// evaluator. Only a value worked out before every walk, or on one element in a walk, is looked at.
+/// An end the value cannot pass, by what it reaches, has no point past it, and one it cannot come
+/// to has none on it either.
+pub(crate) fn accepted_edges(f: &RuleFile, c: &Checked, seeds: &[BTreeMap<String, Val>]) -> Vec<Edge> {
+    use std::cmp::Ordering::*;
+    let st = crate::types::stages(f);
+    let mut out = Vec::new();
+    for (i, it) in f.items.iter().enumerate() {
+        let Item::Define(d) = it else { continue };
+        let name = &d.name.text;
+        let Some(&(lo, hi)) = c.accepts.get(name) else { continue };
+        let Some(ty) = c.ty_of(name) else { continue };
+        let ty = ty.present().clone();
+        let seq = match st.at(i) {
+            crate::types::Stage::Each { seq, .. } => Some(seq),
+            crate::types::Stage::Once(0) => None,
+            _ => continue,
+        };
+        let (rl, rh) = c.reach(&d.expr, &ty).unwrap_or((Rat::int(i64::MIN as i128), Rat::int(i64::MAX as i128)));
+        let mut movable: Vec<String> = f.inputs.iter().map(|x| x.name.text.clone()).collect();
+        if let Some(s) = seq {
+            movable.extend(f.elements[s].fields.iter().map(|fd| fd.name.text.clone()));
+        }
+        let step = Rat::new(1, c.scales.get(name).copied().unwrap_or(1).max(1));
+        for (end, top) in [(lo, false), (hi, true)] {
+            let Some(end) = end else { continue };
+            // How far what it reaches goes past the end: on it (Equal) or beyond it (Greater).
+            let past = if top { rh.cmp_to(end) } else { end.cmp_to(rl) };
+            for inside in [true, false] {
+                if past == Less || (!inside && past != Greater) {
+                    continue;
+                }
+                let target = match (inside, top) {
+                    (true, _) => end,
+                    (false, true) => end.add(step),
+                    (false, false) => end.sub(step),
+                };
+                let found = seeds.iter().enumerate().find_map(|(si, seed)| {
+                    [!top, top].into_iter().find_map(|up| {
+                        let a = solve_flat(f, c, seed, &movable, name, target, up)?;
+                        let v = flat_value(f, c, &a, name)?;
+                        let ok = if inside {
+                            !eval::outside_accepted(c, name, &to_val(v, &ty))
+                        } else if top {
+                            v.cmp_to(end) == Greater
+                        } else {
+                            v.cmp_to(end) == Less
+                        };
+                        ok.then_some((si, a))
+                    })
+                });
+                if let Some((from, a)) = found {
+                    let values = a.into_iter().filter(|(k, _)| movable.contains(k)).collect();
+                    out.push(Edge { define: name.clone(), seq, hi: top, inside, from, values });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The value of `col` on a flat assignment: the inputs of a call and the fields of one element side
+/// by side, the items run without walking (`eval::run_tables`).
+fn flat_value(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>, col: &str) -> Option<Rat> {
+    let (_, _, _, b) = eval::run_tables(f, c, a.clone().into_iter().collect());
+    b.get(col).and_then(as_rat)
+}
+
+/// `place` over a flat assignment (`flat_value`), moving the names in `movable`: each is taken as
+/// far toward `target` as its own range allows, a step brought onto its grid upward with `up` and
+/// downward without. The slope is probed with a step ten times larger each time the value does not
+/// move, so that a rounded value (`down(amount × 3%, 1JPY)`, which one yen does not move) is still
+/// solved for. What comes back is the closest point reached; the caller holds it to what it needs.
+fn solve_flat(f: &RuleFile, c: &Checked, seed: &BTreeMap<String, Val>, movable: &[String], col: &str, target: Rat, up: bool) -> Option<BTreeMap<String, Val>> {
+    let mut a = seed.clone();
+    for _ in 0..=movable.len() {
+        let e0 = flat_value(f, c, &a, col)?;
+        if e0.cmp_to(target) == std::cmp::Ordering::Equal {
+            return Some(a);
+        }
+        let mut moved = false;
+        for x in movable {
+            let Some(xty) = c.ty_of(x).map(|t| t.present().clone()) else { continue };
+            if !matches!(xty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                continue;
+            }
+            let Some(x0) = a.get(x).and_then(as_rat) else { continue };
+            let Some(e0) = flat_value(f, c, &a, col) else { continue };
+            let q = if xty == Ty::Date { Rat::int(1) } else { crate::coverage::quantum(c, x, &xty) };
+            let mut k = q;
+            let mut slope = None;
+            // A probe stays inside what the name is held to — its range, an end it does not write
+            // being the end of its type (`wide_range`): E108 holds every step of the arithmetic to
+            // int64 there and nowhere else, and a value a hundred sextillion past the range,
+            // squared, is past what the evaluator's own numbers hold. Where a step up leaves the
+            // range, the same step down is tried, and where both do there is no slope to find.
+            let held = c.wide_range(x);
+            for _ in 0..24 {
+                let inside = |v: Rat| held.is_none_or(|(lo, hi)| v.cmp_to(lo) != std::cmp::Ordering::Less && v.cmp_to(hi) != std::cmp::Ordering::Greater);
+                let step = if inside(x0.add(k)) {
+                    k
+                } else if inside(x0.sub(k)) {
+                    Rat::zero().sub(k)
+                } else {
+                    break;
+                };
+                let mut probe = a.clone();
+                probe.insert(x.clone(), to_val(x0.add(step), &xty));
+                if let Some(e1) = flat_value(f, c, &probe, col) {
+                    if e1.cmp_to(e0) != std::cmp::Ordering::Equal {
+                        slope = Some(e1.sub(e0).div(step));
+                        break;
+                    }
+                }
+                k = k.mul(Rat::int(10));
+            }
+            let Some(slope) = slope else { continue };
+            let want = x0.add(target.sub(e0).div(slope));
+            let xn = snap_toward(c, x, want, q, up);
+            if xn.cmp_to(x0) == std::cmp::Ordering::Equal {
+                continue;
+            }
+            let mut next = a.clone();
+            next.insert(x.clone(), to_val(xn, &xty));
+            let Some(e2) = flat_value(f, c, &next, col) else { continue };
+            if dist(e2, target).cmp_to(dist(e0, target)) != std::cmp::Ordering::Less {
+                continue;
+            }
+            a = next;
+            moved = true;
+            if e2.cmp_to(target) == std::cmp::Ordering::Equal {
+                return Some(a);
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+    Some(a)
+}
+
+/// A value brought inside the declared range of `name` and onto its grid, upward with `up`.
+fn snap_toward(c: &Checked, name: &str, v: Rat, q: Rat, up: bool) -> Rat {
+    use std::cmp::Ordering::*;
+    let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+    let mut v = if q.num == 0 {
+        v
+    } else if up {
+        crate::grid::ceil_to(v, q)
+    } else {
+        crate::grid::floor_to(v, q)
+    };
+    if let Some(h) = hi {
+        if v.cmp_to(h) == Greater {
+            v = h;
+        }
+    }
+    if let Some(l) = lo {
+        if v.cmp_to(l) == Less {
+            v = l;
+        }
+    }
+    v
 }
 
 fn default_val(ty: &Ty, c: &Checked) -> Val {
@@ -259,8 +489,22 @@ fn enum_cells(f: &RuleFile, col: &str) -> Vec<Cell> {
     let mut out = Vec::new();
     for it in &f.items {
         match it {
-            // A summary declares no cells; what it reads is tested inside the walk.
-            Item::Agg(_) | Item::Fold(_) => {}
+            // A `count` takes the elements whose column is one value, and a `max` or a `min` looks
+            // at those its `where` names: that value is a class of its own, beside the values it
+            // leaves out. Without it, an enum no table reads had one candidate, the first value —
+            // every element was counted, or none was, and a count read by a table never stood on
+            // the far side of its boundary (§15.323).
+            Item::Agg(d) => {
+                let named = match (&d.kind, &d.filter) {
+                    (crate::ast::AggKind::Count, _) => (d.column.text == col).then_some(d.value.as_ref()).flatten(),
+                    (_, Some((c, Some(v)))) => (c.text == col).then_some(v),
+                    _ => None,
+                };
+                if let Some(v) = named {
+                    out.push(Cell::Lit(Lit::Word(v.text.clone())));
+                }
+            }
+            Item::Fold(_) => {}
             Item::Table(t) => {
                 let Some(ci) = t.inputs.iter().position(|(n, _)| n == col) else { continue };
                 for row in &t.rows {
@@ -830,7 +1074,7 @@ fn fold_pool(
     }
     // The scalars move too: each of their boundary cases, carried by one element of each
     // verdict, so a scalar that decides a cell is still exercised.
-    for (a, why) in pool_scalars(f, c, cands, &fields) {
+    for (a, why) in pool_scalars(f, c, cands, &fields, &BTreeMap::new()) {
         for (v, e) in &per_verdict {
             let mut m = a.clone();
             m.insert(fold.over.clone(), seq(vec![e]));
@@ -846,8 +1090,9 @@ fn pool_scalars(
     c: &Checked,
     cands: &BTreeMap<String, Vec<Val>>,
     fields: &[String],
+    held: &BTreeMap<String, Val>,
 ) -> Vec<(BTreeMap<String, Val>, String)> {
-    pool_inner(f, c, cands)
+    pool_inner_at(f, c, cands, held)
         .into_iter()
         .map(|(mut a, why)| {
             a.retain(|k, _| !fields.contains(k));
@@ -1114,8 +1359,18 @@ fn walk_pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> V
     let fields: Vec<String> = f.element_fields().map(|i| i.name.text.clone()).collect();
     let scalars: BTreeMap<String, Val> = baseline(f, c, cands).into_iter().filter(|(k, _)| !fields.contains(k)).collect();
     let combos: Vec<Vec<BTreeMap<String, Val>>> = f.elements.iter().map(|el| element_combos(el, cands)).collect();
-    // Each sequence at rest: one element, its first candidate, so that a walk over it has one.
-    let rest: Vec<Val> = combos.iter().map(|cs| Val::Seq(cs.first().cloned().into_iter().collect())).collect();
+    // Each sequence at rest: one element, its first candidate, so that a walk over it has one; or,
+    // where the walk refuses that one element for a `count` or a `sum` under its bottom, a
+    // sequence it answers, made from it (`at_rest`, §15.323).
+    let firsts: Vec<Val> = combos.iter().map(|cs| Val::Seq(cs.first().cloned().into_iter().collect())).collect();
+    let fitted = {
+        let mut m = scalars.clone();
+        for (el, v) in f.elements.iter().zip(&firsts) {
+            m.insert(el.name.text.clone(), v.clone());
+        }
+        at_rest(f, c, cands, &m)
+    };
+    let rest: Vec<Val> = f.elements.iter().zip(firsts).map(|(el, v)| fitted.get(&el.name.text).cloned().unwrap_or(v)).collect();
     let with = |base: &BTreeMap<String, Val>, s: usize, v: Val| -> BTreeMap<String, Val> {
         let mut m = base.clone();
         for (t, el) in f.elements.iter().enumerate() {
@@ -1176,7 +1431,19 @@ fn walk_pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> V
                 }
                 Item::Agg(d) => {
                     let ty = c.ty_of(&d.name.text).unwrap_or(Ty::Number);
-                    let answer = |xs: Vec<BTreeMap<String, Val>>| -> Option<Val> { binds_of(&with(&scalars, s, seq(xs))).get(&d.name.text).cloned() };
+                    // What a sequence brings the summary to. One a walk refuses because another
+                    // summary over it comes outside its range still brings this one somewhere: the
+                    // case is aimed all the same, and brought inside the other's range when the
+                    // audit is left owed it (`fit_summaries`, §15.323). Without it, a sequence of
+                    // one element under a count's bottom of two aimed at nothing.
+                    let answer = |xs: Vec<BTreeMap<String, Val>>| -> Option<Val> {
+                        let m = with(&scalars, s, seq(xs));
+                        binds_of(&m).get(&d.name.text).cloned().or_else(|| {
+                            let env: std::collections::HashMap<String, Val> = m.into_iter().collect();
+                            eval::summary_outside(f, c, env.clone())?;
+                            eval::summaries_past(f, c, env).get(&d.name.text).cloned()
+                        })
+                    };
                     let targets: Vec<Rat> = numeric_bounds(f, &d.name.text, &ty, c)
                         .into_iter()
                         .flat_map(|b| [b.sub(Rat::int(1)), b, b.add(Rat::int(1))])
@@ -1335,8 +1602,7 @@ fn walk_pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> V
                                     if now.as_ref().is_some_and(|v| eval::cell_matches(c, oc, v, &oty)) {
                                         continue;
                                     }
-                                    let q = crate::coverage::quantum(c, other, &oty);
-                                    let Some((_, want, _)) = crate::coverage::thresholds_pub(oc, &oty, q).into_iter().next() else { continue };
+                                    let Some((_, want, _)) = crate::coverage::pairs_on(c, other, oc, &oty).into_iter().next() else { continue };
                                     match place(f, c, &a, other, want, &BTreeSet::new()) {
                                         Some(next) => a = next,
                                         None => break,
@@ -1356,8 +1622,7 @@ fn walk_pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> V
                             continue;
                         }
                         let Some(cell) = row.cells.get(ci) else { continue };
-                        let q = crate::coverage::quantum(c, col, &ty);
-                        for (b, inside, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
+                        for (b, inside, outside) in crate::coverage::pairs_on(c, col, cell, &ty) {
                             let why = tr!(
                                 "境界両側: 表 {} 行{} {col} {} の",
                                 "boundary pair: table {} row {} {col} {}",
@@ -1415,8 +1680,7 @@ fn walk_pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> V
                         a.insert(other.clone(), v);
                     }
                 }
-                let q = crate::coverage::quantum(c, col, &ty);
-                for (b, inside, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
+                for (b, inside, outside) in crate::coverage::pairs_on(c, col, cell, &ty) {
                     let b = crate::coverage::show_rat(b, &ty);
                     let why = tr!("境界両側: 表 {tname} 行{} {col} {b} の", "boundary pair: table {tname} row {} {col} {b}", row.index);
                     for (n, side) in [(inside, tr!("{why}内側", "{why} inside")), (outside, tr!("{why}外側", "{why} outside"))] {
@@ -1430,8 +1694,10 @@ fn walk_pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> V
     }
 
     // The values of one call move too, each sequence at rest, so a value that decides a cell is
-    // still exercised.
-    for (a, why) in pool_scalars(f, c, cands, &fields) {
+    // still exercised. They are looked for with no sequence, as they always were, unless a walk
+    // refuses an empty one; then with the sequences at rest (`held_at_rest`, §15.323).
+    let held = held_at_rest(f, c, &scalars, &f.elements.iter().map(|el| el.name.text.clone()).zip(rest.iter().cloned()).collect());
+    for (a, why) in pool_scalars(f, c, cands, &fields, &held) {
         let m = with(&a, usize::MAX, Val::Seq(Vec::new()));
         out.push((m, why));
     }
@@ -1649,8 +1915,7 @@ fn count_pool(
                         a.insert(other.clone(), v);
                     }
                 }
-                let q = crate::coverage::quantum(c, col, &ty);
-                for (b, inside, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
+                for (b, inside, outside) in crate::coverage::pairs_on(c, col, cell, &ty) {
                     let b = crate::coverage::show_rat(b, &ty);
                     let why = tr!(
                         "境界両側: 表 {tname} 行{} {col} {b} の",
@@ -1691,11 +1956,17 @@ fn count_pool(
     }
 
     // The scalars move too, carried by one element each, so a scalar that decides a cell is
-    // still exercised.
-    for (a, why) in pool_scalars(f, c, cands, &fields) {
-        if let Some(e) = combos.first() {
+    // still exercised. Where the walk refuses that one element — a `count` or a `sum` over the
+    // sequence with a bottom it does not reach — they are carried by a sequence it answers, made
+    // from it (`at_rest`, §15.323).
+    if let Some(e) = combos.first() {
+        let mut first = scalars.clone();
+        first.insert(over.clone(), seq(vec![e]));
+        let carry = at_rest(f, c, cands, &first).get(&over).cloned().unwrap_or_else(|| seq(vec![e]));
+        let held = held_at_rest(f, c, &scalars, &BTreeMap::from([(over.clone(), carry.clone())]));
+        for (a, why) in pool_scalars(f, c, cands, &fields, &held) {
             let mut m = a.clone();
-            m.insert(over.clone(), seq(vec![e]));
+            m.insert(over.clone(), carry.clone());
             out.push((m, why));
         }
     }
@@ -1769,8 +2040,7 @@ fn held_pairs(
                     continue;
                 }
                 let Some(cell) = row.cells.get(ci) else { continue };
-                let q = crate::coverage::quantum(c, col, &ty);
-                let pairs = crate::coverage::thresholds_pub(cell, &ty, q);
+                let pairs = crate::coverage::pairs_on(c, col, cell, &ty);
                 if pairs.is_empty() {
                     continue;
                 }
@@ -1804,8 +2074,23 @@ fn held_pairs(
 }
 
 fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(BTreeMap<String, Val>, String)> {
+    pool_inner_at(f, c, cands, &BTreeMap::new())
+}
+
+/// The sequences the values of one call are looked for with, in `pool_inner`: none, as they always
+/// were — a walk over a sequence that is not there walks no element — unless the walks refuse that,
+/// a `count` or a `sum` with a bottom above zero (§15.314); then `rest`, the sequences at rest. With
+/// no sequence, every case the rows and the boundaries of a table over the values of the call are
+/// looked for with was refused, and a row such a case had found was left with none (§15.323).
+fn held_at_rest(f: &RuleFile, c: &Checked, scalars: &BTreeMap<String, Val>, rest: &BTreeMap<String, Val>) -> BTreeMap<String, Val> {
+    if eval::summary_outside(f, c, scalars.clone().into_iter().collect()).is_some() { rest.clone() } else { BTreeMap::new() }
+}
+
+/// `pool_inner`, with `held` — the sequences at rest, or nothing — in every case it makes.
+fn pool_inner_at(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>, held: &BTreeMap<String, Val>) -> Vec<(BTreeMap<String, Val>, String)> {
     let names: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
-    let base = baseline(f, c, cands);
+    let mut base = baseline(f, c, cands);
+    base.extend(held.iter().map(|(k, v)| (k.clone(), v.clone())));
     let mut out: Vec<(BTreeMap<String, Val>, String)> = vec![(base.clone(), tr!("基準", "baseline"))];
     // Each row's own point, by (definition set, row). The value pairs and the rounding ties
     // start from here as well as from the baseline (§15.151).
@@ -1845,8 +2130,7 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
                     continue;
                 }
                 let Some(cell) = row.cells.get(ci) else { continue };
-                let q = crate::coverage::quantum(c, col, &ty);
-                for (b, inside, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
+                for (b, inside, outside) in crate::coverage::pairs_on(c, col, cell, &ty) {
                     let (Some(ain), Some(aout)) =
                         (
                             place(f, c, &seed, col, inside, &BTreeSet::new()),
@@ -2026,10 +2310,30 @@ pub fn show(v: &Val) -> String {
     }
 }
 
-/// The same, for a value that is about to be read by a person. Money and quantities are
-/// already whole numbers of their own unit, so only a rate needs its `%` back: `0.1` on its
-/// own reads as either a tenth or ten percent.
+/// The same, for a value that is about to be read by a person: as the rule writes a value of its
+/// type (`types::fmt_val`), in its unit and with its digits grouped as the languages group them,
+/// `30_000JPY`, `1200g`, `10%` (a bare `0.1` reads as either a tenth or ten percent), so that a
+/// number said is one the file can take as it is (§15.333). A value of a name the rule does not
+/// type is its digits alone. The elements of a sequence say their fields the same way, each by its
+/// own name (`lines=[price=499JPY,wrapped=true]`).
 pub fn show_named(c: &Checked, name: &str, v: &Val) -> String {
+    match (v, c.ty_of(name)) {
+        // An optional value that is there is a value of the type it wraps (§15.249).
+        (Val::Num(r), Some(t)) => crate::types::fmt_val(*r, &t),
+        (Val::Num(r), None) => crate::types::written_num(*r),
+        (Val::Seq(xs), _) => {
+            let one = |e: &BTreeMap<String, Val>| e.iter().map(|(k, v)| format!("{k}={}", show_named(c, k, v))).collect::<Vec<_>>().join(",");
+            format!("[{}]", xs.iter().map(one).collect::<Vec<_>>().join(";"))
+        }
+        _ => show(v),
+    }
+}
+
+/// A value as data a page lays out, not as a sentence says it: a rate in percent (`10%`), and any
+/// other value as [`show`] writes it, with no unit and no grouping (`1500`). The table of what two
+/// versions answer (`vdiff::Map`) hands its cells over in this form: the page that draws it groups
+/// the digits its own way and says the unit once, above the column.
+pub fn show_plain(c: &Checked, name: &str, v: &Val) -> String {
     // An optional rate that is there is a rate (§15.249).
     match (v, c.ty_of(name).as_ref().map(crate::types::Ty::present)) {
         (Val::Num(r), Some(crate::types::Ty::Rate)) => format!("{}%", r.mul(Rat::int(100))),
@@ -2064,8 +2368,9 @@ pub fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
 
 /// One case run through the reference evaluator as the suite runs it, or `None` where the suite
 /// would not keep it as a case with an answer: a combination the door refuses (a `constraint`, a
-/// day koyomi does not give), two elements both taking under `take_unique`, a sum past the top of
-/// its range, a drawn value not below the total of the weights, weights whose total passes int64.
+/// day koyomi does not give, a `define` outside the range the rule accepts for it), two elements
+/// both taking under `take_unique`, a `sum` or a `count` outside its range once the walk is over,
+/// a drawn value not below the total of the weights, weights whose total passes int64.
 /// The customer page asks it for the other side of a threshold (§15.302).
 pub fn answer(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>, why: &str) -> Option<Vector> {
     if !allowed(f, c, a) || !days_ok(c, a) {
@@ -2073,7 +2378,7 @@ pub fn answer(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>, why: &str) -
     }
     let env = || a.clone().into_iter().collect();
     if (f.walks() && eval::contradiction(f, c, env()).is_some())
-        || eval::sum_past_range(f, c, env()).is_some()
+        || eval::summary_outside(f, c, env()).is_some()
         || eval::drawn_past(f, c, env()).is_some()
         || eval::weights_past(f, c, env()).is_some()
     {
@@ -2099,8 +2404,17 @@ pub fn days_ok(c: &Checked, a: &BTreeMap<String, Val>) -> bool {
 ///
 /// A combination the caller says does not happen is not a test case: the generated code
 /// refuses it at the door, and the checker never demanded a row for it. Filtering here is
-/// what keeps the suite and the proof talking about the same set of inputs.
+/// what keeps the suite and the proof talking about the same set of inputs. An input on which a
+/// `define` falls outside the range the rule accepts for it is refused too, where the value is
+/// worked out (§15.313), and is not a case either.
 pub fn allowed(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>) -> bool {
+    promised(f, c, a) && (c.accepts.is_empty() || eval::define_outside(f, c, a.iter().map(|(k, v)| (k.clone(), v.clone())).collect()).is_none())
+}
+
+/// Whether an input is one the caller's promises let through: every `constraint` holds, no `never`
+/// line of the door takes it, and no sequence repeats a value of a field marked `unique`. What a
+/// `define` accepts is not asked.
+fn promised(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>) -> bool {
     f.constraints.iter().all(|k| constraint_holds(k, &|n| a.get(n))) && f.door_nevers().all(|n| never_clear(n, c, &|m| a.get(m))) && distinct(f, a)
 }
 
@@ -2164,6 +2478,13 @@ pub(crate) fn plain_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Va
 pub struct Suite {
     pub vectors: Vec<Vector>,
     pub refused: Vec<Vector>,
+    /// The calls on an end of a range the rule writes — the end of an input or of a field of an
+    /// element, as many elements as a count lets a sequence have, or a sequence with none — where
+    /// none of the cases tried on the end is answered (§15.314): one call for each such end, which
+    /// `vectors/<alias>.refused.jsonl` holds with what the reference evaluator refuses it for. In a
+    /// suite with no answered case at all, one call for each `define` whose range refuses a case
+    /// of the pool as well. They are no part of what the audit of the fold transitions reads.
+    pub on_ends: Vec<Vector>,
 }
 
 pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
@@ -2174,7 +2495,27 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
 /// coverage.
 pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     let cands = candidates(f, c);
-    let raw: Vec<_> = pool(f, c, &cands).into_iter().filter(|(a, _)| allowed(f, c, a) && days_ok(c, a)).collect();
+    // The cases of the pool that a `define` refuses, by the range the rule accepts for it, are
+    // kept aside, the first few. Such a range may leave out every case the pool has: the pool aims
+    // at nothing on a value worked out once a walk is over, whose ends are then solved from these
+    // (`walked_edges`); and where no case at all is answered in the end, they are what the suite
+    // has to hold the generated code to.
+    let mut outside: Vec<Vector> = Vec::new();
+    let raw: Vec<_> = pool(f, c, &cands)
+        .into_iter()
+        .filter(|(a, _)| {
+            if !days_ok(c, a) {
+                return false;
+            }
+            if allowed(f, c, a) {
+                return true;
+            }
+            if outside.len() < EDGE_SEEDS && promised(f, c, a) {
+                outside.push(Vector { input: a.clone(), outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: String::new() });
+            }
+            false
+        })
+        .collect();
 
     let key_of = |a: &BTreeMap<String, Val>| -> String {
         a.iter().map(|(k, v)| format!("{k}={}", show(v))).collect::<Vec<_>>().join(",")
@@ -2182,13 +2523,15 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     let mut evaluated: Vec<Vector> = Vec::new();
     let mut refused: Vec<Vector> = Vec::new();
     let mut past_sums: Vec<String> = Vec::new();
-    let mut seen_in: BTreeMap<String, usize> = BTreeMap::new();
+    let mut off_range: Vec<(BTreeMap<String, Val>, String)> = Vec::new();
+    // The inputs seen: an answered case by where it is in `evaluated`, a refused one by `None`.
+    let mut seen_in: BTreeMap<String, Option<usize>> = BTreeMap::new();
     for (a, why) in raw {
         let key = key_of(&a);
         if seen_in.contains_key(&key) {
             continue;
         }
-        seen_in.insert(key, evaluated.len());
+        seen_in.insert(key.clone(), None);
         let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
         // A case the reference evaluator refuses is not a case with an answer, and it is not
         // nothing either. For a rule that walks a sequence, no answer means exactly one thing:
@@ -2208,11 +2551,18 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
             }
             continue;
         }
-        // A sum past the top of its range is refused where the walk ends (§15.100): one such case
-        // per sum holds the generated code to refusing it, and the rest of them say nothing more.
-        if let Some(n) = crate::eval::sum_past_range(f, c, a.clone().into_iter().collect()) {
-            if !past_sums.contains(&n) {
-                past_sums.push(n);
+        // A sum past the top of its range is refused where the walk ends (§15.100), and so is a
+        // sum or a count under the bottom of its own (§15.314): one such case per summary and end
+        // holds the generated code to refusing it, and the rest of them say nothing more. The
+        // first few are kept aside as well, to be brought inside the range where the audit is
+        // left owed something (`fit_summaries`, §15.323).
+        if let Some(p) = crate::eval::summary_outside(f, c, a.clone().into_iter().collect()) {
+            if off_range.len() < FIT_POOL {
+                off_range.push((a.clone(), why.clone()));
+            }
+            let key = if p.below { format!("under:{}", p.name) } else { p.name };
+            if !past_sums.contains(&key) {
+                past_sums.push(key);
                 refused.push(Vector { input: a, outputs: outs, trace, fired, why });
             }
             continue;
@@ -2227,6 +2577,7 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
             }
             continue;
         }
+        seen_in.insert(key, Some(evaluated.len()));
         evaluated.push(Vector { input: a, outputs: outs, trace, fired, why });
     }
     // A case of the pool seldom takes the weights of a pick past int64: two elements never do
@@ -2244,11 +2595,11 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     for (n, a) in example_inputs(f, c).into_iter().enumerate() {
         let key = key_of(&a);
         if let Some(&i) = seen_in.get(&key) {
-            forced.insert(i);
+            forced.extend(i);
             continue;
         }
         let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
-        seen_in.insert(key, evaluated.len());
+        seen_in.insert(key, Some(evaluated.len()));
         forced.insert(evaluated.len());
         evaluated.push(Vector {
             input: a,
@@ -2259,16 +2610,78 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
         });
     }
 
+    // Each end of the range the rule accepts for a `define`, on the end (§15.313): the call the
+    // door takes nearest to where it starts refusing, which the line one step past it in the
+    // refused cases answers.
+    let ends: Vec<(Edge, Vector)> = edge_inputs(f, c, &evaluated, true);
+    for (e, v) in ends {
+        let a = v.input;
+        let key = key_of(&a);
+        if let Some(&i) = seen_in.get(&key) {
+            forced.extend(i);
+            continue;
+        }
+        if !allowed(f, c, &a) || !days_ok(c, &a) {
+            continue;
+        }
+        let why = if e.hi {
+            tr!("定義 {} を、受け付ける範囲の上端に", "the definition {} at the top of the range it accepts", e.define)
+        } else {
+            tr!("定義 {} を、受け付ける範囲の下端に", "the definition {} at the bottom of the range it accepts", e.define)
+        };
+        let Some(vec) = answer(f, c, &a, &why) else { continue };
+        seen_in.insert(key, Some(evaluated.len()));
+        forced.insert(evaluated.len());
+        evaluated.push(vec);
+    }
+
+    // Each end a walk holds a `sum` or a `count` to once it is over, on the end (§15.100, §15.314):
+    // the call the walk answers nearest to where it starts refusing, which the line one step past
+    // it in the refused cases answers.
+    let on_ends: Vec<(SummaryEdge, BTreeMap<String, Val>)> = summary_edges(f, c, &evaluated).into_iter().filter(|(e, _)| e.inside).collect();
+    for (e, a) in on_ends {
+        let key = key_of(&a);
+        if let Some(&i) = seen_in.get(&key) {
+            forced.extend(i);
+            continue;
+        }
+        if !allowed(f, c, &a) || !days_ok(c, &a) {
+            continue;
+        }
+        let Some(vec) = answer(f, c, &a, &e.why()) else { continue };
+        seen_in.insert(key, Some(evaluated.len()));
+        forced.insert(evaluated.len());
+        evaluated.push(vec);
+    }
+
+    // Each end of the range the rule accepts for a `define` it works out once a walk is over, on
+    // the end (§15.313, §15.314): a value read off what a walk answers, come to with a sequence
+    // that brings the summary where the value needs it. The cases so far are where it is solved
+    // from, and after them the cases of the pool a `define` refuses.
+    let walked_ranges = walked_defines(f).iter().any(|d| c.accepts.contains_key(&d.name.text));
+    let from: Vec<Vector> = if walked_ranges && !outside.is_empty() { evaluated.iter().chain(outside.iter()).cloned().collect() } else { Vec::new() };
+    for (e, a) in walked_edges(f, c, if from.is_empty() { &evaluated } else { &from }).into_iter().filter(|(e, _)| e.inside) {
+        let key = key_of(&a);
+        if let Some(&i) = seen_in.get(&key) {
+            forced.extend(i);
+            continue;
+        }
+        let Some(vec) = answer(f, c, &a, &e.why()) else { continue };
+        seen_in.insert(key, Some(evaluated.len()));
+        forced.insert(evaluated.len());
+        evaluated.push(vec);
+    }
+
     // The call that shows a `possible` line outside a `machine` (§15.287) stays as well: the
     // generated code is held to answering what the line says happens.
     for (said, a) in crate::possible::one_call_inputs(f, c) {
         let key = key_of(&a);
         if let Some(&i) = seen_in.get(&key) {
-            forced.insert(i);
+            forced.extend(i);
             continue;
         }
         let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
-        seen_in.insert(key, evaluated.len());
+        seen_in.insert(key, Some(evaluated.len()));
         forced.insert(evaluated.len());
         evaluated.push(Vector { input: a, outputs: outs, trace, fired, why: said });
     }
@@ -2283,7 +2696,7 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
             continue;
         }
         let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
-        seen_in.insert(key, evaluated.len());
+        seen_in.insert(key, Some(evaluated.len()));
         evaluated.push(Vector {
             input: a,
             outputs: outs,
@@ -2299,6 +2712,38 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     // scoring would drop one.
     let audit = crate::coverage::audit(f, c, "", &evaluated, &refused);
     let mut keep: BTreeSet<usize> = audit.witness.clone();
+    // Where the audit is left owed something, the boundaries the tables write on a value worked
+    // out once a walk is over are aimed at (`walked_cases`), and the audit is asked again: what it
+    // takes of them stays, beside everything it took before, and the rest are cases like the
+    // pool's that no criterion took. A rule the audit was satisfied with has the vectors it had.
+    if !audit.missing.is_empty() {
+        let before = evaluated.len();
+        for (a, why) in walked_cases(f, c, &evaluated) {
+            let key = key_of(&a);
+            if seen_in.contains_key(&key) {
+                continue;
+            }
+            let Some(vec) = answer(f, c, &a, &why) else { continue };
+            seen_in.insert(key, Some(evaluated.len()));
+            evaluated.push(vec);
+        }
+        // The pool's cases a walk refused for a `sum` or a `count` outside its range, brought
+        // inside it with what they were aimed at kept (§15.323): a count on a boundary of a table,
+        // made of elements whose total comes in under the total's bottom.
+        for (a, hold) in places(f, c, &off_range, FIT_SEEDS) {
+            let Some((b, why)) = fit_summaries(f, c, a, &cands, &hold) else { continue };
+            let key = key_of(&b);
+            if seen_in.contains_key(&key) {
+                continue;
+            }
+            let Some(vec) = answer(f, c, &b, &why) else { continue };
+            seen_in.insert(key, Some(evaluated.len()));
+            evaluated.push(vec);
+        }
+        if evaluated.len() > before {
+            keep.extend(crate::coverage::audit(f, c, "", &evaluated, &refused).witness);
+        }
+    }
     keep.extend(forced.iter().copied());
     // The drawn values at the edges of each element's share of a pick by weight (§15.226) stay: no
     // criterion of the audit asks which element a pick takes, and without them a pick past the
@@ -2341,6 +2786,130 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
         pairs_of(&evaluated[i], &mut seen2);
     }
 
+    // Each end a `range` writes for an input or for a field of an element, on the end (§15.314):
+    // the value itself for an end written with `>=` or `<=`, and the first value inside one
+    // written with `>` or `<`, which is read one step in from what is written. The line the
+    // refused cases have one step past the end answers this one. Where no case kept so far stands
+    // there, the first case the pool has there is kept; else the first case tried that is
+    // answered — a case of the suite with the value moved there, for a field of an element in its
+    // first element or in that element alone. Where none is, the first of them goes to the
+    // refused cases, with what it is refused for.
+    let mut no_answer: Vec<Vector> = Vec::new();
+    for end in written_ends(f, c) {
+        if keep.iter().any(|&i| end.on(&evaluated[i].input)) {
+            continue;
+        }
+        if let Some(i) = evaluated.iter().position(|x| end.on(&x.input)) {
+            keep.insert(i);
+            continue;
+        }
+        let tries = end.tries(f, c, &evaluated);
+        let why = end.why();
+        match tries.iter().find_map(|a| answer(f, c, a, &why)) {
+            Some(vec) => {
+                seen_in.insert(key_of(&vec.input), Some(evaluated.len()));
+                keep.insert(evaluated.len());
+                evaluated.push(vec);
+            }
+            None => no_answer.extend(tries.into_iter().next().map(|input| Vector { input, outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: unanswered(&why) })),
+        }
+    }
+
+    // As many elements as a count lets a sequence have (§15.314): the longest sequence the door
+    // takes, which the line of the refused cases with one element more answers. Where no case
+    // kept so far has that many, the first case the pool has of that length is kept; else the
+    // first sequence tried that is answered — that many copies of an element the suite has, each
+    // with a value of its own in a field marked `unique`. Where none is, the first of them goes to
+    // the refused cases.
+    for el in &f.elements {
+        let seq = &el.name.text;
+        let Some(cap) = crate::door::count_cap(f, c, seq).filter(|cap| (1..=EDGE_ELEMENTS).contains(cap)) else { continue };
+        let full = |a: &BTreeMap<String, Val>| matches!(a.get(seq), Some(Val::Seq(xs)) if xs.len() as i128 == cap);
+        if keep.iter().any(|&i| full(&evaluated[i].input)) {
+            continue;
+        }
+        if let Some(i) = evaluated.iter().position(|x| full(&x.input)) {
+            keep.insert(i);
+            continue;
+        }
+        let mut known: Vec<&BTreeMap<String, Val>> = Vec::new();
+        for v in &evaluated {
+            let Some(Val::Seq(xs)) = v.input.get(seq) else { continue };
+            for e in xs {
+                if known.len() < 32 && !known.contains(&e) {
+                    known.push(e);
+                }
+            }
+        }
+        let bases = evaluated.iter().filter(|v| matches!(v.input.get(seq), Some(Val::Seq(xs)) if !xs.is_empty())).take(END_BASES);
+        let mut tries: Vec<BTreeMap<String, Val>> = Vec::new();
+        for base in bases {
+            for e in &known {
+                let Some(xs) = apart(c, el, e, cap as usize) else { continue };
+                let mut a = base.input.clone();
+                a.insert(seq.clone(), Val::Seq(xs));
+                tries.push(a);
+            }
+        }
+        let why = full_why(seq);
+        match tries.iter().find_map(|a| answer(f, c, a, &why)) {
+            Some(vec) => {
+                seen_in.insert(key_of(&vec.input), Some(evaluated.len()));
+                keep.insert(evaluated.len());
+                evaluated.push(vec);
+            }
+            None => no_answer.extend(tries.into_iter().next().map(|input| Vector { input, outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: unanswered(&why) })),
+        }
+    }
+
+    // No elements (§15.314): the shortest sequence there is, the other end of how long one can be.
+    // Where no case kept so far gives the sequence empty and no walk the pool found refused does,
+    // the first case the pool has of it is kept; else the first case of the suite that is answered
+    // with the sequence emptied. Where none is, the first of them goes to the refused cases.
+    for el in &f.elements {
+        let seq = &el.name.text;
+        if keep.iter().any(|&i| no_elements(&evaluated[i].input, seq)) || refused.iter().any(|v| no_elements(&v.input, seq)) {
+            continue;
+        }
+        if let Some(i) = evaluated.iter().position(|x| no_elements(&x.input, seq)) {
+            keep.insert(i);
+            continue;
+        }
+        let tries: Vec<BTreeMap<String, Val>> = evaluated
+            .iter()
+            .take(END_TRIES)
+            .map(|v| {
+                let mut a = v.input.clone();
+                a.insert(seq.clone(), Val::Seq(Vec::new()));
+                a
+            })
+            .collect();
+        let why = empty_why(seq);
+        match tries.iter().find_map(|a| answer(f, c, a, &why)) {
+            Some(vec) => {
+                seen_in.insert(key_of(&vec.input), Some(evaluated.len()));
+                keep.insert(evaluated.len());
+                evaluated.push(vec);
+            }
+            None => no_answer.extend(tries.into_iter().next().map(|input| Vector { input, outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: unanswered(&why) })),
+        }
+    }
+
+    // Where no case is answered — the range of a `define` leaves out every input found, as one
+    // that no value on the grid of what it is worked out from comes into does — the suite is not
+    // left with nothing: for each `define` that refuses a case of the pool, the first such case
+    // goes to the refused cases, and the generated code is held to refusing it for that value.
+    if keep.is_empty() {
+        let mut named: BTreeSet<String> = BTreeSet::new();
+        for mut v in outside {
+            let Some(name) = eval::define_outside(f, c, v.input.clone().into_iter().collect()) else { continue };
+            if named.insert(name.clone()) {
+                v.why = tr!("定義 {name} が受け付けない入力（答えのある入力が見つからない）", "an input the definition {name} refuses, where no case found is answered");
+                no_answer.push(v);
+            }
+        }
+    }
+
     // Every refused case is kept: there are as many of them as there are transitions no
     // answer can reach, and dropping one would take a check away rather than a duplicate.
     Suite {
@@ -2351,6 +2920,7 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
             .map(|(_, v)| v)
             .collect(),
         refused,
+        on_ends: no_answer,
     }
 }
 
@@ -2361,13 +2931,13 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
 /// `refused` and `error` (§15.204).
 pub fn refused_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
     let inp = in_object(f, c, v);
-    let r = crate::json::parse(&inp)
-        .ok()
-        .and_then(|j| crate::door::refusal(f, c, &j))
-        .unwrap_or(crate::door::Refusal {
-            kind: "contradiction",
-            error: crate::door::fold_contradiction(f.folds().next().map(|d| d.verdict.as_str()).unwrap_or_default()),
-        });
+    // The door says every refusal of a rule that passes check, the rule's own contradiction
+    // with its two elements among them (§15.324); what is left is said as the rule's first fold
+    // contradicting itself on its first two elements.
+    let r = crate::json::parse(&inp).ok().and_then(|j| crate::door::refusal(f, c, &j)).unwrap_or_else(|| {
+        let (verdict, over) = f.folds().next().map(|d| (d.verdict.as_str(), d.over.as_str())).unwrap_or_default();
+        crate::door::Refusal { kind: "contradiction", error: crate::door::fold_contradiction(verdict, over, 0, 1) }
+    });
     refused_line(&inp, &r, &v.why)
 }
 
@@ -2380,29 +2950,1438 @@ fn refused_line(inp: &str, r: &crate::door::Refusal, why: &str) -> String {
     )
 }
 
+/// Each end of the ranges the rule accepts for its `define`s (§15.313), on the end (`inside`) or
+/// one step past it, as a whole input: a vector of the suite with what the value is worked out from
+/// moved there — for a value of one element, its first element, the other elements as they were.
+/// The vectors are tried in order, a vector with no element taking the first element of the first
+/// vector that has one.
+pub(crate) fn edge_inputs(f: &RuleFile, c: &Checked, vectors: &[Vector], inside: bool) -> Vec<(Edge, Vector)> {
+    if c.accepts.is_empty() || vectors.is_empty() {
+        return Vec::new();
+    }
+    let firsts: Vec<Option<&BTreeMap<String, Val>>> = f
+        .elements
+        .iter()
+        .map(|el| {
+            vectors.iter().find_map(|v| match v.input.get(&el.name.text) {
+                Some(Val::Seq(xs)) => xs.first(),
+                _ => None,
+            })
+        })
+        .collect();
+    // A seed per vector: its inputs, and the fields of the first element of each sequence.
+    let mut seeds: Vec<BTreeMap<String, Val>> = Vec::new();
+    let mut bases: Vec<Vector> = Vec::new();
+    for v in vectors.iter().take(EDGE_SEEDS) {
+        let mut seed: BTreeMap<String, Val> = v.input.iter().filter(|(k, _)| f.inputs.iter().any(|i| i.name.text == **k)).map(|(k, x)| (k.clone(), x.clone())).collect();
+        let mut base = v.clone();
+        for (el, first) in f.elements.iter().zip(&firsts) {
+            let Some(first) = first else { continue };
+            let one = match base.input.get_mut(&el.name.text) {
+                Some(Val::Seq(xs)) if !xs.is_empty() => xs[0].clone(),
+                Some(Val::Seq(xs)) => {
+                    xs.push((*first).clone());
+                    (*first).clone()
+                }
+                _ => continue,
+            };
+            for (k, x) in one {
+                seed.entry(k).or_insert(x);
+            }
+        }
+        seeds.push(seed);
+        bases.push(base);
+    }
+    let mut out = Vec::new();
+    for e in accepted_edges(f, c, &seeds) {
+        if e.inside != inside {
+            continue;
+        }
+        let base = &bases[e.from];
+        let mut input = base.input.clone();
+        for i in &f.inputs {
+            if let Some(v) = e.values.get(&i.name.text) {
+                input.insert(i.name.text.clone(), v.clone());
+            }
+        }
+        if let Some(s) = e.seq {
+            let seq = &f.elements[s].name.text;
+            if let Some(Val::Seq(xs)) = input.get_mut(seq) {
+                for fd in &f.elements[s].fields {
+                    if let (Some(v), Some(x)) = (e.values.get(&fd.name.text), xs.first_mut()) {
+                        x.insert(fd.name.text.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        let v = Vector { input, outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: String::new() };
+        out.push((e, v));
+    }
+    out
+}
+
+/// How many cases of the suite an end of a range is tried on, the value moved there, before the
+/// call on the end is taken to have no answer.
+const END_TRIES: usize = 64;
+
+/// How many cases of the suite a sequence of as many elements as a count lets it have is tried in.
+const END_BASES: usize = 4;
+
+/// One end the `range` of an input or of a field of an element writes (§15.314).
+struct WrittenEnd {
+    name: String,
+    /// The sequence, for a field of an element.
+    seq: Option<String>,
+    top: bool,
+    /// Written with `>` or `<`: the end is read one step in from what is written.
+    strict: bool,
+    /// The end as it is read: the value written with `>=` or `<=`, the first value inside one
+    /// written with `>` or `<`, and for an ordered enum the first or the last value its range
+    /// lets in.
+    value: Val,
+}
+
+impl WrittenEnd {
+    /// Whether a case has the value on the end: the input, or the field in any element.
+    fn on(&self, a: &BTreeMap<String, Val>) -> bool {
+        let same = |v: Option<&Val>| v.is_some_and(|v| show(v) == show(&self.value));
+        match &self.seq {
+            None => same(a.get(&self.name)),
+            Some(seq) => matches!(a.get(seq), Some(Val::Seq(xs)) if xs.iter().any(|x| same(x.get(&self.name)))),
+        }
+    }
+
+    /// Why the case is in the suite.
+    fn why(&self) -> String {
+        let name = &self.name;
+        match (&self.seq, self.strict, self.top) {
+            (None, true, false) => tr!("{name} を、`>` と書いた端の一つ内側に", "{name} one step in from the end its range writes with `>`"),
+            (None, true, true) => tr!("{name} を、`<` と書いた端の一つ内側に", "{name} one step in from the end its range writes with `<`"),
+            (Some(seq), true, false) => tr!("{seq} の要素の {name} を、`>` と書いた端の一つ内側に", "{name} one step in from the end its range writes with `>`, in an element of {seq}"),
+            (Some(seq), true, true) => tr!("{seq} の要素の {name} を、`<` と書いた端の一つ内側に", "{name} one step in from the end its range writes with `<`, in an element of {seq}"),
+            (None, false, false) => tr!("{name} を範囲の下端に", "{name} at the bottom of its range"),
+            (None, false, true) => tr!("{name} を範囲の上端に", "{name} at the top of its range"),
+            (Some(seq), false, false) => tr!("{seq} の要素の {name} を範囲の下端に", "{name} at the bottom of its range, in an element of {seq}"),
+            (Some(seq), false, true) => tr!("{seq} の要素の {name} を範囲の上端に", "{name} at the top of its range, in an element of {seq}"),
+        }
+    }
+
+    /// The cases the end is tried on, in order: each of the first cases of the suite with the
+    /// value moved there — for a field of an element, in the first element of a case that has
+    /// one, then in that element alone — and then the first of them with every other input moved
+    /// to the top of its range, and to the bottom, since a `constraint` or the range a `define`
+    /// accepts may leave the end an answer only beside the ends of the others.
+    fn tries(&self, f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<BTreeMap<String, Val>> {
+        let mut out: Vec<BTreeMap<String, Val>> = Vec::new();
+        match &self.seq {
+            None => {
+                for v in vectors.iter().take(END_TRIES) {
+                    let mut a = v.input.clone();
+                    a.insert(self.name.clone(), self.value.clone());
+                    out.push(a);
+                }
+            }
+            Some(seq) => {
+                for v in vectors.iter().filter(|v| matches!(v.input.get(seq), Some(Val::Seq(xs)) if !xs.is_empty())).take(END_TRIES) {
+                    let mut a = v.input.clone();
+                    let Some(Val::Seq(xs)) = a.get_mut(seq) else { continue };
+                    xs[0].insert(self.name.clone(), self.value.clone());
+                    let alone = vec![xs[0].clone()];
+                    out.push(a.clone());
+                    a.insert(seq.clone(), Val::Seq(alone));
+                    out.push(a);
+                }
+            }
+        }
+        if let Some(first) = out.first().cloned() {
+            for top in [true, false] {
+                let mut a = first.clone();
+                for i in f.inputs.iter().filter(|i| i.name.text != self.name) {
+                    let name = &i.name.text;
+                    let (Some(ty), Some(&(Some(lo), Some(hi)))) = (c.ty_of(name), c.ranges.get(name)) else { continue };
+                    if matches!(ty.present(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) && matches!(a.get(name), Some(Val::Num(_) | Val::Date(..))) {
+                        a.insert(name.clone(), to_val(if top { hi } else { lo }, ty.present()));
+                    }
+                }
+                out.push(a);
+            }
+        }
+        out
+    }
+}
+
+/// Why a call on an end is among the refused cases: it stands where a case with an answer would,
+/// and none of the cases tried there has one.
+fn unanswered(why: &str) -> String {
+    tr!("{why}（試した組み合わせのどれにも答えが無い）", "{why}, where no case tried is answered")
+}
+
+/// The ends the `range` of each input and of each field of an element writes (§15.314), the
+/// bottom before the top.
+fn written_ends(f: &RuleFile, c: &Checked) -> Vec<WrittenEnd> {
+    let mut out = Vec::new();
+    let vars = f.inputs.iter().map(|i| (i, None)).chain(f.elements.iter().flat_map(|el| el.fields.iter().map(move |fd| (fd, Some(el.name.text.clone())))));
+    for (v, seq) in vars {
+        let name = &v.name.text;
+        let (Some(r), Some(ty)) = (&v.range, c.ty_of(name)) else { continue };
+        let ty = ty.present().clone();
+        let written = |ops: [CmpOp; 2]| r.bounds.iter().map(|(o, _)| *o).find(|o| ops.contains(o));
+        let sides = [([CmpOp::Ge, CmpOp::Gt], false), ([CmpOp::Le, CmpOp::Lt], true)];
+        let ends: [Option<Val>; 2] = match (&ty, c.enum_ranges.get(name), c.ranges.get(name)) {
+            (Ty::Enum(_), Some(vs), _) => [vs.first().map(|v| Val::Enum(v.clone())), vs.last().map(|v| Val::Enum(v.clone()))],
+            (_, _, Some(&(lo, hi))) => [lo.map(|e| to_val(e, &ty)), hi.map(|e| to_val(e, &ty))],
+            _ => continue,
+        };
+        for ((ops, top), value) in sides.into_iter().zip(ends) {
+            if let (Some(op), Some(value)) = (written(ops), value) {
+                out.push(WrittenEnd { name: name.clone(), seq: seq.clone(), top, strict: matches!(op, CmpOp::Gt | CmpOp::Lt), value });
+            }
+        }
+    }
+    out
+}
+
+/// Each end the suite is held to stand on (§15.314) — the ends the ranges of the inputs and of the
+/// fields of the elements write, as many elements as a count lets a sequence have, and a sequence
+/// with no elements — by the reason a case made for it carries, with whether an answered case
+/// stands on the end and whether a refused one does. Every end has one or the other, which the
+/// tests hold the corpus to.
+pub fn ends_stood_on(f: &RuleFile, c: &Checked, suite: &Suite) -> Vec<(String, bool, bool)> {
+    let refused: Vec<Json> = refused_lines(f, c, suite).iter().filter_map(|l| crate::json::parse(l).ok()).filter_map(|j| j.get("in").cloned()).collect();
+    let mut out = Vec::new();
+    for end in written_ends(f, c) {
+        let wire = crate::json::parse(&wire_value(c, &end.name, &end.value)).ok();
+        let on = |a: &Json| match &end.seq {
+            None => a.get(&end.name) == wire.as_ref(),
+            Some(seq) => a.get(seq).and_then(|s| s.as_arr()).is_some_and(|xs| xs.iter().any(|x| x.get(&end.name) == wire.as_ref())),
+        };
+        out.push((end.why(), suite.vectors.iter().any(|v| end.on(&v.input)), wire.is_some() && refused.iter().any(on)));
+    }
+    for el in &f.elements {
+        let seq = &el.name.text;
+        let Some(cap) = crate::door::count_cap(f, c, seq).filter(|cap| (1..=EDGE_ELEMENTS).contains(cap)) else { continue };
+        let answered = suite.vectors.iter().any(|v| matches!(v.input.get(seq), Some(Val::Seq(xs)) if xs.len() as i128 == cap));
+        let turned = refused.iter().any(|a| a.get(seq).and_then(|s| s.as_arr()).is_some_and(|xs| xs.len() as i128 == cap));
+        out.push((full_why(seq), answered, turned));
+    }
+    for el in &f.elements {
+        let seq = &el.name.text;
+        let answered = suite.vectors.iter().any(|v| no_elements(&v.input, seq));
+        let turned = refused.iter().any(|a| a.get(seq).and_then(|s| s.as_arr()).is_some_and(|xs| xs.is_empty()));
+        out.push((empty_why(seq), answered, turned));
+    }
+    out
+}
+
+/// Why a sequence of as many elements as a count lets it have is in the suite.
+fn full_why(seq: &str) -> String {
+    tr!("{seq} の要素を、数え上げの上限ちょうどに", "{seq} with as many elements as a count over it can be")
+}
+
+/// Why a sequence with no elements is in the suite.
+fn empty_why(seq: &str) -> String {
+    tr!("{seq} の要素ゼロ件", "no elements of {seq}")
+}
+
+/// Whether a case gives the sequence `seq` with no elements.
+fn no_elements(a: &BTreeMap<String, Val>, seq: &str) -> bool {
+    matches!(a.get(seq), Some(Val::Seq(xs)) if xs.is_empty())
+}
+
+/// One end of the range a `sum` or a `count` is held to once its walk is over (§15.100, §15.314).
+pub(crate) struct SummaryEdge {
+    /// The summary, and the sequence it walks.
+    pub name: String,
+    pub seq: String,
+    /// A `count`, and not a `sum`.
+    pub count: bool,
+    /// The top of the range, and not the bottom.
+    pub hi: bool,
+    /// On the end, where the call is answered; otherwise past it, where it is refused.
+    pub inside: bool,
+}
+
+impl SummaryEdge {
+    /// Why the case is in the suite.
+    pub(crate) fn why(&self) -> String {
+        let (seq, name) = (&self.seq, &self.name);
+        match (self.count, self.hi, self.inside) {
+            (false, true, true) => tr!("{seq} の合計 {name} を範囲の上端に", "the sum {name} of {seq} at the top of its range"),
+            (false, true, false) => tr!("{seq} の合計 {name} を範囲の上端の先に", "the sum {name} of {seq} past the top of its range"),
+            (false, false, true) => tr!("{seq} の合計 {name} を範囲の下端に", "the sum {name} of {seq} at the bottom of its range"),
+            (false, false, false) => tr!("{seq} の合計 {name} を範囲の下端の先に", "the sum {name} of {seq} past the bottom of its range"),
+            (true, true, true) => tr!("{seq} を数えた {name} を範囲の上端に", "the count {name} of {seq} at the top of its range"),
+            (true, true, false) => tr!("{seq} を数えた {name} を範囲の上端の先に", "the count {name} of {seq} past the top of its range"),
+            (true, false, true) => tr!("{seq} を数えた {name} を範囲の下端に", "the count {name} of {seq} at the bottom of its range"),
+            (true, false, false) => tr!("{seq} を数えた {name} を範囲の下端の先に", "the count {name} of {seq} past the bottom of its range"),
+        }
+    }
+}
+
+/// How many elements a sequence built to bring a summary to an end of its range has at most: past
+/// these, the end is left without a case.
+const EDGE_ELEMENTS: i128 = 50;
+
+/// How many of the elements the vectors have such a sequence is made from.
+const EDGE_TEMPLATES: usize = 6;
+
+/// For each end a walk holds a `sum` or a `count` to once it is over — the top of a `sum`'s range,
+/// and the bottom of either where a walk can come in under it (§15.100, §15.314) — a whole input
+/// that brings the summary onto the end, and one that takes it one step past: a vector of the suite
+/// with the sequence replaced. A sum over a field takes as few elements as carry the total, each
+/// within the field's range; any other summary takes copies of one element the vectors have, or one
+/// or two of those elements as they are, and where nothing lands one step past the top, the fewest
+/// copies that pass it. A field marked
+/// `unique` takes a value of its own in each element (§15.290). Each case is confirmed by the
+/// evaluator: on the end the call is answered with the summary there, and past it this summary is
+/// what the walk refuses. An end no such sequence reaches has no case.
+pub(crate) fn summary_edges(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<(SummaryEdge, BTreeMap<String, Val>)> {
+    use crate::ast::AggKind;
+    use std::cmp::Ordering::*;
+    let mut out = Vec::new();
+    let Some(any) = vectors.first() else { return out };
+    for el in &f.elements {
+        let seq = &el.name.text;
+        let base = vectors.iter().find(|v| matches!(v.input.get(seq), Some(Val::Seq(xs)) if !xs.is_empty())).unwrap_or(any);
+        let known = known_elements(vectors, seq);
+        let cap = crate::door::count_cap(f, c, seq);
+        let fits = |n: i128| n <= EDGE_ELEMENTS && cap.is_none_or(|cap| n <= cap);
+        let with = |xs: Vec<BTreeMap<String, Val>>| -> BTreeMap<String, Val> {
+            let mut a = base.input.clone();
+            a.insert(seq.clone(), Val::Seq(xs));
+            a
+        };
+        for d in f.aggs().filter(|d| d.over == *seq && !d.kind.extreme()) {
+            let name = &d.name.text;
+            let Some(&(_, hi)) = c.ranges.get(name) else { continue };
+            let count = d.kind == AggKind::Count;
+            let step = Rat::new(1, c.scales.get(name).copied().unwrap_or(1).max(1));
+            let value = |xs: &[BTreeMap<String, Val>]| eval::summary_value(f, c, with(xs.to_vec()).into_iter().collect(), name);
+            // What one element alone adds, for each element the vectors have that adds something.
+            let adds: Vec<(Rat, &BTreeMap<String, Val>)> = known.iter().filter_map(|e| value(std::slice::from_ref(e)).filter(|m| m.num > 0).map(|m| (m, e))).collect();
+            let reach = |t: Rat| reaching(f, c, el, d, &known, &adds, t);
+            let floor = c.walk_floor(d);
+            let ends = [(if count { None } else { hi }, true), (floor, false)];
+            for (end, top) in ends {
+                let Some(end) = end else { continue };
+                // On the end: answered, the summary there.
+                let on = reach(end).into_iter().map(&with).find(|a| {
+                    eval::summary_outside(f, c, a.clone().into_iter().collect()).is_none()
+                        && eval::summary_value(f, c, a.clone().into_iter().collect(), name).is_some_and(|v| v.cmp_to(end) == Equal)
+                });
+                if let Some(a) = on {
+                    out.push((SummaryEdge { name: name.clone(), seq: seq.clone(), count, hi: top, inside: true }, a));
+                }
+                // One step past it; for the top, failing that, the fewest copies of the element
+                // that adds most which pass it; for the bottom, no element at all.
+                let mut tries = reach(if top { end.add(step) } else { end.sub(step) });
+                if top {
+                    if let Some((m, e)) = adds.iter().max_by(|a, b| a.0.cmp_to(b.0)) {
+                        let q = end.div(*m);
+                        let n = q.num.div_euclid(q.den) + 1;
+                        if fits(n) {
+                            tries.extend(apart(c, el, e, n as usize));
+                        }
+                    }
+                } else {
+                    tries.push(Vec::new());
+                }
+                let past = tries.into_iter().map(&with).find(|a| {
+                    eval::summary_outside(f, c, a.clone().into_iter().collect()).is_some_and(|p| p.name == *name && p.below != top)
+                });
+                if let Some(a) = past {
+                    out.push((SummaryEdge { name: name.clone(), seq: seq.clone(), count, hi: top, inside: false }, a));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The elements the vectors have of the sequence `seq`, each once, the first 32 of them.
+fn known_elements(vectors: &[Vector], seq: &str) -> Vec<BTreeMap<String, Val>> {
+    let mut known: Vec<BTreeMap<String, Val>> = Vec::new();
+    for v in vectors {
+        let Some(Val::Seq(xs)) = v.input.get(seq) else { continue };
+        for e in xs {
+            if known.len() < 32 && !known.contains(e) {
+                known.push(e.clone());
+            }
+        }
+    }
+    known
+}
+
+/// The sequences of `el` that may bring the `sum` or the `count` `d` to `t`, the likeliest first,
+/// made from the elements `known`; `adds` is what one of them alone adds to it, for each that adds
+/// something.
+fn reaching(
+    f: &RuleFile,
+    c: &Checked,
+    el: &ElementsDecl,
+    d: &crate::ast::AggDecl,
+    known: &[BTreeMap<String, Val>],
+    adds: &[(Rat, &BTreeMap<String, Val>)],
+    t: Rat,
+) -> Vec<Vec<BTreeMap<String, Val>>> {
+    use std::cmp::Ordering::*;
+    let count = d.kind == crate::ast::AggKind::Count;
+    let cap = crate::door::count_cap(f, c, &el.name.text);
+    let fits = |n: i128| n <= EDGE_ELEMENTS && cap.is_none_or(|cap| n <= cap);
+    let mut tries: Vec<Vec<BTreeMap<String, Val>>> = Vec::new();
+    if t.num < 0 {
+        return tries;
+    }
+    if t.num == 0 {
+        tries.push(Vec::new());
+    }
+    // A sum over a field: the fewest elements that carry the total, each from the bottom of the
+    // field's range up, the first ones to its top; made from each of the first elements the vectors
+    // have, since what else an element holds decides what the other summaries of the walk come to.
+    let field = el.fields.iter().find(|fd| fd.name.text == d.column.text && fd.unique.is_none());
+    if let (false, Some(_), Some(&(Some(flo), Some(fhi)))) = (count, field, c.ranges.get(&d.column.text)) {
+        let q = if fhi.num > 0 { t.div(fhi) } else { Rat::zero() };
+        let n = (q.num + q.den - 1).div_euclid(q.den).max(1);
+        if fhi.num > 0 && fits(n) && flo.mul(Rat::int(n)).cmp_to(t) != Greater {
+            for first in known.iter().take(EDGE_TEMPLATES) {
+                let Some(mut xs) = apart(c, el, first, n as usize) else { continue };
+                let room = fhi.sub(flo);
+                let mut left = t.sub(flo.mul(Rat::int(n)));
+                for x in xs.iter_mut() {
+                    let add = if left.cmp_to(room) == Greater { room } else { left };
+                    x.insert(d.column.text.clone(), Val::Num(flo.add(add)));
+                    left = left.sub(add);
+                }
+                tries.push(xs);
+            }
+        }
+    }
+    // Copies of one element the vectors have.
+    for (m, e) in adds {
+        let q = t.div(*m);
+        if q.den == 1 && q.num >= 1 && fits(q.num) {
+            tries.extend(apart(c, el, e, q.num as usize));
+        }
+    }
+    // One element the vectors have, or two of them: where another summary of the walk has a bottom
+    // of its own, the sequence has to bring that one inside its range.
+    for a in known.iter().take(EDGE_TEMPLATES) {
+        tries.push(vec![a.clone()]);
+    }
+    if fits(2) {
+        for a in known.iter().take(EDGE_TEMPLATES) {
+            for b in known.iter().take(EDGE_TEMPLATES) {
+                if a == b {
+                    tries.extend(apart(c, el, a, 2));
+                } else {
+                    tries.push(vec![a.clone(), b.clone()]);
+                }
+            }
+        }
+    }
+    tries
+}
+
+/// One end of the range the rule accepts for a `define` it works out once a walk is over
+/// (§15.313, §15.314): a value read off what a walk answers — a `sum`, a `count`, a `max`, a `min`.
+pub(crate) struct WalkedEdge {
+    /// The `define`.
+    pub define: String,
+    /// The top end, or the bottom.
+    pub hi: bool,
+    /// On the end, where the call is answered; otherwise past it, where it is refused.
+    pub inside: bool,
+}
+
+impl WalkedEdge {
+    /// Why the case is in the suite: what a case on an end of a value worked out before the walks
+    /// says, or one step past it.
+    pub(crate) fn why(&self) -> String {
+        let define = &self.define;
+        match (self.hi, self.inside) {
+            (true, true) => tr!("定義 {define} を、受け付ける範囲の上端に", "the definition {define} at the top of the range it accepts"),
+            (false, true) => tr!("定義 {define} を、受け付ける範囲の下端に", "the definition {define} at the bottom of the range it accepts"),
+            (true, false) => tr!("定義 {define} を、受け付ける範囲の上端の先に", "the definition {define} past the top of the range it accepts"),
+            (false, false) => tr!("定義 {define} を、受け付ける範囲の下端の先に", "the definition {define} past the bottom of the range it accepts"),
+        }
+    }
+}
+
+/// The values a rule works out once a walk is over — each `define` that reads what a walk answers
+/// — by name, in the order written.
+fn walked_defines(f: &RuleFile) -> Vec<&crate::ast::DefineDecl> {
+    let st = crate::types::stages(f);
+    f.items
+        .iter()
+        .enumerate()
+        .filter_map(|(i, it)| match it {
+            Item::Define(d) if matches!(st.at(i), crate::types::Stage::Once(k) if k > 0) => Some(d),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The inputs of a whole input, and what each summary of the rule comes to on it, side by side:
+/// what `run_tables` works a value out from once the walks are over, without walking.
+fn flat_of(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>) -> BTreeMap<String, Val> {
+    let mut s: BTreeMap<String, Val> = a.iter().filter(|(k, _)| f.inputs.iter().any(|i| i.name.text == **k)).map(|(k, x)| (k.clone(), x.clone())).collect();
+    for d in f.aggs() {
+        if let Some(v) = eval::summary_value(f, c, a.clone().into_iter().collect(), &d.name.text) {
+            s.insert(d.name.text.clone(), Val::Num(v));
+        }
+    }
+    s
+}
+
+/// What a value worked out once a walk is over is solved over: the inputs of the call, and what
+/// the summaries of the walks come to — a `sum`, a `count`, a `max`, a `min`.
+fn walked_movable(f: &RuleFile) -> Vec<String> {
+    let mut movable: Vec<String> = f.inputs.iter().map(|x| x.name.text.clone()).collect();
+    movable.extend(f.aggs().map(|d| d.name.text.clone()));
+    movable
+}
+
+/// For each end of the range the rule accepts for a `define` it works out once a walk is over — a
+/// value read off what a walk answers, which `accepted_edges` does not look at — a whole input
+/// that brings the value onto the end, and one that takes it one step past (§15.313, §15.314). The
+/// value is solved as `accepted_edges` solves one, over the inputs of the call and what the
+/// summaries of the walks come to, from each of the first vectors in turn; a summary that moved is
+/// then given a sequence that comes to it (`with_summaries`), the rest of the vector as it was.
+/// Each case is confirmed by the evaluator on the whole input: the value is where it was solved
+/// to, on the end the call is answered, and past it this value is what the door refuses the call
+/// for. An end no such input reaches has no case.
+pub(crate) fn walked_edges(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<(WalkedEdge, BTreeMap<String, Val>)> {
+    use std::cmp::Ordering::*;
+    let mut out = Vec::new();
+    if c.accepts.is_empty() || !f.walks() || vectors.is_empty() {
+        return out;
+    }
+    let movable = walked_movable(f);
+    for d in walked_defines(f) {
+        let name = &d.name.text;
+        let Some(&(lo, hi)) = c.accepts.get(name) else { continue };
+        let Some(ty) = c.ty_of(name).map(|t| t.present().clone()) else { continue };
+        let (rl, rh) = c.reach(&d.expr, &ty).unwrap_or((Rat::int(i64::MIN as i128), Rat::int(i64::MAX as i128)));
+        let step = Rat::new(1, c.scales.get(name).copied().unwrap_or(1).max(1));
+        for (end, top) in [(lo, false), (hi, true)] {
+            let Some(end) = end else { continue };
+            // How far what it reaches goes past the end: on it (Equal) or beyond it (Greater).
+            let past = if top { rh.cmp_to(end) } else { end.cmp_to(rl) };
+            for inside in [true, false] {
+                if past == Less || (!inside && past != Greater) {
+                    continue;
+                }
+                let target = match (inside, top) {
+                    (true, _) => end,
+                    (false, true) => end.add(step),
+                    (false, false) => end.sub(step),
+                };
+                // A point solved from a seed, either way, where it is on the side of the end the
+                // case is for, with what the value comes to there.
+                let solve = |seed: &BTreeMap<String, Val>, up: bool| -> Option<(BTreeMap<String, Val>, Rat)> {
+                    let a = solve_flat(f, c, seed, &movable, name, target, up)?;
+                    let v = flat_value(f, c, &a, name)?;
+                    let ok = if inside {
+                        !eval::outside_accepted(c, name, &to_val(v, &ty))
+                    } else if top {
+                        v.cmp_to(end) == Greater
+                    } else {
+                        v.cmp_to(end) == Less
+                    };
+                    ok.then_some((a, v))
+                };
+                // The whole input the point is, where the value comes to `v` on it and the rule
+                // answers it, or, past the end, refuses it for the value.
+                let whole = |base: &Vector, seed: &BTreeMap<String, Val>, a: &BTreeMap<String, Val>, v: Rat| -> Option<BTreeMap<String, Val>> {
+                    with_summaries(f, c, vectors, &base.input, seed, a, name).into_iter().find(|whole| {
+                        if flat_value(f, c, &flat_of(f, c, whole), name).is_none_or(|w| w.cmp_to(v) != Equal) {
+                            return false;
+                        }
+                        if inside {
+                            return answer(f, c, whole, "").is_some();
+                        }
+                        let case = Vector { input: whole.clone(), outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: String::new() };
+                        crate::json::parse(&in_object(f, c, &case)).ok().and_then(|obj| crate::door::refusal(f, c, &obj)).is_some_and(|r| r.error == crate::door::out_of_range(name))
+                    })
+                };
+                // The case is one the value comes to the end on, or one step past it, from any
+                // seed; only where none comes there, the one nearest it, which an end the value
+                // takes no point on has (§15.323). The first point on the side of the end is not
+                // the case: `points = gifts * 10 + boxes` solved to 35 for a top of 40 from one
+                // seed, and to 40 from the other way.
+                let mut near: Vec<(Rat, &Vector, BTreeMap<String, Val>, BTreeMap<String, Val>, Rat)> = Vec::new();
+                let mut found = None;
+                'seeds: for base in vectors.iter().take(EDGE_SEEDS) {
+                    let seed = flat_of(f, c, &base.input);
+                    for up in [!top, top] {
+                        let Some((a, v)) = solve(&seed, up) else { continue };
+                        if v.cmp_to(target) != Equal {
+                            near.push((dist(v, target), base, seed.clone(), a, v));
+                            continue;
+                        }
+                        if let Some(w) = whole(base, &seed, &a, v) {
+                            found = Some(w);
+                            break 'seeds;
+                        }
+                    }
+                }
+                if found.is_none() {
+                    // stable: among the points as near, the seeds' order
+                    near.sort_by(|x, y| x.0.cmp_to(y.0));
+                    found = near.into_iter().find_map(|(_, base, seed, a, v)| whole(base, &seed, &a, v));
+                }
+                if let Some(a) = found {
+                    out.push((WalkedEdge { define: name.clone(), hi: top, inside }, a));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The tries of one sequence for its summaries: the sequence, its elements, the elements the
+/// vectors have, and how many elements it may have.
+struct Walk<'a> {
+    f: &'a RuleFile,
+    c: &'a Checked,
+    el: &'a ElementsDecl,
+    known: Vec<BTreeMap<String, Val>>,
+    room: i128,
+}
+
+impl Walk<'_> {
+    fn seq(&self) -> &String {
+        &self.el.name.text
+    }
+
+    fn at(&self, input: &BTreeMap<String, Val>, d: &AggDecl) -> Option<Rat> {
+        eval::summary_value(self.f, self.c, input.clone().into_iter().collect(), &d.name.text)
+    }
+
+    fn hits(&self, b: &BTreeMap<String, Val>, ds: &[(&AggDecl, Rat)]) -> bool {
+        ds.iter().all(|(d, t)| self.at(b, d).is_some_and(|v| v.cmp_to(*t) == std::cmp::Ordering::Equal))
+    }
+
+    /// The tries for the summary `d` to come to `t`, from the whole input `input`. Without `wide`,
+    /// the sequence as it is with the value of an element moved, the sequence with elements put
+    /// after it, a sequence `reaching` makes, and the sequence with one element put after it that
+    /// the summary looks at, its value moved to where the summary has to be — two moves, for a
+    /// summary none of whose elements is there yet: the least price of the wrapped lines, where no
+    /// line is wrapped. With `wide`, the one that moves what an element is looked at by (§15.323):
+    /// an element of the sequence taken into what a `max` or a `min` looks at, at where the summary
+    /// has to be — a line made a wrapped one, at the price the dearest wrapped line has to have.
+    fn tries(&self, input: &BTreeMap<String, Val>, d: &AggDecl, t: Rat, wide: bool) -> Vec<Vec<BTreeMap<String, Val>>> {
+        use std::cmp::Ordering::*;
+        let (f, c, el, seq, known, room) = (self.f, self.c, self.el, self.seq(), &self.known, self.room);
+        let with = |xs: Vec<BTreeMap<String, Val>>| -> BTreeMap<String, Val> {
+            let mut b = input.clone();
+            b.insert(seq.clone(), Val::Seq(xs));
+            b
+        };
+        let mut tries: Vec<Vec<BTreeMap<String, Val>>> = Vec::new();
+        let cur: &[BTreeMap<String, Val>] = match input.get(seq) {
+            Some(Val::Seq(xs)) => xs,
+            _ => &[],
+        };
+        let Some(now) = self.at(input, d) else { return tries };
+        let col = &d.column.text;
+        let range = c.ranges.get(col).copied();
+        let fits = |v: Rat| range.is_some_and(|(flo, fhi)| !flo.is_some_and(|lo| v.cmp_to(lo) == Less) && !fhi.is_some_and(|hi| v.cmp_to(hi) == Greater));
+        let plain = el.fields.iter().any(|fd| fd.name.text == *col && fd.unique.is_none());
+        if wide {
+            // One element the summary does not look at, taken in at `t`.
+            if let (AggKind::Max | AggKind::Min, Some(view)) = (&d.kind, view_of(c, el, d))
+                && plain
+                && fits(t)
+            {
+                for (k, e) in cur.iter().enumerate().take(EDGE_TEMPLATES) {
+                    if in_view(&view, e) {
+                        continue;
+                    }
+                    let Some(mut x) = into_view(c, el, d, e) else { continue };
+                    x.insert(col.clone(), Val::Num(t));
+                    let mut xs = cur.to_vec();
+                    xs[k] = x;
+                    tries.push(xs);
+                }
+            }
+            return tries;
+        }
+        // The sequence as it is with one element's value moved: what a `sum` reads, by what the
+        // total is away from there; what a `max` or a `min` reads, to where it has to be. The
+        // rest of the sequence stays, and with it what the other summaries of the walk come to.
+        // These come first, and the ones that put elements after it.
+        if range.is_some() {
+            for (k, e) in cur.iter().enumerate().take(EDGE_TEMPLATES) {
+                let Some(old) = e.get(col).and_then(as_rat) else { continue };
+                let v = match d.kind {
+                    AggKind::Sum => old.add(t.sub(now)),
+                    AggKind::Max | AggKind::Min => t,
+                    _ => continue,
+                };
+                if !fits(v) {
+                    continue;
+                }
+                let mut xs = cur.to_vec();
+                xs[k].insert(col.clone(), Val::Num(v));
+                tries.push(xs);
+            }
+        }
+        let adds: Vec<(Rat, &BTreeMap<String, Val>)> = known.iter().filter_map(|e| self.at(&with(vec![e.clone()]), d).filter(|m| m.num > 0).map(|m| (m, e))).collect();
+        // The sequence as it is, and after it as many of one element the vectors have as bring
+        // the summary up to there.
+        if t.cmp_to(now) == Greater {
+            for (m, e) in &adds {
+                let q = t.sub(now).div(*m);
+                let n = cur.len() as i128 + q.num;
+                if q.den != 1 || q.num < 1 || n > room {
+                    continue;
+                }
+                if let Some(more) = apart(c, el, e, q.num as usize) {
+                    tries.push(cur.iter().cloned().chain(more).collect());
+                }
+            }
+        }
+        // A sequence made to bring it there, of the elements the vectors have.
+        tries.extend(reaching(f, c, el, d, known, &adds, t));
+        // An element the vectors have put after the sequence, made one the summary looks at,
+        // and its value moved: the column a `max` or a `min` reads at where the summary has to
+        // be, the one a `sum` adds up at what the total still needs; for a `count`, as many of
+        // it as it still needs.
+        if (cur.len() as i128) < room {
+            for e in known.iter().take(EDGE_TEMPLATES) {
+                let Some(mut x) = into_view(c, el, d, e) else { continue };
+                let v = match d.kind {
+                    AggKind::Max | AggKind::Min => Some(t),
+                    AggKind::Sum => Some(t.sub(now)),
+                    _ => None,
+                };
+                match v {
+                    Some(v) => {
+                        if !plain || !fits(v) {
+                            continue;
+                        }
+                        x.insert(col.clone(), Val::Num(v));
+                        tries.push(cur.iter().cloned().chain([x]).collect());
+                    }
+                    None => {
+                        let q = t.sub(now);
+                        if q.den != 1 || q.num < 1 || cur.len() as i128 + q.num > room {
+                            continue;
+                        }
+                        if let Some(more) = apart(c, el, &x, q.num as usize) {
+                            tries.push(cur.iter().cloned().chain(more).collect());
+                        }
+                    }
+                }
+            }
+        }
+        tries
+    }
+
+    /// One step: from each of `stage`, the tries that bring `d` to `t` with every summary of
+    /// `held` (`d` at `t` among them) where it has it; one that has them there already, as it is.
+    /// The tries that do not move what an element is looked at by come first, over every input of
+    /// `stage`, and then the ones that do. The first `WHOLES` of them.
+    fn step(&self, stage: &[BTreeMap<String, Val>], d: &AggDecl, t: Rat, held: &[(&AggDecl, Rat)]) -> Vec<BTreeMap<String, Val>> {
+        let mut after: Vec<BTreeMap<String, Val>> = Vec::new();
+        for wide in [false, true] {
+            for input in stage {
+                if after.len() >= WHOLES {
+                    return after;
+                }
+                // Brought there already, by the moves before it.
+                if self.hits(input, held) {
+                    if !after.contains(input) {
+                        after.push(input.clone());
+                    }
+                    continue;
+                }
+                for xs in self.tries(input, d, t, wide) {
+                    let mut b = input.clone();
+                    b.insert(self.seq().clone(), Val::Seq(xs));
+                    if !after.contains(&b) && self.hits(&b, held) {
+                        after.push(b);
+                        if after.len() >= WHOLES {
+                            return after;
+                        }
+                    }
+                }
+            }
+        }
+        after
+    }
+}
+
+/// The whole inputs a solved point may be: `base` with the inputs as `a` gives them, and each
+/// sequence over which `a` moved a summary from what `seed` has — what it comes to on `base` —
+/// replaced by one that brings every summary that moved to where the point has it. The summaries are
+/// brought there one after another (§15.323): the tries for each (`Walk::tries`) are made from the
+/// sequences that brought the ones before it, and a try is kept where those are still where they
+/// were brought. In the order written, and for more than one, the other way round as well: a
+/// wrapped line put in for the least wrapped price adds to the total, so the total is brought
+/// there after it. A sequence no summary of which moved stays as it is. At each step, the first
+/// `WHOLES` of them, those that keep the rest of the sequence first; none where no such sequence is
+/// found.
+///
+/// A try for one summary can take another along that the point did not move, and then the value
+/// `name` is not where the point has it. Where none of the sequences found has it there, the
+/// summaries a sequence has away from the point are brought back, one after another, each kept where
+/// it is brought and the ones the point has kept where they are, and those come after: a line put
+/// in for the total that is wrapped moves the dearest wrapped price, and letting it go unwrapped
+/// brings that back. Before, one try had to bring every summary that moved at once, and a point
+/// that moved two of them — the largest price and the least of the wrapped lines — had no sequence.
+fn with_summaries(f: &RuleFile, c: &Checked, vectors: &[Vector], base: &BTreeMap<String, Val>, seed: &BTreeMap<String, Val>, a: &BTreeMap<String, Val>, name: &str) -> Vec<BTreeMap<String, Val>> {
+    use std::cmp::Ordering::*;
+    let mut input = base.clone();
+    for i in &f.inputs {
+        if let Some(v) = a.get(&i.name.text) {
+            input.insert(i.name.text.clone(), v.clone());
+        }
+    }
+    let mut wholes = vec![input];
+    let mut walks: Vec<Walk> = Vec::new();
+    for el in &f.elements {
+        let seq = &el.name.text;
+        // The summaries of the sequence that the point moved, with where it has them.
+        let moved: Vec<(&AggDecl, Rat)> = f
+            .aggs()
+            .filter(|d| d.over == *seq)
+            .filter_map(|d| {
+                let t = a.get(&d.name.text).and_then(as_rat)?;
+                (seed.get(&d.name.text).and_then(as_rat).is_none_or(|s| s.cmp_to(t) != Equal)).then_some((d, t))
+            })
+            .collect();
+        if moved.is_empty() {
+            continue;
+        }
+        let w = Walk { f, c, el, known: known_elements(vectors, seq), room: crate::door::count_cap(f, c, seq).unwrap_or(EDGE_ELEMENTS).min(EDGE_ELEMENTS) };
+        let n = moved.len();
+        let orders: Vec<Vec<usize>> = if n > 1 { vec![(0..n).collect(), (0..n).rev().collect()] } else { vec![vec![0]] };
+        let mut next: Vec<BTreeMap<String, Val>> = Vec::new();
+        for order in &orders {
+            if next.len() >= WHOLES {
+                break;
+            }
+            let mut stage: Vec<BTreeMap<String, Val>> = wholes.iter().take(WHOLES).cloned().collect();
+            for (j, &k) in order.iter().enumerate() {
+                let (d, t) = moved[k];
+                let held: Vec<(&AggDecl, Rat)> = order[..=j].iter().map(|&i| moved[i]).collect();
+                stage = w.step(&stage, d, t, &held);
+                if stage.is_empty() {
+                    break;
+                }
+            }
+            for b in stage {
+                if next.len() < WHOLES && !next.contains(&b) && w.hits(&b, &moved) {
+                    next.push(b);
+                }
+            }
+        }
+        wholes = next;
+        walks.push(w);
+    }
+    let Some(want) = flat_value(f, c, a, name) else { return wholes };
+    let right = |b: &BTreeMap<String, Val>| flat_value(f, c, &flat_of(f, c, b), name).is_some_and(|v| v.cmp_to(want) == Equal);
+    if walks.is_empty() || wholes.iter().any(right) {
+        return wholes;
+    }
+    // The summaries the value reads, by whether moving one a step, or to an end of its range,
+    // moves the value: one it does not read is left wherever a try takes it (the dearest price of
+    // all the lines, beside a value of the total and the dearest wrapped one).
+    let reads = |d: &AggDecl| -> bool {
+        let n = &d.name.text;
+        let (Some(x0), Some(ty)) = (a.get(n).and_then(as_rat), c.ty_of(n).map(|t| t.present().clone())) else { return false };
+        let q = crate::coverage::quantum(c, n, &ty);
+        let (lo, hi) = c.ranges.get(n).copied().unwrap_or((None, None));
+        [Some(x0.add(q)), Some(x0.sub(q)), lo, hi].into_iter().flatten().any(|v| {
+            let mut b = a.clone();
+            b.insert(n.clone(), to_val(v, &ty));
+            flat_value(f, c, &b, name).is_some_and(|y| y.cmp_to(want) != Equal)
+        })
+    };
+    let mut back: Vec<BTreeMap<String, Val>> = Vec::new();
+    for whole in &wholes {
+        let mut stage = vec![whole.clone()];
+        for w in &walks {
+            let all: Vec<(&AggDecl, Rat)> = f.aggs().filter(|d| d.over == *w.seq() && reads(d)).filter_map(|d| Some((d, a.get(&d.name.text).and_then(as_rat)?))).collect();
+            let mut held: Vec<(&AggDecl, Rat)> = all.iter().copied().filter(|&(d, t)| w.at(whole, d).is_some_and(|v| v.cmp_to(t) == Equal)).collect();
+            for &(d, t) in &all {
+                if held.iter().any(|(h, _)| h.name.text == d.name.text) {
+                    continue;
+                }
+                held.push((d, t));
+                stage = w.step(&stage, d, t, &held);
+                if stage.is_empty() {
+                    break;
+                }
+            }
+        }
+        for b in stage {
+            if back.len() < WHOLES && right(&b) && !back.contains(&b) && !wholes.contains(&b) {
+                back.push(b);
+            }
+        }
+        if back.len() >= WHOLES {
+            break;
+        }
+    }
+    wholes.extend(back);
+    wholes
+}
+
+/// The field the summary `d` looks at the elements by, at the value it asks for: the one a
+/// `count` counts, or the one a `max`'s or a `min`'s `where` reads. `None` for a summary that looks
+/// at every element, and where what it reads is not a field of the element of a truth value or an
+/// enum.
+fn view_of<'a>(c: &Checked, el: &ElementsDecl, d: &'a AggDecl) -> Option<(&'a str, Val)> {
+    let (col, val) = match (&d.kind, &d.filter) {
+        (AggKind::Count, _) => (&d.column, d.value.as_ref()),
+        (AggKind::Max | AggKind::Min, Some((col, v))) => (col, v.as_ref()),
+        _ => return None,
+    };
+    el.fields.iter().find(|fd| fd.name.text == col.text)?;
+    let v = match c.ty_of(&col.text)? {
+        Ty::Bool => Val::Bool(val.is_none_or(|v| v.text == "true")),
+        Ty::Enum(_) => Val::Enum(val?.text.clone()),
+        _ => return None,
+    };
+    Some((col.text.as_str(), v))
+}
+
+/// Whether the summary whose view is `view` looks at `e`.
+fn in_view((col, v): &(&str, Val), e: &BTreeMap<String, Val>) -> bool {
+    e.get(*col) == Some(v)
+}
+
+/// `e` made an element the summary `d` looks at: the field a `max`'s or a `min`'s `where` reads, or
+/// the one a `count` counts, at the value it asks for. `e` as it is for a summary that looks at
+/// every element; `None` where what it reads is not a field of the element of a truth value or an
+/// enum.
+fn into_view(c: &Checked, el: &ElementsDecl, d: &AggDecl, e: &BTreeMap<String, Val>) -> Option<BTreeMap<String, Val>> {
+    match (&d.kind, &d.filter) {
+        (AggKind::Count, _) | (AggKind::Max | AggKind::Min, Some(_)) => {
+            let (col, v) = view_of(c, el, d)?;
+            let mut x = e.clone();
+            x.insert(col.to_string(), v);
+            Some(x)
+        }
+        _ => Some(e.clone()),
+    }
+}
+
+/// How many whole inputs a solved point of a value worked out once a walk is over is tried as.
+const WHOLES: usize = 12;
+
+/// How many of the pool's cases that a walk refuses for a summary outside its range are kept aside,
+/// and from how many places, at most, they are brought inside it (`places`, `fit_summaries`). Past
+/// it, what the audit is still owed is said missing, as before.
+const FIT_POOL: usize = 4096;
+const FIT_SEEDS: usize = 64;
+
+/// How many elements of the candidates' cross product `fit_summaries` tries to put after a
+/// sequence, beside the elements the sequence has.
+const FIT_TEMPLATES: usize = 64;
+
+/// The cases a walk refused for a summary outside its range, one for each place they stand — what
+/// each summary inside its range came to, which summaries are outside, and the inputs that are not a
+/// sequence: a second case standing where the first does is brought to the same place. At most
+/// `take` of them, each in turn the one that brings the most the places before it did not: a summary
+/// inside its range on a point of a boundary pair a table writes on it (`coverage::pairs_on`). Among
+/// those that bring as much, the pool's order stands, and the places that bring nothing new come
+/// after, in it. The pool's order alone puts first the places an element's candidates make, which a
+/// rule with many fields has more of than `FIT_SEEDS` lets in, and the places that stand on a
+/// boundary, after them. With each, the summaries it stands on such a point with, which
+/// `fit_summaries` holds: none, for a place that stands on no point, holds every summary inside.
+fn places<'a>(f: &RuleFile, c: &Checked, cases: &'a [(BTreeMap<String, Val>, String)], take: usize) -> Vec<(&'a BTreeMap<String, Val>, BTreeSet<String>)> {
+    use std::cmp::Ordering::*;
+    let summaries: BTreeSet<&str> = f.aggs().map(|d| d.name.text.as_str()).collect();
+    let mut targets: BTreeSet<(String, (i128, i128))> = BTreeSet::new();
+    for set in &c.sets {
+        let t = &set.table;
+        for row in &t.rows {
+            for (ci, (col, _)) in t.inputs.iter().enumerate() {
+                let (true, Some(cell), Some(ty)) = (summaries.contains(col.as_str()), row.cells.get(ci), c.ty_of(col).map(|t| t.present().clone())) else { continue };
+                for (_, inside, outside) in crate::coverage::pairs_on(c, col, cell, &ty) {
+                    targets.insert((col.clone(), (inside.num, inside.den)));
+                    targets.insert((col.clone(), (outside.num, outside.den)));
+                }
+            }
+        }
+    }
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut all: Vec<(&BTreeMap<String, Val>, BTreeSet<(String, (i128, i128))>)> = Vec::new();
+    for (a, _) in cases {
+        let got = eval::summaries_past(f, c, a.clone().into_iter().collect());
+        let mut place: Vec<String> = a.iter().filter(|(_, v)| !matches!(v, Val::Seq(_))).map(|(k, v)| format!("{k}={}", show(v))).collect();
+        let mut on: BTreeSet<(String, (i128, i128))> = BTreeSet::new();
+        for d in f.aggs() {
+            let name = &d.name.text;
+            let v = got.get(name);
+            let r = v.and_then(as_rat);
+            let under = r.zip(c.walk_floor(d)).is_some_and(|(x, lo)| x.cmp_to(lo) == Less);
+            let over = d.kind == crate::ast::AggKind::Sum && r.zip(c.ranges.get(name).and_then(|(_, hi)| *hi)).is_some_and(|(x, hi)| x.cmp_to(hi) == Greater);
+            if under || over {
+                place.push(format!("{name} outside"));
+                continue;
+            }
+            place.push(format!("{name}={}", v.map(show).unwrap_or_default()));
+            if let Some(x) = r.map(|x| (name.clone(), (x.num, x.den))).filter(|k| targets.contains(k)) {
+                on.insert(x);
+            }
+        }
+        if seen.insert(place.join(",")) {
+            all.push((a, on));
+        }
+    }
+    let mut hit: BTreeSet<(String, (i128, i128))> = BTreeSet::new();
+    let mut used = vec![false; all.len()];
+    let mut order: Vec<usize> = Vec::new();
+    while order.len() < take {
+        let best = (0..all.len())
+            .filter(|&i| !used[i])
+            .map(|i| (all[i].1.difference(&hit).count(), i))
+            .filter(|(n, _)| *n > 0)
+            .max_by(|x, y| x.0.cmp(&y.0).then(y.1.cmp(&x.1)));
+        let Some((_, i)) = best else { break };
+        used[i] = true;
+        hit.extend(all[i].1.iter().cloned());
+        order.push(i);
+    }
+    let rest: Vec<usize> = (0..all.len()).filter(|i| !used[*i]).collect();
+    order.extend(rest.into_iter().take(take.saturating_sub(order.len())));
+    order.into_iter().map(|i| (all[i].0, all[i].1.iter().map(|(n, _)| n.clone()).collect())).collect()
+}
+
+/// The sequences that carry the values of one call: `base` — the values, with each sequence at rest
+/// — as it is where every walk ends inside the ranges of its summaries; else with each sequence
+/// brought inside them by `fit_summaries`. The pool moves the values of one call with the sequences
+/// held; a `count` held to two elements, or a `sum` held to 200 yen, refused every one of those
+/// cases, and a table over the values of the call was left with no case at all (§15.323). An empty
+/// map where neither is answered, or `base` has no sequence: the pools then keep what they had.
+fn at_rest(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>, base: &BTreeMap<String, Val>) -> BTreeMap<String, Val> {
+    let seqs = |m: &BTreeMap<String, Val>| -> BTreeMap<String, Val> { m.iter().filter(|(_, v)| matches!(v, Val::Seq(_))).map(|(k, v)| (k.clone(), v.clone())).collect() };
+    if eval::summary_outside(f, c, base.clone().into_iter().collect()).is_none() {
+        return seqs(base);
+    }
+    fit_summaries(f, c, base, cands, &BTreeSet::new()).map(|(m, _)| seqs(&m)).unwrap_or_default()
+}
+
+/// A case a walk refuses because a `sum` or a `count` comes outside its range (§15.314), with each
+/// sequence brought back inside the ranges of its summaries while the summaries in `hold` keep what
+/// they came to: the count, the total or the largest value the case was built to stand on
+/// (§15.323). An empty `hold` holds every summary that was inside; the others may move, inside their
+/// ranges — a count of units held at two would leave no room for the line that brings a total to its
+/// bottom, though no table asks for two units. The pool aims a summary at the boundaries of the tables that read it with copies of
+/// one element, and a total with as few elements as carry it; where another summary of the same
+/// walk has a bottom — a total held to 200 yen, a count held to two elements — such a sequence comes
+/// in under it, the door refuses it, and the boundary is left with no case. For each summary
+/// outside, in turn:
+/// - a total under its bottom: the field it adds up moved up in the elements already there, and
+///   then elements put after the sequence, its field at what the total still needs;
+/// - a total past its top: the field moved down, and then elements taken out that leave the rest
+///   where it was;
+/// - a count under its bottom: elements it counts put after the sequence.
+///
+/// An element put after the sequence has each other field a summary reads at the bottom of where it
+/// can be, and what it adds to a total that was inside is taken back off the elements before it: a
+/// line of one more unit after a line of nine leaves that one with eight. It is one no count that
+/// was inside takes, where the candidates have one.
+///
+/// A field is moved inside its range, and not past what a `max` or a `min` that was inside came to:
+/// an element over the largest value would take its place. A summary over a column worked out per
+/// element is moved by whole elements only. The sequence stays inside the length the counts over it
+/// let through, and within `EDGE_ELEMENTS`. What comes out is confirmed by the evaluator: each
+/// summary held comes to what it did, none is outside, and the call is answered. With
+/// it, why it is in the suite: what it stands on, and what was brought inside. `None` where nothing
+/// does it: no element in reach adds what is missing without moving what the case stands on.
+fn fit_summaries(
+    f: &RuleFile,
+    c: &Checked,
+    a: &BTreeMap<String, Val>,
+    cands: &BTreeMap<String, Vec<Val>>,
+    hold: &BTreeSet<String>,
+) -> Option<(BTreeMap<String, Val>, String)> {
+    use crate::ast::AggKind;
+    use std::cmp::Ordering::*;
+    let mut whole = a.clone();
+    let mut stands: Vec<String> = Vec::new();
+    let mut brought: Vec<String> = Vec::new();
+    let least = |x: Rat, y: Rat| if x.cmp_to(y) == Greater { y } else { x };
+    let most = |x: Rat, y: Rat| if x.cmp_to(y) == Less { y } else { x };
+    for el in &f.elements {
+        let seq = el.name.text.clone();
+        let Some(Val::Seq(start)) = whole.get(&seq).cloned() else { continue };
+        let aggs: Vec<&AggDecl> = f.aggs().filter(|d| d.over == seq).collect();
+        if aggs.is_empty() {
+            continue;
+        }
+        let base = whole.clone();
+        // What every summary comes to on the sequence, one walk for all of them.
+        let got = |xs: &[BTreeMap<String, Val>]| -> std::collections::HashMap<String, Val> {
+            let mut m = base.clone();
+            m.insert(seq.clone(), Val::Seq(xs.to_vec()));
+            eval::summaries_past(f, c, m.into_iter().collect())
+        };
+        let value = |xs: &[BTreeMap<String, Val>], d: &AggDecl| got(xs).get(&d.name.text).and_then(as_rat);
+        let top = |d: &AggDecl| if d.kind == AggKind::Sum { c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi) } else { None };
+        // Where a summary is outside: under its bottom (`Less`) or past its top (`Greater`).
+        let off = |xs: &[BTreeMap<String, Val>], d: &AggDecl| -> Option<std::cmp::Ordering> {
+            let v = value(xs, d)?;
+            if c.walk_floor(d).is_some_and(|lo| v.cmp_to(lo) == Less) {
+                Some(Less)
+            } else if top(d).is_some_and(|hi| v.cmp_to(hi) == Greater) {
+                Some(Greater)
+            } else {
+                None
+            }
+        };
+        let outside: Vec<&AggDecl> = aggs.iter().filter(|d| off(&start, d).is_some()).copied().collect();
+        if outside.is_empty() {
+            continue;
+        }
+        let first = got(&start);
+        let kept: Vec<(&AggDecl, Option<Val>)> = aggs
+            .iter()
+            .filter(|d| !outside.iter().any(|o| o.name.text == d.name.text) && (hold.is_empty() || hold.contains(&d.name.text)))
+            .map(|d| (*d, first.get(&d.name.text).cloned()))
+            .collect();
+        let same = |x: Option<&Val>, y: Option<&Val>| match (x, y) {
+            (Some(Val::Num(x)), Some(Val::Num(y))) => x.cmp_to(*y) == Equal,
+            (x, y) => x == y,
+        };
+        let holds = |xs: &[BTreeMap<String, Val>]| {
+            let now = got(xs);
+            kept.iter().all(|(d, v)| same(now.get(&d.name.text), v.as_ref()))
+        };
+        for (d, v) in &kept {
+            if let Some(v) = v {
+                stands.push(format!("{} = {}", d.name.text, show(v)));
+            }
+        }
+        brought.extend(outside.iter().map(|d| d.name.text.clone()));
+        let cap = crate::door::count_cap(f, c, &seq).unwrap_or(EDGE_ELEMENTS).min(EDGE_ELEMENTS);
+        // A field a summary reads as it is, with how far it can be moved: its range, kept under
+        // what a `max` that was inside came to and over what a `min` did.
+        let field = |col: &str| -> Option<(Rat, Rat)> {
+            el.fields.iter().find(|fd| fd.name.text == col && fd.unique.is_none())?;
+            let Some(&(Some(mut lo), Some(mut hi))) = c.ranges.get(col) else { return None };
+            for (d, v) in &kept {
+                let Some(v) = v.as_ref().and_then(as_rat) else { continue };
+                if d.column.text == col {
+                    match d.kind {
+                        AggKind::Max => hi = least(hi, v),
+                        AggKind::Min => lo = most(lo, v),
+                        _ => {}
+                    }
+                }
+            }
+            (lo.cmp_to(hi) != Greater).then_some((lo, hi))
+        };
+        let num = |e: &BTreeMap<String, Val>, col: &str| e.get(col).and_then(as_rat);
+        let mut templates: Vec<BTreeMap<String, Val>> = Vec::new();
+        for e in start.iter().cloned().chain(element_combos(el, cands).into_iter().take(FIT_TEMPLATES)) {
+            if !templates.contains(&e) {
+                templates.push(e);
+            }
+        }
+        // The columns the summaries over the sequence read, each once.
+        let mut read: Vec<String> = Vec::new();
+        for d in &aggs {
+            if d.kind != AggKind::Count && !read.contains(&d.column.text) {
+                read.push(d.column.text.clone());
+            }
+        }
+        // The element `t` put after the sequence: each column a summary reads at the bottom of where
+        // it can be, but `raise`, the column a total under its bottom adds up, at the value given;
+        // and what it adds to each total that was inside taken back off the elements before it, as
+        // far as their fields go down. `None` where that leaves a summary that was inside moved.
+        let put = |xs: &[BTreeMap<String, Val>], t: &BTreeMap<String, Val>, raise: Option<(&str, Rat)>| -> Option<Vec<BTreeMap<String, Val>>> {
+            let mut e = t.clone();
+            for col in &read {
+                if let Some((flo, _)) = field(col) {
+                    e.insert(col.clone(), Val::Num(flo));
+                }
+            }
+            if let Some((col, v)) = raise {
+                e.insert(col.to_string(), Val::Num(v));
+            }
+            let mut ys = xs.to_vec();
+            ys.push(e);
+            for (s, want) in &kept {
+                if s.kind != AggKind::Sum {
+                    continue;
+                }
+                let scol = &s.column.text;
+                let (Some(want), Some(is), Some((flo, _))) = (want.as_ref().and_then(as_rat), value(&ys, s), field(scol)) else { continue };
+                let mut over = is.sub(want);
+                for k in 0..xs.len() {
+                    if over.num <= 0 {
+                        break;
+                    }
+                    let Some(old) = num(&ys[k], scol) else { continue };
+                    let take = least(old.sub(flo), over);
+                    if take.num <= 0 {
+                        continue;
+                    }
+                    ys[k].insert(scol.clone(), Val::Num(old.sub(take)));
+                    over = over.sub(take);
+                }
+            }
+            holds(&ys).then_some(ys)
+        };
+        let mut xs = start.clone();
+        for _ in 0..aggs.len() * 2 {
+            let Some((d, side)) = aggs.iter().find_map(|d| off(&xs, d).map(|o| (*d, o))) else { break };
+            let Some(now) = value(&xs, d) else { break };
+            let col = d.column.text.clone();
+            let moved = match (d.kind, side) {
+                // A total under its bottom: the field up in place, then elements put after it.
+                (AggKind::Sum, Less) => {
+                    let lo = c.walk_floor(d)?;
+                    let need = |xs: &[BTreeMap<String, Val>]| value(xs, d).map(|v| lo.sub(v));
+                    if let Some((_, fhi)) = field(&col) {
+                        for k in 0..xs.len() {
+                            let Some(left) = need(&xs).filter(|n| n.num > 0) else { break };
+                            let Some(old) = num(&xs[k], &col) else { continue };
+                            let new = least(old.add(left), fhi);
+                            if new.cmp_to(old) != Greater {
+                                continue;
+                            }
+                            let mut ys = xs.clone();
+                            ys[k].insert(col.clone(), Val::Num(new));
+                            if holds(&ys) {
+                                xs = ys;
+                            }
+                        }
+                    }
+                    for t in &templates {
+                        while let Some(left) = need(&xs).filter(|n| n.num > 0) {
+                            if xs.len() as i128 >= cap {
+                                break;
+                            }
+                            let raise = field(&col).map(|(flo, fhi)| (col.as_str(), most(least(left, fhi), flo)));
+                            match put(&xs, t, raise) {
+                                Some(ys) if value(&ys, d).zip(value(&xs, d)).is_some_and(|(is, was)| is.cmp_to(was) == Greater) => xs = ys,
+                                _ => break,
+                            }
+                        }
+                    }
+                    need(&xs).is_some_and(|n| n.num <= 0)
+                }
+                // A total past its top: the field down in place, then elements taken out.
+                (AggKind::Sum, Greater) => {
+                    let hi = top(d)?;
+                    let mut need = now.sub(hi);
+                    if let Some((flo, _)) = field(&col) {
+                        for k in 0..xs.len() {
+                            if need.num <= 0 {
+                                break;
+                            }
+                            let Some(old) = num(&xs[k], &col) else { continue };
+                            let new = most(old.sub(need), flo);
+                            if new.cmp_to(old) != Less {
+                                continue;
+                            }
+                            let mut ys = xs.clone();
+                            ys[k].insert(col.clone(), Val::Num(new));
+                            if holds(&ys) {
+                                need = need.sub(old.sub(new));
+                                xs = ys;
+                            }
+                        }
+                    }
+                    let mut k = xs.len();
+                    while need.num > 0 && k > 0 {
+                        k -= 1;
+                        let mut ys = xs.clone();
+                        ys.remove(k);
+                        let (Some(was), Some(is)) = (value(&xs, d), value(&ys, d)) else { continue };
+                        let drop = was.sub(is);
+                        if drop.num > 0 && holds(&ys) {
+                            need = need.sub(drop);
+                            xs = ys;
+                        }
+                    }
+                    need.num <= 0
+                }
+                // A count under its bottom: elements it counts put after it.
+                (AggKind::Count, Less) => {
+                    let lo = c.walk_floor(d)?;
+                    let short = |xs: &[BTreeMap<String, Val>]| value(xs, d).is_some_and(|v| v.cmp_to(lo) == Less);
+                    let mut done = false;
+                    for t in &templates {
+                        let mut ys = xs.clone();
+                        while short(&ys) && (ys.len() as i128) < cap {
+                            match put(&ys, t, None) {
+                                Some(zs) if value(&zs, d).zip(value(&ys, d)).is_some_and(|(is, was)| is.cmp_to(was) == Greater) => ys = zs,
+                                _ => break,
+                            }
+                        }
+                        if !short(&ys) {
+                            xs = ys;
+                            done = true;
+                            break;
+                        }
+                    }
+                    done
+                }
+                _ => false,
+            };
+            if !moved {
+                return None;
+            }
+        }
+        if aggs.iter().any(|d| off(&xs, d).is_some()) || !holds(&xs) {
+            return None;
+        }
+        whole.insert(seq, Val::Seq(xs));
+    }
+    let sep = if crate::i18n::ja() { "、" } else { ", " };
+    let (stands, moved) = (stands.join(sep), brought.join(sep));
+    let why = if stands.is_empty() {
+        tr!("{moved} を範囲の中に戻した", "{moved} brought inside its range")
+    } else {
+        tr!("{stands} はそのままで、{moved} を範囲の中に戻した", "{stands} kept, {moved} brought inside its range")
+    };
+    answer(f, c, &whole, "").map(|v| (v.input, why))
+}
+
+/// How many of the vectors a boundary on a value worked out once a walk is over is aimed from.
+const WALKED_BASES: usize = 4;
+
+/// The cases a table that reads a value worked out once a walk is over is owed for each boundary a
+/// cell writes on that value (§9.2): a whole input that brings the value to the inside of the
+/// boundary and, from that one, the input that takes it to the outside — the two apart in one
+/// sequence, or in one input, alone, which is what makes them a pair. The pool aims a summary at
+/// the boundaries the tables write on it; a value worked out from one has its boundaries
+/// somewhere the pool does not look, and is aimed here, solved as `walked_edges` solves an end.
+/// The vectors the row won on are tried first as the place to start from, since the other cells of
+/// the row have to hold on the pair, and then the first vectors of all.
+fn walked_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<(BTreeMap<String, Val>, String)> {
+    let mut out: Vec<(BTreeMap<String, Val>, String)> = Vec::new();
+    if !f.walks() || vectors.is_empty() {
+        return out;
+    }
+    let walked: Vec<&str> = walked_defines(f).into_iter().map(|d| d.name.text.as_str()).collect();
+    if walked.is_empty() {
+        return out;
+    }
+    for set in &c.sets {
+        let t = &set.table;
+        for (ri, row) in t.rows.iter().enumerate() {
+            let tag = eval::row_tag(set.row_table(ri), row.index);
+            for (ci, (col, _)) in t.inputs.iter().enumerate() {
+                if !walked.contains(&col.as_str()) {
+                    continue;
+                }
+                let Some(ty) = c.ty_of(col).map(|t| t.present().clone()) else { continue };
+                if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) {
+                    continue;
+                }
+                let Some(cell) = row.cells.get(ci) else { continue };
+                for (_, inside, outside) in crate::coverage::pairs_on(c, col, cell, &ty) {
+                    let won = vectors.iter().filter(|v| v.trace.contains(&tag)).take(WALKED_BASES);
+                    for base in won.chain(vectors.iter().take(WALKED_BASES)) {
+                        let Some(a) = walked_at(f, c, vectors, &base.input, col, inside) else { continue };
+                        let Some(z) = walked_at(f, c, vectors, &a, col, outside) else { continue };
+                        // A pair is two inputs apart in one thing.
+                        if a.len() != z.len() || a.iter().filter(|(k, v)| z.get(*k) != Some(*v)).count() != 1 {
+                            continue;
+                        }
+                        let said = |v: Rat| tr!("{col} が {} になる入力", "{col} brought to {}", crate::coverage::show_rat(v, &ty));
+                        out.push((a, said(inside)));
+                        out.push((z, said(outside)));
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A whole input the rule answers on which the value `name`, worked out once a walk is over, is
+/// `target`: `base` itself where it is one, else `base` with an input, or the sequence a summary
+/// walks, moved to where the value is solved to be there.
+fn walked_at(f: &RuleFile, c: &Checked, vectors: &[Vector], base: &BTreeMap<String, Val>, name: &str, target: Rat) -> Option<BTreeMap<String, Val>> {
+    use std::cmp::Ordering::*;
+    let seed = flat_of(f, c, base);
+    let there = |whole: &BTreeMap<String, Val>| flat_value(f, c, &flat_of(f, c, whole), name).is_some_and(|w| w.cmp_to(target) == Equal) && answer(f, c, whole, "").is_some();
+    if there(base) {
+        return Some(base.clone());
+    }
+    let movable = walked_movable(f);
+    [true, false].into_iter().find_map(|up| {
+        let a = solve_flat(f, c, &seed, &movable, name, target, up)?;
+        if flat_value(f, c, &a, name)?.cmp_to(target) != Equal {
+            return None;
+        }
+        with_summaries(f, c, vectors, base, &seed, &a, name).into_iter().find(|whole| there(whole))
+    })
+}
+
 /// The inputs the door of every generated language refuses, as lines of the same file
 /// (§15.204): for each input, the input left out and a value of another kind; for a number, one
 /// that is not whole (off its step, for a rate) and one past each end of its range; for a date,
 /// a day the calendar does not have, one past each end and a day its koyomi date does not come
 /// to; for an enum, a word it does not have; for a truth value, the string "false"; for each
 /// `constraint`, a combination it rules out; and for the sequence a walk reads, the same of the
-/// sequence and of one element's fields, and one element past what a count over it can be. Each
+/// sequence and of one element's fields, one element past what a count over it can be, and a `sum`
+/// or a `count` one step past each end its walk holds it to (`summary_edges`). Each
 /// is a vector of the suite with one thing changed, so the door has one thing to say, and the
 /// line carries what the reference evaluator refuses it for. A case the reference evaluator does
-/// not refuse — an end the type already closes — is not written.
+/// not refuse — an end the type already closes — is not written. After them come the inputs with
+/// two things wrong, of two reasons, for each pair of places the door looks at (`two_faults`): the
+/// door says the first, in the one order every way looks in (§15.328).
 pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> {
+    door_lines(f, c, vectors).into_iter().map(|(_, line)| line).collect()
+}
+
+/// Every line of `vectors/<alias>.refused.jsonl` (§15.56, §15.204): the walks the suite found
+/// refused, the door cases made from its vectors, and the calls on an end of a range that none of
+/// the cases tried there answers (§15.314). An input is written once: a walk the suite found that
+/// a door case gives as well — no elements, under a `count` that starts above zero — is the door
+/// case, which names the end it is past. Two inputs refused for the same end of the same `sum` or
+/// `count` both stay — the walk the suite found, which is often the one farthest from the end (no
+/// elements, a total of zero), and the door case one step past it: a door that holds the end only
+/// for some of the calls under it is stopped by one of the two and not by the other.
+pub fn refused_lines(f: &RuleFile, c: &Checked, suite: &Suite) -> Vec<String> {
+    let door = door_lines(f, c, &suite.vectors);
+    let mut said: BTreeSet<String> = door.iter().map(|(text, _)| text.clone()).collect();
+    let mut out: Vec<String> = Vec::new();
+    for v in &suite.refused {
+        let text = crate::json::parse(&in_object(f, c, v)).map(|j| j.compact()).unwrap_or_default();
+        if said.insert(text) {
+            out.push(refused_json(f, c, v));
+        }
+    }
+    out.extend(door.iter().map(|(_, line)| line.clone()));
+    for v in &suite.on_ends {
+        let text = crate::json::parse(&in_object(f, c, v)).map(|j| j.compact()).unwrap_or_default();
+        if said.insert(text) {
+            out.push(refused_json(f, c, v));
+        }
+    }
+    out
+}
+
+/// The door cases, each with its inputs as the line writes them.
+fn door_lines(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<(String, String)> {
     let parsed = |v: &Vector| crate::json::parse(&in_object(f, c, v)).ok();
     let Some(base) = vectors.first().and_then(parsed) else { return Vec::new() };
-    let mut out: Vec<String> = Vec::new();
+    let mut out: Vec<(String, String)> = Vec::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
-    let mut push = |obj: Json, why: String| {
+    let mut push = |obj: Json, why: String| -> bool {
         let text = obj.compact();
         if !seen.insert(text.clone()) {
-            return;
+            return false;
         }
         if let Some(r) = crate::door::refusal(f, c, &obj) {
-            out.push(refused_line(&text, &r, &why));
+            let line = refused_line(&text, &r, &why);
+            out.push((text, line));
+            return true;
         }
+        false
     };
     for i in &f.inputs {
         let name = &i.name.text;
@@ -2422,6 +4401,61 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
             push(obj, tr!("`{}` の組み合わせ", "the combination of `{}`", n.said()));
         }
     }
+    // A `define` one step past each end of the range the rule accepts for it (§15.313): the vector
+    // with what the value is worked out from moved there — for a value of one element, an element
+    // after a good one where the sequence can have two, so that the door says it at its index
+    // (§15.324).
+    // The first element of each sequence in the first vector that has one: the good element a
+    // case puts before a bad one.
+    let goods: Vec<Option<Json>> = f
+        .elements
+        .iter()
+        .map(|el| vectors.iter().filter_map(parsed).find_map(|j| j.get(&el.name.text).and_then(|v| v.as_arr()).and_then(|xs| xs.first().cloned())))
+        .collect();
+    for e in edge_inputs(f, c, vectors, false) {
+        let Ok(obj) = crate::json::parse(&in_object(f, c, &e.1)) else { continue };
+        let obj = match e.0.seq {
+            Some(s) => {
+                let seq = &f.elements[s].name.text;
+                let from = parsed(&vectors[e.0.from]).and_then(|j| j.get(seq).and_then(|v| v.as_arr()).and_then(|xs| xs.first().cloned()));
+                past_on_second(f, c, &obj, s, &e.0.define, from.as_ref().or(goods[s].as_ref()))
+            }
+            None => crate::door::refusal(f, c, &obj).is_some_and(|r| r.error == crate::door::out_of_range(&e.0.define)).then_some(obj),
+        };
+        if let Some(obj) = obj {
+            let why = if e.0.hi {
+                tr!("定義 {} を、受け付ける範囲の上端の先に", "the definition {} past the top of the range it accepts", e.0.define)
+            } else {
+                tr!("定義 {} を、受け付ける範囲の下端の先に", "the definition {} past the bottom of the range it accepts", e.0.define)
+            };
+            push(obj, why);
+        }
+    }
+    // The same of a `define` worked out once a walk is over (§15.314): a sequence that takes the
+    // summary it reads to where the value is one step past the end.
+    for (e, a) in walked_edges(f, c, vectors) {
+        if e.inside {
+            continue;
+        }
+        let v = Vector { input: a, outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: String::new() };
+        let Ok(obj) = crate::json::parse(&in_object(f, c, &v)) else { continue };
+        if crate::door::refusal(f, c, &obj).is_some_and(|r| r.error == crate::door::out_of_range(&e.define)) {
+            push(obj, e.why());
+        }
+    }
+    // A `sum` or a `count` one step past each end of the range its walk holds it to (§15.100,
+    // §15.314): past the top of a sum, and under the bottom of either where a walk can come in
+    // under it. The door says that summary, and nothing before it.
+    for (e, a) in summary_edges(f, c, vectors) {
+        if e.inside {
+            continue;
+        }
+        let v = Vector { input: a, outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: String::new() };
+        let Ok(obj) = crate::json::parse(&in_object(f, c, &v)) else { continue };
+        if crate::door::refusal(f, c, &obj).is_some_and(|r| r.error == crate::door::out_of_range(&e.name)) {
+            push(obj, e.why());
+        }
+    }
     for el in &f.elements {
         let seq = &el.name.text;
         let with_one = vectors
@@ -2429,11 +4463,22 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
             .find(|v| matches!(v.input.get(seq), Some(Val::Seq(xs)) if !xs.is_empty()))
             .and_then(parsed);
         let top = with_one.clone().unwrap_or_else(|| base.clone());
+        let cap = crate::door::count_cap(f, c, seq);
+        let first = with_one.as_ref().and_then(|t| t.get(seq)).and_then(|s| s.as_arr()).and_then(|xs| xs.first()).cloned();
         push(without(&top, seq), tr!("{seq} を渡さない", "{seq} left out"));
         push(with(&top, seq, Json::Int(0)), tr!("{seq} に並びでない値", "{seq} not a sequence"));
-        push(with(&top, seq, Json::Arr(vec![Json::Int(0)])), tr!("{seq} にオブジェクトでない要素", "an element of {seq} that is not an object"));
-        if let Some(first) = with_one.as_ref().and_then(|t| t.get(seq)).and_then(|s| s.as_arr()).and_then(|xs| xs.first()).cloned() {
-            let cap = crate::door::count_cap(f, c, seq);
+        // An element that is not an object after a good one, and another after it: the door says
+        // the first of the two by its index (§15.324). Alone, where the sequence has no good element
+        // to put first or can have only one.
+        let odd = match &first {
+            Some(good) if cap.is_none_or(|cap| cap >= 3) => vec![good.clone(), Json::Int(0), Json::Int(0)],
+            Some(good) if cap.is_none_or(|cap| cap >= 2) => vec![good.clone(), Json::Int(0)],
+            _ => vec![Json::Int(0)],
+        };
+        let odd = with(&top, seq, Json::Arr(odd));
+        let odd = if crate::door::refusal(f, c, &odd).is_some_and(|r| r.error == crate::door::not_object(seq, 1)) { odd } else { with(&top, seq, Json::Arr(vec![Json::Int(0)])) };
+        push(odd, tr!("{seq} にオブジェクトでない要素", "an element of {seq} that is not an object"));
+        if let Some(first) = first {
             if let Some(cap) = cap.filter(|cap| *cap <= 50) {
                 let many = Json::Arr(vec![first.clone(); cap as usize + 1]);
                 push(with(&top, seq, many), tr!("{seq} の要素を、数え上げの上限より一つ多く", "{seq} one element past what a count over it can be"));
@@ -2453,38 +4498,36 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
                 Some(xs)
             };
             // Two elements with the same value of a `unique` field, one case for each such field:
-            // the two differ in every other `unique` field, so the door has that one to say.
+            // the two differ in every other `unique` field, so the door has that one to say. The
+            // first and the third, where the sequence can have three and the walk takes the first
+            // two, so that the door says both by their indices (§15.324); else the first two.
             if cap.is_none_or(|cap| cap >= 2) {
                 for fd in &uniques {
+                    let field = &fd.name.text;
+                    let why = tr!("{seq} の要素を、{} が同じ二つに", "two elements of {seq} with the same {}", field);
+                    let three = spread_of(3).filter(|_| cap.is_none_or(|cap| cap >= 3)).and_then(|mut xs| {
+                        // The first two walked over with no refusal of an element's own.
+                        let walked = with(&top, seq, Json::Arr(xs[..2].to_vec()));
+                        if crate::door::refusal(f, c, &walked).is_some_and(|r| r.error.contains(&format!("{seq}["))) {
+                            return None;
+                        }
+                        let same = xs[0].get(field).cloned().unwrap_or(Json::Null);
+                        xs[2] = with(&xs[2], field, same);
+                        let obj = with(&top, seq, Json::Arr(xs));
+                        crate::door::refusal(f, c, &obj).is_some_and(|r| r.error == crate::door::duplicate(seq, field, 0, 2)).then_some(obj)
+                    });
+                    if let Some(obj) = three {
+                        push(obj, why);
+                        continue;
+                    }
                     let Some(mut two) = spread_of(2) else { continue };
-                    let same = two[0].get(&fd.name.text).cloned().unwrap_or(Json::Null);
-                    two[1] = with(&two[1], &fd.name.text, same);
+                    let same = two[0].get(field).cloned().unwrap_or(Json::Null);
+                    two[1] = with(&two[1], field, same);
                     let obj = with(&top, seq, Json::Arr(two));
-                    let said = crate::door::duplicate(seq, &fd.name.text);
-                    if crate::door::refusal(f, c, &obj).is_some_and(|r| r.error == said) {
-                        push(obj, tr!("{seq} の要素を、{} が同じ二つに", "two elements of {seq} with the same {}", fd.name.text));
+                    if crate::door::refusal(f, c, &obj).is_some_and(|r| r.error == crate::door::duplicate(seq, field, 0, 1)) {
+                        push(obj, why);
                     }
                 }
-            }
-            // A sum over a field past the top of its range: as many elements at the field's own
-            // top as it takes, where that is a few dozen, each with values of its own in the
-            // `unique` fields.
-            for d in crate::door::sums(f).into_iter().filter(|d| d.over == *seq) {
-                let (Some(hi), Some((_, Some(fhi)))) = (c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi), c.ranges.get(&d.column.text).copied()) else {
-                    continue;
-                };
-                if !el.fields.iter().any(|fd| fd.name.text == d.column.text) || fhi.num <= 0 || uniques.iter().any(|fd| fd.name.text == d.column.text) {
-                    continue;
-                }
-                let q = hi.div(fhi);
-                let n = q.num.div_euclid(q.den) + 1;
-                if n > 50 || cap.is_some_and(|cap| n > cap) {
-                    continue;
-                }
-                let top_wire = Json::Int(crate::types::wire_int(fhi, c.wire_scale(&d.column.text)));
-                let Some(xs) = spread_of(n as usize) else { continue };
-                let many = Json::Arr(xs.into_iter().map(|x| with(&x, &d.column.text, top_wire.clone())).collect());
-                push(with(&top, seq, many), tr!("{} の合計 {} を範囲の上端の先に", "the sum {1} of {0} past the top of its range", seq, d.name.text));
             }
             for fd in &el.fields {
                 let name = &fd.name.text;
@@ -2493,19 +4536,325 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
                 for (value, why) in wrong_values(c, name, &ty, first.get(name)) {
                     cases.push((Some(value), tr!("{seq} の要素の {why}", "{why}, in an element of {seq}")));
                 }
+                // The value on the elements after a good one, so that the door says the first of them
+                // by its index (§15.324): two of them where the sequence can have three. Else the
+                // first element of the vector's own sequence.
+                let said = format!("{} ", crate::door::element(seq, 1, name));
                 for (value, why) in cases {
-                    let el1 = match value {
-                        None => without(&first, name),
-                        Some(v) => with(&first, name, v),
+                    let bad = |x: &Json| match &value {
+                        None => without(x, name),
+                        Some(v) => with(x, name, v.clone()),
                     };
+                    let after = [3, 2].into_iter().filter(|n| cap.is_none_or(|cap| cap >= *n as i128)).find_map(|n| {
+                        let mut xs = spread_of(n)?;
+                        for x in xs.iter_mut().skip(1) {
+                            *x = bad(x);
+                        }
+                        let obj = with(&top, seq, Json::Arr(xs));
+                        crate::door::refusal(f, c, &obj).is_some_and(|r| r.error.starts_with(&said)).then_some(obj)
+                    });
+                    if let Some(obj) = after {
+                        push(obj, why);
+                        continue;
+                    }
                     let mut xs = top.get(seq).and_then(|s| s.as_arr()).map(|a| a.to_vec()).unwrap_or_default();
-                    xs[0] = el1;
+                    xs[0] = bad(&first);
                     push(with(&top, seq, Json::Arr(xs)), why);
                 }
             }
         }
     }
+    for (obj, why) in two_faults(f, c, vectors, &base) {
+        push(obj, why);
+    }
     out
+}
+
+/// Inputs with two things wrong with them, of two different reasons, that the door says in the
+/// order every way looks (§15.328): first the reading look — each argument in the order the function
+/// takes them, there and of its kind, and a number one int64 holds — then each input inside its
+/// range, the constraints, the cap of a sequence, and then the walk, where an element's fields are
+/// held to their ranges and its `unique` fields to the elements before it, and where a `stop` ends
+/// the work and not the door. One case for each pair of places, each kept only where the reference
+/// evaluator says the one the order puts first: a door that looks in another order says the other.
+fn two_faults(f: &RuleFile, c: &Checked, vectors: &[Vector], base: &Json) -> Vec<(Json, String)> {
+    let parsed = |v: &Vector| crate::json::parse(&in_object(f, c, v)).ok();
+    let said = |obj: &Json| crate::door::refusal(f, c, obj).map(|r| r.error);
+    let mut out: Vec<(Json, String)> = Vec::new();
+    // `obj`, kept where the reference evaluator says of it what it says of `alone`, the input with
+    // only the thing wrong the order puts first, and says another sentence of `other`, the input with
+    // only the other: both are refused, and the order is what decides which is said.
+    let keep = |out: &mut Vec<(Json, String)>, obj: Json, alone: &Json, other: &Json, why: String| -> bool {
+        let want = said(alone);
+        let theirs = said(other);
+        if want.is_some() && theirs.is_some() && theirs != want && said(&obj) == want {
+            out.push((obj, why));
+            return true;
+        }
+        false
+    };
+    let ty = |n: &str| c.ty_of(n).unwrap_or(Ty::Unknown);
+    let ins: Vec<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).collect();
+    // An input outside its range, and one after it of another kind: the kind.
+    'pair: for (k, a) in ins.iter().enumerate() {
+        let Some(ra) = range_fault(c, a, &ty(a), base.get(a)) else { continue };
+        for b in &ins[k + 1..] {
+            let Some(kb) = kind_fault(c, b, &ty(b), base.get(b)) else { continue };
+            let alone = with(base, b, kb);
+            let why = tr!("{a} を範囲の外に、あとの {b} を別の種類の値に。種類のほうを言う", "{a} outside its range and {b} after it of another kind: the kind is said");
+            if keep(&mut out, with(&alone, a, ra.clone()), &alone, &with(base, a, ra.clone()), why) {
+                break 'pair;
+            }
+        }
+    }
+    // A number past what int64 holds, and an input after it of another kind: the number, read
+    // first.
+    'pair: for (k, a) in ins.iter().enumerate() {
+        let Some(pa) = past_fault(&ty(a)) else { continue };
+        let alone = with(base, a, pa);
+        for b in &ins[k + 1..] {
+            let Some(kb) = kind_fault(c, b, &ty(b), base.get(b)) else { continue };
+            let why = tr!("{a} を int64 で持てない数に、あとの {b} を別の種類の値に。先に読む {a} を言う", "{a} past what int64 holds and {b} after it of another kind: {a}, read first, is said");
+            if keep(&mut out, with(&alone, b, kb.clone()), &alone, &with(base, b, kb), why) {
+                break 'pair;
+            }
+        }
+    }
+    // Each sequence by the first vector that has an element in it, and that element.
+    let tops: Vec<Option<(Json, Json)>> = f
+        .elements
+        .iter()
+        .map(|el| {
+            let seq = &el.name.text;
+            let top = vectors.iter().find(|v| matches!(v.input.get(seq), Some(Val::Seq(xs)) if !xs.is_empty())).and_then(parsed)?;
+            let first = top.get(seq)?.as_arr()?.first()?.clone();
+            Some((top, first))
+        })
+        .collect();
+    // A field of an element with a value of another kind, and one outside its range, each the first
+    // the element has.
+    let field_fault = |s: usize, first: &Json, range: bool| -> Option<(String, Json)> {
+        f.elements[s].fields.iter().find_map(|fd| {
+            let n = &fd.name.text;
+            let v = if range { range_fault(c, n, &ty(n), first.get(n)) } else { kind_fault(c, n, &ty(n), first.get(n)) }?;
+            Some((n.clone(), v))
+        })
+    };
+    // Elements that differ in every `unique` field, the first of them `first`.
+    let apart = |s: usize, first: &Json, n: usize| -> Vec<Json> {
+        let mut xs = vec![first.clone(); n];
+        for fd in f.elements[s].fields.iter().filter(|fd| fd.unique.is_some()) {
+            if let Some(vs) = spread(c, &fd.name.text, &ty(&fd.name.text), first.get(&fd.name.text), n) {
+                for (x, v) in xs.iter_mut().zip(vs) {
+                    *x = with(x, &fd.name.text, v);
+                }
+            }
+        }
+        xs
+    };
+    for (s, el) in f.elements.iter().enumerate() {
+        let Some((top, first)) = &tops[s] else { continue };
+        let seq = &el.name.text;
+        let cap = crate::door::count_cap(f, c, seq);
+        let one = |x: Json| with(top, seq, Json::Arr(vec![x]));
+        if let Some((fk, kv)) = field_fault(s, first, false) {
+            let alone = one(with(first, &fk, kv.clone()));
+            // An input outside its range, and a field of an element of another kind: the field,
+            // read with the arguments before any range is looked at.
+            for a in &ins {
+                let Some(ra) = range_fault(c, a, &ty(a), top.get(a)) else { continue };
+                let why = tr!("{a} を範囲の外に、{seq} の要素の {fk} を別の種類の値に。種類のほうを言う", "{a} outside its range and {fk} of an element of {seq} of another kind: the kind is said");
+                if keep(&mut out, with(&alone, a, ra.clone()), &alone, &with(&one(first.clone()), a, ra), why) {
+                    break;
+                }
+            }
+            // An input of another kind, and a field of an element of another kind: the input, an
+            // argument before the sequence.
+            for a in &ins {
+                let Some(ka) = kind_fault(c, a, &ty(a), top.get(a)) else { continue };
+                let input_alone = with(top, a, ka.clone());
+                let why = tr!("{a} を別の種類の値に、{seq} の要素の {fk} も別の種類の値に。先の引数の {a} を言う", "{a} of another kind and {fk} of an element of {seq} of another kind too: {a}, the argument before, is said");
+                if keep(&mut out, with(&alone, a, ka), &input_alone, &alone, why) {
+                    break;
+                }
+            }
+        }
+        if cap.is_none_or(|cap| cap >= 2) {
+            // A field of the first element outside its range, and a field of the second of another
+            // kind: the kind, read for every element before the walk holds one to a range.
+            if let (Some((fr, rv)), Some((fk, kv))) = (field_fault(s, first, true), field_fault(s, first, false)) {
+                let xs = apart(s, first, 2);
+                let alone = with(top, seq, Json::Arr(vec![xs[0].clone(), with(&xs[1], &fk, kv.clone())]));
+                let other = with(top, seq, Json::Arr(vec![with(&xs[0], &fr, rv.clone()), xs[1].clone()]));
+                let obj = with(top, seq, Json::Arr(vec![with(&xs[0], &fr, rv), with(&xs[1], &fk, kv)]));
+                keep(&mut out, obj, &alone, &other, tr!("{seq} の一つ目の要素の {fr} を範囲の外に、二つ目の {fk} を別の種類の値に。種類のほうを言う", "{fr} of the first element of {seq} outside its range and {fk} of the second of another kind: the kind is said"));
+            }
+            // The second element with the `unique` value of the first, and a field of it outside its
+            // range: the range, which the walk looks at on an element before its `unique` fields.
+            let unique = el.fields.iter().find(|fd| fd.unique.is_some()).map(|fd| fd.name.text.clone());
+            let ranged = el.fields.iter().filter(|fd| Some(&fd.name.text) != unique.as_ref()).find_map(|fd| {
+                let n = &fd.name.text;
+                Some((n.clone(), range_fault(c, n, &ty(n), first.get(n))?))
+            });
+            if let (Some(u), Some((fr, rv))) = (unique, ranged) {
+                let xs = apart(s, first, 2);
+                let second = with(&xs[1], &fr, rv.clone());
+                let alone = with(top, seq, Json::Arr(vec![xs[0].clone(), second.clone()]));
+                let first_u = xs[0].get(&u).cloned().unwrap_or(Json::Null);
+                let other = with(top, seq, Json::Arr(vec![xs[0].clone(), with(&xs[1], &u, first_u.clone())]));
+                let obj = with(top, seq, Json::Arr(vec![xs[0].clone(), with(&second, &u, first_u.clone())]));
+                keep(&mut out, obj, &alone, &other, tr!("{seq} の二つ目の要素の {u} を一つ目と同じに、その {fr} を範囲の外に。範囲のほうを言う", "{u} of the second element of {seq} the same as the first's, and its {fr} outside its range: the range is said"));
+                // The second element with the `unique` value of the first, and the third outside its
+                // range: the two the same, which the walk meets first.
+                let xs = apart(s, first, 3);
+                if cap.is_none_or(|cap| cap >= 3) {
+                    let same = with(&xs[1], &u, first_u);
+                    let third = with(&xs[2], &fr, rv);
+                    let alone = with(top, seq, Json::Arr(vec![xs[0].clone(), same.clone(), xs[2].clone()]));
+                    let other = with(top, seq, Json::Arr(vec![xs[0].clone(), xs[1].clone(), third.clone()]));
+                    let obj = with(top, seq, Json::Arr(vec![xs[0].clone(), same, third]));
+                    keep(&mut out, obj, &alone, &other, tr!("{seq} の二つ目の要素の {u} を一つ目と同じに、三つ目の {fr} を範囲の外に。歩きが先に会う重なりのほうを言う", "{u} of the second element of {seq} the same as the first's, and {fr} of the third outside its range: the two the same, which the walk meets first, are said"));
+                }
+            }
+        }
+        // One element past the cap of the sequence, and a combination a constraint rules out: the
+        // constraint, which the door looks at before the cap.
+        if let Some(cap) = cap.filter(|cap| *cap <= 50) {
+            for k in &f.constraints {
+                let Some(broken) = breaking(f, c, k, top) else { continue };
+                let many = Json::Arr(apart(s, first, cap as usize + 1));
+                let obj = with(&broken, seq, many.clone());
+                if keep(&mut out, obj, &broken, &with(top, seq, many), tr!("{seq} の要素を、数え上げの上限より一つ多くし、制約 {} も破る。制約のほうを言う", "{seq} one element past its cap and the constraint {} broken: the constraint is said", k.said())) {
+                    break;
+                }
+            }
+        }
+        // A `define` worked out before the walk past the range the rule accepts for it, and a field
+        // of an element outside its range: the `define`, worked out before the walk reads an element.
+        if let Some((fr, rv)) = field_fault(s, first, true) {
+            for e in edge_inputs(f, c, vectors, false) {
+                if e.0.seq.is_some() {
+                    continue;
+                }
+                let Some(alone) = parsed(&e.1) else { continue };
+                if said(&alone) != Some(crate::door::out_of_range(&e.0.define)) {
+                    continue;
+                }
+                let bad = Json::Arr(vec![with(first, &fr, rv.clone())]);
+                let obj = with(&alone, seq, bad.clone());
+                let why = tr!("定義 {} を、受け付ける範囲の外に、{seq} の要素の {fr} も範囲の外に。歩きの前に求める定義のほうを言う", "the definition {} outside the range it accepts and {fr} of an element of {seq} outside its range: the definition, worked out before the walk, is said", e.0.define);
+                if keep(&mut out, obj, &alone, &with(top, seq, bad), why) {
+                    break;
+                }
+            }
+        }
+        // An element the fold stops at, and after it one with a field outside its range: the
+        // range, which the door looks at past the `stop` on the first walk over the sequence. And two
+        // elements taking under a `take_unique`, and a third outside its range: the two, which the
+        // walk meets first.
+        let Some((fr, rv)) = field_fault(s, first, true) else { continue };
+        let (mut stopped, mut taken) = (false, false);
+        for (i, it) in f.items.iter().enumerate() {
+            let Item::Fold(fold) = it else { continue };
+            if fold.over != *seq {
+                continue;
+            }
+            let arms = |pick: fn(&Arm) -> bool| -> Vec<&str> { fold.arms.iter().filter(|(_, a, _)| pick(a)).map(|(n, _, _)| n.text.as_str()).collect() };
+            // The first vector with an element whose verdict is one of `names`, the sequence it has,
+            // and where that element is in it.
+            let landing = |names: &[&str]| {
+                vectors.iter().find_map(|v| {
+                    let verdicts = eval::fold_verdicts(f, c, v.input.clone().into_iter().collect());
+                    let at = verdicts.get(&i)?.iter().position(|x| x.as_deref().is_some_and(|x| names.contains(&x)))?;
+                    let obj = parsed(v)?;
+                    let xs = obj.get(seq)?.as_arr()?.to_vec();
+                    Some((obj, xs, at))
+                })
+            };
+            let stops = arms(|a| matches!(a, Arm::Stop(_)));
+            if let Some((obj, xs, at)) = (!stopped && !stops.is_empty()).then(|| landing(&stops)).flatten().filter(|(_, _, at)| cap.is_none_or(|cap| cap >= *at as i128 + 2)) {
+                let mut walked = xs[..=at].to_vec();
+                let good = apart(s, &xs[at], 2).pop().unwrap_or_else(|| xs[at].clone());
+                walked.push(with(&good, &fr, rv.clone()));
+                let row = with(&obj, seq, Json::Arr(walked));
+                let want = crate::door::out_of_range(&crate::door::element(seq, at + 1, &fr));
+                if said(&row) == Some(want) {
+                    out.push((row, tr!("{seq} の要素で fold が止まり、その次の要素の {fr} を範囲の外に。止まったあとの要素も入口で確かめる", "the fold stops on an element of {seq}, and {fr} of the element after it outside its range: the door looks at the elements past the stop")));
+                    stopped = true;
+                }
+            }
+            let takes = arms(|a| matches!(a, Arm::Take { unique: true, .. }));
+            if let Some((obj, xs, at)) = (!taken && !takes.is_empty() && cap.is_none_or(|cap| cap >= 3)).then(|| landing(&takes)).flatten() {
+                let ts = apart(s, &xs[at], 3);
+                let bad = with(&ts[2], &fr, rv.clone());
+                let alone = with(&obj, seq, Json::Arr(ts.clone()));
+                let other = with(&obj, seq, Json::Arr(vec![ts[0].clone(), bad.clone()]));
+                let row = with(&obj, seq, Json::Arr(vec![ts[0].clone(), ts[1].clone(), bad]));
+                taken = keep(&mut out, row, &alone, &other, tr!("{seq} の二つの要素が take_unique で当たり、三つ目の {fr} を範囲の外に。歩きが先に会う二件のほうを言う", "two elements of {seq} taking under a take_unique, and {fr} of the third outside its range: the two, which the walk meets first, are said"));
+            }
+        }
+    }
+    // Two sequences: a field of an element of the first outside its range, and a field of an
+    // element of the second of another kind: the kind, read for every sequence before the walks.
+    for s1 in 0..f.elements.len() {
+        for s2 in s1 + 1..f.elements.len() {
+            let (Some((_, first1)), Some((_, first2))) = (&tops[s1], &tops[s2]) else { continue };
+            let (Some((fr, rv)), Some((fk, kv))) = (field_fault(s1, first1, true), field_fault(s2, first2, false)) else { continue };
+            let (q1, q2) = (&f.elements[s1].name.text, &f.elements[s2].name.text);
+            let both = with(&with(base, q1, Json::Arr(vec![first1.clone()])), q2, Json::Arr(vec![first2.clone()]));
+            let alone = with(&both, q2, Json::Arr(vec![with(first2, &fk, kv)]));
+            let other = with(&both, q1, Json::Arr(vec![with(first1, &fr, rv.clone())]));
+            let obj = with(&alone, q1, Json::Arr(vec![with(first1, &fr, rv)]));
+            keep(&mut out, obj, &alone, &other, tr!("{q1} の要素の {fr} を範囲の外に、{q2} の要素の {fk} を別の種類の値に。種類のほうを言う", "{fr} of an element of {q1} outside its range and {fk} of an element of {q2} of another kind: the kind is said"));
+        }
+    }
+    out
+}
+
+/// The input `obj`, whose sequence `s` has a value worked out on each element moved past an end of
+/// the range the rule accepts for it on its first element (`edge_inputs`), with that element put
+/// after a good one (`good`: the first element of the vector the edge was solved from, or of the
+/// first vector that has one) and again after it where the sequence can have three: the door then says the value at index 1, the first of the
+/// two (§15.324). The unique fields of the two are spread apart from the good one's, where the value
+/// is not worked out from them. `obj` as it is when the door says the value at index 0 of it
+/// instead, and `None` when it says neither.
+fn past_on_second(f: &RuleFile, c: &Checked, obj: &Json, s: usize, define: &str, good: Option<&Json>) -> Option<Json> {
+    let seq = &f.elements[s].name.text;
+    let xs = obj.get(seq).and_then(|v| v.as_arr()).unwrap_or_default();
+    let said = |k: usize| crate::door::out_of_range(&crate::door::element(seq, k, define));
+    let says = |o: &Json, k: usize| crate::door::refusal(f, c, o).is_some_and(|r| r.error == said(k));
+    let cap = crate::door::count_cap(f, c, seq);
+    if let (Some(past), Some(good)) = (xs.first(), good) {
+        let uniques: Vec<&crate::ast::VarDecl> = f.elements[s].fields.iter().filter(|fd| fd.unique.is_some()).collect();
+        for n in [3usize, 2] {
+            if cap.is_some_and(|cap| cap < n as i128) {
+                continue;
+            }
+            let mut els = vec![good.clone()];
+            els.extend(std::iter::repeat_n(past.clone(), n - 1));
+            let plain = with(obj, seq, Json::Arr(els.clone()));
+            if says(&plain, 1) {
+                return Some(plain);
+            }
+            // The unique fields set apart, each to values its door takes other than the good one's.
+            let mut apart = true;
+            for fd in &uniques {
+                let ty = c.ty_of(&fd.name.text).unwrap_or(Ty::Unknown);
+                let Some(vs) = spread(c, &fd.name.text, &ty, good.get(&fd.name.text), n) else {
+                    apart = false;
+                    break;
+                };
+                for (x, v) in els.iter_mut().zip(vs).skip(1) {
+                    *x = with(x, &fd.name.text, v);
+                }
+            }
+            let spread_out = with(obj, seq, Json::Arr(els));
+            if apart && says(&spread_out, 1) {
+                return Some(spread_out);
+            }
+        }
+    }
+    says(obj, 0).then(|| obj.clone())
 }
 
 /// `n` values of a field its door takes, each other than the rest, the value it has (`at`) first:
@@ -2569,6 +4918,37 @@ fn spread(c: &Checked, name: &str, ty: &Ty, at: Option<&Json>, n: usize) -> Opti
         _ => {}
     }
     (out.len() == n).then_some(out)
+}
+
+/// A value of `name` the door refuses for its kind, which every way looks at as it reads the
+/// argument, before any range (§15.328): the first of `wrong_values`, a value of another kind.
+fn kind_fault(c: &Checked, name: &str, ty: &Ty, at: Option<&Json>) -> Option<Json> {
+    wrong_values(c, name, ty, at).into_iter().next().map(|(v, _)| v)
+}
+
+/// A value of `name` of its kind, one int64 holds, that the door refuses all the same — past the
+/// range it declares, or a day its koyomi date does not come to — which every way looks at once
+/// every argument has been read (§15.328). `None` for a type with no such value.
+fn range_fault(c: &Checked, name: &str, ty: &Ty, at: Option<&Json>) -> Option<Json> {
+    let max = crate::door::WIRE_MAX;
+    let vs = match ty.present() {
+        Ty::Enum(en) => c.enums.get(en).cloned().unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    wrong_values(c, name, ty, at).into_iter().map(|(v, _)| v).find(|v| match (ty.present(), v) {
+        // −2^63 is a value int64 holds, and outside the range ±(2^63−1) the door holds a number to.
+        (Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number, Json::Int(n)) => (-max - 1..=max).contains(n),
+        // A day the calendar has: the one it does not have is of another kind.
+        (Ty::Date, Json::Str(s)) => s != "2026-02-30",
+        (Ty::Enum(_), Json::Str(s)) => vs.contains(s),
+        _ => false,
+    })
+}
+
+/// A whole number past what int64 holds, for a number: refused as out of range by every way as it
+/// reads it, before the arguments after it (§15.298, §15.328).
+fn past_fault(ty: &Ty) -> Option<Json> {
+    matches!(ty.present(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number).then_some(Json::Int(crate::door::WIRE_MAX + 1))
 }
 
 /// The values of another kind, or outside what the input takes, that its door refuses, each
@@ -2939,7 +5319,7 @@ fn as_rat(v: &Val) -> Option<Rat> {
     }
 }
 
-fn to_val(r: Rat, ty: &Ty) -> Val {
+pub(crate) fn to_val(r: Rat, ty: &Ty) -> Val {
     if matches!(ty, Ty::Date) {
         let (y, m, d) = crate::types::ord_to_date(r);
         Val::Date(y, m, d)
@@ -3089,8 +5469,7 @@ fn satisfy_cell(
     }
     // Number or date: solve for a point inside the cell.
     if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
-        let q = crate::coverage::quantum(c, col, &ty);
-        for (_, inside, _) in crate::coverage::thresholds_pub(cell, &ty, q) {
+        for (_, inside, _) in crate::coverage::pairs_on(c, col, cell, &ty) {
             if let Some(a) = place(f, c, seed, col, inside, frozen) {
                 return Some(a);
             }
@@ -3175,6 +5554,14 @@ fn row_holds(f: &RuleFile, c: &Checked, t: &Table, row: &Row, a: &BTreeMap<Strin
 /// leaves unset says nothing about this one — and no row's cells holding of them. The generated
 /// code stops on such an input, so it is what E101 can hand over. `None` for any other input.
 pub fn no_row_takes(f: &RuleFile, c: &Checked, t: &Table, a: &BTreeMap<String, Val>) -> Option<BTreeMap<String, Val>> {
+    let cols = columns_at(f, c, t, a)?;
+    t.rows.iter().all(|row| !row_holds_in(c, t, row, &cols)).then_some(cols)
+}
+
+/// The values the reference evaluator gives the columns of `t` for an input a caller can send:
+/// every input on its step and inside its range, the `constraint`s and koyomi's days kept, and
+/// every column the table reads given a value (§15.322). `None` for any other input.
+pub(crate) fn columns_at(f: &RuleFile, c: &Checked, t: &Table, a: &BTreeMap<String, Val>) -> Option<BTreeMap<String, Val>> {
     let sendable = f.inputs.iter().all(|i| {
         let Some(ty) = c.ty_of(&i.name.text) else { return false };
         match a.get(&i.name.text) {
@@ -3190,8 +5577,12 @@ pub fn no_row_takes(f: &RuleFile, c: &Checked, t: &Table, a: &BTreeMap<String, V
         return None;
     }
     let binds = bind(f, c, a);
-    let none = t.inputs.iter().all(|(col, _)| binds.contains_key(col)) && t.rows.iter().all(|row| !row_holds_in(c, t, row, &binds));
-    none.then(|| t.inputs.iter().filter_map(|(col, _)| Some((col.clone(), binds.get(col)?.clone()))).collect())
+    t.inputs.iter().map(|(col, _)| Some((col.clone(), binds.get(col)?.clone()))).collect()
+}
+
+/// Whether the cells of `row` hold of the values of the table's columns.
+pub(crate) fn row_holds_at(c: &Checked, t: &Table, row: &Row, cols: &BTreeMap<String, Val>) -> bool {
+    row_holds_in(c, t, row, cols)
 }
 
 fn row_holds_in(c: &Checked, t: &Table, row: &Row, binds: &BTreeMap<String, Val>) -> bool {
@@ -3287,8 +5678,7 @@ fn violate_cell(
 ) -> Option<BTreeMap<String, Val>> {
     let ty = c.ty_of(col)?;
     if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
-        let q = crate::coverage::quantum(c, col, &ty);
-        for (_, _, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
+        for (_, _, outside) in crate::coverage::pairs_on(c, col, cell, &ty) {
             if let Some(a) = place(f, c, seed, col, outside, &BTreeSet::new()) {
                 if !eval::cell_matches(c, cell, &to_val(outside, &ty), &ty) && keep(&a) {
                     return Some(a);

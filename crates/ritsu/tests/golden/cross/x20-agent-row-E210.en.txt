@@ -1,0 +1,10 @@
+precheck.flow: ok
+ok purchase.ringi: a request, 3 fields, 2 stages
+  may never end: the stages `decide` and `check` have no deadline (`due in …`), and wait until they are answered
+error[ritsu E210]: purchase.ringi:17: `purchase` can give the flow `precheck` 30_000JPY as its input `amount`, which takes money[JPY] >=1JPY <=10_000JPY
+    17 |   small   = agent precheck, else finance
+  = `amount` is money[JPY] >=1JPY <=30_000JPY on the row of the route on line 12.
+  = The flow takes 10_000JPY or less.
+  = At a stage of the way `small`, ringi gives the flow the ticket's ID (`request_id`) and the fields of the form the flow declares as its inputs.
+  = Hold the value to what the flow takes, or widen the input `amount` of "precheck.flow" (line 12).
+ritsu check: 2 files (dandori 1, ringi 1): 1 fail (1 error); borders between the languages: 4 checked, 0 undecided

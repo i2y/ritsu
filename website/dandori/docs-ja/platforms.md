@@ -19,6 +19,10 @@ $ dandori gen <file.flow> --target asl|temporal-typescript|temporal-python|tempo
 - `worker.ts`：`makeWorker(own)`
 - `client.ts`：クライアント
 
+### 規則
+
+`rulec gen <rule> --target typescript --out <パッケージのディレクトリ>/rulec` が、`rules.ts` の読むモジュールを書き出します。`enums` ファイルから列挙を読む規則のモジュールは、rulec が横に書くそのファイルのモジュールを、Node が TypeScript を走らせる形に合わせて `.ts` の名前で読みます。tsc でビルドするときは、`rules.ts` の先頭に書いてあるとおり `rewriteRelativeImportExtensions` を使ってください。
+
 ### バージョン
 
 ワークフローの型とタスクキューの名前には、`.flow` のバージョンが入ります（`hotel_stay_v1`）。そのため、新しいバージョンを古いバージョンと並べて動かせます。`makeWorker(own, { deployment })` を使えば、Worker Deployment Versioning も使えます。ビルド ID はコードのハッシュで、実行は始まったときのビルドに固定されます。Worker Deployment Versioning を使わずに同じバージョンのコードを変えるときは、走っている実行の履歴（`client.ts` の `histories` で取り出せます）を `worker.ts` の `replay` にかけ、再生できることを先に確かめてください。
@@ -63,6 +67,8 @@ dandori の版を上げて生成し直したときは、ワーカーを先に入
 
 `--target temporal-python` は、同じものを Temporal の Python SDK 向けに、ワークフローの名前を付けたパッケージとして書き出します。中身は `workflow.py`（ワークフローと、ワーカーに渡す `workflows`）、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`（rulec の Python を包んだもの）、`runtime.py`、`worker.py`（`make_worker`）、`client.py`（`start`、`answer`、`send`、`send_once`、`status`。サービスを実装するワークフローなら、メソッドごとの関数も入り、名前はスネークケースの `answer_packing` のようになります）です。ワークフローの型、アクティビティ、コールバックの Update とシグナル、クエリ、ID の名前を TypeScript 版とそろえてあるので、ワークフローとアクティビティを別々の言語のワーカーで動かせます。
 
+`rules.py` の読むモジュールは、`rules.py` の先頭に書いてあるとおり `rulec gen <rule> --target python --python-package --out <パッケージのディレクトリ>/rulec` が書き出します。`--python-package` を付けると、`enums` ファイルから列挙を読む規則のモジュールが、そのファイルのモジュールをパッケージの中で読めます。
+
 ## Temporal（Go）
 
 `--target temporal-go` は、同じものを Temporal の Go SDK 向けに、ワークフローの名前を付けた Go のパッケージ一つとして書き出します。`go.mod` は付けないので、自分のモジュールの中に置き、`doc.go` に書いてあるモジュールを `go get` してください。Go の import パスには ASCII の文字しか使えないので、ワークフローの名前が ASCII でないときは `.flow` のファイル名から名前を付けます（`hotel.ja.flow` なら `hotel_ja`）。それも使えなければ `workflow` にします。
@@ -82,9 +88,11 @@ dandori の版を上げて生成し直したときは、ワーカーを先に入
 
 ワークフローは、値を JSON の値（`map[string]any`、`[]any`、`float64`、`string`、`bool`、`nil`）のまま運びます。Python 版と同じです。構造体に読むと、フィールドが無いことと null であることの区別がなくなり、構造体の知らないフィールドは落ち、形の違う結果は読む段階で失敗してしまいます。そうした結果はワークフローが自分で見て拒否しなければならないので、構造体には読みません。`types.go` には、レコードごとの構造体と、列挙ごとの文字列の型もあります。`Decode` を使えば、タスクの引数をそれらに読めます。自分で書くタスクは、引数を `map[string]any` で受け取り、SDK が JSON に書ける値なら何でも返せます。
 
+`Start` は、TypeScript 版と Python 版の `start` と同じく、入力を型（`WorkflowInput`）で受け取ります。入力の無いワークフローには `WorkflowInput{}` を渡します。JSON の値から始めるときは、`IsWorkflowInput` で確かめてから `Decode` で読んでください。ワークフローは、受け取った値を前と同じく自分で確かめます。
+
 ### 規則
 
-`rulec gen <rule> --target go --out <パッケージのディレクトリ>/rulec` は、規則ごとの Go を、それぞれ独立したモジュール（`rulec/go/holdamount`）として書き出します。`rules.go` の先頭に書いてあるとおり、自分の `go.mod` でそのモジュールを require し、replace でそのディレクトリを指してください。
+`rulec gen <rule> --target go --out <パッケージのディレクトリ>/rulec` は、規則ごとの Go を、それぞれ独立したモジュール（`rulec/go/holdamount`）として書き出します。`rules.go` の先頭に書いてあるとおり、自分の `go.mod` でそのモジュールを require し、replace でそのディレクトリを指してください。規則が列挙を読む `enums` ファイルのパッケージも、rulec が規則のパッケージの横に書くので、同じく require と replace をしてください。Go が読む `replace` は、自分のモジュールのものだけです。
 
 ### 既定の Transport
 
@@ -96,7 +104,7 @@ HTTP には `net/http`、Lambda と AWS の API には AWS SDK for Go v2、OpenA
 
 ## AWS Step Functions
 
-`--target asl` は、JSONata を使う ASL のステートマシンを書き出します。Lambda 関数として呼ぶ規則ごとに、rulec が生成する Python を包んだ Lambda のハンドラーも書き出します。`connect` を書いた規則は、HTTP Task で規則のサービスを呼びます。`connection` と、HTTPS の URL が要り、Lambda 関数は書きません。タスクは Lambda 関数、EventBridge の接続を通した HTTP の API、SDK の統合を通した AWS のサービスを呼び、コールバックにはタスクトークンを渡します。ステートマシンには自分で書くコードを置けないので、そのどれにも当たらないタスクはエラーにします（E050）。Temporal でしか意味を持たない機能（`on cancel`、`event`、実装するサービスの、実行がいまどこにいるかを聞くメソッド）も同じくエラーにします。
+`--target asl` は、JSONata を使う ASL のステートマシンを書き出します。Lambda 関数として呼ぶ規則ごとに、rulec が生成する Python を包んだ Lambda のハンドラーも書き出します。ハンドラーの先頭に書いてあるとおり、規則のモジュールと、規則が読む `enums` ファイルのモジュールと一緒にデプロイしてください。`connect` を書いた規則は、HTTP Task で規則のサービスを呼びます。`connection` と、HTTPS の URL が要り、Lambda 関数は書きません。タスクは Lambda 関数、EventBridge の接続を通した HTTP の API、SDK の統合を通した AWS のサービスを呼び、コールバックにはタスクトークンを渡します。ステートマシンには自分で書くコードを置けないので、そのどれにも当たらないタスクはエラーにします（E050）。Temporal でしか意味を持たない機能（`on cancel`、`event`、実装するサービスの、実行がいまどこにいるかを聞くメソッド）も同じくエラーにします。
 
 規則と日付の Task には、Lambda で呼ぶものにも HTTP で呼ぶものにも `TimeoutSeconds` 10 を付けます。タイムアウトしたとき（`States.Timeout`）も失敗したときも、`Retry` が 1 秒と 2 秒をおいて 2 回までリトライします。`timeout until` を書いたコールバックの `.waitForTaskToken` の Task には、渡された時刻とステートに入った時刻から JSONata で計算した `TimeoutSeconds` を付けます。1 秒より短くはしません。Task の時計はトークンを渡す前から動くので、渡すのにかかった時間もこの中に入ります。コールバックの `timeout` も同じで、ほかのプラットフォームが ID を渡す部分に付ける 60 秒の上限は、Task には別にありません。
 
@@ -119,7 +127,7 @@ HTTP には `net/http`、Lambda と AWS の API には AWS SDK for Go v2、OpenA
 
 ## pydantic-graph
 
-`--target pydantic-graph` は、`graph.py`（`graph` と、その `State` と `Deps`）、`types.py`、`tasks.py`（`make_tasks(own, transport)`）、`io.py`、`rules.py`、`runtime.py` を持つパッケージを書き出します。文の一つ一つがノードで、各ノードの戻り値の型に次のノードが書いてあるので、`graph.render()` でフローの図を描けます。実行の状態は、それを動かすプロセスの中にしかありません。待つときは `Deps.clock` で眠り、コールバックへの応答は `Deps.callbacks` に届きます。pydantic-graph 2.x は実行の状態をどこにも残さないので、プロセスが落ちればその実行も失われます。試作や、エージェントの中の短いフローに向いています。
+`--target pydantic-graph` は、`graph.py`（`graph` と、その `State` と `Deps`）、`types.py`、`tasks.py`（`make_tasks(own, transport)`）、`io.py`、`rules.py`（読むモジュールは、Temporal の Python と同じく `rulec gen --python-package` が書きます）、`runtime.py` を持つパッケージを書き出します。文の一つ一つがノードで、各ノードの戻り値の型に次のノードが書いてあるので、`graph.render()` でフローの図を描けます。実行の状態は、それを動かすプロセスの中にしかありません。待つときは `Deps.clock` で眠り、コールバックへの応答は `Deps.callbacks` に届きます。pydantic-graph 2.x は実行の状態をどこにも残さないので、プロセスが落ちればその実行も失われます。試作や、エージェントの中の短いフローに向いています。
 
 `connect` を書いた規則は、サービスへの一回ごとに 10 秒の上限があります。プロセスの中で rulec や koyomi の Python が計算する規則と日付には、上限を付けません。入出力の無い計算で必ず終わり、asyncio では途中で止められないからです。コールバックの ID を渡す呼び出しには、60 秒の上限があります。`timeout until` を書いたコールバックは、`Deps.clock` の時刻から渡された時刻までの秒数（1 秒より短くはしません）だけ待ちます。
 
@@ -148,6 +156,8 @@ $ dandori scenarios <file.flow> [--out <dir>]
 $ dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph]
 ```
 
-`scenarios` は、入力と、各呼び出しが受け取る結果を並べたシナリオを書き出します。全部を合わせると、すべての分岐と、エラーを処理するすべての箇所を通り、案件の状態の変わり方もすべて試します。リストには、空のもの、短いもの、ループの上限より長いものを入れます。`run` は、シナリオを一つ参照インタプリタで動かし、呼び出しをターゲットが出す形で出力します。ビルドしたコードをこれとどう突き合わせているかは、[どうやって確かめているか](assurance.md)を見てください。
+`scenarios` は、入力と、各呼び出しが受け取る結果を並べたシナリオを書き出します。全部を合わせると、すべての分岐と、エラーを処理するすべての箇所を通り、案件の状態の変わり方もすべて試します。リストには、空のもの、短いもの、ループの上限より長いものを入れます。`run` は、シナリオを一つ参照インタプリタで動かし、呼び出しをターゲットが出す形で出力します。使わなかった結果はシナリオの誤りで、実行のあとにそれを言い、1 で終わります。ビルドしたコードをこれとどう突き合わせているかは、[どうやって確かめているか](assurance.md)を見てください。
 
-`ritsu dandori scenarios` として rulec と一緒に走らせると、フローの手元の規則（Connect のサービスとして呼ぶものでないもの）の呼び出しは、答えを選ぶ場所になりません。`ritsu run` と同じく、呼び出しが渡す値から rulec が計算し、シナリオには `"rules": "rulec"` と書いて、その答えは書きません。規則の答えを変えたいときは、規則の入力の出どころになるタスクの答えを変えます。`ritsu dandori run` も同じように計算するので、そういうシナリオを `ritsu run` と同じに流します。前に書いた、規則の呼び出しの答えを自分で持つシナリオは、`ritsu run` が最初の規則の呼び出しで、そう言って止まります。`ritsu dandori run` では、そのまま流せます。
+`ritsu dandori scenarios` としてほかの言語と一緒に走らせると、規則の呼び出し（Connect のサービスとして呼ぶものも）、日付の呼び出し、帳簿の操作は、結果を選ぶ場所になりません。`ritsu run` と同じく、呼び出しが渡す値から rulec・koyomi・chobo が計算します（Connect のサービスとして呼ぶ規則の答えは、サービスが書く形にしてから、生成したコードと同じに読み直します）。シナリオには `"rules": "rulec"`、`"dates": "koyomi"`、`books`（帳簿ごとに、走らせる前にした操作。何もしなければ空の並び）を書いて、それらの結果は書きません。結果を変えたいときは、値の出どころを変えます。それより前のタスクの結果、走り始める時刻、走らせる前に帳簿にしたこと（勘定に入れておく振替、同じ操作、同じ鍵の別の操作、仮押さえの確定・取り消し・期限切れ、入れたものを引き出す振替）です。規則の答えを `match` が読むなら、呼び出しが渡す数と日を、rulec が規則から作るベクタの入力に合わせ、規則がそこで返す答えのそれぞれの腕に、実行が届くようにします。シナリオは、書く前に `ritsu run` と同じに流して確かめるので、どれも `ritsu run` でそのまま流れます。どのシナリオも通らない分岐とハンドラは、シナリオのあとに標準エラーで言い、規則がその値にならないと rulec が言えば、その理由も言います。`ritsu dandori run` も同じように計算するので、そういうシナリオを `ritsu run` と同じに流します。前の版の `ritsu dandori scenarios` が書いた、規則・日付・帳簿の結果を自分で持つシナリオは、`ritsu run` がその最初の呼び出しで、そう言って止まります。`ritsu dandori run` では、そのまま流せます。
+
+`dandori run` と `ritsu run` は、`now` を、それを読む文が走るときの実行の時計で読みます。時計はシナリオの `now` に始まり、待ち（`wait until` ならその時刻まで）、リトライの前の待ち、タイムアウトのぶんだけ進みます。6 日待ったあとで `now` から数えた期限は、待ったあとの日から数えます。シナリオの `now` を時刻の並びにすると、走り始めのあとで `now` を読む文が並びの次の時刻を順に読み、時計もそこまで進みます。プラットフォームとの突き合わせは、進まない時計で行います。各ランナーはプラットフォームの時計をシナリオの時刻にして待ちを縮め、参照インタプリタも同じ時計でシナリオを流します。

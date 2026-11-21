@@ -21,7 +21,7 @@ pub const GO_PACKAGE: &str = "kanametest/pkg";
 
 /// The test modules of `tests/modules/`, checked as the file `t.kn` beside the crate (where they read
 /// the examples' rules by their paths), and the ones only these tests run.
-pub const MODULES: [(&str, &str); 34] = [
+pub const MODULES: [(&str, &str); 50] = [
     ("calc", include_str!("../modules/calc.kn")),
     ("places", include_str!("../modules/places.kn")),
     ("lists", include_str!("../modules/lists.kn")),
@@ -56,6 +56,49 @@ pub const MODULES: [(&str, &str); 34] = [
     ("hof.ja", include_str!("../modules/hof.ja.kn")),
     ("trees", include_str!("../modules/trees.kn")),
     ("trees.ja", include_str!("../modules/trees.ja.kn")),
+    ("shared_enum", include_str!("../modules/shared_enum.kn")),
+    ("shared_enum.ja", include_str!("../modules/shared_enum.ja.kn")),
+    ("one_arm", include_str!("../modules/one_arm.kn")),
+    ("one_arm.ja", include_str!("../modules/one_arm.ja.kn")),
+    ("absent", include_str!("../modules/absent.kn")),
+    ("absent.ja", include_str!("../modules/absent.ja.kn")),
+    ("nests", include_str!("../modules/nests.kn")),
+    ("wide", include_str!("../modules/wide.kn")),
+    ("clash", include_str!("../modules/clash.kn")),
+    ("words", include_str!("../modules/words.kn")),
+    ("variants", include_str!("../modules/variants.kn")),
+    ("walked", include_str!("../modules/walked.kn")),
+    ("walked.ja", include_str!("../modules/walked.ja.kn")),
+    ("in_place", include_str!("../modules/in_place.kn")),
+    ("kinds", include_str!("../modules/kinds.kn")),
+    ("answers", include_str!("../modules/answers.kn")),
+];
+
+/// Inputs the tests write themselves, which the reference interpreter and every target run alike
+/// (DESIGN 4.4): a parcel a host gives, of the list the rule `parcel_batch` walks, at the ends of the
+/// range the rule holds its weight to (1g and 30000g), a step past them (0g and 30001g) and well past
+/// (40000g); a list of parcels whose second is past; the same of the rule's Japanese version, whose
+/// columns are named in Japanese; and a line of an order (`kinds`) whose fields that may be missing
+/// are left out, and a list of lines whose second has a quantity past its range. (A field of an
+/// element a step past its range, or on a day of no calendar, is among the cases outside what the
+/// parameters declare.)
+pub const GIVEN: [(&str, &str, &str); 12] = [
+    ("walked", "weight_of", r#"{"p": {"weight": 0, "fragile": false}}"#),
+    ("walked", "weight_of", r#"{"p": {"weight": 1, "fragile": false}}"#),
+    ("walked", "weight_of", r#"{"p": {"weight": 30000, "fragile": false}}"#),
+    ("walked", "weight_of", r#"{"p": {"weight": 30001, "fragile": false}}"#),
+    ("walked", "weight_of", r#"{"p": {"weight": 40000, "fragile": false}}"#),
+    ("walked", "fragile", r#"{"ps": [{"weight": 1, "fragile": true}, {"weight": 40000, "fragile": true}]}"#),
+    ("walked_ja", "weight_of", r#"{"小包": {"重さ": 0, "割れ物": false}}"#),
+    ("walked_ja", "weight_of", r#"{"小包": {"重さ": 30000, "割れ物": false}}"#),
+    ("walked_ja", "weight_of", r#"{"小包": {"重さ": 40000, "割れ物": false}}"#),
+    ("walked_ja", "fragile", r#"{"小包の並び": [{"重さ": 1, "割れ物": true}, {"重さ": 40000, "割れ物": true}]}"#),
+    ("kinds", "line", r#"{"l": {"label": "a", "size": "large", "qty": 1, "price": 0, "off": 0, "on": "2026-01-01", "gift": false}}"#),
+    (
+        "kinds",
+        "order_of",
+        r#"{"ls": [{"label": "a", "size": "small", "qty": 9, "price": 0, "off": 0, "on": "2026-01-01", "gift": false}, {"label": "b", "size": "small", "qty": 10, "price": 0, "off": 0, "on": "2026-01-01", "gift": false}]}"#,
+    ),
 ];
 
 /// Every module the tests generate: the examples, and the test modules, with the path the head
@@ -258,6 +301,8 @@ pub struct Counts {
     pub vectors_not: usize,
     /// The inputs outside what the parameters declare.
     pub outside: usize,
+    /// The inputs the tests write themselves ([`GIVEN`]).
+    pub given: usize,
     /// The values of types that hold themselves nested 200 and 201 deep run, and those that do not
     /// stop (DESIGN 28.1).
     pub nested: usize,
@@ -267,10 +312,10 @@ pub struct Counts {
 impl Counts {
     /// The line a test of a target prints of its cases, `agree` of them agreeing with the reference.
     pub fn line(&self, lang: Lang, agree: usize, modules: usize) -> String {
-        let run = self.vectors + self.outside + self.nested;
+        let run = self.vectors + self.outside + self.given + self.nested;
         format!(
-            "{lang:?}: {agree} of {run} cases agree with the reference: {} vectors ({} that do not stop are not run), {} inputs outside what the parameters declare and {} values of types that hold themselves nested 200 and 201 deep ({} that do not stop are not run), in {modules} modules",
-            self.vectors, self.vectors_not, self.outside, self.nested, self.nested_not
+            "{lang:?}: {agree} of {run} cases agree with the reference: {} vectors ({} that do not stop are not run), {} inputs outside what the parameters declare, {} inputs the tests write and {} values of types that hold themselves nested 200 and 201 deep ({} that do not stop are not run), in {modules} modules",
+            self.vectors, self.vectors_not, self.outside, self.given, self.nested, self.nested_not
         )
     }
 }
@@ -290,11 +335,14 @@ pub fn cases(modules: &[(Rc<Checked>, String)], lang: Lang, t: Target) -> (Vec<C
     let outside = kaname::r#gen::harness::of_target(&kaname::r#gen::harness::outside_cases(&checked, &suite, lang), t);
     let n = outside.len();
     cases.extend(outside);
+    let given = kaname::r#gen::harness::of_target(&kaname::r#gen::harness::given_cases(&checked, &suite, lang, &GIVEN), t);
+    let g = given.len();
+    cases.extend(given);
     let nested = kaname::r#gen::harness::of_target(&kaname::r#gen::harness::nested_cases(&checked, &suite, lang), t);
     let nested_not = nested.iter().filter(|c| c.expected.is_none()).count();
     let nested_run = nested.len() - nested_not;
     cases.extend(nested);
-    (cases, Counts { vectors, vectors_not: diverged, outside: n, nested: nested_run, nested_not })
+    (cases, Counts { vectors, vectors_not: diverged, outside: n, given: g, nested: nested_run, nested_not })
 }
 
 /// The cases as the harness reads them: those the interpreter answers.

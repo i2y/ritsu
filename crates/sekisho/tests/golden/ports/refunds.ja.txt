@@ -186,6 +186,7 @@ facts
     guards openapi "api/orders.json" operation getOrder (line 54)
   action 返金する (refund_order) line 58: principals ["User", "Workflow"], resources ["Order"], nobody None
     guards openapi "api/orders.json" operation refundOrder (line 60)
+    input 金額 (amount) line 64: money[GBP, incl_tax] (money[GBP, incl_tax]) Some(1)..Some(10000)
   action 返金を書き出す (export_refunds) line 70: principals ["User"], resources ["RefundRecord"], nobody None
     guards openapi "api/orders.json" operation exportRefunds (line 72)
   workflow 返品 (returns) line 39: dandori "flows/returns.flow"

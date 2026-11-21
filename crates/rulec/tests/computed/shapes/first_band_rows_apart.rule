@@ -1,0 +1,27 @@
+rule first_band_rows_apart v1
+description "Two rows that meet only where goods under 100 yen would be medium, which never happens, because the first row of the table above takes goods under 100 yen first: goods under 100 yen are small, goods from 100 yen medium, and anything else medium"
+
+enum choice = one | two
+enum order_kind = goods | service
+enum size = small | medium
+
+inputs
+  amount : money[JPY]  range >=1JPY <=200JPY
+  kind   : order_kind
+
+outputs
+  x : choice
+
+table band_of
+policy first
+| amount   | kind  | -> band : size |
+| <100JPY  | goods | small          |
+| >=100JPY | goods | medium         |
+| -        | -     | medium         |
+
+table pick
+| amount   | kind    | band   | -> x |
+| <100JPY  | goods   | small  | one  |
+| -        | goods   | medium | two  |
+| >=100JPY | service | medium | one  |
+| <100JPY  | -       | medium | two  |

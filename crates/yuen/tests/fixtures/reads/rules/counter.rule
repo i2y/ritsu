@@ -1,0 +1,13 @@
+rule refund_counter v1
+description "Whether the desk has counted the items of a parcel sent back: written for the tests of yuen affected. The code of the desk takes the items of a refund's band from here"
+
+inputs
+  items : number  range >=1 <=60
+
+outputs
+  counted : bool
+
+table counted
+policy unique
+| items | -> counted : bool |
+| -     | true              |

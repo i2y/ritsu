@@ -1,0 +1,12 @@
+差分: tests/fixtures/reads/changes/size.ja.diff
+要件が指すファイルが読むファイルで、差分が触るもの:
+  tests/fixtures/reads/rules/size.ja.rule
+    rulec "rules/refund_band.ja.rule" の 12 行目（apply）: 満たす要件 返金の区分
+    sekisho "gates/refunds.ja.gate" の 5 行目（use rule） -> rulec "rules/refund_band.ja.rule" の 12 行目（apply）: 満たす要件 返金できる人
+    sakai "contexts/desk.ja.ctx" の 9 行目（published language） -> rulec "rules/refund_band.ja.rule" の 12 行目（apply）: 満たす要件 返金の言葉
+どの要件にも届かない変更: なし
+触る要件:
+  返金の区分（tests/fixtures/reads/refunds.ja.req:6）持ち主 経理。2026-11-02 に 経理 が「この試験のために書いた」と決めました
+  返金できる人（tests/fixtures/reads/refunds.ja.req:15）持ち主 経理。2026-11-02 に 経理 が「この試験のために書いた」と決めました
+  返金の言葉（tests/fixtures/reads/refunds.ja.req:51）持ち主 経理。2026-11-02 に 経理 が「この試験のために書いた」と決めました
+触る要件は 3 件です。経理 に見てもらってください

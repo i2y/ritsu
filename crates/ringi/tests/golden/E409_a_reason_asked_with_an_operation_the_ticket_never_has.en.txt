@@ -1,0 +1,3 @@
+error[E409]: tests/mutants/E409_a_reason_asked_with_an_operation_the_ticket_never_has.ringi:14:33: `comment required for` asks a reason with `send back`, which this ticket never has: there is no `send back` line
+    14 |   comment required  for reject, send back
+  = Take the operation out of the line, or write the line that allows it.

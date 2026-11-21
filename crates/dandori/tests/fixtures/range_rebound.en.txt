@@ -1,0 +1,17 @@
+error[E014]: tests/fixtures/range_rebound.flow:45:1: `n` can be outside `>=1 <=10`, the range of the parameter `n` of `pack`: it is `>=1 <=100`
+    45 |       pack(n: n)
+error[E014]: tests/fixtures/range_rebound.flow:47:1: `n` can be outside `>=1 <=10`, the range of the parameter `n` of `pack`: it is `>=1 <=100`
+    47 |   pack(n: n)
+warning[W104]: tests/fixtures/range_rebound.flow:53:1: nothing says what range `m` is in (the input `open` has no range), and the parameter `n` of `pack` takes `>=1 <=10`
+    53 |       pack(n: m)
+error[E014]: tests/fixtures/range_rebound.flow:69:1: `d` can be outside `>=2026-01-01 <=2026-06-30`, the range of the parameter `day` of `ship`: it is `>=2026-07-01 <=2026-12-31`
+    69 |       ship(day: d)
+error[E014]: tests/fixtures/range_rebound.flow:76:1: `s` can be outside `>=basic <=silver`, the range of the parameter `of` of `label`: it can be `gold` or `platinum`
+    76 |       label(of: s)
+  = Write `range >=basic <=silver` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+warning[W104]: tests/fixtures/range_rebound.flow:81:1: nothing says what range `c` is in (the answer of `count` has no range), and the parameter `n` of `pack` takes `>=1 <=10`
+    81 |   pack(n: c)
+warning[W104]: tests/fixtures/range_rebound.flow:85:1: nothing says what range `t` is in (the input `others` has no range), and the parameter `n` of `pack` takes `>=1 <=10`
+    85 |     pack(n: t)
+warning[W104]: tests/fixtures/range_rebound.flow:87:1: nothing says what range `t` is in (the input `others` has no range), and the parameter `n` of `pack` takes `>=1 <=10`
+    87 |   pack(n: t)

@@ -1,5 +1,5 @@
 workflow proto_types v1
-description "Types made from a .proto: every kind of field of types.Everything, the ranges and `required` of Protovalidate, and what is said of a name the .proto does not have, of a type that shares its name in the generated code, and of a case whose state is not the machine's"
+description "Types made from a .proto: every kind of field of types.Everything, the ranges and `required` of Protovalidate, and what is said of a name the .proto does not have and of a case whose state is not the machine's"
 
 use rule order_state from "../../examples/order/rules/order_state.rule"
 use rule urgency from "../../examples/order/rules/urgency.rule"
@@ -18,10 +18,6 @@ record Holder
   mode       : types.Mode
   money      : shop.common.v1.Money?
   nested     : types.Everything.Nested?
-
-# a type of the flow's that is the generated name of a made one
-record types_Line
-  sku : string
 
 record Misspelled
   stock : types.Stok

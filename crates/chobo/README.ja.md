@@ -60,7 +60,7 @@ examples/refunds/refunds.ja.book: ok
   ヒント: 店の売上(店) へ入れる移動を先に書いてください
 ```
 
-診断のコードは全部で 34 種類あり、[docs/codes.ja.md](docs/codes.ja.md) に `chobo explain --all` の出力をそのまま置いてあります。
+診断のコードは全部で 34 種類あり、[docs/codes.ja.md](docs/codes.ja.md) に `chobo explain --all` の出力をそのまま置いてあります。`chobo explain` はコードをいくつでも取り、渡した順に説明します。二つ以上のときは、`--all` と同じ形で、渡したコードだけを書きます。
 
 ## 二つの返金が同時に来る
 
@@ -126,7 +126,7 @@ $ chobo gen examples/refunds/refunds.ja.book --target sql --target typescript --
 
 ## インストール
 
-chobo は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリから、最近の stable の Rust でビルドします。九つの言語を全部入れ、複数の言語のファイルがあるプロジェクトを `ritsu check` で確かめるなら、次のとおりです。
+chobo は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリから、最近の stable の Rust でビルドします。十の言語を全部入れ、複数の言語のファイルがあるプロジェクトを `ritsu check` で確かめるなら、次のとおりです。
 
 ```console
 $ cargo install --git https://github.com/i2y/ritsu --locked ritsu
@@ -149,7 +149,7 @@ chobo scenarios <file.book> [--out <dir>]
 chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]
 chobo doc <file.book> [--format html] [--out <dir>]
 chobo api <file.book>
-chobo explain <code> | --all [--format markdown]
+chobo explain <code>... | --all [--format markdown|json]
 ```
 
 `--lang ja` を付けると、メッセージが日本語になります。`--diff-base <rev>` は、git のそのリビジョンの帳簿と比べ、データベースにすでにある残高や仮押さえと合わなくなる変更をエラーにします。`chobo api` は、帳簿の呼び方、操作ごとの拒否されうる理由、仮押さえのライフサイクルをステートマシンとして、ほかのツール向けの JSON で出します（[docs/formats.md](docs/formats.md)、英語）。

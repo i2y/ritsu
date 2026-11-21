@@ -193,14 +193,8 @@ pub fn gen_with(root: &Path, map: &str, targets: &[Target], suite: &crate::suite
                 }
             }
         } else {
-            ritsu_base::fs::create_dir_all(&dir).map_err(|e| {
-                let (d, e) = (dir.display().to_string(), e.to_string());
-                tr!("{d} を作れません: {e}", "cannot create {d}: {e}")
-            })?;
-            ritsu_base::fs::write(&file, &text).map_err(|e| {
-                let (f, e) = (file.display().to_string(), e.to_string());
-                tr!("{f} に書けません: {e}", "cannot write {f}: {e}")
-            })?;
+            ritsu_base::fs::create_dir_all(&dir).map_err(|e| ritsu_base::cli::cannot_create(&dir.display().to_string(), &e))?;
+            ritsu_base::fs::write(&file, &text).map_err(|e| ritsu_base::cli::cannot_write(&file.display().to_string(), &e))?;
             done.push((file, tr!("書きました（{}）", "written ({})", entries.ja; entries.en)));
         }
     }

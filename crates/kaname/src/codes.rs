@@ -127,55 +127,70 @@ pub fn ledger() -> Ledger {
             "E006",
             tr!("同じ名前が二度あります", "The same name is given twice"),
             tr!(
-                "モジュールの中で、`use` の名前と宣言（`enum`、`record`、`fn`）の名前か別名が重なるとき。一つのレコードのフィールド、一つの関数の引数、一つの列挙の値が重なるときも出ます。関数か `use` に、関数の形で呼ぶ組み込みの関数の名前（`sum`、`map`、`numbers`、`char`、`ok`、`err` など）を付けたとき（`get`、`sort_by`、`trim` のように、値のあとに書いて呼ぶ組み込みの関数の名前は付けられます）、`let` や `some` の名前がその場でもう名前になっているときも出ます。フィールドを持つ値のある列挙では、生成するコードが値ごとの型に列挙と値の名前をつなげた名前を付けます（`Order.placed` は `OrderPlaced`）。その名前がレコードや列挙、ほかの値の型の名前と重なるときも出ます。型の引数は、宣言のほかの型の引数とも、モジュールのレコードと列挙の名前とも重なれません。",
-                "In a module, two of the `use` names and the declarations (`enum`, `record`, `fn`) share a name or an alias; or two fields of a record, two parameters of a function or two values of an enum do. So does a function or a `use` given the name of a builtin called as a function (`sum`, `map`, `numbers`, `char`, `ok`, `err`; the name of one written after a value, such as `get`, `sort_by` or `trim`, is free to take), and a `let` or a `some` whose name is taken where it stands; and, for an enum whose values have fields, the name the generated code gives the type of a value, the enum's and the value's joined (`Order.placed` is `OrderPlaced`), where it is the name of a record, an enum or another value's type. A type parameter shares its name with no other of its declaration, and with no record or enum of the module."
+                "モジュールの中で、`use` の名前と宣言（`enum`、`record`、`fn`）の名前か別名が重なるとき。一つのレコードのフィールド、一つの関数の引数、一つの列挙の値が重なるときも出ます。関数か `use` に、関数の形で呼ぶ組み込みの関数の名前（`sum`、`map`、`numbers`、`char`、`ok`、`err` など）を付けたとき（`get`、`sort_by`、`trim` のように、値のあとに書いて呼ぶ組み込みの関数の名前は付けられます）、`let` や `some` の名前がその場でもう名前になっているときも出ます。フィールドを持つ値のある列挙では、生成するコードが値ごとの型に列挙と値の名前をつなげた名前を付けます（`Order.placed` は `OrderPlaced`）。その名前がレコードや列挙、ほかの値の型の名前と重なるときも出ます。型の引数は、宣言のほかの型の引数とも、モジュールのレコードと列挙の名前とも重なれません。ホストが読む二つの名前が、どの出力先の書き方に直しても同じになるときも出ます。型の名前は、どの出力先でも語の頭を大文字にして `_` を除くので、`line_item` と `LineItem` はどちらも `LineItem` です。一部の出力先でだけ同じになる二つは、警告の W002 です。生成するコードの中だけの名前（中の関数、確かめの関数、モジュールの名前の定数、import の名前）は、kaname がほかの名前を避けて付けるので、この誤りにはなりません。",
+                "In a module, two of the `use` names and the declarations (`enum`, `record`, `fn`) share a name or an alias; or two fields of a record, two parameters of a function or two values of an enum do. So does a function or a `use` given the name of a builtin called as a function (`sum`, `map`, `numbers`, `char`, `ok`, `err`; the name of one written after a value, such as `get`, `sort_by` or `trim`, is free to take), and a `let` or a `some` whose name is taken where it stands; and, for an enum whose values have fields, the name the generated code gives the type of a value, the enum's and the value's joined (`Order.placed` is `OrderPlaced`), where it is the name of a record, an enum or another value's type. A type parameter shares its name with no other of its declaration, and with no record or enum of the module. Two names a host reads also share a name where every target writes them alike: a type's name is written in every target with each word's first letter in upper case and no `_`, and `line_item` and `LineItem` are both `LineItem`. Two that some targets alone write alike are W002, a warning. A name the generated code alone reads (a function's inner one, a check, the constant of the module's name, the name of an import) kaname moves aside from the others itself, and it is no cause."
             ),
             tr!("どちらかの名前を替えてください。", "Rename one of them."),
             "module example v1\n\nfn quote() -> number\n  1\n\nfn quote() -> number\n  2\n",
             "module 例(example) v1\n\nfn 見積もる(quote)() -> number\n  1\n\nfn 見積もる(quote_again)() -> number\n  2\n",
-            &["E005", "E110"],
+            &["E005", "E110", "W002"],
         ),
         e(
             "E007",
             tr!("生成するコードが使えない名前です", "A name the generated code cannot take"),
             tr!(
-                "生成するコードに出る名前（別名、別名が無ければ名前）が、TypeScript、Python、Go のどれかの予約語（`class`、`def`、`func` など）か、kaname の補助のモジュールの名前（`kaname`、`KanameError` など）のとき。フィールドを持つ値のある列挙の値に、`kind` という名前のフィールドを付けたときも出ます。生成する TypeScript は、値を `kind` で見分けます。Rust の予約語は名前に使えます（生の識別子 `r#ref` にします。モジュールの名前の五つは W001）。",
-                "A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart. A reserved word of Rust is free to be a name (it is a raw identifier, `r#ref`; five names of a module are W001)."
+                "生成するコードに出る名前（別名、別名が無ければ名前）が、kaname の補助のモジュールの名前（`kaname`、`KanameError`、`Q`、`Date`、`Rat`、`glue`）のとき。生成するコードは、どの出力先でも補助をこの名前で読むので、どの出力先もこの名前を取れません。一部の出力先だけが書けない名前（出力先の予約語など）は、警告の W001 です。",
+                "A name the generated code takes (the alias, or the name with none) is a name of kaname's helper module (`kaname`, `KanameError`, `Q`, `Date`, `Rat`, `glue`), by which the generated code of every target reads the helper, so that no target can take it. A name some targets alone cannot write (a target's keyword, among others) is W001, a warning."
             ),
             tr!("別の名前か別名にしてください。", "Choose another name or alias."),
-            "module example v1\n\nrecord Seat\n  class : string\n",
-            "module 例(example) v1\n\nrecord 座席(Seat)\n  等級(class) : string\n",
+            "module example v1\n\nrecord KanameError\n  a : string\n",
+            "module 例(example) v1\n\nrecord 誤り(KanameError)\n  値(a) : string\n",
             &["E005", "W001"],
         ),
         e(
             "E008",
-            tr!("生成する Rust が、モジュールの名前に使えない名前です", "A name the generated Rust cannot give a module"),
+            tr!("生成する出力先が書けない名前です", "A name a target to be generated cannot write"),
             tr!(
-                "`ritsu gen --target rust` が書くモジュールの名前が、W001 が挙げる名前のとき。そのまま書くと Rust のコードを組めないので、`ritsu gen` はどの出力先のファイルも書かずに 1 で終わります。`--target` に `rust` が無ければ止まりません。`kaname check` はこのコードを出しません。",
-                "`ritsu gen --target rust` is to write a module whose name W001 warns of. The Rust as written would not build, so `ritsu gen` writes no file of any target and exits 1. Without `rust` among the targets it does not stop, and `kaname check` does not give this code."
+                "`ritsu gen` が書く出力先（`--target`、無ければ `ritsu.mod` の `target` の行）に、W001 か W002 が挙げる出力先があるとき。そのまま書くと、その出力先のコードが組めないか、ホストが名前で読めない物になるので、`ritsu gen` はどの出力先のファイルも書かずに 1 で終わります。挙げられた出力先を書かないなら止まらず、`kaname check` はこのコードを出しません。文は警告と同じで、最後の注記だけが、どうするかに替わります。",
+                "A target `ritsu gen` writes (`--target`'s, or else the `target` line of `ritsu.mod`) is one W001 or W002 names. As written, that target's code would not build, or would hold a name a host cannot read it by, so `ritsu gen` writes no file of any target and exits 1. Where it writes none of the targets the warning names, it does not stop, and `kaname check` does not give this code. It says what the warning says, with its last note in place of what to do."
             ),
             tr!(
-                "別の名前か別名にしてください。使わない出力先なら、`--target` で使う出力先を挙げてください。",
-                "Choose another name or alias. For a target you do not use, name the ones you use with `--target`."
+                "別の名前か別名にしてください（二つの名前なら、どちらかを替えてください）。使わない出力先なら、`--target` で使う出力先を挙げてください。",
+                "Choose another name or alias (of two names, rename one of them). For a target you do not use, name the ones you use with `--target`."
             ),
             "module door v1\n\nfn one() -> number\n  1\n",
             "module 入口(door) v1\n\nfn 一(one)() -> number\n  1\n",
-            &["E007", "W001"],
+            &["W001", "W002"],
         ),
         e(
             "W001",
-            tr!("生成する Rust が、モジュールの名前に使えない名前です", "A name the generated Rust cannot give a module"),
+            tr!("出力先によっては書けない名前です", "A name some targets cannot write"),
             tr!(
-                "モジュールの名前（別名、別名が無ければ名前）が `crate`、`self`、`Self`、`mod`、`door` のとき。生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になり、はじめの三つは Rust がモジュールに付けられない語、あとの二つは kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。TypeScript、Python、Go はどれも名前に取るので、警告です。`ritsu gen --target rust` は、このモジュールで止まります（E008）。",
-                "The module's name (the alias, or the name with none) is `crate`, `self`, `Self`, `mod` or `door`. In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: the first three are words Rust names no module, and the other two are the files kaname writes into `glue/` itself (the directory's own, and the package's door). TypeScript, Python and Go take all five, so it is a warning; `ritsu gen --target rust` stops at the module (E008)."
+                "生成するコードに出る名前（別名、別名が無ければ名前）を、一部の出力先が書けないとき。警告は、書けない出力先と理由を言います。モジュールの名前では、Python の予約語（Python）、`_` を除くと Go の予約語になる名前（Go のパッケージの名前。`go_to` は `goto`）、`crate`、`self`、`super`、`Self`、`mod`、`door`（Rust。Rust がモジュールに付けられない語と、kaname が `glue/` に書くファイルの名前）です。ホストが呼ぶ関数の名前では、TypeScript が名前にできない語（予約語と、strict mode が名前にしない `arguments`、`eval` など）と Python の予約語、その引数の名前では Python の予約語です（Python の関数は、ホストから引数を名前で受け取ります）。フィールドの名前では、Python の予約語、`__` で始まる名前（Python がクラスの中で書き換えるか、言語のために取ってある）、`__proto__`（TypeScript のオブジェクトのプロトタイプ）、フィールドを持つ値のある列挙の値の `kind`（生成する TypeScript が値を見分けるフィールド）です。`__x__` の形の関数と、Python で `_x_` の形か `__` で始まる名前になる列挙の値は、Python が取ってある名前です。語の頭を大文字にして `_` を除くと空か数字で始まる型の名前（TypeScript、Python、Rust）と列挙の値（Rust）、Python の予約語になる型の名前（`none_` は `None`）も出ます。ほかの出力先は名前に取るので、警告です。`ritsu gen` は、警告が挙げる出力先を書くとき、このモジュールで止まります（E008）。出力先が別の形に書く名前（語の頭を大文字にした名前、大文字の名前、Rust の生の識別子 `r#ref`）と、生成するコードがほかの名前を避けて付ける名前（中の関数、型の引数、ホストに見せない引数の名前）は、出力先の予約語でも構いません。どの出力先も書けない名前は E007 です。",
+                "A name the generated code takes (the alias, or the name with none) is one some targets cannot write; the warning names them, and why. Of a module's name: a keyword of Python (Python), a name that is a keyword of Go with no `_` (Go's package: `go_to` is `goto`), and `crate`, `self`, `super`, `Self`, `mod` and `door` (Rust: words Rust names no module, and the files kaname writes into `glue/`). Of a function a host calls: a word TypeScript takes as no name (a reserved word, or one strict mode does not bind, such as `arguments` and `eval`) and a keyword of Python; of its parameter, a keyword of Python (Python's function takes what a host gives it by the parameters' names). Of a field: a keyword of Python, a name that starts with `__` (Python renames it in its class, or keeps it for itself), `__proto__` (TypeScript's prototype of an object), and `kind` in a value of an enum whose values have fields (by which the generated TypeScript tells the values apart). A function of the form `__x__`, and a value of an enum Python would write `_x_` or starting with `__`, are names Python keeps. A type's name that is empty or starts with a digit once written with each word's first letter in upper case and no `_` (TypeScript, Python and Rust), such a value of an enum (Rust), and a type's name that is then a keyword of Python (`none_` is `None`) are warned of too. The other targets take the name, so it is a warning; `ritsu gen` stops at the module where it writes a target the warning names (E008). A name a target writes otherwise (in Pascal case, in upper case, or as Rust's raw identifier `r#ref`), and a name the generated code moves aside from the others itself (an inner function, a type parameter, a parameter no host sees), is free to be a target's word. A name no target can write is E007."
             ),
             tr!(
-                "Rust を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。",
-                "If you do not generate Rust, leave it; if you do, choose another name or alias."
+                "警告が挙げる出力先を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。",
+                "If you do not generate the targets the warning names, leave it; if you do, choose another name or alias."
             ),
-            "module door v1\n\nfn one() -> number\n  1\n",
-            "module 入口(door) v1\n\nfn 一(one)() -> number\n  1\n",
+            "module example v1\n\nrecord Seat\n  class : string\n",
+            "module 例(example) v1\n\nrecord 座席(Seat)\n  等級(class) : string\n",
             &["E007", "E008"],
+        ),
+        e(
+            "W002",
+            tr!("出力先によっては同じになる二つの名前です", "Two names some targets write alike"),
+            tr!(
+                "ホストが読む二つの名前が、一部の出力先の書き方に直すと同じになるとき。Go の関数・フィールド・列挙の値の定数と、Rust の列挙の値は、語の頭を大文字にして `_` を除きます（`total_weight` と `totalWeight` は、Go ではどちらも `TotalWeight`）。TypeScript と Python の列挙の値は、すべて大文字にします（`gold` と `GOLD`）。Python はクラスと関数を同じ名前空間に置き（`record total` と `fn Total`）、TypeScript はフィールドを持つ値の無い列挙と関数を（`enum kind` と `fn Kind`）、Go は列挙の値の定数と型を同じ名前空間に置きます。警告は、相手の名前と、同じになる出力先とその名前を言います。ほかの出力先は二つを別の名前に書くので、警告です。`ritsu gen` は、警告が挙げる出力先を書くとき、このモジュールで止まります（E008）。どの出力先でも同じになる二つ（型どうし）は E006 です。",
+                "Two names a host reads are alike once some targets write them as they write names: Go's function, field and constant of a value of an enum, and Rust's value of an enum, are written with each word's first letter in upper case and no `_` (`total_weight` and `totalWeight` are both `TotalWeight` in Go); TypeScript's and Python's value of an enum in upper case (`gold` and `GOLD`). Python holds its classes and its functions in one namespace (`record total` and `fn Total`), TypeScript an enum whose values have no fields and the functions (`enum kind` and `fn Kind`), and Go the constants of the values of enums and the types. The warning names the other name, and the targets that write the two alike with what they write. The other targets write the two apart, so it is a warning; `ritsu gen` stops at the module where it writes a target the warning names (E008). Two every target writes alike (two types) are E006."
+            ),
+            tr!(
+                "警告が挙げる出力先を生成しないなら、このままで構いません。生成するなら、どちらかの名前か別名を替えてください。",
+                "If you do not generate the targets the warning names, leave it; if you do, rename one of them, or give it another alias."
+            ),
+            "module example v1\n\nfn total_weight() -> number\n  1\n\nfn totalWeight() -> number\n  2\n",
+            "module 例(example) v1\n\nfn 総重量(total_weight)() -> number\n  1\n\nfn 重量の合計(totalWeight)() -> number\n  2\n",
+            &["E006", "E008"],
         ),
         e(
             "E009",
@@ -197,8 +212,8 @@ pub fn ledger() -> Ledger {
             "E101",
             tr!("この名前のものはありません", "Nothing has this name"),
             tr!(
-                "式の名前、型の名前（値の型 `Order.placed` も）、関数、規則の出力、レコードと値のフィールド、列挙の値、日付のファイルの日付が、どれも指すものを持たないとき。列挙の値は、型の決まらないところでは `<列挙>.<値>` と書きます。値のあとに書いて呼ぶ組み込みの関数（`get`、`sort_by`、`trim` など）を関数の形で書いたときと、関数の形で呼ぶ組み込みの関数（`numbers`、`char`）を値のあとに書いたときも出ます。このときは、注に書き方を出します。ほかのモジュールの `private` の関数、レコード、列挙を使ったときも出て、注にそう書きます。",
-                "A name in an expression, a type (the type of a value too, `Order.placed`), a function, an output of a rule, a field of a record or of a value, a value of an enum or a date of a dates file names nothing. A value of an enum is written `<enum>.<value>` where no type says which enum. So does a builtin written after a value (`get`, `sort_by`, `trim`) that is called as a function, and one called as a function (`numbers`, `char`) that is written after a value; the note shows how it is written. So does a `private` function, record or enum of another module, and the note says it is `private`."
+                "式の名前、型の名前（値の型 `Order.placed` も）、関数、規則の出力、レコードと値のフィールド、列挙の値、日付のファイルの日付が、どれも指すものを持たないとき。列挙の値は、型の決まらないところでは `<列挙>.<値>` と書きます。値のあとに書いて呼ぶ組み込みの関数（`get`、`sort_by`、`trim` など）を関数の形で書いたときと、関数の形で呼ぶ組み込みの関数（`numbers`、`char`）を値のあとに書いたときも出ます。このときは、注に書き方を出します。ほかのモジュールの `private` の関数、レコード、列挙を使ったときも出て、注にそう書きます。同じ種類の同じ名前を何か所にも書いたときは、最初に書いた所で一度だけ出て、ほかの行の番号を注に挙げます（フィールドはレコードごと、列挙の値は列挙ごと、引数は関数ごと）。",
+                "A name in an expression, a type (the type of a value too, `Order.placed`), a function, an output of a rule, a field of a record or of a value, a value of an enum or a date of a dates file names nothing. A value of an enum is written `<enum>.<value>` where no type says which enum. So does a builtin written after a value (`get`, `sort_by`, `trim`) that is called as a function, and one called as a function (`numbers`, `char`) that is written after a value; the note shows how it is written. So does a `private` function, record or enum of another module, and the note says it is `private`. A name of one kind written in several places is said once, where it is first written, and the note gives the lines of the others (a field, once for each record; a value, for each enum; an argument, for each function)."
             ),
             tr!(
                 "綴りを確かめてください。`use` で読んだものは `<use の名前>.<名前>` で書きます。値のあとに書く組み込みの関数は `xs.sort_by(x => x.due)` のように、値と `.` のあとに書きます。`private` のものは、そのモジュールの中でだけ使えます。",
@@ -212,12 +227,12 @@ pub fn ledger() -> Ledger {
             "E102",
             tr!("型が合いません", "The types do not agree"),
             tr!(
-                "値の型が、渡す先（関数の引数と答え、レコードのフィールド、規則と日付の入力、振替の引数）の型と違うとき。単位と税区分も型で、同じ次元の違う単位（`money[USD]` と `money[USDc]`）や、税込と税抜は合いません。足し引きと比べの両辺、`if` と `match` の答えどうし、リストの要素どうしが合わないとき、一部を替えたレコードの `..` のあとの値が、作るレコードや値の型でないときも出ます。関数の型（`(T) -> U`）どうしで、引数の数か型、答えの型が違うとき（お金や量は、単位も同じでなければ合いません）、関数の型の引数に関数でないものを渡したときも出ます。",
-                "A value is not of the type of where it goes (a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer). A unit and a tax are part of the type: two units of one dimension (`money[USD]` and `money[USDc]`) do not agree, nor do with tax and without. So do the two sides of a sum or a comparison, the answers of an `if` or a `match`, and the elements of a list, that are of two types, and the value after `..` in a record made from another that is not of the type built. So do two function types (`(T) -> U`) whose parameters differ in number or in type, or whose answers differ (an amount or a quantity in another unit too), and what is no function given to a parameter of a function type."
+                "値の型が、渡す先（関数の引数と答え、レコードのフィールド、規則と日付の入力、振替の引数）の型と違うとき。単位と税区分も型で、同じ次元の違う単位（`money[USD]` と `money[USDc]`）や、税込と税抜は合いません。足し引きと比べの両辺、`if` と `match` の答えどうし、リストの要素どうしが合わないとき、一部を替えたレコードの `..` のあとの値が、作るレコードや値の型でないときも出ます。関数の型（`(T) -> U`）どうしで、引数の数か型、答えの型が違うとき（お金や量は、単位も同じでなければ合いません）、関数の型の引数に関数でないものを渡したときも出ます。列挙の型は宣言した場所で決まり、別の場所で宣言した列挙は、値が同じでも合いません（注が、それぞれどこで宣言した列挙かを言います）。一つの `enums` ファイルの列挙は、そのファイルを `use rule` で読んだ名前でも、その列挙を丸ごと読む規則の名前でも、一つの型です。",
+                "A value is not of the type of where it goes (a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer). A unit and a tax are part of the type: two units of one dimension (`money[USD]` and `money[USDc]`) do not agree, nor do with tax and without. So do the two sides of a sum or a comparison, the answers of an `if` or a `match`, and the elements of a list, that are of two types, and the value after `..` in a record made from another that is not of the type built. So do two function types (`(T) -> U`) whose parameters differ in number or in type, or whose answers differ (an amount or a quantity in another unit too), and what is no function given to a parameter of a function type. An enum is the place it is declared: two enums declared at two places do not agree even with the same values (the note says where each is declared). An enum of an `enums` file is one type by the name of the file read with `use rule` and by the name of each rule that reads it whole."
             ),
             tr!(
-                "同じ型にしてください。単位の換算は `fee in USDc` のように書きます（kaname は黙って換算しません）。",
-                "Give a value of the type; a conversion is written, as in `fee in USDc` (kaname converts nothing unasked)."
+                "同じ型にしてください。単位の換算は `fee in USDc` のように書きます（kaname は黙って換算しません）。列挙を一つの型にするには、列挙を `enums` ファイルに置いて規則のそれぞれで `import enum` で読み、モジュールではそのファイルを `use rule` で読んでください。",
+                "Give a value of the type; a conversion is written, as in `fee in USDc` (kaname converts nothing unasked). To make two enums one type, put the enum in an `enums` file, read it with `import enum` in each rule, and read that file in the module with `use rule`."
             ),
             "module example v1\n\nfn fee(amount: money[USD] range >=0USD <=1000USD) -> money[USDc]\n  amount\n",
             "module 例(example) v1\n\nfn 手数料(fee)(金額(amount): money[USD] range >=0USD <=1000USD) -> money[USDc]\n  金額\n",
@@ -272,8 +287,8 @@ pub fn ledger() -> Ledger {
             "E106",
             tr!("`match` が取りこぼす値があります", "The match leaves values out"),
             tr!(
-                "`match` の分岐が、列挙の値、`true` と `false`、`none` と `some x` のどれかを受けず、`else` も無いとき。上の分岐がもう受けた値やリテラルを、下の分岐にもう一度書いたときも出ます。リテラル（数、お金、量、日付、文字列）で分ける `match` に `else` が無いとき、`else` が最後の分岐でないとき、`else` が受ける値が残っていないとき、`else` をほかの値と一つの分岐に並べたとき、フィールドの無い値に名前を付けたとき、名前を付けた値をほかの値と一つの分岐に並べたときも出ます。",
-                "The arms of a `match` leave out a value of the enum, `true` or `false`, or `none` or `some x`, and there is no `else`; or an arm repeats a value or a literal an arm above takes. So does a `match` by literals (numbers, amounts, quantities, dates, strings) with no `else`, an `else` that is not the last arm, takes no value or shares its arm, a name given to a value with no fields, and a value given a name that shares its arm."
+                "`match` の分岐が、列挙の値、`true` と `false`、`none` と `some x` のどれかを受けず、`else` も無いとき。上の分岐がもう受けた値やリテラルを、下の分岐にもう一度書いたときも出ます。リテラル（数、お金、量、日付、文字列）で分ける `match` に `else` が無いとき、`else` が最後の分岐でないとき、`else` が受ける値が残っていないとき、`else` をほかの値と一つの分岐に並べたとき、フィールドの無い値に名前を付けたとき、名前を付けた値をほかの値と一つの分岐に並べたときも出ます。分岐に列挙に無い値を書いたとき（E101）は、受けない値があるとは言いません。値の名前を宣言で誤ったときに、同じ誤りを二度言わないためです。",
+                "The arms of a `match` leave out a value of the enum, `true` or `false`, or `none` or `some x`, and there is no `else`; or an arm repeats a value or a literal an arm above takes. So does a `match` by literals (numbers, amounts, quantities, dates, strings) with no `else`, an `else` that is not the last arm, takes no value or shares its arm, a name given to a value with no fields, and a value given a name that shares its arm. A `match` with an arm for a value the enum does not have (E101) is not said to leave values out: a value written wrong where it is declared is not said twice."
             ),
             tr!(
                 "受けない値の分岐を足すか、残りを `else =>` で受け、重なった値は一つの分岐にまとめてください。`else` は最後の分岐に、ほかの値と並べずに書きます。",
@@ -287,8 +302,8 @@ pub fn ledger() -> Ledger {
             "E107",
             tr!("呼び出しの引数が合いません", "The call does not give what it takes"),
             tr!(
-                "関数、規則、日付の呼び出しで、引数が足りないとき、取らない引数を渡したとき、同じ引数を二度書いたとき、名前を付けずに渡したとき。組み込みの関数に名前を付けた引数を渡したとき、引数の数が違うとき、レコードやフィールドを持つ値（`Order.placed {{ … }}`）を作るのにフィールドが足りないか二度書いたとき、フィールドを持つ値をフィールドを書かずに書いたとき（`Order.placed`）、規則、日付のファイル、帳簿、モジュールの名前を値として書いたとき、辞書のリテラルに同じ定数の鍵を二度書いたとき（`[\"a\": 1, \"a\": 2]`）、関数の値に名前を付けて引数を渡したとき、取る数と違う数の引数を渡したときも出ます。",
-                "A call of a function, a rule or a date misses an argument, gives one it does not take, gives one twice, or gives one with no name; a builtin is given a named argument or the wrong number of them; a record or a value with fields (`Order.placed {{ … }}`) is built with a field missing or given twice, or a value with fields is written without them (`Order.placed`); the name of a rule, a dates file, a book or a module is written as a value; a dict literal gives one constant key twice (`[\"a\": 1, \"a\": 2]`); a function value is given named arguments, or a number of them it does not take."
+                "関数、規則、日付の呼び出しで、引数が足りないとき、取らない引数を渡したとき、同じ引数を二度書いたとき、名前を付けずに渡したとき。組み込みの関数に名前を付けた引数を渡したとき、引数の数が違うとき、レコードやフィールドを持つ値（`Order.placed {{ … }}`）を作るのにフィールドが足りないか二度書いたとき、フィールドを持つ値をフィールドを書かずに書いたとき（`Order.placed`）、規則、日付のファイル、帳簿、モジュールの名前を値として書いたとき、辞書のリテラルに同じ定数の鍵を二度書いたとき（`[\"a\": 1, \"a\": 2]`）、関数の値に名前を付けて引数を渡したとき、取る数と違う数の引数を渡したときも出ます。レコードや呼び出しに、無いフィールドや取らない引数（E101）を、足りないものと同じ数かそれより多く書いたときは、足りないとは言いません。フィールドや引数の名前を誤ったときに、同じ誤りを二度言わないためです。",
+                "A call of a function, a rule or a date misses an argument, gives one it does not take, gives one twice, or gives one with no name; a builtin is given a named argument or the wrong number of them; a record or a value with fields (`Order.placed {{ … }}`) is built with a field missing or given twice, or a value with fields is written without them (`Order.placed`); the name of a rule, a dates file, a book or a module is written as a value; a dict literal gives one constant key twice (`[\"a\": 1, \"a\": 2]`); a function value is given named arguments, or a number of them it does not take. A record or a call that writes no fewer fields or arguments it does not have (E101) than it leaves out is not said to leave them out: a name written wrong is not said twice."
             ),
             tr!(
                 "引数を全部、名前を付けて一度ずつ書いてください（`charges(debt: d, days_late: n)`）。組み込みの関数と関数の値には、名前を付けずに順に渡します（`amount(x)`）。",
@@ -359,8 +374,8 @@ pub fn ledger() -> Ledger {
             "E112",
             tr!("型の引数が決まらないか、合いません", "A type argument cannot be worked out, or does not fit"),
             tr!(
-                "総称の関数を呼ぶところで、型の引数が、引数の型からも置かれた場所の型からも決まらないとき（`[]` や `none` だけを渡したとき）、二つの引数が一つの型の引数に違う型を言うとき（ドルのリストとセントの値を一つの `T` に渡す）。総称のレコード、列挙、関数の名前のあとに書いた型の引数の数が、型の引数の数と違うとき、値の無いことがある型（`number?`）か関数の型を型の引数に当てたとき、ラムダの引数の型が、置かれた場所の関数の型から決まらないとき（型を書かない `let` に置いたラムダ）、呼び出しの輪の中の総称の関数に、型の引数から作った型を渡すとき（`wrap_deep[T]` が自分を `wrap_deep(x: [x], …)` と呼んで `list[T]` を渡す）も出ます。",
-                "Where a generic function is called, a type parameter takes no type from the arguments nor from the place the call is put in (only `[]` or `none` is given), or two arguments say two types for one (a list of dollars and a value of cents for one `T`). So does a generic record, enum or function given a number of type arguments that is not the number of its type parameters, a type argument whose values may be none (`number?`) or that is a function type, a parameter of a lambda whose type the function type of its place does not say (a lambda a `let` with no type names), and a generic function of a ring of calls given a type argument made from a type parameter (`wrap_deep[T]` calling itself as `wrap_deep(x: [x], …)` gives `list[T]`)."
+                "総称の関数を呼ぶところで、型の引数が、引数の型からも置かれた場所の型からも決まらないとき（`[]` や `none` だけを渡したとき）、二つの引数が一つの型の引数に違う型を言うとき（ドルのリストとセントの値を一つの `T` に渡す。どちらの刻みも他方の刻みの整数倍でない二つの率も）。総称のレコード、列挙、関数の名前のあとに書いた型の引数の数が、型の引数の数と違うとき、値の無いことがある型（`number?`）か関数の型を型の引数に当てたとき、ラムダの引数の型が、置かれた場所の関数の型から決まらないとき（型を書かない `let` に置いたラムダ）、呼び出しの輪の中の総称の関数に、型の引数から作った型を渡すとき（`wrap_deep[T]` が自分を `wrap_deep(x: [x], …)` と呼んで `list[T]` を渡す）も出ます。",
+                "Where a generic function is called, a type parameter takes no type from the arguments nor from the place the call is put in (only `[]` or `none` is given), or two arguments say two types for one (a list of dollars and a value of cents for one `T`, or two rates on steps neither of which is a whole number of the other). So does a generic record, enum or function given a number of type arguments that is not the number of its type parameters, a type argument whose values may be none (`number?`) or that is a function type, a parameter of a lambda whose type the function type of its place does not say (a lambda a `let` with no type names), and a generic function of a ring of calls given a type argument made from a type parameter (`wrap_deep[T]` calling itself as `wrap_deep(x: [x], …)` gives `list[T]`)."
             ),
             tr!(
                 "型を書いた `let` に置くか（`let p : Page[number] = …`）、関数の名前のあとに型を書いてください（`empty_page[number]()`）。単位の違うお金や量は `in` で換算してそろえます。値の無いことがあるところは、`?` の無い型を当てて、引数を `T?` と書きます。ラムダの引数には型を書きます（`(l: Line) => …`）。呼び出しの輪の中では、型の引数をそのまま渡すか、型の引数を含まない型を渡してください。",
@@ -415,13 +430,28 @@ pub fn ledger() -> Ledger {
             "module 例(example) v1\n\nfn 半分(half)(数(n): number range >=0 <=98) -> result[number, string]\n  if 数 = 0 then err(\"ゼロ\") else ok(数 + 1)\n\nfn 次(next)(数(n): number range >=0 <=98) -> number\n  let h = try 半分(数: 数)\n  h\n",
             &["E102"],
         ),
+        with_files(
+            "E116",
+            tr!("ホストが呼ぶ関数が、ほかの言語の作る値を取ります", "A function a host calls takes a value another language makes"),
+            tr!(
+                "ホストが呼ぶ関数（`private` でなく、型の引数も関数の型の引数も持たない関数）の引数が、ほかの言語が計算して作る値であるか、どこかにそれを持つとき。規則の出力（`r.outputs`）と帳簿の振替（`ledger.capture.do`）がこれに当たり、レコードや直和型の値のフィールド、リスト・集合・辞書の要素、`result` の値、`indexed`・`entry`・`running` の中にあっても出ます。規則が歩くリストの要素（`r.lines`）、規則の列挙、ほかのモジュールのレコードはホストが作る値で、入口で受けて確かめます。",
+                "A function a host calls (one not `private`, with no type parameter and no parameter of a function type) has a parameter that is, or holds anywhere in it, a value another language works out and makes: a rule's outputs (`r.outputs`) or a transfer of a book (`ledger.capture.do`), also in a field of a record or of a value of a sum, an element of a list, a set or a dict, the value of a result, or inside `indexed`, `entry` and `running`. An element of a list a rule walks (`r.lines`), a rule's enum and a record of another module are values a host makes, which the entry takes and checks."
+            ),
+            tr!(
+                "規則は関数の中で呼んでください。ホストから受けるなら、範囲を書いた自分のレコードで受けてください。ホストが呼ばない関数なら、`private` にしてください。関数の答えと、ホストが呼ばない関数の引数は、この値を持てます。",
+                "Call the rule inside the function; or take what the host gives in a record of your own with its ranges written; or, if no host calls the function, make it `private`. The function's answer, and the parameters of a function no host calls, may hold such a value."
+            ),
+            ("module example v1\n\nuse book ledger from \"ledger.book\"\n\nfn kept(t: ledger.capture.do) -> ledger.capture.do\n  t\n", LEDGER_EN),
+            ("module 例(example) v1\n\nuse book 台帳 from \"台帳.book\"\n\nfn そのまま(kept)(振替(t): 台帳.入金.do) -> 台帳.入金.do\n  振替\n", LEDGER_JA),
+            &["E113", "E204"],
+        ),
         // ── Files a module reads ──
         e(
             "E201",
             tr!("読むファイルを読めません", "A file this module uses cannot be read"),
             tr!(
-                "`use` で読むファイルが無いとき、拡張子が種類に合わないとき（`use rule` は `.rule`、`use dates` は `.cal`、`use book` は `.book`、`use module` は `.kn`）、その言語の検査を通らないとき（rulec、koyomi、chobo、kaname が言うことを注に挙げます）。出力の無い規則（`enums` のファイル）を呼んだときと、その出力を型に書いたときも出ます。出力の無い規則からは呼ぶためのコードが生成されません。読めるのはその列挙で、`<規則>.<列挙>` と書いて型として使えます。",
-                "A file a `use` reads is not there, its extension is not its kind's (`use rule` reads a `.rule`, `use dates` a `.cal`, `use book` a `.book`, `use module` a `.kn`), or it does not pass its language's check (the notes give what rulec, koyomi, chobo or kaname says of it). So does a call of a rule with no outputs (an `enums` file), and its outputs written as a type: nothing to call is generated from it. What a module reads it for is its enums, written `<rule>.<enum>` where a type goes."
+                "`use` で読むファイルが無いとき、拡張子が種類に合わないとき（`use rule` は `.rule`、`use dates` は `.cal`、`use book` は `.book`、`use module` は `.kn`）、その言語の検査を通らないとき（rulec、koyomi、chobo、kaname が言うことを注に挙げます）。出力の無い規則（`enums` のファイル）を呼んだときと、その出力を型に書いたときも出ます。出力の無い規則からは呼ぶためのコードが生成されません。読めるのはその列挙で、`<規則>.<列挙>` と書いて型として使えます。読めなかったファイルについては `use` の行に一度だけ出て、その名前を書くところは何も言いません。名前の値は型の分からない値になり、それに触れないところは型まで確かめます。",
+                "A file a `use` reads is not there, its extension is not its kind's (`use rule` reads a `.rule`, `use dates` a `.cal`, `use book` a `.book`, `use module` a `.kn`), or it does not pass its language's check (the notes give what rulec, koyomi, chobo or kaname says of it). So does a call of a rule with no outputs (an `enums` file), and its outputs written as a type: nothing to call is generated from it. What a module reads it for is its enums, written `<rule>.<enum>` where a type goes. A file that could not be read is said once, at the line of its `use`, and nothing is said where its name is written: what it names is of no type that can be told, and what does not touch it is checked to its types."
             ),
             tr!(
                 "パスを確かめてください（パスは、このモジュールのファイルのあるディレクトリから書きます）。検査を通らないファイルは、その言語の検査が通るように直してください。`enums` のファイルは呼ばずに、その列挙を型に書いてください。",
@@ -650,8 +680,8 @@ pub fn ledger() -> Ledger {
             "E604",
             tr!("Lean が証明を受け付けません", "Lean does not take the proof"),
             tr!(
-                "`--lean` が証明のファイルを確かめ、受け付けなかったとき。理由は、証明のファイルに書けないものがある（何をどの行に）、ビルドが通らない（Lean のエラーを、証明のファイルの行で）、定理の型が性質の文と違う、`propext`・`Classical.choice`・`Quot.sound` のほかの公理に頼る（`sorry` なら `sorryAx`、`native_decide` はその名前で）、その名前の宣言が定理でない、カーネルが宣言を受け付けない、.kn から書いた Lean と一緒に読めない、時間内に終わらない、のどれかです。ファイル全体についての理由は、ファイルに一度だけ言います。",
-                "`--lean` checks the proof file and does not take it: the file holds what a proof file may not (what, and on which line); it does not build (Lean's error, at its line in the proof file); a theorem's type is not the property's statement; a theorem rests on an axiom other than `propext`, `Classical.choice` and `Quot.sound` (`sorryAx` for a `sorry`, and `native_decide` by that name); the name is declared as something other than a theorem; the kernel does not take a declaration; the file cannot be read beside the Lean written from the .kn; or Lean does not finish in time. What is wrong with the file as a whole is said once, of the file."
+                "`--lean` が証明のファイルを確かめ、受け付けなかったとき。理由は、証明のファイルに書けないものがある（何をどの行に）、証明のファイルがビルドできない（Lean のエラーを、証明のファイルの行で）、.kn から書いた Lean がビルドできない（Lean のエラーを、書いたファイルの行で）、定理の型が性質の文と違う、`propext`・`Classical.choice`・`Quot.sound` のほかの公理に頼る（`sorry` なら `sorryAx`、`native_decide` はその名前で）、その名前の宣言が定理でない、カーネルが宣言を受け付けない、.kn から書いた Lean と一緒に読めない、時間内に終わらない、のどれかです。ファイル全体についての理由は、ファイルに一度だけ言います。",
+                "`--lean` checks the proof file and does not take it: the file holds what a proof file may not (what, and on which line); the proof file does not build (Lean's error, at its line in the proof file); the Lean written from the .kn does not build (Lean's error, at its line in the written file); a theorem's type is not the property's statement; a theorem rests on an axiom other than `propext`, `Classical.choice` and `Quot.sound` (`sorryAx` for a `sorry`, and `native_decide` by that name); the name is declared as something other than a theorem; the kernel does not take a declaration; the file cannot be read beside the Lean written from the .kn; or Lean does not finish in time. What is wrong with the file as a whole is said once, of the file."
             ),
             tr!(
                 "注の理由を直してください。性質ごとに、名前空間 `Proofs.<モジュールの別名>` に `theorem <性質の別名> : Kaname.<モジュールの別名>.<性質の別名>` を置きます。import できるのは `Kaname.…` だけです。",

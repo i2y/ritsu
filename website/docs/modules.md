@@ -464,9 +464,9 @@ behavior:
   rules/shipping_fee.rule (rulec): the answers differ
 …
       region = domestic  and  weight >=2001g <=2500g
-        fee: 695 → 395
+        fee: 695GBPc → 395GBPc
         rows: table fee_by_weight row 2 → table fee_by_weight row 1
-        example: region=domestic, weight=2001
+        example: region=domestic, weight=2001g
 …
 interface:
   rules/shipping_fee.rule (rulec, api): 10 changes, 0 of them may break a user

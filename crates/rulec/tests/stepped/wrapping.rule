@@ -1,0 +1,16 @@
+rule wrapping v1
+description "Whether an order of gifts takes the large roll of paper. Each gift takes two sheets, so the sheets come in twos: four sheets or more take the large roll"
+
+inputs
+  gifts : number  range >=0 <=5
+
+define sheets : number = gifts * 2
+
+outputs
+  large_roll : bool
+
+table roll_of
+policy unique
+| sheets | -> large_roll |
+| <4     | false         |
+| >=4    | true          |

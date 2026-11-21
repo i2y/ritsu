@@ -6,6 +6,8 @@ import RulecCert.Linear
 import RulecCert.Contract
 import RulecCert.Certified
 import RulecCert.Values
+import RulecCert.Grid
+import RulecCert.Held
 import RulecCert.Read
 import RulecCert.Cells
 import RulecCert.Sha256

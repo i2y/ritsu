@@ -1,0 +1,6 @@
+error[E405]: tests/mutants/E405_a_hold_of_what_approvers_edit.ringi:23:104: The hold `budget.reserve` reads `amount`, a field approvers may edit
+    23 |   on submitted    hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)
+  = The argument `amount` of the hold reads `amount`, and `approvers edit` on line 22 lets an approver edit `amount`.
+  = A hold is made once, with the values the request is submitted with, and is not made again when an approver edits them.
+  = What is posted is what was held, which is no longer what the request says.
+  = Take `amount` out of `approvers edit` (the line itself, where it lists no other field).

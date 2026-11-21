@@ -1,0 +1,20 @@
+rule who_pays v1
+description "Who pays a claim: the desk up to 500 yen, a person above it. Written for sekisho's example as a sample of a desk's own rule; it transcribes no document"
+
+enum payer = desk "Desk" | person "Person"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=10_000JPY
+
+outputs
+  who : payer
+
+table decide
+| amount   | -> who |
+| <=500JPY | desk   |
+| >500JPY  | person |
+
+examples
+| amount | -> who |
+| 500JPY | desk   |
+| 501JPY | person |

@@ -147,7 +147,7 @@ fn a_divisor_that_can_be_zero_is_e132_with_an_input_that_makes_it_so() {
     assert_eq!(codes(base), ["E132"]);
     let text = said(base, "E132");
     assert!(text.contains("The divisor units can be zero"), "{text}");
-    assert!(text.contains("it ranges from 0 to 10000, zero included"), "{text}");
+    assert!(text.contains("it ranges from 0 to 10_000, zero included"), "{text}");
     assert!(text.contains("An input that makes the divisor zero: units = 0"), "{text}");
     // The way out with `max`, and the narrower range.
     assert!(codes(&base.replace("total / units", "total / max(units, 1)")).is_empty());
@@ -504,7 +504,7 @@ fn a_divisor_reads_an_end_it_does_not_write_as_the_end_of_its_type() {
         let text = said(&src, "E132");
         assert!(text.contains("An input that makes the divisor zero: units = 0"), "{text}");
         assert!(text.contains("zero included"), "{text}");
-        assert!(text.contains("9223372036854775807"), "{text}");
+        assert!(text.contains("9_223_372_036_854_775_807"), "{text}");
         assert!(text.contains("`units` has no upper or no lower bound"), "{text}");
         assert!(text.contains("divide by `max(units, 1)`"), "{text}");
     }
@@ -1109,7 +1109,7 @@ fn a_column_and_an_output_are_held_where_the_code_holds_them() {
     // A value that fits on its own step passes int64 once it is brought to the output's finer one.
     let finer = output("range >=0% <=100_000_000_000_000_000%");
     assert_eq!(codes(&finer), ["E108"]);
-    assert!(said(&finer, "E108").contains("so the stored integer reaches 10000000000000000000"), "{}", said(&finer, "E108"));
+    assert!(said(&finer, "E108").contains("so the stored integer reaches 10_000_000_000_000_000_000"), "{}", said(&finer, "E108"));
 }
 
 /// `half_up`, `half_down` and `half_even` compare twice the remainder with the grid, and `down` and
@@ -1279,4 +1279,32 @@ fn the_certificate_states_what_the_code_holds() {
         }
     }
     std::fs::remove_file(&file).ok();
+}
+
+/// A call whose name is none of the callable names is E118, with the nearest one's name as a
+/// hint — the same distance rule as E154's (§15.341): a letter off, the start or the end of
+/// one, or a common name of one (§15.349).
+#[test]
+fn a_call_of_no_function_is_said_with_the_nearest() {
+    let rule = |call: &str| format!("rule t(t) v1\n\ninputs\n  x(x) : number  range >=0 <=100\n\noutputs\n  y(y) : number  round down(1)\n\nderive z(z) : number = {call}  range >=0 <=100\n\nresult y = z\n");
+    let hint = |call: &str| -> Vec<String> {
+        rulec::i18n::with(rulec::i18n::Lang::En, || {
+            let ds = rulec::check_source(&rule(call), "arith.rule");
+            let d = ds.iter().find(|d| d.code == "E118").unwrap_or_else(|| panic!("{call}: {:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>()));
+            d.notes.iter().filter(|n| n.starts_with("Did you mean")).cloned().collect()
+        })
+    };
+    assert_eq!(hint("mqx(x, 1)"), ["Did you mean `max`?"]);
+    assert_eq!(hint("halfup(x, 1)"), ["Did you mean `half_up`?"]);
+    assert_eq!(hint("minx(x, 1)"), ["Did you mean `min`?"]);
+    assert_eq!(hint("truncate(x, 1)"), ["Did you mean `down`?"]);
+    assert_eq!(hint("sqrt(x)"), ["Did you mean `isqrt`?"]);
+    assert_eq!(hint("maximum(x, 1)"), ["Did you mean `max`?"]);
+    assert!(hint("foo(x, 1)").is_empty());
+    // In Japanese the hint reads as E154's does.
+    rulec::i18n::with(rulec::i18n::Lang::Ja, || {
+        let ds = rulec::check_source(&rule("mqx(x, 1)"), "arith.rule");
+        let d = ds.iter().find(|d| d.code == "E118").unwrap();
+        assert!(d.notes.iter().any(|n| n == &"`max` のことですか。"), "{ds:?}");
+    });
 }

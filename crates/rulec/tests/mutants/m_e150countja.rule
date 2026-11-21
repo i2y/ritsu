@@ -1,0 +1,19 @@
+rule 贈り物のかご(gift_basket_ja) v1
+description "贈り物のかごにカードを入れるか。割れ物は 5 件までで、これがかごの明細を 5 件までにする。包装した品は 6 件以上と書いてある。明細が 6 件のかごは無い"
+
+# かごの明細の一件ぶん
+elements 明細(lines)
+  包装(wrapped) : bool
+  割れ物(fragile) : bool
+
+count 包装した品(wrapped_items) over 明細 where 包装  range >=6 <=10
+count 割れ物の数(fragile_items) over 明細 where 割れ物  range >=0 <=5
+
+outputs
+  カード(card) : bool
+
+table カードの判定(card_of)
+policy unique
+| 包装した品 | 割れ物の数 | -> カード |
+| <8         | -          | false     |
+| >=8        | -          | true      |

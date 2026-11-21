@@ -1,0 +1,5 @@
+warning[W402]: tests/mutants/W402_上へ回したあと待ち続ける.ringi:12:5: The stage `決裁` waits on when it is late (`when late escalate, then stay`): a ticket may never end
+    12 |     when late escalate, then stay
+  = If it may wait, leave it; for it to end, write `expire` or `escalate` in place of `stay`.
+ok tests/mutants/W402_上へ回したあと待ち続ける.ringi: a request, 1 field, 2 stages
+  may never end: the stage `決裁` waits on when it is late (`when late escalate, then stay`)

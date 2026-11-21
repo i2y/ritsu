@@ -1,0 +1,45 @@
+rule parcel_batch v1
+description "The truck a batch of parcels goes on. The ranges of the batch are written with ends that do not take the value they write: a parcel weighs more than 0 g and less than 30,001 g, a batch weighs more than 999 g and less than 60,001 g, and has more than 0 fragile parcels and fewer than 4. Each is read one step in: from 1 g, from 1,000 g, and from one fragile parcel up to three"
+
+enum truck = van | lorry
+
+# One parcel of the batch. The caller passes up to three.
+elements parcels
+  weight  : mass[g]  range >0g <30_001g
+  fragile : bool
+
+sum total over parcels of weight  range >999g <60_001g
+count fragile_parcels over parcels where fragile  range >0 <4
+
+outputs
+  truck   : truck
+  padding : bool
+
+table truck_of
+policy unique
+| total     | -> truck |
+| <=20_000g | van      |
+| >20_000g  | lorry    |
+
+table padding_of
+policy unique
+| fragile_parcels | -> padding |
+| 1               | false      |
+| >=2             | true       |
+
+examples
+| parcels   | -> truck | padding |
+| lightest  | van      | false   |
+| full_load | lorry    | true    |
+
+# The least a batch can be: one fragile parcel of 1,000 g.
+sequence lightest
+| weight | fragile |
+| 1_000g | true    |
+
+# The most: three parcels, all fragile, 60,000 g, one at each end of what a parcel weighs.
+sequence full_load
+| weight  | fragile |
+| 30_000g | true    |
+| 29_999g | true    |
+| 1g      | true    |

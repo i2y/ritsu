@@ -1,0 +1,3 @@
+error[E106]: tests/mutants/E106_a_stage_reads_an_approver_field.ringi:9:23: What is decided when the request is made reads `account`, which is not filled in yet
+     9 |   decide  heads  when account is "6100"
+  = `account` is filled in by approvers (`approvers only`), so it is empty when the request is made. What is decided then (when a field is shown or required, the route, the conditions of the stages, `on submitted`) reads only fields the requester fills in.

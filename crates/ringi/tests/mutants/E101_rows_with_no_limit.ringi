@@ -1,0 +1,14 @@
+request example v1 "Example"
+
+form
+  items : rows "Items"
+    what  : text "What"  count <=100
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

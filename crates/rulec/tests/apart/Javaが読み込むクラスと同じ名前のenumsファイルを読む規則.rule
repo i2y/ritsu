@@ -1,0 +1,25 @@
+rule 地域と科目の料金(zone_fee) v1
+description "Java のモジュールと runner が読み込む JDK のクラスと同じ名前の enums ファイルから、列挙を読む規則"
+
+import enum 地域 from "Javaのモジュールが読み込むクラスと同じ名前のenumsファイル.rule"
+import enum 科目 from "Javaのrunnerが読み込むクラスと同じ名前のenumsファイル.rule"
+
+inputs
+  地域(zone)   : 地域
+  科目(course) : 科目
+
+outputs
+  料金(fee) : money[USD]  round up(1USD)
+
+table 料金表(fee_by)
+policy unique
+| 地域 | 科目           | -> 料金 |
+| 近い | 入門           | 2USD    |
+| 近い | 発展, 総まとめ | 4USD    |
+| 遠い | -              | 7USD    |
+
+examples
+| 地域 | 科目     | -> 料金 |
+| 近い | 入門     | 2USD    |
+| 近い | 総まとめ | 4USD    |
+| 遠い | 発展     | 7USD    |

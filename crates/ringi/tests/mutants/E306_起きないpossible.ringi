@@ -1,0 +1,20 @@
+request 例(example) v1 "例"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=1_000_000円
+
+route
+| 金額         | -> 決裁(decide) |
+| <=100_000円  | 上長            |
+| >100_000円   | 部長            |
+
+who
+  上長(manager)   = team managers
+  部長(head)      = team heads
+  社長(president) = team presidents
+
+ticket
+  self approval  not allowed
+
+claims
+  社長が決裁することがある : possible 決裁 is 社長

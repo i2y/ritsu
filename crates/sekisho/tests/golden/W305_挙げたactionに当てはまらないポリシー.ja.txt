@@ -1,0 +1,6 @@
+警告[W305]: tests/mutants/W305_挙げたactionに当てはまらないポリシー.gate:37:1: forbid `停止中の職員はだれでも読める物を見ない` は action `棚を見る` を挙げていますが、`棚を見る` のどの組み合わせにも当てはまりません
+    37 | forbid 停止中の職員はだれでも読める物を見ない(suspended_staff_see_nothing_open)
+  = `principal` の行が当てはまる 2 通りのうち、`when resource.だれでも読める` は 0 通り、`when principal.停止中` は 1 通りで満たされます。どの組み合わせでも満たされない行があります。
+  = ほかに挙げた action では、`文書を読む` の 1 通りに当てはまります。
+  = `action` の行から `棚を見る` を外すか、`棚を見る` にも当てはまるよう行を直してください。
+tests/mutants/W305_挙げたactionに当てはまらないポリシー.gate: ok — action 2、ポリシー 2（permit 1、forbid 1）、期待 0、職務の分離 0

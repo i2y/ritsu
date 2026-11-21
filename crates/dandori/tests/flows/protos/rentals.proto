@@ -1,0 +1,60 @@
+// The services tests/flows/service_dates.flow and its Japanese version implement (DESIGN 44): a
+// run starts with the days of a car's rental, google.type.Date, at the top of the request, in a
+// list, in a message and in a list of messages, and the desk answers its callback with the day the
+// car came back. protobuf's JSON writes a date as {"year": 2026, "month": 11, "day": 16}, and a
+// run reads it as 2026-11-16. A run answers nothing, as `{}`: a date in its output would go as the
+// flow holds it, which a client that reads protobuf's JSON refuses, and dandori refuses (E017).
+syntax = "proto3";
+
+package rentals.v1;
+
+import "dandori/v1/options.proto";
+import "google/type/date.proto";
+
+service RentalService {
+  option (dandori.v1.workflow) = {name: "service_dates", version: 1};
+
+  rpc Rent(RentRequest) returns (RentResponse) {
+    option (dandori.v1.start) = {fails: ["late"]};
+  }
+
+  rpc AnswerReturn(AnswerReturnRequest) returns (AnswerReturnResponse) {
+    option (dandori.v1.answer) = {task: "wait_for_return"};
+  }
+}
+
+// The same service, for the Japanese version of the flow.
+service RentalServiceJa {
+  option (dandori.v1.workflow) = {name: "貸し出しの日付", version: 1};
+
+  rpc Rent(RentRequest) returns (RentResponse) {
+    option (dandori.v1.start) = {fails: ["返却の遅れ"]};
+  }
+
+  rpc AnswerReturn(AnswerReturnRequest) returns (AnswerReturnResponse) {
+    option (dandori.v1.answer) = {task: "返却を待つ"};
+  }
+}
+
+message RentRequest {
+  string car = 1;
+  google.type.Date pickup = 2;
+  google.type.Date dropoff = 3;
+  repeated google.type.Date closed = 4;
+  Driver driver = 5;
+  repeated Driver others = 6;
+}
+
+message Driver {
+  string name = 1;
+  google.type.Date licensed_on = 2;
+}
+
+message RentResponse {}
+
+message AnswerReturnRequest {
+  google.type.Date returned_on = 1;
+  int32 km = 2;
+}
+
+message AnswerReturnResponse {}

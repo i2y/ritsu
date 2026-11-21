@@ -1,0 +1,33 @@
+workflow shared_enums v1
+description "Reads one enum of an enums file by four names: its own import enum, the enums file used as a rule, and the two rules it calls, which import the enum too. The four are one type, so a value of one is given where another is expected. Runs on every platform"
+
+import enum category from "rules/expense_categories.rule"
+use rule categories from "rules/expense_categories.rule"
+use rule manager from "rules/needs_manager.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:needs-manager"
+use rule accounting from "rules/needs_accounting.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:needs-accounting"
+
+record Claim
+  id       : string
+  category : categories.category
+
+task notify(claim_id: string, category: category)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:notify"
+
+inputs
+  claim : Claim
+
+outputs
+  reviewed_as : category
+  manager     : bool
+  accounting  : bool
+
+flow
+  # categories.category where manager.category is expected
+  let m = manager(category: claim.category)
+  # manager.category where accounting.category is expected
+  let a = accounting(category: m.reviewed_as)
+  # manager.category where the flow's own category is expected
+  notify(claim_id: claim.id, category: m.reviewed_as)
+  succeed reviewed_as = m.reviewed_as, manager = m.manager, accounting = a.accounting

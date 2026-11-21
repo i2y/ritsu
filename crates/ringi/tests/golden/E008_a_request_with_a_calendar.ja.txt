@@ -1,0 +1,9 @@
+エラー[E008]: tests/mutants/E008_a_request_with_a_calendar.ringi:1:1: このファイルには kaname が要りますが、この ringi には入っていません（申請の種類は kaname のモジュールに下ろします）
+     1 | request example v1 "Example"
+  = ringi 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`ritsu ringi check <file.ringi>` のように走らせてください。
+エラー[E008]: tests/mutants/E008_a_request_with_a_calendar.ringi:3:1: このファイルには koyomi が要りますが、この ringi には入っていません（カレンダー `office` を読みます）
+     3 | use calendar office from "office.cal"
+  = ringi 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`ritsu ringi check <file.ringi>` のように走らせてください。
+エラー[E008]: tests/mutants/E008_a_request_with_a_calendar.ringi:5:1: このファイルには rulec が要りますが、この ringi には入っていません（フォームを rulec の規則に下ろします）
+     5 | form
+  = ringi 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`ritsu ringi check <file.ringi>` のように走らせてください。

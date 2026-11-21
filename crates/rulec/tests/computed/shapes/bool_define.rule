@@ -1,0 +1,17 @@
+rule bool_define v1
+description "A truth value a `define` compares the amount with, read with the amount"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define big : bool = amount > 100_000JPY
+
+outputs
+  x : choice
+
+table pick
+| amount       | big   | -> x |
+| <=100_000JPY | false | one  |
+| >100_000JPY  | true  | two  |

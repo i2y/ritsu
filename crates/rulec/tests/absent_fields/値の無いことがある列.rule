@@ -1,0 +1,38 @@
+rule 値の無いことがある列(optional_columns) v1
+description "店で受け取る注文には、表が手数料も重さも引く率も書かない。どの単位も、その列だけが持つ。それぞれの区分（架空）"
+
+enum 地域(zone) = 県内(local) | 県外(national) | 店で受け取る(pickup)
+enum 区分(band) = 安い(low) | 高い(high) | 無料(free)
+
+inputs
+  地域(zone) : 地域
+
+outputs
+  手数料の区分(by_fee)  : 区分
+  重さの区分(by_weight) : 区分
+  率の区分(by_cut)      : 区分
+
+# 地域ごとの送る手数料、重さ、引く率。店で受け取る注文には、どれも無い
+table 条件の表(terms_of)
+| 地域         | -> 手数料(fee) : money[円]? | 重さ(weight) : mass[kg]? | 引く率(cut) : rate[step 1%]? |
+| 県内         | 100円                       | 2kg                      | 5%                           |
+| 県外         | 300円                       | 5kg                      | 10%                          |
+| 店で受け取る | none                        | none                     | none                         |
+
+table 手数料の区分の表(fee_band)
+| 手数料  | -> 手数料の区分 |
+| <=100円 | 安い            |
+| >=300円 | 高い            |
+| none    | 無料            |
+
+table 重さの区分の表(weight_band)
+| 重さ  | -> 重さの区分 |
+| <=2kg | 安い          |
+| >=5kg | 高い          |
+| none  | 無料          |
+
+table 率の区分の表(cut_band)
+| 引く率 | -> 率の区分 |
+| <=5%   | 安い        |
+| >=10%  | 高い        |
+| none   | 無料        |

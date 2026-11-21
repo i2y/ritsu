@@ -1,0 +1,14 @@
+rule 誤りが呼ぶ組み込みと同じ名前の規則(super) v1
+description "数量による料金。誤りの class が呼ぶ組み込みと同じ名前の規則（架空）"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 数量ごとの料金(fee_by_qty)
+policy unique
+| 数量 | -> 料金 |
+| <=5  | 1USD    |
+| >5   | 2USD    |

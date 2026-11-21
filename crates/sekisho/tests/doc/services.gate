@@ -1,0 +1,82 @@
+gate services v1
+description "People read documents and a service indexes them: policies written for every action that apply on some of them and not on others"
+namespace Library
+
+role staff
+  description "Anyone on the staff"
+
+principal User
+  description "A member of the staff"
+  roles staff
+  attributes
+    suspended : bool
+
+principal Service
+  description "A program that runs on its own"
+
+resource Doc
+  description "A document"
+  attributes
+    open_to_all : bool
+
+resource Folder
+  description "A folder of documents"
+
+action read_doc
+  description "Read a document"
+  principal User
+  resource Doc
+
+action index_doc
+  description "Index a document"
+  principal Service
+  resource Doc
+
+action purge_doc
+  description "Remove a document for good"
+  principal User
+  resource Doc
+  nobody "documents are kept"
+
+action list_folder
+  description "List what a folder holds"
+  principal User
+  resource Folder
+
+permit staff_read_and_purge
+  description "Staff read documents, and would remove them"
+  principal in staff
+  action read_doc, purge_doc
+
+permit services_index
+  description "Services index the documents open to all"
+  principal is Service
+  action index_doc
+  when resource.open_to_all
+
+permit staff_list
+  description "Staff list a folder"
+  principal in staff
+  action list_folder
+
+forbid suspended_do_nothing
+  description "A suspended person does nothing"
+  action any
+  when principal.suspended
+
+forbid services_skip_closed_docs
+  description "A service leaves alone a document that is not open to all"
+  principal is Service
+  action any
+  unless resource.open_to_all
+
+forbid no_one_purges
+  description "Documents are kept"
+  action purge_doc
+
+forbid suspended_staff_see_nothing_open
+  description "A suspended member of the staff sees nothing that is open to all"
+  principal in staff
+  action read_doc, list_folder
+  when resource.open_to_all
+  when principal.suspended

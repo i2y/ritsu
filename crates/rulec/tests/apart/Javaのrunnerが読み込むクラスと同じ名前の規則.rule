@@ -1,0 +1,14 @@
+rule 区域の料金(linked_hash_map) v1
+description "Java の runner が読み込む JDK のクラスと同じ名前の規則"
+
+inputs
+  区域(zone) : number  range >=1 <=9
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 区域ごとの料金(fee_by_zone)
+policy unique
+| 区域 | -> 料金 |
+| <=3  | 4USD    |
+| >3   | 8USD    |

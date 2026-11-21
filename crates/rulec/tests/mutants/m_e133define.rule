@@ -1,0 +1,32 @@
+rule dice_total v1
+description "Two dice are rolled for a prize. The total is accepted only up to 10, so a roll of 11 or 12 is refused, and a total of 8 or more wins the large prize. The chances count only the rolls the rule answers. An example of a range on a value the rule works out from random inputs"
+
+enum prize = small | large
+
+inputs
+  first  : number  range >=1 <=6  random
+  second : number  range >=1 <=6  random
+
+# The range is what the rule accepts for the total: a roll of 11 or 12 is refused.
+define total : number = first + second
+
+outputs
+  prize : prize
+
+table prize_of
+policy unique
+| total | -> prize |
+| <8    | small    |
+| >=8   | large    |
+
+# Of the 36 rolls the rule answers 33, and 12 of those total 8 to 10.
+chances
+| -> prize | chance |
+| large    | 4/11   |
+| small    | 7/11   |
+
+examples
+| first | second | -> prize |
+| 1     | 1      | small    |
+| 3     | 5      | large    |
+| 4     | 6      | large    |

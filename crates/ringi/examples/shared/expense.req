@@ -1,0 +1,47 @@
+requirements expense v1
+description "Where the expense request's route, its deadline, the ban on deciding one's own request and the agent's limit come from: the fictional Authority Rules, Articles 5, 12 (Appendix 2), 13 and 14, copied beside this file"
+
+role general_affairs "Owns the Authority Rules and decides how they read"
+role accounting "Administers the expense request"
+
+source art5 = file "regulations/article-05.md" sha256:8e8b0595791514bd
+source art12 = file "regulations/article-12-appendix-2.md" sha256:507ed4102abc9df0
+source art13 = file "regulations/article-13.md" sha256:8f6b4b9093e41e64
+source art14 = file "regulations/article-14.md" sha256:299062fbc15613c3
+
+requirement routing_table
+  text "An expense request is checked, approved and decided by the roles Appendix 2 of Article 12 gives its category and amount"
+  owner general_affairs
+  from @art12
+  satisfied by ringi "../expense.ringi" table route
+  satisfied by ringi "../expense.ringi" who manager
+  satisfied by ringi "../expense.ringi" who dept_head
+  satisfied by ringi "../expense.ringi" who division_head
+  satisfied by ringi "../expense.ringi" who accounting
+  verified by ringi "../expense.ringi" example route
+
+requirement no_self_approval
+  text "No one decides their own request, whatever roles they hold"
+  owner general_affairs
+  from @art5
+  satisfied by sekisho "company.gate" policy no_one_decides_their_own
+  satisfied by ringi "../expense.ringi" ticket self_approval
+  verified by sekisho "company.gate" expect requesters_never_approve_on_a_strict_route
+
+requirement answer_in_three_business_days
+  text "Each stage is answered by the end of the third business day after the request reaches it, and goes one level up when it is not"
+  owner general_affairs
+  from @art13
+  satisfied by ringi "../expense.ringi" deadline every_stage
+  satisfied by ringi "../expense.ringi" table next_up
+  satisfied by koyomi "office.cal"
+  verified by ringi "../expense.ringi" claim reminder_before_due
+
+requirement agent_limit
+  text "The agent decides a request only on the rows the table gives it, never one over 30,000 yen, and hands a doubt to a manager"
+  owner general_affairs
+  from @art14
+  satisfied by ringi "../expense.ringi" table route
+  satisfied by ringi "../expense.ringi" who travel_agent
+  satisfied by dandori "travel_decision.flow"
+  verified by ringi "../expense.ringi" claim the_agent_decides_up_to_30000_yen

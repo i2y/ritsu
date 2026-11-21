@@ -1,0 +1,3 @@
+error[E001]: tests/mutants/E001_a_choice_with_no_values.ringi:4:10: The `choice` `kind` has no values under it
+     4 |   kind : choice "Kind"
+  = Write the values under it, indented, one a line, as `travel "Travel"`; to choose from a master or a rule's enum, write `choice from m.accounts`.

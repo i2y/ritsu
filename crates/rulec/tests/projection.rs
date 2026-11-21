@@ -32,7 +32,7 @@ fn generated(tag: &str) -> (TempDir, PathBuf) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", "tests/corpus/注文の送料.rule", "--out", &dir.to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
+        .args(["gen", "tests/corpus/注文の送料.rule", "--out", &dir.to_string_lossy(), "--lang", "ja"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
@@ -392,7 +392,7 @@ fn 省略できる入力は無いフィールドを_none_として読む() {
     let dir = tmp.path().to_path_buf();
     std::fs::write(dir.join("r.rule"), RULE).unwrap();
     std::fs::write(dir.join("order.json"), SCHEMA).unwrap();
-    let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).output().expect("rulec を起動できない");
+    let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] }).output().expect("rulec を起動できない");
     let o = rulec(&["check", "r.rule"]);
     assert!(o.status.success(), "省略できる入力に `required` を求めてはいけない:\n{}", String::from_utf8_lossy(&o.stdout));
     let o = rulec(&rulec::targets::up_to_0_40(&["gen", "r.rule", "--out", "gen"]));
@@ -440,7 +440,8 @@ fn built(tag: &str, rule: &str, contract: (&str, &str)) -> (TempDir, PathBuf) {
     let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).output().expect("rulec を起動できない");
     let o = rulec(&["check", "r.rule", "--format", "json"]);
     assert!(o.status.success(), "契約と規則はそろっているはず:\n{}", String::from_utf8_lossy(&o.stdout));
-    let o = rulec(&rulec::targets::up_to_0_40(&["gen", "r.rule", "--out", "gen"]));
+    // What `gen` writes is in the language of `--lang` alone (the root DESIGN 4.1).
+    let o = rulec(&rulec::targets::up_to_0_40(&["gen", "r.rule", "--out", "gen", "--lang", "ja"]));
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
     (tmp, dir)
 }
@@ -924,7 +925,7 @@ fn five_say(made: &Path, alias: &str, case: &str) -> Vec<(&'static str, String)>
 /// The rule at `rule`, generated in English or Japanese into `gen` under `dir`.
 fn generated_in(lang: &str, dir: &Path, rule: &str) -> PathBuf {
     let made = dir.join("gen");
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", lang).current_dir(root()).args(["gen", rule, "--out", &made.to_string_lossy()]).args(rulec::targets::UP_TO_0_40).output().expect("rulec を起動できない");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", lang).current_dir(root()).args(["gen", rule, "--out", &made.to_string_lossy(), "--lang", lang]).args(rulec::targets::UP_TO_0_40).output().expect("rulec を起動できない");
     assert!(o.status.success(), "{rule}: {}", String::from_utf8_lossy(&o.stdout));
     made
 }
@@ -957,21 +958,21 @@ fn 読む値は型どおりに確かめ_五つの言語で同じ文で止まる(
             (order(&[ok.clone(), line("600", "false", "4")]), "25".to_string()),
             (order(&[line("1500.0", "true", "1.0"), line("600", "false", "4")]), "25".to_string()),
             // an amount that is no integer, in each of its three readings before
-            (order(&[ok.clone(), line("1.5", "false", "4")]), format!("REFUSED {at}.lines[].amount_usd {integer}")),
-            (order(&[ok.clone(), line("true", "false", "4")]), format!("REFUSED {at}.lines[].amount_usd {integer}")),
-            (order(&[ok.clone(), line("\"7\"", "false", "4")]), format!("REFUSED {at}.lines[].amount_usd {integer}")),
+            (order(&[ok.clone(), line("1.5", "false", "4")]), format!("REFUSED {at}.lines[1].amount_usd {integer}")),
+            (order(&[ok.clone(), line("true", "false", "4")]), format!("REFUSED {at}.lines[1].amount_usd {integer}")),
+            (order(&[ok.clone(), line("\"7\"", "false", "4")]), format!("REFUSED {at}.lines[1].amount_usd {integer}")),
             // a `where` reads a boolean, and a number is not one
-            (order(&[ok.clone(), line("600", "1", "4")]), format!("REFUSED {at}.lines[].fragile {boolean}")),
-            (order(&[ok.clone(), "{\"sku\":\"s\",\"quantity\":4,\"amount_usd\":600}".to_string()]), format!("REFUSED {at}.lines[].fragile {missing}")),
+            (order(&[ok.clone(), line("600", "1", "4")]), format!("REFUSED {at}.lines[1].fragile {boolean}")),
+            (order(&[ok.clone(), "{\"sku\":\"s\",\"quantity\":4,\"amount_usd\":600}".to_string()]), format!("REFUSED {at}.lines[1].fragile {missing}")),
             // a field of an element the rule walks
-            (order(&[ok.clone(), line("600", "false", "\"abc\"")]), format!("REFUSED {at}.lines[].quantity {integer}")),
+            (order(&[ok.clone(), line("600", "false", "\"abc\"")]), format!("REFUSED {at}.lines[1].quantity {integer}")),
             // the collection, and an element of it
             // (an empty object is not used: PHP reads `{}` and `[]` as the same empty array)
             ("{\"id\":\"o1\",\"lines\":{\"first\":1}}".to_string(), format!("REFUSED {at}.lines {sequence}")),
             ("{\"id\":\"o1\"}".to_string(), format!("REFUSED {at}.lines {missing}")),
-            ("{\"id\":\"o1\",\"lines\":[5]}".to_string(), format!("REFUSED {at}.lines[] {object}")),
+            ("{\"id\":\"o1\",\"lines\":[5]}".to_string(), format!("REFUSED {at}.lines[0] {object}")),
             // two wrong values: the one read first, the same in every language
-            (order(&[line("1.5", "false", "1"), line("600", "\"x\"", "4")]), format!("REFUSED {at}.lines[].amount_usd {integer}")),
+            (order(&[line("1.5", "false", "1"), line("600", "\"x\"", "4")]), format!("REFUSED {at}.lines[0].amount_usd {integer}")),
         ];
         for (case, want) in &cases {
             for (l, got) in five_say(&made, alias, case) {
@@ -992,15 +993,87 @@ fn 読む値は型どおりに確かめ_五つの言語で同じ文で止まる(
     let (_tmp, dir) = built("where-order", RULE, ("order.json", SCHEMA));
     let row = |a: &str, f: &str, d: &str| format!("{{\"amount_usd\":{a},\"fragile\":{f},\"ships_on\":{d}}}");
     for (case, want) in [
-        (format!("{{\"lines\":[{},{}]}}", row("1.5", "true", "\"2026-01-01\""), row("3", "\"x\"", "\"2026-01-01\"")), "REFUSED order.lines[].amount_usd が整数ではありません"),
+        (format!("{{\"lines\":[{},{}]}}", row("1.5", "true", "\"2026-01-01\""), row("3", "\"x\"", "\"2026-01-01\"")), "REFUSED order.lines[0].amount_usd が整数ではありません"),
         (format!("{{\"lines\":[{},{}]}}", row("2000", "true", "\"2026-01-01\""), row("3", "false", "\"2026-08-01\"")), "25"),
         (format!("{{\"lines\":[{}]}}", row("3", "false", "\"2026-08-01\"")), "10"),
         // a date is held to the calendar before it is compared, and `any` reads every element
-        (format!("{{\"lines\":[{},{}]}}", row("3", "false", "\"2026-08-01\""), row("3", "false", "\"2026-02-30\"")), "REFUSED order.lines[].ships_on が日付ではありません"),
+        (format!("{{\"lines\":[{},{}]}}", row("3", "false", "\"2026-08-01\""), row("3", "false", "\"2026-02-30\"")), "REFUSED order.lines[1].ships_on が日付ではありません"),
     ] {
         for (l, got) in five_say(&dir.join("gen"), "top_fragile", &case) {
             assert_eq!(got, want, "top_fragile ({l}): {case}");
         }
+    }
+}
+
+/// A sentence of the projection function names an element by the index the rule's own door names
+/// the same element by (§15.234, §15.324). The corpus rule of a handling fee takes its lines out
+/// of `order.lines` with `elements … from`, which takes every element as it stands and in its
+/// order, and reads the total of the lines out of the same collection. Of three lines one is
+/// wrong at a time — the first, the middle one, and the last, the others right: a value of the
+/// wrong kind is the projection function's to refuse, `order.lines[1].quantity is not an
+/// integer`, and a value of the right kind outside the field's range is the door's,
+/// `lines[1].quantity is out of range`. The amount is read by the total first, so the index the
+/// total says is held to the door's too. The five say the same, in English and in the Japanese
+/// version of the rule.
+///
+/// A path through two collections (`order.lines[1].parts[0].name`) would need two indices, and no
+/// rule has one: E121 stops each way of writing it (§15.254), and nothing is generated.
+#[test]
+fn the_projection_function_counts_the_elements_as_the_door_does() {
+    if !need(Need::Python) {
+        return;
+    }
+    assert!(have("python3"), "python3 が要ります");
+    let line = |qty: &str, amount: &str| format!("{{\"sku\":\"s\",\"quantity\":{qty},\"amount_usd\":{amount},\"fragile\":false}}");
+    for (lang, rule, alias, at, [lines, quantity, amount], [integer, range]) in [
+        ("en", "tests/corpus/order_handling_fee.rule", "order_handling_fee", "order.lines", ["lines", "quantity", "amount"], ["is not an integer", "is out of range"]),
+        ("ja", "tests/corpus/注文の取扱手数料.rule", "order_handling", "注文.lines", ["明細", "数量", "金額"], ["が整数ではありません", "が範囲の外です"]),
+    ] {
+        let tmp = TempDir::new(&format!("projection-index-{alias}"));
+        let made = generated_in(lang, tmp.path(), rule);
+        for k in 0..3 {
+            let with = |bad: String| {
+                let mut ls = vec![line("1", "10"); 3];
+                ls[k] = bad;
+                format!("{{\"id\":\"o1\",\"lines\":[{}]}}", ls.join(","))
+            };
+            let cases = [
+                (with(line("\"abc\"", "10")), format!("REFUSED {at}[{k}].quantity {integer}")),
+                (with(line("500", "10")), format!("REFUSED {lines}[{k}].{quantity} {range}")),
+                (with(line("1", "1.5")), format!("REFUSED {at}[{k}].amount_usd {integer}")),
+                (with(line("1", "6000")), format!("REFUSED {lines}[{k}].{amount} {range}")),
+            ];
+            for (case, want) in &cases {
+                for (l, got) in five_say(&made, alias, case) {
+                    assert_eq!(&got, want, "{alias} ({l}): {case}");
+                }
+            }
+        }
+    }
+    // A field of an element through a collection in it, a sequence, a field and a count through
+    // one collection to another: each is E121's, in English and in Japanese.
+    for stem in [
+        "E121_a_collection_in_an_element",
+        "E121_要素の中の並び",
+        "E121_a_sequence_through_a_collection",
+        "E121_並びを通る並び",
+        "E121_a_collection_in_each_line",
+        "E121_明細の中の並び",
+        "E121_a_count_through_a_collection",
+        "E121_並びを通る件数",
+    ] {
+        let tmp = TempDir::new("projection-index-two");
+        let out = tmp.path().join("gen");
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", "en")
+            .current_dir(root())
+            .args(["gen", &format!("tests/collection_path/{stem}.rule"), "--out", &out.to_string_lossy()])
+            .args(rulec::targets::UP_TO_0_40)
+            .output()
+            .expect("rulec を起動できない");
+        let said = String::from_utf8_lossy(&o.stdout);
+        assert!(!o.status.success() && said.contains("error[E121]"), "{stem}: {said}");
+        assert!(!out.exists() || std::fs::read_dir(&out).unwrap().next().is_none(), "{stem}: something was generated");
     }
 }
 
@@ -1022,7 +1095,7 @@ fn protoの値も型どおりに確かめる() {
         (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{parcel}],\"declaredValueJpy\":\"5万\"}}"), "REFUSED 出荷.declared_value_jpy is not an integer".to_string()),
         (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{parcel}],\"declaredValueJpy\":true}}"), "REFUSED 出荷.declared_value_jpy is not an integer".to_string()),
         (format!("{{\"destination\":{{\"region\":\"kyushu\"}},\"parcels\":[{parcel}]}}"), "REFUSED 出荷.destination.region is not a value of enum 地域".to_string()),
-        (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{{\"handling\":7}}]}}"), "REFUSED 出荷.parcels[].handling is not a string".to_string()),
+        (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{{\"handling\":7}}]}}"), "REFUSED 出荷.parcels[0].handling is not a string".to_string()),
         // a place on the way that is not an object, where protojson writes a message
         (format!("{{\"destination\":\"honshu\",\"parcels\":[{parcel}]}}"), "REFUSED 出荷.destination is not an object".to_string()),
         // `null` is protojson's default: here, no window
@@ -1133,7 +1206,7 @@ fn ほかのファイルの列挙もその型の関数で読む() {
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
     let py = std::fs::read_to_string(dir.join("gen/python/item_fee.py")).unwrap();
     for want in [
-        "\nfrom catalog import Category as Category, Zone as Zone, zone_rank\n",
+        "\nfrom catalog import Category as Category, Zone as Zone, zone_rank as zone_rank, category_label as category_label, zone_label as zone_label\n",
         "\ndef _category_of(v: Any, what: str) -> Category:\n",
         "\ndef _zone_of(v: Any, what: str) -> Zone:\n",
     ] {
@@ -1150,4 +1223,128 @@ fn ほかのファイルの列挙もその型の関数で読む() {
             assert_eq!(got, want, "item_fee ({l}): {case}");
         }
     }
+}
+
+/// Two messages each nest an enum `Status` and a message `Item`: a field of `Order` names
+/// `Order`'s, as protobuf finds a name written in a message (§15.346).
+const NESTED: &str = "syntax = \"proto3\";\npackage shop.v1;\n\n\
+    message Cart {\n  message Item {\n    string sku = 1;\n  }\n  enum Status {\n    STATUS_UNSPECIFIED = 0;\n    STATUS_OPEN = 1;\n  }\n  repeated Item items = 1;\n  Status status = 2;\n}\n\n\
+    message Order {\n  message Item {\n    int64 quantity = 1 [(buf.validate.field).int64 = {gte: 1, lte: 99}];\n  }\n  enum Status {\n    STATUS_PICKED = 0;\n    STATUS_PACKED = 1;\n  }\n  message Line {\n    Status status = 1;\n  }\n  \
+    Item first = 1 [(buf.validate.field).required = true];\n  repeated Item items = 2 [(buf.validate.field).repeated.max_items = 20];\n  repeated Line lines = 3 [(buf.validate.field).repeated.max_items = 20];\n}\n";
+
+/// `rulec check` of `r.rule` in `dir`, in English and in Japanese: the exit and what it says.
+fn checked(dir: &Path) -> Vec<(i32, String)> {
+    ["en", "ja"]
+        .iter()
+        .map(|lang| {
+            let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", lang).current_dir(dir).args(["check", "r.rule"]).output().expect("rulec を起動できない");
+            (o.status.code().unwrap_or(-1), format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)))
+        })
+        .collect()
+}
+
+/// A line's `status` is `Order.Status`, whose value 0 is `STATUS_PICKED`: protojson leaves it out
+/// of a line that is picked, and the five count that line. The type was looked up by its last name,
+/// which found `Cart.Status` first: a line left out read as `STATUS_UNSPECIFIED`, the five counted
+/// none, and `check` said the rows for one picked line or more were never reached (W133).
+#[test]
+fn an_enum_two_messages_nest_is_the_one_of_the_message_the_field_is_in() {
+    for (alias, rule, answers) in [
+        (
+            "picked_lines",
+            "rule picked_lines v1\n\nshape order = proto \"order.proto\" Order\n\n\
+             inputs\n  picked : number  range >=0 <=20  from count order.lines where status = STATUS_PICKED\n\n\
+             outputs\n  fee : money[USD]  round up(1USD)\n\n\
+             table fees\npolicy unique\n| picked | -> fee |\n| 0      | 1USD   |\n| 1      | 2USD   |\n| >=2    | 3USD   |\n",
+            ["3", "1", "2", "1"],
+        ),
+        (
+            "picked_lines_ja",
+            "rule 拾った明細(picked_lines_ja) v1\n\nshape 注文(order) = proto \"order.proto\" Order\n\n\
+             inputs\n  拾った数(picked) : number  range >=0 <=20  from count 注文.lines where status = STATUS_PICKED\n\n\
+             outputs\n  手数料(fee) : money[円]  round up(10円)\n\n\
+             table 手数料表(fees)\npolicy unique\n| 拾った数 | -> 手数料 |\n| 0        | 100円     |\n| 1        | 200円     |\n| >=2      | 300円     |\n",
+            ["300", "100", "200", "100"],
+        ),
+    ] {
+        let (_tmp, dir) = built(alias, rule, ("order.proto", NESTED));
+        for (code, said) in checked(&dir) {
+            assert!(code == 0 && !said.contains("W133"), "{alias}: {said}");
+        }
+        let cases = [
+            // two lines left at the value numbered 0, which protojson leaves out
+            "{\"lines\":[{},{\"status\":\"STATUS_PACKED\"},{}]}",
+            "{\"lines\":[{\"status\":\"STATUS_PACKED\"}]}",
+            // the value 0 written out
+            "{\"lines\":[{\"status\":\"STATUS_PICKED\"}]}",
+            "{}",
+        ];
+        five(&dir, alias, &cases.iter().zip(answers).map(|(c, a)| (c.to_string(), a)).collect::<Vec<_>>());
+    }
+}
+
+/// `first` and the elements of `items` are `Order.Item`, which has `quantity`; `Cart.Item` has
+/// only `sku`. The type was looked up by its last name, which found `Cart.Item` first, and `check`
+/// said the contract had no `order.first.quantity` and an element no `quantity` (E121).
+#[test]
+fn a_message_two_messages_nest_is_the_one_of_the_message_the_field_is_in() {
+    for (alias, rule, answers) in [
+        (
+            "first_quantity",
+            "rule first_quantity v1\n\nshape order = proto \"order.proto\" Order\n\n\
+             inputs\n  quantity : number  range >=1 <=99    from order.first.quantity\n  total    : number  range >=0 <=1980  from sum order.items of quantity\n\n\
+             outputs\n  fee : money[USD]  round up(1USD)\n\n\
+             table fees\npolicy unique\n| quantity | total | -> fee |\n| >=10     | -     | 0USD   |\n| <10      | >=100 | 1USD   |\n| <10      | <100  | 2USD   |\n",
+            ["0", "1", "2"],
+        ),
+        (
+            "first_quantity_ja",
+            "rule 先頭の数量(first_quantity_ja) v1\n\nshape 注文(order) = proto \"order.proto\" Order\n\n\
+             inputs\n  数量(quantity) : number  range >=1 <=99    from 注文.first.quantity\n  合計(total)    : number  range >=0 <=1980  from sum 注文.items of quantity\n\n\
+             outputs\n  手数料(fee) : money[円]  round up(10円)\n\n\
+             table 手数料表(fees)\npolicy unique\n| 数量 | 合計  | -> 手数料 |\n| >=10 | -     | 0円       |\n| <10  | >=100 | 100円     |\n| <10  | <100  | 200円     |\n",
+            ["0", "100", "200"],
+        ),
+    ] {
+        let (_tmp, dir) = built(alias, rule, ("order.proto", NESTED));
+        for (code, said) in checked(&dir) {
+            assert!(code == 0 && !said.contains("E121"), "{alias}: {said}");
+        }
+        let cases = [
+            "{\"first\":{\"quantity\":\"12\"}}",
+            "{\"first\":{\"quantity\":\"3\"},\"items\":[{\"quantity\":\"60\"},{\"quantity\":\"50\"}]}",
+            "{\"first\":{\"quantity\":3},\"items\":[{\"quantity\":\"5\"}]}",
+        ];
+        five(&dir, alias, &cases.iter().zip(answers).map(|(c, a)| (c.to_string(), a)).collect::<Vec<_>>());
+    }
+}
+
+/// A `shape` line names a message as an `import proto` line names an enum (§15.346): by its path
+/// from the package, with the package or without, or by its own name where only one message has
+/// it. A name two messages nest is E013, which names both; the first was read.
+#[test]
+fn a_shape_names_a_message_two_messages_nest_by_its_path() {
+    let rule = |at: &str| {
+        format!(
+            "rule item_quantity v1\n\nshape item = proto \"order.proto\" {at}\n\n\
+             inputs\n  quantity : number  range >=1 <=99  from item.quantity\n\n\
+             outputs\n  big : bool\n\n\
+             table t\npolicy unique\n| quantity | -> big |\n| >=10     | true   |\n| <10      | false  |\n"
+        )
+    };
+    for at in ["Order.Item", "shop.v1.Order.Item"] {
+        let (_tmp, dir) = built("item-path", &rule(at), ("order.proto", NESTED));
+        for (code, said) in checked(&dir) {
+            assert_eq!(code, 0, "{at}: {said}");
+        }
+    }
+    let tmp = TempDir::new("projection-item-two");
+    std::fs::write(tmp.path().join("r.rule"), rule("Item")).unwrap();
+    std::fs::write(tmp.path().join("order.proto"), NESTED).unwrap();
+    let said = checked(tmp.path());
+    assert_eq!(said[0].0, 1, "{}", said[0].1);
+    assert!(said[0].1.contains("error[E013]: `order.proto` has more than one message named `Item`"), "{}", said[0].1);
+    assert!(said[0].1.contains("Say which, by the messages it is nested in: `Cart.Item`, `Order.Item`"), "{}", said[0].1);
+    assert!(said[1].1.contains("エラー[E013]: `order.proto` に、`Item` という名前のメッセージが複数あります"), "{}", said[1].1);
+    assert!(said[1].1.contains("どれを読むかを、入れ子にしているメッセージの名前を前に付けて書いてください: `Cart.Item`、`Order.Item`"), "{}", said[1].1);
 }

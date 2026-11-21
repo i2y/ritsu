@@ -120,6 +120,7 @@
           "inputs": [],
           "types": []
         },
+        "workflow_lines": [],
         "total": {
           "gained": 1,
           "lost": 0,

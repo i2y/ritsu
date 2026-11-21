@@ -1,0 +1,4 @@
+error[E008]: chain_names.ja.cal:8:21: The name 受付日 is not declared
+     8 | date 催促(reminder) = 受付日
+  = A date starts from the date under `inputs` or from another date declared with `date`.
+  = `受付日` is written on lines 12 and 20 too.

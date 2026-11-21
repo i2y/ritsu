@@ -1,0 +1,17 @@
+# rulec が決められない問い：`二乗の和` は二つの入力の二乗の和で、整数の上の線形の形でない。`添付` を見せていないとき（どちらも 3 以下）、16 は `二乗の和` の範囲の中にあるが、そこでどの二つの二乗を足しても 16 にならない
+request 例(example) v1 "例"
+
+form
+  日数(asked)     : number "申請する日数"  range >=0 <=20
+  残り(left)      : number "残りの日数"  range >=0 <=20
+  二乗の和(spread) : number "二つの二乗の和" = 日数 * 日数 + 残り * 残り
+  添付(note)      : attachment "添付"  required when 二乗の和 > 15 and 二乗の和 < 17  shown when 日数 >= 4 or 残り >= 4
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

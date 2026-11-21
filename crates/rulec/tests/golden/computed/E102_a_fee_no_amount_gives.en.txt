@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 1 never matches
+  --> tests/computed/E102_a_fee_no_amount_gives.rule:15 table hidden
+   |
+15 | | >900JPY  | <=30_000JPY | true      |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1: no input reaches here
+ 7 | define fee : money[JPY] = down(amount * 3%, 1JPY)
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^ >=0JPY <=900JPY over the values of `amount` in this row
+   |
+ `fee` is computed from `amount`. Over the values of `amount` this row takes, `fee` only comes to >=0JPY <=900JPY, which is not what this row asks for.
+ hint: compare the expression with this row's conditions. No input reaches this row, so if it is not needed, delete it.
+

@@ -8,12 +8,20 @@
 //! repeated here. These are the rest: the words read by their place, the shapes E070 and E073 stop, a
 //! claim broken and one past its budget, the counts W131 and E108 read, a total of the weights past
 //! int64, an example and a claim on a call the code refuses, what `rulec gen` and `rulec api` say,
-//! what the vectors hold the functions to, a certificate that lies, and the pages.
+//! what the vectors hold the functions to, a certificate that lies, a value worked out from the
+//! random inputs alone (the materials in `tests/chances`, English first, a Japanese version beside
+//! each), and the pages.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::tmp::tmpdir_in;
 use ritsu_testkit::{Need, TempDir, ready, skip};
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -24,10 +32,13 @@ fn run_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
 }
 
 fn run_lang(dir: &Path, lang: &str, args: &[&str]) -> (i32, String, String) {
+    // What `gen` and `api` write is in the language of `--lang` alone (the root DESIGN 4.1).
+    let written_in = if args.contains(&"--lang") { vec![] } else { vec!["--lang", lang] };
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", lang)
         .current_dir(dir)
         .args(args)
+        .args(written_in)
         .output()
         .expect("cannot start rulec");
     (
@@ -287,7 +298,7 @@ fn a_weight_reads_an_end_it_does_not_write_as_the_end_of_its_type() {
     assert_eq!(codes_of(t.path(), "up.rule", &with("  range >=0", "w")), ["E108"]);
     let text = shown("up.rule");
     assert!(text.contains("Cannot prove that the total of the weights fits in int64"), "{text}");
-    assert!(text.contains("a weight can be as large as 9223372036854775807"), "{text}");
+    assert!(text.contains("a weight can be as large as 9_223_372_036_854_775_807"), "{text}");
     assert!(text.contains("`w` has no upper or no lower bound"), "{text}");
     assert_eq!(codes_of(t.path(), "low.rule", &with("  range <=10", "w")), ["E073"]);
     let text = shown("low.rule");
@@ -304,7 +315,7 @@ fn the_points_are_counted_for_w131_and_e108() {
     let t = TempDir::new("chances-points");
     let (c, out, _) = run(&["check", "tests/mutants/m_w131.rule"]);
     assert_eq!(c, 0);
-    assert!(out.contains("warning[W131]: The chances function runs the rule 10000000 times on every call"), "{out}");
+    assert!(out.contains("warning[W131]: The chances function runs the rule 10_000_000 times on every call"), "{out}");
     let wide = std::fs::read_to_string(root().join(ROUTING)).unwrap().replacen("range >=0 <=9999  random", "range >=0 <=99_999_999  random", 1);
     assert!(codes_of(t.path(), "wide.rule", &wide).is_empty(), "a pick by weight is said to run its points");
     let (c, api, _) = run_in(t.path(), &["api", "wide.rule"]);
@@ -434,14 +445,9 @@ fn a_total_of_the_weights_past_int64_is_refused_in_every_language() {
         assert!(vectors.lines().any(|l| l.contains("1223372036854775807")), "{file}: the team at 2^63 - 1 is not among the vectors:\n{vectors}");
 
         // Every language at hand answers the team at 2^63 − 1 and refuses the case past it.
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-            .env("RULEC_LANG", lang)
-            .env("TMPDIR", tmpdir_in(&gen_out))
-            .args(["test", gen_out.to_str().unwrap(), "--format", "json"])
-            .output()
-            .expect("cannot start rulec test");
-        let said_test = String::from_utf8_lossy(&o.stdout).into_owned();
-        let j = json(said_test.lines().next().unwrap_or_else(|| panic!("no result: {}", String::from_utf8_lossy(&o.stderr))));
+        let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", lang).env("TMPDIR", tmpdir_in(&gen_out)).args(["test", gen_out.to_str().unwrap(), "--format", "json"]), RULEC_LIMIT, "rulec test running the generated code");
+        let said_test = o.stdout.clone();
+        let j = json(said_test.lines().next().unwrap_or_else(|| panic!("no result: {}", o.stderr)));
         for why in j.get("skipped").and_then(|v| v.as_arr()).unwrap_or_default() {
             skip(&format!("rulec test: {}", why.as_str().unwrap_or_default()));
         }
@@ -503,7 +509,7 @@ fn a_call_the_code_refuses_is_e019_in_an_example_and_e133_in_a_claim() {
     for (what, row, said) in [
         ("weights past int64", "| three_at_the_top | 1     | 1/3    |", "With reviewers = three_at_the_top, the generated code refuses the call as an input error: the total of the weights of reviewers does not fit in int64"),
         // Each draw would take reviewer 1, and the claim says so: the door refuses the team all the same.
-        ("a field past its range", "| past_the_range | 1       | 1      |", "With reviewers = past_the_range, the generated code refuses the call as an input error: capacity is out of range"),
+        ("a field past its range", "| past_the_range | 1       | 1      |", "With reviewers = past_the_range, the generated code refuses the call as an input error: reviewers[0].capacity is out of range"),
     ] {
         let ds = diags_of(t.path(), "claim.rule", &claim(&base, row), &[]);
         let e133 = said_by(&ds, "E133");
@@ -630,15 +636,10 @@ fn the_functions_count_the_chances_the_reference_counts() {
     let generated = t.path().join("gen");
     let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", ROUTING, BOX, "--out", generated.to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmpdir_in(&generated))
-        .args(["test", generated.to_str().unwrap()])
-        .output()
-        .expect("cannot start rulec test");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-    assert!(o.status.success(), "{said}");
-    for (rule, cases) in [("case_routing", 11), ("reward_box", 20)] {
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&generated)).args(["test", generated.to_str().unwrap()]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
+    for (rule, cases) in [("case_routing", 12), ("reward_box", 20)] {
         let langs: Vec<&str> = said.lines().filter(|l| l.starts_with(&format!("ok    {rule} (")) && l.contains(", chances)")).collect();
         assert!(!langs.is_empty(), "{rule}: no language counted the chances:\n{said}");
         assert!(langs.iter().all(|l| l.ends_with(&format!("{cases} chance cases"))), "{said}");
@@ -818,6 +819,126 @@ fn the_panel_counts_the_chances_of_the_case_entered() {
     };
     assert_eq!(rows(&off), ["prize | chance", "first | 1/1000 (0.1%)", "second | 9/1000 (0.9%)", "third | 1/20 (5.0%)", "no_prize | 47/50 (94.0%)"], "{said}");
     assert_eq!(rows(&on), ["prize | chance", "first | 1/1000 (0.1%)", "second | 9/1000 (0.9%)", "third | 9/100 (9.0%)", "no_prize | 9/10 (90.0%)"], "{said}");
+}
+
+/// A table that reads a value worked out from the random inputs alone (`define total = first +
+/// second`, with no range) is counted as the re-checkers can count it again (§15.325). The value is
+/// not drawn: its coordinates do not tile what an input is drawn from, so it is no random axis of the
+/// certificate. `tests/chances/two_dice_for_a_prize.rule` runs the 36 rolls for each claim, and both
+/// re-checkers run them again and prove the claims. `tests/chances/dice_on_an_order.rule` reads an
+/// amount of up to a million yen beside the total, too many amounts to run each with every roll; the
+/// check counts the rolls once for each band of amounts, as before, and its certificate lists the
+/// dice and the amount as its axes, without the total, so both re-checkers take it and state the
+/// classes they do not run. A Japanese version stands beside each. Before, both rules passed the
+/// check, and both re-checkers refused their certificates (the total was written as a random axis).
+/// A certificate that lies about any of it is refused by both, and a claim the rolls do not bear out
+/// is still E133.
+#[test]
+fn a_value_worked_out_from_the_random_inputs_is_counted_as_the_rechecks_count_it() {
+    let rules = [
+        ("tests/chances/two_dice_for_a_prize.rule", "tests/chances/二つのさいころの景品.rule"),
+        ("tests/chances/dice_on_an_order.rule", "tests/chances/注文ごとのさいころ.rule"),
+    ];
+    let cert_of = |rel: &str| -> String {
+        let (c, cert, e) = run(&["certificate", rel]);
+        assert_eq!(c, 0, "{rel}: {e}");
+        cert
+    };
+    for (en, ja) in rules {
+        for rel in [en, ja] {
+            let (c, out, _) = run(&["check", rel]);
+            assert_eq!((c, out.trim()), (0, format!("ok {rel}").as_str()), "{rel}");
+            let cert = json(&cert_of(rel));
+            let ch = cert.get("chances").unwrap_or_else(|| panic!("{rel}: no chances"));
+            let axes: Vec<(String, bool)> = ch
+                .get("axes")
+                .and_then(|a| a.as_arr())
+                .unwrap()
+                .iter()
+                .map(|a| (a.get("column").and_then(|x| x.as_str()).unwrap_or_default().to_string(), a.get("random").and_then(|x| x.as_bool()).unwrap_or(false)))
+                .collect();
+            let runs: Vec<String> = ch
+                .get("claims")
+                .and_then(|a| a.as_arr())
+                .unwrap()
+                .iter()
+                .flat_map(|cl| cl.get("classes").and_then(|k| k.as_arr()).map(|k| k.to_vec()).unwrap_or_default())
+                .map(|k| k.get("run").and_then(|x| x.as_str()).unwrap_or("-").to_string())
+                .collect();
+            if en.contains("two_dice") {
+                // Every roll run for each claim, over no axes.
+                assert!(axes.is_empty(), "{rel}: {axes:?}");
+                assert_eq!(runs, ["36", "36"], "{rel}");
+            } else {
+                // The dice and the amount, and no total among the random axes.
+                let random: Vec<&str> = axes.iter().filter(|(_, r)| *r).map(|(n, _)| n.as_str()).collect();
+                assert_eq!(random.len(), 2, "{rel}: {axes:?}");
+                assert_eq!(axes.len(), 3, "{rel}: {axes:?}");
+                assert!(!axes.iter().any(|(n, _)| n == "total" || n == "合計"), "{rel}: {axes:?}");
+                assert!(runs.iter().all(|r| r == "36"), "{rel}: {runs:?}");
+            }
+        }
+    }
+    // A claim the rolls do not bear out stops the check, as before.
+    let t = TempDir::new("chances-worked-out");
+    let src = std::fs::read_to_string(root().join(rules[0].0)).unwrap();
+    let broken = src.replacen("| large    | 5/12   |", "| large    | 1/2    |", 1);
+    assert_ne!(broken, src);
+    assert_eq!(codes_of(t.path(), "broken.rule", &broken), ["E133"]);
+
+    let mut recheckers: Vec<(String, Vec<String>)> = Vec::new();
+    if ready(Need::Python, || have("python3"), "no python3, so tools/recheck.py was not run") {
+        recheckers.push(("python3".into(), vec![root().join("tools/recheck.py").to_string_lossy().into_owned()]));
+    }
+    let lean = root().join("../../proofs/.lake/build/bin/rulec-recheck");
+    if ready(Need::Lean, || lean.exists(), "ritsu's proofs/ is not built (lake build there makes it)") {
+        recheckers.push((lean.to_string_lossy().into_owned(), Vec::new()));
+    }
+    let recheck = |bin: &str, args: &[String], rel: &str, cert: &str| -> (i32, String) {
+        use std::io::Write;
+        let mut p = Command::new(bin)
+            .current_dir(root())
+            .args(args)
+            .args(["--rule", rel])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap_or_else(|e| panic!("cannot start {bin}: {e}"));
+        p.stdin.as_mut().unwrap().write_all(cert.as_bytes()).unwrap();
+        let o = p.wait_with_output().unwrap();
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr))
+    };
+    // The rule, what is replaced, with what, and what the lie is.
+    let forged: [(&str, &str, &str, &str); 4] = [
+        (rules[0].0, "\"run\":\"36\",\"chance\":\"5/12\"", "\"run\":\"35\",\"chance\":\"5/12\"", "a roll fewer run than there are"),
+        (
+            rules[0].0,
+            "\"axes\":[]",
+            "\"axes\":[{\"column\":\"total\",\"random\":true,\"type\":\"number\",\"step\":\"1\",\"coords\":[{\"point\":\"2\"},{\"open\":[\"2\",\"12\"]},{\"point\":\"12\"}]}]",
+            "the total written as an axis the inputs are drawn from",
+        ),
+        (rules[1].0, "{\"at\":[[0,3]],\"run\":\"36\",\"chance\":\"5/12\",\"low\":\"5/12\",\"high\":\"5/12\"},", "", "a band of amounts the claim's cells take, left out"),
+        (rules[1].0, "\"chance\":\"5/12\",\"low\":\"5/12\",\"high\":\"5/12\"}]", "\"chance\":\"5/12\",\"low\":\"1/3\",\"high\":\"5/12\"}]", "a lowest chance the class did not come to"),
+    ];
+    for (bin, args) in &recheckers {
+        for (en, ja) in rules {
+            for rel in [en, ja] {
+                let (c, said) = recheck(bin, args, rel, &cert_of(rel));
+                assert_eq!(c, 0, "{rel} under {bin}:\n{said}");
+                if en.contains("two_dice") {
+                    assert!(said.contains("every claim this program states was proved"), "{rel} under {bin}:\n{said}");
+                }
+            }
+        }
+        for (rel, from, to, what) in forged {
+            let cert = cert_of(rel);
+            assert!(cert.contains(from), "{what}: the certificate of {rel} no longer has the shape the forgery is written against:\n{cert}");
+            let (c, said) = recheck(bin, args, rel, &cert.replacen(from, to, 1));
+            assert_eq!(c, 1, "{what}: {bin} let the forgery of {rel} through:\n{said}");
+            assert!(said.contains("FAILED"), "{what}: {said}");
+        }
+    }
 }
 
 /// `rulec fmt` lines the claims up like any table, and leaves the chances as written.

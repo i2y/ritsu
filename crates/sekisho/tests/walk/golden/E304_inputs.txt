@@ -1,0 +1,34 @@
+error[E304]: tests/walk/inline.gate:49:1: The expectation `low_and_large_is_not_sent` does not hold: the 1 combination it picks is allowed
+    49 | expect deny low_and_large_is_not_sent
+  = For example: User holding staff, Doc (amount: 101JPY to 1000JPY), a: low, step: large (as when amount is 301JPY); allowed by `staff_send`.
+  = Fix the policies, or the expectation if it says more than is meant.
+error[E304]: tests/walk/inline.gate:54:1: The expectation `small_ones_over_100_are_not_sent` does not hold: the 1 combination it picks is allowed
+    54 | expect deny small_ones_over_100_are_not_sent
+  = For example: User holding staff, Doc (amount: 101JPY to 1000JPY), a: low, step: small (whenever amount is 101JPY to 300JPY); allowed by `staff_send`.
+  = Fix the policies, or the expectation if it says more than is meant.
+error[E304]: tests/walk/inline.gate:60:1: The expectation `nothing_is_compared` does not hold: the 1 combination it picks is allowed
+    60 | expect deny nothing_is_compared
+  = For example: User holding staff, Doc, side: same (whenever amount is 1JPY to 500JPY); allowed by `staff_compare`.
+  = Fix the policies, or the expectation if it says more than is meant.
+error[E304]: tests/walk/inline.gate:64:1: The expectation `staff_step_every_doc` does not hold: 1 of the 2 combinations it picks is denied
+    64 | expect allow staff_step_every_doc
+  = For example: User holding staff, Doc, step: large (as when amount is 301JPY); denied: no permit applies.
+  = Fix the policies, or the expectation if it says more than is meant.
+
+エラー[E304]: tests/walk/inline.gate:49:1: 期待 `low_and_large_is_not_sent` が成り立ちません。選んだ 1 通りのうち 1 通りが許されます
+    49 | expect deny low_and_large_is_not_sent
+  = 例：staff を持つ User、Doc（amount：101JPY〜1000JPY）、a：low、step：large（たとえば amount が 301JPY のとき）。`staff_send` が許します。
+  = ポリシーを直すか、期待が言いすぎているなら期待を直してください。
+エラー[E304]: tests/walk/inline.gate:54:1: 期待 `small_ones_over_100_are_not_sent` が成り立ちません。選んだ 1 通りのうち 1 通りが許されます
+    54 | expect deny small_ones_over_100_are_not_sent
+  = 例：staff を持つ User、Doc（amount：101JPY〜1000JPY）、a：low、step：small（amount が 101JPY〜300JPY のときはいつも）。`staff_send` が許します。
+  = ポリシーを直すか、期待が言いすぎているなら期待を直してください。
+エラー[E304]: tests/walk/inline.gate:60:1: 期待 `nothing_is_compared` が成り立ちません。選んだ 1 通りのうち 1 通りが許されます
+    60 | expect deny nothing_is_compared
+  = 例：staff を持つ User、Doc、side：same（amount が 1JPY〜500JPY のときはいつも）。`staff_compare` が許します。
+  = ポリシーを直すか、期待が言いすぎているなら期待を直してください。
+エラー[E304]: tests/walk/inline.gate:64:1: 期待 `staff_step_every_doc` が成り立ちません。選んだ 2 通りのうち 1 通りが拒まれます
+    64 | expect allow staff_step_every_doc
+  = 例：staff を持つ User、Doc、step：large（たとえば amount が 301JPY のとき）。どの permit も当てはまらないので拒まれます。
+  = ポリシーを直すか、期待が言いすぎているなら期待を直してください。
+

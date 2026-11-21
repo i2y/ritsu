@@ -1,0 +1,24 @@
+rule band_cut_between_yen v1
+description "A band read with the amount it is decided from, by a table that cuts the amount where the table above does not: the band is large from 31 yen to 41 yen and small elsewhere, so from 31 yen to 32 yen it is never small. Between 30 and 31 yen the cells of the two tables would let it be small, but no whole yen lies there"
+
+enum choice = one | two
+enum size = small | large
+
+inputs
+  amount : money[JPY]  range >=1JPY <=51JPY
+
+outputs
+  x : choice
+
+table band_of
+| amount         | -> band : size |
+| <31JPY         | small          |
+| >=31JPY <42JPY | large          |
+| >=42JPY        | small          |
+
+table pick
+| band  | amount        | -> x |
+| large | >30JPY <33JPY | one  |
+| large | >32JPY        | two  |
+| small | <=30JPY       | one  |
+| small | >32JPY        | two  |

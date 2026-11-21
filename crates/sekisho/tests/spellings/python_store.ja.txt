@@ -1,0 +1,5 @@
+警告[W402]: tests/spellings/python_store.gate:13:1: 型 `Return` は、Python のコードで `return` と書かれ、その言語の予約語です
+    13 | resource Return
+  = Python（`--target python`）: 型 `Return` を読む `Store` のメソッドとして `return` と書きますが、`return` は Python の予約語です。モジュールを読み込めず（`SyntaxError`）、`mypy --strict` も通りません。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
+tests/spellings/python_store.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

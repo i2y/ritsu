@@ -1,0 +1,16 @@
+rule 刻みの間の境(between_steps_ja) v1
+description "枚数の取る二つの値の間に書いた境。五枚以上なら大きなロールを使い、枚数は二枚ずつ増える"
+
+inputs
+  贈り物の数(gifts) : number  range >=0 <=5
+
+define 枚数(sheets) : number = 贈り物の数 * 2
+
+outputs
+  大きなロール(large_roll) : bool
+
+table ロールの判定(roll_of)
+policy unique
+| 枚数 | -> 大きなロール |
+| <5   | false           |
+| >=5  | true            |

@@ -1,0 +1,22 @@
+workflow TypeScriptの語 v1
+description "TypeScript の語と同じ名前のレコードと列挙です。"
+
+record 日付
+  日 : string
+
+enum 時間枠 = 早い | 遅い
+
+inputs
+  番号 : string
+
+outputs
+  日 : string
+  枠 : 時間枠
+
+task いつ(番号: string) -> 日付
+task 枠(番号: string) -> 時間枠
+
+flow
+  let d = いつ(番号: 番号)
+  let s = 枠(番号: 番号)
+  succeed 日 = d.日, 枠 = s

@@ -1,15 +1,21 @@
-//! The names of a gate that the code of a target writes as one identifier (W402 when the file is
-//! checked, E401 when `gen` writes the target; DESIGN 24).
+//! The names of a gate that the code of a target writes as an identifier it cannot take (W402 when
+//! the file is checked, E401 when `gen` writes the target; DESIGN 24, 32).
 //!
 //! The module of each language declares the records of the types it reads, the enums, its own types
 //! (`Store`, `Request`, …) and the input of each action, at its top level, and Go a field for each
 //! attribute, the roles and the groups in each record. Each language spells a name its own way
 //! (`order_state` is `OrderState`, `refund` has the input `RefundInput`), so two names of the gate
-//! can be one identifier, and one can be a name of the module's or one it reads from elsewhere
-//! (`Date`, `Literal`). A generator renames none of them: a call is written with the names `check`
-//! read. Each form breaks some of the three languages, and the others and Cedar stay as they are,
-//! so `check` warns, and `gen` of a language it breaks stops. Types and enums of one name are E006,
-//! and a word a language keeps, as a name of the gate's, is E008, before any of this.
+//! can be one identifier, one can be a name of the module's or one it reads from elsewhere (`Date`,
+//! `Literal`), and one can be a reserved word of the language where the code writes it as a name:
+//! Python writes an attribute as a field of its record and reads a type with a method of `Store`
+//! (`class`, `return`), and the name of the file names Python's module, Go's package, and the
+//! module an index of `ritsu gen`'s exports in TypeScript (`pass`, `select`, `interface`). A
+//! generator renames none of them: a call is written with the names `check` read. Each form breaks
+//! some of the three languages, and the others and Cedar stay as they are, so `check` warns, and
+//! `gen` of a language it breaks stops. Types and enums of one name are E006, and a reserved word of
+//! Cedar's, which every target writes, is E008, before any of this. Every other name of a gate is
+//! written where a reserved word is a name too (a property, a method, a string) or with more around
+//! it (`authorizeDelete`, `in_class`), and Go writes it with a capital.
 
 use crate::cedar::Shape;
 use crate::check::Outcome;
@@ -31,6 +37,10 @@ pub enum From {
     Attr(usize, usize),
     /// a name the module declares for itself, or reads from elsewhere
     Own,
+    /// a reserved word of the language, which cannot be a name where the code writes it
+    Word,
+    /// the name of the file (its alias), which names the module and the package of the code
+    File,
 }
 
 /// One identifier the code of a language declares.
@@ -70,6 +80,15 @@ impl Language {
             Language::TypeScript => "TypeScript",
             Language::Python => "Python",
             Language::Go => "Go",
+        }
+    }
+
+    /// What a reserved word written as a name does.
+    fn kept(self) -> Text {
+        match self {
+            Language::TypeScript => tr!("モジュールを読み込めず、型の検査を通りません", "the module does not parse, and does not type-check"),
+            Language::Python => tr!("モジュールを読み込めず（`SyntaxError`）、`mypy --strict` も通りません", "the module does not load (`SyntaxError`), nor pass `mypy --strict`"),
+            Language::Go => tr!("パッケージをコンパイルできません（`syntax error`）", "the package does not compile (`syntax error`)"),
         }
     }
 
@@ -133,6 +152,11 @@ fn what(g: &Gate, f: From) -> Text {
             tr!("型 `{ty}` の属性 `{a}`", "the attribute `{a}` of the type `{ty}`")
         }
         From::Own => tr!("生成するコード", "the generated code"),
+        From::Word => tr!("言語の予約語", "a reserved word of the language"),
+        From::File => {
+            let a = &g.named.alias;
+            tr!("ファイル `{a}`", "the file `{a}`")
+        }
     }
 }
 
@@ -142,7 +166,8 @@ fn line_of(g: &Gate, f: From) -> usize {
         From::Enum(e) => g.enums[e].named.line,
         From::Input(i) => g.actions[i].named.line,
         From::Attr(t, i) => g.types[t].attrs[i].named.line,
-        From::Own => 0,
+        From::File => g.named.line,
+        From::Own | From::Word => 0,
     }
 }
 
@@ -183,6 +208,59 @@ fn own(lang: Language, g: &Gate, x: From, id: &str) -> Text {
     )
 }
 
+/// Where a target writes the names of one list of [`Declared`]: what a reserved word among them is
+/// written as.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// at the top level of the module
+    Top,
+    /// as a field of the record of a type
+    Field,
+    /// as the method of `Store` that reads a type
+    Method,
+    /// as the name of the module: Python's file, and the module an index of `ritsu gen`'s exports in
+    /// TypeScript
+    Module,
+    /// as the name of Go's package
+    Package,
+}
+
+/// What one language says of a gate's name that it writes as one of its reserved words.
+fn kept(lang: Language, g: &Gate, x: From, id: &str, place: Place) -> Text {
+    let (a, l, t) = (what(g, x), lang.title(), lang.target());
+    let (as_ja, as_en) = match place {
+        Place::Top => ("", ""),
+        Place::Field => ("レコードのフィールドとして", " as a field of its record"),
+        Place::Method => ("読む `Store` のメソッドとして", " as the method of `Store` that reads it"),
+        Place::Module => ("モジュールの名前として", " as the name of its module"),
+        Place::Package => ("パッケージの名前として", " as the name of its package"),
+    };
+    let (word, broke) = match (place, lang) {
+        // the module itself parses; what reads it does not (DESIGN 32)
+        (Place::Module, Language::TypeScript) => (
+            tr!("TypeScript の strict モードの予約語", "a reserved word of TypeScript's strict mode"),
+            tr!(
+                "`ritsu gen` がパッケージに書く索引の `export * as {id} from …` が、型の検査を通りません",
+                "the index `ritsu gen` writes in a package, `export * as {id} from …`, does not type-check"
+            ),
+        ),
+        (Place::Module, _) => (
+            tr!("{l} の予約語", "a reserved word of {l}"),
+            tr!(
+                "`import` でモジュール（`authz/{id}.py`）を読めず、`ritsu gen` がパッケージに書く `__init__.py` の `from . import {id} as {id}` も読み込めません（`SyntaxError`）",
+                "no `import` can read the module (`authz/{id}.py`), and the `__init__.py` `ritsu gen` writes in a package, `from . import {id} as {id}`, does not load (`SyntaxError`)"
+            ),
+        ),
+        _ => (tr!("{l} の予約語", "a reserved word of {l}"), lang.kept()),
+    };
+    tr!(
+        "{l}（`--target {t}`）: {} を{as_ja} `{id}` と書きますが、`{id}` は {}です。{}。",
+        "{l} (`--target {t}`): {} is written `{id}`{as_en}, and `{id}` is {}: {}.",
+        a.ja, word.ja, broke.ja;
+        a.en, word.en, broke.en
+    )
+}
+
 /// What one language says of a gate's name that is one the code reads from elsewhere.
 fn global(lang: Language, g: &Gate, x: From, id: &str) -> Text {
     let a = what(g, x);
@@ -194,8 +272,8 @@ fn global(lang: Language, g: &Gate, x: From, id: &str) -> Text {
             a.en
         ),
         _ => tr!(
-            "Python（`--target python`）: {} を `{id}` と書きますが、`{id}` は Python の語か、モジュールが読み込む名前です。モジュールを読み込めないか、宣言がそれを隠すので、`mypy --strict` を通らず、呼び出しが止まります。",
-            "Python (`--target python`): {} is written `{id}`, and `{id}` is a word of Python, or what the module imports: the module does not load, or the declaration hides it, and the module does not pass `mypy --strict` and a call stops.",
+            "Python（`--target python`）: {} を `{id}` と書きますが、`{id}` はモジュールが読み込む名前です。宣言がそれを隠すので、`mypy --strict` を通らず、呼び出しが止まります。",
+            "Python (`--target python`): {} is written `{id}`, and `{id}` is what the module imports: the declaration hides it, and the module does not pass `mypy --strict` and a call stops.",
             a.ja;
             a.en
         ),
@@ -229,7 +307,7 @@ fn add(found: &mut Vec<Found>, first: From, second: From, id: &str, lang: Langua
 /// What every language says of a gate, each finding once, by its place in the file.
 pub fn find(g: &Gate, shape: &Shape) -> Vec<Found> {
     let mut found = Vec::new();
-    let mut read = |lang: Language, decls: &[Declared], taken: &dyn Fn(&str) -> bool| {
+    let mut read = |lang: Language, decls: &[Declared], taken: &dyn Fn(&str) -> bool, place: Place, kept_word: &dyn Fn(&str) -> bool| {
         let (pairs, globals) = hits(decls, taken);
         for (a, b, id) in pairs {
             let note = if b == From::Own { own(lang, g, a, &id) } else { two(lang, g, a, b, &id) };
@@ -238,20 +316,38 @@ pub fn find(g: &Gate, shape: &Shape) -> Vec<Found> {
         for (a, id) in globals {
             add(&mut found, a, From::Own, &id, lang, global(lang, g, a, &id));
         }
+        for d in decls.iter().filter(|d| d.from != From::Own && kept_word(&d.id)) {
+            add(&mut found, d.from, From::Word, &d.id, lang, kept(lang, g, d.from, &d.id, place));
+        }
     };
-    read(Language::TypeScript, &typescript::declared(g, shape), &typescript::global);
-    read(Language::Python, &python::declared(g, shape), &python::global);
-    read(Language::Go, &go::declared(g, shape), &|_| false);
-    for t in plan::types_used(g).into_iter().filter(|&t| plan::reads(g, shape, t)) {
-        read(Language::Go, &go::declared_fields(g, shape, t), &|_| false);
+    read(Language::TypeScript, &typescript::declared(g, shape), &typescript::global, Place::Top, &typescript::reserved);
+    read(Language::Python, &python::declared(g, shape), &python::imported, Place::Top, &python::keyword);
+    read(Language::Go, &go::declared(g, shape), &|_| false, Place::Top, &go::keyword);
+    let read_types: Vec<usize> = plan::types_used(g).into_iter().filter(|&t| plan::reads(g, shape, t)).collect();
+    for &t in &read_types {
+        read(Language::Go, &go::declared_fields(g, shape, t), &|_| false, Place::Field, &go::keyword);
+        read(Language::Python, &python::declared_fields(g, t), &|_| false, Place::Field, &python::keyword);
     }
+    read(Language::Python, &python::store_methods(g, &read_types), &|_| false, Place::Method, &python::keyword);
+    // the name of the file, as each language names its module or its package (DESIGN 32)
+    let file = |id: String| [Declared::new(id, From::File)];
+    read(Language::TypeScript, &file(g.named.alias.clone()), &|_| false, Place::Module, &typescript::index_word);
+    read(Language::Python, &file(g.named.alias.clone()), &|_| false, Place::Module, &python::keyword);
+    read(Language::Go, &file(ritsu_emit::ident::go_package(&g.named.alias)), &|_| false, Place::Package, &go::keyword);
     found.sort_by_key(|f| (line_of(g, f.first).max(line_of(g, f.second)), f.first, f.second));
     found
 }
 
 fn headline(g: &Gate, f: &Found, place: Text) -> Text {
     let (a, id) = (what(g, f.first), &f.id);
-    if f.second == From::Own {
+    if f.second == From::Word {
+        tr!(
+            "{} は、{}で `{id}` と書かれ、その言語の予約語です",
+            "{} is written `{id}` in {}, a reserved word of the language",
+            a.ja, place.ja;
+            a.en, place.en
+        )
+    } else if f.second == From::Own {
         tr!(
             "{} は、{}で `{id}` と書かれ、コードが自分で使う名前と同じです",
             "{} is written `{id}` in {}, a name the code uses itself",
@@ -270,15 +366,22 @@ fn headline(g: &Gate, f: &Found, place: Text) -> Text {
 }
 
 fn fix(f: &Found, at_build: bool) -> Text {
-    let rename = if f.second == From::Own {
+    let rename = if matches!(f.second, From::Own | From::Word) {
         tr!("その別名を変えてください", "change its alias")
     } else {
         tr!("どちらかの別名を変えてください", "change the alias of one of the two")
     };
-    let then = tr!(
-        "別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。",
-        "An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`."
-    );
+    let then = if f.first == From::File {
+        tr!(
+            "ファイルの別名は、生成するファイルとモジュールとパッケージの名前でもあるので、それを読むコードも合わせて直してください。",
+            "The alias of the file also names the files, the module and the package the code is written to, so change what reads them with it."
+        )
+    } else {
+        tr!(
+            "別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。",
+            "An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`."
+        )
+    };
     if at_build {
         tr!("{}。{}", "Please {}. {}", rename.ja, then.ja; rename.en, then.en)
     } else {

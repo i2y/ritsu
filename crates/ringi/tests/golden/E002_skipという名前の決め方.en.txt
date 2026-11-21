@@ -1,0 +1,2 @@
+error[E002]: tests/mutants/E002_skipという名前の決め方.ringi:13:3: `skip` is the word of `when empty escalate, then skip`, and cannot name a way to choose an approver
+    13 |   skip          = person "e04"

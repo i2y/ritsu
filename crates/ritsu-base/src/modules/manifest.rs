@@ -172,14 +172,19 @@ pub struct Manifest {
     /// each a word of [`TARGET_WORDS`], in the order written. Its place is the line and the first
     /// name's column.
     pub targets: Option<At<Vec<String>>>,
+    /// The `catalog` line: the ID the screens `ritsu gen` writes for `requests` name the catalog of
+    /// ritsu's parts by (ringi's DESIGN 13.2), when it is given no `--catalog`: a name for the
+    /// project's catalog, written as a URL the project owns, the same in every environment. Its
+    /// place is the URL's.
+    pub catalog: Option<At<String>>,
 }
 
 /// The words a statement starts with, in the order the file usually has them.
-pub const STATEMENTS: [&str; 11] = ["module", "version", "description", "ritsu", "license", "source", "require", "exclude", "signature", "library", "target"];
+pub const STATEMENTS: [&str; 12] = ["module", "version", "description", "ritsu", "license", "source", "require", "exclude", "signature", "library", "target", "catalog"];
 
 /// The names a `target` line takes (DESIGN 17.3, 9.6): the targets of `ritsu gen`. ritsu-base
 /// cannot read ritsu's own list of them, so a test of ritsu's holds the two to each other.
-pub const TARGET_WORDS: [&str; 6] = ["typescript", "python", "go", "rust", "cedar", "lean"];
+pub const TARGET_WORDS: [&str; 7] = ["typescript", "python", "go", "rust", "cedar", "lean", "requests"];
 
 /// How a statement is written, for the sentence that says a line is not.
 fn form(word: &str) -> Text {
@@ -199,7 +204,8 @@ fn form(word: &str) -> Text {
             "signature \"<頭の部分>\" key \"<パス>\"`（あとに `tlog off` を付けてもよい）、`signature \"<頭の部分>\" by \"<署名者>\" issuer \"<発行者>\"`、`signature \"<頭の部分>\" by matching \"<正規表現>\" issuer \"<発行者>\"",
             "signature \"<start>\" key \"<path>\"` (with `tlog off` after it, if need be), `signature \"<start>\" by \"<identity>\" issuer \"<issuer>\"` or `signature \"<start>\" by matching \"<pattern>\" issuer \"<issuer>\""
         ),
-        "target" => tr!("target typescript|python|go|rust|cedar|lean …", "target typescript|python|go|rust|cedar|lean …"),
+        "target" => tr!("target typescript|python|go|rust|cedar|lean|requests …", "target typescript|python|go|rust|cedar|lean|requests …"),
+        "catalog" => tr!("catalog \"<http か https の URL>\"", "catalog \"<http or https URL>\""),
         _ => tr!("library typescript|python|go \"<名前>\"", "library typescript|python|go \"<name>\""),
     }
 }
@@ -276,6 +282,36 @@ pub fn source_problem(url: &str) -> Option<(Text, Option<Text>)> {
             "ritsu writes the `source` into the module `ritsu mod push` sends, the packages `ritsu gen` makes (package.json and pyproject.toml) and the list site, all of which are meant to be published: keep credentials such as tokens and passwords out of it"
         )),
     ))
+}
+
+/// The ID of the catalog of the screens' parts (`catalog`, `ritsu gen --catalog`; ringi's DESIGN
+/// 13.2): what is wrong with it, if anything. It is a name for the project's catalog, written as an
+/// http or https URL with a host that the project owns (it need not be where the catalog is
+/// served), and every screen carries it to every browser that shows it: a user, a password, a query
+/// or a fragment has no place in it.
+pub fn catalog_problem(url: &str) -> Option<Text> {
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Some(tr!("カタログの ID `{url}` に空白か制御文字が入っています", "the catalog's ID `{url}` has white space or a control character in it"));
+    }
+    if crate::urls::scheme_and_host(url).is_none_or(|(s, h)| !matches!(s.as_str(), "http" | "https") || h.is_empty()) {
+        return Some(tr!("カタログの ID `{url}` は、ホストのある http か https の URL で書いてください", "the catalog's ID `{url}` is an http or https URL with a host"));
+    }
+    if crate::urls::has_userinfo(url) {
+        return Some(tr!("カタログの ID の URL にユーザーかパスワードが入っています。画面がどのブラウザにも運ぶので、書けません", "the catalog's ID has a user or a password in it, which every screen would carry to every browser"));
+    }
+    if crate::urls::has_query(url) || url.contains('#') {
+        return Some(tr!("カタログの ID `{url}` にクエリ（`?` から後）かフラグメント（`#` から後）が入っています。書けません", "the catalog's ID `{url}` has a query (from the `?` on) or a fragment (from the `#` on) in it, which it cannot have"));
+    }
+    None
+}
+
+/// The note after the E302 of a `catalog` line: what the catalog's ID is, and that it need not be
+/// where the catalog is served.
+fn catalog_note() -> Text {
+    tr!(
+        "カタログの ID は、このプロジェクトのカタログを指す名前で、自分の持つ URL の形で書きます。`catalog.json` を配る場所と同じにしておくと分かりやすいですが、同じである要はありません。環境が変わっても同じ値を使ってください（生成物は環境ごとに作り分けません）",
+        "The catalog's ID is a name for this project's catalog, written as a URL you own. The place `catalog.json` is served at is the easiest to follow, but the two need not be the same. Use the same value in every environment (what is generated is not made apart for each)"
+    )
 }
 
 /// The note after the E302 of a git URL that may carry a credential, whose message names neither
@@ -364,6 +400,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
         signatures: Vec::new(),
         libraries: Vec::new(),
         targets: None,
+        catalog: None,
     };
     let mut first = true;
     let mut said_first = false;
@@ -404,7 +441,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
         first = false;
         // the statements written once, and `library` once a target
         let key: Option<&'static str> = match word {
-            "module" | "version" | "description" | "ritsu" | "license" | "source" | "target" => Some(word),
+            "module" | "version" | "description" | "ritsu" | "license" | "source" | "target" | "catalog" => Some(word),
             _ => None,
         };
         if let Some(k) = key {
@@ -420,7 +457,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
         let shape: &[Want] = match word {
             "module" | "version" | "ritsu" => &[Want::Any],
             "target" => &names,
-            "description" | "license" | "source" | "exclude" => &[Want::Str],
+            "description" | "license" | "source" | "exclude" | "catalog" => &[Want::Str],
             "library" => &[Want::Any, Want::Str],
             "require" => match ts.get(2).map(|t| t.text.as_str()) {
                 Some("path") => &[Want::Any, Want::Exactly("path"), Want::Str],
@@ -477,6 +514,12 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
                 }
             }
             "description" => m.description = Some(At { value: v(0).text.clone(), line: n, col: v(0).col }),
+            "catalog" => match catalog_problem(&v(0).text) {
+                None => m.catalog = Some(At { value: v(0).text.clone(), line: n, col: v(0).col }),
+                Some(t) => {
+                    r.at(E302, n, v(0).col, src, t).notes.push(catalog_note());
+                }
+            },
             "license" => {
                 if v(0).text.trim().is_empty() {
                     r.at(E302, n, v(0).col, src, tr!("`license` が空です。SPDX の式（`MIT OR Apache-2.0` など）を書いてください", "the `license` is empty; write an SPDX expression (`MIT OR Apache-2.0`, say)"));

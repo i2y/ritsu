@@ -1,0 +1,33 @@
+rule 決裁権限(authority) v1
+description "購入の申請を、だれが確かめ、だれが決めるか。種類と金額で決める会社の決裁権限の表（権限規程の第 20 条、架空）で、会社のお金で物を買う申請の全部が共有する"
+
+enum 種類(kind) = 物品(goods) "物品とサービス" | 設備(capex) "設備投資" | ソフトウェア(software) "ソフトウェア"
+enum 決裁者(decider) = 部長(dept_head) "部長" | 本部長(division_head) "本部長" | 社長(president) "社長"
+
+inputs
+  種類(kind)   : 種類
+  金額(amount) : money[円]  range >=1円 <=100_000_000円
+
+outputs
+  経理(finance)     : bool
+  取締役会(board)   : bool
+  決める人(decider) : 決裁者
+
+table 決裁権限(authority)  # 権限規程の第 20 条（架空）
+| 種類         | 金額                        | -> 経理 | 取締役会 | 決める人 |
+| 物品         | <=1_000_000円               | false   | false    | 部長     |
+| 物品         | >1_000_000円 <=10_000_000円 | true    | false    | 本部長   |
+| 物品         | >10_000_000円               | true    | true     | 社長     |
+| 設備         | <=5_000_000円               | true    | false    | 本部長   |
+| 設備         | >5_000_000円                | true    | true     | 社長     |
+| ソフトウェア | <=3_000_000円               | false   | false    | 本部長   |
+| ソフトウェア | >3_000_000円                | true    | true     | 社長     |
+
+possible 取締役会 = true
+
+examples
+| 種類         | 金額        | -> 経理 | 取締役会 | 決める人 |
+| 物品         | 1_000_000円 | false   | false    | 部長     |
+| 物品         | 1_000_001円 | true    | false    | 本部長   |
+| 設備         | 5_000_001円 | true    | true     | 社長     |
+| ソフトウェア | 3_000_000円 | false   | false    | 本部長   |

@@ -1,10 +1,10 @@
-sekisho explain — explain a diagnostic code: when it is printed, how to fix it, and the smallest file that prints it
+sekisho explain — explain diagnostic codes: when each is printed, how to fix it, and the smallest file that prints it
 
 Usage:
-  sekisho explain <code> | --all [--format markdown|json] [--lang ja|en]
+  sekisho explain <code>... | --all [--format markdown|json] [--lang ja|en]
 
 Arguments:
-  <code>  a code such as `E101`
+  <code>...  codes such as `E101`, any number, explained in the order given; not given with `--all`
 
 Flags:
   --all                   every code

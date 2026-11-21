@@ -8,6 +8,7 @@ use std::process::Command;
 use ritsu_testkit::tmp::tmpdir_in;
 use ritsu_testkit::{Need, TempDir, ready, side_by_side, skip};
 use rulec::json::Json;
+use ritsu_testkit::run::finish;
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
@@ -211,15 +212,13 @@ const UNREAD: [(&str, &[(&str, &str)]); 18] = [
 /// `check` says with W121, or stops at with E034 — English first and the Japanese versions beside
 /// them, with how many of the trailing columns are outputs (two outputs are the fields of a
 /// `NamedTuple` in Python), and the declaration each word gets: an alias the generated code calls it
-/// by (`Zone(zone)`, `North(v2)`), the name alone where that is what it calls it (`import_`), or the
+/// by (`type(type_)`, `North(v2)`), the name alone where that is what it calls it (`import_`), or the
 /// alias of its kind as the name of a second column headed alike (`c2`). The third field is `en`
 /// where only the English draft spells the word so: an enum's own name, which the Japanese draft
 /// writes `<header>の値` with the alias of its kind beside it already. The word and what the
 /// generated code calls it are kept in a `# 推定` note, and `check` reads the draft back without a
 /// word (§15.266).
-const RESPELLED: [(&str, usize, &[(&str, &str, &str)]); 11] = [
-    ("headers_that_start_with_a_capital", 1, &[("Zone", "Zone(zone)", ""), ("Weight", "Weight(weight)", ""), ("Fee", "Fee(fee)", "")]),
-    ("大文字で始まる見出し", 1, &[("SKU", "SKU(sku)", "")]),
+const RESPELLED: [(&str, usize, &[(&str, &str, &str)]); 9] = [
     ("headers_that_are_keywords_of_a_language", 1, &[("type", "type(type_)", ""), ("class", "class(class_)", ""), ("import", "import_", "")]),
     ("outputs_that_start_with_an_underscore", 2, &[("_fee", "_fee(o1)", ""), ("_tax", "_tax(o2)", "")]),
     (
@@ -228,12 +227,18 @@ const RESPELLED: [(&str, usize, &[(&str, &str, &str)]); 11] = [
         &[("the_fee_for_a_parcel_carried_to_the_far_north_of_the_country_by_road", "the_fee_for_a_parcel_carried_to_the_far_north_of_the_country_by_road(o1)", "")],
     ),
     ("headers_spelled_alike", 1, &[("shipZone", "shipZone(c2)", ""), ("shipZone_values", "shipZone_values(c2_kind)", "en")]),
-    ("headers_that_differ_in_case", 1, &[("Zone", "Zone(c1)", ""), ("zone_values", "zone_values(c2_kind)", "en")]),
+    ("headers_that_differ_in_case", 1, &[("zone", "zone(c2)", ""), ("zone_values", "zone_values(c2_kind)", "en")]),
     ("values_spelled_alike", 1, &[("North", "North(v2)", ""), ("goldplus", "goldplus(v2)", ""), ("low", "low(v2)", "")]),
     ("大文字と小文字だけ違う値", 1, &[("s60", "s60(v2)", "")]),
     ("headers_written_twice", 1, &[("zone", "c2", "")]),
     ("同じ見出しが二つ", 1, &[("地域", "c2", "")]),
 ];
+
+/// The materials of `tests/import/` whose headers start with a capital letter, which Ruby reads as a
+/// constant, with how many of the trailing columns are outputs and the headers. The generated Ruby
+/// binds such a value under another name inside the rule's function (§15.336), so `check` says
+/// nothing of them, and the draft declares each as the sheet wrote it.
+const KEPT: [(&str, usize, &[&str]); 2] = [("headers_that_start_with_a_capital", 1, &["Zone", "Weight", "Fee"]), ("大文字で始まる見出し", 1, &["SKU"])];
 
 #[test]
 fn a_draft_is_read_back_by_check_whatever_the_sheet_writes() {
@@ -243,7 +248,12 @@ fn a_draft_is_read_back_by_check_whatever_the_sheet_writes() {
         .map(|e| e.unwrap().path().file_stem().unwrap().to_string_lossy().into_owned())
         .collect();
     materials.sort();
-    let mut listed: Vec<String> = UNREAD.iter().map(|(m, _)| m.to_string()).chain(RESPELLED.iter().map(|(m, _, _)| m.to_string())).collect();
+    let mut listed: Vec<String> = UNREAD
+        .iter()
+        .map(|(m, _)| m.to_string())
+        .chain(RESPELLED.iter().map(|(m, _, _)| m.to_string()))
+        .chain(KEPT.iter().map(|(m, _, _)| m.to_string()))
+        .collect();
     listed.sort();
     assert_eq!(materials, listed, "every material is listed with the words it writes");
     for (m, words) in UNREAD {
@@ -316,6 +326,28 @@ fn a_name_the_generated_code_cannot_take_as_written_is_spelled_so_that_it_can() 
     }
 }
 
+/// A header that starts with a capital letter is declared as the sheet wrote it, with no alias, and
+/// `check` reads the draft back without a word: the materials of `KEPT`, in both languages.
+#[test]
+fn a_header_that_starts_with_a_capital_is_declared_as_written() {
+    let (_tmp, d) = dir("kept");
+    for (m, outputs, words) in KEPT {
+        let csv = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("tests/import/{m}.csv"));
+        let n = outputs.to_string();
+        for lang in ["en", "ja"] {
+            let (c, out, e) = run_lang(lang, &["import", "csv", csv.to_str().unwrap(), "--outputs", &n]);
+            assert_eq!(c, 0, "{m} {lang}: {e}");
+            for word in words {
+                assert!(declares(&out, word), "{m} {lang}: {word} is not declared as written:\n{out}");
+            }
+            let rule = d.join(format!("{m}.{lang}.rule"));
+            std::fs::write(&rule, &out).unwrap();
+            let (c, o, e) = run_lang(lang, &["check", rule.to_str().unwrap(), "--format", "json"]);
+            assert_eq!((c, o.as_str()), (0, ""), "{m} {lang}: check does not read the draft back without a word:\n{out}\n{e}");
+        }
+    }
+}
+
 /// The rule's name, from the file or from `--name`, is read the same way, and the file's name inside
 /// the draft's description string is written so that the string ends where it should.
 #[test]
@@ -341,12 +373,16 @@ fn a_rule_name_not_read_as_a_name_is_named_for_now() {
     assert!(out.starts_with("rule imported v1  # guess: the rule's name \"parcel fee\" is not read as a name"), "{out}");
     let (_, out, _) = run_lang("en", &["import", "csv", csv.to_str().unwrap(), "--name", "parcel_fee"]);
     assert!(out.starts_with("rule parcel_fee v1\n"), "{out}");
-    // unless the generated code cannot take it as written (§15.266): `sum` is a word of the language,
-    // and the generated code could not take its spelling as the alias, which hides a word some
-    // languages have already; and an enum whose type the rule's name takes is spelled so that it
-    // does not.
+    // unless the generated code cannot take it as written (§15.266): `import` is a word of the
+    // language and a keyword of Python's, so the generated code could not take its spelling as the
+    // alias, and Go names the package of `import_` `import`, a keyword of Go's (§15.265), so the
+    // rule takes the alias of its kind; `sum` is a word of the language too, and as the alias it
+    // names a function like a builtin of Python's, which the generated Python reaches another way,
+    // so the alias stays (§15.336); and an enum whose type the rule's name takes is spelled so that
+    // it does not.
     for (name, said) in [
-        ("sum", "rule sum_ v1  # guess: the code generated for some languages cannot take the rule's name \"sum\" as it is, or makes it one identifier with another name, so the generated code names the rule sum_ for now\n"),
+        ("import", "rule import_(imported) v1  # guess: the code generated for some languages cannot take the rule's name \"import\" as it is, or makes it one identifier with another name, so the generated code names the rule imported for now\n"),
+        ("sum", "rule sum_(sum) v1\n"),
         ("Zone_values", "enum Zone_values(c1_kind) = north | south  # guess: the values seen in this column, as an enum; add what is missing, and rename the aliases; the code generated for some languages cannot take the enum's name \"Zone_values\" as it is, or makes it one identifier with another name, so the generated code names the enum c1_kind for now\n"),
     ] {
         let (c, out, e) = run_lang("en", &["import", "csv", csv.to_str().unwrap(), "--name", name]);
@@ -363,10 +399,15 @@ fn have_python() -> bool {
     Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success())
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 /// `rulec` in `cwd`, with what it writes for a while under `tmp`.
 fn rulec_in(cwd: &std::path::Path, tmp: &std::path::Path, args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp).current_dir(cwd).args(args).output().expect("cannot start rulec");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmp).current_dir(cwd).args(args), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 /// What a draft `check` says nothing of, every language takes: the code generated from the draft of
@@ -384,7 +425,7 @@ fn the_code_generated_from_every_draft_answers_alike_in_every_language() {
     let n = std::thread::available_parallelism().map_or(1, |n| n.get()).clamp(1, 4);
     let dirs: Vec<PathBuf> = (0..n).map(|i| t.path().join(format!("d{i}"))).collect();
     let mut drafts: Vec<(String, String)> = Vec::new();
-    let materials = UNREAD.iter().map(|(m, _)| (*m, 1)).chain(RESPELLED.iter().map(|(m, o, _)| (*m, *o)));
+    let materials = UNREAD.iter().map(|(m, _)| (*m, 1)).chain(RESPELLED.iter().map(|(m, o, _)| (*m, *o))).chain(KEPT.iter().map(|(m, o, _)| (*m, *o)));
     for (m, outputs) in materials {
         for lang in ["en", "ja"] {
             let name = format!("draft_{}_{lang}", drafts.len());

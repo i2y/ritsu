@@ -191,8 +191,10 @@
 .pg .pg-file.on:hover { background: var(--pg-mark); border-color: var(--pg-mark); color: var(--pg-mark-fg); }
 
 .pg .pg-file.err::after,
+.pg .pg-file.wait::after,
 .pg .pg-file.warn::after,
 .pg .pg-count.err::before,
+.pg .pg-count.wait::before,
 .pg .pg-count.warn::before {
   content: "";
   display: inline-block;
@@ -206,6 +208,10 @@
 
 .pg .pg-file.warn::after,
 .pg .pg-count.warn::before { background: var(--pg-warn); }
+
+/* A file that only waits for another to pass has no mistake of its own: a ring, not a dot. */
+.pg .pg-file.wait::after,
+.pg .pg-count.wait::before { background: none; box-shadow: inset 0 0 0 1.5px var(--pg-err); }
 
 /* A file of no language (what yuen keeps of what was looked at, a data file a calendar reads) is
    read by the file that names it; its tab steps back. */
@@ -270,6 +276,7 @@
 
 .pg .pg-count.err:not(:empty) { background: var(--pg-err-soft); color: var(--pg-err); }
 .pg .pg-count.warn:not(:empty) { background: var(--pg-warn-soft); color: var(--pg-warn); }
+.pg .pg-count.wait:not(:empty) { background: var(--pg-err-soft); color: var(--pg-dim); }
 .pg .pg-count::before { display: none !important; }
 
 .pg-panel {
@@ -363,7 +370,8 @@
 .pg .pg-problem:hover:not(:disabled) { background: var(--pg-active); color: var(--pg-fg); }
 .pg .pg-problem .pg-sev { font-weight: 600; color: var(--pg-err); }
 .pg .pg-problem.warn .pg-sev { color: var(--pg-warn); }
-.pg .pg-problem.info .pg-sev { color: var(--pg-dim); }
+.pg .pg-problem.info .pg-sev,
+.pg .pg-problem.wait .pg-sev { color: var(--pg-dim); }
 .pg .pg-problem code { font-family: var(--pg-mono); font-size: .92em; color: var(--pg-dim); background: none; padding: 0; }
 .pg .pg-problem .pg-where { font-family: var(--pg-mono); font-size: .92em; color: var(--pg-mark); overflow-wrap: anywhere; }
 .pg .pg-problem .pg-msg { grid-column: 1 / -1; padding-left: 0; }

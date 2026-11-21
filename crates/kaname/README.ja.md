@@ -5,7 +5,7 @@ Functional Core を書くための、小さな汎用の言語です。
 リクエストや時刻やデータベースを読み、状態を持ち、決めたことを行うほかの部分は、kaname を呼ぶホストの言語（Imperative Shell）に残ります。
 コアは、ritsu の言語と同じ決まり（単位、通貨と税区分、率の刻み、範囲、丸め、int64）で確かめられ、関数ごとに何が起こりうるか（`total`、`fails …`、`diverges`）も検査が推し量ります。
 rulec の規則、koyomi の日付、chobo の帳簿の振替も ritsu の型のまま呼べ、`ritsu gen` が、それらのコードの隣に、何にも依存しない TypeScript、Python、Go、Rust のコードを書きます。Rust のコードは、どの言語のホストからも JSON のオブジェクト一つで呼べる一つの Wasm のモジュールにも組めます。
-kaname は [ritsu](../../README.ja.md) の九つの言語の一つです。
+kaname は [ritsu](../../README.ja.md) の十の言語の一つです。
 ritsu のサイトの **[kaname のページ](https://i2y.github.io/ritsu/ja/kaname/)** では、モジュールの書き方、下の Functional Core の四つの例と TypeScript、Python、Go のホスト、検査が保証すること、規則・日付・帳簿の呼び方を順に読めます。
 
 ## Functional Core
@@ -206,7 +206,7 @@ $ ritsu kaname check tests/docs/dollars.kn --lang ja
 $ ritsu kaname check tests/docs/unnarrowed.kn --lang ja
 エラー[E301]: tests/docs/unnarrowed.kn:15:44: `late` が、規則 `charges` の入力 `days_late` の範囲 >=1 <=1500 の外になることがあります
     15 |   charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate).interest
-  = たとえば `interest(invoice: Invoice { id: "a", invoiced: 2026-01-01, amount: 50000000GBPc }, paid_on: 2026-01-01, reference_rate: 0%)` のとき、-29 になります。
+  = たとえば `interest(invoice: Invoice { id: "a", invoiced: 2026-01-01, amount: 50_000_000GBPc }, paid_on: 2026-01-01, reference_rate: 0%)` のとき、-29 になります。
   = 渡す前に `if` でその範囲に狭めるか、渡す先の範囲を広げてください。
 ```
 
@@ -228,8 +228,8 @@ examples/payout/books/ledger.book: ok
   = 書いたエフェクトに収まるよう、失敗しうる場所を示せるようにする（渡す値を `if` で範囲に狭める）か、エフェクトを広げて書いてください。
 エラー[ritsu E203]: tests/docs/net.kn:15:74: 振替 `ledger.capture.do` の `amount` に渡す `payment.amount - fee` が、chobo の受け取らない額になることがあります
     15 |   ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount - fee)
-  = たとえば `capture(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` のとき、-48 になります。
-  = chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 9223372036854775807 までです。
+  = たとえば `capture(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` のとき、-48USDc になります。
+  = chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 2⁶³ − 1 までです。
   = kaname の生成したコードは、振替を組み立てるところで額を確かめます。関数は、そこで `range` で失敗します。
   = 振替の前に `if` で額を狭めるか、負の額は向きの違う振替に分けてください。
 ritsu check: ファイル 3 個（rulec 1、chobo 1、kaname 1）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 2 か所、決められない 0 か所
@@ -293,7 +293,7 @@ property 残りより多くは配らない(no_share_is_more_than_its_left)(明�
 
 ```console
 $ ritsu kaname check tests/properties/shares.ja.kn --lang ja
-エラー[E603]: tests/properties/shares.ja.kn:12:1: 性質 `どの明細にも配る` は、明細: [明細 { 品番: "a", 残り: 500000USDc }, 明細 { 品番: "a", 残り: 500000USDc }], 返金: 1USDc で成り立ちません
+エラー[E603]: tests/properties/shares.ja.kn:12:1: 性質 `どの明細にも配る` は、明細: [明細 { 品番: "a", 残り: 500_000USDc }, 明細 { 品番: "a", 残り: 500_000USDc }], 返金: 1USDc で成り立ちません
     12 | property どの明細にも配る(every_line_gets_a_share)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
   = 15 行目: `配分` は [0USDc, 1USDc]
   = `check` は、性質を引数のベクタで参照インタプリタに流します。この入力では、`when` の行がどれも `true` で、最後の行が `false` になりました。
@@ -332,7 +332,7 @@ generated: generated/lean/samples/refund_split.lean
 ```lean
 abbrev shares_add_up : Prop :=
   ∀ (lines : List Line) (refund : Int),
-    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    1 ≤ List.length lines → List.length lines ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
     0 ≤ refund → refund ≤ 10000000 →
     ((List.map (fun (s : Share) => s.share) (split lines refund)).sum) = refund
 ```
@@ -459,7 +459,7 @@ Lean のバージョン管理の道具 [elan](https://github.com/leanprover/elan
 
 `ritsu gen` は、TypeScript、Python、Go、Rust のパッケージごとに、モジュールのコードを `glue/` の下に書きます。正確な分数、int64 の確かめ、五つの丸め、コードポイントで扱う文字列、鍵の順に回す辞書と集合を持つ補助のモジュールも一緒に書き、ほかには何にも依存しません。
 直和型の値は、TypeScript では `kind` を持つオブジェクト、Python では凍結したデータクラス、Go ではインターフェースを満たす構造体、Rust では構造体を持つ `enum` で、`result` は補助のモジュールの `Ok` と `Err`（Rust では標準の `Result`）です。お金と量は、規則と帳簿と同じく、パッケージの単位ごとの型で受け渡します。
-ホストが呼ぶ関数は、引数が宣言に収まるかを最初に確かめます。範囲の解析が示せなかった場所は、生成したコードがそこで確かめ、参照インタプリタと同じ種類の `KanameError` で失敗します。
+ホストが呼ぶ関数は、引数が宣言に収まるかを最初に確かめます。範囲の解析が示せなかった場所は、生成したコードがそこで確かめ、参照インタプリタと同じ種類の `KanameError` で失敗します。種類が `input` なら、受け付けなかった場所も `path` に持ちます（`submit.form.days`、`lines[0].weight`）。
 振替は値で、その型には、帳簿がそれを拒否しうる理由が載ります。帳簿ごとの関数が、chobo のクライアントでその振替を当てます。
 Functional Core の四つの例は、`host/` の下に TypeScript、Python、Go のホストを持ちます。どれも `ritsu gen` が書くパッケージを呼び、同じものを出力します。
 
@@ -504,7 +504,7 @@ $ ritsu check --lean examples/refund_split
 ```
 
 `run` は、JSON で渡した入力で関数を一つ参照インタプリタに流します。`vectors` は、関数ごとに選んだ入力を、その答えと一緒に書き出します。
-どのコマンドも `--lang ja|en`（無ければ `KANAME_LANG`、次に `RITSU_LANG`、どちらも無ければ英語）と `--help` を受け付けます。
+どのコマンドも `--lang ja|en`（無ければ `KANAME_LANG`、次に `RITSU_LANG`、どちらも無ければ英語）と `--help` を受け付けます。`doc` と `vectors` が書く物は `--lang` だけで決まります。`ritsu kaname explain` はコードをいくつでも取り、渡した順に説明します。二つ以上のときは、`--all` と同じ形で、渡したコードだけを書きます。
 終了コードは、エラーが無ければ 0、エラーがあれば 1、引数の誤り、読めないファイル、つながっていない言語のファイルなら 2 です。
 言語とコマンドの全部は [docs/reference.md](docs/reference.md)（英語）にあります。
 
@@ -532,9 +532,9 @@ $ ritsu check --lean examples/refund_split
 
 - 丸めは rulec の丸めと 360,600 通りの値と刻みで、日付は ritsu-ports、koyomi、rulec と 3,652,059 日のすべてで、同じ答えになることを確かめます。
 - rulec のコーパスの `derive` と `define` の全部（85 のファイルの 143 行）を kaname の式として読み、rulec と同じ型になり、rulec のベクタ 20,033 件で同じ値になることを確かめます。
-- 範囲の解析を参照インタプリタと突き合わせます。例とテストのモジュールのすべての関数で、ベクタと、引数の宣言から選んだ 200 件の入力を流し（139,754 回の評価）、5,009 の式に来た値 3,452,025 個が、どれも解析の言う範囲に入り、失敗した 1,617 回が、どれも関数のエフェクトの言う種類で失敗することを確かめます。
+- 範囲の解析を参照インタプリタと突き合わせます。例とテストのモジュールのすべての関数で、ベクタと、引数の宣言から選んだ 200 件の入力を流し（153,902 回の評価）、5,415 の式に来た値 3,574,060 個が、どれも解析の言う範囲に入り、失敗した 1,627 回が、どれも関数のエフェクトの言う種類で失敗することを確かめます。
 - 評価と範囲の解析を Lean で書き直し（ritsu の一つの Lean のパッケージの `proofs/KanameCore`）、範囲の解析が健全であることと、total と推論した関数が失敗しないことを、関数を引数に取らない関数について証明しています（関数を引数に取る関数は、試験でモデルと突き合わせていますが、証明はまだありません）。`cargo test -p ritsu-model` が、59 のモジュールの 14,092 の評価で、モデルを参照インタプリタと範囲の解析に突き合わせます。
-- TypeScript、Python、Go、Rust に生成したコードとパッケージの Wasm が、52 のモジュールのすべてのベクタと、引数の宣言の外の入力と、自分を含む型の値をホストが渡せるいちばん深くまで入れ子にした値とその一段深い値に、参照インタプリタと同じ答えを返すことを、英語と日本語の両方で確かめます（TypeScript は 16,874 件、Python は 16,790 件、Go と Rust と Wasm はそれぞれ 16,770 件のすべてが一致。型の全体の外の入力は、その値を持てる言語で流します）。生成したコードは `tsc --strict --erasableSyntaxOnly`、`mypy --strict`、gofmt、`go vet`、`cargo clippy -- -D warnings` を通ります。パッケージの component は wasmtime の下で、モジュールが Node の下で答えるのと同じに答えます。ritsu のテストは、テストのプロジェクトで `ritsu gen --target rust` が書くものを、帳簿の三つの置き場所のそれぞれと wasm32 で組みます。
+- TypeScript、Python、Go、Rust に生成したコードとパッケージの Wasm が、60 のモジュールのすべてのベクタと、引数の宣言の外の入力と、自分を含む型の値をホストが渡せるいちばん深くまで入れ子にした値とその一段深い値に、参照インタプリタと同じ答えを返すことを、英語と日本語の両方で確かめます（TypeScript は 17,634 件、Python は 17,550 件、Go と Rust と Wasm はそれぞれ 17,510 件のすべてが一致。型の全体の外の入力は、その値を持てる言語で流します）。生成したコードは `tsc --strict --erasableSyntaxOnly`、`mypy --strict`、gofmt、`go vet`、`cargo clippy -- -D warnings` を通ります。パッケージの component は wasmtime の下で、モジュールが Node の下で答えるのと同じに答えます。ritsu のテストは、テストのプロジェクトで `ritsu gen --target rust` が書くものを、帳簿の三つの置き場所のそれぞれと wasm32 で組みます。
 - どの診断のコードにも、それを出す一番小さなモジュールが英語と日本語の両方であります。`doc` のページは golden で、中の規則と日付のページは rulec と koyomi が描いたものです。HTML は Chrome で開いて確かめます。
 - Functional Core の四つの例のホスト（TypeScript、Python、Go）が、`ritsu gen` が書くパッケージを呼び、`host/output.txt` のとおりに出力することを確かめます（ritsu の `tests/kaname.rs`）。
 - この README と `docs/` とスキルに載せた出力、診断、`.kn` とホストの行は本物です。`tests/docs.rs` が突き合わせ、コマンドは ritsu の `tests/kaname.rs` が走らせます。サイトの kaname のページも、ritsu の `tests/website.rs` が同じように確かめます。

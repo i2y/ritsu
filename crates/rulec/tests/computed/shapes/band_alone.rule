@@ -1,0 +1,20 @@
+rule band_alone v1
+description "A table that reads the band an applied rule gives and not the amount: held to amounts up to 10,000 yen, the band is small and the answer one"
+
+enum choice = one | two | three
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+apply t = "shared/tier.rule" meaning:8c5e54b1fadce0b7
+  amount = amount
+  band -> t_band
+
+outputs
+  x : choice
+
+table pick
+| t_band | -> x  |
+| small  | one   |
+| medium | two   |
+| large  | three |

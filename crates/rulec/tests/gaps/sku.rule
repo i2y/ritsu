@@ -1,0 +1,16 @@
+rule sku v1
+description "A lane by the start of a stock code: no row for the codes that start with none of the prefixes, which no cell names"
+
+enum lane = frozen | chilled | dry
+
+inputs
+  code : string
+
+outputs
+  lane : lane
+
+table lanes
+policy first
+| code                     | -> lane |
+| starts_with "FZ-"        | frozen  |
+| starts_with "CH-", "CL-" | chilled |

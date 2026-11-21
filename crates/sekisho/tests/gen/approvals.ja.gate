@@ -1,0 +1,40 @@
+gate 承認(approvals_ja) v1
+description "名前が s で終わる型と、母音で始まる型。生成するコードの型の注は、どの型もゲートが付けた名前で言う。approvals.gate の日本語の版"
+namespace LabJa
+
+role 担当(clerk)
+  description "経費の申請を受け付け、承認する"
+
+principal 社員(User)
+  description "経費の申請を扱う人"
+  roles 担当
+  attributes
+    編集する人(editor) : 編集者
+
+resource 承認する人の組(Approvers)
+  description "申請を承認するグループ"
+
+resource 持ち主の組(Owners)
+  description "申請を持つグループ"
+
+resource 編集者(Editor)
+  description "申請を直す人"
+
+resource 申請(Claim)
+  description "経費の申請"
+  attributes
+    承認する人(approvers) : 承認する人の組
+    持ち主(owners)        : 持ち主の組
+    編集する人(editor)    : 編集者
+
+action 承認する(approve)
+  description "申請を承認する"
+  principal 社員
+  resource 申請
+
+permit 組の人が承認する(members_approve)
+  description "申請の承認する人か持ち主の組にいる担当は、申請の編集する人が自分の編集する人と同じなら、承認できる"
+  principal in 担当
+  action 承認する
+  when principal in resource.承認する人 or principal in resource.持ち主
+  when resource.編集する人 is principal.編集する人

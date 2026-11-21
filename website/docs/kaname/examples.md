@@ -46,8 +46,9 @@ names. The values travel in each language's own types:
 
 The function a host calls checks its arguments against what they declare before it computes, and
 fails with `input` outside them. Every failure is a `KanameError` with its kind: `input`, or one of
-the kinds the function's effect says. A refusal of the business is not a failure but a `result`,
-which the host reads.
+the kinds the function's effect says. One of the kind `input` also holds the place it did not take
+in `path` (`submit.form.days`, `lines[0].weight`), which a host can point at without reading the
+sentence. A refusal of the business is not a failure but a `result`, which the host reads.
 
 ## An order and its events
 

@@ -1,0 +1,20 @@
+request 支出(outlay) v1 "支出"
+
+use organization 組織(org) from "shared/小さい会社.ringi"
+
+form
+  種別(category) : choice "種別"
+    出張(travel)   "出張"
+    備品(supplies) "備品"
+  明細(items) : rows "明細"  count >=1 <=10
+    品目(what)       : text "品目"  count <=100
+    製造番号(serial) : number "製造番号"  range >=1 <=99_999_999_999_999_999
+
+route
+  確かめ(check)  上長
+
+who
+  上長(manager) = manager of requester
+
+ticket
+  self approval  not allowed

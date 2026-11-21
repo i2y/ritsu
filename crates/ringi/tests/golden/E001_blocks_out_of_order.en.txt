@@ -1,0 +1,3 @@
+error[E001]: tests/mutants/E001_blocks_out_of_order.ringi:9:1: `route` is out of the order of the blocks
+     9 | route
+  = A request's file holds `description`, `owner`, `effective from`, `use`, `form`, `route`, `who`, `every stage`, `table`, `ticket`, `claims`, `examples`, `scenario` and `labels`, in this order (the first three in any order).

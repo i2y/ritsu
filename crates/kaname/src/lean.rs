@@ -12,6 +12,7 @@
 //! from the kernel.
 
 use crate::check::Checked;
+use ritsu_base::text::Text;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
@@ -459,8 +460,9 @@ pub enum Verdict {
     Shown(Vec<String>),
     /// The proof module builds, and holds no theorem of that name: no proof of it yet.
     NoTheorem,
-    /// The writer could not write its statement (why, as the comment in the Lean says it).
-    NotWritten(String),
+    /// The writer could not write its statement (why; the Lean's comment says its English side,
+    /// the check's language takes the other).
+    NotWritten(Text),
     Rejected(Rejection),
 }
 
@@ -469,6 +471,8 @@ pub enum Verdict {
 pub enum Rejection {
     /// `lake build` stopped on the proof file: where, in the proof file, and what Lean said.
     Build { line: usize, col: usize, message: String },
+    /// `lake build` stopped on the Lean written from the `.kn`: what it said of it.
+    Written(String),
     /// A declaration of the theorem's name that is not a theorem (what it is: `def`, `axiom`).
     NotATheorem(String),
     /// A theorem of that name declared in another module (which).
@@ -484,6 +488,9 @@ pub enum Rejection {
     Load(String),
     /// The file holds what a proof file may not, and is not built.
     Breach(Breach),
+    /// The proof file itself cannot be read from the disk (said as any file that cannot be read
+    /// is: ritsu's DESIGN 6.2, item 10).
+    Unreadable(ritsu_base::text::Text),
     /// Lean did not finish within the time.
     Timeout(Duration),
 }
@@ -491,7 +498,7 @@ pub enum Rejection {
 impl Rejection {
     /// Whether it is said of the file once rather than of each property.
     pub fn of_the_file(&self) -> bool {
-        matches!(self, Rejection::Build { .. } | Rejection::Kernel(_) | Rejection::Load(_) | Rejection::Breach(_) | Rejection::Timeout(_))
+        matches!(self, Rejection::Build { .. } | Rejection::Written(_) | Rejection::Kernel(_) | Rejection::Load(_) | Rejection::Breach(_) | Rejection::Unreadable(_) | Rejection::Timeout(_))
     }
 }
 
@@ -501,7 +508,10 @@ pub enum LeanError {
     /// `lake` is neither on the `PATH` nor in `~/.elan/bin`.
     Missing,
     /// The directory, the files or a process could not be made (what was said).
-    Io(String),
+    Io(ritsu_base::text::Text),
+    /// `lake` was found and does not start: said as any program that cannot start is (ritsu's
+    /// DESIGN 6.2, item 10).
+    Start(ritsu_base::text::Text),
 }
 
 impl LeanError {
@@ -514,7 +524,8 @@ impl LeanError {
                     "--lean needs Lean: `lake` is neither on PATH nor in ~/.elan/bin. Install elan, the Lean version manager; the toolchain the proofs use ({tc}) is installed on the first run"
                 )
             }
-            LeanError::Io(e) => tr!("--lean が Lean を走らせられません: {e}", "--lean cannot run Lean: {e}"),
+            LeanError::Io(t) => t.clone(),
+            LeanError::Start(t) => t.clone(),
         }
     }
 }
@@ -535,7 +546,7 @@ fn scratch() -> Result<Scratch, LeanError> {
     static N: AtomicUsize = AtomicUsize::new(0);
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let dir = std::env::temp_dir().join(format!("kaname-lean-{}-{stamp}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
-    std::fs::create_dir_all(&dir).map_err(|e| LeanError::Io(format!("{}: {e}", dir.display())))?;
+    std::fs::create_dir_all(&dir).map_err(|e| LeanError::Io(ritsu_base::cli::cannot_create(&dir.display().to_string(), &e)))?;
     Ok(Scratch(dir))
 }
 
@@ -550,13 +561,13 @@ enum Ran {
 fn lake_run(lake: &Path, dir: &Path, args: &[&str], limit: Duration) -> Result<Ran, LeanError> {
     use std::process::{Command, Stdio};
     let log = dir.join(format!(".kaname-{}.log", args.first().copied().unwrap_or("lake")));
-    let file = std::fs::File::create(&log).map_err(|e| LeanError::Io(format!("{}: {e}", log.display())))?;
-    let err = file.try_clone().map_err(|e| LeanError::Io(e.to_string()))?;
+    let file = std::fs::File::create(&log).map_err(|e| LeanError::Io(ritsu_base::cli::cannot_create(&log.display().to_string(), &e)))?;
+    let err = file.try_clone().map_err(|e| LeanError::Io(tr!("--lean が Lean を走らせられません: {e}", "--lean cannot run Lean: {e}")))?;
     let mut cmd = Command::new(lake);
     cmd.current_dir(dir).args(args).stdin(Stdio::null()).stdout(Stdio::from(file)).stderr(Stdio::from(err));
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
-    let mut child = cmd.spawn().map_err(|e| LeanError::Io(format!("{}: {e}", lake.display())))?;
+    let mut child = cmd.spawn().map_err(|e| LeanError::Start(ritsu_base::cli::cannot_start(&lake.display().to_string(), &e)))?;
     let start = std::time::Instant::now();
     loop {
         match child.try_wait() {
@@ -584,7 +595,7 @@ fn lake_run(lake: &Path, dir: &Path, args: &[&str], limit: Duration) -> Result<R
                 return Ok(Ran::TimedOut);
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
-            Err(e) => return Err(LeanError::Io(e.to_string())),
+            Err(e) => return Err(LeanError::Io(tr!("--lean が Lean を走らせられません: {e}", "--lean cannot run Lean: {e}"))),
         }
     }
 }
@@ -618,6 +629,39 @@ fn any_error(said: &str) -> String {
     said.lines().filter(|l| l.starts_with("error: ") && !l.starts_with("error: build failed")).map(|l| l.trim_start_matches("error: ").to_string()).next().unwrap_or_else(|| said.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").to_string())
 }
 
+/// The first error `lake build` printed of a file written from the `.kn` (of anything but the
+/// proof files): its place and what Lean said. A proof module cannot build beside a module that
+/// does not.
+fn written_error(said: &str) -> Option<String> {
+    let lines: Vec<&str> = said.lines().filter(|l| !l.starts_with("trace:")).collect();
+    for (k, l) in lines.iter().enumerate() {
+        let Some(rest) = l.strip_prefix("error: ") else { continue };
+        let rest = rest.trim_start_matches("./").trim_start_matches("./");
+        if rest.starts_with("Proofs/") || rest.starts_with("build failed") {
+            continue;
+        }
+        let mut message = rest.to_string();
+        for more in lines[k + 1..].iter().take_while(|m| m.starts_with(' ') || !(m.starts_with("error") || m.starts_with("warning") || m.starts_with("info") || m.starts_with('✖') || m.starts_with('✔') || m.starts_with('⚠') || m.starts_with("Some required") || m.starts_with("- "))).take(8) {
+            message.push_str("\n    ");
+            message.push_str(more.trim_end());
+        }
+        return Some(message);
+    }
+    None
+}
+
+/// The rejection `lake build` stopping gives: the Lean written from the `.kn` if it is what does
+/// not build, else the proof file (`rel`).
+fn build_rejection(said: &str, rel: &str) -> Rejection {
+    match written_error(said) {
+        Some(message) => Rejection::Written(message),
+        None => match first_error(said, rel) {
+            Some((line, col, message)) => Rejection::Build { line, col, message },
+            None => Rejection::Written(any_error(said)),
+        },
+    }
+}
+
 /// Each property of `modules` that is written for Lean, held by Lean to its statement, with the proof
 /// beside its module (DESIGN 38.6, steps 2 to 6): `(module, property)` with the verdict. A module
 /// with no proof beside it gets no verdicts. `lake` is looked for only when a proof file passes the
@@ -625,7 +669,8 @@ fn any_error(said: &str) -> String {
 pub fn check(modules: &[Rc<Checked>], opts: &LeanOptions) -> Result<Vec<(PropertyId, Verdict)>, LeanError> {
     let mut out: Vec<(PropertyId, Verdict)> = Vec::new();
     // the package, written again from the `.kn` files
-    let (files, stated) = crate::r#gen::lean::package_stating(modules);
+    let (files, stated, skipped_props) = crate::r#gen::lean::package_stating(modules);
+    let whys: std::collections::BTreeMap<(PathBuf, usize), Text> = skipped_props.into_iter().map(|(p, k, w)| ((p, k), w)).collect();
     // each module's proof file, read as text and scanned
     struct Sent {
         m: usize,
@@ -648,7 +693,8 @@ pub fn check(modules: &[Rc<Checked>], opts: &LeanOptions) -> Result<Vec<(Propert
             if written.contains(&k) {
                 props.push((k, cp.decl.name.ascii().to_string()));
             } else if crate::r#gen::lean::obstacle(&crate::value::Program::of(&full), &full, cp.lowered).is_none() {
-                out.push(((m, k), Verdict::NotWritten(written_why(&files, &alias, cp.decl.name.ascii()))));
+                let why = whys.get(&(c.canon.clone(), cp.lowered)).cloned().unwrap_or_else(|| tr!("その文が書き出されていません", "its statement is not written"));
+                out.push(((m, k), Verdict::NotWritten(why)));
             }
         }
         if props.is_empty() {
@@ -657,7 +703,7 @@ pub fn check(modules: &[Rc<Checked>], opts: &LeanOptions) -> Result<Vec<(Propert
         let text = match ritsu_base::fs::read_to_string(&path) {
             Ok(t) => t,
             Err(e) => {
-                let r = Rejection::Build { line: 1, col: 1, message: format!("the file cannot be read: {e}") };
+                let r = Rejection::Unreadable(ritsu_base::cli::cannot_read(&path.display().to_string(), &e));
                 out.extend(props.iter().map(|(k, _)| ((m, *k), Verdict::Rejected(r.clone()))));
                 continue;
             }
@@ -681,9 +727,9 @@ pub fn check(modules: &[Rc<Checked>], opts: &LeanOptions) -> Result<Vec<(Propert
     let write = |rel: &Path, text: &str| -> Result<(), LeanError> {
         let p = root.join(rel);
         if let Some(d) = p.parent() {
-            std::fs::create_dir_all(d).map_err(|e| LeanError::Io(format!("{}: {e}", d.display())))?;
+            std::fs::create_dir_all(d).map_err(|e| LeanError::Io(ritsu_base::cli::cannot_create(&d.display().to_string(), &e)))?;
         }
-        std::fs::write(&p, text).map_err(|e| LeanError::Io(format!("{}: {e}", p.display())))
+        std::fs::write(&p, text).map_err(|e| LeanError::Io(ritsu_base::cli::cannot_write(&p.display().to_string(), &e)))
     };
     for (rel, text) in files.iter().chain(&proofs) {
         write(rel, text)?;
@@ -703,10 +749,7 @@ pub fn check(modules: &[Rc<Checked>], opts: &LeanOptions) -> Result<Vec<(Propert
         }
         let r = match &built {
             Ran::TimedOut => Rejection::Timeout(opts.timeout),
-            Ran::Done { said, .. } => match first_error(said, &s.rel) {
-                Some((line, col, message)) => Rejection::Build { line, col, message },
-                None => Rejection::Build { line: 1, col: 1, message: any_error(said) },
-            },
+            Ran::Done { said, .. } => build_rejection(said, &s.rel),
         };
         out.extend(s.props.iter().map(|(k, _)| ((s.m, *k), Verdict::Rejected(r.clone()))));
     }
@@ -776,19 +819,6 @@ pub fn check(modules: &[Rc<Checked>], opts: &LeanOptions) -> Result<Vec<(Propert
     Ok(out)
 }
 
-/// Why the writer wrote no statement of the property `prop` of the module `alias`: the comment it
-/// left in the module's Lean.
-fn written_why(files: &[(PathBuf, String)], alias: &str, prop: &str) -> String {
-    let path = PathBuf::from(format!("Kaname/{alias}.lean"));
-    let head = "-- The property `";
-    files
-        .iter()
-        .find(|(p, _)| *p == path)
-        .and_then(|(_, t)| t.lines().find(|l| l.starts_with(head) && l.contains(&format!("{prop}`"))))
-        .and_then(|l| l.split_once(": ").map(|(_, why)| why.trim_end_matches('.').to_string()))
-        .unwrap_or_else(|| "its statement is not written".into())
-}
-
 /// The names the axioms a proof rests on are said by: `native_decide` for the axiom Lean makes of
 /// each use of it (`<theorem>._native.native_decide.ax_1_1`), each once.
 pub fn axiom_names(axioms: &[String]) -> Vec<String> {
@@ -800,4 +830,23 @@ pub fn axiom_names(axioms: &[String]) -> Vec<String> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_rejection, Rejection};
+
+    /// A build that stopped on the module written from the `.kn` is `Written`, not a `Build` of
+    /// the proof file (`★G-4`: `ticket.lean:1:1` said of `Kaname/ticket.lean`'s errors).
+    #[test]
+    fn a_stopped_build_names_whose_file_does_not_build() {
+        let rel = "Proofs/ticket.lean";
+        let written = "error: Kaname/ticket.lean:10:2: unexpected token 'until'; expected command\nerror: build failed\n";
+        assert_eq!(build_rejection(written, rel), Rejection::Written("Kaname/ticket.lean:10:2: unexpected token 'until'; expected command".to_string()));
+        let proof = "error: Proofs/ticket.lean:7:14: unknown identifier 'x'\nerror: build failed\n";
+        assert_eq!(build_rejection(proof, rel), Rejection::Build { line: 7, col: 15, message: "unknown identifier 'x'".to_string() });
+        // the proof file's own errors are said of it even beside a module's
+        let both = "error: Kaname/other.lean:2:1: bad\nerror: Proofs/ticket.lean:3:4: worse\n";
+        assert_eq!(build_rejection(both, rel), Rejection::Written("Kaname/other.lean:2:1: bad".to_string()));
+    }
 }

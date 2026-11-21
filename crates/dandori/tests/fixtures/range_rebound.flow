@@ -1,0 +1,88 @@
+workflow range_rebound v1
+description "A variable given a value in more than one place is, where it is given on, what the runs that reach that statement last put in it: a value put in it on another way does not count there"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:member-tier-shipping"
+
+inputs
+  express : bool
+  few     : int   range >=1 <=10
+  many    : int   range >=1 <=100
+  open    : int
+  early   : date  range >=2026-01-01 <=2026-06-30
+  late    : date  range >=2026-07-01 <=2026-12-31
+  wide    : tiers.tier
+  narrow  : tiers.tier  range >=basic <=silver
+  others  : list[int]
+
+outputs
+  done : bool
+
+task pack(n: int  range >=1 <=10)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:pack"
+  idempotent
+
+task ship(day: date  range >=2026-01-01 <=2026-06-30)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:ship"
+  idempotent
+
+task label(of: tiers.tier  range >=basic <=silver)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:label"
+  idempotent
+
+task count() -> int
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:count"
+  idempotent
+
+flow
+  # the other arm puts a wider number in `n`; in this arm it is still the first one
+  let n = few
+  match express
+    true => pack(n: n)
+    false =>
+      let n = many
+      # here it is the wider one
+      pack(n: n)
+  # after the arms it is either
+  pack(n: n)
+  # a number with no range on one way only: nothing is unknown of it on the other
+  let m = few
+  match express
+    true =>
+      let m = open
+      pack(n: m)
+    false => pack(n: m)
+  # a variable given another variable is what that one is there
+  let k = many
+  match express
+    true =>
+      let k = few
+      let copy = k
+      pack(n: copy)
+    false => pass
+  # a day, the same way
+  let d = early
+  match express
+    true => ship(day: d)
+    false =>
+      let d = late
+      ship(day: d)
+  # a value of an enum, the same way
+  let s = narrow
+  match express
+    true => label(of: s)
+    false =>
+      let s = wide
+      label(of: s)
+  # the answer of a task put in the variable: what the task answers, from there on
+  let c = few
+  pack(n: c)
+  let c = count()
+  pack(n: c)
+  # a variable the rounds of a loop put a value in is not followed in the loop, nor after it
+  let t = few
+  for other in others at most 5
+    pack(n: t)
+    let t = other
+  pack(n: t)
+  succeed done = true

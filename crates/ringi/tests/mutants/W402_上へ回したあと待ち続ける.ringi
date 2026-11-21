@@ -1,0 +1,23 @@
+request 例(example) v1 "例"
+
+use calendar 事務所(office) from "shared/事務所.cal"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確かめ(check)  経理
+  決裁(decide)   取締役会
+    due in 5 business days at end of day
+    when late escalate, then stay
+
+who
+  経理(finance) = team finance
+  取締役会(board) = team board
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+
+ticket
+  self approval  not allowed

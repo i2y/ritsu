@@ -1,0 +1,41 @@
+rule 注文の取扱手数料(_at) v1
+description "注文の取扱手数料で、規則の別名が生成コードの補助関数 `_at` と同じ規則"
+
+shape 注文(order) = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  合計(total)            : money[USD]  range >=0USD <=100_000USD  from sum 注文.lines of amount_usd
+  割れ物の最高額(top_fragile) : money[USD]  range >=0USD <=5_000USD    from max 注文.lines of amount_usd where fragile = true empty 0USD
+
+elements 明細(lines) from 注文.lines
+  個数(quantity) : number      range >=1 <=99          from quantity
+  金額(amount)   : money[USD]  range >=1USD <=5000USD  from amount_usd
+
+outputs
+  手数料(fee) : money[USD]  round up(1USD)
+
+table パレット(pallet)
+policy unique
+| 個数 | 金額      | -> パレットの明細(pallet_line) : bool |
+| >=50 | -         | true                                  |
+| <50  | >=2000USD | true                                  |
+| <50  | <2000USD  | false                                 |
+
+count パレットの数(pallet_lines) over 明細 where パレットの明細  range >=0 <=20
+
+table 取扱(handling)
+policy unique
+| 合計       | 割れ物の最高額 | -> 基本(base) : money[USD] |
+| >=10000USD | -              | 0USD                       |
+| <10000USD  | >=1000USD      | 25USD                      |
+| <10000USD  | <1000USD       | 5USD                       |
+
+table フォークリフト(forklift)
+policy unique
+| パレットの数 | -> リフト(lift) : money[USD] |
+| >=2          | 10USD                        |
+| <2           | 0USD                         |
+
+define 取扱料(handling_fee) : money[USD] = 基本 + リフト
+
+result 手数料 = 取扱料

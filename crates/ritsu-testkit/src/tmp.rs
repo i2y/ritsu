@@ -62,6 +62,31 @@ impl TempDir {
         std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("cannot read {}: {e}", p.display()))
     }
 
+    /// The ways a person may write the path of the file `rel` under the directory (DESIGN 4.15):
+    /// absolute, with a `.` in it, into a directory and out again with `..`, and relative from the
+    /// directory the test runs in. Each names the same file; the directory the third goes into is
+    /// made, so the path is one the system opens too.
+    pub fn spellings(&self, rel: &str) -> Vec<PathBuf> {
+        let (dir, name) = match rel.rsplit_once('/') {
+            Some((d, n)) => (self.0.join(d), n),
+            None => (self.0.clone(), rel),
+        };
+        let aside = dir.join("aside");
+        std::fs::create_dir_all(&aside).unwrap_or_else(|e| panic!("cannot make {}: {e}", aside.display()));
+        let here = std::env::current_dir().unwrap_or_else(|e| panic!("no working directory: {e}"));
+        let here = std::fs::canonicalize(&here).unwrap_or(here);
+        let (h, d): (Vec<_>, Vec<_>) = (here.components().collect(), dir.components().collect());
+        let common = h.iter().zip(&d).take_while(|(a, b)| a == b).count();
+        let mut relative = PathBuf::new();
+        for _ in common..h.len() {
+            relative.push("..");
+        }
+        for c in &d[common..] {
+            relative.push(c);
+        }
+        vec![dir.join(name), dir.join(".").join(name), aside.join("..").join(name), relative.join(name)]
+    }
+
     /// Note a server started for this directory, so that the first test process after this
     /// one stops it if this one is killed before it can.
     pub fn note_server(&self, pid: u32, program: &str) {

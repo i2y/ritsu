@@ -1,0 +1,18 @@
+エラー[E004]: tests/chains/chain_names.ringi:15:45: 明細 `lines` に `cost` という列はありません
+    15 |   amount  : money[JPY] "Amount" = sum(lines.cost)  range >=1JPY <=1_000_000JPY
+  = 宣言されている列: `item`、`price`
+エラー[E004]: tests/chains/chain_names.ringi:16:45: 明細 `fees` に `cost` という列はありません
+    16 |   charged : money[JPY] "Charged" = sum(fees.cost)  range >=1JPY <=1_000_000JPY
+  = 宣言されている列: `item`、`fee`
+エラー[E004]: tests/chains/chain_names.ringi:23:29: `reviewer` は宣言されていません
+    23 |   technical  reviewer  when reviewer is not none
+  = 宣言されているフィールド: `lines`、`fees`、`amount`、`charged`、`reviewr`
+  = `reviewer` は 30、43 行目にも書かれています。
+エラー[E004]: tests/chains/chain_names.ringi:25:14: `finanse` は `who` に宣言がありません
+    25 |   finance    finanse   when amount > 100_000JPY
+  = 宣言されている承認者の決め方: `manager`、`reviewer`
+  = `finanse` は 26 行目にも書かれています。
+エラー[E308]: tests/chains/chain_names.ringi:39:24: 経路に `first` というステップはありません
+    39 |   withdraw       until first
+  = 宣言されているステップ: `frist`、`technical`、`finance`、`audit`
+  = `first` は 45 行目にも書かれています。

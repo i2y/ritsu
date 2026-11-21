@@ -80,7 +80,7 @@ pub fn side_through(path: &str, shown: &str, files: Option<Rc<dyn ritsu_base::fs
         if let Some(t) = ritsu_base::modules::address::stopped(path) {
             return Err(t);
         }
-        check::check_file(path, suite, opts).map_err(|e| tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}"))
+        check::check_file(path, suite, opts).map_err(|e| ritsu_base::cli::cannot_read(shown, &e))
     };
     let outcome = match &files {
         Some(f) => ritsu_base::fs::with(f.clone(), run),
@@ -169,19 +169,50 @@ impl Only {
     }
 }
 
+/// A line under a workflow (DESIGN 2.12) the two versions write differently: a `resource … from`
+/// line only one version writes under the workflow, or a line under one both write (`amount =
+/// order.total`) only one version writes, or both with another value. No answer of the gate reads
+/// these lines (the generated Cedar has none of them); what they say is what `ritsu check` holds the
+/// flow's calls to (X16, E212).
+#[derive(Clone, Debug, PartialEq)]
+pub struct LineDiff {
+    pub workflow: String,
+    /// The `resource … from` line, as the gate writes it: `resource Order from order.id`.
+    pub head: String,
+    /// The attribute of the line under it; None for the `resource … from` line itself.
+    pub attribute: Option<String>,
+    /// The line as each version writes it (`amount = order.total`, or the `resource … from` line);
+    /// None for the version that does not write it.
+    pub old: Option<String>,
+    pub new: Option<String>,
+}
+
 pub struct Diff {
     pub old: Head,
     pub new: Head,
     pub actions: Vec<ActionDiff>,
     pub only_old: Only,
     pub only_new: Only,
+    /// The lines under the workflows the two versions write differently, in the new version's
+    /// order and then the old's.
+    pub lines: Vec<LineDiff>,
 }
 
 impl Diff {
-    /// Whether the answers or the interface differ (exit 1): a permission gained or lost, or what
-    /// only one version has. A change of the deciding policies alone, or an undecided combination
-    /// alone, is not.
+    /// Whether the two versions differ (exit 1): in their answers or what only one of them has
+    /// ([`Diff::answers_differ`]), or in a line under a workflow (what the gate says a flow holds,
+    /// which `ritsu check` reads at the flow's calls; a difference of the gate's interface, as
+    /// `ritsu mod diff` lists it). A change of the deciding policies alone, or an undecided
+    /// combination alone, is not.
     pub fn differs(&self) -> bool {
+        self.answers_differ() || !self.lines.is_empty()
+    }
+
+    /// Whether the answers differ: a permission gained or lost, or what only one version has (an
+    /// action, a role, an attribute, an input, a type, or a pair of a principal's and a resource's
+    /// types an action takes). The behavior `ritsu mod diff` says of a gate; the lines under the
+    /// workflows are in its interface.
+    pub fn answers_differ(&self) -> bool {
         !self.only_old.is_empty()
             || !self.only_new.is_empty()
             || self.actions.iter().any(|a| !a.frames_only_old.is_empty() || !a.frames_only_new.is_empty() || a.groups.iter().any(|g| g.change != Change::Reasons))
@@ -213,9 +244,11 @@ fn not_passing(s: &Side) -> Option<Text> {
     let errors = s.outcome.diags.iter().filter(|d| d.is_error()).count().max(1);
     let shown = &s.shown;
     let n = count(errors as u64);
+    // the command named the way the person ran this one (ritsu's DESIGN 6.2, item 10)
+    let run = ritsu_base::cli::command_name("sekisho");
     Some(tr!(
-        "`{shown}` は検査を通りません（エラー {n} 件）。`sekisho check` で確かめてください",
-        "`{shown}` does not pass check ({n} {}); run `sekisho check` on it",
+        "`{shown}` は検査を通りません（エラー {n} 件）。`{run} check` で確かめてください",
+        "`{shown}` does not pass check ({n} {}); run `{run} check` on it",
         ; if errors == 1 { "error" } else { "errors" }
     ))
 }
@@ -237,7 +270,7 @@ pub fn diff_kept(old: &Side, new: &Side, suite: &Suite, budget: u128, keep: bool
     let (co, cn) = (old.checked(), new.checked());
     let (go, gn) = (&co.gate, &cn.gate);
     let head = |s: &Side, g: &Gate| Head { file: s.shown.clone(), name: g.named.name.clone(), version: g.version.clone() };
-    let mut d = Diff { old: head(old, go), new: head(new, gn), actions: Vec::new(), only_old: only(go, gn), only_new: only(gn, go) };
+    let mut d = Diff { old: head(old, go), new: head(new, gn), actions: Vec::new(), only_old: only(go, gn), only_new: only(gn, go), lines: lines(go, gn) };
     let (memo_o, memo_n) = (Memo::default(), Memo::default());
     let (ask_o, ask_n) = (langs(), langs());
     for (an, a) in gn.actions.iter().enumerate() {
@@ -256,10 +289,13 @@ pub fn diff_kept(old: &Side, new: &Side, suite: &Suite, budget: u128, keep: bool
 fn stopped(action: &str, e: Stop, budget: u128) -> Text {
     match e {
         Stop::Budget { count: n, .. } => over(action, n, budget),
-        Stop::Unknown => tr!(
-            "`{action}` をたどれません。読む値を、どの言語も答えませんでした（`sekisho check` が理由を言います）",
-            "`{action}` cannot be walked: no language answered for a value it reads (`sekisho check` says why)"
-        ),
+        Stop::Unknown => {
+            let run = ritsu_base::cli::command_name("sekisho");
+            tr!(
+                "`{action}` をたどれません。読む値を、どの言語も答えませんでした（`{run} check` が理由を言います）",
+                "`{action}` cannot be walked: no language answered for a value it reads (`{run} check` says why)"
+            )
+        }
     }
 }
 
@@ -304,6 +340,50 @@ fn only(a: &Gate, b: &Gate) -> Only {
         }
     }
     o
+}
+
+/// The lines under the workflows (DESIGN 2.12) the two versions write differently: each
+/// `resource … from` line by its workflow, its type and the value of the flow it reads the id
+/// from; each line under one both versions write, by its attribute. The names are each version's
+/// own, as `only` compares them.
+fn lines(old: &Gate, new: &Gate) -> Vec<LineDiff> {
+    // (workflow, head, attribute) → the line as written
+    type Lines = Vec<((String, String, Option<String>), String)>;
+    let of = |g: &Gate| -> Lines {
+        let mut out = Vec::new();
+        for w in &g.workflows {
+            for h in &w.holds {
+                let head = h.head_text(g);
+                out.push(((w.named.name.clone(), head.clone(), None), head.clone()));
+                for k in 0..h.attrs.len() {
+                    let attribute = g.types[h.resource].attrs[h.attrs[k].0].named.name.clone();
+                    out.push(((w.named.name.clone(), head.clone(), Some(attribute)), h.line_text(g, k)));
+                }
+            }
+        }
+        out
+    };
+    let (o, n) = (of(old), of(new));
+    let heads_in = |ls: &Lines, w: &str, head: &str| ls.iter().any(|((x, y, a), _)| x == w && y == head && a.is_none());
+    let mut out = Vec::new();
+    let mut put = |(w, head, attribute): &(String, String, Option<String>), was: Option<&String>, is: Option<&String>| {
+        // a line under a `resource … from` line only one version writes is that line's difference
+        if attribute.is_some() && !(heads_in(&o, w, head) && heads_in(&n, w, head)) {
+            return;
+        }
+        if was != is {
+            out.push(LineDiff { workflow: w.clone(), head: head.clone(), attribute: attribute.clone(), old: was.cloned(), new: is.cloned() });
+        }
+    };
+    for (key, line) in &n {
+        put(key, o.iter().find(|(k, _)| k == key).map(|(_, l)| l), Some(line));
+    }
+    for (key, line) in &o {
+        if !n.iter().any(|(k, _)| k == key) {
+            put(key, Some(line), None);
+        }
+    }
+    out
 }
 
 /// One side of the walk of an action.
@@ -702,9 +782,9 @@ enum Say {
 /// A combination, shown as the check shows one.
 fn shown(n: &Walked, kn: &Kept, o: &Walked, ko: &Kept, from: Say) -> Shown {
     if from == Say::Old {
-        return Shown { said: walk::say(o.g, o.space, ko), values: walk::values(o.g, o.space, ko) };
+        return Shown { said: walk::say_counted(o.g, o.space, ko), values: walk::values(o.g, o.space, ko) };
     }
-    let (said, mut values) = (walk::say(n.g, n.space, kn), walk::values(n.g, n.space, kn));
+    let (said, mut values) = (walk::say_counted(n.g, n.space, kn), walk::values(n.g, n.space, kn));
     if from == Say::New {
         return Shown { said, values };
     }
@@ -1361,6 +1441,35 @@ fn only_lines(o: &Only, lang: Lang) -> Vec<String> {
     out
 }
 
+/// The heading of the lines under the workflows that differ, with why no answer changes by them.
+fn lines_title(lang: Lang) -> String {
+    tr!(
+        "ワークフローの下の行で、二つの版が違う書き方をしているもの（ゲートの答えはこの行を読みません。`ritsu check` が、フローの呼び出しをこの行で確かめます）：",
+        "lines under the workflows the two versions write differently (no answer of the gate reads them; `ritsu check` holds the flows' calls to them):"
+    )
+    .get(lang)
+    .to_string()
+}
+
+/// A line under a workflow that differs: `w, resource Order from order.id: amount = order.total →
+/// amount = order.subtotal`.
+fn line_text(l: &LineDiff, lang: Lang) -> String {
+    let c = colon(lang);
+    let at = match (&l.attribute, lang) {
+        (None, Lang::Ja) => format!("ワークフロー {}", l.workflow),
+        (None, Lang::En) => format!("workflow {}", l.workflow),
+        (Some(_), Lang::Ja) => format!("ワークフロー {} の {}", l.workflow, l.head),
+        (Some(_), Lang::En) => format!("workflow {}, {}", l.workflow, l.head),
+    };
+    let what = match (&l.old, &l.new) {
+        (Some(a), Some(b)) => format!("{a} → {b}"),
+        (Some(a), None) => tr!("{a}（古い版だけ）", "{a} (only in the old version)").get(lang).to_string(),
+        (None, Some(b)) => tr!("{b}（新しい版だけ）", "{b} (only in the new version)").get(lang).to_string(),
+        (None, None) => String::new(),
+    };
+    format!("{at}{c}{what}")
+}
+
 fn change_text(c: Change) -> Text {
     match c {
         Change::Gained => tr!("許可が増えた（拒否 → 許可）", "allow gained (deny → allow)"),
@@ -1410,6 +1519,12 @@ pub fn text(d: &Diff, lang: Lang) -> String {
             for l in lines {
                 o.push_str(&format!("  {l}\n"));
             }
+        }
+    }
+    if !d.lines.is_empty() {
+        o.push_str(&format!("\n{}\n", lines_title(lang)));
+        for l in &d.lines {
+            o.push_str(&format!("  {}\n", line_text(l, lang)));
         }
     }
     for a in &d.actions {
@@ -1466,6 +1581,12 @@ pub fn markdown(d: &Diff, lang: Lang) -> String {
         let lines = only_lines(only, lang);
         if !lines.is_empty() {
             o.push_str(&format!("- {}{c}{}\n", what.get(lang), lines.join(if lang == Lang::Ja { "。" } else { "; " })));
+        }
+    }
+    if !d.lines.is_empty() {
+        o.push_str(&format!("- {}\n", ritsu_base::text::capitalize(&lines_title(lang))));
+        for l in &d.lines {
+            o.push_str(&format!("  - {}\n", cell(&line_text(l, lang))));
         }
     }
     for a in &d.actions {
@@ -1562,6 +1683,19 @@ pub fn to_json(d: &Diff, lang: Lang) -> Json {
         ("actions", Json::arr(actions)),
         ("only_old", only_json(&d.only_old)),
         ("only_new", only_json(&d.only_new)),
+        (
+            "workflow_lines",
+            Json::arr(d.lines.iter().map(|l| {
+                let text = |x: &Option<String>| x.as_deref().map(Json::str).unwrap_or(Json::Null);
+                Json::obj([
+                    ("workflow", Json::str(l.workflow.as_str())),
+                    ("head", Json::str(l.head.as_str())),
+                    ("attribute", text(&l.attribute)),
+                    ("old", text(&l.old)),
+                    ("new", text(&l.new)),
+                ])
+            })),
+        ),
         (
             "total",
             Json::obj([("gained", big(d.total(Change::Gained))), ("lost", big(d.total(Change::Lost))), ("reasons", big(d.total(Change::Reasons))), ("unknown", big(d.unknown()))]),

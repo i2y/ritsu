@@ -5,7 +5,7 @@
 //! the run with exit 2: an agent that is told nothing believes the flag worked.
 //! The table is yuen's; how it is drawn and read is ritsu-base's ([`ritsu_base::cli`]).
 
-use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
+use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag, made_lang_flag};
 
 pub use ritsu_base::cli::Args;
 
@@ -110,12 +110,12 @@ pub fn commands() -> Vec<Cmd> {
             name: "affected",
             args: "<path>...",
             purpose: tr!(
-                "差分が触る要件と、その持ち主、出どころ、最後に決めたことを答える。コードは geas の記録から主張を通って要件までたどる",
-                "answer which requirements a diff touches, with their owners, where they come from and the last decision on them; code is followed through geas's records to the claims, and on to the requirements"
+                "差分が触る要件と、その持ち主、出どころ、最後に決めたことを答える。コードは geas の記録から主張を通って要件までたどり、リンクが指すファイルが読むファイルは何段でもたどる",
+                "answer which requirements a diff touches, with their owners, where they come from and the last decision on them; code is followed through geas's records to the claims, and on to the requirements; the files the linked files read are followed through every level"
             ),
             params: vec![("<path>...", tr!("{}", "{}", PATHS.0; PATHS.1))],
             flags: vec![
-                flag("--diff", Some("<file|->"), tr!("統一形式の差分（git diff か diff -u）。- なら標準入力。要る", "a unified diff (git diff or diff -u); - reads standard input; required")),
+                flag("--diff", Some("<file|->"), tr!("統一形式の差分（git diff か diff -u）。- なら標準入力。要る", "a unified diff (git diff or diff -u); - reads standard input; required")).needed(),
                 flag(
                     "--map",
                     Some("<spec.geas>=<record>"),
@@ -155,6 +155,7 @@ pub fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--format", Some("markdown|html"), tr!("ページの形。既定は Markdown", "the form of the page; Markdown unless html")).choices(&["markdown", "html"]),
                 flag("--out", Some("<dir>"), tr!("ページを書くディレクトリ。最初の .req の名前から <名前>.md か <名前>.html を書く", "the directory to write the page to, as <name>.md or <name>.html after the first .req")),
+                made_lang_flag("YUEN_LANG"),
             ],
             exits: vec![
                 (0, tr!("出した（印や欠け、範囲の外れはページに載せる）", "printed (marks, gaps and what the scope misses are on the page)")),
@@ -173,7 +174,7 @@ pub fn commands() -> Vec<Cmd> {
                 "print the whole graph of the project as JSON, for other tools to read from the command's output alone"
             ),
             params: vec![("<path>...", tr!("{}", "{}", PATHS.0; PATHS.1))],
-            flags: vec![],
+            flags: vec![made_lang_flag("YUEN_LANG")],
             exits: vec![
                 (0, tr!("出した（印や欠けがあっても、状態として載せる）", "printed (marks and gaps are in it as states)")),
                 (1, tr!("構文か名前にエラーがある", "the words or names have errors")),
@@ -256,14 +257,14 @@ pub fn commands() -> Vec<Cmd> {
         Cmd {
             usage: None,
             name: "explain",
-            args: "<CODE>",
-            purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look a diagnostic code up: when it comes, how to fix it, the smallest reproduction"),
-            params: vec![("<CODE>", tr!("`E302` のような診断のコード。`--all` なら要らない", "a diagnostic code such as `E302`; not needed with `--all`"))],
+            args: "<CODE>... | --all",
+            purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look diagnostic codes up: when each comes, how to fix it, the smallest reproduction"),
+            params: vec![("<CODE>...", tr!("`E302` のような診断のコード。いくつでも渡せて、渡した順に出す。`--all` とは一緒に渡さない", "diagnostic codes such as `E302`, any number, printed in the order given; not given with `--all`"))],
             flags: vec![
                 flag("--all", None, tr!("全部のコードを出す", "print every code")),
-                flag("--format", Some("markdown"), tr!("Markdown で出す（docs/codes.md の元）", "print Markdown (what docs/codes.md is made from)")).choices(&["markdown"]),
+                flag("--format", Some("markdown|json"), tr!("Markdown（docs/codes.md の元）か JSON で出す", "print Markdown (what docs/codes.md is made from) or JSON")).choices(&["markdown", "json"]),
             ],
-            exits: vec![(0, tr!("引けた", "found")), (2, tr!("そのコードが無い、または引数の誤り", "no such code, or bad arguments"))],
+            exits: vec![(0, tr!("引けた", "found")), (2, tr!("無いコードがある、または引数の誤り", "a code it does not have, or bad arguments"))],
             examples: vec!["yuen explain E302", "yuen explain --all --format markdown --lang ja"],
             codes: vec![],
         },
@@ -281,8 +282,8 @@ pub fn table() -> Table {
         commands: commands(),
         footer: vec![
             tr!(
-                "どのコマンドにも --lang ja|en（既定は en。環境変数 YUEN_LANG か RITSU_LANG でも指定できる）と --root <dir> を付けられます。",
-                "Every command takes --lang ja|en (default en; the YUEN_LANG or RITSU_LANG environment variable works too) and --root <dir>."
+                "どのコマンドにも --lang ja|en（既定は en。環境変数 YUEN_LANG か RITSU_LANG は出す文の言語を決め、doc と api が書く物は --lang だけで決まる）と --root <dir> を付けられます。",
+                "Every command takes --lang ja|en (default en; the YUEN_LANG or RITSU_LANG environment variable sets the language of the text printed, and what doc and api write follows --lang alone) and --root <dir>."
             ),
             tr!("exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル", "Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be read"),
         ],

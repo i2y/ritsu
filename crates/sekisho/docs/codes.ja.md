@@ -63,7 +63,7 @@ role 係(clerk)
 
 **いつ出るか**: 字下げにタブがあるとき、同じブロックの行の字下げがそろっていないとき、字下げした行を取らない行の下に字下げした行があるとき。
 
-**直し方**: 字下げはスペースで書き、同じブロックの行は同じ幅にしてください。`attributes`、`input`、`context` の下の行は、もう一段深く字下げします。
+**直し方**: 字下げはスペースで書き、同じブロックの行は同じ幅にしてください。`attributes`、`input`、`context` の下の行と、ワークフローの `resource` の下の行は、もう一段深く字下げします。
 
 **再現**:
 
@@ -99,7 +99,7 @@ role 係(clerk)
 
 ## E006 — 同じ名前を二度宣言しています
 
-**いつ出るか**: 同じ種類のもの（型と列挙、役割、列挙の値、型の属性、ワークフロー、action、action の入力と計算した値、ポリシー、期待、職務の分離、`use` の名前）のあいだで、名前か別名が重なるとき。`import enum` で読んだ列挙は、`enum` に書いたものと同じに比べます（`-> <名前>` で付けた名前も）。`use gate` で読んだファイルの宣言とも比べます。規則の入力に二度値を渡したとき、`actions` に同じ action を二度並べたときも出ます。
+**いつ出るか**: 同じ種類のもの（型と列挙、役割、列挙の値、型の属性、ワークフロー、action、action の入力と計算した値、ポリシー、期待、職務の分離、`use` の名前）のあいだで、名前か別名が重なるとき。`import enum` で読んだ列挙は、`enum` に書いたものと同じに比べます（`-> <名前>` で付けた名前も）。`use gate` で読んだファイルの宣言とも比べます。規則の入力に二度値を渡したとき、`actions` に同じ action を二度並べたとき、ワークフローの下に同じ `resource … from …` か、その下に同じ属性を二度書いたときも出ます。
 
 **直し方**: どちらかの名前か別名を変えてください。
 
@@ -134,9 +134,9 @@ role 係
 
 <a id="e008"></a>
 
-## E008 — 別名が Cedar か生成するコードの予約語です
+## E008 — 別名が Cedar の予約語か、Cedar か sekisho が使う型の名前です
 
-**いつ出るか**: 別名（別名の無い ASCII の名前も）が、Cedar の予約語（`if`、`then`、`else`、`has`、`like`）か、TypeScript・Python・Go の予約語のとき。型の名前が、Cedar の `Action` と組み込みの型、sekisho が宣言する `Role` と `Workflow` のときも出ます。
+**いつ出るか**: 別名（別名の無い ASCII の名前も）が、Cedar の予約語（`if`、`then`、`else`、`has`、`like`）のとき。型の名前が、Cedar の `Action` と組み込みの型、sekisho が宣言する `Role` と `Workflow` のときも出ます。TypeScript・Python・Go の予約語はここでは言いません。その出力先のコードが名前をその語のまま書く所でだけ W402 になり、ファイルは検査を通ります。
 
 **直し方**: 別の別名にしてください。
 
@@ -148,7 +148,7 @@ gate t v1
 role 持つ(has)
 ```
 
-関連: [E007](#e007)
+関連: [E007](#e007), [W402](#w402)
 
 <a id="e009"></a>
 
@@ -172,7 +172,7 @@ principal 利用者(User)
 
 ## E101 — 知らない名前です
 
-**いつ出るか**: 参照した役割、型、属性、列挙の値、action、入力、計算した値、`use` の名前、規則の出力と入力、日付の関数、単位が無いとき。`import enum` が読む `enums` ファイルに、その列挙が無いときも出ます。ポリシーと期待が、ほかのファイルの action を書いたときも出ます。
+**いつ出るか**: 参照した役割、型、属性、列挙の値、action、入力、計算した値、`use` の名前、規則の出力と入力、日付の関数、単位が無いとき。`import enum` が読む `enums` ファイルに、その列挙が無いときも出ます。ポリシーと期待が、ほかのファイルの action を書いたときも出ます。同じ種類の同じ名前を何か所にも書いたときは、最初に書いた所で一度だけ出て、ほかの行の番号を注に挙げます。型の無い resource の属性を読む条件は、何も言いません。
 
 **直し方**: 書き違いを直すか、宣言を足してください。注に、書ける名前が並びます。規則と日付のファイルの名前は、`.gate` に書ける形で並びます（名前を書けないときは別名で）。名前でも別名でも書けないものには、そのファイルの側で別名を付けてください。
 
@@ -203,7 +203,7 @@ permit 係は見られる(clerks_view)
 
 ## E102 — 型が合いません
 
-**いつ出るか**: 真偽を列挙の値と比べる、列挙を数と比べる、単位の違う数を比べる、真偽でない値を条件にそのまま書く、範囲を書けない型に範囲を書く、規則の入力に型の違う値を渡すとき。
+**いつ出るか**: 真偽を列挙の値と比べる、列挙を数と比べる、単位の違う数を比べる、真偽でない値を条件にそのまま書く、範囲を書けない型に範囲を書く、規則の入力に型の違う値を渡す、ワークフローの `resource` の下で、エンティティを指す属性にフローの値を当てるとき。一つの名前の入力か計算した値が action によって、一つの名前の属性が型によって、違う型であるときも出ます。列挙は、宣言した場所（ファイルとそこでの名前）と値の並びが同じなら、どの名前で読んでも一つの型です（`enums` ファイルの列挙を `import enum` で二つの名前で読むとき、それを読む規則の出力）。別の場所で宣言した列挙は、値が同じでも別の型で、注がそれぞれをどこで宣言したかを言います。
 
 **直し方**: 比べる値を、左の値の型に合わせてください。数は単位まで同じにします（`JPY` と `円` は同じ、税込と税抜は別）。
 
@@ -254,7 +254,7 @@ principal 職員(User)
 
 ## E104 — v1 で書けない関係です
 
-**いつ出るか**: 属性を二段以上たどるとき（`resource.order.customer`）、型の違う二つの属性を同じかで比べるとき、principal の来ない型の属性を principal と比べるとき、数をほかの値と比べるとき。
+**いつ出るか**: 属性を二段以上たどるとき（`resource.order.customer`）、型の違う二つの属性を同じかで比べるとき、principal の来ない型の属性を principal と比べるとき、数をほかの値と比べるとき。二つの列挙の属性は、宣言した場所と値の並びが同じなら一つの型で、比べられます（E102 と同じ）。
 
 **直し方**: 関係は一段だけにしてください（`resource.customer is principal`、`resource.tenant is principal.tenant`、`principal in resource.team`）。二段たどる答えは、それを計算する規則の真偽の出力にできます。
 
@@ -317,7 +317,7 @@ action 見る(view)
 
 ## E106 — principal の型が action に来ません
 
-**いつ出るか**: ポリシーか期待の `principal` の行（`is <型>`、`is workflow <名前>`、`in <役割>`）に当たる principal が、並べた action に来ないとき。`action any` では、どの action にも来ないとき。
+**いつ出るか**: ポリシーか期待の `principal` の行（`is <型>`、`is workflow <名前>`、`in <役割>`）に当たる principal が、並べた action に来ないとき。`action any` では、どの action にも来ないとき。action の principal の型が無い（E101）ときは出ません。
 
 **直し方**: `principal` の行を直すか、action の `principal` の行に型を足してください。役割で選ぶなら、その役割を持てる型の `roles` に役割を書きます。
 
@@ -462,7 +462,7 @@ permit 承認できないものは求められる(requests_of_what_cannot_be_app
 
 ## E201 — `use` のファイルが検査を通らないか、読めないか、ルートの外にあります
 
-**いつ出るか**: `use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`import enum` のファイルが `enums` ファイルでなく規則であるとき、rulec の検査を通らないときも出ます。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use` のファイルがルートの外にあるときも出ます。gate が読むファイルは、ルートからのパスで参照するためです（action が守る操作、生成する Cedar の `@doc` に書く規則と日付とカレンダー、ほかの言語からの参照）。
+**いつ出るか**: `use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`import enum` のファイルが `enums` ファイルでなく規則であるとき、rulec の検査を通らないときも出ます。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use` のファイルがルートの外にあるときも出ます。gate が読むファイルは、ルートからのパスで参照するためです（action が守る操作、生成する Cedar の `@doc` に書く規則と日付とカレンダー、ほかの言語からの参照）。列挙を持ってこなかった `import enum` の名前は、ファイルの中にあるものとして扱います。それを型に書く行には、E101 を重ねません。
 
 **直し方**: そのファイルを、その言語の検査が通るように直してください。ルートの外にあるファイルなら、そのファイルを含むディレクトリを `--root` でルートにしてください。
 
@@ -520,9 +520,9 @@ permit clerks_refund
 
 ## E203 — input が、操作の受け取るものと合いません
 
-**いつ出るか**: `input` の名前が、守る操作の引数にも本文のフィールドにも無いとき。型が違うとき（数を小数や文字列として受け取る、列挙の値が違う）。範囲が操作の受け取る範囲を超えるとき。操作が求めない値に `?` が無いとき。
+**いつ出るか**: `input` の名前が、守る操作の引数にも本文のフィールドにも無いとき。型が違うとき（数を小数や文字列として受け取る、列挙の値が違う、`.proto` の `repeated` のフィールドを一つの値として受け取る）。範囲が操作の受け取る範囲を超えるとき。操作が求めない値に `?` が無いとき。列挙の `input` は、操作が受け取る値（OpenAPI の `enum`、`.proto` のフィールドの型を protobuf の決まりでたどった列挙のうち、Protovalidate の決まりが通す値）を全部持たなければなりません。`.proto` の値の名前は、rulec の `import proto` と同じに読みます。頭にある列挙の名前を落として小文字にし（`CATEGORY_TRAVEL` は `travel`）、同じ番号の名前（`allow_alias`）は一つの値です。
 
-**直し方**: 操作が受け取るものを、同じ名前、同じ型、その中の範囲で書いてください。
+**直し方**: 操作が受け取るものを、同じ名前、同じ型、その中の範囲で書いてください。列挙に足りない値は、注が挙げる名前のどれか一つで足してください。名前の読み方の全部は、rulec の reference の `import proto` の表にあります。
 
 **再現**:
 
@@ -845,7 +845,7 @@ flow
   succeed refund = r.id
 ```
 
-関連: [E201](#e201)
+関連: [E201](#e201), [E212](#e212)
 
 <a id="e209"></a>
 
@@ -931,6 +931,174 @@ role 係(clerk)
 
 関連: [E210](#e210), [E006](#e006)
 
+<a id="e212"></a>
+
+## E212 — ワークフローの下の `resource` の行が、フローの持つ値と合いません
+
+**いつ出るか**: `workflow … from` の下の `resource <型> from <フローの値>` と、その下の `<属性> = <フローの値>` が、フローの持つ値と合わないとき。フローにその値（入力、変数、そのフィールド）が無いとき。値の型や単位が属性と違うとき。行が当たる呼び出し（`from` の値を resource の ID として渡す呼び出し）に届く値が、属性の範囲の外になりうるとき、属性の列挙に無い値になりうるとき、無いことがあるのに属性に `?` が無いとき（そういう値が届く呼び出しを注で言います）。この行は、フローが resource について何を持っているかをゲートが言うもので、`ritsu check` は、フローの呼び出しをゲートが許すかを、この行を前提にして確かめます。
+
+**直し方**: フローにある値を書いてください。範囲が合わないなら、フローの側の値の範囲を属性の範囲の中に狭めるか（フローの入力やレコードのフィールドの `range`）、属性の範囲を広げてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu sekisho check example.gate` を走らせます。
+
+`example.gate`:
+
+```
+gate 店(shop) v1
+description "店の注文"
+
+use openapi 注文 from "orders.json"
+
+workflow 返品(returns) from "返品.flow"
+  description "返品された注文を返金する"
+  resource 注文 from 注文番号
+    合計 = 金額
+
+resource 注文(Order)
+  description "注文"
+  attributes
+    合計(total) : money[JPY]  range >=0JPY <=50_000JPY
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  guards 注文 refundOrder
+  principal Workflow
+  resource 注文 from orderId
+
+permit 返品は少額の注文を返金できる(returns_refund_small_orders)
+  description "返品のワークフローは、1,000 円までの注文を返金できる"
+  principal is workflow 返品
+  action 返金する
+  when resource.合計 <= 1_000JPY
+```
+
+`返品.flow`:
+
+```flow
+workflow 返品 v1
+description "返品された注文を返金する"
+
+use openapi 注文 from "orders.json"
+
+inputs
+  注文番号 : string
+  金額     : money[JPY]  range >=0JPY <=100_000JPY
+
+outputs
+  返金額 : money[JPY]
+
+task 返金する(orderId: string)
+  http POST 注文 "/orders/{orderId}/refunds"
+  key
+
+flow
+  返金する(orderId: 注文番号)
+  succeed 返金額 = 金額
+```
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Orders", "version": "1" },
+  "servers": [ { "url": "https://orders.example" } ],
+  "paths": {
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [ { "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "201": { "description": "Refunded" }, "403": { "description": "Not allowed" } }
+      }
+    }
+  }
+}
+```
+
+関連: [E208](#e208), [E101](#e101), [W202](#w202)
+
+<a id="w202"></a>
+
+## W202 — ワークフローの下の `resource` の行が当たる呼び出しがありません
+
+**いつ出るか**: `workflow … from` の下の `resource <型> from <フローの値>` に当たる呼び出し（ゲートの action が守る操作の呼び出しで、その型の resource を受け取る引数に、行の `from` の値を渡すもの）が、フローに一つも無いとき。`ritsu check` は、この行を、当たる呼び出しでだけ前提にする（E212 と、ゲートが呼び出しを許すかの確かめ）ので、この行はどの呼び出しにも効きません。注で、なぜ当たらないかを言います。その型の resource を引数から受け取る action が無い（型の書き違い）、受け取る action が、どの引数が ID かを書いていない、フローがその action の守る操作を呼ばない（別のワークフローの行か、要らない行）、呼び出しが ID の引数に別の値を渡す（値の書き違い。渡す値を言います）、のどれかです。フローが dandori の検査を通り（通らなければ E208）、action が守る操作が契約にあるとき（無ければ E202）に言います。
+
+**直し方**: 呼び出しが ID として渡す値か、action が受け取る resource の型を書いてください。action が ID を渡す引数を書いていなければ、`resource <型> from <引数>` と書いてください。その操作を呼ばないワークフローの下の行なら、消してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu sekisho check example.gate` を走らせます。
+
+`example.gate`:
+
+```
+gate 店(shop) v1
+description "店の注文"
+
+use openapi 注文 from "orders.json"
+
+workflow 交換(exchanges) from "交換.flow"
+  description "交換の元の注文を返金する"
+  resource 注文 from 注文番号
+
+resource 注文(Order)
+  description "注文"
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  guards 注文 refundOrder
+  principal Workflow
+  resource 注文 from orderId
+
+permit 交換は返金できる(exchanges_refund)
+  description "交換のワークフローは、注文を返金できる"
+  principal is workflow 交換
+  action 返金する
+```
+
+`交換.flow`:
+
+```flow
+workflow 交換 v1
+description "交換の元の注文を返金する"
+
+use openapi 注文 from "orders.json"
+
+inputs
+  注文番号     : string
+  元の注文番号 : string
+
+outputs
+  済み : bool
+
+task 返金する(orderId: string)
+  http POST 注文 "/orders/{orderId}/refunds"
+  key
+
+flow
+  返金する(orderId: 元の注文番号)
+  succeed 済み = true
+```
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Orders", "version": "1" },
+  "servers": [ { "url": "https://orders.example" } ],
+  "paths": {
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [ { "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "201": { "description": "Refunded" }, "403": { "description": "Not allowed" } }
+      }
+    }
+  }
+}
+```
+
+関連: [E212](#e212)
+
 <a id="e301"></a>
 
 ## E301 — どの組み合わせでも、どの permit も action を許しません
@@ -1008,9 +1176,9 @@ forbid nobody_refunds
 
 ## E303 — permit か forbid が、どの組み合わせにも当てはまりません
 
-**いつ出るか**: ポリシーの `principal` の行と `when`・`unless` の行が、どの組み合わせでもそろって成り立たないとき。
+**いつ出るか**: ポリシーの `principal` の行と `when`・`unless` の行が、どの組み合わせでもそろって成り立たないとき。行ごとに、満たされる組み合わせの数を言います。規則が一緒には出さない値を求めているとき（同じ属性から計算する二つの値など）と、ゲートが渡す値には規則が答えない値を求めているときは、その値と、何から計算するかも言います。
 
-**直し方**: 満たせない行か、ポリシーそのものを消してください。
+**直し方**: 満たせない行か、ポリシーそのものを消してください。規則が出さない値を求めているなら、規則が出す値に行を直してください。
 
 **再現**:
 
@@ -1053,7 +1221,7 @@ forbid suspended_and_not
 
 ## E304 — 期待が成り立ちません
 
-**いつ出るか**: `expect allow` か `expect deny` が選ぶ組み合わせのうち、期待と違う答えになるものがあるとき。成り立たない数と、一つの例を示します。
+**いつ出るか**: `expect allow` か `expect deny` が選ぶ組み合わせのうち、期待と違う答えになるものがあるとき。成り立たない数と、一つの例を示します。`nobody` と書いた action を許す組み合わせがあるときも言います。例は、検査が数えた組み合わせです。その計算した値になる入力を、検査が規則にかけて確かめていれば、値のあとのかっこに添えます。`(as when …)` は確かめた入力の一つ、`(whenever …)` はどの入力もその値になる範囲です。
 
 **直し方**: ポリシーを直すか、期待が言いすぎているなら期待を直してください。
 
@@ -1403,9 +1571,9 @@ policy first
 
 ## W304 — 期待が、どの組み合わせも選びません
 
-**いつ出るか**: `expect` の `principal`・`when`・`unless` の行が、その action のどの組み合わせでも、そろって成り立たないとき。期待は成り立ちますが、何も確かめていません（たいていは行の書き違いです）。
+**いつ出るか**: `expect` の `principal`・`when`・`unless` の行が、その action のどの組み合わせでも、そろって成り立たないとき。期待は成り立ちますが、何も確かめていません（たいていは行の書き違いです）。規則が一緒には出さない値や、ゲートが渡す値には規則が答えない値を選んでいるときは、その値と、何から計算するかも言います。それは規則が決めていることで、ポリシーをどう書いても変わりません。
 
-**直し方**: 同時に満たせない行を直すか、期待を消してください。
+**直し方**: 同時に満たせない行を直すか、期待を消してください。規則が出さない値を選んでいるなら、確かめたいことは規則の側（`examples`）に書いてください。
 
 **再現**:
 
@@ -1446,6 +1614,197 @@ expect deny 支払済で返金済の注文は返金しない
 ```
 
 関連: [E304](#e304), [E303](#e303)
+
+<a id="w305"></a>
+
+## W305 — ポリシーが、挙げた action の一つに一度も当てはまりません
+
+**いつ出るか**: action を名前で挙げたポリシー（`action any` でないもの）が、挙げたほかの action には当てはまり、一つの action にはどの組み合わせでも当てはまらないとき。その action では、`principal`・`when`・`unless` の行がそろって成り立ちません（たいていは、その action の型に無い属性や、その action では来ない値を読む行です）。数えるのは起こりうる組み合わせだけで、多めに数えた組み合わせが残るときは言いません。`action any` のポリシーが一部の action に当てはまらないのは普通のことなので、言いません。
+
+**直し方**: `action` の行からその action を外すか、その action にも当てはまるよう行を直してください。
+
+**再現**:
+
+```gate
+gate 図書室(library_ja) v1
+description "図書室の文書を読むこと、棚の中身を見ることを、だれがしてよいか。forbid が、一度も当てはまらない action を挙げている"
+namespace LibraryJa
+
+role 職員(staff)
+  description "図書室で働く"
+
+principal 利用者(User)
+  description "図書室の職員"
+  roles 職員
+  attributes
+    停止中(suspended) : bool
+
+resource 文書(Doc)
+  description "文書"
+  attributes
+    だれでも読める(open_to_all) : bool
+
+resource 棚(Folder)
+  description "文書を入れた棚"
+
+action 文書を読む(read_doc)
+  description "文書を読む"
+  principal 利用者
+  resource 文書
+
+action 棚を見る(list_folder)
+  description "棚の中身を見る"
+  principal 利用者
+  resource 棚
+
+permit 職員は読めて見られる(staff_read_and_list)
+  description "職員は文書を読め、棚の中身を見られる"
+  principal in 職員
+  action 文書を読む, 棚を見る
+
+forbid 停止中の職員はだれでも読める物を見ない(suspended_staff_see_nothing_open)
+  description "停止中の職員は、だれでも読める物を見ない"
+  principal in 職員
+  action 文書を読む, 棚を見る
+  when resource.だれでも読める
+  when principal.停止中
+```
+
+関連: [W301](#w301), [W304](#w304)
+
+<a id="w306"></a>
+
+## W306 — permit が、挙げた action の一つでは何も許しません
+
+**いつ出るか**: action を名前で挙げた permit（`action any` でないもの）が、挙げたほかの action では何かを許し、一つの action では、当てはまる組み合わせをどれも forbid が拒むとき。その action では、permit が無くても答えは変わりません（E302 を action ごとにした形です）。数えるのは起こりうる組み合わせで、多めに数えた組み合わせも許す側に数えます。その action で permit が当てはまる組み合わせのうち、起こると確かめられるものが無いときは言いません。
+
+**直し方**: `action` の行からその action を外すか、その action も許すつもりなら forbid を狭めてください。
+
+**再現**:
+
+```gate
+gate 図書室(library_ja) v1
+description "図書室の文書を読むこと、消すことを、だれがしてよいか。permit が、forbid がだれにも許さない action を挙げている"
+namespace LibraryJa
+
+role 職員(staff)
+  description "図書室で働く"
+
+principal 利用者(User)
+  description "図書室の職員"
+  roles 職員
+
+resource 文書(Doc)
+  description "文書"
+
+action 文書を読む(read_doc)
+  description "文書を読む"
+  principal 利用者
+  resource 文書
+
+action 文書を消す(purge_doc)
+  description "文書をすっかり消す"
+  principal 利用者
+  resource 文書
+  nobody "文書は残す"
+
+permit 職員は読めて消せる(staff_read_and_purge)
+  description "職員は文書を読め、消すこともできるはずだった"
+  principal in 職員
+  action 文書を読む, 文書を消す
+
+forbid だれも消せない(no_one_purges)
+  description "文書は残す"
+  action 文書を消す
+```
+
+関連: [E302](#e302), [W305](#w305)
+
+<a id="w307"></a>
+
+## W307 — permit の行が、どの決定も変えません
+
+**いつ出るか**: permit の `when`・`unless` の行が外す組み合わせ（ほかの行は満たされ、その行だけが満たされないもの）を、どれも forbid が拒むとき。行を消すと permit はその組み合わせにも当てはまりますが、forbid が拒むので、答えは変わりません（W301 を行ごとにした形です）。数えるのは起こりうる組み合わせで、多めに数えた組み合わせも行が外す側に数えます。行が外す組み合わせをほかの permit が許すときは言いません（場合ごとに書いた permit では、その行が、どの場合の permit かを言います）。forbid の行と、W301 が言う permit の行も言いません。同じポリシーの二つの行が、一つずつなら何も変えず、一緒に消すと答えを変えうるときは、それぞれの注でそう言います。
+
+**直し方**: 行を消してください。ほかの組み合わせを外すつもりだったなら、行を直してください。
+
+**再現**:
+
+```gate
+gate 図書室(library_ja) v1
+description "図書室の文書の索引を、だれが作ってよいか。permit の行が外すのは、forbid が拒む組み合わせだけ"
+namespace LibraryJa
+
+principal サービス(Service)
+  description "ひとりでに動くプログラム"
+
+resource 文書(Doc)
+  description "文書"
+  attributes
+    公開(open_to_all) : bool
+
+action 索引を作る(index_doc)
+  description "文書の索引を作る"
+  principal サービス
+  resource 文書
+
+permit サービスは索引を作れる(services_index)
+  description "サービスは、公開の文書の索引を作れる"
+  principal is サービス
+  action 索引を作る
+  when resource.公開
+
+forbid サービスは非公開の文書に触れない(services_skip_closed_docs)
+  description "サービスは、公開でない文書には触れない"
+  principal is サービス
+  action 索引を作る
+  unless resource.公開
+```
+
+関連: [W301](#w301), [W308](#w308)
+
+<a id="w308"></a>
+
+## W308 — ポリシーの行が、起こりうるどの組み合わせも外しません
+
+**いつ出るか**: permit か forbid の `when`・`unless` の行が、ほかの行が満たされる組み合わせのどれでも満たされるとき。その行が効くのは、起こらない組み合わせだけです（ほかの行が先に外したもの、規則が出さない値、など）。数えるのは起こりうる組み合わせで、多めに数えた組み合わせも行が外す側に数えるので、言うのは、そう数えても外す組み合わせが無いときだけです。規則が決めていることなら、注がどの値がなぜ来ないかを言います。同じポリシーの二つの行が、一つずつなら何も変えず、一緒に消すと答えを変えうるときは、それぞれの注でそう言います。
+
+**直し方**: 行を消すか、外すつもりの組み合わせを外すよう行を直してください。規則が決めていることなら、規則の答えは規則の側（`examples`）で確かめてください。
+
+**再現**:
+
+```gate
+gate 店(shop) v1
+description "店の注文。permit の行が、ほかの行が満たされるところで、いつも満たされる"
+
+enum 注文の状態(order_status) = 支払済(paid) | 返金済(refunded) | 返品済(returned)
+
+role 係(clerk)
+  description "お客さまに応対する"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    状態(status) : 注文の状態
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 職員
+  resource 注文
+
+permit 係は支払済の注文を返金できる(clerks_refund_paid_orders)
+  description "係は、支払済で、まだ返金していない注文を返金できる"
+  principal in 係
+  action 返金する
+  when resource.状態 is 支払済
+  unless resource.状態 is 返金済
+```
+
+関連: [E303](#e303), [W304](#w304), [W307](#w307)
 
 <a id="w401"></a>
 
@@ -1680,9 +2039,9 @@ permit だれでも読む(everyone_reads)
 
 <a id="e401"></a>
 
-## E401 — 名前がこの出力先のコードで同じ識別子になります
+## E401 — 名前がこの出力先のコードで同じ識別子か予約語になります
 
-**いつ出るか**: `sekisho gen` の `--target typescript`・`python`・`go` で、W402 がその出力先について言うものがあるときに出ます。そのまま書くと、コードをコンパイルできないか型の検査を通らないか、宣言が別の宣言を置き換えるので、何も書きません。生成器は名前を書き換えません。呼び出しは、検査した名前で書きます。
+**いつ出るか**: `sekisho gen` の `--target typescript`・`python`・`go` で、W402 がその出力先について言うものがあるときに出ます。そのまま書くと、コードをコンパイルできないか型の検査を通らないか、宣言が別の宣言を置き換えるので、何も書きません。`ritsu gen` も、`--target` でその出力先を頼んだときは同じく止まり、1 で終わります。生成器は名前を書き換えません。呼び出しは、検査した名前で書きます。
 
 **直し方**: 注が挙げる別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
 
@@ -1715,9 +2074,9 @@ permit 係は返信する(clerks_reply)
 
 <a id="w402"></a>
 
-## W402 — 生成するコードで同じ識別子になる名前
+## W402 — 生成するコードで同じ識別子か予約語になる名前
 
-**いつ出るか**: `--target typescript`・`python`・`go` のコードで、ゲートの二つの名前が同じ識別子になるとき、または名前がコードが自分で使う名前と同じになるときに出ます。モジュールは、読む型のレコード、列挙、自分の型（`Store`、`Request` など）、各 action の入力（`<Action>Input`）を一番上の階層で宣言します。名前は言語ごとの綴りになります（列挙 `order_state` は `OrderState`、action `refund` の入力は `RefundInput`、Go の属性 `order_id` はフィールド `OrderId`）。TypeScript のグローバル（`Date` など）と、Python の語と読み込む名前（`Literal` など）も同じです。Go のレコードでは、属性と、役割とグループのフィールド（`Roles`、`MemberOf<型>`）も同じです。壊れるのは一部の言語のコードで、ほかの言語と Cedar はそのままなので、警告です。壊れる出力先の `sekisho gen` は E401 で止まります。
+**いつ出るか**: `--target typescript`・`python`・`go` のコードで、ゲートの二つの名前が同じ識別子になるとき、名前がコードが自分で使う名前と同じになるとき、または名前がその言語の予約語になるときに出ます。モジュールは、読む型のレコード、列挙、自分の型と関数（`Store`、`Request` など。Go では、action の名前で尋ねる入口の `Authorize` と、役割の一覧の `Roles`・`RolesOf` も）、各 action の入力（`<Action>Input`）を一番上の階層で宣言します。名前は言語ごとの綴りになります（列挙 `order_state` は `OrderState`、action `refund` の入力は `RefundInput`、Go の属性 `order_id` はフィールド `OrderId`）。TypeScript のグローバル（`Date` など）と、Python が読み込む名前（`Literal` など）も同じです。Go のレコードでは、属性と、役割とグループのフィールド（`Roles`、`MemberOf<型>`）も同じです。予約語になるのは、コードが名前をそのまま書く所です。Python は、属性をレコードのフィールドに（属性 `class`）、型を小文字に直して `Store` のメソッドに（型 `Return` は `return`）書きます。ファイルの別名は、Python のモジュールの名前（`pass`）、Go のパッケージの名前（`select`）、`ritsu gen` がパッケージに書く TypeScript の索引の `export * as` の名前（strict モードの予約語、`interface` など）になります。ほかの名前は、プロパティかメソッドか文字列として書くか、前後に何かを付けて書き、Go は大文字で始めて書くので、予約語でも当たりません。壊れるのは一部の言語のコードで、ほかの言語と Cedar はそのままなので、警告です。壊れる出力先の `sekisho gen` と `ritsu gen` は E401 で止まります。
 
 **直し方**: 使わない出力先なら、このままで構いません。使うなら、注が挙げる別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
 
@@ -1744,7 +2103,7 @@ permit 係は返信する(clerks_reply)
   action 返信
 ```
 
-関連: [E401](#e401)
+関連: [E401](#e401), [E008](#e008)
 
 <a id="w901"></a>
 

@@ -1,0 +1,13 @@
+request example v1 "Example"
+
+form
+  first_day : date "First day"  range >=2026-01-01
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

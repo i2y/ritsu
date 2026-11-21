@@ -1,0 +1,25 @@
+rule 工具の経路(tool_route_ja) v1
+description "注文の工具をすぐに出すか、先に確かめるか。上位の注文はいつもすぐに出し、通常の注文は工具が三つ以上なら先に確かめる。"
+
+enum 経路(path) = すぐ(at_once) | 確認(review)
+enum 区分(tier) = 通常(basic) | 上位(gold)
+
+inputs
+  工具数(tools) : number  range >=0 <=5
+  区分(tier)    : 区分
+
+outputs
+  行き先(route) : 経路
+
+table 振り分け(pick)
+policy unique
+| 区分 | 工具数 | -> 行き先 : 経路 |
+| 通常 | <=2    | すぐ             |
+| 通常 | >=3    | 確認             |
+| 上位 | -      | すぐ             |
+
+examples
+| 工具数 | 区分 | -> 行き先 |
+| 2      | 通常 | すぐ      |
+| 3      | 通常 | 確認      |
+| 4      | 上位 | すぐ      |

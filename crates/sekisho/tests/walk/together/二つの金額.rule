@@ -1,0 +1,19 @@
+rule 二つの金額(two_amounts) v1
+description "二つの金額が 500 円のどちら側にあるか。両方とも 500 円以下、両方とも 500 円超え、片方ずつ"
+
+enum どちら側(kind) = 両方以下(both_low) | 両方超え(both_high) | 片方ずつ(mixed)
+
+inputs
+  一つ目(first)  : money[JPY]  range >=1JPY <=1_000JPY
+  二つ目(second) : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  どちら側(kind) : どちら側
+
+table 決める(decide)
+policy unique
+| 一つ目   | 二つ目   | -> どちら側 |
+| <=500JPY | <=500JPY | 両方以下    |
+| >500JPY  | >500JPY  | 両方超え    |
+| <=500JPY | >500JPY  | 片方ずつ    |
+| >500JPY  | <=500JPY | 片方ずつ    |

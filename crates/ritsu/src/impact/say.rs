@@ -12,7 +12,7 @@ use ritsu_base::tr;
 const SHOWN: usize = 200;
 
 /// The facts that say an answer moved.
-const MOVED: [&str; 6] = ["rule_changes", "date_changes", "allow_gained", "allow_lost", "policies_moved", "book_changes"];
+const MOVED: [&str; 7] = ["rule_changes", "date_changes", "allow_gained", "allow_lost", "policies_moved", "book_changes", "request_changes"];
 
 fn kind_said(k: Kind, lang: Lang) -> &'static str {
     match (k, lang) {

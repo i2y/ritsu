@@ -1,0 +1,7 @@
+エラー[E002]: tests/fixtures/field_of_no_type.flow:6:12: 型 `Zon` はありません
+     6 |   zone   : Zon
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E002]: tests/fixtures/field_of_no_type.flow:21:27: `Parcel` にフィールド `code` はありません（あるのは id・zone・weight）
+    21 |   let b = send(id: parcel.code)
+エラー[E002]: tests/fixtures/field_of_no_type.flow:23:50: `Parcel` にフィールド `size` はありません（あるのは id・zone・weight）
+    23 |   let q: Parcel = {zone: "south", id: parcel.id, size: 2, weight: 1}

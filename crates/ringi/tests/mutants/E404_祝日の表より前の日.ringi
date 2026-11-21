@@ -1,0 +1,17 @@
+request 例(example) v1 "例"
+
+use calendar 事務所(office) from "shared/祝日のある事務所.cal"
+
+form
+  初日(first_day) : date "初日"  range >=2025-10-01 <=2027-12-31
+  日数(days)      : number "営業日数"  range >=1 <=20
+  復帰日(back_on) : date "復帰日" = 初日 + 日数 business days in 事務所
+
+route
+  確かめ(check)  上長
+
+who
+  上長(manager) = team managers
+
+ticket
+  self approval  not allowed

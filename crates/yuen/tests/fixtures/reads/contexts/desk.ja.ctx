@@ -1,0 +1,13 @@
+context 返金の窓口(refund_desk) v1
+description "返金を受け、誰が返金できるかを言う。yuen affected の試験のために書いた"
+owner "返金の窓口"
+
+owns
+  dir "../rules", "../dates", "../gates", "../api", "../proto", "../app"
+
+published language rulec.refund_band.v1
+  rulec "../rules/refund_band.ja.rule"
+
+terms
+  区分 "返品の点数で決める返金の大きさ"
+    means rulec "../rules/refund_band.ja.rule" output 区分

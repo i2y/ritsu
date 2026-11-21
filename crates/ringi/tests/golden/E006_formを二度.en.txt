@@ -1,0 +1,2 @@
+error[E006]: tests/mutants/E006_formを二度.ringi:6:1: A file takes `form` once
+     6 | form

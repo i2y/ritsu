@@ -1,0 +1,23 @@
+# 読めない行。どれも一度だけ言い、その下の行は言い直さない。chain_lines.book の日本語の版
+book 売上金 v1
+description "マーケットプレイスのお金を銭で数える。カードの支払いが店の分として入り、決済の手数料が店の売上金から出る"
+
+unit 円
+
+# 引数の `(` が閉じていない。勘定の下の行も読まない
+account 売上金(店: string : 円
+  description "マーケットプレイスが店に払う分"
+  at least 0 refused as 売上金不足
+account カード : 円 outside
+account 決済会社 : 円 outside
+
+transfer 売上(支払い: string, 店: string, 額: 円)
+  description "店の分として受けたカードの支払い"
+  key 支払い
+  move 額 from カード to 売上金(店)
+
+# 振替の行を字下げしていない。一度だけ言い、振替の行として読む
+transfer 決済手数料(支払い: string, 店: string, 手数料: 円)
+  description "その支払いにかかる決済の手数料"
+key 支払い
+  move 手数料 from カード to 決済会社

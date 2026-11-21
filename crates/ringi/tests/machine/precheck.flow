@@ -1,0 +1,29 @@
+workflow machine_precheck v1
+  now range >=2026-01-01 <=2027-12-31 offset +09:00
+description "The agent's look at a request of the machine's tests before people approve it, at the stage its route gives the agent (fictional): ok when what it asks for names a thing, doubt with the reason otherwise. ringi starts it with the field the requests share and reads its outputs as the answer of the stage"
+
+enum Check = ok | doubt
+
+record Reading
+  verdict : Check
+  reason  : string
+
+inputs
+  request_id : string
+  what       : string
+
+outputs
+  verdict : Check
+  reason  : string
+
+task read(what: string) -> Reading
+  agent claude "You look at a request before people approve it. Answer ok when what it asks for names a thing; otherwise answer doubt, with the reason in one sentence"
+  model "claude-sonnet-5"
+  effort low
+  timeout 60 seconds
+  retry 2 times every 10 seconds
+
+flow
+  let r = read(what: what)
+    on failure, timeout => let r = {verdict: doubt, reason: "The agent could not look at the request"}
+  succeed verdict = r.verdict, reason = r.reason

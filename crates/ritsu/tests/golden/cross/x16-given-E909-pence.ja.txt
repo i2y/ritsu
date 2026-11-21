@@ -1,0 +1,7 @@
+returns.flow: 検査を通りました
+refunds.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0
+エラー[ritsu E909]: returns.flow:15: タスク `refund_order` は `amount` を money[GBP, incl_tax] として渡しますが、refunds.gate の action `refund_order` は入力 `amount` を money[GBPc, incl_tax] として読みます
+    15 |   refund_order(orderId: order, amount: amount)
+  = 二つは、同じ数を違う値として読みます。フローの 1GBP は、ゲートでは 1GBPc です。
+  = どちらかの型を、もう一方に合わせてください。このタスクの引数 `amount` か、refunds.gate の action `refund_order` の入力 `amount` です（範囲の端を単位なしで書いていれば、それも）。
+ritsu check: ファイル 2 個（dandori 1、sekisho 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所

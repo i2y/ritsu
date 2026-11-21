@@ -1,0 +1,2 @@
+error[E105]: tests/mutants/E105_規則に渡すエンティティ.gate:66:54: `resource.注文した人` is an entity of the type `顧客`, which is not given to a rule or a date
+    66 |     返金の区分(refund_band)  = 返金の上限(金額: 金額, 上限: resource.注文した人).区分

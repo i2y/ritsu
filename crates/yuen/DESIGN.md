@@ -219,7 +219,7 @@ requirement 満了日_142条(last_day_142)
 | 出典 | `law` `file` `url` `asof` `sha256:`、データベースの語 `egov` `ecfr`、借りた出典の `source` |
 | 要件の中 | `text` `in force` `owner` `replaces` `from` `decided` `by` `satisfied by` `verified by` `not satisfied` `not verified` |
 | 確かめた記録 | `reviewed` `approved` `by` `->` |
-| 成果物の名前 | ツール名（`rulec` `dandori` `koyomi` `chobo` `geas` `proto` `openapi` `asyncapi` `cedar` `file` `yuen` `sakai` `sekisho` `kaname`）と、ツールごとの種類の語（どちらも 2.3） |
+| 成果物の名前 | ツール名（`rulec` `dandori` `koyomi` `chobo` `geas` `proto` `openapi` `asyncapi` `cedar` `file` `yuen` `sakai` `sekisho` `kaname` `jsonschema` `ringi`）と、ツールごとの種類の語（どちらも 2.3） |
 | 記号 | `@`（出典の引用）、`..`（日付の区間。両端を含む）、`,`、`->`、`#`（行末までコメント） |
 
 名前に使えないのは、行頭の語と、要件の中の語（確かめた記録の `reviewed` と `approved` を含む）である（E002）。ツール名と種類の語は、成果物の名前を書く位置（`satisfied by` と `verified by` のあと、`scope` のあと、`source <名前> =` のあと）でだけキーワードとして読む。要件の名前を `output` にしても、ほかの位置の `output` とは読み違えない。chobo が時間の語を `expires after` のあとでだけ読むのと同じ考えである。
@@ -461,7 +461,7 @@ sakai "contexts/受注.ctx" term キャンセル
 
 ### 2.3 ツールと種類
 
-ツール名は、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname`、`jsonschema` の十五である。ほかの語は E011 にする。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（3.6）。`sekisho` も同じ日に足した（3.7）。`kaname` は 2026-10-18 に足した（3.8）。`jsonschema` は 2026-11-07 に足した（23 章）。
+ツール名は、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname`、`jsonschema`、`ringi` の十六である。ほかの語は E011 にする。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（3.6）。`sekisho` も同じ日に足した（3.7）。`kaname` は 2026-10-18 に足した（3.8）。`jsonschema` は 2026-11-07 に足した（23 章）。`ringi` は 2026-11-15 に足した（申請と承認のファイル。中の物の種類と端は ringi の DESIGN 9.7）。
 
 種類の語は、それぞれのツールが JSON で出す名前の種類から取り、yuen と sakai が使う種類を合わせたものにした。どちらの言語も、自分では使わない種類も参照として読み、JSON に出す。
 
@@ -481,6 +481,7 @@ sakai "contexts/受注.ctx" term キャンセル
 | `sakai` | `.ctx` | `context`、`term` | sakai の口（`Items`） |
 | `sekisho` | `.gate` | `principal`（下に `attribute`）、`resource`（下に `attribute`）、`role`、`workflow`、`enum`（下に `value`）、`action`（下に `input`、`context`）、`policy`、`expect`、`separate` | sekisho の口（`Items`。構文だけから読む。3.7） |
 | `kaname` | `.kn` | `function`、`record`（下に `field`）、`enum`（下に `value`） | kaname の口（`Items`。構文だけから読む。3.8） |
+| `ringi` | `.ringi` | `field`、`input`、`table`、`stage`、`who`、`deadline`、`ticket`、`claim`、`example`、`scenario`、`position`、`team_kind`、`master` | ringi の口（`Items`。構文だけから読む。ringi の DESIGN 9.7） |
 
 - 取り込む前は、名前をツールの JSON（`rulec graph` の `nodes`、`rulec api` の `python.enums`、`koyomi api`、`chobo api`、geas の記録の一行め、`sakai api`）から読むと決めていた。ritsu の D.7 から、どの言語も口の `Items`（ritsu の DESIGN 6.4）で中のものを渡し、yuen はそれを読む。その言語の名前で読むので、JSON の二つの出口（`graph` と `api`）が同じ名前を出すかを確かめる必要は無くなった。
 - ディレクトリを指すツール名（`dir`）は置かない。yuen でディレクトリを書けるのは `scope` だけで、その書き方は 1.8 で決める。JSON では、ディレクトリをパスの文字列で出す（11 章の `scopes`）。
@@ -540,16 +541,19 @@ ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表で�
 
 中のもの（`Items`）は、yuen が言語ごとに尋ねるのではなく、プロジェクトの索引（ritsu の DESIGN 6.4 の `Index`）で引く。索引は、各言語の `Items` の答えをファイルごとに一度だけ尋ねて持ち、参照から中のものを引く（あれば中のもの、無ければ同じ親の同じ種類のもの、言語が答えなければその言語が言うこと）。`ritsu yuen` と `ritsu check` では、索引は ritsu-project が一つ作り、sakai や言語をまたぐ検査と分け合う。参照が指すものが無いときの E202 や、言語が答えないときの E203 は、これまでどおり yuen のコードと文で言う。引き方を索引に替えただけで、yuen の出力は変わらない（ritsu の PLAN の E.1）。
 
+ファイルが読むもの（`References` の `reads`）も、同じ索引でファイルごとに一度だけ尋ねる。`affected` が、リンクが指すファイルの読むファイルをたどるのに使う（8 章）。chobo の帳簿は、ほかのファイルを読まない。
+
 | ツール | 読む口 | 読むもの |
 |---|---|---|
-| rulec | `Items`（索引で）、`Sources`、`Rules` | 中のもの（参照の種類、名前、行、定義の文）。規則が保存して固定している出典（法令の ID と時点と条ごとの固定、`file` の出典のパスと url と固定）。名前の別名（E202 の注のため） |
-| koyomi | `Items`（索引で）、`Sources`、`Dates` | 中のもの。日付のファイルとカレンダーのファイルが固定している出典。名前の別名 |
+| rulec | `Items`・`References`（索引で）、`Sources`、`Rules` | 中のもの（参照の種類、名前、行、定義の文）。規則が保存して固定している出典（法令の ID と時点と条ごとの固定、`file` の出典のパスと url と固定）。名前の別名（E202 の注のため）。読むファイル（準用する規則、取り込む列挙と形、足し分） |
+| koyomi | `Items`・`References`（索引で）、`Sources`、`Dates` | 中のもの。日付のファイルとカレンダーのファイルが固定している出典。名前の別名。読むファイル（使うカレンダー、カレンダーのもとになる表） |
 | chobo | `Items`（索引で） | 中のもの（単位、勘定、振替） |
-| geas | `Items`（索引で）、`Claims` | spec の主張。`geas map` の記録（範囲の 4、5.3）と、差分が主張に何をもたらすか（`affected`、8 章） |
-| dandori | `Items`（索引で） | 中のもの（構文だけから。規則は要らない） |
-| sakai | `Items`（索引で） | コンテキストと語 |
-| sekisho | `Items`（索引で） | `.gate` の中のもの（構文だけから。規則も契約も要らない。3.7） |
-| kaname | `Items`（索引で） | `.kn` の中のもの（構文だけから。規則も日付のファイルも帳簿も要らない。3.8） |
+| geas | `Items`（索引で）、`Claims` | spec の主張。`geas map` の記録（範囲の 4、5.3）と、差分が主張と契約に何をもたらすか（`affected`、8 章） |
+| dandori | `Items`・`References`（索引で） | 中のもの（構文だけから。規則は要らない）。読むファイル（`use` の行の先、呼ぶフローとサービス） |
+| sakai | `Items`・`References`（索引で） | コンテキストと語。読むファイル（公開する言葉と意味の規則と `.proto`、使うコンテキスト） |
+| sekisho | `Items`・`References`（索引で） | `.gate` の中のもの（構文だけから。規則も契約も要らない。3.7）。読むファイル（`use` の行の先、指すワークフロー、守る操作の文書） |
+| kaname | `Items`・`References`（索引で） | `.kn` の中のもの（構文だけから。規則も日付のファイルも帳簿も要らない。3.8）。読むファイル（`use` の行の先） |
+| ringi | `Items`・`References`（索引で） | `.ringi` の中のもの（構文だけから。規則もカレンダーも組織のデータも要らない。ringi の DESIGN 9.7）。読むファイル（`use` の行の先と、`data` の行が読む組織とマスタのデータ。8 章） |
 | proto | 口は使わない | ritsu の `.proto` の読み手（ritsu-proto）で yuen が読む（3.4） |
 | openapi、asyncapi | 口は使わない | ritsu の YAML と JSON の読み手（`ritsu_base::yaml`）で yuen が読み、要素は `ritsu_base::document` で引く（3.6） |
 | cedar | 口は使わない | ritsu の Cedar の読み手（`ritsu_base::cedar`）で yuen が読む（3.6） |
@@ -585,6 +589,7 @@ ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表で�
 | sakai | `context`、`term` | コンテキストのファイルの行、語の塊の行（コメントと前後の空白を除く） |
 | sekisho | `principal`、`resource`、`role`、`workflow`、`enum`、`action`、`policy`、`expect`、`separate` と下の `attribute`、`value`、`input`、`context` | 宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori と同じ。sekisho の DESIGN 8.2） |
 | kaname | `function`、`record`、`enum` と下の `field`、`value` | 関数は見出しから本体の最後の行まで、レコードは宣言の塊、フィールドと列挙はその行、列挙の値は名前と別名（sekisho と同じ決まりで空白を直す。kaname の DESIGN 14.6） |
+| ringi | `field`、`input`、`table`、`stage`、`who`、`deadline`、`ticket`、`claim`、`example`、`scenario`、`position`、`team_kind`、`master` | その物の行（コメントを除き、文字列の外の続いた空白を一つにする。表は見出しと行、表の中のステップはその列、`ticket` の `on` の行は同じことを同じ相手にする行の全部。ringi の DESIGN 9.7） |
 | proto | `service`、`method`、`message`、`field`、`enum`、`value` | 3.4 の決まった形の文 |
 | openapi、asyncapi | `schema`、`property`、`value`、`operation`、`channel`、`message`、`pointer` | 3.6 の文（要素の値と、その `$ref` がたどる値） |
 | cedar | `policy`、`action`、`entity` | 3.6 の文（ポリシー、宣言） |
@@ -1220,6 +1225,12 @@ $ yuen check tests/mutants/E406_隙間が一日 --lang ja
 tests/mutants/E406_隙間が一日: エラー 1 件
 ```
 
+### 6.4 一つの誤りは一度だけ言う（2026-11-16）
+
+ritsu の DESIGN 8.3 の決まりに従う。宣言されていない役割と要件（E008）は、ファイルの中で最初に書いた所で一度だけ言い、同じ名前を書いたほかの行の番号を注に挙げる（「`` `accounting` is written on lines 11, 16 and 17 too. ``」）。役割と要件は別に数え、同じ綴りでも別に言う。同じファイルで宣言されていない出典（E105）も、最初に引いた所で一度だけ言う。宣言の名前を誤ったのなら直すのは宣言の一か所で、使う所の名前を誤ったのなら注の行の全部である。どちらかは検査には決められないので、行の番号は落とさず、文だけを畳む。ファイルをまたいでは畳まない。黙らせたことで、通るか通らないかと終了コードは変わらない。
+
+試験は `tests/chains.rs`（`tests/chains/chain_names.req` と日本語の版。役割を宣言の側で書き誤ったもので、4 件が 1 件）。支払の例の `payment.req` を一つだけ渡して確かめると（役割と要件は、同じディレクトリの `policy.req` が宣言する）、宣言の無い役割を 13 か所、要件を 2 か所に書いたことになり、15 件が 3 件になった（英日とも）。
+
 ## 7. コマンド
 
 | コマンド | すること |
@@ -1232,7 +1243,7 @@ tests/mutants/E406_隙間が一日: エラー 1 件
 | `yuen api <path>...` | プロジェクトのグラフ全体を JSON で（11 章） |
 | `yuen export reqif\|prov <path>... [--format provn\|json] [--time <RFC 3339>] [--out <file>]` | ReqIF（12 章）か W3C PROV（13 章）に書き出す。PROV の既定は PROV-N |
 | `yuen source fetch\|pin\|outdated <path>...` | 出典を取ってきて保存する・固定する・元が変わったかを問う（14 章） |
-| `yuen explain <コード>`、`yuen explain --all [--format markdown]` | 診断のコードを引く |
+| `yuen explain <コード>`、`yuen explain --all [--format markdown\|json]` | 診断のコードを引く |
 
 どのコマンドにも `--lang ja|en`（無ければ `YUEN_LANG`、次に `RITSU_LANG`、どちらも無ければ英語）と `--root <dir>`（2.2）を付けられる。`yuen --help`、`yuen <コマンド> --help`、`yuen --version`。
 
@@ -1258,9 +1269,26 @@ tests/mutants/E406_隙間が一日: エラー 1 件
 1. **`.req`**：差分の行が入る要件のブロック（要件の行から、その下の字下げした行まで）を、変わった要件として挙げる。ディスクのファイルは、差分を当てる前でも当てたあとでもよく、どちらにも合わなければ exit 2 にする。要件の文か期間の行が変わったなら、その要件のリンクが確かめ直しになることも言う。どの要件にも入らない行（役割、出典、範囲）が変われば、そう言う。
 2. **出典のコピー**（yuen のコピー、借りた出典のコピー、リンクが指す規則とカレンダーが固定している条のコピー、`file` の出典のファイル）：その条を引く要件（借りた出典を通るものも、同じ条を自分で保存したものも）と、その条を固定している成果物（3.3）。
 3. **成果物のファイル**（リンクが指すもののファイル）：そのファイルの中のものを指すリンクの要件を、満たす側と確かめる側に分けて。
-4. **コード**：リンクに出てくる geas の spec ごとに、geas に差分と記録を渡す。`--map <spec.geas>=<記録>` はその spec の記録で、二度書けば変更の前と後の二つ、書かなければ spec の隣の `.geas/` の記録である。spec と記録のパスは、ほかのフラグと同じく走らせた場所から書く。geas が答えた主張ごとに、その主張か spec のファイルを指すリンクの要件を挙げる。geas が「どの主張も走らせない」と答えた行（unclaimed）は、そのファイルをリンクが指していればその要件に届き、指していなければ、どの要件にも届かない変更である。
-5. **範囲のファイル**：範囲（1.8）の中で、どの要件にも辿れないファイル（E404 のもの）の変更は、どの要件にも届かない変更である。
-6. **そのほか**：要件に関わらないファイルとして並べる。
+4. **リンクが指すファイルが読むファイル**：リンクが指すファイル（geas の spec を除く。spec が読む契約は 5 で geas が答える）が読むファイルを、読むファイルがさらに読むファイルまで何段でもたどる。差分が触ったファイルごとに、それを読むリンク先のファイルと、そのファイルを指すリンクの要件を、満たす側と確かめる側に分けて挙げる。読む経路は、リンクが指すファイルからいちばん短いものを一本、行と読み方で見せる（`sekisho "gates/refunds.gate" line 6 (use dates) -> koyomi "dates/refund_terms.cal" line 3 (use calendar) -> koyomi "dates/office.cal" line 5 (source)`）。読む先がディレクトリなら、その下のどのファイルの変更も届く。リンクにも指されているファイルは、3 と 4 の両方に出る。
+5. **コード**：リンクに出てくる geas の spec ごとに、geas に差分と記録を渡す。`--map <spec.geas>=<記録>` はその spec の記録で、二度書けば変更の前と後の二つ、書かなければ spec の隣の `.geas/` の記録である。spec と記録のパスは、ほかのフラグと同じく走らせた場所から書く。geas が答えた主張ごとに、その主張か spec のファイルを指すリンクの要件を挙げる。geas が「どの主張も走らせない」と答えた行（unclaimed）は、そのファイルをリンクが指していればその要件に届き、指していなければ、どの要件にも届かない変更である。spec の契約（`contract` の行の文書と、そこから `$ref` で届くファイル）が変わったと geas が答えれば、spec を指すリンクの要件を全部挙げる。契約は、spec のどの主張も従うものだからである。
+6. **範囲のファイル**：範囲（1.8）の中で、どの要件にも辿れないファイル（E404 のもの）の変更は、どの要件にも届かない変更である。ただし、リンク先のファイルが読むファイルなら、4 で要件に届くので、届かない変更に数えない（`check` の E404 は、読むことを辿ることに数えない。範囲が求めるのは、要件がそのファイルを指すことだからである）。
+7. **そのほか**：要件に関わらないファイルとして並べる。
+
+ファイルが何を読むかは、それぞれの言語が口で答える（ritsu の DESIGN 3.2 の `References` の `reads`。外を指すもののうち、言語がそのファイルを検査し走らせるときに読むもの）。yuen は言語ごとの読み方を持たず、プロジェクトの索引で一つのファイルに一度だけ尋ねる（3.1）。yuen が自分で読む標準の形式だけは、yuen がたどる。`.proto` の `import`（3.4）と、文書の `$ref` が届くほかのファイル（3.6）である。言語が読むものは、たとえば次のとおりである。
+
+- rulec：準用する規則（`apply`）、列挙と形を取り込むファイル（`import`、`shape`）、範囲の日付（`range from koyomi`）、規則に足される足し分のファイル（`contribution`）、足し分が足す先の規則（`to`）と先に足される足し分（`after`）。
+- koyomi：日付のファイルが使うカレンダー（`use calendar`）と、カレンダーのもとになる表（`source`）。
+- dandori、kaname、sekisho：`use` の行が指す規則・日付のファイル・カレンダー・帳簿・API の記述・モジュール、呼ぶフローとサービス、守る操作の文書。
+- ringi：申請が使う組織・マスタ・経路・カレンダー・規則・帳簿・ゲート・フロー（`use organization` など）。
+- sakai：公開する言葉と意味の規則と `.proto`、使うコンテキスト。
+
+ファイルが指すだけのものは、読むものに入れない。規則が保存して固定している出典のコピー（rulec の `source … = file`。規則の答えは表からできていて、コピーからではない。コピーが変われば規則の固定が合わなくなり、規則の検査が止める（rulec の E038）。固定を書き直すのは規則の変更なので、3 で規則の要件に届く。法令の条のコピーは 2 で挙げる）、値の出どころ（`fed by`。手で書いたコードが値を取る先を言うだけで、言語はそのファイルを読まない）、コンテキストが持つ場所とコード（sakai の `owns`、`code`、`generated`、`layer`、`shared kernel` など）である。どれを外すかも、言語の口が決める。
+
+足し分は、プロジェクトの規則のファイルのうち、その規則に足すものである。どれが足されるかはプロジェクトの規則のファイルの全部で決まるので、`affected` はルートが決まったところで、つないだ側に知らせる（`Suite` の `at_root`）。`ritsu yuen` は、`ritsu check` と同じく、ルートのプロジェクトの規則のファイルを rulec に渡す。yuen のクレートのバイナリは何もつながないので、知らせを受ける者もいない。
+
+組織とマスタの `data` の行が読むデータ（ringi の DESIGN 8.2、4.6。組織はフォルダー、マスタは CSV のファイル）は、`use` の行ではないので参照には挙がらないが、ringi の口が読むものとして返す（`data` の行と、ルートからのフォルダーかファイル）。フォルダーは、その下のどのファイルが変わっても届く。ritsu-project の `tests/reads.rs` が、組織の版の中のファイルとマスタの表を変える差分が、`use` の行を通って申請の要件に届くことを確かめている。
+
+どの言語のファイルにも書かれていないファイルは、たどらない。コードが走るときに開くデータのファイル（設定の JSON など）がそれで、宣言が無いので言語の口は返さず、geas の記録もコードの走った行だけを持つ（geas は、そのファイルを `outside` に並べる）。そこだけが変わる差分は、要件に関わらないファイルとして並ぶ。
 
 最後に、触った要件を一つずつ、場所と持ち主と出どころと最後に決めたこと（日付のいちばん新しい `decided`）と一緒に挙げ、持ち主を並べる。`from` の無い要件（人が決めただけの要件）は、出どころの部分を書かず、決めたことだけを書く（ritsu の F.1 で、例 `greeter` の要件が `from ;` と空の出どころを書いていたのを直した。出力が変わるのは `from` の無い要件のときだけで、替える前のテストの材料には無かった）。
 
@@ -1285,17 +1313,22 @@ requirements touched:
 
 前の記録だけを渡すと、geas は差分が足した行を引ける記録が無いと言い（geas の E063）、yuen はそれを主張の節に書き、ほかの節も答えてから exit 2 で終わる。
 
-借りた出典のコピーを変える差分（koyomi のカレンダーが固定している 142 条のコピーを一文字変えたもの）と、規則を変える差分（軽減の表の一行を変えたもの）には、次のように答える。英語の材料では、`tests/fixtures/calendar_sources` のカレンダーが固定している英国の祝日の表（`bank-holidays.json`）の一件の日付を変えた差分と、`tests/fixtures/fee_rules` の小さな事業体の表の一行を変えた差分が、同じ形で答えられる。
+借りた出典のコピーを変える差分（koyomi のカレンダーが固定している 142 条のコピーを一文字変えたもの）と、規則を変える差分（軽減の表の一行を変えたもの）には、次のように答える。英語の材料では、`tests/fixtures/calendar_sources` のカレンダーが固定している英国の祝日の表（`bank-holidays.json`）の一件の日付を変えた差分と、`tests/fixtures/fee_rules` の小さな事業体の表の一行を変えた差分が、同じ形で答えられる。祝日の表は、カレンダーのもとになる表（`source`）でもあるので、読む経路の節（4）にも出て、そのカレンダーを使う日付のファイルを指す要件にも届く。
 
 ```
 $ yuen affected tests/fixtures/calendar_sources --root tests/fixtures/calendar_sources --diff tests/fixtures/calendar_sources/changes/copy.diff
 diff: tests/fixtures/calendar_sources/changes/copy.diff
 copies of sources the diff touches:
   tests/fixtures/calendar_sources/calendars/data/bank-holidays.json (bank_holidays): cited by last_day_moved
+files read by the files that requirements name, that the diff touches:
+  tests/fixtures/calendar_sources/calendars/data/bank-holidays.json
+    koyomi "period_of_months.cal" line 3 (use calendar) -> koyomi "calendars/england_and_wales.cal" line 4 (source): met by first_day, last_day, last_day_moved; checked by last_day, last_day_moved
 changes no requirement reaches: none
 requirements touched:
+  first_day (tests/fixtures/calendar_sources/period_of_months.req:11): owner legal; decided 2026-10-03 by legal: "The period starts on the day after the origin. Decided for this material"
+  last_day (tests/fixtures/calendar_sources/period_of_months.req:21): owner legal; decided 2026-10-03 by legal: "The corresponding day is counted from the first day. Decided for this material"
   last_day_moved (tests/fixtures/calendar_sources/period_of_months.req:31): owner legal; from bank_holidays; decided 2026-10-03 by legal: "The day after is taken as it is, and not moved on if it is closed too. Decided for this material"
-1 requirement touched; ask legal
+3 requirements touched; ask legal
 $ yuen affected tests/fixtures/fee_rules --root tests/fixtures/fee_rules --diff tests/fixtures/fee_rules/changes/rule.diff
 diff: tests/fixtures/fee_rules/changes/rule.diff
 files that requirements name, that the diff touches:
@@ -1331,15 +1364,48 @@ requirements touched:
 
 規則を変える差分では、規則のファイルの中のものを指す要件を全部挙げる。どの表が変わり、どのリンクが確かめ直しになるかは、差分を当てたあとの `check` が、表ごとの端（3.2）で正確に言う。
 
-`--format json` は、同じ答えを一つの JSON にする。キーは `diff`、`root`、`requirement_files`、`copies`、`openspec_changes`（20 章で足した。OpenSpec の変更の提案）、`specs`、`files`、`unreached`、`others`、`requirements`、`owners`、`exit` の順で、パスはルートからの相対である（`tests/golden/affected/greeter.json`）。
+リンクが指すファイルの読むファイルだけを変える差分には、読む経路を付けて答える。テストの材料 `tests/fixtures/reads`（架空の返品の窓口。規則、日付のファイル、カレンダー、ゲート、コンテキスト、文書、`.proto` を指す要件で、`refunds.req` と日本語の版の `refunds.ja.req`）で、カレンダーのもとになる休業日の表に一日足すと、ゲートからは三段、日付のファイルからは二段で届く。
+
+```
+$ yuen affected tests/fixtures/reads/refunds.req --root tests/fixtures/reads --diff tests/fixtures/reads/changes/closures.diff
+diff: tests/fixtures/reads/changes/closures.diff
+files read by the files that requirements name, that the diff touches:
+  tests/fixtures/reads/data/closures.csv
+    sekisho "gates/refunds.gate" line 6 (use dates) -> koyomi "dates/refund_terms.cal" line 3 (use calendar) -> koyomi "dates/office.cal" line 5 (source): met by who_refunds
+    koyomi "dates/refund_terms.cal" line 3 (use calendar) -> koyomi "dates/office.cal" line 5 (source): met by refund_period
+changes no requirement reaches: none
+requirements touched:
+  who_refunds (tests/fixtures/reads/refunds.req:15): owner finance; decided 2026-11-02 by finance: "Written for this test"
+  refund_period (tests/fixtures/reads/refunds.req:24): owner finance; decided 2026-11-02 by finance: "Written for this test"
+2 requirements touched; ask finance
+$ yuen affected tests/fixtures/reads/refunds.ja.req --root tests/fixtures/reads --diff tests/fixtures/reads/changes/size.ja.diff --lang ja
+差分: tests/fixtures/reads/changes/size.ja.diff
+要件が指すファイルが読むファイルで、差分が触るもの:
+  tests/fixtures/reads/rules/size.ja.rule
+    rulec "rules/refund_band.ja.rule" の 12 行目（apply）: 満たす要件 返金の区分
+    sekisho "gates/refunds.ja.gate" の 5 行目（use rule） -> rulec "rules/refund_band.ja.rule" の 12 行目（apply）: 満たす要件 返金できる人
+    sakai "contexts/desk.ja.ctx" の 9 行目（published language） -> rulec "rules/refund_band.ja.rule" の 12 行目（apply）: 満たす要件 返金の言葉
+どの要件にも届かない変更: なし
+触る要件:
+  返金の区分（tests/fixtures/reads/refunds.ja.req:6）持ち主 経理。2026-11-02 に 経理 が「この試験のために書いた」と決めました
+  返金できる人（tests/fixtures/reads/refunds.ja.req:15）持ち主 経理。2026-11-02 に 経理 が「この試験のために書いた」と決めました
+  返金の言葉（tests/fixtures/reads/refunds.ja.req:51）持ち主 経理。2026-11-02 に 経理 が「この試験のために書いた」と決めました
+触る要件は 3 件です。経理 に見てもらってください
+```
+
+二つめは、規則が準用する規則を変えた差分である。準用する規則そのものを指す要件は無く、準用している規則、それを使うゲート、その出力を語の意味にするコンテキストを指す要件に届く。値の出どころだけを変えた差分（`fed by` の先の規則）、規則が固定している文書のコピー、コンテキストが持つだけのコード、どのリンク先のファイルも読まない表とカレンダーの変更は、どの要件にも届かず、要件に関わらないファイルとして並ぶ（`tests/reads.rs`）。
+
+`--format json` は、同じ答えを一つの JSON にする。キーは `diff`、`root`、`requirement_files`、`copies`、`openspec_changes`（OpenSpec の変更の提案。20 章）、`specs`、`files`、`reads`、`unreached`、`others`、`requirements`、`owners`、`exit` の順で、パスはルートからの相対である（`tests/golden/affected/greeter.json`）。`reads` は差分が触った読むファイルごとに、`file` と `read_by`（読むリンク先のファイル `artifact`、経路 `way` の一段ずつの `reader`・`line`・`how`・`read`、要件 `requirements`）を持つ（`tests/golden/affected/reads-table.json`）。`specs` の一つずつは、契約の変わったファイルとその要件を `contract_changed` に持つ。`requirements` の一つずつは、`reads` の経路だけで届いたか（その要件の文も、リンクが指すファイルも、ほかの節が挙げるものも変わっていない）を `only_through_reads` に持つ。`ritsu impact` はこれを、事実 `requirements_read` に分けて数える（根の DESIGN 17.10.1）。
 
 exit code は、答えられて、要件の届かない変更が無ければ 0、要件の届かない変更があれば 1、差分が読めない、`--map` の spec をどのリンクも指していない、geas が記録を受け付けなかった、のどれかなら 2 にする。geas の `affected` の exit code（届かないコードがあれば 1）と同じ向きである。
 
-**理由**：エージェントが差分を出したとき、人が知りたいのは「誰に見てもらえばよいか」と「その要件はどこから来たか」である。geas は差分から主張までを答え、yuen は主張から要件と持ち主と出典までを答える。二つを合わせると、差分 → 主張 → 要件 → 持ち主と出典、がつながる。
+**理由**：エージェントが差分を出したとき、人が知りたいのは「誰に見てもらえばよいか」と「その要件はどこから来たか」である。geas は差分から主張までを答え、yuen は主張から要件と持ち主と出典までを答える。二つを合わせると、差分 → 主張 → 要件 → 持ち主と出典、がつながる。リンクが指すファイルの行が一つも変わらなくても、そのファイルが読むファイル（準用する規則、カレンダー、組織、マスタ）が変われば、リンク先の答えは変わりうる。そのときも、見てもらう人を言えなければならない。
 
 **捨てたもの**：
 
-- `affected` が `.rule` や `.cal` の差分の中身を読み、どの出力が変わったかを言うこと。それには `.rule` を読み解くか、差分の前のファイルで言語を走らせることになる。ファイルの単位で要件を挙げ、どのリンクが確かめ直しになるかは、差分を当てたあとの `check` が正確に言う。
+- `affected` が `.rule` や `.cal` の差分の中身を読み、どの出力が変わったかを言うこと。それには `.rule` を読み解くか、差分の前のファイルで言語を走らせることになる。ファイルの単位で要件を挙げ、どのリンクが確かめ直しになるかは、差分を当てたあとの `check` が正確に言う。読むファイルも同じく、ファイルの単位でたどる。
+- 何を読むかを、yuen が言語ごとに持つこと（`use calendar` は読む、`fed by` は読まない、のような表）。言語が増えるたびに yuen を直すことになり、言語の口と食い違う。どの言語も同じ口（`References` の `reads`）で答え、外すものも言語が決める。
+- 一段だけたどること。準用する規則がさらに準用する規則、ゲートが使う日付のファイルが使うカレンダーのもとになる表のように、答えを変えるファイルは何段も先にある。読む経路は循環しうるので、一度見たファイルは二度たどらない。
 - geas の記録を yuen が自分で読み、差分の行と突き合わせること。geas の `affected` は、記録が差分のどちらの側のものかを blob のハッシュで確かめ、古い記録からは答えない（geas の DESIGN 7.5）。同じことを yuen に書けば、二つが食い違う。差分を読むところも、geas と同じ土台の読み手にした。
 - 取り込む前に決めていた、geas の `affected` を子プロセスで呼んで JSON を読むこと（`geas affected <spec> <差分> --json`）。ritsu の中では口で尋ねる（P4）。
 
@@ -1680,9 +1746,9 @@ ritsu の決まりで、例は英語のものを先に置く。英語で作れ�
 - SHA-256 と base64（e-Gov の `law_full_text`）は ritsu-base のもの（依存を足さずに書いたもので、SHA-256 は FIPS 180-4 の既知の値でテストしている）を使う（16.1）。
 - 法令のコピーの XML から本文を取り出す読み手は ritsu-base のもの（rulec の `xml_text` と koyomi の `article_lines` を一つにしたもの）を使う。`.proto` は ritsu の読み手（ritsu-proto）で読む（3.4）。ReqIF と PROV は、エスケープを自前でして書く。
 - 見せる差分は、行の LCS で自前で作る（統一形式、前後二行、40 行を超えれば「ほか N 行」）。`affected` が読む統一形式の差分は、ritsu-base の読み手（geas と同じもの）で読む。
-- ほかの言語は、ritsu の口で、同じプロセスの中で読む。口は yuen を走らせる側が渡す（`src/suite.rs` の `Suite`。中のものはプロジェクトの索引 `Index` で引く。`ritsu yuen` は ritsu-project が一度つないだすべての言語を渡し、yuen のクレートのバイナリは何も渡さない）。コマンドは関数（`yuen::run::run(引数, Suite, 標準出力, 標準エラー)`）で、クレートのバイナリはそれを呼ぶだけである。通信は `curl` を子プロセスで（`source fetch` と `source outdated` だけ）。
+- ほかの言語は、ritsu の口で、同じプロセスの中で読む。口は yuen を走らせる側が渡す（`src/suite.rs` の `Suite`。中のものと読むファイルはプロジェクトの索引 `Index` で引く。`ritsu yuen` は ritsu-project が一度つないだすべての言語を渡し、`affected` がルートを知ったところで規則のファイルを rulec に渡す `at_root` も渡す。yuen のクレートのバイナリは何も渡さない）。読むファイルをたどるのは `src/reads.rs` である（8 章）。コマンドは関数（`yuen::run::run(引数, Suite, 標準出力, 標準エラー)`）で、クレートのバイナリはそれを呼ぶだけである。通信は `curl` を子プロセスで（`source fetch` と `source outdated` だけ）。
 - 診断の文面は `tr!` で英語と日本語を隣に書く。台帳は `src/codes.rs`。
-- テストの共通の部分（一時ディレクトリ、golden、SKIP、ツールの探し方、テストの中の HTTP サーバー）は ritsu-testkit のものを使う。ほかの言語は、出す側のクレート（rulec、koyomi、chobo、geas、dandori、sakai）を dev-dependency に持ち、`ritsu yuen` と同じにつないで、同じプロセスの中で走らせる（ritsu の DESIGN 3.3。SKIP しない）。geas の記録は、`geas map` で一度だけ取ってテストの材料に置いた（`tests/fixtures/geas`）。テストのための外のツール：xmllint（`YUEN_XMLLINT`、無ければ PATH）と `tools/reqif/fetch.sh` が取る 24 個のスキーマ（`YUEN_REQIF_XSD`、無ければ `tools/reqif/xsd`。無ければ SKIP）、curl（`source fetch` と `outdated` のテスト。無ければ SKIP）、`tools/requirements.txt` の `prov==3.2.2` と `reqif==0.1.0`（`uv venv --python 3.13 tools/.venv` に入れる。`YUEN_PYTHON` でほかの場所も使える。無ければ SKIP）、Chrome（`doc` の HTML の画面。`YUEN_CHROME`、無ければ macOS の Google Chrome、PATH の `google-chrome` か `chromium`。無ければ SKIP）。
+- テストの共通の部分（一時ディレクトリ、golden、SKIP、ツールの探し方、テストの中の HTTP サーバー）は ritsu-testkit のものを使う。ほかの言語は、出す側のクレート（rulec、koyomi、chobo、geas、dandori、sakai、sekisho）を dev-dependency に持ち、`ritsu yuen` と同じにつないで、同じプロセスの中で走らせる（ritsu の DESIGN 3.3。SKIP しない）。geas の記録は、`geas map` で一度だけ取ってテストの材料に置いた（`tests/fixtures/geas`）。テストのための外のツール：xmllint（`YUEN_XMLLINT`、無ければ PATH）と `tools/reqif/fetch.sh` が取る 24 個のスキーマ（`YUEN_REQIF_XSD`、無ければ `tools/reqif/xsd`。無ければ SKIP）、curl（`source fetch` と `outdated` のテスト。無ければ SKIP）、`tools/requirements.txt` の `prov==3.2.2` と `reqif==0.1.0`（`uv venv --python 3.13 tools/.venv` に入れる。`YUEN_PYTHON` でほかの場所も使える。無ければ SKIP）、Chrome（`doc` の HTML の画面。`YUEN_CHROME`、無ければ macOS の Google Chrome、PATH の `google-chrome` か `chromium`。無ければ SKIP）。
 - 文書は `docs/`（英語の `reference.md`、`yuen explain --all --format markdown` の出力そのものの `codes.md` と `codes.ja.md`）、README.md、README.ja.md、`skills/yuen`（`SKILL.md` は手で書き、ほかは `skills/sync.sh` が `docs/` からコピーする）。README とスキルに載せた `.req` の行、コマンドの出力、診断は、テストが実物と照らし合わせる。
 
 モジュールの分け方と、各段階の作業は PLAN.md にある。
@@ -2020,13 +2086,13 @@ archive のあと、固定し直す前の `check`：
 
 ```
 $ yuen check examples/openspec_greeter_archived/greeter.req --root examples/openspec_greeter_archived
-warning[W102]: examples/openspec_greeter_archived/greeter.req:7:8: A requirement of the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md is pinned by no source of the project: "Health check"
+warning[W102]: examples/openspec_greeter_archived/greeter.req:7:8: A requirement of the spec openspec/specs/greeting/spec.md is pinned by no source of the project: "Health check"
      7 | source greeting = openspec "openspec/specs/greeting/spec.md"
   = Pin each one and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval.
 error[E103]: examples/openspec_greeter_archived/greeter.req:8:3: greeting "Greeting by name" does not match its pin (pinned sha256:1c3d865f4a521275, the requirement is sha256:228485bfce459383)
      8 |   "Greeting by name" sha256:1c3d865f4a521275
   = The requirement changed in the spec after it was pinned (an archived change, or an edit). Read what changed, then pin it again (`yuen source pin`).
-  what changed in the requirement since it was pinned (the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md):
+  what changed in the requirement since it was pinned (the spec openspec/specs/greeting/spec.md):
       @@ -1,4 +1,4 @@
         ### Requirement: Greeting by name
       - The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.
@@ -2150,3 +2216,26 @@ requirements touched:
 **確かめたこと**：ritsu の `tests/fed_by.rs` の `a_requirement_on_a_json_schema`（E301、`review` のあと通る、範囲を変えると E303、改名で E202）。
 
 **残したこと**：yuen の影響のたどり方は `how: "fed by"` の参照を読まない。`fed by` は手書きのコードが運ぶ値の話で、要件の版の話ではないので、足す理由があるまで足さない。
+
+## 24. パスの書き方によらない文（2026-11-15）
+
+**きっかけ**：ritsu の DESIGN の 4.15 と 6.2 の 8 で、文に書くパスの書き方を、どの言語にも一つの決まりにした。yuen は、参照で指したファイルを言う文の多くを、ルートからのパスを走らせたディレクトリから書き直して言っていた（`p.shown`）。同じ `.req` でも、どこからどう渡すかで文が変わった。
+
+```text
+error[E106]: example.req:4:8: a.cal declares no source cfr
+error[E106]: crates/yuen/tests/mutants/E106_borrows_an_undeclared_source/example.req:4:8: crates/yuen/tests/mutants/E106_borrows_an_undeclared_source/a.cal declares no source cfr
+```
+
+一つ目は `.req` のディレクトリで名前を渡したとき、二つ目は木の根から渡したときである。木の `.req` の全部（216 本）を、名前、絶対パス、根からのパス、根の隣のディレクトリから `..` で上るパスの四つで渡すと、32 本で文が違った。
+
+**決定**：参照で指したファイルを言う文は、参照の書き方（ルートからの相対。ritsu の DESIGN 6.2 の 3 と 7）で言う。出典の仕様が読めない E104、出典が無い E106、名前が無い・二つの名前空間にある E202、`.proto` として読めない E205、仕様に無い要件、どの出典も固定していない要件の W102、固定した要件の差分の見出し、E303 の差分の見出しの成果物である。参照の書き方は、`.req` に書く参照と、JSON の参照と、「Did you mean」の行と同じなので、文の中のパスをそのまま探せる。読んだ所（コピーのパス、`Looked for`）と開く所（診断の場所、ほかの言語の診断の場所）は、前と同じに走らせたディレクトリから書く。口がプロジェクトを読めなかったと言うときのファイルも、走らせたディレクトリから書く（前は絶対パス）。`ritsu yuen` は、最初に渡したパスで、実行のパスの書き方を決める（`paths::run_from`）。`check::check_with` は、確かめた `.req` を `ritsu_base::tally` に `yuen` として数える。
+
+```text
+error[E106]: example.req:4:8: crates/yuen/tests/mutants/E106_borrows_an_undeclared_source/a.cal declares no source cfr
+```
+
+**捨てたもの**：参照で指したファイルを、`.req` に書いたとおりに言う。書いた字を持っているのは字句の段だけで、名前の表の参照（`Name`）が持つのはルートからのパスである。文の中のほかの参照（「Did you mean」の行、`review` が書く行）もルートからのパスで、一つの診断の中で同じファイルが二通りに書かれることになる。
+
+**変わること**：上の文が、どこからどう渡しても同じになる。`.req` のディレクトリで名前を渡したときは、前より長いパスになることがある。診断の数と終了コードは変わらない。
+
+**確かめたこと**：木の `.req` の全部を、上の四つの書き方で、直す前と後のビルドにかけた。違う本は 32 から 14 になり、残った違いは、どれもコピーのパスと、ほかの言語の診断の場所の、走らせたディレクトリからのパスの違いである。ritsu の `tests/spellings.rs` で、E104・E106・E202 の 3 本が、どの書き方でも参照の書き方で言う。

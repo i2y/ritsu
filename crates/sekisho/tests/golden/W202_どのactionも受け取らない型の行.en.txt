@@ -1,0 +1,6 @@
+warning[W202]: tests/mutants/W202_どのactionも受け取らない型の行.gate:21:1: The line speaks of no call: no call of the workflow `支払い` (`../../examples/claims/flows/pay.ja.flow`) gives `請求番号` as the id of a `入金`
+    21 |   resource 入金 from 請求番号
+  = `ritsu check` rests on the line only at a call that gives `請求番号` as the id (E212, and whether the gate allows the call): it holds at no call of the flow.
+  = No action of the gate takes a `入金` from an argument: `請求を支払う` takes `請求` from `claimId`.
+  = Write the type of resource an action takes, or take the line out.
+tests/mutants/W202_どのactionも受け取らない型の行.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations

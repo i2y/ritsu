@@ -1,0 +1,18 @@
+rule 二段(twolevel) v1
+description "金額が大きいかを、ほかの規則が決める区分から読む。規則を取り込む規則"
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+apply 内(inner) = "区分だけ.rule" meaning:faca824fe863d83a
+  金額 = 金額
+  区分 -> 内の区分
+
+outputs
+  大きい(big) : bool
+
+table 大きさの判定(bigness)
+| 内の区分 | -> 大きい |
+| 小       | false     |
+| 中       | false     |
+| 大       | true      |

@@ -1226,6 +1226,63 @@ policy first
     assert_eq!((a.tally[VALUE], a.tally[TIE]), ((0, 0), (0, 0)));
 }
 
+/// A number the rule reads only by comparing it with written values is walked on the first value of
+/// each piece those values cut its range into (§15.325). A fee of 5 dollars under 5,000 dollars and
+/// 0 from there on: the walk for two amounts that move the fee tries 0, 5,000 and 5,001 dollars and
+/// stops at the second, with the pair of 0 and 5,000 dollars the whole walk gives. Before, it tried
+/// every dollar up to 5,000 and set each against every one before it, about half a second optimized
+/// and three seconds not, for a rule of two rows; with the range up to 16,384 dollars and more it
+/// gave up before it began, and under 5,000 dollars the fee is one value, which the arithmetic
+/// shows. The tallies are the same at every range.
+#[test]
+fn 書いた値と比べるだけの数は切れ目ごとの最初の値だけを回る() {
+    use std::time::{Duration, Instant};
+    let fee = |hi: u32| {
+        format!(
+            "rule fee v1\n\ninputs\n  amount : money[USD]  range >=0USD <={hi}USD\n\noutputs\n  fee : money[USD]  round down(1USD)\n\n\
+             table fees\n| amount    | -> fee |\n| <5000USD  | 5USD   |\n| >=5000USD | 0USD   |\n"
+        )
+    };
+    let mut tallies = Vec::new();
+    for hi in [5_000, 10_486, 16_383, 20_000] {
+        let t0 = Instant::now();
+        let (a, vs) = audit_src("fee.rule", &fee(hi));
+        let took = t0.elapsed();
+        // Far above what the walk needs now, even unoptimized, and far under what it took before.
+        assert!(took < Duration::from_secs(2), "{hi} USD: {took:?}");
+        assert!(a.ok(), "{hi} USD\n{}", coverage::render(&a, &vs, &[]));
+        tallies.push((hi, a.tally));
+    }
+    assert!(tallies.windows(2).all(|w| w[0].1 == w[1].1), "{tallies:?}");
+    let (f, c) = rulec::prepare(&fee(16_383), "fee.rule").unwrap();
+    // The first of the two pieces, the first at 5,000 dollars and the first over it: three amounts,
+    // where every one of the 16,384 was tried before.
+    assert_eq!(rulec::grid::pair_walk(&f, &c, "fee"), Some(vec![("amount".to_string(), 3)]));
+    let Some(Some((p, q))) = rulec::grid::exhaust_pair(&f, &c, None, "fee") else { panic!("no pair") };
+    assert_eq!((vectors::show(&p["amount"]), vectors::show(&q["amount"])), ("0".to_string(), "5000".to_string()));
+}
+
+/// Where the rule reads the number some other way too — here in a `define` — the walk tries every
+/// value, and each input is set against no more than three of those before it that differ from it in
+/// that number alone: the first, the first with another value of the column, the first with other
+/// outputs (§15.325). The pair is the one setting it against every one of them gives, 0 and 16,000
+/// dollars; set against every one, the 16,001 amounts the walk meets first made some 128 million
+/// comparisons.
+#[test]
+fn 値の対の探しは入力を前の三つとだけ比べる() {
+    use std::time::{Duration, Instant};
+    let src = "rule fee v1\n\ninputs\n  amount : money[USD]  range >=0USD <=16383USD\n\noutputs\n  fee : money[USD]  round down(1USD)\n\n\
+               define large : bool = amount >= 16000USD\n\ntable fees\n| large | -> fee |\n| false | 5USD  |\n| true  | 0USD  |\n";
+    let (f, c) = rulec::prepare(src, "fee.rule").unwrap();
+    assert_eq!(rulec::grid::pair_walk(&f, &c, "fee"), Some(vec![("amount".to_string(), 16_384)]));
+    let t0 = Instant::now();
+    let Some(Some((p, q))) = rulec::grid::exhaust_pair(&f, &c, None, "fee") else { panic!("no pair") };
+    let took = t0.elapsed();
+    assert_eq!((vectors::show(&p["amount"]), vectors::show(&q["amount"])), ("0".to_string(), "16000".to_string()));
+    // Far above what 16,001 runs of the rule take unoptimized, and far under the comparisons before.
+    assert!(took < Duration::from_secs(2), "{took:?}");
+}
+
 /// A boolean definition a table tests is a range of the number it compares (§15.154): the row
 /// for orders that are not bulk — under 11 cents — never ends in half a cent at 3.49%, and
 /// always rounds to 0. Read that way under `unique` and, as the row before it, under `first`.
@@ -1263,4 +1320,160 @@ policy {policy}
         assert!(a.ok(), "{policy}\n{}", coverage::render(&a, &vs, &[]));
         assert_eq!((a.tally[VALUE], a.tally[TIE]), ((1, 1), (1, 1)), "{policy}");
     }
+}
+
+/// What a basket's goods come to is worked out once the walk is over, from a total, and a table
+/// reads it.
+const GOODS_AFTER_WALK: &str = "rule goods_after_walk v1
+
+elements lines
+  price : money[JPY]  range >=0JPY <=50_000JPY
+
+sum total over lines of price  range >=0JPY <=100_000JPY
+
+define goods : money[JPY] = total
+
+outputs
+  free : bool
+
+table free_of
+policy unique
+| goods      | -> free |
+| <5_000JPY  | false   |
+| >=5_000JPY | true    |
+";
+
+/// The same with an input beside the total, and a count that a second table reads through a value
+/// of its own.
+const CHARGE_AFTER_WALK: &str = "rule charge_after_walk v1
+
+inputs
+  extra : money[JPY]  range >=0JPY <=1_000JPY
+
+elements lines
+  price : money[JPY]  range >=0JPY <=50_000JPY
+  gift  : bool
+
+sum total over lines of price  range >=0JPY <=100_000JPY
+count gifts over lines where gift  range >=0 <=5
+
+define charged : money[JPY] = total + extra
+define wraps : number = gifts + 1
+
+outputs
+  free : bool
+  many : bool
+
+table free_of
+policy unique
+| charged    | -> free |
+| <5_000JPY  | false   |
+| >=5_000JPY | true    |
+
+table many_of
+policy unique
+| wraps | -> many |
+| <4    | false   |
+| >=4   | true    |
+";
+
+/// A table that reads the value beside two inputs: the rows of a gold member in a hurry are cut at
+/// 8,000 yen, and the row from there up is won only by a basket brought there.
+const TIERS_AFTER_WALK: &str = "rule tiers_after_walk v1
+
+enum tier_of = basic | gold
+
+inputs
+  extra : money[JPY]  range >=0JPY <=1_000JPY
+  tier  : tier_of
+  rush  : bool
+
+elements lines
+  price : money[JPY]  range >=0JPY <=50_000JPY
+  gift  : bool
+
+sum total over lines of price  range >=0JPY <=100_000JPY
+count gifts over lines where gift  range >=0 <=5
+
+define charged : money[JPY] = total + extra + gifts * 500JPY
+
+outputs
+  free : bool
+
+table free_of
+policy unique
+| tier  | rush  | charged     | -> free |
+| basic | -     | <5_000JPY   | false   |
+| basic | -     | >=5_000JPY  | true    |
+| gold  | true  | <8_000JPY   | false   |
+| gold  | true  | >=8_000JPY  | true    |
+| gold  | false | -           | true    |
+";
+
+/// A table that reads the value beside the count it is worked out from: the rows of two wrapped
+/// lines or more are cut at 5,000 yen, and their pair is two baskets with as many wrapped lines.
+const GIFT_ROWS: &str = "rule gift_rows v1
+
+elements lines
+  price : money[JPY]  range >=0JPY <=50_000JPY
+  gift  : bool
+
+sum total over lines of price  range >=0JPY <=100_000JPY
+count gifts over lines where gift  range >=0 <=5
+
+define charged : money[JPY] = total + gifts * 500JPY
+
+outputs
+  free : bool
+
+table free_of
+policy unique
+| gifts | charged     | -> free |
+| <2    | -           | false   |
+| >=2   | <5_000JPY   | false   |
+| >=2   | >=5_000JPY  | true    |
+";
+
+/// A table that reads a value worked out once a walk is over — from what a `sum` or a `count`
+/// comes to — has each boundary it writes on that value seen from both sides, by two cases apart
+/// in one thing. The pool aims a sum and a count at the boundaries the tables write on them, and
+/// a value worked out from one had its boundaries where nothing aimed: the suite of
+/// `goods_after_walk` had no case at 4,999 yen or at 5,000, and the audit said so of both rows;
+/// in `tiers_after_walk` no case reached the fourth row at all.
+#[test]
+fn a_table_over_a_value_worked_out_after_a_walk_has_its_boundary_pairs() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
+    let total = |v: &Vector| -> i128 {
+        match v.input.get("lines") {
+            Some(rulec::eval::Val::Seq(xs)) => xs.iter().filter_map(|x| if let Some(rulec::eval::Val::Num(p)) = x.get("price") { Some(p.num / p.den) } else { None }).sum(),
+            _ => 0,
+        }
+    };
+    let (a, vs) = audit_src("goods_after_walk.rule", GOODS_AFTER_WALK);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[ROW], a.tally[BOUND]), ((2, 2), (2, 2)));
+    for at in [4999, 5000] {
+        assert!(vs.iter().any(|v| total(v) == at), "no case with goods at {at}");
+    }
+    // without the two cases on the boundary, the audit names both rows
+    let (f, c) = rulec::prepare(GOODS_AFTER_WALK, "goods_after_walk.rule").expect("passes check");
+    let kept: Vec<Vector> = vs.iter().filter(|v| ![4999, 5000].contains(&total(v))).cloned().collect();
+    assert!(kept.len() < vs.len());
+    let cut = coverage::audit(&f, &c, "goods_after_walk.rule", &kept, &[]);
+    assert_eq!(cut.tally[BOUND], (0, 2));
+
+    let (a, vs) = audit_src("charge_after_walk.rule", CHARGE_AFTER_WALK);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[ROW], a.tally[BOUND]), ((4, 4), (4, 4)));
+
+    // the other cells of a row hold on its pair: the pair of a gold member's rows is a gold member's
+    let (a, vs) = audit_src("tiers_after_walk.rule", TIERS_AFTER_WALK);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[ROW], a.tally[BOUND]), ((5, 5), (4, 4)));
+    assert!(vs.iter().any(|v| v.trace.iter().any(|t| t == "表 free_of 行4")), "no case on the fourth row");
+
+    // a pair that keeps what the walk counts: the price of a line moves, the wrapped lines stay
+    let (a, vs) = audit_src("gift_rows.rule", GIFT_ROWS);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[ROW], a.tally[BOUND]), ((3, 3), (5, 5)));
 }

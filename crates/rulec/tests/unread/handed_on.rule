@@ -1,0 +1,34 @@
+rule handed_on v1
+description "Where a parcel goes and whether it stays on hold, from where it is, whether a scan found it and whether it is on hold: the first row of each table hands on the value it tests (fictional)"
+
+enum place = dock | truck | door
+
+inputs
+  at      : place
+  scanned : bool
+  kept    : bool
+
+outputs
+  goes : place
+  hold : bool
+
+table route
+policy unique
+| at    | scanned | -> goes |
+| dock  | false   | at      |
+| dock  | true    | truck   |
+| truck | -       | door    |
+| door  | -       | at      |
+
+table keep
+policy unique
+| kept  | scanned | -> hold |
+| true  | -       | kept    |
+| false | false   | true    |
+| false | true    | false   |
+
+examples
+| at    | scanned | kept  | -> goes | hold  |
+| dock  | false   | true  | dock    | true  |
+| dock  | true    | false | truck   | false |
+| truck | true    | false | door    | false |

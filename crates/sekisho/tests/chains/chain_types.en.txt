@@ -1,0 +1,6 @@
+error[E101]: chain_types.gate:26:13: There is no type `User`
+    26 |   principal User
+  = The principal types there are `Usr`.
+error[E101]: chain_types.gate:27:12: There is no type `Order`
+    27 |   resource Order
+  = The resource types there are `Ordr`.

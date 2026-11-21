@@ -1,0 +1,33 @@
+package {{package}}
+
+import (
+	"log/slog"
+
+	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/worker"
+
+	server "{{framework}}"
+	"{{framework}}/temporal"
+
+	"{{module}}/go/flows/expense_payment"
+)
+
+// Flows makes what starts the flows of the kinds of request on Temporal, through c: the server's
+// Flows and Agents (cmd/server). It reads the flows the kinds name from their descriptions in pkgs
+// (temporal.FlowsOf): here the payment of an approved expense claim.
+func Flows(c client.Client, pkgs ...*server.Package) (*temporal.Runner, error) {
+	listed, err := temporal.FlowsOf(pkgs...)
+	if err != nil {
+		return nil, err
+	}
+	return temporal.New(c, temporal.Config{Flows: listed})
+}
+
+// Workers make the workers that run the flows on Temporal, through c, each with the tasks the
+// project writes for its flow: the payment's are Payments. cmd/worker runs them. A flow added to a
+// kind of request needs its worker here.
+func Workers(c client.Client, log *slog.Logger) []worker.Worker {
+	return []worker.Worker{
+		expense_payment.NewWorker(c, Payments{Log: log}, nil, ""),
+	}
+}

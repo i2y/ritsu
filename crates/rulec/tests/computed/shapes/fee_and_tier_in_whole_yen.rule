@@ -1,0 +1,34 @@
+rule fee_and_tier_in_whole_yen v1
+description "A fee a policy first table writes from the amount, and the tier written from the fee, read with both and the amount: the fee is 280 yen only above 93 yen, and the tier is t3 only for a fee above 280 yen. A fee is a whole number of yen, so none lies between 280 and 281 yen, and tier t3 never comes with a fee under 281 yen. No row is asked for a fee of 280 yen up to 93 yen, nor for tier t3 with a fee under 281 yen"
+
+enum choice = one | two
+enum level = t1 | t3
+
+inputs
+  amount : money[JPY]  range >=1JPY <=135JPY
+  qty    : number  range >=1 <=2
+
+outputs
+  x : choice
+
+table fee_of
+policy first
+| amount | -> fee : money[JPY] |
+| >93JPY | 280JPY              |
+| -      | 290JPY              |
+
+table tier_of
+| fee      | -> tier : level |
+| <=280JPY | t1              |
+| >280JPY  | t3              |
+
+table pick
+| amount         | qty | fee                 | tier | -> x |
+| <44JPY         | 1   | >=290JPY <=290JPY   | t3   | one  |
+| <44JPY         | 2   | >=290JPY <=290JPY   | t3   | two  |
+| >43JPY <70JPY  | 1   | >=290JPY <=290JPY   | t3   | one  |
+| >43JPY <70JPY  | 2   | >=290JPY <=290JPY   | t3   | two  |
+| >=70JPY        | 1   | <281JPY             | t1   | one  |
+| >=70JPY        | 1   | >=290JPY <=290JPY   | t3   | two  |
+| >=70JPY        | 2   | <281JPY             | t1   | one  |
+| >=70JPY        | 2   | >=290JPY <=290JPY   | t3   | two  |

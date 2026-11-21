@@ -1,0 +1,23 @@
+rule same_rule_date v1
+description "A date a table of the same rule writes, absent for an order picked up at the shop, read on its own"
+
+enum zone = local | national | pickup
+enum timing = early | late | collected
+
+inputs
+  zone : zone
+
+outputs
+  x : timing
+
+table ships_of
+| zone     | -> ships : date? |
+| local    | 2026-07-01       |
+| national | 2026-07-03       |
+| pickup   | none             |
+
+table pick
+| ships        | -> x      |
+| <=2026-07-01 | early     |
+| >=2026-07-03 | late      |
+| none         | collected |

@@ -1,0 +1,2 @@
+error[E307]: tests/mutants/E307_型の違う値.ringi:8:14: `長い` takes `bool`, and `金額`, what it is given, is `money[円]`
+     8 | route 標準(長い: 金額)

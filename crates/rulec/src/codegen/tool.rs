@@ -96,13 +96,14 @@ impl<'a> Gen<'a> {
                 let p = self.py_ty(t);
                 if matches!(p.as_str(), "bool" | "int" | "str") { p } else { format!("m.{p}") }
             };
+            // Each argument there, in the order the function takes them (§15.328).
             match &ty {
                 Ty::Opt(t) => {
-                    convs.push(format!("None if o[{jp}] is None else {}", conv(t, &format!("o[{jp}]"))));
+                    convs.push(format!("None if _arg(o, {jp}, True) is None else {}", conv(t, &format!("o[{jp}]"))));
                     tys.push(format!("{} | None", qualified(t)));
                 }
                 t => {
-                    convs.push(conv(t, &format!("_need({jp}, o[{jp}])")));
+                    convs.push(conv(t, &format!("_arg(o, {jp})")));
                     tys.push(qualified(t));
                 }
             }
@@ -116,10 +117,14 @@ impl<'a> Gen<'a> {
                 .fields
                 .iter()
                 .map(|fd| {
-                    let k = format!("{:?}", fd.name.text);
+                    // A sentence about an element names it by its place, `lines[1].amount`
+                    // (§15.324): the reader is handed the place, with the index `i` in it.
+                    let key = format!("{:?}", fd.name.text);
+                    let k = format!("f{:?}", crate::door::element(&el.name.text, "{i}", &fd.name.text));
+                    let at = format!("f{:?}", crate::door::place(&el.name.text, "{i}"));
                     let t = self.ty_of(&fd.name.text);
                     let optional = matches!(t, Ty::Opt(_));
-                    let src = format!("_field({jp}, e, {k}{})", if optional { ", True" } else { "" });
+                    let src = format!("_field({at}, e, {key}{})", if optional { ", True" } else { "" });
                     let one = |t: &Ty, v: &str| -> String {
                         match t {
                             Ty::Enum(n) => format!("_enum({k}, m.{}, {n:?}, {v})", self.enum_names.get(n).cloned().unwrap_or_default()),
@@ -139,7 +144,7 @@ impl<'a> Gen<'a> {
                 })
                 .collect();
             let ty = self.element_type(s);
-            convs.push(format!("[m.{ty}({}) for e in _seq({jp}, _need({jp}, o[{jp}]))]", fields.join(", ")));
+            convs.push(format!("[m.{ty}({}) for i, e in enumerate(_seq({jp}, _arg(o, {jp})))]", fields.join(", ")));
             tys.push(format!("list[m.{ty}]"));
         }
         let doc = tr!(
@@ -148,7 +153,24 @@ impl<'a> Gen<'a> {
             self.f.name.text,
             self.f.version
         );
-        PY_MCP
+        // Where the module goes inside a package, it is read as a module of the package this
+        // directory makes (§15.327).
+        let server = if self.py_reads_as_package() {
+            PY_MCP
+                .replacen("import http.server\n", "import http.server\nimport importlib\n", 1)
+                .replacen("import sys\n", "import sys\nimport types\n", 1)
+                .replacen("import @ALIAS@ as m\n", &(crate::codegen::py_package_lines() + &self.py_read_module(&alias, "m")), 1)
+        } else {
+            PY_MCP.to_string()
+        };
+        // A rule that reads no input takes no argument: the arguments are still read as an object,
+        // which has to hold none, and they come to the empty tuple, `tuple[()]` (§15.330).
+        let server = if names.is_empty() {
+            server.replacen("    o = _object(d, (@NAMES@))\n@RETURN@\n", "    _object(d, ())\n    return ()\n", 1)
+        } else {
+            server
+        };
+        server
             .replace("@HEADER@", self.header("#").trim_end())
             .replace("@DOC@", &doc)
             .replace("@ALIAS@", &alias)
@@ -158,7 +180,7 @@ impl<'a> Gen<'a> {
             // A one-element tuple needs its comma; a longer one must not have it, or the
             // formatter would spread the call over four lines.
             .replace("@NAMES@", &if names.len() == 1 { format!("{},", names[0]) } else { names.join(", ") })
-            .replace("@TYPES@", &tys.join(", "))
+            .replace("@TYPES@", &if tys.is_empty() { "()".to_string() } else { tys.join(", ") })
             // One element sits on the line with its comma; two or more stand one per line,
             // and their trailing comma is what keeps the formatter from folding them back.
             .replace(
@@ -171,10 +193,11 @@ impl<'a> Gen<'a> {
             )
             .replace("@M_OBJECT@", &py_str(&tr!("引数はオブジェクト（名前と値の組）で渡す", "the arguments must be an object of name and value")))
             .replace("@M_EXTRA@", &tr!("f\"知らない引数: {{', '.join(extra)}}\"", "f\"unknown arguments: {{', '.join(extra)}}\""))
+            .replace("@D_ARG@", &tr!("引数一つを、関数が受ける順に読む。無いもの、optional でないのに null のものは、無いと断る。", "One argument, read in the order the function takes them: one not there, or null where it is not optional, is refused as missing."))
             // The sentences every door says (§15.203, §15.204), the value beside them.
-            .replace("@M_MISSING@", &format!("f\"{}\"", crate::door::missing("{missing[0]}")))
             .replace("@M_NEED@", &format!("f\"{}\"", crate::door::missing("{name}")))
             .replace("@M_INT@", &format!("f\"{}\"", crate::door::not_integer("{name}")))
+            .replace("@M_PAST@", &format!("f\"{}\"", crate::door::out_of_range("{name}")))
             .replace("@M_STR@", &format!("f\"{}\"", crate::door::not_string("{name}")))
             .replace("@M_BOOL@", &format!("f\"{}\"", crate::door::not_bool("{name}")))
             .replace("@M_DATE@", &format!("f\"{}\"", crate::door::not_date("{name}")))
@@ -191,7 +214,9 @@ impl<'a> Gen<'a> {
             .replace("@D_SEQ@", &tr!("並びは配列で渡す。", "The sequence is passed as an array."))
             .replace("@D_EL@", &tr!("要素はオブジェクトで渡す。", "An element is passed as an object."))
             .replace("@M_SEQ@", &format!("f\"{}\"", crate::door::not_sequence("{name}")))
-            .replace("@M_EL@", &format!("f\"{}\"", crate::door::not_object("{seq}")))
+            .replace("@EL_AT@", if self.f.elements.is_empty() { "seq" } else { "at" })
+            .replace("@M_EL@", &format!("f\"{}\"", mcp_not_object(!self.f.elements.is_empty(), "{at}", "{seq}")))
+            .replace("@M_EL_NEED@", &format!("f\"{}\"", mcp_el_missing(!self.f.elements.is_empty(), "{at}", "{name}")))
             .replace("@D_MAIN@", &tr!("引数を読んで、stdio か HTTP のどちらかで待つ。", "Read the arguments and listen, on stdio or on HTTP."))
             .replace("@D_PAGE@", &tr!("隣にある、人が読むページ。無ければ None で、そのときツールは記録だけを返す。", "The page for people from beside this file, or None — and then the tool answers with the record alone."))
             .replace("@UI_DESC@", &py_str(&self.ui_description()))
@@ -209,8 +234,8 @@ impl<'a> Gen<'a> {
 
     /// `typescript/<alias>_mcp.ts`: the same server, in erasable TypeScript, node alone.
     pub fn ts_mcp(&self) -> String {
-        let (code, prose) = self.ts_mcp_parts();
-        prose.iter().fold(code, |s, (k, v)| s.replace(k, v))
+        let prose = self.ts_mcp_parts().1;
+        prose.iter().fold(self.ts_mcp_code(), |s, (k, v)| s.replace(k, v))
     }
 
     /// `javascript/<alias>_mcp.mjs`: the TypeScript server without its types (§15.36). The
@@ -218,11 +243,19 @@ impl<'a> Gen<'a> {
     /// and the stripper must not read that as a cast.
     pub fn js_mcp(&self) -> String {
         let alias = pub_name(&self.f.name);
-        let (code, prose) = self.ts_mcp_parts();
-        let js = super::strip_types(&code)
+        let prose = self.ts_mcp_parts().1;
+        let js = super::strip_types(&self.ts_mcp_code())
             .replace(".ts\";", ".mjs\";")
             .replace(&format!("node {alias}_mcp.ts"), &format!("node {alias}_mcp.mjs"));
         prose.iter().fold(js, |s, (k, v)| s.replace(k, v))
+    }
+
+    /// The server's code with its prose still as placeholders, each global an enum's type of its
+    /// name hides reached past the type (`globalThis.JSON`, §15.336). The server reads the enum's
+    /// types with `import type`, and tsc does not let the code read a value under a name imported
+    /// so. The prose goes in after, as it is.
+    fn ts_mcp_code(&self) -> String {
+        self.apart_types(super::clash::Syntax::Script, |g| g.ts_mcp_parts().0)
     }
 
     /// The server with its code filled in and its prose still as placeholders, and the
@@ -261,9 +294,10 @@ impl<'a> Gen<'a> {
                     _ => format!("_int({jp}, {v})"),
                 }
             };
+            // Each argument there, in the order the function takes them (§15.328).
             match &ty {
-                Ty::Opt(t) => convs.push(format!("o[{jp}] === null ? null : {}", conv(t, &format!("o[{jp}]")))),
-                t => convs.push(conv(t, &format!("_need({jp}, o[{jp}])"))),
+                Ty::Opt(t) => convs.push(format!("_arg(o, {jp}, true) === null ? null : {}", conv(t, &format!("o[{jp}]")))),
+                t => convs.push(conv(t, &format!("_arg(o, {jp})"))),
             }
         }
         // The sequences a walk reads, one element at a time (§15.56, §15.219).
@@ -274,10 +308,14 @@ impl<'a> Gen<'a> {
                 .fields
                 .iter()
                 .map(|fd| {
-                    let k = format!("{:?}", fd.name.text);
+                    // A sentence about an element names it by its place, `lines[1].amount`
+                    // (§15.324): the reader is handed the place, with the index `i` in it.
+                    let key = format!("{:?}", fd.name.text);
+                    let k = format!("`{}`", crate::door::element(&el.name.text, "${i}", &fd.name.text));
+                    let at = format!("`{}`", crate::door::place(&el.name.text, "${i}"));
                     let t = self.ty_of(&fd.name.text);
                     let optional = matches!(t, Ty::Opt(_));
-                    let src = format!("_field({jp}, e, {k}{})", if optional { ", true" } else { "" });
+                    let src = format!("_field({at}, e, {key}{})", if optional { ", true" } else { "" });
                     let mut one = |t: &Ty, v: &str| -> String {
                         match t {
                             Ty::Enum(n) => {
@@ -309,9 +347,11 @@ impl<'a> Gen<'a> {
                     format!("{}: {body}", pub_name(&fd.name))
                 })
                 .collect();
-            convs.push(format!("_seq({jp}, _need({jp}, o[{jp}])).map((e) => ({{ {} }}))", fields.join(", ")));
+            convs.push(format!("_seq({jp}, _arg(o, {jp})).map((e, i) => ({{ {} }}))", fields.join(", ")));
         }
         let code = TS_MCP
+            // A rule that takes nothing reads nothing of the object it checks (§15.342).
+            .replace("  const o = _object(d, [@NAMES@]);\n", if convs.is_empty() { "  const o = _object(d, [@NAMES@]);\n  void o;\n" } else { "  const o = _object(d, [@NAMES@]);\n" })
             .replace("@HEADER@", self.header("//").trim_end())
             .replace("@ALIAS@", &alias)
             .replace("@VERSION@", &self.f.version)
@@ -325,6 +365,8 @@ impl<'a> Gen<'a> {
             )
             .replace("@NAMES@", &names.join(", "))
             .replace("@CONVS@", &convs.iter().map(|c| format!("    {c},\n")).collect::<String>());
+        // Only the readers the arguments of this rule go through (§15.342).
+        let code = super::from::ts_without_unread(&code, &["_arg", "_int", "_str", "_enum", "_bool", "_date", "_seq", "_field"]);
         let doc = tr!(
             "規則 {} v{} を、MCP ツール一つとして出す。\n *\n *     node {alias}_mcp.ts [--record <file.jsonl>]                 // stdio\n *     node {alias}_mcp.ts --http 8000 [--origin https://example.com]  // Streamable HTTP\n *\n * ツールの引数の形は、生成コードが受け取る入力と同じ（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n * 結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n * --record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。\n *\n * stdio はローカルで動くエージェント（Claude Code、IDE）が使う。--http は、HTTPS のエンドポイントしか受け付けない\n * 連携先（チャットのコネクタ、ワークフロー製品、業務向けエージェント）のためのもので、待つのは\n * 既定で 127.0.0.1 だけである。TLS と認証は前に置くこと。このサーバは自分では持たない。",
             "Rule {} v{} as one MCP tool.\n *\n *     node {alias}_mcp.ts [--record <file.jsonl>]                 // stdio\n *     node {alias}_mcp.ts --http 8000 [--origin https://example.com]  // Streamable HTTP\n *\n * The tool's arguments are the wire form of the rule's inputs (an integer in the declared unit,\n * a rate as a count of its steps, YYYY-MM-DD for a date, an enum member by its name), and its\n * result is the line the module's record function writes: in, observed, trace. With --record\n * that line is also appended to a file, so what the agent asked is what rulec replay and rulec\n * diff read later.\n *\n * Stdio is for an agent on the same machine (Claude Code, an IDE). --http is for the places\n * that only accept an HTTPS endpoint (a chat client's connectors, a workflow product, a\n * business agent); it listens on 127.0.0.1 alone unless told otherwise. Put TLS and\n * authentication in front of it: this server carries neither.",
@@ -337,10 +379,11 @@ impl<'a> Gen<'a> {
             ("@INSTRUCTIONS@", quote(&self.tool_instructions())),
             ("@M_OBJECT@", quote(&tr!("引数はオブジェクト（名前と値の組）で渡す", "the arguments must be an object of name and value"))),
             ("@M_EXTRA@", tr!("`知らない引数: ${{extra.join(\", \")}}`", "`unknown arguments: ${{extra.join(\", \")}}`")),
+            ("@D_ARG@", tr!("引数一つを、関数が受ける順に読む。無いもの、optional でないのに null のものは、無いと断る。", "One argument, read in the order the function takes them: one not there, or null where it is not optional, is refused as missing.")),
             // The sentences every door says (§15.203, §15.204), the value beside them.
-            ("@M_MISSING@", format!("`{}`", crate::door::missing("${missing[0]}"))),
             ("@M_NEED@", format!("`{}`", crate::door::missing("${name}"))),
             ("@M_INT@", format!("`{}`", crate::door::not_integer("${name}"))),
+            ("@M_PAST@", format!("`{}`", crate::door::out_of_range("${name}"))),
             ("@M_STR@", format!("`{}`", crate::door::not_string("${name}"))),
             ("@M_BOOL@", format!("`{}`", crate::door::not_bool("${name}"))),
             ("@M_DATE@", format!("`{}`", crate::door::not_date("${name}"))),
@@ -354,7 +397,9 @@ impl<'a> Gen<'a> {
             ("@D_SEQ@", tr!("並びは配列で渡す。", "The sequence is passed as an array.")),
             ("@D_EL@", tr!("要素はオブジェクトで渡す。", "An element is passed as an object.")),
             ("@M_SEQ@", format!("`{}`", crate::door::not_sequence("${name}"))),
-            ("@M_EL@", format!("`{}`", crate::door::not_object("${seq}"))),
+            ("@EL_AT@", if self.f.elements.is_empty() { "seq".to_string() } else { "at".to_string() }),
+            ("@M_EL@", format!("`{}`", mcp_not_object(!self.f.elements.is_empty(), "${at}", "${seq}"))),
+            ("@M_EL_NEED@", format!("`{}`", mcp_el_missing(!self.f.elements.is_empty(), "${at}", "${name}"))),
             ("@D_PORT@", tr!("0 を渡せば空いている番号が選ばれるので、どこで待っているかを一行出す。", "A port of 0 means any free one, so where it is listening is printed as one line.")),
             ("@D_PAGE@", tr!("隣にある、人が読むページ。無ければ null で、そのときツールは記録だけを返す。", "The page for people from beside this file, or null — and then the tool answers with the record alone.")),
             ("@UI_DESC@", quote(&self.ui_description())),
@@ -417,24 +462,25 @@ def _object(d: object, names: tuple[str, ...]) -> dict[str, object]:
     extra = [k for k in d if k not in names]
     if extra:
         raise m.RuleInputError(@M_EXTRA@)
-    missing = [n for n in names if n not in d]
-    if missing:
-        raise m.RuleInputError(@M_MISSING@)
     return d
 
 
-def _need(name: str, v: object) -> object:
-    if v is None:
+def _arg(o: dict[str, object], name: str, optional: bool = False) -> object:
+    """@D_ARG@"""
+    if name not in o or (o[name] is None and not optional):
         raise m.RuleInputError(@M_NEED@)
-    return v
+    return o[name]
 
 
 def _int(name: str, v: object) -> int:
     # A whole number written with a point or an exponent, 1000.0 or 1e3, is that integer.
     if isinstance(v, float) and v.is_integer():
-        return int(v)
+        v = int(v)
     if not isinstance(v, int) or isinstance(v, bool):
         raise m.RuleInputError(@M_INT@, repr(v))
+    # One int64 does not hold is past what a reader of every language takes, there and not later.
+    if not -9223372036854775808 <= v <= 9223372036854775807:
+        raise m.RuleInputError(@M_PAST@, repr(v))
     return v
 
 
@@ -475,12 +521,12 @@ def _seq(name: str, v: object) -> list[object]:
     return v
 
 
-def _field(seq: str, e: object, name: str, optional: bool = False) -> object:
+def _field(@EL_AT@: str, e: object, name: str, optional: bool = False) -> object:
     """@D_EL@"""
     if not isinstance(e, dict):
         raise m.RuleInputError(@M_EL@, repr(e))
     if name not in e or (e[name] is None and not optional):
-        raise m.RuleInputError(@M_NEED@)
+        raise m.RuleInputError(@M_EL_NEED@)
     return e[name]
 
 
@@ -744,18 +790,15 @@ function _object(d: unknown, names: readonly string[]): Record<string, unknown> 
   if (extra.length > 0) {
     throw new m.RuleInputError(@M_EXTRA@);
   }
-  const missing = names.filter((n) => !(n in o));
-  if (missing.length > 0) {
-    throw new m.RuleInputError(@M_MISSING@);
-  }
   return o;
 }
 
-function _need(name: string, v: unknown): unknown {
-  if (v === null) {
+/** @D_ARG@ */
+function _arg(o: Record<string, unknown>, name: string, optional = false): unknown {
+  if (!(name in o) || (o[name] === null && !optional)) {
     throw new m.RuleInputError(@M_NEED@);
   }
-  return v;
+  return o[name];
 }
 
 type JsonSource = { source?: string };
@@ -781,13 +824,15 @@ function _raw(_k: string, v: unknown): unknown {
 }
 
 function _int(name: string, v: unknown): bigint {
-  if (typeof v === "bigint") {
-    return v;
+  const n = typeof v === "bigint" ? v : typeof v === "number" && Number.isInteger(v) ? BigInt(v) : null;
+  if (n === null) {
+    throw new m.RuleInputError(@M_INT@, v);
   }
-  if (typeof v === "number" && Number.isInteger(v)) {
-    return BigInt(v);
+  // One int64 does not hold is past what a reader of every language takes, there and not later.
+  if (n < -9223372036854775808n || n > 9223372036854775807n) {
+    throw new m.RuleInputError(@M_PAST@, v);
   }
-  throw new m.RuleInputError(@M_INT@, v);
+  return n;
 }
 
 function _str(name: string, v: unknown): string {
@@ -834,13 +879,13 @@ function _seq(name: string, v: unknown): unknown[] {
 }
 
 /** @D_EL@ */
-function _field(seq: string, e: unknown, name: string, optional = false): unknown {
+function _field(@EL_AT@: string, e: unknown, name: string, optional = false): unknown {
   if (typeof e !== "object" || e === null || Array.isArray(e)) {
     throw new m.RuleInputError(@M_EL@, e);
   }
   const o = e as Record<string, unknown>;
   if (!(name in o) || (o[name] === null && !optional)) {
-    throw new m.RuleInputError(@M_NEED@);
+    throw new m.RuleInputError(@M_EL_NEED@);
   }
   return o[name];
 }
@@ -1065,3 +1110,26 @@ if (listen === null) {
   serveHttp(host, port, allowed);
 }
 "#;
+
+/// What the element reader of an MCP server says of an element that is not an object (§15.324): the
+/// element by its place, which the server hands it as `at`. A server of a rule with no sequence
+/// has the reader and never calls it; its text stays as the servers were written before, so that
+/// such a server does not change (`seq` is the sequence's name there).
+fn mcp_not_object(walks: bool, at: &str, seq: &str) -> String {
+    if walks {
+        crate::door::not_an_object(at)
+    } else {
+        tr!("{seq} の要素がオブジェクトではありません", "an element of {seq} is not an object")
+    }
+}
+
+/// What the element reader of an MCP server says of a field an element does not have (§15.324):
+/// the field by its place on the element, `lines[1].amount`. In a server of a rule with no sequence,
+/// which never calls the reader, the field by its name, as before.
+fn mcp_el_missing(walks: bool, at: &str, name: &str) -> String {
+    if walks {
+        crate::door::missing(&format!("{at}.{name}"))
+    } else {
+        crate::door::missing(name)
+    }
+}

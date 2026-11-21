@@ -1,0 +1,9 @@
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/computed/shapes/E102_その地域では出荷しない日.rule:21 table 選ぶ
+   |
+21 | | 県内 | 2026-07-03   | 合わない |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+   |
+ The upstream table does not produce the value this row names while the other columns are what this row says. Either half happens; the two together do not.
+ hint: if this is a new specification, move it up; if it is not needed, delete it.
+

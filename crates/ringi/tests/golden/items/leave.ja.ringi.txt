@@ -1,0 +1,71 @@
+12-15 ringi "examples/leave.ja.ringi" field 種類
+    種類(kind) : choice "休暇の種類"
+    有給(paid) "有給休暇"
+    病気(sick) "病気休暇"
+    特別(special) "特別休暇"
+16-16 ringi "examples/leave.ja.ringi" field 初日
+    初日(first_day) : date "初日" range >=2026-01-01 <=2027-12-31 open in 本社
+17-17 ringi "examples/leave.ja.ringi" field 日数
+    日数(days) : number "営業日の日数" range >=1 <=20
+18-18 ringi "examples/leave.ja.ringi" field 復帰日
+    復帰日(back_on) : date "出社する日" = 初日 + 日数 business days in 本社
+19-19 ringi "examples/leave.ja.ringi" field 理由
+    理由(reason) : long text "理由" count <=200 required when 種類 is 特別
+20-20 ringi "examples/leave.ja.ringi" field 代わり
+    代わり(cover) : person "代わりに対応する人" optional
+26-26 ringi "examples/leave.ja.ringi" ticket submitted_by
+    submitted by everyone except team board
+27-27 ringi "examples/leave.ja.ringi" ticket self_approval
+    self approval not allowed
+29-29 ringi "examples/leave.ja.ringi" ticket same_approver
+    same approver approves once
+30-30 ringi "examples/leave.ja.ringi" ticket send_back
+    send back to the requester, at most 2 times
+32-32 ringi "examples/leave.ja.ringi" ticket comment_required
+    comment required for reject, send back
+33-33 ringi "examples/leave.ja.ringi" ticket resubmit
+    resubmit within 5 business days
+34-34 ringi "examples/leave.ja.ringi" ticket withdraw
+    withdraw until it is decided
+35-35 ringi "examples/leave.ja.ringi" ticket hold_休暇.take
+    on submitted hold 休暇.take(request: ticket.id, attempt: ticket.attempt, person: requester.id, days: 日数) when 種類 is 有給
+36-36 ringi "examples/leave.ja.ringi" ticket post_休暇.take
+    on approved post 休暇.take(request: ticket.id, attempt: ticket.attempt) when 種類 is 有給
+37-37 ringi "examples/leave.ja.ringi" ticket void_休暇.take
+    on sent back, rejected, withdrawn, expired void 休暇.take(request: ticket.id, attempt: ticket.attempt) when 種類 is 有給
+40-40 ringi "examples/leave.ja.ringi" claim 期限内に終わる
+    期限内に終わる : every ticket ends within 40 business days
+42-51 ringi "examples/leave.ja.ringi" scenario 長い有給休暇
+    scenario 長い有給休暇
+    requester e1203
+    given 休暇.grant(person: "e1203", year: "2026", days: 20)
+    form 種類 = 有給, 初日 = 2026-12-21, 日数 = 8, 理由 = "家族に会いに行く"
+    | at | event | by | -> stage | status |
+    | 2026-11-16 09:00 | submit | e1203 | manager | in progress |
+    | 2026-11-16 17:00 | approve | e1101 | head | in progress |
+    | 2026-11-17 09:00 | remind | | head | in progress |
+    | 2026-11-19 00:00 | late | | head | in progress |
+    | 2026-11-19 10:00 | approve | e0101 | | approved |
+54-66 ringi "examples/leave.ja.ringi" scenario コメントを添えて差し戻す休暇
+    scenario コメントを添えて差し戻す休暇
+    requester e1203
+    given 休暇.grant(person: "e1203", year: "2026", days: 20)
+    form 種類 = 有給, 初日 = 2026-12-21, 日数 = 3, 理由 = "家族に会いに行く"
+    | at | event | by | comment | -> stage | status |
+    | 2026-11-16 09:00 | submit | e1203 | | manager | in progress |
+    | 2026-11-16 11:00 | comment | e1101 | "休みのあいだ、だれが代わりに対応しますか" | manager | in progress |
+    | 2026-11-16 13:00 | comment | e1203 | "e1201 さんです" | manager | in progress |
+    | 2026-11-16 17:00 | send back | e1101 | "代わりの人に e1201 さんを書いてください" | | with requester |
+    | 2026-11-16 17:30 | comment | e1203 | "代わりの人は、どこに書けばよいですか" | | with requester |
+    | 2026-11-16 17:45 | comment | e1101 | "フォームの「代わりに対応する人」の欄です" | | with requester |
+    | 2026-11-17 09:00 | resubmit(代わり: person "e1201") | e1203 | "代わりの人に e1201 さんを書きました" | manager | in progress |
+    | 2026-11-17 10:00 | approve | e1101 | "よい休みを" | | approved |
+69-76 ringi "examples/leave.ja.ringi" scenario 理由を添えて却下する休暇
+    scenario 理由を添えて却下する休暇
+    requester e1203
+    given 休暇.grant(person: "e1203", year: "2026", days: 20)
+    form 種類 = 有給, 初日 = 2026-12-21, 日数 = 8, 理由 = "家族に会いに行く"
+    | at | event | by | comment | -> stage | status |
+    | 2026-11-16 09:00 | submit | e1203 | | manager | in progress |
+    | 2026-11-16 17:00 | approve | e1101 | | head | in progress |
+    | 2026-11-16 18:00 | reject | e3101 | "年末の前の週は、一年でいちばん忙しい週です" | | rejected |

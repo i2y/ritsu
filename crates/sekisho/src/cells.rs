@@ -5,7 +5,7 @@
 
 use crate::ast::Op;
 use ritsu_base::text::Text;
-use ritsu_units::{Dim, Rat, Unit};
+use ritsu_units::Unit;
 
 /// Whether `a <op> b` holds.
 pub fn holds<T: Ord>(op: Op, a: T, b: T) -> bool {
@@ -56,21 +56,11 @@ pub fn cut(lo: i128, hi: i128, cmps: &[(Op, i128)]) -> Vec<Cell> {
     out
 }
 
-/// A number counted in `unit`, as a message shows it: `50GBP`, `10,000GBP`, `12` for a number.
+/// A number counted in `unit`, as a message shows it: as the gate writes a constant (ritsu's DESIGN
+/// 6.2 item 8), with the unit and the digits grouped by `_` from five on: `50GBP`, `10_000GBP`,
+/// `0.5%`, `12` for a number. A value between -1% and 0% keeps its sign (2026-10-08).
 pub fn show(v: i128, unit: &Unit) -> String {
-    let n = if v < 0 { format!("-{}", ritsu_base::text::count(v.unsigned_abs() as u64)) } else { ritsu_base::text::count(v as u64) };
-    match unit.dim {
-        Dim::Number | Dim::Count(_) => n,
-        Dim::Rate => match unit.step {
-            Some(step) => {
-                // `Rat`'s own text: a step is a decimal fraction, so this is a decimal, and a
-                // value between -1% and 0% keeps its sign (2026-10-08).
-                format!("{}%", Rat::int(v).mul(step).mul(Rat::int(100)))
-            }
-            None => n,
-        },
-        _ => format!("{n}{}", unit.unit),
-    }
+    ritsu_units::written::value(v, Some(unit))
 }
 
 /// A cell as a message shows it: one value, or both ends.
@@ -101,7 +91,10 @@ mod tests {
     #[test]
     fn a_number_is_shown_in_its_unit() {
         let gbp = Unit::parse("money[GBP, incl_tax]").unwrap();
-        assert_eq!(show(10_000, &gbp), "10,000GBP");
+        // as a gate writes a constant: `_` from five digits on (ritsu's DESIGN 6.2 item 8)
+        assert_eq!(show(10_000, &gbp), "10_000GBP");
+        assert_eq!(show(5000, &gbp), "5000GBP");
+        assert_eq!(show(-1_250_000, &gbp), "-1_250_000GBP");
         assert_eq!(show(125, &Unit::parse("rate[step 0.1%]").unwrap()), "12.5%");
         assert_eq!(show_cell(Cell { lo: 1, hi: 50 }, &gbp).en, "1GBP to 50GBP");
         assert_eq!(show_cell(Cell { lo: 1, hi: 50 }, &gbp).ja, "1GBP〜50GBP");

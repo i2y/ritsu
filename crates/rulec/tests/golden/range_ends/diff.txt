@@ -1,0 +1,30 @@
+$ rulec diff before.rule now.rule
+rule gift_basket v1 → v1
+  a count changed range: wrapped_items  0..5 → 1..5
+  a sum changed range: amount  0JPY..100_000JPY → 500JPY..100_000JPY
+
+$ rulec diff before.rule now.rule --fixtures records.jsonl
+Compared 3 / matched 1 (33.333%)
+Counterpart: before.rule → now.rule
+
+Not accepted by the new version 2 (66.667%)
+  the count wrapped_items over lines is under the bottom of the new version's range, 1     1 record
+    Example: lines=[] → old version free_shipping=false, old version card=false
+  the sum amount over lines is under the bottom of the new version's range, 500JPY     1 record
+    Example: lines=[price=499JPY,wrapped=true] → old version free_shipping=false, old version card=false
+
+$ rulec diff before.rule now.rule
+規則 gift_basket v1 → v1
+  数え上げの範囲が変わった: wrapped_items  0..5 → 1..5
+  合計の範囲が変わった: amount  0JPY..100_000JPY → 500JPY..100_000JPY
+
+$ rulec diff before.rule now.rule --fixtures records.jsonl
+照合 3 件 / 一致 1 (33.333%)
+相手: before.rule → now.rule
+
+新しい版が受け付けない入力 2 件 (66.667%)
+  lines の合計 amount が、新しい版の範囲の下限 500JPY に届きません          1 件
+    例: lines=[price=499JPY,wrapped=true] → 旧版 free_shipping=false, 旧版 card=false
+  lines を数えた wrapped_items が、新しい版の範囲の下限 1 に届きません       1 件
+    例: lines=[] → 旧版 free_shipping=false, 旧版 card=false
+

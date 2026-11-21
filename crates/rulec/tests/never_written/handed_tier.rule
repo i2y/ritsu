@@ -1,0 +1,28 @@
+rule handed_tier v1
+description "A tier one table hands on from another, silver or gold and never basic, read through an apply whose first row takes basic (fictional)"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  vip : bool
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table base_by_vip
+policy unique
+| vip   | -> base : tier |
+| true  | gold           |
+| false | silver         |
+
+# The lower tiers take the base, which is silver or gold
+table lift_by_member
+policy unique
+| member         | -> lift : tier |
+| basic, silver  | base           |
+| gold, platinum | gold           |
+
+apply lifted = "tier_first.rule" meaning:4c5a5a77c8f14e12
+  tier = lift
+  credit -> credit

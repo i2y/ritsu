@@ -1,0 +1,22 @@
+request example v1 "Example"
+
+use calendar office from "shared/broken_office.cal"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+every stage
+  due in 3 business days at 09:00
+  remind after 2 business days at 10:00
+
+ticket
+  self approval  not allowed
+
+claims
+  reminded_in_time : every stage reminds before it is due

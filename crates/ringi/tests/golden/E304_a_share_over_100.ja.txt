@@ -1,0 +1,2 @@
+エラー[E304]: tests/mutants/E304_a_share_over_100.ringi:7:11: `at least 120%` は 100% を超えるので、届きません
+     7 |   review  at least 120% of legal

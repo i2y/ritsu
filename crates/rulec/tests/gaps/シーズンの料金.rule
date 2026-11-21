@@ -1,0 +1,14 @@
+rule シーズンの料金(season) v1
+description "日と年齢で決める料金。年齢は書かない人もいる。シーズンの後半の行が無く、前半の 13 歳以上の行も無い"
+
+inputs
+  日(day)    : date     range >=2026-04-01 <=2026-09-30
+  年齢(age)  : number?  range >=0 <=120
+
+outputs
+  料金(price) : money[JPY]  round down(1JPY)
+
+table 料金の表(prices)
+| 日          | 年齢 | -> 料金 |
+| <2026-07-01 | none | 900JPY  |
+| <2026-07-01 | <13  | 500JPY  |

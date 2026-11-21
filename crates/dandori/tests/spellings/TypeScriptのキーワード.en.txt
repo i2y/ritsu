@@ -1,0 +1,5 @@
+warning[W105]: tests/spellings/TypeScriptのキーワード.flow:4:8: The type `any` cannot keep its name in the code of TypeScript
+     4 | record any
+  = TypeScript (`--target temporal-typescript`, `--target durable`): `any` is a word of TypeScript, which a type cannot be named.
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/TypeScriptのキーワード.flow: ok (1 warning(s))

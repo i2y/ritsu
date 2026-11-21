@@ -1,0 +1,4 @@
+エラー[E306]: tests/mutants/E306_an_only_when_that_does_not_hold.ringi:19:3: 主張 small_by_manager が成り立ちません。ステップ decide が `manager` になる申請が、条件の外にあります
+    19 |   small_by_manager : decide is manager only when amount <= 50_000JPY
+  = その申請: amount = 50_001JPY
+  = 経路を直すか、条件を直してください。

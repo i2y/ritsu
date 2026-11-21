@@ -1,0 +1,6 @@
+error[E008]: example.ringi:1:1: The file needs kaname, which this ringi does not hold (a request is lowered to a module of kaname's)
+     1 | request example v1 "Example"
+  = The binary of ringi's own crate holds no other language; run the same command with every language joined, through ritsu: `ritsu ringi check <file.ringi>`.
+error[E008]: example.ringi:3:1: The file needs rulec, which this ringi does not hold (its form is lowered to a rule)
+     3 | form
+  = The binary of ringi's own crate holds no other language; run the same command with every language joined, through ritsu: `ritsu ringi check <file.ringi>`.

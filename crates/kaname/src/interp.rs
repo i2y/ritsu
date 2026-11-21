@@ -29,7 +29,7 @@ use crate::num::{self, Arith, Rat, Rounding};
 use crate::suite::Suite;
 use crate::ty::*;
 use crate::types::Ref;
-use crate::value::{Closure, Program, TransferValue, Value, num_text, range_text, wire_int};
+use crate::value::{Closure, Program, TransferValue, Value, num_shown, num_text, range_text, wire_int};
 use ritsu_base::json::Json;
 use ritsu_base::text::Text;
 use ritsu_ports::{DateValue, RuleError, Value as Wire, Values};
@@ -119,6 +119,10 @@ pub struct Failure {
     /// The expression whose operation failed (a value that leaves int64, a division by 0), by its
     /// id in the module: where the search for an example (DESIGN 5.7) finds the place it is after.
     pub expr: Option<usize>,
+    /// For the kind `input`, the place of what is not taken, from the argument's name
+    /// (`submit.form.days`, `organization.people[0]`), as the generated code's error holds it
+    /// (DESIGN 4.2); None for the other kinds, and for arguments not given as an object.
+    pub path: Option<String>,
 }
 
 /// An evaluation that did not stop: the call that went deeper than [`DEPTH`].
@@ -383,7 +387,7 @@ impl<'p> Interp<'p> {
     #[cold]
     #[inline(never)]
     fn failure(&self, m: &Checked, line: usize, kind: Kind, message: Text) -> Failure {
-        Failure { kind, module: m.module.name.text.clone(), file: m.path.clone(), line, message, stack: self.frames.iter().map(|f| (f.function.clone(), f.line)).collect(), expr: None }
+        Failure { kind, module: m.module.name.text.clone(), file: m.path.clone(), line, message, stack: self.frames.iter().map(|f| (f.function.clone(), f.line)).collect(), expr: None, path: None }
     }
 
     #[cold]
@@ -421,9 +425,10 @@ impl<'p> Interp<'p> {
     /// Where a value does not keep what its place declares, `what` naming the place: the range of
     /// its numbers and dates, the count of a list, each element of a list (a list of lists too, its
     /// elements to the range the outer list writes, as the generated code holds them); with `reached`,
-    /// also of every field of a module's record it reaches, a rate with a step and no range held to
-    /// 0% to 100% (DESIGN 3.9), a number or a date whose range is not written to the whole of its type
-    /// (DESIGN 22.1). The fields of a list a rule walks are the rule's to hold.
+    /// also of every field of a module's record and of a built-in function's record it reaches, a rate
+    /// with a step and no range held to 0% to 100% (DESIGN 3.9), a number or a date whose range is not
+    /// written to the whole of its type (DESIGN 22.1). The fields of a list a rule walks are the rule's
+    /// to hold.
     fn outside(&self, v: &Value, slot: &Slot, what: &str, hold: Hold) -> Option<Outside> {
         if matches!(v, Value::None) {
             return None;
@@ -498,7 +503,8 @@ impl<'p> Interp<'p> {
     }
 
     /// Any other value: a number or a date to its range, then, where a parameter reaches it, the fields
-    /// of a module's record and of the value of a sum, and the value a result holds.
+    /// of a module's record, of the records the built-in functions answer and of the value of a sum,
+    /// and the value a result holds.
     #[inline(never)]
     fn outside_value(&self, v: &Value, slot: &Slot, t: &Ty, what: &str, hold: Hold) -> Option<Outside> {
         let reached = hold != Hold::Place;
@@ -508,7 +514,17 @@ impl<'p> Interp<'p> {
         if !reached {
             return None;
         }
-        if let (Ty::Record(id @ RecId::Module { .. }), Value::Record(fs)) = (t, v) {
+        // a module's record, and a record a built-in function answers, which a host gives as any
+        // other (`indexed`, `entries`, `running_totals`: the item of `indexed[T]`, the key and the
+        // value of `entry[K, V]`, the item and the weights of `running[T, W]`, `x.item.name`)
+        if let (Ty::Record(id @ (RecId::Module { .. } | RecId::Indexed(_) | RecId::Entry(..) | RecId::Running(..))), Value::Record(fs)) = (t, v) {
+            return self.outside_fields(self.p.fields(id), fs, what, None, hold);
+        }
+        // an element of a list a rule walks, where a host gives it: its fields to the rule's columns
+        // (`p.weight`, DESIGN 4.4). One kaname builds is the rule's to hold where kaname calls it, and
+        // the analysis of ranges reads none of its fields in the column's range, so a call of kaname
+        // does not hold it
+        if let (Ty::Record(id @ RecId::Element(..)), Value::Record(fs), Hold::Entry) = (t, v, hold) {
             return self.outside_fields(self.p.fields(id), fs, what, None, hold);
         }
         // a value of a sum: the fields of the value it is, written with its name (`o.placed.on`)
@@ -565,7 +581,7 @@ impl<'p> Interp<'p> {
         };
         if r.min.is_some_and(|lo| num::cmp(at, lo) == Ordering::Less) || r.max.is_some_and(|hi| num::cmp(at, hi) == Ordering::Greater) {
             let shown = match (v, t) {
-                (Value::Num(n), Ty::Num(nt)) => num_text(*n, &nt.unit),
+                (Value::Num(n), Ty::Num(nt)) => num_shown(*n, &nt.unit),
                 (Value::Date(d), _) => crate::date::text(*d),
                 _ => String::new(),
             };
@@ -635,21 +651,21 @@ impl<'p> Interp<'p> {
         let info = &m.decls.fns[f];
         let names = crate::names::tnames(&info.tparams);
         for (p, v) in info.params.iter().zip(args) {
-            let slot = subst_slot(&p.slot, &names, targs);
+            let slot = crate::ty::subst_param(&p.slot, &names, targs);
             // the nesting first, so that what follows walks no deeper (DESIGN 28.1)
             if let Some(deep) = self.nested(v, &slot.ty, 0) {
                 let (fun, param) = (&info.name.text, &p.name.text);
                 let msg = tr!("関数 `{fun}` の引数 `{param}` は、`{deep}` の入れ子が {NESTED} 段を超えています", "The argument `{param}` of `{fun}` nests `{deep}` more than {NESTED} deep");
-                return Err(Box::new(self.failure(m, info.line, Kind::Input, msg)));
+                return Err(Box::new(Failure { path: Some(param.clone()), ..self.failure(m, info.line, Kind::Input, msg) }));
             }
             if let Some(o) = self.outside(v, &slot, &p.name.text, Hold::Entry) {
                 let (fun, path, shown, range) = (&info.name.text, &o.path, &o.shown, &o.range);
-                let msg = match o.count {
+                let msg = match o.count.map(|n| ritsu_units::written::digits(n as i128)) {
                     Some(n) if o.chars => tr!("関数 `{fun}` の引数 `{path}` のコードポイントは {n} 個で、コードポイントの数の範囲 {range} の外です", "The argument `{path}` of `{fun}` has {n} code points, outside its count {range}"),
                     Some(n) => tr!("関数 `{fun}` の引数 `{path}` の要素は {n} 個で、要素の数の範囲 {range} の外です", "The argument `{path}` of `{fun}` has {n} elements, outside its count {range}"),
                     None => tr!("関数 `{fun}` の引数 `{path}` の {shown} は、範囲 {range} の外です", "The argument `{path}` of `{fun}` is {shown}, outside its range {range}"),
                 };
-                return Err(Box::new(self.failure(m, info.line, Kind::Input, msg)));
+                return Err(Box::new(Failure { path: Some(path.clone()), ..self.failure(m, info.line, Kind::Input, msg) }));
             }
         }
         Ok(())
@@ -661,14 +677,17 @@ impl<'p> Interp<'p> {
     pub fn enter_json(&self, m: &Checked, f: usize, input: &Json) -> Result<Vec<Value>, Box<Failure>> {
         let info = &m.decls.fns[f];
         let fun = &info.name.text;
-        let input_failure = |why: Text| Box::new(self.failure(m, info.line, Kind::Input, tr!("関数 `{fun}` の引数: {}", "An argument of `{fun}`: {}", why.ja; why.en)));
+        // the place, where the arguments are an object (DESIGN 4.2)
+        let input_failure = |path: Option<&str>, why: Text| {
+            Box::new(Failure { path: path.map(str::to_string), ..self.failure(m, info.line, Kind::Input, tr!("関数 `{fun}` の引数: {}", "An argument of `{fun}`: {}", why.ja; why.en)) })
+        };
         let Some(obj) = input.as_obj() else {
-            return Err(input_failure(tr!("引数は、引数の名前をキーにしたオブジェクトで渡します", "the arguments are given as an object, a key for each parameter")));
+            return Err(input_failure(None, tr!("引数は、引数の名前をキーにしたオブジェクトで渡します", "the arguments are given as an object, a key for each parameter")));
         };
         for (k, _) in obj {
             if !info.params.iter().any(|p| p.name.is(k)) {
                 let all = info.params.iter().map(|p| format!("`{}`", p.name.text)).collect::<Vec<_>>().join(", ");
-                return Err(input_failure(tr!("`{k}` という引数はありません（引数は {all}）", "there is no parameter `{k}` (the parameters are {all})")));
+                return Err(input_failure(None, tr!("`{k}` という引数はありません（引数は {all}）", "there is no parameter `{k}` (the parameters are {all})")));
             }
         }
         let mut args = Vec::new();
@@ -677,9 +696,9 @@ impl<'p> Interp<'p> {
             let name = &p.name.text;
             let v = match given.as_slice() {
                 [] if matches!(p.slot.ty, Ty::Opt(_)) => Value::None,
-                [] => return Err(input_failure(tr!("`{name}` がありません", "`{name}` is missing"))),
-                [x] => self.p.from_json(m, x, &p.slot.ty, name).map_err(input_failure)?,
-                _ => return Err(input_failure(tr!("`{name}` が、名前と別名で二度渡されています", "`{name}` is given twice, by its name and by its alias"))),
+                [] => return Err(input_failure(Some(name), tr!("`{name}` がありません", "`{name}` is missing"))),
+                [x] => self.p.from_json(m, x, &p.slot.ty, name).map_err(|e| input_failure(Some(&e.path), e.why))?,
+                _ => return Err(input_failure(Some(name), tr!("`{name}` が、名前と別名で二度渡されています", "`{name}` is given twice, by its name and by its alias"))),
             };
             args.push(v);
         }
@@ -774,7 +793,7 @@ impl<'p> Interp<'p> {
         match self.outside(&v, &info.ret, &info.name.text, Hold::Place) {
             Some(o) => {
                 let (fun, shown, range) = (&info.name.text, &o.shown, &o.range);
-                let msg = match o.count {
+                let msg = match o.count.map(|n| ritsu_units::written::digits(n as i128)) {
                     Some(n) if o.chars => tr!("関数 `{fun}` の答えのコードポイントは {n} 個で、コードポイントの数の範囲 {range} の外です", "The answer of `{fun}` has {n} code points, outside its count {range}"),
                     Some(n) => tr!("関数 `{fun}` の答えの要素は {n} 個で、要素の数の範囲 {range} の外です", "The answer of `{fun}` has {n} elements, outside its count {range}"),
                     None => tr!("関数 `{fun}` の答え {shown} は、範囲 {range} の外です", "The answer of `{fun}`, {shown}, is outside its range {range}"),
@@ -814,7 +833,7 @@ impl<'p> Interp<'p> {
         };
         let info = &callee.decls.fns[fi];
         let names = crate::names::tnames(&info.tparams);
-        let slots: Vec<Slot> = info.params.iter().map(|p| subst_slot(&p.slot, &names, targs)).collect();
+        let slots: Vec<Slot> = info.params.iter().map(|p| crate::ty::subst_param(&p.slot, &names, targs)).collect();
         let mut given: Vec<Value> = vec![Value::None; info.params.len()];
         for (a, v) in args.iter().zip(vals) {
             let Arg::Named(n, _, x) = a else { continue };
@@ -825,7 +844,7 @@ impl<'p> Interp<'p> {
         for ((p, slot), v) in info.params.iter().zip(&slots).zip(&given) {
             if let Some(o) = self.outside(v, slot, &p.name.text, Hold::Call) {
                 let (fun, path, shown, range) = (&info.name.text, &o.path, &o.shown, &o.range);
-                let msg = match o.count {
+                let msg = match o.count.map(|n| ritsu_units::written::digits(n as i128)) {
                     Some(n) if o.chars => tr!("関数 `{fun}` に渡す引数 `{path}` のコードポイントは {n} 個で、コードポイントの数の範囲 {range} の外です", "The argument `{path}` given to `{fun}` has {n} code points, outside its count {range}"),
                     Some(n) => tr!("関数 `{fun}` に渡す引数 `{path}` の要素は {n} 個で、要素の数の範囲 {range} の外です", "The argument `{path}` given to `{fun}` has {n} elements, outside its count {range}"),
                     None => tr!("関数 `{fun}` に渡す引数 `{path}` の {shown} は、範囲 {range} の外です", "The argument `{path}` given to `{fun}` is {shown}, outside its range {range}"),
@@ -1183,7 +1202,7 @@ impl<'p> Interp<'p> {
             for (k, (f, slot)) in fields.iter().enumerate() {
                 if let Some(o) = self.outside(&given[k], slot, &f.text, Hold::Place) {
                     let (rec, path, shown, range) = (self.p.show_ty(m, &Ty::Record(id.clone())), &o.path, &o.shown, &o.range);
-                    let msg = match o.count {
+                    let msg = match o.count.map(|n| ritsu_units::written::digits(n as i128)) {
                         Some(n) if o.chars => tr!("{rec} のフィールド `{path}` に置くコードポイントは {n} 個で、コードポイントの数の範囲 {range} の外です", "The field `{path}` of {rec} is given {n} code points, outside its count {range}"),
                         Some(n) => tr!("{rec} のフィールド `{path}` に置く要素は {n} 個で、要素の数の範囲 {range} の外です", "The field `{path}` of {rec} is given {n} elements, outside its count {range}"),
                         None => tr!("{rec} のフィールド `{path}` に置く {shown} は、範囲 {range} の外です", "The field `{path}` of {rec} is given {shown}, outside its range {range}"),
@@ -1321,7 +1340,7 @@ impl<'p> Interp<'p> {
                 Some(w) => wire.push((pn.clone(), w)),
                 None => {
                     let shown = p.show(m, v, pt);
-                    return Err(self.fail(m, e.span.line, Kind::Rule, tr!("規則 `{name}` の入力 `{pn}` に渡す {shown} は、その型の値ではありません", "{shown}, given to the input `{pn}` of the rule `{name}`, is no value of its type")));
+                    return Err(self.fail(m, e.span.line, Kind::Rule, tr!("規則 `{name}` の入力 `{pn}` に渡す {shown} は、その型の値ではありません", "The input `{pn}` of the rule `{name}` is given {shown}, which is no value of its type")));
                 }
             }
         }
@@ -1474,7 +1493,7 @@ impl<'p> Interp<'p> {
                 if let Some(g) = &mut self.given {
                     g.push((m.canon.clone(), e.id, amounts));
                 }
-                let shown = num_text(r, &unit_of(&params[k].1));
+                let shown = num_shown(r, &unit_of(&params[k].1));
                 let t = format!("{}.{}", id.transfer, id.op);
                 return Err(self.fail(m, x.span.line, Kind::Range, tr!("振替 `{t}` の額 `{n}` に、負の値 {shown} を渡しています", "The amount `{n}` of the transfer `{t}` is given {shown}, which is below 0")));
             }

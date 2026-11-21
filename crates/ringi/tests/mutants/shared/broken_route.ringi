@@ -1,0 +1,11 @@
+route standard v1 "Standard approval"
+
+inputs
+  long : bool
+
+route
+  check  finance
+  head   heads  when long
+
+who
+  finance = team finance

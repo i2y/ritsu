@@ -1,0 +1,4 @@
+error[E509]: example.ringi:15:3: In the organization from 2026-04-01, no one may submit the request
+    15 |   submitted by   team finance except position dept_head
+  = `team finance except position dept_head` comes to nobody in the organization from 2026-04-01.
+  = Widen `submitted by`, or correct the data of the version.

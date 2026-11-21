@@ -1,0 +1,10 @@
+rule one_count v1
+description "How many boxes a quantity fills, ten to a box: a rule of one output, a number"
+
+inputs
+  qty : number  range >=0 <=99
+
+outputs
+  boxes : number  round up(1)
+
+result boxes = qty / 10

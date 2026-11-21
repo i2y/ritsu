@@ -205,7 +205,7 @@ Counterpart: sqlite3/ec261.sql
 
 Affected 2 (2.128%)  amount -600
   table band_of row 4 / table amount row 3 / table reduction row 7     2 records  difference -300 uniform  total -600
-    Example: delay=4, distance=3501, intra_eu=false → rule compensation=300 / legacy compensation=600
+    Example: delay=4h, distance=3501km, intra_eu=false → rule compensation=300EUR / legacy compensation=600EUR
 ```
 
 It names the rows that fired in all three tables, how much money the difference is worth, and
@@ -298,7 +298,7 @@ The pieces, in the order they are usually written:
 
 Whatever the language's own type system can carry, carry it — and say plainly what it cannot.
 Rust, Swift and Go hold the unit in the type; TypeScript brands a `bigint` and `tsc --strict` is
-run over the output; Python declares a `NewType` that a type checker enforces and
+run over the output, with `--noUnusedLocals` and `--noUnusedParameters` too; Python declares a `NewType` that a type checker enforces and
 `mypy --strict` is run over the output to prove it;
 Ruby, PHP, JavaScript, Java and SQL cannot hold a unit at all, so there it is documented
 instead, and the `.rbs` that ships with the Ruby module says so too; the Wasm module is the

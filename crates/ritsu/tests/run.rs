@@ -6,9 +6,20 @@
 //! command on what it was asked (`rulec replay`, `koyomi eval`, `chobo run`); and the two versions
 //! to each other. Then what stops a run. Then the flow of `tests/projects/ticket_desk`, which
 //! answers the events it is told with a rule of its own: every scenario `ritsu dandori scenarios`
-//! writes for it runs under `ritsu run` to its end. Last, the fulfillment flow of the shop example:
-//! the way it succeeds and each way it fails, in English and in Japanese, with what it gives back,
-//! whether it cancels the order, and what it tells the customer.
+//! writes for it runs under `ritsu run` to its end. Then a flow whose rule has preconditions ritsu
+//! cannot decide at the call: the run checks them where their values are made, as the code dandori
+//! writes does, and every scenario written for it runs as `ritsu dandori run` runs it. Then what a
+//! scenario covers, which is what its run goes through; the arms of a `match` on a rule's answer,
+//! which the scenarios reach by what the rule is given, or say no run takes where rulec says none
+//! can; and the page of a flow, which shows the runs its scenarios make. Then the
+//! clock: `now` read when the statement that reads it runs, after the waits before it; a run that
+//! leaves its period; time that went by before the run. Then every scenario `ritsu dandori
+//! scenarios` writes for flows that call dates and do operations of books runs under `ritsu run` to
+//! the end `ritsu dandori run` comes to. Last, the fulfillment flow of the shop example: the way it
+//! succeeds and each way it fails, in English and in Japanese, with what it gives back, whether it
+//! cancels the order, and what it tells the customer.
+
+mod common;
 
 use ritsu_testkit::TempDir;
 use serde_json::{json, Value};
@@ -27,7 +38,7 @@ fn project() -> PathBuf {
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -94,7 +105,8 @@ fn every_scenario_runs_as_its_golden_says() {
 
 /// The run is the one `dandori run` makes of the scenario with every answer in it (`replay`):
 /// rulec, koyomi and chobo only decide the answers, and dandori's meaning of the flow is dandori's.
-/// Seen as the reference view and as Temporal's.
+/// Seen as the reference view and as Temporal's. `dandori run` takes every answer of the replay
+/// (one left over would end it with 1).
 #[test]
 fn the_replay_is_the_run_dandori_makes() {
     let t = TempDir::new("replay");
@@ -266,19 +278,19 @@ fn a_rule_called_at_its_service_answers_as_the_service_writes_it() {
 }
 
 /// What stops `ritsu run`, with the exit code and what it says: the arguments (2), a scenario that
-/// cannot be read or run (2), a flow with errors (1, in the text and in the JSON), and a run that
-/// cannot go on (1).
+/// cannot be read or run (2), a run that cannot go on (1), and a flow with errors (1, in the text and
+/// in the JSON): dandori's, or one the check across the languages finds at a call of the flow.
 #[test]
 fn what_stops_ritsu_run() {
     let p = project();
     let (code, out, _) = ritsu_in(&p, &["run", "--help"]);
     assert!(code == 0 && out.starts_with("ritsu run — run a workflow in dandori's reference interpreter"), "{out}");
-    let (code, _, err) = ritsu_in(&p, &["run"]);
-    assert!(code == 2 && err.starts_with("ritsu run <file.flow> --scenario <file.json> "), "{err}");
-    assert_eq!(ritsu_in(&p, &["run", "invoice.flow"]), (2, String::new(), "error: `--scenario <file.json>` is required\n".into()));
-    assert_eq!(ritsu_in(&p, &["run", "invoice.flow", "--lang", "ja"]), (2, String::new(), "エラー: `--scenario <file.json>` が要ります\n".into()));
-    let (code, _, err) = ritsu_in(&p, &["run", "invoice.flow", "--scenario", "scenarios/none.json"]);
-    assert!(code == 2 && err.starts_with("error: cannot read the scenario `scenarios/none.json`: "), "{err}");
+    // what stops it before its work, in the words of every command (DESIGN 6.2, item 10)
+    let usage = "ritsu run <file.flow> --scenario <file.json> [--target reference|asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph] [--format json]";
+    assert_eq!(ritsu_in(&p, &["run"]), (2, String::new(), format!("error: `ritsu run` takes <file.flow> --scenario <file.json>\nusage: {usage}\n")));
+    assert_eq!(ritsu_in(&p, &["run", "invoice.flow"]), (2, String::new(), format!("error: `ritsu run` needs `--scenario <file.json>`\nusage: {usage}\n")));
+    assert_eq!(ritsu_in(&p, &["run", "invoice.flow", "--lang", "ja"]), (2, String::new(), format!("エラー: `ritsu run` には `--scenario <file.json>` が要ります\n使い方: {usage}\n")));
+    assert_eq!(ritsu_in(&p, &["run", "invoice.flow", "--scenario", "scenarios/none.json"]), (2, String::new(), "error: `scenarios/none.json` is not there\n".into()));
 
     let t = TempDir::new("stops");
     let write = |name: &str, v: Value| {
@@ -317,6 +329,48 @@ fn what_stops_ritsu_run() {
     let f = write("no_answers.json", s);
     let (code, out, err) = ritsu_in(&p, &["run", "invoice.flow", "--scenario", &f]);
     assert!(code == 1 && out.is_empty() && err == "error: the run could not go on: the scenario has no answer for call 1 (check_payment)\n", "{err}");
+    let (code, out, err) = ritsu_in(&p, &["run", "invoice.flow", "--scenario", &f, "--lang", "ja"]);
+    assert!(code == 1 && out.is_empty() && err == "エラー: 流れが途中で止まりました: シナリオに、1 番目の呼び出し（check_payment）の結果がありません\n", "{err}");
+    // answers the run does not take (dandori's DESIGN 36): the run is shown to its end, then the
+    // answers left over and why, and the run ends with 1, as one that runs out of answers does
+    let mut s = paid.clone();
+    let n = s["answers"].as_array().unwrap().len();
+    s["answers"].as_array_mut().unwrap().push(json!({ "ok": "left over" }));
+    let f = write("left_over.json", s);
+    for lang in ["en", "ja"] {
+        let (_, whole, _) = ritsu_in(&p, &["run", "invoice.flow", "--scenario", "scenarios/invoice_paid.json", "--lang", lang]);
+        let (code, out, err) = ritsu_in(&p, &["run", "invoice.flow", "--scenario", &f, "--lang", lang]);
+        assert_eq!(code, 1, "{err}");
+        assert_eq!(out, whole.replace("scenarios/invoice_paid.json", &f), "the run is shown to its end");
+        let said = if lang == "en" {
+            format!("error: the run did not take answer {} of the scenario: {{\"ok\":\"left over\"}}\n  The run came to its end before a call took it: the scenario may count the calls wrong, or be written for another way through the flow, or for the flow before it changed.\n  A call of a rule, a date or a book that the run computes takes no answer from the scenario.\n", n + 1)
+        } else {
+            format!("エラー: シナリオの {} 番目の結果は使われませんでした: {{\"ok\":\"left over\"}}\n  実行は、その結果を受け取る呼び出しの前に終わりました。シナリオが呼び出しの数を数え違えているか、フローの別の分岐や、変わる前のフローに合わせて書かれているのかもしれません。\n  実行が計算する規則・日付・帳簿の呼び出しは、シナリオの結果を受け取りません。\n", n + 1)
+        };
+        assert_eq!(err, said);
+    }
+    // the same in the JSON, beside the whole run; the replay holds the answers the run took, and
+    // `ritsu dandori run` on it takes every one
+    let (_, whole, _) = ritsu_in(&p, &["run", "invoice.flow", "--scenario", "scenarios/invoice_paid.json", "--format", "json"]);
+    let (code, out, _) = ritsu_in(&p, &["run", "invoice.flow", "--scenario", &f, "--format", "json"]);
+    assert_eq!(code, 1);
+    let (mut ran, mut want): (Value, Value) = (serde_json::from_str(&out).unwrap(), serde_json::from_str(&whole).unwrap());
+    assert_eq!(ran["unused"], json!({ "from": n + 1, "count": 1, "answers": [{ "ok": "left over" }] }));
+    ran.as_object_mut().unwrap().remove("unused");
+    want["scenario"] = json!(f);
+    assert_eq!(ran, want, "the run is the one without the answer left over");
+    let replay = write("left_over_replay.json", ran["replay"].clone());
+    let (code, _, err) = ritsu_in(&p, &["dandori", "run", "invoice.flow", "--scenario", &replay]);
+    assert!(code == 0 && err.is_empty(), "{err}");
+    // `ritsu dandori run` on the replay with two answers added: it computes nothing, so the line on
+    // computed calls is not said
+    let mut more = ran["replay"].clone();
+    let taken = more["answers"].as_array().unwrap().len();
+    more["answers"].as_array_mut().unwrap().extend([json!({ "ok": 1 }), json!({ "ok": 2 })]);
+    let g = write("replay_left_over.json", more);
+    let (code, out, err) = ritsu_in(&p, &["dandori", "run", "invoice.flow", "--scenario", &g]);
+    assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), want["trace"], "the run is printed to its end");
+    assert_eq!((code, err), (1, format!("error: the run did not take answers {} to {} of the scenario (2 of them): {{\"ok\":1}}, {{\"ok\":2}}\n  The run came to its end before a call took it: the scenario may count the calls wrong, or be written for another way through the flow, or for the flow before it changed.\n", taken + 1, taken + 2)));
 
     // a flow with an error: what dandori's check says, and no run
     let copy = TempDir::new("broken");
@@ -330,6 +384,29 @@ fn what_stops_ritsu_run() {
     assert!(code == 1 && err.is_empty(), "{err}");
     let v: Value = serde_json::from_str(&out).unwrap();
     assert!(v["diagnostics"][0]["code"] == "E003" && v.get("trace").is_none(), "{v}");
+
+    // a flow that dandori's check passes, with an error the check across the languages finds at a
+    // call: it can give the dates file a day before the days it takes (ritsu's E205). It is said as
+    // `ritsu check` says it, and the flow is not run, though the scenario's day is one it takes.
+    let crossed = TempDir::new("crossed");
+    let c = crossed.path();
+    std::fs::create_dir_all(c.join("calendars")).unwrap();
+    std::fs::create_dir_all(c.join("dates")).unwrap();
+    std::fs::write(c.join("calendars/office.cal"), "calendar office v1\ndescription \"The business days of an office (fictional): Saturdays and Sundays are closed\"\noffset +09:00\n\nclosed weekly sat, sun\n").unwrap();
+    std::fs::write(c.join("dates/terms.cal"), "dates terms v1\ndescription \"A due date three business days after a request arrives\"\nuse calendar \"../calendars/office.cal\"\n\ninputs\n  received : date  range >=2026-01-01 <=2027-12-31\n\ndate due = received\n  + 3 business days\n  at end of day\n\nexamples\n| received   | -> due      |\n| 2026-11-13 | 2026-11-18  |\n").unwrap();
+    std::fs::write(c.join("late.flow"), "workflow late v1\ndescription \"Give a koyomi date a day from before the range it takes\"\n\nuse dates terms from \"dates/terms.cal\"\n\ninputs\n  received : date  range >=2025-01-01 <=2027-12-31\n\noutputs\n  due : date\n\nflow\n  let d = terms.due(received: received)\n  succeed due = d.day\n").unwrap();
+    std::fs::write(c.join("received.json"), json!({ "input": { "received": "2026-03-02" } }).to_string()).unwrap();
+    let (code, checked, _) = ritsu_in(c, &["check", "late.flow"]);
+    assert_eq!(code, 1, "{checked}");
+    let at = checked.find("error[ritsu E205]: late.flow:13:1: ").unwrap_or_else(|| panic!("{checked}"));
+    let said = &checked[at..checked.rfind("ritsu check: ").unwrap()];
+    let (code, out, err) = ritsu_in(c, &["run", "late.flow", "--scenario", "received.json"]);
+    assert_eq!((code, out.as_str(), err.as_str()), (1, "", said));
+    let (code, out, err) = ritsu_in(c, &["run", "late.flow", "--scenario", "received.json", "--format", "json"]);
+    assert!(code == 1 && err.is_empty(), "{err}");
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let errors: Vec<(&Value, &Value)> = v["diagnostics"].as_array().unwrap().iter().filter(|d| d["severity"] == "error").map(|d| (&d["tool"], &d["code"])).collect();
+    assert!(errors == [(&json!("ritsu"), &json!("E205"))] && v.get("trace").is_none(), "{v}");
 }
 
 /// A flow that answers the events it is told with a rule of its own (`tests/projects/ticket_desk`,
@@ -345,7 +422,7 @@ fn every_scenario_of_a_flow_that_calls_a_rule_runs_under_ritsu_run() {
     let dir = here().join("tests/projects/ticket_desk");
     for (flow, rule, lang, why) in [
         ("ticket_desk.flow", "step", "en", "cannot be run: it answers the call of the rule step itself"),
-        ("ticket_desk.ja.flow", "一歩", "ja", "を流せません: 規則 一歩 の呼び出しの答えを、シナリオが自分で持っています"),
+        ("ticket_desk.ja.flow", "一歩", "ja", "を流せません: 規則 一歩 の呼び出しの結果を、シナリオが自分で持っています"),
     ] {
         let (code, out, err) = ritsu_in(&dir, &["dandori", "scenarios", flow]);
         assert_eq!(code, 0, "{flow}: {err}");
@@ -394,6 +471,225 @@ fn every_scenario_of_a_flow_that_calls_a_rule_runs_under_ritsu_run() {
     }
 }
 
+/// The preconditions of a rule that ritsu cannot decide where a flow calls it are checked where the
+/// values they read are made, under `ritsu run` as in the code dandori writes and under `ritsu
+/// dandori run` (dandori's DESIGN 1.17): the flow of `crates/dandori/tests/flows/never_lines.flow`,
+/// whose rule has three `never` lines over truth values and a count with no range, in English and
+/// its Japanese version. A run whose values break a line fails there with
+/// `Dandori.BrokenPrecondition`, and rulec is not asked. Every scenario `ritsu dandori scenarios`
+/// writes for it runs under `ritsu run` to the end `ritsu dandori run` comes to, with every answer it
+/// gives used: the scenarios keep each line and break it, and reach the rule past them.
+#[test]
+fn a_precondition_ritsu_cannot_decide_is_checked_where_its_values_are_made() {
+    let dir = here().join("../dandori/tests/flows");
+    for (flow, lang) in [("never_lines.flow", "en"), ("never_lines.ja.flow", "ja")] {
+        let (code, out, err) = ritsu_in(&dir, &["dandori", "scenarios", flow]);
+        assert_eq!(code, 0, "{flow}: {err}");
+        let scenarios: Vec<Value> = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
+        let t = TempDir::new("never-lines");
+        let mut covers = std::collections::BTreeSet::new();
+        let mut broken = std::collections::BTreeSet::new();
+        for (i, sc) in scenarios.iter().enumerate() {
+            covers.extend(sc["covers"].as_array().unwrap().iter().map(|c| c.as_str().unwrap().to_string()));
+            let f = t.path().join(format!("{i:03}.json"));
+            std::fs::write(&f, sc.to_string()).unwrap();
+            let f = f.to_string_lossy().into_owned();
+            let (code, out, err) = ritsu_in(&dir, &["run", flow, "--scenario", &f, "--format", "json", "--lang", lang]);
+            assert_eq!(code, 0, "{flow} {i}: {err}\n{sc}");
+            let ran: Value = serde_json::from_str(&out).unwrap();
+            let events = ran["events"].as_array().unwrap();
+            assert_eq!(events.iter().filter(|e| e["by"] == "scenario").count(), sc["answers"].as_array().unwrap().len(), "{flow} {i}: every answer of the scenario is used, and no more:\n{out}");
+            let (code, trace, err) = ritsu_in(&dir, &["dandori", "run", flow, "--scenario", &f]);
+            assert_eq!(code, 0, "{flow} {i}: {err}");
+            assert_eq!(serde_json::from_str::<Value>(&trace).unwrap(), ran["trace"], "{flow} {i}");
+            let end = &ran["trace"]["end"]["fail"];
+            if end["error"] == "Dandori.BrokenPrecondition" {
+                assert!(events.iter().all(|e| e["by"] != "rulec"), "{flow} {i}: the rule is asked:\n{out}");
+                broken.insert(end["cause"].as_str().unwrap().to_string());
+            }
+        }
+        for site in [8, 9, 10] {
+            for way in ["holds", "breaks"] {
+                assert!(covers.contains(&format!("{site}:{way}")), "{flow}: no scenario covers {site}:{way}: {covers:?}");
+            }
+        }
+        assert!(covers.contains("4:rulec"), "{flow}: no scenario reaches the rule: {covers:?}");
+        assert_eq!(broken.len(), 3, "{flow}: each line is broken by a run of its own: {broken:?}");
+    }
+}
+
+/// What a scenario of `ritsu dandori scenarios` says it `covers` is what its run goes through
+/// (dandori's DESIGN 36): a run that the answer's check stops (`Dandori.BadResponse`,
+/// `Dandori.UnexpectedState`) covers the way of the call that fails the check, and a run that ends
+/// otherwise covers none; a run that covers a `succeed` succeeds, and one that covers a `fail`
+/// fails. Two walks took a way their runs did not: the warehouse of the fulfillment example
+/// answering a reservation with its fields at their zero values left out, where the zero value of
+/// `stock` says it is not set and the check refuses it; and the order of `tests/projects/look_again`
+/// looked at again after its cancellation is refused, where it can only be cancelled already. Each
+/// flow in English and its Japanese version.
+#[test]
+fn what_a_scenario_covers_is_what_its_run_goes_through() {
+    let failing = [":malformed", ":out of range", ":unexpected state", ":rule enum left out"];
+    for (dir, flow, lang, way) in [
+        ("../dandori/examples/fulfillment/temporal", "fulfillment.flow", "en", "3:zero values"),
+        ("../dandori/examples/fulfillment/temporal", "fulfillment.ja.flow", "ja", "3:zero values"),
+        ("tests/projects/look_again", "look_again.flow", "en", "4:sees:cancelled"),
+        ("tests/projects/look_again", "look_again.ja.flow", "ja", "4:sees:取消"),
+    ] {
+        let dir = here().join(dir);
+        let (code, out, err) = ritsu_in(&dir, &["dandori", "scenarios", flow]);
+        assert_eq!(code, 0, "{flow}: {err}");
+        let scenarios: Vec<Value> = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
+        let t = TempDir::new("covers");
+        let mut all = std::collections::BTreeSet::new();
+        for (i, sc) in scenarios.iter().enumerate() {
+            let covers: Vec<&str> = sc["covers"].as_array().unwrap().iter().map(|c| c.as_str().unwrap()).collect();
+            all.extend(covers.iter().map(|c| c.to_string()));
+            let f = t.path().join(format!("{i:03}.json"));
+            std::fs::write(&f, sc.to_string()).unwrap();
+            let f = f.to_string_lossy().into_owned();
+            let (code, out, err) = ritsu_in(&dir, &["run", flow, "--scenario", &f, "--format", "json", "--lang", lang]);
+            assert_eq!(code, 0, "{flow} {i}: {err}\n{sc}");
+            let ran: Value = serde_json::from_str(&out).unwrap();
+            let end = &ran["trace"]["end"];
+            let refused = ["Dandori.BadResponse", "Dandori.UnexpectedState"].contains(&end["fail"]["error"].as_str().unwrap_or(""));
+            let fails_a_check = covers.iter().any(|c| failing.iter().any(|w| c.ends_with(w)));
+            assert_eq!(refused, fails_a_check, "{flow} {i}: the run ends with {end}, and the scenario covers {covers:?}");
+            if covers.iter().any(|c| c.ends_with(":succeed")) {
+                assert!(end.get("succeed").is_some(), "{flow} {i}: the run ends with {end}, and the scenario covers {covers:?}");
+            }
+            if covers.iter().any(|c| c.ends_with(":fail")) {
+                assert!(end.get("fail").is_some() && !refused, "{flow} {i}: the run ends with {end}, and the scenario covers {covers:?}");
+            }
+        }
+        // the way the walk took wrong still has a run of its own, one that goes on past it
+        assert!(all.contains(way), "{flow}: no scenario covers {way}: {all:?}");
+    }
+}
+
+/// The walk that writes the scenarios reaches the arms of a `match` on a rule's answer by the values
+/// the rule is given, as rulec answers them (dandori's DESIGN 36): `tests/projects/rule_arms`, whose
+/// rule has a basic order's tools looked at when they count three or more, in English and its
+/// Japanese version. A run is given a count of three, and its order is looked at; every scenario
+/// runs under `ritsu run`, with each answer it gives taken. The rule sends a gold order's tools out
+/// at once whatever the count, so the arm of the second `match` that would have them looked at is
+/// one no run takes: `ritsu dandori scenarios` says so after the scenarios, with rulec's word for
+/// it, and the page of the flow says it under its scenarios, which are the ones `scenarios` writes.
+#[test]
+fn every_arm_of_a_match_on_a_rule_s_answer_is_taken_or_said() {
+    let dir = here().join("tests/projects/rule_arms");
+    for (flow, lang, note, but) in [
+        (
+            "tool_orders.flow",
+            "en",
+            "note: no scenario takes the arm `review` of the `match` on line 26: rulec says the rule tool_check never comes to `route` = review with what the workflow can give it on line 25\n",
+            "7 scenarios that together take every arm and every handler of an error but those below,",
+        ),
+        (
+            "tool_orders.ja.flow",
+            "ja",
+            "備考: 26 行目の `match` の分岐 `確認` を通るシナリオはありません。rulec によると、25 行目でワークフローが渡しうる値では、規則 経路の判断 の `行き先` は 確認 になりません\n",
+            "下に挙げるものを除く、すべての分岐と、エラーを処理するすべての箇所を通る 7 本のシナリオを、",
+        ),
+    ] {
+        let (code, out, err) = ritsu_in(&dir, &["dandori", "scenarios", flow, "--lang", lang]);
+        assert_eq!((code, err.as_str()), (0, note), "{flow}");
+        let scenarios: Vec<Value> = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
+        let t = TempDir::new("rule-arms");
+        let mut covers = std::collections::BTreeSet::new();
+        for (i, sc) in scenarios.iter().enumerate() {
+            covers.extend(sc["covers"].as_array().unwrap().iter().map(|c| c.as_str().unwrap().to_string()));
+            let f = t.path().join(format!("{i:03}.json"));
+            std::fs::write(&f, sc.to_string()).unwrap();
+            let f = f.to_string_lossy().into_owned();
+            let (code, out, err) = ritsu_in(&dir, &["run", flow, "--scenario", &f, "--format", "json", "--lang", lang]);
+            assert_eq!(code, 0, "{flow} {i}: {err}\n{sc}");
+            let ran: Value = serde_json::from_str(&out).unwrap();
+            let events = ran["events"].as_array().unwrap();
+            assert_eq!(events.iter().filter(|e| e["by"] == "scenario").count(), sc["answers"].as_array().unwrap().len(), "{flow} {i}: {out}");
+            // the run looked at reads a count of three, the least the rule looks at
+            if sc["covers"].as_array().unwrap().iter().any(|c| c == "3:arm1") {
+                assert_eq!(sc["answers"][0], json!({ "ok": 3 }), "{flow} {i}");
+            }
+        }
+        assert!(covers.contains("3:arm0") && covers.contains("3:arm1"), "{flow}: the first `match` has an arm no scenario takes: {covers:?}");
+        assert!(covers.contains("7:arm0") && !covers.contains("7:arm1"), "{flow}: {covers:?}");
+        let (code, page, err) = ritsu_in(&dir, &["dandori", "doc", flow, "--format", "html", "--lang", lang]);
+        assert_eq!(code, 0, "{flow}: {err}");
+        assert_eq!(page.matches("<template id=\"t-run-").count(), scenarios.len(), "{flow}: the page shows other runs than the scenarios");
+        assert!(page.contains(but), "{flow}: the page says its scenarios take every arm");
+        // the item under them, as `scenarios` says it, its code between backquotes as code
+        let said = note.split_once(": ").unwrap().1.trim_end();
+        let item: String = said.split('`').enumerate().map(|(k, part)| if k % 2 == 1 { format!("<code>{part}</code>") } else { part.to_string() }).collect();
+        assert!(page.contains(&format!("<ul class=\"untaken\"><li>{item}</li></ul>")), "{flow}: the page does not say {said}");
+    }
+}
+
+/// The page of a flow shows the runs `ritsu dandori scenarios` writes, each as `ritsu run` runs it
+/// (dandori's DESIGN 36): on the page of each flow here, as many runs as scenarios, and run k ends
+/// where `ritsu run` of scenario k ends. The flows call rules (`tests/projects/rule_arms`, the
+/// review example), a dates file and a book (the invoice example), and run on a clock that moves
+/// out of their period (dandori's tests/flows/date_ranges.flow and its Japanese version), where a
+/// page that drew the runs the platforms are tried with showed runs `ritsu run` does not make. The
+/// page names an error the run makes of a failed or malformed answer in the words of one platform,
+/// and `ritsu run` in those of the flow's, so for those only that the run fails is held.
+#[test]
+fn the_page_of_a_flow_shows_the_runs_its_scenarios_make() {
+    let dandori = here().join("../dandori");
+    let flows = [
+        (here().join("tests/projects/rule_arms"), "tool_orders.flow"),
+        (dandori.join("examples/review/temporal"), "review.flow"),
+        (dandori.join("examples/invoice"), "invoice.flow"),
+        (dandori.join("tests/flows"), "date_ranges.flow"),
+        (dandori.join("tests/flows"), "date_ranges.ja.flow"),
+    ];
+    let made = ["Dandori.Test.Failure", "Dandori.Test.Timeout", "States.QueryEvaluationError", "States.TaskFailed", "States.Timeout"];
+    let mut runs = 0;
+    for (dir, flow) in flows {
+        let (code, out, err) = ritsu_in(&dir, &["dandori", "scenarios", flow]);
+        assert_eq!(code, 0, "{flow}: {err}");
+        let scenarios: Vec<Value> = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
+        let (code, page, err) = ritsu_in(&dir, &["dandori", "doc", flow, "--format", "html", "--lang", "en"]);
+        assert_eq!(code, 0, "{flow}: {err}");
+        // each run's end, as the heading of its steps says it
+        let ends: Vec<String> = page
+            .split("<template id=\"t-run-")
+            .skip(1)
+            .map(|t| {
+                let h = t.split_once("<h2 class=\"dh\">").map_or("", |x| x.1);
+                let chip = h.split_once("<span class=\"chip ").and_then(|x| x.1.split_once("\">")).map_or("", |x| x.1);
+                chip.split_once("</span>").map_or("", |x| x.0).replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+            })
+            .collect();
+        assert_eq!(ends.len(), scenarios.len(), "{flow}: {} runs on the page, {} scenarios", ends.len(), scenarios.len());
+        let t = TempDir::new("page-runs");
+        for (i, sc) in scenarios.iter().enumerate() {
+            let f = t.path().join(format!("{i:03}.json"));
+            std::fs::write(&f, sc.to_string()).unwrap();
+            let f = f.to_string_lossy().into_owned();
+            let (code, out, err) = ritsu_in(&dir, &["run", flow, "--scenario", &f, "--format", "json", "--lang", "en"]);
+            assert_eq!(code, 0, "{flow} {i}: {err}\n{sc}");
+            let ran: Value = serde_json::from_str(&out).unwrap();
+            let end = &ran["trace"]["end"];
+            let shown = &ends[i];
+            let same = if end.get("succeed").is_some() {
+                shown == "succeeds"
+            } else if end.get("cancel").is_some() {
+                shown == "ends cancelled"
+            } else {
+                let error = end["fail"]["error"].as_str().unwrap_or_default();
+                if made.contains(&error) {
+                    shown.starts_with("fail")
+                } else {
+                    shown.starts_with("fail") && shown.contains(error)
+                }
+            };
+            assert!(same, "{flow} {i}: the page says the run {shown}, and `ritsu run` ends it with {end}");
+            runs += 1;
+        }
+    }
+    assert!(runs >= 40, "only {runs} runs");
+}
 
 /// `ritsu run --with` (rulec's §15.231): the contributions it is given are merged into the rules the
 /// flow calls. With the product line, an item of the kind it adds is priced with its markup; without
@@ -445,10 +741,11 @@ fn a_timeout_until_a_time_moves_the_clock_to_it() {
 }
 
 /// A workflow that runs in a period (dandori's DESIGN 20), under `ritsu run`: `now` reads the
-/// scenario's moments, as `dandori run` reads them, the start's and the one every `now` after it
-/// reads. A run that starts in the period and reads `now` past its end, after a wait of three days
-/// that moves the clock past it too, fails where it reads it, and its `on failure` puts the goods
-/// back; a run that starts past the end calls nothing. The text says so in both languages.
+/// scenario's moments, as `dandori run` reads them, the start's, and the next for the first statement
+/// that reads `now` after the start. A run that starts in the period and reads `now` past its end,
+/// after a wait of three days that moves the clock to that moment, fails where it reads it, and its
+/// `on failure` puts the goods back; a run that starts past the end calls nothing. The text says so
+/// in both languages.
 #[test]
 fn a_run_past_the_end_of_its_period_fails_where_it_reads_now() {
     let t = TempDir::new("period");
@@ -471,6 +768,184 @@ fn a_run_past_the_end_of_its_period_fails_where_it_reads_now() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+    // with the start's moment alone, the wait takes the clock past the end by itself: the run fails
+    // where it reads `now`, as the one given the moment after the wait does
+    write("one.json", &json!({ "execution": "past", "now": "2027-12-30T10:00:00Z", "input": input, "books": { "stock": received }, "answers": [] }).to_string());
+    let trace = |scenario: &str| -> Value {
+        let (code, out, err) = ritsu_in(t.path(), &["run", "approval.flow", "--scenario", scenario, "--format", "json"]);
+        assert_eq!(code, 0, "{scenario}: {err}");
+        serde_json::from_str::<Value>(&out).unwrap()["trace"].clone()
+    };
+    let one = trace("one.json");
+    assert_eq!(one["end"]["fail"]["error"], "Dandori.OutOfPeriod", "{one}");
+    assert_eq!(one, trace("past.json"));
+}
+
+/// The flow of the clock: it shows `now`, waits two days, shows it, waits a day, and shows it again.
+const CLOCK: &str = "workflow clock v1\n  now range >=2026-01-01 <=2027-12-31 offset +09:00\ndescription \"Show the time before and after a wait of two days, and after one more day\"\n\ninputs\n  id : string\n\noutputs\n  id : string\n\ntask show(id: string, at: timestamp)\n\nflow\n  show(id: id, at: now)\n  wait 2 days\n  show(id: id, at: now)\n  wait 1 day\n  show(id: id, at: now)\n  succeed id = id\n";
+
+/// `now` reads the clock when the statement that reads it runs (dandori's DESIGN 1.16), and the
+/// clock goes on by each wait, under `ritsu run` as under `ritsu dandori run`. With the start's
+/// moment alone, the run starts at it; given more moments, each statement that reads `now` after the
+/// start reads the next of them, and the clock goes on to it; one that comes before the clock cannot
+/// be read, and the scenario says so. The replay keeps the moments it was given, and `ritsu dandori
+/// run` makes the same trace of it. A deadline counted from `now` after a wait counts from the moment
+/// the wait took the run to: the approval asked for after six days is due on the third business day
+/// after that day, and the timeout waits until then — not the second a timeout waits at the least
+/// (DESIGN 16), as it would for a deadline counted from the start, which has gone by then.
+#[test]
+fn now_reads_the_clock_when_the_statement_runs() {
+    let t = TempDir::new("clock");
+    let write = |name: &str, body: &str| std::fs::write(t.path().join(name), body).unwrap();
+    write("clock.flow", CLOCK);
+    let shown = |now: Value| -> Vec<String> {
+        write("clock.json", &json!({ "now": now, "input": { "id": "c-1" }, "answers": [{ "ok": null }, { "ok": null }, { "ok": null }] }).to_string());
+        let (code, out, err) = ritsu_in(t.path(), &["run", "clock.flow", "--scenario", "clock.json", "--format", "json"]);
+        assert_eq!(code, 0, "{now}: {err}");
+        let ran: Value = serde_json::from_str(&out).unwrap();
+        let (code, trace, err) = ritsu_in(t.path(), &["dandori", "run", "clock.flow", "--scenario", "clock.json"]);
+        assert_eq!(code, 0, "{now}: {err}");
+        assert_eq!(serde_json::from_str::<Value>(&trace).unwrap(), ran["trace"], "{now}");
+        assert_eq!(ran["replay"]["now"], now);
+        write("replay.json", &ran["replay"].to_string());
+        let (code, trace, err) = ritsu_in(t.path(), &["dandori", "run", "clock.flow", "--scenario", "replay.json"]);
+        assert_eq!(code, 0, "{now}: {err}");
+        assert_eq!(serde_json::from_str::<Value>(&trace).unwrap(), ran["trace"], "{now}: the replay");
+        ran["events"].as_array().unwrap().iter().filter(|e| e["call"] == "show").map(|e| e["args"]["at"].as_str().unwrap().to_string()).collect()
+    };
+    assert_eq!(shown(json!("2026-11-13T01:00:00Z")), ["2026-11-13T01:00:00Z", "2026-11-15T01:00:00Z", "2026-11-16T01:00:00Z"]);
+    assert_eq!(shown(json!(["2026-11-13T01:00:00Z", "2026-11-15T01:00:00Z"])), ["2026-11-15T01:00:00Z", "2026-11-17T01:00:00Z", "2026-11-18T01:00:00Z"]);
+    write("back.json", &json!({ "now": ["2026-11-13T01:00:00Z", "2026-11-12T01:00:00Z"], "input": { "id": "c-1" }, "answers": [{ "ok": null }, { "ok": null }, { "ok": null }] }).to_string());
+    for (lang, said) in [
+        ("en", "error: the scenario `back.json` cannot be run: moment 2 of the scenario's `now`, `2026-11-12T01:00:00Z`, comes before 2026-11-13T01:00:00Z, when the statement that reads it runs: time does not go back, so the run cannot read it\n"),
+        ("ja", "エラー: シナリオ `back.json` を流せません: シナリオの `now` の 2 番目の時刻 `2026-11-12T01:00:00Z` は、それを読む文が走る時刻 2026-11-13T01:00:00Z より前です。時間は戻らないので、この実行はその時刻を読めません\n"),
+    ] {
+        assert_eq!(ritsu_in(t.path(), &["run", "clock.flow", "--scenario", "back.json", "--lang", lang]), (2, String::new(), said.to_string()));
+    }
+
+    write("weekdays.cal", WEEKDAYS);
+    write("approval_terms.cal", APPROVAL_TERMS);
+    write("stock.book", STOCK);
+    write("approval.flow", &APPROVAL.replace("wait 3 days", "wait 6 days"));
+    write("late.json", &json!({ "now": "2026-04-03T10:00:00Z", "input": { "order": "A-1", "sku": "pen", "qty": 3 }, "books": { "stock": [{ "op": "do", "kind": "receive", "args": { "delivery": "D-1", "sku": "pen", "qty": 10 } }] }, "answers": [{ "error": "timeout" }] }).to_string());
+    let (code, out, err) = ritsu_in(t.path(), &["run", "approval.flow", "--scenario", "late.json", "--format", "json"]);
+    assert_eq!(code, 0, "{err}");
+    let ran: Value = serde_json::from_str(&out).unwrap();
+    let events = ran["events"].as_array().unwrap();
+    let due = events.iter().find(|e| e["call"] == "terms.due").unwrap();
+    assert_eq!((&due["args"]["asked"], &due["answer"]["ok"]["at"]), (&json!("2026-04-09T10:00:00Z"), &json!("2026-04-14T17:00:00Z")), "{out}");
+    let timeout = events.iter().find(|e| e["why"] == "timeout").unwrap();
+    assert_eq!(timeout, &json!({ "pass": 457200, "why": "timeout", "until": "2026-04-14T17:00:00Z", "after": "2026-04-14T17:00:00Z" }));
+    assert_eq!(ran["trace"]["end"], json!({ "succeed": { "outcome": "put back" } }));
+}
+
+/// What a scenario does to a book before the run may let time go by (`pass`, as `chobo run`'s
+/// scenario writes it): a hold made before the run, thirty days before it starts, has expired by
+/// then, and the shipment the run comes to is refused. The text says how long went by, in both
+/// languages, and the JSON writes it with what it came to. A duration that is not one, and the
+/// operations of `together`, which no run before this one does, stop the run.
+#[test]
+fn time_that_went_by_before_the_run_expires_a_hold() {
+    let t = TempDir::new("aged");
+    let write = |name: &str, body: &str| std::fs::write(t.path().join(name), body).unwrap();
+    write("weekdays.cal", WEEKDAYS);
+    write("approval_terms.cal", APPROVAL_TERMS);
+    write("stock.book", STOCK);
+    write("approval.flow", APPROVAL);
+    let received = json!({ "op": "do", "kind": "receive", "args": { "delivery": "D-1", "sku": "pen", "qty": 10 } });
+    let held = json!({ "op": "hold", "kind": "reserve", "args": { "order": "A-1", "sku": "pen", "qty": 3 } });
+    let scenario = |then: Value| json!({ "now": "2026-04-03T10:00:00Z", "input": { "order": "A-1", "sku": "pen", "qty": 3 }, "books": { "stock": [received, held, then] }, "answers": [{ "ok": { "approver": "kim" } }] }).to_string();
+    write("aged.json", &scenario(json!({ "op": "pass", "duration": "30 days" })));
+    for (lang, line, refused) in [("en", "  pass 30 days                                      time goes by\n", "refused: expired"), ("ja", "  pass 30 days                                      時間が過ぎる\n", "expired で拒否される")] {
+        let (code, out, err) = ritsu_in(t.path(), &["run", "approval.flow", "--scenario", "aged.json", "--lang", lang]);
+        assert!(code == 0 && err.is_empty(), "{lang}: {err}");
+        assert!(out.contains(line) && out.contains(refused) && out.contains("succeed {\"outcome\":\"expired\"}"), "{lang}: {out}");
+    }
+    let (code, out, err) = ritsu_in(t.path(), &["run", "approval.flow", "--scenario", "aged.json", "--format", "json"]);
+    assert_eq!(code, 0, "{err}");
+    let ran: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(ran["books"][0]["before"][2], json!({ "op": "pass", "duration": "30 days", "result": "passed" }));
+    assert_eq!(ran["books"][0]["holds"], json!([{ "kind": "reserve", "key": ["A-1", "pen"], "state": "expired" }]));
+    write("not_a_duration.json", &scenario(json!({ "op": "pass", "duration": "a month" })));
+    let (code, _, err) = ritsu_in(t.path(), &["run", "approval.flow", "--scenario", "not_a_duration.json"]);
+    assert!(code == 2 && err.ends_with("cannot be run: operation 3 of the book `stock`: a `pass` needs a duration like `\"duration\": \"7 days\"` (in seconds, minutes, hours or days)\n"), "{err}");
+    write("together.json", &scenario(json!({ "op": "together", "callers": [[{ "op": "post", "kind": "reserve", "args": { "order": "A-1", "sku": "pen" } }]] })));
+    let (code, _, err) = ritsu_in(t.path(), &["run", "approval.flow", "--scenario", "together.json", "--lang", "ja"]);
+    assert!(code == 2 && err.ends_with("を流せません: 帳簿 `stock` の 3 番目の操作: 走らせる前の操作には `together` を書けません。操作を一つずつ順に書いてください\n"), "{err}");
+}
+
+/// Every scenario `ritsu dandori scenarios` writes for a flow that calls dates and does operations
+/// of books (the approval flow above, the invoice of `tests/projects/invoice` in English and in
+/// Japanese, and the order of `tests/projects/stockroom`) says the dates are koyomi's and what is done
+/// to the books before the run, answers no call of a date and no operation of a book itself, and
+/// runs under `ritsu run` to the end `ritsu dandori run` comes to, with every answer it gives used.
+/// What was done before the run is how the runs reach a book's refusals and what the run does to a
+/// hold made before it: of the approval flow, the hold done before the run, and since posted, voided
+/// or expired; another order with the same key; a shelf with too little on it. A scenario written as
+/// `dandori run` reads one, which answers the dates or the books itself, stops `ritsu run` at the
+/// first such call and says why; `ritsu dandori run` runs it to the same trace.
+#[test]
+fn every_scenario_of_a_flow_with_dates_and_books_runs_under_ritsu_run() {
+    let t = TempDir::new("dates-and-books");
+    let write = |name: &str, body: &str| std::fs::write(t.path().join(name), body).unwrap();
+    write("weekdays.cal", WEEKDAYS);
+    write("approval_terms.cal", APPROVAL_TERMS);
+    write("stock.book", STOCK);
+    write("approval.flow", APPROVAL);
+    let (invoice, stockroom) = (project(), here().join("tests/projects/stockroom"));
+    let flows: [(&Path, &str, &str); 4] = [(t.path(), "approval.flow", "en"), (&invoice, "invoice.flow", "en"), (&invoice, "invoice.ja.flow", "ja"), (&stockroom, "orders/order.flow", "en")];
+    let out_dir = TempDir::new("dates-and-books-scenarios");
+    for (dir, flow, lang) in flows {
+        let (code, out, err) = ritsu_in(dir, &["dandori", "scenarios", flow]);
+        assert_eq!(code, 0, "{flow}: {err}");
+        let scenarios: Vec<Value> = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
+        let mut covers = std::collections::BTreeSet::new();
+        let mut old = None;
+        for (i, sc) in scenarios.iter().enumerate() {
+            assert!(sc["dates"] == "koyomi" && sc["books"].is_object(), "{flow} {i}: {sc}");
+            covers.extend(sc["covers"].as_array().unwrap().iter().map(|c| c.as_str().unwrap().to_string()));
+            let f = out_dir.path().join(format!("{}-{i:03}.json", flow.replace('/', "-")));
+            std::fs::write(&f, sc.to_string()).unwrap();
+            let f = f.to_string_lossy().into_owned();
+            let (code, out, err) = ritsu_in(dir, &["run", flow, "--scenario", &f, "--format", "json", "--lang", lang]);
+            assert_eq!(code, 0, "{flow} {i}: {err}\n{sc}");
+            let ran: Value = serde_json::from_str(&out).unwrap();
+            let events = ran["events"].as_array().unwrap();
+            let by = |who: &str| events.iter().filter(|e| e["by"] == who).count();
+            assert_eq!(by("scenario"), sc["answers"].as_array().unwrap().len(), "{flow} {i}: every answer of the scenario is used, and no more:\n{out}");
+            let (code, trace, err) = ritsu_in(dir, &["dandori", "run", flow, "--scenario", &f]);
+            assert_eq!(code, 0, "{flow} {i}: {err}");
+            assert_eq!(serde_json::from_str::<Value>(&trace).unwrap(), ran["trace"], "{flow} {i}");
+            // the first run koyomi and chobo both answer in, written as `dandori run` read it: the
+            // answers of the one or the other in their places among the scenario's
+            if old.is_none() && by("koyomi") > 0 && by("chobo") > 0 {
+                let answers = |also: &str| -> Value { events.iter().filter(|e| e["by"] == "scenario" || e["by"] == also).map(|e| e["answer"].clone()).collect() };
+                let mut dates = sc.clone();
+                dates.as_object_mut().unwrap().remove("dates");
+                dates["answers"] = answers("koyomi");
+                let mut books = sc.clone();
+                books.as_object_mut().unwrap().remove("books");
+                books["answers"] = answers("chobo");
+                old = Some((dates, books, ran["trace"].clone()));
+            }
+        }
+        if flow == "approval.flow" {
+            for label in ["1:done before", "1:refused:key_conflict", "1:refused:out_of_stock", "9:done before", "9:refused:already_voided", "9:refused:expired", "6:refused:expired", "14:refused:already_posted"] {
+                assert!(covers.contains(label), "{flow}: no scenario covers {label}: {covers:?}");
+            }
+        }
+        let (dates, books, trace) = old.unwrap_or_else(|| panic!("{flow}: no run asks koyomi and chobo both"));
+        for (name, sc, why) in [("dates", dates, if lang == "en" { "cannot be run: it answers the call of the date " } else { "を流せません: 日付 " }), ("books", books, if lang == "en" { "cannot be run: it answers the operation of the book " } else { "を流せません: 帳簿 " })] {
+            let f = out_dir.path().join(format!("old-{name}.json"));
+            std::fs::write(&f, sc.to_string()).unwrap();
+            let f = f.to_string_lossy().into_owned();
+            let (code, out, err) = ritsu_in(dir, &["run", flow, "--scenario", &f, "--lang", lang]);
+            assert!(code == 2 && out.is_empty() && err.contains(why) && err.contains("`ritsu dandori scenarios`"), "{flow} {name}: {code} {err}");
+            let (code, out, err) = ritsu_in(dir, &["dandori", "run", flow, "--scenario", &f]);
+            assert_eq!(code, 0, "{flow} {name}: {err}");
+            assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), trace, "{flow} {name}");
+        }
+    }
 }
 
 const WEEKDAYS: &str = "calendar weekdays v1\ndescription \"Open Monday to Friday, in UTC\"\noffset +00:00\n\nclosed weekly sat, sun\n";

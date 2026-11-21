@@ -1,0 +1,81 @@
+workflow enum_range_arms v1
+description "A value of an enum given in the arms of a match on it is one of the arm's values there: it goes where those fit, until another value is put in it"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:member-tier-shipping"
+
+record Offer
+  campaign : tiers.tier  range >=basic <=gold
+
+record Member
+  tier : tiers.tier
+
+inputs
+  wide     : tiers.tier
+  member   : Member
+  maybe    : tiers.tier?
+  others   : list[Member]
+  subtotal : money[USD]  range >=0USD <=100000USD
+
+outputs
+  top : tiers.tier  range >=basic <=gold
+
+task send(campaign: tiers.tier  range >=silver <=gold)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:send"
+  idempotent
+
+task pick() -> tiers.tier
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:pick"
+  idempotent
+
+flow
+  # in the arm for the values the rule takes, the value fits the rule's input
+  match wide
+    platinum => pass
+    basic, silver, gold =>
+      let a = tiers(member: wide, campaign: wide, subtotal: subtotal)
+      # an arm inside the arm holds it to fewer
+      match wide
+        basic => pass
+        silver, gold => send(campaign: wide)
+      # after the inner arms it is any value of the outer arm again: `basic` does not fit
+      send(campaign: wide)
+      let o: Offer = {campaign: wide}
+  # after the arms it is any value again
+  let b = tiers(member: wide, campaign: wide, subtotal: subtotal)
+  # a field of a record is held the same way
+  match member.tier
+    platinum => pass
+    basic, silver, gold =>
+      let c = tiers(member: wide, campaign: member.tier, subtotal: subtotal)
+  # a value that may be absent, read in the arm for one that is there
+  match maybe
+    none => pass
+    some t =>
+      match t
+        platinum => pass
+        basic, silver, gold =>
+          let d = tiers(member: t, campaign: t, subtotal: subtotal)
+  # another value put in it after the match: the arm no longer says what it is
+  let chosen = wide
+  match chosen
+    platinum => pass
+    basic, silver, gold =>
+      let chosen = pick()
+      let e = tiers(member: wide, campaign: chosen, subtotal: subtotal)
+  # a value the rounds of a loop put a value in is not held in the loop, nor after it
+  let turn = wide
+  match turn
+    platinum => pass
+    basic, silver, gold =>
+      for other in others at most 5
+        let f = tiers(member: wide, campaign: turn, subtotal: subtotal)
+        let turn = other.tier
+      let g = tiers(member: wide, campaign: turn, subtotal: subtotal)
+  # two ways to one statement: the values of either way
+  match wide
+    basic => pass
+    silver => pass
+    gold, platinum => succeed top = gold
+  send(campaign: wide)
+  succeed top = wide

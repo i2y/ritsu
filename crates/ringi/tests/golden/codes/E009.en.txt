@@ -1,0 +1,2 @@
+error[E009]: example.ringi:5:49: `amount` and `30_000` cannot be compared (`money[JPY]` and `number`)
+     5 |   receipt : attachment "Receipt"  required when amount > 30_000

@@ -1,7 +1,12 @@
 diff: tests/fixtures/calendar_sources/changes/copy.diff
 copies of sources the diff touches:
   tests/fixtures/calendar_sources/calendars/data/bank-holidays.json (bank_holidays): cited by last_day_moved
+files read by the files that requirements name, that the diff touches:
+  tests/fixtures/calendar_sources/calendars/data/bank-holidays.json
+    koyomi "period_of_months.cal" line 3 (use calendar) -> koyomi "calendars/england_and_wales.cal" line 4 (source): met by first_day, last_day, last_day_moved; checked by last_day, last_day_moved
 changes no requirement reaches: none
 requirements touched:
+  first_day (tests/fixtures/calendar_sources/period_of_months.req:11): owner legal; decided 2026-10-03 by legal: "The period starts on the day after the origin. Decided for this material"
+  last_day (tests/fixtures/calendar_sources/period_of_months.req:21): owner legal; decided 2026-10-03 by legal: "The corresponding day is counted from the first day. Decided for this material"
   last_day_moved (tests/fixtures/calendar_sources/period_of_months.req:31): owner legal; from bank_holidays; decided 2026-10-03 by legal: "The day after is taken as it is, and not moved on if it is closed too. Decided for this material"
-1 requirement touched; ask legal
+3 requirements touched; ask legal

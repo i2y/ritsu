@@ -1,0 +1,2 @@
+エラー[E002]: tests/mutants/E002_a_way_named_stay.ringi:13:3: `stay` は `when empty escalate, then stay` の語なので、承認者の決め方の名前にできません
+    13 |   stay    = person "e04"

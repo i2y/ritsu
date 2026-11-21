@@ -1,0 +1,25 @@
+警告[W904]: tests/fixtures/loop_rounds.ja.flow:12:1: 入力 `鍵` は秘密の値で、ワークフローの履歴に残ります
+    12 |   鍵     : string  secret
+  = 印は loop_rounds.ja.flow:12 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/loop_rounds.ja.flow:13:1: 入力 `暗証` は秘密の値で、ワークフローの履歴に残ります
+    13 |   暗証   : string  secret
+  = 印は loop_rounds.ja.flow:13 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W107]: tests/fixtures/loop_rounds.ja.flow:97:1: このループは、検査がたどる回の数（64）を越えて値を渡していきます。検査は `札00`、`札01`、`札02`、`札03`、`札04`、`札05`、`札06`を、フローのどこかで入れた値の全部として読みます
+    97 |   repeat at most 3 times
+  = 一回の回は、値を `let` 一つ分だけ先へ渡します。回ごとに一つ前の変数へ渡す値は、通る変数の数だけ回を要します。
+  = ループの中とあとで、検査がこれらの変数について言うこと（秘密、列挙の値、範囲）は、どの実行もそこへ持ってこない値から来ることがあります。
+  = 値を、一つ前の変数から回ごとに渡すのでなく、出どころからそれぞれの変数に入れてください。
+警告[W904]: tests/fixtures/loop_rounds.ja.flow:104:1: 秘密の値 `暗証` が、`挨拶` の引数 `文` として、ワークフローの履歴に残ります
+   104 |     挨拶(文: 札00)
+  = 印は loop_rounds.ja.flow:13 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/loop_rounds.ja.flow:104:1: 秘密の値 `鍵` が、`挨拶` の引数 `文` として、ワークフローの履歴に残ります
+   104 |     挨拶(文: 札00)
+  = 印は loop_rounds.ja.flow:12 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。

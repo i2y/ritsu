@@ -10,11 +10,11 @@ refunds.book: ok
 ok bill.kn: 関数 1 個、total
 refund.flow: 検査を通りました
 desk.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
-エラー[ritsu E207]: refund_limit.rule:5:1: `input left` は money[USDc] >=0 <=10000000 を受け取りますが、出どころ chobo "refunds.book" account remaining は 10000001 になることがあります
+エラー[ritsu E207]: refund_limit.rule:5:1: `input left` は money[USDc] >=0USDc <=10_000_000USDc を受け取りますが、出どころ chobo "refunds.book" account remaining は 10_000_001USDc になることがあります
      5 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
   = 帳簿が受け付ける値です。`at least`・`at most` を書いていない端は、chobo の限度（2⁶³ − 1）まで受け付けます。
   = 受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。
-エラー[ritsu E207]: refund.flow:9:1: `record Balance field left` は money[USDc] >=0 <=10000000 を受け取りますが、出どころ chobo "refunds.book" account remaining は 10000001 になることがあります
+エラー[ritsu E207]: refund.flow:9:1: `record Balance field left` は money[USDc] >=0USDc <=10_000_000USDc を受け取りますが、出どころ chobo "refunds.book" account remaining は 10_000_001USDc になることがあります
      9 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
   = 帳簿が受け付ける値です。`at least`・`at most` を書いていない端は、chobo の限度（2⁶³ − 1）まで受け付けます。
   = 受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。

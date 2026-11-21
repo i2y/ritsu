@@ -1,0 +1,14 @@
+rule _parcel_fee v1
+description "A rule whose name starts with an underscore, the name of Go's file of the rule"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | 3USD   |
+| >5  | 2USD   |

@@ -1,0 +1,185 @@
+workflow 長いループ v1
+description "回ごとに秘密を一つ前の変数へ渡し、70 個の変数をさかのぼるループ：実行をたどる歩きは、64 回を越えて回が値を変える変数を、フローのどこかで入れた値の全部として読み（W107）、ほかの変数は最後までたどる"
+
+use rule 送料 from "rules/会員段階の送料.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:member-tier-shipping"
+
+record 返事
+  済み : bool
+
+inputs
+  名前   : string
+  鍵     : string  secret
+  暗証   : string  secret
+  狭い   : 送料.段階  range >=一般 <=シルバー
+  広い   : 送料.段階
+
+outputs
+  済み : bool
+
+task 挨拶(文: string) -> 返事
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:greet"
+  idempotent
+
+flow
+  let 控え = 名前
+  let 段 = 狭い
+  let 札00 = 名前
+  let 札01 = 名前
+  let 札02 = 名前
+  let 札03 = 名前
+  let 札04 = 名前
+  let 札05 = 名前
+  let 札06 = 名前
+  let 札07 = 名前
+  let 札08 = 名前
+  let 札09 = 名前
+  let 札10 = 名前
+  let 札11 = 名前
+  let 札12 = 名前
+  let 札13 = 名前
+  let 札14 = 名前
+  let 札15 = 名前
+  let 札16 = 名前
+  let 札17 = 名前
+  let 札18 = 名前
+  let 札19 = 名前
+  let 札20 = 名前
+  let 札21 = 名前
+  let 札22 = 名前
+  let 札23 = 名前
+  let 札24 = 名前
+  let 札25 = 名前
+  let 札26 = 名前
+  let 札27 = 名前
+  let 札28 = 名前
+  let 札29 = 名前
+  let 札30 = 名前
+  let 札31 = 名前
+  let 札32 = 名前
+  let 札33 = 名前
+  let 札34 = 名前
+  let 札35 = 名前
+  let 札36 = 名前
+  let 札37 = 名前
+  let 札38 = 名前
+  let 札39 = 名前
+  let 札40 = 名前
+  let 札41 = 名前
+  let 札42 = 名前
+  let 札43 = 名前
+  let 札44 = 名前
+  let 札45 = 名前
+  let 札46 = 名前
+  let 札47 = 名前
+  let 札48 = 名前
+  let 札49 = 名前
+  let 札50 = 名前
+  let 札51 = 名前
+  let 札52 = 名前
+  let 札53 = 名前
+  let 札54 = 名前
+  let 札55 = 名前
+  let 札56 = 名前
+  let 札57 = 名前
+  let 札58 = 名前
+  let 札59 = 名前
+  let 札60 = 名前
+  let 札61 = 名前
+  let 札62 = 名前
+  let 札63 = 名前
+  let 札64 = 名前
+  let 札65 = 名前
+  let 札66 = 名前
+  let 札67 = 名前
+  let 札68 = 名前
+  let 札69 = 名前
+  repeat at most 3 times
+    # 最後までたどる：ループを出る道で `控え` に入れる秘密も、ループのあとで `段` に入れる段階も、どの実行もここへ持ってこない
+    挨拶(文: 控え)
+    match 段
+      一般 => pass
+      シルバー => pass
+    # 64 回目からフローのどこかで入れた値として読む：秘密は 70 回目からここへ来て、ループのあとで `札00` に入れる暗証は来ない
+    挨拶(文: 札00)
+    let 段 = 狭い
+    # 回ごとに秘密を一つ前の変数へ渡す
+    let 札00 = 札01
+    let 札01 = 札02
+    let 札02 = 札03
+    let 札03 = 札04
+    let 札04 = 札05
+    let 札05 = 札06
+    let 札06 = 札07
+    let 札07 = 札08
+    let 札08 = 札09
+    let 札09 = 札10
+    let 札10 = 札11
+    let 札11 = 札12
+    let 札12 = 札13
+    let 札13 = 札14
+    let 札14 = 札15
+    let 札15 = 札16
+    let 札16 = 札17
+    let 札17 = 札18
+    let 札18 = 札19
+    let 札19 = 札20
+    let 札20 = 札21
+    let 札21 = 札22
+    let 札22 = 札23
+    let 札23 = 札24
+    let 札24 = 札25
+    let 札25 = 札26
+    let 札26 = 札27
+    let 札27 = 札28
+    let 札28 = 札29
+    let 札29 = 札30
+    let 札30 = 札31
+    let 札31 = 札32
+    let 札32 = 札33
+    let 札33 = 札34
+    let 札34 = 札35
+    let 札35 = 札36
+    let 札36 = 札37
+    let 札37 = 札38
+    let 札38 = 札39
+    let 札39 = 札40
+    let 札40 = 札41
+    let 札41 = 札42
+    let 札42 = 札43
+    let 札43 = 札44
+    let 札44 = 札45
+    let 札45 = 札46
+    let 札46 = 札47
+    let 札47 = 札48
+    let 札48 = 札49
+    let 札49 = 札50
+    let 札50 = 札51
+    let 札51 = 札52
+    let 札52 = 札53
+    let 札53 = 札54
+    let 札54 = 札55
+    let 札55 = 札56
+    let 札56 = 札57
+    let 札57 = 札58
+    let 札58 = 札59
+    let 札59 = 札60
+    let 札60 = 札61
+    let 札61 = 札62
+    let 札62 = 札63
+    let 札63 = 札64
+    let 札64 = 札65
+    let 札65 = 札66
+    let 札66 = 札67
+    let 札67 = 札68
+    let 札68 = 札69
+    let 札69 = 鍵
+    let 返り = 挨拶(文: 名前)
+    match 返り.済み
+      true =>
+        let 控え = 鍵
+        break
+      false => pass
+  let 段 = 広い
+  let 札00 = 暗証
+  succeed 済み = true

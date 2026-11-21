@@ -7,6 +7,12 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready};
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec verify` talks to the adapter, and waits for its
+/// answers without a limit of its own. Past it, rulec is stopped with every process it started,
+/// and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -111,7 +117,7 @@ fn setup_for(tag: &str, rule: &str, adapter: &str) -> Option<(TempDir, PathBuf)>
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", rule, "--out", &out]).args(rulec::targets::UP_TO_0_40)
+        .args(["gen", rule, "--out", &out, "--lang", "ja"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .unwrap();
     assert!(o.status.success());
@@ -132,11 +138,8 @@ fn verify_env(dir: &PathBuf, env: &[(&str, &str)]) -> ((i32, String), String) {
     for (k, v) in env {
         cmd.env(k, v);
     }
-    let o = cmd.output().expect("rulec を起動できない");
-    (
-        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned()),
-        String::from_utf8_lossy(&o.stderr).into_owned(),
-    )
+    let o = finish(&mut cmd, RULEC_LIMIT, "rulec verify asking the adapter");
+    ((o.code.unwrap_or(-1), o.stdout), o.stderr)
 }
 
 #[test]
@@ -166,7 +169,7 @@ fn 旧実装の欠陥は件数と証人つきで出る() {
     // The amount is the cluster total, so it moves with the count. Check the sign, and the
     // difference of the witness's single record.
     assert!(out.contains("差 -"), "金額の差を出す: {out}");
-    assert!(out.contains("運賃=1450 / 現行 運賃=1460"), "証人を出す: {out}");
+    assert!(out.contains("運賃=1450円 / 現行 運賃=1460円"), "証人を出す: {out}");
     // A deviation of exactly one grid step is a value mismatch, not rounding. Do not tag it.
     assert!(!out.contains("丸め方の違い"), "刻みちょうどの差を丸めのせいにしている: {out}");
 }
@@ -193,6 +196,7 @@ fn 雛形とスキーマが出る() {
             .env("RULEC_LANG", "ja")
             .current_dir(root())
             .args(args)
+            .args(["--lang", "ja"])
             .output()
             .unwrap();
         assert!(o.status.success(), "{args:?}: {}", String::from_utf8_lossy(&o.stderr));
@@ -271,14 +275,9 @@ for line in sys.stdin:
 "#;
     std::fs::write(dir.join("opt.rule"), rule).unwrap();
     std::fs::write(dir.join("adapter.py"), adapter).unwrap();
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "ja")
-        .current_dir(&dir)
-        .args(["verify", "opt.rule", "--lang", "ja", "--adapter", "python3", "adapter.py"])
-        .output()
-        .unwrap();
-    let out = String::from_utf8_lossy(&o.stdout).into_owned();
-    assert_eq!(o.status.code(), Some(0), "{out}{}", String::from_utf8_lossy(&o.stderr));
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(["verify", "opt.rule", "--lang", "ja", "--adapter", "python3", "adapter.py"]), RULEC_LIMIT, "rulec verify asking the adapter");
+    let out = o.stdout.clone();
+    assert_eq!(o.code, Some(0), "{out}{}", o.stderr);
     assert!(out.contains("(100.000%)"), "{out}");
 }
 
@@ -301,7 +300,7 @@ fn 文書に載せた実演は_いまの出力と一致する() {
             cmd.args(["--format", "json"]);
         }
         cmd.args(["--adapter", "python3"]).arg(dir.join("adapter.py")).env("BUG", "1");
-        String::from_utf8_lossy(&cmd.output().expect("rulec を起動できない").stdout).into_owned()
+        finish(&mut cmd, RULEC_LIMIT, "rulec verify asking the adapter").stdout
     };
     for (lang, page) in [("en", "website/rulec/docs/compare.md"), ("ja", "website/rulec/docs-ja/compare.md")] {
         let page = std::fs::read_to_string(repo().join(page)).unwrap();
@@ -309,9 +308,16 @@ fn 文書に載せた実演は_いまの出力と一致する() {
         // it (on the Japanese page, the answers outside what the rule can produce), the first
         // cluster.
         let out = run(lang, false);
-        for line in out.lines().take(6).filter(|l| !l.trim().is_empty()) {
+        // Every row the demonstration shows: the head, and the whole of the first cluster —
+        // its witness line `Example:`/`例:` included (a head of six lines used to stop one
+        // short of it, so what the example read went unchecked). The page then breaks off
+        // with `…`, which the rest of the report stands behind.
+        let lines: Vec<&str> = out.lines().filter(|l| !l.trim().is_empty()).collect();
+        let last = lines.iter().position(|l| l.trim_start().starts_with("Example:") || l.trim_start().starts_with("例:")).unwrap_or_else(|| panic!("{lang}: 実演の例の行が無い:\n{out}"));
+        for line in &lines[..=last] {
             assert!(page.contains(line), "{lang}: 実演に無い行:\n{line}\n出力:\n{out}");
         }
+        assert!(page.lines().any(|l| l.trim() == "…"), "{lang}: 実演の省略の印 `…` が無い");
         // And the JSON, in the pieces the page breaks it into.
         let js = run(lang, true);
         let at = |k: &str| js.find(k).unwrap_or_else(|| panic!("{k} が無い:\n{js}"));
@@ -410,17 +416,8 @@ fn stand_in(tag: &str, mode: &str, flags: &[&str]) -> Option<(i32, String, Strin
     let dir = tmp.path();
     std::fs::write(dir.join("parcel.rule"), PARCEL).unwrap();
     std::fs::write(dir.join("adapter.py"), STAND_IN).unwrap();
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .current_dir(dir)
-        .env("RULEC_LANG", "en")
-        .env("RULEC", env!("CARGO_BIN_EXE_rulec"))
-        .env("MODE", mode)
-        .args(["verify", "parcel.rule"])
-        .args(flags)
-        .args(["--adapter", "python3", "adapter.py"])
-        .output()
-        .expect("rulec starts");
-    Some((o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned()))
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(dir).env("RULEC_LANG", "en").env("RULEC", env!("CARGO_BIN_EXE_rulec")).env("MODE", mode).args(["verify", "parcel.rule"]).args(flags).args(["--adapter", "python3", "adapter.py"]), RULEC_LIMIT, "rulec verify asking the adapter");
+    Some((o.code.unwrap_or(-1), o.stdout.clone(), o.stderr.clone()))
 }
 
 /// The stand-in matches a rule that walks a sequence and has two outputs, record for record.
@@ -428,7 +425,7 @@ fn stand_in(tag: &str, mode: &str, flags: &[&str]) -> Option<(i32, String, Strin
 fn the_stand_in_matches_exactly() {
     let Some((code, out, err)) = stand_in("faithful", "", &[]) else { return };
     assert_eq!(code, 0, "{out}{err}");
-    assert!(out.contains("matched 15 (100.000%)") && out.contains("Counterpart: stand-in"), "{out}");
+    assert!(out.contains("matched 16 (100.000%)") && out.contains("Counterpart: stand-in"), "{out}");
     assert!(err.is_empty(), "an adapter that answers in time is said nothing of: {err}");
 }
 
@@ -468,7 +465,8 @@ fn a_string_where_a_number_goes_is_shown_in_its_quotes() {
     let Some((code, out, err)) = stand_in("fee-string", "fee_is_a_string", &[]) else { return };
     assert_eq!(code, 1, "{out}{err}");
     assert!(out.contains("matched 0 (0.000%)"), "{out}");
-    assert!(out.contains(r#"Example: dest=near, lines=[], weight=1 → rule fee=500 / legacy fee="500""#), "{out}");
+    // the rule's value as a rule file writes it, with its unit (§15.333); the answer's as it came
+    assert!(out.contains(r#"Example: dest=near, lines=[], weight=1 → rule fee=500JPY / legacy fee="500""#), "{out}");
     let Some((code, js, err)) = stand_in("fee-string-json", "fee_is_a_string", &["--format", "json"]) else { return };
     assert_eq!(code, 1, "{js}{err}");
     assert!(js.contains(r#""ours":{"fee":500},"theirs":{"fee":"500"}"#), "{js}");
@@ -588,7 +586,7 @@ fn an_adapter_that_says_nothing_is_spoken_of_once_and_waited_for() {
         "{said:?}"
     );
     assert!(said[0].contains("does not flush its output after each line") && said[0].contains("print(..., flush=True)"), "{said:?}");
-    assert_eq!((rep.total, rep.agreed), (15, 15), "the run went on to its end");
+    assert_eq!((rep.total, rep.agreed), (16, 16), "the run went on to its end");
     // The documents show the sentence as rulec says it, after the 30 seconds it waits.
     assert_eq!(rulec::verify::QUIET.as_secs(), 30);
     let shown = said[0].replace("for 2 seconds", "for 30 seconds");
@@ -604,7 +602,7 @@ fn the_record_an_adapter_is_silent_at_is_named() {
     let Some((said, rep)) = waited_for("silent-record", rulec::i18n::Lang::En, 8, "1", "0") else { return };
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(said[0].starts_with("note: the adapter has not answered record 1 for 8 seconds."), "{said:?}");
-    assert_eq!((rep.total, rep.agreed), (15, 15), "the run went on to its end");
+    assert_eq!((rep.total, rep.agreed), (16, 16), "the run went on to its end");
 }
 
 /// The sentence is in the language of the run, though another thread builds it.
@@ -614,7 +612,7 @@ fn the_silence_is_spoken_of_in_japanese_too() {
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(said[0].starts_with("注記: アダプタがハンドシェイクに 2 秒答えていません。rulec は時間を切らずに待ち続けます。"), "{said:?}");
     assert!(said[0].contains("一行ごとにフラッシュ"), "{said:?}");
-    assert_eq!((rep.total, rep.agreed), (15, 15));
+    assert_eq!((rep.total, rep.agreed), (16, 16));
     let shown = said[0].replace("に 2 秒答えていません", "に 30 秒答えていません");
     let page = repo().join("website/rulec/docs-ja/compare.md");
     assert!(std::fs::read_to_string(&page).unwrap().contains(&shown), "{} does not show the sentence as it is said:\n{shown}", page.display());

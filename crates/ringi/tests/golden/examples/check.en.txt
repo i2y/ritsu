@@ -1,0 +1,219 @@
+ok examples/account.ja.ringi: a request, 5 fields, 4 stages
+  used from 2026-04-01: the first version of the organization `shared/company.ringi` (data `../org`)
+  used with no end: no data it reads ends
+  ends within 55 business days at the most (3 × 15 at its stages, 2 × 5 with the requester)
+  requesters whose stages (`上長`, `持ち主`) go elsewhere or are skipped by the shape of the organization: 4 of 24 in the organization from 2026-04-01, and 4 of 23 from 2027-04-01
+  requesters whose late stages (`上長`) have nowhere to go up to by the shape of the organization: 6 of 24 in the organization from 2026-04-01, and 6 of 23 from 2027-04-01
+  who they are, and where their stages go: `ringi simulate examples/account.ja.ringi --every-requester`
+ok examples/account.ringi: a request, 5 fields, 4 stages
+  used from 2026-04-01: the first version of the organization `shared/company.ringi` (data `../org`)
+  used with no end: no data it reads ends
+  ends within 55 business days at the most (3 × 15 at its stages, 2 × 5 with the requester)
+  requesters whose stages (`manager`, `owner`) go elsewhere or are skipped by the shape of the organization: 4 of 24 in the organization from 2026-04-01, and 4 of 23 from 2027-04-01
+  requesters whose late stages (`manager`) have nowhere to go up to by the shape of the organization: 6 of 24 in the organization from 2026-04-01, and 6 of 23 from 2027-04-01
+  who they are, and where their stages go: `ringi simulate examples/account.ringi --every-requester`
+error[E504]: examples/contract.ja.ringi:31:17: In the organization from 2027-04-01, the stage `二人目` cannot get 2 approvals for some requesters
+    31 |   二人目(second)   at least 2 of 法務  when 金額 > 5_000_000円
+  = `法務` has only 1 member besides the requester.
+  = For 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Add people to the team, or change the quorum.
+warning[W506]: examples/contract.ja.ringi:33:17: In the organization from 2026-04-01, one person answers two stages of a ticket
+    33 |   法務部長(counsel) 部長              when 金額 > 10_000_000円
+  = The stage `上長` is `上長` and the stage `法務部長` is `部長`, and both come to one person.
+  = For 2 requesters, e9001 (General counsel) answers both: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = If one approval is enough, write `same approver approves once, at the last stage` under `ticket`: `上長` then waits for the approval of `法務部長`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+error[E503]: examples/contract.ja.ringi:41:3: In the organization from 2027-04-01, `部長` names someone who is not there
+    41 |   部長(counsel)     = person "e9001"
+  = `部長` names e9001, who is not in the organization from 2027-04-01.
+  = The stage `法務部長` is `when empty escalate`, and it cannot go up from someone the organization does not have (what `then` says holds only where nobody is above).
+  = Correct the ID, or add the person (the team) to the data of the version.
+error[E504]: examples/contract.ringi:31:12: In the organization from 2027-04-01, the stage `second` cannot get 2 approvals for some requesters
+    31 |   second   at least 2 of legal  when value > 5_000_000JPY
+  = `legal` has only 1 member besides the requester.
+  = For 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Add people to the team, or change the quorum.
+warning[W506]: examples/contract.ringi:33:12: In the organization from 2026-04-01, one person answers two stages of a ticket
+    33 |   counsel  counsel              when value > 10_000_000JPY
+  = The stage `manager` is `manager` and the stage `counsel` is `counsel`, and both come to one person.
+  = For 2 requesters, e9001 (General counsel) answers both: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = If one approval is enough, write `same approver approves once, at the last stage` under `ticket`: `manager` then waits for the approval of `counsel`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+error[E503]: examples/contract.ringi:41:3: In the organization from 2027-04-01, `counsel` names someone who is not there
+    41 |   counsel  = person "e9001"
+  = `counsel` names e9001, who is not in the organization from 2027-04-01.
+  = The stage `counsel` is `when empty escalate`, and it cannot go up from someone the organization does not have (what `then` says holds only where nobody is above).
+  = Correct the ID, or add the person (the team) to the data of the version.
+warning[W502]: examples/expense.ja.ringi:33:84: In the organization from 2027-04-01, the stage `決裁` goes elsewhere or is skipped for lack of an approver
+    33 | | 出張 | >100_000円               |                    | 上長        |                 | 部長           |
+  = `部長` comes to the team legal (Legal), whose head is empty.
+  = The stage is `when empty escalate, then 取締役`, and it goes up.
+  = It goes up to e0102 (Head of Corporate Division) for 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Correct the data of the version, or make sure this is meant.
+  = The same on the rows of lines 33, 35, 37.
+warning[W502]: examples/expense.ja.ringi:36:66: In the organization from 2027-04-01, the stage `二次` goes elsewhere or is skipped for lack of an approver
+    36 | | 経費 | >1_000_000円             |                    | 上長        | 部長            | 本部長         |
+  = `部長` comes to the team legal (Legal), whose head is empty.
+  = The stage is `when empty escalate, then 取締役`, and it goes up.
+  = It goes up to e0102 (Head of Corporate Division) for 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Correct the data of the version, or make sure this is meant.
+  = The same on the rows of lines 36, 38.
+warning[W506]: examples/expense.ja.ringi:37:82: In the organization from 2026-04-01, one person answers two stages of a ticket
+    37 | | 購買 | <=1_000_000円            |                    | 上長        | 経理            | 部長           |
+  = The stage `一次` is `上長` and the stage `決裁` is `部長`, and both come to one person.
+  = For 2 requesters, e7001 (Head of Information Systems) answers both: e7101 (Manager of IT Security) and e7201 (Manager of IT Operations).
+  = For 2 requesters, e9001 (General counsel) answers both: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = For 1 requester, e3101 (Head of Sales Department 1) answers both: e1101 (Manager of Section 1A).
+  = `same approver approves once` does not do `決裁` with the approval of `一次`: `二次` comes between them.
+  = With `same approver approves once, at the last stage`, they answer once: `一次` waits for the approval of `決裁`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+warning[W506]: examples/expense.ja.ringi:37:82: In the organization from 2027-04-01, one person answers two stages of a ticket
+    37 | | 購買 | <=1_000_000円            |                    | 上長        | 経理            | 部長           |
+  = The stage `一次` is `上長` and the stage `決裁` is `部長`, and both come to one person.
+  = For 3 requesters, e3101 (Head of Sales Department 1) answers both: e1101 (Manager of Section 1A), e1201 (Sales staff 1) and e1203 (Sales staff 3).
+  = For 2 requesters, e7001 (Head of Information Systems) answers both: e7101 (Manager of IT Security) and e7201 (Manager of IT Operations).
+  = `same approver approves once` does not do `決裁` with the approval of `一次`: `二次` comes between them.
+  = With `same approver approves once, at the last stage`, they answer once: `一次` waits for the approval of `決裁`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+warning[W506]: examples/expense.ja.ringi:38:80: In the organization from 2026-04-01, one person answers two stages of a ticket
+    38 | | 購買 | >1_000_000円             |                    | 上長        | 部長 and 経理   | 本部長         |
+  = The stage `一次` is `上長` and the stage `決裁` is `本部長`, and both come to one person.
+  = For 6 requesters, e0001 (President (fictional)) answers both: e0101 (Head of Sales Division), e0102 (Head of Corporate Division), e0201 (Director 1) and 3 more.
+  = For 6 requesters, e0102 (Head of Corporate Division) answers both: e1001 (Head of Accounting), e4001 (Head of Finance), e5001 (Head of General Affairs) and 3 more.
+  = For 1 requester, e0101 (Head of Sales Division) answers both: e3101 (Head of Sales Department 1).
+  = `same approver approves once` does not do `決裁` with the approval of `一次`: `二次` comes between them.
+  = With `same approver approves once, at the last stage`, they answer once: `一次` waits for the approval of `決裁`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+warning[W506]: examples/expense.ja.ringi:38:80: In the organization from 2027-04-01, one person answers two stages of a ticket
+    38 | | 購買 | >1_000_000円             |                    | 上長        | 部長 and 経理   | 本部長         |
+  = The stage `一次` is `上長` and the stage `決裁` is `本部長`, and both come to one person.
+  = For 7 requesters, e0102 (Head of Corporate Division) answers both: e1001 (Head of Accounting), e4001 (Head of Finance), e5001 (Head of General Affairs) and 4 more.
+  = For 6 requesters, e0001 (President (fictional)) answers both: e0101 (Head of Sales Division), e0102 (Head of Corporate Division), e0201 (Director 1) and 3 more.
+  = For 1 requester, e0101 (Head of Sales Division) answers both: e3101 (Head of Sales Department 1).
+  = `same approver approves once` does not do `決裁` with the approval of `一次`: `二次` comes between them.
+  = With `same approver approves once, at the last stage`, they answer once: `一次` waits for the approval of `決裁`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+ok examples/expense.ja.ringi: a request, 8 fields, 4 stages
+  used from 2026-04-01: the first version of the organization `shared/company.ringi` (data `../org`)
+  used with no end: no data it reads ends
+  ends within 93 business days at the most (4 × 21 at its stages, 3 × 3 with the requester)
+  requesters whose stages (`確かめ`, `一次`, `二次`, `決裁`) go elsewhere or are skipped by the shape of the organization: 14 of 24 in the organization from 2026-04-01, and 13 of 23 from 2027-04-01
+  requesters whose late stages (`二次`) have nowhere to go up to by the shape of the organization: 1 of 24 in the organization from 2026-04-01, and 1 of 23 from 2027-04-01
+  who they are, and where their stages go: `ringi simulate examples/expense.ja.ringi --every-requester`
+warning[W502]: examples/expense.ringi:33:93: In the organization from 2027-04-01, the stage `decide` goes elsewhere or is skipped for lack of an approver
+    33 | | travel   | >100_000JPY                |             | manager |                          | dept_head     |
+  = `dept_head` comes to the team legal (Legal), whose head is empty.
+  = The stage is `when empty escalate, then board`, and it goes up.
+  = It goes up to e0102 (Head of Corporate Division) for 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Correct the data of the version, or make sure this is meant.
+  = The same on the rows of lines 33, 35, 37.
+warning[W502]: examples/expense.ringi:36:66: In the organization from 2027-04-01, the stage `second` goes elsewhere or is skipped for lack of an approver
+    36 | | expense  | >1_000_000JPY              |             | manager | dept_head                | division_head |
+  = `dept_head` comes to the team legal (Legal), whose head is empty.
+  = The stage is `when empty escalate, then board`, and it goes up.
+  = It goes up to e0102 (Head of Corporate Division) for 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Correct the data of the version, or make sure this is meant.
+  = The same on the rows of lines 36, 38.
+warning[W506]: examples/expense.ringi:37:93: In the organization from 2026-04-01, one person answers two stages of a ticket
+    37 | | purchase | <=1_000_000JPY             |             | manager | accounting               | dept_head     |
+  = The stage `first` is `manager` and the stage `decide` is `dept_head`, and both come to one person.
+  = For 2 requesters, e7001 (Head of Information Systems) answers both: e7101 (Manager of IT Security) and e7201 (Manager of IT Operations).
+  = For 2 requesters, e9001 (General counsel) answers both: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = For 1 requester, e3101 (Head of Sales Department 1) answers both: e1101 (Manager of Section 1A).
+  = `same approver approves once` does not do `decide` with the approval of `first`: `second` comes between them.
+  = With `same approver approves once, at the last stage`, they answer once: `first` waits for the approval of `decide`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+warning[W506]: examples/expense.ringi:37:93: In the organization from 2027-04-01, one person answers two stages of a ticket
+    37 | | purchase | <=1_000_000JPY             |             | manager | accounting               | dept_head     |
+  = The stage `first` is `manager` and the stage `decide` is `dept_head`, and both come to one person.
+  = For 3 requesters, e3101 (Head of Sales Department 1) answers both: e1101 (Manager of Section 1A), e1201 (Sales staff 1) and e1203 (Sales staff 3).
+  = For 2 requesters, e7001 (Head of Information Systems) answers both: e7101 (Manager of IT Security) and e7201 (Manager of IT Operations).
+  = `same approver approves once` does not do `decide` with the approval of `first`: `second` comes between them.
+  = With `same approver approves once, at the last stage`, they answer once: `first` waits for the approval of `decide`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+warning[W506]: examples/expense.ringi:38:93: In the organization from 2026-04-01, one person answers two stages of a ticket
+    38 | | purchase | >1_000_000JPY              |             | manager | dept_head and accounting | division_head |
+  = The stage `first` is `manager` and the stage `decide` is `division_head`, and both come to one person.
+  = For 6 requesters, e0001 (President (fictional)) answers both: e0101 (Head of Sales Division), e0102 (Head of Corporate Division), e0201 (Director 1) and 3 more.
+  = For 6 requesters, e0102 (Head of Corporate Division) answers both: e1001 (Head of Accounting), e4001 (Head of Finance), e5001 (Head of General Affairs) and 3 more.
+  = For 1 requester, e0101 (Head of Sales Division) answers both: e3101 (Head of Sales Department 1).
+  = `same approver approves once` does not do `decide` with the approval of `first`: `second` comes between them.
+  = With `same approver approves once, at the last stage`, they answer once: `first` waits for the approval of `decide`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+warning[W506]: examples/expense.ringi:38:93: In the organization from 2027-04-01, one person answers two stages of a ticket
+    38 | | purchase | >1_000_000JPY              |             | manager | dept_head and accounting | division_head |
+  = The stage `first` is `manager` and the stage `decide` is `division_head`, and both come to one person.
+  = For 7 requesters, e0102 (Head of Corporate Division) answers both: e1001 (Head of Accounting), e4001 (Head of Finance), e5001 (Head of General Affairs) and 4 more.
+  = For 6 requesters, e0001 (President (fictional)) answers both: e0101 (Head of Sales Division), e0102 (Head of Corporate Division), e0201 (Director 1) and 3 more.
+  = For 1 requester, e0101 (Head of Sales Division) answers both: e3101 (Head of Sales Department 1).
+  = `same approver approves once` does not do `decide` with the approval of `first`: `second` comes between them.
+  = With `same approver approves once, at the last stage`, they answer once: `first` waits for the approval of `decide`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+ok examples/expense.ringi: a request, 8 fields, 4 stages
+  used from 2026-04-01: the first version of the organization `shared/company.ringi` (data `../org`)
+  used with no end: no data it reads ends
+  ends within 93 business days at the most (4 × 21 at its stages, 3 × 3 with the requester)
+  requesters whose stages (`precheck`, `first`, `second`, `decide`) go elsewhere or are skipped by the shape of the organization: 14 of 24 in the organization from 2026-04-01, and 13 of 23 from 2027-04-01
+  requesters whose late stages (`second`) have nowhere to go up to by the shape of the organization: 1 of 24 in the organization from 2026-04-01, and 1 of 23 from 2027-04-01
+  who they are, and where their stages go: `ringi simulate examples/expense.ringi --every-requester`
+warning[W502]: examples/leave.ja.ringi:22:7: In the organization from 2027-04-01, the stage `head` goes elsewhere or is skipped for lack of an approver
+    22 | route 標準(long: 日数 > 5)
+  = `dept_head` comes to the team legal (Legal), whose head is empty.
+  = The stage is `when empty escalate, then skip`, and it goes up.
+  = It goes up to e0102 (Head of Corporate Division) for 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Correct the data of the version, or make sure this is meant.
+ok examples/leave.ja.ringi: a request, 6 fields, 2 stages
+  used from 2026-04-01: the first version of the organization `shared/company.ringi` (data `../org`)
+  used with no end: no data it reads ends
+  ends within 40 business days at the most (3 × 10 at its stages, 2 × 5 with the requester)
+  submitted by 19 of 24 people in the organization from 2026-04-01, and 18 of 23 from 2027-04-01 (`everyone except team board`)
+  requesters whose stages (`head`) go elsewhere or are skipped by the shape of the organization: 9 of 19 in the organization from 2026-04-01, and 8 of 18 from 2027-04-01
+  requesters whose late stages (`manager`, `head`) have nowhere to go up to by the shape of the organization: 2 of 19 in the organization from 2026-04-01, and 2 of 18 from 2027-04-01
+  who they are, and where their stages go: `ringi simulate examples/leave.ja.ringi --every-requester`
+warning[W502]: examples/leave.ringi:22:7: In the organization from 2027-04-01, the stage `head` goes elsewhere or is skipped for lack of an approver
+    22 | route standard(long: days > 5)
+  = `dept_head` comes to the team legal (Legal), whose head is empty.
+  = The stage is `when empty escalate, then skip`, and it goes up.
+  = It goes up to e0102 (Head of Corporate Division) for 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Correct the data of the version, or make sure this is meant.
+ok examples/leave.ringi: a request, 6 fields, 2 stages
+  used from 2026-04-01: the first version of the organization `shared/company.ringi` (data `../org`)
+  used with no end: no data it reads ends
+  ends within 40 business days at the most (3 × 10 at its stages, 2 × 5 with the requester)
+  submitted by 19 of 24 people in the organization from 2026-04-01, and 18 of 23 from 2027-04-01 (`everyone except team board`)
+  requesters whose stages (`head`) go elsewhere or are skipped by the shape of the organization: 9 of 19 in the organization from 2026-04-01, and 8 of 18 from 2027-04-01
+  requesters whose late stages (`manager`, `head`) have nowhere to go up to by the shape of the organization: 2 of 19 in the organization from 2026-04-01, and 2 of 18 from 2027-04-01
+  who they are, and where their stages go: `ringi simulate examples/leave.ringi --every-requester`
+warning[W502]: examples/purchase.ja.ringi:45:20: In the organization from 2027-04-01, the stage `決裁` goes elsewhere or is skipped for lack of an approver
+    45 |   決裁(decide)       権限表.decider
+  = `部長` comes to the team legal (Legal), whose head is empty (`権限表.decider` is `部長`).
+  = The stage is `when empty escalate, then 取締役`, and it goes up.
+  = It goes up to e0102 (Head of Corporate Division) for 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Correct the data of the version, or make sure this is meant.
+ok examples/purchase.ja.ringi: a request, 9 fields, 6 stages
+  used from 2026-04-01: the first version of the organization `shared/company.ringi` (data `../org`)
+  used with no end: no data it reads ends
+  ends within 246 business days at the most (4 × 54 at its stages, 3 × 10 with the requester)
+  requesters whose stages (`一次`, `財務`, `決裁`) go elsewhere or are skipped by the shape of the organization: 14 of 24 in the organization from 2026-04-01, and 13 of 23 from 2027-04-01
+  requesters whose late stages (`一次`, `決裁`) have nowhere to go up to by the shape of the organization: 24 of 24 in the organization from 2026-04-01, and 23 of 23 from 2027-04-01
+  who they are, and where their stages go: `ringi simulate examples/purchase.ja.ringi --every-requester`
+warning[W502]: examples/purchase.ringi:45:13: In the organization from 2027-04-01, the stage `decide` goes elsewhere or is skipped for lack of an approver
+    45 |   decide    authority.decider
+  = `dept_head` comes to the team legal (Legal), whose head is empty (`authority.decider` is `dept_head`).
+  = The stage is `when empty escalate, then board`, and it goes up.
+  = It goes up to e0102 (Head of Corporate Division) for 2 requesters: e9002 (Lawyer 2) and e9003 (Lawyer 3).
+  = Correct the data of the version, or make sure this is meant.
+ok examples/purchase.ringi: a request, 9 fields, 6 stages
+  used from 2026-04-01: the first version of the organization `shared/company.ringi` (data `../org`)
+  used with no end: no data it reads ends
+  ends within 246 business days at the most (4 × 54 at its stages, 3 × 10 with the requester)
+  requesters whose stages (`first`, `finance`, `decide`) go elsewhere or are skipped by the shape of the organization: 14 of 24 in the organization from 2026-04-01, and 13 of 23 from 2027-04-01
+  requesters whose late stages (`first`, `decide`) have nowhere to go up to by the shape of the organization: 24 of 24 in the organization from 2026-04-01, and 23 of 23 from 2027-04-01
+  who they are, and where their stages go: `ringi simulate examples/purchase.ringi --every-requester`
+ok examples/shared/company.ringi: an organization, 5 positions, 5 kinds of team
+  data `../org`: 2 versions (2026-04-01, 2027-04-01), 13 teams and 23 people in the last, 2 proxies
+ok examples/shared/manager_approval.ringi: a route, 1 input, 2 stages
+  used from 2026-04-01: the first version of the organization `company.ringi` (data `../org`)
+  used with no end: no data it reads ends
+ok examples/shared/masters.ringi: 3 masters
+  data: accounts 4 rows, vendors 3 rows, systems 3 rows

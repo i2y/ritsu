@@ -1,0 +1,9 @@
+enums print_stream v1
+description "An enums file named like a class of the JDK the Java runner of its prerequisites imports"
+
+enum course = intro | advanced | capstone
+
+prerequisites path over course
+  start    intro
+  advanced requires intro
+  capstone requires advanced

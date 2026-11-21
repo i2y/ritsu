@@ -1,0 +1,3 @@
+エラー[E406]: tests/mutants/E406_a_post_with_no_hold.ringi:16:23: `post budget.reserve` より前に、仮押さえがありません（`on submitted hold budget.reserve(…)` の行がありません）
+    16 |   on approved    post budget.reserve(request: ticket.id, attempt: ticket.attempt)
+  = `on submitted hold budget.reserve(…)` を足すか、この行を消してください。

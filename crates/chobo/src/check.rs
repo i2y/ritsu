@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+#[derive(Clone)]
 pub struct Checked {
     pub book: Option<Book>,
     pub diags: Vec<Diag>,
@@ -21,6 +22,7 @@ pub struct Checked {
     pub report: Option<Report>,
 }
 
+#[derive(Clone)]
 pub struct Refusal {
     pub name: String,
     /// bound, key, account or hold
@@ -31,12 +33,14 @@ pub struct Refusal {
     pub example: Vec<Value>,
 }
 
+#[derive(Clone)]
 pub struct OpReport {
     pub kind: usize,
     pub op: Op,
     pub refusals: Vec<Refusal>,
 }
 
+#[derive(Clone)]
 pub struct KeyNote {
     pub kind: usize,
     /// a parameter outside the key, and a call that differs only in it, refused
@@ -45,6 +49,7 @@ pub struct KeyNote {
     pub again: Option<Vec<Value>>,
 }
 
+#[derive(Clone)]
 pub struct Report {
     pub ops: Vec<OpReport>,
     pub keys: Vec<KeyNote>,
@@ -64,8 +69,9 @@ pub fn compare_across(path: &str, c: &mut Checked, earlier: &mut Vec<crate::spel
     earlier.push(crate::spellings::Earlier { path: path.to_string(), book, stem });
 }
 
-pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
-    let src = ritsu_base::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+pub fn check_file(path: &Path) -> Result<(String, Checked), std::io::Error> {
+    let src = ritsu_base::fs::read_to_string(path)?;
+    ritsu_base::tally::count("chobo", path);
     let c = check_source(&src);
     Ok((src, c))
 }

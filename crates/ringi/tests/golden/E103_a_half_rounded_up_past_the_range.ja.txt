@@ -1,0 +1,4 @@
+エラー[E103]: tests/mutants/E103_a_half_rounded_up_past_the_range.ringi:6:67: フィールド half の範囲 `<1JPY` に、計算した値は一度も入りません
+     6 |   half   : money[JPY] "Half" = amount * 50%  round half_up(1JPY)  range <1JPY
+  = 計算した値がとるのは `>=1JPY <=2JPY` です（読む値の範囲から）。この範囲では、どの申請も出せません。
+  = 範囲を、計算した値と重なるように直してください。範囲の外の値になる申請は出せず、範囲が計算した値より広くても狭くても誤りではありません。

@@ -1,4 +1,4 @@
-//! The ground the nine languages of ritsu stand on (DESIGN 4): what each of them wrote for
+//! The ground the ten languages of ritsu stand on (DESIGN 4): what each of them wrote for
 //! itself before, written once. None of it knows what a rule, a date, an account, a workflow,
 //! a claim, a requirement or a context is; each module is a tool a language uses.
 //!
@@ -11,7 +11,10 @@
 //!   line is read against.
 //! - [`sha256`]: FIPS 180-4.
 //! - [`naming`] and [`paths`]: `<tool> "<path>" [<kind> <name>]...` (DESIGN 6.2), the root of a
-//!   project, and paths from it and from where a tool runs.
+//!   project, and paths from it and from where a tool runs: one way a run writes every path it
+//!   holds (DESIGN 4.15).
+//! - [`tally`]: how many times each file was checked whole on the thread, for the tests of one
+//!   check of a file in a run.
 //! - [`fed`]: `fed by <naming>` at the end of a line that declares a value (DESIGN 7.16): where it
 //!   stands in the line, the naming it holds, and the text of a file with it taken off.
 //! - [`sources`]: the copies of a law's articles, their text, their pins, and the requests to
@@ -68,6 +71,7 @@ pub mod paths;
 pub mod secrets;
 pub mod sha256;
 pub mod sources;
+pub mod tally;
 pub mod text;
 pub mod udiff;
 pub mod urls;

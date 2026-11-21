@@ -1,0 +1,10 @@
+enums outcomes v1
+description "Enums of an enums file named like types the Rust code reads"
+
+enum choice(option) = this_way | that_way
+enum outcome(result) = passed | failed
+enum row(vec) = short | long
+
+prerequisites steps over outcome
+  start  passed
+  failed requires passed

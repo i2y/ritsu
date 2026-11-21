@@ -2,6 +2,7 @@
 //! file's code and every claim's run lines this way, so that a person can read a
 //! line of it and a diff of two records stays small.
 
+use ritsu_base::text::Text;
 use std::collections::BTreeSet;
 
 pub type Lines = BTreeSet<u32>;
@@ -22,15 +23,15 @@ pub fn to_ranges(lines: &Lines) -> String {
 }
 
 /// The set a string of ranges names. Lines start at 1, and a range runs upwards.
-pub fn from_ranges(s: &str) -> Result<Lines, String> {
+pub fn from_ranges(s: &str) -> Result<Lines, Text> {
     let mut out = Lines::new();
     if s.is_empty() {
         return Ok(out);
     }
-    let num = |t: &str| -> Result<u32, String> {
+    let num = |t: &str| -> Result<u32, Text> {
         match t.parse::<u32>() {
             Ok(n) if n > 0 && t.chars().all(|c| c.is_ascii_digit()) => Ok(n),
-            _ => Err(format!("`{t}` is not a line number")),
+            _ => Err(tr!("`{t}` は行番号ではありません", "`{t}` is not a line number")),
         }
     };
     for part in s.split(',') {
@@ -38,7 +39,7 @@ pub fn from_ranges(s: &str) -> Result<Lines, String> {
             Some((a, b)) => {
                 let (a, b) = (num(a)?, num(b)?);
                 if a > b {
-                    return Err(format!("the range `{part}` runs downwards"));
+                    return Err(tr!("範囲 `{part}` は、始めの行が終わりの行より後ろです", "the range `{part}` runs downwards"));
                 }
                 out.extend(a..=b);
             }

@@ -1,0 +1,4 @@
+enums main v1
+description "An enums file named main, which a Go package and a Swift file cannot be"
+
+enum zone = north | south

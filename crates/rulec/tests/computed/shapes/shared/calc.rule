@@ -1,0 +1,10 @@
+rule calc v1
+description "A fee of 3% of an amount, rounded down to the yen: an output a `define` works out"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)
+
+outputs
+  fee : money[JPY]  round down(1JPY)

@@ -1,0 +1,18 @@
+request example v1 "Example"
+
+use organization org from "shared/small.ringi"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  manager
+
+who
+  manager = manager of requester
+
+every stage
+  when empty escalate, then stay
+
+ticket
+  self approval  not allowed

@@ -1,0 +1,18 @@
+error[E004]: tests/chains/chain_names.ringi:15:45: The rows `lines` have no column `cost`
+    15 |   amount  : money[JPY] "Amount" = sum(lines.cost)  range >=1JPY <=1_000_000JPY
+  = The columns declared: `item` and `price`
+error[E004]: tests/chains/chain_names.ringi:16:45: The rows `fees` have no column `cost`
+    16 |   charged : money[JPY] "Charged" = sum(fees.cost)  range >=1JPY <=1_000_000JPY
+  = The columns declared: `item` and `fee`
+error[E004]: tests/chains/chain_names.ringi:23:29: `reviewer` is not declared
+    23 |   technical  reviewer  when reviewer is not none
+  = The fields declared: `lines`, `fees`, `amount`, `charged` and `reviewr`
+  = `reviewer` is written on lines 30 and 43 too.
+error[E004]: tests/chains/chain_names.ringi:25:14: `finanse` is not declared in `who`
+    25 |   finance    finanse   when amount > 100_000JPY
+  = The ways to choose an approver declared: `manager` and `reviewer`
+  = `finanse` is written on line 26 too.
+error[E308]: tests/chains/chain_names.ringi:39:24: The route has no stage `first`
+    39 |   withdraw       until first
+  = The stages declared: `frist`, `technical`, `finance` and `audit`
+  = `first` is written on line 45 too.

@@ -6,6 +6,7 @@ warning[W105]: Overlapping rows: the same input matches row 1 and row 2
 14 | | none            | true           |
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
    |
+ Every input the cells of row 2 take, those of row 1 take too.
  Both rows match: 期日 = none
  Because of `policy first`, row 1 wins. Is this intended?
  If this is intended, leave it as is. In CI, check --diff-base reports only newly introduced instances.

@@ -1,0 +1,13 @@
+diff --git a/rules/counter.rule b/rules/counter.rule
+index b1926a4..7a14dd5 100644
+--- a/rules/counter.rule
++++ b/rules/counter.rule
+@@ -2,7 +2,7 @@ rule refund_counter v1
+ description "Whether the desk has counted the items of a parcel sent back: written for the tests of yuen affected. The code of the desk takes the items of a refund's band from here"
+ 
+ inputs
+-  items : number  range >=1 <=60
++  items : number  range >=1 <=50
+ 
+ outputs
+   counted : bool

@@ -1,0 +1,3 @@
+error[E603]: tests/mutants/E603_終わったあとの行.ringi:23:22: The ticket does not take the `approve` of this row: the ticket has ended (`rejected`), and takes no `approve`
+    23 | | 2026-06-01 11:00 | approve | e04 |          | approved    |
+  = The ticket is `rejected`.

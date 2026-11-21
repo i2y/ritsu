@@ -1,0 +1,14 @@
+rule 短期滞在(transient) v1
+description "Java の予約語と同じ名前の規則（Java の生成コードはメソッドの後ろに下線を付けて書く）"
+
+inputs
+  泊数(nights) : number  range >=1 <=30
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 泊数ごとの料金(fee_by_nights)
+policy unique
+| 泊数 | -> 料金 |
+| <=7  | 20USD   |
+| >7   | 15USD   |

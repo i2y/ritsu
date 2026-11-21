@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="ringi 0.55.2">
+<title>休暇の申請：いちばん長くかかる場合</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 40px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 28px 0 8px; }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+th { background: var(--soft); white-space: nowrap; }
+:target { scroll-margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- ringi 0.55.2 が leave.ja.ringi（sha256:19079ab70aff3303）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<main>
+<header>
+<h1>休暇の申請：いちばん長くかかる場合</h1>
+</header>
+<p>ファイル：<code>leave.ja.ringi</code>（申請の種類 <code>leave_ja</code> の版 1、sha256:19079ab70aff3303）</p>
+<p>受け持つチーム：人事部（<code>hr</code>）</p>
+<p>組織は、置いてある版のそれぞれ（2026-04-01、2027-04-01 から）で読んでいます。</p>
+<nav class="toc" aria-label="目次">
+<ul>
+<li><a href="#longest">いちばん長くかかる日数</a></li>
+<li><a href="#path">いちばん長い並び</a></li>
+<li><a href="#dates">2026-04-03（金）に出したチケット</a></li>
+<li><a href="#shorter">短くするには</a></li>
+</ul>
+</nav>
+<h2 id="longest">いちばん長くかかる日数</h2>
+<p>この申請の種類のチケットは、長くても 40 営業日で終わります。内訳は次のとおりです。</p>
+<div class="scroll"><table>
+<thead><tr><th>内訳</th><th>営業日</th></tr></thead>
+<tbody>
+<tr><td>経路のいちばん長い並びを 3 回（はじめの 1 回と、差し戻しのたびに 1 回）</td><td>3 × 10</td></tr>
+<tr><td>申請者の手元で出し直しを待つ（2 回）</td><td>2 × 5</td></tr>
+<tr><td>合計</td><td>40</td></tr>
+</tbody>
+</table></div>
+<h2 id="path">いちばん長い並び</h2>
+<p>条件のあるステップも、どれも来るものとして数えます。</p>
+<div class="scroll"><table>
+<thead><tr><th>ステップ</th><th>答える人</th><th>期限</th><th>期限を過ぎたら</th><th>長くて何営業日</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>上長</td><td>2 営業日の日の終わり</td><td>上の長へ回す。次は期限切れで終わる</td><td>5</td></tr>
+<tr><td>部長</td><td>部長</td><td>2 営業日の日の終わり</td><td>上の長へ回す。次は期限切れで終わる</td><td>5</td></tr>
+</tbody>
+</table></div>
+<p>この並びを一回通ると、長くて 10 営業日です。</p>
+<h2 id="dates">2026-04-03（金）に出したチケット</h2>
+<p>どのステップも、上へ回れるだけ回ったあと、最後の期限の直前に承認されます。チケットは、最後のステップから上限の回数まで申請者へ差し戻され、申請者は出し直しの期限の日に出し直します。</p>
+<div class="scroll"><table>
+<thead><tr><th>日</th><th>起きること</th></tr></thead>
+<tbody>
+<tr><td>2026-04-03（金）</td><td>申請者が出します。</td></tr>
+<tr><td>2026-04-03（金）</td><td>ステップ「上長」が始まります。</td></tr>
+<tr><td>2026-04-07（火）の終わり</td><td>ステップ「上長」が期限を過ぎ、上へ回ります。</td></tr>
+<tr><td>2026-04-10（金）</td><td>ステップ「上長」が、期限の直前に承認します。期限は2026-04-10（金）の終わりです。</td></tr>
+<tr><td>2026-04-10（金）</td><td>ステップ「部長」が始まります。</td></tr>
+<tr><td>2026-04-14（火）の終わり</td><td>ステップ「部長」が期限を過ぎ、上へ回ります。</td></tr>
+<tr><td>2026-04-17（金）</td><td>ステップ「部長」が、期限の直前に申請者へ差し戻します。期限は2026-04-17（金）の終わりです。</td></tr>
+<tr><td>2026-04-24（金）</td><td>出し直しの期限（5 営業日）の最後の日に、申請者が出し直します。</td></tr>
+<tr><td>2026-04-24（金）</td><td>ステップ「上長」が始まります。</td></tr>
+<tr><td>2026-04-28（火）の終わり</td><td>ステップ「上長」が期限を過ぎ、上へ回ります。</td></tr>
+<tr><td>2026-05-01（金）</td><td>ステップ「上長」が、期限の直前に承認します。期限は2026-05-01（金）の終わりです。</td></tr>
+<tr><td>2026-05-01（金）</td><td>ステップ「部長」が始まります。</td></tr>
+<tr><td>2026-05-05（火）の終わり</td><td>ステップ「部長」が期限を過ぎ、上へ回ります。</td></tr>
+<tr><td>2026-05-08（金）</td><td>ステップ「部長」が、期限の直前に申請者へ差し戻します。期限は2026-05-08（金）の終わりです。</td></tr>
+<tr><td>2026-05-15（金）</td><td>出し直しの期限（5 営業日）の最後の日に、申請者が出し直します。</td></tr>
+<tr><td>2026-05-15（金）</td><td>ステップ「上長」が始まります。</td></tr>
+<tr><td>2026-05-19（火）の終わり</td><td>ステップ「上長」が期限を過ぎ、上へ回ります。</td></tr>
+<tr><td>2026-05-22（金）</td><td>ステップ「上長」が、期限の直前に承認します。期限は2026-05-22（金）の終わりです。</td></tr>
+<tr><td>2026-05-22（金）</td><td>ステップ「部長」が始まります。</td></tr>
+<tr><td>2026-05-26（火）の終わり</td><td>ステップ「部長」が期限を過ぎ、上へ回ります。</td></tr>
+<tr><td>2026-05-29（金）</td><td>ステップ「部長」が、期限の直前に承認します。期限は2026-05-29（金）の終わりです。チケットは承認で終わります。</td></tr>
+</tbody>
+</table></div>
+<p>2026-04-03（金）から2026-05-29（金）まで、40 営業日です。</p>
+<h2 id="shorter">短くするには</h2>
+<p>一行ごとに、申請の種類の一つを変えたときの、いちばん長い日数です。数え方は同じで、ほかの並びのほうが長くなれば、その並びで数えます。</p>
+<div class="scroll"><table>
+<thead><tr><th>変えること</th><th>いちばん長い日数</th><th>短くなる日数</th></tr></thead>
+<tbody>
+<tr><td>共有の経路 <code>manager_approval</code> のどのステップも期限を 1 営業日に（今は 2 営業日）</td><td>28</td><td>12</td></tr>
+<tr><td>差し戻しを 1 回までに（今は 2 回）</td><td>25</td><td>15</td></tr>
+<tr><td>出し直しの期限を 4 営業日に（今は 5 営業日）</td><td>38</td><td>2</td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

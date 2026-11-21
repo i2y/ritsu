@@ -1,0 +1,18 @@
+rule 偶数にならない枚数(never_even_ja) v1
+description "包む明細一件に紙を二枚、カードにもう一枚使うので、枚数は奇数になる。二枚だけの範囲は、どの呼び出しも受け付けない"
+
+# 注文の明細の一件ぶん
+elements 明細(lines)
+  贈り物(gift) : bool
+
+count 贈り物の数(gifts) over 明細 where 贈り物  range >=0 <=5
+
+define 枚数(sheets) : number = 贈り物の数 * 2 + 1  range >=2 <=2
+
+outputs
+  大きなロール(large_roll) : bool
+
+table ロールの判定(roll_of)
+policy unique
+| 枚数 | -> 大きなロール |
+| -    | true            |

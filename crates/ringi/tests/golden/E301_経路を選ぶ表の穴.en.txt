@@ -1,0 +1,6 @@
+error[E301]: tests/mutants/E301_経路を選ぶ表の穴.ringi:9:1: No row of the route takes some requests
+     9 | route
+  = The requests no row takes: 金額 from 100_001円 to 200_000円
+  = A request no row takes: 金額 = 100_001円
+  = Add this row to the table, writing in place of `?` the shared route those requests take (the alias of a `use route` line): | >100_000円 <=200_000円 | ? |
+  = The cells are cut only at the bounds the table already writes and at the ends of the ranges, so the rows close the gap as they are; where the route changes inside a row, split it there.

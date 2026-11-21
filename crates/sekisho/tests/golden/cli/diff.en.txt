@@ -14,8 +14,8 @@ Flags:
   --help                       print this page
 
 Exit codes:
-  0  no permission gained or lost and the same interface (the deciding policies may change, and some combinations may be undecided)
-  1  a permission gained or lost, or the interface differs
+  0  no permission gained or lost, the same interface and the same lines under the workflows (the deciding policies may change, and some combinations may be undecided)
+  1  a permission gained or lost, the interface differs, or a line under a workflow differs
   2  cannot compare (a side that does not pass check, over the budget, a file that cannot be read, or a file that reads another language run with this sekisho, which reads none)
 
 Examples:

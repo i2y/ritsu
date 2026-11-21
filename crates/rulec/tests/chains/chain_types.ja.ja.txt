@@ -1,0 +1,36 @@
+エラー[E012]: `段会` という型はありません
+  --> chain_types.ja.rule:11
+   |
+11 |   会員(member) : 段会
+   |                  ^^^^
+   |
+ `段階` のことですか。
+ 型は `number`・`rate`・`bool`・`string`・`date`・単位の型（`money[円]`・`mass[kg]` など）か、このファイルの列挙です。このファイルの列挙は `種類`、`段階` です。
+
+エラー[E103]: `UDS` は money の単位ではありません
+  --> chain_types.ja.rule:13
+   |
+13 |   定価(list_price) : money[UDS]  range >=0USD <=1000USD
+   |                      ^^^^^^^^^^
+   |
+ 金額の単位は 円（JPY と同じ） 銭（円の 1/100）、または ISO 4217 のコード USD EUR GBP CHF CAD AUD NZD CNY HKD SGD KRW INR TWD THB SEK NOK DKK PLN CZK HUF TRY BRL MXN ZAR AED SAR ILS PHP IDR MYR VND（その 1/100 はコードに c を付ける。USD と USDc） です。
+
+エラー[E012]: 列の名前 `品の種類` は宣言されていません
+  --> chain_types.ja.rule:20 表 上乗せ
+   |
+20 | | 品の種類 | -> 上乗せ率(markup) : rate[step 1%] |
+   |   ^^^^^^^^
+   |
+ `品の種`（9 行目）のことですか。
+ 列に書けるのは 入力・導出・真偽/列挙の中間値です。
+ `品の種類` は 35 行目にも書かれています。
+
+警告[W111]: 入力 品の種 はどの表でも使われていません
+  --> chain_types.ja.rule:9
+  |
+9 |   品の種(item_knd) : 種類
+  |   ^^^^^^ どの列にも現れません
+  |
+ 本来使うべき列の書き忘れかもしれません。
+ 範囲の入口検査としてだけ効かせるつもりなら、宣言に `contract_only` を付けてください（W111）。
+

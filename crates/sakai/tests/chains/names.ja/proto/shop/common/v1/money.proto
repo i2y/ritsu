@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package shop.common.v1;
+
+// 受注と在庫の共有カーネル。受注のファイルで、在庫も並べる。
+message Money {
+  int64 amount_jpy = 1;
+}

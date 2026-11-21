@@ -1,0 +1,24 @@
+# Names written wrong where they are declared, and the lines that use them: each name is said
+# once in a file (a target), or once in a claim (a kept name), where it is first written.
+
+# the target named wrong: every call still names `api`
+target apii {
+  run "python3 server.py"
+}
+
+claim "a ticket can be read back and taken away" {
+  # the kept name written wrong: the calls still write `{token}`
+  keep env "TICKETS_TOKEN" as tokn
+  when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+  then status is 201
+  keep body json ".id" as id
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then body json ".id" is "{id}"
+  when api.delete("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 204
+}
+
+claim "a call without the token is refused" {
+  when api.post("/tickets", body: "{\"title\":\"the door\"}")
+  then status is 401
+}

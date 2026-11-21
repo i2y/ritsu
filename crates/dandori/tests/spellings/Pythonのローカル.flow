@@ -1,0 +1,16 @@
+workflow Pythonのローカル v1
+description "dandori が書くタスクで、make_activities が Transport を入れるローカル変数と同じ名前です。"
+
+inputs
+  id : string
+
+outputs
+  文 : string
+
+task t(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+flow
+  let 文 = t(id: id)
+  succeed 文 = 文

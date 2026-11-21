@@ -17,10 +17,9 @@ fn restore_sigpipe() {}
 
 fn main() -> ExitCode {
     restore_sigpipe();
-    // A panic is a bug in koyomi: exit 2, as DESIGN 4.1 says, rather than Rust's 101.
-    std::panic::set_hook(Box::new(|info| {
-        eprintln!("koyomi: a bug in koyomi, please report it: {info}");
-    }));
+    // A panic is a bug in koyomi: exit 2, as DESIGN 4.1 says, rather than Rust's 101, in the words
+    // of every binary of the toolchain.
+    ritsu_base::cli::on_panic("koyomi");
     let args: Vec<String> = std::env::args().skip(1).collect();
     match std::panic::catch_unwind(|| koyomi::run::run(args)) {
         Ok(code) => code,

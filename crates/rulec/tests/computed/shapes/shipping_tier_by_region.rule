@@ -1,0 +1,44 @@
+rule shipping_tier_by_region v1
+description "A shipping fee by the amount and the region, a tier by the fee and the region, and a choice read off the amount, the fee and the tier. Up to 86 yen the fee is 120 yen only in the south, whose tier is the second: the rows of the tier table that give the first or the third tier at 120 yen stand on regions the fee table answers 240 yen for there, so no small amount comes with them"
+
+enum choice = one | two
+enum region = north | south | west
+enum tier = first | second | third
+
+inputs
+  amount : money[JPY]  range >=1JPY <=132JPY
+  region : region
+
+outputs
+  x : choice
+
+table fee_of
+| amount  | region | -> fee : money[JPY] |
+| <=86JPY | north  | 240JPY              |
+| <=86JPY | south  | 120JPY              |
+| <=86JPY | west   | 240JPY              |
+| >86JPY  | north  | 120JPY              |
+| >86JPY  | south  | 120JPY              |
+| >86JPY  | west   | 120JPY              |
+
+table tier_of
+| fee    | region | -> tier : tier |
+| 120JPY | north  | third          |
+| 120JPY | south  | second         |
+| 120JPY | west   | first          |
+| 240JPY | north  | first          |
+| 240JPY | west   | third          |
+
+table pick
+| amount         | fee      | tier   | -> x |
+| <=11JPY        | <=121JPY | second | one  |
+| <=11JPY        | >121JPY  | first  | two  |
+| <=11JPY        | >121JPY  | third  | one  |
+| >11JPY <=57JPY | <=121JPY | second | two  |
+| >11JPY <=57JPY | >121JPY  | first  | one  |
+| >11JPY <=57JPY | >121JPY  | third  | two  |
+| >57JPY         | <=121JPY | first  | one  |
+| >57JPY         | <=121JPY | second | two  |
+| >57JPY         | <=121JPY | third  | one  |
+| >57JPY         | >121JPY  | first  | two  |
+| >57JPY         | >121JPY  | third  | one  |

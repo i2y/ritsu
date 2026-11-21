@@ -2,7 +2,8 @@
 //! that read it without reading the file — the shape follows koyomi's and chobo's `api` (the tool
 //! and its version, the file's name, alias, version, digest and description first). It holds what
 //! the Cedar is made of: the namespace and the four files `gen --target cedar` writes, each role,
-//! type and workflow with the entity it is in Cedar, each action with the operations it guards
+//! type and workflow with the entity it is in Cedar (a workflow with what the gate says its flow
+//! holds of the resources, `assumes`: DESIGN 2.12), each action with the operations it guards
 //! (each as its reference, in the JSON of a reference that sakai's `api` writes too: ritsu's DESIGN
 //! 6.2) and its context (with whether each action a policy asks with `allowed` is allowed, the
 //! action and what its inputs are given: DESIGN 2.11), each policy with its `@id`, and the
@@ -141,6 +142,17 @@ pub fn json(scope: &Scope, checked: &Checked) -> Json {
             ("line", line(w.named.line)),
             ("entity", uid(cedar::workflow_uid(g, &shape, wi))),
             ("flow", Json::str(w.flow.clone())),
+            // what the gate says the flow holds of the resources it acts on (DESIGN 2.12): the
+            // `resource` lines under the workflow, an assumption of the gate's that nothing
+            // checks of the resource the service reads
+            (
+                "assumes",
+                Json::arr(w.holds.iter().map(|h| {
+                    let ty = &g.types[h.resource];
+                    let attributes = h.attrs.iter().map(|(a, value, at)| Json::obj([("attribute", Json::str(ty.attrs[*a].named.alias.clone())), ("value", Json::str(value.clone())), ("line", line(*at))]));
+                    Json::obj([("resource", Json::str(ty.named.alias.clone())), ("from", Json::str(h.id.clone())), ("line", line(h.line)), ("attributes", Json::arr(attributes))])
+                })),
+            ),
         ])
     });
     let actions = g.actions.iter().enumerate().map(|(ai, a)| {

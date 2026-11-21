@@ -1,0 +1,30 @@
+error[E016]: tests/fixtures/date_formats.flow:35:1: the parameter `period` is not what `leave` POST /leaves takes: in `first_day`, `timestamp` is not a date; declare it `date`
+    35 | task book(employee: string, period: Period) -> Leave
+error[E016]: tests/fixtures/date_formats.flow:35:1: what `leave` POST /leaves answers is not `Leave`: in `id`, a string is not `date`
+    35 | task book(employee: string, period: Period) -> Leave
+error[E016]: tests/fixtures/date_formats.flow:35:1: what `leave` POST /leaves answers is not `Leave`: in `first_day`, a date is not `timestamp`; declare it `date`
+    35 | task book(employee: string, period: Period) -> Leave
+error[E016]: tests/fixtures/date_formats.flow:35:1: what `leave` POST /leaves answers is not `Leave`: in `booked_at`, a date and time is not `date`; declare it `timestamp`
+    35 | task book(employee: string, period: Period) -> Leave
+error[E016]: tests/fixtures/date_formats.flow:39:1: the parameter `first_day` is not what `leave` POST /leaves/{id}/move takes: `timestamp` is not a date; declare it `date`
+    39 | task move(id: string, first_day: timestamp, previous: string, asked_at: date) -> Moved
+error[E016]: tests/fixtures/date_formats.flow:39:1: the parameter `asked_at` is not what `leave` POST /leaves/{id}/move takes: `date` is not a date and time; declare it `timestamp`
+    39 | task move(id: string, first_day: timestamp, previous: string, asked_at: date) -> Moved
+error[E016]: tests/fixtures/date_formats.flow:43:1: the parameter `asked_at` is not what `leave` POST /leaves/{id}/move takes: `string` is not a date and time; declare it `timestamp`
+    43 | task move_by_text(id: string, first_day: date, asked_at: string) -> Moved
+error[E016]: tests/fixtures/date_formats.flow:48:1: the parameter `day` is not what `leave` GET /days/{day} takes: `Kind` is not a date; declare it `date`
+    48 | task day_off(day: Kind, until: int) -> Day
+error[E016]: tests/fixtures/date_formats.flow:48:1: the parameter `until` is not what `leave` GET /days/{day} takes: `int` is not a date; declare it `date`
+    48 | task day_off(day: Kind, until: int) -> Day
+error[E016]: tests/fixtures/date_formats.flow:48:1: what `leave` GET /days/{day} answers is not `Day`: in `day`, a date is not `Kind`; declare it `date`
+    48 | task day_off(day: Kind, until: int) -> Day
+error[E016]: tests/fixtures/date_formats.flow:48:1: what `leave` GET /days/{day} answers is not `Day`: in `closing`, it may be `2026-12-29`, outside `>=2026-12-01 <=2026-12-28`
+    48 | task day_off(day: Kind, until: int) -> Day
+error[E016]: tests/fixtures/date_formats.flow:52:1: the parameter `day` is not what `leave` POST /closings takes: `date` is not one of 2026-12-28, 2026-12-29; declare it `date  range >=2026-12-28 <=2026-12-29`
+    52 | task close_year(day: date) -> Closing
+error[E016]: tests/fixtures/date_formats.flow:52:1: what `leave` POST /closings answers is not `Closing`: in `day`, it may be `2026-12-28`, which `timestamp` does not take
+    52 | task close_year(day: date) -> Closing
+error[E016]: tests/fixtures/date_formats.flow:60:1: the parameter `day` is not what `leave` POST /closings takes: it may be `2026-12-30`, which is not one of the values it takes (2026-12-28, 2026-12-29)
+    60 | task close_by(day: date  range >=2026-12-28 <=2026-12-30) -> Closed
+error[E016]: tests/fixtures/date_formats.flow:64:1: the parameter `day` is not what `leave` POST /closings takes: it takes one of 2026-12-28, 2026-12-29, and `string` can be anything; declare it `date  range >=2026-12-28 <=2026-12-29`
+    64 | task close_by_text(day: string) -> Closed

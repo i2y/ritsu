@@ -1,0 +1,15 @@
+request 例(example) v1 "例"
+
+use masters マスタ(m) from "shared/穴のあるマスタ.ringi"
+
+form
+  科目(account) : choice from マスタ.勘定科目 "勘定科目"
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

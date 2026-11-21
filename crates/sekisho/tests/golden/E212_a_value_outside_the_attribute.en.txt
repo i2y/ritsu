@@ -1,0 +1,5 @@
+error[E212]: tests/mutants/E212_a_value_outside_the_attribute.gate:11:1: The flow's `amount` can be outside the range of the attribute `amount` (1JPY..5000JPY)
+    11 |     amount = amount
+  = For example: `amount` at 10_000JPY.
+  = Such a value reaches the call of `pay_claim` on line 30 in the flow.
+  = Narrow what the flow's value can be to what the attribute takes (the `range` of the flow's input or of the record's field), or widen the attribute's range.

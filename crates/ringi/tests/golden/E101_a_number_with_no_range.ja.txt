@@ -1,0 +1,4 @@
+エラー[E101]: tests/mutants/E101_a_number_with_no_range.ringi:4:3: `days` に値の範囲がありません
+     4 |   days : number "Days"
+  = `range >=1 <=20` のように、入れられる値の範囲を書いてください。範囲は、画面の入力の検査と、経路の表の検査と、生成するコードの確かめに使います。
+  = 直した行: days : number "Days"  range >=1 <=20

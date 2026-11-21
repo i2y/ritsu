@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="ringi 0.55.2">
+<title>アカウントの申請</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 40px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 28px 0 8px; }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+th { background: var(--soft); white-space: nowrap; }
+:target { scroll-margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- ringi 0.55.2 が account.ja.ringi（sha256:ba7d7372d9db0568）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<main>
+<header>
+<h1>アカウントの申請</h1>
+<p class="desc">社員が会社のシステムを使うための申請（架空の決まり）。上長が承認し、次にシステムの一覧が示すシステムの持ち主が承認する。管理者の権限なら情報セキュリティの担当も承認する。承認されたら情報システムの運用担当に回覧する</p>
+</header>
+<p>ファイル：<code>account.ja.ringi</code>（申請の種類 <code>account_ja</code> の版 1、sha256:ba7d7372d9db0568）</p>
+<p>受け持つチーム：情報システム部（<code>it</code>）</p>
+<p>組織は、置いてある版のそれぞれ（2026-04-01、2027-04-01 から）で読んでいます。</p>
+<nav class="toc" aria-label="目次">
+<ul>
+<li><a href="#usable">使える期間</a></li>
+<li><a href="#submitters">出せる人</a></li>
+<li><a href="#form">フォーム</a></li>
+<li><a href="#route">経路</a></li>
+<li><a href="#ways">承認者の決め方</a></li>
+<li><a href="#deadlines">期限と催促</a></li>
+<li><a href="#rules">チケットの決まり</a></li>
+<li><a href="#comments">コメント</a></li>
+<li><a href="#proxies">代理</a></li>
+<li><a href="#after">帳簿と flow</a></li>
+<li><a href="#claims">主張</a></li>
+<li><a href="#scenarios">シナリオ</a></li>
+</ul>
+</nav>
+<h2 id="usable">使える期間</h2>
+<ul>
+<li>2026-04-01 から使えます。決めているのは、組織 <code>shared/company.ringi</code> の最初の版（データ <code>../org</code>）です。</li>
+<li>終わりの日はありません。読む物に終わりがありません。</li>
+</ul>
+<h2 id="submitters">出せる人</h2>
+<p>組織のだれでも出せます。</p>
+<p>人数は、2026-04-01 からの組織の 24 人のうち 24 人、2027-04-01 からの 23 人のうち 23 人です。</p>
+<p>代わりに出す代理の人は、代わる人の名前で出せます。その申請は、代わられた人の申請になります。</p>
+<h2 id="form">フォーム</h2>
+<div class="scroll"><table>
+<thead><tr><th>フィールド</th><th>型</th><th>受け付ける値</th><th>必須</th><th>表示</th></tr></thead>
+<tbody>
+<tr><td>使う人</td><td>組織の人</td><td>—</td><td>必須</td><td>いつも</td></tr>
+<tr><td>システム</td><td><code>マスタ.systems</code> の行</td><td>—</td><td>必須</td><td>いつも</td></tr>
+<tr><td>権限</td><td>読み取り、書き込み、管理者のどれか</td><td>—</td><td>必須</td><td>いつも</td></tr>
+<tr><td>使える期限</td><td>日付</td><td>2026-01-01から2028-12-31まで</td><td>必須</td><td>いつも</td></tr>
+<tr><td>必要な理由</td><td>文</td><td>1字から300字まで</td><td>必須</td><td>いつも</td></tr>
+</tbody>
+</table></div>
+<h2 id="route">経路</h2>
+<p>ステップを順に並べています。条件のあるステップは、条件が成り立つときだけ来ます。各ステップにだれが答えるかは「承認者の決め方」にあります。</p>
+<div class="scroll"><table>
+<thead><tr><th>ステップ</th><th>答える人</th><th>来るとき</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>上長</td><td>いつも</td></tr>
+<tr><td>持ち主</td><td>システムの持ち主</td><td>いつも</td></tr>
+<tr><td>セキュリティ</td><td>情報セキュリティ</td><td>「権限」が「管理者」のとき</td></tr>
+<tr><td>運用</td><td>運用担当に回覧</td><td>いつも</td></tr>
+</tbody>
+</table></div>
+<h2 id="ways">承認者の決め方</h2>
+<div class="scroll"><table>
+<thead><tr><th>承認者</th><th>決まる人</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>申請者の上長。申請者が主に属するチームの長で、その長が申請者自身か空なら、上のチームの長です</td></tr>
+<tr><td>システムの持ち主</td><td>「システム」で選んだ行の <code>owner</code> の人</td></tr>
+<tr><td>情報セキュリティ</td><td>情報セキュリティ課（<code>it_security</code>）の人。だれか一人が答えます</td></tr>
+<tr><td>運用担当</td><td>運用課（<code>it_operations</code>）の人。だれか一人が答えます</td></tr>
+</tbody>
+</table></div>
+<p>承認者は、ステップが始まるときに、そのときに効いている組織の版で決めます。その日に有効な代理も、並んで答えられます（「代理」を見てください）。</p>
+<h2 id="deadlines">期限と催促</h2>
+<p>どのステップも：</p>
+<ul>
+<li>期限は、始まった日から 2 営業日の日の終わりです。</li>
+<li>始まった日から 1 営業日の日の 09:00 に、承認者へ催促が届きます。</li>
+<li>期限を過ぎると上の長へ回ります。期限は、そこから数え直されます。また過ぎるとチケットは期限切れで終わります。</li>
+<li>答える人がいなければ、上の長へ回ります。組織のいちばん上では、管理する人を待ちます。</li>
+</ul>
+<p>ステップ「上長」は、それに代えて：</p>
+<ul>
+<li>答える人がいなければ、上の長へ回ります。組織のいちばん上では、ステップは飛ばされます。</li>
+</ul>
+<p>2026-04-03（金）に始まるステップでは、次のとおりです。申請の種類のカレンダーの休みは数えません（時刻は UTC+09:00）。</p>
+<div class="scroll"><table>
+<thead><tr><th>ステップ</th><th>催促</th><th>期限</th><th>上へ回したあとの期限</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>2026-04-06（月）09:00</td><td>2026-04-07（火）の終わり</td><td>2026-04-10（金）の終わり</td></tr>
+<tr><td>持ち主</td><td>2026-04-06（月）09:00</td><td>2026-04-07（火）の終わり</td><td>2026-04-10（金）の終わり</td></tr>
+<tr><td>セキュリティ</td><td>2026-04-06（月）09:00</td><td>2026-04-07（火）の終わり</td><td>2026-04-10（金）の終わり</td></tr>
+</tbody>
+</table></div>
+<p>チケットは、長くても 55 営業日で終わります（ステップに 3 × 15、申請者のもとで 2 × 5）。いちばん長い場合の日付は <code>ritsu ringi doc --longest</code> が見せます。</p>
+<h2 id="rules">チケットの決まり</h2>
+<ul>
+<li>申請者は、自分の申請を承認しません。どのステップの承認者からも外します。代わりに出した人も同じです。</li>
+<li>一人で二つ以上のステップに答える人は、最後のステップで一度だけ答えます。前のステップは、その承認を待ちます。</li>
+<li>承認者は、申請者か、答えた前のステップへ差し戻せます。取り下げと合わせて 2 回までです。使い切ったら、承認か却下を選びます。</li>
+<li>申請者へ戻ったら、戻った日から 5 営業日の日の終わりまでに出し直せます。過ぎると期限切れで終わります。出し直しでは、変えるフィールドだけを渡します。</li>
+<li>申請者は、ステップ「セキュリティ」が答えるまで取り下げられます。取り下げたチケットは手元へ戻り、直して出し直すか、やめるかを選びます。</li>
+<li>承認者は却下できます。チケットは却下で終わり、出し直せません。</li>
+<li>申請の種類を受け持つチームは、今のステップに承認者を足せます。承認者の一人の受け持ちを、ほかの人に引き継ぐこともできます。どちらも期限を動かしません。</li>
+</ul>
+<h2 id="comments">コメント</h2>
+<ul>
+<li>人がする操作（申請、承認、差し戻し、却下、取り下げなど）には、コメントを一つ添えられます。コメントだけを書くこともできます。添えなくてもかまいません。</li>
+<li>だれが書けるかは、ほかの操作と同じく、gate <code>shared/company.gate</code> が決めます。</li>
+<li>コメントは 2000 字までです。チケットの履歴の、その人がしたことの行に、書いた人と時刻と一緒に残り、あとから変えません。コメントだけを書いても、チケットの状態と期限は変わりません。</li>
+<li>理由を書かずに却下も差し戻しもできますが、書けば、申請者は何を直せばよいかを履歴で読めます。</li>
+</ul>
+<h2 id="proxies">代理</h2>
+<ul>
+<li>承認の代理は、行の期間のあいだ、代わる人のステップに並んで答えます。答えは、代わる人の席で一票に数えます。保留と再開、承認者が直すフィールドの直し、自分がした承認の取り消しもできます。</li>
+<li>申請の代理は、代わる人の名前で申請を出します。取り下げ、出し直し、やめることも、申請者と同じくできます。</li>
+<li>代理がしたことは、だれの代わりにしたかと一緒に、履歴に残ります。</li>
+</ul>
+<p>組織のデータに、この申請の種類の代理はありません。</p>
+<h2 id="after">帳簿と flow</h2>
+<ul>
+<li>承認されたとき、flow <code>払い出し</code> が始まります（<code>person</code> に「使う人」、<code>system</code> に「システム」、<code>level</code> に「権限」、<code>until</code> に「使える期限」）。</li>
+</ul>
+<h2 id="claims">主張</h2>
+<p>検査は、どれも成り立つことを確かめています。成り立たない主張があれば、この申請の種類は検査を通りません。</p>
+<ul>
+<li><code>管理者の権限は情報セキュリティを通る場合がある</code>：ステップ「セキュリティ」が「情報セキュリティ」になる申請があります。</li>
+<li><code>期限内に終わる</code>：どのチケットも 55 営業日のうちに終わります。長くても 55 営業日です。</li>
+</ul>
+<h2 id="scenarios">シナリオ</h2>
+<p>検査は、どのシナリオもチケットの機械で走らせ、イベントごとに、書いたステップと状態になることを確かめています。</p>
+<h3 id="scenario-e7aea1e79086e88085e381aee6a8a9e99990e381aee794b3e8ab8b"><code>管理者の権限の申請</code></h3>
+<p>申請者：e1201（営業担当 1）</p>
+<ul>
+<li>使う人：e1203（営業担当 3）</li>
+<li>システム：<code>crm</code></li>
+<li>権限：管理者</li>
+<li>使える期限：2027-03-31</li>
+<li>必要な理由：「課の新しいメンバーのアカウントを作るため」</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>時刻</th><th>イベント</th><th>する人</th><th>そのあとのステップ</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td>2026-11-16 10:00</td><td>申請</td><td>e1201（営業担当 1）</td><td>上長</td><td>進行中</td></tr>
+<tr><td>2026-11-16 11:00</td><td>承認</td><td>e1101（営業一課長）</td><td>持ち主</td><td>進行中</td></tr>
+<tr><td>2026-11-16 16:00</td><td>承認</td><td>e3101（営業一部長）</td><td>セキュリティ</td><td>進行中</td></tr>
+<tr><td>2026-11-17 09:00</td><td>催促</td><td>—</td><td>セキュリティ</td><td>進行中</td></tr>
+<tr><td>2026-11-17 15:00</td><td>承認</td><td>e7102（セキュリティ技術者）</td><td>—</td><td>承認</td></tr>
+</tbody>
+</table></div>
+<h3 id="scenario-e4b88ae995b7e3818ce382bbe382ade383a5e383aae38386e382a3e381a7e4b880e5baa6e381a0e38191e7ad94e38188e3828b"><code>上長がセキュリティで一度だけ答える</code></h3>
+<p>申請者：e7102（セキュリティ技術者）</p>
+<ul>
+<li>使う人：e7102（セキュリティ技術者）</li>
+<li>システム：<code>wiki</code></li>
+<li>権限：管理者</li>
+<li>使える期限：2027-03-31</li>
+<li>必要な理由：「情報セキュリティ課のページを管理するため」</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>時刻</th><th>イベント</th><th>する人</th><th>そのあとのステップ</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td>2026-11-16 10:00</td><td>申請</td><td>e7102（セキュリティ技術者）</td><td>持ち主</td><td>進行中</td></tr>
+<tr><td>2026-11-16 11:00</td><td>承認</td><td>e7001（情報システム部長）</td><td>セキュリティ</td><td>進行中</td></tr>
+<tr><td>2026-11-16 15:00</td><td>承認</td><td>e7101（情報セキュリティ課長）</td><td>—</td><td>承認</td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

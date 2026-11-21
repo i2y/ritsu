@@ -1,0 +1,2 @@
+error[E304]: tests/mutants/E304_100を超える割合.ringi:7:15: `at least 120%` is more than 100%, and cannot be reached
+     7 |   審査(review)  at least 120% of 法務

@@ -22,6 +22,7 @@ dandori = { path = "../dandori" }
 geas = { path = "../geas" }
 kaname = { path = "../kaname" }
 koyomi = { path = "../koyomi" }
+ringi = { path = "../ringi" }
 rulec = { path = "../rulec" }
 sakai = { path = "../sakai" }
 sekisho = { path = "../sekisho" }

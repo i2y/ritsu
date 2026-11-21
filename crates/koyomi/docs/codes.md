@@ -23,7 +23,7 @@ See also: [E006](#e006)
 
 ## E002 — A word is written where it does not belong
 
-**When**: The syntax does not take the word there: an operation that does not exist, an unknown way after `else`, an unknown convention after `roll`, and the like.
+**When**: The syntax does not take the word there: an operation that does not exist, an unknown way after `else`, an unknown convention after `roll`, and the like. A line that starts with what no line starts with is said once: the indented lines and the rows under it say nothing (for an operation of a date with no indent, the note says to indent it).
 
 **Fix**: Use one of the forms the note lists.
 
@@ -141,7 +141,7 @@ See also: [E008](#e008)
 
 ## E008 — A name is not declared
 
-**When**: The start of a date, a number in an operation, a claim, an example column or a `closed` table names something not declared.
+**When**: The start of a date, a number in an operation, a claim, an example column or a `closed` table names something not declared. A name written in several places is said once, where it is first written, and the note gives the lines of the others.
 
 **Fix**: Correct the spelling, or declare it.
 
@@ -284,7 +284,7 @@ date y = x
 
 ## E015 — The calendar of `use calendar` cannot be used
 
-**When**: It cannot be read, it is not a calendar file, reading it leads back to the file, or its offset differs.
+**When**: It cannot be read, it is not a calendar file, it does not pass koyomi's check, reading it leads back to the file, or its offset differs. For a calendar that does not pass, the notes give up to three of its errors; the calendar's own diagnostics are said once, where it is checked.
 
 **Fix**: Correct the path (from this .cal's directory) or the file it names.
 
@@ -931,7 +931,7 @@ See also: [E304](#e304)
 
 ## E304 — The examples lack a column for an input or a date
 
-**When**: The `examples` table has no column for an input or a date. Only values a person wrote can catch a mistake the reference interpreter and the generated code share.
+**When**: The `examples` table has no column for an input or a date. Only values a person wrote can catch a mistake the reference interpreter and the generated code share. It is not said when the table has a column for a name that is not declared: E008 says that name, and a name written wrong where it is declared is not said twice.
 
 **Fix**: Add the columns missing (a date's is `-> <name>`).
 

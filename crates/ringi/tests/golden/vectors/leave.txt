@@ -1,0 +1,192 @@
+scenario a_long_paid_leave, line 47: submit by e1203 at 2026-11-16 09:00 -> manager, in progress
+scenario a_long_paid_leave, line 48: approve by e1101 at 2026-11-16 17:00 -> head, in progress
+scenario a_long_paid_leave, line 49: remind at 2026-11-17 09:00 -> head, in progress
+scenario a_long_paid_leave, line 50: late at 2026-11-19 00:00 -> head, in progress
+scenario a_long_paid_leave, line 51: approve by e0101 at 2026-11-19 10:00 -> approved
+scenario a_long_paid_leave, after it ended: comment by e1203 at 2026-11-19 10:00 -> refused (state)
+scenario a_long_paid_leave, after line 47: approvals: approve by e1101 at 2026-11-16 09:00 -> head, in progress
+scenario a_long_paid_leave, after line 47: rejections: reject by e1101 at 2026-11-16 09:00 -> rejected
+scenario a_long_paid_leave, after line 47: the requester: approve by e1203 at 2026-11-16 09:00 -> refused (person)
+scenario a_long_paid_leave, after line 47: the requester: withdraw by e1203 at 2026-11-16 09:00 -> with requester
+scenario a_long_paid_leave, after line 47: the requester: comment by e1203 at 2026-11-16 09:00 -> with requester
+scenario a_long_paid_leave, after line 47: sent back: send back by e1101 at 2026-11-16 09:00 -> with requester
+scenario a_long_paid_leave, after line 47: sent back: resubmit by e1203 at 2026-11-17 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: made again, with fields made empty: resubmit by e1203 at 2026-11-17 09:00 -> refused (form)
+scenario a_long_paid_leave, after line 47: made again, with fields made empty: resubmit by e1203 at 2026-11-17 09:00 -> refused (form)
+scenario a_long_paid_leave, after line 47: made again, with fields made empty: resubmit by e1203 at 2026-11-17 09:00 -> refused (form)
+scenario a_long_paid_leave, after line 47: made again, with fields made empty: resubmit by e1203 at 2026-11-17 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: made again, with fields made empty: resubmit by e1203 at 2026-11-17 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: made again, with fields made empty: resubmit by e1203 at 2026-11-17 09:00 -> refused (form)
+scenario a_long_paid_leave, after line 47: made again, with fields made empty: resubmit by e1203 at 2026-11-17 09:00 -> refused (form)
+scenario a_long_paid_leave, after line 47: made again, with fields made empty: resubmit by e1203 at 2026-11-17 09:00 -> refused (form)
+scenario a_long_paid_leave, after line 47: made again, with fields made empty: resubmit by e1203 at 2026-11-17 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: made again, with fields made empty: resubmit by e1203 at 2026-11-17 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: sent back: discard by e1203 at 2026-11-16 09:00 -> withdrawn
+scenario a_long_paid_leave, after line 47: sent back: comment by e1101 at 2026-11-16 09:00 -> with requester
+scenario a_long_paid_leave, after line 47: sent back: comment by e1203 at 2026-11-16 09:00 -> with requester
+scenario a_long_paid_leave, after line 47: sent back: resubmit late at 2026-11-24 00:00 -> expired
+scenario a_long_paid_leave, after line 47: paused: pause by e1101 at 2026-11-16 09:00 -> refused (event)
+scenario a_long_paid_leave, after line 47: an administrator: add approver at 2026-11-16 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: an administrator: hand over at 2026-11-16 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: an administrator, by name: add approver by e0101 at 2026-11-16 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: an administrator, by name: hand over by e0101 at 2026-11-16 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: clocks: remind at 2026-11-17 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: clocks: late at 2026-11-19 00:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: clocks: remind at 2026-11-20 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: clocks: late at 2026-11-24 00:00 -> expired
+scenario a_long_paid_leave, after line 47: clocks: remind at 2026-11-17 08:59 -> refused (clock)
+scenario a_long_paid_leave, after line 47: clocks: approve by e1101 at 2026-11-17 09:00 -> refused (clock)
+scenario a_long_paid_leave, after line 47: clocks: comment by e1101 at 2026-11-17 09:00 -> refused (clock)
+scenario a_long_paid_leave, after line 47: comments: comment by e1101 at 2026-11-16 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: comments: comment by e1203 at 2026-11-16 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: comments: comment by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: comments: comment by e1101 at 2026-11-16 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: comments: comment by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: comments: approve by e1101 at 2026-11-16 09:00 -> head, in progress
+scenario a_long_paid_leave, after line 47: comments: send back by e1101 at 2026-11-16 09:00 -> with requester
+scenario a_long_paid_leave, after line 47: comments: approve by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: a reason asked, and none given: reject by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: a reason asked, and none given: reject by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: a reason asked, and none given: reject by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: a reason asked, and none given: reject by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: a reason asked, given in a character that is no white space: reject by e1101 at 2026-11-16 09:00 -> rejected
+scenario a_long_paid_leave, after line 47: a reason asked, given in a character that is no white space: reject by e1101 at 2026-11-16 09:00 -> rejected
+scenario a_long_paid_leave, after line 47: a reason asked, and none given: send back by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: a reason asked, and none given: send back by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: a reason asked, and none given: send back by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: a reason asked, and none given: send back by e1101 at 2026-11-16 09:00 -> refused (comment)
+scenario a_long_paid_leave, after line 47: a reason asked, given in a character that is no white space: send back by e1101 at 2026-11-16 09:00 -> with requester
+scenario a_long_paid_leave, after line 47: a reason asked, given in a character that is no white space: send back by e1101 at 2026-11-16 09:00 -> with requester
+scenario a_long_paid_leave, after line 47: sent back to the limit: send back by e1101 at 2026-11-17 09:00 -> with requester
+scenario a_long_paid_leave, after line 47: sent back to the limit: resubmit by e1203 at 2026-11-18 09:00 -> manager, in progress
+scenario a_long_paid_leave, after line 47: sent back to the limit: send back by e1101 at 2026-11-18 09:00 -> refused (limit)
+scenario a_long_paid_leave, after line 48: approvals: approve by e3101 at 2026-11-16 17:00 -> approved
+scenario a_long_paid_leave, after line 48: rejections: reject by e3101 at 2026-11-16 17:00 -> rejected
+scenario a_long_paid_leave, after line 48: the requester: approve by e1203 at 2026-11-16 17:00 -> refused (person)
+scenario a_long_paid_leave, after line 48: the requester: withdraw by e1203 at 2026-11-16 17:00 -> with requester
+scenario a_long_paid_leave, after line 48: sent back: send back by e3101 at 2026-11-16 17:00 -> with requester
+scenario a_long_paid_leave, after line 48: sent back: resubmit by e1203 at 2026-11-17 17:00 -> manager, in progress
+scenario a_long_paid_leave, after line 48: sent back: discard by e1203 at 2026-11-16 17:00 -> withdrawn
+scenario a_long_paid_leave, after line 48: sent back: resubmit late at 2026-11-24 00:00 -> expired
+scenario a_long_paid_leave, after line 48: sent back: send back by e3101 at 2026-11-16 17:00 -> refused (event)
+scenario a_long_paid_leave, after line 48: retracted: retract by e1101 at 2026-11-16 17:00 -> refused (event)
+scenario a_long_paid_leave, after line 48: clocks: remind at 2026-11-20 09:00 -> head, in progress
+scenario a_long_paid_leave, after line 48: clocks: late at 2026-11-24 00:00 -> expired
+scenario a_leave_sent_back_with_a_comment, line 60: submit by e1203 at 2026-11-16 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, line 61: comment by e1101 at 2026-11-16 11:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, line 62: comment by e1203 at 2026-11-16 13:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, line 63: send back by e1101 at 2026-11-16 17:00 -> with requester
+scenario a_leave_sent_back_with_a_comment, line 64: comment by e1203 at 2026-11-16 17:30 -> with requester
+scenario a_leave_sent_back_with_a_comment, line 65: comment by e1101 at 2026-11-16 17:45 -> with requester
+scenario a_leave_sent_back_with_a_comment, line 66: resubmit by e1203 at 2026-11-17 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, line 67: approve by e1101 at 2026-11-17 10:00 -> approved
+scenario a_leave_sent_back_with_a_comment, after line 60: approvals: approve by e1101 at 2026-11-16 09:00 -> approved
+scenario a_leave_sent_back_with_a_comment, after line 60: rejections: reject by e1101 at 2026-11-16 09:00 -> rejected
+scenario a_leave_sent_back_with_a_comment, after line 60: the requester: approve by e1203 at 2026-11-16 09:00 -> refused (person)
+scenario a_leave_sent_back_with_a_comment, after line 60: the requester: withdraw by e1203 at 2026-11-16 09:00 -> with requester
+scenario a_leave_sent_back_with_a_comment, after line 60: sent back: send back by e1101 at 2026-11-16 09:00 -> with requester
+scenario a_leave_sent_back_with_a_comment, after line 60: sent back: resubmit by e1203 at 2026-11-17 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 60: sent back: discard by e1203 at 2026-11-16 09:00 -> withdrawn
+scenario a_leave_sent_back_with_a_comment, after line 60: sent back: resubmit late at 2026-11-24 00:00 -> expired
+scenario a_leave_sent_back_with_a_comment, after line 60: paused: pause by e1101 at 2026-11-16 09:00 -> refused (event)
+scenario a_leave_sent_back_with_a_comment, after line 60: an administrator: add approver at 2026-11-16 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 60: an administrator: hand over at 2026-11-16 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 60: clocks: remind at 2026-11-17 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 60: clocks: late at 2026-11-19 00:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 60: clocks: remind at 2026-11-20 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 60: clocks: late at 2026-11-24 00:00 -> expired
+scenario a_leave_sent_back_with_a_comment, after line 60: clocks: remind at 2026-11-17 08:59 -> refused (clock)
+scenario a_leave_sent_back_with_a_comment, after line 60: clocks: approve by e1101 at 2026-11-17 09:00 -> refused (clock)
+scenario a_leave_sent_back_with_a_comment, after line 60: sent back to the limit: send back by e1101 at 2026-11-17 09:00 -> with requester
+scenario a_leave_sent_back_with_a_comment, after line 60: sent back to the limit: resubmit by e1203 at 2026-11-18 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 60: sent back to the limit: send back by e1101 at 2026-11-18 09:00 -> refused (limit)
+scenario a_leave_sent_back_with_a_comment, after line 66: approvals: approve by e1101 at 2026-11-17 09:00 -> approved
+scenario a_leave_sent_back_with_a_comment, after line 66: rejections: reject by e1101 at 2026-11-17 09:00 -> rejected
+scenario a_leave_sent_back_with_a_comment, after line 66: the requester: approve by e1203 at 2026-11-17 09:00 -> refused (person)
+scenario a_leave_sent_back_with_a_comment, after line 66: the requester: withdraw by e1203 at 2026-11-17 09:00 -> with requester
+scenario a_leave_sent_back_with_a_comment, after line 66: sent back: send back by e1101 at 2026-11-17 09:00 -> with requester
+scenario a_leave_sent_back_with_a_comment, after line 66: sent back: resubmit by e1203 at 2026-11-18 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 66: sent back: discard by e1203 at 2026-11-17 09:00 -> withdrawn
+scenario a_leave_sent_back_with_a_comment, after line 66: sent back: resubmit late at 2026-11-25 00:00 -> expired
+scenario a_leave_sent_back_with_a_comment, after line 66: clocks: remind at 2026-11-18 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 66: clocks: late at 2026-11-20 00:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 66: clocks: remind at 2026-11-23 09:00 -> manager, in progress
+scenario a_leave_sent_back_with_a_comment, after line 66: clocks: late at 2026-11-25 00:00 -> expired
+scenario a_leave_rejected_with_a_reason, line 77: reject by e3101 at 2026-11-16 18:00 -> rejected
+scenario a_long_paid_leave, after line 48: made on the revision before: approve by e1101 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: reject by e1101 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: send back by e1101 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: retract by e1101 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: pause by e1101 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: resume by e1101 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: edit by e1101 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: withdraw by e1203 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: discard by e1203 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: resubmit by e1203 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: add approver at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: hand over at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: agent answered at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: note ready at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: made on the revision before: flow failed at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: no revision: approve by e1101 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, after line 48: a comment, which says no revision: comment by e1101 at 2026-11-16 17:00 -> head, in progress
+scenario a_long_paid_leave, after line 48: made on the revision before, with a comment too long: approve by e1101 at 2026-11-16 17:00 -> refused (stale)
+scenario a_long_paid_leave, made on 2026-11-20 (closed from 2026-11-21): submit by e1203 at 2026-11-20 09:00 -> manager, in progress
+scenario a_long_paid_leave, made on 2026-11-20 (closed from 2026-11-21): remind at 2026-11-23 09:00 -> manager, in progress
+scenario a_long_paid_leave, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-25 00:00 -> manager, in progress
+scenario a_long_paid_leave, made on 2026-11-20 (closed from 2026-11-21): remind at 2026-11-26 09:00 -> manager, in progress
+scenario a_long_paid_leave, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-28 00:00 -> expired
+scenario a_long_paid_leave, made on 2026-12-28 (closed from 2026-12-29): submit by e1203 at 2026-12-28 09:00 -> manager, in progress
+scenario a_long_paid_leave, made on 2026-12-28 (closed from 2026-12-29): remind at 2027-01-04 09:00 -> manager, in progress
+scenario a_long_paid_leave, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-06 00:00 -> manager, in progress
+scenario a_long_paid_leave, made on 2026-12-28 (closed from 2026-12-29): remind at 2027-01-07 09:00 -> manager, in progress
+scenario a_long_paid_leave, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-09 00:00 -> expired
+scenario a_long_paid_leave, made with a comment: submit by e1203 at 2026-11-16 09:00 -> manager, in progress
+scenario a_long_paid_leave, made with a comment: submit by e1203 at 2026-11-16 09:00 -> refused (comment)
+requester e0001: submit by e0001 at 2026-11-16 09:00 -> refused (submit)
+requester e0101: submit by e0101 at 2026-11-16 09:00 -> manager, in progress
+requester e0102: submit by e0102 at 2026-11-16 09:00 -> manager, in progress
+requester e0201: submit by e0201 at 2026-11-16 09:00 -> refused (submit)
+requester e0202: submit by e0202 at 2026-11-16 09:00 -> refused (submit)
+requester e0203: submit by e0203 at 2026-11-16 09:00 -> refused (submit)
+requester e0204: submit by e0204 at 2026-11-16 09:00 -> refused (submit)
+requester e1001: submit by e1001 at 2026-11-16 09:00 -> manager, in progress
+requester e1002: submit by e1002 at 2026-11-16 09:00 -> manager, in progress
+requester e1101: submit by e1101 at 2026-11-16 09:00 -> manager, in progress
+requester e1201: submit by e1201 at 2026-11-16 09:00 -> manager, in progress
+requester e3101: submit by e3101 at 2026-11-16 09:00 -> manager, in progress
+requester e4001: submit by e4001 at 2026-11-16 09:00 -> manager, in progress
+requester e5001: submit by e5001 at 2026-11-16 09:00 -> manager, in progress
+requester e6001: submit by e6001 at 2026-11-16 09:00 -> manager, in progress
+requester e7001: submit by e7001 at 2026-11-16 09:00 -> manager, in progress
+requester e7101: submit by e7101 at 2026-11-16 09:00 -> manager, in progress
+requester e7102: submit by e7102 at 2026-11-16 09:00 -> manager, in progress
+requester e7201: submit by e7201 at 2026-11-16 09:00 -> manager, in progress
+requester e7202: submit by e7202 at 2026-11-16 09:00 -> manager, in progress
+requester e9001: submit by e9001 at 2026-11-16 09:00 -> manager, in progress
+requester e9002: submit by e9002 at 2026-11-16 09:00 -> manager, in progress
+requester e9003: submit by e9003 at 2026-11-16 09:00 -> manager, in progress
+proxy e1201 for e1203: submit by e1201 at 2026-11-30 09:00 -> refused (person)
+proxy e1201 for e1203: submit by e1201 at 2026-12-01 09:00 -> manager, in progress
+proxy e1201 for e1203: a comment: comment by e1101 at 2026-12-01 09:00 -> manager, in progress
+proxy e1201 for e1203: taken back by the one who made it: withdraw by e1201 at 2026-12-01 09:00 -> with requester
+proxy e1201 for e1203: sent back: send back by e1101 at 2026-12-01 09:00 -> with requester
+proxy e1201 for e1203: sent back: comment by e1203 at 2026-12-01 09:00 -> with requester
+proxy e1201 for e1203: sent back, and discarded by the one who made it: discard by e1201 at 2026-12-01 09:00 -> withdrawn
+proxy e1201 for e1203: submit by e1201 at 2026-12-31 09:00 -> manager, in progress
+proxy e1201 for e1203: submit by e1201 at 2027-01-01 09:00 -> refused (person)
+proxy e0001 for e1203: submit by e0001 at 2026-11-16 09:00 -> refused (person)
+across the versions of the organization: submit by e1203 at 2027-03-31 09:00 -> manager, in progress
+across the versions of the organization: remind at 2027-04-01 09:00 -> manager, in progress
+across the versions of the organization: approve by e1101 at 2027-04-01 09:00 -> head, in progress
+across the versions of the organization: approve by e3101 at 2027-04-01 09:00 -> approved
+across the versions of the organization: send back by e1101 at 2027-03-31 09:00 -> with requester
+across the versions of the organization: resubmit by e1203 at 2027-04-01 09:00 -> manager, in progress
+across the versions of the organization: submit by e9001 at 2027-03-31 09:00 -> manager, in progress
+across the versions of the organization: send back by e0102 at 2027-03-31 09:00 -> with requester
+across the versions of the organization: resubmit by e9001 at 2027-04-01 09:00 -> refused (person)
+edge of days, going up: 20: submit by e1203 at 2026-11-16 09:00 -> manager, in progress
+edge of days, going up: 21: submit by e1203 at 2026-11-16 09:00 -> refused (form)
+edge of days, going down: 1: submit by e1203 at 2026-11-16 09:00 -> manager, in progress
+edge of days, going down: 0: submit by e1203 at 2026-11-16 09:00 -> refused (form)
+scenario a_long_paid_leave, with reason left empty: submit by e1203 at 2026-11-16 09:00 -> manager, in progress

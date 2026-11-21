@@ -23,7 +23,8 @@
 //! to optional outputs and reads one in a table below; and mutants that each say one finding
 //! about the absent value. What `rulec check` prints for a mutant, in English and in Japanese, is
 //! its golden file in `tests/golden/optional` (`RULEC_BLESS=1 cargo test --test optional` writes
-//! them again).
+//! them again). The rules of the NumPy test of a value brought in with `apply` are written inline,
+//! with their Japanese versions (`HANDED`).
 
 use ritsu_testkit::tmp::tmpdir_in;
 use ritsu_testkit::{Need, TempDir, need, ready, skip};
@@ -33,6 +34,7 @@ use rulec::json::Json;
 use rulec::num::Rat;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -95,14 +97,20 @@ fn found(src: &str, rel: &str) -> Vec<(String, usize)> {
     })
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and `rulec verify` to the adapter, and both wait for their answers without a limit of their
+/// own. Past it, rulec is stopped with every process it started, and the test fails saying what
+/// it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 fn rulec(lang: &str, tmp: Option<&Path>, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_rulec"));
-    c.env("RULEC_LANG", lang).current_dir(root()).args(args);
+    c.env("RULEC_LANG", lang).current_dir(root()).args(args).args(["--lang", lang]);
     if let Some(t) = tmp {
         c.env("TMPDIR", t);
     }
-    let o = c.output().expect("cannot start rulec");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    let o = finish(&mut c, RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 /// Whether a command answers. swiftc leaves an empty directory in its TMPDIR almost every time it
@@ -727,12 +735,18 @@ fn the_generated_types_of_an_optional_output_check() {
             std::fs::write(ts.join("package.json"), "{\"type\": \"module\"}\n").unwrap();
             let files: Vec<PathBuf> = aliases.iter().flat_map(|a| [format!("{a}.ts"), format!("{a}_runner.ts"), format!("{a}_mcp.ts")]).map(|f| ts.join(f)).collect();
             let mut c = Command::new(&tsc);
-            c.args(["--strict", "--noEmit", "--allowImportingTsExtensions", "--erasableSyntaxOnly", "--module", "nodenext", "--target", "es2022", "--types", "node"]);
+            // with the two flags a project that compiles the module may set (§15.342)
+            c.args(["--strict", "--noUnusedLocals", "--noUnusedParameters", "--noEmit", "--allowImportingTsExtensions", "--erasableSyntaxOnly", "--module", "nodenext", "--target", "es2022", "--types", "node"]);
             if let Ok(types) = std::fs::canonicalize(root().join("tools/node_modules/@types")) {
                 c.arg("--typeRoots").arg(types);
             }
             let o = c.args(&files).current_dir(&ts).output().expect("cannot start tsc");
-            assert!(o.status.success(), "the TypeScript does not pass tsc --strict:\n{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+            assert!(
+                o.status.success(),
+                "the TypeScript does not pass tsc --strict --noUnusedLocals --noUnusedParameters:\n{}{}",
+                String::from_utf8_lossy(&o.stdout),
+                String::from_utf8_lossy(&o.stderr)
+            );
         }
         Some(_) => {}
     }
@@ -1293,5 +1307,184 @@ fn an_applied_optional_output_hands_none_on_or_says_why_it_cannot() {
         };
         assert_eq!(at(1, false), vec![(out.to_string(), Some(Val::Enum("none".into())))], "{out}");
         assert_eq!(at(1, true), vec![(out.to_string(), Some(Val::Enum(present.into())))], "{out}");
+    }
+}
+
+/// A callee whose optional date and truth value are absent on the lightest parcels, and a caller
+/// that reads both in tables, hands the truth value on as its `result`, and works out a charge it
+/// accepts only up to 20,000 yen after those tables: the English rules first, then the Japanese
+/// versions. `{pin}` is the callee's meaning, written in when the files are.
+const HANDED: [(&str, &str, &str, &str); 2] = [
+    ("parcel_dates.rule", r#"rule parcel_dates v1
+description "When a parcel is collected and whether it is signed for, by its weight: a parcel up to 1 kg is neither"
+
+inputs
+  weight : number  range >=1 <=30_000
+
+outputs
+  collected : date?
+  signed    : bool?
+
+table by_weight
+policy unique
+| weight          | -> collected | signed |
+| <=1_000         | none         | none   |
+| >1_000 <=10_000 | 2027-01-31   | false  |
+| >10_000         | 2027-02-28   | true   |
+"#, "parcel_handling.rule", r#"rule parcel_handling v1
+description "Brings in when a parcel is collected and whether it is signed for, hands the second on, reads both in tables, and works out a charge it accepts only up to 20,000 yen after them"
+
+enum care = light | standard | careful
+enum size = small | large
+
+inputs
+  weight : number  range >=1 <=30_000
+
+apply p = "parcel_dates.rule" meaning:{pin}
+  weight = weight
+  collected -> p_collected
+  signed -> p_signed
+
+outputs
+  signed  : bool?
+  by_date : care
+  by_sign : care
+  size    : size
+
+result signed = p_signed
+
+table date_care
+policy first
+| p_collected | -> by_date |
+| none        | light     |
+| 2027-01-31  | standard  |
+| -           | careful   |
+
+table sign_care
+policy unique
+| p_signed | -> by_sign |
+| none     | light      |
+| false    | standard   |
+| true     | careful    |
+
+define charge : money[JPY] = weight * 1JPY  range <=20_000JPY
+
+table size_of
+policy unique
+| charge     | -> size |
+| <=5_000JPY | small   |
+| >5_000JPY  | large   |
+"#),
+    ("小包の集荷.rule", r#"rule 小包の集荷(parcel_dates_ja) v1
+description "小包を集荷する日と、受け取りに署名が要るか。重さで決まり、1 kg までの小包はどちらも無い"
+
+inputs
+  重さ(weight) : number  range >=1 <=30_000
+
+outputs
+  集荷日(collected) : date?
+  署名(signed)      : bool?
+
+table 重さごと(by_weight)
+policy unique
+| 重さ            | -> 集荷日  | 署名  |
+| <=1_000         | none       | none  |
+| >1_000 <=10_000 | 2027-01-31 | false |
+| >10_000         | 2027-02-28 | true  |
+"#, "小包の扱い.rule", r#"rule 小包の扱い(parcel_handling_ja) v1
+description "小包を集荷する日と、署名が要るかを取り込み、署名をそのまま答え、どちらも表で読み、そのあとで料金を出す。料金は 20,000 円までしか受け付けない"
+
+enum 扱い(care) = 軽い(light) | ふつう(standard) | 慎重(careful)
+enum 大きさ(size) = 小(small) | 大(large)
+
+inputs
+  重さ(weight) : number  range >=1 <=30_000
+
+apply 集荷(p) = "小包の集荷.rule" meaning:{pin}
+  重さ = 重さ
+  集荷日 -> 取り込んだ集荷日(p_collected)
+  署名 -> 取り込んだ署名(p_signed)
+
+outputs
+  署名(signed)        : bool?
+  日付の扱い(by_date) : 扱い
+  署名の扱い(by_sign) : 扱い
+  大きさ(size)        : 大きさ
+
+result 署名 = 取り込んだ署名
+
+table 日付の扱い(date_care)
+policy first
+| 取り込んだ集荷日 | -> 日付の扱い |
+| none             | 軽い          |
+| 2027-01-31       | ふつう        |
+| -                | 慎重          |
+
+table 署名の扱い(sign_care)
+policy unique
+| 取り込んだ署名 | -> 署名の扱い |
+| none           | 軽い          |
+| false          | ふつう        |
+| true           | 慎重          |
+
+define 料金(charge) : money[円] = 重さ * 1円  range <=20_000円
+
+table 大きさ(size_of)
+policy unique
+| 料金      | -> 大きさ |
+| <=5_000円 | 小        |
+| >5_000円  | 大        |
+"#),
+];
+
+/// NumPy answers as the reference evaluator does where an optional date or truth value comes in
+/// with `apply`, where a `result` hands one on, and where a value the rule accepts only up to an
+/// end is worked out after a table that may write no value. Before, the definition an `apply`
+/// writes lost where its value was absent, so a `none` row never fired and `false` took the
+/// absent value; a `result` that named one answered its placeholder; and the mask of the elements
+/// refused had the name of the one where a column is absent, so a charge past its end marked the
+/// truth value absent instead of refusing the parcel.
+#[test]
+fn numpy_answers_a_value_brought_in_or_handed_on_where_it_is_absent() {
+    if !ready(Need::Python, || have("python3", &["--version"]), "python3 is not here") {
+        return;
+    }
+    if !have("python3", &["-c", "import numpy"]) {
+        skip("NumPy is not here; the columns of a value brought in are not run");
+        return;
+    }
+    let t = TempDir::new("optional-numpy");
+    let mut callers = Vec::new();
+    for (callee, callee_src, caller, caller_src) in HANDED {
+        std::fs::write(t.path().join(callee), callee_src).unwrap();
+        let pin = rulec::link::pin::meaning(callee_src);
+        let path = t.path().join(caller);
+        std::fs::write(&path, caller_src.replace("{pin}", &pin)).unwrap();
+        callers.push(path.to_string_lossy().into_owned());
+    }
+    let out = t.path().join("out");
+    let dir = out.to_string_lossy().into_owned();
+    let mut args = vec!["gen"];
+    args.extend(callers.iter().map(String::as_str));
+    args.extend(["--out", dir.as_str(), "--target", "numpy", "--target", "python", "--extra", "runner", "--extra", "vectors"]);
+    let (code, said, e) = rulec("en", None, &args);
+    assert_eq!(code, 0, "{said}{e}");
+    let j = rulec_test(&out);
+    for (alias, signed) in [("parcel_handling", "signed"), ("parcel_handling_ja", "署名")] {
+        // the vectors ask for the absent value, and past the end of the charge
+        let vectors = std::fs::read_to_string(out.join("vectors").join(format!("{alias}.jsonl"))).unwrap();
+        assert!(vectors.contains(&format!("\"{signed}\":null")), "{alias}: no vector asks for {signed} = none\n{vectors}");
+        let refused = std::fs::read_to_string(out.join("vectors").join(format!("{alias}.refused.jsonl"))).unwrap();
+        assert!(refused.contains(":20001}"), "{alias}: no vector is refused past the end of the charge\n{refused}");
+        let mut ran = Vec::new();
+        for r in j.get("results").and_then(|v| v.as_arr()).unwrap_or_default() {
+            if r.get("rule").and_then(|v| v.as_str()) != Some(alias) || r.get("ran").and_then(|v| v.as_bool()) != Some(true) {
+                continue;
+            }
+            assert_eq!(r.get("ok").and_then(|v| v.as_bool()), Some(true), "{alias}: {r:?}");
+            ran.push(r.get("lang").and_then(|v| v.as_str()).unwrap_or_default().to_string());
+        }
+        ran.sort();
+        assert_eq!(ran, ["numpy", "python"], "{alias}");
     }
 }

@@ -66,7 +66,7 @@ pub fn case(path: &Path) -> Case {
     // hand-written scenarios beside the book, for what the generated ones do not reach
     if let Ok(text) = std::fs::read_to_string(path.with_file_name(format!("{}.more.json", stem(path)))) {
         let more: Vec<Value> = serde_json::from_str(&text).unwrap();
-        scenarios.extend(more.iter().map(|v| scenario::from_json(&book, v).unwrap_or_else(|e| panic!("{}: {e}", path.display()))));
+        scenarios.extend(more.iter().map(|v| scenario::from_json(&book, v).unwrap_or_else(|e| panic!("{}: {}", path.display(), e.en))));
     }
     let mut reference = Vec::new();
     for s in &scenarios {
@@ -604,20 +604,22 @@ pub fn tenant(combo: &str, c: &Case, i: usize) -> String {
 pub fn run_runner(mut cmd: Command, input: &Value, work: &Path, combo: &str) -> Result<Value, String> {
     let file = work.join(format!("{}.json", combo.replace('/', "-")));
     std::fs::write(&file, serde_json::to_string(input).unwrap()).unwrap();
-    let out = cmd.arg(&file).output().map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err(format!("{combo}: the runner failed:\n{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
+    let out = finish(cmd.arg(&file), CLIENT_LIMIT, &format!("{combo}: the runner of the scenarios"));
+    if !out.ok {
+        return Err(format!("{combo}: the runner failed:\n{}{}", out.stdout, out.stderr));
     }
-    serde_json::from_slice(&out.stdout).map_err(|e| format!("{combo}: the runner's output is not JSON ({e}):\n{}", String::from_utf8_lossy(&out.stderr)))
+    serde_json::from_str(&out.stdout).map_err(|e| format!("{combo}: the runner's output is not JSON ({e}):\n{}", out.stderr))
 }
 
 // ── the SQL as it is, through psql ───────────────────────────────────────
 
-/// One psql session, fed a statement at a time.
+/// One psql session, fed a statement at a time. What it prints is read in a thread of its own, so
+/// that a statement it does not answer within [`SQL_LIMIT`] fails the test, saying so, and is not
+/// waited for without end.
 struct Psql {
     child: std::process::Child,
     stdin: std::process::ChildStdin,
-    stdout: BufReader<std::process::ChildStdout>,
+    lines: std::sync::mpsc::Receiver<String>,
     stderr: Arc<Mutex<String>>,
 }
 
@@ -629,7 +631,16 @@ impl Psql {
     fn open(pg: &Postgres) -> Psql {
         let mut child = pg.db().args(["-A", "-t", "-F", "|", "-v", "ON_ERROR_STOP=0"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
         let stdin = child.stdin.take().unwrap();
-        let stdout = BufReader::new(child.stdout.take().unwrap());
+        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        let (sent, lines) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut line = String::new();
+            while stdout.read_line(&mut line).is_ok_and(|n| n > 0) {
+                if sent.send(std::mem::take(&mut line)).is_err() {
+                    break;
+                }
+            }
+        });
         let mut err = BufReader::new(child.stderr.take().unwrap());
         let stderr = Arc::new(Mutex::new(String::new()));
         let sink = stderr.clone();
@@ -640,7 +651,7 @@ impl Psql {
                 line.clear();
             }
         });
-        Psql { child, stdin, stdout, stderr }
+        Psql { child, stdin, lines, stderr }
     }
 
     /// The rows a statement prints.
@@ -648,11 +659,16 @@ impl Psql {
         writeln!(self.stdin, "{sql};\n\\echo {END}").map_err(|e| e.to_string())?;
         self.stdin.flush().map_err(|e| e.to_string())?;
         let mut rows = Vec::new();
+        let until = Instant::now() + SQL_LIMIT;
         loop {
-            let mut line = String::new();
-            if self.stdout.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
-                return Err(format!("psql ended: {}", self.stderr.lock().unwrap()));
-            }
+            let line = match self.lines.recv_timeout(until.saturating_duration_since(Instant::now())) {
+                Ok(line) => line,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err(format!("psql ended: {}", self.stderr.lock().unwrap())),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    let _ = self.child.kill();
+                    return Err(format!("psql did not answer within {} seconds, and was stopped: {sql}\n{}", SQL_LIMIT.as_secs(), self.stderr.lock().unwrap()));
+                }
+            };
             let line = line.trim_end_matches('\n').to_string();
             if line == END {
                 break;
@@ -672,8 +688,15 @@ impl Psql {
 }
 
 impl Drop for Psql {
+    /// psql is asked to end, and given a minute to; past it, it is stopped.
     fn drop(&mut self) {
         let _ = writeln!(self.stdin, "\\q");
+        let _ = self.stdin.flush();
+        let until = Instant::now() + Duration::from_secs(60);
+        while matches!(self.child.try_wait(), Ok(None)) && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let _ = self.child.kill();
         let _ = self.child.wait();
     }
 }

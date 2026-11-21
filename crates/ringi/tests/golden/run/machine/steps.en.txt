@@ -1,0 +1,7 @@
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> approved
+scenario `inside_every_range`: as written (2 rows)
+
+2026-11-16 10:00  submit  by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  reject  by e1101  -> rejected
+scenario `below_zero_and_past_a_hundred`: as written (2 rows)

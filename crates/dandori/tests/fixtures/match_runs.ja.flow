@@ -1,0 +1,101 @@
+workflow 分岐と実行 v1
+description "match のエラーが見せる実行は、分岐の無い値をエラーが言うとき、その値を持つ：値を入れる腕を通り、ループを一回まわり、無いことがある値からその値を取り出す"
+
+use rule 送料 from "rules/会員段階の送料.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:member-tier-shipping"
+
+record 返事
+  済み : bool
+
+inputs
+  内密   : bool
+  名前   : string
+  狭い   : 送料.段階  range >=一般 <=シルバー
+  広い   : 送料.段階
+  あれば : 送料.段階?
+  段階表 : list[送料.段階]
+
+outputs
+  済み : bool
+
+task 挨拶(文: string) -> 返事
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:greet"
+  idempotent
+
+task 選ぶ() -> 送料.段階
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:pick"
+  idempotent
+
+flow
+  # ゴールドとプラチナが入るのは false の腕だけ：見せる実行はその腕を通る
+  let 段1 = 狭い
+  match 内密
+    true => pass
+    false =>
+      let 段1 = 広い
+      pass
+  match 段1
+    一般 => pass
+    シルバー => pass
+  # ゴールドとプラチナが入るのは二回目の回から：見せる実行はループを一回まわる
+  let 段2 = 狭い
+  repeat at most 3 times
+    match 段2
+      一般 => pass
+      シルバー => pass
+    let 段2 = 広い
+    let 返り = 挨拶(文: 名前)
+    match 返り.済み
+      true => break
+      false => pass
+  # 無いことがある値から取り出した値：見せる実行はゴールドを持つ
+  let 段3 = 狭い
+  match 内密
+    true => pass
+    false =>
+      let 段3 = あれば
+      pass
+  match 段3
+    none => pass
+    some 取り出した段 =>
+      match 取り出した段
+        一般 => pass
+        シルバー => pass
+  # タスクの答え：見せる実行は、それを呼ぶ腕を通る
+  let 段4 = 狭い
+  match 内密
+    true => pass
+    false =>
+      let 段4 = 選ぶ()
+      pass
+  match 段4
+    一般 => pass
+    シルバー => pass
+  # リストの値を、回の中で別の変数に入れる：見せる実行はループをまわる
+  let 段5 = 狭い
+  for 段 in 段階表 at most 3
+    let 段5 = 段
+  match 段5
+    一般 => pass
+    シルバー => pass
+  # 二つの変数を、回ごとに一つずつさかのぼって渡す値：見せる実行はループを二回まわる
+  let 段6 = 狭い
+  let 段7 = 狭い
+  repeat at most 3 times
+    match 段6
+      一般 => pass
+      シルバー => pass
+    let 段6 = 段7
+    let 段7 = 広い
+  # 別の変数に入れた値：見せる実行は、その変数に値を入れた腕を通る
+  let 段8 = 狭い
+  match 内密
+    true => pass
+    false =>
+      let 段8 = 広い
+      pass
+  let 段9 = 段8
+  match 段9
+    一般 => pass
+    シルバー => pass
+  succeed 済み = true

@@ -1,0 +1,16 @@
+rule parcel_fee v1
+description "A parcel fee whose rounding mode is written truncate, a common name of down"
+
+inputs
+  qty : number  range >=1 <=100
+
+outputs
+  fee : money[USD]  round truncate(1USD)
+
+define by_qty : money[USD] = qty * 75USD / 100
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=4 | 3USD   |
+| >4  | by_qty |

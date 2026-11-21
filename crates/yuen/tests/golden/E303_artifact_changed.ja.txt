@@ -1,6 +1,6 @@
 エラー[E303]: tests/mutants/E303_artifact_changed/period_of_months.req:21:3: file "period_of_months.cal" は、2026-10-03 に development がこのリンクを確かめたあとで変わりました
     21 |   satisfied by file "period_of_months.cal"
-  tests/mutants/E303_artifact_changed/period_of_months.cal の変わったところ:
+  period_of_months.cal の変わったところ:
       @@ -13,5 +13,5 @@
           - 1 day                                        # the day before it: the last day of the last month when it had no corresponding day
         date last_day_moved = last_day

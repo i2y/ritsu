@@ -201,6 +201,16 @@ golden!(e147_一つずつでも届く合計, "E147", "tests/mutants/m_e147ja.rul
 golden!(e148_入力の_unique, "E148", "tests/mutants/m_e148ja.rule", "E148");
 // §15.299: a `range` with no end.
 golden!(e149_端の無い_range, "E149", "tests/mutants/m_e149ja.rule", "E149");
+// §15.313: the range of a `define` that meets nothing the value reaches.
+golden!(e150_届く値と重ならない定義の範囲, "E150", "tests/mutants/m_e150ja.rule", "E150");
+// §15.314: the range of a `sum` or a `count` no sequence comes to.
+golden!(e150_件数の上限では届かない合計, "E150-sum", "tests/mutants/m_e150sumja.rule", "E150");
+golden!(e150_件数の下限で必ず越える合計, "E150-top", "tests/mutants/m_e150topja.rule", "E150");
+golden!(e150_件数の上限より大きい数え上げ, "E150-count", "tests/mutants/m_e150countja.rule", "E150");
+// §15.323: an output nothing decides, one read before it is decided, a table with no `->`.
+golden!(e151_決めるものの無い出力, "E151", "tests/mutants/m_e151ja.rule", "E151");
+golden!(e151_result_より前に読む出力, "E151-result", "tests/mutants/m_e151resultja.rule", "E151");
+golden!(e152_出力の列の無い表, "E152", "tests/mutants/m_e152ja.rule", "E152");
 
 // The service a rule implements (§15.274): a value the contract does not have, and a service the
 // contract does not declare.

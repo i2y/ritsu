@@ -1,0 +1,56 @@
+エラー[E016]: tests/fixtures/http_refusals.flow:22:1: 引数 `x_id` は、`places` の GET /either のクエリの `x_id` とヘッダーの `X-Id` のどれにも当たるので、どこに送るかが決まりません。記述の名前のどれか一つにだけ当たる名前にしてください
+    22 | task either(x_id: string) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:26:1: 引数 `x_key` と `X_Key` が、どちらも `places` の GET /keys のヘッダーの `X-Key` に当たります
+    26 | task keys(x_key: string, X_Key: string) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:30:1: `places` の GET /tabs の `days` の style `tabDelimited` は、OpenAPI に無い書き方です
+    30 | task tabs(days: list[string]) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:34:1: `places` の GET /content は、`filter` の書き方を `content`（メディアタイプ）で言っています。dandori が書くのは `schema` と `style` で言う書き方です
+    34 | task by_content(filter: Years) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:38:1: ヘッダー `Host` は、HTTP のクライアントが自分で書くので、引数からは送れません
+    38 | task with_host(host: string) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:41:1: クッキーは、ヘッダー `Cookie` でなく、記述の `in: cookie` の引数として送ります
+    41 | task with_cookie_header(cookie: string) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:45:1: `X-印` はヘッダーの名前に書けません（HTTP の名前に使える字は、英数字と `!#$%&'*+-.^_`|~` です）
+    45 | task odd_names(x_印: string, セッション: string) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:45:1: `セッション` はクッキーの名前に書けません（HTTP の名前に使える字は、英数字と `!#$%&'*+-.^_`|~` です）
+    45 | task odd_names(x_印: string, セッション: string) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:49:1: 引数 `x_tags` は、`places` の GET /header-form が受け取るものと合いません。ヘッダーの style は simple で、form は書けません
+    49 | task header_form(x_tags: list[string]) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:52:1: 引数 `ids` は、`places` の GET /path-form/{ids} が受け取るものと合いません。パスの style は simple・label・matrix のどれかで、form は書けません
+    52 | task path_form(ids: list[string]) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:55:1: 引数 `prefs` は、`places` の GET /cookie-simple が受け取るものと合いません。クッキーの style は form で、simple は書けません
+    55 | task cookie_simple(prefs: list[string]) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:60:1: 引数 `prefs` は、`places` の GET /cookie-list が受け取るものと合いません。explode: true の form では、リストやレコードがクッキーの書き方になりません。explode: false にしてください
+    60 | task cookie_list(prefs: list[string]) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:63:1: 引数 `ids` は、`places` の GET /deep-list が受け取るものと合いません。deepObject はオブジェクトの書き方で、リストを書く決まりがありません
+    63 | task deep_list(ids: list[string]) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:66:1: 引数 `codes` は、`places` の GET /pipes が受け取るものと合いません。pipeDelimited の explode: true は、決まりに無い書き方です。explode: false にしてください
+    66 | task pipes(codes: list[string]) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:69:1: 引数 `sort` は、`places` の GET /deep-false が受け取るものと合いません。deepObject の explode: false は、決まりに無い書き方です。explode: true にしてください
+    69 | task deep_false(sort: Sort) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:73:1: 引数 `filter` は、`places` の GET /deep-json が受け取るものと合いません。`json` の値は JSON の文字列で送るので、deepObject では書けません。リストかレコードの型にしてください
+    73 | task deep_json(filter: json) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:76:1: 引数 `tags` は、`places` の GET /json-list が受け取るものと合いません。`json` の値は JSON の文字列で送るので、`tags` のリストやオブジェクトの書き方になりません。リストかレコードの型にしてください
+    76 | task json_list(tags: json) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:80:1: 引数 `ranges` は、`places` の GET /nested が受け取るものと合いません。クエリには、リストやレコードを中に持つリストやレコードを書く書き方がありません
+    80 | task nested(ranges: list[Years]) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:84:1: `places` の GET /needs にはヘッダー `X-Board-Key` が要りますが、引数 `x_board_key` は無いことがあります
+    84 | task needs_maybe(x_board_key: string?, session: string) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:87:1: `places` の GET /needs にはクッキー `session` が要りますが、`needs_none` はそれを渡しません
+    87 | task needs_none(x_board_key: string) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:91:1: `years` と `first` が、クエリの同じ名前 `first` に値を入れます。受け取る側は二つを分けられません
+    91 | task clash(years: Years, first: int) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:95:1: ヘッダー `Idempotency-Key` には、`key` の冪等キーを dandori が入れます。引数 `idempotency_key` を外してください
+    95 | task order(item: string, idempotency_key: string) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:100:1: `places` の POST /orders にはヘッダー `Idempotency-Key` が要りますが、`order_again` はそれを渡しません。タスクに `key` を書けば、dandori が冪等キーをそこに入れます
+   100 | task order_again(item: string) -> Done
+エラー[E016]: tests/fixtures/http_refusals.flow:104:1: `places` の POST /notes は、URL エンコードの本文の `meta` を `application/json` で書くと言っています。dandori がそこに書くのは、style と explode で言う書き方です
+   104 | task note(text: string, meta: Years) -> Done
+エラー[E003]: tests/fixtures/http_refusals.flow:110:3: 引数 `ranges` を送れません。クエリには、リストやレコードを中に持つリストやレコードを書く書き方がありません
+   110 |   http GET "https://places.example.com/plain"
+エラー[E003]: tests/fixtures/http_refusals.flow:113:3: `years` と `first` が、クエリの同じ名前 `first` に値を入れます。受け取る側は二つを分けられません
+   113 |   http GET "https://places.example.com/plain"
+エラー[E003]: tests/fixtures/http_refusals.flow:116:3: 引数 `ranges` を送れません。URL エンコードの本文には、リストやレコードを中に持つリストやレコードを書く書き方がありません
+   116 |   http POST "https://places.example.com/plain" form
+エラー[E003]: tests/fixtures/http_refusals.flow:116:3: `place` と `room` が、URL エンコードの本文の同じ名前 `room` に値を入れます。受け取る側は二つを分けられません
+   116 |   http POST "https://places.example.com/plain" form

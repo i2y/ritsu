@@ -1,0 +1,12 @@
+# 見出しが proto のパッケージと違う、公表された言語。見出しで一度だけ言い、そのパッケージを通して言語を読む行は言い直さない。
+# published の日本語の版
+map 店(shop) v1
+description "注文を受け、在庫を押さえる"
+
+use context "ctx/受注.ctx"
+use context "ctx/在庫.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"

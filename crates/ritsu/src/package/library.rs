@@ -19,7 +19,7 @@
 //! ([`Units::shared`]), read from that library's `units` module and handed on under the same name,
 //! so that an amount one library gives is an amount the other takes.
 
-use super::{Refusal, Target, kaname_modules, read, refusal};
+use super::{Refusal, Target, kaname_modules, refusal};
 use ritsu_base::modules::Tree;
 use ritsu_base::modules::names::Target as Line;
 use ritsu_base::modules::semver::Version;
@@ -578,7 +578,7 @@ pub fn plan(
             if units.libs.contains_key(&d) {
                 continue;
             }
-            let (brands, its) = library_units(whole, tree, joined, verdicts, contributions, t, d, lang)?;
+            let (brands, its) = library_units(whole, tree, joined, verdicts, t, d, lang)?;
             todo.extend(its.iter().copied());
             units.paths.insert(d, format!("{}{sep}units", import_of.get(&d).cloned().unwrap_or_default()));
             units.names.insert(d, named(tree, d, t).unwrap_or_default().to_string());
@@ -619,18 +619,9 @@ pub fn plan(
 
 /// The types of the units the library of node `d` holds in its `units` module, by their names, and
 /// the libraries it reads: from the files its own `ritsu gen --library` makes it of (its module's,
-/// and those of the modules they reach that no library holds for it).
-#[allow(clippy::too_many_arguments)]
-fn library_units(
-    whole: &Project,
-    tree: &Tree,
-    joined: &Joined,
-    verdicts: &Rc<ritsu_cross::ProgramVerdicts>,
-    contributions: &[String],
-    t: Target,
-    d: usize,
-    lang: Lang,
-) -> Result<(BTreeSet<String>, Vec<usize>), Refusal> {
+/// and those of the modules they reach that no library holds for it), the rules with the
+/// contributions the engine of rules chose for the run merged.
+fn library_units(whole: &Project, tree: &Tree, joined: &Joined, verdicts: &Rc<ritsu_cross::ProgramVerdicts>, t: Target, d: usize, lang: Lang) -> Result<(BTreeSet<String>, Vec<usize>), Refusal> {
     let prefix = tree.nodes[d].prefix.clone();
     let mut own = whole.clone();
     own.files.retain(|f| whole.dependency_of(&f.rel).as_deref() == Some(prefix.as_str()));
@@ -647,18 +638,26 @@ fn library_units(
         }
     }
     let rulec_lang = if lang == Lang::Ja { rulec::i18n::Lang::Ja } else { rulec::i18n::Lang::En };
+    let chosen = joined.rulec.contributions();
     let mut units = Vec::new();
     for f in reach.of(Tool::Rulec).into_iter().filter(|f| held.contains(&f.rel)) {
         if rulec::link::is_contribution_file(&f.shown) {
             continue;
         }
-        let src = read(&reach, f, lang)?;
-        let (_, _, used) = rulec::link::with_set(contributions, || rulec::i18n::with(rulec_lang, || rulec::codegen::package_parts_at(&src, &f.shown, &f.rel, t.key(), "units", Place::here())))
+        // the rule as the check of the run kept it (DESIGN 4.15)
+        let refused = || {
+            let shown = &f.shown;
+            refusal(1, tr!("`{shown}` は検査を通っていないので生成しません", "`{shown}` does not pass check, so nothing is generated"), lang)
+        };
+        let (path, src, kept) = joined.rulec.prepared(Path::new(&f.shown)).map_err(|_| refused())?;
+        let Ok((rf, rc)) = kept.as_ref() else { return Err(refused()) };
+        let (_, _, used) = rulec::link::with_contributions(chosen.clone(), || rulec::i18n::with(rulec_lang, || rulec::codegen::package_parts_of(rf, rc, &src, &path, &f.rel, t.key(), "units", Place::here())))
             .map_err(|e| refusal(1, Text::new(e.clone(), e), lang))?;
         units.extend(used);
     }
     for f in reach.of(Tool::Chobo).into_iter().filter(|f| held.contains(&f.rel)) {
-        let (_, c) = chobo::check::check_file(Path::new(&f.shown)).map_err(|e| refusal(2, Text::new(e.clone(), e), lang))?;
+        // the book as the check of the run kept it (DESIGN 4.15)
+        let (_, c) = joined.chobo.kept(Path::new(&f.shown)).map_err(|t| refusal(2, t, lang))?;
         let Some(book) = c.book.as_ref() else {
             let shown = &f.shown;
             return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));

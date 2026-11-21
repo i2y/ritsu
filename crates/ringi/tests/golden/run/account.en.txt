@@ -1,0 +1,11 @@
+2026-11-16 10:00  submit   by e1201  -> manager (e1101), due 2026-11-18 end of day
+2026-11-16 11:00  approve  by e1101  -> owner (e3101), due 2026-11-18 end of day
+2026-11-16 16:00  approve  by e3101  -> security (one of e7101, e7102), due 2026-11-18 end of day
+2026-11-17 09:00  remind             -> security (one of e7101, e7102), due 2026-11-18 end of day; reminded e7101, e7102
+2026-11-17 15:00  approve  by e7102  -> approved; operations circulated to e7201, e7202; launch provision
+scenario `administrator_access`: as written (5 rows)
+
+2026-11-16 10:00  submit   by e7102  -> owner (e7001), due 2026-11-18 end of day; manager waits for the approval of security (e7101)
+2026-11-16 11:00  approve  by e7001  -> security (e7101), due 2026-11-18 end of day
+2026-11-16 15:00  approve  by e7101  -> approved; manager done with the approval of security (e7101); operations circulated to e7201, e7202; launch provision
+scenario `the_manager_answers_once_at_security`: as written (3 rows)

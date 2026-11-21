@@ -8,13 +8,13 @@ pub enum J {
     Obj(Vec<(String, J)>),
 }
 
-pub fn parse(s: &str) -> Result<J, String> {
+pub fn parse(s: &str) -> Result<J, ritsu_base::text::Text> {
     let b: Vec<char> = s.chars().collect();
     let mut i = 0usize;
     let v = val(&b, &mut i)?;
     ws(&b, &mut i);
     if i < b.len() {
-        return Err("trailing data after JSON value".into());
+        return Err(tr!("JSON の値のあとに続きがあります", "trailing data after JSON value"));
     }
     Ok(v)
 }
@@ -25,10 +25,10 @@ fn ws(b: &[char], i: &mut usize) {
     }
 }
 
-fn val(b: &[char], i: &mut usize) -> Result<J, String> {
+fn val(b: &[char], i: &mut usize) -> Result<J, ritsu_base::text::Text> {
     ws(b, i);
     match b.get(*i) {
-        None => Err("unexpected end of JSON".into()),
+        None => Err(tr!("JSON が途中で終わっています", "unexpected end of JSON")),
         Some('{') => {
             *i += 1;
             let mut pairs = Vec::new();
@@ -42,7 +42,7 @@ fn val(b: &[char], i: &mut usize) -> Result<J, String> {
                 let k = jstr(b, i)?;
                 ws(b, i);
                 if b.get(*i) != Some(&':') {
-                    return Err("expected `:` in object".into());
+                    return Err(tr!("オブジェクトに `:` がありません", "expected `:` in object"));
                 }
                 *i += 1;
                 let v = val(b, i)?;
@@ -56,7 +56,7 @@ fn val(b: &[char], i: &mut usize) -> Result<J, String> {
                         *i += 1;
                         break;
                     }
-                    _ => return Err("expected `,` or `}` in object".into()),
+                    _ => return Err(tr!("オブジェクトに `,` か `}}` がありません", "expected `,` or `}}` in object")),
                 }
             }
             Ok(J::Obj(pairs))
@@ -80,7 +80,7 @@ fn val(b: &[char], i: &mut usize) -> Result<J, String> {
                         *i += 1;
                         break;
                     }
-                    _ => return Err("expected `,` or `]` in array".into()),
+                    _ => return Err(tr!("配列に `,` か `]` がありません", "expected `,` or `]` in array")),
                 }
             }
             Ok(J::Arr(items))
@@ -97,31 +97,31 @@ fn val(b: &[char], i: &mut usize) -> Result<J, String> {
                 *i += 1;
             }
             let s: String = b[start..*i].iter().collect();
-            s.parse::<f64>().map(J::Num).map_err(|_| format!("bad number `{}`", s))
+            s.parse::<f64>().map(J::Num).map_err(|_| tr!("数 `{s}` が読めません", "bad number `{s}`"))
         }
-        Some(c) => Err(format!("unexpected character `{}` in JSON", c)),
+        Some(c) => Err(tr!("JSON に `{c}` という読めない字があります", "unexpected character `{c}` in JSON")),
     }
 }
 
-fn lit(b: &[char], i: &mut usize, word: &str, out: J) -> Result<J, String> {
+fn lit(b: &[char], i: &mut usize, word: &str, out: J) -> Result<J, ritsu_base::text::Text> {
     for w in word.chars() {
         if b.get(*i) != Some(&w) {
-            return Err(format!("bad JSON literal (expected `{}`)", word));
+            return Err(tr!("JSON のリテラルが読めません（`{word}` が要ります）", "bad JSON literal (expected `{word}`)"));
         }
         *i += 1;
     }
     Ok(out)
 }
 
-fn jstr(b: &[char], i: &mut usize) -> Result<String, String> {
+fn jstr(b: &[char], i: &mut usize) -> Result<String, ritsu_base::text::Text> {
     if b.get(*i) != Some(&'"') {
-        return Err("expected a JSON string".into());
+        return Err(tr!("JSON の文字列が要ります", "expected a JSON string"));
     }
     *i += 1;
     let mut s = String::new();
     loop {
         match b.get(*i) {
-            None => return Err("unterminated JSON string".into()),
+            None => return Err(tr!("JSON の文字列が閉じていません", "unterminated JSON string")),
             Some('"') => {
                 *i += 1;
                 return Ok(s);
@@ -129,7 +129,7 @@ fn jstr(b: &[char], i: &mut usize) -> Result<String, String> {
             Some('\\') => {
                 *i += 1;
                 let Some(e) = b.get(*i) else {
-                    return Err("unterminated escape".into());
+                    return Err(tr!("エスケープが閉じていません", "unterminated escape"));
                 };
                 match e {
                     '"' => s.push('"'),
@@ -150,17 +150,17 @@ fn jstr(b: &[char], i: &mut usize) -> Result<String, String> {
                                 *i += 6;
                                 0x10000 + ((h - 0xD800) << 10) + (lo - 0xDC00)
                             } else {
-                                return Err("lone surrogate in JSON string".into());
+                                return Err(tr!("JSON の文字列にペアの無いサロゲートがあります", "lone surrogate in JSON string"));
                             }
                         } else {
                             h
                         };
                         match char::from_u32(cp) {
                             Some(c) => s.push(c),
-                            None => return Err("bad \\u escape".into()),
+                            None => return Err(tr!("\\u のエスケープが読めません", "bad \\u escape")),
                         }
                     }
-                    other => return Err(format!("unknown escape \\{}", other)),
+                    other => return Err(tr!("読めないエスケープ `\\{other}` があります", "unknown escape \\{other}")),
                 }
                 *i += 1;
             }
@@ -172,13 +172,13 @@ fn jstr(b: &[char], i: &mut usize) -> Result<String, String> {
     }
 }
 
-fn hex4(b: &[char], at: usize) -> Result<u32, String> {
+fn hex4(b: &[char], at: usize) -> Result<u32, ritsu_base::text::Text> {
     let mut v = 0u32;
     for k in 0..4 {
         let Some(c) = b.get(at + k) else {
-            return Err("truncated \\u escape".into());
+            return Err(tr!("\\u のエスケープが途中で終わっています", "truncated \\u escape"));
         };
-        let d = c.to_digit(16).ok_or("bad hex in \\u escape".to_string())?;
+        let d = c.to_digit(16).ok_or_else(|| tr!("\\u のエスケープの 16 進数が読めません", "bad hex in \\u escape"))?;
         v = v * 16 + d;
     }
     Ok(v)
@@ -444,7 +444,7 @@ mod tests {
         let pair = format!("\"{}d83d{}de00\"", "\\u", "\\u");
         assert_eq!(s(&pair), "\u{1F600}");
         let lone = format!("\"{}d83d x\"", "\\u");
-        assert_eq!(parse(&lone).unwrap_err(), "lone surrogate in JSON string");
+        assert_eq!(parse(&lone).unwrap_err().en, "lone surrogate in JSON string");
     }
 
     #[test]
@@ -464,8 +464,8 @@ mod tests {
     fn objects_arrays_and_literals_render_back() {
         let src = r#"{ "a": [1, true, null, "x"], "b": { "c": false } }"#;
         assert_eq!(render(&parse(src).unwrap()), r#"{"a":[1,true,null,"x"],"b":{"c":false}}"#);
-        assert_eq!(parse("[1,]").unwrap_err(), "unexpected character `]` in JSON");
-        assert_eq!(parse("{} x").unwrap_err(), "trailing data after JSON value");
+        assert_eq!(parse("[1,]").unwrap_err().en, "unexpected character `]` in JSON");
+        assert_eq!(parse("{} x").unwrap_err().en, "trailing data after JSON value");
     }
 
     #[test]

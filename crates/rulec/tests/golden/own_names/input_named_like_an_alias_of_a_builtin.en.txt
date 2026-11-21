@@ -1,0 +1,1 @@
+ok tests/own_names/input_named_like_an_alias_of_a_builtin.rule

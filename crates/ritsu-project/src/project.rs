@@ -20,14 +20,15 @@ use std::rc::Rc;
 /// ones that give facts through the ports first (rulec, koyomi, chobo, geas, and the `.proto`
 /// files every language reads with ritsu-proto), then kaname, which receives rules, dates and books
 /// and gives nothing yet, then dandori, which receives rules and gives its tasks, then sekisho,
-/// which receives rules, dates and workflows and gives its gates, then yuen and sakai, which receive
-/// from all of them. kaname comes before dandori, for when a flow calls a function of kaname's
-/// (kaname's DESIGN 11.2).
-pub const ORDER: [Tool; 10] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Kaname, Tool::Dandori, Tool::Sekisho, Tool::Yuen, Tool::Sakai];
+/// which receives rules, dates and workflows and gives its gates, then ringi, which receives rules,
+/// dates, books, workflows, gates and modules (ringi's DESIGN 16.3), then yuen and sakai, which
+/// receive from all of them. kaname comes before dandori, for when a flow calls a function of
+/// kaname's (kaname's DESIGN 11.2).
+pub const ORDER: [Tool; 11] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Kaname, Tool::Dandori, Tool::Sekisho, Tool::Ringi, Tool::Yuen, Tool::Sakai];
 
 /// The language of a file, by its extension: `.rule`, `.cal`, `.book`, `.geas`, `.proto`, `.kn`,
-/// `.flow` (`.ja.flow` too), `.gate`, `.req` and `.ctx`. None for any other file, which a project
-/// reads only when something in it names the file.
+/// `.flow` (`.ja.flow` too), `.gate`, `.ringi`, `.req` and `.ctx`. None for any other file, which a
+/// project reads only when something in it names the file.
 pub fn kind_of(path: &str) -> Option<Tool> {
     let ext = Path::new(path).extension()?.to_str()?;
     ORDER.into_iter().find(|t| t.extension() == Some(ext))
@@ -95,12 +96,17 @@ pub struct Project {
     /// How Lean holds the proofs beside the modules of kaname to their properties (`ritsu check
     /// --lean`, kaname's DESIGN 38.6); none when they are not checked.
     pub lean: Option<kaname::lean::LeanOptions>,
+    /// What ringi's check reads besides the files: the day every request is to be usable through
+    /// (`ritsu check --through`, ringi's DESIGN 16.1).
+    pub ringi: ringi::check::Options,
 }
 
 impl Project {
     /// The project of the paths given (`.` when none is), under `--root` when it is given, else
     /// under the nearest directory above the first path that holds a `.git` or a `ritsu.mod`, else
-    /// the first path itself (DESIGN 6.2, item 3; 17.6). A path that is not there, that is outside the root, or a file
+    /// the first path itself (DESIGN 6.2, item 3; 17.6). Each path, `--root` among them, is the file the
+    /// system opens (DESIGN 4.15): one whose `..` crosses a symbolic link is where the link leads, the
+    /// root found above it, and its name from the root is that place's. A path that is not there, that is outside the root, or a file
     /// of no language given by name, is what the person has to correct: the error says so. So does
     /// a project with no file of any language, which checks nothing, and one with only the `.geas`
     /// files of dependencies, whose claims are not run (DESIGN 17.8).
@@ -110,12 +116,12 @@ impl Project {
         ritsu_base::modules::given_all(&given)?;
         for g in &given {
             if !ritsu_base::fs::exists(g) {
-                return Err(tr!("`{g}` がありません", "`{g}` is not there"));
+                return Err(ritsu_base::cli::not_there(g));
             }
         }
         let root = match root_flag {
             Some(r) => {
-                let p = paths::absolute(Path::new(r));
+                let p = paths::opened(Path::new(r));
                 if !ritsu_base::fs::is_dir(&p) {
                     return Err(tr!("`--root {r}` はディレクトリではありません", "`--root {r}` is not a directory"));
                 }
@@ -158,11 +164,10 @@ impl Project {
         rels.sort_by(|(ta, a), (tb, b)| (rank(*ta), a).cmp(&(rank(*tb), b)));
         rels.dedup();
         if rels.is_empty() {
-            let gs = given.join(" ");
-            let mut e = tr!(
-                "{gs} には、ritsu の言語のファイル（.rule、.flow、.cal、.book、.geas、.req、.ctx、.gate、.kn、.proto）がありません",
-                "there is no file of ritsu's languages (.rule, .flow, .cal, .book, .geas, .req, .ctx, .gate, .kn, .proto) in {gs}"
-            );
+            // in the words every command of the toolchain says a directory with none of its files in
+            // (DESIGN 6.2, item 10)
+            let gs = given.join("`, `");
+            let mut e = ritsu_base::cli::no_files_under(&gs, &[".rule", ".flow", ".cal", ".book", ".geas", ".req", ".ctx", ".gate", ".kn", ".proto"]);
             for m in &skipped {
                 let note = paths::other_module_note(&shown.path(m), "ritsu check");
                 e = Text::new(format!("{}\n{}", e.ja, note.ja), format!("{}\n{}", e.en, note.en));
@@ -171,7 +176,7 @@ impl Project {
         }
         let files = rels.into_iter().map(|(tool, rel)| File { tool, shown: shown.path(&rel), rel }).collect();
         let tree = module.then(|| ritsu_base::modules::tree(&root));
-        let mut p = Project { root, shown, given, root_flag: root_flag.map(str::to_string), files, skipped, tree, whole, not_run: Vec::new(), run_claims: true, lean: None };
+        let mut p = Project { root, shown, given, root_flag: root_flag.map(str::to_string), files, skipped, tree, whole, not_run: Vec::new(), run_claims: true, lean: None, ringi: ringi::check::Options::default() };
         p.leave_out_claims();
         if p.files.is_empty() {
             let gs = p.given.join(" ");

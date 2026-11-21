@@ -1,0 +1,37 @@
+rule price(price) v1
+description "Declarations with an error, and the lines that use what they declare: each error is said once, at its declaration"
+
+enum kind(kind) = books(books) "Books" | music(music) "Music" | toys(toys) "Toys"
+enum tier(tier) = plain(plain) "Plain" | gold(gold) "Gold"
+
+inputs
+  # the name written wrong: the table and the example still write `item_kind`
+  item_knd(item_knd) : kind
+  # the type written wrong: there is no type `tierr`, and the cells of `member` are not checked
+  member(member) : tierr
+  # the unit written wrong: the range, the definition and the example are not checked
+  list_price(list_price) : money[UDS]  range >=0USD <=1000USD
+
+outputs
+  price(price) : money[USD]  round half_up(1USD)
+
+table markup_of
+policy unique
+| item_kind | -> markup : rate[step 1%] |
+| books     | 0%                        |
+| music     | 10%                       |
+| toys      | 20%                       |
+
+table discount_of
+policy unique
+| member | -> discount : rate[step 1%] |
+| plain  | 0%                          |
+| gold   | 5%                          |
+
+define gross : money[USD] = list_price + list_price * markup
+define price : money[USD] = gross - gross * discount
+
+examples
+| item_kind | member | list_price | -> price |
+| books     | plain  | 20USD      | 20USD    |
+| toys      | gold   | 100USD     | 114USD   |

@@ -41,6 +41,10 @@ it was not earned. Run it first: the region is what the whole rule does with the
 what the changed row says (a base fee a later table multiplies by 0% moves nobody). **With
 `--fixtures`** it answers how many of your records move and by how much, read as the old version
 reads them; inputs the new one does not take are listed apart. Run `fixtures lint` first, always.
+What a version **accepts** is listed above the region where it changed, and is a finding of its
+own (exit 1) even when every input both versions take gets the same answer: the range of an
+input, of a `sum`, a `count` or a `define`, and the range, the type or the `unique` of a field of
+an element (`lots[].fee  0..100 → 0..50`).
 
 A version is a file, a git tag (`parcel@v3` is `rules/parcel/v3`, else the revision `v3`), a path at a revision (on a
 PR, `rules/parcel.rule@origin/main`), or a dependency's rule: `@tax/vat.rule` at the lock's version, `@tax@1.0.0/vat.rule` from the
@@ -55,6 +59,15 @@ matter, and tell a person about the ones you cannot decide, since a row you cann
 `--at-most <n>` makes it a gate. `--claims-only` asks how far the claims alone go, and `--other <path>`
 writes a different table that keeps everything the file says, to compare with `rulec diff`.
 `--format json` is in [formats.md](formats.md#strength).
+
+## For a checker other than rulec: `rulec certificate <file.rule>`
+
+The evidence behind all five proofs, as one JSON object something other than rulec can re-check:
+the tree tiling the input space, the axis each pair of rows of a `unique` table parts on, a
+point reaching each row with its values, every computed value's interval and type, each output's
+range once rounded, and where each cell stands in the file. `tools/recheck.py` re-checks it with
+no dependencies; `proofs/` proves in Lean 4 that those checks imply the claims and runs them.
+`--rule <file>` ties it to that text, cell by cell ([formats.md](formats.md)).
 
 ## For people: `rulec doc`
 

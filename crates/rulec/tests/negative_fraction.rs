@@ -27,8 +27,11 @@ fn rulec(dir: &Path, lang: &str, args: &[&str]) -> (i32, String) {
 struct Swing {
     lang: &'static str,
     rule: &'static str,
-    /// The witness and the row to add, as `check` writes them.
-    said: [&'static str; 2],
+    /// The witness, the part no row takes and the row to add, as `check` writes them.
+    said: [&'static str; 3],
+    /// A row for the bottom of the range, to put above the table's own, and the row `check` then
+    /// asks for: its lower end is that row's boundary, below zero.
+    below: [&'static str; 2],
 }
 
 const SWING_EN: Swing = Swing {
@@ -50,7 +53,8 @@ examples
 | change | -> fee |
 | 0%     | 10USD  |
 ",
-    said: ["An input that matches no row: change = -0.5%", "| -0.5% | 10USD |"],
+    said: ["An input that matches no row: change = -0.5%", "No row matches: change from -0.5% to -0.1%", "| <0% | ? |"],
+    below: ["| <-0.3% | 10USD                |\n", "| >=-0.3% <0% | ? |"],
 };
 
 const SWING_JA: Swing = Swing {
@@ -72,11 +76,14 @@ examples
 | 変動率 | -> 手数料 |
 | 0%     | 100円     |
 ",
-    said: ["当てはまらない例: 変動率 = -0.5%", "| -0.5% | 100円 |"],
+    said: ["当てはまらない例: 変動率 = -0.5%", "どの行にも当てはまらない入力: 変動率が -0.5% から -0.1%", "| <0% | ? |"],
+    below: ["| <-0.3% | 100円                 |\n", "| >=-0.3% <0% | ? |"],
 };
 
-/// The completeness check names the input below zero that no row takes, and the row to add is a
-/// row for that input: in the text a person reads and in the JSON's `fix`, which a tool pastes.
+/// The completeness check names the inputs below zero that no row takes with their sign — the
+/// example, and both ends of the part — and the row to add takes them: in the text a person reads
+/// and in the JSON's `fix`, which a tool pastes. A boundary below zero that the table writes is
+/// written in the row with its sign too.
 #[test]
 fn a_gap_below_zero_is_named_with_its_sign() {
     for s in [&SWING_EN, &SWING_JA] {
@@ -85,12 +92,22 @@ fn a_gap_below_zero_is_named_with_its_sign() {
         std::fs::write(d.join("swing.rule"), s.rule).unwrap();
         let (code, out) = rulec(d, s.lang, &["check", "swing.rule"]);
         assert_eq!(code, 1, "{}: {out}", s.lang);
-        assert!(out.contains("E101") && out.contains(s.said[0]) && out.contains(&format!("`{}`", s.said[1])), "{}: {out}", s.lang);
+        assert!(out.contains("E101") && out.contains(s.said[0]) && out.contains(s.said[1]) && out.contains(&format!("`{}`", s.said[2])), "{}: {out}", s.lang);
         let (_, js) = rulec(d, s.lang, &["check", "swing.rule", "--format", "json"]);
         let gap = js.lines().find(|l| l.contains("\"code\":\"E101\"")).unwrap_or_else(|| panic!("{}: E101 が無い:\n{js}", s.lang));
         let j = rulec::json::parse(gap).unwrap();
         let fix = j.get("fix").and_then(|f| f.get("text")).and_then(|t| t.as_str().map(str::to_string));
-        assert_eq!(fix.as_deref(), Some(s.said[1]), "{}: 貼る行の符号: {gap}", s.lang);
+        assert_eq!(fix.as_deref(), Some(s.said[2]), "{}: 貼る行: {gap}", s.lang);
+        // with a row for the bottom of the range, the part left is between two boundaries
+        let head = s.rule.lines().find(|l| l.starts_with("| ") && l.contains("->")).unwrap();
+        let with_bottom = s.rule.replacen(&format!("{head}\n"), &format!("{head}\n{}", s.below[0]), 1);
+        assert_ne!(with_bottom, s.rule, "{}", s.lang);
+        std::fs::write(d.join("swing.rule"), with_bottom).unwrap();
+        let (_, js) = rulec(d, s.lang, &["check", "swing.rule", "--format", "json"]);
+        let gap = js.lines().find(|l| l.contains("\"code\":\"E101\"")).unwrap_or_else(|| panic!("{}: E101 が無い:\n{js}", s.lang));
+        let j = rulec::json::parse(gap).unwrap();
+        let fix = j.get("fix").and_then(|f| f.get("text")).and_then(|t| t.as_str().map(str::to_string));
+        assert_eq!(fix.as_deref(), Some(s.below[1]), "{}: 貼る行の符号: {gap}", s.lang);
     }
 }
 

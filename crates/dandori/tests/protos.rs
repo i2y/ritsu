@@ -24,7 +24,7 @@ fn root() -> PathBuf {
 /// tests/fixtures), as the type of a field of a record of its own, under the name `alias`.
 fn made_from(alias: &str, file: &str) -> (Model, Api, Vec<(String, String, bool)>) {
     let path = root().join("tests/fixtures").join(file);
-    let doc = apis::load(ApiKind::Proto, &path).unwrap_or_else(|e| panic!("{e}"));
+    let doc = apis::load(ApiKind::Proto, &path).unwrap_or_else(|e| panic!("{}", e.en));
     let ApiDoc::Proto(pf) = &doc else { unreachable!("a .proto") };
     let own = format!("{}.", pf.package);
     // (the name in the flow, the full name in the .proto, whether it is an enum)
@@ -362,7 +362,7 @@ fn rulec_gen_writes_the_names_dandori_builds() {
         let out = scratch("gen");
         rulec_gen(&rule, &out);
         let written = rulec_proto(&rule);
-        let pf = dandori::proto::load(&out.join(written)).unwrap_or_else(|e| panic!("{}: {e}", rule.display()));
+        let pf = dandori::proto::load(&out.join(written)).unwrap_or_else(|e| panic!("{}: {}", rule.display(), e.en));
         let name = rule.file_name().unwrap().to_string_lossy().to_string();
         assert!(pf.unread.is_empty(), "{name}: the .proto rulec writes imports what it does not write: {:?}", pf.unread);
 
@@ -495,13 +495,20 @@ fn rule_services_answer_as_dandori_reads_them() {
             .args(["--http", "127.0.0.1:0"])
             .current_dir(out.join("python"))
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
+            // what it logs is not read; a pipe nobody reads would stop it once full
+            .stderr(std::process::Stdio::null())
             .spawn()
             .unwrap();
         let stdout = child.stdout.take().unwrap();
         let service = Service(child);
-        let mut first = String::new();
-        std::io::BufRead::read_line(&mut std::io::BufReader::new(stdout), &mut first).unwrap();
+        // its first line, for no longer than a minute: a service that says nothing is not waited for
+        let (said, heard) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut first = String::new();
+            let _ = std::io::BufRead::read_line(&mut std::io::BufReader::new(stdout), &mut first);
+            let _ = said.send(first);
+        });
+        let first = heard.recv_timeout(std::time::Duration::from_secs(60)).unwrap_or_else(|_| panic!("{name}: the service said nothing on its first line within 60 seconds"));
         let base = first.trim().to_string();
         assert!(base.starts_with("http://127.0.0.1:"), "{name}: the service says where it is on its first line, not {first:?}");
 
@@ -531,8 +538,12 @@ fn rule_services_answer_as_dandori_reads_them() {
         bodies.extend(wrong.iter().map(|(_, _, b)| b.clone()));
         let dir = scratch("post");
         std::fs::write(dir.join("requests.json"), serde_json::to_string(&json!({ "url": c.url, "bodies": bodies })).unwrap()).unwrap();
-        let post = Command::new(venv.join("python")).arg(root().join("tools/connect/post.py")).arg(dir.join("requests.json")).arg(dir.join("answers.json")).output().unwrap();
-        assert!(post.status.success(), "{name}: post.py failed: {}", String::from_utf8_lossy(&post.stderr));
+        let post = ritsu_testkit::run::finish(
+            Command::new(venv.join("python")).arg(root().join("tools/connect/post.py")).arg(dir.join("requests.json")).arg(dir.join("answers.json")),
+            std::time::Duration::from_secs(5 * 60),
+            &format!("{name}: post.py, which sends the requests to the service"),
+        );
+        assert!(post.ok, "{name}: post.py failed: {}", post.stderr);
         let answers: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join("answers.json")).unwrap()).unwrap();
         assert_eq!(answers.len(), bodies.len());
         for (i, line) in lines.iter().enumerate() {
@@ -595,6 +606,19 @@ fn imports_of(text: &str) -> Vec<String> {
     text.lines().filter_map(|l| l.trim().strip_prefix("import ")).filter_map(|l| l.split('"').nth(1)).map(String::from).collect()
 }
 
+/// A root of imports with `google/type/date.proto` in it, as much of it as protoc needs: the tests
+/// keep no copy of the file, and dandori reads the type by its name (DESIGN 44).
+fn date_proto_root() -> PathBuf {
+    let dir = scratch("date-proto");
+    std::fs::create_dir_all(dir.join("google/type")).unwrap();
+    std::fs::write(
+        dir.join("google/type/date.proto"),
+        "syntax = \"proto3\";\n\npackage google.type;\n\n// A whole or partial calendar date: a year from 1 to 9999 or 0, a month from 1 to 12 or 0, a day from 1 to 31 or 0.\nmessage Date {\n  int32 year = 1;\n  int32 month = 2;\n  int32 day = 3;\n}\n",
+    )
+    .unwrap();
+    dir
+}
+
 /// dandori's options, which a user copies into the root of their protos, pass buf's lint as they
 /// are (STANDARD, as `proto/buf.yaml` says), and build.
 #[test]
@@ -627,10 +651,11 @@ fn service_protos_build_with_protoc() {
         return;
     };
     let mut built = Vec::new();
+    let date = date_proto_root();
     for f in proto_files(&root().join("examples")).into_iter().chain(proto_files(&root().join("tests"))) {
         let imports = imports_of(&std::fs::read_to_string(&f).unwrap());
         let dir = f.parent().unwrap();
-        let kept = |i: &String| i.starts_with("google/protobuf/") || i == "dandori/v1/options.proto" || dir.join(i).exists();
+        let kept = |i: &String| i.starts_with("google/protobuf/") || i == "dandori/v1/options.proto" || i == "google/type/date.proto" || dir.join(i).exists();
         if !imports.iter().any(|i| i == "dandori/v1/options.proto") || !imports.iter().all(kept) {
             continue;
         }
@@ -639,6 +664,8 @@ fn service_protos_build_with_protoc() {
             .arg(dir)
             .arg("-I")
             .arg(root().join("proto"))
+            .arg("-I")
+            .arg(&date)
             .arg("--include_imports")
             .arg(format!("--descriptor_set_out={}", scratch("protoc").join("set.pb").display()))
             .arg(&f)
@@ -656,6 +683,9 @@ fn service_flows() -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = ["temporal", "aws", "pydantic-graph"].iter().flat_map(|v| ["fulfillment.flow", "fulfillment.ja.flow"].map(|f| root().join(format!("examples/fulfillment/{v}/{f}")))).collect();
     out.push(root().join("tests/flows/events.flow"));
     out.push(root().join("tests/flows/service.flow"));
+    // `google.type.Date`, which protobuf reads as `{year, month, day}` (DESIGN 44)
+    out.push(root().join("tests/flows/service_dates.flow"));
+    out.push(root().join("tests/flows/service_dates.ja.flow"));
     out
 }
 
@@ -693,6 +723,7 @@ fn protobuf_reads_what_the_services_carry() {
     }
     use dandori::model::{Mark, TK};
     let (mut read, mut inputs_back) = (0, 0);
+    let date = date_proto_root();
     for f in service_flows() {
         let name = f.strip_prefix(root()).unwrap().display().to_string();
         let (_, checked) = with_rules(|| dandori::check::check_file(&f)).unwrap();
@@ -706,6 +737,8 @@ fn protobuf_reads_what_the_services_carry() {
             .arg(proto.parent().unwrap())
             .arg("-I")
             .arg(root().join("proto"))
+            .arg("-I")
+            .arg(&date)
             .arg("--include_imports")
             .arg(format!("--descriptor_set_out={}", set.display()))
             .arg(&proto)

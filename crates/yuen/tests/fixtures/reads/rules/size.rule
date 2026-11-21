@@ -1,0 +1,21 @@
+rule refund_size v1
+description "Whether a refund is of few items or many: written for the tests of yuen affected, and copied from no document"
+
+enum size = few | many
+
+inputs
+  items : number  range >=1 <=60
+
+outputs
+  size : size
+
+table size
+policy unique
+| items | -> size : size |
+| <=20  | few            |
+| >20   | many           |
+
+examples
+| items | -> size |
+| 20    | few     |
+| 21    | many    |

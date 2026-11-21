@@ -1,0 +1,20 @@
+rule 前の行に残された行(row_left_to_the_earlier_rows) v1
+description "大口の注文かを、金額と一緒に policy first で読む。52 円未満の注文は大口にならず、そうでない注文は前の行が取るので、最後の行にはどの入力も届かない"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=0円 <=93円
+
+define 大口(big) : bool = 金額 > 56円
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+policy first
+| 金額          | 大口  | -> 答え |
+| >=52円 <=56円 | false | 一      |
+| >56円         | true  | 二      |
+| <52円         | false | 二      |
+| <52円         | -     | 一      |

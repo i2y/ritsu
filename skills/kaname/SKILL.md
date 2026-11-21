@@ -231,8 +231,8 @@ reproduction. The usual ones:
 | Code | What it means | What to do |
 |---|---|---|
 | E001-E004 | a word, a line, a part's order or the indentation the language does not read | fix the line |
-| E005-E007 | a name without an ASCII alias, given twice, or one the generated code cannot take | add or change the alias |
-| W001, E008 | a module named `crate`, `self`, `Self`, `mod` or `door`, which the generated Rust alone cannot take: `kaname check` warns, and `ritsu gen --target rust` stops | if Rust is generated, change the name or the alias; else leave it |
+| E005-E007 | a name without an ASCII alias, given twice (or two every target writes alike, `line_item` and `LineItem`), or a name of the helper module (`KanameError`) | add or change the alias |
+| W001, W002, E008 | a name some targets cannot write (a keyword of Python as a field, `delete` as a function in TypeScript, a module named `super` in Rust), or two some targets write alike (`total_weight` and `totalWeight` in Go): `kaname check` warns, naming the targets, and `ritsu gen` stops where it writes one of them | if one of those targets is generated, change the name or the alias; else leave it |
 | E101 | a name names nothing, or a builtin written the way it is not (`keys(d)`) | fix the spelling, or declare it; write the builtin as the note shows (`d.keys()`) |
 | E102 | types or units that do not agree, a currency or a tax that differs | convert with `in` where the dimension is one; else the value is the wrong one |
 | E103 | an unrounded value where a rounded one goes | round it with the step the place takes; ask which way |

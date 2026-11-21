@@ -1,0 +1,2 @@
+error[E105]: tests/mutants/E105_an_entity_given_to_a_rule.gate:66:65: `resource.customer` is an entity of the type `Customer`, which is not given to a rule or a date
+    66 |     refund_band  = refund_limit(amount: amount, limit: resource.customer).band

@@ -1,0 +1,10 @@
+organization 会社(company) v1 "会社"
+
+positions
+  社員(staff)       "社員"
+  課長(manager)     "課長"
+  部長(dept_head)   "部長"
+
+team kinds
+  会社(company)     "会社"
+  部(department)    "部"

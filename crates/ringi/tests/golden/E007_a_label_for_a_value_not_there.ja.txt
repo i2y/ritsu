@@ -1,0 +1,2 @@
+エラー[E007]: tests/mutants/E007_a_label_for_a_value_not_there.ringi:20:3: `kind.taxi` の文言が指すものがありません。`kind` にその値も行のフィールドもありません
+    20 |   kind.taxi  "タクシー"

@@ -57,7 +57,7 @@ fn where_note(c: &Checked, f: &Failure) -> Text {
         tr!("{line} 行目: {ja}", "Line {line}: {en}")
     } else {
         let file = &f.file;
-        tr!("{file} の {line} 行目: {ja}", "{file}, line {line}: {en}")
+        tr!("{file} の {line} 行目: {ja}", "Line {line} of {file}: {en}")
     }
 }
 

@@ -83,7 +83,7 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
   hint: write the move that puts into shop_balance(shop) first
 ```
 
-[docs/codes.md](docs/codes.md) has all 34 codes, as `chobo explain --all` prints them.
+[docs/codes.md](docs/codes.md) has all 34 codes, as `chobo explain --all` prints them. `chobo explain` takes any number of codes and explains them in the order given; for two or more it writes what `--all` writes, with only those codes.
 
 ## Two refunds at the same time
 
@@ -187,7 +187,7 @@ book), and the fix for each diagnostic. Copy it into `~/.claude/skills/`, or int
 ## Install
 
 chobo is one of the languages of [ritsu](https://github.com/i2y/ritsu), and is built from its
-repository with a recent stable Rust. To have all nine, and `ritsu check` for a project that
+repository with a recent stable Rust. To have all ten, and `ritsu check` for a project that
 holds the files of more than one:
 
 ```console
@@ -212,7 +212,7 @@ chobo scenarios <file.book> [--out <dir>]
 chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]
 chobo doc <file.book> [--format html] [--out <dir>]
 chobo api <file.book>
-chobo explain <code> | --all [--format markdown]
+chobo explain <code>... | --all [--format markdown|json]
 ```
 
 `--lang ja` prints the messages in Japanese. `--diff-base <rev>` compares the book with the one

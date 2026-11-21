@@ -1,14 +1,14 @@
-<!-- kaname <version> が tests/modules/places.kn（sha256:5fcd3d0fa9149eb4）から生成したページです。読むためのもので、もとになるのは .kn のほうです。ここを編集しても .kn には戻せません。 -->
+<!-- kaname <version> が tests/modules/places.kn（sha256:eb1107a561104a0f）から生成したページです。読むためのもので、もとになるのは .kn のほうです。ここを編集しても .kn には戻せません。 -->
 # places
 
-- ファイル：`tests/modules/places.kn`（module places v1、sha256:5fcd3d0fa9149eb4）
+- ファイル：`tests/modules/places.kn`（module places v1、sha256:eb1107a561104a0f）
 - 読むファイル：なし
 - kaname：<version>
 
 上のファイルと、それが読むファイルを kaname <version> で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 > [!NOTE]
-> 関数 9 個: total 5 個、fails range 4 個。規則も koyomi の日付も呼びません。振替は組み立てません。コードに書いた判断はありません。このモジュールは `kaname check` を通りません（エラー 4 個）。関数がどこで失敗しうるかを、このページで示します。
+> 関数 14 個: total 10 個、fails range 4 個。規則も koyomi の日付も呼びません。振替は組み立てません。コードに書いた判断はありません。このモジュールは `kaname check` を通りません（エラー 4 個）。関数がどこで失敗しうるかを、このページで示します。
 
 ## 表にある判断
 
@@ -67,6 +67,55 @@ total な関数です。宣言した範囲のどの入力にも答えます。�
 ```kn
 fn share(r: rate[step 1%]) -> rate[step 1%]
   r
+```
+
+#### `kept_share`
+
+total な関数です。宣言した範囲のどの入力にも答えます。見出しにエフェクトは書いてありません。kaname が推論したものです。
+
+```kn
+fn kept_share(r: rate[step 0.25%]?) -> rate[step 0.25%]?
+  match r
+    none => none
+    some x => x
+```
+
+#### `unread`
+
+total な関数です。宣言した範囲のどの入力にも答えます。見出しにエフェクトは書いてありません。kaname が推論したものです。
+
+```kn
+fn unread(r: rate[step 0.25%], s: rate[step 0.25%]?, m: money[USDc], n: money[USDc]?) -> number
+  0
+```
+
+#### `whole`
+
+total な関数です。宣言した範囲のどの入力にも答えます。見出しにエフェクトは書いてありません。kaname が推論したものです。
+
+```kn
+fn whole(n: number range >=-9_223_372_036_854_775_808 <=9_223_372_036_854_775_807) -> number range >=-9_223_372_036_854_775_808 <=9_223_372_036_854_775_807
+  n
+```
+
+#### `whole_share`
+
+total な関数です。宣言した範囲のどの入力にも答えます。見出しにエフェクトは書いてありません。kaname が推論したものです。
+
+```kn
+fn whole_share(r: rate[step 0.25%] range >=-2_305_843_009_213_693_952% <=2305843009213693951.75%, s: rate[step 0.25%]? range >=-2_305_843_009_213_693_952% <=2305843009213693951.75%) -> rate[step 0.25%] range >=-2_305_843_009_213_693_952% <=2305843009213693951.75%
+  match s
+    none => r
+    some x => x
+```
+
+#### `wide_share`
+
+total な関数です。宣言した範囲のどの入力にも答えます。見出しにエフェクトは書いてありません。kaname が推論したものです。
+
+```kn
+fn wide_share(w: Wide) -> rate[step 0.25%] range >=-2_305_843_009_213_693_952% <=2305843009213693951.75%
+  w.share
 ```
 
 ### 実行時に確かめる関数

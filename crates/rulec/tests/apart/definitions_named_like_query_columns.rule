@@ -1,0 +1,19 @@
+rule column_fee v1
+description "Definitions named like the columns the SQL query keeps for itself"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define _id : money[USD] = qty * 3USD
+define _input_error : money[USD] = _id + 1USD
+define _raw_fee : money[USD] = half_up(_input_error / 3, 1USD)
+define _r1 : money[USD] = _raw_fee + _id
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | _r1    |
+| >5  | 2USD   |

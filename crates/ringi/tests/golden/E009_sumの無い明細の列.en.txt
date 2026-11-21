@@ -1,0 +1,2 @@
+error[E009]: tests/mutants/E009_sumの無い明細の列.ringi:7:50: `明細.金額` is a column of the rows `明細`: to add it up, write `sum(明細.金額)`
+     7 |   領収書(receipt) : attachment "領収書"  required when 明細.金額 > 30_000円

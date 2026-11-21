@@ -1,0 +1,58 @@
+// The services tests/flows/service_date_names.flow and its Japanese version implement: the days of
+// a car's rental come as google.type.Date, as in protos/rentals.proto, to a workflow whose records
+// are named as what the code of Python declares for reading such days (`fill`, `read_day`). The
+// code reads its own by other names, and the run reads the days as service_dates.flow's does.
+syntax = "proto3";
+
+package date_names.v1;
+
+import "dandori/v1/options.proto";
+import "google/type/date.proto";
+
+service DateNames {
+  option (dandori.v1.workflow) = {name: "service_date_names", version: 1};
+
+  rpc Rent(RentRequest) returns (RentResponse) {
+    option (dandori.v1.start) = {fails: ["late"]};
+  }
+
+  rpc AnswerReturn(AnswerReturnRequest) returns (AnswerReturnResponse) {
+    option (dandori.v1.answer) = {task: "wait_for_return"};
+  }
+}
+
+// The same service, for the Japanese version of the flow.
+service DateNamesJa {
+  option (dandori.v1.workflow) = {name: "日付の名前のサービス", version: 1};
+
+  rpc Rent(RentRequest) returns (RentResponse) {
+    option (dandori.v1.start) = {fails: ["返却の遅れ"]};
+  }
+
+  rpc AnswerReturn(AnswerReturnRequest) returns (AnswerReturnResponse) {
+    option (dandori.v1.answer) = {task: "返却を待つ"};
+  }
+}
+
+message RentRequest {
+  string car = 1;
+  google.type.Date pickup = 2;
+  google.type.Date dropoff = 3;
+  repeated google.type.Date closed = 4;
+  Driver driver = 5;
+  repeated Driver others = 6;
+}
+
+message Driver {
+  string name = 1;
+  google.type.Date licensed_on = 2;
+}
+
+message RentResponse {}
+
+message AnswerReturnRequest {
+  google.type.Date returned_on = 1;
+  int32 km = 2;
+}
+
+message AnswerReturnResponse {}

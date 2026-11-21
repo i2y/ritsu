@@ -4,7 +4,7 @@
 //! flag without its value and a flag given twice (`gen`'s `--target` may be, each target once) all
 //! stop the run with exit 2: an agent that is told nothing believes the flag worked. The table is koyomi's; how it is drawn and read is ritsu-base's ([`ritsu_base::cli`]).
 
-use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
+use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag, made_lang_flag};
 
 pub use ritsu_base::cli::Args;
 
@@ -171,6 +171,7 @@ pub fn commands() -> Vec<Cmd> {
                         "write nothing; exit 1 if a file the same --target and --extra write differs from the one on disk, or is missing (for CI)"
                     ),
                 ),
+                made_lang_flag("KOYOMI_LANG"),
             ],
             exits: vec![
                 (0, tr!("生成した、または --check で全部が同じだった", "generated, or --check found every file the same")),
@@ -229,6 +230,7 @@ pub fn commands() -> Vec<Cmd> {
                         "the months the tables show; without it, a dates file shows the months its inputs and computed dates fall in (over 24, only the months of the inputs claims fail on and of the edge cases), and a calendar the last 24 months of what it knows"
                     ),
                 ),
+                made_lang_flag("KOYOMI_LANG"),
             ],
             exits: vec![
                 (0, tr!("ページを出した（条件が成り立たないときも）", "printed the page (also when claims fail)")),
@@ -296,14 +298,14 @@ pub fn commands() -> Vec<Cmd> {
         Cmd {
             usage: None,
             name: "explain",
-            args: "<CODE>",
-            purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look a diagnostic code up: when it comes, how to fix it, the smallest reproduction"),
-            params: vec![("<CODE>", tr!("`E301` のような診断のコード。`--all` なら要らない", "a diagnostic code such as `E301`; not needed with `--all`"))],
+            args: "<CODE>... | --all",
+            purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look diagnostic codes up: when each comes, how to fix it, the smallest reproduction"),
+            params: vec![("<CODE>...", tr!("`E301` のような診断のコード。いくつでも渡せて、渡した順に出す。`--all` とは一緒に渡さない", "diagnostic codes such as `E301`, any number, printed in the order given; not given with `--all`"))],
             flags: vec![
                 flag("--all", None, tr!("全部のコードを出す", "print every code")),
-                flag("--format", Some("markdown"), tr!("Markdown で出す（docs/codes.md の元）", "print Markdown (what docs/codes.md is made from)")).choices(&["markdown"]),
+                flag("--format", Some("markdown|json"), tr!("Markdown（docs/codes.md の元）か JSON で出す", "print Markdown (what docs/codes.md is made from) or JSON")).choices(&["markdown", "json"]),
             ],
-            exits: vec![(0, tr!("引けた", "found")), (2, tr!("そのコードが無い、または引数の誤り", "no such code, or bad arguments"))],
+            exits: vec![(0, tr!("引けた", "found")), (2, tr!("無いコードがある、または引数の誤り", "a code it does not have, or bad arguments"))],
             examples: vec!["koyomi explain E201", "koyomi explain --all --format markdown --lang ja"],
             codes: vec![],
         },
@@ -324,8 +326,8 @@ pub fn table() -> Table {
         commands: commands(),
         footer: vec![
             tr!(
-                "どのコマンドにも --lang ja|en を付けられます（既定は en。環境変数 KOYOMI_LANG か RITSU_LANG でも指定できます）。",
-                "Every command takes --lang ja|en (default en; the KOYOMI_LANG or RITSU_LANG environment variable works too)."
+                "どのコマンドにも --lang ja|en を付けられます（既定は en。環境変数 KOYOMI_LANG か RITSU_LANG は出す文の言語を決め、gen と doc が書く物は --lang だけで決まります）。",
+                "Every command takes --lang ja|en (default en; the KOYOMI_LANG or RITSU_LANG environment variable sets the language of the text printed, and what gen and doc write follows --lang alone)."
             ),
             tr!("exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル", "Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be read"),
         ],

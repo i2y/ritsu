@@ -1,0 +1,4 @@
+enums for v1
+description "An enums file named like a keyword of the languages that write its name as it is"
+
+enum zone = north | south

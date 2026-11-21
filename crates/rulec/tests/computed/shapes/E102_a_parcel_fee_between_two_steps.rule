@@ -1,0 +1,17 @@
+rule parcel_fee_between_two_steps v1
+description "A parcel fee of 5 yen on top of 10% of the amount rounded up to 10 yen, read with the amount: up to 250 yen it comes to 15, 25 or 35 yen, so no input reaches the row for a fee between 15 and 25 yen"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=1JPY <=300JPY
+
+define parcel_fee : money[JPY] = up(amount * 10%, 10JPY) + 5JPY
+
+outputs
+  x : choice
+
+table pick
+| amount   | parcel_fee    | -> x |
+| <=250JPY | >15JPY <25JPY | two  |
+| -        | -             | one  |

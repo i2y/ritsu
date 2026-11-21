@@ -6,6 +6,12 @@
 use ritsu_testkit::{Need, TempDir, ready, skip};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -103,6 +109,52 @@ fn a_kind_a_product_line_adds_asks_every_table_that_reads_kinds_for_a_row() {
         let (c, out, _) = run_in(&d, &["check", ship, here.to_str().unwrap()]);
         assert_eq!(c, 1, "{out}");
         assert!(out.contains("error[E033]") && out.contains(&format!("{value} falls to this row in silence")), "{out}");
+    }
+}
+
+/// The `--> file:line` of a finding names the file its line is in (§15.318). A clause of a
+/// contribution that takes what a row of the rule takes is an overlap of the two, placed at the
+/// rule's row: its place is the rule's file and that row's line. It was said with the path of the
+/// contribution, the file being checked, and the rule's line number, a line the contribution may
+/// not have. The JSON, which is at the first of the lines marked, stays at the clause; each of its
+/// `spans` says which file its line is in; and the gap the clause leaves, found at the rule's
+/// table, is at the rule in both. In English and in Japanese.
+#[test]
+fn the_place_of_a_finding_names_the_file_its_line_is_in() {
+    for (kinds, price, kind_c, price_c, garden, toys, table, word) in [
+        ("shared/product_kinds.rule", "product_price.rule", "contrib/product_line/garden_kind.rule", "contrib/product_line/garden_price.rule", "  when item_kind garden", "  when item_kind toys", "markup_of", "table"),
+        ("shared/商品の種類.rule", "商品の料金.rule", "contrib/商品ライン/園芸の種類.rule", "contrib/商品ライン/園芸の料金.rule", "  when 商品の種類 園芸", "  when 商品の種類 おもちゃ", "上乗せ表", "table"),
+    ] {
+        let t = TempDir::new("contrib-places");
+        for f in [kinds, price, kind_c, price_c] {
+            let to = t.path().join(f);
+            std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+            std::fs::write(&to, std::fs::read_to_string(corpus().join(f)).unwrap()).unwrap();
+        }
+        let c = t.path().join(price_c);
+        let src = std::fs::read_to_string(&c).unwrap();
+        assert!(src.contains(garden), "{src}");
+        std::fs::write(&c, src.replace(garden, toys)).unwrap();
+        // the contribution's check: the overlap at the rule's row 3 (line 18 of the rule), the gap
+        // at the rule's table (line 13), the example at the contribution's own line 12
+        let (code, out, _) = run_in(t.path(), &["check", price_c, kind_c]);
+        assert_eq!(code, 1, "{out}");
+        let places: Vec<&str> = out.lines().filter(|l| l.starts_with("  --> ")).collect();
+        assert_eq!(places, [format!("  --> {price}:18 {word} {table}"), format!("  --> {price}:13 {word} {table}"), format!("  --> {price_c}:12 examples")], "{out}");
+        let (code, out, _) = run_in(t.path(), &["check", price_c, kind_c, "--format", "json"]);
+        assert_eq!(code, 1, "{out}");
+        let found: Vec<ritsu_base::json::Json> = out.lines().filter(|l| l.starts_with('{')).map(|l| ritsu_base::json::parse(l).unwrap()).collect();
+        let s = |j: &ritsu_base::json::Json, k: &str| j.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let n = |j: &ritsu_base::json::Json, k: &str| j.get(k).and_then(|x| x.as_int()).unwrap_or(-1);
+        let at: Vec<(String, String, i128)> = found.iter().map(|d| (s(d, "code"), s(d, "file"), n(d, "line"))).collect();
+        assert_eq!(at, [("E105".to_string(), price_c.to_string(), 7), ("E101".to_string(), price.to_string(), 13), ("E107".to_string(), price_c.to_string(), 12)], "{out}");
+        for d in &found {
+            let w = d.get("where").unwrap();
+            assert_eq!((s(d, "file"), n(d, "line")), (s(w, "file"), n(w, "line")), "{out}");
+        }
+        // the overlap's two lines, each with its file: the clause's is the file of the finding
+        let spans: Vec<(i128, String)> = found[0].get("spans").and_then(|x| x.as_arr()).unwrap().iter().map(|m| (n(m, "line"), s(m, "file"))).collect();
+        assert_eq!(spans, [(7, String::new()), (18, price.to_string())], "{out}");
     }
 }
 
@@ -333,9 +385,9 @@ fn the_merged_rules_run_alike_in_every_language() {
         ]),
     );
     assert_eq!(c, 0, "{e}");
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").args(["test", out.to_str().unwrap()]).output().expect("cannot start rulec test");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-    assert!(o.status.success(), "{said}");
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").args(["test", out.to_str().unwrap()]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
     for rule in ["order_discount", "product_price"] {
         assert!(said.lines().any(|l| l.starts_with(&format!("ok    {rule} (Python)"))), "{rule}:\n{said}");
     }
@@ -494,9 +546,9 @@ fn a_rules_claims_of_chances_hold_whatever_is_added() {
     let py = std::fs::read_to_string(out_dir.join("python/prize_lottery.py")).unwrap();
     assert!(py.contains("def prize_lottery_chances(campaign: bool, holiday: bool) -> Chances:"), "the counts take the added input");
     if ready(Need::Python, || have("python3"), "no python3, so the merged rule's chances were not run") {
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").args(["test", out_dir.to_str().unwrap()]).output().unwrap();
-        let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-        assert!(o.status.success() && said.lines().any(|l| l.starts_with("ok    prize_lottery (Python)")), "{said}");
+        let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").args(["test", out_dir.to_str().unwrap()]), RULEC_LIMIT, "rulec test running the generated code");
+        let said = o.stdout.clone() + &o.stderr;
+        assert!(o.ok && said.lines().any(|l| l.starts_with("ok    prize_lottery (Python)")), "{said}");
     }
     // A contribution draws no input, and claims no chance.
     std::fs::write(d.join("drawn.rule"), "contribution drawn(drawn) v1\nto \"lottery.rule\"\n\ninputs\n  roll(roll) : number  range >=0 <=9  random\n").unwrap();

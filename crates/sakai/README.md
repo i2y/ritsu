@@ -1,7 +1,7 @@
 # sakai
 
 A small language for the part of a context map that can be checked: which bounded context owns each artifact, which references the relationships let cross a boundary, and how an anticorruption layer maps the values and words that cross.
-sakai is one of the nine languages of [ritsu](../../README.md), and reads the artifacts of the others (rules, workflows, calendars, books, `.proto` files) through ritsu, and the contracts services keep in OpenAPI and AsyncAPI documents.
+sakai is one of the ten languages of [ritsu](../../README.md), and reads the artifacts of the others (rules, workflows, calendars, books, `.proto` files) through ritsu, and the contracts services keep in OpenAPI and AsyncAPI documents.
 
 A context map usually lives in a drawing, and the drawing stops matching the code the week after it is drawn.
 sakai writes the map next to the artifacts, one file per context, owned by that context's team, and holds every artifact to it:
@@ -63,7 +63,7 @@ error[E406]: contexts/ordering.ctx:22:3: Inventory's reservation crosses into Or
 
 sakai never decides that two definitions mean the same; only `as` says so.
 The other checks: every artifact covered belongs to exactly one context; a reference crosses only where a relationship allows it (a conformist reads the upstream's published language, an anticorruption layer only from inside its layer, a service is called only when it is an open host service); the patterns agree (a customer needs its supplier to agree, a shared kernel lists the same files on both sides); and separate ways means nothing crosses.
-Every code is in [docs/codes.md](docs/codes.md), with when it comes, how to fix it, and the smallest reproduction (`sakai explain E401`).
+Every code is in [docs/codes.md](docs/codes.md), with when it comes, how to fix it, and the smallest reproduction (`sakai explain E401`). `sakai explain` takes any number of codes and explains them in the order given; for two or more it writes what `--all` writes, with only those codes.
 
 ## Contracts between services: OpenAPI and AsyncAPI
 
@@ -197,7 +197,7 @@ $ sakai explain E401
 `check` takes map files and directories, and `--format json`; `--root` changes the directory paths are counted from (else the nearest one above that holds `.git` or `ritsu.mod`).
 `gen` takes `--target` once for each tool whose settings it writes (`import-linter`, `dependency-cruiser`, `archunit`, `go-arch-lint`), and writes none when one cannot be written (E501); up to 0.40.0 it was `sakai build`, which now stops with exit 2 and says the new name.
 `vectors` prints what the mappings of the anticorruption layers say, one JSON line for every value of every upstream enum (the value it becomes, the refusal and its reason, `unmapped` for what the map says nothing of, the number in the `.proto`, and what the rule answers where it goes to a rule's enum): sakai does not read the code of a layer, and a test of the code is held to these lines ([the reference](docs/reference.md#vectors-for-the-code-of-a-layer)); [examples/shop/check_layers.py](examples/shop/check_layers.py) does it for the Python of the shop.
-Every command takes `--lang ja|en` (else `SAKAI_LANG`, then `RITSU_LANG`, else English) and `--help`.
+Every command takes `--lang ja|en` and `--help`. Without `--lang`, the text a command prints follows `SAKAI_LANG`, then `RITSU_LANG`, else English, and what `gen`, `export` and `doc` write is in English, whatever the environment says.
 The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file that cannot be read, or a language that is not joined.
 
 ## Examples

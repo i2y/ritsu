@@ -1,0 +1,22 @@
+workflow ts_word v1
+description "A record and an enum named as words of TypeScript."
+
+record object
+  day : string
+
+enum keyof = early | late
+
+inputs
+  id : string
+
+outputs
+  day : string
+  slot : keyof
+
+task when(id: string) -> object
+task slot(id: string) -> keyof
+
+flow
+  let d = when(id: id)
+  let s = slot(id: id)
+  succeed day = d.day, slot = s

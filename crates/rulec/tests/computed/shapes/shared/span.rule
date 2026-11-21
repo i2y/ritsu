@@ -1,0 +1,19 @@
+rule span v1
+description "How wide a span is, from its two ends, which a constraint keeps in order"
+
+enum width = narrow | wide
+
+inputs
+  lo : number  range >=0 <=100
+  hi : number  range >=0 <=100
+
+constraint lo <= hi
+
+outputs
+  size : width
+
+table size
+| lo   | hi   | -> size |
+| <=50 | <=50 | narrow  |
+| <=50 | >50  | wide    |
+| >50  | >50  | narrow  |

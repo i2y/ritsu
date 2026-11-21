@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+use organization org from "shared/broken_company.ringi"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed

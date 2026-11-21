@@ -1,0 +1,638 @@
+{
+  "ringi": "0.55.2",
+  "kind": "request",
+  "name": "expense",
+  "old": {
+    "file": "expense_old.ringi",
+    "version": 1,
+    "sha256": "32e72f5f9d045dd9"
+  },
+  "new": {
+    "file": "expense_new.ringi",
+    "version": 2,
+    "sha256": "0e9774a26b15e318"
+  },
+  "differs": true,
+  "total": true,
+  "route": [
+    {
+      "case": [
+        {
+          "name": "category",
+          "label": "Category",
+          "is": "“Expenses”"
+        },
+        {
+          "name": "amount",
+          "label": "Amount",
+          "is": "from 100,001 JPY to 1,000,000 JPY"
+        }
+      ],
+      "stages": [
+        {
+          "stage": "precheck",
+          "stage_written": "precheck",
+          "label": "precheck",
+          "before": "check",
+          "before_written": "check",
+          "after": null,
+          "after_written": null,
+          "before_words": "check",
+          "after_words": null
+        }
+      ],
+      "text": "Requests where “Category” is “Expenses” and “Amount” is from 100,001 JPY to 1,000,000 JPY: the stage “precheck” (check) no longer comes.",
+      "example": {
+        "amount": "100001",
+        "category": "expense"
+      },
+      "people": [
+        {
+          "organization_from": "2026-04-01",
+          "requesters": 24,
+          "changes": [
+            {
+              "requester": "e0001",
+              "made_by": null,
+              "named": "e0001 (President (fictional))",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): no head is above the requester; it goes to `board`: one of e0201 (Director 1), e0202 (Director 2), e0203 (Director 3), e0204 (Director 4)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0101",
+              "made_by": null,
+              "named": "e0101 (Head of Sales Division)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0102",
+              "made_by": null,
+              "named": "e0102 (Head of Corporate Division)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0201",
+              "made_by": null,
+              "named": "e0201 (Director 1)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0202",
+              "made_by": null,
+              "named": "e0202 (Director 2)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0203",
+              "made_by": null,
+              "named": "e0203 (Director 3)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0204",
+              "made_by": null,
+              "named": "e0204 (Director 4)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e1001",
+              "made_by": null,
+              "named": "e1001 (Head of Accounting)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e1002",
+              "made_by": null,
+              "named": "e1002 (Accountant)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e1001 (Head of Accounting)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e1101",
+              "made_by": null,
+              "named": "e1101 (Manager of Section 1A)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e3101 (Head of Sales Department 1)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e1201",
+              "made_by": null,
+              "named": "e1201 (Sales staff 1)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e1101 (Manager of Section 1A)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e1203",
+              "made_by": null,
+              "named": "e1203 (Sales staff 3)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e1101 (Manager of Section 1A)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e3101",
+              "made_by": null,
+              "named": "e3101 (Head of Sales Department 1)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0101 (Head of Sales Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e4001",
+              "made_by": null,
+              "named": "e4001 (Head of Finance)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e5001",
+              "made_by": null,
+              "named": "e5001 (Head of General Affairs)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e6001",
+              "made_by": null,
+              "named": "e6001 (Head of Human Resources)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e7001",
+              "made_by": null,
+              "named": "e7001 (Head of Information Systems)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e7101",
+              "made_by": null,
+              "named": "e7101 (Manager of IT Security)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e7001 (Head of Information Systems)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e7102",
+              "made_by": null,
+              "named": "e7102 (Security engineer)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e7101 (Manager of IT Security)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e7201",
+              "made_by": null,
+              "named": "e7201 (Manager of IT Operations)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e7001 (Head of Information Systems)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e7202",
+              "made_by": null,
+              "named": "e7202 (Operator)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e7201 (Manager of IT Operations)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e9001",
+              "made_by": null,
+              "named": "e9001 (General counsel)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e9002",
+              "made_by": null,
+              "named": "e9002 (Lawyer 2)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e9001 (General counsel)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e9003",
+              "made_by": null,
+              "named": "e9003 (Lawyer 3)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e9001 (General counsel)",
+              "after": "does not come"
+            }
+          ]
+        },
+        {
+          "organization_from": "2027-04-01",
+          "requesters": 23,
+          "changes": [
+            {
+              "requester": "e0001",
+              "made_by": null,
+              "named": "e0001 (President (fictional))",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): no head is above the requester; it goes to `board`: one of e0201 (Director 1), e0202 (Director 2), e0203 (Director 3), e0204 (Director 4)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0101",
+              "made_by": null,
+              "named": "e0101 (Head of Sales Division)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0102",
+              "made_by": null,
+              "named": "e0102 (Head of Corporate Division)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0201",
+              "made_by": null,
+              "named": "e0201 (Director 1)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0202",
+              "made_by": null,
+              "named": "e0202 (Director 2)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0203",
+              "made_by": null,
+              "named": "e0203 (Director 3)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e0204",
+              "made_by": null,
+              "named": "e0204 (Director 4)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0001 (President (fictional))",
+              "after": "does not come"
+            },
+            {
+              "requester": "e1001",
+              "made_by": null,
+              "named": "e1001 (Head of Accounting)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e1002",
+              "made_by": null,
+              "named": "e1002 (Accountant)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e1001 (Head of Accounting)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e1101",
+              "made_by": null,
+              "named": "e1101 (Manager of Section 1A)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e3101 (Head of Sales Department 1)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e1201",
+              "made_by": null,
+              "named": "e1201 (Sales staff 1)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e3101 (Head of Sales Department 1)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e1203",
+              "made_by": null,
+              "named": "e1203 (Sales staff 3)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e3101 (Head of Sales Department 1)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e3101",
+              "made_by": null,
+              "named": "e3101 (Head of Sales Department 1)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0101 (Head of Sales Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e4001",
+              "made_by": null,
+              "named": "e4001 (Head of Finance)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e5001",
+              "made_by": null,
+              "named": "e5001 (Head of General Affairs)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e6001",
+              "made_by": null,
+              "named": "e6001 (Head of Human Resources)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e7001",
+              "made_by": null,
+              "named": "e7001 (Head of Information Systems)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e7101",
+              "made_by": null,
+              "named": "e7101 (Manager of IT Security)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e7001 (Head of Information Systems)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e7102",
+              "made_by": null,
+              "named": "e7102 (Security engineer)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e7101 (Manager of IT Security)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e7201",
+              "made_by": null,
+              "named": "e7201 (Manager of IT Operations)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e7001 (Head of Information Systems)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e7202",
+              "made_by": null,
+              "named": "e7202 (Operator)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e7201 (Manager of IT Operations)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e9002",
+              "made_by": null,
+              "named": "e9002 (Lawyer 2)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            },
+            {
+              "requester": "e9003",
+              "made_by": null,
+              "named": "e9003 (Lawyer 3)",
+              "stage": "precheck",
+              "stage_written": "precheck",
+              "spec": null,
+              "spec_written": null,
+              "label": "precheck",
+              "before": "check (manager when the agent doubts): e0102 (Head of Corporate Division)",
+              "after": "does not come"
+            }
+          ]
+        }
+      ],
+      "applies_to": "new_requests"
+    }
+  ],
+  "unsettled": [],
+  "sections": [],
+  "approvers": [],
+  "approvers_apply_to": "next_stage",
+  "no_people": null,
+  "in_progress": [
+    "A ticket finishes with the version of the request it was submitted with: tickets submitted with version 1 finish as version 1 says, and what changes here applies to requests submitted with version 2."
+  ]
+}

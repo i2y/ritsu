@@ -1,0 +1,4 @@
+error[E306]: tests/mutants/E306_起きないpossible.ringi:20:1: The claim 社長が決裁することがある does not hold: no request comes to it
+    20 |   社長が決裁することがある : possible 決裁 is 社長
+  = As rulec says it: On the calls that meet the line's inputs, decide answers head / manager.
+  = Correct the route, or remove the claim.

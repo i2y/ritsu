@@ -155,7 +155,12 @@ fn e080_arguments_the_command_does_not_take() {
         ("explain-without-a-code", vec!["explain"]),
         ("explain-both", vec!["explain", "E001", "--all"]),
         ("explain-unknown-code", vec!["explain", "E999"]),
+        // every code geas does not have, in one sentence, in the order given, and nothing printed
+        ("explain-unknown-codes", vec!["explain", "E998", "E001", "E999"]),
         ("jobs-zero", vec!["check", "x.geas", "--jobs", "0"]),
+        // a flag given three times stops at the second, in the words of a flag given twice
+        ("jobs-three-times", vec!["check", "x.geas", "--jobs", "1", "--jobs", "1", "--jobs", "1"]),
+        ("all-twice", vec!["explain", "--all", "--all"]),
     ] {
         both(&s, &format!("E080-{name}"), &args, 2, false);
     }
@@ -168,15 +173,37 @@ fn e080_arguments_the_command_does_not_take() {
     // GEAS_LANG gives the language when --lang does not
     let (_, err, _) = run(s.path(), &["chekc"], &[("GEAS_LANG", "ja")]);
     assert!(err.starts_with("エラー[E080]"), "{err}");
+    // a line that asks for JSON gets the E080 there, as a spec that cannot be read gets its
+    // E081, with no file, whether the command takes `--json` or not; the standard error says it
+    // as a line without `--json` does
+    for (name, args) in [
+        ("unknown-option", vec!["check", "--nope", "x.geas", "--json"]),
+        ("unknown-command", vec!["chekc", "x.geas", "--json"]),
+        ("explain-unknown-codes", vec!["explain", "E998", "E001", "E999", "--json"]),
+        ("explain-both", vec!["explain", "E001", "--all", "--json"]),
+    ] {
+        let (out, err, code) = run(s.path(), &args, &[]);
+        assert_eq!(code, 2);
+        golden(&format!("en/errors/E080-{name}.json"), &out);
+        golden(&format!("en/errors/E080-{name}.txt"), &err);
+    }
 }
 
 #[test]
 fn e081_files_that_cannot_be_read_or_written() {
     let s = Scratch::new("e081");
     both(&s, "E081-missing", &["check", "missing.geas"], 2, false);
-    let (out, _, code) = run(s.path(), &["check", "missing.geas", "--json"], &[]);
+    let (out, err, code) = run(s.path(), &["check", "missing.geas", "--json"], &[]);
     assert_eq!(code, 2);
     golden("en/errors/E081-missing.json", &out);
+    // the standard error says it with the JSON, as without it
+    golden("en/errors/E081-missing.txt", &err);
+    // and so do `affected` and `scenarios`, the other commands that read a spec
+    s.write("empty.diff", "");
+    for args in [vec!["affected", "missing.geas", "empty.diff", "--json"], vec!["scenarios", "missing.geas", "--openspec", "openspec", "--json"]] {
+        let (o, e, c) = run(s.path(), &args, &[]);
+        assert_eq!((c, o.as_str(), e.as_str()), (2, out.as_str(), err.as_str()), "{args:?}");
+    }
     // `.geas` is a file, so the journal has nowhere to go: the report is printed, then E081
     s.write("calc/calc.geas", "target calc {\n  run \"echo 5\"\n}\n\nclaim \"echoes\" {\n  when calc.run()\n  then stdout is \"5\"\n}\n");
     s.write("calc/.geas", "");

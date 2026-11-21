@@ -1,0 +1,19 @@
+workflow service_date_outputs v1 implements dates.BookingService
+description "E017: a run's outputs that go to google.type.Date, to a list of them and to a message that holds one, which a run does not write as protobuf's JSON does (DESIGN 44). The dates of the request are read as dates and as strings"
+
+use proto dates from "services/dates.proto"
+
+inputs
+  id     : string
+  since  : date
+  closed : list[string]
+  extra  : json
+
+outputs
+  bookedOn : date
+  span     : json
+  days     : list[string]
+  note     : string
+
+flow
+  succeed bookedOn = since, span = extra, days = closed, note = id

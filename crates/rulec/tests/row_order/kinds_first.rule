@@ -1,0 +1,29 @@
+rule kinds_first v1
+description "A weight and a rate, each its input or zero, the input's row first; and the fee of each line, its own or zero"
+
+inputs
+  weight      : mass[kg]  range >=0kg <=30kg
+  discount    : rate[step 1%]  range >=0% <=50%
+  given       : bool
+
+elements lines
+  line_fee : money[JPY]  range >=0JPY <=10_000JPY
+  free     : bool
+
+outputs
+  billed_weight : mass[kg]  round down(1kg)
+  applied       : rate[step 1%]  round down(1%)
+  total         : money[JPY]  round down(1JPY)
+
+table billed
+| given | -> billed_weight | applied  |
+| true  | weight           | discount |
+| false | 0kg              | 0%       |
+
+table per_line
+| free  | -> charged : money[JPY] |
+| false | line_fee                |
+| true  | 0JPY                    |
+
+sum total over lines of charged  range >=0JPY <=1_000_000JPY
+

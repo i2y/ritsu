@@ -206,10 +206,10 @@ fn what_stops_a_diff() {
     let (code, _, err) = koyomi(&["diff", EN.payment, EN.office]);
     assert_eq!((code, err.as_str()), (2, "error: `payment.cal` and `office.cal` are of different kinds (a calendar and a dates file); a diff compares two of a kind\n"));
     let (code, _, err) = koyomi(&["diff", EN.payment]);
-    assert_eq!((code, err.as_str()), (2, "error: `koyomi diff` takes two sides, the old and the new\n"));
+    assert_eq!((code, err.as_str()), (2, "error: `koyomi diff` takes <old> <new>\nusage: koyomi diff <old> <new> [--format text|markdown|json] [--budget <n>]\n"));
     let (code, _, err) = koyomi(&["diff", "no_such.cal", EN.payment]);
     assert_eq!(code, 2, "{err}");
-    assert!(err.starts_with("error: cannot read `no_such.cal`"), "{err}");
+    assert_eq!(err, "error: `no_such.cal` is not there\n");
 }
 
 /// A material read and checked, shown by its name.

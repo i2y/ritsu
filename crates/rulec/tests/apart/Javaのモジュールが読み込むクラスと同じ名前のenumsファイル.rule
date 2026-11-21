@@ -1,0 +1,4 @@
+enums 地域の一覧(list) v1
+description "読む規則の Java のモジュールが読み込む JDK のクラスと同じ名前の enums ファイル"
+
+enum 地域(zone) = 近い(near) | 遠い(far)

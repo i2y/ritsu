@@ -132,6 +132,8 @@ impl Checked {
         }
         if matches!(crate::chances::method(f), crate::chances::Method::Points) && total > FUNCTION_POINTS {
             let name = crate::codegen::chances_fn_name(&f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone()), "python");
+            // a count, grouped as every number a sentence says (§15.333)
+            let total = ritsu_units::written::digits(i128::try_from(total).unwrap_or(i128::MAX));
             self.diags.push(
                 Diag::warning("W131", tr!("確率の関数は、呼ぶたびに規則を {total} 回評価します", "The chances function runs the rule {total} times on every call"))
                     .at(at(first.line))

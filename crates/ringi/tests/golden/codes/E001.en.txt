@@ -1,0 +1,3 @@
+error[E001]: example.ringi:12:7: Write `stage`, not `step`
+    12 | every step
+  = In rulec and kaname `step` is the step of a rate's type (`rate[step 1%]`); so that one file does not give the word two meanings, ringi calls a stage `stage`.

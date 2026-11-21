@@ -1,0 +1,40 @@
+error[E303]: tests/walk/inline.gate:27:1: The permit `high_and_small` applies to no combination
+    27 | permit high_and_small
+  = Of the 4 combinations its `principal` line takes, the lines are met: `when a is high and step is small` on 0. A line is met on none.
+  = `a` is never `high` while `step` is `small`: both are computed from `resource.amount`.
+  = Correct the lines to values the rules give together, or remove the permit itself.
+error[E303]: tests/walk/inline.gate:32:1: The permit `low_and_dear` applies to no combination
+    32 | permit low_and_dear
+  = Of the 4 combinations its `principal` line takes, the lines are met: `when a is low` on 2, `when resource.amount > 600JPY` on 1; but never all at once.
+  = `a` is never `low` while `resource.amount` is 601JPY to 1000JPY: `a` is computed from `resource.amount`.
+  = Correct the lines to values the rules give together, or remove the permit itself.
+error[E303]: tests/walk/inline.gate:38:1: The forbid `never_met` applies to no combination
+    38 | forbid never_met
+  = Of the 4 combinations its `principal` line takes, the lines are met: `when a is low` on 2, `unless a is low` on 2; but never all at once.
+  = Remove the line that cannot be met, or the forbid itself.
+warning[W304]: tests/walk/inline.gate:44:1: The expectation `high_small_is_not_sent` picks no combination: it holds, and checks nothing
+    44 | expect deny high_small_is_not_sent
+  = Of the 8 combinations of `send_doc`, the lines are met: `when a is high` on 4, `when step is small` on 2; but never all at once.
+  = `a` is never `high` while `step` is `small`: both are computed from `resource.amount`.
+  = The rules decide this whatever the policies say, so the expectation checks nothing of them. To hold what a rule answers, write it in the rule (its `examples`, which rulec checks); here, remove the expectation or correct its lines.
+
+エラー[E303]: tests/walk/inline.gate:27:1: permit `high_and_small` は、どの組み合わせにも当てはまりません
+    27 | permit high_and_small
+  = `principal` の行が当てはまる 4 通りのうち、`when a is high and step is small` は 0 通りで満たされます。どの組み合わせでも満たされない行があります。
+  = `a` が `high` で、`step` が `small` になることはありません。どちらも `resource.amount` から計算する値です。
+  = 規則が一緒に出す値に行を直すか、permit そのものを消してください。
+エラー[E303]: tests/walk/inline.gate:32:1: permit `low_and_dear` は、どの組み合わせにも当てはまりません
+    32 | permit low_and_dear
+  = `principal` の行が当てはまる 4 通りのうち、`when a is low` は 2 通り、`when resource.amount > 600JPY` は 1 通りで満たされますが、全部が同時に満たされることはありません。
+  = `a` が `low` で、`resource.amount` が 601JPY〜1000JPY になることはありません。`a` は `resource.amount` から計算する値です。
+  = 規則が一緒に出す値に行を直すか、permit そのものを消してください。
+エラー[E303]: tests/walk/inline.gate:38:1: forbid `never_met` は、どの組み合わせにも当てはまりません
+    38 | forbid never_met
+  = `principal` の行が当てはまる 4 通りのうち、`when a is low` は 2 通り、`unless a is low` は 2 通りで満たされますが、全部が同時に満たされることはありません。
+  = 満たせない行か、forbid そのものを消してください。
+警告[W304]: tests/walk/inline.gate:44:1: 期待 `high_small_is_not_sent` は、どの組み合わせも選びません。成り立ちますが、何も確かめていません
+    44 | expect deny high_small_is_not_sent
+  = `send_doc` の 8 通りのうち、`when a is high` は 4 通り、`when step is small` は 2 通りで満たされますが、全部が同時に満たされることはありません。
+  = `a` が `high` で、`step` が `small` になることはありません。どちらも `resource.amount` から計算する値です。
+  = これは規則が決めていることで、ポリシーをどう書いても成り立ちます。この期待は、ポリシーについて何も確かめていません。規則の答えを確かめたいなら規則の側に書き（`examples`。rulec が検査します）、この期待は消すか、行を直してください。
+

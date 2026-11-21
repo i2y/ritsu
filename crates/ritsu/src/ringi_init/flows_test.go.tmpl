@@ -1,0 +1,131 @@
+package {{package}}
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"go.temporal.io/sdk/client"
+	sdklog "go.temporal.io/sdk/log"
+	sdktemporal "go.temporal.io/sdk/temporal"
+	"go.temporal.io/sdk/testsuite"
+
+	server "{{framework}}"
+	"{{framework}}/memstore"
+	"{{framework}}/servertest"
+)
+
+// TestFlows runs the payment of an approved expense claim on Temporal's dev server, as cmd/server
+// and cmd/worker run it: s1201 claims an expense, the manager approves it, the server starts the
+// payment (Flows), and the worker runs it with the project's tasks (Workers, Payments): the
+// requester is paid once, and told. The dev server runs from the Temporal CLI TEMPORAL_CLI names,
+// else the one the SDK keeps in the system's temporary directory; the test never downloads it, and
+// without it says SKIP.
+func TestFlows(t *testing.T) {
+	cli := os.Getenv("TEMPORAL_CLI")
+	if cli == "" {
+		cli = filepath.Join(os.TempDir(), "temporal-cli-go-sdk-"+sdktemporal.SDKVersion)
+	}
+	if _, err := os.Stat(cli); err != nil {
+		t.Skipf("SKIP: no Temporal CLI at %s (TEMPORAL_CLI names one); the test does not download it", cli)
+	}
+	quiet := sdklog.NewStructuredLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	dev, err := testsuite.StartDevServer(t.Context(), testsuite.DevServerOptions{
+		ExistingPath: cli, LogLevel: "error", ClientOptions: &client.Options{Logger: quiet}, Stdout: io.Discard, Stderr: io.Discard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dev.Stop()
+	c := dev.Client()
+	var log lockedBuffer
+	logger := slog.New(slog.NewTextHandler(&log, nil))
+
+	// What cmd/worker runs.
+	for _, w := range Workers(c, logger) {
+		if err := w.Start(); err != nil {
+			t.Fatal(err)
+		}
+		defer w.Stop()
+	}
+	// What cmd/server runs, with the tickets in memory and the clock on monday.
+	cfg, err := Parts(logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flows, err := Flows(c, cfg.Packages...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Flows, cfg.Agents = flows, flows
+	cfg.Store, cfg.Authenticator, cfg.Clock, cfg.Logger = memstore.New(), servertest.Header{}, servertest.NewClock(monday), logger
+	srv, err := server.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	Started(cfg, srv)
+	if err := srv.ImportOrganization(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	ran := make(chan error, 1)
+	go func() { ran <- flows.Run(ctx, srv) }()
+	defer func() {
+		cancel()
+		<-ran
+	}()
+
+	r := do(t, srv, "s1201", "submit_expense", "", `{"form":{"amount":4800,"purpose":"A taxi to a customer"}}`)
+	var b struct {
+		Ticket ticket `json:"ticket"`
+	}
+	if r.Outcome != server.OK || json.Unmarshal(r.Body, &b) != nil {
+		t.Fatalf("the claim: %s %s %s", r.Outcome, r.Problem, r.Body)
+	}
+	id := b.Ticket.ID
+	if r := do(t, srv, "s1101", "approve", id, `{"revision":`+string(b.Ticket.Revision)+`}`); r.Outcome != server.OK {
+		t.Fatalf("the manager approves: %s %s %s", r.Outcome, r.Problem, r.Body)
+	}
+	// The things to do after the approval: the start of the payment.
+	if _, err := srv.RunToDo(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	told := "msg=told request=" + id + " "
+	for end := time.Now().Add(time.Minute); !strings.Contains(log.String(), told); time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(end) {
+			t.Fatalf("the requester was not told within a minute:\n%s", log.String())
+		}
+	}
+	if n := strings.Count(log.String(), "msg=paid request="+id+" "); n != 1 || !strings.Contains(log.String(), "PAY-"+id) {
+		t.Errorf("the requester was paid %d times:\n%s", n, log.String())
+	}
+	if tk := ticketOf(t, srv, "s1201", id); tk.Status != "approved" {
+		t.Errorf("the claim after the approval: %+v", tk)
+	}
+}
+
+// lockedBuffer is a log the server and the worker write to while the test reads it.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}

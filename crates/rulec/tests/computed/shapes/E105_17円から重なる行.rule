@@ -1,0 +1,19 @@
+rule 十七円から重なる行(meet_from_17_yen) v1
+description "金額が 17 円以上かを金額と一緒に読む。最後の行は 20 円までのそういう金額を求め、2 行目と 17 円から 20 円までだけで重なる。例はそこにある"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=191円
+
+define 大きい(big) : bool = 金額 >= 17円
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 金額   | 大きい | -> 答え |
+| <=22円 | false  | 一      |
+| <=22円 | true   | 二      |
+| >22円  | -      | 一      |
+| <=20円 | true   | 一      |

@@ -1,0 +1,16 @@
+rule 印刷(print) v1
+description "PHP の予約語と同じ名前の規則・列挙・値（PHP の生成コードは後ろに下線を付けて書く）"
+
+enum 品質(class) = 下書き(draft) | 仕上げ(final)
+
+inputs
+  仕上がり(quality) : 品質
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 仕上がりごとの料金(fee_by_quality)
+policy unique
+| 仕上がり | -> 料金 |
+| 下書き   | 1USD    |
+| 仕上げ   | 3USD    |

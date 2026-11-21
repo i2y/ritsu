@@ -1,0 +1,2 @@
+error[E003]: tests/mutants/E003_a_value_of_an_enum_titled_twice.ringi:10:5: The title of `manager` is written twice (first on line 8)
+    10 |     manager "Line manager"

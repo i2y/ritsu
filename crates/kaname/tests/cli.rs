@@ -47,10 +47,11 @@ fn what_stops_the_command() {
     let (code, _, err) = joined(&["check", "x.kn", "--fast"]);
     assert_eq!((code, err.as_str()), (2, "error: unknown flag `--fast`; run `kaname check --help`\n"));
     let (code, _, err) = joined(&["check"]);
-    assert_eq!((code, err.as_str()), (2, "error: `kaname check` needs .kn files\n"));
+    assert_eq!(code, 2);
+    assert!(err.starts_with("error: `kaname check` takes <file.kn>...\nusage: kaname check <file.kn>... "), "{err}");
     let (code, _, err) = joined(&["check", "nowhere.kn", "--lang", "ja"]);
     assert_eq!(code, 2);
-    assert!(err.starts_with("エラー: `nowhere.kn` を読めません: "), "{err}");
+    assert_eq!(err, "エラー: `nowhere.kn` がありません\n");
     let (code, _, err) = joined(&["check", "examples/payout/payout.kn", "--root", "nowhere"]);
     assert_eq!((code, err.as_str()), (2, "error: `--root nowhere` is not a directory\n"));
 }
@@ -134,13 +135,13 @@ fn explain() {
     assert!(out.contains("    module 例(example) v1\n"), "{out}");
     let (code, out, _) = joined(&["explain", "--all", "--format", "json"]);
     assert_eq!(code, 0);
-    assert_eq!(ritsu_base::json::parse(&out).unwrap().as_arr().unwrap().len(), 47);
+    assert_eq!(ritsu_base::json::parse(&out).unwrap().as_arr().unwrap().len(), 49);
     let (code, out, _) = joined(&["explain", "W501"]);
     assert_eq!(code, 0);
     assert!(out.starts_with("W501 (warning) — A decision is written in code; a table should hold it\n"), "{out}");
     assert!(out.contains("  if total >= 35USD then 0USD else 5USD\n"), "{out}");
     let (code, _, err) = joined(&["explain", "E999"]);
-    assert_eq!((code, err.as_str()), (2, "error: there is no diagnostic code `E999`; `kaname explain --all` lists them all\n"));
+    assert_eq!((code, err.as_str()), (2, "error: there is no code `E999`; run `kaname explain --all`\n"));
     let (code, out, _) = joined(&["explain", "--all", "--format", "markdown"]);
     assert_eq!(code, 0);
     assert_eq!(out, std::fs::read_to_string("docs/codes.md").unwrap());
@@ -174,5 +175,5 @@ fn checked_as_ritsu_check_prints_it() {
     assert_eq!(units[0].text(), "ok examples/payout/payout.kn: 1 function, fails range\n");
     assert_eq!(units[0].verdict, ritsu_ports::Verdict::Passes);
     assert_eq!(units[1].verdict, ritsu_ports::Verdict::Unchecked);
-    assert!(units[1].text().starts_with("error: cannot read `examples/nowhere.kn`: "), "{}", units[1].text());
+    assert_eq!(units[1].text(), "error: `examples/nowhere.kn` is not there\n");
 }

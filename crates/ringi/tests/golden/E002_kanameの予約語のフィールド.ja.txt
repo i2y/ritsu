@@ -1,0 +1,3 @@
+エラー[E002]: tests/mutants/E002_kanameの予約語のフィールド.ringi:5:6: `some` は kaname の予約語なので、フィールドの名前にできません
+     5 |   明細(some)     : rows "明細"  count >=1 <=5
+  = チケットの JSON は、フィールドを ASCII の名前で持ちます。それを読み書きする kaname のコードは、予約語を名前にできません。別の名前にするか、`名前(ascii_name)` のように別の ASCII の名前を括弧に書いてください。

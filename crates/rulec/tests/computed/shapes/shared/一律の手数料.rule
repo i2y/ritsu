@@ -1,0 +1,14 @@
+rule 一律の手数料(flat_fee) v1
+description "213 円までは一律 260 円の手数料、それを超えると無し"
+
+inputs
+  金額(amount) : money[円]  range >=0円 <=360円
+
+outputs
+  手数料(fee) : money[円]  round down(1円)
+
+table 手数料の表(fees)
+| 金額           | -> 手数料 |
+| <=116円        | 260円     |
+| >116円 <=213円 | 260円     |
+| >213円         | 0円       |

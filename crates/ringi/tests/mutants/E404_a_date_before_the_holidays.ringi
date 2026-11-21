@@ -1,0 +1,17 @@
+request example v1 "Example"
+
+use calendar office from "shared/finite.cal"
+
+form
+  first_day : date "First day"  range >=2025-10-01 <=2027-12-31
+  days      : number "Business days"  range >=1 <=20
+  back_on   : date "Back at work on" = first_day + days business days in office
+
+route
+  check  manager
+
+who
+  manager = team managers
+
+ticket
+  self approval  not allowed

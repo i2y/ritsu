@@ -10,6 +10,10 @@
 //!   rule it reads) from a registry, with a dates file and a gate of its own that read the desk's
 //!   calendar and rule: what raising the desk changes in their answers (koyomi's and sekisho's
 //!   diffs).
+//! - A module of the test's own that requires the desk's organization of requests (ringi's example,
+//!   its data in folders by version) from a registry, with a request of its own that reads it:
+//!   raising the desk moves a person to another team in the data alone, and the request's approvers
+//!   move with it (ringi's diff of the request under the two locks).
 //! - The lines of the flows and the kaname modules, which have no diff of behavior, that read an
 //!   answer that changes (PLAN 8.3 C3): the shop's flow reading the fee, a kaname module of the
 //!   office's reading its dates file and another reading that module, and the shop's flow and
@@ -34,6 +38,8 @@
 //!   at the top, and exits 2, with `--fail-on-change` too when no difference is shown in behavior,
 //!   in each language.
 
+mod common;
+
 use ritsu_base::modules::store::{self, Store};
 use ritsu_testkit::registry::{self as reg, Registry};
 use ritsu_testkit::{TempDir, skip};
@@ -49,7 +55,7 @@ fn here() -> PathBuf {
 fn command(dir: &Path, store: &Path, args: &[&str]) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args).env(store::VARIABLE, store);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     c
@@ -582,6 +588,118 @@ fn your_answers_that_change_held_to_golden_files() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// A request of the office's own, whose organization and calendar are the desk's.
+const TRIP: &str = "request trip v1 \"Trip\"
+description \"A trip the requester's manager approves (fictional)\"
+
+use organization org from \"@desk/shared/company.ringi\"
+use calendar office from \"@desk/shared/office.cal\"
+
+form
+  where_to : text \"Where to\"  count >=1 <=100
+
+route
+  first  manager
+
+who
+  manager = manager of requester
+
+every stage
+  due in 3 business days at end of day
+  when late expire
+  when empty skip
+
+ticket
+  self approval  not allowed
+";
+
+/// The desk's organization of requests (ringi's examples: the organization, the folders of its data
+/// by version and the calendar) in two versions in a store of the test's own, the second moving a
+/// person of a sales section to accounting in its data alone; and the office in a repository of its
+/// own, with a request that reads the desk's organization: a commit tagged `one` that requires the
+/// desk at 1.0.0, and the working tree raising it to 1.1.0.
+fn requests_office() -> (TempDir, PathBuf, PathBuf) {
+    let t = TempDir::new("mod-report-requests");
+    let ringi = here().join("../ringi/examples");
+    let store = t.path().join("store");
+    for (v, version) in [("desk-1.0.0", "1.0.0"), ("desk-1.1.0", "1.1.0")] {
+        t.write(&format!("{v}/ritsu.mod"), format!("module example.com/acme/desk\nversion {version}\n"));
+        for f in ["company.ringi", "office.cal"] {
+            t.write(&format!("{v}/shared/{f}"), std::fs::read(ringi.join("shared").join(f)).unwrap());
+        }
+        copy_dir(&ringi.join("org"), &t.path().join(v).join("org"));
+    }
+    replace(&t.path().join("desk-1.1.0"), "org/2026-04-01/members.csv", "e1201,sales1_a,staff,yes", "e1201,accounting,staff,yes");
+    for v in ["desk-1.0.0", "desk-1.1.0"] {
+        put(&store, &t.path().join(v));
+    }
+    let repo = t.path().join("office");
+    t.write("office/ritsu.mod", "module example.com/acme/office\nversion 0.1.0\n\nrequire desk oci \"example.com/acme/desk\" 1.0.0\n");
+    t.write("office/trip.ringi", TRIP);
+    let lock = |what: &str| {
+        let (code, out, err) = ritsu_in(&repo, &store, &["mod", "lock"]);
+        assert_eq!(code, 0, "{what}: {out}{err}");
+    };
+    lock("1.0.0");
+    git(&repo, &["init", "-q"]);
+    git(&repo, &["add", "."]);
+    git(&repo, &["commit", "-q", "-m", "desk 1.0.0"]);
+    git(&repo, &["tag", "one"]);
+    replace(&repo, "ritsu.mod", "\"example.com/acme/desk\" 1.0.0", "\"example.com/acme/desk\" 1.1.0");
+    lock("1.1.0");
+    (t, store, repo)
+}
+
+/// Raising the desk changes no byte of the office's request, and its approvers move with the data
+/// of the organization it reads: ringi's diff of the request under the two locks says so, beside
+/// the desk's own organization, in each language.
+#[test]
+fn your_request_whose_organization_moves() {
+    if !has_git() {
+        return;
+    }
+    let (t, store, repo) = requests_office();
+    for lang in ["en", "ja"] {
+        let (code, out, err) = ritsu_in(&repo, &store, &["mod", "report", "--base", "one", "--format", "json", "--lang", lang]);
+        assert_eq!((code, err.as_str()), (0, ""), "{lang}:\n{out}");
+        let v = json(&out);
+        let m = &v["modules"][0];
+        assert_eq!((&m["module"], &m["change"]), (&serde_json::json!("example.com/acme/desk"), &serde_json::json!("upgraded")), "{out}");
+        // the desk's organization answers differently in its own diff
+        assert!(m["diff"]["behavior"].as_array().unwrap().iter().any(|b| b["file"] == "shared/company.ringi" && b["tool"] == "ringi" && b["result"]["differs"] == true), "{lang}:\n{out}");
+        // the office's request: no row of its route and no section changes, and the requester who
+        // moved has another approver, from the data it reads
+        let yours: Vec<(&str, &str, bool)> = m["yours"].as_array().unwrap().iter().map(|b| (b["file"].as_str().unwrap(), b["tool"].as_str().unwrap(), b["error"].is_null())).collect();
+        assert_eq!(yours, [("trip.ringi", "ringi", true)], "{lang}:\n{out}");
+        let r = &m["yours"][0]["result"];
+        assert_eq!((&r["differs"], &r["route"], &r["sections"]), (&serde_json::json!(true), &serde_json::json!([]), &serde_json::json!([])), "{r}");
+        let moved: Vec<&str> = r["approvers"].as_array().unwrap().iter().flat_map(|g| g["changes"].as_array().unwrap().iter().map(|c| c["requester"].as_str().unwrap())).collect();
+        assert_eq!(moved, ["e1201"], "{r}");
+        let data = if lang == "en" {
+            "Where the request itself does not change, the approvers that change come from the data it reads: a stage whose approvers are decided keeps them, and a ticket in progress takes the change at the next stage it starts."
+        } else {
+            "申請の種類が変わっていない所で承認者が変わるのは、申請の種類が読むデータが変わったからです。承認者が決まったステップはそのまま進み、この変更は、進行中のチケットには次に始まるステップから効きます。"
+        };
+        assert_eq!((&r["approvers_apply_to"], &r["in_progress"]), (&serde_json::json!("next_stage"), &serde_json::json!([data])), "{r}");
+        let (code, _, _) = ritsu_in(&repo, &store, &["mod", "report", "--base", "one", "--fail-on-change", "--lang", lang]);
+        assert_eq!(code, 1);
+        // the text says the request with ringi's own text under it, its two sides named with the
+        // lock each is read with
+        let (code, text, _) = ritsu_in(&repo, &store, &["mod", "report", "--base", "one", "--lang", lang]);
+        assert_eq!(code, 0, "{text}");
+        let head = if lang == "en" { "your answers that change:" } else { "手元のファイルの答えのうち、変わるもの：" };
+        assert!(text.contains(head) && text.contains("  trip.ringi (ringi)"), "{text}");
+        let (base, now) = if lang == "en" { ("the lock of one", "the lock of the working tree") } else { ("one の lock", "作業ツリーの lock") };
+        assert!(text.contains(&format!("trip.ringi ({base})")) && text.contains(&format!("trip.ringi ({now})")) && text.contains("e1201"), "{text}");
+        // the Markdown holds ringi's pages with no comment of their heads, which name the files of
+        // the desk with an `@`
+        let (code, md, _) = ritsu_in(&repo, &store, &["mod", "report", "--base", "one", "--format", "markdown", "--lang", lang]);
+        assert_eq!(code, 0, "{md}");
+        assert!(!md.contains("<!--"), "{md}");
+        holds(&md, t.path(), &format!("requests {lang}"));
+    }
+}
+
 /// The line of `file` (from `root`) that starts with `start` and names `path`, from 1.
 fn line_of(root: &Path, file: &str, start: &str, path: &str) -> usize {
     let text = std::fs::read_to_string(root.join(file)).unwrap();
@@ -895,6 +1013,9 @@ fn a_module_with_claims_is_read_and_not_run() {
     let t = TempDir::new("report-claims");
     let repo = t.path().join("greeter");
     copy_dir(&here().join("../geas/examples/greeter"), &repo);
+    // the journals a run of the claims in the example left there (git ignores them) are not the
+    // example's, and the journal is what says a claim ran
+    let _ = std::fs::remove_dir_all(repo.join(".geas"));
     std::fs::write(repo.join("ritsu.mod"), "module example.com/acme/greeter\nversion 0.1.0\ndescription \"A greeter\"\n").unwrap();
     git(&repo, &["init", "-q"]);
     git(&repo, &["add", "."]);
@@ -984,8 +1105,11 @@ fn what_stops_a_report() {
         assert_eq!((code, out.as_str()), (2, ""), "{args:?}: {err}");
         err
     };
-    assert_eq!(stops(&repo, &store, &["mod", "report"]), "error: `--base <revision>` is required: the revision to compare with\n");
-    assert_eq!(stops(&repo, &store, &["mod", "report", "--lang", "ja"]), "エラー: `--base <git の版>`（比べる前の版）を付けてください\n");
+    // what it needs, and its usage line, which writes `--base` without brackets
+    let err = stops(&repo, &store, &["mod", "report"]);
+    assert!(err.starts_with("error: `ritsu mod report` needs `--base <revision>`\nusage: ritsu mod report --base <revision> [--head <revision>] "), "{err}");
+    let err = stops(&repo, &store, &["mod", "report", "--lang", "ja"]);
+    assert!(err.starts_with("エラー: `ritsu mod report` には `--base <revision>` が要ります\n使い方: ritsu mod report --base <revision> [--head <revision>] "), "{err}");
     assert_eq!(stops(&repo, &store, &["mod", "report", "--base", "nowhere"]), "error: the git revision `nowhere` cannot be resolved\n");
     assert_eq!(stops(&repo, &store, &["mod", "report", "--base", "one", "--budget", "0"]), "error: `--budget 0` is not a positive integer\n");
     // a module in no repository

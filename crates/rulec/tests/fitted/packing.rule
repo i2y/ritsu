@@ -1,0 +1,65 @@
+rule packing v1
+description "How an order is packed: three toys take a toy box, two books a shelf box, twenty units a bulky one, four gifts wrapping, two rushed lines the fast lane and three cold ones a chilled box. An order comes to 300 yen or more, and a line is 100 yen at most"
+
+enum Kind = food | toy | book | tool
+
+# A line of the order
+elements lines
+  price : money[JPY]  range >=1JPY <=100JPY
+  qty   : number  range >=1 <=9
+  kind  : Kind
+  gift  : bool
+  rush  : bool
+  cold  : bool
+
+count toys over lines where kind = toy  range >=0 <=6
+count books over lines where kind = book  range >=0 <=6
+count gifts over lines where gift  range >=0 <=6
+count rushes over lines where rush  range >=0 <=6
+count colds over lines where cold  range >=0 <=6
+sum total over lines of price  range >=300JPY <=3_000JPY
+sum units over lines of qty  range >=0 <=100
+
+outputs
+  toy_box : bool
+  shelf   : bool
+  bulky   : bool
+  wrapped : bool
+  fast    : bool
+  chilled : bool
+
+table toy_box_of
+policy unique
+| toys | -> toy_box |
+| <3   | false      |
+| >=3  | true       |
+
+table shelf_of
+policy unique
+| books | -> shelf |
+| <2    | false    |
+| >=2   | true     |
+
+table bulky_of
+policy unique
+| units | -> bulky |
+| <20   | false    |
+| >=20  | true     |
+
+table wrapped_of
+policy unique
+| gifts | -> wrapped |
+| <4    | false      |
+| >=4   | true       |
+
+table fast_of
+policy unique
+| rushes | -> fast |
+| <2     | false   |
+| >=2    | true    |
+
+table chilled_of
+policy unique
+| colds | -> chilled |
+| <3    | false      |
+| >=3   | true       |

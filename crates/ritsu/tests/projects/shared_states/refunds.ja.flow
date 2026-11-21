@@ -1,0 +1,16 @@
+workflow 返金 v1
+description "注文をあと何日のうちなら返金できるかを返す。フローも、フローが尋ねる規則も、ゲートも、状態を一つの enums のファイルから読むので、フローが受け取った状態をそのまま規則に渡せる。refunds.flow の日本語の版"
+
+import enum 注文の状態 from "rules/注文の状態.rule"
+use rule 返金の期限 from "rules/返金の期限.rule"
+
+inputs
+  注文ID : string
+  状態   : 注文の状態
+
+outputs
+  日数 : int
+
+flow
+  let 期限 = 返金の期限(状態: 状態)
+  succeed 日数 = 期限.日数

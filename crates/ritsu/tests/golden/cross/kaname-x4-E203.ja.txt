@@ -10,8 +10,8 @@ books/ledger.book: ok
   = 書いたエフェクトに収まるよう、失敗しうる場所を示せるようにする（渡す値を `if` で範囲に狭める）か、エフェクトを広げて書いてください。
 エラー[ritsu E203]: payout.kn:21:85: 振替 `ledger.capture.do` の `amount` に渡す `payment.amount - fee` が、chobo の受け取らない額になることがあります
     21 |     capture: ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount - fee),
-  = たとえば `settle(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` のとき、-48 になります。
-  = chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 9223372036854775807 までです。
+  = たとえば `settle(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` のとき、-48USDc になります。
+  = chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 2⁶³ − 1 までです。
   = kaname の生成したコードは、振替を組み立てるところで額を確かめます。関数は、そこで `range` で失敗します。
   = 振替の前に `if` で額を狭めるか、負の額は向きの違う振替に分けてください。
 ritsu check: ファイル 3 個（rulec 1、chobo 1、kaname 1）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 4 か所、決められない 0 か所

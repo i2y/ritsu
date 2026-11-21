@@ -1,0 +1,4 @@
+error[E101]: tests/mutants/E101_範囲の無い数.ringi:4:3: `日数` has no range
+     4 |   日数(days) : number "日数"
+  = Write the values it takes, as in `range >=1 <=20`: the screen checks the value against it, and the check of the route and the generated code take it.
+  = The line, fixed: 日数(days) : number "日数"  range >=1 <=20

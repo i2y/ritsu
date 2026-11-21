@@ -1,0 +1,2 @@
+エラー[E105]: tests/mutants/E105_an_entity_given_to_a_rule.gate:66:65: `resource.customer` は型 `Customer` のエンティティなので、規則や日付の入力に渡せません
+    66 |     refund_band  = refund_limit(amount: amount, limit: resource.customer).band

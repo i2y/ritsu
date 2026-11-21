@@ -1,0 +1,37 @@
+rule 購買の経路(purchase_route) v1
+description "購買の申請が通る順。決裁権限の表を取り込み、経理が審査するかをそこから受け取る。表は種類、金額、その答えを一緒に読み、決裁権限の表が出さない組み合わせの行は求められない"
+
+enum 種類(kind) = 物品(goods) | 設備(capex) | ソフトウェア(software)
+enum 一次の確認(first_by) = 課長(manager)
+enum 経理の確認(finance_by) = 経理部(finance_team)
+enum 決める人(decide_by) = 部長(dept_head) | 本部長(division_head) | 社長(president)
+
+inputs
+  種類(kind)   : 種類
+  金額(amount) : money[円]  range >=1円 <=100_000_000円
+
+apply 決裁権限(authority) = "shared/決裁権限.rule" meaning:2cbe8adf6c74a60d
+  種類 = 種類
+  金額 = 金額
+  経理 -> 経理を通す
+
+outputs
+  一次(first)   : 一次の確認
+  経理(finance) : 経理の確認?
+  決裁(decide)  : 決める人
+
+table 経路(route)
+| 種類         | 金額          | 経理を通す | -> 一次 | 経理   | 決裁   |
+| 物品         | <=1_000_000円 | false      | 課長    | none   | 部長   |
+| 物品         | >1_000_000円  | true       | 課長    | 経理部 | 本部長 |
+| 設備         | -             | true       | 課長    | 経理部 | 社長   |
+| ソフトウェア | <=3_000_000円 | false      | 課長    | none   | 本部長 |
+| ソフトウェア | >3_000_000円  | true       | 課長    | 経理部 | 社長   |
+
+examples
+| 種類         | 金額        | -> 一次 | 経理   | 決裁   |
+| 物品         | 1_000_000円 | 課長    | none   | 部長   |
+| 物品         | 1_000_001円 | 課長    | 経理部 | 本部長 |
+| 設備         | 1円         | 課長    | 経理部 | 社長   |
+| ソフトウェア | 3_000_000円 | 課長    | none   | 本部長 |
+| ソフトウェア | 3_000_001円 | 課長    | 経理部 | 社長   |

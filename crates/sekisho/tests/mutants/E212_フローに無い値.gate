@@ -1,0 +1,30 @@
+gate 請求(claims_ja) v1
+description "claims.ja.gate が、フローに無い値を書いたもの"
+namespace ClaimsJa
+
+use rule 支払う人 from "../../examples/claims/rules/支払う人.rule"
+use openapi 窓口 from "../../examples/claims/api/desk.json"
+
+workflow 支払い(pay) from "../../examples/claims/flows/pay.ja.flow"
+  description "決まりが窓口に任せる請求を支払い、ほかの請求は担当者に回す"
+  resource 請求 from 請求の番号
+    金額 = 請求.合計
+
+resource 請求(Claim)
+  description "請求"
+  attributes
+    金額(amount) : money[JPY]  range >=1JPY <=10_000JPY
+
+action 請求を支払う(pay_claim)
+  description "請求を支払う"
+  guards 窓口 payClaim
+  principal Workflow
+  resource 請求 from claimId
+  context
+    支払う人(payer) = 支払う人(金額: resource.金額).だれ
+
+permit ワークフローは窓口の請求を支払える(the_workflow_pays_the_desks_claims)
+  description "ワークフローは、決まりが窓口に任せる請求を支払える"
+  principal is workflow 支払い
+  action 請求を支払う
+  when 支払う人 is 窓口

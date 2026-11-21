@@ -1,0 +1,14 @@
+rule authority v1
+description "Who decides, by the amount (fictional)"
+
+enum decider = manager "Manager" | cfo "Chief financial officer"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  decider : decider
+
+table decider
+| amount      | -> decider |
+| <=50_000JPY | manager    |

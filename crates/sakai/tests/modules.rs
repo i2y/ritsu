@@ -99,7 +99,7 @@ fn a_module_in_english() {
         "The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `contexts/pricings.ctx`",
         "A path that starts with `@` names a dependency only in a module",
         "The file @lib/rules/order_total.rule refers to rulec \"@lib/@base/rules/vat_rate.rule\", which is outside the map's scope (apply)",
-        "@lib/@base/rules/vat_rate.rule is a file of the dependency `@lib/@base`: bring the dependency's context that owns it into the map with `use context \"@lib/@base/…\"`, or write `\"@lib/@base\"` in `covers` and own the file in a context of the map.",
+        "The file @lib/@base/rules/vat_rate.rule belongs to the dependency `@lib/@base`: bring the dependency's context that owns it into the map with `use context \"@lib/@base/…\"`, or write `\"@lib/@base\"` in `covers` and own the file in a context of the map.",
     ] {
         assert!(t.contains(said), "{said}\n{t}");
     }

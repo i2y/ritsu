@@ -1,0 +1,6 @@
+permit clerks_refund_small_amounts
+  description "A clerk refunds a small refund within the period"
+  principal in clerk
+  action refund_order
+  when size is small
+  when in_period

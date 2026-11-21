@@ -1,0 +1,4 @@
+エラー[E306]: tests/mutants/E306_a_possible_that_does_not_happen.ringi:20:1: 主張 a_president_at_times が成り立ちません。そうなる申請がありません
+    20 |   a_president_at_times : possible decide is president
+  = rulec の言い方: 入力の条件に当てはまる呼び出しで、decide が答えるのは head / manager です。
+  = 経路を直すか、主張を消してください。

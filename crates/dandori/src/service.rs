@@ -186,6 +186,13 @@ pub fn check(m: &Model) -> Vec<Diag> {
                 }
                 for (o, t) in &m.outputs {
                     match fields.iter().find(|(f, _)| f == o) {
+                        // what comes in reads `{year, month, day}` as a date; what goes out is written as the flow has it (DESIGN 44)
+                        Some(_) if res.holds_day(o) => {
+                            said.say(tr!(
+                                "出力 `{o}` は `{r}` の `{o}` に入りますが、そこは `google.type.Date` か、それを中に持つメッセージです。実行の出力は、日付を protobuf の JSON の形（`{{year, month, day}}`）では書きません。そのフィールドを `string` にしてください",
+                                "the output `{o}` goes to `{o}` of `{r}`, which is a `google.type.Date` or holds one, and a run's output does not write a date as protobuf's JSON does (`{{year, month, day}}`); make that field a `string`"
+                            ));
+                        }
                         None => {
                             let Text { en, ja } = fields_are(&fields);
                             said.say(

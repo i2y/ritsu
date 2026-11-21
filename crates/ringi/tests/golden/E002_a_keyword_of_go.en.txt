@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_a_keyword_of_go.ringi:4:3: `func` is a reserved word of a language the code is generated in, and cannot be a name
+     4 |   func : text "Function"  count <=20
+  = One of TypeScript, Python and Go cannot take `func` as a name. Choose another name, or give another ASCII name in brackets, as in `name(ascii_name)`.

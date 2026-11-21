@@ -162,7 +162,7 @@ error gets none.
 ## Install
 
 koyomi is one of the languages of [ritsu](https://github.com/i2y/ritsu), and is built from its
-repository with a recent stable Rust. To have all nine, and `ritsu check` for a project that
+repository with a recent stable Rust. To have all ten, and `ritsu check` for a project that
 holds the files of more than one:
 
 ```console
@@ -193,6 +193,8 @@ $ koyomi source fetch|pin|outdated examples/calendars/england_and_wales.cal
 $ koyomi explain E201                            # when it appears, how to fix it, a repro
 ```
 
+`koyomi explain` takes any number of codes and explains them in the order given; for two or more
+it writes what `--all` writes, with only those codes.
 `--lang ja` gives the messages, the page and the comments of the generated code in Japanese. The
 exit code is 0 with no error, 1 with one, and 2 for bad arguments. `diff` takes each version as a
 path, `<path>@<git revision>`, `@<name>/<path>` (a dependency at the lock's version) or

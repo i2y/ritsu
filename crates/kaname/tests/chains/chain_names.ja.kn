@@ -1,0 +1,35 @@
+module 店(shop) v1
+description "名前を書き誤った宣言と、それを使う行。どの名前も最初に書いた所で一度だけ言い、そこから続くことは言い直さない。chain_names.kn の日本語の版"
+
+# フィールドの名前を宣言で書き誤った。合計と例は `数量` と書いたままで、例が作るレコードにフィールドが足りないとは言わない
+record 明細(Line)
+  品番(sku) : string
+  数(qy)    : number  range >=1 <=20
+
+# 値の名前を宣言で書き誤った。`match` と例は `金` と書いたままで、`match` が `金色` を受けないとは言わない
+enum 段階(Tier) = 一般(plain) | 金色(gld)
+
+# レコードの名前を宣言で書き誤った。`注文` と書く型は一度だけ言う
+record 注(Ordr)
+  明細(lines) : list[明細]  count <=10
+  段階(tier)  : 段階
+
+fn 割引率(discount)(段階(t): 段階) -> number
+  match 段階
+    一般 => 0
+    金 => 5
+
+fn 個数(count_of)(明細(lines): list[明細] count <=10) -> number
+  sum(明細, l => l.数量)
+
+fn 請求額(bill)(注文(o): 注文, 単価(price): money[USDc] range >=1USDc <=1000USDc) -> money[USDc]
+  let 総額 = 単価 * 個数(明細: 注文.明細)
+  総額 - down(総額 * 割引率(段階: 注文.段階) / 100, 1USDc)
+
+fn 明細の数(lines_of)(注文(o): 注文) -> number
+  個数(明細: 注文.明細)
+
+examples
+  割引率(段階: 段階.金) = 5
+  個数(明細: [明細 { 品番: "a", 数量: 2 }]) = 2
+  個数(明細: [明細 { 品番: "a", 数量: 2 }, 明細 { 品番: "b", 数量: 3 }]) = 5

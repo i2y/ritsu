@@ -137,10 +137,7 @@ fn root_note(root: &Path) -> Text {
 /// Read the map `map` (a path from the root) and the contexts it names.
 pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
     let shown_map = paths::shown(map);
-    let src = ritsu_base::fs::read_to_string(paths::on_disk(root, map)).map_err(|e| {
-        let e = e.to_string();
-        tr!("{shown_map} を読めません: {e}", "{shown_map} cannot be read: {e}")
-    })?;
+    let src = ritsu_base::fs::read_to_string(paths::on_disk(root, map)).map_err(|e| ritsu_base::cli::cannot_read(&shown_map, &e))?;
     let mut r = R { root, diags: Vec::new() };
     let mut reads = Vec::new();
     let (f, ds) = parse::parse(map, &src);
@@ -338,7 +335,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
                 && !names.contains(&a.context)
             {
                 let ac = &a.context;
-                r.at("E007", f, s, a.pos, tr!("コンテキスト「{ac}」は地図にありません", "There is no context {ac} in the map")).notes.push(known(&names));
+                r.at("E007", f, s, a.pos, tr!("コンテキスト「{ac}」は地図にありません", "There is no context {ac} in the map")).same_in_mut("context", ac.clone()).notes.push(known(&names));
             }
             for e in &t.means {
                 if let Element::Long { written, pos } = e {
@@ -351,7 +348,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
         for rel in &c.relations {
             let Some(partner) = names.iter().position(|n| *n == rel.partner) else {
                 let pn = &rel.partner;
-                r.at("E007", f, s, rel.partner_pos, tr!("コンテキスト「{pn}」は地図にありません", "There is no context {pn} in the map")).notes.push(known(&names));
+                r.at("E007", f, s, rel.partner_pos, tr!("コンテキスト「{pn}」は地図にありません", "There is no context {pn} in the map")).same_in_mut("context", pn.clone()).notes.push(known(&names));
                 continue;
             };
             let kind = match &rel.kind {

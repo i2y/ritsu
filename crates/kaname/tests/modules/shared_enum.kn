@@ -1,0 +1,32 @@
+module shared_enum v1
+description "An enum of an enums file is one type by every name a module reads it by: the name of the file read as a rule, and the name of each rule that reads the enum whole. shared_enum.ja.kn is the Japanese version"
+
+use rule catalog from "../rulec/tests/corpus/shared/catalog.rule"
+use rule shipping from "../rulec/tests/corpus/catalog_shipping.rule"
+use rule returns from "../rulec/tests/corpus/catalog_returns.rule"
+
+# the file's names of the types, given to a rule that reads the enums whole
+fn fee(goods: catalog.category, to: catalog.zone, weight: mass[kg] range >=1kg <=30kg) -> money[USD]
+  shipping(goods: goods, destination: to, weight: weight).fee
+
+# one rule's names of the types, given to the other rule
+fn free_return(goods: shipping.category, to: shipping.zone) -> bool
+  returns(goods: goods, destination: to, opened: false).free_return
+
+# one value given to both rules
+fn days_to_return(goods: catalog.category, to: catalog.zone) -> number
+  if shipping(goods: goods, destination: to, weight: 1kg).fee > 10USD
+    returns(goods: goods, destination: to, opened: false).window
+  else
+    0
+
+# three names of one type compared, and the values of an ordered enum compared across two names
+fn same_goods(a: catalog.category, b: shipping.category, c: returns.category) -> bool
+  a = b and b = c
+
+fn nearer(a: catalog.zone, b: returns.zone) -> bool
+  a < b
+
+# values of three names in one list, where a list of a fourth name goes
+fn goods_of(a: catalog.category, b: shipping.category, c: returns.category) -> list[returns.category]
+  [a, b, c]

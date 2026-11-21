@@ -1,0 +1,144 @@
+request contract v1 "Contract review"
+description "A contract the company is about to sign, reviewed by legal (fictional rules): the agent summarizes it for the reviewers, a lawyer of the legal team takes it in and names the reviewer, two lawyers review a contract over 5,000,000 yen, and the general counsel decides one over 10,000,000 yen"
+owner legal
+
+use organization org from "shared/company.ringi"
+use calendar office from "shared/office.cal"
+use gate "shared/company.gate"
+use flow summarize from "shared/summary.flow"
+
+form
+  counterparty : text "Counterparty"  count >=1 <=100
+  kind : choice "Kind of contract"
+    nda     "Non-disclosure agreement"
+    service "Service agreement"
+    license "License agreement"
+  value    : money[JPY] "Contract value"  range >=0JPY <=1_000_000_000JPY
+  months   : number "Term in months"  range >=1 <=60
+  document : attachment "Contract"
+  text     : long text "Text of the contract"  count >=1 <=20_000
+  reviewer : person "Reviewer"  approvers only
+  # A non-disclosure agreement has no value to weigh: legal notes its risks on the others alone.
+  risks    : long text "Risks legal notes"  count <=2_000  approvers only  optional  shown when kind is not nda
+
+route
+  # The president has no manager: their contract goes to legal, as anyone's does.
+  manager  manager
+    when empty escalate, then skip
+  summary  note from summarize
+  intake   legal
+  review   reviewer
+  second   at least 2 of legal  when value > 5_000_000JPY
+  # Where the general counsel cannot answer (it is their own contract), the stage goes up.
+  counsel  counsel              when value > 10_000_000JPY
+    when empty escalate
+  finance  circulate to finance  when kind is license
+
+who
+  manager  = manager of requester
+  legal    = team legal
+  reviewer = chosen by previous approver in reviewer
+  counsel  = person "e9001"
+  finance  = team finance
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late escalate, then expire
+  when empty stay
+
+ticket
+  self approval   not allowed
+  send back       to any earlier stage, at most 3 times
+  resubmit        within 10 business days
+  withdraw        until counsel
+  pause           at most 10 business days
+  approvers edit  risks, reviewer
+
+claims
+  counsel_decides_large_contracts : counsel is counsel only when value > 10_000_000JPY
+  ends_in_time                    : every ticket ends within 192 business days
+
+scenario a_large_license
+  requester e1201
+  form counterparty = "Example Software (fictional)", kind = license, value = 12_000_000JPY, months = 12, document = "contract.pdf", text = "The licensee may use the software for twelve months (fictional)."
+| at               | event                                                                         | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                                        | e1201 | manager  | in progress |
+| 2026-11-16 11:00 | approve                                                                       | e1101 | summary  | in progress |
+| 2026-11-16 11:05 | note ready(summary: "A one-year license; the liability is capped at the fee") |       | intake   | in progress |
+| 2026-11-16 14:00 | edit(reviewer: person "e9003")                                                | e9002 | intake   | in progress |
+| 2026-11-16 14:05 | approve                                                                       | e9002 | review   | in progress |
+| 2026-11-17 10:00 | pause                                                                         | e9003 | review   | paused      |
+| 2026-11-18 10:00 | resume                                                                        | e9003 | review   | in progress |
+| 2026-11-18 15:00 | approve                                                                       | e9003 | second   | in progress |
+| 2026-11-19 10:00 | approve                                                                       | e9001 | second   | in progress |
+| 2026-11-19 11:00 | approve                                                                       | e9002 | counsel  | in progress |
+| 2026-11-20 10:00 | approve                                                                       | e9001 |          | approved    |
+
+# Legal asks for the counterparty's own draft, and sends the request back for it. The draft does not
+# come: the request is not made again within 10 business days, and it expires.
+scenario a_draft_that_does_not_come
+  requester e1201
+  form counterparty = "Example Logistics (fictional)", kind = service, value = 3_000_000JPY, months = 12, document = "contract.pdf", text = "The contractor carries the goods of the company for twelve months (fictional)."
+| at               | event                                                         | by    | comment                                                           | -> stage | status         |
+| 2026-11-16 10:00 | submit                                                        | e1201 |                                                                   | manager  | in progress    |
+| 2026-11-16 11:00 | approve                                                       | e1101 |                                                                   | summary  | in progress    |
+| 2026-11-16 11:05 | note ready(summary: "A one-year contract for carrying goods") |       |                                                                   | intake   | in progress    |
+| 2026-11-16 14:00 | send back                                                     | e9002 | "Attach the draft the counterparty sent: we check what both sign" |          | with requester |
+| 2026-12-01 00:00 | resubmit late                                                 |       |                                                                   |          | expired        |
+
+# A non-disclosure agreement: it has no value to weigh, so legal notes no risks on it, and the
+# review decides it
+scenario a_non_disclosure_agreement
+  requester e1201
+  form counterparty = "Example Research (fictional)", kind = nda, value = 0JPY, months = 24, document = "nda.pdf", text = "Each side keeps secret what the other discloses, for two years (fictional)."
+| at               | event                                                     | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                    | e1201 | manager  | in progress |
+| 2026-11-16 11:00 | approve                                                   | e1101 | summary  | in progress |
+| 2026-11-16 11:05 | note ready(summary: "A two-year NDA, the same for both") |       | intake   | in progress |
+| 2026-11-16 14:00 | edit(reviewer: person "e9003")                            | e9002 | intake   | in progress |
+| 2026-11-16 14:05 | approve                                                   | e9002 | review   | in progress |
+| 2026-11-17 10:00 | approve                                                   | e9003 |          | approved    |
+
+# A lawyer makes a contract request after the legal team has grown smaller (the organization from
+# 2027-04-01). The second review needs two lawyers, and only one is left who is not the requester:
+# the stage stops, and waits until an administrator adds an approver.
+scenario a_lawyer_after_the_team_shrinks
+  requester e9003
+  form counterparty = "Example Printing (fictional)", kind = service, value = 6_000_000JPY, months = 12, document = "contract.pdf", text = "The contractor prints the catalogs of the company for twelve months (fictional)."
+| at               | event                                                    | by    | -> stage | status      |
+| 2027-04-12 10:00 | submit                                                   | e9003 | manager  | in progress |
+| 2027-04-12 11:00 | approve                                                  | e0102 | summary  | in progress |
+| 2027-04-12 11:05 | note ready(summary: "A one-year contract for printing") |       | intake   | in progress |
+| 2027-04-12 14:00 | edit(reviewer: person "e9002")                           | e9002 | intake   | in progress |
+| 2027-04-12 14:05 | approve                                                  | e9002 | review   | in progress |
+| 2027-04-13 10:00 | approve                                                  | e9002 | second   | in progress |
+| 2027-04-13 11:00 | add approver(approver: person "e0102")                   |       | second   | in progress |
+| 2027-04-13 15:00 | approve                                                  | e9002 | second   | in progress |
+| 2027-04-14 10:00 | approve                                                  | e0102 |          | approved    |
+
+labels ja
+  request        "契約の確認"
+  counterparty   "契約の相手"
+  kind           "契約の種類"
+  kind.nda       "秘密保持契約"
+  kind.service   "業務委託契約"
+  kind.license   "ライセンス契約"
+  value          "契約の金額"
+  months         "期間（月）"
+  document       "契約書"
+  text           "契約の本文"
+  reviewer       "担当"
+  risks          "法務が書くリスク"
+  stage manager  "上長"
+  stage summary  "要約"
+  stage intake   "受付"
+  stage review   "確認"
+  stage second   "二人目"
+  stage counsel  "法務部長"
+  stage finance  "財務"
+  who manager    "上長"
+  who legal      "法務"
+  who reviewer   "担当者"
+  who counsel    "部長"
+  who finance    "財務部"

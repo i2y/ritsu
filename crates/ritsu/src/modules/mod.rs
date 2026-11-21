@@ -76,9 +76,7 @@ impl Ctx {
 
     /// What stops the command, said on the standard error: exit 2.
     pub fn refuse(&self, t: Text) -> u8 {
-        let head = if self.lang == Lang::Ja { "エラー" } else { "error" };
-        eprintln!("{head}: {}", t.get(self.lang));
-        2
+        ritsu_base::cli::refuse(&mut std::io::stderr(), &t, self.lang)
     }
 
     /// The directory the run is in, made canonical.
@@ -93,7 +91,7 @@ impl Ctx {
     pub fn root(&self) -> Result<PathBuf, Text> {
         match &self.root_flag {
             Some(r) => {
-                let p = ritsu_base::fs::canonicalize(Path::new(r)).map_err(|_| tr!("`--root {r}` がありません", "`--root {r}` is not there"))?;
+                let p = ritsu_base::fs::canonicalize(Path::new(r)).map_err(|e| ritsu_base::cli::cannot_read(r, &e))?;
                 if !p.join(manifest::FILE).is_file() {
                     return Err(tr!("`--root {r}` に `ritsu.mod` がありません", "`--root {r}` has no `ritsu.mod`"));
                 }

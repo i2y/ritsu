@@ -62,6 +62,9 @@ pub mod codes;
 pub mod coverage;
 pub mod json;
 pub mod jsonschema;
+/// The rules a thread has read as far as their types, which `prepare` hands out again (ritsu's
+/// DESIGN 4.15).
+mod kept;
 pub mod kw;
 pub mod lex;
 /// Merging contributions into the rules they add to (§15.227–§15.231).
@@ -75,6 +78,9 @@ pub mod ooxml;
 /// `Rules::outputs_over`).
 pub mod over;
 pub mod parse;
+/// What a run of `rulec gen` is to write, made sure of before it writes any of it: two files that
+/// write one place (§15.334), and a name the code of a target it writes cannot take (E153, §15.335).
+pub mod places;
 /// Which values of an enum need which before them (§15.222).
 pub mod possible;
 pub mod prereq;
@@ -113,6 +119,7 @@ use diag::{Diag, Severity};
 /// Checks one `.rule` and returns its diagnostics. There are three stages, and when a
 /// stage reports an error the next one does not run (type failures stacked on top of
 /// syntax failures are unreadable).
+#[derive(Clone)]
 pub struct Report {
     pub diags: Vec<Diag>,
     /// Total number of nodes the check visited (measured to set the §15-2 budget).
@@ -156,18 +163,62 @@ pub fn report(src: &str, path: &str) -> Report {
     report_with(src, path, region::DEFAULT_BUDGET)
 }
 
+/// [`report`], for what reads of the check only whether the rule passes and the codes of its errors
+/// (the check of a rule another applies, of an `enums` file a rule imports, a port's question of
+/// whether a rule passes): a report kept in either language answers ([`kept_verdict`]), as the
+/// codes and their severities are the same in both; else the rule is checked in the thread's
+/// language and its report kept, as [`report`] keeps it (§15.320). What shows a file's own findings
+/// asks [`report`], in the language it shows them in.
+pub(crate) fn verdict(src: &str, path: &str) -> Report {
+    kept_verdict(src, path, region::DEFAULT_BUDGET).unwrap_or_else(|| report(src, path))
+}
+
+/// The report kept of the rule, to `budget`, in either language, while what its check read reads
+/// the same: None where there is none, and the rule is not checked.
+pub(crate) fn kept_verdict(src: &str, path: &str, budget: i64) -> Option<Report> {
+    kept::key(src, path).as_ref().and_then(|k| kept::report_in_either(k, budget))
+}
+
 /// [`report`] with a budget. The keys written in the file come first (W901, ritsu's DESIGN
 /// 16.3): they are said whatever else the rule holds, and they stop nothing.
+///
+/// A rule this thread checked before, in the same language and to the same budget, under the same
+/// port of dates, while every file that check read reads the same and the run's contributions that
+/// come down to the files it merged are the same, is not checked again: its report is kept
+/// (`kept`), and the check of an `enums` file a rule reads, of a rule another applies, or of a rule
+/// a port asks about after its check is that one, in either language ([`verdict`]; ritsu's DESIGN
+/// 4.15). A report that says a ring
+/// of applies, made while a rule was being expanded, is not kept: the ring may run through a rule
+/// outside the one checked.
 pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
-    let mut r = stages(src, path, budget);
+    let key = kept::key(src, path);
+    let lang = i18n::current();
+    if let Some(r) = key.as_ref().and_then(|k| kept::report(k, lang, budget)) {
+        return r;
+    }
+    let (mut r, read) = match key {
+        Some(_) => {
+            let (r, read) = kept::watch(|| stages(src, path, budget));
+            (r, Some(read))
+        }
+        None => (stages(src, path, budget), None),
+    };
+    // A name declared nowhere is said once, where it is first written (§15.321).
+    diag::once(&mut r.diags);
     r.diags.splice(0..0, diag::keys(src, path));
+    if let (Some(key), Some(read)) = (key, read)
+        && !(apply::expanding() && r.diags.iter().any(|d| d.code == "E044"))
+    {
+        kept::keep_report(key, lang, budget, read, r.clone());
+    }
     r
 }
 
 /// The three stages of the check. A rule a contribution of the run reaches is checked twice
 /// (§15.231): alone, with its examples — what it claims when there are none — and merged with them,
 /// without its examples, which are about it alone. The report holds what both say, each finding
-/// once.
+/// once. The two are two rules, each checked once: what the rule alone reads is counted apart
+/// (`rulec.alone`) from the file's check.
 fn stages(src: &str, path: &str, budget: i64) -> Report {
     let parsed = parse::parse(src, path);
     let diags = parsed.diags.clone();
@@ -177,8 +228,8 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
     let Some(f) = parsed.file else { return Report::of(diags, Vec::new(), region::Shadow::default(), 0) };
     match f.kind {
         ast::FileKind::Rule if link::reaches(path) => {
-            let alone = link::without(|| pipeline(f.clone(), path, budget));
-            let mut merged = pipeline(f, path, budget);
+            let alone = link::without(|| pipeline(f.clone(), src, path, budget));
+            let mut merged = pipeline(f, src, path, budget);
             // A claim of chances the rule alone breaks the same way is said once, as the rule's
             // (§15.224): the merged rule says it again only when the contributions move the chance.
             let alone_claims: Vec<(String, Option<String>)> = alone
@@ -196,13 +247,38 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
             quiet.extend(merged.quiet.drain(..).filter(|d| !qseen.contains(&finding_key(d, path))));
             Report { diags, quiet, shadow: merged.shadow, nodes: alone.nodes + merged.nodes, merged: merged.merged, adds_to: None, tables_hold: merged.tables_hold }
         }
-        _ => pipeline(f, path, budget),
+        _ => pipeline(f, src, path, budget),
     }
 }
 
-/// The check of one parsed file, from the enums it reads to the claims of its machine.
-fn pipeline(mut f: ast::RuleFile, path: &str, budget: i64) -> Report {
-    let mut r = pipeline_inner(&mut f, path, budget);
+/// The check of one parsed file, from the enums it reads to the claims of its machine. The rule as
+/// it is read as far as its types is kept on the thread for [`prepare`] (`kept`), with what the
+/// check read, so that what is made of the rule after its check does not read it again (ritsu's
+/// DESIGN 4.15).
+fn pipeline(mut f: ast::RuleFile, src: &str, path: &str, budget: i64) -> Report {
+    // the rule checked over the days of a koyomi date, or with its inputs held to ranges, is counted
+    // apart from its own check: a check over other ranges (with ranges held, under what is held);
+    // and so is a file read for a rule a contribution reaches checked alone (§15.231)
+    ritsu_base::tally::count(
+        if days::holding_over() {
+            "rulec.days"
+        } else if over::holding() {
+            "rulec.over"
+        } else if link::alone() {
+            "rulec.alone"
+        } else {
+            "rulec"
+        },
+        std::path::Path::new(&over::tallied(path)),
+    );
+    let key = kept::key(src, path);
+    let ((mut r, typed), read) = match key {
+        Some(_) => {
+            let (got, read) = kept::watch(|| pipeline_inner(&mut f, path, budget));
+            (got, Some(read))
+        }
+        None => (pipeline_inner(&mut f, path, budget), None),
+    };
     // A finding about a line of a file merged into this one says that file (§15.227).
     link::relocate(&mut r.diags, path);
     link::relocate(&mut r.quiet, path);
@@ -220,57 +296,88 @@ fn pipeline(mut f: ast::RuleFile, path: &str, budget: i64) -> Report {
         }
         r.merged = merged;
     }
+    if let (Some(key), Some(read), Some(typed)) = (key, read, typed) {
+        kept::keep(key, read, f, typed.checked, typed.pinned);
+    }
     r
 }
 
-fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
+/// The rule a check read as far as its types, where [`prepare_lenient`] reads the same rule (no
+/// error before the types are checked, nor among them, but for a pin that does not match): the
+/// types, and whether a pin did not match (E040), which [`prepare`] stops at.
+struct Typed {
+    checked: types::Checked,
+    pinned: bool,
+}
+
+fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> (Report, Option<Typed>) {
     let mut diags = Vec::new();
-    let mut quiet = Vec::new();
-    let mut shadow = region::Shadow::default();
-    let mut nodes = 0i64;
+    let quiet = Vec::new();
+    let shadow = region::Shadow::default();
     let adds_to = (f.kind == ast::FileKind::Contribution).then(|| f.contrib.as_ref().and_then(|h| h.to.as_ref()).and_then(|t| link::join(path, &t.file))).flatten();
-    let done = |diags: Vec<Diag>, quiet: Vec<Diag>, shadow: region::Shadow, nodes: i64| Report { diags, quiet, shadow, nodes, merged: Vec::new(), adds_to: adds_to.clone(), tables_hold: false };
+    let done = |diags: Vec<Diag>, quiet: Vec<Diag>, shadow: region::Shadow| (Report { diags, quiet, shadow, nodes: 0, merged: Vec::new(), adds_to: adds_to.clone(), tables_hold: false }, None);
     // A name the file's lines declare twice, or two names given one identifier (§15.262): whatever
     // reads the name below would read one of the two, so the check stops before anything does.
     diags.extend(names::check(f, path));
     if has_error(&diags) {
-        return done(diags, quiet, shadow, nodes);
+        return done(diags, quiet, shadow);
     }
     // The enums it reads from an `enums` file come first (§15.212): everything below, the
     // rule an `apply` brings in included, is checked over them as over the rule's own.
     diags.extend(enums::read_imports(f, path));
     if has_error(&diags) {
-        return done(diags, quiet, shadow, nodes);
+        return done(diags, quiet, shadow);
     }
     // A rule applied by this one is read and expanded into it first (§15.69). A callee that
     // cannot be expanded leaves holes everything below would trip over, so those errors
     // return here; a pin that does not match (E040) is reported and the check goes on, so
     // that what the changed callee does to this rule can be seen.
-    diags.extend(apply::expand(f, path));
+    let expanded = apply::expand(f, path);
+    let mut pinned = expanded.iter().any(|d| d.severity == Severity::Error && d.code == "E040");
+    diags.extend(expanded);
     if diags.iter().any(|d| d.severity == Severity::Error && d.code != "E040") {
-        return done(diags, quiet, shadow, nodes);
+        return done(diags, quiet, shadow);
     }
     // The contributions the run gives are merged into the rule they reach, and its open values
     // become `define`s (§15.227); a contribution becomes the rule it adds to, merged with it and
     // with what it comes after. Its pins (E040) are said and the check goes on, as an apply's.
-    diags.extend(link::merge(f, path));
+    let merging = link::merge(f, path);
+    pinned |= merging.iter().any(|d| d.severity == Severity::Error && d.code == "E040");
+    diags.extend(merging);
     if diags.iter().any(|d| d.severity == Severity::Error && d.code != "E040") {
-        return done(diags, quiet, shadow, nodes);
+        return done(diags, quiet, shadow);
     }
     // Every spelling of an imported division becomes the one value it stands for (§15.182).
     let spelled = prelude::normalize(f, path);
     if has_error(&spelled) {
         diags.extend(spelled);
-        return done(diags, quiet, shadow, nodes);
+        return done(diags, quiet, shadow);
     }
     // A bare word is read where the type of the place says what it is: a value of the column's
     // enum, or a name (§15.208). Two readings left open (E075) go on with the type errors.
-    diags.extend(types::read_words(f, path));
+    let words = types::read_words(f, path);
+    let words_hold = !has_error(&words);
+    diags.extend(words);
     let f = &*f;
 
     let t = types::check(f, path);
+    let applied = apply::check(f, &t, path);
+    // what `prepare_lenient` reads of the rule: the stages so far, without an error but E040
+    let read = words_hold && !has_error(&t.diags) && !has_error(&applied);
+    let r = typed_stages(f, &t, applied, path, budget, diags, adds_to);
+    (r, read.then_some(Typed { checked: t, pinned }))
+}
+
+/// The stages of the check that read the rule typed: the files outside it, the tables, the
+/// examples and the claims, after the findings `diags` of the stages before and those of the
+/// `apply`s (`applied`).
+fn typed_stages(f: &ast::RuleFile, t: &types::Checked, applied: Vec<Diag>, path: &str, budget: i64, mut diags: Vec<Diag>, adds_to: Option<String>) -> Report {
+    let mut quiet = Vec::new();
+    let mut shadow = region::Shadow::default();
+    let mut nodes = 0i64;
+    let done = |diags: Vec<Diag>, quiet: Vec<Diag>, shadow: region::Shadow, nodes: i64| Report { diags, quiet, shadow, nodes, merged: Vec::new(), adds_to: adds_to.clone(), tables_hold: false };
     diags.extend(t.diags.iter().cloned());
-    diags.extend(apply::check(f, &t, path));
+    diags.extend(applied);
     // What the merge proves once the rule is typed: the values a contribution added fall to no
     // row in silence (E033), and every finding about a contributed row says whose it is.
     diags.extend(link::check(f, &t, path));
@@ -301,6 +408,7 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
         shadow.confirm += r.shadow.confirm;
         nodes += r.nodes;
     }
+    unused_values_beside_gaps(&mut diags, f, &t);
     // Whether each `never` line that stands on definitions really does (§15.282), and once they
     // do, which lines rule out nothing (§15.286).
     let lines = projection::walks::never_lines(f, &t, path);
@@ -425,6 +533,77 @@ pub fn check_tail_of(shadow: &region::Shadow, diags: &[Diag], path: &str, suppre
 /// zero. The input has to be one the door takes — inside every `constraint` and on koyomi's days —
 /// and the reference evaluator has to say the expression comes to zero, or below it. None found,
 /// nothing is named: the ranges reach the value, and that is what the error says.
+/// W111 for the values of an enum that no row names, beside an E101 of a table that reads or
+/// writes the enum (§15.317). Its note said "even though the completeness check passes", which
+/// that table's does not. Where the rows E101 asks for name every one of those values in the
+/// enum's column, the warning says what the error says, and is left out, as W110 is beside a row
+/// E101 asks for. Otherwise the note says which table is short of rows: what its rows answer may
+/// be where the values go (a table that writes the enum), or the values may come to be taken by a
+/// `-` once it passes (a table that reads it).
+fn unused_values_beside_gaps(diags: &mut Vec<Diag>, f: &ast::RuleFile, c: &types::Checked) {
+    let gaps: Vec<(String, Vec<Vec<String>>)> = diags
+        .iter()
+        .filter(|d| d.code == "E101")
+        .filter_map(|d| {
+            let rows = d.fix.text.as_deref().unwrap_or("").lines().map(|l| l.trim().trim_start_matches('|').trim_end_matches('|').split('|').map(|x| x.trim().to_string()).collect()).collect();
+            Some((d.table.clone()?, rows))
+        })
+        .collect();
+    if gaps.is_empty() {
+        return;
+    }
+    let of_enum = |name: &str, e: &str| match c.ty_of(name) {
+        Some(types::Ty::Enum(n)) => n == e,
+        Some(types::Ty::Opt(t)) => matches!(t.as_ref(), types::Ty::Enum(n) if n == e),
+        _ => false,
+    };
+    diags.retain_mut(|d| {
+        if d.code != "W111" || d.fix.kind != diag::FixKind::MarkDefault {
+            return true;
+        }
+        let Some(e) = f.enums.iter().find(|e| d.marks.first().is_some_and(|m| m.span.line == e.name.span.line && m.span.col == e.name.span.col)) else { return true };
+        let unused: Vec<String> = d.notes.first().and_then(|n| n.rsplit_once(": ")).map(|(_, vs)| vs.split(" / ").map(str::to_string).collect()).unwrap_or_default();
+        let mut asked: Vec<&str> = Vec::new();
+        let mut beside: Option<(&str, bool)> = None;
+        for (name, rows) in &gaps {
+            let Some(t) = f.items.iter().find_map(|it| match it {
+                ast::Item::Table(t) if t.name.as_ref().is_some_and(|n| n.text == *name) => Some(t),
+                _ => None,
+            }) else {
+                continue;
+            };
+            let reads: Vec<usize> = t.inputs.iter().enumerate().filter(|(_, (n, _))| of_enum(n, &e.name.text)).map(|(i, _)| i).collect();
+            let writes = t.outputs.iter().any(|o| of_enum(&o.name.text, &e.name.text));
+            if reads.is_empty() && !writes {
+                continue;
+            }
+            beside.get_or_insert((name.as_str(), !reads.is_empty()));
+            for row in rows.iter().filter(|r| r.len() == t.inputs.len() + t.outputs.len()) {
+                asked.extend(reads.iter().flat_map(|&i| row[i].split(',').map(str::trim)));
+            }
+        }
+        let Some((table, reads)) = beside else { return true };
+        if reads && !unused.is_empty() && unused.iter().all(|v| asked.contains(&v.as_str())) {
+            return false;
+        }
+        let note = if reads {
+            tr!(
+                "この型を読む表 {table} は、完全性の検査を通っていません（E101）。通ったあとも、その値は `-` の行に当たっているだけかもしれません。",
+                "Table {table}, which reads this type, does not pass the completeness check (E101). Once it does, the rows for those values may simply be absorbed by a `-`."
+            )
+        } else {
+            tr!(
+                "この型を書く表 {table} には、行が足りません（E101）。その値は、足りない行の答えかもしれません。",
+                "Table {table}, which writes this type, is short of rows (E101): what the rows it lacks answer may be where those values belong."
+            )
+        };
+        if let Some(last) = d.notes.last_mut() {
+            *last = note;
+        }
+        true
+    });
+}
+
 fn enrich_arith(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) {
     use eval::Val;
     use num::Rat;
@@ -662,6 +841,48 @@ pub fn prepare_lenient<'a>(src: &'a str, path: &str) -> Result<(ast::RuleFile, t
 }
 
 fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleFile, types::Checked), Vec<Diag>> {
+    // The rule as its check, or a `prepare` before, read it as far as its types on this thread,
+    // while every file that reading read reads the same: it is not read again (ritsu's DESIGN 4.15).
+    let key = kept::key(src, path);
+    if let Some((mut f, t)) = key.as_ref().and_then(|k| kept::find(k, tolerate_pin)) {
+        codegen::assign_identifiers(&mut f);
+        return Ok((f, t));
+    }
+    // read again with the inputs held to ranges (`over::with`): a question over other ranges,
+    // counted apart; and so is a file read for a rule checked alone (§15.231)
+    ritsu_base::tally::count(
+        if over::holding() {
+            "rulec.over"
+        } else if link::alone() {
+            "rulec.alone"
+        } else {
+            "rulec.prepare"
+        },
+        std::path::Path::new(&over::tallied(path)),
+    );
+    let (typed, read) = match key {
+        Some(_) => {
+            let (typed, read) = kept::watch(|| read_typed(src, path, tolerate_pin));
+            (typed, Some(read))
+        }
+        None => (read_typed(src, path, tolerate_pin), None),
+    };
+    let (mut f, t, pinned) = typed?;
+    if let (Some(key), Some(read)) = (key, read) {
+        kept::keep(key, read, f.clone(), t.clone(), pinned);
+    }
+    // What is generated from the rule writes a name some language keeps as a keyword with `_`
+    // after it (§15.210), and what an `apply` or a contribution brings in under an identifier no
+    // other name of the rule is written as, in any language (§15.260). The checks ran on the names
+    // as declared.
+    codegen::assign_identifiers(&mut f);
+    Ok((f, t))
+}
+
+/// The rule read as far as its types, as [`prepare`] reads it (with a pin that does not match let
+/// through when `tolerate_pin`), and whether a pin did not match (E040); else the findings of the
+/// stage it stops at.
+fn read_typed(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleFile, types::Checked, bool), Vec<Diag>> {
     let parsed = parse::parse(src, path);
     if !parsed.diags.is_empty() {
         return Err(parsed.diags);
@@ -677,16 +898,19 @@ fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleF
     if has_error(&ds) {
         return Err(ds);
     }
+    let pin = |ds: &[Diag]| ds.iter().any(|d| d.severity == Severity::Error && d.code == "E040");
     let ds = apply::expand(&mut f, path);
     if ds.iter().any(|d| d.severity == Severity::Error && !(tolerate_pin && d.code == "E040")) {
         return Err(ds);
     }
+    let mut pinned = pin(&ds);
     // What is generated from a rule is the rule merged with the contributions the run gives
     // (§15.231); from a contribution, the rule it adds to, merged with it.
     let ds = link::merge(&mut f, path);
     if ds.iter().any(|d| d.severity == Severity::Error && !(tolerate_pin && d.code == "E040")) {
         return Err(ds);
     }
+    pinned |= pin(&ds);
     let ds = prelude::normalize(&mut f, path);
     if has_error(&ds) {
         return Err(ds);
@@ -703,11 +927,5 @@ fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleF
     if ds.iter().any(|d| d.severity == Severity::Error) {
         return Err(ds);
     }
-    // What is generated from the rule writes a name some language keeps as a keyword with `_`
-    // after it (§15.210), and what an `apply` or a contribution brings in under an identifier no
-    // other name of the rule is written as, in any language (§15.260). The checks above ran on the
-    // names as declared.
-    let mut f = f;
-    codegen::assign_identifiers(&mut f);
-    Ok((f, t))
+    Ok((f, t, pinned))
 }

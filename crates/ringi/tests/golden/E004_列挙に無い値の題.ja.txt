@@ -1,0 +1,3 @@
+エラー[E004]: tests/mutants/E004_列挙に無い値の題.ringi:10:5: 列挙 `権限.decider` に、値 `ceo` はありません
+    10 |     ceo     "社長"
+  = 宣言されている列挙の値: `manager`、`cfo`

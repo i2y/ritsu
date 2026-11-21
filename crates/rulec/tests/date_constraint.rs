@@ -19,6 +19,7 @@ use rulec::json::Json;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -48,6 +49,11 @@ fn rulec(args: &[&str]) -> (i32, String, String) {
     rulec_in(None, args)
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 /// `rulec`, with `tmp` as its TMPDIR when there is one: `rulec test` asks swiftc for its version,
 /// and swiftc leaves an empty directory in its TMPDIR almost every time.
 fn rulec_in(tmp: Option<&Path>, args: &[&str]) -> (i32, String, String) {
@@ -56,8 +62,8 @@ fn rulec_in(tmp: Option<&Path>, args: &[&str]) -> (i32, String, String) {
     if let Some(t) = tmp {
         c.env("TMPDIR", t);
     }
-    let o = c.output().expect("cannot start rulec");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    let o = finish(&mut c, RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 fn have(cmd: &str) -> bool {
@@ -317,7 +323,7 @@ fn a_broken_relation_between_two_dates_is_shown_at_dates() {
     for s in &STAYS {
         let p = Path::new(s.path);
         let relation = |ranges: &[(String, Option<i128>, Option<i128>)]| -> Answer<Values> {
-            let all = e.preconditions_hold(p, ranges, None).unwrap_or_else(|x| panic!("{}: {x:?}", s.path));
+            let all = e.preconditions_hold(p, ranges, None, None).unwrap_or_else(|x| panic!("{}: {x:?}", s.path));
             all.into_iter().find(|(q, _)| matches!(q, Precondition::Relation { .. })).map(|(_, a)| a).expect("the constraint is a precondition")
         };
         // check-in in the summer, check-out from 2026-06-01 to 2026-07-16

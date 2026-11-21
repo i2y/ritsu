@@ -1,0 +1,22 @@
+rule 手数料(fee) v1
+description "3% の手数料と、金額に確かめが要るか（架空）"
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100_000円
+
+outputs
+  手数料(fee)    : money[円]  round down(1円)
+  確かめ(review) : bool
+
+table 確かめの要否(review_of)
+policy unique
+| 金額      | -> 確かめ |
+| <30000円  | false     |
+| >=30000円 | true      |
+
+result 手数料 = down(金額 * 3%, 1円)
+
+examples
+| 金額     | -> 手数料 | 確かめ |
+| 1_000円  | 30円      | false  |
+| 50_000円 | 1500円    | true   |

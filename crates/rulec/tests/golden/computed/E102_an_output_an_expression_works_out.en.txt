@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 1 never matches
+  --> tests/computed/shapes/E102_an_output_an_expression_works_out.rule:16 table hidden
+   |
+16 | | >900JPY  | <=30_000JPY | true      |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1: no input reaches here
+ 7 | apply c = "shared/calc.rule" meaning:12271f77080f6b9f
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ >=0JPY <=900JPY over the values of `amount` in this row
+   |
+ `c_fee` is computed from `amount`. Over the values of `amount` this row takes, `c_fee` only comes to >=0JPY <=900JPY, which is not what this row asks for.
+ hint: compare the expression with this row's conditions. No input reaches this row, so if it is not needed, delete it.
+

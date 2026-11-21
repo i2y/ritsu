@@ -1,0 +1,53 @@
+rule 割り振り(w_routing) v1
+description "Java で重みで選ぶ歩きが持つ局所と同じ名前の入力"
+
+enum 在席(presence) = 不在(away) | 在席中(in_office)
+
+# 係の一人。呼び出し側は係の全員を決まった順で渡す
+elements 担当者(reviewers)
+  番号(reviewer_id) : number  range >=1 <=50
+  いる(present)     : bool
+  受け持ち(capacity) : number  range >=0 <=100
+
+inputs
+  引いた数(w) : number  range >=0 <=9999  random  # いる人の受け持ちの合計より小さい数を引く
+
+outputs
+  担当(reviewer) : number  round down(1)  # 誰もいなければ 0
+
+table 今日の在席(in_today)
+policy unique
+| いる  | -> 在席 : 在席 |
+| true  | 在席中         |
+| false | 不在           |
+
+fold 在席 over 担当者
+  不在   -> next
+  在席中 -> take_weighted 番号 by 受け持ち
+  draw   -> 引いた数
+  empty  -> 0
+  exhausted -> held
+
+sequence 三人(team_of_three)
+| 番号 | いる | 受け持ち |
+| 1    | true | 50       |
+| 2    | true | 30       |
+| 3    | true | 20       |
+
+sequence 誰もいない(nobody_in)
+| 番号 | いる  | 受け持ち |
+| 1    | false | 50       |
+
+chances
+| 担当者     | -> 担当 | chance |
+| 三人       | 1       | 1/2    |
+| 三人       | 2       | 3/10   |
+| 三人       | 3       | 1/5    |
+| 誰もいない | 0       | 1      |
+
+examples
+| 引いた数 | 担当者     | -> 担当 |
+| 0    | 三人       | 1       |
+| 50   | 三人       | 2       |
+| 80   | 三人       | 3       |
+| 0    | 誰もいない | 0       |

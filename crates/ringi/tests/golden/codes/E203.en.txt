@@ -1,0 +1,4 @@
+error[E203]: example.ringi:9:21: The values `cfo` of `authority.decider` name no way to choose approvers in `who`
+     9 |   decide  authority.decider
+  = When a rule's output names the approver, `who` declares a way to choose approvers by the name of each value of the output.
+  = Add it to `who`, as in `cfo = …`.

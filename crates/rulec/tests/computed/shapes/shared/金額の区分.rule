@@ -1,0 +1,18 @@
+rule 金額の区分(tier) v1
+description "金額の区分と、区分ごとの手数料と印。いちばん小さい区分には印が無い"
+
+enum 大きさ(size) = 小(small) | 中(medium) | 大(large)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+outputs
+  区分(band)  : 大きさ
+  手数料(fee) : money[円]  round down(1円)
+  印(flag)    : bool?
+
+table 区分の表(bands)
+| 金額                  | -> 区分 | 手数料 | 印    |
+| <=10_000円            | 小      | 100円  | none  |
+| >10_000円 <=100_000円 | 中      | 300円  | false |
+| >100_000円            | 大      | 900円  | true  |

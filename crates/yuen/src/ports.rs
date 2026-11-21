@@ -41,8 +41,7 @@ impl Engine {
         let c = match checked {
             Ok(c) => c,
             Err(project::Refusal(t)) => {
-                let head = if lang == ritsu_base::text::Lang::Ja { "エラー" } else { "error" };
-                return vec![Unit::unchecked(&label, format!("{head}: {}\n", t.get(lang)))];
+                return vec![Unit::unchecked(&label, format!("{}\n", ritsu_base::cli::refusal(t.get(lang), lang)))];
             }
         };
         // the line that sums the project up names what yuen's own command names (`.` as its files)
@@ -59,7 +58,7 @@ fn load(root: &Path, file: &str, suite: &crate::suite::Suite) -> Result<Project,
     let disk = ritsu_base::paths::on_disk(root, file).to_string_lossy().to_string();
     let r = root.to_string_lossy().to_string();
     match project::load_with(std::slice::from_ref(&disk), Some(&r), suite.clone()) {
-        Err(project::Refusal(t)) => Err(vec![Said { code: String::new(), file: disk, line: None, message: t }]),
+        Err(project::Refusal(t)) => Err(vec![Said { code: String::new(), file: ritsu_base::paths::show_str(&disk), line: None, message: t }]),
         Ok((None, diags)) => Err(diags.iter().filter(|d| d.is_error()).map(Said::of).collect()),
         Ok((Some(mut p), _)) => {
             project::check_names(&mut p);

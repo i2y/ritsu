@@ -1,0 +1,30 @@
+error[E016]: tests/fixtures/date_formats.ja.flow:35:1: the parameter `period` is not what `勤怠` POST /leaves takes: in `first_day`, `timestamp` is not a date; declare it `date`
+    35 | task 取る(employee: string, period: 期間) -> 取った休暇
+error[E016]: tests/fixtures/date_formats.ja.flow:35:1: what `勤怠` POST /leaves answers is not `取った休暇`: in `id`, a string is not `date`
+    35 | task 取る(employee: string, period: 期間) -> 取った休暇
+error[E016]: tests/fixtures/date_formats.ja.flow:35:1: what `勤怠` POST /leaves answers is not `取った休暇`: in `first_day`, a date is not `timestamp`; declare it `date`
+    35 | task 取る(employee: string, period: 期間) -> 取った休暇
+error[E016]: tests/fixtures/date_formats.ja.flow:35:1: what `勤怠` POST /leaves answers is not `取った休暇`: in `booked_at`, a date and time is not `date`; declare it `timestamp`
+    35 | task 取る(employee: string, period: 期間) -> 取った休暇
+error[E016]: tests/fixtures/date_formats.ja.flow:39:1: the parameter `first_day` is not what `勤怠` POST /leaves/{id}/move takes: `timestamp` is not a date; declare it `date`
+    39 | task 移す(id: string, first_day: timestamp, previous: string, asked_at: date) -> 移した休暇
+error[E016]: tests/fixtures/date_formats.ja.flow:39:1: the parameter `asked_at` is not what `勤怠` POST /leaves/{id}/move takes: `date` is not a date and time; declare it `timestamp`
+    39 | task 移す(id: string, first_day: timestamp, previous: string, asked_at: date) -> 移した休暇
+error[E016]: tests/fixtures/date_formats.ja.flow:43:1: the parameter `asked_at` is not what `勤怠` POST /leaves/{id}/move takes: `string` is not a date and time; declare it `timestamp`
+    43 | task 文字列で移す(id: string, first_day: date, asked_at: string) -> 移した休暇
+error[E016]: tests/fixtures/date_formats.ja.flow:48:1: the parameter `day` is not what `勤怠` GET /days/{day} takes: `日の種類` is not a date; declare it `date`
+    48 | task 休みの日か(day: 日の種類, until: int) -> 日
+error[E016]: tests/fixtures/date_formats.ja.flow:48:1: the parameter `until` is not what `勤怠` GET /days/{day} takes: `int` is not a date; declare it `date`
+    48 | task 休みの日か(day: 日の種類, until: int) -> 日
+error[E016]: tests/fixtures/date_formats.ja.flow:48:1: what `勤怠` GET /days/{day} answers is not `日`: in `day`, a date is not `日の種類`; declare it `date`
+    48 | task 休みの日か(day: 日の種類, until: int) -> 日
+error[E016]: tests/fixtures/date_formats.ja.flow:48:1: what `勤怠` GET /days/{day} answers is not `日`: in `closing`, it may be `2026-12-29`, outside `>=2026-12-01 <=2026-12-28`
+    48 | task 休みの日か(day: 日の種類, until: int) -> 日
+error[E016]: tests/fixtures/date_formats.ja.flow:52:1: the parameter `day` is not what `勤怠` POST /closings takes: `date` is not one of 2026-12-28, 2026-12-29; declare it `date  range >=2026-12-28 <=2026-12-29`
+    52 | task 年を締める(day: date) -> 締め
+error[E016]: tests/fixtures/date_formats.ja.flow:52:1: what `勤怠` POST /closings answers is not `締め`: in `day`, it may be `2026-12-28`, which `timestamp` does not take
+    52 | task 年を締める(day: date) -> 締め
+error[E016]: tests/fixtures/date_formats.ja.flow:59:1: the parameter `day` is not what `勤怠` POST /closings takes: it may be `2026-12-30`, which is not one of the values it takes (2026-12-28, 2026-12-29)
+    59 | task その日までに締める(day: date  range >=2026-12-28 <=2026-12-30) -> 締めた日
+error[E016]: tests/fixtures/date_formats.ja.flow:63:1: the parameter `day` is not what `勤怠` POST /closings takes: it takes one of 2026-12-28, 2026-12-29, and `string` can be anything; declare it `date  range >=2026-12-28 <=2026-12-29`
+    63 | task 文字列で締める(day: string) -> 締めた日

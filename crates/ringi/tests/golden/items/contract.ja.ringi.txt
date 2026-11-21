@@ -1,0 +1,122 @@
+11-11 ringi "examples/contract.ja.ringi" field 相手
+    相手(counterparty) : text "契約の相手" count >=1 <=100
+12-15 ringi "examples/contract.ja.ringi" field 種類
+    種類(kind) : choice "契約の種類"
+    秘密保持(nda) "秘密保持契約"
+    業務委託(service) "業務委託契約"
+    ライセンス(license) "ライセンス契約"
+16-16 ringi "examples/contract.ja.ringi" field 金額
+    金額(value) : money[円] "契約の金額" range >=0円 <=1_000_000_000円
+17-17 ringi "examples/contract.ja.ringi" field 月数
+    月数(months) : number "期間（月）" range >=1 <=60
+18-18 ringi "examples/contract.ja.ringi" field 契約書
+    契約書(document) : attachment "契約書"
+19-19 ringi "examples/contract.ja.ringi" field 本文
+    本文(text) : long text "契約の本文" count >=1 <=20_000
+20-20 ringi "examples/contract.ja.ringi" field 担当
+    担当(reviewer) : person "担当" approvers only
+22-22 ringi "examples/contract.ja.ringi" field リスク
+    リスク(risks) : long text "法務が書くリスク" count <=2_000 approvers only optional shown when 種類 is not 秘密保持
+26-27 ringi "examples/contract.ja.ringi" stage 上長
+    上長(manager) 上長
+    when empty escalate, then skip
+28-28 ringi "examples/contract.ja.ringi" stage 要約
+    要約(summary) note from 要約
+29-29 ringi "examples/contract.ja.ringi" stage 受付
+    受付(intake) 法務
+30-30 ringi "examples/contract.ja.ringi" stage 確認
+    確認(review) 担当者
+31-31 ringi "examples/contract.ja.ringi" stage 二人目
+    二人目(second) at least 2 of 法務 when 金額 > 5_000_000円
+33-34 ringi "examples/contract.ja.ringi" stage 法務部長
+    法務部長(counsel) 部長 when 金額 > 10_000_000円
+    when empty escalate
+35-35 ringi "examples/contract.ja.ringi" stage 財務
+    財務(finance) circulate to 財務部 when 種類 is ライセンス
+38-38 ringi "examples/contract.ja.ringi" who 上長
+    上長(manager) = manager of requester
+39-39 ringi "examples/contract.ja.ringi" who 法務
+    法務(legal) = team legal
+40-40 ringi "examples/contract.ja.ringi" who 担当者
+    担当者(reviewer) = chosen by previous approver in 担当
+41-41 ringi "examples/contract.ja.ringi" who 部長
+    部長(counsel) = person "e9001"
+42-42 ringi "examples/contract.ja.ringi" who 財務部
+    財務部(finance) = team finance
+44-48 ringi "examples/contract.ja.ringi" deadline every_stage
+    every stage
+    due in 3 business days at end of day
+    remind after 2 business days at 09:00
+    when late escalate, then expire
+    when empty stay
+27-27 ringi "examples/contract.ja.ringi" deadline 上長
+    when empty escalate, then skip
+34-34 ringi "examples/contract.ja.ringi" deadline 法務部長
+    when empty escalate
+51-51 ringi "examples/contract.ja.ringi" ticket self_approval
+    self approval not allowed
+52-52 ringi "examples/contract.ja.ringi" ticket send_back
+    send back to any earlier stage, at most 3 times
+53-53 ringi "examples/contract.ja.ringi" ticket resubmit
+    resubmit within 10 business days
+54-54 ringi "examples/contract.ja.ringi" ticket withdraw
+    withdraw until 法務部長
+55-55 ringi "examples/contract.ja.ringi" ticket pause
+    pause at most 10 business days
+56-56 ringi "examples/contract.ja.ringi" ticket approvers_edit
+    approvers edit リスク, 担当
+59-59 ringi "examples/contract.ja.ringi" claim 大きな契約は法務部長が決める
+    大きな契約は法務部長が決める : 法務部長 is 部長 only when 金額 > 10_000_000円
+60-60 ringi "examples/contract.ja.ringi" claim 期限内に終わる
+    期限内に終わる : every ticket ends within 192 business days
+62-76 ringi "examples/contract.ja.ringi" scenario 金額の大きいライセンス契約
+    scenario 金額の大きいライセンス契約
+    requester e1201
+    form 相手 = "サンプルソフトウェア（架空）", 種類 = ライセンス, 金額 = 12_000_000円, 月数 = 12, 契約書 = "contract.pdf", 本文 = "ライセンスを受ける側は、ソフトウェアを 12 か月使える（架空）。"
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | 上長 | in progress |
+    | 2026-11-16 11:00 | approve | e1101 | 要約 | in progress |
+    | 2026-11-16 11:05 | note ready(summary: "一年のライセンス。賠償は料金が上限") | | 受付 | in progress |
+    | 2026-11-16 14:00 | edit(担当: person "e9003") | e9002 | 受付 | in progress |
+    | 2026-11-16 14:05 | approve | e9002 | 確認 | in progress |
+    | 2026-11-17 10:00 | pause | e9003 | 確認 | paused |
+    | 2026-11-18 10:00 | resume | e9003 | 確認 | in progress |
+    | 2026-11-18 15:00 | approve | e9003 | 二人目 | in progress |
+    | 2026-11-19 10:00 | approve | e9001 | 二人目 | in progress |
+    | 2026-11-19 11:00 | approve | e9002 | 法務部長 | in progress |
+    | 2026-11-20 10:00 | approve | e9001 | | approved |
+79-87 ringi "examples/contract.ja.ringi" scenario 相手の案が届かない契約
+    scenario 相手の案が届かない契約
+    requester e1201
+    form 相手 = "サンプル物流（架空）", 種類 = 業務委託, 金額 = 3_000_000円, 月数 = 12, 契約書 = "contract.pdf", 本文 = "受託者は、会社の荷物を 12 か月運ぶ（架空）。"
+    | at | event | by | comment | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | | 上長 | in progress |
+    | 2026-11-16 11:00 | approve | e1101 | | 要約 | in progress |
+    | 2026-11-16 11:05 | note ready(summary: "荷物を運ぶ一年の契約") | | | 受付 | in progress |
+    | 2026-11-16 14:00 | send back | e9002 | "相手から届いた案を付けてください。双方が署名する本文を確かめます" | | with requester |
+    | 2026-12-01 00:00 | resubmit late | | | | expired |
+90-99 ringi "examples/contract.ja.ringi" scenario 秘密保持契約
+    scenario 秘密保持契約
+    requester e1201
+    form 相手 = "サンプル研究所（架空）", 種類 = 秘密保持, 金額 = 0円, 月数 = 24, 契約書 = "nda.pdf", 本文 = "双方は、相手が開示したことを 2 年のあいだ秘密にする（架空）。"
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | 上長 | in progress |
+    | 2026-11-16 11:00 | approve | e1101 | 要約 | in progress |
+    | 2026-11-16 11:05 | note ready(summary: "双方に同じ、二年の秘密保持") | | 受付 | in progress |
+    | 2026-11-16 14:00 | edit(担当: person "e9003") | e9002 | 受付 | in progress |
+    | 2026-11-16 14:05 | approve | e9002 | 確認 | in progress |
+    | 2026-11-17 10:00 | approve | e9003 | | approved |
+103-115 ringi "examples/contract.ja.ringi" scenario 人の減った法務の契約
+    scenario 人の減った法務の契約
+    requester e9003
+    form 相手 = "サンプル印刷（架空）", 種類 = 業務委託, 金額 = 6_000_000円, 月数 = 12, 契約書 = "contract.pdf", 本文 = "受託者は、会社のカタログを 12 か月印刷する（架空）。"
+    | at | event | by | -> stage | status |
+    | 2027-04-12 10:00 | submit | e9003 | 上長 | in progress |
+    | 2027-04-12 11:00 | approve | e0102 | 要約 | in progress |
+    | 2027-04-12 11:05 | note ready(summary: "印刷を頼む一年の契約") | | 受付 | in progress |
+    | 2027-04-12 14:00 | edit(担当: person "e9002") | e9002 | 受付 | in progress |
+    | 2027-04-12 14:05 | approve | e9002 | 確認 | in progress |
+    | 2027-04-13 10:00 | approve | e9002 | 二人目 | in progress |
+    | 2027-04-13 11:00 | add approver(approver: person "e0102") | | 二人目 | in progress |
+    | 2027-04-13 15:00 | approve | e9002 | 二人目 | in progress |
+    | 2027-04-14 10:00 | approve | e0102 | | approved |

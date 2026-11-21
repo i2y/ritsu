@@ -1,0 +1,27 @@
+gate 非公開(private) v1
+description "TypeScript の strict モードの予約語を名前にしたファイル。パッケージの索引が、その名前でモジュールを書き出す"
+namespace Shop
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 掲示を出す
+
+principal 係の人(Clerk)
+  description "尋ねる人"
+  roles 係
+
+resource 掲示(Notice)
+  description "店の掲示板の掲示"
+  attributes
+    承認済み(approved) : bool
+
+action 掲示を出す(post_notice)
+  description "掲示板に掲示を出す"
+  principal 係の人
+  resource 掲示
+
+permit 係は承認済みの掲示を出せる(clerks_post_approved_notices)
+  description "係は次のことができる: 掲示板に掲示を出す"
+  principal in 係
+  action 掲示を出す
+  when resource.承認済み

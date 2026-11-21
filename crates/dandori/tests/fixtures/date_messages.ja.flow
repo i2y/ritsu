@@ -1,0 +1,26 @@
+workflow 日付のメッセージ v1
+description "E016：フローが日付として送り、日付として読む google.type.Date（DESIGN 44）を、ほかのもので受け渡す。数を送り、年・月・日のレコード、数、数のリストで読む。同じ三つのフィールドのメッセージは日付ではなく、そのままのレコードで読める"
+
+use proto 日 from "protos/dates.proto"
+  url "https://days.example.com"
+
+# protobuf の JSON は日付をこの三つのフィールドで書く。dandori はそれを `date` として読む
+record 年月日
+  year  : int
+  month : int
+  day   : int
+
+record ずらした日
+  day  : 年月日?
+  also : int?
+  more : list[int]
+  own  : 日.Ymd?
+
+inputs
+  幅 : int
+
+task ずらす(day: int, by: int) -> ずらした日
+  connect 日 "DayService/Shift"
+
+flow
+  let s = ずらす(day: 20261116, by: 幅)

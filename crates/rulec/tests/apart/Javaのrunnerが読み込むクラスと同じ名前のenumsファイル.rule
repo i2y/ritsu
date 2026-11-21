@@ -1,0 +1,9 @@
+enums 出力の流れ(print_stream) v1
+description "前提の Java の runner が読み込む JDK のクラスと同じ名前の enums ファイル"
+
+enum 科目(course) = 入門(intro) | 発展(advanced) | 総まとめ(capstone)
+
+prerequisites 順(path) over 科目
+  start    入門
+  発展     requires 入門
+  総まとめ requires 発展

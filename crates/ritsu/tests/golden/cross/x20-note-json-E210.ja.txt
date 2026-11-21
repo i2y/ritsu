@@ -1,0 +1,8 @@
+summary.flow: 検査を通りました
+ok contract.ringi: 申請の種類、フィールド 4 個、ステップ 2 個
+  終わらないことがあります: ステップ `summary`、`review` には期限がありません（`due in …`）。答えが来るまで待ちます
+エラー[ritsu E210]: contract.ringi:12: flow `summarize` は `contract` のステップ `summary` の要約を作りますが、出力 `summary` は `json` で、要約は形を決めない値（json）を持てません
+    12 |   summary  note from summarize  when amount >= 1_000_000JPY and amount <= 50_000_000JPY
+  = 要約が持てる値は、文（string、date、timestamp、列挙）、整数（int と単位の付いた数。単位で数えた整数で運びます）、真偽（bool）、行（レコードの list。レコードのフィールドもこれらの値）、それらの `T?`（値が無ければ無い値）です。
+  = "summary.flow" の出力を、要約が持てる型にしてください（一つのレコードは、一行の `list[…]` にします）。
+ritsu check: ファイル 2 個（dandori 1、ringi 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 5 か所、決められない 0 か所

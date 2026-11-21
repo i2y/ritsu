@@ -1,0 +1,4 @@
+{
+  "name": "a shipped order",
+  "input": {"order_id": "o-1", "state": "shipped"}
+}

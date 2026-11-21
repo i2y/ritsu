@@ -1,7 +1,7 @@
 {
   "name": "@i2y/ritsu",
   "version": "0.55.2",
-  "description": "ritsu and its nine small languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho, kaname) built for WebAssembly (WASI) and run by Node: every command, and run() and runSync() from JavaScript, with no native binary",
+  "description": "ritsu and its ten small languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho, kaname, ringi) built for WebAssembly (WASI) and run by Node: every command, and run() and runSync() from JavaScript, with no native binary",
   "keywords": [
     "ritsu",
     "rulec",
@@ -13,6 +13,7 @@
     "sakai",
     "sekisho",
     "kaname",
+    "ringi",
     "business-rules",
     "workflow",
     "authorization",
@@ -51,7 +52,8 @@
     "yuen": "bin/yuen.js",
     "sakai": "bin/sakai.js",
     "sekisho": "bin/sekisho.js",
-    "kaname": "bin/kaname.js"
+    "kaname": "bin/kaname.js",
+    "ringi": "bin/ringi.js"
   },
   "files": [
     "bin/",

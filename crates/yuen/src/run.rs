@@ -8,9 +8,8 @@ use ritsu_base::text::{Lang, Text};
 use std::io::Write;
 
 fn refuse(w: &mut dyn Write, msg: Text, lang: Lang) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    let _ = writeln!(w, "{head}: {}", msg.get(lang));
-    2
+    // in the words of every command of ritsu (ritsu's DESIGN 6.2, item 10)
+    ritsu_base::cli::refuse(w, &msg, lang)
 }
 
 /// `--lang ja`, `--lang=ja`, anywhere on the line: decided before anything is printed.
@@ -29,6 +28,12 @@ fn lang_flag(args: &[String]) -> Option<String> {
 /// The `yuen` command: `args` without the program's name, the languages `suite` joins (none for
 /// the binary of yuen's own crate, every one for `ritsu yuen`), and where to print. The exit code.
 pub fn run(args: &[String], suite: Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    // a line that asks for JSON is answered in JSON when the command stops before its work too: the
+    // last value on standard output is `{"error": …}` (ritsu's DESIGN 6.2, item 10)
+    ritsu_base::cli::answering(args, out, |out| command(args, suite, out, err))
+}
+
+fn command(args: &[String], suite: Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     crate::check::COMMAND.with(|c| *c.borrow_mut() = Some(args.to_vec()));
     let code = run_command(args, suite, out, err);
     crate::check::COMMAND.with(|c| *c.borrow_mut() = None);
@@ -75,14 +80,14 @@ fn run_command(args: &[String], suite: Suite, out: &mut dyn Write, err: &mut dyn
                         let _ = write!(out, "{}", table.help_cmd(c, lang));
                         0
                     }
-                    None => refuse(err, tr!("`{n}` というコマンドはありません。`yuen --help` を読んでください", "there is no command `{n}`; run `yuen --help`"), lang),
+                    None => refuse(err, ritsu_base::cli::no_command("yuen", n), lang),
                 },
             };
         }
         _ => {}
     }
     let Some(cmd) = table.command(first) else {
-        return refuse(err, tr!("`{first}` というコマンドはありません。`yuen --help` を読んでください", "there is no command `{first}`; run `yuen --help`"), lang);
+        return refuse(err, ritsu_base::cli::no_command("yuen", first), lang);
     };
     let a = match table.parse(cmd, &args[1..]) {
         Ok(a) => a,
@@ -95,6 +100,38 @@ fn run_command(args: &[String], suite: Suite, out: &mut dyn Write, err: &mut dyn
     // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN 17.6)
     if let Err(t) = ritsu_base::modules::given_all(&a.pos) {
         return refuse(err, t, lang);
+    }
+    // The word `export` and `source` take before their paths and the code `explain` takes are no
+    // paths; every other positional argument is one.
+    let (first, end) = match cmd.name {
+        "export" | "source" => (1, a.pos.len()),
+        "explain" => (0, 0),
+        _ => (0, a.pos.len()),
+    };
+    // the paths the run holds are written the way the first path given was (ritsu's DESIGN 4.15),
+    // and so are the paths given: `./refunds.req` and `x/../refunds.req` are `refunds.req` (6.2
+    // item 8)
+    let _way = ritsu_base::paths::run_from(a.pos.get(first).filter(|_| first < end).map_or(".", String::as_str));
+    let mut a = a;
+    for p in a.pos.iter_mut().take(end).skip(first) {
+        *p = ritsu_base::paths::show_given(p);
+    }
+    // and so are the paths the flags take: `--out ./refunds.md` is `refunds.md`, and so are the
+    // files of `--diff`, of `--map <spec.geas>=<record>` and of `--at <file.req>:<line>`
+    for (flag, v) in &mut a.got {
+        let held = match *flag {
+            "--out" | "--diff" => ritsu_base::paths::fold_given(v),
+            "--map" => match v.split_once('=') {
+                Some((spec, record)) => format!("{}={}", ritsu_base::paths::fold_given(spec), ritsu_base::paths::fold_given(record)),
+                None => continue,
+            },
+            "--at" => match v.rsplit_once(':') {
+                Some((file, line)) => format!("{}:{line}", ritsu_base::paths::fold_given(file)),
+                None => continue,
+            },
+            _ => continue,
+        };
+        *v = held;
     }
     // A directory given is walked without entering another module below it; when the walk did not
     // start in a module, one line each says which it passed over (ritsu's DESIGN 17.6).
@@ -122,7 +159,7 @@ fn run_command(args: &[String], suite: Suite, out: &mut dyn Write, err: &mut dyn
 
 fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.pos.is_empty() {
-        return refuse(err, tr!("`yuen check` には .req のファイルかディレクトリが要ります", "`yuen check` needs .req files or directories"), lang);
+        return refuse(err, cli::table().takes_of("check"), lang);
     }
     let c = match crate::check::check_with(&a.pos, a.get("--root"), suite.clone()) {
         Ok(c) => c,
@@ -151,10 +188,10 @@ fn exit_of(c: &crate::check::Checked) -> u8 {
 
 fn review_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.pos.is_empty() {
-        return refuse(err, tr!("`yuen review` には .req のファイルかディレクトリが要ります", "`yuen review` needs .req files or directories"), lang);
+        return refuse(err, cli::table().takes_of("review"), lang);
     }
     let Some(by) = a.get("--by") else {
-        return refuse(err, tr!("`yuen review` には、確かめた人の役割 `--by <役割>` が要ります", "`yuen review` needs the role of whoever looked: `--by <role>`"), lang);
+        return refuse(err, cli::table().needs_of("review", "--by <role>"), lang);
     };
     let choice = crate::review::Choice { at: a.all("--at"), requirements: a.all("--requirement"), all: a.has("--all") };
     match crate::review::review_with(&a.pos, a.get("--root"), &choice, by, a.get("--date"), suite.clone()) {
@@ -174,7 +211,7 @@ pub(crate) fn checked(a: &Args, lang: Lang, cmd: &str, suite: &Suite, err: &mut 
 
 pub(crate) fn checked_paths(paths: &[String], root: Option<&str>, lang: Lang, cmd: &str, suite: &Suite, err: &mut dyn Write) -> Result<crate::check::Checked, u8> {
     if paths.is_empty() {
-        return Err(refuse(err, tr!("`yuen {cmd}` には .req のファイルかディレクトリが要ります", "`yuen {cmd}` needs .req files or directories"), lang));
+        return Err(refuse(err, cli::table().takes_of(cmd), lang));
     }
     let c = match crate::check::check_with(paths, root, suite.clone()) {
         Ok(c) => c,
@@ -192,7 +229,7 @@ pub(crate) fn checked_paths(paths: &[String], root: Option<&str>, lang: Lang, cm
 fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let what = a.pos.first().map(|s| s.as_str()).unwrap_or("");
     if !matches!(what, "reqif" | "prov") {
-        return refuse(err, tr!("書き方は `yuen export reqif <path>...` か `yuen export prov <path>...` です", "It is `yuen export reqif <path>...` or `yuen export prov <path>...`"), lang);
+        return refuse(err, cli::table().takes_of("export"), lang);
     }
     if what == "reqif" && a.has("--format") {
         return refuse(err, tr!("`--format` は prov のときだけ書けます（ReqIF の形は一つです）", "`--format` is for prov only (ReqIF has one form)"), lang);
@@ -229,8 +266,8 @@ fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mu
     };
     match a.get("--out") {
         Some(file) => {
-            if let Err(e) = std::fs::write(file, &text) {
-                return refuse(err, tr!("`{file}` に書けません: {e}", "Cannot write `{file}`: {e}"), lang);
+            if let Err(e) = ritsu_base::fs::write(file, &text) {
+                return refuse(err, ritsu_base::cli::cannot_write(file, &e), lang);
             }
             let _ = writeln!(out, "{}", tr!("書き出しました: {file}", "wrote: {file}").get(lang));
         }
@@ -246,11 +283,11 @@ fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mu
 fn source_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let verb = a.pos.first().map(|s| s.as_str()).unwrap_or("");
     if !matches!(verb, "fetch" | "pin" | "outdated") {
-        return refuse(err, tr!("書き方は `yuen source fetch|pin|outdated <path>...` です", "It is `yuen source fetch|pin|outdated <path>...`"), lang);
+        return refuse(err, cli::table().takes_of("source"), lang);
     }
     let paths: Vec<String> = a.pos[1..].to_vec();
     if paths.is_empty() {
-        return refuse(err, tr!("`yuen source {verb}` には .req のファイルかディレクトリが要ります", "`yuen source {verb}` needs .req files or directories"), lang);
+        return refuse(err, cli::table().takes_of("source"), lang);
     }
     let label = paths.join(", ");
     let (project, mut diags) = match crate::project::load_with(&paths, a.get("--root"), suite.clone()) {
@@ -282,9 +319,8 @@ fn source_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mu
             let (texts, o) = crate::fetch::pin(&p);
             for (fi, text) in texts {
                 let f = &p.files[fi];
-                if let Err(e) = std::fs::write(&f.abs, text) {
-                    let d = &f.display;
-                    return refuse(err, tr!("`{d}` に書けません: {e}", "Cannot write `{d}`: {e}"), lang);
+                if let Err(e) = ritsu_base::fs::write(&f.abs, text) {
+                    return refuse(err, ritsu_base::cli::cannot_write(&f.display, &e), lang);
                 }
             }
             Ok(o)
@@ -315,7 +351,7 @@ fn trace_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
     .flatten()
     .collect();
     if picks.len() != 1 {
-        return refuse(err, tr!("`--requirement`、`--artifact`、`--source` のどれか一つを渡してください", "Give exactly one of `--requirement`, `--artifact` and `--source`"), lang);
+        return refuse(err, cli::table().one_of("trace", &["--requirement", "--artifact", "--source"]), lang);
     }
     let c = match checked(a, lang, "trace", suite, err) {
         Ok(c) => c,
@@ -347,9 +383,11 @@ fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
         let _ = write!(err, "{}", crate::check::render(&c, &label, lang));
         return exit_of(&c);
     }
-    let page = crate::doc::page(&c, &label, lang);
+    // the page is in `--lang`, else English, whatever the environment says (ritsu's DESIGN 4.1)
+    let made = Lang::made(a.get("--lang"));
+    let page = crate::doc::page(&c, &label, made);
     let html = a.get("--format") == Some("html");
-    let text = if html { crate::doc::html::render(&page, lang) } else { crate::doc::markdown::render(&page, lang) };
+    let text = if html { crate::doc::html::render(&page, made) } else { crate::doc::markdown::render(&page, made) };
     match a.get("--out") {
         Some(dir) => {
             let p = c.project.as_ref().unwrap();
@@ -357,8 +395,11 @@ fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
             let stem = first.file_name().map(|n| n.to_string_lossy().trim_end_matches(".req").to_string()).unwrap_or_else(|| "yuen".into());
             let file = std::path::Path::new(dir).join(format!("{stem}.{}", if html { "html" } else { "md" }));
             let shown = file.to_string_lossy().to_string();
-            if let Err(e) = std::fs::create_dir_all(dir).and_then(|_| std::fs::write(&file, &text)) {
-                return refuse(err, tr!("`{shown}` に書けません: {e}", "Cannot write `{shown}`: {e}"), lang);
+            if let Err(e) = ritsu_base::fs::create_dir_all(dir) {
+                return refuse(err, ritsu_base::cli::cannot_create(dir, &e), lang);
+            }
+            if let Err(e) = ritsu_base::fs::write(&file, &text) {
+                return refuse(err, ritsu_base::cli::cannot_write(&shown, &e), lang);
             }
             let _ = writeln!(out, "{}", tr!("書き出しました: {shown}", "wrote: {shown}").get(lang));
         }
@@ -375,7 +416,9 @@ fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
         Err(code) => return code,
     };
     let label = a.pos.join(", ");
-    match crate::api::api(&c, &label, lang) {
+    // the JSON's sentences are in `--lang`, else English, whatever the environment says (ritsu's
+    // DESIGN 4.1)
+    match crate::api::api(&c, &label, Lang::made(a.get("--lang"))) {
         Some(v) => {
             let _ = writeln!(out, "{}", serde_json::to_string_pretty(&v).unwrap());
             0
@@ -385,33 +428,44 @@ fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
 }
 
 fn explain_cmd(a: &Args, lang: Lang, _suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
-    let markdown = a.get("--format") == Some("markdown");
+    let format = a.get("--format");
     let ledger = crate::codes::ledger();
     if a.has("--all") {
-        if markdown {
-            let _ = write!(out, "{}", ledger.render_markdown(lang));
-        } else {
-            for (i, e) in ledger.entries.iter().enumerate() {
-                if i > 0 {
-                    let _ = writeln!(out, );
+        // codes and `--all` are the two ways to call it, not one: what it takes
+        if !a.pos.is_empty() {
+            return refuse(err, cli::table().takes_of("explain"), lang);
+        }
+        match format {
+            Some("markdown") => {
+                let _ = write!(out, "{}", ledger.render_markdown(lang));
+            }
+            Some("json") => {
+                let _ = writeln!(out, "{}", ritsu_base::json::Json::arr(ledger.entries.iter().map(|e| ledger.to_json(e, lang))).pretty());
+            }
+            _ => {
+                for (i, e) in ledger.entries.iter().enumerate() {
+                    if i > 0 {
+                        let _ = writeln!(out);
+                    }
+                    let _ = write!(out, "{}", ledger.render_text(e, lang));
                 }
-                let _ = write!(out, "{}", ledger.render_text(e, lang));
             }
         }
         return 0;
     }
-    let Some(code) = a.pos.first() else {
-        return refuse(err, tr!("`yuen explain` には `E302` のようなコードか `--all` が要ります", "`yuen explain` needs a code such as `E302`, or `--all`"), lang);
-    };
-    match ledger.find(code) {
-        Some(e) => {
-            if markdown {
-                let _ = write!(out, "{}", ledger.render_markdown_one(e, lang));
-            } else {
-                let _ = write!(out, "{}", ledger.render_text(e, lang));
-            }
+    if a.pos.is_empty() {
+        return refuse(err, cli::table().takes_of("explain"), lang);
+    }
+    match ledger.look_up(&a.pos) {
+        Ok(entries) => {
+            let shape = match format {
+                Some("markdown") => ritsu_base::ledger::Shape::Markdown,
+                Some("json") => ritsu_base::ledger::Shape::Json,
+                _ => ritsu_base::ledger::Shape::Text,
+            };
+            let _ = write!(out, "{}", ledger.explained(&entries, shape, lang));
             0
         }
-        None => refuse(err, tr!("`{code}` という診断のコードはありません。`yuen explain --all` で全部を見られます", "there is no diagnostic code `{code}`; `yuen explain --all` lists them all"), lang),
+        Err(unknown) => refuse(err, ritsu_base::cli::no_codes("yuen", &unknown), lang),
     }
 }

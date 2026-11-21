@@ -3,6 +3,7 @@
 //! checks every example so that none of them can drift from what the checker says.
 
 use crate::diag::Severity;
+use ritsu_base::json::Json;
 use ritsu_base::text::{Lang, Text};
 
 pub struct Entry {
@@ -442,8 +443,8 @@ pub fn ledger() -> Vec<Entry> {
             "E001",
             tr!("読めない行があります", "A line that does not read"),
             tr!(
-                "知らない語がある、字下げがそろっていない、文字列が閉じていない、行が決まった形になっていないときに出ます。ファイルの先頭の BOM、タブ、結合文字（濁点やアクセントを別の文字として付けたもの）も、このコードになります。読めない行があると、そこから先は推測になるので、chobo は名前の解決やほかの検査をしません。",
-                "A word chobo does not know, an indentation that does not line up, a string left open, or a line that is not in one of the forms. A byte order mark, a tab and a combining mark (a voiced sound mark or an accent written as a character of its own) stop here too. With a line it cannot read, anything after would be a guess, so the names are not resolved and nothing else is checked."
+                "知らない語がある、字下げがそろっていない、文字列が閉じていない、行が決まった形になっていないときに出ます。ファイルの先頭の BOM、タブ、結合文字（濁点やアクセントを別の文字として付けたもの）も、このコードになります。読めない行があると、そこから先は推測になるので、chobo は名前の解決やほかの検査をしません。字下げの足りない勘定や振替の行は、その行で一度だけ出て、その勘定や振替の行として読みます。読めなかった `account` と `transfer` の見出しの下の行は、何も言いません。",
+                "A word chobo does not know, an indentation that does not line up, a string left open, or a line that is not in one of the forms. A byte order mark, a tab and a combining mark (a voiced sound mark or an accent written as a character of its own) stop here too. With a line it cannot read, anything after would be a guess, so the names are not resolved and nothing else is checked. A line of an account or a transfer that is not indented is said once, and read as the block's; the lines under an `account` or a `transfer` heading that cannot be read say nothing."
             ),
             tr!(
                 "メッセージが示す形に書き直してください。勘定の下に書けるのは `description`、`at least`、`at most`、振替の下に書けるのは `description`、`key`、`pending`、`move` です。結合文字は、合成済みの一文字（「か」と濁点ではなく「が」）で書き直してください。",
@@ -456,8 +457,8 @@ pub fn ledger() -> Vec<Entry> {
             "E002",
             tr!("名前が見つかりません", "A name that is not declared"),
             tr!(
-                "単位、勘定、型、振替の引数の名前が、宣言されたどれとも合わないときに出ます。chobo は名前を、書いたとおりに比べます。",
-                "A unit, an account, a type or a parameter of the transfer is named that nothing declares. Names are compared exactly as written."
+                "単位、勘定、型、振替の引数の名前が、宣言されたどれとも合わないときに出ます。chobo は名前を、書いたとおりに比べます。同じ名前を何か所にも書いたときは、最初に書いた所で一度だけ出て、ほかの行の番号を注に挙げます（振替の引数は、振替ごとに）。",
+                "A unit, an account, a type or a parameter of the transfer is named that nothing declares. Names are compared exactly as written. A name written in several places is said once, where it is first written, and the note gives the lines of the others (a parameter's name, once in each transfer)."
             ),
             tr!(
                 "宣言を足すか、宣言にある名前に直してください。外の世界を表す勘定（仕入先、客）も、`account 仕入先 : 個 outside` のように宣言してください。",
@@ -629,8 +630,8 @@ pub fn ledger() -> Vec<Entry> {
             "E030",
             tr!("振替にキーがありません", "A transfer with no key"),
             tr!(
-                "振替に `key` の行が無いとき、またはキーに書いた名前が振替の引数に無いときに出ます。どの振替にも冪等のキーが要ります。同じキーで同じ中身の二度目の呼び出しは何もせず、中身が違えば拒否されます。",
-                "A transfer has no `key` line, or the key names something that is not one of its parameters. Every transfer needs an idempotency key: a second call with the same key and the same content does nothing, and one with other content is refused."
+                "振替に `key` の行が無いとき、またはキーに書いた名前が振替の引数に無いときに出ます。どの振替にも冪等のキーが要ります。同じキーで同じ中身の二度目の呼び出しは何もせず、中身が違えば拒否されます。引数に無い名前を、キーとほかの行に書いたときは、最初の行で一度だけ出て、ほかの行の番号を注に挙げます。",
+                "A transfer has no `key` line, or the key names something that is not one of its parameters. Every transfer needs an idempotency key: a second call with the same key and the same content does nothing, and one with other content is refused. A name that is no parameter, written in the key and on other lines, is said once, at the first, and the note gives the lines of the others."
             ),
             tr!(
                 "一度だけにしたい単位を、引数で並べてください。注文と SKU の組ごとに一度なら `key 注文, sku` です。",
@@ -1006,4 +1007,32 @@ pub fn markdown_all(lang: Lang) -> String {
 
 pub fn text_all(lang: Lang) -> String {
     ledger().iter().map(|e| render_text(e, lang)).collect::<Vec<_>>().join("\n")
+}
+
+/// One entry of `chobo explain <code> --format json`: what the text says, as data. `example` is
+/// the smallest book that shows it; `before`, for the codes of `--diff-base`, the book at the
+/// revision it is compared with; `command`, for the codes of `chobo gen`, the command that shows
+/// it. The prose follows `--lang`.
+pub fn to_json(e: &Entry, lang: Lang) -> Json {
+    let command = e.target.map(|t| format!("chobo gen <file.book> {}", crate::target::Target::parse(t).expect("a code's target is a target").flags()));
+    Json::obj([
+        ("code", Json::str(e.code)),
+        ("severity", Json::str(e.severity.key())),
+        ("title", Json::str(e.title.get(lang))),
+        ("when", Json::str(e.when.get(lang))),
+        ("fix", Json::str(e.fix.get(lang))),
+        ("example", Json::str(e.example)),
+        ("before", e.before.map_or(Json::Null, Json::str)),
+        ("command", command.map_or(Json::Null, Json::str)),
+        ("related", Json::arr(e.related.iter().map(|c| Json::str(*c)))),
+    ])
+}
+
+/// `chobo explain <code>... --format json`: one code as one indented document; `--all` and two or
+/// more codes as one indented array, in the order given (ritsu's DESIGN 6.2, item 10).
+pub fn json_of(entries: &[Entry], all: bool, lang: Lang) -> String {
+    match entries {
+        [e] if !all => format!("{}\n", to_json(e, lang).pretty()),
+        _ => format!("{}\n", Json::arr(entries.iter().map(|e| to_json(e, lang))).pretty()),
+    }
 }

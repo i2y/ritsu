@@ -1,0 +1,11 @@
+error[E002]: tests/fixtures/chain_names.ja.flow:10:8: there is no type `strng`
+    10 |   種類 : strng
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+  = `strng` is written on line 13 too
+error[E002]: tests/fixtures/chain_names.ja.flow:21:3: there is no task or rule `知らせろ`
+    21 |   知らせろ(ID: ID)
+  = `知らせろ` is written on lines 23 and 24 too
+error[E002]: tests/fixtures/chain_names.ja.flow:26:12: there is no variable or value `役割`
+    26 |   知らせる(ID: 役割)
+  = a value is a variable, a field of one, a string, a number, true or false
+  = `役割` is written on line 27 too

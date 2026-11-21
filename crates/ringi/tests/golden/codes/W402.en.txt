@@ -1,0 +1,5 @@
+warning[W402]: example.ringi:16:3: The stage `check` waits on when it is late (`when late stay`): a ticket may never end
+    16 |   when late stay
+  = If it may wait, leave it; for it to end, write `expire` or `escalate` in place of `stay`.
+ok example.ringi: a request, 1 field, 1 stage
+  may never end: the stage `check` waits on when it is late (`when late stay`)

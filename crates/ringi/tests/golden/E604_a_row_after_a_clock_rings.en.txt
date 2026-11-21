@@ -1,0 +1,4 @@
+error[E604]: tests/mutants/E604_a_row_after_a_clock_rings.ringi:28:22: The clock of `remind` rings at 2026-06-03 09:00, before this row (2026-06-03 15:00)
+    28 | | 2026-06-03 15:00 | approve | e04 |          | approved    |
+  = Write the row of a clock that rings: `| 2026-06-03 09:00 | remind | | check | … |`.
+  = The ticket is at `check`, and is `in progress`. The clocks set: remind 2026-06-03 09:00 (check), late 2026-06-05 00:00 (check).

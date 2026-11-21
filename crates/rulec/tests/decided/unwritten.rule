@@ -1,0 +1,18 @@
+rule unwritten v1
+description "An output that nothing decides and nothing reads, beside one a table decides"
+
+enum level = low "Low" | high "High"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+  member : bool
+
+outputs
+  grade  : level
+  review : bool
+
+table review_of
+policy unique
+| member | -> review |
+| true   | false     |
+| false  | true      |

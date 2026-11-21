@@ -1,0 +1,32 @@
+workflow expense_precheck v1
+  now range >=2026-01-01 <=2027-12-31 offset +09:00
+description "The agent's check of an expense request before people approve it, at the stage the route of expense.ringi gives the agent: ok when the purpose names what the money pays for and the amount fits it, doubt with the reason otherwise. ringi starts it and reads its outputs as the answer of the stage"
+
+enum Category = travel | expense | purchase
+enum Check = ok | doubt
+
+record Reading
+  verdict : Check
+  reason  : string
+
+inputs
+  request_id : string
+  category   : Category
+  amount     : money[JPY]  range >=1JPY <=10_000_000JPY
+  purpose    : string
+
+outputs
+  verdict : Check
+  reason  : string
+
+task read(category: Category, amount: money[JPY], purpose: string) -> Reading
+  agent claude "You check an expense request before people approve it. Answer ok when the purpose names what the money pays for and the amount fits it; otherwise answer doubt, with the reason in one sentence"
+  model "claude-sonnet-5"
+  effort low
+  timeout 60 seconds
+  retry 2 times every 10 seconds
+
+flow
+  let r = read(category: category, amount: amount, purpose: purpose)
+    on failure, timeout => let r = {verdict: doubt, reason: "The agent could not check the request"}
+  succeed verdict = r.verdict, reason = r.reason

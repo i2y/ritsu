@@ -354,7 +354,7 @@ impl Writer<'_> {
         for (rel, bytes) in &m.files {
             let mut h = holds::held(m, rel, self.lang, &self.joined);
             let tool = ritsu_project::project::kind_of(rel).filter(|t| has_doc(*t));
-            let doc = tool.map(|t| doc_of(&m.root, t, rel, self.lang));
+            let doc = tool.map(|t| doc_of(&m.root, t, rel, self.lang).map(|html| if t == Tool::Ringi { takers_linked(&html, rel, &m.files) } else { html }));
             if let (Some(h), Some(Ok(html))) = (h.as_mut(), doc.as_ref()) {
                 h.has_page = true;
                 h.can_try = html.contains("<section id=\"try\"");
@@ -1286,16 +1286,18 @@ fn is_web(u: &str) -> bool {
 
 /// Whether a language draws a page of a file with `doc` (DESIGN 4.8).
 fn has_doc(t: Tool) -> bool {
-    matches!(t, Tool::Rulec | Tool::Dandori | Tool::Koyomi | Tool::Chobo | Tool::Yuen | Tool::Sakai | Tool::Sekisho | Tool::Kaname)
+    matches!(t, Tool::Rulec | Tool::Dandori | Tool::Koyomi | Tool::Chobo | Tool::Yuen | Tool::Sakai | Tool::Sekisho | Tool::Kaname | Tool::Ringi)
 }
 
 /// The HTML page `ritsu <language> doc <rel> --format html` prints, run in `root`; or what it said
-/// when it drew none.
+/// when it drew none. sekisho and ringi are given the root of the version, so that the page names
+/// its file from there and ringi's page of a shared route lists the requests of the version that
+/// take it.
 fn doc_of(root: &Path, t: Tool, rel: &str, lang: Lang) -> Result<String, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let mut c = std::process::Command::new(exe);
     c.current_dir(root).args([t.word(), "doc", rel, "--format", "html", "--lang", lang.code()]);
-    if t == Tool::Sekisho {
+    if matches!(t, Tool::Sekisho | Tool::Ringi) {
         c.args(["--root", "."]);
     }
     let o = c.output().map_err(|e| e.to_string())?;
@@ -1305,6 +1307,38 @@ fn doc_of(root: &Path, t: Tool, rel: &str, lang: Lang) -> Result<String, String>
     } else {
         Err(format!("{out}{}", String::from_utf8_lossy(&o.stderr)))
     }
+}
+
+/// ringi's page of a shared route, with each request it lists that is a file of the version made a
+/// link to the page of that file. The requests are in the section `<h2 id="requests">`, a row each,
+/// the file from the root of the version in a cell of its own (`<td><code>leave.ringi</code></td>`);
+/// the section ends at the next `<h2 ` or at `</main>`.
+fn takers_linked(html: &str, rel: &str, files: &std::collections::BTreeMap<String, Vec<u8>>) -> String {
+    const HEAD: &str = "<h2 id=\"requests\">";
+    const OPEN: &str = "<td><code>";
+    const CLOSE: &str = "</code></td>";
+    let Some(at) = html.find(HEAD) else { return html.to_string() };
+    let after_head = at + HEAD.len();
+    let end = [html[after_head..].find("<h2 "), html[after_head..].find("</main>")].into_iter().flatten().min().map_or(html.len(), |i| after_head + i);
+    let back = up(parent_of(rel));
+    let mut o = String::from(&html[..at]);
+    let mut rest = &html[at..end];
+    while let Some(a) = rest.find(OPEN) {
+        let inside = &rest[a + OPEN.len()..];
+        let Some(z) = inside.find(CLOSE) else { break };
+        let shown = &inside[..z];
+        o.push_str(&rest[..a]);
+        let file = shown.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&");
+        if files.contains_key(&file) {
+            o.push_str(&format!("<td><a href=\"{back}{}.html\"><code>{shown}</code></a></td>", esc(&url_path(&file))));
+        } else {
+            o.push_str(&rest[a..a + OPEN.len() + z + CLOSE.len()]);
+        }
+        rest = &inside[z + CLOSE.len()..];
+    }
+    o.push_str(rest);
+    o.push_str(&html[end..]);
+    o
 }
 
 /// `module.json` (DESIGN 17.17): the files of the version, and the modules its lock pins in the form
@@ -1352,6 +1386,20 @@ mod tests {
         assert_eq!(short_name("ghcr.io/i2y/ritsu-holidays"), "ritsu_holidays");
         assert_eq!(short_name("example.com/acme/tax"), "tax");
         assert_eq!(split_name("ghcr.io/i2y/ritsu-holidays"), ("ghcr.io/i2y/", "ritsu-holidays"));
+    }
+
+    /// The requests a shared route's page lists are links to their pages when they are files of the
+    /// version, and only in the section that lists them.
+    #[test]
+    fn the_requests_that_take_a_route_are_links() {
+        let files: std::collections::BTreeMap<String, Vec<u8>> = ["leave.ringi", "休暇 &.ringi", "shared/manager_approval.ringi"].iter().map(|f| (f.to_string(), Vec::new())).collect();
+        let html = "<h2 id=\"stages\">Stages</h2>\n<tr><td><code>leave.ringi</code></td></tr>\n<h2 id=\"requests\">The requests that take it</h2>\n<div class=\"scroll\"><table>\n<tbody>\n<tr><td>Leave request (<code>leave</code>)</td><td><code>leave.ringi</code></td></tr>\n<tr><td><code>x</code></td><td><code>休暇 &amp;.ringi</code></td></tr>\n<tr><td><code>other</code></td><td><code>gone.ringi</code></td></tr>\n</tbody>\n</table></div>\n</main>\n<td><code>leave.ringi</code></td>";
+        let got = takers_linked(html, "shared/manager_approval.ringi", &files);
+        assert_eq!(
+            got,
+            "<h2 id=\"stages\">Stages</h2>\n<tr><td><code>leave.ringi</code></td></tr>\n<h2 id=\"requests\">The requests that take it</h2>\n<div class=\"scroll\"><table>\n<tbody>\n<tr><td>Leave request (<code>leave</code>)</td><td><a href=\"../leave.ringi.html\"><code>leave.ringi</code></a></td></tr>\n<tr><td><code>x</code></td><td><a href=\"../%E4%BC%91%E6%9A%87%20%26.ringi.html\"><code>休暇 &amp;.ringi</code></a></td></tr>\n<tr><td><code>other</code></td><td><code>gone.ringi</code></td></tr>\n</tbody>\n</table></div>\n</main>\n<td><code>leave.ringi</code></td>"
+        );
+        assert_eq!(takers_linked("<h2 id=\"stages\">x</h2>", "a.ringi", &files), "<h2 id=\"stages\">x</h2>");
     }
 
     #[test]

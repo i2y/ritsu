@@ -1,0 +1,83 @@
+workflow Pythonの名前 v1
+description "Python のコードが自分で持つ名前や、組み込みから読む名前を、型に付けたフローです。types.py が取り込む名前、自分で宣言する補助の名前、検査が呼ぶ組み込みの名前を使います。コードは自分の名前を別の名前で読み、フローはどのプラットフォームでも動きます"
+
+# types.py が取り込む名前
+record annotations
+  文 : string
+
+record re
+  型 : string
+
+record Any
+  注記 : string
+
+enum Literal = 甲 | 乙
+enum NotRequired = 甲 | 乙
+enum TypedDict = 甲 | 乙
+enum TypeGuard = 甲 | 乙
+
+# types.py が自分で宣言する名前
+enum TIMESTAMP = 早い | 遅い
+enum DATE = 平日 | 休日
+enum is_int = はい | いいえ
+enum dd_field = 甲 | 乙
+
+# 検査が呼ぶ組み込み
+record all
+  数 : int
+
+record dict
+  鍵 : string
+
+record float
+  値 : int
+
+record isinstance
+  種類 : string
+
+record list
+  項目 : list[string]
+
+record str
+  文 : string
+
+record tuple
+  先頭 : string
+
+record 全部
+  annotationsの値 : annotations
+  reの値 : re
+  Anyの値 : Any
+  Literalの値 : Literal
+  NotRequiredの値 : NotRequired
+  TypedDictの値 : TypedDict
+  TypeGuardの値 : TypeGuard
+  TIMESTAMPの値 : TIMESTAMP
+  DATEの値 : DATE
+  is_intの値 : is_int
+  dd_fieldの値 : dd_field
+  allの値 : all
+  dictの値 : dict
+  floatの値 : float
+  isinstanceの値 : isinstance
+  listの値 : list
+  strの値 : str
+  tupleの値 : tuple
+
+inputs
+  番号 : string
+  日   : date
+  時刻 : timestamp
+
+outputs
+  全部の値 : 全部
+  日   : date
+  時刻 : timestamp
+
+task 集める(番号: string, 日: date, 時刻: timestamp) -> 全部
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:gather"
+  idempotent
+
+flow
+  let 全部の値 = 集める(番号: 番号, 日: 日, 時刻: 時刻)
+  succeed 全部の値 = 全部の値, 日 = 日, 時刻 = 時刻

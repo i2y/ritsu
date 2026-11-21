@@ -1,0 +1,5 @@
+calendar office v1
+description "Saturdays and Sundays are closed (fictional)"
+offset +09:00
+
+closed weekly sat, sun

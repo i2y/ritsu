@@ -52,6 +52,8 @@ const MAX_PASSES: usize = 16;
 pub struct Held {
     pub ranges: Vec<(String, Ival)>,
     pub values: Vec<(String, Vec<String>)>,
+    /// The names of `ranges` that are fields of an element, not inputs (`define_kept`).
+    pub fields: Vec<String>,
 }
 
 thread_local! {
@@ -75,6 +77,22 @@ pub fn with<R>(held: Held, f: impl FnOnce() -> R) -> R {
     let old = HELD.with(|c| std::mem::replace(&mut *c.borrow_mut(), Some(held)));
     let _restore = Restore(old);
     f()
+}
+
+/// What a check with ranges held is counted under in `ritsu_base::tally`: the rule's path and what
+/// is held, since each holding is another question of the rule (ritsu's DESIGN 4.15); the path
+/// alone when nothing is.
+pub(crate) fn tallied(path: &str) -> String {
+    HELD.with(|c| match c.borrow().as_ref() {
+        Some(h) => format!("{path} {h:?}"),
+        None => path.to_string(),
+    })
+}
+
+/// Whether a check is running with ranges held: the rule read again for a question about some of
+/// its inputs, where what is asked of the rule as it is written is not asked a second time.
+pub(crate) fn holding() -> bool {
+    HELD.with(|c| c.borrow().is_some())
 }
 
 /// Runs `f` with nothing held: the check of a rule this one applies (§15.69), which is the other
@@ -312,10 +330,23 @@ pub(crate) fn held_of(f: &RuleFile, c: &Checked, ranges: &[(String, Option<i128>
 impl Held {
     /// Whether the vector's input lies inside what this holds the inputs to.
     pub fn takes(&self, v: &crate::vectors::Vector) -> bool {
-        self.ranges.iter().all(|(n, iv)| match v.input.get(n) {
-            Some(crate::eval::Val::Num(x)) => inside(*iv, *x),
-            Some(crate::eval::Val::Date(y, m, d)) => inside(*iv, crate::types::date_ord(*y, *m, *d)),
+        use crate::eval::Val;
+        let one = |iv: Ival, x: &Val| match x {
+            Val::Num(x) => inside(iv, *x),
+            Val::Date(y, m, d) => inside(iv, crate::types::date_ord(*y, *m, *d)),
             _ => true,
+        };
+        self.ranges.iter().all(|(n, iv)| match v.input.get(n) {
+            // an input that may be left out, held to a range: it is given, with a value of the
+            // range. Left out, it is not inside, as the check reads the rule with the input held
+            // (`region`: the axis of a held input has no absent value).
+            Some(Val::Enum(w)) if w == crate::kw::NONE => false,
+            Some(x) => one(*iv, x),
+            // a field of an element (`define_kept`): every element of the lists that has it
+            None => v.input.values().all(|l| match l {
+                Val::Seq(rows) => rows.iter().all(|r| r.get(n).is_none_or(|x| one(*iv, x))),
+                _ => true,
+            }),
         }) && self.values.iter().all(|(n, vs)| match v.input.get(n) {
             Some(crate::eval::Val::Enum(w)) => vs.contains(w),
             Some(crate::eval::Val::Bool(b)) => vs.contains(&b.to_string()),
@@ -323,17 +354,22 @@ impl Held {
         })
     }
 
-    /// Whether this holds some input of the rule to less than the rule declares for it.
+    /// Whether this holds some input of the rule to less than the rule declares for it. An input
+    /// that may be left out is held to less whatever the ends: held, it is given.
     fn narrower(&self, c: &Checked) -> bool {
         let same = |a: Option<Rat>, b: Option<Rat>| match (a, b) {
             (Some(x), Some(y)) => x.cmp_to(y) == std::cmp::Ordering::Equal,
             (None, None) => true,
             _ => false,
         };
+        let may_be_left_out = |n: &String| !self.fields.contains(n) && matches!(c.ty_of(n), Some(Ty::Opt(_)));
         self.ranges.iter().any(|(n, iv)| {
             let declared = c.ranges.get(n).copied().unwrap_or((None, None));
-            !same(iv.0, declared.0) || !same(iv.1, declared.1)
+            may_be_left_out(n) || !same(iv.0, declared.0) || !same(iv.1, declared.1)
         }) || self.values.iter().any(|(n, vs)| {
+            if may_be_left_out(n) {
+                return true;
+            }
             let mut all: Vec<String> = match c.ty_of(n).as_ref().map(Ty::present) {
                 Some(Ty::Enum(e)) => c.enums.get(e).cloned().unwrap_or_default(),
                 _ => vec![crate::kw::FALSE.to_string(), crate::kw::TRUE.to_string()],
@@ -372,6 +408,15 @@ fn decided_by(f: &RuleFile, c: &Checked, output: &str) -> Option<String> {
         });
     }
     decided
+}
+
+/// The rule read with the inputs held to `held`, under [`with`]: read again where `held` is
+/// narrower than what the rule declares, else the rule as checked (`f`, `c`), which a holding no
+/// narrower reads the same as, as [`values_over`] and [`define_kept`] take it. So a question over the
+/// whole of the rule's ranges, asked again in the run, does not check the rule again (ritsu's DESIGN
+/// 4.15).
+fn read_held(held: &Held, f: &RuleFile, c: &Checked, src: &str, path: &str) -> Option<(RuleFile, Checked)> {
+    if held.narrower(c) { crate::prepare(src, path).ok() } else { Some((f.clone(), c.clone())) }
 }
 
 /// What the output `output` (an enum or a bool) comes to when each input of `ranges` takes only
@@ -421,7 +466,7 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
         Err(why) => return Found::Undecided(why),
     };
     with(held.clone(), || {
-        let Ok((f2, mut c2)) = crate::prepare(src, path) else {
+        let Some((f2, mut c2)) = read_held(&held, f, c, src, path) else {
             return Found::Undecided(ritsu_base::tr!("入力を範囲に限ると、規則の検査が通りません", "the rule does not pass its check with the inputs held to the ranges"));
         };
         narrow_upstream(&f2, &mut c2);
@@ -553,6 +598,239 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
     })
 }
 
+/// The most combinations the rows of the deciding tables may write before `outputs_together`
+/// decides nothing.
+const MAX_TOGETHER: usize = 4096;
+
+/// What the outputs `outputs` (each an enum or a bool) come to together in one call when each input
+/// of `ranges` takes only the values between its ends, as `outputs_over` takes them, and every
+/// other input its whole range (ritsu's port `Rules::outputs_together`; sekisho's DESIGN 4.1): each
+/// combination of their values, in the order of `outputs`, with an input that comes to it; an
+/// enum's value by its public name and the input as `eval` takes it; or undecided, with why.
+///
+/// The rule is read again with the inputs held, as `outputs_over` reads it, and answered from the
+/// same two sides:
+///
+/// - From above: the outputs are put by the table that decides each. A row of a table some input
+///   may reach ([`crate::region::live_rows`]) writes one combination of that table's outputs (a row
+///   that passes an input on, or writes a name the rule computes, writes every value it may). The
+///   rows of one table say nothing of which rows of another the same input reaches, so the
+///   combinations of two tables are every pair of theirs; an output no table decides takes every
+///   value.
+/// - From below: the combination each of the rule's vectors over the held ranges comes to, run
+///   through the evaluator, with its input.
+///
+/// When the two meet, the answer is exact: every combination from above has an input, and no input
+/// comes to another. A combination from above with no input (a pair of rows of two tables that no
+/// input reaches together, mostly) leaves the answer undecided, with the combination.
+pub fn outputs_together(f: &RuleFile, c: &Checked, src: &str, path: &str, outputs: &[String], ranges: &[(String, Option<i128>, Option<i128>)]) -> Found<Vec<(Vec<Value>, Values)>> {
+    // every value each output can take
+    let mut alls: Vec<Vec<Value>> = Vec::new();
+    let mut inners: Vec<Ty> = Vec::new();
+    for output in outputs {
+        if !f.outputs.iter().any(|o| o.name.text == *output) {
+            return Found::Undecided(ritsu_base::tr!("`{output}` は、この規則の出力ではありません", "`{output}` is not an output of this rule"));
+        }
+        let ty = c.ty_of(output).unwrap_or(Ty::Unknown);
+        let (inner, optional) = match &ty {
+            Ty::Opt(t) => ((**t).clone(), true),
+            t => (t.clone(), false),
+        };
+        let mut all: Vec<Value> = Vec::new();
+        if optional {
+            all.push(Value::None);
+        }
+        match &inner {
+            Ty::Enum(e) => all.extend(c.enums.get(e).cloned().unwrap_or_default().into_iter().map(Value::Enum)),
+            Ty::Bool => all.extend([Value::Bool(true), Value::Bool(false)]),
+            _ => {
+                return Found::Undecided(ritsu_base::tr!(
+                    "`{output}` は列挙でも真偽でもない出力です。とる値を数えて答えるのは、列挙と真偽の出力だけです",
+                    "`{output}` is neither an enum nor a bool; the values are counted for enum and bool outputs only"
+                ));
+            }
+        }
+        alls.push(all);
+        inners.push(inner);
+    }
+    if let Some(el) = f.elements.first() {
+        let list = &el.name.text;
+        return Found::Undecided(ritsu_base::tr!(
+            "この規則は並び `{list}` の要素を一つずつ見るので、入力を範囲に限って数えられません",
+            "this rule walks the list `{list}`, so its outputs are not counted over ranges of its inputs"
+        ));
+    }
+    let held = match held_of(f, c, ranges) {
+        Ok(Some(held)) => held,
+        // no input lies inside the ranges, so the outputs come to nothing
+        Ok(None) => return Found::Value(Vec::new()),
+        Err(why) => return Found::Undecided(why),
+    };
+    let too_many = || {
+        Found::Undecided(ritsu_base::tr!(
+            "出力を決める表の行の組が多すぎるので、一緒にとる値を数えません",
+            "the rows of the tables that decide the outputs come to too many combinations to count together"
+        ))
+    };
+    with(held.clone(), || {
+        let Some((f2, mut c2)) = read_held(&held, f, c, src, path) else {
+            return Found::Undecided(ritsu_base::tr!("入力を範囲に限ると、規則の検査が通りません", "the rule does not pass its check with the inputs held to the ranges"));
+        };
+        narrow_upstream(&f2, &mut c2);
+        // From above: each output with the table that decides it, and the combinations the rows
+        // some input may reach write of each table's outputs.
+        let decided: Vec<Option<String>> = outputs.iter().map(|o| decided_by(&f2, &c2, o)).collect();
+        let set_of: Vec<Option<usize>> = decided.iter().map(|d| d.as_ref().and_then(|d| c2.sets.iter().position(|s| s.table.outputs.iter().any(|o| o.name.text == *d)))).collect();
+        // the inputs a row some input may reach passes on as an output, with the output's place
+        let mut passes: Vec<(usize, String)> = Vec::new();
+        // each table's outputs (by their place in `outputs`) with the combinations of them
+        let mut parts: Vec<(Vec<usize>, Vec<Vec<Value>>)> = Vec::new();
+        for k in 0..outputs.len() {
+            let Some(si) = set_of[k] else {
+                parts.push((vec![k], alls[k].iter().map(|v| vec![v.clone()]).collect()));
+                continue;
+            };
+            if parts.iter().any(|(ks, _)| ks.contains(&k)) {
+                continue;
+            }
+            let ks: Vec<usize> = (0..outputs.len()).filter(|&j| set_of[j] == Some(si)).collect();
+            let set = &c2.sets[si];
+            let live = crate::region::live_rows(set, &c2, &f2, crate::region::DEFAULT_BUDGET);
+            let mut written: Vec<Vec<Value>> = Vec::new();
+            for (ri, row) in set.table.rows.iter().enumerate() {
+                if live.as_ref().is_some_and(|l| !l[ri]) {
+                    continue;
+                }
+                let mut row_writes: Vec<Vec<Value>> = vec![Vec::new()];
+                for &j in &ks {
+                    let oi = set.table.outputs.iter().position(|o| Some(&o.name.text) == decided[j].as_ref()).unwrap_or(0);
+                    let word = match row.outs.get(oi) {
+                        Some(OutCell::Name(w)) | Some(OutCell::Lit(Lit::Word(w))) => word_value(w, &alls[j]),
+                        Some(OutCell::Nothing) => word_value(crate::kw::NONE, &alls[j]),
+                        _ => None,
+                    };
+                    let values: Vec<Value> = match (word, passed_on(&f2, &c2, &set.table, row, oi, &alls[j])) {
+                        (Some(v), _) => vec![v],
+                        (None, Some(vs)) => {
+                            if let Some(OutCell::Name(w)) = row.outs.get(oi)
+                                && !passes.contains(&(j, w.clone()))
+                            {
+                                passes.push((j, w.clone()));
+                            }
+                            vs
+                        }
+                        (None, None) => alls[j].clone(),
+                    };
+                    if row_writes.len().saturating_mul(values.len()) > MAX_TOGETHER {
+                        return too_many();
+                    }
+                    row_writes = row_writes.iter().flat_map(|t| values.iter().map(move |v| t.iter().cloned().chain([v.clone()]).collect::<Vec<Value>>())).collect();
+                }
+                for t in row_writes {
+                    if !written.contains(&t) {
+                        written.push(t);
+                    }
+                }
+                if written.len() > MAX_TOGETHER {
+                    return too_many();
+                }
+            }
+            parts.push((ks, written));
+        }
+        // every pair of the combinations of two tables, each in the order of `outputs`
+        let mut candidates: Vec<Vec<Option<Value>>> = vec![vec![None; outputs.len()]];
+        for (ks, written) in &parts {
+            if candidates.len().saturating_mul(written.len()) > MAX_TOGETHER {
+                return too_many();
+            }
+            let mut next = Vec::with_capacity(candidates.len() * written.len());
+            for cand in &candidates {
+                for t in written {
+                    let mut x = cand.clone();
+                    for (j, v) in ks.iter().zip(t) {
+                        x[*j] = Some(v.clone());
+                    }
+                    next.push(x);
+                }
+            }
+            candidates = next;
+        }
+        let candidates: Vec<Vec<Value>> = candidates.into_iter().filter_map(|t| t.into_iter().collect::<Option<Vec<Value>>>()).collect();
+        // From below: the combination each vector over the held ranges comes to.
+        let as_input = |input: &std::collections::BTreeMap<String, crate::eval::Val>| -> Values {
+            f2.inputs.iter().filter_map(|i| input.get(&i.name.text).map(|x| (i.name.text.clone(), crate::ports::from_val(&c2, &i.name.text, x)))).collect()
+        };
+        let comes_to = |outs: &[(String, Option<crate::eval::Val>)]| -> Option<Vec<Value>> {
+            outputs.iter().map(|o| outs.iter().find(|(n, _)| n == o).and_then(|(_, x)| x.as_ref()).map(|x| crate::ports::from_val(&c2, o, x))).collect()
+        };
+        let mut found: Vec<(Vec<Value>, Values)> = Vec::new();
+        let vectors: Vec<crate::vectors::Vector> = crate::vectors::generate(&f2, &c2).into_iter().filter(|v| held.takes(v)).collect();
+        for v in &vectors {
+            let Some(t) = comes_to(&v.outputs) else { continue };
+            if !found.iter().any(|(y, _)| *y == t) {
+                found.push((t, as_input(&v.input)));
+            }
+        }
+        // A combination with a value a row passes on from an input: a vector with that input set to
+        // the value, run through the evaluator, is an input that comes to it, if it does (as
+        // `outputs_over` tries a value of a group the vectors take one of).
+        for cand in &candidates {
+            if found.iter().any(|(t, _)| t == cand) {
+                continue;
+            }
+            let reached = passes.iter().find_map(|(j, w)| {
+                let (x, word) = match &cand[*j] {
+                    Value::Enum(n) => (crate::eval::Val::Enum(n.clone()), n.clone()),
+                    Value::Bool(b) => (crate::eval::Val::Bool(*b), b.to_string()),
+                    _ => return None,
+                };
+                if held_values(w).is_some_and(|h| !h.contains(&word)) {
+                    return None;
+                }
+                vectors.iter().find_map(|v| {
+                    let mut input = v.input.clone();
+                    input.insert(w.clone(), x.clone());
+                    if !crate::vectors::allowed(&f2, &c2, &input) || !crate::vectors::days_ok(&c2, &input) {
+                        return None;
+                    }
+                    let (outs, _, _) = crate::eval::run_all(&f2, &c2, input.clone().into_iter().collect());
+                    (comes_to(&outs).as_ref() == Some(cand)).then(|| as_input(&input))
+                })
+            });
+            if let Some(input) = reached {
+                found.push((cand.clone(), input));
+            }
+        }
+        let said = |t: &[Value]| -> String { outputs.iter().zip(t).map(|(o, v)| format!("{o} = {}", shown(v))).collect::<Vec<_>>().join(", ") };
+        if let Some((t, _)) = found.iter().find(|(t, _)| !candidates.contains(t)) {
+            let t = said(t);
+            return Found::Undecided(ritsu_base::tr!(
+                "rulec の解析は {t} の組にならないと言い、評価器はそうなる入力を見つけました。食い違うので決めません",
+                "rulec's analysis says the outputs never come to {t} together, and its evaluator finds an input that does; the two disagree, so nothing is decided"
+            ));
+        }
+        if let Some(missing) = candidates.iter().find(|c| !found.iter().any(|(t, _)| t == *c)) {
+            let t = said(missing);
+            return Found::Undecided(ritsu_base::tr!(
+                "{t} の組になる入力があるかを決められません。出力を決める表の行からは無いと示せず、範囲の中に、そうなる入力も見つかりません",
+                "whether the outputs come to {t} together cannot be decided: the rows of the tables that decide them do not rule it out, and no input inside the ranges is found that does"
+            ));
+        }
+        found.sort_by_key(|(t, _)| candidates.iter().position(|c| c == t));
+        // an enum's value by its public name, what a gate writes into Cedar
+        for (j, inner) in inners.iter().enumerate() {
+            if let Ty::Enum(e) = inner {
+                for (t, _) in &mut found {
+                    if let Value::Enum(name) = &mut t[j] {
+                        *name = crate::codegen::public_value(&f2, e, name);
+                    }
+                }
+            }
+        }
+        Found::Value(found)
+    })
+}
+
 /// What `output_values` answers for the numeric output `output` when each input of `ranges` takes
 /// only the values between its ends, as `outputs_over` takes them, and every other input its whole
 /// range (ritsu's port `Rules::output_values_over`, its X4; §15.273). With no input held to less
@@ -667,4 +945,121 @@ pub fn values_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &st
         Some(Found::Value(ritsu_ports::OutputValues { min, max, values, examples }))
     });
     read.unwrap_or_else(whole)
+}
+
+/// Whether the value the `define` named `name` works out stays inside the range the rule accepts
+/// for it with the inputs held to `ranges` (ritsu's port `Rules::preconditions_hold`, §15.313),
+/// each field of an element taking its own range, whatever the list holds.
+///
+/// What it reaches there, read again as the check reads it with the inputs held (over the whole
+/// range where the rule does not pass its check so), is inside the range: it holds. Otherwise an
+/// input inside the ranges whose value falls past an end is the example — solved from the rule's
+/// vectors inside the ranges as the vectors solve the ends of the range, or a corner of the ranges
+/// of the inputs it is worked out from. With neither, it is not decided. `said` is the range as the
+/// rule writes it.
+pub(crate) fn define_kept(
+    f: &RuleFile,
+    c: &Checked,
+    src: &str,
+    path: &str,
+    name: &str,
+    said: &str,
+    ranges: &[(String, Option<i128>, Option<i128>)],
+) -> ritsu_ports::Answer<std::collections::BTreeMap<String, crate::eval::Val>> {
+    use crate::ast::Item;
+    use ritsu_ports::Answer;
+    use std::cmp::Ordering::*;
+    let Some((alo, ahi)) = c.accepts.get(name).copied() else { return Answer::Holds };
+    // a field of an element is held as an input is, by what the caller knows of the elements it
+    // gives (kaname's lists); the re-check narrows it as it narrows an input
+    let field = |n: &str| f.elements.iter().flat_map(|e| &e.fields).any(|x| x.name.text == n);
+    let (fields, inputs): (Vec<_>, Vec<_>) = ranges.iter().cloned().partition(|(n, ..)| field(n));
+    let mut held = match held_of(f, c, &inputs) {
+        Ok(Some(held)) => held,
+        Ok(None) => {
+            return Answer::Undecided(ritsu_base::tr!("渡す値の範囲の中に、規則の入力がありません", "no input of the rule lies inside the ranges it is given"));
+        }
+        Err(why) => return Answer::Undecided(why),
+    };
+    for (n, lo, hi) in fields {
+        let Some(ty) = c.ty_of(&n).map(|t| t.present().clone()) else { continue };
+        if !ty.is_numeric() {
+            continue;
+        }
+        let sc = c.wire_scale(&n);
+        let at = |v: Option<i128>| v.map(|v| crate::types::from_wire(v, sc));
+        let iv = meet(c.ranges.get(&n).copied().unwrap_or((None, None)), (at(lo), at(hi)));
+        if let (Some(l), Some(h)) = iv
+            && l.cmp_to(h) == Greater
+        {
+            return Answer::Undecided(ritsu_base::tr!("渡す値の範囲の中に、規則の入力がありません", "no input of the rule lies inside the ranges it is given"));
+        }
+        held.fields.push(n.clone());
+        held.ranges.push((n, iv));
+    }
+    let again = if held.narrower(c) { with(held.clone(), || crate::prepare(src, path).ok()) } else { None };
+    let (f2, c2): (&RuleFile, &Checked) = match &again {
+        Some((f2, c2)) => (f2, c2),
+        None => (f, c),
+    };
+    let Some(d) = f2.items.iter().find_map(|it| match it {
+        Item::Define(d) if d.name.text == name => Some(d),
+        _ => None,
+    }) else {
+        return Answer::Holds;
+    };
+    let ty = c2.ty_of(name).map(|t| t.present().clone()).unwrap_or(Ty::Number);
+    if let Some((lo, hi)) = c2.reach(&d.expr, &ty)
+        && alo.is_none_or(|a| lo.cmp_to(a) != Less)
+        && ahi.is_none_or(|a| hi.cmp_to(a) != Greater)
+    {
+        return Answer::Holds;
+    }
+    // past an end where it is worked out: a rule that walks a list works it out with the walk, on
+    // each element or after a total, and refuses at the first value it works out outside
+    let past = |a: &std::collections::BTreeMap<String, crate::eval::Val>| -> bool {
+        if f.walks() {
+            return crate::eval::define_outside(f, c, a.clone().into_iter().collect()).as_deref() == Some(name);
+        }
+        let (_, _, _, b) = crate::eval::run_tables(f, c, a.clone().into_iter().collect());
+        b.get(name).is_some_and(|v| crate::eval::outside_accepted(c, name, v))
+    };
+    let vectors: Vec<crate::vectors::Vector> = crate::vectors::generate(f2, c2).into_iter().filter(|v| held.takes(v)).collect();
+    for (e, v) in crate::vectors::edge_inputs(f2, c2, &vectors, false) {
+        if e.define == name && held.takes(&v) && past(&v.input) {
+            return Answer::Fails(v.input);
+        }
+    }
+    // the corners of the ranges of the input numbers it is worked out from, the rest (the fields of
+    // the elements among them) as a vector has them
+    if let Some(base) = vectors.first().or(crate::vectors::generate(f, c).first()).map(|v| v.input.clone()) {
+        let from: Vec<(String, (Rat, Rat))> = crate::verify::worked_from(f, name)
+            .into_iter()
+            .filter(|n| f.inputs.iter().any(|i| i.name.text == *n))
+            .filter_map(|n| {
+                let ty = c.ty_of(&n)?.present().clone();
+                if !ty.is_numeric() {
+                    return None;
+                }
+                let iv = held.ranges.iter().find(|(h, _)| *h == n).map(|(_, iv)| *iv).unwrap_or_else(|| c.ranges.get(&n).copied().unwrap_or((None, None)));
+                Some((n, (iv.0?, iv.1?)))
+            })
+            .take(8)
+            .collect();
+        for k in 0..(1usize << from.len()) {
+            let mut a = base.clone();
+            for (j, (n, (lo, hi))) in from.iter().enumerate() {
+                let ty = c.ty_of(n).map(|t| t.present().clone()).unwrap_or(Ty::Number);
+                a.insert(n.clone(), crate::vectors::to_val(if k >> j & 1 == 1 { *hi } else { *lo }, &ty));
+            }
+            let v = crate::vectors::Vector { input: a, outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: String::new() };
+            if held.takes(&v) && past(&v.input) {
+                return Answer::Fails(v.input);
+            }
+        }
+    }
+    Answer::Undecided(ritsu_base::tr!(
+        "渡す値の範囲で `{name}` が {said} の外になるかどうかを決められません",
+        "whether `{name}` falls outside {said} with the values given is not decided"
+    ))
 }

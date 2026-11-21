@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 1 never matches
+  --> tests/computed/shapes/E102_刻みの間の小包の手数料.rule:16 table 選ぶ
+   |
+16 | | <=250円 | >15円 <25円  | 二      |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1: no input reaches here
+ 9 | define 小包の手数料(parcel_fee) : money[円] = up(金額 * 10%, 10円) + 5円
+   |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^ 5円 plus multiples of 10円 within >=15円 <=35円 over the values of `金額` in this row
+   |
+ `小包の手数料` is computed from `金額`. Over the values of `金額` this row takes, `小包の手数料` only comes to 5円 plus multiples of 10円 within >=15円 <=35円, none of which this row asks for.
+ hint: compare the expression with this row's conditions. No input reaches this row, so if it is not needed, delete it.
+

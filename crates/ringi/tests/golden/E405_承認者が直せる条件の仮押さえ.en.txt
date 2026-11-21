@@ -1,0 +1,6 @@
+error[E405]: tests/mutants/E405_承認者が直せる条件の仮押さえ.ringi:26:107: The hold `予算.reserve` reads `種別`, a field approvers may edit
+    26 |   on submitted    hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: 部, amount: 金額)  when 種別 is 予算
+  = The condition of the hold (`when 種別 is 予算`) reads `種別`, and `approvers edit` on line 25 lets an approver edit `種別`.
+  = A hold is made once, with the values the request is submitted with, and is not made again when an approver edits them.
+  = Once an edit makes the condition fail, a `post` or a `void` on the same condition is not done, and the hold is left open.
+  = Take `種別` out of `approvers edit` (the line itself, where it lists no other field).

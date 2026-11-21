@@ -1,0 +1,8 @@
+error[E150]: The range of the count does not meet the values it can reach
+  --> tests/mutants/m_e150count.rule:9 count
+  |
+9 | count wrapped_items over lines where wrapped  range >=6 <=10
+  |                                               ^^^^^^^^^^^^^^ wrapped_items can only be <=5
+  |
+ lines has at most 5 elements (the top of the count fragile_items), so no sequence comes to the bottom 6 of wrapped_items. The generated code would refuse every call once the walk is over.
+ Hint: bring the bottom of wrapped_items down to 5 or less, or the top of fragile_items up to 6 or more.

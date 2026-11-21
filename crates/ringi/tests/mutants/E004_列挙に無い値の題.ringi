@@ -1,0 +1,19 @@
+request 例(example) v1 "例"
+
+use rule 権限(authority) from "shared/権限.rule"
+
+form
+  金額(amount)   : money[円] "金額"  range >=1円 <=100_000円
+  決裁者(level)  : choice from 権限.decider "決裁する人"
+    manager "上長"
+    cfo     "財務の責任者"
+    ceo     "社長"
+
+route
+  確認(check)  上長
+
+who
+  上長(managers) = team managers
+
+ticket
+  self approval  not allowed

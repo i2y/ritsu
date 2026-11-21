@@ -1,0 +1,197 @@
+request purchase v1 "Purchase ringi"
+description "A purchase that spends the company's money, reviewed and decided by the people the company's table of authority (fictional) names for its kind and amount, and ordered once it is approved"
+owner general_affairs
+
+use organization org from "shared/company.ringi"
+use masters m from "shared/masters.ringi"
+use calendar office from "shared/office.cal"
+use rule authority from "shared/authority.rule"
+use book budget from "shared/budget.book"
+use gate "shared/company.gate"
+use flow order from "shared/order.flow"
+
+form
+  kind   : choice from authority.kind "Kind"
+    goods    "Goods and services"
+    capex    "Capital expenditure"
+    software "Software"
+  vendor : choice from m.vendors "Vendor"
+  lines  : rows "Lines"  count >=1 <=30
+    item     : text "Item"  count <=100
+    quantity : number "Quantity"  range >=1 <=10_000
+    price    : money[JPY] "Unit price"  range >=1JPY <=50_000_000JPY
+    subtotal : money[JPY] "Subtotal" = quantity * price  range >=1JPY <=100_000_000JPY
+  amount   : money[JPY] "Amount" = sum(lines.subtotal)  range >=1JPY <=100_000_000JPY
+  summary  : long text "What it is for"  count >=1 <=1000
+  quote    : attachment "Quotation"
+  advance  : rate[step 5%] "Paid in advance"  range >=0% <=100%
+  others   : rows "Other quotations"  count >=0 <=3
+    company : text "Company"  count >=1 <=100
+    bid     : money[JPY] "Amount quoted"  range >=1JPY <=100_000_000JPY
+  reviewer : person "Technical reviewer"  optional
+
+route
+  # The president has no manager: the stage is skipped for them.
+  first     manager
+    when empty escalate, then skip
+  technical reviewer               when reviewer is not none
+  # Finance checks what the table of authority sends it, and a purchase over 30% paid in advance.
+  finance   finance                when authority.finance or advance > 30%
+  board     at least 60% of board  when authority.board
+    due in 10 business days at end of day
+    when late expire
+  # The president is the top of the table of authority, and nobody above decides their own purchase:
+  # it goes to the board, and one of the directors decides it.
+  decide    authority.decider
+    when empty escalate, then board
+  inform    circulate to general_affairs
+
+who
+  manager         = manager of requester
+  reviewer        = chosen by requester in reviewer
+  finance         = team finance
+  board           = team board
+  general_affairs = team general_affairs
+  dept_head       = head of requester.department
+  division_head   = nearest division_head above requester
+  president       = nearest president above requester
+
+every stage
+  due in 5 business days at end of day
+  remind after 3 business days at 09:00
+  when late escalate, then expire
+  when empty escalate
+
+ticket
+  self approval     not allowed
+  # One who answers two or more stages (a manager who also decides) answers once, at the last of
+  # them: the decision is made after finance and the board have answered.
+  same approver     approves once, at the last stage
+  send back         to any earlier stage, at most 3 times
+  resubmit          within 10 business days
+  withdraw          until decide
+  retract approval until the next stage answers
+  approvers edit    summary
+  # The president, the heads of divisions and the directors are above every department: their
+  # requests hold no department's budget.
+  on submitted      hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: requester.department, amount: amount)  when requester.department is not none
+  on approved       post budget.reserve(request: ticket.id, attempt: ticket.attempt)
+  on approved       launch order(request_id: ticket.id, vendor: vendor, amount: amount, summary: summary)
+  on sent back, rejected, withdrawn, expired  void budget.reserve(request: ticket.id, attempt: ticket.attempt)
+
+claims
+  the_board_votes_on_large_purchases : possible board is at least 60% of board
+  ends_in_time                       : every ticket ends within 246 business days
+
+scenario a_board_purchase
+  requester e1201
+  given budget.allocate(dept: "sales1", period: "2026", amount: 10_000_000JPY)
+  form kind = capex, vendor = "V-0031", lines = [{item: "Press line", quantity: 1, price: 8_000_000JPY}], summary = "A second press line for the plant", quote = "quote.pdf", advance = 20%, others = [{company: "Example Presses (fictional)", bid: 8_600_000JPY}]
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 14:00 | approve | e1101 | finance  | in progress |
+| 2026-11-17 10:00 | approve | e4001 | board    | in progress |
+| 2026-11-18 10:00 | approve | e0201 | board    | in progress |
+| 2026-11-18 11:00 | approve | e0202 | board    | in progress |
+| 2026-11-18 15:00 | approve | e0203 | decide   | in progress |
+| 2026-11-19 10:00 | approve | e0001 |          | approved    |
+
+# A small purchase, half of it paid in advance: the table of authority does not send it to finance,
+# and the advance does
+scenario half_paid_in_advance
+  requester e1201
+  given budget.allocate(dept: "sales1", period: "2026", amount: 10_000_000JPY)
+  form kind = goods, vendor = "V-0012", lines = [{item: "Booth for the trade fair", quantity: 1, price: 400_000JPY}], summary = "A booth for the spring trade fair", quote = "quote.pdf", advance = 50%, others = []
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | finance  | in progress |
+| 2026-11-16 14:00 | approve | e4001 | decide   | in progress |
+| 2026-11-17 10:00 | approve | e3101 |          | approved    |
+
+# The head of the division is the requester's manager, and decides too: they answer once, at
+# `decide`, after finance
+scenario the_manager_decides_after_finance
+  requester e3101
+  given budget.allocate(dept: "sales1", period: "2026", amount: 10_000_000JPY)
+  form kind = goods, vendor = "V-0012", lines = [{item: "Demo units", quantity: 4, price: 500_000JPY}], summary = "Demo units for the sales offices", quote = "quote.pdf", advance = 0%, others = []
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e3101 | finance  | in progress |
+| 2026-11-16 14:00 | approve | e4001 | decide   | in progress |
+| 2026-11-17 10:00 | approve | e0101 |          | approved    |
+
+# The decision is late and goes up to the president, who approves it: the manager's stage, which
+# waited for the decision, starts then, and the head of the division answers it after all
+scenario the_decision_goes_up_and_the_manager_answers_after
+  requester e3101
+  given budget.allocate(dept: "sales1", period: "2026", amount: 10_000_000JPY)
+  form kind = goods, vendor = "V-0012", lines = [{item: "Demo units", quantity: 4, price: 500_000JPY}], summary = "Demo units for the sales offices", quote = "quote.pdf", advance = 0%, others = []
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e3101 | finance  | in progress |
+| 2026-11-16 14:00 | approve | e4001 | decide   | in progress |
+| 2026-11-19 09:00 | remind  |       | decide   | in progress |
+| 2026-11-24 00:00 | late    |       | decide   | in progress |
+| 2026-11-24 10:00 | approve | e0001 | first    | in progress |
+| 2026-11-24 15:00 | approve | e0101 |          | approved    |
+
+# The organization changes while the manager's stage waits. The general counsel was the requester's
+# manager and the head of their department, and is gone from 2027-04-01. When `decide` starts, the
+# stage that waited is decided again: both go up to the head of the division, who answers once
+scenario the_organization_changes_while_the_manager_waits
+  requester e9002
+  given budget.allocate(dept: "legal", period: "2026", amount: 3_000_000JPY)
+  form kind = goods, vendor = "V-0012", lines = [{item: "Document scanner", quantity: 1, price: 300_000JPY}], summary = "A scanner for the contract archive", quote = "quote.pdf", advance = 0%, others = [], reviewer = person "e7201"
+| at               | event   | by    | -> stage  | status      |
+| 2027-03-30 10:00 | submit  | e9002 | technical | in progress |
+| 2027-04-01 11:00 | approve | e7201 | decide    | in progress |
+| 2027-04-01 15:00 | approve | e0102 |           | approved    |
+
+# The board votes the purchase down: one director approves it, and three reject it, each saying why.
+# At the third rejection, the approvals can no longer reach the three it needs, so the purchase is
+# rejected there, and the budget held for it is let go
+scenario the_board_votes_it_down
+  requester e1201
+  given budget.allocate(dept: "sales1", period: "2026", amount: 10_000_000JPY)
+  form kind = capex, vendor = "V-0031", lines = [{item: "Robot arm for the packing line", quantity: 2, price: 3_500_000JPY}], summary = "Two robot arms for the packing line", quote = "quote.pdf", advance = 0%, others = []
+| at               | event   | by    | comment                                      | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 |                                              | first    | in progress |
+| 2026-11-16 14:00 | approve | e1101 |                                              | finance  | in progress |
+| 2026-11-17 10:00 | approve | e4001 |                                              | board    | in progress |
+| 2026-11-18 10:00 | approve | e0201 |                                              | board    | in progress |
+| 2026-11-18 11:00 | reject  | e0202 | "The packing line runs at half its capacity" | board    | in progress |
+| 2026-11-18 13:00 | reject  | e0203 | "Two arms are more than the line needs"      | board    | in progress |
+| 2026-11-18 15:00 | reject  | e0204 | "Ask again with a quote for one arm"         |          | rejected    |
+
+labels ja
+  request              "購買の稟議"
+  kind                 "種類"
+  kind.goods           "物品・サービス"
+  kind.capex           "設備投資"
+  kind.software        "ソフトウェア"
+  vendor               "取引先"
+  lines                "明細"
+  lines.item           "品目"
+  lines.quantity       "数量"
+  lines.price          "単価"
+  lines.subtotal       "小計"
+  amount               "合計"
+  summary              "何に使うか"
+  quote                "見積書"
+  advance              "前払いの割合"
+  others               "相見積もり"
+  others.company       "会社"
+  others.bid           "見積もりの金額"
+  reviewer             "技術の確認者"
+  stage first          "一次"
+  stage technical      "技術"
+  stage finance        "財務"
+  stage board          "取締役会"
+  stage decide         "決裁"
+  stage inform         "回覧"
+  who manager          "上長"
+  who reviewer         "確認者"
+  who finance          "財務部"
+  who board            "取締役"
+  who general_affairs  "総務部"
+  who dept_head        "部長"
+  who division_head    "本部長"
+  who president        "社長"

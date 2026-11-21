@@ -45,7 +45,7 @@ false on one of them is an error that names the input:
 ```console
 $ cd crates/kaname
 $ ritsu kaname check tests/properties/shares.kn
-error[E603]: tests/properties/shares.kn:12:1: The property `every_line_gets_a_share` is false for lines: [Line { sku: "a", left: 500000USDc }, Line { sku: "a", left: 500000USDc }], refund: 1USDc
+error[E603]: tests/properties/shares.kn:12:1: The property `every_line_gets_a_share` is false for lines: [Line { sku: "a", left: 500_000USDc }, Line { sku: "a", left: 500_000USDc }], refund: 1USDc
     12 | property every_line_gets_a_share(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
   = Line 15: `shares` is [0USDc, 1USDc]
   = `check` runs a property in the reference interpreter on the vectors of its parameters: on this one the `when` lines hold and the last line is false.
@@ -112,7 +112,7 @@ counts amounts in the unit of their type, and `Within` is the range of a record'
 ```lean
 abbrev shares_add_up : Prop :=
   ∀ (lines : List Line) (refund : Int),
-    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    1 ≤ List.length lines → List.length lines ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
     0 ≤ refund → refund ≤ 10000000 →
     ((List.map (fun (s : Share) => s.share) (split lines refund)).sum) = refund
 ```

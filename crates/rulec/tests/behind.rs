@@ -72,7 +72,8 @@ fn behind<'a>(d: &'a rulec::diag::Diag, said: &str) -> Option<&'a str> {
     d.notes.iter().find_map(|n| n.strip_prefix(said))
 }
 
-/// `name = value, …`, as whole numbers, or the name of an enum value.
+/// `name = value, …`, as whole numbers with the unit of their type (§15.333), or the name of an
+/// enum value.
 fn input_of(note: &str) -> BTreeMap<String, String> {
     note.split(", ")
         .map(|p| {
@@ -82,8 +83,10 @@ fn input_of(note: &str) -> BTreeMap<String, String> {
         .collect()
 }
 
+/// The whole number of a value as a sentence says it: its unit taken off, and the `_` between its
+/// groups of digits.
 fn num(v: &str) -> i128 {
-    v.parse().unwrap_or_else(|_| panic!("not a whole number: {v}"))
+    v.trim_end_matches(|c: char| !c.is_ascii_digit()).replace('_', "").parse().unwrap_or_else(|_| panic!("not a whole number: {v}"))
 }
 
 /// What the reference evaluator gives for whole-number inputs: the rows that took them, and every
@@ -133,11 +136,12 @@ fn a_gap_on_a_min_names_the_input_behind_it() {
             let witness = json.get("witness").and_then(|w| w.get("inputs")).and_then(|w| w.get(low)).and_then(|v| v.as_str());
             assert_eq!(witness, Some("1.1"), "{rel}: {}", json.compact());
             let input = behind(&d, said).unwrap_or_else(|| panic!("{rel}: no input behind the example: {:?}", d.notes));
-            assert_eq!(input_of(input), BTreeMap::from([(amount.to_string(), "11".to_string())]), "{rel}");
+            assert_eq!(input_of(input), BTreeMap::from([(amount.to_string(), format!("11{unit}"))]), "{rel}");
             let notes: Vec<&str> = json.get("notes").and_then(|n| n.as_arr()).unwrap().iter().filter_map(|n| n.as_str()).collect();
             assert!(notes.contains(&format!("{said}{input}").as_str()), "{rel}: the JSON's notes: {notes:?}");
             let fix = json.get("fix").and_then(|f| f.get("text")).and_then(|t| t.as_str());
-            assert_eq!(fix, Some(format!("| >1{unit} <2{unit} | true |").as_str()), "{rel}");
+            // the row of the part the value is in, its answer left open (§15.317)
+            assert_eq!(fix, Some(format!("| >1{unit} <2{unit} | ? |").as_str()), "{rel}");
         }
     }
     // on the table's heading, line 11 of both
@@ -250,7 +254,7 @@ fn a_gap_on_a_table_above_names_the_input_behind_it() {
     let src = source(en_rel);
     let (d, _) = the_error(&src, en_rel, Lang::En);
     assert!(d.notes.iter().any(|n| n == "An input that matches no row: dest = overseas, size = small, weight = 1lb"), "{:?}", d.notes);
-    assert_eq!(behind(&d, EN), Some("dest = overseas, girth = 23, signature = true, weight = 1"));
+    assert_eq!(behind(&d, EN), Some("dest = overseas, girth = 23in, signature = true, weight = 1lb"));
     let (fired, b) = evaluate_vals(
         &src,
         en_rel,
@@ -263,7 +267,7 @@ fn a_gap_on_a_table_above_names_the_input_behind_it() {
     let ja = source(ja_rel);
     let (d, _) = the_error(&ja, ja_rel, Lang::Ja);
     assert!(d.notes.iter().any(|n| n == "当てはまらない例: あて先 = 山梨県, サイズ = S60"), "{:?}", d.notes);
-    assert_eq!(behind(&d, JA), Some("あて先 = 山梨県, 三辺合計 = 1, 重量 = 1"));
+    assert_eq!(behind(&d, JA), Some("あて先 = 山梨県, 三辺合計 = 1cm, 重量 = 1g"));
     let (fired, b) = evaluate_vals(&ja, ja_rel, &[("あて先", Val::Enum("山梨県".into())), ("三辺合計", Val::Num(Rat::int(1))), ("重量", Val::Num(Rat::int(1)))]);
     assert_eq!(b.get("サイズ"), Some(&Val::Enum("S60".into())));
     assert!(!fired.iter().any(|r| r.contains("運賃表")), "a row of 運賃表 took it: {fired:?}");
@@ -287,7 +291,7 @@ fn an_input_the_table_reads_keeps_the_example_value() {
     let src = "rule tiered_band v1\n\nenum level = regular | gold\n\ninputs\n  tier   : level\n  amount : money[GBP]  range >=1GBP <=100GBP\n\noutputs\n  small : bool\n\nderive low : money[GBP] = min(amount, amount * 10%)  range >=0GBP <=100GBP\n\ntable band\npolicy unique\n| tier    | low    | -> small : bool |\n| gold    | -      | true            |\n| regular | <=1GBP | true            |\n| regular | >=2GBP | false           |\n";
     let (d, _) = the_error(src, "tiered_band.rule", Lang::En);
     assert!(d.notes.iter().any(|n| n == "An input that matches no row: tier = regular, low = 1.1GBP"), "{:?}", d.notes);
-    assert_eq!(behind(&d, EN), Some("amount = 11, tier = regular"));
+    assert_eq!(behind(&d, EN), Some("amount = 11GBP, tier = regular"));
 }
 
 /// A `constraint` holds of the input named. Walking the cap from the bottom, the first cap that lets
@@ -297,28 +301,48 @@ fn an_input_the_table_reads_keeps_the_example_value() {
 fn the_input_named_keeps_the_constraints() {
     let src = "rule capped_band v1\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n  cap    : money[GBP]  range >=0GBP <=100GBP\n\nconstraint amount <= cap\n\noutputs\n  small : bool\n\nderive low : money[GBP] = min(amount * 10%, cap)  range >=0GBP <=100GBP\n\ntable band\npolicy unique\n| low    | -> small : bool |\n| <=1GBP | true            |\n| >=2GBP | false           |\n";
     let (d, _) = the_error(src, "capped_band.rule", Lang::En);
-    assert_eq!(behind(&d, EN), Some("amount = 11, cap = 11"));
+    assert_eq!(behind(&d, EN), Some("amount = 11GBP, cap = 11GBP"));
     let (fired, b) = evaluate(src, "capped_band.rule", &[("amount", 11), ("cap", 11)]);
     assert!(fired.is_empty(), "{fired:?}");
     assert_eq!(b.get("low"), Some(&Val::Num(Rat::new(11, 10))));
 }
 
-/// The walk has a budget, 2^14 combinations. Two inputs of 128 values each are walked, and the
-/// larger of them names the input behind 11; one value more on one of them is past the budget, and
-/// E101 stands as it did, with no input named.
+/// The walk has a budget, 2^14 combinations. Two inputs of 128 values each are walked, and their
+/// product names the input behind 11. One value more on one of them is past the budget: moving one
+/// input at a time through its range from the first input never makes a product of 11, so no input
+/// is named, and the example is the combination it is, not called an input and with nothing in the
+/// witness (§15.322). E101 stands either way.
 #[test]
 fn past_the_budget_no_input_is_named() {
     let rule = |top: u32| {
         format!(
-            "rule larger v1\n\ninputs\n  a : number  range >=0 <=127\n  b : number  range >=0 <={top}\n\noutputs\n  high : bool\n\nderive peak : number = max(a, b)  range >=0 <={top}\n\ntable t\npolicy unique\n| peak | -> high : bool |\n| <=10 | false          |\n| >=12 | true           |\n"
+            "rule product v1\n\ninputs\n  a : number  range >=0 <=127\n  b : number  range >=0 <={top}\n\noutputs\n  high : bool\n\nderive peak : number = a * b  range >=0 <=20000\n\ntable t\npolicy unique\n| peak | -> high : bool |\n| <=10 | false          |\n| >=12 | true           |\n"
         )
     };
-    let (d, _) = the_error(&rule(127), "larger.rule", Lang::En);
+    let (d, _) = the_error(&rule(127), "product.rule", Lang::En);
+    assert!(d.notes.iter().any(|n| n == "An input that matches no row: peak = 11"), "{:?}", d.notes);
+    assert_eq!(behind(&d, EN), Some("a = 11, b = 1"));
+    let (d, json) = the_error(&rule(128), "product.rule", Lang::En);
+    assert!(d.notes.iter().any(|n| n == "A combination no row takes: peak = 11"), "{:?}", d.notes);
+    assert!(d.notes.iter().any(|n| n == "No input that gives it was found, and it could not be shown that none does."), "{:?}", d.notes);
+    assert_eq!(behind(&d, EN), None, "{:?}", d.notes);
+    assert_eq!(d.title, "Completeness gap: some combination matches no row");
+    assert!(d.witness.inputs.is_empty(), "{:?}", d.witness.inputs);
+    assert!(json.get("witness").and_then(|w| w.get("inputs")).is_none(), "{json:?}");
+}
+
+/// Past the budget, an input the table does not read is moved through its range: from the first
+/// input, `a` is moved until the larger of the two comes into the gap, and that input is named
+/// (§15.322).
+#[test]
+fn past_the_budget_an_input_the_table_does_not_read_is_moved() {
+    let src = "rule larger v1\n\ninputs\n  a : number  range >=0 <=127\n  b : number  range >=0 <=128\n\noutputs\n  high : bool\n\nderive peak : number = max(a, b)  range >=0 <=128\n\ntable t\npolicy unique\n| peak | -> high : bool |\n| <=10 | false          |\n| >=12 | true           |\n";
+    let (d, _) = the_error(src, "larger.rule", Lang::En);
     assert!(d.notes.iter().any(|n| n == "An input that matches no row: peak = 11"), "{:?}", d.notes);
     assert_eq!(behind(&d, EN), Some("a = 11, b = 0"));
-    let (d, _) = the_error(&rule(128), "larger.rule", Lang::En);
-    assert!(d.notes.iter().any(|n| n == "An input that matches no row: peak = 11"), "{:?}", d.notes);
-    assert_eq!(behind(&d, EN), None, "{:?}", d.notes);
+    let (fired, b) = evaluate(src, "larger.rule", &[("a", 11), ("b", 0)]);
+    assert!(fired.is_empty(), "{fired:?}");
+    assert_eq!(b.get("peak"), Some(&Val::Num(Rat::int(11))));
 }
 
 /// A gap no input reaches is no gap (§15.195). A `define` of a share asked here for a row at 310/3%,

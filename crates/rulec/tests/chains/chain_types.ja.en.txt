@@ -1,0 +1,36 @@
+error[E012]: There is no type `段会`
+  --> chain_types.ja.rule:11
+   |
+11 |   会員(member) : 段会
+   |                  ^^^^
+   |
+ Did you mean `段階`?
+ A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. The enums of this file are `種類`, `段階`.
+
+error[E103]: `UDS` is not a unit of money
+  --> chain_types.ja.rule:13
+   |
+13 |   定価(list_price) : money[UDS]  range >=0USD <=1000USD
+   |                      ^^^^^^^^^^
+   |
+ The units of money are 円 (yen, the same as JPY) 銭 (a hundredth of 円), or one of the ISO 4217 codes USD EUR GBP CHF CAD AUD NZD CNY HKD SGD KRW INR TWD THB SEK NOK DKK PLN CZK HUF TRY BRL MXN ZAR AED SAR ILS PHP IDR MYR VND (its hundredth is the code plus c: USD and USDc).
+
+error[E012]: Column `品の種類` is not a declared name
+  --> chain_types.ja.rule:20 table 上乗せ
+   |
+20 | | 品の種類 | -> 上乗せ率(markup) : rate[step 1%] |
+   |   ^^^^^^^^
+   |
+ Did you mean `品の種` (line 9)?
+ A column can only be an input, a derived value, or a boolean/enum intermediate value.
+ `品の種類` is written on line 35 too.
+
+warning[W111]: Input 品の種 is not used by any table
+  --> chain_types.ja.rule:9
+  |
+9 |   品の種(item_knd) : 種類
+  |   ^^^^^^ appears in no column
+  |
+ A column that should use it may have been left out.
+ If it is meant only as an entry check on its range, add `contract_only` to the declaration (W111).
+

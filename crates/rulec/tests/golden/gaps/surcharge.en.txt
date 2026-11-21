@@ -1,0 +1,11 @@
+error[E101]: Completeness gap: some input matches no row
+  --> tests/gaps/surcharge.rule:11 table base
+   |
+11 | table base
+   | ^^^^^^^^^^ the input space is not fully covered
+   |
+ No row matches: weight from 21kg to 50kg, fragile = false
+ An input that matches no row: weight = 21kg, fragile = false
+ hint: add rows that match these inputs.
+ table base, table fragile_goods together do not cover it. The row may go in any of them; the declared precedence still applies.
+

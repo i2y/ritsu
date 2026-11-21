@@ -31,11 +31,8 @@ The calls dandori writes go through a `Transport` (`io.ts`, `io.py`, `io.go`), w
 are yours to set: the headers of an HTTP API, the AWS SDK's clients, an agent's API key, TypeSafe's
 key for Jev and OpenAI's for its Decisions API, the clients of the books a flow runs operations on. In tests it is where a stand-in goes.
 
-- An `http` task's URL takes its arguments by name: `{id}` is the argument `id` as text (a number, a
-  bool or a record as JSON, nothing for none), escaped as JavaScript's `encodeURIComponent` escapes
-  it, so a `/`, `?`, `#`, `%` or space in a value is not read as the end of a segment or the start
-  of the query. The arguments the URL does not take go in the query of a `GET` or a `DELETE`, and
-  in the body of the others.
+- An `http` task's arguments go to the URL's path, the query, the headers, the cookies or the body,
+  each written as OpenAPI writes it ([Where an HTTP call's arguments go](#where-an-http-calls-arguments-go)).
 - `queue "<name>"` sends a Temporal activity or child workflow to that task queue, where workers in
   any of the three languages can serve it.
 - `local` under `use rule` has Temporal call the rule as a local activity, in the worker that runs
@@ -56,6 +53,59 @@ key for Jev and OpenAI's for its Decisions API, the clients of the books a flow 
   outputs of a pod that failed: if the pod's end reaches Argo's controller before the error file
   does, the call is read as one that wrote none, a `failure` with an empty cause, even where the
   error was a declared one.
+
+## Where an HTTP call's arguments go
+
+With no description, an `http` task's arguments go where OpenAPI's defaults put them: an argument
+the URL names (`{id}`) to the path, and the others to the query of a `GET` or a `DELETE` and to the
+body of the other methods. When an OpenAPI document holds the task, each argument goes where the
+document says, by the document's name: to the path, the query (a `POST`'s too), a header or a
+cookie, and to the body otherwise. A `-` in the document's name is a `_` in the task's (`book-id` is
+`book_id`), and a header's name is the same in any case: `x_library_key` is the header
+`X-Library-Key`.
+
+A list or a record is written in the `style` and `explode` the document gives the parameter (for a
+URL-encoded body, its `encoding`), and in OpenAPI's defaults where it gives none:
+
+| Where | Default | `tags: ["a", "b"]` | `spot: {row: 3, col: 12}` |
+|---|---|---|---|
+| the path | `simple` | `a,b` | `row,3,col,12` |
+| the query, a URL-encoded body | `form`, `explode: true` | `tags=a&tags=b` | `row=3&col=12` |
+| a header | `simple` | `X-Tags: a,b` | `X-Spot: row,3,col,12` |
+| a cookie | `form`, `explode: true` | E016: a cookie takes `explode: false`, `tags=a,b` | the same: `spot=row,3,col,12` |
+
+The other styles are written as OpenAPI's examples write them: `label` (`.a.b`) and `matrix`
+(`;tags=a;tags=b`, `;row=3;col=12`) in the path, and `spaceDelimited` (`tags=a%20b`),
+`pipeDelimited` (`tags=a%7Cb`) and `deepObject` (`spot%5Brow%5D=3&spot%5Bcol%5D=12`) in the query
+and in a URL-encoded body. A value's text is a string as it is, a number or a bool as JSON writes
+it, and a `json` value that is not a string as its JSON text. In the path, the query and a cookie it
+is escaped as JavaScript's `encodeURIComponent` escapes it, so a `/`, `?`, `#`, `%`, `&` or space in
+a value stays inside it. A header has the text as it is, and text that is not ASCII goes as its
+UTF-8.
+
+A value that is not there puts nothing where it goes: an argument with none, an item of a list or a
+field of a record that is none, a list with no item, a record with no field. There is no `until=` in
+the query, no pair in a URL-encoded body, no header and no cookie; a JSON body has `null`, and the
+path an empty segment.
+
+What cannot be written as the document says is refused at the task (E016, and E003 for a task no
+document holds), rather than sent another way: a combination OpenAPI does not define (a list as
+`deepObject`, `pipeDelimited` with `explode: true`, a list or a record as a cookie with
+`explode: true`), a list or a record that holds a list or a record anywhere but in a JSON body, two
+arguments that put a value under one name, an argument that is two of the document's parameters, a
+header the HTTP client writes itself (`Host`, `Content-Length`), a cookie sent as the header
+`Cookie`, and a name a header or a cookie cannot have. A header or a cookie the document requires is
+passed, and with a value (`T`, not `T?`).
+
+The `Transport` is handed the call as Step Functions' HTTP Task is: the URL with the path and the
+query written into it, the headers with the cookies in one `Cookie`, and the body, a JSON body as
+its object and a URL-encoded one as the object of its pairs, with the items of a list under one
+name. dandori's own headers are the `Content-Type` of a URL-encoded body, `Connect-Protocol-Version`
+and the `Idempotency-Key` of `key`. A header of the `Transport`'s options takes the place of the
+call's of the same name, in any case; a `Cookie` of the options adds its cookies to the call's, in
+place of those of the same name. A state machine writes the URL in JSONata, and hands the HTTP Task
+the headers and the body, with `ArrayFormat: REPEAT` where a list repeats its name in a URL-encoded
+body.
 
 ## How long a call may take
 
@@ -148,6 +198,62 @@ may leave out or send as null, and an enum that takes every value the answer may
 the operation answers with, and an AWS API's `key <parameter>` must be the operation's idempotency
 token.
 
+A string the description says is a day or a moment is one of the flow's dates or times:
+
+| The description has | A task sends there | A task reads it into |
+|---|---|---|
+| a string with `format: date` (`2026-11-16`) | a `date`, or a `string` | a `date`, or a `string` |
+| a string with `format: date-time` | a `timestamp` | a `timestamp`, or a `string` |
+| `google.protobuf.Timestamp` | a `timestamp` | a `timestamp`, or a `string` |
+| `google.type.Date` (`{"year": 2026, "month": 11, "day": 16}`) | a `date`, or a `string` | a `date`, or a `string` |
+| Smithy's `timestamp` | a `timestamp` | a `timestamp` |
+
+```flow
+use openapi leave from "apis/leave.json"
+
+record Period
+  first_day : date
+  last_day  : date
+
+task book(employee: string, period: Period) -> Leave
+  http POST leave "/leaves"
+```
+
+On every platform a `date` goes as `2026-11-16`, and a `timestamp` as RFC 3339 in UTC
+(`2026-11-16T09:00:00Z`). So a day does not go where the description says a moment, a moment does
+not go where it says a day, and an enum's value goes to neither. A `string` goes where it says a day
+(whether its text is a day is the API's to say), but not where it says a moment. A string whose
+values the description lists (`enum`) is read into a `date` or a `timestamp` when each value it lists
+is one, inside the range when there is one.
+
+A Smithy timestamp goes in the form the model says: the member's `@timestampFormat`, else the
+timestamp shape's, else the form of the protocol for where it goes. That is seconds since 1970 in the
+body under awsJson1_0, awsJson1_1, restJson1 and rpcv2Cbor; RFC 3339 in the body under restXml,
+awsQuery and ec2Query, and in a query or a path; and an HTTP date in a header. A timestamp may come as
+a number, so a `string` does not read it. The AWS SDK of each language puts the flow's timestamp in
+that form: the default `Transport` of TypeScript hands the SDK a `Date` for each timestamp the model
+has, and boto3 and the AWS SDK for Go v2 read the RFC 3339 text themselves. Whatever form a timestamp
+comes back in, the default `Transport` gives it to the flow as RFC 3339 in UTC
+(`2026-11-16T09:00:00Z`). A state machine hands Step Functions the text.
+
+`google.type.Date` (`google/type/date.proto`) is an object in protobuf's JSON:
+`{"year": 2026, "month": 11, "day": 16}`. On every platform the code dandori writes sends a `date`
+there as that object, at the top of a request, in a list, in a message and in the messages of a list,
+and reads one back as `2026-11-16` before the answer's type is checked. A `string` goes as the day it
+holds; one that holds no day goes as it is, for the service to refuse. A date short of its year, its
+month or its day (protobuf's JSON leaves out a part that is 0, as for a card's month or a birthday
+without its year) is no day of the calendar: it is left as it came, and the check refuses it with
+`Dandori.BadResponse`. A field read as `json` takes such a date as it came (and a whole one as
+`2026-11-16`). The type is known by its name, as protobuf's well-known types are:
+`google/type/date.proto` need not be on the disk, and is not read when it is.
+
+```text
+error[E016]: tests/fixtures/date_formats.flow:39:1: the parameter `first_day` is not what `leave` POST /leaves/{id}/move takes: `timestamp` is not a date; declare it `date`
+    39 | task move(id: string, first_day: timestamp, previous: string, asked_at: date) -> Moved
+error[E016]: tests/fixtures/date_formats.flow:39:1: the parameter `asked_at` is not what `leave` POST /leaves/{id}/move takes: `date` is not a date and time; declare it `timestamp`
+    39 | task move(id: string, first_day: timestamp, previous: string, asked_at: date) -> Moved
+```
+
 In a draft of calls to Stripe and to a stock service
 ([tests/fixtures/api_calls.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/api_calls.flow)):
 
@@ -217,6 +323,7 @@ description: the table that makes a type is the one the task is held to.
 | `repeated T` | `list[T]` |
 | a field that says whether it is set (`optional`, a message, a member of a `oneof`) | `T?` |
 | `google.protobuf.Timestamp` | `timestamp` |
+| `google.type.Date` | `date` |
 | `Struct`, `Value`, `ListValue`, `Any` | `json` |
 | `Empty` | a record with no fields |
 | `Duration`, `FieldMask` | `string` |
@@ -232,8 +339,8 @@ description: the table that makes a type is the one the task is held to.
   so is a name after an OpenAPI document or a Smithy model, which make no types.
 
 ```text
-error[E002]: tests/fixtures/proto_types.flow:27:11: there is no type `types.Stok`
-    27 |   stock : types.Stok
+error[E002]: tests/fixtures/proto_types.flow:23:11: there is no type `types.Stok`
+    23 |   stock : types.Stok
   = the messages and enums of `types` are Box, Everything, Everything.Nested, GetRequest, Line, Mode, Status, Ticket
 ```
 
@@ -270,7 +377,8 @@ error[E014]: tests/fixtures/proto_ranges.flow:41:1: `many` can be outside `>=1 <
   options, and nothing in it is a type a flow uses, so the `.proto` is read all the same and the file is
   passed over. A type that only such a file has is not known: a message with a field of one cannot be
   made (E002), a method that takes or answers one cannot be held to a task (E016), and the diagnostic
-  names the files that were not read.
+  names the files that were not read. `google/type/date.proto` is not one of them: its date is known
+  by its name.
 
 ```text
 error[E002]: tests/fixtures/proto_unread.flow:11:12: `catalog.Priced` cannot be made: its field `price` is of the type `google.type.Money`, which is not known; write the record yourself, with `json` for `price`
@@ -410,6 +518,14 @@ The enum keeps its values, and its order if the file writes it with `<`, so a ra
 in this flow. A file that is not there, is a rule, or does not pass rulec's check is E005; an enum the
 file does not have is E002; a name the flow already has is E006. The code of every platform is that
 of the same enum written in the flow.
+
+An enum is one type by every name it is read by, as long as it is one enum of one file: the flow's
+`import enum`, the `<rule>.<enum>` of a rule that reads it with `import enum`, and that of the
+`enums` file read with `use rule`. So the flow hands a value of it to every rule that reads the same
+file, and the code of each platform keeps the names the flow and the rules write. An enum the flow
+writes, or a rule declares, is an enum of its own, another type even with the same values (E003,
+whose note says where each is declared); put it in an `enums` file to share it. The page `dandori
+doc` writes lists the names of one enum when the flow reads it by more than one.
 
 The order example for AWS calls its urgency rule this way
 ([order.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/order/aws/order.flow)), and the tests

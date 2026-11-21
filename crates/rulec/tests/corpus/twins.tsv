@@ -76,3 +76,9 @@ Claude利用料.rule	claude_api_usage_fee.rule
 注文の起きること.rule	order_happens.rule
 なんでも取り消す注文.rule	order_cancels_everything.rule
 修理の見積り.rule	repair_quote.rule
+カード手数料.rule	card_fee.rule
+明細の小計.rule	order_line_subtotals.rule
+さいころの合計.rule	dice_total.rule
+シーズン券.rule	season_ticket.rule
+贈り物のかご.rule	gift_basket.rule
+小包のまとめ出荷.rule	parcel_batch.rule

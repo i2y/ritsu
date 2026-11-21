@@ -1,0 +1,76 @@
+workflow python_tasks v1
+description "Tasks named as what the code of Python reads where it runs them: a type it imports, the builtins it calls, and the names the activities have for themselves. Each is read into a variable of its name. The code reads its own by other names, and the flow runs on every platform"
+
+inputs
+  id : string
+
+outputs
+  text : string
+
+# tasks you implement, named as what the class of your tasks and the graph read
+task Any(id: string) -> string
+task dict(id: string) -> string
+task str(id: string) -> string
+task int(id: string) -> string
+task OwnTasks(id: string) -> string
+task io(id: string) -> string
+
+# tasks dandori writes, named as what the activities read
+task JEV(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task RULES(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task SCHEMAS(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task T(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task activity(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task beating(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task fail(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task list(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task own(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task transport(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+flow
+  let Any = Any(id: id)
+  let dict = dict(id: id)
+  let str = str(id: id)
+  let int = int(id: id)
+  let OwnTasks = OwnTasks(id: id)
+  let io = io(id: id)
+  let JEV = JEV(id: id)
+  let RULES = RULES(id: id)
+  let SCHEMAS = SCHEMAS(id: id)
+  let T = T(id: id)
+  let activity = activity(id: id)
+  let beating = beating(id: id)
+  let fail = fail(id: id)
+  let list = list(id: id)
+  let own = own(id: id)
+  let transport = transport(id: id)
+  succeed text = "{Any}{dict}{str}{int}{OwnTasks}{io}{JEV}{RULES}{SCHEMAS}{T}{activity}{beating}{fail}{list}{own}{transport}"

@@ -1,0 +1,7 @@
+warning[W201]: tests/mutants/W201_Rustの予約語.ringi:5:1: What the field `実装` is lowered to has a warning from rulec: `impl` is a keyword in a target language, so the generated code writes it as `impl_`
+     5 |   実装(impl)   : choice "作り方"
+  = From rulec: W121 at line 8 of the lowered `route.rule`
+  = Rust, Wasm: it is a keyword there. Every language's generated code writes this name as `impl_`, and `rulec api` names it so; the name a value travels under (the keys of the input JSON, the records) stays the one declared.
+  = For the generated code to use the name as it is, choose another ASCII name (for a name in Japanese, the one in brackets).
+ok tests/mutants/W201_Rustの予約語.ringi: a request, 2 fields, 1 stage
+  may never end: the stage `決裁` has no deadline (`due in …`), and waits until it is answered

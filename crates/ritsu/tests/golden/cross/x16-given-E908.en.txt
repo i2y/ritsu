@@ -1,0 +1,9 @@
+returns.flow: ok
+refunds.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+error[ritsu E908]: returns.flow:15: The task `refund_order` calls openapi "orders.json" operation refundOrder, and the action `refund_order` of refunds.gate that guards it allows the workflow `returns` in no combination this call can come to
+    15 |   refund_order(orderId: order, amount: amount)
+  = Where the flow makes this call, `amount` (what the call gives, `amount`) is 1GBP to 50GBP.
+  = Every run that comes to the call is denied there.
+  = The gate allows the workflow, for example: workflow returns, Order, amount: 101GBP to 10_000GBP.
+  = Make the call where the gate allows the workflow, or change the policies of refunds.gate so that they allow it here.
+ritsu check: 2 files (dandori 1, sekisho 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

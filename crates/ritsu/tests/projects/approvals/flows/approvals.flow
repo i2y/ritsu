@@ -1,0 +1,40 @@
+workflow approvals v1
+  now range >=2026-01-01 <=2027-12-31 offset +09:00
+description "An expense request is approved by the roles it names together, then decided by a director"
+
+enum Verdict = approve | send_back | reject
+
+record Joint
+  approvers : list[string]
+
+record StageAnswer
+  verdict  : Verdict
+  approver : string
+
+inputs
+  request_id : string
+  amount     : money[JPY]  range >=1JPY <=10_000_000JPY
+  roles      : list[string]
+
+outputs
+  approvers  : list[string]
+  decided_by : string
+
+task joint(request_id: string, amount: money[JPY]  range >=1JPY <=10_000_000JPY, roles: list[string]) -> Joint
+  flow "joint.flow"
+  errors Expired, SentBack, Rejected
+  timeout 60 days
+
+task decide(request_id: string, role: string, amount: money[JPY]  range >=1JPY <=10_000_000JPY) -> StageAnswer
+  flow "stage.flow"
+  errors Expired
+  timeout 30 days
+
+flow
+  let j = joint(request_id: request_id, amount: amount, roles: roles)
+  let d = decide(request_id: request_id, role: "director", amount: amount)
+  match d.verdict
+    approve => pass
+    send_back => fail SentBack "{d.approver} sent it back"
+    reject => fail Rejected "{d.approver} rejected it"
+  succeed approvers = j.approvers, decided_by = d.approver

@@ -1,0 +1,5 @@
+warning[W402]: tests/spellings/python_field.gate:18:1: The attribute `class` of the type `Seat` is written `class` in the code of Python, a reserved word of the language
+    18 |     class : seat_class
+  = Python (`--target python`): the attribute `class` of the type `Seat` is written `class` as a field of its record, and `class` is a reserved word of Python: the module does not load (`SyntaxError`), nor pass `mypy --strict`.
+  = For a target you do not build, leave it as it is. For one you do, change its alias. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/python_field.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

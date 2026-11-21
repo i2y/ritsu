@@ -1,6 +1,6 @@
 # plain_tasks v1
 
-Tasks you implement named as the builtins of Python the code never reads, each read into a variable of its name.
+Tasks you implement named as the builtins of Python the code never reads, and as a name of Python's typing it reads by another name, each read into a variable of its name.
 
 `tests/flows/plain_tasks.flow`, drawn by `dandori doc`. Inputs: `id: string`. Outputs: `text: string`.
 
@@ -27,7 +27,9 @@ flowchart TD
     s16["slice = slice(…)<br>a task you write"]
     s17["sum = sum(…)<br>a task you write"]
     s18["vars = vars(…)<br>a task you write"]
-    s19(["succeed text = #quot;{bytes}{callable}{filter}{format}{froze…"])
+    s19["TypeError = TypeError(…)<br>a task you write"]
+    s20["TypeGuard = TypeGuard(…)<br>a task you write"]
+    s21(["succeed text = #quot;{bytes}{callable}{filter}{format}{froze…"])
     start --> s1
     s1 --> s2
     s2 --> s3
@@ -47,9 +49,11 @@ flowchart TD
     s16 --> s17
     s17 --> s18
     s18 --> s19
+    s19 --> s20
+    s20 --> s21
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s19 ok
+    class s21 ok
 ```
 
 A rectangle is a task, one with a line down each side a rule, a slanted one a task whose value comes from outside (an event, or the answer to a callback), a hexagon a `match`, a rounded box a wait, and a box around steps a loop. A dashed arrow is an error the call handles.
@@ -58,24 +62,26 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 30 | `bytes = bytes(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 31 | `callable = callable(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 32 | `filter = filter(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 33 | `format = format(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 34 | `frozenset = frozenset(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 35 | `hasattr = hasattr(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 36 | `hash = hash(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 37 | `iter = iter(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 38 | `map = map(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 39 | `object = object(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 40 | `open = open(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 41 | `print = print(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 42 | `repr = repr(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 43 | `reversed = reversed(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 44 | `setattr = setattr(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 45 | `slice = slice(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 46 | `sum = sum(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
-| 47 | `vars = vars(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 32 | `bytes = bytes(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 33 | `callable = callable(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 34 | `filter = filter(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 35 | `format = format(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 36 | `frozenset = frozenset(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 37 | `hasattr = hasattr(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 38 | `hash = hash(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 39 | `iter = iter(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 40 | `map = map(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 41 | `object = object(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 42 | `open = open(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 43 | `print = print(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 44 | `repr = repr(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 45 | `reversed = reversed(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 46 | `setattr = setattr(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 47 | `slice = slice(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 48 | `sum = sum(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 49 | `vars = vars(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 50 | `TypeError = TypeError(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
+| 51 | `TypeGuard = TypeGuard(…)` | a task you write | — | — | `timeout`, `failure` → the workflow fails |
 
 ## Ends
 
@@ -83,5 +89,5 @@ Every way the workflow can end.
 
 | Line | End |
 |---:|---|
-| 48 | `succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}"` |
+| 52 | `succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}{TypeError}{TypeGuard}"` |
 

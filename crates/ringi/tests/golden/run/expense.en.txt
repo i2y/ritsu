@@ -1,0 +1,29 @@
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day; hold budget.reserve 1_200_000 JPY
+2026-11-16 15:00  approve  by e1101  -> second (dept_head: e3101; accounting: one of e1001, e1002), due 2026-11-19 end of day
+2026-11-17 11:00  approve  by e1001  -> second (dept_head: e3101), due 2026-11-19 end of day
+2026-11-17 16:00  approve  by e3101  -> decide (e0101), due 2026-11-20 end of day
+2026-11-18 09:30  approve  by e0101  -> approved; launch pay; post budget.reserve
+the book `budget` at the end: dept_budget(sales1) 3_800_000 JPY, allocations -5_000_000 JPY, payees 1_200_000 JPY
+  the hold `reserve` (T-1, attempt-1): posted
+scenario `a_joint_purchase`: as written (5 rows)
+
+2026-11-16 10:00  submit             by e1201  -> decide (flow travel_decision), due 2026-11-19 end of day; ask flow travel_decision; hold budget.reserve 28_000 JPY
+2026-11-16 10:01  agent answered ok            -> approved; launch pay; post budget.reserve
+the book `budget` at the end: dept_budget(sales1) 4_972_000 JPY, allocations -5_000_000 JPY, payees 28_000 JPY
+  the hold `reserve` (T-1, attempt-1): posted
+scenario `a_day_trip_the_agent_decides`: as written (2 rows)
+
+2026-11-16 10:00  submit                                                  by e1201  -> decide (flow travel_decision), due 2026-11-19 end of day; ask flow travel_decision; hold budget.reserve 29_500 JPY
+2026-11-16 10:01  agent answered doubt "The fare is above the usual one"            -> decide (e1101), due 2026-11-19 end of day
+2026-11-16 14:00  approve                                                 by e1101  -> approved; launch pay; post budget.reserve
+the book `budget` at the end: dept_budget(sales1) 4_970_500 JPY, allocations -5_000_000 JPY, payees 29_500 JPY
+  the hold `reserve` (T-1, attempt-1): posted
+scenario `a_trip_the_agent_doubts`: as written (3 rows)
+
+2026-11-16 10:00  submit    by e1201  -> first (e1101), due 2026-11-19 end of day; hold budget.reserve 118_000 JPY
+2026-11-16 15:00  approve   by e1101  -> decide (e3101), due 2026-11-19 end of day
+2026-11-17 09:00  withdraw  by e1201  -> with requester, resubmit by 2026-11-20 end of day; comment "The customer has put the visit off to spring"; void budget.reserve
+2026-11-17 09:05  discard   by e1201  -> withdrawn
+the book `budget` at the end: dept_budget(sales1) 5_000_000 JPY, allocations -5_000_000 JPY, payees 0 JPY
+  the hold `reserve` (T-1, attempt-1): voided
+scenario `a_trip_called_off`: as written (4 rows)

@@ -1,0 +1,11 @@
+diff --git a/rules/refund_band.rule b/rules/refund_band.rule
+index 8739e4d..e09b6e6 100644
+--- a/rules/refund_band.rule
++++ b/rules/refund_band.rule
+@@ -1,5 +1,5 @@
+ rule refund_band v1
+-description "How large a refund is, by the items sent back: the band of the size the rule refund_size gives, which this rule applies"
++description "How large a refund is, by the items sent back: the band of the size the rule refund_size gives, which this rule applies to the items"
+ 
+ enum band = small | large
+ 

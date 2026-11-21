@@ -1,0 +1,22 @@
+workflow クライアントのキーワード v1 implements svc.Svc
+description "TypeScript のクライアントが宣言できない語と同じ名前の、メソッドとメッセージです。"
+
+use proto svc from "protos/クライアントのキーワード.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task 待つ() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = 待つ()
+    on timeout => fail Late "知らせがありません"
+  succeed id = "{id} {s.note}"

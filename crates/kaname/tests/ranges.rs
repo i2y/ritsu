@@ -56,6 +56,10 @@ fn modules() -> Vec<(String, Rc<Checked>)> {
         ("hof.ja", include_str!("modules/hof.ja.kn")),
         ("trees", include_str!("modules/trees.kn")),
         ("trees.ja", include_str!("modules/trees.ja.kn")),
+        ("one_arm", include_str!("modules/one_arm.kn")),
+        ("one_arm.ja", include_str!("modules/one_arm.ja.kn")),
+        ("absent", include_str!("modules/absent.kn")),
+        ("absent.ja", include_str!("modules/absent.ja.kn")),
     ] {
         let o = common::check_text("t.kn", src);
         out.push((name.to_string(), o.analysed.clone().unwrap_or_else(|| panic!("{name}: {}", common::shown(&o, Lang::En)))));
@@ -386,6 +390,22 @@ fn what_the_arms_of_a_match_narrow() {
     assert_eq!(codes(&format!("{wide}fn f(x: Narrow, k: number range >=0 <=100) -> Narrow\n  Narrow {{ ..x, m: k }}\n")), ["E301"]);
 }
 
+/// The item of `indexed[T]` and the value of `entry[K, V]` are of the fields `T` and `V` declare
+/// (DESIGN 24.3): given on to a function that takes the record, a field with no range (an optional
+/// date, a list with no count) is of the values of its type, as it is when the record itself is
+/// given, and the functions are total.
+#[test]
+fn the_fields_of_a_builtin_record_are_as_their_type_declares() {
+    let head = "module m v1\n\nrecord S\n  d  : date?\n  xs : list[string]\n\nfn f(s: S) -> number total\n  1\n\n";
+    for body in [
+        "fn g(x: indexed[S]) -> number total\n  f(s: x.item)\n\nfn h(ys: list[S]) -> list[number] total\n  ys.indexed().map(x => g(x: x))\n",
+        "fn k(e: entry[string, S]) -> number total\n  f(s: e.value)\n\nfn h(m: dict[string, S]) -> list[number] total\n  m.entries().map(e => k(e: e))\n",
+    ] {
+        let o = common::check_text("m.kn", &format!("{head}{body}"));
+        assert_eq!(common::codes(&o), Vec::<&str>::new(), "{}", common::shown(&o, Lang::En));
+    }
+}
+
 /// What a branch narrows and what is known after a call answers (DESIGN 5.3): the days given a rule
 /// once it answered, a list's count once `count(xs) = 0` is false, the difference of two names whose
 /// order a condition keeps.
@@ -485,9 +505,9 @@ fn a_rule_output_with_no_range_takes_the_whole_of_its_type() {
     let o = check(&format!("{head}fn f({given}) -> number\n  g(xs: [{call}])\n\nprivate fn g(xs: list[money[JPY]] range >=0JPY <=10_000JPY count <=20) -> number\n  count(xs)\n"));
     assert_eq!(common::codes(&o), ["W301"]);
     let (en, ja) = (common::shown(&o, Lang::En), common::shown(&o, Lang::Ja));
-    assert!(en.contains(&format!("Whether each element of `[{call}]` stays in >=0JPY <=10000JPY, the range of the parameter `xs` of `g`, cannot be decided")), "{en}");
+    assert!(en.contains(&format!("Whether each element of `[{call}]` stays in >=0JPY <=10_000JPY, the range of the parameter `xs` of `g`, cannot be decided")), "{en}");
     assert!(en.contains(&format!("The analysis of ranges finds no bound on each element of `[{call}]`")), "{en}");
-    assert!(ja.contains(&format!("`[{call}]` の要素が、関数 `g` の引数 `xs` の範囲 >=0JPY <=10000JPY に収まるかを決められません")), "{ja}");
+    assert!(ja.contains(&format!("`[{call}]` の要素が、関数 `g` の引数 `xs` の範囲 >=0JPY <=10_000JPY に収まるかを決められません")), "{ja}");
     assert!(!en.contains("9223372036854775807") && !ja.contains("9223372036854775807"), "{en}\n{ja}");
     // a count written, and a list whose count is not: W301 of the count
     let o = check("module m v1\n\nfn f(ys: list[money[JPY]] range >=0JPY <=10JPY) -> number\n  g(xs: ys)\n\nprivate fn g(xs: list[money[JPY]] count <=20) -> number\n  count(xs)\n");

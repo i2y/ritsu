@@ -1,0 +1,32 @@
+rule さいころの合計(dice_total_ja) v1
+description "さいころを二つ振って景品を決める。合計は 10 までしか受け付けないので、11 と 12 の目は受け付けず、合計が 8 以上なら大きい景品になる。確率は規則が答える目だけで数える。乱数の入力から計算する値に範囲を付ける例"
+
+enum 景品(prize) = 小(small) | 大(large)
+
+inputs
+  一つ目(first)  : number  range >=1 <=6  random
+  二つ目(second) : number  range >=1 <=6  random
+
+# この範囲は規則が合計として受け付ける値。11 と 12 の目は受け付けない。
+define 合計(total) : number = 一つ目 + 二つ目
+
+outputs
+  景品(prize) : 景品
+
+table 景品表(prize_of)
+policy unique
+| 合計 | -> 景品 |
+| <8   | 小      |
+| >=8  | 大      |
+
+# 36 通りの目のうち規則が答えるのは 33 通りで、そのうち 12 通りが合計 8 から 10 になる。
+chances
+| -> 景品 | chance |
+| 大      | 4/11   |
+| 小      | 7/11   |
+
+examples
+| 一つ目 | 二つ目 | -> 景品 |
+| 1      | 1      | 小      |
+| 3      | 5      | 大      |
+| 4      | 6      | 大      |

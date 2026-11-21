@@ -1,0 +1,15 @@
+request 例(example) v1 "例"
+
+use route 簡単(simple) from "shared/簡単.ringi"
+use route 厳しい(strict) from "shared/厳しい.ringi"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=1_000_000円
+
+route
+| 金額         | -> route |
+| <=100_000円  | 簡単     |
+| >200_000円   | 厳しい   |
+
+ticket
+  self approval  not allowed

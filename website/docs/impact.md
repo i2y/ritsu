@@ -32,7 +32,9 @@ say anything of its own about what a file means.
   includes what a file reads: a gate reading a calendar moves when the calendar does, and a gate with a
   date condition shows nothing when an unrelated file changes.
 - **The owners**: `yuen affected` of the change: the requirements it reaches, their owners, and the
-  changes no requirement reaches. A project with no `.req` is told as one.
+  changes no requirement reaches. A change reaches a requirement through the files the linked files
+  read too: the organization and the shared routes an application uses, the rules a rule applies, the
+  calendar a dates file uses. A project with no `.req` is told as one.
 - **The claims**: `geas affected` of the change: the claims it touches, and the changed lines no claim
   runs. Without a record that fits the code (`.geas/<name>.map.jsonl`), the report says it does not know,
   and every changed line of code counts as one no claim runs.
@@ -78,7 +80,7 @@ The inputs of the rule are named after the facts below, by their names or their 
 the same checks as any other rule. Its outputs are all given. This is the example's:
 
 ```rule
-define moved : number = rule_changes + date_changes + allow_gained + allow_lost + policies_moved + book_changes + interface_changes + interface_breaks + requirements_moved
+define moved : number = rule_changes + date_changes + allow_gained + allow_lost + policies_moved + book_changes + interface_changes + interface_breaks + requirements_moved + requirements_read
 define unread : number = undecided + generated_unchecked + opaque_specs + unclaimed_lines + other_files + new_warnings
 
 table route
@@ -115,6 +117,29 @@ Whatever the report knows nothing of goes to a person: a contract a spec reads, 
 a requirement rests on that claim (`requirements_moved`), because a claim running a line does not say the
 claim would notice the line going wrong.
 
+A change can reach a requirement through a file the files it names only read: the calendar a dates file
+uses, a rule a gate uses. Those requirements are counted apart, in `requirements_read`, and the example
+sends them to their owners like the others, because what a file reads is what its answers rest on. A
+project that would rather let such a change through when it moves no answer leaves that fact out of
+`moved`, and out of its inputs:
+
+```rule
+define moved : number = rule_changes + date_changes + allow_gained + allow_lost + policies_moved + book_changes + interface_changes + interface_breaks + requirements_moved
+```
+
+With that rule, a change to the description of the office's calendar goes to merge, where the example
+sends it to the owners. A change to the description of the dates file a requirement names still goes to
+its owner, and so does a change that moves an answer:
+
+```text
+$ ritsu impact --base base --route route.rule
+No answer moved; route: route = owner_reads, person_reads = true; owners: finance.
+$ ritsu impact --base base --route without_read.rule
+No answer moved; route: route = merge, person_reads = false; owners: finance.
+```
+
+Both runs count `requirements_moved = 0` and `requirements_read = 2`.
+
 A rule that cannot take the facts stops the run with exit 2, before anything is compared: an input named
 after no fact (every name is listed), an input of another type than its fact. A value outside the range
 of an input is said, with its name, its value and the range, and is not rounded: the report still comes
@@ -134,10 +159,11 @@ Counts are `number` inputs, 0 or more, and the rest are `bool`.
 | `allow_gained`, `allow_lost` | the combinations a gate now allows or denies that it did not |
 | `policies_moved` | the combinations with the same answer from other policies, what only one version of a gate has, and the gates added or removed |
 | `book_changes` | the changes to what a `.book` offers, and the books added or removed |
+| `request_changes` | what `ringi diff` lists of each `.ringi`: the ranges of requests whose stages change, the changes of each section, and the requesters whose approvers change; and the `.ringi` files added or removed |
 | `interface_changes`, `interface_breaks` | the changes to what files offer the code that uses them, and those that can break it. A `fed by` line added, dropped or moved counts as a change here, because dropping one loosens what the check holds |
 | `undecided` | what could not be compared or decided |
 | `opaque_specs` | the changed `.flow`, `.kn`, `.ctx`, `.geas` and `.proto` files, whose contents are not compared |
-| `requirements_moved`, `requirements_unknown` | the requirements that moved, and the changed specs and code no requirement reaches |
+| `requirements_moved`, `requirements_read`, `requirements_unknown` | the requirements that moved through what they are or name (their own words, a linked file, a copy they cite, a claim), those the change reaches only through a file the linked files read, and the changed specs and code no requirement reaches. A requirement is counted in one of the first two, never in both |
 | `claims_touched`, `unclaimed_lines` | the claims the change touches, and the changed lines of code no claim is known to run: those it does not run, an added line the record holds no statement on (a table, a constant; a comment on its own line is left out), and a file whose diff has no line |
 | `claims_known` | whether every `.geas` has a record that fits the change |
 | `generated_stale`, `generated_checked` | whether a generated file is stale, and whether that was checked at all |

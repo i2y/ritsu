@@ -1,0 +1,435 @@
+scenario 取締役会で決議する購買, line 90: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, line 91: approve by e1101 at 2026-11-16 14:00 -> 財務, in progress
+scenario 取締役会で決議する購買, line 92: approve by e4001 at 2026-11-17 10:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, line 93: approve by e0201 at 2026-11-18 10:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, line 94: approve by e0202 at 2026-11-18 11:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, line 95: approve by e0203 at 2026-11-18 15:00 -> 決裁, in progress
+scenario 取締役会で決議する購買, line 96: approve by e0001 at 2026-11-19 10:00 -> approved
+scenario 取締役会で決議する購買, after it ended: comment by e1201 at 2026-11-19 10:00 -> refused (state)
+scenario 取締役会で決議する購買, after line 90: approvals: approve by e1101 at 2026-11-16 10:00 -> 財務, in progress
+scenario 取締役会で決議する購買, after line 90: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario 取締役会で決議する購買, after line 90: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario 取締役会で決議する購買, after line 90: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario 取締役会で決議する購買, after line 90: the requester: comment by e1201 at 2026-11-16 10:00 -> with requester
+scenario 取締役会で決議する購買, after line 90: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario 取締役会で決議する購買, after line 90: sent back: resubmit by e1201 at 2026-11-17 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario 取締役会で決議する購買, after line 90: sent back: comment by e1101 at 2026-11-16 10:00 -> with requester
+scenario 取締役会で決議する購買, after line 90: sent back: comment by e1201 at 2026-11-16 10:00 -> with requester
+scenario 取締役会で決議する購買, after line 90: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 取締役会で決議する購買, after line 90: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario 取締役会で決議する購買, after line 90: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario 取締役会で決議する購買, after line 90: an administrator: add approver at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: an administrator: hand over at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: an administrator, by name: add approver by e0101 at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: an administrator, by name: hand over by e0101 at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: clocks: remind at 2026-11-19 09:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: clocks: late at 2026-11-24 00:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: clocks: remind at 2026-11-27 09:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: clocks: late at 2026-12-02 00:00 -> expired
+scenario 取締役会で決議する購買, after line 90: clocks: remind at 2026-11-19 08:59 -> refused (clock)
+scenario 取締役会で決議する購買, after line 90: clocks: approve by e1101 at 2026-11-19 09:00 -> refused (clock)
+scenario 取締役会で決議する購買, after line 90: clocks: comment by e1101 at 2026-11-19 09:00 -> refused (clock)
+scenario 取締役会で決議する購買, after line 90: comments: comment by e1101 at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: comments: comment by e1201 at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario 取締役会で決議する購買, after line 90: comments: comment by e1101 at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario 取締役会で決議する購買, after line 90: comments: approve by e1101 at 2026-11-16 10:00 -> 財務, in progress
+scenario 取締役会で決議する購買, after line 90: comments: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario 取締役会で決議する購買, after line 90: comments: approve by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario 取締役会で決議する購買, after line 90: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario 取締役会で決議する購買, after line 90: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> with requester
+scenario 取締役会で決議する購買, after line 90: sent back to the limit: resubmit by e1201 at 2026-11-19 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 90: sent back to the limit: send back by e1101 at 2026-11-19 10:00 -> refused (limit)
+scenario 取締役会で決議する購買, after line 91: approvals: approve by e4001 at 2026-11-16 14:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, after line 91: rejections: reject by e4001 at 2026-11-16 14:00 -> rejected
+scenario 取締役会で決議する購買, after line 91: the requester: approve by e1201 at 2026-11-16 14:00 -> refused (person)
+scenario 取締役会で決議する購買, after line 91: the requester: withdraw by e1201 at 2026-11-16 14:00 -> with requester
+scenario 取締役会で決議する購買, after line 91: sent back: send back by e4001 at 2026-11-16 14:00 -> with requester
+scenario 取締役会で決議する購買, after line 91: sent back: resubmit by e1201 at 2026-11-17 14:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 91: sent back: discard by e1201 at 2026-11-16 14:00 -> withdrawn
+scenario 取締役会で決議する購買, after line 91: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 取締役会で決議する購買, after line 91: sent back: send back by e4001 at 2026-11-16 14:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 91: retracted: retract by e1101 at 2026-11-16 14:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 91: clocks: remind at 2026-11-19 09:00 -> 財務, in progress
+scenario 取締役会で決議する購買, after line 91: clocks: late at 2026-11-24 00:00 -> 財務, in progress
+scenario 取締役会で決議する購買, after line 91: clocks: remind at 2026-11-27 09:00 -> 財務, in progress
+scenario 取締役会で決議する購買, after line 91: clocks: late at 2026-12-02 00:00 -> expired
+scenario 取締役会で決議する購買, after line 92: approvals: approve by e0001 at 2026-11-17 10:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, after line 92: approvals: approve by e0201 at 2026-11-17 10:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, after line 92: approvals: approve by e0202 at 2026-11-17 10:00 -> 決裁, in progress
+scenario 取締役会で決議する購買, after line 92: rejections: reject by e0001 at 2026-11-17 10:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, after line 92: rejections: reject by e0201 at 2026-11-17 10:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, after line 92: rejections: reject by e0202 at 2026-11-17 10:00 -> rejected
+scenario 取締役会で決議する購買, after line 92: the requester: approve by e1201 at 2026-11-17 10:00 -> refused (person)
+scenario 取締役会で決議する購買, after line 92: the requester: withdraw by e1201 at 2026-11-17 10:00 -> with requester
+scenario 取締役会で決議する購買, after line 92: sent back: send back by e0001 at 2026-11-17 10:00 -> with requester
+scenario 取締役会で決議する購買, after line 92: sent back: resubmit by e1201 at 2026-11-18 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 92: sent back: discard by e1201 at 2026-11-17 10:00 -> withdrawn
+scenario 取締役会で決議する購買, after line 92: sent back: resubmit late at 2026-12-02 00:00 -> expired
+scenario 取締役会で決議する購買, after line 92: sent back: send back by e0001 at 2026-11-17 10:00 -> 財務, in progress
+scenario 取締役会で決議する購買, after line 92: retracted: retract by e4001 at 2026-11-17 10:00 -> 財務, in progress
+scenario 取締役会で決議する購買, after line 92: clocks: remind at 2026-11-20 09:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, after line 92: clocks: late at 2026-12-02 00:00 -> expired
+scenario 取締役会で決議する購買, after line 95: approvals: approve by e0001 at 2026-11-18 15:00 -> approved
+scenario 取締役会で決議する購買, after line 95: rejections: reject by e0001 at 2026-11-18 15:00 -> rejected
+scenario 取締役会で決議する購買, after line 95: the requester: approve by e1201 at 2026-11-18 15:00 -> refused (person)
+scenario 取締役会で決議する購買, after line 95: the requester: withdraw by e1201 at 2026-11-18 15:00 -> with requester
+scenario 取締役会で決議する購買, after line 95: sent back: send back by e0001 at 2026-11-18 15:00 -> with requester
+scenario 取締役会で決議する購買, after line 95: sent back: resubmit by e1201 at 2026-11-19 15:00 -> 一次, in progress
+scenario 取締役会で決議する購買, after line 95: sent back: discard by e1201 at 2026-11-18 15:00 -> withdrawn
+scenario 取締役会で決議する購買, after line 95: sent back: resubmit late at 2026-12-03 00:00 -> expired
+scenario 取締役会で決議する購買, after line 95: sent back: send back by e0001 at 2026-11-18 15:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, after line 95: retracted: retract by e0203 at 2026-11-18 15:00 -> 取締役会, in progress
+scenario 取締役会で決議する購買, after line 95: clocks: remind at 2026-11-23 09:00 -> 決裁, in progress
+scenario 取締役会で決議する購買, after line 95: clocks: late at 2026-11-26 00:00 -> expired
+scenario 半分を前払いする購買, line 104: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+scenario 半分を前払いする購買, line 105: approve by e1101 at 2026-11-16 11:00 -> 財務, in progress
+scenario 半分を前払いする購買, line 106: approve by e4001 at 2026-11-16 14:00 -> 決裁, in progress
+scenario 半分を前払いする購買, line 107: approve by e3101 at 2026-11-17 10:00 -> approved
+scenario 半分を前払いする購買, after line 104: approvals: approve by e1101 at 2026-11-16 10:00 -> 財務, in progress
+scenario 半分を前払いする購買, after line 104: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario 半分を前払いする購買, after line 104: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario 半分を前払いする購買, after line 104: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario 半分を前払いする購買, after line 104: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario 半分を前払いする購買, after line 104: sent back: resubmit by e1201 at 2026-11-17 10:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 104: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario 半分を前払いする購買, after line 104: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 半分を前払いする購買, after line 104: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario 半分を前払いする購買, after line 104: an administrator: add approver at 2026-11-16 10:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 104: an administrator: hand over at 2026-11-16 10:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 104: clocks: remind at 2026-11-19 09:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 104: clocks: late at 2026-11-24 00:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 104: clocks: remind at 2026-11-27 09:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 104: clocks: late at 2026-12-02 00:00 -> expired
+scenario 半分を前払いする購買, after line 104: clocks: remind at 2026-11-19 08:59 -> refused (clock)
+scenario 半分を前払いする購買, after line 104: clocks: approve by e1101 at 2026-11-19 09:00 -> refused (clock)
+scenario 半分を前払いする購買, after line 104: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario 半分を前払いする購買, after line 104: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 104: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> with requester
+scenario 半分を前払いする購買, after line 104: sent back to the limit: resubmit by e1201 at 2026-11-19 10:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 104: sent back to the limit: send back by e1101 at 2026-11-19 10:00 -> refused (limit)
+scenario 半分を前払いする購買, after line 105: approvals: approve by e4001 at 2026-11-16 11:00 -> 決裁, in progress
+scenario 半分を前払いする購買, after line 105: rejections: reject by e4001 at 2026-11-16 11:00 -> rejected
+scenario 半分を前払いする購買, after line 105: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
+scenario 半分を前払いする購買, after line 105: the requester: withdraw by e1201 at 2026-11-16 11:00 -> with requester
+scenario 半分を前払いする購買, after line 105: sent back: send back by e4001 at 2026-11-16 11:00 -> with requester
+scenario 半分を前払いする購買, after line 105: sent back: resubmit by e1201 at 2026-11-17 11:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 105: sent back: discard by e1201 at 2026-11-16 11:00 -> withdrawn
+scenario 半分を前払いする購買, after line 105: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 半分を前払いする購買, after line 105: sent back: send back by e4001 at 2026-11-16 11:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 105: retracted: retract by e1101 at 2026-11-16 11:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 105: clocks: remind at 2026-11-19 09:00 -> 財務, in progress
+scenario 半分を前払いする購買, after line 105: clocks: late at 2026-11-24 00:00 -> 財務, in progress
+scenario 半分を前払いする購買, after line 105: clocks: remind at 2026-11-27 09:00 -> 財務, in progress
+scenario 半分を前払いする購買, after line 105: clocks: late at 2026-12-02 00:00 -> expired
+scenario 半分を前払いする購買, after line 106: approvals: approve by e3101 at 2026-11-16 14:00 -> approved
+scenario 半分を前払いする購買, after line 106: rejections: reject by e3101 at 2026-11-16 14:00 -> rejected
+scenario 半分を前払いする購買, after line 106: the requester: approve by e1201 at 2026-11-16 14:00 -> refused (person)
+scenario 半分を前払いする購買, after line 106: the requester: withdraw by e1201 at 2026-11-16 14:00 -> with requester
+scenario 半分を前払いする購買, after line 106: sent back: send back by e3101 at 2026-11-16 14:00 -> with requester
+scenario 半分を前払いする購買, after line 106: sent back: resubmit by e1201 at 2026-11-17 14:00 -> 一次, in progress
+scenario 半分を前払いする購買, after line 106: sent back: discard by e1201 at 2026-11-16 14:00 -> withdrawn
+scenario 半分を前払いする購買, after line 106: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 半分を前払いする購買, after line 106: sent back: send back by e3101 at 2026-11-16 14:00 -> 財務, in progress
+scenario 半分を前払いする購買, after line 106: retracted: retract by e4001 at 2026-11-16 14:00 -> 財務, in progress
+scenario 半分を前払いする購買, after line 106: clocks: remind at 2026-11-19 09:00 -> 決裁, in progress
+scenario 半分を前払いする購買, after line 106: clocks: late at 2026-11-24 00:00 -> 決裁, in progress
+scenario 半分を前払いする購買, after line 106: clocks: remind at 2026-11-27 09:00 -> 決裁, in progress
+scenario 半分を前払いする購買, after line 106: clocks: late at 2026-12-02 00:00 -> expired
+scenario 上長が財務のあとに決裁する, line 115: submit by e3101 at 2026-11-16 10:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, line 116: approve by e4001 at 2026-11-16 14:00 -> 決裁, in progress
+scenario 上長が財務のあとに決裁する, line 117: approve by e0101 at 2026-11-17 10:00 -> approved
+scenario 上長が財務のあとに決裁する, after line 115: approvals: approve by e4001 at 2026-11-16 10:00 -> 決裁, in progress
+scenario 上長が財務のあとに決裁する, after line 115: rejections: reject by e4001 at 2026-11-16 10:00 -> rejected
+scenario 上長が財務のあとに決裁する, after line 115: the requester: approve by e3101 at 2026-11-16 10:00 -> refused (person)
+scenario 上長が財務のあとに決裁する, after line 115: the requester: withdraw by e3101 at 2026-11-16 10:00 -> with requester
+scenario 上長が財務のあとに決裁する, after line 115: sent back: send back by e4001 at 2026-11-16 10:00 -> with requester
+scenario 上長が財務のあとに決裁する, after line 115: sent back: resubmit by e3101 at 2026-11-17 10:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 115: sent back: discard by e3101 at 2026-11-16 10:00 -> withdrawn
+scenario 上長が財務のあとに決裁する, after line 115: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 上長が財務のあとに決裁する, after line 115: sent back: send back by e4001 at 2026-11-16 10:00 -> 一次, in progress
+scenario 上長が財務のあとに決裁する, after line 115: sent back: approve by e0101 at 2026-11-16 10:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 115: sent back: approve by e4001 at 2026-11-16 10:00 -> 決裁, in progress
+scenario 上長が財務のあとに決裁する, after line 115: sent back: approve by e0101 at 2026-11-16 10:00 -> approved
+scenario 上長が財務のあとに決裁する, after line 115: paused: pause by e4001 at 2026-11-16 10:00 -> refused (event)
+scenario 上長が財務のあとに決裁する, after line 115: an administrator: add approver at 2026-11-16 10:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 115: an administrator: hand over at 2026-11-16 10:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 115: clocks: remind at 2026-11-19 09:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 115: clocks: late at 2026-11-24 00:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 115: clocks: remind at 2026-11-27 09:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 115: clocks: late at 2026-12-02 00:00 -> expired
+scenario 上長が財務のあとに決裁する, after line 115: clocks: remind at 2026-11-19 08:59 -> refused (clock)
+scenario 上長が財務のあとに決裁する, after line 115: clocks: approve by e4001 at 2026-11-19 09:00 -> refused (clock)
+scenario 上長が財務のあとに決裁する, after line 115: sent back to the limit: send back by e4001 at 2026-11-17 10:00 -> with requester
+scenario 上長が財務のあとに決裁する, after line 115: sent back to the limit: resubmit by e3101 at 2026-11-18 10:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 115: sent back to the limit: send back by e4001 at 2026-11-18 10:00 -> with requester
+scenario 上長が財務のあとに決裁する, after line 115: sent back to the limit: resubmit by e3101 at 2026-11-19 10:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 115: sent back to the limit: send back by e4001 at 2026-11-19 10:00 -> refused (limit)
+scenario 上長が財務のあとに決裁する, after line 116: approvals: approve by e0101 at 2026-11-16 14:00 -> approved
+scenario 上長が財務のあとに決裁する, after line 116: rejections: reject by e0101 at 2026-11-16 14:00 -> rejected
+scenario 上長が財務のあとに決裁する, after line 116: the requester: approve by e3101 at 2026-11-16 14:00 -> refused (person)
+scenario 上長が財務のあとに決裁する, after line 116: the requester: withdraw by e3101 at 2026-11-16 14:00 -> with requester
+scenario 上長が財務のあとに決裁する, after line 116: sent back: send back by e0101 at 2026-11-16 14:00 -> with requester
+scenario 上長が財務のあとに決裁する, after line 116: sent back: resubmit by e3101 at 2026-11-17 14:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 116: sent back: discard by e3101 at 2026-11-16 14:00 -> withdrawn
+scenario 上長が財務のあとに決裁する, after line 116: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 上長が財務のあとに決裁する, after line 116: sent back: send back by e0101 at 2026-11-16 14:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 116: sent back: send back by e0101 at 2026-11-16 14:00 -> 一次, in progress
+scenario 上長が財務のあとに決裁する, after line 116: sent back: approve by e0101 at 2026-11-16 14:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 116: sent back: approve by e4001 at 2026-11-16 14:00 -> 決裁, in progress
+scenario 上長が財務のあとに決裁する, after line 116: sent back: approve by e0101 at 2026-11-16 14:00 -> approved
+scenario 上長が財務のあとに決裁する, after line 116: retracted: retract by e4001 at 2026-11-16 14:00 -> 財務, in progress
+scenario 上長が財務のあとに決裁する, after line 116: an administrator: add approver at 2026-11-16 14:00 -> 決裁, in progress
+scenario 上長が財務のあとに決裁する, after line 116: an administrator: hand over at 2026-11-16 14:00 -> 決裁, in progress
+scenario 上長が財務のあとに決裁する, after line 116: an administrator: approve by e0001 at 2026-11-16 14:00 -> 一次, in progress
+scenario 上長が財務のあとに決裁する, after line 116: an administrator: approve by e0101 at 2026-11-16 14:00 -> approved
+scenario 上長が財務のあとに決裁する, after line 116: an administrator: approve by e0001 at 2026-11-16 14:00 -> 一次, in progress
+scenario 上長が財務のあとに決裁する, after line 116: an administrator: approve by e0101 at 2026-11-16 14:00 -> approved
+scenario 上長が財務のあとに決裁する, after line 116: clocks: remind at 2026-11-19 09:00 -> 決裁, in progress
+scenario 上長が財務のあとに決裁する, after line 116: clocks: late at 2026-11-24 00:00 -> 決裁, in progress
+scenario 上長が財務のあとに決裁する, after line 116: clocks: remind at 2026-11-27 09:00 -> 決裁, in progress
+scenario 上長が財務のあとに決裁する, after line 116: clocks: late at 2026-12-02 00:00 -> expired
+scenario 上長が財務のあとに決裁する, after line 116: late, and approved where it went up to: approve by e0001 at 2026-11-24 01:00 -> 一次, in progress
+scenario 上長が財務のあとに決裁する, after line 116: late, and approved where it went up to: approve by e0101 at 2026-11-24 01:00 -> approved
+scenario 決裁が上へ回り上長はあとで答える, line 130: approve by e0001 at 2026-11-24 10:00 -> 一次, in progress
+scenario 決裁が上へ回り上長はあとで答える, line 131: approve by e0101 at 2026-11-24 15:00 -> approved
+scenario 決裁が上へ回り上長はあとで答える, after line 130: approvals: approve by e0101 at 2026-11-24 10:00 -> approved
+scenario 決裁が上へ回り上長はあとで答える, after line 130: rejections: reject by e0101 at 2026-11-24 10:00 -> rejected
+scenario 決裁が上へ回り上長はあとで答える, after line 130: the requester: approve by e3101 at 2026-11-24 10:00 -> refused (person)
+scenario 決裁が上へ回り上長はあとで答える, after line 130: the requester: withdraw by e3101 at 2026-11-24 10:00 -> refused (state)
+scenario 決裁が上へ回り上長はあとで答える, after line 130: sent back: send back by e0101 at 2026-11-24 10:00 -> with requester
+scenario 決裁が上へ回り上長はあとで答える, after line 130: sent back: resubmit by e3101 at 2026-11-25 10:00 -> 財務, in progress
+scenario 決裁が上へ回り上長はあとで答える, after line 130: sent back: discard by e3101 at 2026-11-24 10:00 -> withdrawn
+scenario 決裁が上へ回り上長はあとで答える, after line 130: sent back: resubmit late at 2026-12-09 00:00 -> expired
+scenario 決裁が上へ回り上長はあとで答える, after line 130: sent back: send back by e0101 at 2026-11-24 10:00 -> 決裁, in progress
+scenario 決裁が上へ回り上長はあとで答える, after line 130: retracted: retract by e0001 at 2026-11-24 10:00 -> 決裁, in progress
+scenario 決裁が上へ回り上長はあとで答える, after line 130: clocks: remind at 2026-11-27 09:00 -> 一次, in progress
+scenario 決裁が上へ回り上長はあとで答える, after line 130: clocks: late at 2026-12-02 00:00 -> 一次, in progress
+scenario 決裁が上へ回り上長はあとで答える, after line 130: clocks: remind at 2026-12-07 09:00 -> 一次, in progress
+scenario 決裁が上へ回り上長はあとで答える, after line 130: clocks: late at 2026-12-10 00:00 -> expired
+scenario 上長が待つあいだに組織が変わる, line 141: submit by e9002 at 2027-03-30 10:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, line 142: approve by e7201 at 2027-04-01 11:00 -> 決裁, in progress
+scenario 上長が待つあいだに組織が変わる, line 143: approve by e0102 at 2027-04-01 15:00 -> approved
+scenario 上長が待つあいだに組織が変わる, after line 141: approvals: approve by e7201 at 2027-03-30 10:00 -> 決裁, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: rejections: reject by e7201 at 2027-03-30 10:00 -> rejected
+scenario 上長が待つあいだに組織が変わる, after line 141: the requester: approve by e9002 at 2027-03-30 10:00 -> refused (person)
+scenario 上長が待つあいだに組織が変わる, after line 141: the requester: withdraw by e9002 at 2027-03-30 10:00 -> with requester
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back: send back by e7201 at 2027-03-30 10:00 -> with requester
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back: resubmit by e9002 at 2027-03-31 10:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back: discard by e9002 at 2027-03-30 10:00 -> withdrawn
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back: resubmit late at 2027-04-14 00:00 -> expired
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back: send back by e7201 at 2027-03-30 10:00 -> 一次, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back: approve by e9001 at 2027-03-30 10:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back: approve by e7201 at 2027-03-30 10:00 -> 決裁, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back: approve by e9001 at 2027-03-30 10:00 -> approved
+scenario 上長が待つあいだに組織が変わる, after line 141: paused: pause by e7201 at 2027-03-30 10:00 -> refused (event)
+scenario 上長が待つあいだに組織が変わる, after line 141: an administrator: add approver at 2027-03-30 10:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: an administrator: hand over at 2027-03-30 10:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: clocks: remind at 2027-04-02 09:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: clocks: late at 2027-04-07 00:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: clocks: remind at 2027-04-12 09:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: clocks: late at 2027-04-15 00:00 -> expired
+scenario 上長が待つあいだに組織が変わる, after line 141: clocks: remind at 2027-04-02 08:59 -> refused (clock)
+scenario 上長が待つあいだに組織が変わる, after line 141: clocks: approve by e7201 at 2027-04-02 09:00 -> refused (clock)
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back to the limit: send back by e7201 at 2027-03-31 10:00 -> with requester
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back to the limit: resubmit by e9002 at 2027-04-01 10:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back to the limit: send back by e7201 at 2027-04-01 10:00 -> with requester
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back to the limit: resubmit by e9002 at 2027-04-02 10:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 141: sent back to the limit: send back by e7201 at 2027-04-02 10:00 -> refused (limit)
+scenario 上長が待つあいだに組織が変わる, after line 142: approvals: approve by e0102 at 2027-04-01 11:00 -> approved
+scenario 上長が待つあいだに組織が変わる, after line 142: rejections: reject by e0102 at 2027-04-01 11:00 -> rejected
+scenario 上長が待つあいだに組織が変わる, after line 142: the requester: approve by e9002 at 2027-04-01 11:00 -> refused (person)
+scenario 上長が待つあいだに組織が変わる, after line 142: the requester: withdraw by e9002 at 2027-04-01 11:00 -> with requester
+scenario 上長が待つあいだに組織が変わる, after line 142: sent back: send back by e0102 at 2027-04-01 11:00 -> with requester
+scenario 上長が待つあいだに組織が変わる, after line 142: sent back: resubmit by e9002 at 2027-04-02 11:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: sent back: discard by e9002 at 2027-04-01 11:00 -> withdrawn
+scenario 上長が待つあいだに組織が変わる, after line 142: sent back: resubmit late at 2027-04-16 00:00 -> expired
+scenario 上長が待つあいだに組織が変わる, after line 142: sent back: send back by e0102 at 2027-04-01 11:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: sent back: send back by e0102 at 2027-04-01 11:00 -> 一次, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: sent back: approve by e0102 at 2027-04-01 11:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: sent back: approve by e7201 at 2027-04-01 11:00 -> 決裁, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: sent back: approve by e0102 at 2027-04-01 11:00 -> approved
+scenario 上長が待つあいだに組織が変わる, after line 142: retracted: retract by e7201 at 2027-04-01 11:00 -> 技術, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: an administrator: add approver at 2027-04-01 11:00 -> 決裁, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: an administrator: hand over at 2027-04-01 11:00 -> 決裁, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: an administrator: approve by e0001 at 2027-04-01 11:00 -> 一次, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: an administrator: approve by e0102 at 2027-04-01 11:00 -> approved
+scenario 上長が待つあいだに組織が変わる, after line 142: an administrator: approve by e0001 at 2027-04-01 11:00 -> 一次, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: an administrator: approve by e0102 at 2027-04-01 11:00 -> approved
+scenario 上長が待つあいだに組織が変わる, after line 142: clocks: remind at 2027-04-06 09:00 -> 決裁, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: clocks: late at 2027-04-09 00:00 -> 決裁, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: clocks: remind at 2027-04-14 09:00 -> 決裁, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: clocks: late at 2027-04-17 00:00 -> expired
+scenario 上長が待つあいだに組織が変わる, after line 142: late, and approved where it went up to: approve by e0001 at 2027-04-09 01:00 -> 一次, in progress
+scenario 上長が待つあいだに組織が変わる, after line 142: late, and approved where it went up to: approve by e0102 at 2027-04-09 01:00 -> approved
+scenario 取締役会が否決する購買, line 152: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会が否決する購買, line 153: approve by e1101 at 2026-11-16 14:00 -> 財務, in progress
+scenario 取締役会が否決する購買, line 154: approve by e4001 at 2026-11-17 10:00 -> 取締役会, in progress
+scenario 取締役会が否決する購買, line 155: approve by e0201 at 2026-11-18 10:00 -> 取締役会, in progress
+scenario 取締役会が否決する購買, line 156: reject by e0202 at 2026-11-18 11:00 -> 取締役会, in progress
+scenario 取締役会が否決する購買, line 157: reject by e0203 at 2026-11-18 13:00 -> 取締役会, in progress
+scenario 取締役会が否決する購買, line 158: reject by e0204 at 2026-11-18 15:00 -> rejected
+scenario 取締役会が否決する購買, after line 152: approvals: approve by e1101 at 2026-11-16 10:00 -> 財務, in progress
+scenario 取締役会が否決する購買, after line 152: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario 取締役会が否決する購買, after line 152: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario 取締役会が否決する購買, after line 152: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario 取締役会が否決する購買, after line 152: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario 取締役会が否決する購買, after line 152: sent back: resubmit by e1201 at 2026-11-17 10:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 152: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario 取締役会が否決する購買, after line 152: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 取締役会が否決する購買, after line 152: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario 取締役会が否決する購買, after line 152: an administrator: add approver at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 152: an administrator: hand over at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 152: clocks: remind at 2026-11-19 09:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 152: clocks: late at 2026-11-24 00:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 152: clocks: remind at 2026-11-27 09:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 152: clocks: late at 2026-12-02 00:00 -> expired
+scenario 取締役会が否決する購買, after line 152: clocks: remind at 2026-11-19 08:59 -> refused (clock)
+scenario 取締役会が否決する購買, after line 152: clocks: approve by e1101 at 2026-11-19 09:00 -> refused (clock)
+scenario 取締役会が否決する購買, after line 152: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario 取締役会が否決する購買, after line 152: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 152: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> with requester
+scenario 取締役会が否決する購買, after line 152: sent back to the limit: resubmit by e1201 at 2026-11-19 10:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 152: sent back to the limit: send back by e1101 at 2026-11-19 10:00 -> refused (limit)
+scenario 取締役会が否決する購買, after line 153: approvals: approve by e4001 at 2026-11-16 14:00 -> 取締役会, in progress
+scenario 取締役会が否決する購買, after line 153: rejections: reject by e4001 at 2026-11-16 14:00 -> rejected
+scenario 取締役会が否決する購買, after line 153: the requester: approve by e1201 at 2026-11-16 14:00 -> refused (person)
+scenario 取締役会が否決する購買, after line 153: the requester: withdraw by e1201 at 2026-11-16 14:00 -> with requester
+scenario 取締役会が否決する購買, after line 153: sent back: send back by e4001 at 2026-11-16 14:00 -> with requester
+scenario 取締役会が否決する購買, after line 153: sent back: resubmit by e1201 at 2026-11-17 14:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 153: sent back: discard by e1201 at 2026-11-16 14:00 -> withdrawn
+scenario 取締役会が否決する購買, after line 153: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 取締役会が否決する購買, after line 153: sent back: send back by e4001 at 2026-11-16 14:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 153: retracted: retract by e1101 at 2026-11-16 14:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 153: clocks: remind at 2026-11-19 09:00 -> 財務, in progress
+scenario 取締役会が否決する購買, after line 153: clocks: late at 2026-11-24 00:00 -> 財務, in progress
+scenario 取締役会が否決する購買, after line 153: clocks: remind at 2026-11-27 09:00 -> 財務, in progress
+scenario 取締役会が否決する購買, after line 153: clocks: late at 2026-12-02 00:00 -> expired
+scenario 取締役会が否決する購買, after line 154: approvals: approve by e0001 at 2026-11-17 10:00 -> 取締役会, in progress
+scenario 取締役会が否決する購買, after line 154: approvals: approve by e0201 at 2026-11-17 10:00 -> 取締役会, in progress
+scenario 取締役会が否決する購買, after line 154: approvals: approve by e0202 at 2026-11-17 10:00 -> 決裁, in progress
+scenario 取締役会が否決する購買, after line 154: rejections: reject by e0001 at 2026-11-17 10:00 -> 取締役会, in progress
+scenario 取締役会が否決する購買, after line 154: rejections: reject by e0201 at 2026-11-17 10:00 -> 取締役会, in progress
+scenario 取締役会が否決する購買, after line 154: rejections: reject by e0202 at 2026-11-17 10:00 -> rejected
+scenario 取締役会が否決する購買, after line 154: the requester: approve by e1201 at 2026-11-17 10:00 -> refused (person)
+scenario 取締役会が否決する購買, after line 154: the requester: withdraw by e1201 at 2026-11-17 10:00 -> with requester
+scenario 取締役会が否決する購買, after line 154: sent back: send back by e0001 at 2026-11-17 10:00 -> with requester
+scenario 取締役会が否決する購買, after line 154: sent back: resubmit by e1201 at 2026-11-18 10:00 -> 一次, in progress
+scenario 取締役会が否決する購買, after line 154: sent back: discard by e1201 at 2026-11-17 10:00 -> withdrawn
+scenario 取締役会が否決する購買, after line 154: sent back: resubmit late at 2026-12-02 00:00 -> expired
+scenario 取締役会が否決する購買, after line 154: sent back: send back by e0001 at 2026-11-17 10:00 -> 財務, in progress
+scenario 取締役会が否決する購買, after line 154: retracted: retract by e4001 at 2026-11-17 10:00 -> 財務, in progress
+scenario 取締役会が否決する購買, after line 154: clocks: remind at 2026-11-20 09:00 -> 取締役会, in progress
+scenario 取締役会が否決する購買, after line 154: clocks: late at 2026-12-02 00:00 -> expired
+scenario 取締役会で決議する購買, after line 91: made on the revision before: approve by e1101 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: reject by e1101 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: send back by e1101 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: retract by e1101 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: pause by e1101 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: resume by e1101 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: edit by e1101 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: withdraw by e1201 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: discard by e1201 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: resubmit by e1201 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: add approver at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: hand over at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: agent answered at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: note ready at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: made on the revision before: flow failed at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: no revision: approve by e1101 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, after line 91: a comment, which says no revision: comment by e1101 at 2026-11-16 14:00 -> 財務, in progress
+scenario 取締役会で決議する購買, after line 91: made on the revision before, with a comment too long: approve by e1101 at 2026-11-16 14:00 -> refused (stale)
+scenario 取締役会で決議する購買, made on 2026-11-20 (closed from 2026-11-21): submit by e1201 at 2026-11-20 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, made on 2026-11-20 (closed from 2026-11-21): remind at 2026-11-25 09:00 -> 一次, in progress
+scenario 取締役会で決議する購買, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-28 00:00 -> 一次, in progress
+scenario 取締役会で決議する購買, made on 2026-11-20 (closed from 2026-11-21): remind at 2026-12-02 09:00 -> 一次, in progress
+scenario 取締役会で決議する購買, made on 2026-11-20 (closed from 2026-11-21): late at 2026-12-05 00:00 -> expired
+scenario 取締役会で決議する購買, made on 2026-12-28 (closed from 2026-12-29): submit by e1201 at 2026-12-28 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, made on 2026-12-28 (closed from 2026-12-29): remind at 2027-01-06 09:00 -> 一次, in progress
+scenario 取締役会で決議する購買, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-09 00:00 -> 一次, in progress
+scenario 取締役会で決議する購買, made on 2026-12-28 (closed from 2026-12-29): remind at 2027-01-13 09:00 -> 一次, in progress
+scenario 取締役会で決議する購買, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-16 00:00 -> expired
+scenario 取締役会で決議する購買, made with a comment: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+scenario 取締役会で決議する購買, made with a comment: submit by e1201 at 2026-11-16 10:00 -> refused (comment)
+requester e0001: submit by e0001 at 2026-11-16 10:00 -> 財務, in progress
+requester e0101: submit by e0101 at 2026-11-16 10:00 -> 財務, in progress
+requester e0102: submit by e0102 at 2026-11-16 10:00 -> 財務, in progress
+requester e0201: submit by e0201 at 2026-11-16 10:00 -> 財務, in progress
+requester e0202: submit by e0202 at 2026-11-16 10:00 -> 財務, in progress
+requester e0203: submit by e0203 at 2026-11-16 10:00 -> 財務, in progress
+requester e0204: submit by e0204 at 2026-11-16 10:00 -> 財務, in progress
+requester e1001: submit by e1001 at 2026-11-16 10:00 -> 一次, in progress
+requester e1002: submit by e1002 at 2026-11-16 10:00 -> 一次, in progress
+requester e1101: submit by e1101 at 2026-11-16 10:00 -> 一次, in progress
+requester e1203: submit by e1203 at 2026-11-16 10:00 -> 一次, in progress
+requester e3101: submit by e3101 at 2026-11-16 10:00 -> 一次, in progress
+requester e4001: submit by e4001 at 2026-11-16 10:00 -> 財務, in progress
+requester e5001: submit by e5001 at 2026-11-16 10:00 -> 一次, in progress
+requester e6001: submit by e6001 at 2026-11-16 10:00 -> 一次, in progress
+requester e7001: submit by e7001 at 2026-11-16 10:00 -> 一次, in progress
+requester e7101: submit by e7101 at 2026-11-16 10:00 -> 一次, in progress
+requester e7102: submit by e7102 at 2026-11-16 10:00 -> 一次, in progress
+requester e7201: submit by e7201 at 2026-11-16 10:00 -> 一次, in progress
+requester e7202: submit by e7202 at 2026-11-16 10:00 -> 一次, in progress
+requester e9001: submit by e9001 at 2026-11-16 10:00 -> 一次, in progress
+requester e9002: submit by e9002 at 2026-11-16 10:00 -> 一次, in progress
+requester e9003: submit by e9003 at 2026-11-16 10:00 -> 一次, in progress
+proxy e0001 for e1201: submit by e0001 at 2026-11-16 10:00 -> refused (person)
+proxy e1101 for e3101: submit by e1201 at 2026-12-28 10:00 -> 一次, in progress
+proxy e1101 for e3101: approve by e1101 at 2026-12-28 10:00 -> 財務, in progress
+proxy e1101 for e3101: approve by e4001 at 2026-12-28 10:00 -> 決裁, in progress
+proxy e1101 for e3101: approve by e1101 at 2026-12-28 10:00 -> approved
+proxy e1101 for e3101: sent back by the proxy: send back by e1101 at 2026-12-28 10:00 -> with requester
+proxy e1101 for e3101: rejected by the proxy: reject by e1101 at 2026-12-28 10:00 -> rejected
+proxy e1101 for e3101: edited by the proxy: edit by e1101 at 2026-12-28 10:00 -> 決裁, in progress
+across the versions of the organization: submit by e1201 at 2027-03-31 10:00 -> 一次, in progress
+across the versions of the organization: approve by e1101 at 2027-04-01 10:00 -> 財務, in progress
+across the versions of the organization: approve by e4001 at 2027-04-01 10:00 -> 取締役会, in progress
+across the versions of the organization: approve by e0001 at 2027-04-01 10:00 -> 取締役会, in progress
+across the versions of the organization: approve by e0201 at 2027-04-01 10:00 -> 取締役会, in progress
+across the versions of the organization: approve by e0202 at 2027-04-01 10:00 -> 決裁, in progress
+across the versions of the organization: approve by e0001 at 2027-04-01 10:00 -> approved
+across the versions of the organization: send back by e1101 at 2027-03-31 10:00 -> with requester
+across the versions of the organization: resubmit by e1201 at 2027-04-01 10:00 -> 一次, in progress
+edge of 明細.数量, going up: 12: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of 明細.数量, going up: 13: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of 明細.数量, going down: 0: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of 明細.単価, going up: 8_333_333円: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of 明細.単価, going up: 8_333_334円: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of 明細.単価, going down: 1円: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of 明細.単価, going down: 0円: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of 前払い, going up: 100%: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of 前払い, going up: 105%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of 前払い, going down: 0%: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of 前払い, going down: -5%: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of 相見積もり.金額, going up: 100_000_000円: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of 相見積もり.金額, going up: 100_000_001円: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of 相見積もり.金額, going down: 1円: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of 相見積もり.金額, going down: 0円: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of the rows of 明細: 2 rows, 数量 4 in the last: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of the rows of 明細: 2 rows, 数量 5 in the last: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of the number of rows of 明細: 30 rows: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of the number of rows of 明細: 31 rows: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of the number of rows of 明細: 1 row: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of the number of rows of 明細: 0 rows: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of the rows of 相見積もり: 3 rows: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of the rows of 相見積もり: 4 rows: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of the number of rows of 相見積もり: 3 rows: submit by e1201 at 2026-11-16 10:00 -> 一次, in progress
+edge of the number of rows of 相見積もり: 4 rows: submit by e1201 at 2026-11-16 10:00 -> refused (form)

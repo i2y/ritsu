@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 1 never matches
+  --> tests/computed/shapes/E102_a_parcel_fee_between_two_steps.rule:16 table pick
+   |
+16 | | <=250JPY | >15JPY <25JPY | two  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1: no input reaches here
+ 9 | define parcel_fee : money[JPY] = up(amount * 10%, 10JPY) + 5JPY
+   |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 5JPY plus multiples of 10JPY within >=15JPY <=35JPY over the values of `amount` in this row
+   |
+ `parcel_fee` is computed from `amount`. Over the values of `amount` this row takes, `parcel_fee` only comes to 5JPY plus multiples of 10JPY within >=15JPY <=35JPY, none of which this row asks for.
+ hint: compare the expression with this row's conditions. No input reaches this row, so if it is not needed, delete it.
+

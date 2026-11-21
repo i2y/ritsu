@@ -1,0 +1,189 @@
+{
+  "sekisho": "<version>",
+  "name": "請求",
+  "alias": "claims_ja",
+  "version": "v1",
+  "source_sha256": "f26fbb951b6021691454467877af898feca5aed9797eca439eaa2ee3ede0fe73",
+  "description": "請求をだれが支払ってよいか。査定の係はどの請求も支払い、窓口のワークフローは、決まりが窓口に任せる請求を支払う。claims.gate の日本語の版",
+  "namespace": "ClaimsJa",
+  "uses": [
+    {
+      "kind": "rule",
+      "name": "支払う人",
+      "path": "rules/支払う人.rule",
+      "line": 5
+    },
+    {
+      "kind": "openapi",
+      "name": "窓口",
+      "path": "api/desk.json",
+      "line": 6
+    }
+  ],
+  "today": null,
+  "cedar": {
+    "policies": "cedar/claims_ja.cedar",
+    "schema": "cedar/claims_ja.cedarschema",
+    "schema_json": "cedar/claims_ja.cedarschema.json",
+    "policies_json": "cedar/claims_ja.policies.json"
+  },
+  "enums": [],
+  "roles": [
+    {
+      "name": "査定",
+      "alias": "adjuster",
+      "line": 8,
+      "entity": "ClaimsJa::Role::\"adjuster\"",
+      "includes": [],
+      "can": [
+        "pay_claim"
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "職員",
+      "alias": "User",
+      "kind": "principal",
+      "line": 12,
+      "entity_type": "ClaimsJa::User",
+      "roles": [
+        "adjuster"
+      ],
+      "member_of": [
+        "Role"
+      ],
+      "attributes": []
+    },
+    {
+      "name": "請求",
+      "alias": "Claim",
+      "kind": "resource",
+      "line": 24,
+      "entity_type": "ClaimsJa::Claim",
+      "roles": [],
+      "member_of": [],
+      "attributes": [
+        {
+          "name": "金額",
+          "alias": "amount",
+          "type": "money[JPY]",
+          "range": {
+            "min": 1,
+            "max": 10000
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        }
+      ]
+    },
+    {
+      "name": "Workflow",
+      "alias": "Workflow",
+      "kind": "workflow",
+      "line": null,
+      "entity_type": "ClaimsJa::Workflow",
+      "roles": [],
+      "member_of": [],
+      "attributes": []
+    }
+  ],
+  "workflows": [
+    {
+      "name": "支払い",
+      "alias": "pay",
+      "line": 19,
+      "entity": "ClaimsJa::Workflow::\"pay\"",
+      "flow": "flows/pay.ja.flow",
+      "assumes": [
+        {
+          "resource": "Claim",
+          "from": "請求番号",
+          "line": 21,
+          "attributes": [
+            {
+              "attribute": "amount",
+              "value": "金額",
+              "line": 22
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "name": "請求を支払う",
+      "alias": "pay_claim",
+      "line": 29,
+      "entity": "ClaimsJa::Action::\"pay_claim\"",
+      "guards": [
+        {
+          "reference": {
+            "text": "openapi \"api/desk.json\" operation payClaim",
+            "tool": "openapi",
+            "path": "api/desk.json",
+            "items": [
+              [
+                "operation",
+                "payClaim"
+              ]
+            ]
+          },
+          "line": 31
+        }
+      ],
+      "principals": [
+        "User",
+        "Workflow"
+      ],
+      "resources": [
+        "Claim"
+      ],
+      "from": "claimId",
+      "nobody": null,
+      "inputs": [],
+      "context": [
+        {
+          "name": "支払う人",
+          "alias": "payer",
+          "line": 35,
+          "computed": "支払う人(金額: resource.金額).だれ",
+          "type": "enum",
+          "values": [
+            "desk",
+            "person"
+          ],
+          "optional": false
+        }
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "name": "査定は請求を支払える",
+      "alias": "adjusters_pay_claims",
+      "id": "claims_ja/adjusters_pay_claims",
+      "effect": "permit",
+      "actions": [
+        "pay_claim"
+      ],
+      "file": "claims.ja.gate",
+      "line": 37
+    },
+    {
+      "name": "ワークフローは窓口の請求を支払える",
+      "alias": "the_workflow_pays_the_desks_claims",
+      "id": "claims_ja/the_workflow_pays_the_desks_claims",
+      "effect": "permit",
+      "actions": [
+        "pay_claim"
+      ],
+      "file": "claims.ja.gate",
+      "line": 42
+    }
+  ],
+  "expects": [],
+  "separations": []
+}

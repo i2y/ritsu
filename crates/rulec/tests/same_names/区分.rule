@@ -1,0 +1,26 @@
+rule 区分(band_ja) v1
+description "年齢の区分。規則と、答える列挙の名前が同じ（架空）"
+
+enum 区分(band_ja) = 子ども(child) "子ども" < 大人(adult) "大人"
+
+inputs
+  年齢(age) : number  range >=0 <=120
+
+outputs
+  区分(band) : 区分
+  成人(grown) : bool
+
+table 区分
+| 年齢 | -> 区分 |
+| <18  | 子ども  |
+| >=18 | 大人    |
+
+table 成人
+| 区分    | -> 成人 |
+| >=大人  | true    |
+| 子ども  | false   |
+
+examples
+| 年齢 | -> 区分 | 成人  |
+| 0    | 子ども  | false |
+| 18   | 大人    | true  |

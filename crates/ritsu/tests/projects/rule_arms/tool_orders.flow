@@ -1,0 +1,28 @@
+workflow tool_orders v1
+description "Sends an order's tools out at once or has them looked at first, as the rule says for the order's tier, and asks the rule again as for a gold order. The rule has a basic order's tools looked at when they count three or more, and a run whose count comes to three gets there; it sends a gold order's out at once whatever the count, so no run has them looked at for the second answer."
+
+use rule tool_check from "rules/tool_route.rule"
+
+inputs
+  order : string
+  tier  : tool_check.tier
+
+task count_tools(order: string) -> int  range >=0 <=5
+  idempotent
+
+task send_out(order: string)
+  key
+
+task look_at(order: string)
+  key
+
+flow
+  let tools = count_tools(order: order)
+  let decision = tool_check(tools: tools, tier: tier)
+  match decision.route
+    at_once => send_out(order: order)
+    review => look_at(order: order)
+  let as_gold = tool_check(tools: tools, tier: gold)
+  match as_gold.route
+    at_once => pass
+    review => look_at(order: order)

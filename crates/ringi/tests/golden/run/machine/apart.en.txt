@@ -1,0 +1,8 @@
+2026-11-13 10:00  submit  by e1201  -> decide (e1101), due 2026-11-17 end of day
+2026-11-14 09:00  remind            -> decide (e1101), due 2026-11-17 end of day; reminded e1101
+2026-11-18 00:00  late              -> decide (e3101), due 2026-11-20 end of day; decide went up to e3101
+2026-11-19 09:00  remind            -> decide (e3101), due 2026-11-20 end of day; reminded e3101
+2026-11-21 00:00  late              -> decide (e0101), due 2026-11-24 end of day; decide went up to e0101
+2026-11-24 09:00  remind            -> decide (e0101), due 2026-11-24 end of day; reminded e0101
+2026-11-25 00:00  late              -> expired; expired (late)
+scenario `late_and_up_twice`: as written (7 rows)

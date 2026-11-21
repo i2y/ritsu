@@ -1,0 +1,25 @@
+rule 先に当たる行で決まる区分(first_band_above) v1
+description "policy first の表が書く区分を、それを決める金額と一緒に読む。小になるのは、上の表の初めの三行のどれもとらない 115 円のときだけなので、102 円以下で小の行は求められない"
+
+enum 選択(choice) = 一(one) | 二(two)
+enum 大きさ(size) = 小(small) | 中(medium) | 大(large)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=115円
+
+outputs
+  答え(x) : 選択
+
+table 区分の表(band_of)
+policy first
+| 金額           | -> 区分(band) : 大きさ |
+| >15円 <=40円   | 中                     |
+| >=41円 <=114円 | 中                     |
+| <16円          | 大                     |
+| -              | 小                     |
+
+table 選ぶ(pick)
+| 金額    | 区分    | -> 答え |
+| <=102円 | not: 小 | 一      |
+| >=103円 | 小      | 二      |
+| >=103円 | not: 小 | 一      |

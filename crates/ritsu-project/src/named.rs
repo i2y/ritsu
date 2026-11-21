@@ -90,13 +90,26 @@ fn named_in(project: &Project, files: &[File], joined: &Joined) -> (Vec<(File, u
             };
             let at = ps.imports.get(&f.rel).cloned().unwrap_or_default();
             for (i, imp) in pf.imports.iter().enumerate() {
-                // a file found outside the files read is told, with where it was found
-                let found = at.get(i).cloned().flatten().or_else(|| {
-                    issues.iter().find_map(|x| match x {
-                        ritsu_proto::Issue::OutOfScope { file, import, at } if *file == f.rel && import == imp => Some(at.clone()),
-                        _ => None,
+                // a file found outside the files read is told, with where it was found; a file of the
+                // files read that cannot be read is passed over, and is the one `load` looks for first
+                // among them, as it looks (ritsu's DESIGN 8.3: what reads this file waits for it)
+                let found = at
+                    .get(i)
+                    .cloned()
+                    .flatten()
+                    .or_else(|| {
+                        issues.iter().find_map(|x| match x {
+                            ritsu_proto::Issue::OutOfScope { file, import, at } if *file == f.rel && import == imp => Some(at.clone()),
+                            _ => None,
+                        })
                     })
-                });
+                    .or_else(|| {
+                        if ritsu_proto::is_known(&imp.path) {
+                            return None;
+                        }
+                        let roots = ritsu_proto::roots_for(&project.root, &f.rel, &[".".to_string()]);
+                        ritsu_proto::import_candidates(&f.rel, &pf.package, &roots, &imp.path).into_iter().find(|c| rels.contains(c))
+                    });
                 if let Some(t) = found {
                     out.push((f.clone(), imp.line, t));
                 }

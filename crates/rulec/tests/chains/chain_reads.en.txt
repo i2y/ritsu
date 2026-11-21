@@ -1,0 +1,37 @@
+error[E012]: There is no type `numbr`
+  --> chain_reads.rule:8
+  |
+8 |   limit(limit) : numbr  range >=0 <=10
+  |                  ^^^^^
+  |
+ Did you mean `number`?
+ A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. The enum of this file is `size`.
+ `numbr` is written on line 14 too.
+
+error[E103]: `UDS` is not a unit of money
+  --> chain_reads.rule:26
+   |
+26 |   fee(fee) : money[UDS]  round up(1USD)  range >=0USD <=100USD
+   |              ^^^^^^^^^^
+   |
+ The units of money are 円 (yen, the same as JPY) 銭 (a hundredth of 円), or one of the ISO 4217 codes USD EUR GBP CHF CAD AUD NZD CNY HKD SGD KRW INR TWD THB SEK NOK DKK PLN CZK HUF TRY BRL MXN ZAR AED SAR ILS PHP IDR MYR VND (its hundredth is the code plus c: USD and USDc).
+ `money[UDS]` is written on line 30 too.
+
+error[E012]: There is no type `sizee`
+  --> chain_reads.rule:13
+   |
+13 |   kind(kind) : sizee
+   |                ^^^^^
+   |
+ Did you mean `size`?
+ A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. The enum of this file is `size`.
+
+error[E012]: There is no type `mas`
+  --> chain_reads.rule:15
+   |
+15 |   weight(weight) : mas[g]  range >0g <30001g
+   |                    ^^^
+   |
+ Did you mean `mass`?
+ A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. The enum of this file is `size`.
+

@@ -21,8 +21,8 @@ use std::time::{Duration, Instant};
 fn load_books(pg: &Postgres, work: &Path) -> Vec<Case> {
     let cases = cases();
     for (c, f) in cases.iter().zip(build_all(&cases, Target::Postgres, &work.join("sql"))) {
-        let out = pg.db().arg("-f").arg(&f).output().unwrap();
-        assert!(out.status.success(), "{}: {}", c.stem, String::from_utf8_lossy(&out.stderr));
+        let out = finish(pg.db().arg("-f").arg(&f), SQL_LIMIT, "psql loading a book's SQL into PostgreSQL");
+        assert!(out.ok, "{}: {}", c.stem, out.stderr);
     }
     cases
 }
@@ -57,8 +57,8 @@ fn at_once(pg: &Postgres, scripts: &[String]) -> Vec<(String, String)> {
             .iter()
             .map(|sql| {
                 s.spawn(move || {
-                    let out = pg.db().args(["-A", "-t", "-v", "ON_ERROR_STOP=0", "-v", "VERBOSITY=verbose", "-c", sql]).output().unwrap();
-                    (String::from_utf8_lossy(&out.stdout).to_string(), String::from_utf8_lossy(&out.stderr).to_string())
+                    let out = finish(pg.db().args(["-A", "-t", "-v", "ON_ERROR_STOP=0", "-v", "VERBOSITY=verbose", "-c", sql]), SQL_LIMIT, "a psql session of the scripts run at once");
+                    (out.stdout.to_string(), out.stderr.to_string())
                 })
             })
             .collect();
@@ -98,13 +98,13 @@ fn no_deadlock(pg: &Postgres) {
 fn checks_stop_writes(pg: &Postgres) {
     let t = "'check'";
     pg.exec(&format!("select * from \"在庫\".\"入荷_do\"({t}, 'n-1', 'A', 3)"));
-    let out = pg.db().args(["-c", &format!("update \"在庫\".accounts set held_out = posted + 1 where tenant = {t} and kind = '在庫'")]).output().unwrap();
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success() && err.contains("within_lower"), "{err}");
+    let out = finish(pg.db().args(["-c", &format!("update \"在庫\".accounts set held_out = posted + 1 where tenant = {t} and kind = '在庫'")]), SQL_LIMIT, "psql writing past a bound of 在庫 without the functions");
+    let err = &out.stderr;
+    assert!(!out.ok && err.contains("within_lower"), "{err}");
     pg.exec("select * from \"ウォレット\".\"入金_do\"('check', 'p-1', 'm', 5)");
-    let out = pg.db().args(["-c", "update \"ウォレット\".accounts set posted = 100001 where tenant = 'check' and kind = 'ウォレット'"]).output().unwrap();
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success() && err.contains("within_upper"), "{err}");
+    let out = finish(pg.db().args(["-c", "update \"ウォレット\".accounts set posted = 100001 where tenant = 'check' and kind = 'ウォレット'"]), SQL_LIMIT, "psql writing past a bound of ウォレット without the functions");
+    let err = &out.stderr;
+    assert!(!out.ok && err.contains("within_upper"), "{err}");
     eprintln!("checks: a write past a bound that does not go through the functions is stopped");
 }
 
@@ -113,9 +113,9 @@ fn other_bounds(pg: &Postgres) {
     let t = "'bounds'";
     pg.exec(&format!("select * from \"在庫\".\"入荷_do\"({t}, 'n-1', 'A', 3)"));
     pg.exec(&format!("update \"在庫\".accounts set lower_bound = 2 where tenant = {t} and kind = '在庫'"));
-    let out = pg.db().args(["-v", "VERBOSITY=verbose", "-c", &format!("select * from \"在庫\".\"引当_hold\"({t}, 'o-1', 'A', 1)")]).output().unwrap();
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success() && err.contains("CB001"), "{err}");
+    let out = finish(pg.db().args(["-v", "VERBOSITY=verbose", "-c", &format!("select * from \"在庫\".\"引当_hold\"({t}, 'o-1', 'A', 1)")]), SQL_LIMIT, "psql calling 引当_hold on a row made under other bounds");
+    let err = &out.stderr;
+    assert!(!out.ok && err.contains("CB001"), "{err}");
     eprintln!("bounds: a row made under other bounds stops the call with CB001");
 }
 
@@ -213,9 +213,9 @@ await pool.end();
                 ),
             )
             .unwrap();
-            let out = Command::new("node").arg("--no-warnings").arg(&script).output().unwrap();
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            conflicts += check("rr-typescript", &String::from_utf8_lossy(&out.stdout));
+            let out = finish(Command::new("node").arg("--no-warnings").arg(&script), CLIENT_LIMIT, "the TypeScript client under REPEATABLE READ");
+            assert!(out.ok, "{}", out.stderr);
+            conflicts += check("rr-typescript", &out.stdout);
         }
         Err(why) => skip(&format!("{why}; the TypeScript client is not tried under REPEATABLE READ")),
     }
@@ -278,9 +278,9 @@ print(json.dumps({{"results": results, "conflicts": conflicts}}))
                 ),
             )
             .unwrap();
-            let out = Command::new(py).arg(&script).output().unwrap();
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            conflicts += check("rr-python", &String::from_utf8_lossy(&out.stdout));
+            let out = finish(Command::new(py).arg(&script), CLIENT_LIMIT, "the Python client under REPEATABLE READ");
+            assert!(out.ok, "{}", out.stderr);
+            conflicts += check("rr-python", &out.stdout);
         }
         Err(why) => skip(&format!("{why}; the Python client is not tried under REPEATABLE READ")),
     }
@@ -375,9 +375,9 @@ func main() {{
                 ),
             )
             .unwrap();
-            let out = go_in(&module).args(["run", "-mod=readonly", "."]).output().unwrap();
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            conflicts += check("rr-go", &String::from_utf8_lossy(&out.stdout));
+            let out = finish(go_in(&module).args(["run", "-mod=readonly", "."]), CLIENT_LIMIT, "the Go client under REPEATABLE READ");
+            assert!(out.ok, "{}", out.stderr);
+            conflicts += check("rr-go", &out.stdout);
         }
         Err(why) => skip(&format!("{why}; the Go client is not tried under REPEATABLE READ")),
     }
@@ -474,9 +474,9 @@ fn main() {{
     );
     let name = if stem.is_ascii() { format!("rr-{stem}") } else { "rr-ja".to_string() };
     let bin = build_rust_with(work, &name, &[("book".to_string(), module)], &main).unwrap_or_else(|e| panic!("{e}"));
-    let out = Command::new(&bin).output().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    Some(String::from_utf8_lossy(&out.stdout).to_string())
+    let out = finish(&mut Command::new(&bin), CLIENT_LIMIT, "the Rust client under REPEATABLE READ");
+    assert!(out.ok, "{}", out.stderr);
+    Some(out.stdout.to_string())
 }
 
 /// The cases of the named books of tests/books.
@@ -573,13 +573,13 @@ fn no_deadlock_in_english(pg: &Postgres) {
 fn checks_stop_writes_in_english(pg: &Postgres) {
     let t = "'check'";
     pg.exec(&format!("select * from \"stock_reservation\".\"receive_do\"({t}, 'n-1', 'A', 3)"));
-    let out = pg.db().args(["-c", &format!("update \"stock_reservation\".accounts set held_out = posted + 1 where tenant = {t} and kind = 'stock'")]).output().unwrap();
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success() && err.contains("within_lower"), "{err}");
+    let out = finish(pg.db().args(["-c", &format!("update \"stock_reservation\".accounts set held_out = posted + 1 where tenant = {t} and kind = 'stock'")]), SQL_LIMIT, "psql writing past a bound of stock_reservation without the functions");
+    let err = &out.stderr;
+    assert!(!out.ok && err.contains("within_lower"), "{err}");
     pg.exec("select * from \"wallet\".\"deposit_do\"('check', 'p-1', 'm', 5)");
-    let out = pg.db().args(["-c", "update \"wallet\".accounts set posted = 100001 where tenant = 'check' and kind = 'wallet'"]).output().unwrap();
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success() && err.contains("within_upper"), "{err}");
+    let out = finish(pg.db().args(["-c", "update \"wallet\".accounts set posted = 100001 where tenant = 'check' and kind = 'wallet'"]), SQL_LIMIT, "psql writing past a bound of wallet without the functions");
+    let err = &out.stderr;
+    assert!(!out.ok && err.contains("within_upper"), "{err}");
     eprintln!("checks: a write past a bound that does not go through the functions is stopped");
 }
 
@@ -588,9 +588,9 @@ fn other_bounds_in_english(pg: &Postgres) {
     let t = "'bounds'";
     pg.exec(&format!("select * from \"stock_reservation\".\"receive_do\"({t}, 'n-1', 'A', 3)"));
     pg.exec(&format!("update \"stock_reservation\".accounts set lower_bound = 2 where tenant = {t} and kind = 'stock'"));
-    let out = pg.db().args(["-v", "VERBOSITY=verbose", "-c", &format!("select * from \"stock_reservation\".\"reserve_hold\"({t}, 'o-1', 'A', 1)")]).output().unwrap();
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success() && err.contains("CB001"), "{err}");
+    let out = finish(pg.db().args(["-v", "VERBOSITY=verbose", "-c", &format!("select * from \"stock_reservation\".\"reserve_hold\"({t}, 'o-1', 'A', 1)")]), SQL_LIMIT, "psql calling reserve_hold on a row made under other bounds");
+    let err = &out.stderr;
+    assert!(!out.ok && err.contains("CB001"), "{err}");
     eprintln!("bounds: a row made under other bounds stops the call with CB001");
 }
 
@@ -685,9 +685,9 @@ await pool.end();
                 ),
             )
             .unwrap();
-            let out = Command::new("node").arg("--no-warnings").arg(&script).output().unwrap();
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            conflicts += check("rr-typescript", &String::from_utf8_lossy(&out.stdout));
+            let out = finish(Command::new("node").arg("--no-warnings").arg(&script), CLIENT_LIMIT, "the TypeScript client of the English book under REPEATABLE READ");
+            assert!(out.ok, "{}", out.stderr);
+            conflicts += check("rr-typescript", &out.stdout);
         }
         Err(why) => skip(&format!("{why}; the TypeScript client is not tried under REPEATABLE READ")),
     }
@@ -750,9 +750,9 @@ print(json.dumps({{"results": results, "conflicts": conflicts}}))
                 ),
             )
             .unwrap();
-            let out = Command::new(py).arg(&script).output().unwrap();
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            conflicts += check("rr-python", &String::from_utf8_lossy(&out.stdout));
+            let out = finish(Command::new(py).arg(&script), CLIENT_LIMIT, "the Python client of the English book under REPEATABLE READ");
+            assert!(out.ok, "{}", out.stderr);
+            conflicts += check("rr-python", &out.stdout);
         }
         Err(why) => skip(&format!("{why}; the Python client is not tried under REPEATABLE READ")),
     }
@@ -847,9 +847,9 @@ func main() {{
                 ),
             )
             .unwrap();
-            let out = go_in(&module).args(["run", "-mod=readonly", "."]).output().unwrap();
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            conflicts += check("rr-go", &String::from_utf8_lossy(&out.stdout));
+            let out = finish(go_in(&module).args(["run", "-mod=readonly", "."]), CLIENT_LIMIT, "the Go client of the English book under REPEATABLE READ");
+            assert!(out.ok, "{}", out.stderr);
+            conflicts += check("rr-go", &out.stdout);
         }
         Err(why) => skip(&format!("{why}; the Go client is not tried under REPEATABLE READ")),
     }

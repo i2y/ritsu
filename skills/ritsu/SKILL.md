@@ -1,6 +1,6 @@
 ---
 name: ritsu
-description: Work on a project with files of two or more of ritsu's nine small languages, rules (`.rule`, rulec), workflows (`.flow`, dandori), dates (`.cal`, koyomi), ledgers (`.book`, chobo), claims about code (`.geas`, geas), requirements (`.req`, yuen), maps of bounded contexts (`.ctx`, sakai), who may do what (`.gate`, sekisho) and functional cores (`.kn`, kaname). `ritsu check` checks each file with its own language and then across them, holding a call to a rule's preconditions, a date's days to a rule's range and a ledger to its amounts. Use when a project has files of two or more of these languages, when `ritsu check` prints a diagnostic of ritsu's own (E101, E201-E208, E301-W303, W901, E905-W909), when a workflow has to be run with its rules, dates and books computed, when one package of TypeScript, Python or Go is to be generated for the whole project, or when a project is to be looked over for what its files depend on and none says. To write one language's files, read that language's skill.
+description: Work on a project with files of two or more of ritsu's ten languages, rules (`.rule`, rulec), workflows (`.flow`, dandori), dates (`.cal`, koyomi), ledgers (`.book`, chobo), claims about code (`.geas`, geas), requirements (`.req`, yuen), maps of bounded contexts (`.ctx`, sakai), who may do what (`.gate`, sekisho), functional cores (`.kn`, kaname) and applications and approvals (`.ringi`, ringi). `ritsu check` checks each file with its own language and then across them, holding a call to a rule's preconditions, a date's days to a rule's range and a ledger to its amounts. Use when a project has files of two or more of them, when `ritsu check` prints a diagnostic of ritsu's own (E101, E201-E210, E301-W303, W901, E905-W911), when a workflow is to be run with its rules, dates and books computed, when one package of TypeScript, Python, Go or Rust is to be generated for the whole project, or when a project is to be looked over for what its files depend on and none says. For one language's files, read its skill.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`), which runs each language as `ritsu <language> …`; a link to ritsu named for a language (`rulec`, `dandori`, …), as a release archive holds, runs the same. `ritsu skills install` writes the ten skills into a project's `.claude/skills/`.
 license: MIT OR Apache-2.0
 ---
@@ -17,10 +17,10 @@ to, the bounds of an account) is what the next is held to.
 
 It also applies when the project holds the files of one language only and a diagnostic names
 `ritsu`, when a command of one language has to read another (`ritsu dandori`, `ritsu yuen`,
-`ritsu sakai`, `ritsu sekisho`, `ritsu kaname`, §6), and when the project is a module (a
+`ritsu sakai`, `ritsu sekisho`, `ritsu kaname`, `ritsu ringi`, §6), and when the project is a module (a
 `ritsu.mod`) that requires the files of other modules or is to be shared or published (§9). It
 does not replace the language skills: to write a rule, a workflow, a date, a ledger, a claim, a
-requirement, a map, a gate or a functional core, read the skill of that language (§5).
+requirement, a map, a gate, a functional core or a request type, read the skill of that language (§5).
 
 A file never mixes two languages. A tariff, a calendar, a ledger and a workflow are read by
 different people, so each is a file of its own, and the files meet by name: a workflow's `use rule`,
@@ -61,7 +61,7 @@ and bounds are, which warnings to leave, and what a fix would change in the mean
 6. **Then run and generate**: `ritsu run` plays a workflow with its rules, dates and books worked
    out (§4); `ritsu gen [<path>...] --target <target>...` writes one package of the whole project for each language given (§4); the pages
    for people that the languages write (`rulec doc`, `dandori doc`, `koyomi doc`, `chobo doc`,
-   `yuen doc`, `sakai doc`, `sekisho doc`, `kaname doc`, each run as `ritsu <language> doc`) are for whoever has to understand
+   `yuen doc`, `sakai doc`, `sekisho doc`, `kaname doc`, `ringi doc`, each run as `ritsu <language> doc`) are for whoever has to understand
    what the code is to carry out and check it against what they know.
 7. **Have a person confirm it.** Hand those pages to the people who own what they say (§7). What
    they find wrong you fix in the file of its language, and the loop starts again.
@@ -73,8 +73,8 @@ ok refund_check.rule
 refund.flow: ok
 error[ritsu E201]: refund.flow:21:1: The call of the rule check can give it values that break its precondition `asked <= paid`
     21 |   let decision = check(paid: paid, asked: asked)
-  = `asked` is `>=0 <=10000` and `paid` is `>=0 <=10000`, and at asked = 10000, paid = 0 `asked <= paid` does not hold
-  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, gathered from every place the values come from.
+  = `asked` is `>=0 <=10_000` and `paid` is `>=0 <=10_000`, and at asked = 10_000, paid = 0 `asked <= paid` does not hold
+  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, from what the runs that reach this call last put in the values.
   = Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result).
 ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided
 ```
@@ -88,6 +88,23 @@ ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the
   checks between the languages. Each comes to one of three answers: it holds, here is a case where
   it does not (an error), or it cannot be decided, and then it says why (a warning). Nothing
   passes in silence.
+- When a file does not pass, a line of another file that reads it (`use dates … from`, a flow's
+  `flow "…"`, a gate's `workflow … from`, a requirement's `satisfied by`) **waits** for it, and is
+  not said in its place. After the rest, each file that does not pass has one block: a line that
+  names it with its first error, then each line that waits for it, with its tool and code and the
+  line as its file writes it. Fix the file the block names; the lines under it need nothing of
+  their own. A rule that fails only for a contribution that does not pass waits for the
+  contribution, with no line of its own, and so does each line that reads the rule; a line that
+  reads a `.proto` waits for a `.proto` it imports too. A mistake in a file that waits that has
+  nothing to do with it is said in its place, as any error is. The last line counts the files that wait apart from the ones that fail; a line that
+  waits is an error all the same, so the exit is 1.
+
+  ```text
+  waiting for dates/approval_terms.cal (koyomi E301 at line 19) to pass:
+    flows/stage.flow:5: [dandori E005] use dates terms from "../dates/approval_terms.cal"
+    gates/expense.gate:14: [sekisho E208] workflow approvals from "../flows/approvals.flow"
+  ritsu check: 7 files (koyomi 2, dandori 3, sekisho 1, yuen 1): 1 fail (1 error), 5 waiting; borders between the languages: 0 checked, 0 undecided
+  ```
 - **Exit codes**: 0 no errors (warnings possible), 1 an error in a language or across them, 2 bad
   arguments, a file that cannot be read, or one a language could not check.
 - `--format json` prints one object: `ritsu` (the version), `root`, `ok`, `files`, `diagnostics`
@@ -95,16 +112,19 @@ ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the
   - Each of `diagnostics` is in its language's own JSON, with `tool` first and `file` from the
     root: `code`, `severity`, `file`, `line`, `col`, `message`, `notes`, then the language's own
     keys, and `fix` where the language gives one. rulec's has `v`, `column` and `title` in place
-    of `col` and `message`.
+    of `col` and `message`. A line that waits keeps its language's code and `severity`, and has
+    `reads` (the file it reads, from the root) and `waits_for` (the files that do not pass that it
+    waits for).
   - Each of `files` has `tool`, `file`, `ok` and `check`: what the language's own `check --format
     json` writes for that file, without the file and the diagnostics. A kaname module's has
     `summary` and each function's `effect`; a date file's, a gate's, a map's and a module's
     requirements' (on each `.req`) `ok` and `summary`; a book's `report`; a spec's `claims`. A
-    rule's is `null`, and a flow's `{}`.
+    rule's is `null`, and a flow's `{}`. A file that waits has `waits_for` too.
   - `borders` has the counts `held`, `failed` and `undecided`, and `records`, one for each border,
     as many as the counts add up to: `check` (which check: `precondition`, `rule_date_input`,
     `range_from_koyomi`, `transfer_amount`, `transfer_refusals`, `hold_expiry`,
-    `koyomi_date_input`, `secret_destination`, `operation_guard`, `workflow_permission` or `fed_by`),
+    `koyomi_date_input`, `secret_destination`, `operation_guard`, `workflow_permission`, `fed_by`,
+    `ticket_gate`, `ticket_hold` or `ticket_flow`),
     `about`, the two sides `at` (where the diagnostic is) and `to` (null when there is none), each
     with `tool`, `file` and `line` (null where it is not known), `result` (`held`, `failed` or
     `undecided`) and `code` (null when it holds). They come in that order of the checks, then by
@@ -125,8 +145,8 @@ comes with an example that breaks it; a warning says what could not be decided.
 | Code | What it says | What to do |
 |---|---|---|
 | E101 | a `.proto` of the project does not read as proto3 | correct it where it points; a file `buf build` builds, ritsu reads |
-| E201 | a workflow's call of a rule, or a kaname module's, can give it values that break one of its preconditions (a `constraint`), or a koyomi date's days, or the days of a date held to a range, one of the rule's | branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or of a task's result); if the precondition is what is wrong, correct the rule's `constraint` |
-| W201 | whether a call keeps a precondition cannot be decided: a value comes from a place with no range, or the precondition bounds a total or a length | give the place a range; where none can be given, leave it: the workflow `ritsu dandori gen` writes checks it when it runs, and fails a run that breaks it with `Dandori.BrokenPrecondition` |
+| E201 | a workflow's call of a rule, or a kaname module's, can give it values that break one of its preconditions (a `constraint`; a `never` line, where the truth values and enum values the call gives all meet its conditions, written out, left by the arms of a `match`, or put in a variable by the runs that reach the call; or the range a value the rule works out is accepted in, `define … range`), or a koyomi date's days, or the days of a date held to a range, one of the rule's | branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or of a task's result); where a value written out meets a `never` line, give the value the note says; if the precondition is what is wrong, correct the rule's `constraint` or `never` line, or the range of its `define` |
+| W201 | whether a call keeps a precondition cannot be decided: a value comes from a place with no range, the precondition bounds a total or a length, or a `never` line reads a truth value or an enum the call gives with values on both sides of its condition | give the place a range; for a `never` line, branch on the value with `match` and call the rule in the arms, or give it a variable the runs that reach the call put one value in; where none can be given, leave it: the workflow `ritsu dandori gen` writes checks it when it runs, as `ritsu run` does, and fails a run that breaks it with `Dandori.BrokenPrecondition` (the range of a value the rule works out is checked by the rule's own code, where it works the value out) |
 | E202 | the days a koyomi date comes to, or a day of the range of a date (`range >=2026-01-01 <=2026-12-31`), fall outside the range of the rule input they are given to | widen the input's range, or make it `range from koyomi`, so that koyomi's days are the range; for a date held to a range, narrowing that range does it too |
 | W202 | whether those days stay inside the range cannot be decided: the value can also come from an input or a task's answer with no range, or `now` | give the input days of koyomi dates, or of dates held to a range, only; or narrow the inputs of its file |
 | E203 | a rule's output a workflow gives a chobo transfer as its amount, or an amount a kaname module gives one, comes to an amount below 0 or above 2⁶³ − 1 at an input from the vectors (chobo takes 0 to 2⁶³ − 1); in a workflow, among what the call can give the rule on the runs that reach the transfer | make the amounts 0 or more (a negative one, a refund say, is a transfer the other way); a workflow can instead branch with `match` before the transfer on the enum or bool the call was given, and give the transfer the output only in the arms of the values that do not come to such an amount; in kaname, narrow the amount with an `if` before the transfer |
@@ -137,9 +157,13 @@ comes with an example that breaks it; a warning says what could not be decided.
 | W205 | whether the day stays inside the range cannot be decided: it comes from an input, a field or a task's answer with no range, from `now` in a workflow that says no period it runs in (or in `on failure` and `on cancel`), or from a rule's date output | give the place it comes from a range (`received : date  range >=2026-01-01 <=2027-12-31`), or the workflow the period it runs in (`now range >=2026-01-01 <=2027-12-31` under `workflow`), or give it the day of another koyomi date; otherwise leave it, koyomi refuses a day outside its range when the workflow runs |
 | E206 | a hold has always expired by the time the flow posts or voids it | make the hold last longer (the transfer's `pending expires after`), or make the call sooner |
 | W206 | whether the hold has expired by then cannot be decided: nothing bounds the time between making the hold and the call | give the task that makes the hold, and the tasks between, a `timeout`; where none can be given, leave it |
-| E207 | a line with `fed by` does not take a value its source can come to: a number in another unit or beyond the range, an enum value it does not have, a day outside its range, or an end a contract or a book leaves open; the message gives the value, and the input that gives it when the source can say | widen what the line takes, or narrow what the source gives: which of the two is a person's decision |
-| W207 | whether a line with `fed by` takes what its source can come to cannot be decided: rulec counts an end of a rule's output that none of the rule's vectors reaches, a contract's date lists no days, or the source's own language does not pass the file | make the source say its values (a row that gives that end, an `enum` of days), correct what its language says, or leave it; `ritsu check` does not check the code that carries the value either way |
+| E207 | a line with `fed by` does not take a value its source can come to: a number in another unit or beyond the range, an enum value it does not have, a day outside its range, a string a contract marks `format: date-time` (a day with a time of day) where the line takes a date, a `.proto` field that may be left unset (`optional`, in a `oneof`, or a message, unless a rule or proto2 marks it `required`) where the line is not `T?`, or an end a contract or a book leaves open; the message gives the value, and the input that gives it when the source can say | widen what the line takes, or narrow what the source gives: which of the two is a person's decision (a contract's string that carries only a day is marked `format: date`) |
+| W207 | whether a line with `fed by` takes what its source can come to cannot be decided: rulec counts an end of a rule's output that none of the rule's vectors reaches, or does not count the values of an enum a rule gives, a contract's date lists no days (a `.proto`'s `google.type.Date`, a date by its name as dandori reads it, never does), two records or lists, which are not compared value by value, or the source's own language does not pass the file | make the source say its values (a row that gives that end, an `enum` of days, a string field that lists them in place of a `google.type.Date`), take the values of a rule's enum the place leaves out, correct what its language says, or leave it; `ritsu check` does not check the code that carries the value either way |
 | E208 | the source a `fed by` names is not there: no such file, nothing of that name in it, or a document or a `.proto` that does not read | put the name right or add what it names; the path goes from the directory of the file it is written in |
+| E209 | a hold a request makes when it is submitted (`on submitted hold`, in a `.ringi`) can reach the book's expiry before its round posts or voids it: the business days ringi's check counts for a round, laid on the calendar from the day that makes them the longest | make the hold last longer (the transfer's `pending expires after`), or give the stages shorter deadlines |
+| W209 | whether such a hold expires cannot be decided (a stage with no deadline, days counted in several calendars, a calendar's data that ends too soon), or an argument of the hold reads a team above the requester (`requester.department`) that some of the people who may submit the request do not have, whose `submit` is refused | give every stage a deadline, or make the hold last longer; for the argument, leave those people out (`submitted by … except …`), give a value everyone has, or write `when requester.<kind> is not none` on the line |
+| E210 | a request gives a workflow a value an input of the workflow does not take: what `on … launch` writes, or the ticket's ID and the fields of the form an agent's or a summary's workflow declares, each read as the rows of the route and a `when` of comparisons with constants hold it; an input not given, a value with no input, and an agent's workflow that does not answer `verdict` (`ok` or `doubt`) and `reason` are this too; the other way, a workflow that makes a request through the server's API (the `openapi.json` of `ritsu gen --target requests`) calls an operation written from the request as it was, not as it is now, or one the request no longer has | hold the value to what the workflow takes (the form's `range`, a `when` on the `on` line), or widen the workflow's input: which of the two is a person's decision; for the API, write it again with `ritsu gen --target requests` |
+| W210 | whether the workflow takes what the request gives it cannot be decided: a value ringi does not follow, a `rows` field against a list, an organization with no data, or values that look as if they do not fit at a place whose condition ringi does not follow (a `when` with `or` or `not`); for a workflow that makes a request, a request of the API that is not the project's, or one whose API ringi cannot write | write the `when` as comparisons of fields of the form with constants joined with `and`; where that cannot be done, widen the workflow's input; where the request of the API is in the project, write the API again from the project's root |
 | E301 | a `ritsu.mod` does not read: a word it does not know, a word with no value, a word written twice that is written once, no `module` first, bytes that are not UTF-8 | correct the line it points at; the first statement is `module` |
 | E302 | a value of a `ritsu.mod` is not of its form (a name, a version, an absolute `path`, a dependency's name twice; a git URL that is not https or ssh, that gives a name with an uppercase letter, or that may carry a credential: a user or a password in an https URL, a query), or a `require … path` leads to a directory with no `ritsu.mod` | write the value in its form; a dependency by a path names a directory with a `ritsu.mod`, from the module's root; leave git's credentials to its credential helper or an ssh key, never in `ritsu.mod` |
 | E303 | a dependency comes from a registry or a git repository and the module has no `ritsu.lock`, or one that does not read | run `ritsu mod lock`; do not write the lock by hand |
@@ -158,9 +182,12 @@ comes with an example that breaks it; a warning says what could not be decided.
 | W905 | where in the map such a value goes cannot be decided: the map does not pass sakai's check | correct the map so that `sakai check` passes |
 | E907 | a context opens an operation (`open host service`) that no action of a gate guards, while its other operations are guarded | write an action that guards it in a `.gate` of that context; if anyone may call it on purpose, write `security: []` on the operation |
 | W907 | a context opens operations and no action guards any of them: it has written no authorization with sekisho yet | write a `.gate` of the context, and guard each operation it opens with an action |
-| E908 | a workflow calls an operation whose action allows the workflow in no combination: every run that comes to the call is denied | write a permit that allows the workflow (`principal is workflow <name>`), or take the call out |
+| E908 | a workflow calls an operation whose action allows the workflow in no combination the call can come to: every run that comes to the call is denied. What the call can come to is what it gives the operation, the values of the flow the gate's `resource … from …` lines say the resource's attributes are, and what the arms of a `match` on the way leave of each | make the call where the gate allows the workflow, or change the gate's policies; where no permit allows the workflow, write one (`principal is workflow <name>`), or take the call out |
 | W908 | a workflow is allowed an action whose operations its flow never calls | take the action out of the permits that allow the workflow |
-| W909 | a call of a workflow can be denied, or whether it is allowed cannot be decided, and the task declares no error for a denial | declare `errors denied = 403` (or `permission_denied` for Connect) on the task, and handle it under the call |
+| E909 | a call gives an argument a number the action's `input` of its name counts in another unit, step or tax (`rate[step 0.1%]` and `rate[step 1%]`): the flow sends 0.5% and the gate reads 5% | write one type as the other: the task's parameter or the gate's `input` (and the ends of its range written without a unit) |
+| W909 | a call of a workflow can be denied in some of the combinations it can come to, or whether it is allowed cannot be decided, and the task declares no error for a denial; also where the answer reads attributes of the resource and the gate says nothing of what the flow holds of them, and where the call is allowed only as far as the gate's `resource … from …` lines hold (an assumption nothing checks) | declare `errors denied = 403` (or `permission_denied` for Connect) on the task, and handle it under the call; say what the flow holds of the resource with `resource <Type> from <input>` under the gate's `workflow`, which narrows what is asked but does not take the declaration's place |
+| E911 | a gate a request reads (`use gate`, in a `.ringi`) does not say what the request's route says: it declares no action for an operation of a ticket or of the server's administration (switching a version of the request type, importing the organization's data, reading the records of either), or one that takes inputs of its own (`input`), which the server has nothing to give, it allows the approvers the route decides nothing an approver does, or it lets a requester decide their own request where the route does not (or never where the route does) | in the gate, declare the action, with no `input` lines, permit the approvers of a stage (`when principal in resource.approvers`) and forbid a requester their own request (`when resource.requester is principal`, `unless resource.self_approval`); or change the request's `self approval` line: which of the two is a person's decision |
+| W911 | whether the gate says what the route says cannot be decided: the gate declares `requester`, `approvers` or `self_approval` with another type than ringi hands it, or its answer rests on a condition another language does not decide | declare `requester` (an entity of the principal's type), `approvers` (an entity the approvers are members of) and `self_approval` (a bool) on the gate's resource |
 
 A few things to know before you act on one:
 
@@ -172,7 +199,9 @@ A few things to know before you act on one:
   Giving a place a range makes the warning decidable, but a range is a claim about the business
   (what a task can return, what days an input can be), so ask the person who owns it (§7) rather
   than narrowing it to silence the warning.
-- The ranges in E201 and W201 are dandori's, gathered from every place a value comes from, or, for a
+- The ranges in E201 and W201 are dandori's, gathered from every place a value comes from on the
+  runs that reach the call (a variable is what those runs last put in it; a value put in it on a
+  way that does not reach the call is not counted), or, for a
   call of a module of kaname, kaname's, which its analysis of ranges finds and its branches narrow.
   Narrowing one place can turn a warning into a pass or into an error. For a module's call, an error's
   example is an input of the function, found among its vectors, and a warning that cannot be decided
@@ -208,14 +237,24 @@ book stock (books/stock.book) at the end:
 
 The third column says who answered each call (`chobo`, `rulec`, `koyomi`, or `scenario`); a wait
 takes the time it says, a hold expires as the run's time goes by, and the end of each book is
-printed. The scenario is the one `dandori run` reads (an input, `now`, the answers of the other
-tasks) with `books`, what was done to the books before the run. `ritsu dandori scenarios
-<file.flow>` writes scenarios that take every arm; the calls of the flow's own rules are rulec's to
-answer there too (`"rules": "rulec"`), so each runs under `ritsu run` as it is. A scenario that
-answers those calls itself, written before, stops `ritsu run` at the first of them (exit 2). `--target` shows the calls as a platform would make them,
-`--format json` prints one object. Exit codes: 0 the run came to its end (succeeded, failed or was
-cancelled), 1 the flow has errors or the run could not go on (the scenario ran out of answers, say),
-2 bad arguments or a scenario that cannot be run.
+printed. `now` reads the run's clock when its statement runs: the scenario's `now`, gone on by each
+wait before it. The scenario is the one `dandori run` reads (an input, `now`, the answers of the
+other tasks) with `books`, what was done to each book before the run: its operations in order, and
+`{"op": "pass", "duration": "30 days"}` for time that went by between them. `ritsu dandori scenarios
+<file.flow>` writes scenarios that take every arm; the calls of the flow's own rules, of its dates
+and of its books are computed there too, not answered (`"rules": "rulec"`, `"dates": "koyomi"` and
+`books`), so every one runs under `ritsu run` unchanged. To reach each arm of a `match` on a rule's
+answer, it gives the rule values from its vectors through the answers of the tasks before the call;
+an arm or a handler no scenario takes is said after the scenarios, on standard error. A scenario an
+older `ritsu dandori scenarios` wrote, which answers those calls itself, stops `ritsu run` at the
+first of them (exit 2). `--target` shows the calls as a platform would make them, `--format json`
+prints one object. Exit codes: 0 the run came to its end (succeeded, failed or was cancelled) and
+took every answer of the scenario, 1 the flow has errors, the run could not go on (the scenario ran
+out of answers, say), or it left answers of the scenario (said after the run, and `unused` in the
+JSON), 2 bad arguments or a scenario that cannot be run. The flow's errors are
+dandori's and those `ritsu check <file.flow>` finds across the languages at its calls (a day a dates
+file does not take, say): the flow is not run then, even when the scenario does not come to that
+value.
 
 **`ritsu gen [<path>...] --target <target>... [--out <dir>]`** writes one package for each language
 given, of TypeScript, Python, Go and Rust (`<out>/<language>/`, `generated` by default), in that order
@@ -223,22 +262,30 @@ whatever the order of the flags; with no `--target`, the `target` line of the mo
 (`target typescript python go`) names them, and with neither, nothing is written and the exit is
 2. A package holds the rules, the dates, the
 clients of the books, the workflows, the code that asks the gates and the functional cores
-(kaname's modules, under `glue/`) of the project, where a workflow and a module read their rules, dates and books,
-and a gate's code its rules and dates, from the package itself; `--target cedar` writes the gates' Cedar once into `<out>/cedar/`, and a run without it lists what an earlier run left there and keeps it, the files with ritsu's head (the two JSON files, `.cedarschema.json` and `.policies.json`, have none and are not listed). A package of Rust
+(kaname's modules, under `glue/`) of the project, and of each request type (ringi's) the rules and dates it is lowered to, its wiring and the ticket machine, with a list of the kinds of request, where a workflow and a module read their rules, dates and books,
+and a gate's code its rules and dates, from the package itself; `--target cedar` writes the gates' Cedar once into `<out>/cedar/`, `--target requests` writes once into `<out>/requests/` what a server of requests and its screens read (the API as OpenAPI, the agents' tools, the screens, the organization's schema, the vectors; it needs `--catalog <url>` or a `catalog` line in `ritsu.mod`), and a run without it lists what an earlier run left there and keeps it, the files with ritsu's head (the two JSON files, `.cedarschema.json` and `.policies.json`, have none and are not listed). A package of Rust
 is one crate with no workflow and no code that asks a gate (a warning names each file it leaves out, and
 the exit is 0), and with functional cores it can be built as one Wasm module by the line at the head of its
 `Cargo.toml`; `--library` does not write Rust (exit 2). An amount of money or of a quantity is of
 the package's one type of its unit, declared in `units` and taken and returned in it by the rules
 and the clients of the books alike, so code written by hand that gives a book what a rule returns,
 with no workflow between them, is held to the book's unit by the type checker of the language
-(`USDc` from a rule is what the book's `sale` takes; `USD` is not). Run it after `ritsu check` passes. `--check`
+(`USDc` from a rule is what the book's `sale` takes; `USD` is not). It writes nothing while `ritsu check`
+finds an error that would make the code wrong, and says it as `ritsu check` does (exit 1): an
+error of a file's own language, of the checks across the languages or of the modules, or sakai's
+of a reference from a file of the package that crosses a boundary of the map (its E2xx). yuen's
+errors (a record no person has made yet), geas's claims and sakai's other errors do not stop it,
+nor does a warning that a check cannot decide. `--check`
 writes nothing and exits 1 if a package is stale, for CI; `--format json` prints one object instead
 of lines, every file of the packages with what became of it (`written`, `same` or `removed`; under
 `--check`, `same`, `missing`, `stale` or `left`), or why nothing was generated with the diagnostics
-of the files that stopped it; `--books postgres|tigerbeetle|mysql` says what the clients of the
+that stopped it; `--books postgres|tigerbeetle|mysql` says what the clients of the
 books call (`mysql` is MySQL, TiDB or Vitess); `--authorizer cedar|avp` says whether a gate's code
 asks the language's own Cedar in the process or Amazon Verified Permissions; `--name` and
-`--module` name the package. Each language's own `gen` still writes that language's code alone (`rulec
+`--module` name the package. The comments of the code, and the text the code returns, are in the
+language of `--lang`, and in English without it: `RITSU_LANG` and the languages' own variables
+change only the text the command prints, so the same project makes the same package on every
+machine. Each language's own `gen` still writes that language's code alone (`rulec
 gen`, `koyomi gen`, `chobo gen`, `dandori gen`, `sekisho gen`, each with its own `--target`), and
 none of them reads the `target` line.
 
@@ -261,15 +308,16 @@ repository at the paths below, to copy beside this one.
 | sakai | `.ctx` | `skills/sakai/` | write a map of bounded contexts |
 | sekisho | `.gate` | `skills/sekisho/` | write who may do what, fix sekisho's diagnostics, generate Cedar and the code that asks it |
 | kaname | `.kn` | `skills/kaname/` | write a functional core, general code with no input or output that may call rules, dates and ledgers, fix kaname's diagnostics, show which functions are total |
+| ringi | `.ringi` | `skills/ringi/` | write a kind of request of any department (its form, its route and who approves each stage, its deadlines), with the organization and the masters it reads, fix ringi's diagnostics, show who approves a person's request |
 
 ## 6. A language that reads another
 
 `ritsu <language> …` is that language's own command, with the languages it reads joined in the same
-process. `dandori`, `yuen`, `sakai`, `sekisho` and `kaname` read others, so a command of theirs on
+process. `dandori`, `yuen`, `sakai`, `sekisho`, `kaname` and `ringi` read others, so a command of theirs on
 a file that uses another language's files is run as `ritsu dandori …`, `ritsu yuen …`, `ritsu sakai
-…`, `ritsu sekisho …` or `ritsu kaname …`. A link to ritsu named for the language does the same. Built alone from its own
+…`, `ritsu sekisho …`, `ritsu kaname …` or `ritsu ringi …`. A link to ritsu named for the language does the same. Built alone from its own
 crate, each reads no other language and says so: dandori's E018, yuen's E206, sakai's E104,
-sekisho's E209 and kaname's E202 name the command to run instead. `rulec` reads koyomi's days (`range from koyomi`), so `ritsu rulec check` is what checks
+sekisho's E209, kaname's E202 and ringi's E008 name the command to run instead. `rulec` reads koyomi's days (`range from koyomi`), so `ritsu rulec check` is what checks
 such a rule.
 
 ## 7. What stays with people

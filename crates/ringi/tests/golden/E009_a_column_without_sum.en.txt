@@ -1,0 +1,2 @@
+error[E009]: tests/mutants/E009_a_column_without_sum.ringi:7:49: `items.price` is a column of the rows `items`: to add it up, write `sum(items.price)`
+     7 |   receipt : attachment "Receipt"  required when items.price > 30_000JPY

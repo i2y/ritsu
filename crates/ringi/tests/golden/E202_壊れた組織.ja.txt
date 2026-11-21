@@ -1,0 +1,4 @@
+エラー[E202]: tests/mutants/E202_壊れた組織.ringi:3:31: `shared/壊れた会社.ringi` は ringi の検査を通りません
+     3 | use organization 組織(org) from "shared/壊れた会社.ringi"
+  = E001: 組織のファイル（`organization`）に `positions` がありません（`tests/mutants/shared/壊れた会社.ringi:1:1`）
+  = そのファイルを、検査が通るように直してください。

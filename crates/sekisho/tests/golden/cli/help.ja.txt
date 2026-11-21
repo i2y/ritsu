@@ -3,13 +3,13 @@ sekisho <version>
 認可を書く小さな言語。だれが何に何をしてよいかを、役割・属性・関係と、rulec の規則と koyomi の日付を条件にして書き、宣言した範囲のすべての組み合わせで確かめて、Cedar を生成する
 
 使い方:
-  sekisho check <file.gate>...  検査する。構文、名前と型、宣言した範囲のすべての組み合わせ
-  sekisho gen <file.gate>...    Cedar のスキーマとポリシーか、リクエストを組み立てて Cedar に尋ねるコードを生成する。検査を通らないファイルからは生成しない
-  sekisho diff <old> <new>      二つの版の決定を比べる。両方にある action ごとに、二つの版の切り方を合わせた組み合わせの全部で
-  sekisho vectors <file.gate>   全部の組み合わせを、cedar run-tests が読むテストにして出す（リクエスト、エンティティ、sekisho の参照の評価が言う答えと決めたポリシー）
-  sekisho api <file.gate>       ほかのツールのための JSON を出す。名前空間と生成するファイル、役割・型・ワークフローと Cedar でのエンティティ、action と守る操作と context、ポリシーの @id、期待と職務の分離
-  sekisho doc <file.gate>       人が読むページを出す。action ごとの表、ポリシーと生成する Cedar、計算した値とその規則と日付のページ、期待と役割、ワークフロー、守る操作
-  sekisho explain <code>        診断のコードを説明する。いつ出るか、直し方、それを出す一番小さな例
+  sekisho check <file.gate>...       検査する。構文、名前と型、宣言した範囲のすべての組み合わせ
+  sekisho gen <file.gate>...         Cedar のスキーマとポリシーか、リクエストを組み立てて Cedar に尋ねるコードを生成する。検査を通らないファイルからは生成しない
+  sekisho diff <old> <new>           二つの版の決定を比べる。両方にある action ごとに、二つの版の切り方を合わせた組み合わせの全部で
+  sekisho vectors <file.gate>        全部の組み合わせを、cedar run-tests が読むテストにして出す（リクエスト、エンティティ、sekisho の参照の評価が言う答えと決めたポリシー）
+  sekisho api <file.gate>            ほかのツールのための JSON を出す。名前空間と生成するファイル、役割・型・ワークフローと Cedar でのエンティティ、action と守る操作と context、ポリシーの @id、期待と職務の分離
+  sekisho doc <file.gate>            人が読むページを出す。action ごとの表、ポリシーと生成する Cedar、計算した値とその規則と日付のページ、期待と役割、ワークフロー、守る操作
+  sekisho explain <code>... | --all  診断のコードを説明する。いつ出るか、直し方、それを出す一番小さな例
 
 一つのコマンドの詳しい説明は `sekisho <cmd> --help`（`sekisho help <cmd>` も同じ）。
 どのコマンドも `--lang ja|en` と `--help` を取ります。

@@ -6,9 +6,9 @@
 use ritsu_testkit::tmp::tmpdir_in;
 use ritsu_testkit::{Need, TempDir, ready};
 use std::collections::BTreeMap;
-use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -73,16 +73,25 @@ const EXTRA: &[(&[&str], &str, &[&str])] = &[
 /// The runner of the Connect service: written only when both `runner` and `connect` are asked for.
 const CONNECT_RUNNER: &str = "python/member_shipping_fee_connect_runner.py";
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own, and a session of `rulec mcp` waits for
+/// every answer. Past it, rulec is stopped with every process it started, and the test fails saying
+/// what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 /// `rulec <args>` in `dir`, in `lang`: the exit code, the standard output and the standard error.
 /// `rulec test` has its TMPDIR under `dir`, so what a toolchain leaves there goes with it.
 fn rulec_in(dir: &Path, lang: &str, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_rulec"));
     c.env("RULEC_LANG", lang).env_remove("RITSU_LANG").current_dir(dir).args(args);
+    if !args.contains(&"--lang") {
+        c.args(["--lang", lang]);
+    }
     if args.first() == Some(&"test") {
         c.env("TMPDIR", tmpdir_in(dir));
     }
-    let o = c.output().expect("cannot start rulec");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    let o = finish(&mut c, RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 /// Every file under `dir`, by its path from `dir`, with its bytes.
@@ -222,7 +231,7 @@ fn with_no_target_nothing_is_written_and_the_command_of_0_40_is_named() {
         ),
         (
             "ja",
-            format!("error: `rulec gen` が書くのは、指定した出力先だけです。`--target {names}` を一つ以上付けてください。横に書く付属物は `--extra {extras}` で指定します"),
+            format!("エラー: `rulec gen` が書くのは、指定した出力先だけです。`--target {names}` を一つ以上付けてください。横に書く付属物は `--extra {extras}` で指定します"),
             "注記: 0.40.0 までの `rulec gen` は、`--target` が無ければ、全部の出力先を全部の付属物つきで書きました。同じファイルを書くのは次のコマンドです",
         ),
     ] {
@@ -249,7 +258,7 @@ fn what_cannot_be_written_stops_at_2_before_anything_is() {
         (
             &["--target", "cobol"],
             "`--target cobol` is not a value this flag takes; it takes only python | numpy | typescript | javascript | rust | ruby | php | go | swift | java | sql | wasm | proto",
-            "`--target` に `cobol` は使えません。書けるのは python | numpy | typescript | javascript | rust | ruby | php | go | swift | java | sql | wasm | proto だけです",
+            "`--target` に `cobol` は使えません。使えるのは python | numpy | typescript | javascript | rust | ruby | php | go | swift | java | sql | wasm | proto だけです",
         ),
         (&["--target", "python", "--extra", "proof"], "`--extra proof` is an extra of rust, and there is no `--target rust`", "`--extra proof` は rust の付属物です。`--target rust` がありません"),
         (
@@ -274,7 +283,8 @@ fn what_cannot_be_written_stops_at_2_before_anything_is() {
             let mut a = vec!["gen", "member_shipping_fee.rule", "--out", "out"];
             a.extend_from_slice(args);
             let (code, out, err) = rulec_in(t.path(), lang, &a);
-            assert_eq!((code, out.as_str(), err.as_str()), (2, "", format!("error: {says}\n").as_str()), "{lang}: {args:?}");
+            let head = if lang == "ja" { "エラー" } else { "error" };
+            assert_eq!((code, out.as_str(), err.as_str()), (2, "", format!("{head}: {says}\n").as_str()), "{lang}: {args:?}");
             assert!(!t.path().join("out").exists(), "{lang}: {args:?} wrote before it stopped");
         }
     }
@@ -350,7 +360,7 @@ fn rulec_test_runs_what_was_generated() {
     let (code, _, err) = rulec_in(t.path(), "en", &["test", "bare"]);
     assert_eq!((code, err.as_str()), (2, "error: no vectors in `bare/vectors`; run `rulec gen <file.rule>... --target <target> --extra runner --extra vectors --out bare` first\n"));
     let (code, _, err) = rulec_in(t.path(), "ja", &["test", "bare"]);
-    assert_eq!((code, err.as_str()), (2, "error: `bare/vectors` にベクタがありません。先に `rulec gen <file.rule>... --target <出力先> --extra runner --extra vectors --out bare` を実行してください\n"));
+    assert_eq!((code, err.as_str()), (2, "エラー: `bare/vectors` にベクタがありません。先に `rulec gen <file.rule>... --target <出力先> --extra runner --extra vectors --out bare` を実行してください\n"));
     make("vectors-only", &["--target", "python", "--extra", "vectors"]);
     std::fs::remove_dir_all(t.path().join("vectors-only/python")).unwrap();
     let (code, _, err) = rulec_in(t.path(), "en", &["test", "vectors-only"]);
@@ -392,7 +402,7 @@ fn rulec_test_runs_what_was_generated() {
     let results = j.get("results").and_then(|r| r.as_arr()).unwrap();
     assert_eq!(results.len(), 1, "{out}");
     let (_, out, _) = rulec_in(t.path(), "en", &["test", "runner"]);
-    assert!(out.contains("ok    member_shipping_fee (Python) 70 vectors, 16 refused"), "{out}");
+    assert!(out.contains("ok    member_shipping_fee (Python) 70 vectors, 18 refused"), "{out}");
 }
 
 /// The MCP tool takes the targets as an array of the names `--target` takes, at least one, and
@@ -408,29 +418,20 @@ fn the_mcp_tool_takes_the_targets_as_an_array() {
         call(2, format!(r#"{{"files":[{}],"target":["python","go"],"extra":["runner"],"out":{}}}"#, json_str(&rule), json_str(&out))),
         call(3, format!(r#"{{"files":[{}],"out":{}}}"#, json_str(&rule), json_str(&t.path().join("none")))),
     ];
-    let mut child = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env_remove("RITSU_LANG")
-        .current_dir(t.path())
-        .arg("mcp")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("cannot start rulec mcp");
-    {
-        let mut stdin = child.stdin.take().unwrap();
-        for r in &requests {
-            writeln!(stdin, "{r}").unwrap();
-        }
-    }
-    let answers: Vec<rulec::json::Json> = BufReader::new(child.stdout.take().unwrap())
+    let input: String = requests.iter().map(|r| format!("{r}\n")).collect();
+    let o = ritsu_testkit::run::finish_with_input(
+        Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env_remove("RITSU_LANG").current_dir(t.path()).arg("mcp"),
+        Some(input.as_bytes()),
+        RULEC_LIMIT,
+        "rulec mcp answering the requests",
+    );
+    let answers: Vec<rulec::json::Json> = o
+        .stdout
         .lines()
-        .map(|l| l.unwrap())
         .filter(|l| !l.trim().is_empty())
-        .map(|l| rulec::json::parse(&l).unwrap_or_else(|e| panic!("{e}: {l}")))
+        .map(|l| rulec::json::parse(l).unwrap_or_else(|e| panic!("{e}: {l}")))
         .collect();
-    assert!(child.wait().unwrap().success());
+    assert!(o.ok);
     let tools = answers[0].get("result").and_then(|r| r.get("tools")).and_then(|t| t.as_arr()).unwrap();
     let tool = tools.iter().find(|t| t.get("name").and_then(|n| n.as_str()) == Some("rulec_gen")).expect("rulec_gen");
     let schema = tool.get("inputSchema").unwrap();
@@ -463,8 +464,8 @@ fn json_str(p: &Path) -> String {
 #[test]
 fn the_page_of_gen_names_the_targets_and_the_extras() {
     for (lang, usage) in [
-        ("en", "  rulec gen <file.rule>... --target <target>... [--extra <extra>...] [--out <dir>] [--check] [--format json]"),
-        ("ja", "  rulec gen <file.rule>... --target <出力先>... [--extra <付属物>...] [--out <dir>] [--check] [--format json]"),
+        ("en", "  rulec gen <file.rule>... --target <target>... [--extra <extra>...] [--python-package] [--out <dir>] [--check] [--format json]"),
+        ("ja", "  rulec gen <file.rule>... --target <出力先>... [--extra <付属物>...] [--python-package] [--out <dir>] [--check] [--format json]"),
     ] {
         let (code, out, _) = rulec_in(&root(), lang, &["gen", "--help"]);
         assert_eq!(code, 0);

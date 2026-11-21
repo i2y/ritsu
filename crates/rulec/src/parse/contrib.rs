@@ -95,6 +95,7 @@ impl P {
         let mut combine = None;
         let mut empty = None;
         let mut range = None;
+        let mut range_seen = false;
         while k < line.len() {
             if line[k].is(&Kind::At) {
                 break;
@@ -129,7 +130,12 @@ impl P {
                 }
                 Some(crate::kw::RANGE) => {
                     // Only this `range` is read here. A later one on the line is read when the
-                    // loop comes to it, and reading it twice would say twice what is wrong with it.
+                    // loop comes to it — and is a `range` written twice, E155 (§15.348); the last
+                    // one used to win in silence.
+                    if range_seen {
+                        self.twice(line[k].span.clone(), crate::kw::RANGE);
+                    }
+                    range_seen = true;
                     let next = line[k + 1..].iter().position(|t| t.ident() == Some(crate::kw::RANGE)).map_or(line.len(), |p| k + 1 + p);
                     let (r, _) = self.tail_range(&line[..next], k);
                     range = r;

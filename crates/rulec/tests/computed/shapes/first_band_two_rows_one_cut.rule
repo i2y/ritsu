@@ -1,0 +1,28 @@
+rule first_band_two_rows_one_cut v1
+description "A band a policy first table writes from the amount, read with the amount cut elsewhere: from -16 yen to 12 yen, the first row of the table above takes the amounts under 1 yen and the third row those from 1 yen, so the last row never writes small there, and no row is asked for that"
+
+enum choice = one | two
+enum size = small | large
+
+inputs
+  amount : money[JPY]  range >=-40JPY <=42JPY
+
+outputs
+  x : choice
+
+table band_of
+policy first
+| amount           | -> band : size |
+| >=-22JPY <1JPY   | large          |
+| >=30JPY          | small          |
+| >0JPY <30JPY     | large          |
+| -                | small          |
+
+table pick
+| amount            | band  | -> x |
+| <=-33JPY          | small | one  |
+| >-33JPY <-16JPY   | small | two  |
+| >-33JPY <-16JPY   | large | one  |
+| >=-16JPY <13JPY   | large | two  |
+| >12JPY            | small | one  |
+| >12JPY            | large | two  |

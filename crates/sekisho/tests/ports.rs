@@ -7,7 +7,7 @@
 mod common;
 
 use ritsu_base::naming::{self, Tool};
-use ritsu_ports::{Allowance, Asker, Found, Gates, Items, References};
+use ritsu_ports::{Allowance, Asker, Found, GateGiven, GateGivenValue, Gates, Items, References};
 use sekisho::ports::Engine;
 use std::path::{Path, PathBuf};
 
@@ -45,6 +45,9 @@ fn answers(e: &Engine, file: &str) -> String {
         for (g, l) in &a.guards {
             out.push_str(&format!("    guards {} (line {l})\n", g.text()));
         }
+        for i in &a.inputs {
+            out.push_str(&format!("    input {} ({}) line {}: {}\n", i.name, i.alias, i.line, holds(&i.holds)));
+        }
     }
     for w in &f.workflows {
         out.push_str(&format!("  workflow {} ({}) line {}: {}\n", w.name, w.alias, w.line, w.flow.text()));
@@ -59,6 +62,18 @@ fn answers(e: &Engine, file: &str) -> String {
         out.push_str(&format!("  separate {x} line {l}\n"));
     }
     out
+}
+
+/// What an input holds, as the golden files write it: a number's type as the gate writes it, the
+/// type of its unit, and its range on the wire; an enum's values; `?` where it may be absent.
+fn holds(c: &ritsu_ports::Carried) -> String {
+    use ritsu_ports::Carried;
+    match c {
+        Carried::Num { written, unit, min, max } => format!("{written} ({}) {min:?}..{max:?}", unit.as_ref().map_or_else(|| "no unit".into(), |u| u.to_string())),
+        Carried::Enum { name, values } => format!("{name} [{}]", values.iter().map(|v| format!("{} {}", v.written, v.public)).collect::<Vec<_>>().join(", ")),
+        Carried::Opt(t) => format!("{}?", holds(t)),
+        other => format!("{other:?}"),
+    }
 }
 
 #[test]
@@ -108,6 +123,127 @@ fn how_far_an_asker_is_allowed_an_action() {
     assert!(e.allowed(&root, "refunds.gate", "delete_order", &Asker::Workflow("returns".into())).is_err());
 }
 
+/// A gate of who does what to a ticket (fictional): the approvers of a stage answer it, no one
+/// decides their own request unless its route lets them, and an urgent stage is not handed over.
+const TICKETS: &str = "gate company v1
+description \"Who does what to a ticket\"
+namespace Tickets
+
+enum level = normal | urgent
+
+principal Staff
+principal Robot
+resource Approvers
+resource Ticket
+resource Stage
+  attributes
+    requester     : Staff
+    approvers     : Approvers
+    self_approval : bool
+    urgency       : level
+
+action submit
+  principal Staff
+  resource Ticket
+action approve
+  principal Staff, Robot
+  resource Stage
+action hand_over
+  principal Staff
+  resource Stage
+
+permit staff_submit_and_hand_over
+  principal is Staff
+  action submit, hand_over
+
+permit approvers_answer_their_stage
+  principal is Staff
+  action approve
+  when principal in resource.approvers
+
+forbid no_one_decides_their_own
+  principal is Staff
+  action approve
+  when resource.requester is principal
+  unless resource.self_approval
+
+forbid an_urgent_stage_stays
+  principal is Staff
+  action hand_over
+  when resource.urgency is urgent
+";
+
+/// How far an action is allowed where some attributes are held to values (`Gates::allowed_with`):
+/// over the combinations the check walks that agree with what is held, and every value of the rest.
+#[test]
+fn how_far_an_action_is_allowed_with_attributes_held() {
+    let e = engine();
+    let t = ritsu_testkit::TempDir::new("held");
+    std::fs::write(t.path().join("company.gate"), TICKETS).unwrap();
+    let ask = |action: &str, principal: Option<&str>, given: &[GateGiven]| e.allowed_with(t.path(), "company.gate", action, principal, given).unwrap_or_else(|s| panic!("{action}: {s:?}"));
+    let word = |a: &Found<Allowance>| match a {
+        Found::Value(Allowance::Always) => "always",
+        Found::Value(Allowance::Sometimes { .. }) => "sometimes",
+        Found::Value(Allowance::Never) => "never",
+        Found::Undecided(_) => "undecided",
+    };
+    let requester = |is: bool| GateGiven::resource("requester", GateGivenValue::IsPrincipal(is));
+    let approvers = |holds: bool| GateGiven::resource("approvers", GateGivenValue::HoldsPrincipal(holds));
+    let own = |allowed: bool| GateGiven::resource("self_approval", GateGivenValue::Bool(allowed));
+    let urgency = |v: &str| GateGiven::resource("urgency", GateGivenValue::Enum(v.to_string()));
+    // nothing held is the question of every combination: an approver is allowed, another is not
+    assert_eq!(word(&ask("approve", Some("Staff"), &[])), "sometimes");
+    // an approver who is not the requester is allowed in every combination
+    assert_eq!(word(&ask("approve", Some("Staff"), &[approvers(true), requester(false), own(false)])), "always");
+    assert_eq!(word(&ask("approve", Some("Staff"), &[approvers(false)])), "never");
+    // the requester: never where the route does not let them, as far as they are an approver where
+    // it does
+    assert_eq!(word(&ask("approve", Some("Staff"), &[requester(true), own(false)])), "never");
+    let some = ask("approve", Some("Staff"), &[requester(true), own(true)]);
+    let Found::Value(Allowance::Sometimes { allowed, denied }) = &some else { panic!("{some:?}") };
+    assert!(allowed.en.contains("principal is in resource.approvers") && denied.en.contains("principal is not in resource.approvers"), "{allowed:?} {denied:?}");
+    assert!(!allowed.ja.is_empty() && !denied.ja.is_empty());
+    assert_eq!(word(&ask("approve", Some("Staff"), &[requester(true), approvers(true), own(true)])), "always");
+    // a value of an enum
+    assert_eq!(word(&ask("hand_over", None, &[urgency("urgent")])), "never");
+    assert_eq!(word(&ask("hand_over", None, &[urgency("normal")])), "always");
+    assert_eq!(word(&ask("hand_over", None, &[])), "sometimes");
+    // the type of the principal: every type the action takes for None, and a type no policy
+    // permits is never allowed; a type the gate does not have is never allowed either
+    assert_eq!(word(&ask("approve", None, &[approvers(true), requester(false)])), "sometimes");
+    assert_eq!(word(&ask("approve", Some("Robot"), &[approvers(true), requester(false)])), "never");
+    assert_eq!(word(&ask("approve", Some("Nobody"), &[])), "never");
+    // an attribute held to be the principal, of another type than the principal's, leaves no
+    // combination
+    assert_eq!(word(&ask("approve", Some("Robot"), &[requester(true), approvers(true), own(true)])), "never");
+    // an attribute the action's resource does not have holds nothing
+    assert_eq!(word(&ask("submit", None, &[own(false), urgency("urgent")])), "always");
+    // a value the attribute's type cannot have is undecided, with the reason
+    for (given, why) in [
+        (GateGiven::resource("requester", GateGivenValue::Bool(true)), "`resource.requester` is not a bool"),
+        (GateGiven::resource("self_approval", GateGivenValue::Enum("urgent".into())), "`resource.self_approval` is not an enum"),
+        (GateGiven::resource("self_approval", GateGivenValue::IsPrincipal(true)), "`resource.self_approval` does not point to an entity"),
+    ] {
+        match ask("approve", Some("Staff"), &[given.clone()]) {
+            Found::Undecided(t) => assert_eq!(t.en, why, "{given:?}"),
+            other => panic!("{given:?}: {other:?}"),
+        }
+    }
+    assert_eq!(word(&ask("hand_over", None, &[urgency("slow")])), "undecided");
+    // what is held, as a message shows it
+    assert_eq!(requester(true).text().en, "`resource.requester` is the principal");
+    assert_eq!(approvers(true).text().en, "the principal is in `resource.approvers`");
+    assert_eq!(own(false).text().en, "`resource.self_approval` is false");
+    assert_eq!(GateGiven::principal("team", GateGivenValue::Enum("sales".into())).place(), "principal.team");
+    // an action the gate does not have is no question it answers; Cedar written by hand keeps the
+    // port's default
+    assert!(e.allowed_with(t.path(), "company.gate", "delete", None, &[]).is_err());
+    assert_eq!(word(&e.allowed_with(t.path(), "policies.cedar", "approve", None, &[own(true)]).unwrap()), "undecided");
+    // the question with nothing held agrees with the question of an asker
+    let asker = e.allowed(t.path(), "company.gate", "approve", &Asker::Roles { ty: "Staff".into(), roles: Vec::new() }).unwrap();
+    assert_eq!(word(&asker), "sometimes");
+}
+
 /// A gate that does not pass its check answers no question of the checks across the borders, but
 /// still says what it holds and names.
 #[test]
@@ -132,4 +268,49 @@ fn a_gate_that_does_not_pass_says_why() {
     assert_eq!(said[0].code, "E001", "{said:?}");
     assert_eq!(e.items(t.path(), "missing.gate").unwrap_err()[0].code, "");
     assert_eq!(Tool::from_word("sekisho"), Some(Tool::Sekisho));
+}
+
+/// A gate's check is kept for the run its engine is made for (ritsu's DESIGN 4.15): each command
+/// and each question of the browser page makes its own engine (`ritsu_project::Joined`), and nothing
+/// in a run writes a gate, so the engine reads nothing again; the next run's engine checks the gate
+/// as it is then.
+#[test]
+fn a_gate_is_kept_for_the_run_and_read_again_by_the_next() {
+    let t = ritsu_testkit::TempDir::new("kept-gate");
+    let gate = t.write("company.gate", TICKETS);
+    let e = engine();
+    for _ in 0..2 {
+        assert!(matches!(e.outcome_of(t.path(), &gate).as_ref(), Ok(o) if !o.has_errors()));
+    }
+    assert_eq!(e.checks(), 1);
+    t.write("company.gate", TICKETS.replace("action submit, hand_over", "action submit, hand_off"));
+    let next = engine();
+    assert!(matches!(next.outcome_of(t.path(), &gate).as_ref(), Ok(o) if o.has_errors()));
+    assert_eq!(next.checks(), 1);
+}
+
+/// A gate is one file however its path is written (ritsu's DESIGN 4.15): `ritsu check` given it under
+/// four spellings of its path, then the ports and `ritsu gen` asking of it, check it once in a run,
+/// and what the ports say of one that does not pass names it one way.
+#[test]
+fn a_gate_is_one_file_however_its_path_is_written() {
+    let e = engine();
+    let t = ritsu_testkit::TempDir::new("spelled");
+    t.write("company.gate", TICKETS);
+    t.write("wrong.gate", TICKETS.replace("action submit, hand_over", "action submit, hand_off"));
+    let _run = ritsu_base::paths::run_from(".");
+    let given: Vec<String> = t.spellings("company.gate").iter().map(|p| p.display().to_string()).collect();
+    let units = e.checked(t.path(), &given, ritsu_base::text::Lang::En);
+    assert!(units.iter().all(|u| u.verdict == ritsu_ports::Verdict::Passes), "{}", units[0].text());
+    for f in ["company.gate", "./company.gate", "aside/../company.gate"] {
+        assert_eq!(e.facts(t.path(), f).unwrap_or_else(|s| panic!("{f}: {s:?}")).name, "company");
+    }
+    for p in t.spellings("company.gate") {
+        assert!(e.outcome_of(t.path(), &p).is_ok(), "{}", p.display());
+    }
+    assert_eq!(e.checks(), 1, "one check for every spelling");
+    let said: Vec<_> = ["wrong.gate", "./wrong.gate", "aside/../wrong.gate"].iter().map(|f| e.facts(t.path(), f).unwrap_err()).collect();
+    assert!(!said[0].is_empty() && said[0].iter().all(|s| !s.code.is_empty()), "{:?}", said[0]);
+    assert!(said.windows(2).all(|w| w[0] == w[1]), "{said:?}");
+    assert_eq!(e.checks(), 2);
 }

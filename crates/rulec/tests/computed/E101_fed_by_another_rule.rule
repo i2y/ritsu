@@ -1,0 +1,25 @@
+rule purchase_route_fed v1
+description "The same order, with whether finance reviews the request taken as an input another rule's output feeds. `fed by` says where the value comes from, not what that rule was given, so the table is read with that input free of the kind and the amount"
+
+enum kind = goods | capex | software
+enum first_by = manager
+enum finance_by = finance_team
+enum decide_by = dept_head | division_head | president
+
+inputs
+  kind              : kind
+  amount            : money[JPY]  range >=1JPY <=100_000_000JPY
+  authority_finance : bool  fed by rulec "shared/authority.rule" output finance
+
+outputs
+  first   : first_by
+  finance : finance_by?
+  decide  : decide_by
+
+table route
+| kind     | amount         | authority_finance | -> first | finance      | decide        |
+| goods    | <=1_000_000JPY | false             | manager  | none         | dept_head     |
+| goods    | >1_000_000JPY  | true              | manager  | finance_team | division_head |
+| capex    | -              | true              | manager  | finance_team | president     |
+| software | <=3_000_000JPY | false             | manager  | none         | division_head |
+| software | >3_000_000JPY  | true              | manager  | finance_team | president     |

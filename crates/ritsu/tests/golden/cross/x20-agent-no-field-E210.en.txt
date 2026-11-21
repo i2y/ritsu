@@ -1,0 +1,9 @@
+precheck.flow: ok
+ok purchase.ringi: a request, 3 fields, 2 stages
+  may never end: the stages `decide` and `check` have no deadline (`due in …`), and wait until they are answered
+error[ritsu E210]: purchase.ringi:17: The input `budget` of the flow `precheck` is neither `request_id` nor a field of the form of `purchase`
+    17 |   small   = agent precheck, else finance
+  = At a stage of the way `small`, ringi gives the flow the ticket's ID (`request_id`) and the fields of the form the flow declares as its inputs.
+  = ringi has nothing to give this input.
+  = Name the input of "precheck.flow" after a field of the form (line 14), or take the input out.
+ritsu check: 2 files (dandori 1, ringi 1): 1 fail (1 error); borders between the languages: 5 checked, 0 undecided

@@ -1,0 +1,24 @@
+# 宣言で書き誤った名前と、それを使う行。ターゲットはファイルで、持った名前は主張で、最初に書いた所で一度だけ言う。
+# chain_names.geas の日本語の版
+
+# ターゲットの名前の書き誤り。どの呼び出しも `api` と書いたまま
+target apii {
+  run "python3 server.py"
+}
+
+claim "チケットは読み返せて、消せる" {
+  # 持つ名前の書き誤り。呼び出しは `{token}` と書いたまま
+  keep env "TICKETS_TOKEN" as tokn
+  when api.post("/tickets", body: "{\"title\":\"プリンター\"}", header "authorization": "Bearer {token}")
+  then status is 201
+  keep body json ".id" as id
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then body json ".id" is "{id}"
+  when api.delete("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 204
+}
+
+claim "トークンの無い呼び出しは断られる" {
+  when api.post("/tickets", body: "{\"title\":\"ドア\"}")
+  then status is 401
+}

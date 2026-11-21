@@ -1,0 +1,10 @@
+enums 結果の種類(outcomes) v1
+description "Rust のコードが読む型と同じ名前の、enums ファイルの列挙"
+
+enum 選び(option) = こちら(this_way) | あちら(that_way)
+enum 結果(result) = 合格(passed) | 不合格(failed)
+enum 列(vec) = 短い(short) | 長い(long)
+
+prerequisites 段(steps) over 結果
+  start  合格
+  不合格 requires 合格

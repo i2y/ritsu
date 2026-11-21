@@ -5,7 +5,7 @@ A state moved by events, input checked and made the form a service keeps, counts
 The rest of the program — reading a request, the clock or a database, keeping state, and carrying out what the core decides — stays in the host, the imperative shell that calls it.
 kaname checks the core by the rules ritsu's languages are checked by — units, currencies and tax, the steps of rates, ranges, rounding and int64 — and works out what each function can do (`total`, `fails …`, `diverges`).
 It also calls the rules of rulec, the dates of koyomi and the transfers of chobo's books in ritsu's types, and `ritsu gen` writes it as TypeScript, Python, Go and Rust, with no dependency, beside their code; the Rust also builds to one Wasm module, which a host in any language calls with one JSON object.
-kaname is one of the nine languages of [ritsu](../../README.md).
+kaname is one of the ten languages of [ritsu](../../README.md).
 On ritsu's site, **[the pages of kaname](https://i2y.github.io/ritsu/kaname/)** go through how a module is written, the four functional cores below with their hosts in TypeScript, Python and Go, what the check guarantees, and the calls of rules, dates and books.
 
 ## A functional core
@@ -203,7 +203,7 @@ Without the branch, the days late reach the rule unnarrowed, and kaname shows an
 $ ritsu kaname check tests/docs/unnarrowed.kn
 error[E301]: tests/docs/unnarrowed.kn:15:44: `late` can be outside >=1 <=1500, the range of the input `days_late` of the rule `charges`
     15 |   charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate).interest
-  = For example, `interest(invoice: Invoice { id: "a", invoiced: 2026-01-01, amount: 50000000GBPc }, paid_on: 2026-01-01, reference_rate: 0%)` gives it -29.
+  = For example, `interest(invoice: Invoice { id: "a", invoiced: 2026-01-01, amount: 50_000_000GBPc }, paid_on: 2026-01-01, reference_rate: 0%)` gives it -29.
   = Narrow it to that range with an `if` before it goes there, or widen the range it goes to.
 ```
 
@@ -225,8 +225,8 @@ error[kaname E401]: tests/docs/net.kn:13:1: `capture` is written `total`, but it
   = Make the places shown (narrow the values with an `if` before they go there), or write a wider effect.
 error[ritsu E203]: tests/docs/net.kn:15:74: `payment.amount - fee`, given to `amount` of the transfer `ledger.capture.do`, can be an amount chobo does not take
     15 |   ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount - fee)
-  = For example, `capture(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` gives it -48.
-  = chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step.
+  = For example, `capture(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` gives it -48USDc.
+  = chobo takes an amount from 0 to 2⁶³ − 1 in the unit's smallest step.
   = kaname's generated code checks the amount where it builds the transfer, and the function fails there with `range`.
   = Narrow the amount with an `if` before the transfer, or make a negative amount a transfer the other way.
 ritsu check: 3 files (rulec 1, chobo 1, kaname 1): 1 fail (2 errors); borders between the languages: 2 checked, 0 undecided
@@ -292,7 +292,7 @@ One that fails is an error that names the input:
 
 ```console
 $ ritsu kaname check tests/properties/shares.kn
-error[E603]: tests/properties/shares.kn:12:1: The property `every_line_gets_a_share` is false for lines: [Line { sku: "a", left: 500000USDc }, Line { sku: "a", left: 500000USDc }], refund: 1USDc
+error[E603]: tests/properties/shares.kn:12:1: The property `every_line_gets_a_share` is false for lines: [Line { sku: "a", left: 500_000USDc }, Line { sku: "a", left: 500_000USDc }], refund: 1USDc
     12 | property every_line_gets_a_share(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
   = Line 15: `shares` is [0USDc, 1USDc]
   = `check` runs a property in the reference interpreter on the vectors of its parameters: on this one the `when` lines hold and the last line is false.
@@ -331,7 +331,7 @@ generated: generated/lean/samples/refund_split.lean
 ```lean
 abbrev shares_add_up : Prop :=
   ∀ (lines : List Line) (refund : Int),
-    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    1 ≤ List.length lines → List.length lines ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
     0 ≤ refund → refund ≤ 10000000 →
     ((List.map (fun (s : Share) => s.share) (split lines refund)).sum) = refund
 ```
@@ -458,7 +458,7 @@ W605 says that no vector makes the `when` lines true, which is a property that c
 
 `ritsu gen` writes each module under `glue/` in the package it writes for each of TypeScript, Python, Go and Rust, with a helper module of exact fractions, int64, the five roundings, strings by their code points and dicts and sets in the order of their keys, and no dependency.
 A value of a sum is an object with `kind` in TypeScript, a frozen data class in Python, a struct of an interface in Go and an `enum` of structs in Rust, and a `result` is the helper module's `Ok` and `Err` (the standard `Result` in Rust); amounts travel in the package's one type of each unit, as the rules and the books take them.
-A function the host calls checks its arguments against what they declare, and the code checks the places the analysis did not show, failing with `KanameError` of the kind the reference interpreter fails with.
+A function the host calls checks its arguments against what they declare, and the code checks the places the analysis did not show, failing with `KanameError` of the kind the reference interpreter fails with; one of the kind `input` also holds the place it did not take in `path` (`submit.form.days`, `lines[0].weight`).
 A transfer is a value whose type carries the reasons the book can refuse it with, and a function of the book makes it through chobo's client.
 The four examples of a functional core each have a host in TypeScript, Python and Go under `host/`, which call the package `ritsu gen` writes and print the same.
 
@@ -502,7 +502,7 @@ $ ritsu check --lean examples/refund_split
 ```
 
 `run` runs a function in the reference interpreter on an input of JSON, and `vectors` prints the inputs it chooses for each function with their answers.
-Every command takes `--lang ja|en` (else `KANAME_LANG`, then `RITSU_LANG`, else English) and `--help`.
+Every command takes `--lang ja|en` (else `KANAME_LANG`, then `RITSU_LANG`, else English) and `--help`. What `doc` and `vectors` write follows `--lang` alone. `ritsu kaname explain` takes any number of codes and explains them in the order given; for two or more it writes what `--all` writes, with only those codes.
 The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file that cannot be read, or a language that is not joined.
 [docs/reference.md](docs/reference.md) has the whole language and every command.
 
@@ -530,9 +530,9 @@ The other four call rules, dates and books, which read the Japanese versions of 
 
 - Its rounding is held to rulec's on 360,600 values and steps, and its dates to ritsu-ports', koyomi's and rulec's on every one of 3,652,059 days.
 - Every `derive` and `define` of rulec's corpus, 143 lines in 85 files, reads as kaname with rulec's type and gives rulec's value on rulec's 20,033 vectors.
-- The analysis of ranges is held to the reference interpreter: 3,452,025 values of 5,009 expressions, seen on 139,754 runs of every function of the examples and the test modules (its vectors, and 200 inputs drawn from what its parameters declare), are inside what it says, and each of the 1,617 runs that fail fails in a way the function's effect says.
+- The analysis of ranges is held to the reference interpreter: 3,574,060 values of 5,415 expressions, seen on 153,902 runs of every function of the examples and the test modules (its vectors, and 200 inputs drawn from what its parameters declare), are inside what it says, and each of the 1,627 runs that fail fails in a way the function's effect says.
 - Its evaluation and its analysis of ranges are written again in Lean (`proofs/KanameCore`, in ritsu's one Lean package), with proofs that the analysis is sound and that a function it finds total does not fail, for every function that takes no function as a parameter (a function that does is held to the model by the tests, with no proof of its own yet); `cargo test -p ritsu-model` holds the model to the reference interpreter and the analysis on 14,092 runs of 59 modules.
-- The code generated in TypeScript, Python, Go and Rust, and the package's Wasm, answers every vector of 52 modules, every input outside what their parameters declare, and values of types that hold themselves nested as deep as a host may give one and one deeper, as the reference interpreter does, in English and in Japanese (all 16,874 cases in TypeScript, 16,790 in Python, and 16,770 in each of Go, Rust and the Wasm: an input past the whole of a type runs where the language can hold it), and passes `tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt, `go vet` and `cargo clippy -- -D warnings`. A component of the package answers under wasmtime as the module does under Node, and ritsu's tests build what `ritsu gen --target rust` writes of its test projects, on all three stores of books and for wasm32.
+- The code generated in TypeScript, Python, Go and Rust, and the package's Wasm, answers every vector of 60 modules, every input outside what their parameters declare, and values of types that hold themselves nested as deep as a host may give one and one deeper, as the reference interpreter does, in English and in Japanese (all 17,634 cases in TypeScript, 17,550 in Python, and 17,510 in each of Go, Rust and the Wasm: an input past the whole of a type runs where the language can hold it), and passes `tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt, `go vet` and `cargo clippy -- -D warnings`. A component of the package answers under wasmtime as the module does under Node, and ritsu's tests build what `ritsu gen --target rust` writes of its test projects, on all three stores of books and for wasm32.
 - Every diagnostic code has the smallest module that prints it, in English and in Japanese; the pages of `doc` are golden files, the pages of the rules and dates in them are what rulec and koyomi draw, and Chrome opens the HTML.
 - The hosts of the four functional cores, in TypeScript, Python and Go, call the package `ritsu gen` writes of each and print what `host/output.txt` holds (ritsu's `tests/kaname.rs`).
 - The outputs, diagnostics and lines of `.kn` and of the hosts in this README, `docs/` and the skill are real: `tests/docs.rs` compares them, and ritsu's `tests/kaname.rs` runs the commands. ritsu's `tests/website.rs` holds the pages of kaname on the site the same way.

@@ -1,0 +1,35 @@
+workflow 支払い v1
+description "決まりが窓口に任せる請求を支払い、ほかの請求は担当者に回す。sekisho の例のために書いたもので、ワークフローは自分の名前で窓口の API を呼び、呼んでよいかはゲート claims.ja.gate が決める。pay.flow の日本語の版"
+
+use rule 支払う人 from "../rules/支払う人.rule"
+use openapi 窓口 from "../api/desk.json"
+
+record 支払いの結果
+  paid : bool
+
+inputs
+  請求番号 : string
+  金額     : money[JPY]  range >=1JPY <=10_000JPY
+
+outputs
+  支払った : bool
+
+task 請求を支払う(claimId: string) -> 支払いの結果
+  http POST 窓口 "/claims/{claimId}/payments"
+  errors 拒否 = 403
+  key
+
+task 担当者に回す(請求番号: string)
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:hand-over"
+  idempotent
+
+flow
+  let r = 支払う人(金額: 金額)
+  match r.だれ
+    窓口 =>
+      let p = 請求を支払う(claimId: 請求番号)
+        on 拒否 => fail 拒否された "ゲートが、ワークフローにこの請求の支払いを許さなかった"
+      succeed 支払った = p.paid
+    担当者 =>
+      担当者に回す(請求番号: 請求番号)
+      succeed 支払った = false

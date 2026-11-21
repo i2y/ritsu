@@ -405,10 +405,13 @@ fn a_name_that_looks_kept_and_is_not_is_said_by_check_alone() {
     assert_eq!(code, 0);
     let v = json(out.trim_end());
     let d = v.get("diagnostics").arr();
-    assert_eq!(d.len(), 4, "{out}");
+    // one name written twice is one W016, whose second note names the other line (DESIGN 8.3)
+    assert_eq!(d.len(), 2, "{out}");
     assert!(d.iter().all(|x| x.get("code").str() == "W016"), "{out}");
     assert_eq!(d[0].get("line").num(), 14.0);
     assert_eq!(d[0].get("col").num(), 25.0, "at the name inside the string: {out}");
+    assert!(d[0].get("notes").arr().iter().any(|n| n.str().contains("line 15")), "{out}");
+    assert!(d[1].get("notes").arr().iter().any(|n| n.str().contains("line 16")), "{out}");
     // a run of another command says nothing of it, and the string stays as it is written
     let (out, err, code) = run(s.path(), &["snap", "k/typo.geas"], &[]);
     assert_eq!(code, 0, "{out}{err}");

@@ -1,0 +1,26 @@
+rule 贈り物の箱(gift_box_ja) v1
+description "箱の送料が無料になるか、カードを入れるか。箱は 200 円以上で、一件は 100 円まで。贈り物が一つだけの箱は、ほかの明細と一緒でないと下の端に届かない"
+
+# 箱の明細の一件ぶん
+elements 明細(lines)
+  価格(price)  : money[円]  range >=1円 <=100円
+  贈り物(gift) : bool
+
+count 贈り物の数(gifts) over 明細 where 贈り物  range >=0 <=3
+sum 金額(total) over 明細 of 価格  range >=200円 <=2000円
+
+outputs
+  送料無料(free) : bool
+  カード(card)   : bool
+
+table 送料(free_of)
+policy unique
+| 金額    | -> 送料無料 |
+| <250円  | false       |
+| >=250円 | true        |
+
+table カードの判定(card_of)
+policy unique
+| 贈り物の数 | -> カード |
+| <2         | false     |
+| >=2        | true      |

@@ -1,0 +1,20 @@
+rule expense_next_up v1
+description "What ringi writes from the table next_up of expense.ringi"
+
+enum approver = manager "manager" | dept_head "dept_head" | accounting "accounting" | division_head "division_head" | check "check" | travel_agent "travel_agent" | board "board"
+
+inputs
+  approver : approver
+
+outputs
+  goes_to : approver
+
+table next_up
+| approver      | -> goes_to    |
+| check         | manager       |
+| travel_agent  | manager       |
+| manager       | dept_head     |
+| dept_head     | division_head |
+| accounting    | division_head |
+| division_head | division_head |
+| board         | board         |

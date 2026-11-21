@@ -1,0 +1,27 @@
+request example v1 "Example"
+
+use organization org from "shared/small.ringi"
+use calendar office from "shared/office.cal"
+
+form
+  amount   : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  approver : text "Note to the approver"  count <=40  optional
+
+route
+  check  manager
+
+who
+  manager = manager of requester
+  top     = person "e04"
+
+every stage
+  due in 3 business days at end of day
+  when late escalate by up, then expire
+
+table up
+| approver | -> goes_to |
+| manager  | top        |
+| top      | top        |
+
+ticket
+  self approval  not allowed

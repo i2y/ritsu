@@ -1,0 +1,15 @@
+request leave v1 "Leave"
+description "A leave of some business days, approved by the standard route, by the heads too when it is longer than five days"
+
+use calendar office from "calendars/office.cal"
+use route standard from "routes/standard.ringi"
+
+form
+  first_day : date "First day"  range >=2026-01-01 <=2027-12-31
+  days      : number "Business days"  range >=1 <=20
+  back_on   : date "Back at work on" = first_day + days business days
+
+route standard(long: days > 5)
+
+ticket
+  self approval  not allowed

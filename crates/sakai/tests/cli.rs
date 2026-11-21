@@ -75,7 +75,7 @@ fn what_is_refused_with_exit_2() {
         vec!["help", "nonsense"],
         vec!["explain", "E999"],
         vec!["explain"],
-        vec!["explain", "E401", "E402"],
+        vec!["explain", "E401", "E999", "E998"],
         vec!["explain", "--all", "E401"],
         vec!["explain", "--all=yes"],
         vec!["explain", "E401", "--format", "html"],
@@ -247,6 +247,13 @@ fn explain_gives_the_reproduction() {
     assert!(out(&o).contains("Retired in ritsu 0.23.0"), "{}", out(&o));
     let all = out(&sakai(&["explain", "--all"]));
     assert!(all.contains("E001 (error)") && all.contains("W402 (warning)") && all.contains("N101 (note)") && all.contains("E209 (error)"));
+    // any number of codes, in the order given, the way --all writes them: a blank line between
+    let one = |c: &str| out(&sakai(&["explain", c]));
+    let two = sakai(&["explain", "E402", "E401"]);
+    assert_eq!((code(&two), out(&two)), (0, format!("{}\n{}", one("E402"), one("E401"))));
+    // the codes it does not have, all of them in one sentence, and nothing explained
+    let none = sakai(&["explain", "E401", "E999", "E998"]);
+    assert_eq!((code(&none), out(&none), err(&none)), (2, String::new(), "error: there are no codes `E999`, `E998`; run `sakai explain --all`\n".to_string()));
     let md = out(&sakai(&["explain", "--all", "--format", "markdown", "--lang", "ja"]));
     assert!(md.starts_with("# 診断のコード\n"), "{md}");
     assert!(md.contains("<a id=\"e401\"></a>") && md.contains("```ctx\n"));
@@ -435,8 +442,11 @@ fn the_verb_of_0_40_stops_with_the_verb_now() {
     assert_eq!(said(&["build", MAP_EN, "--target", "import-linter"]), renamed);
     assert_eq!(said(&["help", "build"]), renamed);
     assert_eq!(said(&["build", MAP_EN, "--lang", "ja"]), (2, String::new(), "エラー: `sakai build` は 0.41.0 から `sakai gen` です\n".to_string()));
-    assert_eq!(said(&["gen", MAP_EN]), (2, String::new(), "error: `sakai gen` needs one or more `--target import-linter|dependency-cruiser|archunit|go-arch-lint`\n".to_string()));
-    assert_eq!(said(&["gen", MAP_EN, "--lang", "ja"]), (2, String::new(), "エラー: `sakai gen` には `--target import-linter|dependency-cruiser|archunit|go-arch-lint` が一つ以上要ります\n".to_string()));
+    // the usage line writes `--target` without brackets: gen cannot run without it. `--lang` is
+    // gen's own, as what it writes is in `--lang` alone (ritsu's DESIGN 4.1)
+    let usage = "sakai gen <map.ctx> --target <tool>... [--out <dir>] [--check] [--root <dir>] [--lang ja|en]";
+    assert_eq!(said(&["gen", MAP_EN]), (2, String::new(), format!("error: `sakai gen` needs `--target import-linter|dependency-cruiser|archunit|go-arch-lint`\nusage: {usage}\n")));
+    assert_eq!(said(&["gen", MAP_EN, "--lang", "ja"]), (2, String::new(), format!("エラー: `sakai gen` には `--target import-linter|dependency-cruiser|archunit|go-arch-lint` が要ります\n使い方: {usage}\n")));
     assert_eq!(said(&["gen", MAP_EN, "--target", "archunit", "--target", "archunit"]), (2, String::new(), "error: `--target archunit` is given twice\n".to_string()));
 }
 

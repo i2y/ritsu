@@ -1,0 +1,8 @@
+error[E101]: chain_names.ja.gate:10:7: There is no action `返金する`
+    10 |   can 返金する
+  = The actions there are `返金`.
+  = `返金する` is written on line 32 too.
+error[E101]: chain_names.ja.gate:14:9: There is no role `窓口係`
+    14 |   roles 窓口係
+  = The roles there are `窓口`.
+  = `窓口係` is written on line 31 too.

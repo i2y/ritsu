@@ -10,12 +10,14 @@
 //! The materials are rules whose names are the builtins, English first with the Japanese version
 //! of each beside it (`tests/builtins/`): a fee decided from inputs, table outputs and a walk
 //! over a sequence; a fee read out of an order object whose shape is called by the name of a
-//! builtin the projection function calls; and groups called by the names the module gives to the
-//! builtins and to its helpers. The generated code of those and of the rules of the corpus that
+//! builtin the projection function calls; groups called by the names the module gives to the
+//! builtins and to its helpers; and a rule named `super`, whose function stood where the classes of
+//! the module's errors called the builtin `super()` (§15.336). The generated code of those and of
+//! the rules of the corpus that
 //! walk, fold, count, carry a machine, take optional inputs or read a caller's object is looked
 //! through for a builtin called by its bare name.
 
-use ritsu_testkit::{Need, TempDir, ready};
+use ritsu_testkit::{Need, TempDir, ready, skip};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -36,8 +38,8 @@ struct Case {
     fee: &'static str,
     order: &'static str,
     /// What the fee refuses: an input that is not an integer, a truth value that is not one, a
-    /// value that is not a member of the enum, a number out of range, an element that is not a
-    /// truth value, and a sequence that is too long.
+    /// value that is not a member of the enum, a number out of range, a field of an element that is
+    /// not a truth value (the element by its place, §15.324), and a sequence that is too long.
     not_integer: &'static str,
     not_bool: &'static str,
     not_in_enum: &'static str,
@@ -56,7 +58,7 @@ const CASES: [Case; 2] = [
         not_bool: "bool is not a boolean",
         not_in_enum: "len is not a value of enum size",
         out_of_range: "repr is out of range",
-        element_not_bool: "set is not a boolean",
+        element_not_bool: "str[0].set is not a boolean",
         too_many: "str has too many elements (at most 50)",
     },
     Case {
@@ -68,7 +70,7 @@ const CASES: [Case; 2] = [
         not_bool: "真偽 が真偽ではありません",
         not_in_enum: "長さ が列挙 大きさ区分 の値ではありません",
         out_of_range: "表記 が範囲の外です",
-        element_not_bool: "条件甲 が真偽ではありません",
+        element_not_bool: "明細[0].条件甲 が真偽ではありません",
         too_many: "明細 の要素が多すぎます（上限 50）",
     },
 ];
@@ -93,7 +95,10 @@ const LOOKED_AT: [[&str; 2]; 10] = [
     ["tests/corpus/shipment_delivery_fee.rule", "tests/corpus/出荷の送料.rule"],
 ];
 
-/// `rulec gen` of some rules into a directory of their own.
+/// `rulec gen` of some rules into a directory of their own: the Python, its runner and the vectors,
+/// which are what these tests read. The Japanese versions give inputs the aliases `int` and
+/// `float`, Java's keywords (W121), so a run that asked for Java too would write nothing (E153,
+/// §15.335). The sentences of the code are in the language `--lang` gives (ritsu's DESIGN 4.1).
 fn generate(lang: &str, rules: &[&str]) -> (TempDir, PathBuf) {
     let t = TempDir::new(&format!("builtin-names-{lang}"));
     let out = t.path().join("out");
@@ -102,13 +107,21 @@ fn generate(lang: &str, rules: &[&str]) -> (TempDir, PathBuf) {
         .current_dir(root())
         .arg("gen")
         .args(rules)
-        .args(rulec::targets::UP_TO_0_40)
+        .args(["--target", "python", "--extra", "runner", "--extra", "vectors", "--lang", lang])
         .arg("--out")
         .arg(&out)
         .output()
         .expect("cannot start rulec");
     assert!(o.status.success(), "{lang}: {}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     (t, out)
+}
+
+/// `mypy`, installed or through `uvx`.
+fn mypy() -> Option<Vec<String>> {
+    if have("mypy", "--version") {
+        return Some(vec!["mypy".into()]);
+    }
+    Command::new("uvx").args(["mypy", "--version"]).output().map(|o| o.status.success()).unwrap_or(false).then(|| vec!["uvx".into(), "mypy".into()])
 }
 
 fn python(dir: &Path, script: &str, args: &[&str]) -> (bool, String) {
@@ -252,6 +265,34 @@ fn a_rule_named_like_the_builtins_is_answered_and_refused_as_any_other() {
         );
         let (ok, said) = python(&out.join("python"), &script, &[]);
         assert!(ok && said.trim() == "builtin names ok", "{}:\n{said}", c.lang);
+    }
+}
+
+/// A rule named `super`, the English one and the Japanese version beside it: the module's function
+/// of that name stood where the classes of its errors called the builtin `super()`, and an input it
+/// refuses broke with a `TypeError` in place of the refusal. Where the rule's function is `super`,
+/// the classes call their base's `__init__` by the base's name, so the rule refuses as any other,
+/// through the runner and called, and mypy --strict takes the module.
+#[test]
+fn a_rule_named_like_the_builtin_its_errors_call_refuses_as_any_other() {
+    if !ready(Need::Python, || have("python3", "--version"), "python3 is not here; the modules are not called") {
+        return;
+    }
+    for (lang, rule, out_of_range) in [("en", "tests/builtins/super.rule", "qty is out of range"), ("ja", "tests/builtins/誤りが呼ぶ組み込みと同じ名前の規則.rule", "数量 が範囲の外です")] {
+        let (_t, out) = generate(lang, &[rule]);
+        let refused = std::fs::File::open(out.join("vectors").join("super.refused.jsonl")).unwrap();
+        let o = Command::new("python3").current_dir(out.join("python")).env("PYTHONDONTWRITEBYTECODE", "1").args(["-B", "super_runner.py"]).stdin(refused).output().unwrap();
+        let said = String::from_utf8_lossy(&o.stdout).into_owned();
+        assert!(o.status.success() && !said.is_empty() && said.lines().all(|l| l.starts_with("{\"refused\":\"input\"")), "{lang}: {said}{}", String::from_utf8_lossy(&o.stderr));
+        let (ok, got) = python(&out.join("python"), "import super as m\ntry:\n    m.super(11)\nexcept m.RuleInputError as e:\n    print(e.what)\n", &[]);
+        assert!(ok && got.trim() == out_of_range, "{lang}:\n{got}");
+        match mypy() {
+            None => skip("mypy is not here, nor uvx; the module of the rule named `super` is not held to mypy --strict"),
+            Some(my) => {
+                let o = Command::new(&my[0]).args(&my[1..]).args(["--strict", "--no-color-output", "--no-incremental", "--cache-dir"]).arg(out.join("mypy-cache")).args(["super.py", "super_runner.py"]).current_dir(out.join("python")).output().unwrap();
+                assert!(o.status.success(), "{lang}: {}", String::from_utf8_lossy(&o.stdout));
+            }
+        }
     }
 }
 

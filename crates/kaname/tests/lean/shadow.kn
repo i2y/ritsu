@@ -1,0 +1,83 @@
+module shadow v1
+description "The names a module's own declarations, parameters, lets, patterns and lambdas take when they are the names the Lean it is written as needs for itself: the standard's types and classes, the package's namespace `Kaname`, the module's own namespace, the rules' `Inner`, and the members Lean makes for a structure or an inductive"
+
+use rule Ok from "tests/rules/part.rule"
+use rule Within from "tests/rules/one_count.rule"
+use rule rank from "tests/rules/one_day.rule"
+use rule mk from "tests/rules/one_flag.rule"
+use rule rec from "tests/rules/one_label.rule"
+use rule recOn from "tests/rules/one_size.rule"
+use rule noConfusion from "tests/rules/stay.rule"
+use rule Outputs from "tests/rules/coupon.rule"
+use rule Fields from "tests/rules/shipping.rule"
+use dates terms from "examples/late_payment/dates/payment_terms.cal"
+use module lib from "tests/lean/shadow_lib.kn"
+
+record Min
+  lo    : number       range >=0 <=9
+  mk    : money[USDc]  range >=0USDc <=10USDc
+  rec   : string       count <=9
+  recOn : bool
+
+record List
+  Within      : number  range >=0 <=9
+  rank        : number  range >=0 <=9
+  Fields      : number  range >=0 <=9
+  noConfusion : number  range >=0 <=9
+
+record Except
+  ok    : string  count <=9
+  error : string  count <=9
+
+record Kaname
+  frac : money[USDc]  range >=0USDc <=100USDc
+
+enum Option = mk < rec < recOn < casesOn < noConfusion < noConfusionType < rank < Within < ok < err
+enum Max = low < mid < high
+enum Bool = yes | no
+enum String = a | b
+enum Nat = zero | one | many
+enum Int = neg | pos
+enum Prop = yes | no
+enum Type = first | second
+enum Sort = top | mid | low
+enum Decidable = picked | passed
+enum Inhabited = idle | live
+
+fn inner() -> number
+  1
+
+fn Inner() -> number
+  2
+
+fn shadow() -> number
+  3
+
+fn shown(n: number range >=0 <=9) -> number
+  n
+
+# the parameter and the lets take the names the rules' table, the package's namespace, the
+# module's namespace, a function of the module and the members Lean makes for a structure take
+fn hiding(inner: number range >=0 <=9) -> number
+  let Kaname = inner + 1
+  let Min = Kaname + 1
+  let Max = Min + 1
+  let shown = Max + 1
+  let shadow = shown + 1
+  let ok = shadow + 1
+  let err = ok + 1
+  err + shown(n: 0) + inner() + shadow()
+
+# a lambda parameter takes the name of the rules' table
+fn lambdas(n: number range >=0 <=9) -> number
+  sum([1, 2, n], inner => inner + 1)
+
+# a parameter takes `inner`, the name the rules go by in the Lean of a function that calls them
+fn day_of(inner: bool) -> date
+  rank(late: inner).ships
+
+# a `let` takes `inner` beside a call of a rule (the rules go by `inner'`, the `let` by `inner''`)
+fn bulk_of(qty: number range >=0 <=9) -> bool
+  let inner = qty
+  mk(qty: inner).bulk
+

@@ -98,9 +98,9 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
                     continue;
                 }
                 if let Some(parent) = dest.parent() {
-                    ritsu_base::fs::create_dir_all(parent).map_err(|e| tr!("{} を作れません: {e}", "cannot create {}: {e}", parent.display()))?;
+                    ritsu_base::fs::create_dir_all(parent).map_err(|e| ritsu_base::cli::cannot_create(&parent.display().to_string(), &e))?;
                 }
-                ritsu_base::fs::write(&dest, &body).map_err(|e| tr!("{} に書けません: {e}", "cannot write {}: {e}", dest.display()))?;
+                ritsu_base::fs::write(&dest, &body).map_err(|e| ritsu_base::cli::cannot_write(&dest.display().to_string(), &e))?;
                 changed |= before.is_some();
                 let what = if before.is_some() {
                     tr!("{name}: 取り直して {path} に保存しました（sha256:{h}）", "{name}: fetched the copy {path} again (sha256:{h})")
@@ -125,20 +125,20 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
                         continue;
                     };
                     let (xml, rev) = egov().law_data(id, &asof.to_string(), Some(&e))?;
-                    ritsu_base::fs::create_dir_all(&cdir).map_err(|err| tr!("{} を作れません: {err}", "cannot create {}: {err}", cdir.display()))?;
+                    ritsu_base::fs::create_dir_all(&cdir).map_err(|err| ritsu_base::cli::cannot_create(&cdir.display().to_string(), &err))?;
                     let dest = cdir.join(format!("{e}.xml"));
                     let before = ritsu_base::fs::read(&dest).ok();
                     // A copy whose text did not change keeps its bytes, and so its pin: e-Gov
                     // rewrites the markup of articles no amendment touched.
                     let same = before.as_deref().is_some_and(|b| sources::same_text(b, &xml));
                     if !same {
-                        ritsu_base::fs::write(&dest, &xml).map_err(|err| tr!("{} に書けません: {err}", "cannot write {}: {err}", dest.display()))?;
+                        ritsu_base::fs::write(&dest, &xml).map_err(|err| ritsu_base::cli::cannot_write(&dest.display().to_string(), &err))?;
                     }
                     if !rev.is_empty() {
                         let rp = cdir.join("revision.txt");
                         let want = format!("{rev}\n");
                         if ritsu_base::fs::read_to_string(&rp).ok().as_deref() != Some(want.as_str()) {
-                            ritsu_base::fs::write(&rp, want).map_err(|err| tr!("{} に書けません: {err}", "cannot write {}: {err}", rp.display()))?;
+                            ritsu_base::fs::write(&rp, want).map_err(|err| ritsu_base::cli::cannot_write(&rp.display().to_string(), &err))?;
                         }
                     }
                     let h = short(if same { before.as_deref().unwrap() } else { &xml });

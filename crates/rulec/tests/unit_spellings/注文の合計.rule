@@ -1,0 +1,26 @@
+rule 注文の合計(order_total) v1
+description "注文の合計。小計に、分け合う規則が JPY で決める送料を足す。この規則は円と書く（架空）"
+
+inputs
+  小計(subtotal) : money[円]  range >=0円 <=100_000円
+  重さ(weight)   : mass[g]    range >=1g <=30_000g
+
+apply 配送(shipping) = "shared/送料.rule" meaning:9b8a4525e1e221ab
+  重さ = 重さ
+  小計 = 小計
+  送料 -> 送料
+
+outputs
+  合計(total) : money[円]  round down(1円)
+
+define 送料込み(with_shipping) : money[円] = 小計 + 送料
+
+table 合計
+| -> 合計    |
+| 送料込み   |
+
+examples
+| 小計      | 重さ     | -> 合計    |
+| 4_000円   | 2_000g  | 4_800円    |
+| 4_000円   | 2_001g  | 5_200円    |
+| 5_000円   | 2_001g  | 5_000円    |

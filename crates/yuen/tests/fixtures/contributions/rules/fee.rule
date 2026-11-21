@@ -1,0 +1,21 @@
+rule refund_fee v1
+description "The fee a refund costs, by how the items come back: written for the tests of yuen affected. A line of the shop adds a way from a file of its own"
+
+enum way = post "By post" | counter "At the counter"  open
+
+inputs
+  way : way
+
+outputs
+  fee : number  round down(1)
+
+table fee open
+policy unique
+| way     | -> fee : number |
+| post    | 5               |
+| counter | 0               |
+
+examples
+| way     | -> fee |
+| post    | 5      |
+| counter | 0      |

@@ -391,6 +391,11 @@ fn 定理が立つ公理は三つだけ() {
         "RulecCert.mem_boxOf_absent_iff",
         "RulecCert.eval_type_of_typeOf",
         "RulecCert.eval_mem_interval",
+        "RulecCert.eval_onGridAt_gridOf",
+        "RulecCert.gridMisses_sound",
+        "RulecCert.gridPick_sound",
+        "RulecCert.eval_mem_heldInterval",
+        "RulecCert.eval_eq_heldPoint",
         "RulecCert.runTotal_exact",
         "RulecCert.cut_of_box",
         "RulecCert.written_mem_hull",
@@ -1107,11 +1112,11 @@ fn 出力の範囲は丸めた答えまで二つの再検査で確かめられ�
 /// The range an output answers in is stated beside `ranges`, not in it (rulec's §15.269), because the
 /// other claims read `ranges` as what decides each name. A sum of up to 1,050 cents that the rule
 /// rounds down to a dollar answers up to 1,000 cents (§15.303), and a table cut on the sum runs to
-/// 1,050 cents; a `define` read by one written above it bounds that one by its own range. Both
-/// certificates pass both re-checkers, with the output's range held. A range written on the line of
-/// a walk is the walk's too, and nothing tighter is stated: where the mode puts its end off the grid
-/// past it — 1,050 cents half up to a dollar is 1,100 — the run says so rather than refusing it, and
-/// rounded down, it holds.
+/// 1,050 cents; a `define` read by the one written below it bounds that one by its own range, and
+/// both answer as outputs rounded to the cent. Both certificates pass both re-checkers, with each
+/// output's range held. A range written on the line of a walk is the walk's too, and nothing tighter
+/// is stated: where the mode puts its end off the grid past it — 1,050 cents half up to a dollar is
+/// 1,100 — the run says so rather than refusing it, and rounded down, it holds.
 #[test]
 fn 出力の範囲を丸めの刻みへ広げても証明書のほかの主張は変わらない() {
     let Some(bin) = checker() else {
@@ -1124,12 +1129,13 @@ fn 出力の範囲を丸めの刻みへ広げても証明書のほかの主張�
             "rule walk_grid v1\n\ninputs\n  cap : money[USDc]  range >=0USDc <=1000USDc  contract_only\n\nelements items\n  w : money[USDc]  range >=0USDc <=150USDc\n\noutputs\n  total : money[USDc]  round {mode}(100USDc){total}\n  big   : bool\n\nsum total over items of w  range >=0USDc <={sum}USDc\n\ntable big_of\npolicy unique\n| total     | -> big : bool |\n| <=500USDc | false         |\n| >500USDc  | true          |\n"
         )
     };
-    let read_first = "rule order_dep v1\n\ninputs\n  amount : money[USDc]  range >=1USDc <=1000USDc\n\noutputs\n  total : money[USDc]  round half_up(1USDc)\n  fee   : money[USDc]  round half_up(1USDc)\n\ndefine total : money[USDc] = fee + amount\n\ndefine fee : money[USDc] = amount × 3.49% + 49USDc\n";
+    let read_below = "rule order_dep v1\n\ninputs\n  amount : money[USDc]  range >=1USDc <=1000USDc\n\noutputs\n  total : money[USDc]  round half_up(1USDc)\n  fee   : money[USDc]  round half_up(1USDc)\n\ndefine fee : money[USDc] = amount × 3.49% + 49USDc\n\ndefine total : money[USDc] = fee + amount\n";
     let cases = [
-        ("walk", walk("down", "", "1050"), r#""total":["0","1050"]"#, r#""output_ranges":{"total":["0","1000"]}"#),
-        ("read_first", read_first.to_string(), r#""fee":["490349/10000","839/10"]"#, r#""output_ranges":{"fee":["49","84"]}"#),
+        ("walk", walk("down", "", "1050"), r#""total":["0","1050"]"#, r#""output_ranges":{"total":["0","1000"]}"#, 1),
+        ("read_below", read_below.to_string(), r#""fee":["490349/10000","839/10"]"#, r#""output_ranges":{"fee":["49","84"],"total":["50","1084"]}"#, 2),
     ];
-    for (what, src, decided, stated) in cases {
+    for (what, src, decided, stated, ranges) in cases {
+        let held = format!("outputs: {ranges} ranges hold what their output answers");
         let p = dir.join(format!("{what}.rule"));
         std::fs::write(&p, &src).unwrap();
         let rule = p.to_str().unwrap();
@@ -1138,10 +1144,10 @@ fn 出力の範囲を丸めの刻みへ広げても証明書のほかの主張�
         assert!(cert.contains(decided) && cert.contains(stated), "{what}: {cert}");
         let (code, said) = lean(&bin, &cert, Some(rule));
         assert_eq!(code, 0, "{what}: {said}");
-        assert!(said.contains("outputs: 1 ranges hold what their output answers") && said.contains("OK: every claim"), "{what}: {said}");
+        assert!(said.contains(&held) && said.contains("OK: every claim"), "{what}: {said}");
         if let Some((code, said)) = python(&cert, rule) {
             assert_eq!(code, 0, "{what}: {said}");
-            assert!(said.contains("outputs: 1 ranges hold what their output answers") && said.contains("every claim this program states was proved"), "{what}: {said}");
+            assert!(said.contains(&held) && said.contains("every claim this program states was proved"), "{what}: {said}");
         }
     }
     // A range written on the walk's output line, off the grid: `check` holds it to what the sum comes
@@ -1783,11 +1789,14 @@ policy unique
 | 0     | merge             | false                  |
 ";
 
-/// The pair rule written where `rulec certificate` can read it.
-fn pair_file(tag: &str) -> String {
-    let p = std::env::temp_dir().join(format!("rulec-pair-{tag}-{}.rule", std::process::id()));
+/// The pair rule written where `rulec certificate` can read it, in a directory of the test's that
+/// goes with the first of the two it hands back.
+fn pair_file(tag: &str) -> (TempDir, String) {
+    let t = TempDir::new(&format!("pair-{tag}"));
+    let p = t.path().join("pair.rule");
     std::fs::write(&p, PAIR).unwrap();
-    p.to_string_lossy().into_owned()
+    let p = p.to_string_lossy().into_owned();
+    (t, p)
 }
 
 /// The fact of `who_reads` that keeps `moved = 1` from `route = merge`, and a narrower one.
@@ -1800,7 +1809,7 @@ fn 数の列の座標と上の表の値の組も証明付きの検査器を通�
     let Some(bin) = checker() else {
         return;
     };
-    let file = pair_file("lean");
+    let (_dir, file) = pair_file("lean");
     let (c, cert) = rulec(&["certificate", &file]);
     assert_eq!(c, 0, "{cert}");
     assert!(cert.contains(PAIR_FACT), "証明書の形が変わっています:\n{cert}");

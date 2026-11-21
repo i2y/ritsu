@@ -1,0 +1,24 @@
+request 例(example) v1 "例"
+
+use organization 組織(org) from "shared/小さい会社.ringi"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確かめ(check)  経理
+  決裁(decide)   営業
+
+who
+  経理(finance) = team finance
+  営業(sales)   = team sales
+
+ticket
+  self approval  allowed
+
+scenario 小さな経費
+  requester e03
+  form 金額 = 5_000円
+| at               | event   | by  | -> stage | status      |
+| 2026-06-01 09:00 | submit  | e03 | 確かめ   | in progress |
+| 2026-06-01 10:00 | approve | e04 |          | approved    |

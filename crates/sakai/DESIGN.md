@@ -1161,6 +1161,15 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
       配送  dandori "delivery/配送の手配.flow"  「配送」の内側のもの
 ```
 
+### 5.4 一つの誤りは一度だけ言う（2026-11-16）
+
+ritsu の DESIGN 8.3 の決まりに従う。黙るのは、ほかの行がエラーを言った誤りから決まる行だけなので、通るか通らないかと終了コードは変わらない。
+
+- 地図に無いコンテキスト（E007。関係の相手と `as`）は、一つのファイルの中で最初に書いた所で一度だけ言い、同じ名前を書いたほかの行の番号を注に挙げる（「`` `Inventory` is written on line 21 too. ``」）。ほかのファイルも同じ名前を書けば、そのファイルでも一度言う。ファイルは、そのファイルのエラーで通るかが決まるので、ファイルをまたいで畳むと、畳んだ先のファイルが通ってしまう。proto と文書の要素（E007。`means` と対応）は、どこに無いかごとに数える。
+- proto の package、規則の Connect の package、クレートの名前が見出しと違うとき（E302）は、誤りを E302 が一度だけ言う。見出しの名前とファイルが言う名前は、そのコンテキストの疑わしい名前として持ち（`patterns::Doubt`）、それを `through` に並べた関係（E312）と、それに届く参照（E203）は何も言わない。`through` が、上流の公表していない package を挙げるとき、その先の要素を探して見つからないこと（E007）も言わない（E312 か E302 が言う）。前は、公表する言語の名前を見出しで書き誤った例で、E302 のほかに `through` の E312 が 2 件、要素の E007 が 1 件、フローと proto の参照の E203 が 5 件出た。
+
+試験は `tests/chains.rs`（`tests/chains/` の `names/`（2 件が 1 件）と `published/`（3 件が 1 件）、日本語の版の `names.ja/` と `published.ja/`）。
+
 ## 6. コマンド
 
 | コマンド | すること |
@@ -1170,7 +1179,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 | `sakai export cml <map.ctx> [--out <file>] [--root <dir>]` | Context Mapper の CML を書く（8 章）。既定は標準出力。検査を通らない地図からは書かない（診断は標準エラーに出して exit 1） |
 | `sakai doc <map.ctx> [--format markdown\|html] [--out <dir>] [--root <dir>]` | コンテキストマップの図、コンテキストごとの成果物と用語集、関係と越える参照、対応の表（10 章）。既定は Markdown を標準出力に。`--out` があれば、地図のファイルの名前から `<名前>.md` か `<名前>.html` を書き、`site/shop.html: Written` のように一行で言う。検査を通らない地図からは書かない（診断は標準エラーに出して exit 1） |
 | `sakai api <map.ctx> [--root <dir>]` | 地図、属し方、境界を越える参照を JSON で（9 章） |
-| `sakai explain <コード>`、`sakai explain --all [--format markdown]` | 診断のコードを引く |
+| `sakai explain <コード>`、`sakai explain --all [--format markdown\|json]` | 診断のコードを引く |
 
 どのコマンドも、ritsu の入口から `ritsu sakai <コマンド> …` で走らせられる（ritsu の DESIGN 8.6）。そのときは、sakai が読むすべての言語がつながる（4.1）。sakai のクレートのバイナリの `sakai` は、ほかの言語を持たないので、地図が規則、カレンダー、ワークフローを含めば E104 を言う（帳簿は `check` が問わないので含んでもよい。4.5）。規則、カレンダー、ワークフローを含まない地図（B の段階の地図など）では、二つは同じに動く。
 
@@ -2722,14 +2731,16 @@ error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/deliv
 ### 28.3 決定
 
 1. **動詞は `gen`。** `sakai build` と `sakai help build` は exit 2 で止まり、新しい名前を言う（`` `sakai build` is `sakai gen` from 0.41.0``、`` `sakai build` は 0.41.0 から `sakai gen` です``）。`ritsu sakai build` も同じ文で止まる。動く別名にはしない（chobo の 17 章と同じ）。
-2. **`--target` を何度でも書く。** 書く順はフラグの順ではなく、ツールの並び（`Target::ALL`。import-linter、dependency-cruiser、archunit、go-arch-lint）の順で、`Written` と「書きました」の行もその順に並ぶ。同じ `--target` を二度書けば exit 2（`` `--target archunit` is given twice``）。`--target` が無ければ、何も書かずに exit 2 で止まり、四つの名前を言う。文は sekisho と dandori と同じ形にした（0.40.0 は `` `sakai build` needs --target (import-linter | dependency-cruiser | archunit | go-arch-lint)``）。0.40.0 も `--target` が要ったので、0.40.0 と同じものを書くコマンドは示さない。
+2. **`--target` を何度でも書く。** 書く順はフラグの順ではなく、ツールの並び（`Target::ALL`。import-linter、dependency-cruiser、archunit、go-arch-lint）の順で、`Written` と「書きました」の行もその順に並ぶ。同じ `--target` を二度書けば exit 2（`` `--target archunit` is given twice``）。`--target` が無ければ、何も書かずに exit 2 で止まり、四つの名前と使い方の行を言う。文はどの言語の要るフラグとも同じ形で（ritsu の DESIGN 6.2 の 10）、使い方の行は `--target` を括弧なしで書く。0.40.0 は `` `sakai build` needs --target (import-linter | dependency-cruiser | archunit | go-arch-lint)`` だった。0.40.0 も `--target` が要ったので、0.40.0 と同じものを書くコマンドは示さない。
 
    ```
-   error: `sakai gen` needs one or more `--target import-linter|dependency-cruiser|archunit|go-arch-lint`
+   error: `sakai gen` needs `--target import-linter|dependency-cruiser|archunit|go-arch-lint`
+   usage: sakai gen <map.ctx> --target <tool>... [--out <dir>] [--check] [--root <dir>] [--lang ja|en]
    ```
 
    ```
-   エラー: `sakai gen` には `--target import-linter|dependency-cruiser|archunit|go-arch-lint` が一つ以上要ります
+   エラー: `sakai gen` には `--target import-linter|dependency-cruiser|archunit|go-arch-lint` が要ります
+   使い方: sakai gen <map.ctx> --target <tool>... [--out <dir>] [--check] [--root <dir>] [--lang ja|en]
    ```
 
 3. **置き場所は変えない。** どの設定も、0.40.0 と同じく、そのツールが探すところ（地図の `code` の行がその言語を置くところ。ArchUnit は `test` の置き場所）に書く。ほかの生成のコマンドの `<out>/<出力先>/` の段は作らない。ツールは設定をコードのルートで探すので、ほかのディレクトリに書くと読まれない。`--out` を付ければ、どのツールの設定もそのディレクトリに書く。ファイルの名前（`.importlinter`、`.dependency-cruiser.cjs`、`SakaiContextsTest.java`、`.go-arch-lint.yml`）はツールごとに違うので、ぶつからない。
@@ -2894,3 +2905,29 @@ error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/deliv
 **確かめたこと**：ritsu の `tests/fed_by.rs` の `sakai_holds_it_to_the_boundary`（関係なし、公表の外、公表の内、帳簿）と `a_json_schema_belongs_to_no_context`、`tests/naming.rs`（表の 58 と 34）。
 
 **残したこと**：JSON Schema はどのコンテキストの成果物でもない（JSON や Smithy のモデルと同じ）ので、別のコンテキストの `dir` の下の `.schema.json` を `fed by jsonschema` で指しても、境界をまたいだことにならない（`dir` は W101 と言う）。持ち主を決めるなら、`published language` に `jsonschema` を書けるようにする必要がある。
+
+## 33. パスの書き方によらない文（2026-11-15）
+
+**きっかけ**：ritsu の DESIGN の 4.15 と 6.2 の 8 で、文に書くパスの書き方を、どの言語にも一つの決まりにした。木の `.ctx` の全部（231 本）を、名前、絶対パス、木の根からのパス、根の隣のディレクトリから `..` で上るパスの四つで渡すと、13 本で文が違った。11 本は、走らせたディレクトリからのパスが違うだけで、決まりどおりである（E009 の「書いたとおりなら … を指す」、ほかの言語の診断の場所）。残る 2 本は、依存のファイルを言う E103 の注で、根から渡すと文の頭の字が大文字になった（直す前の出力）。
+
+```
+  = Crates/sakai/tests/modules/en/app/@lib/@base/rules/vat_rate.rule is a file of the dependency `@lib/@base`: …
+```
+
+sakai は英語の文の頭の字を大文字にして書く（`ritsu_base::text::spaced`）。英語の注がパスで始まっていたので、パスの一字目が大文字になった。
+
+**決定**：英語の注を「The file <パス> belongs to the dependency …」にして、パスで始めない。値で始まる注を避けた E401 の注（`mapping.rs`）と同じ直し方である。日本語の注は変えない。口がファイルを読めないと言うときのパスは、走らせたディレクトリから書く（前は絶対パス）。`ritsu sakai` は、最初に渡したパスで、実行のパスの書き方を決める（`paths::run_from`）。地図の検査は、確かめた `.ctx` を `ritsu_base::tally` に `sakai` として数える。
+
+ルートを探すのとルートからの名前は、システムが開くファイルで決める（2026-11-16。根の DESIGN 4.15、6.2 の 3）。`--root` はシステムが開くディレクトリとして読み、`--root` が無ければ、渡したパスのシステムが開く所の上でルートを探す。`..` でシンボリックリンクを越えるパスを `sakai check` に渡すと、リンクの先から書いたパスを渡したときと同じに検査する（前は、字の上で畳んだパスでルートを探し、渡したファイルの種類を、字の上で同じになる別のファイルで決めた）。`.ctx` に書いたパスは参照なので、今までどおり字の上で畳む（2.4）。
+
+**変わること**：E103 の英語の注の文。根の DESIGN の 17.6 の例も同じ文にした。`..` でリンクを越えて渡したパスの検査（上）。
+
+**確かめたこと**：`tests/modules.rs` と `tests/golden/modules/en.txt`。木の `.ctx` の全部を、上の四つの書き方で、直す前と後のビルドにかけた。違う本は 13 のままで、11 本は走らせたディレクトリからのパスの違い、2 本は、モジュールの中で走らせたときに依存のファイルを `@lib/…` と書く違い（17.6）で、どちらも決まりどおりである。大文字の違いは無くなった。
+
+## 34. ringi のツール名と種類の語（2026-11-18）
+
+**きっかけ**：ritsu の参照の決まりに、ツール名 `ringi`（十六個目）と ringi の種類の語が入った（ringi の DESIGN 9.7）。sakai は `ritsu_base::naming` で参照を読むので、`ringi "…" stage decide` のような参照は前から読めた。しかし `.ctx` の予約語の表（`kw.rs`）にはまだ無く、`ringi`、`stage`、`ticket` などを地図、コンテキスト、語、下流の値の名前にできた。ほかのツール名と種類の語は、どれも予約している（1.2）。
+
+**決定**：ツール名 `ringi` と、表に無かった種類の語（`stage`、`who`、`deadline`、`ticket`、`example`、`scenario`、`position`、`team_kind`、`master`）を予約語に足す。`field`、`input`、`table`、`claim` は前から表にある。reference の表も同じに直した。
+
+**変わること**：この十の語を名前にした地図は E002 になる。例とテストに、これらを名前にしたものは無かった。ブラウザで試すページの言葉の表（`words.json`）の `ctx` の行が変わる。

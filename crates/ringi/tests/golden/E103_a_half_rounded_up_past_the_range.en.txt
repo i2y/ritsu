@@ -1,0 +1,4 @@
+error[E103]: tests/mutants/E103_a_half_rounded_up_past_the_range.ringi:6:67: The range `<1JPY` of the field half holds no value its computation comes to
+     6 |   half   : money[JPY] "Half" = amount * 50%  round half_up(1JPY)  range <1JPY
+  = The computation comes to `>=1JPY <=2JPY` (from the ranges of what it reads). With this range no request can be made.
+  = Correct the range so that it meets what the computation comes to. A request whose value falls outside the range is refused; a range wider or narrower than that is no mistake.

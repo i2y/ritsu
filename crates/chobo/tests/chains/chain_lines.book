@@ -1,0 +1,23 @@
+# Lines that cannot be read: each is said once, and the lines under it are not said again
+book ledger v1
+description "A marketplace's money, counted in cents. A card payment comes in for the seller, and the processor's fee goes out of the seller's balance"
+
+unit USD scale 2
+
+# the `(` of the parameters is never closed: the lines of the account are not read either
+account seller_balance(seller: string : USD
+  description "what the marketplace holds for a seller"
+  at least 0 refused as insufficient_balance
+account cards : USD outside
+account processor : USD outside
+
+transfer capture(payment: string, seller: string, amount: USD)
+  description "a card payment taken for the seller"
+  key payment
+  move amount from cards to seller_balance(seller)
+
+# a line of the transfer not indented: it is said once, and read as a line of the transfer
+transfer processing_fee(payment: string, seller: string, fee: USD)
+  description "the processor's fee on that payment, out of the seller's balance"
+key payment
+  move fee from cards to processor

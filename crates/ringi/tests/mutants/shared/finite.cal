@@ -1,0 +1,10 @@
+calendar finite v1
+description "Saturdays, Sundays and the holidays of 2026 and 2027 are closed (fictional)"
+offset +09:00
+
+source holidays = file "holidays.csv" sha256:5927e83156e00064
+  format csv
+  covers 2026-01-01..2027-12-31
+
+closed weekly sat, sun
+closed holidays

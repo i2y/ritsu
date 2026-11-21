@@ -4,8 +4,8 @@
 //! thing can take, or of the combinations several things that read the same data can take
 //! together:
 //!
-//! - the roles a principal holds: every set of the roles the policies read and of the roles that
-//!   include them, the empty set among them;
+//! - the roles a principal holds: every set of the roles the policies read, of the roles that
+//!   include them and of the roles they include, the empty set among them;
 //! - a bool or an enum: each of its values (and absent, for one that may be);
 //! - a number compared with constants: the cells the constants cut its range into
 //!   ([`crate::cells`]);
@@ -51,6 +51,10 @@ pub trait Ask {
     /// The values a rule's output can come to with each numeric input held to a range (by name,
     /// both ends in), each with an input that reaches it (`Rules::outputs_over`).
     fn outputs(&self, rule: &FsPath, output: &str, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<Found<Vec<(Value, Values)>>, Vec<Said>>;
+    /// The combinations of values several outputs of one call of a rule can come to together, the
+    /// inputs held as for [`Ask::outputs`], each with an input that reaches it
+    /// (`Rules::outputs_together`).
+    fn together(&self, rule: &FsPath, outputs: &[String], ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<Found<Vec<(Vec<Value>, Values)>>, Vec<Said>>;
     /// The outputs of a rule for one input (rulec's reference evaluator).
     fn rule(&self, rule: &FsPath, inputs: &Values) -> Result<Values, RuleError>;
     /// Every date of a dates file for one input (koyomi's evaluator).
@@ -159,6 +163,33 @@ pub struct Point {
     /// False when another language could not say whether this can happen, and it is counted in
     /// case it can.
     pub exact: bool,
+    /// For values of rule outputs that an input run through the rules' evaluator came to: where.
+    /// An example says it beside the values ([`confirmed`]); nothing is counted by it.
+    pub reached: Reached,
+}
+
+impl Point {
+    /// A point no input was run for.
+    fn of(vals: Vec<Val>, exact: bool) -> Point {
+        Point { vals, exact, reached: Reached::default() }
+    }
+}
+
+/// Where an input run through the rules' evaluator came to the values of a point of rule outputs:
+/// the attributes and inputs the rules are given, each by its slot.
+///
+/// - One input (`region` false): every one of them, with the value that was run.
+/// - A region (`region` true), where rulec says every input of it comes to these values and to
+///   nothing else, and one of them that was run did: those the region holds further than the
+///   point's own cells do (a part of a cell a policy cuts, a stretch of a thing no policy reads,
+///   an optional thing absent), each with what it is held to. A region that holds nothing further
+///   leaves this empty: every input of the combination comes to the values.
+///
+/// Empty where no input was run, where the point is counted in case, and in every other factor.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Reached {
+    pub at: Vec<(Slot, Val)>,
+    pub region: bool,
 }
 
 /// One policy, compiled for a frame.
@@ -467,8 +498,10 @@ pub enum Stop {
 /// The numeric inputs of a rule held to ranges, by name (both ends in; None at an open end).
 pub type Ranges = Vec<(String, Option<i128>, Option<i128>)>;
 
-/// What rulec answers of an output over ranges, and what koyomi answers for one input.
+/// What rulec answers of an output over ranges and of several outputs together, and what koyomi
+/// answers for one input.
 type Outputs = Result<Found<Vec<(Value, Values)>>, Vec<Said>>;
+type Together = Result<Found<Vec<(Vec<Value>, Values)>>, Vec<Said>>;
 type DatesOf = Result<Vec<(String, DateValue)>, Vec<Said>>;
 /// An input of a dates file, each by name.
 type DateInputs = Vec<(String, i64)>;
@@ -478,10 +511,21 @@ type DateInputs = Vec<(String, i64)>;
 #[derive(Default)]
 pub struct Memo {
     outputs: RefCell<HashMap<(PathBuf, String, Ranges), Outputs>>,
+    together: RefCell<HashMap<(PathBuf, Vec<String>, Ranges), Together>>,
     dates: RefCell<HashMap<(PathBuf, DateInputs), DatesOf>>,
 }
 
 impl Memo {
+    fn together(&self, ask: &dyn Ask, rule: &FsPath, outputs: &[String], ranges: Ranges) -> Together {
+        let key = (rule.to_path_buf(), outputs.to_vec(), ranges);
+        if let Some(r) = self.together.borrow().get(&key) {
+            return r.clone();
+        }
+        let r = ask.together(rule, &key.1, &key.2);
+        self.together.borrow_mut().insert(key, r.clone());
+        r
+    }
+
     fn outputs(&self, ask: &dyn Ask, rule: &FsPath, output: &str, ranges: Ranges) -> Outputs {
         let key = (rule.to_path_buf(), output.to_string(), ranges);
         if let Some(r) = self.outputs.borrow().get(&key) {
@@ -1106,7 +1150,8 @@ impl<'g> Compiler<'g> {
                     });
                 }
                 match (self.resolve(p), self.resolve(q)) {
-                    (Some((s, Ty::Enum(e))), Some((t, Ty::Enum(f)))) if e == f => {
+                    // two names of one enum of an `enums` file are one type, with its values in one order
+                    (Some((s, Ty::Enum(e))), Some((t, Ty::Enum(f)))) if self.g.enums[e].one == self.g.enums[f].one => {
                         let (x, y) = (self.place(s), self.place(t));
                         CAtom::EnumEq(x, y)
                     }
@@ -1177,10 +1222,23 @@ impl<'g> Compiler<'g> {
     }
 
     /// The roles walked: of the principal type's roles, those that are read or include one that
-    /// is.
+    /// is, and those one that is read includes (`in clerk` matches a manager too, so a principal
+    /// holding only the included role answers `in` differently — a combination of its own).
     fn walked_roles(&self) -> Vec<usize> {
         let t = &self.g.types[self.principal];
-        t.roles.iter().copied().filter(|&r| self.g.closure(r).iter().any(|x| self.roles_read & bit(*x) != 0)).collect()
+        let mut inc = 0u128;
+        for r in 0..self.g.roles.len() {
+            if self.roles_read & bit(r) != 0 {
+                for &x in &self.g.closure(r) {
+                    inc |= bit(x);
+                }
+            }
+        }
+        t.roles
+            .iter()
+            .copied()
+            .filter(|&r| self.g.closure(r).iter().any(|x| self.roles_read & bit(*x) != 0) || inc & bit(r) != 0)
+            .collect()
     }
 
     /// The sizes of what needs nothing from another language, to stop early when they alone are
@@ -1286,23 +1344,45 @@ impl<'g> Compiler<'g> {
     /// the rule's file and output, and what each input is given in this frame (an input or an
     /// attribute by its place, a constant, today, nothing).
     fn rule_key(&self, at: usize) -> Option<String> {
+        let (act, ci, _) = self.computed_at(at)?;
+        let Some(Kn::Rule { output, .. }) = self.known.computed.get(&(act, ci)) else { return None };
+        Some(format!("{output}\u{1}{}", self.call_key(at)?))
+    }
+
+    /// Whether the rule output at a place is given today.
+    fn given_today(&self, at: usize) -> bool {
+        let Some((act, ci, link)) = self.computed_at(at) else { return false };
+        let How::Rule { args, .. } = &self.g.actions[act].computed[ci].how else { return false };
+        args.iter().any(|(_, src)| self.mapped(link, src) == Some(Source::Today))
+    }
+
+    /// The call a rule output at a place is an output of, as a key two outputs of one call share:
+    /// the rule's file, and what each input is given in this frame (an input or an attribute by its
+    /// place, a constant, today, nothing). One call comes to all of its outputs at once, so two of
+    /// them are counted together.
+    fn call_key(&self, at: usize) -> Option<String> {
         let (act, ci, link) = self.computed_at(at)?;
         let How::Rule { args, .. } = &self.g.actions[act].computed[ci].how else { return None };
-        let Some(Kn::Rule { file, output, .. }) = self.known.computed.get(&(act, ci)) else { return None };
-        let mut key = format!("{}\u{1}{output}", file.display());
-        for (input, src) in args {
-            let given = match self.mapped(link, src) {
-                None => "absent".to_string(),
-                Some(Source::Lit(l)) => format!("{l:?}"),
-                Some(Source::Today) => "today".to_string(),
-                Some(other) => match self.source_slot(&other) {
-                    Ok(Some(slot)) => format!("{slot:?}"),
-                    _ => format!("{other:?}"),
-                },
-            };
-            key.push_str(&format!("\u{1}{input}={given}"));
-        }
-        Some(key)
+        let Some(Kn::Rule { file, .. }) = self.known.computed.get(&(act, ci)) else { return None };
+        // in the order of the inputs' names: two calls that write the same inputs in another order
+        // are one call
+        let mut given: Vec<String> = args
+            .iter()
+            .map(|(input, src)| {
+                let given = match self.mapped(link, src) {
+                    None => "absent".to_string(),
+                    Some(Source::Lit(l)) => format!("{l:?}"),
+                    Some(Source::Today) => "today".to_string(),
+                    Some(other) => match self.source_slot(&other) {
+                        Ok(Some(slot)) => format!("{slot:?}"),
+                        _ => format!("{other:?}"),
+                    },
+                };
+                format!("\u{1}{input}={given}")
+            })
+            .collect();
+        given.sort();
+        Some(format!("{}{}", file.display(), given.concat()))
     }
 
     /// What computes the value at a place: the action, the value's index there, and the link.
@@ -1342,11 +1422,15 @@ impl<'g> Compiler<'g> {
             }
         }
         let date_sources: BTreeSet<Slot> = date_values.iter().flat_map(|at| reads[at].iter().cloned()).collect();
-        // the rule outputs joined by what they read
+        // the rule outputs joined by what they read: an attribute or an input two of them are
+        // given, today given to both, or the same call of the same rule (two of its outputs)
+        let calls: BTreeMap<usize, Option<String>> = rule_values.iter().map(|&at| (at, self.call_key(at))).collect();
+        let given_today: BTreeSet<usize> = rule_values.iter().copied().filter(|&at| self.given_today(at)).collect();
         let mut groups: Vec<Vec<usize>> = Vec::new();
         for &at in &rule_values {
             let mine: BTreeSet<&Slot> = reads[&at].iter().collect();
-            let joined: Vec<usize> = (0..groups.len()).filter(|&gi| groups[gi].iter().any(|o| reads[o].iter().any(|s| mine.contains(s)))).collect();
+            let together = |o: &usize| reads[o].iter().any(|s| mine.contains(s)) || (given_today.contains(o) && given_today.contains(&at)) || (calls[o].is_some() && calls[o] == calls[&at]);
+            let joined: Vec<usize> = (0..groups.len()).filter(|&gi| groups[gi].iter().any(together)).collect();
             let mut merged = vec![at];
             for gi in joined.iter().rev() {
                 merged.extend(groups.remove(*gi));
@@ -1368,23 +1452,9 @@ impl<'g> Compiler<'g> {
         for grp in &groups {
             let read: BTreeSet<Slot> = grp.iter().flat_map(|at| reads[at].iter().cloned()).collect();
             let cut: Vec<usize> = direct.iter().copied().filter(|at| read.contains(&self.slots[*at]) && !taken.contains(at)).collect();
-            // what is read by two outputs and not cut, or also by the dates, is not joined exactly
-            let cut_slots: BTreeSet<&Slot> = cut.iter().map(|at| &self.slots[*at]).collect();
-            // two outputs that are one computation (the same rule given the same values: an action
-            // and an action it asks computing the same) are one value, and read nothing twice
-            let mut times: BTreeMap<&Slot, usize> = BTreeMap::new();
-            let mut seen: Vec<String> = Vec::new();
-            for at in grp {
-                let key = self.rule_key(*at);
-                if key.as_ref().is_some_and(|k| seen.contains(k)) {
-                    continue;
-                }
-                seen.extend(key);
-                for s in &reads[at] {
-                    *times.entry(s).or_default() += 1;
-                }
-            }
-            let loose = read.iter().any(|s| date_sources.contains(s)) || times.iter().any(|(s, n)| *n > 1 && !cut_slots.contains(s));
+            // what the dates read too is not joined with them exactly (two outputs that read the
+            // same thing are counted together, [`Compiler::joint`])
+            let loose = read.iter().any(|s| date_sources.contains(s));
             let f = self.rule_factor(grp, &cut, loose, ask, memo)?;
             taken.extend(f.places.iter().copied());
             let key = f.places.iter().map(|&p| self.order(p)).min().unwrap_or(usize::MAX);
@@ -1395,7 +1465,7 @@ impl<'g> Compiler<'g> {
                 continue;
             }
             if let Some(vals) = self.domain(at) {
-                units.push((self.order(at), Factor { kind: FactorKind::One, places: vec![at], points: vals.into_iter().map(|v| Point { vals: vec![v], exact: true }).collect() }));
+                units.push((self.order(at), Factor { kind: FactorKind::One, places: vec![at], points: vals.into_iter().map(|v| Point::of(vec![v], true)).collect() }));
             }
         }
         let rels: Vec<(usize, usize)> = self.slots.iter().enumerate().filter_map(|(at, s)| if let Slot::Relation(t) = s { Some((at, *t)) } else { None }).collect();
@@ -1404,17 +1474,23 @@ impl<'g> Compiler<'g> {
         }
         units.sort_by_key(|(k, _)| *k);
         let walked = self.walked_roles();
-        let mut factors = vec![Factor { kind: FactorKind::Roles, places: vec![0], points: role_sets(g, &walked).into_iter().map(|v| Point { vals: vec![v], exact: true }).collect() }];
+        let mut factors = vec![Factor { kind: FactorKind::Roles, places: vec![0], points: role_sets(g, &walked).into_iter().map(|v| Point::of(vec![v], true)).collect() }];
         if self.workflow_read && let Some(at) = self.slots.iter().position(|s| *s == Slot::Workflow) {
-            factors.push(Factor { kind: FactorKind::Workflow, places: vec![at], points: (0..g.workflows.len()).map(|w| Point { vals: vec![Val::Workflow(w)], exact: true }).collect() });
+            factors.push(Factor { kind: FactorKind::Workflow, places: vec![at], points: (0..g.workflows.len()).map(|w| Point::of(vec![Val::Workflow(w)], true)).collect() });
         }
         factors.extend(units.into_iter().map(|(_, f)| f));
         Ok((factors, fixed, walked.iter().fold(0u128, |m, r| m | bit(*r))))
     }
 
     /// The factor of a group of rule outputs: for every value of the attributes and inputs they
-    /// read that a policy also reads, the values rulec says each output can come to. `loose` says
-    /// the outputs read something together that rulec is not asked of together.
+    /// read that a policy also reads, the values rulec says the outputs can come to there. `loose`
+    /// says the outputs read something the dates read too, which this does not join.
+    ///
+    /// One output (in however many places) is counted as rulec answers of it. Two or more, which
+    /// read the same data, are counted together ([`Compiler::joint`]): only the combinations of
+    /// their values that can happen, and each marked exact only where that is known. Where they
+    /// cannot be counted together (more combinations of the cut values than rulec is asked over one
+    /// by one), every pair of what each comes to is counted in case, marked inexact.
     fn rule_factor(&self, outputs: &[usize], cut: &[usize], loose: bool, ask: &dyn Ask, memo: &Memo) -> Result<Factor, Stop> {
         let g = self.g;
         let cut_domains: Vec<Vec<Val>> = cut.iter().map(|&at| self.domain(at).unwrap_or_else(|| vec![Val::Absent])).collect();
@@ -1429,6 +1505,19 @@ impl<'g> Compiler<'g> {
         let keys: Vec<Option<String>> = outputs.iter().map(|&at| self.rule_key(at)).collect();
         let same_as: Vec<Option<usize>> = (0..outputs.len()).map(|j| (0..j).find(|&i| keys[i].is_some() && keys[i] == keys[j])).collect();
         let firsts: Vec<usize> = (0..outputs.len()).filter(|&j| same_as[j].is_none()).collect();
+        // two outputs, or one whose call is given one thing as two of its inputs (which rulec, asked
+        // of each input's range, cannot be told are one value): what happens together is counted
+        let together = firsts.len() > 1 || outputs.iter().any(|&at| self.given_twice(at));
+        if together
+            && !many
+            && let Some(points) = self.joint(outputs, cut, &cut_domains, &same_as, &firsts, loose, ask, memo)?
+        {
+            return Ok(Factor { kind: FactorKind::Rules { outputs: outputs.to_vec(), cut: cut.to_vec() }, places, points });
+        }
+        // not counted together: nothing says which pairs happen
+        let loose = loose || together;
+        // the call, to run an input for each value it comes to: an example is said with it
+        let mut run = if loose || many { None } else { self.group(outputs, cut, &firsts, ask, memo).ok().filter(|(_, reads)| reads.optional.len() <= MAX_OPTIONAL) };
         let mut points = Vec::new();
         for assignment in product(&cut_domains) {
             let mut per: Vec<(Vec<Val>, bool)> = Vec::new();
@@ -1436,29 +1525,8 @@ impl<'g> Compiler<'g> {
                 let Some((act, ci, link)) = self.computed_at(out_at) else { return Err(Stop::Unknown) };
                 let c = &g.actions[act].computed[ci];
                 let (Some(Kn::Rule { file, output, domain, inputs, enums, .. }), How::Rule { args, .. }) = (self.known.computed.get(&(act, ci)), &c.how) else { return Err(Stop::Unknown) };
-                // the place of a value in the order the rule declares the values of the enum the
-                // input takes: how rulec is told to hold an enum input to that value
-                let place = |input: &str, words: &[&str]| -> Option<i128> {
-                    let (_, values) = enums.iter().find(|(n, _)| n == input)?;
-                    values.iter().position(|(_, ws)| ws.iter().any(|w| words.contains(&w.as_str()))).map(|k| k as i128)
-                };
-                // a word given to an enum input: the rule's value, or the gate's value of that name
-                // (one a link gives an input of its action)
-                let word_place = |input: &str, w: &str| -> Option<i128> {
-                    place(input, &[w]).or_else(|| {
-                        let v = g.enums.iter().flat_map(|e| e.values.iter()).find(|v| v.is(w))?;
-                        place(input, &[v.name.as_str(), v.alias.as_str()])
-                    })
-                };
-                // the places of the values of the gate's enum `e`
-                let places_of = |input: &str, e: usize, only: Option<usize>| -> Option<Vec<i128>> {
-                    let values = &self.g.enums[e].values;
-                    let picked: Vec<&Named> = match only {
-                        Some(v) => vec![&values[v]],
-                        None => values.iter().collect(),
-                    };
-                    picked.iter().map(|v| place(input, &[v.name.as_str(), v.alias.as_str()])).collect()
-                };
+                let word_place = |input: &str, w: &str| enum_word_place(g, enums, input, w);
+                let places_of = |input: &str, e: usize, only: Option<usize>| enum_places_of(g, enums, input, e, only);
                 let mut ranges = Vec::new();
                 let mut absent = false;
                 let mut exact = !loose;
@@ -1551,6 +1619,7 @@ impl<'g> Compiler<'g> {
             }
             let lists: Vec<Vec<Val>> = per.iter().map(|(v, _)| v.clone()).collect();
             let exact = per.iter().all(|(_, e)| *e);
+            let from = points.len();
             for outs in product(&lists) {
                 let mut vals = assignment.clone();
                 // each output in its order: its own value, or the value of the one it computes as
@@ -1559,10 +1628,269 @@ impl<'g> Compiler<'g> {
                     let k = firsts.iter().position(|&x| x == first).unwrap_or(0);
                     vals.push(outs[k].clone());
                 }
-                points.push(Point { vals, exact });
+                points.push(Point::of(vals, exact));
+            }
+            if exact && let Some((group, reads)) = &mut run {
+                let base = reads.region(&assignment, 0);
+                let mut seen: Seen = BTreeMap::new();
+                let mut regions: BTreeMap<Vec<Val>, Vec<Hold>> = BTreeMap::new();
+                for absent in 0..(1usize << reads.optional.len()) {
+                    let region = reads.region(&assignment, absent);
+                    let answers: Vec<Answer> = (0..group.calls.len()).map(|i| group.answer(i, &region)).collect();
+                    if answers.iter().any(|a| a.tuples.is_empty()) {
+                        continue;
+                    }
+                    let tried = group.observe(&region, &answers, &mut seen);
+                    group.keep(&region, &answers, &tried, &base, &mut regions);
+                }
+                for (point, outs) in points[from..].iter_mut().zip(product(&lists)) {
+                    point.reached = reads.reached(&base, regions.get(&outs), seen.get(&outs));
+                }
             }
         }
         Ok(Factor { kind: FactorKind::Rules { outputs: outputs.to_vec(), cut: cut.to_vec() }, places, points })
+    }
+
+    /// Whether the call of the rule output at a place is given one attribute or input (or today)
+    /// as two of its inputs.
+    fn given_twice(&self, at: usize) -> bool {
+        let Some((act, ci, link)) = self.computed_at(at) else { return false };
+        let How::Rule { args, .. } = &self.g.actions[act].computed[ci].how else { return false };
+        let mut seen: Vec<Raw> = Vec::new();
+        for (_, src) in args {
+            let raw = match self.mapped(link, src) {
+                Some(Source::Today) => Raw::Today,
+                Some(Source::Lit(_)) | None => continue,
+                Some(other) => match self.source_slot(&other) {
+                    Ok(Some(slot)) => Raw::Slot(slot),
+                    _ => continue,
+                },
+            };
+            if seen.contains(&raw) {
+                return true;
+            }
+            seen.push(raw);
+        }
+        false
+    }
+
+    /// The calls of a group of rule outputs (one rule given the same values is one call, which
+    /// comes to all of its outputs at once), and the things they are given: what each is, what it
+    /// takes with nothing held, which cut value holds it, and those that may be absent and are not
+    /// cut.
+    fn group<'a>(&self, outputs: &[usize], cut: &[usize], firsts: &[usize], ask: &'a dyn Ask, memo: &'a Memo) -> Result<(Group<'a, 'g>, Reads), Stop> {
+        let g = self.g;
+        // the calls, and the things they are given
+        let mut raws: Vec<Raw> = Vec::new();
+        let mut calls: Vec<Call> = Vec::new();
+        for (k, &j) in firsts.iter().enumerate() {
+            let at = outputs[j];
+            let Some((act, ci, link)) = self.computed_at(at) else { return Err(Stop::Unknown) };
+            let (Some(Kn::Rule { file, output, domain, inputs, enums, .. }), How::Rule { args, .. }) = (self.known.computed.get(&(act, ci)), &g.actions[act].computed[ci].how) else { return Err(Stop::Unknown) };
+            let key = self.call_key(at);
+            if let Some(call) = calls.iter_mut().find(|x| key.is_some() && x.key == key) {
+                call.outs.push((k, output.as_str(), domain));
+                continue;
+            }
+            let mut given = Vec::new();
+            let mut reads = Vec::new();
+            let mut today = false;
+            for (input, src) in args {
+                // an input of a link's action given nothing: the value is absent
+                let Some(src) = self.mapped(link, src) else {
+                    given.push((input.clone(), Given::Nothing));
+                    continue;
+                };
+                let raw = match &src {
+                    Source::Lit(lit) => {
+                        let constant = match lit {
+                            Literal::Num(num) => {
+                                let unit = inputs.iter().find(|(n, _)| n == input).and_then(|(_, u)| u.clone());
+                                let k = unit.as_ref().and_then(|unit| crate::types::count(num, unit).ok());
+                                Given::Const { held: k, value: k.map(Value::Int) }
+                            }
+                            // a day: rulec takes the range of a date as day numbers
+                            Literal::Date(d) => Given::Const { held: Some(*d as i128), value: Some(Value::Date(ritsu_ports::day_text(*d))) },
+                            // rulec holds a bool as 0 or 1, an enum by the place of its value
+                            Literal::Bool(b) => Given::Const { held: Some(i128::from(*b)), value: Some(Value::Bool(*b)) },
+                            Literal::Word(w) => Given::Const { held: enum_word_place(g, enums, input, w), value: Some(enum_to_rule(g, enums, input, Value::Enum(w.clone()))) },
+                        };
+                        given.push((input.clone(), constant));
+                        continue;
+                    }
+                    Source::Today => {
+                        today = true;
+                        Raw::Today
+                    }
+                    other => match self.source_slot(other) {
+                        Ok(Some(slot)) => Raw::Slot(slot),
+                        _ => return Err(Stop::Unknown),
+                    },
+                };
+                let r = match raws.iter().position(|x| *x == raw) {
+                    Some(r) => r,
+                    None => {
+                        raws.push(raw);
+                        raws.len() - 1
+                    }
+                };
+                if !reads.contains(&r) {
+                    reads.push(r);
+                }
+                given.push((input.clone(), Given::Raw(r)));
+            }
+            calls.push(Call { key, file, given, outs: vec![(k, output.as_str(), domain)], enums, reads, today });
+        }
+        // what each thing given is, what it takes with nothing held, which cut value holds it, and
+        // those that may be absent and are not cut
+        let mut kinds: Vec<RawKind> = Vec::new();
+        let mut whole: Vec<Hold> = Vec::new();
+        let mut cut_of: Vec<Option<usize>> = Vec::new();
+        let mut optional: Vec<usize> = Vec::new();
+        for (r, raw) in raws.iter().enumerate() {
+            let (kind, hold, k) = match raw {
+                Raw::Today => match &g.today {
+                    Some(t) => (RawKind::Date, Hold::Span(t.lo as i128, t.hi as i128), None),
+                    None => (RawKind::Other, Hold::Other, None),
+                },
+                Raw::Slot(s) => {
+                    let f = self.field(s).ok_or(Stop::Unknown)?;
+                    let (kind, hold) = match &f.ty {
+                        FieldType::Num { lo, hi, .. } => (RawKind::Num, Hold::Span(*lo, *hi)),
+                        FieldType::Date { lo, hi } => (RawKind::Date, Hold::Span(*lo as i128, *hi as i128)),
+                        FieldType::Bool => (RawKind::Bool, Hold::Bool(None)),
+                        FieldType::Enum(e) => (RawKind::Enum(*e), Hold::Enum(*e, None)),
+                        FieldType::Entity(_) => (RawKind::Other, Hold::Other),
+                    };
+                    let k = cut.iter().position(|at| self.slots[*at] == *s);
+                    if k.is_none() && f.optional {
+                        optional.push(r);
+                    }
+                    (kind, hold, k)
+                }
+            };
+            kinds.push(kind);
+            whole.push(hold);
+            cut_of.push(k);
+        }
+        Ok((Group { g, calls, kinds, n: firsts.len(), ask, memo, evals: HashMap::new() }, Reads { raws, whole, cut_of, optional }))
+    }
+
+    /// The points of a group of rule outputs counted together (DESIGN 4.1): for each combination of
+    /// the cut values, the combinations of the outputs' values that can happen there, each with the
+    /// cut values in front, in the order of every pair of what each output comes to. None when the
+    /// group is past what is counted this way (more attributes that may be absent than
+    /// [`MAX_OPTIONAL`]).
+    ///
+    /// The outputs are put by the call that comes to them (one rule given the same values: one call
+    /// comes to all of its outputs at once). The values the calls are given are held to a region:
+    /// first the cut values, every other attribute and input whole (one that may be absent, there
+    /// and not there in turn; with it absent, every output of a call that is given it is absent).
+    /// Over a region, rulec says what each call comes to: the combinations of its outputs together
+    /// (`Rules::outputs_together`) where it can, else the values of each output
+    /// (`Rules::outputs_over`). Then:
+    ///
+    /// - where no call is left with every pair of two outputs' values, none that comes to more than
+    ///   one combination is given one thing as two of its inputs over more than one value of it, and
+    ///   no two calls that come to more than one combination are given the same thing over more than
+    ///   one value of it, every pair of the calls' combinations is counted: the others are the same
+    ///   wherever one varies;
+    /// - elsewhere the region is split, at a value where a concrete input shows the outputs change
+    ///   ([`Group::split`]), and each part is asked again. Where no two inputs tried differ, it is
+    ///   split by the inputs rulec found instead ([`Group::apart`]): between the values one of them
+    ///   gives a thing the call is given twice, which no request does. The combinations of the parts
+    ///   are those of the region, without the pairs no part has.
+    ///
+    /// A region that cannot be split any further (a rule whose answer does not change along one
+    /// input alone, or past [`REGIONS`] parts) is counted as every pair in case.
+    ///
+    /// A combination is marked exact where rulec's answers alone say it happens (the calls given
+    /// nothing in common that the region leaves wide, so that an input one takes is one the other
+    /// takes), or where a concrete input run through the rules' evaluator comes to it. The rest are
+    /// counted in case, and an answer that rests on one is tried again ([`confirm`]).
+    #[allow(clippy::too_many_arguments)]
+    fn joint(&self, outputs: &[usize], cut: &[usize], cut_domains: &[Vec<Val>], same_as: &[Option<usize>], firsts: &[usize], loose: bool, ask: &dyn Ask, memo: &Memo) -> Result<Option<Vec<Point>>, Stop> {
+        let g = self.g;
+        let (mut group, reads) = self.group(outputs, cut, firsts, ask, memo)?;
+        if reads.optional.len() > MAX_OPTIONAL {
+            return Ok(None);
+        }
+        let n = firsts.len();
+        // today is read by the dates of the action too, which this does not join
+        let loose = loose || group.calls.iter().any(|c| c.today);
+        let mut asked = 0usize;
+        let mut points = Vec::new();
+        for assignment in product(cut_domains) {
+            // each combination counted, with whether rulec's answers alone say it happens; the
+            // combinations a concrete input came to, each with the input; and the regions that
+            // come to one combination, by it
+            let mut counted: BTreeMap<Vec<Val>, bool> = BTreeMap::new();
+            let mut seen: Seen = BTreeMap::new();
+            let mut regions: BTreeMap<Vec<Val>, Vec<Hold>> = BTreeMap::new();
+            let base = reads.region(&assignment, 0);
+            for absent in 0..(1usize << reads.optional.len()) {
+                let mut parts = vec![reads.region(&assignment, absent)];
+                let mut here = 0usize;
+                while let Some(region) = parts.pop() {
+                    here += 1;
+                    asked += 1;
+                    let answers: Vec<Answer> = (0..group.calls.len()).map(|i| group.answer(i, &region)).collect();
+                    // a call no input reaches over the region: no combination there
+                    if answers.iter().any(|a| a.tuples.is_empty()) {
+                        continue;
+                    }
+                    let shares = |i: usize, j: usize| group.calls[i].reads.iter().any(|r| group.calls[j].reads.contains(r) && region[*r].wide(g));
+                    let varying: Vec<usize> = (0..answers.len()).filter(|&i| answers[i].tuples.len() > 1).collect();
+                    let unsplit = answers.iter().any(|a| a.pairs || (a.twice && a.tuples.len() > 1)) || varying.iter().any(|&i| varying.iter().any(|&j| i < j && shares(i, j)));
+                    // rulec's answers alone say every pair happens: each is exactly what its call
+                    // comes to, and no two calls are given the same thing over more than one value
+                    let vouched = !unsplit && answers.iter().all(|a| a.tight) && (0..answers.len()).all(|i| (0..i).all(|j| !shares(i, j)));
+                    // concrete inputs of the region, run through the evaluator: where the region
+                    // is split, and an input to say a combination with
+                    let tried = group.observe(&region, &answers, &mut seen);
+                    if !vouched
+                        && unsplit
+                        && here < REGIONS
+                        && asked < ASKS
+                        && let Some(split) = group.split(&region, &tried, &mut seen).or_else(|| group.apart(&region, &answers, REGIONS - here))
+                    {
+                        parts.extend(split);
+                        continue;
+                    }
+                    group.keep(&region, &answers, &tried, &base, &mut regions);
+                    let mut pairs: Vec<Vec<Val>> = vec![vec![Val::Absent; n]];
+                    for (call, a) in group.calls.iter().zip(&answers) {
+                        let mut next = Vec::with_capacity(pairs.len() * a.tuples.len());
+                        for t in &pairs {
+                            for u in &a.tuples {
+                                let mut x = t.clone();
+                                for ((k, _, _), v) in call.outs.iter().zip(u) {
+                                    x[*k] = v.clone();
+                                }
+                                next.push(x);
+                            }
+                        }
+                        pairs = next;
+                    }
+                    for t in pairs {
+                        *counted.entry(t).or_insert(false) |= vouched;
+                    }
+                }
+            }
+            for (t, vouched) in counted {
+                let exact = !loose && (vouched || seen.contains_key(&t));
+                let reached = if exact { reads.reached(&base, regions.get(&t), seen.get(&t)) } else { Reached::default() };
+                let mut vals = assignment.clone();
+                // each output in its order: its own value, or the value of the one it computes as
+                for (j, same) in same_as.iter().enumerate().take(outputs.len()) {
+                    let first = same.unwrap_or(j);
+                    let k = firsts.iter().position(|&x| x == first).unwrap_or(0);
+                    vals.push(t[k].clone());
+                }
+                points.push(Point { vals, exact, reached });
+            }
+        }
+        Ok(Some(points))
     }
 
     /// The factor of the dates of `today`: every combination of truths the dates can come to
@@ -1729,7 +2057,7 @@ impl<'g> Compiler<'g> {
         }
         let mut places: Vec<usize> = cut_cells.iter().map(|(at, ..)| *at).collect();
         places.extend(date_values.iter().copied());
-        Ok(Factor { kind: FactorKind::Dates, places, points: tuples.into_iter().map(|vals| Point { vals, exact: true }).collect() })
+        Ok(Factor { kind: FactorKind::Dates, places, points: tuples.into_iter().map(|vals| Point::of(vals, true)).collect() })
     }
 
     /// The factor of the terms of one entity type: every way they can be the same entity or not
@@ -1755,7 +2083,7 @@ impl<'g> Compiler<'g> {
             asked.dedup();
             for bits in 0..(1u64 << asked.len()) {
                 let members = asked.iter().enumerate().fold(0u64, |m, (k, b)| if bits & (1 << k) != 0 { m | (1 << b) } else { m });
-                points.push(Point { vals: vec![Val::Relation(Rel { blocks: blocks.clone(), members, principal })], exact: true });
+                points.push(Point::of(vec![Val::Relation(Rel { blocks: blocks.clone(), members, principal })], true));
             }
         }
         Factor { kind: FactorKind::Relation, places: vec![at], points }
@@ -1763,8 +2091,676 @@ impl<'g> Compiler<'g> {
 }
 
 /// The most combinations of the cut values of a group of rule outputs that rulec is asked over one
-/// by one.
+/// by one; and the most regions a group counted together is asked over in all, before a region
+/// is not split any further.
 const ASKS: usize = 4096;
+
+/// The most parts the region of one combination of the cut values is split into, before a part
+/// is counted as every pair in case.
+const REGIONS: usize = 64;
+
+/// The most concrete inputs tried over one region.
+const PROBES: usize = 64;
+
+/// The most attributes that may be absent, and that no policy reads itself, a group of rule
+/// outputs counted together is given: each is there and not there in turn.
+const MAX_OPTIONAL: usize = 6;
+
+/// A thing a group of rule outputs is given: an attribute or an input, by its slot, or today.
+#[derive(Clone, Debug, PartialEq)]
+enum Raw {
+    Slot(Slot),
+    Today,
+}
+
+/// What a thing given is: how a rule's input is held to it, and how the rule is given one value
+/// of it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum RawKind {
+    Num,
+    Date,
+    Bool,
+    Enum(usize),
+    /// Something a rule's input cannot be held to (an entity).
+    Other,
+}
+
+/// What a region holds one thing given to.
+#[derive(Clone, Debug, PartialEq)]
+enum Hold {
+    /// A number (in the counts of its unit) or a day (its number): both ends in.
+    Span(i128, i128),
+    /// A bool: one value, or either.
+    Bool(Option<bool>),
+    /// An enum of the gate's: one of its values, or any.
+    Enum(usize, Option<usize>),
+    /// An attribute that may be absent, and is.
+    Absent,
+    Other,
+}
+
+impl Hold {
+    /// Whether it is more than one value.
+    fn wide(&self, g: &Gate) -> bool {
+        match self {
+            Hold::Span(lo, hi) => lo < hi,
+            Hold::Bool(b) => b.is_none(),
+            Hold::Enum(e, v) => v.is_none() && g.enums[*e].values.len() > 1,
+            Hold::Absent => false,
+            Hold::Other => true,
+        }
+    }
+
+    /// Its first value and its last.
+    fn ends(&self, g: &Gate) -> (Pv, Pv) {
+        match self {
+            Hold::Span(lo, hi) => (Pv::Int(*lo), Pv::Int(*hi)),
+            Hold::Bool(Some(b)) => (Pv::Bool(*b), Pv::Bool(*b)),
+            Hold::Bool(None) => (Pv::Bool(false), Pv::Bool(true)),
+            Hold::Enum(_, Some(v)) => (Pv::Enum(*v), Pv::Enum(*v)),
+            Hold::Enum(e, None) => (Pv::Enum(0), Pv::Enum(g.enums[*e].values.len().saturating_sub(1))),
+            Hold::Absent => (Pv::Absent, Pv::Absent),
+            Hold::Other => (Pv::Other, Pv::Other),
+        }
+    }
+
+    fn takes(&self, v: &Pv) -> bool {
+        match (self, v) {
+            (Hold::Span(lo, hi), Pv::Int(k)) => lo <= k && k <= hi,
+            (Hold::Bool(b), Pv::Bool(x)) => b.is_none_or(|b| b == *x),
+            (Hold::Enum(_, v), Pv::Enum(x)) => v.is_none_or(|v| v == *x),
+            (Hold::Absent, Pv::Absent) => true,
+            _ => false,
+        }
+    }
+}
+
+/// One value of a thing given: a number or a day, a bool, an enum's value by its place in the
+/// gate's enum.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+enum Pv {
+    Int(i128),
+    Bool(bool),
+    Enum(usize),
+    Absent,
+    Other,
+}
+
+/// The combinations concrete inputs came to, each with the lowest input that did.
+type Seen = BTreeMap<Vec<Val>, Vec<Pv>>;
+
+/// What an input of a call is given.
+#[derive(Clone, Debug, PartialEq)]
+enum Given {
+    /// A thing given, by its place among the group's.
+    Raw(usize),
+    /// A constant: how rulec holds the input to it (None: it cannot), and the value its evaluator
+    /// takes (None: there is none).
+    Const { held: Option<i128>, value: Option<Value> },
+    /// Nothing: an input of a link's action the link gives nothing.
+    Nothing,
+}
+
+/// One call of a rule: the rule given the same values comes to all of its outputs at once.
+struct Call<'g> {
+    key: Option<String>,
+    file: &'g PathBuf,
+    /// Each input, by the rule's name of it, and what it is given.
+    given: Vec<(String, Given)>,
+    /// The outputs read: each by its place among the group's, its name and its values.
+    outs: Vec<(usize, &'g str, &'g Domain)>,
+    enums: &'g [(String, EnumInput)],
+    /// The things given, each once.
+    reads: Vec<usize>,
+    today: bool,
+}
+
+/// The things the calls of a group of rule outputs are given ([`Compiler::group`]).
+struct Reads {
+    raws: Vec<Raw>,
+    /// What each takes with nothing held.
+    whole: Vec<Hold>,
+    /// The cut value that holds each, by its place among the cut values.
+    cut_of: Vec<Option<usize>>,
+    /// Those that may be absent and are not cut.
+    optional: Vec<usize>,
+}
+
+impl Reads {
+    /// The region of one combination of the cut values: each thing a cut value holds held to it,
+    /// every other whole, and those of `optional` whose bit of `absent` is set not there.
+    fn region(&self, assignment: &[Val], absent: usize) -> Vec<Hold> {
+        let mut region = self.whole.clone();
+        for (r, k) in self.cut_of.iter().enumerate() {
+            let Some(k) = k else { continue };
+            region[r] = match (&assignment[*k], &self.whole[r]) {
+                (Val::Cell(c), _) => Hold::Span(c.lo, c.hi),
+                (Val::Bool(b), _) => Hold::Bool(Some(*b)),
+                (Val::Enum(v), Hold::Enum(e, _)) => Hold::Enum(*e, Some(*v)),
+                (Val::Absent, _) => Hold::Absent,
+                _ => Hold::Other,
+            };
+        }
+        for (b, &r) in self.optional.iter().enumerate() {
+            if absent & (1 << b) != 0 {
+                region[r] = Hold::Absent;
+            }
+        }
+        region
+    }
+
+    /// Where an input came to a combination, as a point keeps it ([`Reached`]): the region kept
+    /// for it ([`Group::keep`]) where there is one, by what it holds further than the combination
+    /// of the cut values does (`base`: its region, nothing absent); else the input, by every
+    /// thing it gives a value.
+    fn reached(&self, base: &[Hold], region: Option<&Vec<Hold>>, input: Option<&Vec<Pv>>) -> Reached {
+        let held = |h: &Hold| match h {
+            Hold::Span(lo, hi) => Some(Val::Cell(Cell { lo: *lo, hi: *hi })),
+            Hold::Bool(Some(b)) => Some(Val::Bool(*b)),
+            Hold::Enum(_, Some(v)) => Some(Val::Enum(*v)),
+            Hold::Absent => Some(Val::Absent),
+            _ => None,
+        };
+        let mut at = Vec::new();
+        for (r, raw) in self.raws.iter().enumerate() {
+            let Raw::Slot(slot) = raw else { continue };
+            let v = match (region, input) {
+                (Some(region), _) => held(&region[r]).filter(|v| held(&base[r]).as_ref() != Some(v)),
+                (None, Some(input)) => match &input[r] {
+                    Pv::Int(k) => Some(Val::Cell(Cell { lo: *k, hi: *k })),
+                    Pv::Bool(b) => Some(Val::Bool(*b)),
+                    Pv::Enum(v) => Some(Val::Enum(*v)),
+                    Pv::Absent => Some(Val::Absent),
+                    Pv::Other => None,
+                },
+                (None, None) => None,
+            };
+            if let Some(v) = v {
+                at.push((slot.clone(), v));
+            }
+        }
+        Reached { region: region.is_some() && !at.is_empty(), at }
+    }
+}
+
+/// What rulec says a call comes to over a region.
+struct Answer {
+    /// The combinations of its outputs' values, each in the order of the call's outputs.
+    tuples: Vec<Vec<Val>>,
+    /// Whether they are exactly what the call comes to: each happens, and nothing else does.
+    tight: bool,
+    /// Whether they are every pair of what each output comes to, two or more outputs with more
+    /// than one value: which pairs happen is not known, and a part of the region may tell.
+    pairs: bool,
+    /// Whether the call is given one thing, over more than one value of it, as two of its inputs:
+    /// rulec was asked as if the two were given apart, so some of what it says may not happen, and
+    /// a part of the region may tell.
+    twice: bool,
+    /// The inputs rulec found, each as the rule's evaluator takes it.
+    witnesses: Vec<Values>,
+}
+
+impl Answer {
+    fn absent(n: usize) -> Answer {
+        Answer { tuples: vec![vec![Val::Absent; n]], tight: true, pairs: false, twice: false, witnesses: Vec::new() }
+    }
+}
+
+/// A group of rule outputs counted together ([`Compiler::joint`]): its calls, what the things
+/// they are given are, and what the rules' evaluator gave for each concrete input tried.
+struct Group<'a, 'g> {
+    g: &'g Gate,
+    calls: Vec<Call<'g>>,
+    kinds: Vec<RawKind>,
+    /// How many outputs the group has.
+    n: usize,
+    ask: &'a dyn Ask,
+    memo: &'a Memo,
+    /// For each input tried, what each output comes to (None: the rule gives none there).
+    evals: HashMap<Vec<Pv>, Vec<Option<Val>>>,
+}
+
+impl Group<'_, '_> {
+    /// What rulec says the call `i` comes to with the things it is given held to the region.
+    fn answer(&self, i: usize, region: &[Hold]) -> Answer {
+        let g = self.g;
+        let call = &self.calls[i];
+        let n = call.outs.len();
+        let mut ranges: Ranges = Vec::new();
+        // today is read by the dates of the action too, which this does not join
+        let mut exact = !call.today;
+        let mut twice = false;
+        let mut seen: Vec<usize> = Vec::new();
+        for (input, given) in &call.given {
+            match given {
+                Given::Nothing => return Answer::absent(n),
+                Given::Const { held: Some(k), .. } => ranges.push((input.clone(), Some(*k), Some(*k))),
+                Given::Const { held: None, .. } => exact = false,
+                Given::Raw(r) => {
+                    // one thing given as two inputs: rulec, asked of each input's range, is not told
+                    // they are one value
+                    if seen.contains(r) && region[*r].wide(g) {
+                        exact = false;
+                        twice = true;
+                    }
+                    seen.push(*r);
+                    match &region[*r] {
+                        Hold::Absent => return Answer::absent(n),
+                        Hold::Span(lo, hi) => ranges.push((input.clone(), Some(*lo), Some(*hi))),
+                        Hold::Bool(Some(b)) => ranges.push((input.clone(), Some(i128::from(*b)), Some(i128::from(*b)))),
+                        Hold::Bool(None) => {}
+                        Hold::Enum(e, Some(v)) => match enum_places_of(g, call.enums, input, *e, Some(*v)) {
+                            Some(ks) => ranges.extend(ks.into_iter().map(|k| (input.clone(), Some(k), Some(k)))),
+                            None => exact = false,
+                        },
+                        // an enum of the gate's with fewer values than the rule's: rulec holds the
+                        // input to the values the gate's takes
+                        Hold::Enum(e, None) => match enum_places_of(g, call.enums, input, *e, None) {
+                            Some(ks) if ks.len() < call.enums.iter().find(|(n, _)| n == input).map_or(0, |(_, vs)| vs.len()) => {
+                                ranges.extend(ks.into_iter().map(|k| (input.clone(), Some(k), Some(k))));
+                            }
+                            Some(_) => {}
+                            None => exact = false,
+                        },
+                        Hold::Other => exact = false,
+                    }
+                }
+            }
+        }
+        // the outputs together, where rulec says them so
+        if n > 1 {
+            let names: Vec<String> = call.outs.iter().map(|(_, o, _)| o.to_string()).collect();
+            if let Ok(Found::Value(found)) = self.memo.together(self.ask, call.file, &names, ranges.clone()) {
+                let tuples: Option<Vec<Vec<Val>>> = found.iter().map(|(t, _)| if t.len() == n { t.iter().zip(&call.outs).map(|(v, (_, _, domain))| domain.of_value(v)).collect() } else { None }).collect();
+                if let Some(mut tuples) = tuples {
+                    tuples.sort();
+                    tuples.dedup();
+                    return Answer { tuples, tight: exact, pairs: false, twice, witnesses: found.into_iter().map(|(_, w)| w).collect() };
+                }
+            }
+        }
+        // each output's values, and every pair of them
+        let mut lists: Vec<Vec<Val>> = Vec::new();
+        let mut witnesses: Vec<Values> = Vec::new();
+        for (_, output, domain) in &call.outs {
+            match self.memo.outputs(self.ask, call.file, output, ranges.clone()) {
+                Ok(Found::Value(vs)) if vs.iter().all(|(v, _)| domain.of_value(v).is_some()) => {
+                    lists.push(domain.vals().into_iter().filter(|d| vs.iter().any(|(v, _)| domain.of_value(v).as_ref() == Some(d))).collect());
+                    witnesses.extend(vs.into_iter().map(|(_, w)| w));
+                }
+                _ => {
+                    lists.push(domain.vals());
+                    exact = false;
+                }
+            }
+        }
+        let varying = lists.iter().filter(|l| l.len() > 1).count();
+        Answer { tuples: product(&lists), tight: exact && varying <= 1, pairs: varying > 1, twice, witnesses }
+    }
+
+    /// What each output comes to for one concrete input, by the rules' evaluator: its value, absent
+    /// for a call given an absent value, None where the rule gives no answer (an input it refuses,
+    /// a value it cannot be given). A combination every output has a value in happens: it is put
+    /// in `seen`, with the input (the lowest, of those that come to it).
+    fn tuple_at(&mut self, point: &[Pv], seen: &mut Seen) -> Vec<Option<Val>> {
+        let out = match self.evals.get(point) {
+            Some(t) => t.clone(),
+            None => {
+                let mut out: Vec<Option<Val>> = vec![None; self.n];
+                for call in &self.calls {
+                    let mut vals: Values = Vec::new();
+                    // Some(true): the call is given an absent value; Some(false): a value the rule
+                    // cannot be given
+                    let mut stopped: Option<bool> = None;
+                    for (input, given) in &call.given {
+                        let v = match given {
+                            Given::Nothing => Err(true),
+                            Given::Const { value: Some(v), .. } => Ok(v.clone()),
+                            Given::Const { value: None, .. } => Err(false),
+                            Given::Raw(r) => match (&point[*r], self.kinds[*r]) {
+                                (Pv::Absent, _) => Err(true),
+                                (Pv::Int(k), RawKind::Date) => Ok(Value::Date(ritsu_ports::day_text(*k as i64))),
+                                (Pv::Int(k), RawKind::Num) => Ok(Value::Int(*k)),
+                                (Pv::Bool(b), RawKind::Bool) => Ok(Value::Bool(*b)),
+                                (Pv::Enum(v), RawKind::Enum(e)) => Ok(enum_to_rule(self.g, call.enums, input, Value::Enum(self.g.enums[e].values[*v].name.clone()))),
+                                _ => Err(false),
+                            },
+                        };
+                        match v {
+                            Ok(v) => vals.push((input.clone(), v)),
+                            Err(absent) => {
+                                stopped = Some(absent);
+                                break;
+                            }
+                        }
+                    }
+                    match stopped {
+                        Some(true) => call.outs.iter().for_each(|(k, _, _)| out[*k] = Some(Val::Absent)),
+                        Some(false) => {}
+                        None => {
+                            if let Ok(outs) = self.ask.rule(call.file, &vals) {
+                                for (k, output, domain) in &call.outs {
+                                    out[*k] = outs.iter().find(|(n, _)| n == output).and_then(|(_, v)| domain.of_value(v));
+                                }
+                            }
+                        }
+                    }
+                }
+                self.evals.insert(point.to_vec(), out.clone());
+                out
+            }
+        };
+        if let Some(t) = out.iter().cloned().collect::<Option<Vec<Val>>>() {
+            match seen.get_mut(&t) {
+                Some(lowest) => {
+                    if point < lowest.as_slice() {
+                        *lowest = point.to_vec();
+                    }
+                }
+                None => {
+                    seen.insert(t, point.to_vec());
+                }
+            }
+        }
+        out
+    }
+
+    /// The one combination the calls' answers say a region comes to, when each says one.
+    fn sole(&self, answers: &[Answer]) -> Option<Vec<Val>> {
+        let mut t = vec![Val::Absent; self.n];
+        for (call, a) in self.calls.iter().zip(answers) {
+            let [u] = a.tuples.as_slice() else { return None };
+            for ((k, _, _), v) in call.outs.iter().zip(u) {
+                t[*k] = v.clone();
+            }
+        }
+        Some(t)
+    }
+
+    /// Keeps a region for the combination it comes to, where the calls' answers say it comes to
+    /// one and an input of it that was tried came to that one: every input of the region does. Of
+    /// two regions of one combination, the one that holds fewer things further than `base` (the
+    /// region of the cut values, nothing absent) is kept, then the lower one.
+    fn keep(&self, region: &[Hold], answers: &[Answer], tried: &[(Vec<Pv>, Vec<Option<Val>>)], base: &[Hold], regions: &mut BTreeMap<Vec<Val>, Vec<Hold>>) {
+        let Some(t) = self.sole(answers) else { return };
+        if !tried.iter().any(|(_, x)| x.len() == t.len() && x.iter().zip(&t).all(|(x, v)| x.as_ref() == Some(v))) {
+            return;
+        }
+        let weight = |holds: &[Hold]| -> (usize, Vec<i128>) {
+            let further = holds.iter().zip(base).filter(|(h, b)| h != b).count();
+            let low = holds
+                .iter()
+                .map(|h| match h {
+                    Hold::Span(lo, _) => *lo,
+                    Hold::Bool(Some(b)) => i128::from(*b),
+                    Hold::Enum(_, Some(v)) => *v as i128,
+                    Hold::Absent => i128::MAX,
+                    _ => -1,
+                })
+                .collect();
+            (further, low)
+        };
+        if regions.get(&t).is_none_or(|kept| weight(region) < weight(kept)) {
+            regions.insert(t, region.to_vec());
+        }
+    }
+
+    /// Concrete inputs of a region, each run through the rules' evaluator: both ends of the region,
+    /// and the inputs rulec found for the values of each call, each laid over the first end and over
+    /// each input found for another call (the things two calls are both given, from the one laid
+    /// last). Each with what the outputs come to there.
+    fn observe(&mut self, region: &[Hold], answers: &[Answer], seen: &mut Seen) -> Vec<(Vec<Pv>, Vec<Option<Val>>)> {
+        let g = self.g;
+        let (lo, hi): (Vec<Pv>, Vec<Pv>) = region.iter().map(|h| h.ends(g)).unzip();
+        let mut points: Vec<Vec<Pv>> = vec![lo.clone()];
+        if hi != lo {
+            points.push(hi);
+        }
+        {
+            // an input rulec found for the call `i`, laid over a point: the things the call is given
+            // take the input's values (one given twice, the first's); None for a value outside the
+            // region, or one the gate has no value for
+            let over = |base: &[Pv], i: usize, w: &Values| -> Option<Vec<Pv>> {
+                let call = &self.calls[i];
+                let mut p = base.to_vec();
+                let mut set: Vec<usize> = Vec::new();
+                for (input, given) in &call.given {
+                    let Given::Raw(r) = given else { continue };
+                    if set.contains(r) {
+                        continue;
+                    }
+                    let v = w.iter().find(|(n, _)| n == input).map(|(_, v)| v)?;
+                    let pv = pv_of(g, call.enums, input, self.kinds[*r], v)?;
+                    if !region[*r].takes(&pv) {
+                        return None;
+                    }
+                    p[*r] = pv;
+                    set.push(*r);
+                }
+                Some(p)
+            };
+            let mut add = |p: Option<Vec<Pv>>| {
+                if let Some(p) = p
+                    && points.len() < PROBES
+                    && !points.contains(&p)
+                {
+                    points.push(p);
+                }
+            };
+            for (i, a) in answers.iter().enumerate() {
+                for w in &a.witnesses {
+                    add(over(&lo, i, w));
+                    for (j, b) in answers.iter().enumerate() {
+                        if i == j {
+                            continue;
+                        }
+                        for x in &b.witnesses {
+                            add(over(&lo, j, x).and_then(|base| over(&base, i, w)));
+                        }
+                    }
+                }
+            }
+        }
+        points
+            .into_iter()
+            .map(|p| {
+                let t = self.tuple_at(&p, seen);
+                (p, t)
+            })
+            .collect()
+    }
+
+    /// The parts a region is split into, where the concrete inputs tried show the outputs change:
+    /// two of the inputs that come to different combinations (two every output has a value for,
+    /// when there are such) are joined by a path that changes one thing given at a time; the first
+    /// step that changes what the outputs come to names the thing. A number or a day is split
+    /// between the two neighbouring values where the outputs change (found by halving); a bool or
+    /// an enum into each of its values. None when no two inputs tried differ.
+    fn split(&mut self, region: &[Hold], tried: &[(Vec<Pv>, Vec<Option<Val>>)], seen: &mut Seen) -> Option<Vec<Vec<Hold>>> {
+        let whole = |t: &[Option<Val>]| t.iter().all(Option::is_some);
+        let pair = |only_whole: bool| -> Option<(usize, usize)> {
+            for i in 0..tried.len() {
+                for j in i + 1..tried.len() {
+                    if tried[i].1 != tried[j].1 && (!only_whole || (whole(&tried[i].1) && whole(&tried[j].1))) {
+                        return Some((i, j));
+                    }
+                }
+            }
+            None
+        };
+        let (a, b) = pair(true).or_else(|| pair(false))?;
+        let mut cur = tried[a].0.clone();
+        let cur_t = tried[a].1.clone();
+        for r in 0..region.len() {
+            if cur[r] == tried[b].0[r] {
+                continue;
+            }
+            let mut next = cur.clone();
+            next[r] = tried[b].0[r].clone();
+            let next_t = self.tuple_at(&next, seen);
+            if next_t == cur_t {
+                cur = next;
+                continue;
+            }
+            let with = |hold: Hold| -> Vec<Hold> {
+                let mut x = region.to_vec();
+                x[r] = hold;
+                x
+            };
+            return match (&region[r], &cur[r], &next[r]) {
+                (Hold::Span(lo, hi), Pv::Int(u), Pv::Int(v)) => {
+                    let (mut l, mut h) = (*u.min(v), *u.max(v));
+                    // what the outputs come to at the lower of the two
+                    let at_l = if l == *u { cur_t } else { next_t };
+                    while h - l > 1 {
+                        let m = l + (h - l) / 2;
+                        let mut p = cur.clone();
+                        p[r] = Pv::Int(m);
+                        if self.tuple_at(&p, seen) != at_l {
+                            h = m;
+                        } else {
+                            l = m;
+                        }
+                    }
+                    Some(vec![with(Hold::Span(*lo, l)), with(Hold::Span(l + 1, *hi))])
+                }
+                (Hold::Bool(None), ..) => Some(vec![with(Hold::Bool(Some(false))), with(Hold::Bool(Some(true)))]),
+                (Hold::Enum(e, None), ..) => Some((0..self.g.enums[*e].values.len()).map(|v| with(Hold::Enum(*e, Some(v)))).collect()),
+                _ => None,
+            };
+        }
+        None
+    }
+
+    /// The parts a region is split into where no two inputs tried differ, by the inputs rulec
+    /// found. Rulec is asked of a call given one thing as two of its inputs as if the two were
+    /// given apart, so an input it finds may give the thing two values, which no request does:
+    /// with the thing split between the two, no part takes that input, and rulec is asked again
+    /// without it. A thing two calls that come to more than one combination are both given is
+    /// split the same way, between the values the inputs found for them give it. A number or a
+    /// day: each value found but the lowest starts a part (`room` parts at most); a bool or an
+    /// enum: each of its values. None when the inputs found give no such thing two values.
+    fn apart(&self, region: &[Hold], answers: &[Answer], room: usize) -> Option<Vec<Vec<Hold>>> {
+        let g = self.g;
+        for r in 0..region.len() {
+            if !region[r].wide(g) {
+                continue;
+            }
+            let varies = |i: usize| answers[i].tuples.len() > 1;
+            let twice = |i: usize| answers[i].twice && varies(i) && self.calls[i].given.iter().filter(|(_, x)| *x == Given::Raw(r)).count() > 1;
+            let shared = (0..self.calls.len()).filter(|&i| varies(i) && self.calls[i].reads.contains(&r)).count() > 1;
+            let mut found: Vec<Pv> = Vec::new();
+            for (i, call) in self.calls.iter().enumerate() {
+                if !(twice(i) || (shared && varies(i))) {
+                    continue;
+                }
+                for w in &answers[i].witnesses {
+                    for (input, given) in &call.given {
+                        if *given != Given::Raw(r) {
+                            continue;
+                        }
+                        let Some(v) = w.iter().find(|(n, _)| n == input).map(|(_, v)| v) else { continue };
+                        if let Some(pv) = pv_of(g, call.enums, input, self.kinds[r], v)
+                            && region[r].takes(&pv)
+                            && !found.contains(&pv)
+                        {
+                            found.push(pv);
+                        }
+                    }
+                }
+            }
+            if found.len() < 2 {
+                continue;
+            }
+            let with = |hold: Hold| -> Vec<Hold> {
+                let mut x = region.to_vec();
+                x[r] = hold;
+                x
+            };
+            match &region[r] {
+                Hold::Span(lo, hi) => {
+                    let mut at: Vec<i128> = found.iter().filter_map(|p| if let Pv::Int(k) = p { Some(*k) } else { None }).collect();
+                    at.sort();
+                    if at.len() < 2 {
+                        continue;
+                    }
+                    let mut parts = Vec::new();
+                    let mut from = *lo;
+                    for &start in at[1..].iter().take(room.saturating_sub(1).max(1)) {
+                        parts.push(with(Hold::Span(from, start - 1)));
+                        from = start;
+                    }
+                    parts.push(with(Hold::Span(from, *hi)));
+                    return Some(parts);
+                }
+                Hold::Bool(None) => return Some(vec![with(Hold::Bool(Some(false))), with(Hold::Bool(Some(true)))]),
+                Hold::Enum(e, None) => return Some((0..g.enums[*e].values.len()).map(|v| with(Hold::Enum(*e, Some(v)))).collect()),
+                _ => continue,
+            }
+        }
+        None
+    }
+}
+
+/// The place of a value in the order the rule declares the values of the enum its input `input`
+/// takes, by a word that names it: how rulec is told to hold an enum input to that value.
+fn enum_place(enums: &[(String, EnumInput)], input: &str, words: &[&str]) -> Option<i128> {
+    let (_, values) = enums.iter().find(|(n, _)| n == input)?;
+    values.iter().position(|(_, ws)| ws.iter().any(|w| words.contains(&w.as_str()))).map(|k| k as i128)
+}
+
+/// The place of a word given to an enum input: the rule's value, or the gate's value of that name
+/// (one a link gives an input of its action).
+fn enum_word_place(g: &Gate, enums: &[(String, EnumInput)], input: &str, w: &str) -> Option<i128> {
+    enum_place(enums, input, &[w]).or_else(|| {
+        let v = g.enums.iter().flat_map(|e| e.values.iter()).find(|v| v.is(w))?;
+        enum_place(enums, input, &[v.name.as_str(), v.alias.as_str()])
+    })
+}
+
+/// The places of the values of the gate's enum `e` (of one of them, with `only`) among the values
+/// of the enum the rule's input `input` takes; None when one of them is no value of the rule's.
+fn enum_places_of(g: &Gate, enums: &[(String, EnumInput)], input: &str, e: usize, only: Option<usize>) -> Option<Vec<i128>> {
+    let values = &g.enums[e].values;
+    let picked: Vec<&Named> = match only {
+        Some(v) => vec![&values[v]],
+        None => values.iter().collect(),
+    };
+    picked.iter().map(|v| enum_place(enums, input, &[v.name.as_str(), v.alias.as_str()])).collect()
+}
+
+/// A value of an enum input, as the rule's evaluator takes it: the rule's name of the value that
+/// answers to the word (or to the alias of the gate's value of that name). Any other value as it
+/// is.
+fn enum_to_rule(g: &Gate, enums: &[(String, EnumInput)], input: &str, v: Value) -> Value {
+    let Value::Enum(word) = &v else { return v };
+    let Some((_, values)) = enums.iter().find(|(n, _)| n == input) else { return v };
+    let alias = g.enums.iter().flat_map(|e| e.values.iter()).find(|x| x.name == *word || x.alias == *word).map(|x| (x.name.clone(), x.alias.clone()));
+    values
+        .iter()
+        .find(|(_, words)| words.iter().any(|x| x == word || alias.as_ref().is_some_and(|(n, al)| x == n || x == al)))
+        .map(|(name, _)| Value::Enum(name.clone()))
+        .unwrap_or(v)
+}
+
+/// A value of a rule's input, as the rule's evaluator takes it, as one value of the thing the
+/// gate gives the input: a number as it is, a day by its number, an enum's value by its place in
+/// the gate's enum. None for a value the gate has none for.
+fn pv_of(g: &Gate, enums: &[(String, EnumInput)], input: &str, kind: RawKind, v: &Value) -> Option<Pv> {
+    match (kind, v) {
+        (RawKind::Num, Value::Int(k)) => Some(Pv::Int(*k)),
+        (RawKind::Date, Value::Date(s)) => ritsu_ports::day_of(s).map(|d| Pv::Int(d as i128)),
+        (RawKind::Bool, Value::Bool(b)) => Some(Pv::Bool(*b)),
+        (RawKind::Enum(e), Value::Enum(name) | Value::Str(name)) => {
+            let words: Vec<&str> = match enums.iter().find(|(n, _)| n == input).and_then(|(_, vs)| vs.iter().find(|(rule_name, _)| rule_name == name)) {
+                Some((_, ws)) => ws.iter().map(String::as_str).collect(),
+                None => vec![name.as_str()],
+            };
+            g.enums[e].values.iter().position(|x| words.contains(&x.name.as_str()) || words.contains(&x.alias.as_str())).map(Pv::Enum)
+        }
+        _ => None,
+    }
+}
 
 /// What a date comes to for one combination of the values it is given.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -1973,18 +2969,6 @@ pub fn confirm(g: &Gate, s: &Space, k: &Kept, known: &Known, ask: &dyn Ask) -> b
                 let Some((act, ci, link)) = f.computed_at(s.action, at) else { return false };
                 let cv = &g.actions[act].computed[ci];
                 let (Some(Kn::Rule { file, output, domain, inputs, enums, .. }), How::Rule { args, .. }) = (known.computed.get(&(act, ci)), &cv.how) else { return false };
-                // a value of an enum input, as the rule's evaluator takes it: the rule's name of the
-                // value that answers to the word (or to the alias of the gate's value of that name)
-                let to_rule = |input: &str, v: Value| -> Value {
-                    let Value::Enum(word) = &v else { return v };
-                    let Some((_, values)) = enums.iter().find(|(n, _)| n == input) else { return v };
-                    let alias = g.enums.iter().flat_map(|e| e.values.iter()).find(|x| x.name == *word || x.alias == *word).map(|x| (x.name.clone(), x.alias.clone()));
-                    values
-                        .iter()
-                        .find(|(_, words)| words.iter().any(|x| x == word || alias.as_ref().is_some_and(|(n, al)| x == n || x == al)))
-                        .map(|(name, _)| Value::Enum(name.clone()))
-                        .unwrap_or(v)
-                };
                 let mut vals: Values = Vec::new();
                 for (input, src) in args {
                     let Some(src) = f.mapped(link, g, src) else { return want == Val::Absent };
@@ -2003,7 +2987,7 @@ pub fn confirm(g: &Gate, s: &Space, k: &Kept, known: &Known, ask: &dyn Ask) -> b
                         other => slot_of(other).and_then(|sl| raws.iter().position(|r| *r == sl)).and_then(|p| asg[p].clone()),
                     };
                     match v {
-                        Some(v) => vals.push((input.clone(), to_rule(input, v))),
+                        Some(v) => vals.push((input.clone(), enum_to_rule(g, enums, input, v))),
                         None => return want == Val::Absent,
                     }
                 }
@@ -2031,10 +3015,156 @@ fn spread(lo: i128, hi: i128) -> Vec<i128> {
 // ---------------------------------------------------------------------------------------------
 // Saying a combination
 
+/// A cell of days as a message shows it: one day, or both ends.
+fn show_days(c: Cell) -> Text {
+    let (a, b) = (crate::types::day_text(c.lo as i64), crate::types::day_text(c.hi as i64));
+    if c.lo == c.hi { Text::same(a) } else { Text { ja: format!("{a}〜{b}"), en: format!("{a} to {b}") } }
+}
+
+/// What an example says beside the computed values of one group of rule outputs: the input that
+/// was run through the rules and came to them ([`Reached`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Confirmed {
+    /// The place of the last of the group's values the example says: the words go after it.
+    pub after: usize,
+    /// The computed values of the group the example says, by name, in the order said.
+    pub computed: Vec<String>,
+    /// Whether it is a region, every input of which comes to the values; else it is one input.
+    pub region: bool,
+    /// The attributes and inputs the rules are given: the principal's, the resource's, then the
+    /// action's inputs, each in the order declared.
+    pub given: Vec<GivenValue>,
+}
+
+/// One attribute or input of a [`Confirmed`], with its value there.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GivenValue {
+    /// As a gate writes it: `principal.refund_limit`, `resource.amount`, an input by its name.
+    pub name: String,
+    /// The type whose attribute it is; None for an input.
+    pub ty: Option<String>,
+    /// As the words name it: an attribute by its own name, unless something else the action
+    /// reads has the same name.
+    pub short: String,
+    pub val: Val,
+    pub value: Text,
+}
+
+/// Two pieces of Japanese joined as the suite writes it: a space where a letter or a digit meets
+/// Japanese.
+fn glue(a: &str, b: &str) -> String {
+    let (p, c) = (a.chars().last(), b.chars().next());
+    let plain = |c: Option<char>| c.is_some_and(|c| c.is_ascii_alphanumeric());
+    let wide = |c: Option<char>| c.is_some_and(|c| !c.is_ascii() && !matches!(c, '、' | '。' | '（' | '）' | '「' | '」' | '〜' | '：'));
+    if (plain(p) && wide(c)) || (wide(p) && plain(c)) { format!("{a} {b}") } else { format!("{a}{b}") }
+}
+
+impl Confirmed {
+    /// In words, as an example says it in brackets after the values: `as when refund_limit is
+    /// 1GBP and amount is 1GBP` for one input, `whenever amount is 101JPY to 300JPY` for a region.
+    pub fn said(&self) -> Text {
+        let items: Vec<Text> = self
+            .given
+            .iter()
+            .map(|x| {
+                let ja = match x.val {
+                    Val::Bool(_) => format!("{}「{}」", glue(&x.short, "が"), x.value.ja),
+                    Val::Absent => glue(&x.short, "が無い"),
+                    _ => glue(&glue(&x.short, "が"), &x.value.ja),
+                };
+                Text { ja, en: format!("{} is {}", x.short, x.value.en) }
+            })
+            .collect();
+        let l = Text::list(&items);
+        // 無いとき, 1GBP のとき
+        let when = if matches!(self.given.last().map(|x| &x.val), Some(Val::Absent)) { "とき" } else { "のとき" };
+        if self.region { Text { ja: glue(&l.ja, &format!("{when}はいつも")), en: format!("whenever {}", l.en) } } else { Text { ja: glue(&glue("たとえば", &l.ja), when), en: format!("as when {}", l.en) } }
+    }
+}
+
+/// For each group of rule outputs of a kept combination that an input was run for, what an
+/// example says beside its values. A group none of whose values the example says is left out.
+pub fn confirmed(g: &Gate, s: &Space, k: &Kept) -> Vec<Confirmed> {
+    let f = &s.frames[k.frame];
+    let env = s.env_of(k);
+    let a = &g.actions[s.action];
+    let (pt, rt) = (&g.types[f.principal], &g.types[f.resource]);
+    // a name two things of the action have is said with whose it is
+    let shared = |n: &str| pt.attrs.iter().map(|x| &x.named.name).chain(rt.attrs.iter().map(|x| &x.named.name)).chain(a.inputs.iter().map(|x| &x.named.name)).chain(a.computed.iter().map(|x| &x.named.name)).filter(|x| x.as_str() == n).count() > 1;
+    let mut out = Vec::new();
+    for (x, &i) in f.factors.iter().zip(&k.idx) {
+        let FactorKind::Rules { outputs, .. } = &x.kind else { continue };
+        let reached = &x.points[i].reached;
+        if reached.at.is_empty() {
+            continue;
+        }
+        let said: Vec<(usize, &String)> = locals(f)
+            .into_iter()
+            .filter_map(|(at, sl)| match sl {
+                Slot::Computed(c) if outputs.contains(&at) && env[at] != Val::Absent && !a.computed[*c].of_flow() => Some((at, &a.computed[*c].named.name)),
+                _ => None,
+            })
+            .collect();
+        let Some(&(after, _)) = said.last() else { continue };
+        let mut at: Vec<&(Slot, Val)> = reached.at.iter().collect();
+        at.sort_by_key(|(sl, _)| match sl {
+            Slot::Attr(Owner::Principal, i) => (0, *i),
+            Slot::Attr(_, i) => (1, *i),
+            Slot::Input(i) => (2, *i),
+            _ => (3, 0),
+        });
+        let given = at
+            .into_iter()
+            .filter_map(|(sl, v)| {
+                let (name, ty, short, field) = match sl {
+                    Slot::Attr(o, i) => {
+                        let t = g.owner_type(*o, f.principal, f.resource);
+                        let n = &t.attrs[*i].named.name;
+                        let full = format!("{}.{n}", o.word());
+                        (full.clone(), Some(t.named.name.clone()), if shared(n) { full } else { n.clone() }, &t.attrs[*i].ty)
+                    }
+                    Slot::Input(i) => (a.inputs[*i].named.name.clone(), None, a.inputs[*i].named.name.clone(), &a.inputs[*i].ty),
+                    _ => return None,
+                };
+                let value = match (v, field) {
+                    (Val::Bool(b), _) => {
+                        if *b {
+                            tr!("はい", "yes")
+                        } else {
+                            tr!("いいえ", "no")
+                        }
+                    }
+                    (Val::Absent, _) => tr!("無い", "absent"),
+                    (Val::Enum(v), FieldType::Enum(e)) => Text::same(g.enums[*e].values[*v].name.clone()),
+                    (Val::Cell(c), FieldType::Date { .. }) => show_days(*c),
+                    (Val::Cell(c), FieldType::Num { unit, .. }) => cells::show_cell(*c, unit),
+                    _ => return None,
+                };
+                Some(GivenValue { name, ty, short, val: v.clone(), value })
+            })
+            .collect();
+        out.push(Confirmed { after, computed: said.iter().map(|(_, n)| (*n).clone()).collect(), region: reached.region, given });
+    }
+    out
+}
+
 /// A combination in words, for an example in a message: the principal with its roles and
 /// attributes, the resource with its attributes, the relations, the inputs and the computed
-/// values the policies read.
+/// values the policies read, each attribute and input by its cell, as the walk counts it. Where an
+/// input was run that comes to the computed values of a group of rule outputs, it is said in
+/// brackets after the last of them ([`Confirmed::said`]).
 pub fn say(g: &Gate, s: &Space, k: &Kept) -> Text {
+    say_with(g, s, k, &confirmed(g, s, k))
+}
+
+/// A combination in words as the walk counts it, and nothing of an input that was run. Two
+/// versions of a gate are compared by it (`sekisho diff`): an input run for one version says
+/// nothing of the other.
+pub fn say_counted(g: &Gate, s: &Space, k: &Kept) -> Text {
+    say_with(g, s, k, &[])
+}
+
+fn say_with(g: &Gate, s: &Space, k: &Kept, beside: &[Confirmed]) -> Text {
     let f = &s.frames[k.frame];
     let env = s.env_of(k);
     let a = &g.actions[s.action];
@@ -2136,7 +3266,7 @@ pub fn say(g: &Gate, s: &Space, k: &Kept) -> Text {
     for (at, sl) in locals(f) {
         let name = match sl {
             Slot::Input(i) => &a.inputs[*i].named.name,
-            Slot::Computed(i) => &a.computed[*i].named.name,
+            Slot::Computed(i) if !a.computed[*i].of_flow() => &a.computed[*i].named.name,
             _ => continue,
         };
         if env[at] == Val::Absent && matches!(sl, Slot::Computed(_)) {
@@ -2146,7 +3276,13 @@ pub fn say(g: &Gate, s: &Space, k: &Kept) -> Text {
             continue;
         }
         let v = val(at);
-        parts.push(tr!("{name}：{}", "{name}: {}", v.ja; v.en));
+        parts.push(match beside.iter().find(|c| c.after == at) {
+            Some(c) => {
+                let c = c.said();
+                tr!("{name}：{}（{}）", "{name}: {} ({})", v.ja, c.ja; v.en, c.en)
+            }
+            None => tr!("{name}：{}", "{name}: {}", v.ja; v.en),
+        });
     }
     // the answers of the actions the conditions ask (DESIGN 2.11)
     for (l, link) in f.links.iter().enumerate().filter(|(_, x)| x.direct) {
@@ -2160,7 +3296,7 @@ pub fn say(g: &Gate, s: &Space, k: &Kept) -> Text {
 
 /// A combination as the values the JSON of a diagnostic lists: the principal and each role walked
 /// (with the roles they include), the attributes, the resource, the relations, the inputs and the
-/// computed values, each by what it is the value of.
+/// computed values, each by what it is the value of, as the walk counts it.
 pub fn values(g: &Gate, s: &Space, k: &Kept) -> Vec<(String, Text)> {
     let f = &s.frames[k.frame];
     let env = s.env_of(k);
@@ -2240,7 +3376,7 @@ pub fn values(g: &Gate, s: &Space, k: &Kept) -> Vec<(String, Text)> {
     for (at, sl) in locals(f) {
         let name = match sl {
             Slot::Input(i) => &a.inputs[*i].named.name,
-            Slot::Computed(i) => &a.computed[*i].named.name,
+            Slot::Computed(i) if !a.computed[*i].of_flow() => &a.computed[*i].named.name,
             _ => continue,
         };
         if walked(at) {

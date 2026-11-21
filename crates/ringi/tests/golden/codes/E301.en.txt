@@ -1,0 +1,6 @@
+error[E301]: example.ringi:6:1: No row of the route takes some requests
+     6 | route
+  = The requests no row takes: amount from 100_001JPY to 1_000_000JPY
+  = A request no row takes: amount = 100_001JPY
+  = Add this row to the table, writing in place of each `?` who answers that stage (a name in `who`; a blank cell where those requests skip it): | >100_000JPY | ? | ? |
+  = The cells are cut only at the bounds the table already writes and at the ends of the ranges, so the rows close the gap as they are; where the approvers change inside a row, split it there.

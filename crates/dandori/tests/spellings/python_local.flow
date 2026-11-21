@@ -1,0 +1,16 @@
+workflow python_local v1
+description "A task dandori writes, named as the local of make_activities that holds the transport."
+
+inputs
+  id : string
+
+outputs
+  text : string
+
+task t(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+flow
+  let text = t(id: id)
+  succeed text = text

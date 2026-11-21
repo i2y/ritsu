@@ -1,0 +1,18 @@
+rule 値の無いことがある出力(unwritten_optional_ja) v1
+description "値の無いことがある出力で、何も決めないもの"
+
+enum 段階(level) = 低(low) | 高(high)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100000円
+  会員(member) : bool
+
+outputs
+  等級(grade)  : 段階?
+  確認(review) : bool
+
+table 確認の要否(review_of)
+policy unique
+| 会員  | -> 確認 |
+| true  | false   |
+| false | true    |

@@ -1,0 +1,76 @@
+workflow Pythonのタスクの名前 v1
+description "Python のコードがタスクを動かす所で読む名前を、タスクに付けたフローです。取り込む型、呼ぶ組み込み、アクティビティが自分で持つ名前を使い、それぞれ同じ名前の変数に受けます。コードは自分の名前を別の名前で読み、フローはどのプラットフォームでも動きます"
+
+inputs
+  番号 : string
+
+outputs
+  文 : string
+
+# 自分で実装するタスク。タスクのクラスとグラフが読む名前を付ける
+task Any(番号: string) -> string
+task dict(番号: string) -> string
+task str(番号: string) -> string
+task int(番号: string) -> string
+task OwnTasks(番号: string) -> string
+task io(番号: string) -> string
+
+# dandori が書くタスク。アクティビティが読む名前を付ける
+task JEV(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task RULES(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task SCHEMAS(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task T(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task activity(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task beating(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task fail(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task list(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task own(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task transport(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+flow
+  let Any = Any(番号: 番号)
+  let dict = dict(番号: 番号)
+  let str = str(番号: 番号)
+  let int = int(番号: 番号)
+  let OwnTasks = OwnTasks(番号: 番号)
+  let io = io(番号: 番号)
+  let JEV = JEV(番号: 番号)
+  let RULES = RULES(番号: 番号)
+  let SCHEMAS = SCHEMAS(番号: 番号)
+  let T = T(番号: 番号)
+  let activity = activity(番号: 番号)
+  let beating = beating(番号: 番号)
+  let fail = fail(番号: 番号)
+  let list = list(番号: 番号)
+  let own = own(番号: 番号)
+  let transport = transport(番号: 番号)
+  succeed 文 = "{Any}{dict}{str}{int}{OwnTasks}{io}{JEV}{RULES}{SCHEMAS}{T}{activity}{beating}{fail}{list}{own}{transport}"

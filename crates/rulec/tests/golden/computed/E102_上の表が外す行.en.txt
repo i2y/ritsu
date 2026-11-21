@@ -1,0 +1,9 @@
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/computed/shapes/E102_上の表が外す行.rule:24 table 選ぶ
+   |
+24 | | -      | 中   | 一      |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+   |
+ No input reaches this row: the tables above leave out every input it asks for that the earlier rows do not take first. Delete this row, or, if such an input can come, correct the tables above.
+
+note tests/computed/shapes/E102_上の表が外す行.rule: 1 shadow pairs (1 structural, 0 equivalent, 0 needs review)

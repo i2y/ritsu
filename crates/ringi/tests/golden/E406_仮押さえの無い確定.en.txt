@@ -1,0 +1,3 @@
+error[E406]: tests/mutants/E406_仮押さえの無い確定.ringi:16:23: `post 予算.reserve` has no hold before it: there is no `on submitted hold 予算.reserve(…)` line
+    16 |   on approved    post 予算.reserve(request: ticket.id, attempt: ticket.attempt)
+  = Add `on submitted hold 予算.reserve(…)`, or take this line out.

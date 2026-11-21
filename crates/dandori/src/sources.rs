@@ -17,7 +17,7 @@ use std::rc::Rc;
 
 pub trait Sources {
     /// The text of a file, or why it cannot be read.
-    fn read(&self, path: &Path) -> Result<String, String>;
+    fn read(&self, path: &Path) -> Result<String, std::io::Error>;
     /// One name for a file however the path to it is written, to tell a flow that runs itself.
     fn canonical(&self, path: &Path) -> PathBuf;
     /// The port the rules are read through.
@@ -37,6 +37,51 @@ pub trait Sources {
     fn undecided(&self) -> Option<&dyn ritsu_ports::Undecided> {
         None
     }
+    /// The ports themselves, as the program that runs dandori handed them over: what a check kept
+    /// by `ports::Engine` was made with. None where nothing was handed over.
+    fn held(&self) -> Option<Held> {
+        None
+    }
+}
+
+/// The ports a check reads the rules, the dates files and the books through, as they were handed
+/// over. Two are the same when they are the same ports (the same objects): a check kept with one
+/// is not taken for a check with another (`ports::Engine`). Holding them keeps their places from
+/// being taken by others.
+#[derive(Clone)]
+pub struct Held {
+    rules: Rc<dyn Rules>,
+    dates: Option<Rc<dyn Dates>>,
+    books: Option<Rc<dyn Books>>,
+}
+
+impl Held {
+    /// The three ports, when the program that runs dandori handed over all three (`ritsu dandori`):
+    /// what `dandori run` and `dandori scenarios` compute the calls of rules, dates and books with.
+    pub fn ports(&self) -> Option<(Rc<dyn Rules>, Rc<dyn Dates>, Rc<dyn Books>)> {
+        Some((self.rules.clone(), self.dates.clone()?, self.books.clone()?))
+    }
+
+    /// The three ports, each as it was handed over, or, where it was not (the dates and the books
+    /// of a program that joins rulec only), one that answers every question with what to run
+    /// instead (`NoDates`, `NoBooks`).
+    pub fn or_unread(&self) -> (Rc<dyn Rules>, Rc<dyn Dates>, Rc<dyn Books>) {
+        let dates: Rc<dyn Dates> = self.dates.clone().unwrap_or_else(|| Rc::new(NoDates));
+        let books: Rc<dyn Books> = self.books.clone().unwrap_or_else(|| Rc::new(NoBooks));
+        (self.rules.clone(), dates, books)
+    }
+
+    pub fn same(&self, o: &Held) -> bool {
+        fn at<T: ?Sized>(x: &Rc<T>) -> *const () {
+            Rc::as_ptr(x) as *const ()
+        }
+        at(&self.rules) == at(&o.rules) && self.dates.as_ref().map(at) == o.dates.as_ref().map(at) && self.books.as_ref().map(at) == o.books.as_ref().map(at)
+    }
+}
+
+/// The ports the checks read through now: none, unless the program that runs dandori handed them over.
+pub fn held() -> Option<Held> {
+    CURRENT.with(|c| c.borrow().as_ref().and_then(|s| s.held()))
 }
 
 thread_local! {
@@ -99,7 +144,7 @@ fn current() -> Rc<dyn Sources> {
     CURRENT.with(|c| c.borrow().clone()).unwrap_or_else(|| Rc::new(Disk::new(Rc::new(NoRules))))
 }
 
-pub fn read(path: &Path) -> Result<String, String> {
+pub fn read(path: &Path) -> Result<String, std::io::Error> {
     current().read(path)
 }
 
@@ -114,16 +159,30 @@ pub fn rule(path: &Path) -> Result<RuleFacts, Vec<Said>> {
 
 /// What a call of a rule comes to, through the port of rules the program that runs dandori hands
 /// over, as `ritsu run` answers it (`computed::rule_answer`).
-pub fn rule_answer(m: &crate::model::Model, r: usize, args: &serde_json::Map<String, serde_json::Value>) -> Result<serde_json::Value, String> {
+pub fn rule_answer(m: &crate::model::Model, r: usize, args: &serde_json::Map<String, serde_json::Value>) -> Result<serde_json::Value, ritsu_base::text::Text> {
     let s = current();
     crate::computed::rule_answer(s.rules(), m, r, args)
 }
 
 /// The same, as the record of the rule's outputs the flow reads, or why the call is refused at the
 /// door (`computed::rule_outputs`).
-pub fn rule_outputs(m: &crate::model::Model, r: usize, args: &serde_json::Map<String, serde_json::Value>) -> Result<Result<serde_json::Value, String>, String> {
+pub fn rule_outputs(m: &crate::model::Model, r: usize, args: &serde_json::Map<String, serde_json::Value>) -> Result<Result<serde_json::Value, String>, ritsu_base::text::Text> {
     let s = current();
     crate::computed::rule_outputs(s.rules(), m, r, args)
+}
+
+/// What the enum and truth-value outputs of a rule come to together with its inputs held to
+/// `ranges` (`Rules::outputs_together`): each combination, with an input that comes to it, exact or
+/// undecided.
+pub fn outputs_together(path: &Path, outputs: &[String], ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<Found<Vec<(Vec<ritsu_ports::Value>, ritsu_ports::Values)>>, Vec<Said>> {
+    current().rules().outputs_together(path, outputs, ranges)
+}
+
+/// The inputs of the vectors rulec makes of the rule `r`, as a call of the flow gives them
+/// (`computed::rule_vectors`); none without rulec.
+pub fn rule_vectors(m: &crate::model::Model, r: usize) -> Vec<serde_json::Map<String, serde_json::Value>> {
+    let s = current();
+    crate::computed::rule_vectors(s.rules(), m, r)
 }
 
 /// What koyomi knows of a dates file, or what is said instead.
@@ -157,8 +216,9 @@ pub fn rule_doc(path: &Path, html: bool, lang: Lang) -> Result<String, Vec<Said>
     current().rules().doc(path, &shown, html, lang)
 }
 
-/// What was said of a rule, as notes of the diagnostic that names it: each thing rulec says, with
-/// its code and where it is.
+/// What was said of a file a flow reads (a rule, a dates file, a book), as notes of the diagnostic
+/// that names it: each thing its language says, with its code and where it is, the file named the
+/// way the run writes its paths, as the language's port names it (ritsu's DESIGN 6.2, item 8).
 pub fn said_notes(said: &[Said]) -> Vec<Text> {
     said.iter()
         .map(|s| {
@@ -172,25 +232,6 @@ pub fn said_notes(said: &[Said]) -> Vec<Text> {
             }
         })
         .collect()
-}
-
-/// What a port said of a file a flow reads, as notes, with every file under the flow's directory
-/// named from there, as the flow names it (`books/stock.book`), not by the path it was reached by.
-pub fn said_notes_from(said: &[Said], base: &std::path::Path) -> Vec<Text> {
-    let dir = base.to_string_lossy().to_string();
-    if dir.is_empty() {
-        return said_notes(said);
-    }
-    let prefix = format!("{}/", dir.trim_end_matches('/'));
-    let shown: Vec<Said> = said
-        .iter()
-        .map(|s| Said {
-            file: s.file.strip_prefix(&prefix).map(str::to_string).unwrap_or_else(|| s.file.clone()),
-            message: Text::new(s.message.ja.replace(&prefix, ""), s.message.en.replace(&prefix, "")),
-            ..s.clone()
-        })
-        .collect();
-    said_notes(&shown)
 }
 
 /// The disk, and the ports the program that runs dandori hands over.
@@ -208,8 +249,12 @@ impl Disk {
 }
 
 impl Sources for Disk {
-    fn read(&self, path: &Path) -> Result<String, String> {
-        ritsu_base::fs::read_to_string(path).map_err(|e| e.to_string())
+    fn held(&self) -> Option<Held> {
+        Some(Held { rules: self.rules.clone(), dates: self.dates.clone(), books: self.books.clone() })
+    }
+
+    fn read(&self, path: &Path) -> Result<String, std::io::Error> {
+        ritsu_base::fs::read_to_string(path)
     }
 
     fn canonical(&self, path: &Path) -> PathBuf {
@@ -317,7 +362,7 @@ impl Rules for NoRules {
         Err(no_rules(rule))
     }
 
-    fn preconditions_hold(&self, rule: &Path, _: &[(String, Option<i128>, Option<i128>)], _: Option<i128>) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+    fn preconditions_hold(&self, rule: &Path, _: &[(String, Option<i128>, Option<i128>)], _: Option<i128>, _: Option<i128>) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
         Err(no_rules(rule))
     }
 

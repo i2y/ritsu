@@ -1,0 +1,5 @@
+--- a/calendars/tokyo_business_days.cal
++++ b/calendars/tokyo_business_days.cal
+@@ -11 +11,2 @@
+ closed every 12-29..01-03 "New Year holidays"
++closed every 08-13..08-15 "Summer holidays"

@@ -27,7 +27,7 @@ use ritsu_base::modules::manifest::{self, Source};
 use ritsu_base::modules::store;
 use ritsu_base::modules::{E303, artifact, digest};
 use ritsu_base::naming::Tool;
-use ritsu_base::text::{Lang, Text, capitalize, plural};
+use ritsu_base::text::{Text, capitalize, plural};
 use ritsu_base::tr;
 use std::path::{Path, PathBuf};
 
@@ -80,12 +80,11 @@ fn stopped(ctx: &Ctx, known: &Known, s: Stop) -> u8 {
             ("pushed", Json::Null),
             ("reference", Json::Null),
             ("sign", Json::Null),
-            ("error", Json::str(ctx.say(&text))),
+            ("error", Json::obj([("code", Json::int(i128::from(code))), ("message", Json::str(ctx.say(&text)))])),
         ]);
         println!("{}", o.pretty());
     } else {
-        let h = if ctx.lang == Lang::Ja { "エラー" } else { "error" };
-        eprintln!("{h}: {}", ctx.say(&text));
+        eprintln!("{}", ritsu_base::cli::refusal(&ctx.say(&text), ctx.lang));
     }
     code
 }

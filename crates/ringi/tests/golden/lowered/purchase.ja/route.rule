@@ -1,0 +1,57 @@
+rule purchase_ja_route v1
+description "What ringi writes from the route of purchase.ja.ringi: one optional output for each stage, whose value is the approver the stage names; a blank cell is none, the stage is not there"
+
+import enum authority_decider from "choices.rule"
+enum first_by = manager "上長"
+enum technical_by = reviewer "確認者"
+enum finance_by = finance_approver "財務部"
+enum board_by = at_least_60_percent_of_board "at least 60% of 取締役"
+enum decide_by = dept_head "dept_head" | division_head "division_head" | president "president"
+enum inform_by = circulate_to_general_affairs "circulate to 総務部"
+
+inputs
+  reviewer_given    : bool
+  authority_finance : bool  fed by rulec "../../../../examples/shared/authority.rule" output finance
+  advance           : rate[step 5%]  range >=0% <=100%
+  authority_board   : bool  fed by rulec "../../../../examples/shared/authority.rule" output board
+  authority_decider : authority_decider  fed by rulec "../../../../examples/shared/authority.rule" output decider
+
+outputs
+  first     : first_by
+  technical : technical_by?
+  finance   : finance_by?
+  board     : board_by?
+  decide    : decide_by
+  inform    : inform_by
+
+table first
+| -> first |
+| manager  |
+
+table technical
+| reviewer_given | -> technical |
+| true           | reviewer     |
+| false          | none         |
+
+table finance
+| authority_finance | advance | -> finance       |
+| true              | -       | finance_approver |
+| false             | <=30%   | none             |
+| false             | >30%    | finance_approver |
+
+table board
+| authority_board | -> board                     |
+| true            | at_least_60_percent_of_board |
+| false           | none                         |
+
+table decide
+| authority_decider | -> decide     |
+| dept_head         | dept_head     |
+| division_head     | division_head |
+| president         | president     |
+
+table inform
+| -> inform                    |
+| circulate_to_general_affairs |
+
+possible board = at_least_60_percent_of_board

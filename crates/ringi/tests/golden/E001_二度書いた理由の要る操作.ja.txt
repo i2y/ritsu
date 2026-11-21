@@ -1,0 +1,2 @@
+エラー[E001]: tests/mutants/E001_二度書いた理由の要る操作.ringi:15:44: `reject` を二度書いています。一度にしてください
+    15 |   comment required  for reject, send back, reject

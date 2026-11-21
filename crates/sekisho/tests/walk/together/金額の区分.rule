@@ -1,0 +1,30 @@
+rule 金額の区分(sizes) v1
+description "一つの金額から出す三つの出力。二つは同じ表が一緒に書き、三つ目は別の表が別の金額で切る"
+
+enum 水準(level) = 低(low) | 高(high)
+
+inputs
+  金額(amount) : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  甲(a) : 水準
+  乙(b) : 水準
+  丙(c) : 水準
+
+table 甲と乙(both)
+policy unique
+| 金額     | -> 甲 | 乙 |
+| <=500JPY | 低    | 低 |
+| >500JPY  | 高    | 高 |
+
+table 丙の表(third)
+policy unique
+| 金額     | -> 丙 |
+| <=300JPY | 低    |
+| >300JPY  | 高    |
+
+examples
+| 金額   | -> 甲 | 乙 | 丙 |
+| 300JPY | 低    | 低 | 低 |
+| 500JPY | 低    | 低 | 高 |
+| 501JPY | 高    | 高 | 高 |

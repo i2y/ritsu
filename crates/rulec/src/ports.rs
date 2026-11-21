@@ -15,24 +15,28 @@ use crate::num::Rat;
 use crate::types::{Checked, Ty};
 use ritsu_base::naming::{Name as Naming, Tool};
 use ritsu_base::text::{Lang, Text};
-use ritsu_ports::{Answer, Column, ColumnType, DaySet, Item, Precondition, Reference, RuleError, RuleFacts, Said, Value, Values};
+use ritsu_ports::{Answer, Column, ColumnType, DaySet, Item, Outside, Precondition, Reference, RuleError, RuleFacts, Said, Value, Values};
 use std::path::Path;
 
-/// rulec, as the ports reach it. It keeps each rule it has checked, by its path and its text, so
+/// rulec, as the ports reach it. It keeps each rule it has checked, by the file and its text, so
 /// that a program asking one rule many times (an evaluation per call of a workflow) checks it
 /// once; and the report `rulec check` prints of it, so that `ritsu check`, which prints that report
-/// and then asks the rule's facts for the workflows that use it, checks it once too. A check is
-/// kept while every file it read reads the same ([`Seen`]): a rule of the same text whose
-/// enums, callee or contributions read otherwise (the other side of a diff, a git revision, the
-/// module at hand with another lock) is checked again, and both checks are kept.
+/// and then asks the rule's facts for the workflows that use it, checks it once too. A rule is
+/// kept by the file, however its path is written, and named the way the run writes its paths
+/// (ritsu's DESIGN 4.15), so every way of asking gets the same answer. A check is kept while every
+/// file it read reads the same ([`Seen`]): a rule of the same text whose enums, callee or
+/// contributions read otherwise (the other side of a diff, a git revision, the module at hand with
+/// another lock) is checked again, and both checks are kept.
 #[derive(Default)]
 pub struct Engine {
-    /// By the path and the text: the checks kept, each with what its files read.
-    checked: std::sync::Mutex<std::collections::HashMap<(String, String), Vec<Kept>>>,
-    /// By the file (its path with its links followed, so two spellings of one path are one file)
-    /// and its text: the path the report was made with, its language, what its files read, and the
-    /// report.
-    reports: std::sync::Mutex<std::collections::HashMap<(std::path::PathBuf, String), (String, RLang, std::sync::Arc<Seen>, std::sync::Arc<crate::Report>)>>,
+    /// By the file and the text: the checks kept, each with what its files read.
+    checked: std::sync::Mutex<std::collections::HashMap<(std::path::PathBuf, String), Vec<Kept>>>,
+    /// By the file (its path made absolute and folded, so two spellings of one path are one file),
+    /// its text and the language: the path the report was made with, what its files read, and the
+    /// report. A rule's findings are written in one language as they are found, so a rule that does
+    /// not pass is checked again for the other language when another language says its errors in
+    /// both ([`Engine::refused`]).
+    reports: std::sync::Mutex<std::collections::HashMap<(std::path::PathBuf, String, RLang), (String, std::sync::Arc<Seen>, std::sync::Arc<crate::Report>)>>,
     /// How many times a rule's text has been checked whole (what [`Engine::checks`] says).
     checks: std::sync::atomic::AtomicUsize,
     /// The port of dates a rule's `range from koyomi` is read through (§15.174); None where no
@@ -41,14 +45,16 @@ pub struct Engine {
     /// The most nodes one check of a rule visits (`--budget`), when it is not the default
     /// (§15.209).
     budget: Option<i64>,
-    /// The files of the project, as the person gave them: the contributions among them are merged
-    /// into the rules they reach (§15.231). `None` outside a project.
+    /// The contribution files among the files of the project, as the person gave them, chosen once
+    /// when the project is set: they are merged into the rules they reach (§15.231). `None` outside a
+    /// project.
     set: std::sync::Mutex<Option<Vec<String>>>,
 }
 
-/// The file a path names, its links followed and `..` folded: how the reports are kept.
+/// The file a path names, made absolute and folded as the system opens it
+/// (`ritsu_base::paths::opened`): how the checks and the reports are kept.
 fn the_file(path: &str) -> std::path::PathBuf {
-    ritsu_base::fs::canonicalize(path).unwrap_or_else(|_| std::path::PathBuf::from(path))
+    ritsu_base::paths::opened(Path::new(path))
 }
 
 /// A rule read and checked, or what check said of it.
@@ -61,137 +67,16 @@ type Kept = (std::sync::Arc<Seen>, Checked2);
 /// (the two sides of a diff, the base and the head of `ritsu mod report`).
 const KEPT_EACH: usize = 4;
 
-/// What a check read through `ritsu_base::fs`, each question once, with its answer: the files a
-/// rule reads besides itself (what it imports and applies, the contributions to it, the days of a
-/// koyomi date) at the paths the files of the thread were asked for, and the files that say where a
-/// module's dependencies are (its `ritsu.mod`, its lock) that the view of them read.
-#[derive(Default)]
-struct Seen(Vec<Look>);
+// What a check read through `ritsu_base::fs` (ritsu-base's `Seen`): the files a rule reads besides
+// itself (what it imports and applies, the contributions to it, the days of a koyomi date) at the
+// paths the files of the thread were asked for, and the files that say where a module's
+// dependencies are (its `ritsu.mod`, its lock) that the view of them read.
+use ritsu_base::fs::{Seen, watched};
 
-/// A question a check asked the files, and the answer (None where there was nothing).
-#[derive(Clone, PartialEq)]
-enum Look {
-    Read(std::path::PathBuf, Option<Vec<u8>>),
-    Meta(std::path::PathBuf, Option<ritsu_base::fs::Meta>),
-    Dir(std::path::PathBuf, Option<Vec<(std::ffi::OsString, ritsu_base::fs::Kind)>>),
-    Canonical(std::path::PathBuf, Option<std::path::PathBuf>),
-}
-
-impl Look {
-    /// The question, to ask it once.
-    fn question(&self) -> (u8, &Path) {
-        match self {
-            Look::Read(p, _) => (0, p),
-            Look::Meta(p, _) => (1, p),
-            Look::Dir(p, _) => (2, p),
-            Look::Canonical(p, _) => (3, p),
-        }
-    }
-
-    /// Whether the files the thread reads now answer the question the same.
-    fn holds(&self) -> bool {
-        use ritsu_base::fs::raw;
-        match self {
-            Look::Read(p, was) => raw::read(p).ok() == *was,
-            Look::Meta(p, was) => raw::metadata(p).ok() == *was,
-            Look::Dir(p, was) => raw::read_dir(p).ok() == *was,
-            Look::Canonical(p, was) => raw::canonicalize(p).ok() == *was,
-        }
-    }
-}
-
-impl Seen {
-    /// Whether every file the check read reads the same now.
-    fn still(&self) -> bool {
-        self.0.iter().all(Look::holds)
-    }
-
-    /// What the rule at `rule`, of the text `src`, checked with these reads rests on
-    /// ([`ritsu_ports::Rules::rests_on`]).
-    fn rests_on(&self, rule: &Path, src: &str) -> String {
-        ritsu_ports::rests_on(rule, Some(src), self.0.iter().filter_map(|l| if let Look::Read(p, b) = l { Some((p.as_path(), b.as_deref())) } else { None }))
-    }
-}
-
-/// The files a check reads through: every call handed on to what the thread read before (the disk,
-/// or the files of an outer `ritsu_base::fs::with`), each question noted once with its answer. It
-/// stands for the files it hands on to ([`ritsu_base::fs::Files::stands_for`]), so the tree of a
-/// module kept for those is read here too.
-struct Recorder {
-    under: Option<std::rc::Rc<dyn ritsu_base::fs::Files>>,
-    stands: usize,
-    seen: std::cell::RefCell<(Vec<Look>, std::collections::HashSet<(u8, std::path::PathBuf)>)>,
-}
-
-impl Recorder {
-    fn files(&self) -> &dyn ritsu_base::fs::Files {
-        match &self.under {
-            Some(f) => f.as_ref(),
-            None => &ritsu_base::fs::Disk,
-        }
-    }
-
-    fn note(&self, look: Look) {
-        let mut s = self.seen.borrow_mut();
-        let (kind, p) = look.question();
-        if s.1.insert((kind, p.to_path_buf())) {
-            s.0.push(look);
-        }
-    }
-}
-
-impl ritsu_base::fs::Files for Recorder {
-    fn read(&self, p: &Path) -> std::io::Result<Vec<u8>> {
-        let got = self.files().read(p);
-        self.note(Look::Read(p.to_path_buf(), got.as_ref().ok().cloned()));
-        got
-    }
-
-    fn metadata(&self, p: &Path) -> std::io::Result<ritsu_base::fs::Meta> {
-        let got = self.files().metadata(p);
-        self.note(Look::Meta(p.to_path_buf(), got.as_ref().ok().copied()));
-        got
-    }
-
-    fn read_dir(&self, p: &Path) -> std::io::Result<Vec<(std::ffi::OsString, ritsu_base::fs::Kind)>> {
-        let got = self.files().read_dir(p);
-        self.note(Look::Dir(p.to_path_buf(), got.as_ref().ok().cloned()));
-        got
-    }
-
-    fn write(&self, p: &Path, bytes: &[u8]) -> std::io::Result<()> {
-        self.files().write(p, bytes)
-    }
-
-    fn create_dir_all(&self, p: &Path) -> std::io::Result<()> {
-        self.files().create_dir_all(p)
-    }
-
-    fn current_dir(&self) -> std::io::Result<std::path::PathBuf> {
-        self.files().current_dir()
-    }
-
-    fn canonicalize(&self, p: &Path) -> std::io::Result<std::path::PathBuf> {
-        let got = self.files().canonicalize(p);
-        self.note(Look::Canonical(p.to_path_buf(), got.as_ref().ok().cloned()));
-        got
-    }
-
-    fn revision(&self) -> Option<String> {
-        self.files().revision()
-    }
-
-    fn stands_for(&self) -> Option<usize> {
-        Some(self.stands)
-    }
-}
-
-/// `f` run with every read of `ritsu_base::fs` noted: what it came to, and what it read.
-fn watched<R>(f: impl FnOnce() -> R) -> (R, Seen) {
-    let rec = std::rc::Rc::new(Recorder { under: ritsu_base::fs::current(), stands: ritsu_base::fs::id(), seen: Default::default() });
-    let got = ritsu_base::fs::with(rec.clone(), f);
-    let (looks, _) = rec.seen.take();
-    (got, Seen(looks))
+/// What the rule at `rule`, of the text `src`, checked with the reads `seen` rests on
+/// ([`ritsu_ports::Rules::rests_on`]).
+fn rests_on(seen: &Seen, rule: &Path, src: &str) -> String {
+    ritsu_ports::rests_on(rule, Some(src), seen.reads())
 }
 
 fn rlang(l: Lang) -> RLang {
@@ -201,58 +86,82 @@ fn rlang(l: Lang) -> RLang {
     }
 }
 
-/// The file's text, as the caller named it.
+/// The file's text, and its path the way the run writes its paths (ritsu's DESIGN 4.15): what its
+/// check names it by, however the caller wrote it.
 fn read(rule: &Path) -> Result<(String, String), Vec<Said>> {
-    let path = rule.to_string_lossy().to_string();
-    match ritsu_base::fs::read_to_string(rule) {
+    let path = ritsu_base::paths::show(rule);
+    match ritsu_base::fs::read_to_string(&path) {
         Ok(src) => Ok((path, src)),
-        Err(e) => Err(vec![Said::unreadable(&path, &e.to_string())]),
+        Err(e) => Err(vec![Said::unreadable(&path, &e)]),
     }
 }
 
-/// What check says of a rule that does not pass, each error in both languages.
-fn refused(path: &str, src: &str) -> Vec<Said> {
-    let ja = i18n::with(RLang::Ja, || crate::report(src, path).diags);
-    let en = i18n::with(RLang::En, || crate::report(src, path).diags);
-    ja.iter()
-        .zip(&en)
-        .filter(|(d, _)| d.severity == crate::diag::Severity::Error)
-        .map(|(j, e)| Said { code: j.code.to_string(), file: path.to_string(), line: j.line(), message: Text::new(j.title.clone(), e.title.clone()) })
-        .collect()
-}
-
-/// The rule, when it passes the whole of check (as `api` and `certificate` ask of it), the check
-/// held to `budget`.
-fn checked(path: &str, src: &str, budget: i64) -> Result<(RuleFile, Checked), Vec<Said>> {
-    let rep = crate::report_with(src, path, budget);
-    if crate::has_error(&rep.diags) {
-        return Err(refused(path, src));
-    }
-    crate::prepare(src, path).map_err(|_| refused(path, src))
-}
-
-/// A value's type as the port hands it over: a number with its unit and its range on the wire, an
-/// enum with the values its input's range lets in (§15.210, §15.251). An input's range is the one
-/// the entry guard holds it to; an output's is the one its answers lie in, as `output_values`, the
-/// certificate's `output_ranges` and the schema say (§15.271).
+/// A value's type as the port hands it over: a number with its unit and its range on the wire, a
+/// date with its range as day numbers, an enum with the values its input's range lets in (§15.210,
+/// §15.251). An input's range is the one the entry guard holds it to; an output's is the one its
+/// answers lie in, as `output_values`, the certificate's `output_ranges` and the schema say
+/// (§15.271).
 fn column_type(c: &Checked, name: &str, ty: &Ty) -> ColumnType {
     match ty {
         Ty::Bool => ColumnType::Bool,
         Ty::Str => ColumnType::Str,
-        Ty::Date => ColumnType::Date,
+        Ty::Date => {
+            let (min, max) = day_range(c, name);
+            ColumnType::Date { min, max }
+        }
         Ty::Enum(e) => ColumnType::Enum { name: e.clone(), range: c.enum_ranges.get(name).cloned() },
         Ty::Opt(t) => ColumnType::Opt(Box::new(column_type(c, name, t))),
         _ => {
             let step = matches!(ty, Ty::Rate).then(|| Rat::new(1, c.wire_scale(name)));
             let (min, max) = c.wire_range(name).unwrap_or((None, None));
-            ColumnType::Num { written: ty.to_string(), unit: ty.unit(step), min, max }
+            ColumnType::Num { written: ty.to_string(), unit: ty.unit(step), min, max, round: None }
         }
     }
+}
+
+/// The range of a date as day numbers (days since 1970-01-01, the count the generated code holds a
+/// date in): the one its line declares, or the hull of the days of a koyomi date an input's range is;
+/// None at an end not written. The facts' column carries it (ritsu's DESIGN 3.2).
+fn day_range(c: &Checked, name: &str) -> (Option<i64>, Option<i64>) {
+    let day = |r: Option<Rat>| r.map(|v| (v.num / v.den) as i64);
+    let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+    (day(lo), day(hi))
 }
 
 fn column(c: &Checked, n: &Name) -> Column {
     let ty = c.ty_of(&n.text).unwrap_or(Ty::Unknown);
     Column { name: n.text.clone(), alias: pub_name_of(n), ty: column_type(c, &n.text, &ty) }
+}
+
+/// The unit of the total `name`, as the integers of its precondition count it (§15.333): the type's
+/// unit, with the step one integer counts where the total is held finer than a whole unit (a total
+/// of a value worked out on each element that keeps its fractions, §15.314), a rate's as a rate's.
+/// What a sentence says the ends of the total in: a total of a `define` on each element has no
+/// column of its own that a caller sees.
+pub fn sum_unit(c: &Checked, name: &str) -> Option<ritsu_units::Unit> {
+    let ty = c.ty_of(name)?;
+    let scale = c.scales.get(name).copied().unwrap_or(1);
+    let step = (scale != 1 || matches!(ty.present(), Ty::Rate)).then(|| Rat::new(1, scale));
+    let mut unit = ty.present().unit(step)?;
+    unit.step = step;
+    Some(unit)
+}
+
+/// An output's column, with the step its `round` puts its answers on: `round down(0.5%)` of a
+/// `rate[step 0.25%]` travels in quarters of a percent and answers on halves, which a module that
+/// reads the answer takes as a value on 0.5% (kaname's DESIGN 6.1).
+fn output_column(c: &Checked, o: &crate::ast::OutDecl) -> Column {
+    fn put(t: &mut ColumnType, grid: Option<Rat>) {
+        match t {
+            ColumnType::Opt(x) => put(x, grid),
+            ColumnType::Num { round, .. } => *round = grid,
+            _ => {}
+        }
+    }
+    let mut col = column(c, &o.name);
+    let ty = c.ty_of(&o.name.text).unwrap_or(Ty::Unknown);
+    put(&mut col.ty, o.rounding.as_ref().and_then(|rd| crate::types::lit_value_in_pub(&rd.grid, ty.present())));
+    col
 }
 
 fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Precondition> {
@@ -263,11 +172,16 @@ fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Precondition> {
                 ([l], [r]) => Precondition::Relation { left: l.clone(), op: op.to_string(), right: r.clone() },
                 _ => Precondition::SumRelation { left, op: op.to_string(), right },
             },
-            crate::verify::Pre::Sum { name, over, of, max } => Precondition::Sum { name, over, of, max },
+            crate::verify::Pre::Sum { name, over, of, max, min } => {
+                let unit = sum_unit(c, &name);
+                Precondition::Sum { name, over, of, max, min, unit }
+            }
+            crate::verify::Pre::Count { name, over, min } => Precondition::Count { name, over, min },
             crate::verify::Pre::Length { sequence, max } => Precondition::Length { sequence, max },
             crate::verify::Pre::Unique { sequence, field } => Precondition::Unique { sequence, field },
             crate::verify::Pre::Days { input, file, date, days } => Precondition::Days { input, file, date, days: days.into_iter().collect() },
             crate::verify::Pre::Never { said, conds } => Precondition::Never { said, conds },
+            crate::verify::Pre::Define { name, range, from, over } => Precondition::Define { name, range, from, over },
         })
         .collect()
 }
@@ -296,9 +210,20 @@ impl Engine {
     }
 
     /// The project the engine answers for (§15.231): the contributions among `files` are merged into
-    /// the rules they reach, in every check and every answer of a rule.
+    /// the rules they reach, in every check and every answer of a rule. They are chosen here, once,
+    /// as the files the thread reads now say (`link::contributions`): a check or an answer reads no
+    /// file of the project to choose them again, so what a check is kept with is what it read
+    /// (ritsu's DESIGN 4.15).
     pub fn set_project(&self, files: Vec<String>) {
-        *self.set.lock().unwrap_or_else(|e| e.into_inner()) = Some(files);
+        let chosen = crate::link::contributions(&files);
+        *self.set.lock().unwrap_or_else(|e| e.into_inner()) = Some(chosen);
+    }
+
+    /// The contribution files of the project the engine answers for, as [`Engine::set_project`]
+    /// chose them, each as the run writes it: what a program that merges them itself (the code
+    /// `ritsu gen` makes of a rule) hands to `link::with_contributions`. Empty outside a project.
+    pub fn contributions(&self) -> Vec<String> {
+        self.set.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default()
     }
 
     /// Runs `f` with this engine's port of dates joined on the thread, and the project's
@@ -306,7 +231,7 @@ impl Engine {
     fn joined<R>(&self, f: impl FnOnce() -> R) -> R {
         let set = self.set.lock().unwrap_or_else(|e| e.into_inner()).clone();
         match set {
-            Some(files) => crate::link::with_set(&files, || crate::days::with(self.dates.clone(), f)),
+            Some(chosen) => crate::link::with_contributions(chosen, || crate::days::with(self.dates.clone(), f)),
             None => crate::days::with(self.dates.clone(), f),
         }
     }
@@ -318,35 +243,81 @@ impl Engine {
         self.joined(|| self.rule_here(rule)).map(|(path, src, got, _)| (path, src, got))
     }
 
+    /// The rule at `rule` as the engine keeps its check (read, merged with the contributions of the
+    /// project the engine was given, and typed), with its path the way the run writes its paths and
+    /// its text: what `ritsu gen` makes a rule's module from, so that the rule is checked once in the
+    /// run (ritsu's DESIGN 4.15). Err, or an Err inside, is what check says of a rule that cannot be
+    /// read or does not pass.
+    #[allow(clippy::type_complexity)]
+    pub fn prepared(&self, rule: &Path) -> Result<(String, String, std::sync::Arc<Result<(RuleFile, Checked), Vec<Said>>>), Vec<Said>> {
+        self.rule(rule)
+    }
+
+    /// The rule at `rule` in the JavaScript of a page, in `lang` (`Gen::page_javascript`: its
+    /// module, with the module of each `enums` file it reads inside it), made from the checks the
+    /// engine keeps of the rule and of those files, which are not checked again (ritsu's DESIGN
+    /// 4.15): what `ritsu gen` writes into the functions of a request's screens (ringi's DESIGN
+    /// 13.7). Err, or an Err inside, as [`Engine::prepared`].
+    pub fn page_javascript(&self, rule: &Path, lang: Lang) -> Result<String, Vec<Said>> {
+        let (path, src, got) = self.rule(rule)?;
+        let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        let enums = |p: &str| {
+            let (path, src, got) = self.rule(Path::new(p)).ok()?;
+            let (file, checked) = got.as_ref().as_ref().ok()?;
+            (file.kind == crate::ast::FileKind::Enums).then(|| crate::enums::EnumsFile { file: file.clone(), checked: checked.clone(), src, path })
+        };
+        Ok(self.joined(|| i18n::with(rlang(lang), || crate::codegen::Gen::new(f, c, &src, &path).page_javascript_with(&enums))))
+    }
+
+    /// What stops the code `target` writes of the rule at `rule` into a package (§15.335): E153, each
+    /// W121 of the rule's check that names the target as one whose code would not build or would
+    /// answer otherwise, but one that does so only where `rulec gen` writes the rule's module beside
+    /// the language's own (`places::package_stops`), as `rulec gen` says it, in `lang`, each as
+    /// [`Engine::checked`] gives a finding, its file from `root`. Empty when the rule cannot be read
+    /// or nothing stops the target: what `ritsu gen` asks of each rule before it writes it into a
+    /// package of `target`. A report kept in either language says whether any W121 names the target,
+    /// so the rule is checked again only to say one that does in `lang`.
+    pub fn stops(&self, rule: &Path, target: &str, root: &Path, lang: Lang) -> Vec<ritsu_ports::Finding> {
+        let Ok((path, src)) = read(rule) else { return Vec::new() };
+        // whether a W121 names the target at all: which of those stop it is `package_stops`'s alone
+        let names = |r: &crate::Report| r.diags.iter().any(|d| d.code == "W121" && d.targets.contains(&target));
+        if self.kept_report(&path, &src, false).is_some_and(|r| !names(&r)) {
+            return Vec::new();
+        }
+        let rl = rlang(lang);
+        let r = self.report(&path, &src, rl);
+        let ds = i18n::with(rl, || crate::places::package_stops(&r.diags, target));
+        let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+        let file = ritsu_base::paths::from_root(root, Path::new(&path));
+        ds.iter().map(|d| finding(d, &path, file.clone(), &lines, rl)).collect()
+    }
+
     /// [`Engine::rule`], with what the check read.
     fn rule_here(&self, rule: &Path) -> Result<(String, String, Checked2, std::sync::Arc<Seen>), Vec<Said>> {
         let (path, src) = read(rule)?;
-        let key = (path.clone(), crate::sha256::hex(src.as_bytes()));
-        let reported = self
-            .reports
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&(the_file(&path), key.1.clone()))
-            .map(|(_, _, seen, r)| (seen.clone(), r.clone()))
-            .filter(|(seen, _)| seen.still());
+        let key = (the_file(&path), crate::sha256::hex(src.as_bytes()));
         let mut cache = self.checked.lock().unwrap_or_else(|e| e.into_inner());
         let kept = cache.entry(key).or_default();
         if let Some((seen, got)) = kept.iter().find(|(seen, _)| seen.still()) {
             return Ok((path, src, got.clone(), seen.clone()));
         }
+        // whether the rule passes, read off a report `check` made of the same text in either
+        // language under any spelling of its path, or off one the thread kept in either language
+        // (the check of a rule another applies, of an `enums` file a rule imports: `kept_verdict`),
+        // else off one made now in the thread's language, which the rule's own findings are read
+        // off when the run shows them after (§15.320)
         let (got, mut seen) = watched(|| {
-            std::sync::Arc::new(match &reported {
-                Some((_, r)) if crate::has_error(&r.diags) => Err(refused(&path, &src)),
-                Some(_) => crate::prepare(&src, &path).map_err(|_| refused(&path, &src)),
-                None => {
-                    self.checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    checked(&path, &src, self.budget())
-                }
-            })
+            let r = self
+                .kept_report(&path, &src, false)
+                .or_else(|| self.joined(|| crate::kept_verdict(&src, &path, self.budget()).map(std::sync::Arc::new)))
+                .unwrap_or_else(|| self.report(&path, &src, i18n::current()));
+            std::sync::Arc::new(if crate::has_error(&r.diags) { Err(self.refused(&path, &src)) } else { crate::prepare(&src, &path).map_err(|_| self.refused(&path, &src)) })
         });
-        // read off a report, the answer rests on what the report's check read as well
-        if let Some((was, _)) = &reported {
-            seen.0.extend(was.0.iter().cloned());
+        // the answer rests on what the report's check read as well
+        for l in [RLang::Ja, RLang::En] {
+            if let Some((_, was, _)) = self.reports.lock().unwrap_or_else(|e| e.into_inner()).get(&(the_file(&path), crate::sha256::hex(src.as_bytes()), l)) {
+                seen.extend(was);
+            }
         }
         if kept.len() >= KEPT_EACH {
             kept.remove(0);
@@ -361,11 +332,9 @@ impl Engine {
     /// it was made with, while what it read reads the same; whether the rule passes,
     /// [`Engine::rule`] reads off any of them).
     fn report(&self, path: &str, src: &str, lang: RLang) -> std::sync::Arc<crate::Report> {
-        let key = (the_file(path), crate::sha256::hex(src.as_bytes()));
-        let mut reports = self.reports.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((p, l, seen, r)) = reports.get(&key)
+        let key = (the_file(path), crate::sha256::hex(src.as_bytes()), lang);
+        if let Some((p, seen, r)) = self.reports.lock().unwrap_or_else(|e| e.into_inner()).get(&key)
             && p == path
-            && *l == lang
             && seen.still()
         {
             return r.clone();
@@ -373,8 +342,30 @@ impl Engine {
         self.checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let (r, seen) = self.joined(|| watched(|| i18n::with(lang, || crate::report_with(src, path, self.budget()))));
         let r = std::sync::Arc::new(r);
-        reports.insert(key, (path.to_string(), lang, std::sync::Arc::new(seen), r.clone()));
+        self.reports.lock().unwrap_or_else(|e| e.into_inner()).insert(key, (path.to_string(), std::sync::Arc::new(seen), r.clone()));
         r
+    }
+
+    /// A report kept for the rule's text, in either language, while what it read reads the same:
+    /// with `named`, only one that names the file `path`, as its findings do (whether the rule
+    /// passes is the same under any spelling of its path).
+    fn kept_report(&self, path: &str, src: &str, named: bool) -> Option<std::sync::Arc<crate::Report>> {
+        let reports = self.reports.lock().unwrap_or_else(|e| e.into_inner());
+        [RLang::Ja, RLang::En]
+            .into_iter()
+            .find_map(|l| reports.get(&(the_file(path), crate::sha256::hex(src.as_bytes()), l)).filter(|(p, seen, _)| (!named || p == path) && seen.still()).map(|(_, _, r)| r.clone()))
+    }
+
+    /// What check says of a rule that does not pass, each error in both languages: the reports kept
+    /// for its text in each ([`Engine::report`]).
+    fn refused(&self, path: &str, src: &str) -> Vec<Said> {
+        let (ja, en) = (self.report(path, src, RLang::Ja), self.report(path, src, RLang::En));
+        ja.diags
+            .iter()
+            .zip(&en.diags)
+            .filter(|(d, _)| d.severity == crate::diag::Severity::Error)
+            .map(|(j, e)| Said { code: j.code.to_string(), file: path.to_string(), line: j.line(), message: Text::new(j.title.clone(), e.title.clone()) })
+            .collect()
     }
 
     /// How many times the engine has checked a rule's text whole, for `check` or for a port's
@@ -383,12 +374,29 @@ impl Engine {
         self.checks.load(std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// The files the errors of the rule at `path` are at, as its findings name them (one about a
+    /// line of a contribution merged into the rule names the contribution, §15.227), each once, as
+    /// the program reaches them: what ritsu reads of a rule whose errors [`Engine::checked`] said
+    /// for a file above (`note …: its errors are said above`), which says none of them, to find the
+    /// files it fails for (ritsu's DESIGN 8.3). The report kept for the rule is read, in the language
+    /// it was made in, else one made now in the thread's language (§15.320); empty when the file
+    /// cannot be read.
+    pub fn errors_at(&self, path: &str) -> Vec<String> {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else { return Vec::new() };
+        let r = self.kept_report(path, &src, true).unwrap_or_else(|| self.report(path, &src, i18n::current()));
+        let mut out: Vec<String> =
+            r.diags.iter().filter(|d| d.severity == crate::diag::Severity::Error).map(|d| d.marks.first().and_then(|m| m.span.file_path()).unwrap_or(path).to_string()).collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
     /// `rulec check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3): every finding,
     /// as the command prints it and as its `--format json` prints it, then what the command prints
     /// after them (`ok rules/送料.rule`). `files` are as the person gave them, from where the
     /// program runs; `root` is the project's, which the findings' files are written from.
     pub fn checked(&self, root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Checked> {
-        use ritsu_ports::{Checked, Finding, Part, Verdict};
+        use ritsu_ports::{Checked, Part, Verdict};
         let rl = rlang(lang);
         // The files checked together are the project whose contributions are merged (§15.231),
         // unless the engine was given one.
@@ -400,32 +408,20 @@ impl Engine {
         let mut said: std::collections::HashSet<String> = std::collections::HashSet::new();
         files
             .iter()
-            .map(|path| {
-                let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-                    return Checked::unchecked(path, i18n::with(rl, || format!("{}\n", crate::tr!("error: `{path}` を読めません", "error: cannot read `{path}`"))));
+            .map(|given| {
+                // the rule named the way the run writes its paths, as every other question names it
+                // (ritsu's DESIGN 4.15), so the report made here is the one they read
+                let path = &ritsu_base::paths::show_str(given);
+                // a file `ritsu check` cannot read is said in the words every command of ritsu says it in
+                let src = match ritsu_base::fs::read_to_string(path) {
+                    Ok(src) => src,
+                    Err(e) => return Checked::unchecked(given, i18n::with(rl, || format!("{}\n", ritsu_base::cli::refusal(&i18n::text(&ritsu_base::cli::cannot_read(path, &e)), i18n::base())))),
                 };
                 let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
                 let r = self.report(path, &src, rl);
                 let file = ritsu_base::paths::from_root(root, Path::new(path));
                 let shown: Vec<&crate::diag::Diag> = r.diags.iter().filter(|d| said.insert(crate::finding_key(d, path))).collect();
-                let mut parts: Vec<Part> = shown
-                    .iter()
-                    .copied()
-                    .map(|d| {
-                        let json = ritsu_base::json::parse(&crate::diag::render_json(d, path)).unwrap_or(ritsu_base::json::Json::Null);
-                        Part::Finding(Finding {
-                            code: d.code.to_string(),
-                            severity: match d.severity {
-                                crate::diag::Severity::Error => ritsu_base::diag::Severity::Error,
-                                crate::diag::Severity::Warning => ritsu_base::diag::Severity::Warning,
-                            },
-                            file: file.clone(),
-                            line: d.line(),
-                            text: i18n::with(rl, || crate::findings_text(std::slice::from_ref(d), &lines)),
-                            json,
-                        })
-                    })
-                    .collect();
+                let mut parts: Vec<Part> = shown.iter().copied().map(|d| Part::Finding(finding(d, path, file.clone(), &lines, rl))).collect();
                 // Its errors were all said for a file above: one line says so, as `rulec check` does.
                 let all_said = crate::has_error(&r.diags) && !shown.iter().any(|d| d.severity == crate::diag::Severity::Error);
                 if all_said {
@@ -444,7 +440,7 @@ impl Engine {
                 };
                 // `rulec check --format json` prints a line for each diagnostic, and no object of a
                 // file
-                Checked { label: path.clone(), parts, verdict, json: ritsu_base::json::Json::Null }
+                Checked { label: given.clone(), parts, verdict, json: ritsu_base::json::Json::Null }
             })
             .collect()
     }
@@ -477,7 +473,7 @@ impl Engine {
             sha256: ritsu_base::fed::hash(src),
             rulec: env!("CARGO_PKG_VERSION").to_string(),
             inputs: f.inputs.iter().map(|i| column(c, &i.name)).collect(),
-            outputs: f.outputs.iter().map(|o| column(c, &o.name)).collect(),
+            outputs: f.outputs.iter().map(|o| output_column(c, o)).collect(),
             elements: f.elements.iter().map(|el| (el.name.text.clone(), pub_name_of(&el.name), el.fields.iter().map(|fd| column(c, &fd.name)).collect())).collect(),
             enums: g.rule_enums(),
             machine,
@@ -491,21 +487,187 @@ impl Engine {
             rust,
         })
     }
+
+    /// The outputs for these inputs, as rulec's reference evaluator answers them, refusing what the
+    /// generated code refuses at its door ([`ritsu_ports::Rules::eval`]); `seen` takes the value it
+    /// refuses the call for, where that is one the rule works out outside the range it accepts for
+    /// it ([`ritsu_ports::Rules::eval_outside`]).
+    fn answer(&self, rule: &Path, inputs: &Values, seen: &mut Option<Outside>) -> Result<Values, RuleError> {
+        use crate::eval::Val;
+        let (_, _, got) = self.rule(rule).map_err(RuleError::Unread)?;
+        let (f, c) = got.as_ref().as_ref().map_err(|e| RuleError::Unread(e.clone()))?;
+        // An input with two or more things wrong with it is refused for the first of them, in the
+        // order every door looks (§15.328, `door::read`), each said in the port's own words.
+        let mut vals = std::collections::HashMap::new();
+        // The first look: each input there and of its kind, then each list and each field of each
+        // of its elements.
+        for i in &f.inputs {
+            let name = &i.name.text;
+            let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+            let v = inputs.iter().find(|(n, _)| n == name).map(|(_, v)| v).ok_or_else(|| RuleError::Input(ritsu_base::tr!("入力 `{name}` がありません", "the input `{name}` is missing")))?;
+            // `none`, which the evaluator holds as the word itself
+            if matches!((&ty, v), (Ty::Opt(_), Value::None)) {
+                vals.insert(name.clone(), Val::Enum(crate::kw::NONE.into()));
+                continue;
+            }
+            vals.insert(name.clone(), to_val(c, name, &ty, v).map_err(RuleError::Input)?);
+        }
+        let mut lengths: Vec<usize> = Vec::new();
+        for el in &f.elements {
+            let name = &el.name.text;
+            let Some((_, Value::List(xs))) = inputs.iter().find(|(n, _)| n == name) else {
+                return Err(RuleError::Input(ritsu_base::tr!("並び `{name}` がありません", "the list `{name}` is missing")));
+            };
+            let mut seq = Vec::new();
+            for (k, x) in xs.iter().enumerate() {
+                let mut one = std::collections::BTreeMap::new();
+                for fd in &el.fields {
+                    let fname = &fd.name.text;
+                    // A field is said at its place on the list, `lines[1].amount`, as every door
+                    // says it (§15.324).
+                    let said = crate::door::element(name, k, fname);
+                    let ty = c.ty_of(fname).unwrap_or(Ty::Unknown);
+                    let v = x.iter().find(|(n, _)| n == fname).map(|(_, v)| v).ok_or_else(|| RuleError::Input(ritsu_base::tr!("要素のフィールド `{said}` がありません", "an element's field `{said}` is missing")))?;
+                    if matches!((&ty, v), (Ty::Opt(_), Value::None)) {
+                        one.insert(fname.clone(), Val::Enum(crate::kw::NONE.into()));
+                        continue;
+                    }
+                    one.insert(fname.clone(), to_val_as(c, fname, &said, &ty, v).map_err(RuleError::Input)?);
+                }
+                seq.push(one);
+            }
+            lengths.push(seq.len());
+            vals.insert(name.clone(), Val::Seq(seq));
+        }
+        // The second look: each input inside its range, held as the generated code's door holds it.
+        for i in &f.inputs {
+            let name = &i.name.text;
+            if crate::door::ranged(c, name, name, &c.ty_of(name).unwrap_or(Ty::Unknown), &vals[name]).is_err() {
+                return Err(RuleError::Input(outside(name, name)));
+            }
+        }
+        // Two dates compare by their day numbers, as the generated code's door compares them
+        // (§15.198).
+        for k in &f.constraints {
+            if !crate::vectors::constraint_holds(k, &|n| vals.get(n)) {
+                return Err(RuleError::Input(ritsu_base::tr!("`{}` が成り立ちません", "`{}` does not hold", k.said())));
+            }
+        }
+        for n in f.door_nevers() {
+            if !crate::vectors::never_clear(n, c, &|m| vals.get(m)) {
+                let said = n.said();
+                return Err(RuleError::Input(ritsu_base::tr!("起こらない組み合わせです: {said}", "this combination does not happen: {said}")));
+            }
+        }
+        // A date of koyomi's days takes those days only, and the door refuses any other
+        // (§15.174): after the constraints and name by name, where the generated code looks.
+        let mut names: Vec<&String> = c.day_sets.keys().collect();
+        names.sort();
+        for name in names {
+            let set = &c.day_sets[name];
+            if let Some(Val::Date(y, m, d)) = vals.get(name)
+                && set.days.binary_search(&(crate::types::date_ord(*y, *m, *d).num as i64)).is_err()
+            {
+                let (file, date) = set.from.as_ref().map(|fr| (fr.file.clone(), fr.date.clone())).unwrap_or_default();
+                return Err(RuleError::Input(ritsu_base::tr!(
+                    "入力 `{name}` は、{file} の {date} がとる日ではありません",
+                    "the input `{name}` is not a day {date} of {file} comes to"
+                )));
+            }
+        }
+        // No longer than the smallest top a `count` over it writes, as the generated code's door
+        // holds it (§15.58).
+        for (el, n) in f.elements.iter().zip(&lengths) {
+            let name = &el.name.text;
+            if let Some(cap) = crate::door::count_cap(f, c, name).filter(|cap| *n as i128 > *cap) {
+                return Err(RuleError::Input(ritsu_base::tr!("並び `{name}` の要素が多すぎます（{cap} 件まで）", "the list `{name}` has too many elements (at most {cap})")));
+            }
+        }
+        // What the function works out, in the order it does: on the walk, each element's fields
+        // held to their ranges and its `unique` fields (§15.290, §15.251), the values worked out
+        // outside the range the rule accepts for them (§15.313), weights whose total passes int64
+        // (§15.226), a `sum` or a `count` outside its range once the walk is over (§15.100,
+        // §15.314), a drawn value not below the weights, and the rule's own contradiction, two
+        // elements both taking under `take_unique` (§15.56). Elements are said by their places, the
+        // earlier first (§15.324).
+        use crate::eval::Refused;
+        match crate::eval::walked_refusal(f, c, vals.clone()) {
+            None => {}
+            Some(Refused::Element(s, crate::door::ElementRefused::Range { field, at })) => {
+                return Err(RuleError::Input(outside(&field, &crate::door::element(&f.elements[s].name.text, at, &field))));
+            }
+            Some(Refused::Element(s, crate::door::ElementRefused::Unique { field, before, here })) => {
+                let name = &f.elements[s].name.text;
+                let (a, b) = (crate::door::place(name, before), crate::door::place(name, here));
+                return Err(RuleError::Input(ritsu_base::tr!(
+                    "並び `{name}` の要素に、`{field}` が同じものが二つあります（`{a}` と `{b}`）",
+                    "the list `{name}` has two elements with the same `{field}` (`{a}` and `{b}`)"
+                )));
+            }
+            Some(Refused::Outside(o)) => {
+                let o = Outside::Define { at: o.at.map(|(s, k)| (f.elements[s].name.text.clone(), k)), name: o.name };
+                let t = o.text();
+                *seen = Some(o);
+                return Err(RuleError::Input(t));
+            }
+            Some(Refused::Heavy(seq)) => {
+                return Err(RuleError::Input(ritsu_base::tr!(
+                    "並び `{seq}` の重みの合計が int64 に収まりません",
+                    "the total of the weights of the list `{seq}` does not fit in int64"
+                )));
+            }
+            Some(Refused::Past(p)) => {
+                let o = Outside::Summary { name: p.name };
+                let t = o.text();
+                *seen = Some(o);
+                return Err(RuleError::Input(t));
+            }
+            Some(Refused::Drawn(name)) => {
+                return Err(RuleError::Input(ritsu_base::tr!(
+                    "入力 `{name}` が、重みの合計より小さくありません",
+                    "the input `{name}` is not below the total of the weights"
+                )));
+            }
+            Some(Refused::Contradiction(b)) => {
+                if let Some(crate::ast::Item::Fold(fold)) = f.items.get(b.item) {
+                    let verdict = &fold.verdict;
+                    let (a, h) = (crate::door::place(&fold.over, b.before), crate::door::place(&fold.over, b.here));
+                    return Err(RuleError::Contradiction(ritsu_base::tr!(
+                        "畳み込み `{verdict}` で、`take_unique` に二つの要素が当たりました（`{a}` と `{h}`）",
+                        "two elements matched a `take_unique` of the fold `{verdict}` (`{a}` and `{h}`)"
+                    )));
+                }
+            }
+        }
+        let (outs, _, _) = crate::eval::run_all(f, c, vals);
+        outs.into_iter()
+            .map(|(name, v)| match v {
+                Some(v) => Ok((name.clone(), from_val(c, &name, &v))),
+                None => Err(RuleError::Contradiction(ritsu_base::tr!("出力 `{name}` を決める行がありません", "no row decides the output `{name}`"))),
+            })
+            .collect()
+    }
 }
 
 /// The value of an input on the wire, as rulec's evaluator holds it.
 fn to_val(c: &Checked, name: &str, ty: &Ty, v: &Value) -> Result<crate::eval::Val, Text> {
+    to_val_as(c, name, name, ty, v)
+}
+
+/// [`to_val`], with the sentences calling the value `said`: for a field of an element, its place
+/// on the list, `lines[1].amount` (rulec's §15.324).
+fn to_val_as(c: &Checked, name: &str, said: &str, ty: &Ty, v: &Value) -> Result<crate::eval::Val, Text> {
     use crate::eval::Val;
-    let wrong = || ritsu_base::tr!("`{name}` に {ty} として読めない値が渡されています", "`{name}` is given a value that is not a {ty}");
+    let wrong = || ritsu_base::tr!("`{said}` に {ty} として読めない値が渡されています", "`{said}` is given a value that is not a {ty}");
     match (ty, v) {
-        (Ty::Opt(t), v) => to_val(c, name, t, v),
+        (Ty::Opt(t), v) => to_val_as(c, name, said, t, v),
         (Ty::Bool, Value::Bool(b)) => Ok(Val::Bool(*b)),
         (Ty::Str, Value::Str(s)) => Ok(Val::Str(s.clone())),
         (Ty::Enum(e), Value::Enum(x)) => {
             if c.enums.get(e).is_some_and(|vs| vs.contains(x)) {
                 Ok(Val::Enum(x.clone()))
             } else {
-                Err(ritsu_base::tr!("`{name}` の `{x}` は {e} の値ではありません", "`{x}` of `{name}` is not a value of {e}"))
+                Err(ritsu_base::tr!("`{said}` の `{x}` は {e} の値ではありません", "`{x}` of `{said}` is not a value of {e}"))
             }
         }
         // `YYYY-MM-DD` of a day the calendar has, as the generated code's door reads a date: a
@@ -514,24 +676,23 @@ fn to_val(c: &Checked, name: &str, ty: &Ty, v: &Value) -> Result<crate::eval::Va
             Some((y, m, dd)) => Ok(Val::Date(y, m, dd)),
             None => Err(wrong()),
         },
+        // A whole number int64 does not hold is past what a reader of every language takes, refused
+        // where it is read and before the values after it, as the door refuses it (rulec's §15.298,
+        // §15.328).
+        (t, Value::Int(n)) if t.is_numeric() && (*n > i64::MAX as i128 || *n < i64::MIN as i128) => Err(outside(name, said)),
         (t, Value::Int(n)) if t.is_numeric() => Ok(Val::Num(crate::types::from_wire(*n, c.wire_scale(name)))),
         _ => Err(wrong()),
     }
 }
 
-/// Whether the value of the input or the element's field `name` is outside the range its
-/// declaration holds it to, as the generated code's door holds it: a number by its value and a date
-/// by its day number (reading only numbers let any date through, §15.198), and a value of an
-/// ordered enum by the values its `range` lets in (§15.210, §15.251).
-fn outside_range(c: &Checked, name: &str, v: &crate::eval::Val) -> bool {
-    use crate::eval::Val;
-    let at = match v {
-        Val::Num(x) => *x,
-        Val::Date(y, m, d) => crate::types::date_ord(*y, *m, *d),
-        Val::Enum(x) => return c.enum_ranges.get(name).is_some_and(|allowed| !allowed.contains(x)),
-        _ => return false,
-    };
-    c.ranges.get(name).is_some_and(|(lo, hi)| lo.is_some_and(|lo| at.cmp_to(lo) == std::cmp::Ordering::Less) || hi.is_some_and(|hi| at.cmp_to(hi) == std::cmp::Ordering::Greater))
+/// The port's sentence of a value outside its range: an input by its name, and a field of an
+/// element at its place on the list, `lines[1].amount` (`said`).
+fn outside(name: &str, said: &str) -> Text {
+    if name == said {
+        ritsu_base::tr!("入力 `{name}` が範囲の外です", "the input `{name}` is outside its range")
+    } else {
+        ritsu_base::tr!("要素のフィールド `{said}` が範囲の外です", "an element's field `{said}` is outside its range")
+    }
 }
 
 /// Why `output` is not answered as a range of numbers: not a numeric output of the rule, or an
@@ -656,11 +817,27 @@ type RangeOf<'a> = dyn Fn(&str) -> (Option<i128>, Option<i128>) + 'a;
 /// whatever the others do. Every condition met inside a closed range is an example that breaks it,
 /// and everything else cannot be told from ranges: a truth value or an enum has none, and an open
 /// end does not say a value goes there.
-fn never_kept(said: &str, conds: &[ritsu_ports::NeverCond], range: &RangeOf) -> Answer<Values> {
+///
+/// A caller that knows every value it gives a truth value or an enum's input (`given`: the
+/// values, each one of the input's own) is read the same way: a condition none of them meets
+/// keeps the line, one all of them meet is met (the first of them is the example's), and one only
+/// some meet cannot be told, as with no values at all.
+fn never_kept(said: &str, conds: &[ritsu_ports::NeverCond], range: &RangeOf, given: &dyn Fn(&str) -> Option<Vec<Value>>) -> Answer<Values> {
     use ritsu_ports::NeverTest;
     let mut example: Vec<(String, Value)> = Vec::new();
     let mut open = false;
     for k in conds {
+        if let Some(values) = given(&k.name) {
+            let met: Vec<Option<bool>> = values.iter().map(|v| k.test.holds(v)).collect();
+            if met.iter().all(|m| *m == Some(false)) {
+                return Answer::Holds;
+            }
+            match values.first() {
+                Some(first) if met.iter().all(|m| *m == Some(true)) => example.push((k.name.clone(), first.clone())),
+                _ => open = true,
+            }
+            continue;
+        }
         let (lo, hi) = range(&k.name);
         // The whole numbers of the range that meet the condition, as far as they can be told.
         let one: Option<Option<i128>> = match &k.test {
@@ -715,11 +892,35 @@ fn holds(l: Rat, op: &str, r: Rat) -> bool {
     }
 }
 
+/// One finding of a rule as `ritsu check` and the port's `findings` hand it over: its text as `rulec
+/// check` prints it in `rl` and its object as `rulec check --format json` writes it (with the inputs
+/// of an example, the rows and the fix), naming the file `path`; `file` is the file the finding
+/// names, from the project's root.
+fn finding(d: &crate::diag::Diag, path: &str, file: Option<String>, lines: &[String], rl: RLang) -> ritsu_ports::Finding {
+    let json = ritsu_base::json::parse(&crate::diag::render_json(d, path)).unwrap_or(ritsu_base::json::Json::Null);
+    ritsu_ports::Finding {
+        code: d.code.to_string(),
+        severity: match d.severity {
+            crate::diag::Severity::Error => ritsu_base::diag::Severity::Error,
+            crate::diag::Severity::Warning => ritsu_base::diag::Severity::Warning,
+        },
+        file,
+        line: d.line(),
+        text: i18n::with(rl, || crate::findings_text(std::slice::from_ref(d), lines)),
+        json,
+    }
+}
+
 impl ritsu_ports::Rules for Engine {
     /// The text and every file the check read, from the check kept for the files read now.
     fn rests_on(&self, rule: &Path) -> Option<String> {
         let (_, src, _, seen) = self.joined(|| self.rule_here(rule)).ok()?;
-        Some(seen.rests_on(rule, &src))
+        Some(rests_on(&seen, rule, &src))
+    }
+
+    fn meaning(&self, rule: &Path) -> Option<String> {
+        let (_, src, _) = self.rule(rule).ok()?;
+        Some(format!("meaning:{}", crate::link::pin::meaning(&src)))
     }
 
     fn facts(&self, rule: &Path) -> Result<RuleFacts, Vec<Said>> {
@@ -728,13 +929,63 @@ impl ritsu_ports::Rules for Engine {
         self.facts_of(f, c, &src, &path)
     }
 
+    /// The report `check` makes of the rule, the one `ritsu check` prints (kept for the text and
+    /// the files it read), every diagnostic of it, the ones about another file too (a contribution).
+    fn findings(&self, rule: &Path, lang: Lang) -> Result<ritsu_ports::Found<Vec<ritsu_ports::Finding>>, Vec<Said>> {
+        let path = rule.to_string_lossy().to_string();
+        let src = ritsu_base::fs::read_to_string(&path).map_err(|e| vec![Said::unreadable(&path, &e)])?;
+        let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+        let rl = rlang(lang);
+        let r = self.report(&path, &src, rl);
+        // a rule that passes is kept as read and checked too, by its file and text while what it
+        // read reads the same, as a question of it keeps it ([`Engine::rule`]): what is asked of
+        // it after, through other files that read the same (the package `ritsu gen` makes of the
+        // files a request is lowered to, laid apart from the ones its check laid), is answered from
+        // this check (ritsu's DESIGN 4.15)
+        if !crate::has_error(&r.diags) {
+            let _ = self.rule(rule);
+        }
+        Ok(ritsu_ports::Found::Value(r.diags.iter().map(|d| finding(d, &path, Some(path.clone()), &lines, rl)).collect()))
+    }
+
     /// A relation between two inputs is decided over the box of their ranges: it holds for every
     /// pair exactly when it holds for the pair at the corner that tries it hardest, and that pair
-    /// is the example when it does not. The bounds on a list's total and length are about a list
-    /// whose length the question does not carry, and are not decided.
-    fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)], max_len: Option<i128>) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
-        let (_, _, got) = self.rule(rule)?;
+    /// is the example when it does not. The bounds on a list's total and length are decided for a
+    /// list as long as `max_len`, and the bottom of a total for one as short as `min_len`; without
+    /// the length it needs, a bound is not decided. Which elements a `count` counts is nothing a
+    /// range says, so its bottom is decided only where the longest list is shorter than it. The range a `define` is
+    /// accepted in is decided over what the value reaches with the inputs held to the ranges
+    /// (`over::define_kept`, §15.313), a field of an element taking its own range.
+    fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)], min_len: Option<i128>, max_len: Option<i128>) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+        self.preconditions_hold_given(rule, ranges, &[], min_len, max_len)
+    }
+
+    /// The same, with every value the caller gives some of the truth values and the enums'
+    /// inputs: a `never` line is decided over them too (`never_kept`). Values are read only for
+    /// an input of truth values or of an enum, and only when each is a value of that input's
+    /// type; anything else says nothing of the input, as if no values were given for it.
+    fn preconditions_hold_given(
+        &self,
+        rule: &Path,
+        ranges: &[(String, Option<i128>, Option<i128>)],
+        values: &[(String, Vec<Value>)],
+        min_len: Option<i128>,
+        max_len: Option<i128>,
+    ) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+        let (path, src, got) = self.rule(rule)?;
         let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        let given = |name: &str| -> Option<Vec<Value>> {
+            let (_, vs) = values.iter().find(|(n, _)| n == name)?;
+            let own: bool = match c.ty_of(name)? {
+                Ty::Bool => vs.iter().all(|v| matches!(v, Value::Bool(_))),
+                Ty::Enum(e) => {
+                    let names = c.enums.get(&e)?;
+                    vs.iter().all(|v| matches!(v, Value::Enum(x) if names.contains(x)))
+                }
+                _ => false,
+            };
+            own.then(|| vs.clone())
+        };
         let range = |name: &str| -> (Option<Rat>, Option<Rat>) {
             let sc = c.wire_scale(name);
             match ranges.iter().find(|(n, ..)| n == name) {
@@ -795,12 +1046,47 @@ impl ritsu_ports::Rules for Engine {
                     // The total is largest with the list as long as it gets and every element at
                     // the top of its range (none when that top is below zero: the empty list's
                     // total, 0, is then the largest).
-                    Precondition::Sum { name, over, of, max } => match (max_len, range(of).1) {
+                    // `max` and `min` count in the total's own step, which is finer than an
+                    // element's on the wire where the total adds up a value worked out on each
+                    // element that keeps its fractions (§15.314): the ends of the elements are
+                    // added up at that step, and an example gives an element at its own.
+                    Precondition::Sum { name, over, of, max, min, .. } => match (max_len, range(of).1) {
                         (Some(n), Some(hi)) => {
+                            let at_total = |v: Rat| crate::types::wire_int(v, c.scales.get(name).copied().unwrap_or(1));
                             let top = crate::types::wire_int(hi, c.wire_scale(of));
-                            let most = if top > 0 { top.saturating_mul(n) } else { 0 };
+                            let most = if top > 0 { at_total(hi).saturating_mul(n) } else { 0 };
                             if most <= *max {
-                                Answer::Holds
+                                // The bottom, where the range starts above zero (§15.314). A
+                                // list that comes in under it at its longest and largest never
+                                // reaches it: that list is the example. Otherwise the total is
+                                // smallest with the list as short as it gets and every element
+                                // at the bottom of its range (an element is not below zero, and
+                                // an empty list comes to 0): at or above the bottom it holds, and
+                                // under it that list is the example.
+                                match (min, min_len, range(of).0) {
+                                    (None, ..) => Answer::Holds,
+                                    (Some(lo), ..) if most < *lo => {
+                                        let one = vec![(of.clone(), Value::Int(top))];
+                                        Answer::Fails(vec![(over.clone(), Value::List(vec![one; if top > 0 { n.clamp(0, 10_000) as usize } else { 0 }]))])
+                                    }
+                                    (Some(lo), Some(k), Some(b)) => {
+                                        let (bottom, k) = (crate::types::wire_int(b, c.wire_scale(of)).max(0), k.max(0));
+                                        if at_total(b).max(0).saturating_mul(k) >= *lo {
+                                            Answer::Holds
+                                        } else {
+                                            let one = vec![(of.clone(), Value::Int(bottom))];
+                                            Answer::Fails(vec![(over.clone(), Value::List(vec![one; k.clamp(0, 10_000) as usize]))])
+                                        }
+                                    }
+                                    (Some(_), None, _) => Answer::Undecided(ritsu_base::tr!(
+                                        "`{name}` は `{over}` の合計の下限でもあります。並びがいちばん短いときの長さが分からないので、決められません",
+                                        "`{name}` bounds the total over `{over}` from below as well, and how short the list can be is not known, so it cannot be decided"
+                                    )),
+                                    (Some(_), Some(_), None) => Answer::Undecided(ritsu_base::tr!(
+                                        "`{name}` は `{over}` の `{of}` の合計の下限でもあります。`{of}` の範囲に下限が無いので、決められません",
+                                        "`{name}` bounds the total of `{of}` over `{over}` from below as well, and the range of `{of}` has no lower end, so it cannot be decided"
+                                    )),
+                                }
                             } else {
                                 let one = vec![(of.clone(), Value::Int(top))];
                                 Answer::Fails(vec![(over.clone(), Value::List(vec![one; n.clamp(0, 10_000) as usize]))])
@@ -815,6 +1101,16 @@ impl ritsu_ports::Rules for Engine {
                             "`{name}` bounds the total of `{of}` over `{over}`, and the range of `{of}` has no upper end, so it cannot be decided"
                         )),
                     },
+                    // How many elements are counted is between none and all of them, whatever
+                    // the ranges of their fields: a range does not show which ones are. A list
+                    // shorter than the bottom at its longest never reaches it.
+                    Precondition::Count { over, min, .. } if max_len.is_some_and(|n| n < *min) => {
+                        Answer::Fails(vec![(over.clone(), Value::List(vec![Vec::new(); max_len.unwrap_or(0).clamp(0, 10_000) as usize]))])
+                    }
+                    Precondition::Count { name, over, .. } => Answer::Undecided(ritsu_base::tr!(
+                        "`{name}` は `{over}` を数えた数の下限です。どの要素が数に入るかは、範囲と長さからは示せません",
+                        "`{name}` bounds from below how many elements of `{over}` are counted, and ranges and a length cannot show which ones are"
+                    )),
                     Precondition::Length { sequence, max } => match max_len {
                         Some(n) if n <= *max => Answer::Holds,
                         Some(_) => Answer::Fails(vec![(sequence.clone(), Value::List(vec![Vec::new(); (*max + 1).clamp(0, 10_000) as usize]))]),
@@ -836,11 +1132,29 @@ impl ritsu_ports::Rules for Engine {
                         "`{input}` は koyomi の日付がとる日だけをとります。問い合わせには範囲しか入らないので、渡す日がその日のどれかであることまでは示せません",
                         "`{input}` takes only the days of a koyomi date, and a range alone cannot show that the day given is one of them"
                     )),
-                    Precondition::Never { said, conds } => never_kept(said, conds, &|name| {
-                        let sc = c.wire_scale(name);
-                        let (lo, hi) = range(name);
-                        (lo.map(|v| crate::types::wire_int(v, sc)), hi.map(|v| crate::types::wire_int(v, sc)))
-                    }),
+                    Precondition::Never { said, conds } => never_kept(
+                        said,
+                        conds,
+                        &|name| {
+                            let sc = c.wire_scale(name);
+                            let (lo, hi) = range(name);
+                            (lo.map(|v| crate::types::wire_int(v, sc)), hi.map(|v| crate::types::wire_int(v, sc)))
+                        },
+                        &given,
+                    ),
+                    // What the value reaches with the inputs held to the ranges (§15.313), each
+                    // field of an element in its own range; the example names the inputs it is
+                    // worked out from, and each list whose fields it reads.
+                    Precondition::Define { name, range: said, from, .. } => {
+                        let lists: Vec<&String> = f.elements.iter().filter(|e| e.fields.iter().any(|x| from.contains(&x.name.text))).map(|e| &e.name.text).collect();
+                        match self.joined(|| crate::over::define_kept(f, c, &src, &path, name, said, ranges)) {
+                            Answer::Holds => Answer::Holds,
+                            Answer::Undecided(why) => Answer::Undecided(why),
+                            Answer::Fails(at) => Answer::Fails(
+                                from.iter().chain(lists).filter_map(|n| at.get(n).map(|v| (n.clone(), from_val(c, n, v)))).collect(),
+                            ),
+                        }
+                    }
                 };
                 (p, a)
             })
@@ -858,9 +1172,16 @@ impl ritsu_ports::Rules for Engine {
             return Ok(Answer::Undecided(ritsu_base::tr!("`{input}` は、この規則の日付の入力ではありません", "`{input}` is not a date input of this rule")));
         }
         let given: Vec<i64> = days.iter().copied().collect();
-        let both = |l: RLang| self.joined(|| crate::days::over(input, given.clone(), || i18n::with(l, || crate::report(&src, &path).diags)));
-        let (ja, en) = (both(RLang::Ja), both(RLang::En));
-        let first = ja.iter().zip(&en).find(|(d, _)| d.severity == crate::diag::Severity::Error && matches!(d.code, "E101" | "E102" | "E105"));
+        let over = |l: RLang| self.joined(|| crate::days::over(input, given.clone(), || i18n::with(l, || crate::report(&src, &path).diags)));
+        let breaks = |d: &crate::diag::Diag| d.severity == crate::diag::Severity::Error && matches!(d.code, "E101" | "E102" | "E105");
+        // the check over the days once; again in the other language only for the sentence of an
+        // example
+        let en = over(RLang::En);
+        if !en.iter().any(breaks) {
+            return Ok(Answer::Holds);
+        }
+        let ja = over(RLang::Ja);
+        let first = ja.iter().zip(&en).find(|(d, _)| breaks(d));
         Ok(match first {
             None => Answer::Holds,
             Some((j, e)) => {
@@ -899,106 +1220,51 @@ impl ritsu_ports::Rules for Engine {
         Ok(self.joined(|| crate::over::outputs_over(f, c, &src, &path, output, ranges)))
     }
 
-    fn date_range(&self, rule: &Path, input: &str) -> Result<(Option<i64>, Option<i64>), Vec<Said>> {
-        let (_, _, got) = self.rule(rule)?;
-        let (_, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
-        let (lo, hi) = c.ranges.get(input).copied().unwrap_or((None, None));
-        let day = |r: Option<Rat>| r.map(|v| (v.num / v.den) as i64);
-        Ok((day(lo), day(hi)))
+    /// The same reading for several outputs of one call: the combinations the rows some input may
+    /// reach write, table by table, and an input for each found in the vectors over the ranges
+    /// (`crate::over::outputs_together`). Exact when the two meet.
+    fn outputs_together(&self, rule: &Path, outputs: &[String], ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<ritsu_ports::Found<Vec<(Vec<Value>, Values)>>, Vec<Said>> {
+        let (path, src, got) = self.rule(rule)?;
+        let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        Ok(self.joined(|| crate::over::outputs_together(f, c, &src, &path, outputs, ranges)))
     }
 
     fn eval(&self, rule: &Path, inputs: &Values) -> Result<Values, RuleError> {
-        use crate::eval::Val;
-        let (_, _, got) = self.rule(rule).map_err(RuleError::Unread)?;
-        let (f, c) = got.as_ref().as_ref().map_err(|e| RuleError::Unread(e.clone()))?;
-        let mut vals = std::collections::HashMap::new();
-        for i in &f.inputs {
-            let name = &i.name.text;
-            let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
-            let v = inputs.iter().find(|(n, _)| n == name).map(|(_, v)| v).ok_or_else(|| RuleError::Input(ritsu_base::tr!("入力 `{name}` がありません", "the input `{name}` is missing")))?;
-            // `none`, which the evaluator holds as the word itself
-            if matches!((&ty, v), (Ty::Opt(_), Value::None)) {
-                vals.insert(name.clone(), Val::Enum(crate::kw::NONE.into()));
-                continue;
-            }
-            let val = to_val(c, name, &ty, v).map_err(RuleError::Input)?;
-            if outside_range(c, name, &val) {
-                return Err(RuleError::Input(ritsu_base::tr!("入力 `{name}` が範囲の外です", "the input `{name}` is outside its range")));
-            }
-            // A date of koyomi's days takes those days only, and the door refuses any other
-            // (§15.174).
-            if let (Val::Date(y, m, d), Some(set)) = (&val, c.day_sets.get(name))
-                && set.days.binary_search(&(crate::types::date_ord(*y, *m, *d).num as i64)).is_err()
-            {
-                let (file, date) = set.from.as_ref().map(|fr| (fr.file.clone(), fr.date.clone())).unwrap_or_default();
-                return Err(RuleError::Input(ritsu_base::tr!(
-                    "入力 `{name}` は、{file} の {date} がとる日ではありません",
-                    "the input `{name}` is not a day {date} of {file} comes to"
-                )));
-            }
-            vals.insert(name.clone(), val);
-        }
-        for el in &f.elements {
-            let name = &el.name.text;
-            let Some((_, Value::List(xs))) = inputs.iter().find(|(n, _)| n == name) else {
-                return Err(RuleError::Input(ritsu_base::tr!("並び `{name}` がありません", "the list `{name}` is missing")));
-            };
-            let mut seq = Vec::new();
-            for x in xs {
-                let mut one = std::collections::BTreeMap::new();
-                for fd in &el.fields {
-                    let fname = &fd.name.text;
-                    let ty = c.ty_of(fname).unwrap_or(Ty::Unknown);
-                    let v = x.iter().find(|(n, _)| n == fname).map(|(_, v)| v).ok_or_else(|| RuleError::Input(ritsu_base::tr!("要素のフィールド `{fname}` がありません", "an element's field `{fname}` is missing")))?;
-                    if matches!((&ty, v), (Ty::Opt(_), Value::None)) {
-                        one.insert(fname.clone(), Val::Enum(crate::kw::NONE.into()));
-                        continue;
-                    }
-                    let val = to_val(c, fname, &ty, v).map_err(RuleError::Input)?;
-                    // a field is held to its range as an input is, the way the generated code's
-                    // door holds each element's (§15.251)
-                    if outside_range(c, fname, &val) {
-                        return Err(RuleError::Input(ritsu_base::tr!("要素のフィールド `{fname}` が範囲の外です", "an element's field `{fname}` is outside its range")));
-                    }
-                    one.insert(fname.clone(), val);
-                }
-                seq.push(one);
-            }
-            vals.insert(name.clone(), Val::Seq(seq));
-        }
-        // Two dates compare by their day numbers, as the generated code's door compares them
-        // (§15.198).
-        for k in &f.constraints {
-            if !crate::vectors::constraint_holds(k, &|n| vals.get(n)) {
-                return Err(RuleError::Input(ritsu_base::tr!("`{}` が成り立ちません", "`{}` does not hold", k.said())));
-            }
-        }
-        for n in f.door_nevers() {
-            if !crate::vectors::never_clear(n, c, &|m| vals.get(m)) {
-                let said = n.said();
-                return Err(RuleError::Input(ritsu_base::tr!("起こらない組み合わせです: {said}", "this combination does not happen: {said}")));
-            }
-        }
-        let (outs, _, _) = crate::eval::run_all(f, c, vals);
-        outs.into_iter()
-            .map(|(name, v)| match v {
-                Some(v) => Ok((name.clone(), from_val(c, &name, &v))),
-                None => Err(RuleError::Contradiction(ritsu_base::tr!("出力 `{name}` を決める行がありません", "no row decides the output `{name}`"))),
-            })
-            .collect()
+        self.answer(rule, inputs, &mut None)
+    }
+
+    fn eval_outside(&self, rule: &Path, inputs: &Values) -> Result<Values, (RuleError, Option<Outside>)> {
+        let mut seen = None;
+        self.answer(rule, inputs, &mut seen).map_err(|e| (e, seen))
+    }
+
+    /// The inputs of the vectors `rulec vectors` makes of the rule as its check kept it (no check
+    /// of its own), each input as `eval` takes it, the lists it walks among them.
+    fn vector_inputs(&self, rule: &Path) -> Result<Vec<Values>, Vec<Said>> {
+        let (_, _, got) = self.rule(rule)?;
+        let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        let names: Vec<&String> = f.inputs.iter().map(|i| &i.name.text).chain(f.elements.iter().map(|e| &e.name.text)).collect();
+        Ok(self.joined(|| {
+            crate::vectors::generate(f, c).iter().map(|v| names.iter().filter_map(|n| v.input.get(*n).map(|x| ((*n).clone(), from_val(c, n, x)))).collect()).collect()
+        }))
     }
 
     fn doc(&self, rule: &Path, shown: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>> {
-        let (path, src) = read(rule)?;
+        // the check kept for the rule: the page is drawn from it, not from a check of its own
+        let (path, src, got) = self.rule(rule)?;
         self.joined(|| i18n::with(rlang(lang), || {
-            let (f, c) = checked(&path, &src, self.budget())?;
+            let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
             Ok(if html {
-                let js = crate::codegen::Gen::new(&f, &c, &src, &path).javascript();
+                let js = crate::codegen::Gen::new(&f, &c, &src, &path).page_javascript();
                 crate::doc::render_html_named(&f, &c, &src, &path, shown, &js)
             } else {
                 crate::doc::render_named(&f, &c, &src, &path, shown)
             })
         }))
+    }
+
+    fn diff(&self, old: &ritsu_ports::DiffSide, new: &ritsu_ports::DiffSide, budget: Option<usize>) -> Result<ritsu_ports::Found<ritsu_ports::RuleDiff>, Vec<Said>> {
+        rule_diff(self, old, new, budget)
     }
 }
 
@@ -1025,9 +1291,10 @@ fn machine_end(m: &crate::ast::MachineDecl) -> usize {
 }
 
 /// The path of a file a rule names, from the root: written from the rule's directory, or from the
-/// root of the module of ritsu's it is in for `@<name>/…` (ritsu's DESIGN 17.6).
+/// root of the module of ritsu's it is in for `@<name>/…` (ritsu's DESIGN 17.6); where a `..` of it
+/// crosses a symbolic link, the file the system opens there, the one the rule reads (DESIGN 4.15).
 fn from_root(root: &Path, file: &str, written: &str) -> Option<String> {
-    ritsu_base::modules::join(root, file, written).ok()
+    ritsu_base::modules::join_opened(root, file, written).ok()
 }
 
 impl ritsu_ports::Sources for Engine {
@@ -1066,7 +1333,7 @@ impl ritsu_ports::Items for Engine {
         let (path, src) = read(&ritsu_base::paths::on_disk(root, file))?;
         let parsed = crate::parse::parse(&src, &path);
         let Some(f) = parsed.file else {
-            return Err(refused(&path, &src));
+            return Err(self.refused(&path, &src));
         };
         // Where a value comes from says nothing of what the item means, and a version of it stays
         // the same (§15.285): the definition is read without `fed by`, which keeps the lines.
@@ -1132,21 +1399,26 @@ impl ritsu_ports::References for Engine {
         let (path, src) = read(&disk)?;
         let parsed = crate::parse::parse(&src, &path);
         let Some(f) = parsed.file else {
-            return Err(refused(&path, &src));
+            return Err(self.refused(&path, &src));
         };
+        let contract = |proto: &str| ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(root, proto)).ok().and_then(|s| crate::proto::read(proto, &s).ok());
         // a `.proto`'s name for a message or an enum, from its package: `shop.v1.Order` is `Order`
         let local = |proto: &str, written: &str| -> String {
-            let package = ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(root, proto)).ok().and_then(|s| crate::proto::read(proto, &s).ok()).and_then(|p| p.package);
-            match package {
+            match contract(proto).and_then(|p| p.package) {
                 Some(p) => written.strip_prefix(&format!("{p}.")).unwrap_or(written).to_string(),
                 None => written.to_string(),
             }
+        };
+        // an enum an `import proto` line names, as `check` finds it: one nested in a message is
+        // named after the message (`Order.Status`)
+        let enum_path = |proto: &str, written: &str| -> String {
+            contract(proto).and_then(|f| f.enum_named(written).ok().map(|e| e.path.clone())).unwrap_or_else(|| local(proto, written))
         };
         let mut out = Vec::new();
         for im in &f.enum_imports {
             let Some(p) = from_root(root, file, &im.file) else { continue };
             let (target, how) = match im.kind {
-                crate::ast::EnumSource::Proto => (Naming::file(Tool::Proto, &p).with("enum", local(&p, &im.source)), "import proto"),
+                crate::ast::EnumSource::Proto => (Naming::file(Tool::Proto, &p).with("enum", enum_path(&p, &im.source)), "import proto"),
                 crate::ast::EnumSource::JsonSchema => (Naming::file(Tool::File, &p), "import jsonschema"),
             };
             out.push(Reference { line: im.span.line, target, how: how.into() });
@@ -1194,6 +1466,41 @@ impl ritsu_ports::References for Engine {
         }
         out.sort_by_key(|r| r.line);
         Ok(out)
+    }
+
+    /// What a rule reads (ritsu's DESIGN 6.4): what it names ([`ritsu_ports::Read::of_named`]), but
+    /// for the documents its `source` lines copy, which it pins and is not made of (§15.68). A
+    /// contribution reads the file it adds to and those it comes after (`to`, `after`, §15.227),
+    /// which `references` leaves out. A rule reads the contributions merged into it, which it does
+    /// not name: those of the project the engine was given ([`Engine::set_project`]), each from the
+    /// root; an engine given no project merges none into any rule. A file out of the root is not
+    /// said.
+    fn reads(&self, root: &Path, file: &str, named: Vec<Reference>) -> Vec<ritsu_ports::Read> {
+        let mut out = ritsu_ports::Read::of_named(named.into_iter().filter(|r| r.how != "source").collect());
+        let at = ritsu_base::paths::on_disk(root, file).to_string_lossy().into_owned();
+        let top = ritsu_base::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+        let from_root = |shown: &str| -> Option<String> {
+            let rel = ritsu_base::fs::canonicalize(Path::new(shown)).ok()?.strip_prefix(&top).ok()?.to_string_lossy().replace('\\', "/");
+            (rel != file).then_some(rel)
+        };
+        if crate::link::is_contribution_file(&at) {
+            let to = crate::link::target_of(&at).map(|(f, _)| f);
+            for (line, f) in crate::link::names_of(&at) {
+                let how = if to.as_deref() == Some(f.as_str()) { "to" } else { "after" };
+                if let Some(rel) = from_root(&f) {
+                    out.push(ritsu_ports::Read { line: Some(line), target: Naming::file(Tool::Rulec, rel), how: how.into() });
+                }
+            }
+        }
+        let set = self.contributions();
+        if !set.is_empty() {
+            for c in crate::link::with_contributions(set, || crate::link::merged_into(&at)) {
+                if let Some(rel) = from_root(&c) {
+                    out.push(ritsu_ports::Read { line: None, target: Naming::file(Tool::Rulec, rel), how: "contribution".into() });
+                }
+            }
+        }
+        out
     }
 }
 
@@ -1251,21 +1558,121 @@ impl ritsu_ports::Feeds for Engine {
     }
 }
 
-/// What an input or a field of an element takes: what the facts say, with what they do not say of a
-/// date, its range or the days of a koyomi date.
+/// What an input or a field of an element takes: what the facts say, with the days of a koyomi date
+/// an input's range is, which they do not say.
 fn takes_of(facts: &RuleFacts, c: &Checked, n: &str, ty: &ColumnType) -> ritsu_ports::Carried {
     use ritsu_ports::Carried;
     let takes = Carried::of_column(facts, ty);
-    let opt = match &takes {
-        Carried::Date { .. } => false,
-        Carried::Opt(t) if matches!(**t, Carried::Date { .. }) => true,
-        _ => return takes,
+    let Some(d) = c.day_sets.get(n) else { return takes };
+    let days = Carried::Days(d.days.iter().copied().collect());
+    match takes {
+        Carried::Date { .. } => days,
+        Carried::Opt(t) if matches!(*t, Carried::Date { .. }) => Carried::Opt(Box::new(days)),
+        other => other,
+    }
+}
+
+// ── What two versions of a rule answer differently (`Rules::diff`) ──────
+
+/// [`ritsu_ports::Rules::diff`]: each side read through its own files and checked as `rulec diff`
+/// reads it (an unpinned or changed callee let through, `prepare_lenient`), the two compared as
+/// `rulec diff` compares them (`vdiff::diff`), and what it found handed over as its JSON says it.
+/// The walk's words are English, and Japanese too where it says why a box was not settled or why the
+/// two cannot be compared: the walk is made again in Japanese then, which a rule that passes both
+/// checks rarely needs.
+fn rule_diff(e: &Engine, old: &ritsu_ports::DiffSide, new: &ritsu_ports::DiffSide, budget: Option<usize>) -> Result<ritsu_ports::Found<ritsu_ports::RuleDiff>, Vec<Said>> {
+    let side = |s: &ritsu_ports::DiffSide| -> Result<(String, RuleFile, Checked), Vec<Said>> {
+        let go = || {
+            let (path, src) = read(&s.rule)?;
+            let got = e.joined(|| crate::prepare_lenient(&src, &path));
+            got.map(|(f, c)| (path.clone(), f, c)).map_err(|_| e.refused(&path, &src))
+        };
+        match &s.files {
+            Some(f) => ritsu_base::fs::with(f.clone(), go),
+            None => go(),
+        }
     };
-    let day = |r: Option<Rat>| r.map(|v| (v.num / v.den) as i64);
-    let (lo, hi) = c.ranges.get(n).copied().unwrap_or((None, None));
-    let dated = match c.day_sets.get(n) {
-        Some(d) => Carried::Days(d.days.iter().copied().collect()),
-        None => Carried::Date { min: day(lo), max: day(hi) },
-    };
-    if opt { Carried::Opt(Box::new(dated)) } else { dated }
+    let (_, of, oc) = side(old)?;
+    let (path, nf, nc) = side(new)?;
+    if of.name.text != nf.name.text {
+        let (a, b) = (&of.name.text, &nf.name.text);
+        return Err(vec![Said { code: String::new(), file: path, line: None, message: ritsu_base::tr!("別の規則を比べようとしています（`{a}` と `{b}`）", "comparing different rules (`{a}` and `{b}`)") }]);
+    }
+    let budget = budget.unwrap_or(crate::vdiff::DEFAULT_BUDGET);
+    let walk = |l: RLang| e.joined(|| i18n::with(l, || crate::vdiff::diff((&of, &oc), (&nf, &nc), budget)));
+    let en = walk(RLang::En);
+    let ja = (en.blocked.is_some() || !en.unknown.is_empty()).then(|| walk(RLang::Ja));
+    let both = |en: &str, ja: Option<&String>| Text::new(ja.cloned().unwrap_or_else(|| en.to_string()), en.to_string());
+    let held = |r: &crate::vdiff::Region| en.axes.iter().zip(r).map(|(ax, sel)| held_of(ax, sel)).collect::<Vec<_>>();
+    Ok(ritsu_ports::Found::Value(ritsu_ports::RuleDiff {
+        rule: en.rule.clone(),
+        old_version: en.old_version.clone(),
+        new_version: en.new_version.clone(),
+        columns: en
+            .axes
+            .iter()
+            .map(|ax| ritsu_ports::DiffColumn {
+                name: ax.col.clone(),
+                kind: match ax.kind {
+                    crate::vdiff::Kind::Input => ritsu_ports::DiffKind::Input,
+                    crate::vdiff::Kind::Derived => ritsu_ports::DiffKind::Derived,
+                    crate::vdiff::Kind::Walk => ritsu_ports::DiffKind::Walk,
+                },
+                date: ax.date,
+                rate: ax.shown == 100,
+                unit: ax.unit.clone(),
+            })
+            .collect(),
+        declared: en.domain.iter().map(|d| ritsu_ports::DiffDeclared { what: d.what.to_string(), name: d.name.clone(), old: d.old.clone(), new: d.new.clone() }).collect(),
+        changes: en
+            .changes
+            .iter()
+            .map(|ch| ritsu_ports::DiffChange {
+                held: held(&ch.region),
+                outputs: ch.outs.clone(),
+                uniform: ch.uniform,
+                old_rows: ch.old_rows.clone(),
+                new_rows: ch.new_rows.clone(),
+                witness: ch.witness.iter().map(|(k, v)| (k.clone(), crate::vectors::show(v))).collect(),
+                cells: ch.cells,
+            })
+            .collect(),
+        unknown: en
+            .unknown
+            .iter()
+            .enumerate()
+            .map(|(i, (r, why))| ritsu_ports::DiffUnknown { held: held(r), why: both(why, ja.as_ref().and_then(|j| j.unknown.get(i)).map(|(_, w)| w)) })
+            .collect(),
+        cells: en.cells,
+        feasible: en.feasible,
+        same: en.same,
+        differing: en.differing,
+        unsettled: en.unsettled,
+        unrealized: en.unrealized,
+        over_budget: en.over_budget,
+        blocked: en.blocked.as_ref().map(|b| both(b, ja.as_ref().and_then(|j| j.blocked.as_ref()))),
+    }))
+}
+
+/// What a box holds of one axis, as the JSON's `accepts` says it: every value, the words, or the
+/// numbers in runs, a run of coordinates next to each other joined as the text joins them.
+fn held_of(ax: &crate::vdiff::Axis, sel: &std::collections::BTreeSet<usize>) -> ritsu_ports::DiffHeld {
+    use crate::vdiff::Coord;
+    if sel.len() == ax.len() {
+        return ritsu_ports::DiffHeld::Any;
+    }
+    let numeric = sel.iter().any(|&i| matches!(ax.coords[i], Coord::Point(_) | Coord::Open(..)));
+    if !numeric {
+        let words = sel.iter().filter_map(|&i| if let Coord::Word(w) = &ax.coords[i] { Some(w.clone()) } else { None }).collect();
+        let other = sel.iter().any(|&i| matches!(ax.coords[i], Coord::OtherStr));
+        return ritsu_ports::DiffHeld::Words { words, other };
+    }
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    for &i in sel {
+        match runs.last_mut() {
+            Some((_, end)) if *end + 1 == i => *end = i,
+            _ => runs.push((i, i)),
+        }
+    }
+    ritsu_ports::DiffHeld::Runs(runs.into_iter().map(|(a, b)| (crate::vdiff::ival(&ax.coords[a], ax.step).0, crate::vdiff::ival(&ax.coords[b], ax.step).1)).collect())
 }

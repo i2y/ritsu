@@ -1,0 +1,55 @@
+rule contract_ja_route v1
+description "What ringi writes from the route of contract.ja.ringi: one optional output for each stage, whose value is the approver the stage names; a blank cell is none, the stage is not there"
+
+import enum kind from "choices.rule"
+enum manager_by = manager_approver "上長"
+enum summary_by = note_from_summarize "note from 要約"
+enum intake_by = legal "法務"
+enum review_by = reviewer "担当者"
+enum second_by = at_least_2_of_legal "at least 2 of 法務"
+enum counsel_by = counsel_approver "部長"
+enum finance_by = circulate_to_finance "circulate to 財務部"
+
+inputs
+  value : money[円]  range >=0円 <=1_000_000_000円
+  kind  : kind
+
+outputs
+  manager : manager_by
+  summary : summary_by
+  intake  : intake_by
+  review  : review_by
+  second  : second_by?
+  counsel : counsel_by?
+  finance : finance_by?
+
+table manager
+| -> manager       |
+| manager_approver |
+
+table summary
+| -> summary          |
+| note_from_summarize |
+
+table intake
+| -> intake |
+| legal     |
+
+table review
+| -> review |
+| reviewer  |
+
+table second
+| value        | -> second           |
+| <=5_000_000円 | none                |
+| >5_000_000円  | at_least_2_of_legal |
+
+table counsel
+| value         | -> counsel       |
+| <=10_000_000円 | none             |
+| >10_000_000円  | counsel_approver |
+
+table finance
+| kind         | -> finance           |
+| not: license | none                 |
+| license      | circulate_to_finance |

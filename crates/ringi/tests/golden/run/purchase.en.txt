@@ -1,0 +1,53 @@
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-23 end of day; hold budget.reserve 8_000_000 JPY
+2026-11-16 14:00  approve  by e1101  -> finance (e4001), due 2026-11-23 end of day
+2026-11-17 10:00  approve  by e4001  -> board (3 of e0001, e0201, e0202, e0203, e0204), due 2026-12-01 end of day
+2026-11-18 10:00  approve  by e0201  -> board (2 of e0001, e0202, e0203, e0204), due 2026-12-01 end of day
+2026-11-18 11:00  approve  by e0202  -> board (one of e0001, e0203, e0204), due 2026-12-01 end of day
+2026-11-18 15:00  approve  by e0203  -> decide (e0001), due 2026-11-25 end of day
+2026-11-19 10:00  approve  by e0001  -> approved; inform circulated to e5001; launch order; post budget.reserve
+the book `budget` at the end: dept_budget(sales1) 2_000_000 JPY, allocations -10_000_000 JPY, payees 8_000_000 JPY
+  the hold `reserve` (T-1, attempt-1): posted
+scenario `a_board_purchase`: as written (7 rows)
+
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-23 end of day; hold budget.reserve 400_000 JPY
+2026-11-16 11:00  approve  by e1101  -> finance (e4001), due 2026-11-23 end of day
+2026-11-16 14:00  approve  by e4001  -> decide (e3101), due 2026-11-23 end of day
+2026-11-17 10:00  approve  by e3101  -> approved; inform circulated to e5001; launch order; post budget.reserve
+the book `budget` at the end: dept_budget(sales1) 9_600_000 JPY, allocations -10_000_000 JPY, payees 400_000 JPY
+  the hold `reserve` (T-1, attempt-1): posted
+scenario `half_paid_in_advance`: as written (4 rows)
+
+2026-11-16 10:00  submit   by e3101  -> finance (e4001), due 2026-11-23 end of day; first waits for the approval of decide (e0101); hold budget.reserve 2_000_000 JPY
+2026-11-16 14:00  approve  by e4001  -> decide (e0101), due 2026-11-23 end of day
+2026-11-17 10:00  approve  by e0101  -> approved; first done with the approval of decide (e0101); inform circulated to e5001; launch order; post budget.reserve
+the book `budget` at the end: dept_budget(sales1) 8_000_000 JPY, allocations -10_000_000 JPY, payees 2_000_000 JPY
+  the hold `reserve` (T-1, attempt-1): posted
+scenario `the_manager_decides_after_finance`: as written (3 rows)
+
+2026-11-16 10:00  submit   by e3101  -> finance (e4001), due 2026-11-23 end of day; first waits for the approval of decide (e0101); hold budget.reserve 2_000_000 JPY
+2026-11-16 14:00  approve  by e4001  -> decide (e0101), due 2026-11-23 end of day
+2026-11-19 09:00  remind             -> decide (e0101), due 2026-11-23 end of day; reminded e0101
+2026-11-24 00:00  late               -> decide (e0001), due 2026-12-01 end of day; decide went up to e0001
+2026-11-24 10:00  approve  by e0001  -> first (e0101), due 2026-12-01 end of day; first no longer waits for decide, and starts (e0101; the stage it waited for was answered without e0101)
+2026-11-24 15:00  approve  by e0101  -> approved; inform circulated to e5001; launch order; post budget.reserve
+the book `budget` at the end: dept_budget(sales1) 8_000_000 JPY, allocations -10_000_000 JPY, payees 2_000_000 JPY
+  the hold `reserve` (T-1, attempt-1): posted
+scenario `the_decision_goes_up_and_the_manager_answers_after`: as written (6 rows)
+
+2027-03-30 10:00  submit   by e9002  -> technical (e7201), due 2027-04-06 end of day; first waits for the approval of decide (e9001); hold budget.reserve 300_000 JPY
+2027-04-01 11:00  approve  by e7201  -> decide (e0102), due 2027-04-08 end of day; first waits for the approval of decide (e0102; the stage it waited for does not come to e9001 alone); decide went up to e0102 (the head of legal is empty)
+2027-04-01 15:00  approve  by e0102  -> approved; first done with the approval of decide (e0102); inform circulated to e5001; launch order; post budget.reserve
+the book `budget` at the end: dept_budget(legal) 2_700_000 JPY, allocations -3_000_000 JPY, payees 300_000 JPY
+  the hold `reserve` (T-1, attempt-1): posted
+scenario `the_organization_changes_while_the_manager_waits`: as written (3 rows)
+
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-23 end of day; hold budget.reserve 7_000_000 JPY
+2026-11-16 14:00  approve  by e1101  -> finance (e4001), due 2026-11-23 end of day
+2026-11-17 10:00  approve  by e4001  -> board (3 of e0001, e0201, e0202, e0203, e0204), due 2026-12-01 end of day
+2026-11-18 10:00  approve  by e0201  -> board (2 of e0001, e0202, e0203, e0204), due 2026-12-01 end of day
+2026-11-18 11:00  reject   by e0202  -> board (2 of e0001, e0203, e0204), due 2026-12-01 end of day; comment "The packing line runs at half its capacity"
+2026-11-18 13:00  reject   by e0203  -> board (2 of e0001, e0204), due 2026-12-01 end of day; comment "Two arms are more than the line needs"
+2026-11-18 15:00  reject   by e0204  -> rejected; comment "Ask again with a quote for one arm"; void budget.reserve
+the book `budget` at the end: dept_budget(sales1) 10_000_000 JPY, allocations -10_000_000 JPY, payees 0 JPY
+  the hold `reserve` (T-1, attempt-1): voided
+scenario `the_board_votes_it_down`: as written (7 rows)

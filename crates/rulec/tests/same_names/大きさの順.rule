@@ -1,0 +1,26 @@
+rule 大きさの順(size_ja_rank) v1
+description "荷物の大きさ。選択肢から読み、規則の名前が、大きさの順を言う関数の名前と同じ（架空）"
+
+import enum 大きさ from "選択肢.rule"
+
+inputs
+  重さ(weight) : number  range >=1 <=100
+
+outputs
+  大きさ(size) : 大きさ
+  大物(big)    : bool
+
+table 大きさ
+| 重さ | -> 大きさ |
+| <=10 | 小        |
+| >10  | 大        |
+
+table 大物
+| 大きさ | -> 大物 |
+| >=大   | true    |
+| 小     | false   |
+
+examples
+| 重さ | -> 大きさ | 大物  |
+| 1    | 小        | false |
+| 11   | 大        | true  |

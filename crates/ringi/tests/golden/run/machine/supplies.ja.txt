@@ -1,0 +1,29 @@
+2026-11-16 10:00  submit                      e1201  -> first（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  send back                   e1101  -> with requester、再申請は 2026-11-19 の終わりまで
+2026-11-16 13:00  resubmit（kind = service）  e1201  -> first（e1101）、期限は 2026-11-19 の終わり; 空になった: vendor、contact
+2026-11-16 14:00  approve                     e1101  -> approved
+シナリオ `a_kind_changed_on_resubmit`: 書いたとおり（4 行）
+
+2026-11-16 10:00  submit                   e1201  -> first（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  send back                e1101  -> with requester、再申請は 2026-11-19 の終わりまで
+2026-11-16 13:00  resubmit（note = none）  e1201  -> first（e1101）、期限は 2026-11-19 の終わり; 空になった: note
+2026-11-16 14:00  approve                  e1101  -> approved
+シナリオ `a_note_made_empty`: 書いたとおり（4 行）
+
+2026-11-16 10:00  submit                                                  e1201  -> first（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  send back                                               e1101  -> with requester、再申請は 2026-11-19 の終わりまで
+2026-11-16 13:00  resubmit（kind = service, vendor = none, note = none）  e1201  -> first（e1101）、期限は 2026-11-19 の終わり; 空になった: vendor、contact
+2026-11-16 14:00  approve                                                 e1101  -> approved
+シナリオ `made_empty_where_it_is_hidden_or_empty`: 書いたとおり（4 行）
+
+2026-11-16 10:00  submit                                     e1201  -> first（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  edit（label = "A-12", checked = "e1101"）  e1101  -> first（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  edit（kind = service, note = none）        e1101  -> first（e1101）、期限は 2026-11-19 の終わり; 空になった: vendor、contact、note、label
+2026-11-16 13:00  edit（checked = none）                     e1101  -> first（e1101）、期限は 2026-11-19 の終わり; 空になった: checked
+2026-11-16 14:00  approve                                    e1101  -> approved
+シナリオ `edited_by_an_approver`: 書いたとおり（5 行）
+
+2026-11-16 10:00  submit                 e1201  -> first（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  edit（vendor = none）  e1101  -> first（e1101）、期限は 2026-11-19 の終わり; 空になった: vendor、contact
+2026-11-16 13:00  approve                e1101  -> approved
+シナリオ `the_vendor_made_empty_by_an_approver`: 書いたとおり（3 行）

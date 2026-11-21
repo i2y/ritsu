@@ -6,6 +6,7 @@ error[E105]: Overlapping rows: the same input matches row 1 and row 3
 15 | | not: 5 | false         |
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3
    |
+ Every input the cells of row 1 take, those of row 3 take too.
  Both rows match: bonus = none
  `policy unique` does not allow overlapping rows. Decide which row is right, or declare `policy first` if the order is meant to matter.
 

@@ -1,0 +1,3172 @@
+module ticket v1
+description "The machine of a ticket of a request: a request is made, and each event moves it, from the ticket as it was, the event, the part of the organization the event comes with and the time; it answers the ticket as it is then with what is to do, or why the event is not taken"
+
+use dates days from "days.cal"
+
+# ── the ticket ─────────────────────────────────────────────────────────────
+
+enum Status = in_progress | paused | with_requester | approved | rejected | withdrawn | expired
+
+enum Phase = ahead | active | answered | skipped | circulated | noted | once | deferred
+
+enum PartState = active | passed | skipped | stopped | agent | checked | once | deferred
+
+enum Sole
+  passing
+  by
+    person : string
+  other
+
+record Answer
+  by   : string
+  seat : string
+  yes  : bool
+  at   : number  range >=0 <=253_402_300_799
+
+record Part
+  way       : string
+  key       : string
+  approvers : list[string]
+  team      : string?
+  needed    : number  range >=0 <=1_000_000
+  answers   : list[Answer]
+  state     : PartState
+  of        : string?
+  sole      : Sole
+
+record Stage
+  name     : string
+  value    : string
+  phase    : Phase
+  started  : number?  range >=0 <=253_402_300_799
+  held     : number  range >=0 <=100_000
+  remind   : number?  range >=0 <=253_402_300_799
+  reminded : bool
+  due      : number?  range >=0 <=253_402_300_799
+  up       : number  range >=0 <=255
+  org      : date?
+  again    : bool
+  parts    : list[Part]
+
+record Held
+  book     : string
+  transfer : string
+  round    : number  range >=1 <=1_000_000
+
+record Ended
+  at    : number  range >=0 <=253_402_300_799
+  stage : string?
+  by    : string?
+
+enum Val
+  str
+    v : string
+  num
+    v : number
+  truth
+    v : bool
+  rows
+    v : list[list[Arg]]
+  nothing
+
+record Arg
+  name  : string
+  value : Val
+
+record Note
+  stage   : string
+  outputs : list[Arg]
+
+# The revision of a ticket: its round, the place in its stages of the stage it is at (none while it
+# is with the requester and once it has ended), and the approvers' edits that have gone through.
+# An event a person or a flow gives says the revision it was made on.
+record Revision
+  round : number  range >=1 <=1_000_000
+  stage : number?  range >=0 <=1_000_000
+  edits : number  range >=0 <=1_000_000
+
+# A ticket. `sent_back_by` is the one who sent it back to the requester, while it is with them: the
+# person who did it, a proxy's own ID where a proxy did; none at any other time, and while it is with
+# the requester because they took it back themselves.
+record Ticket[F]
+  id           : string
+  request      : string
+  version      : number  range >=1 <=1_000_000
+  requester    : string
+  made_by      : string?
+  sent_back_by : string?
+  status       : Status
+  round        : number  range >=1 <=1_000_000
+  attempt      : string
+  serial       : number  range >=0 <=1_000_000_000
+  revision     : Revision
+  form         : F
+  stage        : string?
+  stages       : list[Stage]
+  backs        : number  range >=0 <=1_000_000
+  edits        : number  range >=0 <=1_000_000
+  pause_left   : number  range >=0 <=100_000
+  paused_at    : number?  range >=0 <=253_402_300_799
+  pause_ends   : number?  range >=0 <=253_402_300_799
+  resubmit_due : number?  range >=0 <=253_402_300_799
+  holds        : list[Held]
+  notes        : list[Note]
+  ended        : Ended?
+
+# ── the part of the organization ──────────────────────────────────────────
+
+record Team
+  id     : string
+  kind   : string
+  parent : string?
+  head   : string?
+
+record Member
+  person   : string
+  team     : string
+  position : string
+  primary  : bool
+
+enum ProxyKind = approve | submit
+
+record Proxy
+  person : string
+  proxy  : string
+  kind   : ProxyKind
+
+record Cell
+  name  : string
+  value : string
+
+record Row
+  master : string
+  key    : string
+  values : list[Cell]
+
+# A person of the part: their ID and their names, which a refusal says with the ID (an empty
+# string where the data has none).
+record Person
+  id      : string
+  name    : string
+  name_ja : string
+
+record Org
+  day       : date
+  version   : date
+  positions : list[string]
+  teams     : list[Team]
+  people    : list[Person]
+  members   : list[Member]
+  proxies   : list[Proxy]
+  rows      : list[Row]
+
+# ── the events ─────────────────────────────────────────────────────────────
+
+record Submit[G]
+  id        : string
+  requester : string
+  by        : string?
+  form      : G
+  comment   : string?
+  attempt   : string
+
+enum Verdict = ok | doubt
+
+enum Event[G]
+  resubmit
+    by       : string
+    form     : G
+    clear    : list[string]?
+    revision : Revision?
+    comment  : string?
+    attempt  : string
+  approve
+    by       : string
+    revision : Revision?
+    comment  : string?
+  reject
+    by       : string
+    revision : Revision?
+    comment  : string?
+  send_back
+    by       : string
+    to       : string?
+    revision : Revision?
+    comment  : string?
+  retract
+    by       : string
+    revision : Revision?
+    comment  : string?
+  pause
+    by       : string
+    revision : Revision?
+    comment  : string?
+  resume
+    by       : string
+    revision : Revision?
+    comment  : string?
+  withdraw
+    by       : string
+    revision : Revision?
+    comment  : string?
+  discard
+    by       : string
+    revision : Revision?
+    comment  : string?
+  edit
+    by       : string
+    fields   : G
+    clear    : list[string]?
+    revision : Revision?
+    comment  : string?
+  add_approver
+    by       : string?
+    approver : string
+    part     : string?
+    revision : Revision?
+    comment  : string?
+  hand_over
+    by       : string?
+    of       : string
+    to       : string
+    revision : Revision?
+    comment  : string?
+  comment
+    by      : string
+    comment : string?
+  remind
+  late
+  resubmit_late
+  pause_ends
+  agent_answered
+    verdict  : Verdict
+    reason   : string
+    revision : Revision?
+  note_ready
+    outputs  : list[Arg]
+    revision : Revision?
+  flow_failed
+    revision : Revision?
+
+# ── what is to do ──────────────────────────────────────────────────────────
+
+enum Timer = remind | late | resubmit_late | pause_ends
+
+enum Notice = waiting | reminder | went_up | returned | decided | circulation | paused | resumed | stopped | comment
+
+enum What
+  history
+    did          : string
+    stage        : string?
+    by           : string?
+    proxy_of     : string?
+    organization : date?
+    once_with    : string?
+    to           : list[string]
+    note         : string?
+    comment      : string?
+    cleared      : list[string]
+  cancel_timer
+    timer : Timer
+    stage : string?
+  post
+    book     : string
+    transfer : string
+    args     : list[Arg]
+  release
+    book     : string
+    transfer : string
+    args     : list[Arg]
+  hold
+    book     : string
+    transfer : string
+    args     : list[Arg]
+  launch
+    flow : string
+    args : list[Arg]
+  ask_agent
+    flow  : string
+    stage : string
+    args  : list[Arg]
+  ask_note
+    flow  : string
+    stage : string
+    args  : list[Arg]
+  notify
+    to     : list[string]
+    notice : Notice
+    stage  : string?
+  set_timer
+    timer : Timer
+    stage : string?
+    at    : number  range >=0 <=253_402_300_799
+
+record Key
+  ticket : string
+  round  : number  range >=1 <=1_000_000
+  serial : number  range >=1 <=1_000_000_000
+
+record Effect
+  key  : Key
+  what : What
+
+enum Kind = state | person | submit | form | comment | limit | clock | stale | event | data | book | unread
+
+record Refusal
+  refused : Kind
+  text    : string
+  text_ja : string
+  at      : string?
+
+fn refusal(kind: Kind, en: string, ja: string) -> Refusal total
+  description "A refusal that names no place of the form, said in English and in Japanese"
+  Refusal { refused: kind, text: en, text_ja: ja, at: none }
+
+fn refusal_at(kind: Kind, en: string, ja: string, at: string) -> Refusal total
+  description "A refusal that names a place of the form (a field by its ASCII name, a cell of a row as `items[1].price`), said in English and in Japanese"
+  Refusal { refused: kind, text: en, text_ja: ja, at: at }
+
+record Moved[F]
+  ticket  : Ticket[F]
+  effects : list[Effect]
+
+# ── what the request says (data its glue gives) ────────────────────────────
+
+enum Once = off | before | last
+
+enum How
+  manager_of
+  head_of
+    team_kind : string
+  nearest
+    position : string
+  team
+    id : string
+  person
+    id : string
+  lookup
+    master  : string
+    field   : string
+    by      : string
+    shown   : string
+    column  : string
+    by_name : string
+  chosen_by
+    field    : string
+    shown    : string
+    previous : bool
+  agent
+    flow      : string
+    otherwise : string
+
+record Way
+  name    : string
+  written : string
+  how     : How
+
+enum AtTop
+  stay
+  skip
+  to
+    way : string
+
+enum WhenEmpty
+  stay
+  skip
+  escalate
+    top : AtTop?
+
+enum Quorum
+  all
+  at_least
+    n : number  range >=0 <=1_000_000
+  percent
+    p : number  range >=0 <=100
+
+# What a stage of the route is: the ways it names (a quorum of one), a rule's output that names its
+# way, a circulation, or a summary a flow makes.
+enum Shape
+  who
+  quorum
+    q : Quorum
+  rule_output
+  circulate
+    way : string
+  note
+    flow : string
+
+# The ways a table of `when late escalate by <table>` sends a late stage of the way `key` to.
+record Send
+  key : string
+  to  : list[string]
+
+enum LateAct
+  expire
+  stay
+  escalate
+    table : bool
+    sends : list[Send]
+
+record LateLine
+  first : LateAct
+  after : LateAct?
+
+record Occ
+  stage : string
+  value : string
+  shape : Shape
+  ways  : list[string]
+  empty : WhenEmpty
+  late  : LateLine?
+
+record Back
+  to_requester : bool
+  times        : number  range >=0 <=1_000_000
+
+record Withdraw
+  until : string?
+
+# A flow the request uses: its name in the JSON, and as the request writes it, which the history names.
+record Flow
+  name  : string
+  shown : string
+
+# A stage by the name the ticket gives it (`decide`) and as the request writes it (`決裁`), which a
+# refusal says.
+record StageName
+  name    : string
+  written : string
+
+# The UTC offset a clock is read in where it is not the request's (DESIGN 7.5): the offset of the
+# calendar the clock counts in. `timer` is the clock (`remind`, `late`, `pause ends`, `resubmit late`)
+# and `stage` the stage it is of, none for the stages the request writes no deadline of their own
+# for, a pause and the requester's turn.
+record ClockOffset
+  timer  : string
+  stage  : string?
+  offset : number  range >=-1_440 <=1_440
+
+# What the machine is given of the request. `comment_required` is the events the request asks a
+# reason with (`comment required for`), by their names in the contract: `reject`, `send_back`.
+record Spec
+  request       : string
+  version       : number  range >=1 <=1_000_000
+  offset        : number  range >=-1_440 <=1_440
+  usable_from   : date?
+  usable_to     : date?
+  self_approval : bool
+  once          : Once
+  pause         : number?  range >=0 <=100_000
+  back          : Back?
+  resubmit      : number?  range >=0 <=100_000
+  withdraw      : Withdraw?
+  retract       : bool
+  order         : list[string]
+  ways          : list[Way]
+  occs          : list[Occ]
+  flows         : list[Flow]
+  named         : list[StageName]
+  offsets       : list[ClockOffset]
+  comment_required : list[string]
+
+# What a ticket does as it ends or is submitted: the `on` lines of the request.
+enum Ending = submitted | approved | sent_back | rejected | withdrawn | expired
+
+enum Action = hold | post | release | launch
+
+record OnLine
+  action   : Action
+  book     : string
+  transfer : string
+  when     : result[bool, Refusal]
+  args     : result[list[Arg], Refusal]
+
+record Ref
+  id        : string
+  round     : number  range >=1 <=1_000_000
+  attempt   : string
+  requester : string
+  made_by   : string?
+
+record Clocks
+  remind : number?  range >=0 <=253_402_300_799
+  due    : number?  range >=0 <=253_402_300_799
+
+# The form of a ticket made again or edited: the form, the stages its route comes to, its values
+# as a flow is given them, the fields the event gave, and the fields that lost their value (made
+# empty, or dropped as the form no longer shows them).
+record Formed[F]
+  form    : F
+  stages  : list[Stage]
+  vals    : list[Arg]
+  named   : list[string]
+  cleared : list[string]
+
+# ── a move in the making ───────────────────────────────────────────────────
+
+record Cx
+  spec : Spec
+  org  : Org
+  now  : number  range >=0 <=253_402_300_799
+
+record Made
+  round : number  range >=1 <=1_000_000
+  what  : What
+
+record Step[F]
+  t    : Ticket[F]
+  fx   : list[Made]
+  vals : list[Arg]
+
+record Rec
+  did          : string
+  stage        : string?
+  by           : string?
+  proxy_of     : string?
+  organization : date?
+  once_with    : string?
+  to           : list[string]
+  note         : string?
+  comment      : string?
+  cleared      : list[string]
+
+# ── days and times ─────────────────────────────────────────────────────────
+
+fn day_number(now: number range >=0 <=253_402_300_799, offset: number range >=-1_440 <=1_440) -> number total
+  description "The day the time is in, counted from 1970-01-01, as the request reads its days in its offset (minutes east of UTC)"
+  let local = now + offset * 60
+  down((local - mod(local, 86_400)) / 86_400, 1)
+
+fn day_at(at: number range >=0 <=253_402_300_799, offset: number range >=-1_440 <=1_440) -> date total
+  description "The day a time is in, as the request reads its days"
+  days.day_of(epoch: 1970-01-01, n: max(min(day_number(now: at, offset: offset), 2_932_896), 0))
+
+fn instant(day: date, minutes: number range >=0 <=1_440, offset: number range >=-1_440 <=1_440) -> number total
+  description "The time of a day: `minutes` after its midnight (1440 is the end of the day) in the offset"
+  (day - 1970-01-01) * 86_400 + minutes * 60 - offset * 60
+
+fn clock_offset(spec: Spec, timer: string, stage: string?) -> number  range >=-1_440 <=1_440 total
+  description "The UTC offset the clock is read in: the offset of the calendar it counts in, the request's where that calendar writes none"
+  match spec.offsets.first(x => x.timer = timer and x.stage = stage)
+    some x => x.offset
+    none =>
+      match spec.offsets.first(x => x.timer = timer and x.stage = none)
+        some x => x.offset
+        none => spec.offset
+
+fn time_text(at: number range >=0 <=253_402_300_799, offset: number range >=-1_440 <=1_440) -> string total
+  description "A time as a refusal says it: its day and its hours and minutes in the offset (`2026-11-20 09:00`)"
+  let local = at + offset * 60
+  let minutes = down((mod(local, 86_400) - mod(local, 60)) / 60, 1)
+  let hours = down((minutes - mod(minutes, 60)) / 60, 1)
+  concat(text(day_at(at: at, offset: offset)), " ", text(hours).pad_start(2, "0"), ":", text(mod(minutes, 60)).pad_start(2, "0"))
+
+fn time_in(x: number) -> number?  range >=0 <=253_402_300_799 total
+  description "A time, when it is one a ticket holds: 1970-01-01 to 9999-12-31"
+  if x >= 0 and x <= 253_402_300_799
+    x
+  else
+    none
+
+fn end_of_day(day: date, offset: number range >=-1_440 <=1_440) -> result[number, Refusal] total
+  description "The end of the day, its 24:00, as a time a ticket holds"
+  match time_in(x: instant(day: day, minutes: 1_440, offset: offset))
+    none => err(refusal(kind: Kind.data, en: concat("the end of ", text(day), " is no time a ticket holds"), ja: concat(text(day), " の終わりは、チケットが持てる時刻ではありません")))
+    some x => ok(x)
+
+fn on_day(org: Org, now: number range >=0 <=253_402_300_799, offset: number range >=-1_440 <=1_440) -> result[date, Refusal] total
+  description "The part of the organization is of the day the event is on"
+  match org.day - 1970-01-01 = day_number(now: now, offset: offset)
+    true => ok(org.day)
+    false => err(refusal(kind: Kind.data, en: concat("the part of the organization is of ", text(org.day), ", and the event is on another day"), ja: concat("組織の部分が ", text(org.day), " のものです。イベントは別の日に起きました")))
+
+fn usable_on(spec: Spec, day: date) -> result[bool, Refusal] total
+  description "The day is one the request can be used on"
+  let early =
+    match spec.usable_from
+      none => false
+      some f => day < f
+  let late =
+    match spec.usable_to
+      none => false
+      some u => day > u
+  match early or late
+    true => err(refusal(kind: Kind.data, en: concat("the request cannot be used on ", text(day)), ja: concat("この申請の種類は ", text(day), " には使えません")))
+    false => ok(true)
+
+fn refusal_of_day(r: result[date, Refusal]) -> Refusal? total
+  match r
+    err e => e
+    ok d => none
+
+fn on_or_before(r: result[date, Refusal], b: date) -> bool total
+  match r
+    err e => false
+    ok d => d <= b
+
+fn open_between(a: date, b: date, most: number range >=0 <=100_000, open_after: (string, date, number) -> result[date, Refusal] total) -> result[number, Refusal] total
+  description "The business days of the pause's calendar after `a`, through `b`: at most `most` of them"
+  let tried = numbers(1, most).map(k => open_after("pause", a, k))
+  match tried.filter_map(r => refusal_of_day(r: r)).first()
+    some e => err(e)
+    none => ok(tried.count(r => on_or_before(r: r, b: b)))
+
+fn moved_time(spec: Spec, at: number range >=0 <=253_402_300_799, held: number, open: (date, number) -> result[date, Refusal] total) -> result[number, Refusal] total
+  description "The time a stage's clocks count from: the time it started, later by the days the business days it was paused for take in the pause's calendar (`open`), counted from the day it started there. Each calendar counts from its own day of it"
+  match held = 0
+    true => ok(at)
+    false =>
+      let begun = day_where(spec: spec, at: at, timer: "pause ends")
+      match open(begun, held)
+        err e => err(e)
+        ok d => ok(at + (d - begun) * 86_400)
+
+fn unmoved_time(at: number, held: number) -> result[number, Refusal] total
+  description "The time a stage's clocks count from, in a request with no pause: the time it started"
+  match held = 0
+    true => ok(at)
+    false => err(refusal(kind: Kind.unread, en: "the request counts no business days for `pause`", ja: "この申請の種類は、`pause` の営業日を数えません"))
+
+fn day_where(spec: Spec, at: number range >=0 <=253_402_300_799, timer: string) -> date total
+  description "The day a time is in where the calendar of a clock counts (`pause ends`, `resubmit late`): each calendar reads its own day of a time, in its offset"
+  day_at(at: at, offset: clock_offset(spec: spec, timer: timer, stage: none))
+
+# ── the organization ───────────────────────────────────────────────────────
+
+fn in_org(org: Org, id: string) -> bool total
+  org.people.any(p => p.id = id)
+
+fn ja_word(s: string) -> string total
+  description "A word a Japanese sentence goes on after: followed by a space where it ends in a character of ASCII"
+  match s.drop(s.count() - 1).code_points().first()
+    none => s
+    some c =>
+      match c <= 127
+        true => concat(s, " ")
+        false => s
+
+fn who_en(org: Org, id: string) -> string total
+  description "A person as a refusal names them in English: their ID and name (`e3101 (Head of Sales Department 1)`), the ID alone where the part of the organization has no name of theirs"
+  match org.people.first(p => p.id = id)
+    none => id
+    some p =>
+      match p.name = "" or p.name = id
+        true => id
+        false => concat(id, " (", p.name, ")")
+
+fn who_ja(org: Org, id: string) -> string total
+  description "The same in Japanese, the Japanese name where there is one (`e3101（営業部長 1）`), as a Japanese sentence goes on after it (`e1201 は`)"
+  let named =
+    match org.people.first(p => p.id = id)
+      none => id
+      some p =>
+        let n =
+          match p.name_ja = ""
+            true => p.name
+            false => p.name_ja
+        match n = "" or n = id
+          true => id
+          false => concat(id, "（", n, "）")
+  ja_word(s: named)
+
+fn stage_written(spec: Spec, name: string) -> string total
+  description "A stage as the request writes it (`決裁`), by the name the ticket gives it (`decide`)"
+  match spec.named.first(x => x.name = name)
+    none => name
+    some x => x.written
+
+fn has_team(org: Org, id: string) -> bool total
+  org.teams.any(t => t.id = id)
+
+fn has_row(org: Org, master: string, key: string) -> bool total
+  description "The master has the row on the day: its rows in effect are what the part of the organization carries"
+  org.rows.any(r => r.master = master and r.key = key)
+
+fn team_of(org: Org, id: string) -> Team? total
+  org.teams.first(t => t.id = id)
+
+fn primary(org: Org, person: string) -> string? total
+  description "The person's primary team"
+  match org.members.first(m => m.person = person and m.primary)
+    none => none
+    some m => m.team
+
+record Climb
+  at    : string?
+  teams : list[Team]
+
+fn climb(org: Org, c: Climb) -> Climb total
+  match c.at
+    none => c
+    some id =>
+      match team_of(org: org, id: id)
+        none => Climb { at: none, teams: c.teams }
+        some t => Climb { at: t.parent, teams: c.teams.append(t) }
+
+fn chain(org: Org, team: string?) -> list[Team] total
+  description "The team and the teams above it, nearest first, at most 30 of them"
+  reduce(numbers(1, 30), Climb { at: team, teams: [] }, (c, i) => climb(org: org, c: c)).teams
+
+fn kind_above(org: Org, person: string, kind: string) -> string? total
+  description "The team of the kind that the person's primary team is or is below: `requester.department`"
+  match chain(org: org, team: primary(org: org, person: person)).first(t => t.kind = kind)
+    none => none
+    some t => t.id
+
+fn member_of(org: Org, person: string, team: string) -> bool total
+  description "The person is a member of the team"
+  org.members.any(m => m.person = person and m.team = team)
+
+fn under(org: Org, person: string, team: string) -> bool total
+  description "The person's primary team is the team, or one below it"
+  chain(org: org, team: primary(org: org, person: person)).any(t => t.id = team)
+
+fn rank(org: Org, position: string) -> number? total
+  description "The place of a position in the organization's positions"
+  match org.positions.indexed().first(x => x.item = position)
+    none => none
+    some x => x.index
+
+fn position_of(org: Org, person: string) -> number? total
+  description "The place of the person's position in their primary team"
+  match org.members.first(m => m.person = person and m.primary)
+    none => none
+    some m => rank(org: org, position: m.position)
+
+record Who
+  id        : string
+  requester : string
+  made_by   : string?
+
+fn who_of[F](t: Ticket[F]) -> Who total
+  description "Who the ticket is for: its ID, its requester and the one who made it for them"
+  Who { id: t.id, requester: t.requester, made_by: t.made_by }
+
+fn left_out(spec: Spec, who: Who, id: string) -> bool total
+  description "The person is left out of every way: the requester or the one who made the request, with self approval not allowed"
+  not spec.self_approval and (who.requester = id or who.made_by = id)
+
+fn not_in(id: string, org: Org) -> Refusal total
+  refusal(kind: Kind.person, en: concat(id, " is not in the organization from ", text(org.version)), ja: concat(id, " は、", text(org.version), " からの組織にいません"))
+
+fn is_proxy(org: Org, by: string, person: string) -> bool total
+  description "The one is a proxy who may answer for the person that day"
+  org.proxies.any(x => x.kind = ProxyKind.approve and x.person = person and x.proxy = by)
+
+# ── the form ───────────────────────────────────────────────────────────────
+
+fn present[T](v: T?) -> bool total
+  description "Whether a value is filled in"
+  match v
+    none => false
+    some x => true
+
+fn kept[T](v: T?, keep: bool) -> T? total
+  description "The value where it is kept, none where it is dropped"
+  match keep
+    true => v
+    false => none
+
+fn chars_long(n: number) -> string total
+  match n = 1
+    true => "1 character long"
+    false => concat(text(n), " characters long")
+
+fn commas(t: string) -> string total
+  description "The digits of a whole number in threes from the right with `,` between them, where there are more than three"
+  let digits = t.replace("-", "")
+  if digits.count() <= 3 or t.contains(".")
+    t
+  else
+    let p = digits.pad_start(21, " ")
+    let g = concat(p.take(3), ",", p.slice(3, 6), ",", p.slice(6, 9), ",", p.slice(9, 12), ",", p.slice(12, 15), ",", p.slice(15, 18), ",", p.drop(18))
+    concat(t.take(t.count() - digits.count()), g.replace(",", " ").trim_start().replace(" ", ","))
+
+fn rows_many(n: number) -> string total
+  match n = 1
+    true => "1 row"
+    false => concat(text(n), " rows")
+
+# The refusals are written as records here, not through `refusal_at`: a record a function answers,
+# made an optional one, is copied in the Rust kaname writes (`Some((&r).clone())`), which clippy's
+# `needless_borrow` refuses in the package's crate.
+fn untaken(has: bool, shown: bool, asked: bool, name: string, at: string, missing: string, missing_ja: string) -> Refusal? total
+  description "Why the form does not take a field shown or asked for on a condition: a value of a field it does not show, or none of a field it asks for"
+  match shown
+    false =>
+      match has
+        true => Refusal { refused: Kind.form, text: concat("`", name, "` is not shown for this request (its `shown when` does not hold), and takes no value"), text_ja: concat("`", name, "` は、この申請では見せないフィールドです（`shown when` が成り立たない）。値は送りません"), at: at }
+        false => none
+    true =>
+      match has or not asked
+        true => none
+        false => Refusal { refused: Kind.form, text: missing, text_ja: missing_ja, at: at }
+
+fn pick(vals: list[Arg], field: string) -> string? total
+  description "The value of a field of the form that names a person or a row, when it is filled in"
+  match vals.first(a => a.name = field)
+    none => none
+    some a =>
+      match a.value
+        str x =>
+          match x.v = ""
+            true => none
+            false => x.v
+        else => none
+
+fn arg_str(name: string, v: string) -> Arg total
+  Arg { name: name, value: Val.str { v: v } }
+
+fn arg_num(name: string, v: number) -> Arg total
+  Arg { name: name, value: Val.num { v: v } }
+
+fn arg_truth(name: string, v: bool) -> Arg total
+  Arg { name: name, value: Val.truth { v: v } }
+
+fn arg_rows(name: string, v: list[list[Arg]]) -> Arg total
+  Arg { name: name, value: Val.rows { v: v } }
+
+fn arg_maybe_str(name: string, v: string?) -> Arg total
+  description "A text, or nothing where it is not filled in"
+  match v
+    none => Arg { name: name, value: Val.nothing }
+    some x => arg_str(name: name, v: x)
+
+fn arg_maybe_num(name: string, v: number?) -> Arg total
+  description "A number, or nothing where it is not filled in"
+  match v
+    none => Arg { name: name, value: Val.nothing }
+    some x => arg_num(name: name, v: x)
+
+fn arg_maybe_truth(name: string, v: bool?) -> Arg total
+  description "A truth, or nothing where it is not filled in"
+  match v
+    none => Arg { name: name, value: Val.nothing }
+    some x => arg_truth(name: name, v: x)
+
+fn at_position(org: Org, person: string, position: string, higher: bool) -> bool total
+  description "The person holds the position in their primary team, or, with `higher`, one above it: `submitted by position manager or higher`"
+  match rank(org: org, position: position)
+    none => false
+    some r =>
+      match position_of(org: org, person: person)
+        none => false
+        some p => p = r or (higher and p > r)
+
+fn flow_args(who: Who, vals: list[Arg]) -> list[Arg] total
+  description "What a flow the ticket asks is given: the ticket's ID, and the values of its form"
+  [arg_str(name: "request_id", v: who.id)].concat(vals)
+
+# ── who answers ────────────────────────────────────────────────────────────
+
+enum Why
+  person_not_in
+    id : string
+  team_not_in
+    id : string
+  head_empty
+    team : string
+  only_requester
+    id : string
+  no_team_of_kind
+    team_kind : string
+  none_above
+  no_members
+    team : string
+
+enum Up
+  at
+    team : string
+  above
+    team : string
+  cannot
+
+enum Solved
+  people
+    ps   : list[string]
+    team : string?
+  nobody
+    why    : string
+    up     : Up
+    cannot : bool
+
+fn why_note(why: Why) -> string total
+  match why
+    person_not_in w => concat(w.id, " is not in the organization")
+    team_not_in w => concat("the team ", w.id, " is not in the organization")
+    head_empty w => concat("the head of ", w.team, " is empty")
+    only_requester => "it comes to the requester alone"
+    no_team_of_kind w => concat("no team of the kind ", w.team_kind, " is above the requester")
+    none_above => "no head is above the requester"
+    no_members w => concat(w.team, " has no member")
+
+fn nobody(why: Why, up: Up) -> Solved total
+  let cannot =
+    match up
+      cannot =>
+        match why
+          person_not_in, team_not_in => true
+          else => false
+      else => false
+  Solved.nobody { why: why_note(why: why), up: up, cannot: cannot }
+
+fn cannot(note: string) -> Solved total
+  Solved.nobody { why: note, up: Up.cannot, cannot: true }
+
+fn head_for(spec: Spec, who: Who, team: Team) -> string? total
+  description "The head of the team, when there is one and it is neither the requester nor left out"
+  match team.head
+    none => none
+    some h =>
+      match h = who.requester or left_out(spec: spec, who: who, id: h)
+        true => none
+        false => h
+
+fn head_kept(spec: Spec, who: Who, team: Team) -> string? total
+  description "The head of the team, when there is one and it is not left out"
+  match team.head
+    none => none
+    some h =>
+      match left_out(spec: spec, who: who, id: h)
+        true => none
+        false => h
+
+fn manager_of(spec: Spec, who: Who, org: Org) -> Solved total
+  match primary(org: org, person: who.requester)
+    none => nobody(why: Why.none_above, up: Up.cannot)
+    some p =>
+      match chain(org: org, team: p).filter_map(x => head_for(spec: spec, who: who, team: x)).first()
+        none => nobody(why: Why.none_above, up: Up.cannot)
+        some h => Solved.people { ps: [h], team: none }
+
+fn head_of_kind(spec: Spec, who: Who, org: Org, kind: string) -> Solved total
+  match primary(org: org, person: who.requester)
+    none => nobody(why: Why.none_above, up: Up.cannot)
+    some p =>
+      match chain(org: org, team: p).first(x => x.kind = kind)
+        none => nobody(why: Why.no_team_of_kind { team_kind: kind }, up: Up.at { team: p })
+        some tm =>
+          match tm.head
+            none => nobody(why: Why.head_empty { team: tm.id }, up: Up.above { team: tm.id })
+            some h =>
+              match left_out(spec: spec, who: who, id: h)
+                true => nobody(why: Why.only_requester { id: h }, up: Up.above { team: tm.id })
+                false => Solved.people { ps: [h], team: none }
+
+fn senior(spec: Spec, who: Who, org: Org, team: Team, want: number) -> string? total
+  description "The head of the team, when they hold the position or a higher one there, and are neither the requester nor left out"
+  match head_for(spec: spec, who: who, team: team)
+    none => none
+    some h =>
+      match org.members.first(m => m.person = h and m.team = team.id)
+        none => none
+        some m =>
+          match rank(org: org, position: m.position)
+            none => none
+            some r =>
+              match r >= want
+                true => h
+                false => none
+
+fn nearest_way(spec: Spec, who: Who, org: Org, position: string, written: string) -> Solved total
+  match primary(org: org, person: who.requester)
+    none => nobody(why: Why.none_above, up: Up.cannot)
+    some p =>
+      match rank(org: org, position: position)
+        none => cannot(note: concat("the organization does not decide the way to choose ", written))
+        some want =>
+          match chain(org: org, team: p).filter_map(x => senior(spec: spec, who: who, org: org, team: x, want: want)).first()
+            none => nobody(why: Why.none_above, up: Up.cannot)
+            some h => Solved.people { ps: [h], team: none }
+
+fn team_way(spec: Spec, who: Who, org: Org, id: string) -> Solved total
+  match team_of(org: org, id: id)
+    none => nobody(why: Why.team_not_in { id: id }, up: Up.cannot)
+    some tm =>
+      let all = org.members.filter(m => m.team = id).map(m => m.person)
+      let people = all.filter(p => not left_out(spec: spec, who: who, id: p))
+      match all.first()
+        none => nobody(why: Why.no_members { team: id }, up: Up.above { team: id })
+        some a =>
+          match people.count() = 0
+            true => nobody(why: Why.only_requester { id: a }, up: Up.above { team: id })
+            false => Solved.people { ps: people, team: id }
+
+fn person_way(spec: Spec, who: Who, org: Org, id: string) -> Solved total
+  match in_org(org: org, id: id)
+    false => nobody(why: Why.person_not_in { id: id }, up: Up.cannot)
+    true =>
+      match left_out(spec: spec, who: who, id: id)
+        false => Solved.people { ps: [id], team: none }
+        true =>
+          match primary(org: org, person: id)
+            none => nobody(why: Why.only_requester { id: id }, up: Up.cannot)
+            some p => nobody(why: Why.only_requester { id: id }, up: Up.at { team: p })
+
+fn lookup_way(spec: Spec, who: Who, vals: list[Arg], org: Org, master: string, field: string, by: string, shown: string, column: string, by_name: string) -> Solved total
+  description "The person in the field of the row of the master that a field of the form chose, on the day"
+  match pick(vals: vals, field: by)
+    none => cannot(note: concat(by_name, " is empty, and no row of ", shown, " is looked up"))
+    some key =>
+      match org.rows.first(r => r.master = master and r.key = key)
+        none => cannot(note: concat(shown, " has no row ", key, " in effect on ", text(org.day)))
+        some row =>
+          match row.values.first(c => c.name = field and c.value != "")
+            none => cannot(note: concat("the row ", key, " of ", shown, " has no ", column))
+            some c => person_way(spec: spec, who: who, org: org, id: c.value)
+
+fn solve_way(spec: Spec, who: Who, vals: list[Arg], org: Org, w: Way) -> Solved total
+  match w.how
+    manager_of => manager_of(spec: spec, who: who, org: org)
+    head_of x => head_of_kind(spec: spec, who: who, org: org, kind: x.team_kind)
+    nearest x => nearest_way(spec: spec, who: who, org: org, position: x.position, written: w.written)
+    team x => team_way(spec: spec, who: who, org: org, id: x.id)
+    person x => person_way(spec: spec, who: who, org: org, id: x.id)
+    lookup x => lookup_way(spec: spec, who: who, vals: vals, org: org, master: x.master, field: x.field, by: x.by, shown: x.shown, column: x.column, by_name: x.by_name)
+    chosen_by x =>
+      match pick(vals: vals, field: x.field)
+        none => cannot(note: concat("nobody is chosen in ", x.shown))
+        some id => person_way(spec: spec, who: who, org: org, id: id)
+    agent x => cannot(note: concat("the organization does not decide the way to choose ", w.written))
+
+fn solve(spec: Spec, who: Who, vals: list[Arg], org: Org, way: string) -> Solved total
+  description "The way to choose, solved for the ticket in the part of the organization: the way after `else` for an agent's"
+  match spec.ways.first(w => w.name = way)
+    none => cannot(note: concat("the way to choose ", way, " is not declared"))
+    some w =>
+      match w.how
+        agent a =>
+          match spec.ways.first(x => x.name = a.otherwise)
+            none => cannot(note: concat("the way to choose ", a.otherwise, " is not declared"))
+            some o => solve_way(spec: spec, who: who, vals: vals, org: org, w: o)
+        else => solve_way(spec: spec, who: who, vals: vals, org: org, w: w)
+
+fn up_from(spec: Spec, who: Who, org: Org, origin: Up) -> string? total
+  description "Where a stage with nobody goes up to: the first head above who is not left out"
+  match origin
+    cannot => none
+    at a => chain(org: org, team: a.team).filter_map(x => head_kept(spec: spec, who: who, team: x)).first()
+    above a => chain(org: org, team: a.team).drop(1).filter_map(x => head_kept(spec: spec, who: who, team: x)).first()
+
+fn written(spec: Spec, way: string) -> string total
+  match spec.ways.first(w => w.name = way)
+    none => way
+    some w => w.written
+
+fn flow_shown(spec: Spec, flow: string) -> string total
+  description "A flow as the request writes it, which the history names"
+  match spec.flows.first(f => f.name = flow)
+    none => flow
+    some f => f.shown
+
+fn agent_flow(spec: Spec, way: string) -> string? total
+  description "The flow of an agent's way"
+  match spec.ways.first(w => w.name = way)
+    none => none
+    some w =>
+      match w.how
+        agent a => a.flow
+        else => none
+
+fn is_chosen(spec: Spec, way: string) -> bool total
+  description "Whether the way is a person chosen in a field of the form"
+  match spec.ways.first(w => w.name = way)
+    none => false
+    some w =>
+      match w.how
+        chosen_by c => true
+        else => false
+
+record Chosen
+  field : string
+  shown : string
+
+fn chosen_by_previous(spec: Spec, way: string) -> Chosen? total
+  description "The field the approver before chooses the person of the way in"
+  match spec.ways.first(w => w.name = way)
+    none => none
+    some w =>
+      match w.how
+        chosen_by c =>
+          match c.previous
+            true => Chosen { field: c.field, shown: c.shown }
+            false => none
+        else => none
+
+# ── what is made ───────────────────────────────────────────────────────────
+
+fn rank_of(what: What) -> number total
+  match what
+    history => 0
+    cancel_timer => 1
+    post => 2
+    release => 3
+    hold => 4
+    launch => 5
+    ask_agent, ask_note => 6
+    notify => 7
+    set_timer => 8
+
+fn put[F](s: Step[F], what: What) -> Step[F] total
+  Step { ..s, fx: s.fx.append(Made { round: s.t.round, what: what }) }
+
+fn put_all[F](s: Step[F], made: list[What]) -> Step[F] total
+  Step { ..s, fx: s.fx.concat(made.map(w => Made { round: s.t.round, what: w })) }
+
+fn rec_of(did: string) -> Rec total
+  Rec { did: did, stage: none, by: none, proxy_of: none, organization: none, once_with: none, to: [], note: none, comment: none, cleared: [] }
+
+fn hist(r: Rec) -> What total
+  What.history { did: r.did, stage: r.stage, by: r.by, proxy_of: r.proxy_of, organization: r.organization, once_with: r.once_with, to: r.to, note: r.note, comment: r.comment, cleared: r.cleared }
+
+fn note_down[F](s: Step[F], r: Rec) -> Step[F] total
+  put(s: s, what: hist(r: r))
+
+fn is_history(w: What) -> bool total
+  match w
+    history => true
+    else => false
+
+fn with_comment(w: What, c: string) -> What total
+  match w
+    history h => What.history { did: h.did, stage: h.stage, by: h.by, proxy_of: h.proxy_of, organization: h.organization, once_with: h.once_with, to: h.to, note: h.note, comment: c, cleared: h.cleared }
+    else => w
+
+fn commented[F](s: Step[F], c: string?) -> Step[F] total
+  description "What a person wrote with what they did, on the first line of the history the move made: the line of what they did"
+  match c
+    none => s
+    some x =>
+      match s.fx.indexed().first(m => is_history(w: m.item.what))
+        none => s
+        some h => Step { ..s, fx: s.fx.indexed().map(m => if m.index = h.index then Made { ..m.item, what: with_comment(w: m.item.what, c: x) } else m.item) }
+
+fn tell[F](s: Step[F], to: list[string], notice: Notice, stage: string?) -> Step[F] total
+  description "A notice to the ones named: none to nobody"
+  match to.count() = 0
+    true => s
+    false => put(s: s, what: What.notify { to: to, notice: notice, stage: stage })
+
+fn keyed[F](t: Ticket[F], x: indexed[Made]) -> Effect total
+  Effect { key: Key { ticket: t.id, round: x.item.round, serial: min(t.serial + max(min(x.index, 1_000_000), 0) + 1, 1_000_000_000) }, what: x.item.what }
+
+fn done[F](s: Step[F]) -> Moved[F] total
+  description "The list in its order, keyed from the ticket's serial on; the ticket's serial moves past them, and its revision is worked out of it as it is now"
+  let effects = s.fx.sort_by(m => rank_of(what: m.what)).indexed().map(x => keyed(t: s.t, x: x))
+  let serial = min(s.t.serial + min(effects.count(), 1_000_000), 1_000_000_000)
+  Moved { ticket: Ticket { ..s.t, serial: serial, revision: revision_of(t: s.t) }, effects: effects }
+
+# ── the stages ─────────────────────────────────────────────────────────────
+
+fn new_stage(name: string, value: string) -> Stage total
+  description "A stage of the route as the ticket comes to it: by its name and the value of its output in the lowered route"
+  Stage { name: name, value: value, phase: Phase.ahead, started: none, held: 0, remind: none, reminded: false, due: none, up: 0, org: none, again: false, parts: [] }
+
+fn reset(st: Stage) -> Stage total
+  description "The stage as it is before the ticket comes to it"
+  new_stage(name: st.name, value: st.value)
+
+fn with_stage[F](t: Ticket[F], i: number range >=0 <=9_223_372_036_854_775_806, st: Stage) -> Ticket[F] total
+  Ticket { ..t, stages: t.stages.take(i).concat([st], t.stages.drop(i + 1)) }
+
+fn replace_part(ps: list[Part], k: number range >=0 <=9_223_372_036_854_775_806, p: Part) -> list[Part] total
+  description "The parts with the one at `k` as it is now"
+  ps.take(k).concat([p], ps.drop(k + 1))
+
+fn set_phase[F](s: Step[F], i: number range >=0 <=9_223_372_036_854_775_806, phase: Phase) -> Step[F] total
+  match s.t.stages.at(i)
+    none => s
+    some st => Step { ..s, t: with_stage(t: s.t, i: i, st: Stage { ..st, phase: phase }) }
+
+fn name_at(stages: list[Stage], k: number) -> string total
+  match stages.at(k)
+    none => ""
+    some st => st.name
+
+fn at_of[F](t: Ticket[F]) -> number? total
+  description "The stage the ticket is at: the last of its name"
+  match t.stage
+    none => none
+    some name =>
+      match t.stages.indexed().last(x => x.item.name = name)
+        none => none
+        some x => x.index
+
+fn revision_of[F](t: Ticket[F]) -> Revision total
+  description "The ticket's revision, worked out from it: the one place it is made"
+  let stage =
+    match at_of(t: t)
+      none => none
+      some i => max(min(i, 1_000_000), 0)
+  Revision { round: t.round, stage: stage, edits: t.edits }
+
+fn occ_of(spec: Spec, st: Stage) -> result[Occ, Refusal] total
+  description "The stage of the route a ticket's stage is: by its name and the value of its output; a rule's output's value names its way"
+  match spec.occs.first(o => o.stage = st.name and o.value = st.value)
+    some o => ok(o)
+    none =>
+      match spec.occs.first(o => o.stage = st.name and is_rule_output(o: o))
+        some o => ok(Occ { ..o, ways: [st.value] })
+        none => err(refusal(kind: Kind.unread, en: concat("the route has no stage `", st.name, "` of `", st.value, "`"), ja: concat("ステップ `", st.name, "`（`", st.value, "`）が経路にありません")))
+
+fn is_rule_output(o: Occ) -> bool total
+  match o.shape
+    rule_output => true
+    else => false
+
+fn quorum_of(o: Occ) -> Quorum? total
+  match o.shape
+    quorum x =>
+      let q = x.q
+      q
+    else => none
+
+fn needed(q: Quorum?, n: number range >=0 <=1_000_000) -> number total
+  description "How many approvals a part of `n` people needs"
+  match q
+    none => 1
+    some x =>
+      match x
+        all => n
+        at_least a => a.n
+        percent c => up(n * c.p / 100, 1)
+
+fn sole_of(ps: list[string], needed: number, alone: bool) -> Sole total
+  description "What a part comes to as `same approver approves once` reads it: one person alone, or others"
+  match ps.first()
+    none => Sole.other
+    some p =>
+      match alone and ps.count() = 1 and needed = 1
+        true => Sole.by { person: p }
+        false => Sole.other
+
+fn part_done(p: Part) -> bool total
+  match p.state
+    passed, skipped, checked, once, deferred => true
+    else => false
+
+fn passed_phase(parts: list[Part]) -> Phase total
+  match parts.any(p => p.state = PartState.deferred)
+    true => Phase.deferred
+    false =>
+      match parts.any(p => p.state = PartState.once)
+        true => Phase.once
+        false => Phase.skipped
+
+record Wait
+  person : string
+  to     : string
+
+fn waits_for(p: Part) -> Wait? total
+  description "The one person a part waits for a later stage's approval of, and that stage"
+  match p.state = PartState.deferred
+    false => none
+    true =>
+      match p.sole
+        by b =>
+          match p.of
+            none => none
+            some to => Wait { person: b.person, to: to }
+        else => none
+
+fn alone_by(p: Part) -> string? total
+  description "The one person who alone answers a part that waits for them"
+  match p.state = PartState.active
+    false => none
+    true =>
+      match p.sole
+        by b => b.person
+        else => none
+
+record Place
+  stage : number
+  part  : number
+
+fn live(stages: list[Stage], a: number, name: string) -> bool total
+  description "The stage is the last of its name on the ticket"
+  not stages.drop(max(min(a, 1_000_000), 0) + 1).any(s => s.name = name)
+
+fn places_of(x: indexed[Stage]) -> list[Place] total
+  x.item.parts.indexed().filter(p => present(v: waits_for(p: p.item))).map(p => Place { stage: x.index, part: p.index })
+
+fn waiting(stages: list[Stage], i: number) -> list[Place] total
+  description "The parts that wait for a later stage's approval, among the stages before `i` that are the last of their names"
+  stages.indexed().filter(x => x.index < i and live(stages: stages, a: x.index, name: x.item.name)).flat_map(x => places_of(x: x))
+
+record Change
+  stage : number
+  part  : number
+  p     : Part
+  made  : list[What]
+
+fn part_now(p: indexed[Part], cs: list[Change]) -> Part total
+  match cs.first(c => c.part = p.index)
+    none => p.item
+    some c => c.p
+
+fn changed(x: indexed[Stage], cs: list[Change]) -> Stage total
+  description "A stage with the parts of it the changes name as they are now"
+  let mine = cs.filter(c => c.stage = x.index)
+  match mine.count() = 0
+    true => x.item
+    false => Stage { ..x.item, parts: x.item.parts.indexed().map(p => part_now(p: p, cs: mine)) }
+
+record Parted
+  part : Part
+  made : list[What]
+
+fn at_stage(did: string, st: Stage, org: Org, to: list[string], note: string) -> What total
+  hist(r: Rec { ..rec_of(did: did), stage: st.name, organization: org.version, to: to, note: note })
+
+fn part_of(spec: Spec, who: Who, vals: list[Arg], o: Occ, st: Stage, way: string, q: Quorum?, org: Org, ask: bool) -> Parted total
+  description "One part of a stage as it starts: who answers the way, or what the stage's `when empty` does with nobody, with its line of the history; an agent's way asks its flow when `ask`"
+  let flow = agent_flow(spec: spec, way: way)
+  let alone = not present(v: flow) and not is_chosen(spec: spec, way: way)
+  let p = Part { way: way, key: way, approvers: [], team: none, needed: 1, answers: [], state: PartState.active, of: none, sole: Sole.other }
+  let asked =
+    match flow
+      none => none
+      some f =>
+        match ask
+          true => Parted { part: Part { ..p, state: PartState.agent, of: f }, made: [What.ask_agent { flow: f, stage: st.name, args: flow_args(who: who, vals: vals) }, hist(r: Rec { ..rec_of(did: "agent asked"), stage: st.name, organization: org.version, note: flow_shown(spec: spec, flow: f) })] }
+          false => none
+  match asked
+    some x => x
+    none => solved_part(spec: spec, who: who, vals: vals, o: o, st: st, way: way, q: q, org: org, p: p, alone: alone)
+
+fn solved_part(spec: Spec, who: Who, vals: list[Arg], o: Occ, st: Stage, way: string, q: Quorum?, org: Org, p: Part, alone: bool) -> Parted total
+  match solve(spec: spec, who: who, vals: vals, org: org, way: way)
+    people x =>
+      let n = needed(q: q, n: max(min(x.ps.count(), 1_000_000), 0))
+      let q2 = Part { ..p, approvers: x.ps, team: x.team, needed: n, sole: sole_of(ps: x.ps, needed: n, alone: alone) }
+      match x.ps.count() < n
+        true => Parted { part: Part { ..q2, state: PartState.stopped }, made: [at_stage(did: "stopped", st: st, org: org, to: x.ps, note: concat(text(x.ps.count()), " of ", written(spec: spec, way: way), " cannot give the ", text(n), " approvals the stage needs"))] }
+        false => Parted { part: q2, made: [] }
+    nobody n =>
+      match in_org(org: org, id: who.requester)
+        false => Parted { part: Part { ..p, state: PartState.stopped }, made: [at_stage(did: "stopped", st: st, org: org, to: [], note: concat(n.why, "; the requester ", who.requester, " is not in the organization from ", text(org.version)))] }
+        true => empty_part(spec: spec, who: who, vals: vals, o: o, st: st, p: p, why: n.why, origin: n.up, cannot: n.cannot, org: org, alone: alone)
+
+fn empty_part(spec: Spec, who: Who, vals: list[Arg], o: Occ, st: Stage, p: Part, why: string, origin: Up, cannot: bool, org: Org, alone: bool) -> Parted total
+  match o.empty
+    stay => Parted { part: Part { ..p, state: PartState.stopped }, made: [at_stage(did: "stopped", st: st, org: org, to: [], note: why)] }
+    skip => Parted { part: Part { ..p, state: PartState.skipped }, made: [at_stage(did: "skipped", st: st, org: org, to: [], note: why)] }
+    escalate e =>
+      match cannot
+        true => Parted { part: Part { ..p, state: PartState.stopped }, made: [at_stage(did: "stopped", st: st, org: org, to: [], note: concat(why, "; it cannot go up"))] }
+        false =>
+          match up_from(spec: spec, who: who, org: org, origin: origin)
+            some h => Parted { part: Part { ..p, approvers: [h], sole: sole_of(ps: [h], needed: 1, alone: alone) }, made: [at_stage(did: "went up", st: st, org: org, to: [h], note: why)] }
+            none => at_top(spec: spec, who: who, vals: vals, st: st, p: p, why: why, top: e.top, org: org, alone: alone)
+
+fn at_top(spec: Spec, who: Who, vals: list[Arg], st: Stage, p: Part, why: string, top: AtTop?, org: Org, alone: bool) -> Parted total
+  let stopped = Parted { part: Part { ..p, state: PartState.stopped }, made: [at_stage(did: "stopped", st: st, org: org, to: [], note: concat(why, "; nobody is above to go up to"))] }
+  match top
+    none => stopped
+    some a =>
+      match a
+        stay => stopped
+        skip => Parted { part: Part { ..p, state: PartState.skipped }, made: [at_stage(did: "skipped", st: st, org: org, to: [], note: concat(why, "; nobody is above to go up to"))] }
+        to w =>
+          let name = written(spec: spec, way: w.way)
+          match solve(spec: spec, who: who, vals: vals, org: org, way: w.way)
+            people x => Parted { part: Part { ..p, key: w.way, approvers: x.ps, team: x.team, sole: sole_of(ps: x.ps, needed: 1, alone: alone) }, made: [at_stage(did: "went to", st: st, org: org, to: x.ps, note: concat(why, "; nobody is above to go up to: ", name))] }
+            nobody n => Parted { part: Part { ..p, state: PartState.stopped }, made: [at_stage(did: "stopped", st: st, org: org, to: [], note: concat(why, "; nobody is above to go up to, and ", name, " has nobody: ", n.why))] }
+
+fn waited(st: Stage, org: Org) -> list[string] total
+  description "Who a stage waits for: its approvers yet to answer, and the proxies of theirs in effect that day"
+  let own = st.parts.filter(p => p.state = PartState.active).flat_map(p => p.approvers.filter(a => not p.answers.any(x => x.seat = a))).distinct()
+  let proxies = own.flat_map(a => org.proxies.filter(x => x.kind = ProxyKind.approve and x.person = a).map(x => x.proxy))
+  own.concat(proxies).distinct()
+
+fn theirs(who: Who) -> list[string] total
+  match who.made_by
+    none => [who.requester]
+    some b => [who.requester, b]
+
+# ── `same approver approves once` ──────────────────────────────────────────
+
+enum Out
+  passing
+  by
+    person : string
+  other
+
+enum Look
+  passed_over
+  other
+  parts
+    outs : list[Out]
+    once : bool
+
+fn out_of(p: Part) -> Out total
+  match p.state = PartState.skipped
+    true => Out.passing
+    false =>
+      match p.sole
+        passing => Out.passing
+        by b => Out.by { person: b.person }
+        other => Out.other
+
+fn look_of(st: Stage) -> Look total
+  description "A stage before, as `same approver approves once` reads it: what it came to on the ticket"
+  match st.phase
+    circulated, skipped, ahead => Look.passed_over
+    noted, active, deferred => Look.other
+    answered => Look.parts { outs: st.parts.map(p => out_of(p: p)), once: false }
+    once => Look.parts { outs: st.parts.map(p => out_of(p: p)), once: true }
+
+fn is_passing(o: Out) -> bool total
+  match o
+    passing => true
+    else => false
+
+fn is_by(o: Out, x: string) -> bool total
+  match o
+    by b => b.person = x
+    else => false
+
+record Scan
+  found : number?
+  done  : bool
+
+fn scan_step(looks: list[Look], s: Scan, k: number, x: string) -> Scan total
+  match s.done
+    true => s
+    false =>
+      match looks.at(k)
+        none => Scan { found: none, done: true }
+        some l =>
+          match l
+            passed_over => s
+            other => Scan { found: none, done: true }
+            parts p =>
+              match p.outs.all(o => is_passing(o: o))
+                true => s
+                false =>
+                  match p.outs.any(o => not is_passing(o: o) and not is_by(o: o, x: x))
+                    true => Scan { found: none, done: true }
+                    false => Scan { found: k, done: true }
+
+fn before_on(looks: list[Look], ib: number, x: string) -> number? total
+  description "The stage before `ib` whose approval does a part `x` alone answers: the first one back that anyone answers, when only `x` answers it"
+  let n = max(min(ib, 1_000_000), 0)
+  reduce(numbers(1, n), Scan { found: none, done: false }, (s, j) => scan_step(looks: looks, s: s, k: n - j, x: x)).found
+
+fn origin_step(looks: list[Look], k: number, x: string) -> number total
+  match looks.at(k)
+    none => k
+    some l =>
+      match l
+        parts p =>
+          match p.once
+            true =>
+              match before_on(looks: looks, ib: k, x: x)
+                none => k
+                some m => m
+            false => k
+        else => k
+
+fn origin_on(looks: list[Look], k: number, x: string) -> number total
+  description "The stage `x` approved that `same approver approves once` does the stage `k` with"
+  reduce(numbers(1, max(min(k, 1_000_000), 0)), k, (acc, j) => origin_step(looks: looks, k: acc, x: x))
+
+fn alone_at(cx: Cx, who: Who, stages: list[Stage], vals: list[Arg], k: number) -> list[string] total
+  description "The persons who alone answer a part of the stage `k`, were it to start now"
+  match stages.at(k)
+    none => []
+    some st =>
+      match occ_of(spec: cx.spec, st: st)
+        err e => []
+        ok o => o.ways.map(way => part_of(spec: cx.spec, who: who, vals: vals, o: o, st: st, way: way, q: quorum_of(o: o), org: cx.org, ask: true).part).filter_map(p => alone_by(p: p)).distinct()
+
+fn last_of(cx: Cx, who: Who, stages: list[Stage], vals: list[Arg], first: number, x: string) -> number? total
+  description "The last stage at or after `first` that `x` alone answers a part of, as the stages would start now"
+  match stages.indexed().last(y => y.index >= first and alone_at(cx: cx, who: who, stages: stages, vals: vals, k: y.index).contains(x))
+    none => none
+    some y => y.index
+
+record Parts[F]
+  s     : Step[F]
+  parts : list[Part]
+
+fn done_before(cx: Cx, stages: list[Stage], looks: list[Look], i: number, st: Stage, p: Part) -> Parted total
+  match alone_by(p: p)
+    none => Parted { part: p, made: [] }
+    some x =>
+      match before_on(looks: looks, ib: i, x: x)
+        none => Parted { part: p, made: [] }
+        some k =>
+          let at = origin_on(looks: looks, k: k, x: x)
+          let origin = name_at(stages: stages, k: at)
+          let given =
+            match stages.at(at)
+              none => none
+              some so => so.parts.flat_map(q => q.answers).first(a => a.yes and a.seat = x)
+          let by =
+            match given
+              none => x
+              some a => a.by
+          let proxy =
+            match by = x
+              true => none
+              false => x
+          Parted { part: Part { ..p, state: PartState.once, of: origin }, made: [hist(r: Rec { ..rec_of(did: "approved"), stage: st.name, by: by, proxy_of: proxy, organization: cx.org.version, once_with: origin })] }
+
+fn once_with_before[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, st: Stage, parts: list[Part]) -> Parts[F] total
+  description "`same approver approves once`: a part one person alone answers is done with the approval of the stage before it that they alone approved"
+  match cx.spec.once = Once.before and not st.again
+    false => Parts { s: s, parts: parts }
+    true =>
+      let looks = s.t.stages.take(i).map(x => look_of(st: x))
+      let made = parts.map(p => done_before(cx: cx, stages: s.t.stages, looks: looks, i: i, st: st, p: p))
+      Parts { s: put_all(s: s, made: made.flat_map(x => x.made)), parts: made.map(x => x.part) }
+
+fn defer_own(cx: Cx, who: Who, stages: list[Stage], vals: list[Arg], i: number range >=0 <=1_000_000, st: Stage, p: Part) -> Parted total
+  match alone_by(p: p)
+    none => Parted { part: p, made: [] }
+    some x =>
+      match last_of(cx: cx, who: who, stages: stages, vals: vals, first: i + 1, x: x)
+        none => Parted { part: p, made: [] }
+        some k =>
+          let to = name_at(stages: stages, k: k)
+          Parted { part: Part { ..p, state: PartState.deferred, of: to }, made: [hist(r: Rec { ..rec_of(did: "deferred"), stage: st.name, organization: cx.org.version, once_with: to, to: [x] })] }
+
+fn waits_too(stages: list[Stage], pl: Place, name: string, parts: list[Part]) -> Change? total
+  description "A part before that waited for the stage `name`: where its one person waits for a later stage here too, it waits for that one"
+  match stages.at(pl.stage)
+    none => none
+    some sa =>
+      match sa.parts.at(pl.part)
+        none => none
+        some pa =>
+          match waits_for(p: pa)
+            none => none
+            some w =>
+              match w.to = name
+                false => none
+                true =>
+                  match parts.filter_map(p => waits_for(p: p)).first(y => y.person = w.person)
+                    none => none
+                    some later => Change { stage: pl.stage, part: pl.part, p: Part { ..pa, of: later.to }, made: [hist(r: Rec { ..rec_of(did: "deferred"), stage: sa.name, organization: sa.org, once_with: later.to, to: [w.person], note: "the stage it waited for waits too" })] }
+
+fn once_at_last[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, st: Stage, parts: list[Part]) -> Parts[F] total
+  description "`same approver approves once, at the last stage`: a part one person alone answers, who alone answers a part of a stage ahead too, waits for the last of them; the parts that waited for this stage wait on with it"
+  match cx.spec.once = Once.last
+    false => Parts { s: s, parts: parts }
+    true =>
+      let own =
+        match st.again
+          true => parts.map(p => Parted { part: p, made: [] })
+          false => parts.map(p => defer_own(cx: cx, who: who_of(t: s.t), stages: s.t.stages, vals: s.vals, i: i, st: st, p: p))
+      let s1 = put_all(s: s, made: own.flat_map(x => x.made))
+      let ps = own.map(x => x.part)
+      let cs = waiting(stages: s1.t.stages, i: i).filter_map(pl => waits_too(stages: s1.t.stages, pl: pl, name: st.name, parts: ps))
+      let t = Ticket { ..s1.t, stages: s1.t.stages.indexed().map(x => changed(x: x, cs: cs)) }
+      Parts { s: put_all(s: Step { ..s1, t: t }, made: cs.flat_map(c => c.made)), parts: ps }
+
+enum Settled = clear | started | passed
+
+record Settle[F]
+  s   : Step[F]
+  how : Settled
+
+record Started
+  part : number
+  p    : Part
+
+enum Fate = waits | starts
+
+record Decided
+  stage : number
+  part  : number
+  fate  : Fate
+  p     : Part
+  made  : list[What]
+
+fn decide(cx: Cx, who: Who, stages: list[Stage], vals: list[Arg], pl: Place, i: number range >=0 <=1_000_000, ahead: list[string], here: list[string]) -> result[Decided?, Refusal] total
+  description "A part that waits for a later stage, as the ticket comes to the stage `i`: none while that stage is still one to wait for; else it is decided again, and waits on for the last stage ahead the one who answers it now alone answers, or starts"
+  match stages.at(pl.stage)
+    none => ok(none)
+    some sa =>
+      match sa.parts.at(pl.part)
+        none => ok(none)
+        some pa =>
+          match waits_for(p: pa)
+            none => ok(none)
+            some w =>
+              let why =
+                match ahead.indexed().first(y => y.item = w.to)
+                  some y =>
+                    match y.index = 0 and not here.contains(w.person)
+                      true => concat("the stage it waited for does not come to ", w.person, " alone")
+                      false => ""
+                  none =>
+                    match stages.take(i).any(x => x.name = w.to)
+                      true => concat("the stage it waited for was answered without ", w.person)
+                      false => "the stage it waited for is not on the route"
+              match why = ""
+                true => ok(none)
+                false =>
+                  let o = try occ_of(spec: cx.spec, st: sa)
+                  match o.ways.contains(pa.way)
+                    false => err(refusal(kind: Kind.unread, en: concat("the stage `", sa.name, "` has no way `", pa.way, "`"), ja: concat("ステップ `", sa.name, "` の決め方 `", pa.way, "` がありません")))
+                    true =>
+                      let np = part_of(spec: cx.spec, who: who, vals: vals, o: o, st: sa, way: pa.way, q: quorum_of(o: o), org: cx.org, ask: true)
+                      let later =
+                        match alone_by(p: np.part)
+                          none => none
+                          some y =>
+                            match last_of(cx: cx, who: who, stages: stages, vals: vals, first: i, x: y)
+                              none => none
+                              some k2 => Wait { person: y, to: name_at(stages: stages, k: k2) }
+                      match later
+                        some lw => ok(Decided { stage: pl.stage, part: pl.part, fate: Fate.waits, p: Part { ..np.part, state: PartState.deferred, of: lw.to }, made: np.made.append(hist(r: Rec { ..rec_of(did: "deferred"), stage: sa.name, organization: cx.org.version, once_with: lw.to, to: [lw.person], note: why })) })
+                        none => ok(Decided { stage: pl.stage, part: pl.part, fate: Fate.starts, p: np.part, made: np.made.append(hist(r: Rec { ..rec_of(did: "deferral ended"), stage: sa.name, organization: cx.org.version, once_with: w.to, to: np.part.approvers, note: why })) })
+
+record Try
+  stage : number
+  r     : result[Decided?, Refusal]
+
+fn start_of(x: Try) -> number? total
+  match x.r
+    err e => none
+    ok d =>
+      match d
+        none => none
+        some y =>
+          match y.fate = Fate.starts
+            true => x.stage
+            false => none
+
+fn tried_by(x: Try, first: number?) -> bool total
+  description "A decision made before the stage that comes again, or at it: the ones after it are not made"
+  match first
+    none => true
+    some a => x.stage <= a
+
+fn refused(x: Try) -> Refusal? total
+  match x.r
+    err e => e
+    ok d => none
+
+fn decided_of(x: Try) -> Decided? total
+  match x.r
+    err e => none
+    ok d => d
+
+fn settled_stage(cx: Cx, x: indexed[Stage], ds: list[Decided]) -> Stage total
+  description "A stage before, with the parts of it that wait on for another stage; one that never started takes the part of the organization of now"
+  let cs = ds.filter(d => d.stage = x.index and d.fate = Fate.waits).map(d => Change { stage: d.stage, part: d.part, p: d.p, made: [] })
+  match cs.count() = 0
+    true => x.item
+    false =>
+      let org =
+        match x.item.started
+          none => cx.org.version
+          some at => x.item.org
+      Stage { ..changed(x: x, cs: cs), org: org }
+
+fn restarted(x: indexed[Part], started: list[Started]) -> Part total
+  match started.first(y => y.part = x.index)
+    none => x.item
+    some y => y.p
+
+fn come_again[F](cx: Cx, s: Step[F], a: number, i: number range >=0 <=1_000_000, started: list[Started], clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> result[Settle[F], Refusal] total
+  description "The stage comes again, here: the parts started now, and the ones of it that wait on"
+  match s.t.stages.at(a)
+    none => ok(Settle { s: s, how: Settled.clear })
+    some sa =>
+      let parts = sa.parts.indexed().filter(x => present(v: waits_for(p: x.item))).map(x => restarted(x: x, started: started))
+      let again = Stage { ..new_stage(name: sa.name, value: sa.value), again: true, org: cx.org.version, parts: parts }
+      let s1 = Step { ..s, t: Ticket { ..s.t, stages: s.t.stages.take(i).concat([again], s.t.stages.drop(i)) } }
+      match parts.all(p => part_done(p: p))
+        true =>
+          let phase =
+            match parts.any(p => p.state = PartState.deferred)
+              true => Phase.deferred
+              false => Phase.skipped
+          ok(Settle { s: set_phase(s: s1, i: i, phase: phase), how: Settled.passed })
+        false =>
+          let s2 = try wait_at(cx: cx, s: s1, i: i, clocks: clocks, open_after: open_after)
+          ok(Settle { s: s2, how: Settled.started })
+
+fn settle[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> result[Settle[F], Refusal] total
+  description "The parts that wait for a later stage, as the ticket comes to the stage `i` or to the end of its route: a part whose stage is no longer one to wait for is decided again, stage by stage, and the first stage before with a part that starts comes again here"
+  let at = max(min(i, s.t.stages.count()), 0)
+  let w = waiting(stages: s.t.stages, i: at)
+  match w.count() = 0
+    true => ok(Settle { s: s, how: Settled.clear })
+    false =>
+      let ahead = s.t.stages.drop(at).map(x => x.name)
+      let here = alone_at(cx: cx, who: who_of(t: s.t), stages: s.t.stages, vals: s.vals, k: at)
+      let tried = w.map(pl => Try { stage: pl.stage, r: decide(cx: cx, who: who_of(t: s.t), stages: s.t.stages, vals: s.vals, pl: pl, i: at, ahead: ahead, here: here) })
+      let first = tried.filter_map(x => start_of(x: x)).first()
+      let upto = tried.filter(x => tried_by(x: x, first: first))
+      match upto.filter_map(x => refused(x: x)).first()
+        some e => err(e)
+        none =>
+          let ds = upto.filter_map(x => decided_of(x: x))
+          let t = Ticket { ..s.t, stages: s.t.stages.indexed().map(x => settled_stage(cx: cx, x: x, ds: ds)) }
+          let s1 = put_all(s: Step { ..s, t: t }, made: ds.flat_map(d => d.made))
+          match first
+            none => ok(Settle { s: s1, how: Settled.clear })
+            some a => come_again(cx: cx, s: s1, a: a, i: at, started: ds.filter(d => d.stage = a and d.fate = Fate.starts).map(d => Started { part: d.part, p: d.p }), clocks: clocks, open_after: open_after)
+
+fn answered_at(stages: list[Stage], pl: Place, st: Stage) -> Change? total
+  description "A part before that waited for the stage `st`: done with the approval given at it in the seat of its one approver"
+  match stages.at(pl.stage)
+    none => none
+    some sa =>
+      match sa.parts.at(pl.part)
+        none => none
+        some pa =>
+          match waits_for(p: pa)
+            none => none
+            some w =>
+              match w.to = st.name
+                false => none
+                true =>
+                  match st.parts.flat_map(p => p.answers).first(x => x.yes and x.seat = w.person)
+                    none => none
+                    some ans =>
+                      let proxy =
+                        match ans.by = w.person
+                          true => none
+                          false => w.person
+                      Change { stage: pl.stage, part: pl.part, p: Part { ..pa, state: PartState.once, of: st.name }, made: [hist(r: Rec { ..rec_of(did: "approved"), stage: sa.name, by: ans.by, proxy_of: proxy, organization: sa.org, once_with: st.name })] }
+
+fn answered_stage(x: indexed[Stage], cs: list[Change]) -> Stage total
+  description "A stage before with the parts done by an approval given later: answered when none of its parts waits any more"
+  match cs.any(c => c.stage = x.index)
+    false => x.item
+    true =>
+      let st = changed(x: x, cs: cs)
+      let phase =
+        match st.parts.any(p => p.state = PartState.deferred)
+          true => st.phase
+          false =>
+            match present(v: st.started)
+              true => Phase.answered
+              false => Phase.once
+      Stage { ..st, phase: phase }
+
+fn answered[F](s: Step[F], i: number) -> Step[F] total
+  description "The stage `i` has every approval it needs: each part that waited for it is done with the approval given at it in the seat of the part's one approver"
+  match s.t.stages.at(i)
+    none => s
+    some st =>
+      let cs = waiting(stages: s.t.stages, i: i).filter_map(pl => answered_at(stages: s.t.stages, pl: pl, st: st))
+      let t = Ticket { ..s.t, stages: s.t.stages.indexed().map(x => answered_stage(x: x, cs: cs)) }
+      put_all(s: Step { ..s, t: t }, made: cs.flat_map(c => c.made))
+
+fn once_in(p: Part, undone: list[string]) -> bool total
+  match p.state = PartState.once
+    false => false
+    true =>
+      match p.of
+        none => false
+        some x => undone.contains(x)
+
+fn rewait(st: Stage, undone: list[string]) -> Stage total
+  description "A stage before: the parts an approval given at a stage undone did wait for it again"
+  let waits = st.parts.any(p => once_in(p: p, undone: undone))
+  let parts = st.parts.map(p => if once_in(p: p, undone: undone) then Part { ..p, state: PartState.deferred } else p)
+  let phase =
+    match waits and (st.phase = Phase.answered or st.phase = Phase.once)
+      true => Phase.deferred
+      false => st.phase
+  Stage { ..st, parts: parts, phase: phase }
+
+fn unwind[F](cx: Cx, t: Ticket[F], first: number range >=0 <=1_000_000, reopened: number?) -> Ticket[F] total
+  description "The stages from `first` on are as they were before the ticket came to them: a stage that came again there is taken off, and the parts before `first` that an approval given there or at the stage `reopened` did wait for it again"
+  let back =
+    match reopened
+      none => []
+      some j => [name_at(stages: t.stages, k: j)]
+  let undone = t.stages.drop(first).map(x => x.name).concat(back)
+  let head = t.stages.take(first)
+  let rest = t.stages.drop(first)
+  let tail = rest.indexed().filter(x => not head.any(y => y.name = x.item.name) and not rest.take(x.index).any(y => y.name = x.item.name)).map(x => reset(st: x.item))
+  let stages = head.concat(tail)
+  match cx.spec.once = Once.last
+    false => Ticket { ..t, stages: stages }
+    true => Ticket { ..t, stages: stages.indexed().map(x => if x.index < first then rewait(st: x.item, undone: undone) else x.item) }
+
+# ── coming to a stage and moving on ────────────────────────────────────────
+
+fn timer_at[F](s: Step[F], timer: Timer, stage: string, at: number? range >=0 <=253_402_300_799) -> Step[F] total
+  match at
+    none => s
+    some x => put(s: s, what: What.set_timer { timer: timer, stage: stage, at: x })
+
+fn before(r: number range >=0 <=253_402_300_799, due: number? range >=0 <=253_402_300_799) -> number? total
+  match due
+    none => none
+    some d =>
+      match r < d
+        true => r
+        false => none
+
+fn set_times[F](s: Step[F], i: number range >=0 <=9_223_372_036_854_775_806, st: Stage, remind: number? range >=0 <=253_402_300_799, due: number? range >=0 <=253_402_300_799, now: number range >=0 <=253_402_300_799) -> Step[F] total
+  description "The clocks of the stage, set at `now`: neither before it, and the reminder only where it comes before the deadline"
+  let d =
+    match due
+      none => none
+      some x => max(x, now)
+  let r =
+    match remind
+      none => none
+      some x => before(r: max(x, now), due: d)
+  let t = with_stage(t: s.t, i: i, st: Stage { ..st, remind: r, due: d })
+  timer_at(s: timer_at(s: Step { ..s, t: t }, timer: Timer.remind, stage: st.name, at: r), timer: Timer.late, stage: st.name, at: d)
+
+fn set_clocks[F](cx: Cx, s: Step[F], i: number range >=0 <=9_223_372_036_854_775_806, fresh: bool, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> result[Step[F], Refusal] total
+  description "The clocks of the stage, counted from the time it started and the days it was paused for and set, none before now, the reminder only where it comes before the deadline. A stage that starts (`fresh`) sets both; a stage come back to, resumed or come back to by a retracted approval, counts again the clocks it has not heard ring: the deadline, where it is set, and the reminder, where it has not rung (`reminded`), set before or not"
+  match s.t.stages.at(i)
+    none => ok(s)
+    some st =>
+      match st.started
+        none => ok(s)
+        some started =>
+          let c = try clocks(st.name, started, st.held, st.up)
+          let remind =
+            match fresh or not st.reminded
+              true => c.remind
+              false => none
+          let due =
+            match fresh or present(v: st.due)
+              true => c.due
+              false => none
+          ok(set_times(s: s, i: i, st: st, remind: remind, due: due, now: cx.now))
+
+fn cancel_remind[F](s: Step[F], st: Stage) -> Step[F] total
+  match st.remind
+    none => s
+    some r => put(s: s, what: What.cancel_timer { timer: Timer.remind, stage: st.name })
+
+fn cancel_due[F](s: Step[F], st: Stage) -> Step[F] total
+  match st.due
+    none => s
+    some r => put(s: s, what: What.cancel_timer { timer: Timer.late, stage: st.name })
+
+fn cancel_clocks[F](s: Step[F]) -> Step[F] total
+  description "The clocks of the ticket's stage that are set are cancelled; the stage keeps their times. A paused ticket has none set"
+  match s.t.status = Status.paused
+    true => s
+    false =>
+      match at_of(t: s.t)
+        none => s
+        some i =>
+          match s.t.stages.at(i)
+            none => s
+            some st => cancel_due(s: cancel_remind(s: s, st: st), st: st)
+
+fn cancel_pause[F](s: Step[F]) -> Step[F] total
+  match s.t.pause_ends
+    none => s
+    some x => put(s: Step { ..s, t: Ticket { ..s.t, pause_ends: none } }, what: What.cancel_timer { timer: Timer.pause_ends, stage: s.t.stage })
+
+fn cancel_back[F](s: Step[F]) -> Step[F] total
+  match s.t.resubmit_due
+    none => s
+    some x => put(s: Step { ..s, t: Ticket { ..s.t, resubmit_due: none } }, what: What.cancel_timer { timer: Timer.resubmit_late, stage: none })
+
+fn wait_at[F](cx: Cx, s: Step[F], i: number range >=0 <=9_223_372_036_854_775_806, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> result[Step[F], Refusal] total
+  description "The ticket waits at the stage: it starts now, the ones it waits for are told, and its clocks are set"
+  let u = try usable_on(spec: cx.spec, day: cx.org.day)
+  match s.t.stages.at(i)
+    none => ok(s)
+    some st0 =>
+      let st = Stage { ..st0, phase: Phase.active, started: cx.now }
+      let s1 = tell(s: Step { ..s, t: Ticket { ..with_stage(t: s.t, i: i, st: st), stage: st.name } }, to: waited(st: st, org: cx.org), notice: Notice.waiting, stage: st.name)
+      let s2 =
+        match st.parts.any(p => p.state = PartState.stopped)
+          true => put(s: s1, what: What.notify { to: [], notice: Notice.stopped, stage: st.name })
+          false => s1
+      set_clocks(cx: cx, s: s2, i: i, fresh: true, clocks: clocks, open_after: open_after)
+
+fn ask_note[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, st: Stage, flow: string, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> result[Step[F], Refusal] total
+  description "A summary: its one part waits for the flow, which is asked for it"
+  let u = try usable_on(spec: cx.spec, day: cx.org.day)
+  let part = Part { way: "", key: "", approvers: [], team: none, needed: 0, answers: [], state: PartState.agent, of: flow, sole: Sole.other }
+  let t = Ticket { ..with_stage(t: s.t, i: i, st: Stage { ..st, parts: [part], phase: Phase.active, started: cx.now }), stage: st.name }
+  let s1 = note_down(s: Step { ..s, t: t }, r: Rec { ..rec_of(did: "note asked"), stage: st.name, note: flow_shown(spec: cx.spec, flow: flow) })
+  let s2 = put(s: s1, what: What.ask_note { flow: flow, stage: st.name, args: flow_args(who: who_of(t: t), vals: s.vals) })
+  set_clocks(cx: cx, s: s2, i: i, fresh: true, clocks: clocks, open_after: open_after)
+
+record Walk[F]
+  s    : Step[F]
+  at   : number  range >=0 <=1_000_000
+  over : bool
+  end  : bool
+  stop : Refusal?
+
+fn people_stage[F](cx: Cx, w: Walk[F], i: number range >=0 <=1_000_000, o: Occ, st: Stage, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> Walk[F] total
+  let made = o.ways.map(way => part_of(spec: cx.spec, who: who_of(t: w.s.t), vals: w.s.vals, o: o, st: st, way: way, q: quorum_of(o: o), org: cx.org, ask: true))
+  let s1 = put_all(s: w.s, made: made.flat_map(x => x.made))
+  let b = once_with_before(cx: cx, s: s1, i: i, st: st, parts: made.map(x => x.part))
+  let l = once_at_last(cx: cx, s: b.s, i: i, st: st, parts: b.parts)
+  let s2 = Step { ..l.s, t: with_stage(t: l.s.t, i: i, st: Stage { ..st, parts: l.parts }) }
+  match l.parts.all(p => part_done(p: p))
+    true => Walk { ..w, s: set_phase(s: s2, i: i, phase: passed_phase(parts: l.parts)), at: min(i + 1, 1_000_000) }
+    false =>
+      match wait_at(cx: cx, s: s2, i: i, clocks: clocks, open_after: open_after)
+        err e => Walk { ..w, s: s2, over: true, stop: e }
+        ok s3 => Walk { ..w, s: s3, over: true }
+
+fn circulated(cx: Cx, to: Solved) -> list[string] total
+  match to
+    people x => x.ps
+    nobody n => []
+
+fn walk_stage[F](cx: Cx, w: Walk[F], clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> Walk[F] total
+  let i = w.at
+  match w.s.t.stages.at(i)
+    none => Walk { ..w, over: true, end: true }
+    some st0 =>
+      match occ_of(spec: cx.spec, st: st0)
+        err e => Walk { ..w, over: true, stop: e }
+        ok o =>
+          let st = Stage { ..reset(st: st0), again: st0.again, org: cx.org.version }
+          let s = Step { ..w.s, t: with_stage(t: w.s.t, i: i, st: st) }
+          match o.shape
+            circulate c =>
+              let to = circulated(cx: cx, to: solve(spec: cx.spec, who: who_of(t: s.t), vals: s.vals, org: cx.org, way: c.way))
+              let s1 = note_down(s: s, r: Rec { ..rec_of(did: "circulated"), stage: st.name, organization: cx.org.version, to: to })
+              Walk { ..w, s: set_phase(s: tell(s: s1, to: to, notice: Notice.circulation, stage: st.name), i: i, phase: Phase.circulated), at: min(i + 1, 1_000_000) }
+            note n =>
+              match ask_note(cx: cx, s: s, i: i, st: st, flow: n.flow, clocks: clocks, open_after: open_after)
+                err e => Walk { ..w, s: s, over: true, stop: e }
+                ok s1 => Walk { ..w, s: s1, over: true }
+            else => people_stage(cx: cx, w: Walk { ..w, s: s }, i: i, o: o, st: st, clocks: clocks, open_after: open_after)
+
+fn walk[F](cx: Cx, w: Walk[F], clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> Walk[F] total
+  match w.over
+    true => w
+    false =>
+      match cx.spec.once = Once.last
+        false => walk_stage(cx: cx, w: w, clocks: clocks, open_after: open_after)
+        true =>
+          match settle(cx: cx, s: w.s, i: w.at, clocks: clocks, open_after: open_after)
+            err e => Walk { ..w, over: true, stop: e }
+            ok x =>
+              match x.how
+                started => Walk { ..w, s: x.s, over: true }
+                passed => Walk { ..w, s: x.s, at: min(w.at + 1, 1_000_000) }
+                clear => walk_stage(cx: cx, w: Walk { ..w, s: x.s }, clocks: clocks, open_after: open_after)
+
+record Lap
+  stages : list[Stage]
+  stage  : string?
+  fx     : list[Made]
+  at     : number  range >=0 <=1_000_000
+  over   : bool
+  end    : bool
+  stop   : Refusal?
+
+fn lap[F](cx: Cx, s: Step[F], x: Lap, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> Lap total
+  description "One stage of the walk, from the ticket's stages and effects so far (`walk`)"
+  match x.over
+    true => x
+    false =>
+      let w = walk(cx: cx, w: Walk { s: Step { ..s, t: Ticket { ..s.t, stages: x.stages, stage: x.stage }, fx: x.fx }, at: x.at, over: false, end: false, stop: none }, clocks: clocks, open_after: open_after)
+      Lap { stages: w.s.t.stages, stage: w.s.t.stage, fx: w.s.fx, at: w.at, over: w.over, end: w.end, stop: w.stop }
+
+fn finish[F](cx: Cx, s: Step[F], on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  description "No stage is left: the ticket is approved"
+  let t = Ticket { ..s.t, stage: none, status: Status.approved, ended: Ended { at: cx.now, stage: none, by: none } }
+  let s1 = note_down(s: Step { ..s, t: t }, r: rec_of(did: "ticket approved"))
+  let s2 = try on_ending(cx: cx, s: s1, ending: Ending.approved, on: on)
+  ok(put(s: s2, what: What.notify { to: theirs(who: who_of(t: s2.t)), notice: Notice.decided, stage: none }))
+
+fn advance[F](cx: Cx, s: Step[F], first: number range >=0 <=1_000_000, again: bool, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  description "The ticket moves on from the stage `first`: the first stage at or after it that waits for someone is started, the ones before it that nobody answers, that circulate and that another stage's approval does are passed; with none left, the ticket is approved. `again` starts `first` as a stage the ticket was sent back to"
+  let t0 = Ticket { ..s.t, status: Status.in_progress }
+  let t1 =
+    match again
+      false => t0
+      true =>
+        match t0.stages.at(first)
+          none => t0
+          some st => with_stage(t: t0, i: first, st: Stage { ..st, again: true })
+  let most = 9_223_372_036_854_775_807
+  let s0 = Step { ..s, t: t1, fx: [] }
+  # Each lap passes one stage or ends the walk. A stage comes again (`come_again`) for a part that
+  # waits, which is decided then, so the walk ends within as many laps as the stages and the parts,
+  # and the refusal below is not reached.
+  let laps = min(t1.stages.count(), 1_000_000) + min(t1.stages.flat_map(y => y.parts).count(), 1_000_000) + 2
+  let x = reduce(numbers(1, laps), Lap { stages: t1.stages, stage: t1.stage, fx: [], at: first, over: false, end: false, stop: none }, (y, k) => lap(cx: cx, s: s0, x: Lap { ..y, stages: y.stages.take(most), fx: y.fx.take(most), at: max(min(y.at, 1_000_000), 0) }, clocks: clocks, open_after: open_after))
+  let s1 = Step { ..s, t: Ticket { ..t1, stages: x.stages.take(most), stage: x.stage }, fx: s.fx.concat(x.fx.take(most)) }
+  match x.stop
+    some e => err(e)
+    none =>
+      match x.end
+        true => finish(cx: cx, s: s1, on: on)
+        false =>
+          match x.over
+            true => ok(s1)
+            false => err(refusal(kind: Kind.unread, en: "the route has more stages than one move walks", ja: "経路のステップが、一度に進める数を超えます"))
+
+# ── the `on` lines ─────────────────────────────────────────────────────────
+
+fn closes(l: OnLine) -> bool total
+  match l.action
+    post, release => true
+    else => false
+
+fn without(holds: list[Held], k: number) -> list[Held] total
+  description "The holds without the one at `k`"
+  holds.indexed().filter(x => x.index != k).map(x => x.item)
+
+record Booked
+  holds : list[Held]
+  made  : list[What]
+  stop  : Refusal?
+
+fn on_line[F](t: Ticket[F], b: Booked, l: OnLine) -> Booked total
+  description "One `on` line: a post or a void is given only while the hold of the round is open, and nothing is asked of it otherwise"
+  match b.stop
+    some e => b
+    none =>
+      let open = b.holds.indexed().first(h => h.item.book = l.book and h.item.transfer = l.transfer and h.item.round = t.round)
+      match closes(l: l) and not present(v: open)
+        true => b
+        false =>
+          match l.when
+            err e => Booked { ..b, stop: e }
+            ok yes =>
+              match yes
+                false => b
+                true =>
+                  match l.args
+                    err e => Booked { ..b, stop: e }
+                    ok args =>
+                      match l.action
+                        launch =>
+                          let w : What = What.launch { flow: l.book, args: args }
+                          Booked { ..b, made: b.made.append(w) }
+                        hold =>
+                          let w : What = What.hold { book: l.book, transfer: l.transfer, args: args }
+                          Booked { ..b, holds: b.holds.append(Held { book: l.book, transfer: l.transfer, round: t.round }), made: b.made.append(w) }
+                        post =>
+                          match open
+                            none => b
+                            some h =>
+                              let w : What = What.post { book: l.book, transfer: l.transfer, args: args }
+                              Booked { ..b, holds: without(holds: b.holds, k: h.index), made: b.made.append(w) }
+                        release =>
+                          match open
+                            none => b
+                            some h =>
+                              let w : What = What.release { book: l.book, transfer: l.transfer, args: args }
+                              Booked { ..b, holds: without(holds: b.holds, k: h.index), made: b.made.append(w) }
+
+# `on` is the request's `on` lines of the form the ticket holds: `start`, `act` and a resubmission make
+# it of the form they hold, so that the lines read that form as the glue gave it however deep the
+# calls that come to an ending go, past the four calls kaname reads a generic function again in.
+fn on_ending[F](cx: Cx, s: Step[F], ending: Ending, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  description "What the ticket does at the ending: each `on` line of it whose condition holds, in the order written"
+  let lines = on(ending, Ref { id: s.t.id, round: s.t.round, attempt: s.t.attempt, requester: s.t.requester, made_by: s.t.made_by }, cx.org)
+  let most = 9_223_372_036_854_775_807
+  let b = reduce(lines, Booked { holds: s.t.holds, made: [], stop: none }, (x, l) => on_line(t: s.t, b: Booked { ..x, holds: x.holds.take(most), made: x.made.take(most) }, l: l))
+  match b.stop
+    some e => err(e)
+    none => ok(put_all(s: Step { ..s, t: Ticket { ..s.t, holds: b.holds.take(most) } }, made: b.made.take(most)))
+
+fn end_ticket[F](cx: Cx, s: Step[F], status: Status, ending: Ending, did: string, by: string?, proxy_of: string?, note: string?, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  description "The ticket ends: its clocks are cancelled, what its `on` lines say of the ending is done, and the requester is told. `proxy_of` is whom `by` ended it for"
+  let s1 = cancel_back(s: cancel_pause(s: cancel_clocks(s: s)))
+  let stage = s1.t.stage
+  let s2 = note_down(s: s1, r: Rec { ..rec_of(did: did), stage: stage, by: by, proxy_of: proxy_of, note: note })
+  let t = Ticket { ..s2.t, status: status, stage: none, paused_at: none, sent_back_by: none, ended: Ended { at: cx.now, stage: stage, by: by } }
+  let s3 = try on_ending(cx: cx, s: Step { ..s2, t: t }, ending: ending, on: on)
+  ok(put(s: s3, what: What.notify { to: theirs(who: who_of(t: s3.t)), notice: Notice.decided, stage: none }))
+
+# ── a request is made ──────────────────────────────────────────────────────
+
+fn may_submit(org: Org, requester: string, by: string?) -> result[string?, Refusal] total
+  description "The requester is in the organization, and the one who makes the request in their name is a proxy of theirs that day: who made it for them, if anyone did"
+  match in_org(org: org, id: requester)
+    false => err(not_in(id: requester, org: org))
+    true =>
+      match by
+        none => ok(none)
+        some b =>
+          match b = requester
+            true => ok(none)
+            false =>
+              match in_org(org: org, id: b)
+                false => err(not_in(id: b, org: org))
+                true =>
+                  match org.proxies.any(x => x.kind = ProxyKind.submit and x.person = requester and x.proxy = b)
+                    true => ok(b)
+                    false => err(refusal(kind: Kind.person, en: concat(who_en(org: org, id: b), " is no proxy of ", who_en(org: org, id: requester), " to submit the request on ", text(org.day), " (no `submit` row of `proxies.csv`)"), ja: concat(who_ja(org: org, id: b), "は、", text(org.day), " に ", who_ja(org: org, id: requester), "の代わりにこの申請を出せません（`proxies.csv` に `submit` の行がありません）")))
+
+fn said(c: string?) -> result[string?, Refusal] total
+  description "What a person wrote with an event, as the machine keeps it: none for an empty one, and refused (`comment`) past 2,000 characters"
+  match c
+    none => ok(none)
+    some x =>
+      match x.count() = 0
+        true => ok(none)
+        false =>
+          match x.count() > 2_000
+            true => err(refusal(kind: Kind.comment, en: concat("the comment is ", chars_long(n: x.count()), ", past the limit (2000)"), ja: concat("コメントは ", commas(t: text(x.count())), " 文字で、上限の 2,000 を超えています")))
+            false => ok(x)
+
+fn reason_asked[G](spec: Spec, ev: Event[G]) -> bool total
+  description "Whether the request asks a reason with the event (`comment required for`): a `reject` or a `send back` it names"
+  match ev
+    reject => spec.comment_required.any(x => x = "reject")
+    send_back => spec.comment_required.any(x => x = "send_back")
+    else => false
+
+fn reasoned[G](spec: Spec, ev: Event[G], c: string?) -> result[string?, Refusal] total
+  description "What a person wrote with an event the request asks a reason with, as `said` keeps it: refused (`comment`) when it is none or white space alone, before who gives the event is asked"
+  match reason_asked(spec: spec, ev: ev)
+    false => ok(c)
+    true =>
+      match c
+        none => err(no_reason(ev: ev))
+        some x =>
+          match x.trim().count() = 0
+            true => err(no_reason(ev: ev))
+            false => ok(c)
+
+fn no_reason[G](ev: Event[G]) -> Refusal total
+  refusal(kind: Kind.comment, en: concat("a `", event_word(ev: ev), "` of this request needs a reason: write it in the comment"), ja: concat("この申請の `", event_word(ev: ev), "` には理由が要ります。コメントに書いてください"))
+
+fn start[F](spec: Spec, id: string, requester: string, made_by: string?, form: F, vals: list[Arg], stages: list[Stage], org: Org, now: number range >=0 <=253_402_300_799, comment: string?, attempt: string, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org, F) -> list[OnLine] total) -> result[Moved[F], Refusal] total
+  description "A request is made: the ticket at its first stage, with what is to do; or why it is not made. What the requester wrote with it is on the line of the history it makes"
+  let cx = Cx { spec: spec, org: org, now: now }
+  let pause =
+    match spec.pause
+      none => 0
+      some d => d
+  let t = Ticket { id: id, request: spec.request, version: spec.version, requester: requester, made_by: made_by, sent_back_by: none, status: Status.in_progress, round: 1, attempt: attempt, serial: 0, revision: Revision { round: 1, stage: none, edits: 0 }, form: form, stage: none, stages: stages, backs: 0, edits: 0, pause_left: pause, paused_at: none, pause_ends: none, resubmit_due: none, holds: [], notes: [], ended: none }
+  let by =
+    match made_by
+      none => requester
+      some b => b
+  let proxy_of =
+    match made_by
+      none => none
+      some b => requester
+  let s0 = note_down(s: Step { t: t, fx: [], vals: vals }, r: Rec { ..rec_of(did: "submitted"), by: by, proxy_of: proxy_of, organization: org.version })
+  let s1 = try on_ending(cx: cx, s: s0, ending: Ending.submitted, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, form))
+  let s2 = try advance(cx: cx, s: s1, first: 0, again: false, clocks: clocks, open_after: open_after, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, form))
+  ok(done(s: commented(s: s2, c: comment)))
+
+# ── an event ───────────────────────────────────────────────────────────────
+
+record Rung
+  timer : string
+  stage : string?
+  at    : number  range >=0 <=253_402_300_799
+
+fn clock_list(st: Stage) -> list[Rung] total
+  let r =
+    match st.remind
+      none => []
+      some x => [Rung { timer: "remind", stage: st.name, at: x }]
+  let d =
+    match st.due
+      none => []
+      some x => [Rung { timer: "late", stage: st.name, at: x }]
+  r.concat(d)
+
+fn own_clocks[F](t: Ticket[F]) -> list[Rung] total
+  match t.status = Status.in_progress
+    false => []
+    true =>
+      match at_of(t: t)
+        none => []
+        some i =>
+          match t.stages.at(i)
+            none => []
+            some st => clock_list(st: st)
+
+fn rung_first[F](t: Ticket[F], now: number range >=0 <=253_402_300_799) -> Rung? total
+  description "The first clock of the ticket that is set and has rung"
+  let pause =
+    match t.pause_ends
+      none => []
+      some x => [Rung { timer: "pause ends", stage: t.stage, at: x }]
+  let back =
+    match t.resubmit_due
+      none => []
+      some x => [Rung { timer: "resubmit late", stage: none, at: x }]
+  pause.concat(back, own_clocks(t: t)).sort_by(r => r.at).first(r => r.at <= now)
+
+fn rung(spec: Spec, at: number? range >=0 <=253_402_300_799, what: string, stage: string?, now: number range >=0 <=253_402_300_799) -> result[bool, Refusal] total
+  description "A clock that is set and has rung; else refused, with the time it is set for and the time it is, in the offset the clock is read in"
+  match at
+    none => err(refusal(kind: Kind.clock, en: concat("no clock is set for `", what, "`"), ja: concat("`", what, "` の時計は置かれていません")))
+    some x =>
+      match now < x
+        true =>
+          let offset = clock_offset(spec: spec, timer: what, stage: stage)
+          let a = time_text(at: x, offset: offset)
+          let n = time_text(at: now, offset: offset)
+          err(refusal(kind: Kind.clock, en: concat("the clock of `", what, "` is set for ", a, ", and it is ", n), ja: concat("`", what, "` の時計は ", a, " に鳴ります。今は ", n, " です")))
+        false => ok(true)
+
+fn event_word[G](ev: Event[G]) -> string total
+  description "The event as a refusal names it: its name in the contract, its words apart (`send back`)"
+  match ev
+    resubmit => "resubmit"
+    approve => "approve"
+    reject => "reject"
+    send_back => "send back"
+    retract => "retract"
+    pause => "pause"
+    resume => "resume"
+    withdraw => "withdraw"
+    discard => "discard"
+    edit => "edit"
+    add_approver => "add approver"
+    hand_over => "hand over"
+    comment => "comment"
+    remind => "remind"
+    late => "late"
+    resubmit_late => "resubmit late"
+    pause_ends => "pause ends"
+    agent_answered => "agent answered"
+    note_ready => "note ready"
+    flow_failed => "flow failed"
+
+fn ended(s: Status) -> bool total
+  match s
+    approved, rejected, withdrawn, expired => true
+    else => false
+
+fn is_clock[G](ev: Event[G]) -> bool total
+  match ev
+    remind, late, resubmit_late, pause_ends => true
+    else => false
+
+fn revised[G](ev: Event[G]) -> bool total
+  description "Whether the event is made on a revision of the ticket: every event but a clock's and a comment, which moves nothing"
+  match ev
+    remind, late, resubmit_late, pause_ends, comment => false
+    else => true
+
+fn comment_of[G](ev: Event[G]) -> string? total
+  description "What the person wrote with the event: none for a clock's and a flow's"
+  match ev
+    resubmit x => x.comment
+    approve x => x.comment
+    reject x => x.comment
+    send_back x => x.comment
+    retract x => x.comment
+    pause x => x.comment
+    resume x => x.comment
+    withdraw x => x.comment
+    discard x => x.comment
+    edit x => x.comment
+    add_approver x => x.comment
+    hand_over x => x.comment
+    comment x => x.comment
+    remind, late, resubmit_late, pause_ends, agent_answered, note_ready, flow_failed => none
+
+fn seen[G](ev: Event[G]) -> Revision? total
+  description "The revision of the ticket the event says it was made on: none for a clock's event and a comment, which say none"
+  match ev
+    resubmit x => x.revision
+    approve x => x.revision
+    reject x => x.revision
+    send_back x => x.revision
+    retract x => x.revision
+    pause x => x.revision
+    resume x => x.revision
+    withdraw x => x.revision
+    discard x => x.revision
+    edit x => x.revision
+    add_approver x => x.revision
+    hand_over x => x.revision
+    agent_answered x => x.revision
+    note_ready x => x.revision
+    flow_failed x => x.revision
+    remind, late, resubmit_late, pause_ends, comment => none
+
+fn revision_text(r: Revision) -> string total
+  description "The revision as a refusal says it: round 1, stage 2 of the ticket, 1 edit"
+  let stage =
+    match r.stage
+      none => "at no stage"
+      some i => concat("stage ", text(i + 1), " of the ticket")
+  let edits =
+    match r.edits = 1
+      true => "1 edit"
+      false => concat(text(r.edits), " edits")
+  concat("round ", text(r.round), ", ", stage, ", ", edits)
+
+fn revision_text_ja(r: Revision) -> string total
+  description "The revision as a refusal says it in Japanese: 1 回目、2 番目のステップ、直し 1 回"
+  let stage =
+    match r.stage
+      none => "ステップの外"
+      some i => concat(text(i + 1), " 番目のステップ")
+  concat(text(r.round), " 回目、", stage, "、直し ", text(r.edits), " 回")
+
+fn fresh[F, G](t: Ticket[F], ev: Event[G]) -> result[bool, Refusal] total
+  description "Whether an event a person or a flow gives was made on the ticket's revision: else it is refused, and the one who made it is to see the ticket again. A clock's event and a comment say none, and are not asked"
+  let now = revision_of(t: t)
+  match revised(ev: ev)
+    false => ok(true)
+    true =>
+      match seen(ev: ev)
+        none => err(refusal(kind: Kind.stale, en: concat("`", event_word(ev: ev), "` does not say which revision of the ticket it was made on"), ja: concat("`", event_word(ev: ev), "` が、どの版のチケットに対するものかを言っていません")))
+        some r =>
+          match r = now
+            true => ok(true)
+            false => err(refusal(kind: Kind.stale, en: concat("`", event_word(ev: ev), "` was made on the ticket at ", revision_text(r: r), ", and it is at ", revision_text(r: now), " now: the ticket is to be shown again"), ja: concat("`", event_word(ev: ev), "` はチケットの ", revision_text_ja(r: r), "のときのものですが、チケットは今 ", revision_text_ja(r: now), "です。チケットを見せ直してください")))
+
+fn may_answer[F](cx: Cx, t: Ticket[F], by: string) -> result[bool, Refusal] total
+  description "The person is in the organization and did not make the request (where self approval is not allowed): one who may answer a stage of it"
+  match in_org(org: cx.org, id: by)
+    false => err(not_in(id: by, org: cx.org))
+    true =>
+      match left_out(spec: cx.spec, who: who_of(t: t), id: by)
+        true => err(refusal(kind: Kind.person, en: concat(who_en(org: cx.org, id: by), " made the request, and does not answer it (`self approval not allowed`)"), ja: concat(who_ja(org: cx.org, id: by), "は、この申請を出した人なので、答えられません（`self approval not allowed`）")))
+        false => ok(true)
+
+record Seat
+  part : number
+  seat : string
+
+fn free(p: Part, by: string, seat: string) -> bool total
+  p.state = PartState.active and not p.answers.any(a => a.by = by or a.seat = seat) and p.approvers.contains(seat)
+
+fn proxy_seat(org: Org, p: indexed[Part], by: string) -> Seat? total
+  match p.item.approvers.first(a => free(p: p.item, by: by, seat: a) and is_proxy(org: org, by: by, person: a))
+    none => none
+    some a => Seat { part: p.index, seat: a }
+
+fn seats[F](cx: Cx, t: Ticket[F], st: Stage, by: string) -> result[list[Seat], Refusal] total
+  description "The seats an answer takes at the stage: each part the person is an approver of, in their own right; else the first approver they are a proxy of who has yet to answer"
+  let may = try may_answer(cx: cx, t: t, by: by)
+  let own = st.parts.indexed().filter(p => free(p: p.item, by: by, seat: by)).map(p => Seat { part: p.index, seat: by })
+  match own.count() = 0
+    false => ok(own)
+    true =>
+      match st.parts.indexed().filter_map(p => proxy_seat(org: cx.org, p: p, by: by)).first()
+        some x => ok([x])
+        none =>
+          match st.parts.any(p => p.answers.any(a => a.by = by or a.seat = by))
+            true => err(refusal(kind: Kind.person, en: concat(who_en(org: cx.org, id: by), " has answered the stage `", stage_written(spec: cx.spec, name: st.name), "` already"), ja: concat(who_ja(org: cx.org, id: by), "は、ステップ `", stage_written(spec: cx.spec, name: st.name), "` にもう答えています")))
+            false => err(not_approver(cx: cx, st: st, by: by))
+
+fn approver[F](cx: Cx, t: Ticket[F], st: Stage, by: string) -> result[bool, Refusal] total
+  description "An approver of the stage, or a proxy of one: who may pause it and edit the request there. Not one whose part waits for a later stage"
+  let may = try may_answer(cx: cx, t: t, by: by)
+  match st.parts.filter(p => p.state != PartState.deferred).any(p => p.approvers.any(a => a = by or is_proxy(org: cx.org, by: by, person: a)))
+    true => ok(true)
+    false => err(not_approver(cx: cx, st: st, by: by))
+
+fn not_approver(cx: Cx, st: Stage, by: string) -> Refusal total
+  refusal(kind: Kind.person, en: concat(who_en(org: cx.org, id: by), " is not an approver of the stage `", stage_written(spec: cx.spec, name: st.name), "`, nor a proxy of one"), ja: concat(who_ja(org: cx.org, id: by), "は、ステップ `", stage_written(spec: cx.spec, name: st.name), "` の承認者でも、その代理でもありません"))
+
+fn theirs_to_do[F](cx: Cx, t: Ticket[F], by: string, ev: string) -> result[bool, Refusal] total
+  description "The requester, the one who made the request for them, or a proxy who may submit for them that day"
+  match in_org(org: cx.org, id: by)
+    false => err(not_in(id: by, org: cx.org))
+    true =>
+      match by = t.requester or t.made_by = by or cx.org.proxies.any(x => x.kind = ProxyKind.submit and x.person = t.requester and x.proxy = by)
+        true => ok(true)
+        false => err(refusal(kind: Kind.person, en: concat("`", ev, "` is the requester's to do, and ", who_en(org: cx.org, id: by), " is neither the requester nor a proxy of theirs"), ja: concat("`", ev, "` は申請者がします。", who_ja(org: cx.org, id: by), "は、この申請の申請者でも、その代理でもありません")))
+
+fn answered_seat(x: indexed[Part], seats: list[Seat], by: string, yes: bool, now: number range >=0 <=253_402_300_799) -> Part total
+  let mine = seats.filter(s => s.part = x.index).map(s => Answer { by: by, seat: s.seat, yes: yes, at: now })
+  let p = Part { ..x.item, answers: x.item.answers.concat(mine) }
+  match yes and p.state = PartState.active and p.answers.count(a => a.yes) >= p.needed
+    true => Part { ..p, state: PartState.passed }
+    false => p
+
+fn proxy_of_seats(seats: list[Seat], by: string) -> string? total
+  match seats.first()
+    none => none
+    some x =>
+      match x.seat = by
+        true => none
+        false => x.seat
+
+fn for_requester[F](t: Ticket[F], by: string) -> string? total
+  description "Whom one on the requester's side acts for: the requester, when the one who made the request for them or a proxy of theirs does it"
+  match by = t.requester
+    true => none
+    false => t.requester
+
+fn acting_for(org: Org, st: Stage, by: string) -> string? total
+  description "Whom one acts for at the stage as an approver does: nobody where they are an approver of it, else the first approver they are a proxy of that day"
+  let parts = st.parts.filter(p => p.state != PartState.deferred)
+  match parts.any(p => p.approvers.contains(by))
+    true => none
+    false => parts.flat_map(p => p.approvers).first(a => is_proxy(org: org, by: by, person: a))
+
+fn state_refusal(t: Status, ev: string) -> Refusal total
+  refusal(kind: Kind.state, en: concat("the ticket is `", text(t), "`, and takes no `", ev, "`"), ja: concat("チケットは `", text(t), "` です。`", ev, "` は受け付けません"))
+
+fn stage_in[F](t: Ticket[F], ev: string, states: list[Status]) -> result[Stage, Refusal] total
+  description "The stage the ticket is at, when its state is one the event is taken in"
+  match states.contains(t.status)
+    false => err(state_refusal(t: t.status, ev: ev))
+    true =>
+      match at_of(t: t)
+        none => err(state_refusal(t: t.status, ev: ev))
+        some i =>
+          match t.stages.at(i)
+            none => err(state_refusal(t: t.status, ev: ev))
+            some st => ok(st)
+
+fn index_in[F](t: Ticket[F]) -> number total
+  description "The place of the stage the ticket is at"
+  match at_of(t: t)
+    none => 0
+    some i => max(min(i, 1_000_000), 0)
+
+fn chosen_next[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000) -> result[bool, Refusal] total
+  description "The approver of the next stage, whom this stage's approver chooses, is chosen"
+  match s.t.stages.at(i + 1)
+    none => ok(true)
+    some nx =>
+      let o = try occ_of(spec: cx.spec, st: nx)
+      match o.ways.filter_map(w => chosen_by_previous(spec: cx.spec, way: w)).first(c => not present(v: pick(vals: s.vals, field: c.field)))
+        none => ok(true)
+        some c => err(refusal_at(kind: Kind.form, en: concat("`", c.shown, "` is empty, and the next stage `", stage_written(spec: cx.spec, name: nx.name), "` is answered by the person chosen in it: fill it in with `edit` first"), ja: concat("`", c.shown, "` が空です。次のステップ `", stage_written(spec: cx.spec, name: nx.name), "` は、そこに指名した人が答えます。先に `edit` で入れてください"), at: c.field))
+
+fn passed_on[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  description "The stage has every approval it needs: the ticket moves on. The parts that waited for it are done with the approval given here; a part of its own that waits for a later stage leaves it waiting"
+  let s1 = cancel_clocks(s: s)
+  let s2 =
+    match cx.spec.once = Once.last
+      true => answered(s: s1, i: i)
+      false => s1
+  match s2.t.stages.at(i)
+    none => ok(s2)
+    some st =>
+      let phase =
+        match st.parts.any(p => p.state = PartState.deferred)
+          true => Phase.deferred
+          false => Phase.answered
+      advance(cx: cx, s: set_phase(s: s2, i: i, phase: phase), first: min(i + 1, 1_000_000), again: false, clocks: clocks, open_after: open_after, on: on)
+
+fn answer[F](cx: Cx, s: Step[F], by: string, yes: bool, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  let ev =
+    match yes
+      true => "approve"
+      false => "reject"
+  let st = try stage_in(t: s.t, ev: ev, states: [Status.in_progress])
+  let i = index_in(t: s.t)
+  let sts = try seats(cx: cx, t: s.t, st: st, by: by)
+  let parts = st.parts.indexed().map(x => answered_seat(x: x, seats: sts, by: by, yes: yes, now: cx.now))
+  let did =
+    match yes
+      true => "approved"
+      false => "rejected"
+  let s1 = note_down(s: Step { ..s, t: with_stage(t: s.t, i: i, st: Stage { ..st, parts: parts }) }, r: Rec { ..rec_of(did: did), stage: st.name, by: by, proxy_of: proxy_of_seats(seats: sts, by: by), organization: st.org })
+  match yes
+    false =>
+      match parts.any(p => p.state = PartState.active and max(p.approvers.count() - p.answers.count(a => not a.yes), 0) < p.needed)
+        true => end_ticket(cx: cx, s: s1, status: Status.rejected, ending: Ending.rejected, did: "ticket rejected", by: by, proxy_of: proxy_of_seats(seats: sts, by: by), note: none, on: on)
+        false => ok(s1)
+    true =>
+      match parts.all(p => part_done(p: p))
+        false => ok(s1)
+        true =>
+          let chosen = try chosen_next(cx: cx, s: s1, i: i)
+          passed_on(cx: cx, s: s1, i: i, clocks: clocks, open_after: open_after, on: on)
+
+record Unpaused[F]
+  s    : Step[F]
+  used : number  range >=0 <=100_000
+
+fn unpause[F](cx: Cx, s: Step[F], whole: bool, open_after: (string, date, number) -> result[date, Refusal] total) -> result[Unpaused[F], Refusal] total
+  description "The business days of the pause the ticket is in are taken from what it has left: all of them when the pause ran out"
+  match s.t.paused_at
+    none => ok(Unpaused { s: s, used: 0 })
+    some at =>
+      let counted = try counted_days(cx: cx, at: at, whole: whole, left: s.t.pause_left, open_after: open_after)
+      let used = max(min(counted, s.t.pause_left), 0)
+      ok(Unpaused { s: Step { ..s, t: Ticket { ..s.t, paused_at: none, pause_left: max(s.t.pause_left - used, 0) } }, used: used })
+
+fn counted_days(cx: Cx, at: number range >=0 <=253_402_300_799, whole: bool, left: number range >=0 <=100_000, open_after: (string, date, number) -> result[date, Refusal] total) -> result[number, Refusal] total
+  match whole
+    true => ok(left)
+    false => open_between(a: day_where(spec: cx.spec, at: at, timer: "pause ends"), b: day_where(spec: cx.spec, at: cx.now, timer: "pause ends"), most: left, open_after: open_after)
+
+fn due_back[F](cx: Cx, s: Step[F], open_after: (string, date, number) -> result[date, Refusal] total) -> result[Step[F], Refusal] total
+  description "The requester's turn has a clock: the end of the day the request is to be made again by"
+  match cx.spec.resubmit
+    none => ok(s)
+    some n =>
+      let day = try open_after("resubmit", day_where(spec: cx.spec, at: cx.now, timer: "resubmit late"), n)
+      let due = try end_of_day(day: day, offset: clock_offset(spec: cx.spec, timer: "resubmit late", stage: none))
+      ok(put(s: Step { ..s, t: Ticket { ..s.t, resubmit_due: due } }, what: What.set_timer { timer: Timer.resubmit_late, stage: none, at: due }))
+
+fn to_requester[F](cx: Cx, s: Step[F], did: string, by: string, sent_by: string?, proxy_of: string?, tell_to: list[string], open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  description "The ticket goes to the requester: sent back by an approver or a proxy of the approver `proxy_of` (`sent_by`, kept while it is with the requester), or withdrawn by the requester's side (none)"
+  let u = try unpause(cx: cx, s: cancel_pause(s: cancel_clocks(s: s)), whole: false, open_after: open_after)
+  let s1 = note_down(s: u.s, r: Rec { ..rec_of(did: did), stage: u.s.t.stage, by: by, proxy_of: proxy_of })
+  let s2 = try on_ending(cx: cx, s: Step { ..s1, t: Ticket { ..s1.t, backs: min(s1.t.backs + 1, 1_000_000), status: Status.with_requester, stage: none, sent_back_by: sent_by } }, ending: Ending.sent_back, on: on)
+  let s3 = try due_back(cx: cx, s: s2, open_after: open_after)
+  ok(tell(s: s3, to: tell_to, notice: Notice.returned, stage: none))
+
+fn times_of(b: Back?) -> number total
+  match b
+    none => 0
+    some x => x.times
+
+fn answered_once(p: Phase) -> bool total
+  match p
+    answered, once, deferred => true
+    else => false
+
+fn do_send_back[F](cx: Cx, s: Step[F], by: string, to: string?, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  let st = try stage_in(t: s.t, ev: "send back", states: [Status.in_progress])
+  let i = index_in(t: s.t)
+  let sts = try seats(cx: cx, t: s.t, st: st, by: by)
+  match cx.spec.back
+    none => err(refusal(kind: Kind.event, en: "the request has no `send back` line", ja: "この申請の種類には `send back` の行がありません"))
+    some b =>
+      match s.t.backs >= b.times
+        true => err(refusal(kind: Kind.limit, en: concat("the ticket has gone back ", text(b.times), " times already (`send back … at most ", text(b.times), " times`): approve it or reject it"), ja: concat("合わせて ", text(b.times), " 回までです（`send back … at most ", text(b.times), " times`）。承認か却下を選んでください")))
+        false =>
+          match to
+            none => to_requester(cx: cx, s: s, did: "sent back", by: by, sent_by: by, proxy_of: proxy_of_seats(seats: sts, by: by), tell_to: theirs(who: who_of(t: s.t)), open_after: open_after, on: on)
+            some k =>
+              match b.to_requester
+                true => err(refusal(kind: Kind.event, en: "the request goes back to the requester alone (`send back to the requester`)", ja: "この申請の種類は、申請者へだけ戻せます（`send back to the requester`）"))
+                false =>
+                  match s.t.stages.take(i).indexed().first(x => x.item.name = k)
+                    none => err(refusal(kind: Kind.event, en: concat("`", stage_written(spec: cx.spec, name: k), "` is no stage of the ticket before `", stage_written(spec: cx.spec, name: st.name), "`"), ja: concat("`", stage_written(spec: cx.spec, name: k), "` は、このチケットの `", stage_written(spec: cx.spec, name: st.name), "` より前のステップではありません")))
+                    some j =>
+                      match answered_once(p: j.item.phase)
+                        false => err(refusal(kind: Kind.event, en: concat("nobody answered the stage `", stage_written(spec: cx.spec, name: k), "` on this ticket"), ja: concat("ステップ `", stage_written(spec: cx.spec, name: k), "` には、このチケットでだれも答えていません")))
+                        true =>
+                          let s1 = cancel_clocks(s: s)
+                          let s2 = note_down(s: Step { ..s1, t: Ticket { ..s1.t, backs: min(s1.t.backs + 1, 1_000_000) } }, r: Rec { ..rec_of(did: "sent back"), stage: st.name, by: by, proxy_of: proxy_of_seats(seats: sts, by: by), organization: st.org, to: [k] })
+                          let back = max(min(j.index, 1_000_000), 0)
+                          advance(cx: cx, s: Step { ..s2, t: unwind(cx: cx, t: s2.t, first: back, reopened: none) }, first: back, again: true, clocks: clocks, open_after: open_after, on: on)
+
+fn position(order: list[string], n: string) -> number? total
+  match order.indexed().first(x => x.item = n)
+    none => none
+    some x => x.index
+
+fn past(order: list[string], n: string, un: string) -> bool total
+  description "The stage `n` comes after the stage `un` in the route"
+  match position(order: order, n: n)
+    none => false
+    some a =>
+      match position(order: order, n: un)
+        none => false
+        some b => a > b
+
+fn until_past[F](cx: Cx, t: Ticket[F], st: Stage, i: number, until: string?) -> bool total
+  description "The ticket has come past the stage a request is withdrawn until: the stage it is at is after it in the route, or one it came to before is, and no part waits for it"
+  match until
+    none => false
+    some un =>
+      let waits = st.name = un or waiting(stages: t.stages, i: i).any(p => name_at(stages: t.stages, k: p.stage) = un)
+      let before = t.stages.take(i).any(x => x.name = un or past(order: cx.spec.order, n: x.name, un: un))
+      (past(order: cx.spec.order, n: st.name, un: un) or before) and not waits
+
+fn do_withdraw[F](cx: Cx, s: Step[F], by: string, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  let st = try stage_in(t: s.t, ev: "withdraw", states: [Status.in_progress, Status.paused])
+  let i = index_in(t: s.t)
+  let mine = try theirs_to_do(cx: cx, t: s.t, by: by, ev: "withdraw")
+  match cx.spec.withdraw
+    none => err(refusal(kind: Kind.event, en: "the request has no `withdraw` line", ja: "この申請の種類には `withdraw` の行がありません"))
+    some wl =>
+      match until_past(cx: cx, t: s.t, st: st, i: i, until: wl.until)
+        true =>
+          let un =
+            match wl.until
+              none => ""
+              some u => stage_written(spec: cx.spec, name: u)
+          let cur = stage_written(spec: cx.spec, name: st.name)
+          err(refusal(kind: Kind.state, en: concat("the request is withdrawn until `", un, "` answers (`withdraw until ", un, "`), and the ticket is at `", cur, "`"), ja: concat("取り下げられるのは `", un, "` が答えるまでです（`withdraw until ", un, "`）。チケットは `", cur, "` にあります")))
+        false =>
+          match s.t.backs >= times_of(b: cx.spec.back)
+            true =>
+              let u = try unpause(cx: cx, s: s, whole: false, open_after: open_after)
+              end_ticket(cx: cx, s: u.s, status: Status.withdrawn, ending: Ending.withdrawn, did: "ticket withdrawn", by: by, proxy_of: for_requester(t: s.t, by: by), note: none, on: on)
+            false => to_requester(cx: cx, s: s, did: "withdrawn", by: by, sent_by: none, proxy_of: for_requester(t: s.t, by: by), tell_to: waited(st: st, org: cx.org), open_after: open_after, on: on)
+
+fn do_discard[F](cx: Cx, s: Step[F], by: string, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  match s.t.status = Status.with_requester
+    false => err(state_refusal(t: s.t.status, ev: "discard"))
+    true =>
+      let mine = try theirs_to_do(cx: cx, t: s.t, by: by, ev: "discard")
+      end_ticket(cx: cx, s: s, status: Status.withdrawn, ending: Ending.withdrawn, did: "ticket withdrawn", by: by, proxy_of: for_requester(t: s.t, by: by), note: none, on: on)
+
+fn listed(names: list[string]?) -> list[string] total
+  description "The names an event lists, none for a list it leaves out"
+  match names
+    none => []
+    some ns => ns
+
+fn do_resubmit[F, G](cx: Cx, s: Step[F], by: string, form: G, clear: list[string]?, attempt: string, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org, F) -> list[OnLine] total, reform: (F, G, list[string], bool, Org) -> result[Formed[F], Refusal] total) -> result[Step[F], Refusal] total
+  match s.t.status = Status.with_requester
+    false => err(state_refusal(t: s.t.status, ev: "resubmit"))
+    true =>
+      let mine = try theirs_to_do(cx: cx, t: s.t, by: by, ev: "resubmit")
+      let u = try usable_on(spec: cx.spec, day: cx.org.day)
+      let f = try reform(s.t.form, form, listed(names: clear), false, cx.org)
+      let s1 = cancel_back(s: s)
+      let s2 = note_down(s: Step { ..s1, t: Ticket { ..s1.t, round: min(s1.t.round + 1, 1_000_000), attempt: attempt, form: f.form, stages: f.stages, sent_back_by: none }, vals: f.vals }, r: Rec { ..rec_of(did: "resubmitted"), by: by, proxy_of: for_requester(t: s1.t, by: by), organization: cx.org.version, cleared: f.cleared })
+      let s3 = try on_ending(cx: cx, s: s2, ending: Ending.submitted, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, f.form))
+      advance(cx: cx, s: s3, first: 0, again: false, clocks: clocks, open_after: open_after, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, f.form))
+
+fn after_cur(order: list[string], n: string, cur: number?) -> bool total
+  match position(order: order, n: n)
+    none => false
+    some p =>
+      match cur
+        none => true
+        some c => p > c
+
+fn agent_of(p: Part) -> string? total
+  match p.state = PartState.agent
+    false => none
+    true => p.of
+
+fn ask_again(cx: Cx, who: Who, vals: list[Arg], stage: string, flow: string) -> list[What] total
+  [What.ask_agent { flow: flow, stage: stage, args: flow_args(who: who, vals: vals) }, hist(r: Rec { ..rec_of(did: "agent asked"), stage: stage, organization: cx.org.version, note: flow_shown(spec: cx.spec, flow: flow) })]
+
+fn do_edit[F, G](cx: Cx, s: Step[F], by: string, fields: G, clear: list[string]?, reform: (F, G, list[string], bool, Org) -> result[Formed[F], Refusal] total) -> result[Step[F], Refusal] total
+  let st = try stage_in(t: s.t, ev: "edit", states: [Status.in_progress])
+  let i = index_in(t: s.t)
+  let who = try approver(cx: cx, t: s.t, st: st, by: by)
+  let f = try reform(s.t.form, fields, listed(names: clear), true, cx.org)
+  let cur = s.t.stages.take(i + 1).filter_map(x => position(order: cx.spec.order, n: x.name)).max_of(p => p)
+  let stages = s.t.stages.take(i + 1).concat(f.stages.filter(x => after_cur(order: cx.spec.order, n: x.name, cur: cur)))
+  let t = Ticket { ..s.t, form: f.form, stages: stages, edits: min(s.t.edits + 1, 1_000_000) }
+  let s1 = note_down(s: Step { ..s, t: t, vals: f.vals }, r: Rec { ..rec_of(did: "edited"), stage: st.name, by: by, proxy_of: acting_for(org: cx.org, st: st, by: by), to: f.named, cleared: f.cleared })
+  ok(put_all(s: s1, made: st.parts.filter_map(p => agent_of(p: p)).flat_map(flow => ask_again(cx: cx, who: who_of(t: s1.t), vals: s1.vals, stage: st.name, flow: flow))))
+
+fn waits_answer(p: Part) -> bool total
+  p.state = PartState.active or p.state = PartState.stopped
+
+fn do_add_approver[F](cx: Cx, s: Step[F], by: string?, approver: string, which: string?) -> result[Step[F], Refusal] total
+  let st = try stage_in(t: s.t, ev: "add approver", states: [Status.in_progress, Status.paused])
+  let i = index_in(t: s.t)
+  let may = try may_answer(cx: cx, t: s.t, by: approver)
+  let found =
+    match which
+      some w => st.parts.indexed().first(x => x.item.way = w and waits_answer(p: x.item))
+      none =>
+        match st.parts.indexed().first(x => x.item.state = PartState.stopped)
+          some x => x
+          none => st.parts.indexed().first(x => waits_answer(p: x.item))
+  match found
+    none => err(refusal(kind: Kind.event, en: concat("the stage `", stage_written(spec: cx.spec, name: st.name), "` has no part that waits for an approver"), ja: concat("ステップ `", stage_written(spec: cx.spec, name: st.name), "` に、承認者を足せる所がありません")))
+    some x =>
+      match x.item.approvers.contains(approver)
+        true => err(refusal(kind: Kind.event, en: concat(approver, " is an approver of the stage `", stage_written(spec: cx.spec, name: st.name), "` already"), ja: concat(approver, " は、もうステップ `", stage_written(spec: cx.spec, name: st.name), "` の承認者です")))
+        false =>
+          let p = x.item
+          let approvers = p.approvers.append(approver)
+          let n = max(p.needed, 1)
+          let state =
+            match p.state = PartState.stopped and approvers.count() >= n
+              true => PartState.active
+              false => p.state
+          let sole =
+            match approvers.count() = 1 and n = 1
+              true => Sole.by { person: approver }
+              false => Sole.other
+          let st2 = Stage { ..st, parts: replace_part(ps: st.parts, k: max(min(x.index, 1_000_000), 0), p: Part { ..p, approvers: approvers, state: state, needed: n, sole: sole }) }
+          let s1 = note_down(s: Step { ..s, t: with_stage(t: s.t, i: i, st: st2) }, r: Rec { ..rec_of(did: "approver added"), stage: st.name, by: by, to: [approver] })
+          match s.t.status = Status.paused
+            true => ok(s1)
+            false => ok(put(s: s1, what: What.notify { to: [approver], notice: Notice.waiting, stage: st.name }))
+
+fn hands(p: Part, of: string, to: string) -> bool total
+  p.state = PartState.active and p.approvers.contains(of) and not p.answers.any(a => a.seat = of) and not p.approvers.contains(to)
+
+fn swapped(s: Sole, of: string, to: string) -> Sole total
+  match s
+    by b =>
+      match b.person = of
+        true => Sole.by { person: to }
+        false => s
+    else => s
+
+fn handed(p: Part, of: string, to: string) -> Part total
+  match hands(p: p, of: of, to: to)
+    false => p
+    true => Part { ..p, approvers: p.approvers.map(a => if a = of then to else a), sole: swapped(s: p.sole, of: of, to: to) }
+
+fn do_hand_over[F](cx: Cx, s: Step[F], by: string?, of: string, to: string) -> result[Step[F], Refusal] total
+  let st = try stage_in(t: s.t, ev: "hand over", states: [Status.in_progress, Status.paused])
+  let i = index_in(t: s.t)
+  let may = try may_answer(cx: cx, t: s.t, by: to)
+  match st.parts.any(p => hands(p: p, of: of, to: to))
+    false => err(refusal(kind: Kind.event, en: concat(of, " is no approver of the stage `", stage_written(spec: cx.spec, name: st.name), "` who has yet to answer (or ", to, " is one already)"), ja: concat(of, " は、ステップ `", stage_written(spec: cx.spec, name: st.name), "` でまだ答えていない承認者ではありません（または ", to, " がもう承認者です）")))
+    true =>
+      let st2 = Stage { ..st, parts: st.parts.map(p => handed(p: p, of: of, to: to)) }
+      let s1 = note_down(s: Step { ..s, t: with_stage(t: s.t, i: i, st: st2) }, r: Rec { ..rec_of(did: "handed over"), stage: st.name, by: by, to: [of, to] })
+      match s.t.status = Status.paused
+        true => ok(s1)
+        false => ok(put(s: s1, what: What.notify { to: [to], notice: Notice.waiting, stage: st.name }))
+
+fn do_comment[F](cx: Cx, s: Step[F], by: string, text: string?) -> result[Step[F], Refusal] total
+  description "A comment: a line of the history, and a notice to the requester, the one who made the request for them, the one who sent it back to the requester while it is with them, and the ones the stage waits for, past the one who wrote it. The ticket's state, clocks and revision do not move. Who may write one is the gate's to say"
+  match text
+    none => err(refusal(kind: Kind.comment, en: "the text of `comment` is empty", ja: "`comment` の文が空です"))
+    some x =>
+      let back =
+        match s.t.sent_back_by
+          none => []
+          some b => [b]
+      let waits =
+        match at_of(t: s.t)
+          none => []
+          some i =>
+            match s.t.stages.at(i)
+              none => []
+              some st => waited(st: st, org: cx.org)
+      let to = theirs(who: who_of(t: s.t)).concat(back, waits).distinct().filter(p => p != by)
+      let s1 = note_down(s: s, r: Rec { ..rec_of(did: "commented"), stage: s.t.stage, by: by, comment: x })
+      ok(tell(s: s1, to: to, notice: Notice.comment, stage: s.t.stage))
+
+fn back_step[F](t: Ticket[F], s: Scan, j: number) -> Scan total
+  match s.done
+    true => s
+    false =>
+      match t.stages.at(j)
+        none => Scan { found: none, done: true }
+        some st =>
+          match st.phase
+            answered => Scan { found: j, done: true }
+            deferred =>
+              match present(v: st.started)
+                true => Scan { found: j, done: true }
+                false => s
+            skipped, once, circulated => s
+            else => Scan { found: none, done: true }
+
+fn back_to[F](t: Ticket[F], i: number) -> number? total
+  description "The stage an approval to retract was given at: the last one before `i` that people answered, past the ones that approval did, the ones nobody answers and the circulations"
+  let n = max(min(i, 1_000_000), 0)
+  reduce(numbers(1, n), Scan { found: none, done: false }, (s, k) => back_step(t: t, s: s, j: n - k)).found
+
+fn unanswered(p: Part, by: string) -> Part total
+  let answers = p.answers.filter(a => a.by != by)
+  let q = Part { ..p, answers: answers }
+  match p.state = PartState.passed and answers.count(a => a.yes) < p.needed
+    true => Part { ..q, state: PartState.active }
+    false => q
+
+fn do_retract[F](cx: Cx, s: Step[F], by: string, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> result[Step[F], Refusal] total
+  let cur = try stage_in(t: s.t, ev: "retract", states: [Status.in_progress])
+  let i = index_in(t: s.t)
+  match cx.spec.retract
+    false => err(refusal(kind: Kind.event, en: "the request has no `retract approval` line", ja: "この申請の種類には `retract approval` の行がありません"))
+    true =>
+      match cur.parts.any(p => p.answers.count() > 0 or p.state = PartState.checked)
+        true => err(refusal(kind: Kind.state, en: concat("the stage `", stage_written(spec: cx.spec, name: cur.name), "` has an answer already, and the approval before it is not retracted"), ja: concat("ステップ `", stage_written(spec: cx.spec, name: cur.name), "` に、もう答えがあります。前の承認は取り消せません")))
+        false =>
+          match back_to(t: s.t, i: i)
+            none => err(refusal(kind: Kind.state, en: concat("no approval before `", stage_written(spec: cx.spec, name: cur.name), "` is there to retract"), ja: concat("`", stage_written(spec: cx.spec, name: cur.name), "` の前に、取り消せる承認がありません")))
+            some j0 =>
+              let j = max(min(j0, 1_000_000), 0)
+              match s.t.stages.at(j)
+                none => err(refusal(kind: Kind.state, en: concat("no approval before `", stage_written(spec: cx.spec, name: cur.name), "` is there to retract"), ja: concat("`", stage_written(spec: cx.spec, name: cur.name), "` の前に、取り消せる承認がありません")))
+                some sj =>
+                  match sj.parts.flat_map(p => p.answers).first(a => a.by = by and a.yes)
+                    none => err(refusal(kind: Kind.person, en: concat(who_en(org: cx.org, id: by), " did not approve the stage `", stage_written(spec: cx.spec, name: sj.name), "`"), ja: concat(who_ja(org: cx.org, id: by), "は、ステップ `", stage_written(spec: cx.spec, name: sj.name), "` を承認していません")))
+                    some given =>
+                      let proxy =
+                        match given.seat = by
+                          true => none
+                          false => given.seat
+                      let s1 = cancel_clocks(s: s)
+                      let t1 = with_stage(t: s1.t, i: j, st: Stage { ..sj, parts: sj.parts.map(p => unanswered(p: p, by: by)), phase: Phase.active })
+                      let t2 = Ticket { ..unwind(cx: cx, t: t1, first: min(j + 1, 1_000_000), reopened: j), stage: sj.name }
+                      let s2 = note_down(s: Step { ..s1, t: t2 }, r: Rec { ..rec_of(did: "retracted"), stage: sj.name, by: by, proxy_of: proxy })
+                      let s3 = try set_clocks(cx: cx, s: s2, i: j, fresh: false, clocks: clocks, open_after: open_after)
+                      match s3.t.stages.at(j)
+                        none => ok(s3)
+                        some sj2 => ok(tell(s: s3, to: waited(st: sj2, org: cx.org), notice: Notice.waiting, stage: sj.name))
+
+fn do_pause[F](cx: Cx, s: Step[F], by: string, open_after: (string, date, number) -> result[date, Refusal] total) -> result[Step[F], Refusal] total
+  let st = try stage_in(t: s.t, ev: "pause", states: [Status.in_progress])
+  let who = try approver(cx: cx, t: s.t, st: st, by: by)
+  match cx.spec.pause
+    none => err(refusal(kind: Kind.event, en: "the request has no `pause` line", ja: "この申請の種類には `pause` の行がありません"))
+    some most =>
+      match s.t.pause_left = 0
+        true => err(refusal(kind: Kind.limit, en: concat("the ticket has been paused for the ", text(most), " business days it may be (`pause at most ", text(most), " business days`)"), ja: concat("保留は合わせて", text(most), "営業日までで、もう残っていません（`pause at most ", text(most), " business days`）")))
+        false =>
+          let day = try open_after("pause", day_where(spec: cx.spec, at: cx.now, timer: "pause ends"), s.t.pause_left)
+          let ends = try end_of_day(day: day, offset: clock_offset(spec: cx.spec, timer: "pause ends", stage: none))
+          let s1 = cancel_clocks(s: s)
+          let t = Ticket { ..s1.t, status: Status.paused, paused_at: cx.now, pause_ends: ends }
+          let s2 = note_down(s: Step { ..s1, t: t }, r: Rec { ..rec_of(did: "paused"), stage: st.name, by: by, proxy_of: acting_for(org: cx.org, st: st, by: by) })
+          let s3 = put(s: s2, what: What.notify { to: theirs(who: who_of(t: t)), notice: Notice.paused, stage: st.name })
+          ok(put(s: s3, what: What.set_timer { timer: Timer.pause_ends, stage: st.name, at: ends }))
+
+fn resumed_by[F](cx: Cx, t: Ticket[F], st: Stage, by: string?, ev: string) -> result[bool, Refusal] total
+  match by
+    some b => approver(cx: cx, t: t, st: st, by: b)
+    none => rung(spec: cx.spec, at: t.pause_ends, what: ev, stage: st.name, now: cx.now)
+
+fn do_resume[F](cx: Cx, s: Step[F], by: string?, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total) -> result[Step[F], Refusal] total
+  description "`resume` by an approver, or the clock of the pause (`by` none): the stage's clocks are set again, later by the business days it was paused for"
+  let ev =
+    match by
+      none => "pause ends"
+      some b => "resume"
+  let st = try stage_in(t: s.t, ev: ev, states: [Status.paused])
+  let i = index_in(t: s.t)
+  let who = try resumed_by(cx: cx, t: s.t, st: st, by: by, ev: ev)
+  let u = try unpause(cx: cx, s: s, whole: not present(v: by), open_after: open_after)
+  let s1 =
+    match present(v: by) and present(v: u.s.t.pause_ends)
+      true => put(s: u.s, what: What.cancel_timer { timer: Timer.pause_ends, stage: st.name })
+      false => u.s
+  let st1 = Stage { ..st, held: min(st.held + u.used, 100_000) }
+  let used = concat(text(u.used), " business days")
+  let proxy =
+    match by
+      none => none
+      some b => acting_for(org: cx.org, st: st, by: b)
+  let s2 = note_down(s: Step { ..s1, t: Ticket { ..with_stage(t: s1.t, i: i, st: st1), pause_ends: none, status: Status.in_progress } }, r: Rec { ..rec_of(did: "resumed"), stage: st.name, by: by, proxy_of: proxy, note: used })
+  let s3 = try set_clocks(cx: cx, s: s2, i: i, fresh: false, clocks: clocks, open_after: open_after)
+  match s3.t.stages.at(i)
+    none => ok(s3)
+    some st2 => ok(put(s: s3, what: What.notify { to: theirs(who: who_of(t: s3.t)).concat(waited(st: st2, org: cx.org)), notice: Notice.resumed, stage: st.name }))
+
+fn do_remind[F](cx: Cx, s: Step[F]) -> result[Step[F], Refusal] total
+  let st = try stage_in(t: s.t, ev: "remind", states: [Status.in_progress])
+  let i = index_in(t: s.t)
+  let r = try rung(spec: cx.spec, at: st.remind, what: "remind", stage: st.name, now: cx.now)
+  let st1 = Stage { ..st, remind: none, reminded: true }
+  let to = waited(st: st1, org: cx.org)
+  let s1 = note_down(s: Step { ..s, t: with_stage(t: s.t, i: i, st: st1) }, r: Rec { ..rec_of(did: "reminded"), stage: st.name, to: to })
+  ok(tell(s: s1, to: to, notice: Notice.reminder, stage: st.name))
+
+fn do_resubmit_late[F](cx: Cx, s: Step[F], on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  match s.t.status = Status.with_requester
+    false => err(state_refusal(t: s.t.status, ev: "resubmit late"))
+    true =>
+      let r = try rung(spec: cx.spec, at: s.t.resubmit_due, what: "resubmit late", stage: none, now: cx.now)
+      end_ticket(cx: cx, s: Step { ..s, t: Ticket { ..s.t, resubmit_due: none } }, status: Status.expired, ending: Ending.expired, did: "ticket expired", by: none, proxy_of: none, note: "resubmit late", on: on)
+
+fn late_act(o: Occ, up: number) -> LateAct? total
+  description "What the stage does at this deadline: what `when late` says first, then what it says after `then`"
+  match o.late
+    none => none
+    some l =>
+      match up
+        0 =>
+          let first = l.first
+          first
+        1 => l.after
+        else => none
+
+fn then_stays(o: Occ) -> bool total
+  match o.late
+    none => false
+    some l =>
+      match l.after
+        none => false
+        some a =>
+          match a
+            stay => true
+            else => false
+
+record Move
+  part   : number
+  people : list[string]
+  way    : string?
+  team   : string?
+
+fn head_not(spec: Spec, who: Who, team: Team, p: string) -> string? total
+  match team.head
+    none => none
+    some h =>
+      match h = p or left_out(spec: spec, who: who, id: h)
+        true => none
+        false => h
+
+fn above_person(cx: Cx, who: Who, p: string) -> string? total
+  description "The first head above the person who answers in their place: from their primary team up, each team's head who is not them and not left out"
+  chain(org: cx.org, team: primary(org: cx.org, person: p)).filter_map(x => head_not(spec: cx.spec, who: who, team: x, p: p)).first()
+
+fn above_move(cx: Cx, who: Who, k: number, p: Part) -> Move? total
+  let to =
+    match p.team
+      some tm => up_from(spec: cx.spec, who: who, org: cx.org, origin: Up.above { team: tm })
+      none =>
+        match p.approvers.first()
+          none => none
+          some a => above_person(cx: cx, who: who, p: a)
+  match to
+    none => none
+    some h => Move { part: k, people: [h], way: none, team: none }
+
+fn sent_move(cx: Cx, who: Who, vals: list[Arg], k: number, way: string) -> Move? total
+  description "Where a table sends a late part: the people of the way it names, or the head above where the way finds nobody"
+  match is_chosen(spec: cx.spec, way: way)
+    true => none
+    false =>
+      match solve(spec: cx.spec, who: who, vals: vals, org: cx.org, way: way)
+        people y =>
+          match y.ps.count() = 0
+            true => none
+            false => Move { part: k, people: y.ps, way: way, team: y.team }
+        nobody n =>
+          match up_from(spec: cx.spec, who: who, org: cx.org, origin: n.up)
+            none => none
+            some h => Move { part: k, people: [h], way: way, team: none }
+
+fn table_move(cx: Cx, who: Who, vals: list[Arg], k: number, p: Part, sends: list[Send]) -> Move? total
+  match sends.first(x => x.key = p.key)
+    none => none
+    some sd => sd.to.filter_map(w => sent_move(cx: cx, who: who, vals: vals, k: k, way: w)).first()
+
+fn move_of(cx: Cx, who: Who, vals: list[Arg], o: Occ, x: indexed[Part], table: bool, sends: list[Send]) -> Move? total
+  description "Where a part that still waits goes up to when it is late: an agent that has not answered, with no table, to the way after `else`"
+  match x.item.state = PartState.agent and not table
+    true =>
+      match o.ways.at(x.index)
+        none => none
+        some way =>
+          match solve(spec: cx.spec, who: who, vals: vals, org: cx.org, way: way)
+            people y => Move { part: x.index, people: y.ps, way: none, team: y.team }
+            nobody n => none
+    false =>
+      match table
+        false => above_move(cx: cx, who: who, k: x.index, p: x.item)
+        true => table_move(cx: cx, who: who, vals: vals, k: x.index, p: x.item, sends: sends)
+
+fn moved(x: indexed[Part], moves: list[Move]) -> Part total
+  match moves.first(m => m.part = x.index)
+    none => x.item
+    some m =>
+      let p = x.item
+      let n =
+        match m.team
+          none => 1
+          some tm => min(max(p.needed, 1), max(min(m.people.count(), 1_000_000), 1))
+      let sole =
+        match m.people.first()
+          none => Sole.other
+          some a =>
+            match m.people.count() = 1 and n = 1 and p.state != PartState.agent
+              true => Sole.by { person: a }
+              false => Sole.other
+      let key =
+        match m.way
+          none => p.key
+          some w => w
+      Part { ..p, needed: n, sole: sole, key: key, answers: [], state: PartState.active, of: none, approvers: m.people, team: m.team }
+
+fn gathered(acc: list[string], m: Move) -> list[string] total
+  acc.concat(m.people.filter(p => not acc.contains(p)))
+
+fn expire[F](cx: Cx, s: Step[F], note: string, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  end_ticket(cx: cx, s: s, status: Status.expired, ending: Ending.expired, did: "ticket expired", by: none, proxy_of: none, note: note, on: on)
+
+fn go_up[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, st: Stage, o: Occ, table: bool, sends: list[Send], clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  description "The stage goes up for being late: each part that still waits to where it goes up, with a deadline and a reminder counted from the time the deadline passed, the reminder not yet rung"
+  let tried = st.parts.indexed().filter(x => not part_done(p: x.item)).map(x => move_of(cx: cx, who: who_of(t: s.t), vals: s.vals, o: o, x: x, table: table, sends: sends))
+  match tried.any(m => not present(v: m))
+    true =>
+      match st.up = 0 and then_stays(o: o)
+        true => ok(note_down(s: s, r: Rec { ..rec_of(did: "late"), stage: st.name, note: "nowhere to go up; it waits on" }))
+        false => expire(cx: cx, s: s, note: "late; nowhere to go up", on: on)
+    false =>
+      let moves = tried.filter_map(m => m)
+      let none_yet: list[string] = []
+      let to = reduce(moves, none_yet, (acc, m) => gathered(acc: acc.take(9_223_372_036_854_775_807), m: m)).take(9_223_372_036_854_775_807)
+      let up = min(st.up + 1, 255)
+      let started =
+        match st.started
+          none => cx.now
+          some x => x
+      let c = try clocks(st.name, started, st.held, up)
+      let d =
+        match c.due
+          none => none
+          some x => max(x, cx.now)
+      let r =
+        match c.remind
+          none => none
+          some x => before(r: max(x, cx.now), due: d)
+      let st2 = Stage { ..st, parts: st.parts.indexed().map(x => moved(x: x, moves: moves)), up: up, remind: r, reminded: false, due: d }
+      let s1 = note_down(s: Step { ..s, t: with_stage(t: s.t, i: i, st: st2) }, r: Rec { ..rec_of(did: "went up"), stage: st.name, to: to, organization: cx.org.version, note: "late" })
+      let s2 = tell(s: s1, to: waited(st: st2, org: cx.org), notice: Notice.went_up, stage: st.name)
+      ok(timer_at(s: timer_at(s: s2, timer: Timer.remind, stage: st.name, at: r), timer: Timer.late, stage: st.name, at: d))
+
+fn do_late[F](cx: Cx, s: Step[F], clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  description "The deadline of the ticket's stage passed"
+  let st = try stage_in(t: s.t, ev: "late", states: [Status.in_progress])
+  let i = index_in(t: s.t)
+  let r = try rung(spec: cx.spec, at: st.due, what: "late", stage: st.name, now: cx.now)
+  let o = try occ_of(spec: cx.spec, st: st)
+  let st1 = Stage { ..st, due: none, remind: none }
+  let s0 = Step { ..s, t: with_stage(t: s.t, i: i, st: st1) }
+  let s1 =
+    match st.remind
+      none => s0
+      some x => put(s: s0, what: What.cancel_timer { timer: Timer.remind, stage: st.name })
+  match o.shape
+    note n =>
+      let s2 = note_down(s: s1, r: Rec { ..rec_of(did: "note missing"), stage: st.name, note: "late" })
+      advance(cx: cx, s: set_phase(s: s2, i: i, phase: Phase.noted), first: min(i + 1, 1_000_000), again: false, clocks: clocks, open_after: open_after, on: on)
+    else =>
+      match late_act(o: o, up: st.up)
+        none => expire(cx: cx, s: s1, note: "late", on: on)
+        some a =>
+          match a
+            expire => expire(cx: cx, s: s1, note: "late", on: on)
+            stay => ok(note_down(s: s1, r: Rec { ..rec_of(did: "late"), stage: st.name, note: "it waits on" }))
+            escalate e => go_up(cx: cx, s: s1, i: i, st: st1, o: o, table: e.table, sends: e.sends, clocks: clocks, open_after: open_after, on: on)
+
+fn lift[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, open_after: (string, date, number) -> result[date, Refusal] total) -> result[Step[F], Refusal] total
+  description "The stage is done by a flow's answer while the ticket is paused: the pause ends with it, the business days it took counted"
+  match s.t.status = Status.paused
+    false => ok(s)
+    true =>
+      let name = name_at(stages: s.t.stages, k: i)
+      let u = try unpause(cx: cx, s: s, whole: false, open_after: open_after)
+      let used = concat(text(u.used), " business days")
+      let s1 = note_down(s: cancel_pause(s: u.s), r: Rec { ..rec_of(did: "resumed"), stage: name, note: used })
+      let s2 = put(s: s1, what: What.notify { to: theirs(who: who_of(t: s1.t)), notice: Notice.resumed, stage: name })
+      match s2.t.stages.at(i)
+        none => ok(Step { ..s2, t: Ticket { ..s2.t, status: Status.in_progress } })
+        some st => ok(Step { ..s2, t: Ticket { ..with_stage(t: s2.t, i: i, st: Stage { ..st, remind: none, due: none }), status: Status.in_progress } })
+
+fn doubted[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, st: Stage, o: Occ, x: indexed[Part], note: string, why: string?, failed: bool) -> result[Step[F], Refusal] total
+  description "The agent doubts (`why` is its reason), or its flow failed: the way after `else` answers the part"
+  let did =
+    match failed
+      true => "agent failed"
+      false => "agent doubt"
+  let s1 = note_down(s: s, r: Rec { ..rec_of(did: did), stage: st.name, note: note, comment: why })
+  match o.ways.at(x.index)
+    none => err(refusal(kind: Kind.unread, en: concat("the stage `", st.name, "` has no such way"), ja: concat("ステップ `", st.name, "` の決め方がありません")))
+    some way =>
+      let np = part_of(spec: cx.spec, who: who_of(t: s1.t), vals: s1.vals, o: o, st: st, way: way, q: quorum_of(o: o), org: cx.org, ask: false)
+      let s2 = put_all(s: Step { ..s1, t: with_stage(t: s1.t, i: i, st: Stage { ..st, parts: replace_part(ps: st.parts, k: max(min(x.index, 1_000_000), 0), p: np.part) }) }, made: np.made)
+      let to =
+        match np.part.state = PartState.active
+          true => np.part.approvers
+          false => []
+      let s3 = tell(s: s2, to: to, notice: Notice.waiting, stage: st.name)
+      match np.part.state = PartState.stopped
+        true => ok(put(s: s3, what: What.notify { to: [], notice: Notice.stopped, stage: st.name }))
+        false => ok(s3)
+
+fn do_agent[F](cx: Cx, s: Step[F], yes: bool, reason: string, failed: bool, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  description "An agent's flow answered `ok`, or a doubt, with its reason, or failed, which is a doubt; a summary's flow that failed leaves the ticket to go on without it. A flow answers when it is done, so a paused ticket takes its answer too. The history names the flow in its note, and keeps the reason as its comment"
+  let ev =
+    match failed
+      true => "flow failed"
+      false => "agent answered"
+  let st = try stage_in(t: s.t, ev: ev, states: [Status.in_progress, Status.paused])
+  let i = index_in(t: s.t)
+  let o = try occ_of(spec: cx.spec, st: st)
+  match o.shape
+    note n =>
+      match failed
+        false => err(refusal(kind: Kind.event, en: concat("the stage `", stage_written(spec: cx.spec, name: st.name), "` is a summary, and takes `note ready`"), ja: concat("ステップ `", stage_written(spec: cx.spec, name: st.name), "` は要約です。`note ready` を受け付けます")))
+        true =>
+          let s1 = note_down(s: s, r: Rec { ..rec_of(did: "note missing"), stage: st.name, note: "flow failed" })
+          let s2 = try lift(cx: cx, s: s1, i: i, open_after: open_after)
+          advance(cx: cx, s: set_phase(s: cancel_clocks(s: s2), i: i, phase: Phase.noted), first: min(i + 1, 1_000_000), again: false, clocks: clocks, open_after: open_after, on: on)
+    else =>
+      match st.parts.indexed().first(x => x.item.state = PartState.agent)
+        none => err(refusal(kind: Kind.state, en: concat("the stage `", stage_written(spec: cx.spec, name: st.name), "` waits for no agent's answer"), ja: concat("ステップ `", stage_written(spec: cx.spec, name: st.name), "` は、エージェントの答えを待っていません")))
+        some x =>
+          let flow =
+            match x.item.of
+              none => ""
+              some f => flow_shown(spec: cx.spec, flow: f)
+          let why : string? =
+            match reason = ""
+              true => none
+              false => reason
+          let s1 : result[Step[F], Refusal] =
+            match yes
+              true => ok(note_down(s: Step { ..s, t: with_stage(t: s.t, i: i, st: Stage { ..st, parts: replace_part(ps: st.parts, k: max(min(x.index, 1_000_000), 0), p: Part { ..x.item, state: PartState.checked }) }) }, r: Rec { ..rec_of(did: "agent ok"), stage: st.name, note: flow, comment: why }))
+              false => doubted(cx: cx, s: s, i: i, st: st, o: o, x: x, note: flow, why: why, failed: failed)
+          let s2 = try s1
+          match s2.t.stages.at(i)
+            none => ok(s2)
+            some st2 =>
+              match st2.parts.all(p => part_done(p: p))
+                false => ok(s2)
+                true =>
+                  let s3 = try lift(cx: cx, s: s2, i: i, open_after: open_after)
+                  passed_on(cx: cx, s: s3, i: i, clocks: clocks, open_after: open_after, on: on)
+
+fn do_note[F](cx: Cx, s: Step[F], outputs: list[Arg], clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
+  let st = try stage_in(t: s.t, ev: "note ready", states: [Status.in_progress, Status.paused])
+  let i = index_in(t: s.t)
+  let o = try occ_of(spec: cx.spec, st: st)
+  match o.shape
+    note n =>
+      let s1 = note_down(s: Step { ..s, t: Ticket { ..s.t, notes: s.t.notes.append(Note { stage: st.name, outputs: outputs }) } }, r: Rec { ..rec_of(did: "note attached"), stage: st.name })
+      let s2 = try lift(cx: cx, s: s1, i: i, open_after: open_after)
+      advance(cx: cx, s: set_phase(s: cancel_clocks(s: s2), i: i, phase: Phase.noted), first: min(i + 1, 1_000_000), again: false, clocks: clocks, open_after: open_after, on: on)
+    else => err(refusal(kind: Kind.state, en: concat("the stage `", stage_written(spec: cx.spec, name: st.name), "` is no summary"), ja: concat("ステップ `", stage_written(spec: cx.spec, name: st.name), "` は要約ではありません")))
+
+fn act[F, G](cx: Cx, t: Ticket[F], ev: Event[G], c: string?, vals: list[Arg], clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org, F) -> list[OnLine] total, reform: (F, G, list[string], bool, Org) -> result[Formed[F], Refusal] total) -> result[Step[F], Refusal] total
+  let s = Step { t: t, fx: [], vals: vals }
+  match ev
+    approve a => answer(cx: cx, s: s, by: a.by, yes: true, clocks: clocks, open_after: open_after, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, t.form))
+    reject a => answer(cx: cx, s: s, by: a.by, yes: false, clocks: clocks, open_after: open_after, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, t.form))
+    send_back a => do_send_back(cx: cx, s: s, by: a.by, to: a.to, clocks: clocks, open_after: open_after, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, t.form))
+    retract a => do_retract(cx: cx, s: s, by: a.by, clocks: clocks, open_after: open_after)
+    pause a => do_pause(cx: cx, s: s, by: a.by, open_after: open_after)
+    resume a => do_resume(cx: cx, s: s, by: a.by, clocks: clocks, open_after: open_after)
+    pause_ends => do_resume(cx: cx, s: s, by: none, clocks: clocks, open_after: open_after)
+    withdraw a => do_withdraw(cx: cx, s: s, by: a.by, open_after: open_after, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, t.form))
+    discard a => do_discard(cx: cx, s: s, by: a.by, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, t.form))
+    resubmit a => do_resubmit(cx: cx, s: s, by: a.by, form: a.form, clear: a.clear, attempt: a.attempt, clocks: clocks, open_after: open_after, on: on, reform: reform)
+    edit a => do_edit(cx: cx, s: s, by: a.by, fields: a.fields, clear: a.clear, reform: reform)
+    add_approver a => do_add_approver(cx: cx, s: s, by: a.by, approver: a.approver, which: a.part)
+    hand_over a => do_hand_over(cx: cx, s: s, by: a.by, of: a.of, to: a.to)
+    comment a => do_comment(cx: cx, s: s, by: a.by, text: c)
+    remind => do_remind(cx: cx, s: s)
+    late => do_late(cx: cx, s: s, clocks: clocks, open_after: open_after, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, t.form))
+    resubmit_late => do_resubmit_late(cx: cx, s: s, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, t.form))
+    agent_answered a => do_agent(cx: cx, s: s, yes: a.verdict = Verdict.ok, reason: a.reason, failed: false, clocks: clocks, open_after: open_after, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, t.form))
+    flow_failed a => do_agent(cx: cx, s: s, yes: false, reason: "", failed: true, clocks: clocks, open_after: open_after, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, t.form))
+    note_ready a => do_note(cx: cx, s: s, outputs: a.outputs, clocks: clocks, open_after: open_after, on: (e: Ending, r: Ref, o: Org) => on(e, r, o, t.form))
+
+fn next[F, G](spec: Spec, t: Ticket[F], ev: Event[G], org: Org, now: number range >=0 <=253_402_300_799, vals: list[Arg], clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org, F) -> list[OnLine] total, reform: (F, G, list[string], bool, Org) -> result[Formed[F], Refusal] total) -> result[Moved[F], Refusal] total
+  description "One event of a ticket: the ticket as it is after it, with what is to do; or why the event is not taken. Asked in order: a clock that has rung, the revision the event was made on, the state of the ticket, the comment and the reason the request asks with it, then who gives it. What a person wrote with it is on the line of the history of what they did"
+  let day = try on_day(org: org, now: now, offset: spec.offset)
+  let r =
+    match is_clock(ev: ev)
+      true => none
+      false => rung_first(t: t, now: now)
+  match r
+    some x =>
+      let a = time_text(at: x.at, offset: clock_offset(spec: spec, timer: x.timer, stage: x.stage))
+      let of_en =
+        match x.stage
+          none => ""
+          some st => concat(" (`", stage_written(spec: spec, name: st), "`)")
+      let of_ja =
+        match x.stage
+          none => ""
+          some st => concat("（`", stage_written(spec: spec, name: st), "`）")
+      err(refusal(kind: Kind.clock, en: concat("the clock of `", x.timer, "`", of_en, " rang at ", a, ": its event comes before `", event_word(ev: ev), "`"), ja: concat("`", x.timer, "` の時計", of_ja, "が ", a, " に鳴っています。`", event_word(ev: ev), "` より先に、その時計のイベントを渡してください")))
+    none =>
+      let same = try fresh(t: t, ev: ev)
+      match ended(s: t.status)
+        true => err(refusal(kind: Kind.state, en: concat("the ticket has ended (`", text(t.status), "`), and takes no `", event_word(ev: ev), "`"), ja: concat("チケットは `", text(t.status), "` で終わっています。`", event_word(ev: ev), "` は受け付けません")))
+        false =>
+          let written = try said(c: comment_of(ev: ev))
+          let c = try reasoned(spec: spec, ev: ev, c: written)
+          let s = try act(cx: Cx { spec: spec, org: org, now: now }, t: t, ev: ev, c: c, vals: vals, clocks: clocks, open_after: open_after, on: on, reform: reform)
+          ok(done(s: commented(s: s, c: c)))

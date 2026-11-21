@@ -1,0 +1,6 @@
+error[E301]: tests/mutants/E301_10万円を超える行が無い.ringi:6:1: No row of the route takes some requests
+     6 | route
+  = The requests no row takes: 金額 from 100_001円 to 1_000_000円
+  = A request no row takes: 金額 = 100_001円
+  = Add this row to the table, writing in place of each `?` who answers that stage (a name in `who`; a blank cell where those requests skip it): | >100_000円 | ? | ? |
+  = The cells are cut only at the bounds the table already writes and at the ends of the ranges, so the rows close the gap as they are; where the approvers change inside a row, split it there.

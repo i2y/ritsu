@@ -1,0 +1,83 @@
+request 購買(purchase) v1 "購買の申請"
+description "購買の申請。申請者の上長が承認し、次に部長が承認する。ritsu ringi init が始めの形として書いたので、自分の決まりに書き換える"
+owner general_affairs
+
+use organization 組織(org) from "shared/company.ringi"
+use calendar 本社(office) from "shared/office.cal"
+use gate "shared/company.gate"
+
+form
+  金額(amount)  : money[JPY] "金額"  range >=1JPY <=10_000_000JPY
+  目的(purpose) : long text "目的"  count >=1 <=500
+
+route
+  上長(manager)  上長
+  部長(head)     部長
+
+who
+  上長(manager)   = manager of requester
+  部長(dept_head) = head of requester.department
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late expire
+  when empty escalate
+
+ticket
+  # 社長は組織のいちばん上にいて、購買を承認する上長がいない。
+  submitted by   everyone except position president
+  self approval  not allowed
+  # 上長が部長でもあるときは、一度承認すれば両方のステップが済む。
+  same approver  approves once
+  send back      to the requester, at most 2 times
+  resubmit       within 5 business days
+  withdraw       until it is decided
+
+claims
+  期限内に終わる : every ticket ends within 28 business days
+
+scenario 二つのステップで承認される
+  requester s1201
+  form 金額 = 120_000JPY, 目的 = "課に来た新しいメンバーのノートパソコン"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1201 | 上長     | in progress |
+| 2026-11-16 15:00 | approve | s1101 | 部長     | in progress |
+| 2026-11-17 11:00 | approve | s1001 |          | approved    |
+
+# 上長が何に使うのかを尋ね、申請者は出し直す申請に書く。
+scenario 差し戻されて出し直す
+  requester s1201
+  form 金額 = 120_000JPY, 目的 = "ノートパソコン"
+| at               | event                                                     | by    | comment                    | -> stage | status         |
+| 2026-11-16 10:00 | submit                                                    | s1201 |                            | 上長     | in progress    |
+| 2026-11-16 15:00 | send back                                                 | s1101 | "だれが使いますか"         |          | with requester |
+| 2026-11-17 09:00 | resubmit(目的: "課に来た新しいメンバーのノートパソコン")  | s1201 | "新しいメンバーが使います" | 上長     | in progress    |
+| 2026-11-17 10:00 | approve                                                   | s1101 |                            | 部長     | in progress    |
+| 2026-11-17 11:00 | approve                                                   | s1001 |                            |          | approved       |
+
+scenario 部長が却下する
+  requester s1202
+  form 金額 = 9_000_000JPY, 目的 = "課の車"
+| at               | event   | by    | comment                | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1202 |                        | 上長     | in progress |
+| 2026-11-16 15:00 | approve | s1101 |                        | 部長     | in progress |
+| 2026-11-17 11:00 | reject  | s1001 | "今年の予算にありません" |          | rejected    |
+
+# だれも答えない。上長には 2 営業日たつと催促が行き、3 営業日を過ぎると申請は期限切れになる。
+scenario だれも答えずに期限が切れる
+  requester s1202
+  form 金額 = 30_000JPY, 目的 = "課の本"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | s1202 | 上長     | in progress |
+| 2026-11-18 09:00 | remind  |       | 上長     | in progress |
+| 2026-11-20 00:00 | late    |       |          | expired     |
+
+labels en
+  request     "Purchase request"
+  金額        "Amount"
+  目的        "Purpose"
+  stage 上長  "Manager"
+  stage 部長  "Head of department"
+  who 上長    "Manager"
+  who 部長    "Head of department"

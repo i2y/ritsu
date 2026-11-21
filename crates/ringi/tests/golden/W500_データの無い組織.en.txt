@@ -1,0 +1,6 @@
+warning[W500]: tests/mutants/W500_データの無い組織.ringi:3:1: The organization has no data, so whether each stage has an approver is not decided
+     3 | use organization 組織(org) from "shared/会社.ringi"
+  = The organization's file has no `data` line, and no `--org` is given.
+  = Write a `data` line in the organization's file, or give the data's directory with `--org`: with the data, the check says which stages have nobody, which quorums cannot be met and who answers two stages.
+ok tests/mutants/W500_データの無い組織.ringi: a request, 1 field, 1 stage
+  may never end: the stage `確かめ` has no deadline (`due in …`), and waits until it is answered

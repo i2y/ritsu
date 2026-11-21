@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="ringi 0.55.2">
+<title>company_masters</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 40px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 28px 0 8px; }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+th { background: var(--soft); white-space: nowrap; }
+:target { scroll-margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- ringi 0.55.2 が shared/masters.ringi（sha256:a69d7e3d8e1df8c8）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<main>
+<header>
+<h1>company_masters</h1>
+<p class="desc">The lists the requests choose from or look up approvers in (fictional): account codes, vendors and the company&#39;s systems with their owners. Each row says from when and until when it may be chosen</p>
+</header>
+<p>ファイル：<code>shared/masters.ringi</code>（マスタ <code>company_masters</code> の版 1、sha256:a69d7e3d8e1df8c8）</p>
+<p>組織は、置いてある版のそれぞれ（2026-04-01、2027-04-01 から）で読んでいます。</p>
+<nav class="toc" aria-label="目次">
+<ul>
+<li><a href="#master-accounts"><code>accounts</code></a></li>
+<li><a href="#master-vendors"><code>vendors</code></a></li>
+<li><a href="#master-systems"><code>systems</code></a></li>
+</ul>
+</nav>
+<h2 id="master-accounts"><code>accounts</code></h2>
+<p>行を見分けるキーは <code>code</code> です。行を選んだ申請は、その値を持ちます。</p>
+<div class="scroll"><table>
+<thead><tr><th>フィールド</th><th>型</th><th>受け付ける値</th></tr></thead>
+<tbody>
+<tr><td><code>code</code></td><td>一行の文</td><td>10字まで</td></tr>
+<tr><td><code>label</code></td><td>一行の文</td><td>60字まで</td></tr>
+</tbody>
+</table></div>
+<p><code>../masters/accounts.csv</code> から 4 行を読んでいます。行は、始まりの日から終わりの日まで選べます。</p>
+<div class="scroll"><table>
+<thead><tr><th><code>code</code></th><th><code>label</code></th><th>から</th><th>まで</th></tr></thead>
+<tbody>
+<tr><td>5101</td><td>Travel</td><td>2026-01-01（木）</td><td>終わり無し</td></tr>
+<tr><td>5102</td><td>Meetings</td><td>2026-01-01（木）</td><td>終わり無し</td></tr>
+<tr><td>5103</td><td>Supplies</td><td>2026-01-01（木）</td><td>2026-12-31（木）</td></tr>
+<tr><td>5110</td><td>Supplies and small equipment</td><td>2027-01-01（金）</td><td>終わり無し</td></tr>
+</tbody>
+</table></div>
+<h2 id="master-vendors"><code>vendors</code></h2>
+<p>行を見分けるキーは <code>id</code> です。行を選んだ申請は、その値を持ちます。</p>
+<div class="scroll"><table>
+<thead><tr><th>フィールド</th><th>型</th><th>受け付ける値</th></tr></thead>
+<tbody>
+<tr><td><code>id</code></td><td>一行の文</td><td>12字まで</td></tr>
+<tr><td><code>name</code></td><td>一行の文</td><td>100字まで</td></tr>
+</tbody>
+</table></div>
+<p><code>../masters/vendors.csv</code> から 3 行を読んでいます。行は、始まりの日から終わりの日まで選べます。</p>
+<div class="scroll"><table>
+<thead><tr><th><code>id</code></th><th><code>name</code></th><th>から</th><th>まで</th></tr></thead>
+<tbody>
+<tr><td>V-0012</td><td>Office supplies vendor (fictional)</td><td>2026-01-01（木）</td><td>終わり無し</td></tr>
+<tr><td>V-0031</td><td>Machine maker (fictional)</td><td>2026-01-01（木）</td><td>終わり無し</td></tr>
+<tr><td>V-0044</td><td>Software reseller (fictional)</td><td>2026-04-01（水）</td><td>2027-03-31（水）</td></tr>
+</tbody>
+</table></div>
+<h2 id="master-systems"><code>systems</code></h2>
+<p>行を見分けるキーは <code>id</code> です。行を選んだ申請は、その値を持ちます。</p>
+<div class="scroll"><table>
+<thead><tr><th>フィールド</th><th>型</th><th>受け付ける値</th></tr></thead>
+<tbody>
+<tr><td><code>id</code></td><td>一行の文</td><td>30字まで</td></tr>
+<tr><td><code>name</code></td><td>一行の文</td><td>100字まで</td></tr>
+<tr><td><code>owner</code></td><td>組織の人</td><td>—</td></tr>
+</tbody>
+</table></div>
+<p><code>../masters/systems.csv</code> から 3 行を読んでいます。行は、始まりの日から終わりの日まで選べます。</p>
+<div class="scroll"><table>
+<thead><tr><th><code>id</code></th><th><code>name</code></th><th><code>owner</code></th><th>から</th><th>まで</th></tr></thead>
+<tbody>
+<tr><td>erp</td><td>Accounting system</td><td>e1001（経理部長）</td><td>2026-01-01（木）</td><td>終わり無し</td></tr>
+<tr><td>crm</td><td>Customer system</td><td>e3101（営業一部長）</td><td>2026-01-01（木）</td><td>終わり無し</td></tr>
+<tr><td>wiki</td><td>Company wiki</td><td>e7001（情報システム部長）</td><td>2026-01-01（木）</td><td>終わり無し</td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

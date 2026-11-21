@@ -1,0 +1,3 @@
+error[E102]: tests/mutants/E102_a_computed_value_of_the_enums_of_two_rules.gate:40:8: `tier` is of different types in different actions (the enum `tier` of the rule `tier_by_size`, and the enum `tier` of the rule `tier_of_its_own` in `hold_order`)
+    40 |   when tier is gold
+  = The enum `tier` of the rule `tier_by_size` is the enum `tier` of the `enums` file `read/order_states.rule`; the enum `tier` of the rule `tier_of_its_own` is the enum `tier` that the rule `tier_of_its_own` (`read/tier_of_its_own.rule`) declares itself. Enums declared at two places are two types, even with the same values; to make them one, put the enum in an `enums` file, and read it with `import enum` in each file that uses it.

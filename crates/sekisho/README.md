@@ -1,7 +1,7 @@
 # sekisho
 
 A small language for who may do what: principals, roles, attributes and relations, with the answers of business rules and dates as conditions, checked on every combination it declares and compiled to [Cedar](https://www.cedarpolicy.com/).
-sekisho is one of the nine languages of [ritsu](../../README.md): it reads the rules of rulec, the dates and calendars of koyomi and the workflows of dandori through ritsu, and the contracts services keep in OpenAPI, AsyncAPI and `.proto` files.
+sekisho is one of the ten languages of [ritsu](../../README.md): it reads the rules of rulec, the dates and calendars of koyomi and the workflows of dandori through ritsu, and the contracts services keep in OpenAPI, AsyncAPI and `.proto` files.
 
 On ritsu's site, **[the page of sekisho](https://i2y.github.io/ritsu/sekisho/)** follows the example below from the answer of a rule to the Cedar and the code generated from it.
 
@@ -62,7 +62,7 @@ Nothing in Cedar stops it, and the permits for managers silently allow nothing:
 error[E302]: tests/mutants/E302_forbid_covers_permit.gate:94:1: The permit `managers_refund_in_period` allows nothing: a forbid denies every combination it would allow
     94 | permit managers_refund_in_period
   = It would allow 256 combinations; `clerks_do_not_refund` denies 256 of them, `auditors_do_not_refund` 128, `suspended_staff_do_nothing` 128, `no_second_refund` 64.
-  = For example: User holding manager (suspended: no), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit, in_period: yes, business_day: no; denied by `clerks_do_not_refund`.
+  = For example: User holding manager (suspended: no), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit (as when refund_limit is 1GBP and amount is 1GBP), in_period: yes, business_day: no; denied by `clerks_do_not_refund`.
   = Narrow the forbid, or remove the permit if no one is meant to be allowed this.
 ```
 
@@ -72,13 +72,16 @@ With two of its lines taken out, the one that says a manager refunds in the peri
 ```text
 error[E304]: tests/mutants/E304_expect_fails.gate:147:1: The expectation `managers_refund_in_period` does not hold: 144 of the 192 combinations it picks are denied
    147 | expect allow managers_refund_in_period
-  = For example: User holding manager (suspended: yes), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit, in_period: yes, business_day: no; denied by `suspended_staff_do_nothing`.
+  = For example: User holding manager (suspended: yes), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit (as when refund_limit is 1GBP and amount is 1GBP), in_period: yes, business_day: no; denied by `suspended_staff_do_nothing`.
   = Fix the policies, or the expectation if it says more than is meant.
 ```
 
+The example is a combination as the check counts it: a refund of 1 to 50 pounds that the rule answers `within_limit` for.
+The brackets say one input the check ran through the rule and saw come to that answer: a limit of 1 pound and an amount of 1 pound.
+
 The other checks: an action no permit allows, a policy whose conditions never hold together, a permit another one already covers, two duties a `separate` keeps apart that one principal is allowed, a role allowed more or less than its `can` line, an operation the contract does not have, an input the operation does not take, a value given to a rule outside what it takes or breaking its precondition, a calendar without data for every day the gate can be asked on.
 Every check comes to one of three answers: it holds, here is a combination where it does not, or it cannot be decided, and then it says why.
-Every code is in [docs/codes.md](docs/codes.md), with when it comes, how to fix it, and the smallest file that prints it (`sekisho explain E302`).
+Every code is in [docs/codes.md](docs/codes.md), with when it comes, how to fix it, and the smallest file that prints it (`sekisho explain E302`). `sekisho explain` takes any number of codes and explains them in the order given; for two or more it writes what `--all` writes, with only those codes.
 
 ## Another action's answer
 
@@ -127,6 +130,7 @@ Cedar trusts what a request tells it.
 If the caller sent `refund_band`, the caller could allow their own refund.
 So `gen --target typescript`, `python` or `go` writes, for each action, a function that reads the principal and the order from the service's own data, computes the band and the dates with the code rulec and koyomi generate, builds the request and asks Cedar: cedar-wasm, cedarpy or cedar-go in the process, or Amazon Verified Permissions with `--authorizer avp`.
 The function takes no computed value from the caller, and refuses before asking Cedar when the data is not what the gate declared or the day is outside the range the gate was checked over.
+Beside the functions, `authorize` (`Authorize` in Go) asks by the action's name, with the ids of the resources by the name of their types, for a caller that holds the name as a string; it refuses a name the gate has no action of, and an action that takes inputs of its own is asked through its own function.
 `--target` may be given more than once: `--target typescript --target cedar` writes both in one run, the Cedar first.
 `ritsu gen` writes the same into the package of a project, beside the code of the rules and dates it reads.
 
@@ -134,7 +138,8 @@ The function takes no computed value from the caller, and refuses before asking 
 
 `ritsu check` reads the gates of a project with every other language, and adds two checks across them.
 Every operation a context of sakai's map opens is guarded by an action, unless its contract says anyone may call it (ritsu's E907 and W907).
-A workflow is allowed the operations its flow calls, handles a denial where it can be denied, and is allowed nothing it never calls (E908, W909, W908).
+A workflow is allowed the operations its flow calls, handles a denial where it can be denied, and is allowed nothing it never calls (E908, W909, W908); and a number a call gives is counted in the unit and step of the action's `input` it goes to (E909: a fee the flow counts in steps of 0.1% and the gate in steps of 1% is two values).
+Each call is asked of over the runs of the flow that reach it: what the call gives, what the arms of each `match` on the way leave, and what the gate says the flow holds of the resource ([examples/claims](examples/claims)), which nothing checks and every answer that rests on it says.
 In the example, the workflow `returns` calls `refundOrder`, which the gate allows it for a returned order up to 50 pounds, and its task declares the error of a denial:
 
 ```console
@@ -200,8 +205,8 @@ $ sekisho explain E302
 
 `--root` is the directory the paths of what a gate names are written from (else the nearest one above the first file that holds `.git` or `ritsu.mod`), so that sekisho, yuen and sakai name one operation alike.
 `vectors` prints every combination as a test of `cedar run-tests`.
-`diff` compares the decisions of two versions of a gate, each a path, `<path>@<git revision>`, `@<name>/<path>` (a dependency at the lock's version) or `@<name>@<version>/<path>` (a version in the store), and exits 1 when a permission is gained or lost.
-Every command takes `--lang ja|en` (else `SEKISHO_LANG`, then `RITSU_LANG`, else English) and `--help`.
+`diff` compares the decisions of two versions of a gate, each a path, `<path>@<git revision>`, `@<name>/<path>` (a dependency at the lock's version) or `@<name>@<version>/<path>` (a version in the store), and exits 1 when a permission is gained or lost, the interface differs, or a line under a workflow differs.
+Every command takes `--lang ja|en` and `--help`. Without `--lang`, the text a command prints follows `SEKISHO_LANG`, then `RITSU_LANG`, else English, and what `gen` and `doc` write is in English, whatever the environment says.
 The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file that cannot be read, or a language that is not joined.
 [docs/reference.md](docs/reference.md) has the whole language and every command.
 
@@ -213,6 +218,8 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
   `approvals.ja.gate` is the same gate with Japanese names, reading the Japanese version of the rule.
 - [examples/documents](examples/documents): the weaker of two operations first: a document that can be archived is not deleted (`forbid … when allowed archive_document`).
   `documents.ja.gate` is the same gate with Japanese names.
+- [examples/claims](examples/claims): a workflow that pays a claim only in the arm of a rule's answer the gate allows it in. The gate says what the flow holds of the claim (`resource Claim from claim_id`, `amount = amount`), and `ritsu check` asks of the call over the runs that reach it; swap the arms and it is E908.
+  `claims.ja.gate` and `pay.ja.flow` are the same with Japanese names.
 - [examples/order_states](examples/order_states): a workflow and a gate that read the states of an order from one `enums` file with `import enum`, so that neither can name a state the other does not.
   `orders.ja.gate` and `shipping.ja.flow` are the same with Japanese names.
 - [examples/order_desk](examples/order_desk): who may refund an order at the desk, with the order's amount and the reason named by `fed by` as coming from a JSON Schema.
@@ -222,10 +229,10 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 
 `cargo test -p sekisho` runs the language on its mutants and its examples, and runs the real Cedar.
 
-- 158 mutants, each an example or a fixture with one change, are held to the diagnostics they give, in English and in Japanese (79 of them with Japanese names, each with an English twin).
+- 188 mutants, each an example or a fixture with one change, are held to the diagnostics they give, in English and in Japanese (94 of them with Japanese names, each with an English twin).
 - The Cedar generated from every gate of the examples and the tests that passes check goes through the official Cedar CLI 4.13.0: `cedar validate` in strict mode finds nothing, `cedar format --check` passes, `cedar run-tests` answers every combination as sekisho's reference evaluation does, with the same deciding policies, and the JSON forms are what `cedar translate-schema` and `translate-policy` write.
 - Cedar written by hand gets the answers the official CLI gives: for a policy set and its schema (the ones in `tests/cedar_in/` and each of them changed at one place, and the Cedar generated from every gate that passes check, read as if written by hand), every combination sekisho counts is made a request with its entities and run through `cedar run-tests`, with the same decision and the same deciding policies. Where sekisho does not decide, it names the part of the policy it does not count.
-- The code generated for TypeScript, Python and Go builds the requests of every combination from raw data and asks cedar-wasm 4.13.0, cedarpy 4.12.1 and cedar-go v1.8.0, which answer as the reference evaluation; `tsc --strict`, `mypy --strict`, `go vet` and gofmt pass it.
+- The code generated for TypeScript, Python and Go builds the requests of every combination from raw data and asks cedar-wasm 4.13.0, cedarpy 4.12.1 and cedar-go v1.8.0, which answer as the reference evaluation, and asked by the action's name through `authorize` it answers as the action's own function does; `tsc --strict`, `mypy --strict`, `go vet` and gofmt pass it.
 - The pages of `doc` are golden files, the pages of the rules and dates in them are what rulec and koyomi draw, and Chrome opens the HTML.
 - The outputs, diagnostics and the lines of `.gate` and Cedar in this README, `docs/` and the skill are real: `tests/docs.rs` runs and compares them, and ritsu's `tests/sekisho.rs` runs the `ritsu check` above.
 

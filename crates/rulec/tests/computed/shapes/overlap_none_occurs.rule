@@ -1,0 +1,20 @@
+rule overlap_none_occurs v1
+description "Two rows whose cells meet only where the band and the amount disagree: no input takes both, so they do not overlap"
+
+enum choice = one | two | three
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+apply t = "shared/tier.rule" meaning:8c5e54b1fadce0b7
+  amount = amount
+  band -> t_band
+
+outputs
+  x : choice
+
+table pick
+| amount      | t_band | -> x  |
+| <=50_000JPY | -      | one   |
+| >10_000JPY  | large  | three |
+| >50_000JPY  | medium | two   |

@@ -1,0 +1,6 @@
+エラー[E405]: tests/mutants/E405_承認者が直せる明細の合計の仮押さえ.ringi:26:97: 仮押さえ `予算.reserve` が、承認者の直せるフィールド `明細` を読みます
+    26 |   on submitted    hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: 部, amount: 金額)
+  = 仮押さえの引数 `amount` が `金額` を読み、`金額` は `明細` から計算します。25 行目の `approvers edit` が、承認者に `明細` を直させます。
+  = 仮押さえは、申請を出したときの値で一度だけ行い、承認者が直しても押さえ直しません。
+  = 確定されるのは押さえたときの値で、直したあとの申請の値と食い違います。
+  = `approvers edit` から `明細` を外してください（ほかのフィールドが無ければ、行ごと）。

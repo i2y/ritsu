@@ -1,0 +1,11 @@
+差分: tests/fixtures/contributions/changes/courier.ja.diff
+要件が指すファイルで、差分が触るもの:
+  rulec "rules/extra/courier.ja.rule": 満たす要件 集荷の手数料
+要件が指すファイルが読むファイルで、差分が触るもの:
+  tests/fixtures/contributions/rules/extra/courier.ja.rule
+    rulec "rules/fee.ja.rule"（contribution）: 満たす要件 戻し方ごとの手数料
+どの要件にも届かない変更: なし
+触る要件:
+  戻し方ごとの手数料（tests/fixtures/contributions/fees.ja.req:6）持ち主 経理。2026-11-02 に 経理 が「この試験のために書いた」と決めました
+  集荷の手数料（tests/fixtures/contributions/fees.ja.req:15）持ち主 経理。2026-11-02 に 経理 が「この試験のために書いた」と決めました
+触る要件は 2 件です。経理 に見てもらってください

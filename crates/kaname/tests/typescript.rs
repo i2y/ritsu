@@ -66,7 +66,7 @@ fn the_generated_typescript_answers_as_the_reference_does() {
         for lang in [Lang::En, Lang::Ja] {
             let dir = root.join(format!("ts-{}", if lang == Lang::Ja { "ja" } else { "en" }));
             write_package(&dir, Target::TypeScript, lang, &modules);
-            std::fs::write(dir.join("harness.ts"), kaname::r#gen::harness::program(&checked, Target::TypeScript, PY_NAME, GO_PACKAGE)).unwrap();
+            std::fs::write(dir.join("harness.ts"), kaname::r#gen::harness::program(&checked, Target::TypeScript, PY_NAME, GO_PACKAGE, lang)).unwrap();
             let (cases, counts) = cases(&modules, lang, Target::TypeScript);
             std::fs::write(dir.join("cases.json"), cases_json(&cases)).unwrap();
             tsconfig(&dir);
@@ -84,6 +84,67 @@ fn the_generated_typescript_answers_as_the_reference_does() {
     for line in report {
         println!("{line}");
     }
+}
+
+/// The module of [`values_named_as_a_target_writes_no_value_are_values`]: values named as the targets
+/// write no value, each given to a field that may be absent.
+const NO_VALUE_NAMES: &str = "module nils v1
+
+record Form
+  n   : number range >=0 <=10
+  opt : number? range >=0 <=10
+
+fn kept(f: Form) -> Form total
+  let nil = f.n
+  Form { n: nil, opt: nil }
+
+fn named(f: Form) -> Form total
+  let None = f.n
+  let null = f.n
+  Form { n: None, opt: null }
+";
+
+/// A value named as a target writes no value (`nil` of Go, `None` of Python and Rust, `null` of
+/// TypeScript) and given to a field that may be absent is that value in the other targets: the
+/// TypeScript answers every case as the reference interpreter does. Before, the generator read the
+/// three words as no value in every target, and wrote `opt: null` for `opt: nil` (DESIGN 10.3).
+#[test]
+fn values_named_as_a_target_writes_no_value_are_values() {
+    if !ritsu_testkit::need(Need::Node) {
+        return;
+    }
+    let Some(tsc) = tsc() else {
+        ritsu_testkit::skip("tsc is not installed (npm ci --prefix tools); the TypeScript kaname generates is not checked");
+        return;
+    };
+    if !ritsu_testkit::tools::runs("node", &["--version"]) {
+        ritsu_testkit::skip("node is not on the PATH; the TypeScript kaname generates is not run");
+        return;
+    }
+    let t = TempDir::new("kaname-typescript-nils");
+    let dir = t.path().to_path_buf();
+    let cases = deep({
+        let dir = dir.clone();
+        move || {
+            let o = common::check_text("nils.kn", NO_VALUE_NAMES);
+            let c = o.analysed.clone().unwrap_or_else(|| panic!("{}", common::shown(&o, Lang::En)));
+            let modules = vec![(c.clone(), "nils.kn".to_string())];
+            write_package(&dir, Target::TypeScript, Lang::En, &modules);
+            std::fs::write(dir.join("harness.ts"), kaname::r#gen::harness::program(&[c], Target::TypeScript, PY_NAME, GO_PACKAGE, Lang::En)).unwrap();
+            let (cases, _) = cases(&modules, Lang::En, Target::TypeScript);
+            std::fs::write(dir.join("cases.json"), cases_json(&cases)).unwrap();
+            tsconfig(&dir);
+            cases
+        }
+    });
+    let r = ritsu_testkit::run(Command::new(&tsc).arg("-p").arg(dir.join("tsconfig.json")).current_dir(&dir), LIMIT);
+    assert!(r.ok, "tsc --strict --erasableSyntaxOnly finds fault with the TypeScript kaname generates:\n{}", r.both());
+    let r = ritsu_testkit::run(Command::new("node").arg(dir.join("dist/harness.js")).arg(dir.join("cases.json")).current_dir(&dir), LIMIT);
+    assert!(r.ok, "node failed:\n{}", r.both());
+    let (agree, wrong) = compare(&cases, &r.stdout);
+    assert!(wrong.is_empty(), "the TypeScript answers otherwise than the reference:\n{}", wrong.join("\n"));
+    assert!(agree >= 2 && agree == cases.len(), "{agree} of {} cases agree", cases.len());
+    println!("{agree} of {} cases agree", cases.len());
 }
 
 /// The program of [`a_day_of_no_calendar_is_outside_every_range`]: the functions called as a host

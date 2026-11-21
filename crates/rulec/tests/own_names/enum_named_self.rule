@@ -1,0 +1,16 @@
+rule fee_by_payer v1
+description "An enum named self, the keyword Rust and Swift write a type's own name with"
+
+enum self = person | company
+
+inputs
+  payer : self
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_payer_kind
+policy unique
+| payer   | -> fee |
+| person  | 3USD   |
+| company | 5USD   |

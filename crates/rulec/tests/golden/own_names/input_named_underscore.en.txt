@@ -1,0 +1,11 @@
+warning[W121]: `_` is a name the code generated for Go and Swift cannot take
+  --> tests/own_names/input_named_underscore.rule:5
+  |
+5 |   _ : number  range >=0 <=10
+  |   ^ the input's name
+  |
+ Go: the inputs and the sequences are the fields of the `Input` struct, and `_` is the blank identifier: a field of that name can be neither written nor read.
+ Swift: the inputs and the sequences are the labels a caller passes the arguments of the rule's function under, and `_` is the label of an argument that has none: it cannot be passed by that name, and the function cannot read it by its name.
+ For a target you do not generate, leave it. For one you do, give it an alias (`_(<alias>)`).
+
+ok tests/own_names/input_named_underscore.rule

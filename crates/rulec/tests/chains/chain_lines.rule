@@ -1,0 +1,29 @@
+rule price(price) v1
+description "Lines that cannot be read: each is said once, and the lines that follow from it are not said again"
+
+enum kind(kind) = books(books) "Books" | music(music) "Music" | toys(toys) "Toys"
+
+inputs
+  item_kind(item_kind) : kind
+  # the `[` of the type is never closed: the range after it is not read as a part of the unit
+  list_price(list_price) : money[USD  range >=0USD <=1000USD
+
+# the heading word written wrong: the line under it is not read either
+output
+  price(price) : money[USD]  round half_up(1USD)
+
+# the word under the table's heading written wrong: the table is not said to be unreadable, and its
+# rows are not read either
+table markup_of
+polcy unique
+| item_kind | -> markup : rate[step 1%] |
+| books     | 0%                        |
+| music     | 10%                       |
+| toys      | 20%                       |
+
+define price : money[USD] = list_price + list_price * markup
+
+examples
+| item_kind | list_price | -> price |
+| books     | 20USD      | 20USD    |
+| toys      | 100USD     | 120USD   |

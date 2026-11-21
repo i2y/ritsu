@@ -1,0 +1,3 @@
+error[E104]: tests/mutants/E104_二か所で宣言した列挙.gate:31:32: `resource.状態` (the enum `状態`) and `resource.求める状態` (the enum `分け合う状態`) are of different types, and do not compare
+    31 |   when resource.状態 is resource.求める状態
+  = The enum `状態` is an enum this gate declares; the enum `分け合う状態` is the enum `状態` of the `enums` file `read/注文の状態.rule`. Enums declared at two places are two types, even with the same values; to make them one, put the enum in an `enums` file, and read it with `import enum` in each file that uses it.

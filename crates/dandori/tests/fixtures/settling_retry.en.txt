@@ -1,0 +1,15 @@
+warning[W101]: tests/fixtures/settling_retry.flow:48:1: if `put_back` fails while `on failure` is settling `goods`, the workflow fails with `goods` in held (1 such call(s))
+    48 |   goods <- put_back(order: order, sku: sku)
+  = The `retry` of `put_back` does not take the failure away: once the retries run out, the call fails.
+  = Once a call fails inside `on failure`, `on failure` cannot settle `goods` any more: handle the failure at the call of `put_back`, and hand `goods` over as it is (`on failure, timeout => fail <Error> "…" leaving goods`).
+  the run that gets there:
+      39  reserve: goods starts in held
+      42  approve fails (timeout, failure)
+      48  on failure
+      48  put_back fails (timeout, failure)
+gen --target asl:
+error[E050]: tests/fixtures/settling_retry.flow:20:1: `approve` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions
+    20 | task approve(order: string)
+gen --target argo:
+error[E050]: tests/fixtures/settling_retry.flow:20:1: `approve` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows
+    20 | task approve(order: string)

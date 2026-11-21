@@ -1,0 +1,38 @@
+rule optional_columns v1
+description "What a parcel comes to where a table leaves the fee, the weight and the rate taken off unwritten for an order picked up at the shop, each unit carried by that column alone: a band for each (fictional)"
+
+enum zone = local | national | pickup
+enum band = low | high | free
+
+inputs
+  zone : zone
+
+outputs
+  by_fee    : band
+  by_weight : band
+  by_cut    : band
+
+# What sending to each zone costs, weighs and takes off; an order picked up at the shop has none
+table terms_of
+| zone     | -> fee : money[JPY]? | weight : mass[kg]? | cut : rate[step 1%]? |
+| local    | 100JPY               | 2kg                | 5%                   |
+| national | 300JPY               | 5kg                | 10%                  |
+| pickup   | none                 | none               | none                 |
+
+table fee_band
+| fee      | -> by_fee |
+| <=100JPY | low       |
+| >=300JPY | high      |
+| none     | free      |
+
+table weight_band
+| weight | -> by_weight |
+| <=2kg  | low          |
+| >=5kg  | high         |
+| none   | free         |
+
+table cut_band
+| cut   | -> by_cut |
+| <=5%  | low       |
+| >=10% | high      |
+| none  | free      |

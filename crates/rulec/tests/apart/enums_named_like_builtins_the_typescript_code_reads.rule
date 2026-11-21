@@ -1,0 +1,12 @@
+enums script_kinds v1
+description "Enums of an enums file named like builtins the TypeScript and JavaScript code reads"
+
+enum thing(object) = plain | boxed
+enum amount(number) = one | two
+enum size(big_int) = small | large
+enum reckoning(math) = add | subtract
+enum fault(error) = fine | broken
+
+prerequisites order over thing
+  start plain
+  boxed requires plain

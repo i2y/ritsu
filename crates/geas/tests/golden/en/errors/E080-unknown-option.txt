@@ -1,2 +1,1 @@
-error[E080]: `--nope` is not an option of `geas check`
-  = it takes: --json, --lang, --jobs
+error[E080]: unknown flag `--nope`; run `geas check --help`

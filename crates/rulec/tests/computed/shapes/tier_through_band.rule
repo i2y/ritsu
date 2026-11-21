@@ -1,0 +1,33 @@
+rule tier_through_band v1
+description "A tier read with the band it is decided from and the amount both are decided from: the band is large from -30 yen to 9 yen and small elsewhere, and the tier is t3 only for a small band up to 1 yen. So from -4 yen the tier is never t3, and no row is asked for a small band of tier t3 there"
+
+enum choice = one | two
+enum size = small | large
+enum level = t1 | t2 | t3
+
+inputs
+  amount : money[JPY]  range >=-40JPY <=15JPY
+
+outputs
+  x : choice
+
+table band_of
+policy first
+| amount         | -> band : size |
+| >-31JPY <=9JPY | large          |
+| >9JPY          | small          |
+| -              | small          |
+
+table tier_of
+| band  | amount | -> tier : level |
+| large | <=1JPY | t2              |
+| large | >1JPY  | t1              |
+| small | <=1JPY | t3              |
+| small | >1JPY  | t2              |
+
+table pick
+| amount | band  | tier | -> x |
+| <-4JPY | small | t3   | one  |
+| -      | small | t2   | two  |
+| -      | large | t1   | one  |
+| -      | large | t2   | two  |

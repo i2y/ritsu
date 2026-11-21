@@ -1,0 +1,16 @@
+rule purchase_values v1
+description "What ringi writes from the form of purchase.ringi for the code it generates: the totals and computations over all the values what they read can take, and when a field is shown and asked for; the code holds each computation to its range"
+
+elements lines
+  quantity : number  range >=1 <=10_000
+  price    : money[JPY]  range >=1JPY <=50_000_000JPY
+
+define subtotal : money[JPY] = quantity * price
+
+max subtotal_most over lines of subtotal  empty 1JPY
+
+sum amount over lines of subtotal  range >=0JPY <=15_000_000_000_000JPY
+
+outputs
+  amount        : money[JPY]  round down(1JPY)
+  subtotal_most : money[JPY]  round down(1JPY)

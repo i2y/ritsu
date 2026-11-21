@@ -185,7 +185,7 @@ pub fn paths() -> Vec<&'static str> {
 }
 
 /// Edit distance, by characters, without regard to case (the hints only).
-fn distance(a: &str, b: &str) -> usize {
+pub(crate) fn distance(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.to_lowercase().chars().collect();
     let b: Vec<char> = b.to_lowercase().chars().collect();
     let mut prev: Vec<usize> = (0..=b.len()).collect();

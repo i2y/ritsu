@@ -1,0 +1,18 @@
+request example v1 "Example"
+
+use organization org from "shared/small.ringi"
+use rule authority from "shared/authority.rule"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  level  : choice from authority.decider "Who decides"
+    manager "Manager"
+
+route
+  check  manager
+
+who
+  manager = manager of requester
+
+ticket
+  self approval  not allowed

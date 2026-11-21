@@ -1,0 +1,11 @@
+request 例(example) v1 "例"
+
+use route 確認(check) from "shared/manager_check.ringi"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route 確認()
+
+ticket
+  self approval  not allowed

@@ -1,0 +1,12 @@
+warning[W510]: tests/mutants/W510_nobody_answers_the_president.ringi:9:10: In the organization from 2026-04-01, no stage of the request has anyone to answer it for some requesters
+     9 |   check  manager
+  = `check` is skipped for lack of an approver, and no other stage has anyone to answer it.
+  = A ticket of theirs is approved as soon as it is submitted, with nobody answering it.
+  = For 1 requester: e01 (President (fictional)).
+  = If someone must see their requests, write after `then` the way to choose who answers them (`when empty escalate, then board`, with `board = team board` in `who`), or correct the data of the version; if they do not make the request, leave them out with `submitted by … except …`.
+ok tests/mutants/W510_nobody_answers_the_president.ringi: a request, 1 field, 1 stage
+  used from 2026-04-01: the first version of the organization `shared/small.ringi` (data `org-small`)
+  used with no end: no data it reads ends
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+  requesters whose stages (`check`) go elsewhere or are skipped by the shape of the organization: 1 of 4 in the organization from 2026-04-01
+  who they are, and where their stages go: `ringi simulate tests/mutants/W510_nobody_answers_the_president.ringi --every-requester`

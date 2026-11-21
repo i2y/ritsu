@@ -1,0 +1,63 @@
+rule purchase_route v1
+description "What ringi writes from the route of purchase.ringi: one optional output for each stage, whose value is the approver the stage names; a blank cell is none, the stage is not there"
+
+import enum kind from "choices.rule"
+enum first_by = manager "manager"
+enum technical_by = reviewer "reviewer"
+enum finance_by = finance_approver "finance"
+enum board_by = at_least_60_percent_of_board "at least 60% of board"
+enum decide_by = dept_head "dept_head" | division_head "division_head" | president "president"
+enum inform_by = circulate_to_general_affairs "circulate to general_affairs"
+
+inputs
+  reviewer_given : bool
+  kind           : kind
+  amount         : money[JPY]  range >=1JPY <=100_000_000JPY
+  advance        : rate[step 5%]  range >=0% <=100%
+
+apply authority = "../../../../examples/shared/authority.rule" meaning:19261fb92723d78d
+  kind = kind
+  amount = amount
+  finance -> authority_finance
+  board -> authority_board
+  decider -> authority_decider
+
+outputs
+  first     : first_by
+  technical : technical_by?
+  finance   : finance_by?
+  board     : board_by?
+  decide    : decide_by
+  inform    : inform_by
+
+table first
+| -> first |
+| manager  |
+
+table technical
+| reviewer_given | -> technical |
+| true           | reviewer     |
+| false          | none         |
+
+table finance
+| authority_finance | advance | -> finance       |
+| true              | -       | finance_approver |
+| false             | <=30%   | none             |
+| false             | >30%    | finance_approver |
+
+table board
+| authority_board | -> board                     |
+| true            | at_least_60_percent_of_board |
+| false           | none                         |
+
+table decide
+| authority_decider | -> decide     |
+| dept_head         | dept_head     |
+| division_head     | division_head |
+| president         | president     |
+
+table inform
+| -> inform                    |
+| circulate_to_general_affairs |
+
+possible board = at_least_60_percent_of_board

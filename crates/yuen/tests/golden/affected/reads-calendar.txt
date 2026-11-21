@@ -1,0 +1,10 @@
+diff: tests/fixtures/reads/changes/office.diff
+files read by the files that requirements name, that the diff touches:
+  tests/fixtures/reads/dates/office.cal
+    sekisho "gates/refunds.gate" line 6 (use dates) -> koyomi "dates/refund_terms.cal" line 3 (use calendar): met by who_refunds
+    koyomi "dates/refund_terms.cal" line 3 (use calendar): met by refund_period
+changes no requirement reaches: none
+requirements touched:
+  who_refunds (tests/fixtures/reads/refunds.req:15): owner finance; decided 2026-11-02 by finance: "Written for this test"
+  refund_period (tests/fixtures/reads/refunds.req:24): owner finance; decided 2026-11-02 by finance: "Written for this test"
+2 requirements touched; ask finance

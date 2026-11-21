@@ -1,0 +1,4 @@
+エラー[E202]: tests/mutants/E202_壊れた規則.ringi:3:29: `shared/壊れた権限.rule` は rulec の検査を通りません
+     3 | use rule 権限(authority) from "shared/壊れた権限.rule"
+  = E101: 完全性の欠落: どの行にも当てはまらない入力があります（`tests/mutants/shared/壊れた権限.rule:12`）
+  = そのファイルを、rulec の検査が通るように直してください。

@@ -1,0 +1,92 @@
+request 休暇(leave_ja) v1 "休暇の申請"
+description "有給休暇・病気休暇・特別休暇の申請。上長が承認し、5 営業日を超えるときは部長も承認する（架空の決まり）。有給休暇は、休暇の帳簿が持つ残りから日数を引く"
+owner hr
+
+use organization 組織(org) from "shared/company.ringi"
+use calendar 本社(office) from "shared/office.cal"
+use book 休暇(leave) from "shared/leave.book"
+use gate "shared/company.gate"
+use route 標準(standard) from "shared/manager_approval.ringi"
+
+form
+  種類(kind) : choice "休暇の種類"
+    有給(paid)    "有給休暇"
+    病気(sick)    "病気休暇"
+    特別(special) "特別休暇"
+  初日(first_day)  : date "初日"  range >=2026-01-01 <=2027-12-31  open in 本社
+  日数(days)       : number "営業日の日数"  range >=1 <=20
+  復帰日(back_on)  : date "出社する日" = 初日 + 日数 business days in 本社
+  理由(reason)     : long text "理由"  count <=200  required when 種類 is 特別
+  代わり(cover)    : person "代わりに対応する人"  optional
+
+route 標準(long: 日数 > 5)
+
+ticket
+  # 休暇の決まりは社員のためのもの（架空）。取締役会の人は出さない。
+  submitted by   everyone except team board
+  self approval  not allowed
+  # 上長が部長でもあるときは、一度承認すれば両方のステップが済む。二つのステップは続いている。
+  same approver  approves once
+  send back      to the requester, at most 2 times
+  # 却下と差し戻しは、申請者が読むコメントに理由を書く。
+  comment required  for reject, send back
+  resubmit       within 5 business days
+  withdraw       until it is decided
+  on submitted   hold 休暇.take(request: ticket.id, attempt: ticket.attempt, person: requester.id, days: 日数)  when 種類 is 有給
+  on approved    post 休暇.take(request: ticket.id, attempt: ticket.attempt)  when 種類 is 有給
+  on sent back, rejected, withdrawn, expired  void 休暇.take(request: ticket.id, attempt: ticket.attempt)  when 種類 is 有給
+
+claims
+  期限内に終わる : every ticket ends within 40 business days
+
+scenario 長い有給休暇
+  requester e1203
+  given 休暇.grant(person: "e1203", year: "2026", days: 20)
+  form 種類 = 有給, 初日 = 2026-12-21, 日数 = 8, 理由 = "家族に会いに行く"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 09:00 | submit  | e1203 | manager  | in progress |
+| 2026-11-16 17:00 | approve | e1101 | head     | in progress |
+| 2026-11-17 09:00 | remind  |       | head     | in progress |
+| 2026-11-19 00:00 | late    |       | head     | in progress |
+| 2026-11-19 10:00 | approve | e0101 |          | approved    |
+
+# 上長が、だれが代わりに対応するかを尋ね、書くことを添えて差し戻す。申請者はどこに書くかを上長に尋ね返し、上長は答えて、出し直した申請を承認する。どれも理由をコメントに書く。
+scenario コメントを添えて差し戻す休暇
+  requester e1203
+  given 休暇.grant(person: "e1203", year: "2026", days: 20)
+  form 種類 = 有給, 初日 = 2026-12-21, 日数 = 3, 理由 = "家族に会いに行く"
+| at               | event                            | by    | comment                                  | -> stage | status         |
+| 2026-11-16 09:00 | submit                           | e1203 |                                          | manager  | in progress    |
+| 2026-11-16 11:00 | comment                          | e1101 | "休みのあいだ、だれが代わりに対応しますか"   | manager  | in progress    |
+| 2026-11-16 13:00 | comment                          | e1203 | "e1201 さんです"                          | manager  | in progress    |
+| 2026-11-16 17:00 | send back                        | e1101 | "代わりの人に e1201 さんを書いてください"     |          | with requester |
+| 2026-11-16 17:30 | comment                          | e1203 | "代わりの人は、どこに書けばよいですか"       |          | with requester |
+| 2026-11-16 17:45 | comment                          | e1101 | "フォームの「代わりに対応する人」の欄です"   |          | with requester |
+| 2026-11-17 09:00 | resubmit(代わり: person "e1201") | e1203 | "代わりの人に e1201 さんを書きました"        | manager  | in progress    |
+| 2026-11-17 10:00 | approve                          | e1101 | "よい休みを"                               |          | approved       |
+
+# 部長が、一年でいちばん忙しい週の長い休暇を、理由を添えて却下する。
+scenario 理由を添えて却下する休暇
+  requester e1203
+  given 休暇.grant(person: "e1203", year: "2026", days: 20)
+  form 種類 = 有給, 初日 = 2026-12-21, 日数 = 8, 理由 = "家族に会いに行く"
+| at               | event   | by    | comment                                  | -> stage | status      |
+| 2026-11-16 09:00 | submit  | e1203 |                                          | manager  | in progress |
+| 2026-11-16 17:00 | approve | e1101 |                                          | head     | in progress |
+| 2026-11-16 18:00 | reject  | e3101 | "年末の前の週は、一年でいちばん忙しい週です" |          | rejected    |
+
+labels en
+  request        "Leave request"
+  種類           "Kind of leave"
+  種類.有給      "Paid leave"
+  種類.病気      "Sick leave"
+  種類.特別      "Special leave"
+  初日           "First day"
+  日数           "Business days"
+  復帰日         "Back at work on"
+  理由           "Reason"
+  代わり         "Who covers for you"
+  stage manager  "Manager"
+  stage head     "Head of the department"
+  who manager    "Manager"
+  who dept_head  "Head of the department"

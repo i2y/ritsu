@@ -1,0 +1,30 @@
+// google.type.Date where tests/fixtures/date_messages.flow and its Japanese version send and read
+// something else (DESIGN 44). Ymd is a message of the same three fields, which is no date: a flow
+// reads it as the record it is.
+syntax = "proto3";
+
+package days.v1;
+
+import "google/type/date.proto";
+
+service DayService {
+  rpc Shift(ShiftRequest) returns (ShiftResponse);
+}
+
+message ShiftRequest {
+  google.type.Date day = 1;
+  int32 by = 2;
+}
+
+message Ymd {
+  int32 year = 1;
+  int32 month = 2;
+  int32 day = 3;
+}
+
+message ShiftResponse {
+  google.type.Date day = 1;
+  google.type.Date also = 2;
+  repeated google.type.Date more = 3;
+  Ymd own = 4;
+}

@@ -189,7 +189,7 @@ error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` ca
 |---|---|---|
 | E001 to E006 | words, lines, the order of sections, indentation, dates that do not exist | what the message says |
 | E007 to E014 | names twice or undeclared, aliases, types, the one date input, ranges, dates that start from each other | what the message says |
-| E015 | a `use calendar` that cannot be used | the path is from the `.cal`'s directory |
+| E015 | a `use calendar` that cannot be used, a calendar that does not pass koyomi's check among them (its errors in the notes) | the path is from the `.cal`'s directory; a calendar that does not pass is corrected in its own file |
 | E016 | `gen` is to write a target a W001 names, and writes nothing | another alias for the one the note names; for a target you do not use, name the ones you use with `--target` |
 | W001 | two aliases one target spells as one identifier (Go's PascalCase, PostgreSQL's 63 bytes), an alias that is a name the Go code declares, a file's alias whose Go package is a keyword or `main`, an alias with two `_` in a row, which rustc warns of (`non_snake_case`) in the Rust and Wasm code, a file's alias that is a module of Python's standard library or a schema PostgreSQL keeps for itself (`pg_terms`, `information_schema`), an alias that hides what a target's code uses (`is_open` beside a calendar, Python's `str`, `tuple` and `isinstance`, Go's `err` as an input), an input `__proto__` for Wasm, or a file given with another that is one Go package, WIT package or PostgreSQL schema with it (the warning is on the later file) | leave it for a target you do not generate, and name the ones you do with `gen --target`; for one you do, another alias for the one the note names |
 | E101 to E106 | a table's copy missing, unpinned, changed, unreadable, or outside its `covers` | `ritsu koyomi source fetch`, read what changed, `ritsu koyomi source pin` |
@@ -219,7 +219,8 @@ error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` ca
   `ritsu koyomi vectors` gives every input's result as JSON Lines.
 - The exit code is 0 with no error (warnings may be), 1 with one, and 2 for bad arguments or a file
   that cannot be read. An unknown flag is refused with 2, never ignored.
-- `--lang ja`, or `KOYOMI_LANG=ja`, gives the messages in Japanese. `check` never reads the
+- `--lang ja`, or `KOYOMI_LANG=ja`, gives the messages in Japanese; what `gen` and `doc` write is
+  in Japanese with `--lang ja` only. `check` never reads the
   network; `source fetch` and `source outdated` do.
 
 ## 6. The generated code

@@ -1,0 +1,4 @@
+エラー[E104]: tests/mutants/E104_an_amount_divided.ringi:6:34: `per_day` の計算に丸め方がありません
+     6 |   per_day : money[JPY] "A day" = amount / days
+  = `amount / days` は端数が出ることがあります。`round down(1JPY)` のように、丸め方と刻みを書いてください（`up`、`down`、`half_up`、`half_down`、`half_even`）。
+  = 直した行: per_day : money[JPY] "A day" = amount / days  round down(1JPY)

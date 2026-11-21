@@ -314,10 +314,10 @@ struct CalFile {
 fn read_calendar_files(c: &Calendar) -> Vec<CalFile> {
     let mut out = Vec::new();
     for info in std::iter::once(&c.info).chain(c.used.iter()) {
-        let Ok(src) = ritsu_base::fs::read_to_string(&info.path) else { continue };
+        let Ok(src) = ritsu_base::fs::read_to_string(&info.read) else { continue };
         let parsed = crate::parse::parse(&info.shown, &src);
         let Some(file) = parsed.file else { continue };
-        let dir = info.path.parent().unwrap_or(Path::new("")).to_path_buf();
+        let dir = info.read.parent().unwrap_or(Path::new("")).to_path_buf();
         let (laws, _) = sources::check_laws(&Origin { file: &file, dir: &dir });
         out.push(CalFile { info: info.clone(), file, laws });
     }
@@ -516,6 +516,9 @@ fn dates_page(m: &Model, rep: &Report, diags: &[Diag], ok: Option<&Text>, lang: 
 
     // The verdict.
     let failing: Vec<&Diag> = diags.iter().filter(|d| d.is_error()).collect();
+    // Where the verdict says the failing days are in bold below: the sentence stays only when
+    // the months the page shows hold one of them.
+    let mut says_bold: Option<usize> = None;
     if failing.is_empty() {
         let line = ok.map(|x| ritsu_base::text::spaced(x, lang)).unwrap_or_default();
         b.push(Block::Alert { ok: true, lines: vec![vec![t(format!("{line}{}", if lang == Lang::Ja { "。" } else { "." }))]] });
@@ -526,6 +529,7 @@ fn dates_page(m: &Model, rep: &Report, diags: &[Diag], ok: Option<&Text>, lang: 
                 "成り立たない入力の日は、下の月の表で太字にしてあります。",
                 "The input days it fails on are in bold in the month tables below."
             )))]);
+            says_bold = Some(b.len());
         }
         b.push(Block::Alert { ok: false, lines });
     }
@@ -919,6 +923,12 @@ fn dates_page(m: &Model, rep: &Report, diags: &[Diag], ok: Option<&Text>, lang: 
                 marks.edges.entry(d).or_default().extend(e.why.iter().cloned());
             }
         }
+    }
+    if marks.fails.is_empty()
+        && let Some(at) = says_bold
+        && let Some(Block::Alert { lines, .. }) = b.get_mut(at)
+    {
+        lines.pop();
     }
     match &m.cal {
         None => b.push(Block::P(vec![t(s(tr!(

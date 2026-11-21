@@ -1,0 +1,21 @@
+book budget v1
+description "The budget of each department. An expense request holds its amount while it is approved, the payment posts the hold, and a rejection, an expiry or a withdrawal voids it"
+
+unit JPY
+
+account dept_budget(dept: string) : JPY
+  description "what the department has left to spend"
+  at least 0 refused as over_budget
+account allocations : JPY outside
+account payees : JPY outside
+
+transfer allocate(dept: string, period: string, amount: JPY)
+  description "the budget a department is given for a period"
+  key dept, period
+  move amount from allocations to dept_budget(dept)
+
+transfer reserve(request: string, attempt: string, dept: string, amount: JPY)
+  description "held when a request is submitted, posted when it is paid, voided when it is rejected, expires, is withdrawn or sent back"
+  key request, attempt
+  pending expires after 365 days
+  move amount from dept_budget(dept) to payees

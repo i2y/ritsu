@@ -1,0 +1,71 @@
+request memo v1 "Memo, approved once at the last stage"
+description "A memo whose route is written in stage lines (fictional rules): with `same approver approves once, at the last stage`, a later stage that comes on a condition, one that is skipped where it has nobody, and a stage of two ways one of which waits"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  what   : text "What"  count >=1 <=100
+  amount : money[JPY] "Amount"  range >=1JPY <=1_000_000JPY
+
+route
+  first   manager and accounting
+  second  dept_head  when amount > 100_000JPY
+    when empty skip
+  last    finance
+
+who
+  manager    = manager of requester
+  dept_head  = head of requester.department
+  accounting = team accounting
+  finance    = team finance
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+  same approver  approves once, at the last stage
+  send back      to the requester, at most 2 times
+  resubmit       within 3 business days
+  withdraw       until second
+  pause          at most 5 business days
+
+claims
+  ends_in_time : every ticket ends within 95 business days
+
+# the later stage does not come for the amount: the manager answers the first stage where it is
+scenario the_later_stage_does_not_come
+  requester e1101
+  form what = "A notebook", amount = 50_000JPY
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | first    | in progress |
+| 2026-11-16 11:00 | approve | e3101 | first    | in progress |
+| 2026-11-16 12:00 | approve | e1002 | last     | in progress |
+| 2026-11-16 13:00 | approve | e4001 |          | approved    |
+
+# it comes: the manager's way waits for it, accounting answers the first stage, and one approval at
+# the later stage does both
+scenario one_way_waits_for_the_later_stage
+  requester e1101
+  form what = "A notebook", amount = 200_000JPY
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | first    | in progress |
+| 2026-11-16 12:00 | approve | e1002 | second   | in progress |
+| 2026-11-16 13:00 | approve | e3101 | last     | in progress |
+| 2026-11-16 14:00 | approve | e4001 |          | approved    |
+
+# the version of the organization changes, and the later stage has nobody: it is skipped, and the
+# way that waited for it starts first, with the one who answers it now
+scenario the_later_stage_is_skipped_for_lack_of_an_approver
+  requester e9002
+  form what = "A notebook", amount = 200_000JPY
+| at               | event   | by    | -> stage | status      |
+| 2027-03-30 10:00 | submit  | e9002 | first    | in progress |
+| 2027-04-01 09:00 | remind  |       | first    | in progress |
+| 2027-04-01 11:00 | approve | e1002 | first    | in progress |
+| 2027-04-01 12:00 | approve | e0102 | last     | in progress |
+| 2027-04-01 13:00 | approve | e4001 |          | approved    |

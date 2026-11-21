@@ -2,7 +2,8 @@
 //! an OpenAPI document's types, ranges, enums and parameters that may be absent (E203), the `from`
 //! of an action (E204), a `.proto`'s methods and Protovalidate's ranges, an AsyncAPI channel's
 //! parameters, the operations of a chobo book's transfers (E202), and a rule's precondition the
-//! values given can break (E206). Each case is a small gate, checked with every language joined.
+//! values given can break (E206) — a `constraint`, or the range the rule accepts for a value it
+//! works out. Each case is a small gate, checked with every language joined.
 
 mod common;
 
@@ -65,7 +66,7 @@ fn an_input_is_what_the_openapi_operation_takes() {
     // a range past the operation's
     let (c, text) = codes(&[("example.gate", &refund_gate("    amount : money[GBP]  range >=1GBP <=20_000GBP\n")), ("orders.json", ORDERS)]);
     assert_eq!(c, vec!["E203"], "{text}");
-    assert!(text.contains("its range is 1GBP..20,000GBP, and the operation takes 1GBP..10,000GBP"), "{text}");
+    assert!(text.contains("its range is 1GBP..20_000GBP, and the operation takes 1GBP..10_000GBP"), "{text}");
     // a number the operation takes with a fraction
     let (c, text) = codes(&[("example.gate", &refund_gate("    share : number  range >=0 <=10\n")), ("orders.json", ORDERS)]);
     assert_eq!(c, vec!["E203"], "{text}");
@@ -176,11 +177,139 @@ fn a_proto_method_its_fields_and_their_ranges() {
     let (c, text) = codes(&[("example.gate", &proto_gate("\"shop.v1.Orders/Refund\"", "orderId", "    flag : bool\n")), ("orders.proto", PROTO)]);
     assert_eq!(c, vec!["E203"], "{text}");
     assert!(text.contains("The input `flag` is not a field of the request of proto \"orders.proto\" service Orders method Refund\n"), "{text}");
+    // a service of another package is not this file's, though its last name is the same
+    let (c, text) = codes(&[("example.gate", &proto_gate("\"other.v1.Orders/Refund\"", "orderId", "    urgent : bool\n")), ("orders.proto", PROTO)]);
+    assert_eq!(c, vec!["E202"], "{text}");
+    assert!(text.contains("There is no service other.v1.Orders method Refund in orders.proto\n"), "{text}");
     let (c, text) = codes(&[("example.gate", &proto_gate("\"Orders/Refund\"", "id", "    urgent : bool\n")), ("orders.proto", PROTO)]);
     assert_eq!(c, vec!["E204"], "{text}");
     // Protovalidate's range is what the method takes
     let (c, text) = codes(&[("example.gate", &proto_gate("\"Orders/Refund\"", "order_id", "    amount : number  range >=0 <=10_000\n")), ("orders.proto", PROTO)]);
     assert_eq!(c, vec!["E203"], "{text}");
+}
+
+const KINDS: &str = r#"syntax = "proto3";
+package claims.v1;
+
+import "buf/validate/validate.proto";
+
+service Claims {
+  rpc Pay(PayRequest) returns (PayReply);
+  rpc PayTravel(PayTravelRequest) returns (PayReply);
+  rpc PayOdd(PayOddRequest) returns (PayReply);
+}
+
+enum Category {
+  CATEGORY_UNSPECIFIED = 0;
+  CATEGORY_TRAVEL = 1;
+  CATEGORY_PURCHASE = 2;
+}
+
+message OddCategory {
+  string text = 1;
+}
+
+message PayRequest {
+  string claim_id = 1;
+  Category kind = 2;
+}
+
+message PayTravelRequest {
+  string claim_id = 1;
+  Category kind = 2 [(buf.validate.field).enum = {in: [1]}];
+}
+
+message PayOddRequest {
+  string claim_id = 1;
+  OddCategory kind = 2;
+}
+
+message PayReply {
+  bool paid = 1;
+}
+"#;
+
+/// An enum input against a field of the request whose type a `.proto` names: the name is resolved
+/// as protobuf resolves it, to an enum (not a message whose name ends as the enum's does), and every
+/// value the field lets through, Protovalidate's `in` heeded, is a value of the input's enum.
+#[test]
+fn a_proto_enum_field_and_the_values_it_lets_through() {
+    let gate = |method: &str, values: &str| {
+        format!("gate claims v1\n\nuse proto desk from \"claims.proto\"\n\nenum category = {values}\n\nprincipal User\n\nresource Claim\n\naction pay_claim\n  guards desk \"Claims/{method}\"\n  principal User\n  resource Claim from claim_id\n  input\n    kind : category\n\npermit users_pay\n  principal is User\n  action pay_claim\n")
+    };
+    let (c, text) = codes(&[("example.gate", &gate("Pay", "travel | purchase")), ("claims.proto", KINDS)]);
+    assert!(c.is_empty(), "{text}");
+    // the request may carry a value the input's enum does not have
+    let (c, text) = codes(&[("example.gate", &gate("Pay", "travel")), ("claims.proto", KINDS)]);
+    assert_eq!(c, vec!["E203"], "{text}");
+    assert!(text.contains("the operation takes purchase, which the enum `category` does not have\n") && text.contains("操作が受け取る purchase は、列挙 `category` の値にありません\n"), "{text}");
+    // Protovalidate lets only one value through
+    let (c, text) = codes(&[("example.gate", &gate("PayTravel", "travel")), ("claims.proto", KINDS)]);
+    assert!(c.is_empty(), "{text}");
+    // a message, whose name ends as the enum's does
+    let (c, text) = codes(&[("example.gate", &gate("PayOdd", "travel | purchase")), ("claims.proto", KINDS)]);
+    assert_eq!(c, vec!["E203"], "{text}");
+    assert!(text.contains("the field's type `OddCategory` is no enum\n") && text.contains("フィールドの型 `OddCategory` は列挙ではありません\n"), "{text}");
+}
+
+/// The request of `Claims/Pay` with an enum `Category` of `values` and a field `kind` as `field`
+/// writes it; `extra` goes before the enum.
+fn pay_proto(values: &str, field: &str, extra: &str) -> String {
+    format!(
+        "syntax = \"proto3\";\npackage claims.v1;\n\nimport \"buf/validate/validate.proto\";\n\nservice Claims {{\n  rpc Pay(PayRequest) returns (PayReply);\n}}\n\nmessage PayReply {{\n  bool paid = 1;\n}}\n\n{extra}enum Category {{\n{values}}}\n\nmessage PayRequest {{\n  string claim_id = 1;\n  {field}\n}}\n"
+    )
+}
+
+/// Each form an enum field of a `.proto` and its value names can take, against a gate's enum: the
+/// gate takes every value the field lets through, read as rulec's `import proto` reads it (rulec's
+/// DESIGN §15.59), or E203 names the one it does not.
+#[test]
+fn every_form_of_an_enum_field_of_a_proto() {
+    let gate = |values: &str| {
+        format!("gate claims v1\n\nuse proto desk from \"claims.proto\"\n\nenum category = {values}\n\nprincipal User\n\nresource Claim\n\naction pay_claim\n  guards desk \"Claims/Pay\"\n  principal User\n  resource Claim from claim_id\n  input\n    kind : category\n\npermit users_pay\n  principal is User\n  action pay_claim\n")
+    };
+    const PREFIXED: &str = "  CATEGORY_UNSPECIFIED = 0;\n  CATEGORY_TRAVEL = 1;\n  CATEGORY_PURCHASE = 2;\n";
+    const ALIAS: &str = "  option allow_alias = true;\n  CATEGORY_UNSPECIFIED = 0;\n  CATEGORY_TRAVEL = 1;\n  CATEGORY_TRIP = 1;\n  CATEGORY_PURCHASE = 2;\n";
+    let plain = |values: &str| pay_proto(values, "Category kind = 2;", "");
+    let nested = "syntax = \"proto3\";\npackage claims.v1;\n\nservice Claims {\n  rpc Pay(PayRequest) returns (PayReply);\n}\n\nmessage PayReply {\n  bool paid = 1;\n}\n\nmessage PayRequest {\n  enum Category {\n    CATEGORY_UNSPECIFIED = 0;\n    CATEGORY_TRAVEL = 1;\n    CATEGORY_PURCHASE = 2;\n  }\n  string claim_id = 1;\n  Category kind = 2;\n}\n";
+    // (what it is, the gate's values, the contract, the English and the Japanese of what E203 says; none when it passes)
+    let cases: Vec<(&str, &str, String, Option<(&str, &str)>)> = vec![
+        ("the same values", "travel | purchase", plain(PREFIXED), None),
+        ("a value the gate lacks", "travel", plain(PREFIXED), Some(("the operation takes purchase, which the enum `category` does not have", "操作が受け取る purchase は、列挙 `category` の値にありません"))),
+        ("a value the field does not take", "travel | purchase | training", plain(PREFIXED), None),
+        ("a real value at 0", "travel | purchase", plain("  TRAVEL = 0;\n  PURCHASE = 1;\n"), None),
+        ("UNKNOWN at 0 is a value", "travel | purchase", plain("  UNKNOWN = 0;\n  TRAVEL = 1;\n  PURCHASE = 2;\n"), Some(("the operation takes unknown, which the enum `category` does not have", "操作が受け取る unknown は、列挙 `category` の値にありません"))),
+        ("not_in 0", "travel | purchase", pay_proto(PREFIXED, "Category kind = 2 [(buf.validate.field).enum = {not_in: [0]}];", ""), None),
+        ("defined_only", "travel | purchase", pay_proto(PREFIXED, "Category kind = 2 [(buf.validate.field).enum.defined_only = true];", ""), None),
+        ("const", "travel", pay_proto(PREFIXED, "Category kind = 2 [(buf.validate.field).enum.const = 1];", ""), None),
+        ("in, which the gate lacks", "purchase", pay_proto(PREFIXED, "Category kind = 2 [(buf.validate.field).enum = {in: [1]}];", ""), Some(("the operation takes travel, which the enum `category` does not have", "操作が受け取る travel は、列挙 `category` の値にありません"))),
+        ("optional", "travel | purchase", pay_proto(PREFIXED, "optional Category kind = 2;", ""), None),
+        ("repeated", "travel | purchase", pay_proto(PREFIXED, "repeated Category kind = 2;", ""), Some(("the field is `repeated`, a list of values, and the input takes one value", "フィールドは `repeated` で値の並びですが、input は一つの値を受け取ります"))),
+        ("a string field", "travel | purchase", pay_proto(PREFIXED, "string kind = 2;", ""), Some(("the field's type `string` is not the input's", "フィールドの型 `string` と合いません"))),
+        ("names in other cases", "travel | purchase", plain("  Category_Unspecified = 0;\n  Travel = 1;\n  Purchase = 2;\n"), None),
+        ("a prefix in other cases", "travel | purchase", plain("  Category_Unspecified = 0;\n  Category_Travel = 1;\n  category_purchase = 2;\n"), None),
+        ("the enum's name running on into a word", "travel | purchase", plain("  CATEGORY_UNSPECIFIED = 0;\n  CATEGORYTRAVEL = 1;\n  CATEGORY_PURCHASE = 2;\n"), Some(("the operation takes categorytravel, which the enum `category` does not have", "操作が受け取る categorytravel は、列挙 `category` の値にありません"))),
+        ("another enum of the same values", "travel | purchase", pay_proto(PREFIXED, "Kind kind = 2;", "enum Kind {\n  KIND_UNSPECIFIED = 0;\n  KIND_TRAVEL = 1;\n  KIND_PURCHASE = 2;\n}\n\n"), None),
+        ("another enum of other values", "travel | purchase", pay_proto(PREFIXED, "Kind kind = 2;", "enum Kind {\n  KIND_UNSPECIFIED = 0;\n  KIND_BIG = 1;\n  KIND_SMALL = 2;\n}\n\n"), Some(("the operation takes big and small, which the enum `category` does not have", "操作が受け取る big、small は、列挙 `category` の値にありません"))),
+        ("an enum nested in the request", "travel | purchase", nested.to_string(), None),
+        ("the type named with its package", "travel | purchase", pay_proto(PREFIXED, "claims.v1.Category kind = 2;", ""), None),
+        ("the type named from the root", "travel | purchase", pay_proto(PREFIXED, ".claims.v1.Category kind = 2;", ""), None),
+        ("two names of one number", "travel | purchase", plain(ALIAS), None),
+        ("the other name of the number", "trip | purchase", plain(ALIAS), None),
+        ("neither name of the number", "purchase", plain(ALIAS), Some(("the operation takes travel / trip, which the enum `category` does not have", "操作が受け取る travel / trip は、列挙 `category` の値にありません"))),
+        ("reserved numbers", "travel | purchase", plain("  reserved 3, 4;\n  CATEGORY_UNSPECIFIED = 0;\n  CATEGORY_TRAVEL = 1;\n  CATEGORY_PURCHASE = 2;\n"), None),
+        ("a value of two words", "air_travel | purchase", plain("  CATEGORY_UNSPECIFIED = 0;\n  CATEGORY_AIR_TRAVEL = 1;\n  CATEGORY_PURCHASE = 2;\n"), None),
+    ];
+    for (what, values, proto, said) in &cases {
+        let (c, text) = codes(&[("example.gate", &gate(values)), ("claims.proto", proto)]);
+        match said {
+            None => assert!(c.is_empty(), "{what}: {text}"),
+            Some((en, ja)) => {
+                assert_eq!(c, vec!["E203"], "{what}: {text}");
+                assert!(text.contains(&format!("{en}\n")) && text.contains(&format!("{ja}\n")), "{what}: {text}");
+            }
+        }
+    }
 }
 
 const EVENTS: &str = r##"asyncapi: 3.0.0
@@ -258,6 +387,27 @@ fn values_that_can_break_a_precondition_of_the_rule() {
     ritsu_testkit::golden("tests/walk/golden/E206_precondition.txt", &text);
     // low is never above high
     let (c, text) = codes(&[("example.gate", &gate(">=0 <=50", ">=50 <=100")), ("ordered.rule", ORDERED)]);
+    assert!(c.is_empty(), "{text}");
+}
+
+const CARD_FEE: &str = "rule card_fee v1\ndescription \"Whether a card payment's fee is large; the fee is accepted only up to 20,000\"\n\nenum size = small | large\n\ninputs\n  amount : number  range >=1 <=1_000_000\n\ndefine fee : number = down(amount * 3%, 1)  range >=0 <=20_000\n\noutputs\n  size : size\n\ntable decide\npolicy unique\n| fee      | -> size : size |\n| <10_000  | small          |\n| >=10_000 | large          |\n";
+
+/// The range a rule accepts for a value it works out is a precondition of the rule as a
+/// `constraint` is (rulec's §15.313): rulec works the fee out over the range of the amount the gate
+/// gives. Up to 1,000,000 the fee can pass 20,000 (E206, with an amount that takes it past); up to
+/// 500,000 it cannot.
+#[test]
+fn values_that_can_take_what_the_rule_works_out_past_the_range_it_accepts() {
+    let gate = |amount: &str| {
+        format!(
+            "gate payments v1\n\nuse rule card_fee from \"fee.rule\"\n\nprincipal User\n  attributes\n    amount : number  range {amount}\n\nresource Payment\n\naction pay\n  principal User\n  resource Payment\n  context\n    size = card_fee(amount: principal.amount).size\n\npermit small_pays\n  principal is User\n  action pay\n  when size is small\n"
+        )
+    };
+    let (c, text) = codes(&[("example.gate", &gate(">=1 <=1000000")), ("fee.rule", CARD_FEE)]);
+    assert_eq!(c, vec!["E206"], "{text}");
+    assert!(text.contains("its precondition `fee` (>=0 <=20_000)") && text.contains("前提 `fee` (>=0 <=20_000)"), "{text}");
+    assert!(text.contains("For example: amount = 666701."), "{text}");
+    let (c, text) = codes(&[("example.gate", &gate(">=1 <=500000")), ("fee.rule", CARD_FEE)]);
     assert!(c.is_empty(), "{text}");
 }
 

@@ -161,7 +161,8 @@ pub fn linear(e: &Expr, want: &Ty, c: &Checked) -> Option<Lin> {
     match e {
         Expr::Name(n, _) => {
             let ty = c.ty_of(n)?;
-            (ty == *want).then(|| Lin::var(n))
+            // A unit is the unit it is, however it is spelled (§15.332).
+            ty.same(want).then(|| Lin::var(n))
         }
         Expr::Lit(l, _) => lit_of(l, want).map(Lin::con),
         Expr::Bin(a, op, b, _) => match op {
@@ -226,11 +227,15 @@ pub struct Ground {
 /// The same reasoning drops a `derive` whose expression is not linear: its name stays in the
 /// system, free inside its range, and only the equation that would have tied it down is
 /// left out. §15.126 gave up on the whole question in both cases; there was no need to.
+///
+/// Two spellings of one unit (`JPY` and `円`, `mL` and `cm3`) measure the same way, and their names
+/// share one system, as the type checker lets them share a sum (§15.332). The system's `want` is
+/// the first spelling the seed reads; every number in it is the same number in either.
 pub fn grounds(seed: &[String], f: &RuleFile, c: &Checked) -> Vec<Ground> {
     let mut types: Vec<Ty> = Vec::new();
     for n in seed {
         if let Some(ty) = c.ty_of(n) {
-            if numeric(&ty) && !types.contains(&ty) {
+            if numeric(&ty) && !types.iter().any(|t| t.same(&ty)) {
                 types.push(ty);
             }
         }
@@ -262,7 +267,7 @@ fn ground_in(seed: &[String], want: &Ty, f: &RuleFile, c: &Checked) -> Option<Gr
     let mut vars: Vec<String> = Vec::new();
     let mut queue: Vec<String> = seed.to_vec();
     while let Some(n) = queue.pop() {
-        if vars.contains(&n) || c.ty_of(&n).as_ref() != Some(want) {
+        if vars.contains(&n) || !c.ty_of(&n).is_some_and(|t| t.same(want)) {
             continue;
         }
         vars.push(n.clone());

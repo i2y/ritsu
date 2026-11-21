@@ -52,6 +52,14 @@ Every way the workflow can end.
 | 35 | `fail RuleLate` "注文 {一件.id} の便を決めるのが間に合いませんでした" |
 | 38 | the flow runs to its end, and the workflow succeeds |
 
+## Names of one enum
+
+Each row is one enum, which the flow and the rules it uses read by these names: the same enum of one file. They are one type, so a value of one name is given where another is expected.
+
+| Names | Declared in | Name there | Values |
+|---|---|---|---|
+| `急ぎ.便`, `急ぎの見直し.便` | `../../examples/order/rules/出荷の急ぎ.rule` | `便` | `通常便`, `翌日便` |
+
 ## Rules
 
 The rules this workflow calls, each as the page for people that `rulec doc` renders.

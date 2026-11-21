@@ -36,6 +36,9 @@ pub const TERM_GRACE: Duration = Duration::from_secs(5);
 const KILL_GRACE: Duration = Duration::from_secs(5);
 /// How many of the last lines of a program's stderr a claim error quotes.
 const STDERR_TAIL: usize = 5;
+/// How long geas waits, once a program has ended or been stopped, for what it wrote on its
+/// pipes to be read to the end.
+const READ_GRACE: Duration = Duration::from_secs(1);
 
 #[cfg(unix)]
 unsafe extern "C" {
@@ -485,14 +488,27 @@ impl Collector {
         String::from_utf8_lossy(&self.buf.lock().unwrap_or_else(|e| e.into_inner())).into_owned()
     }
 
-    /// What was read, once the pipe closed or the deadline passed.
-    fn take(self, deadline: Instant) -> String {
+    /// Waits until the pipe closed or the deadline passed.
+    fn wait(&self, deadline: Instant) {
         while !self.done.load(Ordering::SeqCst) && Instant::now() < deadline {
             thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    /// What was read, once the pipe closed or the deadline passed.
+    fn take(self, deadline: Instant) -> String {
+        self.wait(deadline);
         let bytes = std::mem::take(&mut *self.buf.lock().unwrap_or_else(|e| e.into_inner()));
         String::from_utf8_lossy(&bytes).into_owned()
     }
+}
+
+/// How long the pipes of a program that has ended are read: until they close, and at most
+/// until `deadline` or `READ_GRACE` from now, whichever is later. What a program wrote last
+/// may still be in a pipe when geas learns it ended, and on a busy machine the collector
+/// reads it later; a deadline that has nearly run out must not cut that off.
+fn after_end(deadline: Instant) -> Instant {
+    deadline.max(Instant::now() + READ_GRACE)
 }
 
 /// A running service.
@@ -639,7 +655,7 @@ pub fn run_process(
             other => {
                 stop(&mut child, &group, false);
                 pid_log(format!("stop {}\n", child.id()));
-                let stderr = se.take(Instant::now() + Duration::from_secs(1));
+                let stderr = se.take(Instant::now() + READ_GRACE);
                 let mut notes = vec![command_note(&words)];
                 notes.extend(stderr_tail(&stderr));
                 let msg = match other {
@@ -655,8 +671,9 @@ pub fn run_process(
     };
     stop(&mut child, &group, launch.term);
     pid_log(format!("stop {}\n", child.id()));
-    let stdout = so.take(deadline);
-    let stderr = se.take(deadline);
+    let by = after_end(deadline);
+    let stdout = so.take(by);
+    let stderr = se.take(by);
     Ok(Obs::Proc { stdout, stderr, exit: status.code().unwrap_or(-1) })
 }
 
@@ -690,7 +707,7 @@ pub fn start_server(
         if let Ok(Some(st)) = child.try_wait() {
             stop(&mut child, &group, false);
             pid_log(format!("stop {}\n", child.id()));
-            let stderr = se.take(Instant::now() + Duration::from_secs(1));
+            let stderr = se.take(Instant::now() + READ_GRACE);
             let how = ended(st);
             let mut notes = vec![command_note(shown)];
             notes.extend(stderr_tail(&stderr));
@@ -710,7 +727,7 @@ pub fn start_server(
         if Instant::now() >= deadline {
             stop(&mut child, &group, false);
             pid_log(format!("stop {}\n", child.id()));
-            let stderr = se.take(Instant::now() + Duration::from_secs(1));
+            let stderr = se.take(Instant::now() + READ_GRACE);
             let mut notes = vec![command_note(shown)];
             notes.extend(stderr_tail(&stderr));
             return Err(Failure {
@@ -737,7 +754,7 @@ pub fn start_server(
 pub fn stop_server(mut s: Server) -> (String, bool) {
     let killed = stop(&mut s.child, &s.group, true);
     pid_log(format!("stop {}\n", s.child.id()));
-    (s.stderr.take(Instant::now() + Duration::from_secs(1)), killed)
+    (s.stderr.take(Instant::now() + READ_GRACE), killed)
 }
 
 /// A program geas talks to or waits for: a GUI driver, a pixie app, Chrome. It runs
@@ -762,6 +779,35 @@ pub fn start(label: &str, words: &[String], launch: &Launch, stdin: bool, stdout
     Ok(Proc { stdin: child.stdin.take(), stdout: child.stdout.take(), child, group, stderr, done: false })
 }
 
+/// For a test: forty lines on stderr, then exit 3 at once, as a program that fails as it
+/// starts does.
+#[cfg(test)]
+pub(crate) const FORTY_LINES: &str = "i=1; while [ $i -le 40 ]; do echo \"line $i of why it stopped\" >&2; i=$((i+1)); done; exit 3";
+
+/// `start` for a test, with no stdin or stdout, and a collector that begins to read the
+/// program's stderr only `late` after it started, as it may on a busy machine.
+#[cfg(test)]
+pub(crate) fn start_late(words: &[&str], late: Duration) -> Proc {
+    struct Late<R> {
+        r: R,
+        wait: Option<Duration>,
+    }
+    impl<R: Read> Read for Late<R> {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if let Some(d) = self.wait.take() {
+                thread::sleep(d);
+            }
+            self.r.read(buf)
+        }
+    }
+    let words: Vec<String> = words.iter().map(|w| w.to_string()).collect();
+    let env = Env { clear: false, vars: vec![] };
+    let launch = Launch { dir: Path::new("."), env: &env, term: false };
+    let (mut child, group) = spawn_with("late", &words, &words, &launch, Stdio::null(), Stdio::null()).unwrap_or_else(|f| panic!("{}", f.msg.en));
+    let stderr = child.stderr.take().map(|r| Collector::start(Late { r, wait: Some(late) }));
+    Proc { stdin: None, stdout: None, child, group, stderr, done: false }
+}
+
 impl Proc {
     /// How it ended, if it has by `deadline`.
     pub fn wait_until(&mut self, deadline: Instant) -> Option<ExitStatus> {
@@ -774,16 +820,29 @@ impl Proc {
         }
     }
 
-    /// What it has written on stderr so far.
+    /// What it has written on stderr so far, while it runs.
     pub fn stderr_so_far(&self) -> String {
         self.stderr.as_ref().map(Collector::peek).unwrap_or_default()
+    }
+
+    /// What it wrote on stderr, once it has ended: as `finish` does, waits for the pipe to be
+    /// read to its end (`READ_GRACE` at most), so that what it wrote just before it exited
+    /// is in.
+    pub fn stderr_after_end(&self) -> String {
+        match &self.stderr {
+            Some(c) => {
+                c.wait(after_end(Instant::now()));
+                c.peek()
+            }
+            None => String::new(),
+        }
     }
 
     /// Stops it and its whole group, reaps it, and returns its stderr.
     pub fn finish(mut self) -> String {
         self.stop_now();
         match self.stderr.take() {
-            Some(c) => c.take(Instant::now() + Duration::from_secs(1)),
+            Some(c) => c.take(Instant::now() + READ_GRACE),
             None => String::new(),
         }
     }
@@ -823,6 +882,32 @@ mod tests {
         assert_eq!(w(&["python3", "calc.py", "2", "+", "3"]), "python3 calc.py 2 + 3");
         assert_eq!(w(&["a b", "", "it's"]), "'a b' '' 'it'\\''s'");
         assert_eq!(w(&["server", "--port={port}", "{a,b}"]), "server --port={port} '{a,b}'");
+    }
+
+    /// What a program wrote just before it ended is read to the end, though the collector
+    /// begins to read it only after geas learns it ended.
+    #[cfg(unix)]
+    #[test]
+    fn a_program_that_ended_is_read_to_the_end_of_its_stderr() {
+        let mut p = start_late(&["sh", "-c", FORTY_LINES], Duration::from_millis(300));
+        let st = p.wait_until(Instant::now() + STEP_TIMEOUT).expect("the program ends");
+        assert_eq!(st.code(), Some(3));
+        let err = p.stderr_after_end();
+        assert!(err.starts_with("line 1 of why it stopped\n") && err.ends_with("line 40 of why it stopped\n"), "{err:?}");
+        assert_eq!(err.lines().count(), 40);
+    }
+
+    /// A `run` that ends just before its 5 s are out still has its output read to the end:
+    /// the pipes get `READ_GRACE` past the end, not what is left of the deadline.
+    #[cfg(unix)]
+    #[test]
+    fn a_program_that_ends_by_its_deadline_is_read_to_the_end() {
+        let mut p = start_late(&["sh", "-c", FORTY_LINES], Duration::from_millis(300));
+        let st = p.wait_until(Instant::now() + STEP_TIMEOUT).expect("the program ends");
+        assert_eq!(st.code(), Some(3));
+        // the deadline has run out as the program ends
+        let err = p.stderr.take().expect("collected").take(after_end(Instant::now()));
+        assert_eq!(err.lines().last(), Some("line 40 of why it stopped"), "{err:?}");
     }
 
     #[test]

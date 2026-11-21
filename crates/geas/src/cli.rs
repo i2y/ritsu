@@ -5,6 +5,7 @@
 use crate::{affected, codes, contract, diag, drift, map, model, parse, proc, report, run, scenarios, sched, skill};
 
 use diag::{Diag, Show};
+use ritsu_base::cli::Misuse;
 use ritsu_base::text::{Lang, Text};
 use run::ClaimStatus;
 use std::io::Write as _;
@@ -156,14 +157,60 @@ enum Parsed {
     Run(Args),
 }
 
+/// `geas --help`, the commands named the way the person ran this one: `ritsu geas check …` through
+/// `ritsu` (ritsu's DESIGN 6.2, item 10).
+fn help(lang: Lang) -> String {
+    let page = Text::new(HELP_JA, HELP_EN).get(lang).to_string();
+    let run = ritsu_base::cli::command_name("geas");
+    if run == "geas" {
+        return page;
+    }
+    // the line that goes on under a command's own keeps its column
+    let more = " ".repeat(run.chars().count() - "geas".len());
+    let column = format!("\n{}", " ".repeat(38));
+    page.replace(&column, &format!("{column}{more}")).replace("\n  geas ", &format!("\n  {run} ")).replace("`geas ", &format!("`{run} "))
+}
+
 fn e080(en: impl Into<String>, ja: impl Into<String>) -> Diag {
     diag::error("E080", 0, 0, Text::new(ja, en))
 }
 
+/// E080 in the words every command of ritsu stops a command line with (ritsu's DESIGN 6.2, item
+/// 10): the sentence, and the usage line it puts on its next line as a note.
+fn e080_said(t: Text) -> Diag {
+    let split = |s: &str| match s.split_once('\n') {
+        Some((head, rest)) => (head.to_string(), Some(rest.trim().to_string())),
+        None => (s.to_string(), None),
+    };
+    let ((ja, ja_note), (en, en_note)) = (split(&t.ja), split(&t.en));
+    let d = diag::error("E080", 0, 0, Text::new(ja, en));
+    match (ja_note, en_note) {
+        (Some(j), Some(e)) => d.note(Text::new(j, e)),
+        _ => d,
+    }
+}
+
+/// `geas <cmd>` as the person runs it: `ritsu geas <cmd>` through `ritsu`.
+fn geas_cmd(c: &str) -> String {
+    format!("{} {c}", ritsu_base::cli::command_name("geas"))
+}
+
+/// The placeholder of each flag that takes a value, as `geas --help` writes it.
+fn placeholder(flag: &str) -> &'static str {
+    match flag {
+        "--lang" => "en|ja",
+        "--jobs" | "-j" => "<n>",
+        "--root" | "--install" => "<dir>",
+        "--out" | "--map" => "<file>",
+        _ => "<path>",
+    }
+}
+
 fn commands_note() -> Text {
+    let run = ritsu_base::cli::command_name("geas");
     tr!(
-        "コマンドは check、snap、drift、map、affected、scenarios、explain、skill です。詳しくは `geas --help` を見てください",
-        "the commands: check, snap, drift, map, affected, scenarios, explain, skill; `geas --help` says more",
+        "コマンドは check、snap、drift、map、affected、scenarios、explain、skill です。詳しくは `{run} --help` を見てください",
+        "the commands: check, snap, drift, map, affected, scenarios, explain, skill; `{run} --help` says more",
     )
 }
 
@@ -179,17 +226,13 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
                 Some(v) => match diag::parse_lang(v) {
                     Some(l) => lang_flag = Some(l),
                     None => {
-                        return Err((
-                            e080(
-                                format!("`--lang` takes en or ja, not `{v}`"),
-                                format!("`--lang` に渡せるのは en か ja で、`{v}` は使えません"),
-                            ),
-                            lang,
-                        ));
+                        let m = Misuse::NotAChoice { flag: "--lang", value: v.clone(), choices: &["en", "ja"] };
+                        return Err((e080_said(m.text("geas", "")), lang));
                     }
                 },
                 None => {
-                    return Err((e080("`--lang` needs a value: en or ja", "`--lang` には値（en か ja）が要ります"), lang));
+                    let m = Misuse::MissingValue { flag: "--lang", placeholder: placeholder("--lang") };
+                    return Err((e080_said(m.text("geas", "")), lang));
                 }
             }
             i += 2;
@@ -212,7 +255,7 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
             // `-j N` and `-jN`, as make and cargo take them
             "-j" => {
                 let Some(v) = it.next() else {
-                    return fail(e080("`-j` needs a value", "`-j` には値が要ります"));
+                    return fail(e080_said(Misuse::MissingValue { flag: "-j", placeholder: placeholder("-j") }.text("geas", "")));
                 };
                 flags.push("--jobs");
                 values.push(("--jobs", v.clone()));
@@ -223,7 +266,8 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
             }
             f if VALUE_FLAGS.iter().any(|(v, _)| *v == f) => {
                 let Some(v) = it.next() else {
-                    return fail(e080(format!("`{f}` needs a value"), format!("`{f}` には値が要ります")));
+                    let flag = VALUE_FLAGS.iter().find(|(v, _)| *v == f).map_or("--lang", |(v, _)| *v);
+                    return fail(e080_said(Misuse::MissingValue { flag, placeholder: placeholder(f) }.text("geas", "")));
                 };
                 flags.push(f);
                 values.push((f, v.clone()));
@@ -235,47 +279,36 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
         }
     }
     let Some(word) = word else {
+        let run = ritsu_base::cli::command_name("geas");
         return fail(
-            e080(
-                "no command given; geas runs as `geas <command> …`",
-                "コマンドがありません。geas は、`geas <コマンド> …` の形で走らせてください",
-            )
-            .note(commands_note()),
+            e080(format!("no command given; geas runs as `{run} <command> …`"), format!("コマンドがありません。geas は、`{run} <コマンド> …` の形で走らせてください"))
+                .note(commands_note()),
         );
     };
     let Some(cmd) = Cmd::parse(word) else {
-        return fail(
-            e080(format!("`{word}` is not a command"), format!("`{word}` というコマンドはありません")).note(commands_note()),
-        );
+        return fail(e080_said(ritsu_base::cli::no_command("geas", word)));
     };
     let c = cmd.word();
     for f in &flags {
         if !cmd.options().contains(f) {
-            return fail(
-                e080(
-                    format!("`{f}` is not an option of `geas {c}`"),
-                    format!("`{f}` は `geas {c}` のオプションではありません"),
-                )
-                .note(tr!(
-                    "使えるオプション: {}",
-                    "it takes: {}",
-                    cmd.options().join("、");
-                    cmd.options().join(", "),
-                )),
-            );
+            let m = Misuse::UnknownFlag(f.to_string());
+            return fail(e080_said(m.text_among(&ritsu_base::cli::command_name("geas"), c, cmd.options())));
         }
     }
-    for (flag, most) in VALUE_FLAGS {
-        let n = values.iter().filter(|(f, _)| f == flag).count();
-        if n > *most && *flag != "--lang" {
-            return fail(if *most == 1 {
-                e080(format!("`{flag}` is given {n} times; give it once"), format!("`{flag}` が {n} 回あります。一回だけ渡してください"))
-            } else {
-                e080(
-                    format!("`{flag}` is given {n} times; it takes at most {most}: a record of the code before the change and one of the code after it"),
-                    format!("`{flag}` が {n} 回あります。渡せるのは {most} 回までで、変更前のコードの記録と変更後のコードの記録です"),
-                )
-            });
+    // a flag given a second time stops the line there, in the words every command of ritsu says it
+    // in, however many times it was given; `--map` takes two (the records before and after the change)
+    for (i, f) in flags.iter().enumerate() {
+        let n = flags[..=i].iter().filter(|g| *g == f).count();
+        let most = if *f == "--map" { 2 } else { 1 };
+        if n > most && *f != "--lang" {
+            if most == 1 {
+                let name = cmd.options().iter().chain(["--jobs"].iter()).find(|o| **o == *f).copied().unwrap_or("--jobs");
+                return fail(e080_said(Misuse::Twice(name).text("geas", "")));
+            }
+            return fail(e080(
+                format!("`{f}` is given {n} times; it takes at most {most}: a record of the code before the change and one of the code after it"),
+                format!("`{f}` が {n} 回あります。渡せるのは {most} 回までで、変更前のコードの記録と変更後のコードの記録です"),
+            ));
         }
     }
     let value = |flag: &str| values.iter().find(|(f, _)| *f == flag).map(|(_, v)| v.clone());
@@ -284,39 +317,17 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
         None => None,
         Some(v) => match v.parse::<usize>() {
             Ok(n) if n >= 1 => Some(n),
-            _ => {
-                return fail(e080(
-                    format!("`--jobs` takes a whole number from 1, not `{v}`"),
-                    format!("`--jobs` に渡せるのは 1 以上の整数で、`{v}` は使えません"),
-                ));
-            }
+            _ => return fail(e080_said(ritsu_base::cli::not_positive("--jobs", &v))),
         },
     };
     match cmd {
-        Cmd::Explain if all && !files.is_empty() => {
-            return fail(e080(
-                "give `geas explain` codes or `--all`, not both",
-                "`geas explain` に渡すのは、コードか `--all` のどちらかです",
-            ));
-        }
-        Cmd::Explain if !all && files.is_empty() => {
-            return fail(e080(
-                "`geas explain` needs a code, or `--all`",
-                "`geas explain` にはコードか `--all` が要ります",
-            ));
+        // codes and `--all` are the two ways to call it, not one: what it takes, as without either
+        Cmd::Explain if all == !files.is_empty() => {
+            return fail(e080_said(ritsu_base::cli::takes(&geas_cmd("explain"), "<code>... | --all", "geas explain <code>... | --all [--json]")));
         }
         Cmd::Explain => {}
         Cmd::Skill if !files.is_empty() => {
-            return fail(
-                e080(
-                    format!("`geas skill` takes no file, and was given {} argument(s)", files.len()),
-                    format!("`geas skill` はファイルを受け取りませんが、引数が {} 個渡されています", files.len()),
-                )
-                .note(tr!(
-                    "使い方: geas skill [--install <dir> [--force]]",
-                    "usage: geas skill [--install <dir> [--force]]",
-                )),
-            );
+            return fail(e080_said(ritsu_base::cli::takes(&geas_cmd("skill"), "", "geas skill [--install <dir> [--force]]")));
         }
         Cmd::Skill if flags.contains(&"--force") && value("--install").is_none() => {
             return fail(e080(
@@ -327,41 +338,29 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
         Cmd::Skill => {}
         Cmd::Affected if files.len() != 2 => {
             return fail(
-                e080(
-                    format!("`geas affected` takes a spec and a diff, and was given {} argument(s)", files.len()),
-                    format!("`geas affected` に渡すのは主張のファイルと差分の二つで、渡された引数は {} 個です", files.len()),
-                )
-                .note(tr!(
-                    "使い方: geas affected <spec.geas> <diff|->。`-` なら差分を標準入力から読みます",
-                    "usage: geas affected <spec.geas> <diff|->; `-` reads the diff from stdin",
-                )),
+                e080_said(ritsu_base::cli::takes(&geas_cmd("affected"), "<spec.geas> <diff|->", "geas affected <spec.geas> <diff|-> [--root <dir>] [--map <file>]... [--json]"))
+                    .note(tr!("`-` なら差分を標準入力から読みます", "`-` reads the diff from stdin")),
             );
         }
         _ if files.is_empty() => {
-            return fail(
-                e080(
-                    format!("`geas {c}` needs at least one spec"),
-                    format!("`geas {c}` には主張のファイルが一つ以上要ります"),
-                )
-                .note(tr!("使い方: geas {c} <spec.geas>...", "usage: geas {c} <spec.geas>...")),
-            );
+            let usage = match cmd {
+                Cmd::Scenarios => "geas scenarios <spec.geas>... --openspec <path>... [--draft] [--json]".to_string(),
+                Cmd::Map => "geas map <spec.geas>... [--root <dir>] [--out <file>] [--jobs <n>] [--json]".to_string(),
+                _ => format!("geas {c} <spec.geas>... [--jobs <n>] [--json]"),
+            };
+            return fail(e080_said(ritsu_base::cli::takes(&geas_cmd(c), "<spec.geas>...", &usage)));
         }
         Cmd::Scenarios if value("--openspec").is_none() => {
-            return fail(
-                e080(
-                    "`geas scenarios` needs `--openspec <path>`: the specs whose scenarios to hold to the claims",
-                    "`geas scenarios` には `--openspec <path>` が要ります。シナリオを主張と照らし合わせる仕様です",
-                )
-                .note(tr!("使い方: geas scenarios <spec.geas>... --openspec <path>... [--draft]", "usage: geas scenarios <spec.geas>... --openspec <path>... [--draft]")),
-            );
+            return fail(e080_said(ritsu_base::cli::needs(&geas_cmd("scenarios"), "--openspec <path>", "geas scenarios <spec.geas>... --openspec <path>... [--draft] [--json]")));
         }
         Cmd::Scenarios if flags.contains(&"--draft") && flags.contains(&"--json") => {
             return fail(e080("`--draft` writes claims, and `--json` a report: give one of them", "`--draft` は主張を書き、`--json` は報告を出します。どちらか一つを渡してください"));
         }
         Cmd::Map if files.len() > 1 && value("--out").is_some() => {
+            let c = geas_cmd("map");
             return fail(e080(
-                format!("`--out` names one record, and `geas map` was given {} specs", files.len()),
-                format!("`--out` で書ける記録は一つですが、`geas map` に主張のファイルが {} 個渡されています", files.len()),
+                format!("`--out` names one record, and `{c}` was given {} specs", files.len()),
+                format!("`--out` で書ける記録は一つですが、`{c}` に主張のファイルが {} 個渡されています", files.len()),
             ));
         }
         _ => {}
@@ -431,14 +430,15 @@ fn with_contracts(src: &str, p: &Paths) -> Result<(model::Spec, Vec<Diag>), Vec<
     if said.iter().any(Diag::is_error) { Err(said) } else { Ok((spec, said)) }
 }
 
-/// A spec geas could not run: its diagnostics on stderr, or as JSON on stdout.
+/// A spec geas could not run: its diagnostics on stderr, or as JSON on stdout. What stops the
+/// run before its work (E080 for the line, E081 for a file) is said on stderr with the JSON too,
+/// as every command of ritsu says it (ritsu's DESIGN 6.2, item 10).
 fn fail(a: &Args, file: &str, diags: &[(String, Diag)], src: &str) {
     if a.json {
         println!("{}", report::failure_json(file, diags, a.lang));
-    } else {
-        for (f, d) in diags {
-            eprint!("{}", d.shown(f, src, a.lang));
-        }
+    }
+    for (f, d) in diags.iter().filter(|(_, d)| !a.json || matches!(d.code, "E080" | "E081")) {
+        eprint!("{}", d.shown(f, src, a.lang));
     }
 }
 
@@ -446,9 +446,11 @@ fn fail(a: &Args, file: &str, diags: &[(String, Diag)], src: &str) {
 /// and that file's text.
 fn baseline_problem(e: drift::BaselineError, file: &str, p: &Paths) -> (String, Diag, String) {
     let base = shown(&p.baseline);
+    // the commands named the way the person ran this one (ritsu's DESIGN 6.2, item 10)
+    let run = ritsu_base::cli::command_name("geas");
     let again = tr!(
-        "ベースラインは `geas snap` が書きます。`geas snap {file}` を走らせると、ベースラインが書き直されます",
-        "`geas snap` writes the baseline; run `geas snap {file}` to write it again",
+        "ベースラインは `{run} snap` が書きます。`{run} snap {file}` を走らせると、ベースラインが書き直されます",
+        "`{run} snap` writes the baseline; run `{run} snap {file}` to write it again",
     );
     match e {
         drift::BaselineError::Missing => {
@@ -459,8 +461,8 @@ fn baseline_problem(e: drift::BaselineError, file: &str, p: &Paths) -> (String, 
                 tr!("{base} にベースラインがありません", "there is no baseline at {base}"),
             )
             .note(tr!(
-                "先に `geas snap {file}` を走らせてください。`geas drift` は、今回の実行を snap が残したものと比べます",
-                "run `geas snap {file}` first; drift compares a run with what snap kept",
+                "先に `{run} snap {file}` を走らせてください。`{run} drift` は、今回の実行を snap が残したものと比べます",
+                "run `{run} snap {file}` first; drift compares a run with what snap kept",
             ));
             if p.old_baseline.is_file() {
                 let old = shown(&p.old_baseline);
@@ -472,16 +474,10 @@ fn baseline_problem(e: drift::BaselineError, file: &str, p: &Paths) -> (String, 
             }
             (file.to_string(), d, String::new())
         }
-        drift::BaselineError::Unreadable(err) => (
-            base,
-            diag::error(
-                "E081",
-                0,
-                0,
-                tr!("ベースラインを読めません: {err}", "cannot read the baseline: {err}"),
-            ),
-            String::new(),
-        ),
+        drift::BaselineError::Unreadable(err) => {
+            let d = diag::named("E081", ritsu_base::cli::cannot_read(&base, &err));
+            (base, d, String::new())
+        }
         drift::BaselineError::Bad { line, why } => {
             let text = std::fs::read_to_string(&p.baseline).unwrap_or_default();
             (base, diag::error("E051", line, 0, why).note(again), text)
@@ -491,21 +487,14 @@ fn baseline_problem(e: drift::BaselineError, file: &str, p: &Paths) -> (String, 
 
 fn write_journal(p: &Paths, journal: &[String]) -> Result<(), (String, Diag)> {
     if let Err(e) = ritsu_base::fs::create_dir_all(&p.geas) {
-        return Err((
-            shown(&p.geas),
-            diag::error(
-                "E081",
-                0,
-                0,
-                tr!("このディレクトリを作れません: {e}", "cannot make this directory: {e}"),
-            ),
-        ));
+        let dir = shown(&p.geas);
+        let d = diag::named("E081", ritsu_base::cli::cannot_create(&dir, &e));
+        return Err((dir, d));
     }
     ritsu_base::fs::write(&p.journal, journal.join("\n") + "\n").map_err(|e| {
-        (
-            shown(&p.journal),
-            diag::error("E081", 0, 0, tr!("ジャーナルを書けません: {e}", "cannot write the journal: {e}")),
-        )
+        let journal = shown(&p.journal);
+        let d = diag::named("E081", ritsu_base::cli::cannot_write(&journal, &e));
+        (journal, d)
     })
 }
 
@@ -515,7 +504,7 @@ fn run_file(file: &str, a: &Args) -> i32 {
     let src = match ritsu_base::fs::read_to_string(file) {
         Ok(s) => s,
         Err(e) => {
-            let d = diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"));
+            let d = diag::named("E081", ritsu_base::cli::cannot_read(file, &e));
             fail(a, file, &[(file.to_string(), d)], "");
             return 2;
         }
@@ -593,15 +582,11 @@ fn run_file(file: &str, a: &Args) -> i32 {
                         print!("{}", report::snap_summary(&results, n, &shown(&p.baseline), lang));
                     }
                 }
-                Err(e) => problems.push((
-                    shown(&p.baseline),
-                    diag::error(
-                        "E081",
-                        0,
-                        0,
-                        tr!("ベースラインを書けません: {e}", "cannot write the baseline: {e}"),
-                    ),
-                )),
+                Err(e) => {
+                    let base = shown(&p.baseline);
+                    let d = diag::named("E081", ritsu_base::cli::cannot_write(&base, &e));
+                    problems.push((base, d));
+                }
             }
         }
         Cmd::Drift => {
@@ -674,12 +659,9 @@ fn map_file(file: &str, a: &Args, src: &str, spec: &model::Spec, p: &Paths) -> i
     let record_path = a.out.clone().unwrap_or_else(|| shown(&p.record));
     let mut written = None;
     if let Some(r) = &m.record {
-        match std::fs::write(&record_path, r.render()) {
+        match ritsu_base::fs::write(&record_path, r.render()) {
             Ok(()) => written = Some(r.clone()),
-            Err(e) => problems.push((
-                record_path.clone(),
-                diag::error("E081", 0, 0, tr!("記録を書けません: {e}", "cannot write the record: {e}")),
-            )),
+            Err(e) => problems.push((record_path.clone(), diag::named("E081", ritsu_base::cli::cannot_write(&record_path, &e)))),
         }
     }
     let mut code = if report::failed(&m.results) == 0 { 0 } else { 1 };
@@ -715,25 +697,27 @@ fn explain(a: &Args) -> i32 {
     let entries = if a.all {
         codes::table()
     } else {
-        let mut v = Vec::new();
-        for c in &a.files {
-            match codes::find(c) {
-                Some(e) => v.push(e),
-                None => {
-                    let d = e080(format!("`{c}` is not a code geas has"), format!("`{c}` というコードはありません")).note(tr!(
-                        "`geas explain --all` で、すべてのコードが出ます",
-                        "`geas explain --all` prints every code",
-                    ));
-                    eprint!("{}", d.shown("", "", a.lang));
-                    return 2;
-                }
+        // every code it does not have, named in one sentence before anything is printed; a line
+        // that asks for JSON gets it as the E080 of a line it cannot run (ritsu's DESIGN 6.2, item 10)
+        let unknown: Vec<String> = a.files.iter().filter(|c| codes::find(c).is_none()).cloned().collect();
+        if !unknown.is_empty() {
+            let d = e080_said(ritsu_base::cli::no_codes("geas", &unknown));
+            eprint!("{}", d.shown("", "", a.lang));
+            if a.json {
+                println!("{}", report::failure_json("", &[(String::new(), d)], a.lang));
             }
+            return 2;
         }
-        v
+        a.files.iter().filter_map(|c| codes::find(c)).collect()
     };
     if a.json {
-        for e in &entries {
-            println!("{}", codes::render_json(e, a.lang));
+        // one code is one indented document; `--all` and two or more codes, one indented array,
+        // as every tool's `explain` writes them (ritsu's DESIGN 6.2, item 10)
+        let each: Vec<ritsu_base::json::Json> = entries.iter().map(|e| ritsu_base::json::parse(&codes::render_json(e, a.lang)).expect("geas reads the JSON it writes")).collect();
+        if each.len() == 1 && !a.all {
+            println!("{}", each[0].pretty());
+        } else {
+            println!("{}", ritsu_base::json::Json::Arr(each).pretty());
         }
     } else {
         let texts: Vec<String> = entries.iter().map(|e| codes::render_text(e, a.lang)).collect();
@@ -771,7 +755,7 @@ pub fn run(raw: &[String]) -> i32 {
     proc::stop_groups_on_signals();
     let code = match parse_args(raw) {
         Ok(Parsed::Help(lang)) => {
-            print!("{}", Text::new(HELP_JA, HELP_EN).get(lang));
+            print!("{}", help(lang));
             0
         }
         Ok(Parsed::Version) => {
@@ -783,40 +767,66 @@ pub fn run(raw: &[String]) -> i32 {
         Ok(Parsed::Run(a)) if a.files.iter().any(|f| ritsu_base::modules::given(f).is_err()) => {
             for f in &a.files {
                 if let Err(t) = ritsu_base::modules::given(f) {
-                    fail(&a, f, &[(f.clone(), diag::error("E081", 0, 0, t))], "");
+                    fail(&a, f, &[(f.clone(), diag::named("E081", t))], "");
                     break;
                 }
             }
             2
         }
-        Ok(Parsed::Run(a)) => match a.cmd {
-            Cmd::Explain => explain(&a),
-            Cmd::Skill => skill_command(&a),
-            Cmd::Scenarios => scenarios::command(&a.files, &scenarios::Opts { openspec: &a.openspec, draft: a.draft, json: a.json, lang: a.lang }),
-            Cmd::Affected => affected::command(
-                &a.files[0],
-                &a.files[1],
-                &affected::Opts { root: a.root.as_deref(), maps: &a.maps, json: a.json, lang: a.lang },
-            ),
-            _ => {
-                let mut worst = 0;
-                for f in &a.files {
-                    worst = worst.max(run_file(f, &a));
-                    if proc::signalled().is_some() {
-                        break;
-                    }
+        Ok(Parsed::Run(mut a)) => {
+            // the paths the run holds are written the way the first path given was (ritsu's
+            // DESIGN 4.15), and so are the files given: `./orders.geas` and `x/../orders.geas`
+            // are `orders.geas` (6.2 item 8), and the paths `--out`, `--map`, `--openspec` and
+            // `--install` take; the codes `explain` takes are no paths
+            let _way = ritsu_base::paths::run_from(a.files.first().filter(|_| !matches!(a.cmd, Cmd::Explain)).map_or(".", String::as_str));
+            if !matches!(a.cmd, Cmd::Explain) {
+                for f in &mut a.files {
+                    *f = ritsu_base::paths::show_given(f);
                 }
-                worst
             }
-        },
+            for p in a.out.iter_mut().chain(a.install.iter_mut()).chain(a.maps.iter_mut()).chain(a.openspec.iter_mut()) {
+                *p = ritsu_base::paths::fold_given(p);
+            }
+            run_parsed(&a)
+        }
         Err((d, lang)) => {
             eprint!("{}", d.shown("", "", lang));
+            // a line that asks for JSON anywhere gets the E080 in the JSON a spec that cannot be
+            // read gets its E081, whatever the command: a program reading it has one JSON
+            // whatever stopped the run (ritsu's DESIGN 6.2, item 10)
+            if raw.iter().any(|w| w == "--json") {
+                println!("{}", report::failure_json("", &[(String::new(), d)], lang));
+            }
             2
         }
     };
     let code = proc::signalled().map_or(code, |sig| 128 + sig);
     let _ = std::io::stdout().flush();
     code
+}
+
+/// A command line read, run: the exit code.
+fn run_parsed(a: &Args) -> i32 {
+    match a.cmd {
+        Cmd::Explain => explain(a),
+        Cmd::Skill => skill_command(a),
+        Cmd::Scenarios => scenarios::command(&a.files, &scenarios::Opts { openspec: &a.openspec, draft: a.draft, json: a.json, lang: a.lang }),
+        Cmd::Affected => affected::command(
+            &a.files[0],
+            &a.files[1],
+            &affected::Opts { root: a.root.as_deref(), maps: &a.maps, json: a.json, lang: a.lang },
+        ),
+        _ => {
+            let mut worst = 0;
+            for f in &a.files {
+                worst = worst.max(run_file(f, a));
+                if proc::signalled().is_some() {
+                    break;
+                }
+            }
+            worst
+        }
+    }
 }
 
 /// `geas check` of each spec, as `ritsu check` prints it (ritsu's DESIGN 8.3): the claims run
@@ -852,12 +862,13 @@ fn specs_checked(root: &Path, files: &[String], run: bool, lang: Lang) -> Vec<ri
         let src = match ritsu_base::fs::read_to_string(file) {
             Ok(s) => s,
             Err(e) => {
-                let d = diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"));
+                let d = diag::named("E081", ritsu_base::cli::cannot_read(file, &e));
                 let json = ritsu_base::json::parse(&report::failure_json(file, &[(file.clone(), d.clone())], lang)).unwrap_or(ritsu_base::json::Json::Null);
                 out.push(Checked { label: file.clone(), parts: vec![Part::Finding(finding(file, &d, d.shown(file, "", lang)))], verdict: Verdict::Unchecked, json });
                 continue;
             }
         };
+        ritsu_base::tally::count("geas", Path::new(file));
         // the keys written in the spec (W901), whatever else it holds
         let mut key_diags = diag::keys(&src);
         let p = paths(file);

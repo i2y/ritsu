@@ -12,6 +12,8 @@
 //! its tmp/, not in the arguments curl was given (a wrapper of the test's own writes them down), and
 //! not in the test's directory but for the config file and the helper that hold them.
 
+mod common;
+
 use ritsu_base::modules::store;
 use ritsu_testkit::TempDir;
 use ritsu_testkit::registry::{self as reg, Auth, Registry, TokenAuth};
@@ -26,7 +28,7 @@ const USER: &str = "ritsu-fake-user";
 const PASSWORD: &str = "ritsu-fake-password-7f3a9c";
 const IDENTITY: &str = "ritsu-fake-identity-token-91c2e4";
 
-const LANG_VARS: [&str; 10] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"];
+const LANG_VARS: [&str; 11] = common::LANG_VARS;
 
 /// A credential helper of the test's own: it writes down the key it is given on its standard input,
 /// answers the planted credentials for the registry's host alone (`HELPER_GIVES` says which:
@@ -274,7 +276,7 @@ fn anonymous_pulls_and_credentials_refused() {
     let (code, out, err) = w.run("tax", &["mod", "push", "--format", "json"]);
     assert_eq!(code, 2, "{err}");
     let file = w.path("docker/config.json");
-    let e = serde_json::from_str::<serde_json::Value>(&out).unwrap()["error"].as_str().unwrap().to_string();
+    let e = serde_json::from_str::<serde_json::Value>(&out).unwrap()["error"]["message"].as_str().unwrap().to_string();
     assert_eq!(
         e,
         format!(

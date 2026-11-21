@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_a_way_named_as_a_stages_value.ringi:14:3: `manager_and_finance` is the value `manager and finance` (line 9) gives a stage too, and cannot name a way to choose an approver
+    14 |   manager_and_finance = person "e04"
+  = A ticket holds how a stage chooses its approvers as the stage's value, by its ASCII name (`value` in `stages` of its JSON), and the value of `manager and finance` is `manager_and_finance`, so the two cannot be told apart. Choose another name for the way, or give it another ASCII name in brackets, as in `name(ascii_name)`.

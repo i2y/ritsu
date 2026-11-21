@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":null,"diagnostics":[{"code":"E080","severity":"error","file":null,"line":null,"col":null,"message":"unknown flag `--nope`; run `geas check --help`","notes":[],"path":[]}]}

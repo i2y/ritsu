@@ -360,10 +360,12 @@ pub fn claims_json_with(file: &str, results: &[ClaimResult], lang: Lang, ok: boo
 }
 
 /// A spec geas could not run at all: it does not parse, cannot be read, or has no
-/// usable baseline.
+/// usable baseline. `file` is empty, and written `null`, for a command line geas does
+/// not take (E080), which stops before any spec is read.
 pub fn failure_json(file: &str, diags: &[(String, Diag)], lang: Lang) -> String {
     let ds: Vec<String> = diags.iter().map(|(f, d)| d.json_in(f, lang)).collect();
-    format!("{{\"geas\":1,\"ok\":false,\"file\":{},\"diagnostics\":[{}]}}", json::quote(file), ds.join(","))
+    let file = if file.is_empty() { "null".to_string() } else { json::quote(file) };
+    format!("{{\"geas\":1,\"ok\":false,\"file\":{file},\"diagnostics\":[{}]}}", ds.join(","))
 }
 
 #[cfg(test)]

@@ -1,0 +1,12 @@
+error[E102]: Unreachable row: row 5 never matches
+  --> tests/computed/shapes/E102_差が負の一段.rule:28 table 選ぶ
+   |
+28 | | >19円         | -1円          | 一段 | 二      |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 5: no input reaches here
+10 | define 差(net) : money[円] = down(金額 * 7%, 1円) - up(金額 * 5%, 1円)
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the reachable interval is >=-6円 <=8円
+   |
+ `差` is computed from `金額`. At some of the values of `金額` this row takes, `差` does not come to some of what this row asks for.
+ `段階` is 一段 only where row 2 or row 4 of table 段階の表 fires, and where either does, no combination of values meets all of this row's conditions.
+ hint: rewrite the condition within the values `差` can come to, or delete this row.
+

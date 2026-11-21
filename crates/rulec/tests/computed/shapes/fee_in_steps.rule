@@ -1,0 +1,18 @@
+rule fee_in_steps v1
+description "A fee of 10% of the amount rounded up to 10 yen, read on its own: it comes to 10, 20 or 30 yen and to nothing between, so no row is asked for a fee of 11 to 19 yen or of 21 to 29 yen"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=1JPY <=300JPY
+
+define fee : money[JPY] = up(amount * 10%, 10JPY)
+
+outputs
+  x : choice
+
+table pick
+| fee     | -> x |
+| <=10JPY | one  |
+| 20JPY   | two  |
+| >=30JPY | one  |

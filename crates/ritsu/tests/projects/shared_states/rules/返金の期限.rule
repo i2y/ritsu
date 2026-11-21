@@ -1,0 +1,21 @@
+rule 返金の期限(refund_window) v1
+description "ある状態の注文を、最後に変わってから何日のうちなら返金できるか。refund_window.rule の日本語の版"
+import enum 注文の状態 from "注文の状態.rule"
+
+inputs
+  状態(state) : 注文の状態
+
+outputs
+  日数(days) : number  round down(1)
+
+table 期限(window)
+| 状態   | -> 日数 |
+| 支払済 | 30      |
+| 発送済 | 14      |
+| 返品済 | 7       |
+| 返金済 | 0       |
+
+examples
+| 状態   | -> 日数 |
+| 発送済 | 14      |
+| 返金済 | 0       |

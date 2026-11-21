@@ -1,0 +1,5 @@
+warning[W303]: tests/mutants/W303_どの申請も届かないステップ.ringi:8:1: No request reaches `部長たち` at the stage 部長
+     8 |   部長(head)     部長たち  when 金額 > 200_000円
+  = Correct the conditions of the rows or of the stage, or take out of the route what no request reaches.
+ok tests/mutants/W303_どの申請も届かないステップ.ringi: a request, 1 field, 2 stages
+  may never end: the stages `確かめ` and `部長` have no deadline (`due in …`), and wait until they are answered

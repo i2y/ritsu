@@ -32,8 +32,8 @@ nothing is set.
 
 ## The commands
 
-The package puts ten commands into `node_modules/.bin`: `ritsu`, and `rulec`, `dandori`, `koyomi`,
-`chobo`, `geas`, `yuen`, `sakai`, `sekisho` and `kaname`, each the same as `ritsu <language> …`, as
+The package puts eleven commands into `node_modules/.bin`: `ritsu`, and `rulec`, `dandori`, `koyomi`,
+`chobo`, `geas`, `yuen`, `sakai`, `sekisho`, `kaname` and `ringi`, each the same as `ritsu <language> …`, as
 the links of a release's archive are. In a project with a rule, a calendar, a dates file, a ledger
 and a workflow:
 
@@ -100,9 +100,11 @@ is well (the exit code is 0). Then whether it was `--check`, `--out` and the lan
 the file of the project it is made from (null for what the package itself is made of), and its
 state — `written`, `same` or `removed` when ritsu writes, and `same`, `missing`, `stale` or `left`
 under `--check`. When nothing is generated, `files` is empty, `error` says why with the exit code,
-and `diagnostics` holds the diagnostics of the files that do not pass their checks, each as
-`ritsu check --format json` writes one. The same JSON comes without the package, from the native
-binary.
+and `diagnostics` holds what stopped it, each as `ritsu check --format json` writes one: the
+diagnostics of the files that do not pass their checks, the errors the checks across the languages
+and of the modules find, and sakai's of a reference from a file of the package that crosses a
+boundary of the map. yuen's errors, geas's claims and a warning that a check cannot decide do not
+stop it. The same JSON comes without the package, from the native binary.
 
 ## From JavaScript
 
@@ -167,7 +169,7 @@ when the program it needs is missing:
 Everything else runs as the native binary does: every language's `check`, `ritsu check` across the
 languages, `ritsu gen` and `ritsu run`, every `doc`, `api`, `vectors`, `export`, `trace`, `affected`,
 `scenarios` and `explain`, and `ritsu skills install`. Each release holds the package to the native
-binary on the examples of the nine languages, ritsu's test projects and the projects of the
+binary on the examples of the ten languages, ritsu's test projects and the projects of the
 [playground](playground.md): the same output, the same exit code and the same files written, for
 every command a person runs there, in English and in Japanese.
 

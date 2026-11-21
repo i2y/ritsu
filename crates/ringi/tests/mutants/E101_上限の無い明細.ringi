@@ -1,0 +1,14 @@
+request 例(example) v1 "例"
+
+form
+  明細(items) : rows "明細"
+    品目(what) : text "品目"  count <=100
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

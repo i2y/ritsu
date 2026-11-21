@@ -1,0 +1,7 @@
+route simple v1 "Simple approval"
+
+route
+  check  finance
+
+who
+  finance = team finance

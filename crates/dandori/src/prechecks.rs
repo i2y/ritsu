@@ -109,7 +109,7 @@ fn test_of(p: &Precondition, args: &[(String, TExpr)]) -> Option<PreTest> {
             Some(PreTest::Relation { left: side(left)?, op: op.clone(), right: side(right)? })
         }
         Precondition::Days { input, file, date, days } => Some(PreTest::Days { input: input.clone(), value: arg(input)?, file: file.clone(), date: date.clone(), days: days.iter().map(|d| civil(*d)).collect() }),
-        Precondition::Sum { .. } | Precondition::Length { .. } | Precondition::Unique { .. } => None,
+        Precondition::Sum { .. } | Precondition::Count { .. } | Precondition::Length { .. } | Precondition::Unique { .. } => None,
         // A `never` line (rulec's §15.282). A test only the rule's own door reads, `= none` or
         // `starts_with`, stays with the door.
         Precondition::Never { said, conds } => {
@@ -119,6 +119,9 @@ fn test_of(p: &Precondition, args: &[(String, TExpr)]) -> Option<PreTest> {
             let conds = conds.iter().map(|k| arg(&k.name).map(|e| (k.name.clone(), e, k.test.clone()))).collect::<Option<Vec<_>>>()?;
             Some(PreTest::Never { said: said.clone(), conds })
         }
+        // The range a value the rule works out is accepted in (rulec's §15.313) is about the
+        // rule's own arithmetic, which the flow does not repeat: the rule's door refuses it.
+        Precondition::Define { .. } => None,
     }
 }
 

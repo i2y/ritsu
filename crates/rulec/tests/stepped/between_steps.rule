@@ -1,0 +1,16 @@
+rule between_steps v1
+description "A boundary written between two values the sheets take: five sheets or more take the large roll, and the sheets come in twos"
+
+inputs
+  gifts : number  range >=0 <=5
+
+define sheets : number = gifts * 2
+
+outputs
+  large_roll : bool
+
+table roll_of
+policy unique
+| sheets | -> large_roll |
+| <5     | false         |
+| >=5    | true          |

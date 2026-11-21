@@ -1,0 +1,14 @@
+rule transient v1
+description "A fee for a transient stay by its nights, from a rule named like a keyword of Java's, whose generated method takes an underscore after it"
+
+inputs
+  nights : number  range >=1 <=30
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_nights
+policy unique
+| nights | -> fee |
+| <=7    | 20USD  |
+| >7     | 15USD  |

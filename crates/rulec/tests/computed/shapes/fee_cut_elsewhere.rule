@@ -1,0 +1,20 @@
+rule fee_cut_elsewhere v1
+description "An applied fee read as any fee from 0 yen, with the amount cut where the applied table does not cut: each row takes the amounts of its band"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=0JPY <=360JPY
+
+apply f = "shared/flat_fee.rule" meaning:ed8b6b02d4166ae7
+  amount = amount
+  fee -> f_fee
+
+outputs
+  x : choice
+
+table pick
+| amount           | f_fee  | -> x |
+| <=154JPY         | >-1JPY | one  |
+| >154JPY <=171JPY | >-1JPY | two  |
+| >171JPY          | >-1JPY | one  |

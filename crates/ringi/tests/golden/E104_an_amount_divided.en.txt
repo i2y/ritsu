@@ -1,0 +1,4 @@
+error[E104]: tests/mutants/E104_an_amount_divided.ringi:6:34: `per_day` is computed with no rounding
+     6 |   per_day : money[JPY] "A day" = amount / days
+  = `amount / days` can leave a fraction: say how it rounds and to what, as in `round down(1JPY)` (`up`, `down`, `half_up`, `half_down`, `half_even`).
+  = The line, fixed: per_day : money[JPY] "A day" = amount / days  round down(1JPY)

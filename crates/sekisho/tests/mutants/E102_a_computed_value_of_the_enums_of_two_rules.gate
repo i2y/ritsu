@@ -1,0 +1,40 @@
+gate shop v1
+description "Who may rush an order of the shop, and who may hold one back"
+namespace Shop
+
+use rule tier_by_size from "read/tier_by_size.rule"
+use rule tier_of_its_own from "read/tier_of_its_own.rule"
+
+role clerk
+  description "Answers customers"
+  can rush_order, hold_order
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Order
+  description "An order of the shop"
+  attributes
+    large : bool
+    rush  : bool
+
+action rush_order
+  description "Send an order before the others"
+  principal User
+  resource Order
+  context
+    tier = tier_by_size(large: resource.large, rush: resource.rush).tier
+
+action hold_order
+  description "Hold an order back"
+  principal User
+  resource Order
+  context
+    tier = tier_of_its_own(large: resource.large, rush: resource.rush).tier
+
+permit clerks_act_on_gold_orders
+  description "A clerk rushes or holds back an order of the gold tier"
+  principal in clerk
+  action rush_order, hold_order
+  when tier is gold

@@ -1,0 +1,4 @@
+error[E202]: example.ringi:3:27: `company.ringi` does not pass ringi's check
+     3 | use organization org from "company.ringi"
+  = E001: A file of the kind `organization` needs `positions` (company.ringi:1:1)
+  = Correct that file until its check passes.

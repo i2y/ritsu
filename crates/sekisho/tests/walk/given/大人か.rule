@@ -1,0 +1,19 @@
+rule 大人か(grown) v1
+description "年齢が大人かどうか。書かなければならない入力で、gate は年齢が有るときだけ渡す"
+
+inputs
+  年齢(age) : number  range >=1 <=100
+
+outputs
+  大人(grown) : bool
+
+table 年齢から(grown_of)
+policy unique
+| 年齢 | -> 大人 |
+| <18  | false   |
+| >=18 | true    |
+
+examples
+| 年齢 | -> 大人 |
+| 6    | false   |
+| 30   | true    |

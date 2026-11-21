@@ -139,7 +139,7 @@ fn x4_every_amount_wherever_it_comes_from_and_its_refusals() {
     let vs = verdicts(&kn);
     let amounts = of(&vs, Crossing::Amount);
     let Some((_, Answer::Undecided(why))) = amounts.iter().find(|(p, _)| p == "amount") else { panic!("{amounts:?}") };
-    assert!(why.en.contains("in >=-4989949 <=99999951"), "{}", why.en);
+    assert!(why.en.contains("in >=-4_989_949USDc <=99_999_951USDc"), "{}", why.en);
 }
 
 /// A module whose names do not pass has no verdicts: kaname says what is wrong with it.

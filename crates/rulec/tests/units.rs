@@ -659,13 +659,19 @@ fn 参照は表の通貨を挙げ円の百分の一を銭と言う() {
 }
 
 /// A value that is no unit of the table is told what the table has, in both languages, and the
-/// example of the rounding is in the column's own unit, not in yen.
+/// example of the rounding is in the column's own unit, not in yen. A type of no unit is told so
+/// where it is declared, and the values written in it are not read (§15.321).
 #[test]
 fn 単位でない通貨の注は表の通貨を言い丸めの例は列の単位で書く() {
     let rule = |unit: &str, grid: &str| format!("rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=9\n\noutputs\n  b(b) : {unit}  round down({grid})\n\ntable j(j)\npolicy unique\n| a | -> b(b) : {unit} |\n| - | 5{grid} |\n");
     for (lang, hundredth, example) in [(rulec::i18n::Lang::Ja, "銭（円の 1/100）", "`mass[g]` なら `round down(1g)`"), (rulec::i18n::Lang::En, "銭 (a hundredth of 円)", "`mass[g]` takes `round down(1g)`")] {
         let notes = |unit: &str, grid: &str| {
-            rulec::i18n::with(lang, || rulec::check_source(&rule(unit, grid), "t.rule")).iter().filter(|d| d.code == "E103").flat_map(|d| d.notes.clone()).collect::<Vec<_>>().join(" ")
+            rulec::i18n::with(lang, || rulec::check_source(&rule(unit, grid), "t.rule"))
+                .iter()
+                .filter(|d| d.code == "E103")
+                .flat_map(|d| std::iter::once(d.title.clone()).chain(d.notes.clone()))
+                .collect::<Vec<_>>()
+                .join(" ")
         };
         for unknown in ["JPYc", "RUB"] {
             let said = notes(&format!("money[{unknown}]"), &format!("1{unknown}"));
@@ -781,8 +787,9 @@ fn コーパスのどの数の型も単位の表で書ける() {
 }
 
 /// The tax of a money type is `incl_tax` or `excl_tax`, or not written at all (§15.169). Any other
-/// word passed in silence, as a tax of its own that no table knows; each place a type writes it is
-/// named now, an input's, an output's, a table's column's and a definition's alike.
+/// word passed in silence, as a tax of its own that no table knows. It is said where the type is
+/// first written, and the note names the other lines that write the type, an output's, a table's
+/// column's and a definition's alike (§15.321).
 #[test]
 fn 税区分はincl_taxかexcl_taxだけ() {
     let rule = |tax: &str| {
@@ -797,15 +804,295 @@ fn 税区分はincl_taxかexcl_taxだけ() {
     for ok in ["incl_tax", "excl_tax", ""] {
         assert!(check(&rule(ok)).is_empty(), "{ok}: {:?}", check(&rule(ok)));
     }
-    let said: Vec<(String, String, usize)> = rulec::i18n::with(rulec::i18n::Lang::Ja, || {
-        rulec::check_source(&rule("foo"), "units.rule").iter().map(|d| (d.code.to_string(), d.title.clone(), d.marks.first().map(|m| m.span.line).unwrap_or(0))).collect()
+    let said: Vec<(String, String, usize, Vec<String>)> = rulec::i18n::with(rulec::i18n::Lang::Ja, || {
+        rulec::check_source(&rule("foo"), "units.rule")
+            .iter()
+            .map(|d| (d.code.to_string(), d.title.clone(), d.marks.first().map(|m| m.span.line).unwrap_or(0), d.notes.clone()))
+            .collect()
     });
-    assert_eq!(said.iter().map(|(c, t, l)| (c.as_str(), t.as_str(), *l)).collect::<Vec<_>>(), [
-        ("E103", "税区分 `foo` は incl_tax でも excl_tax でもありません", 4),
-        ("E103", "税区分 `foo` は incl_tax でも excl_tax でもありません", 7),
-        ("E103", "税区分 `foo` は incl_tax でも excl_tax でもありません", 9),
-        ("E103", "税区分 `foo` は incl_tax でも excl_tax でもありません", 13),
-    ]);
-    let en: Vec<String> = rulec::i18n::with(rulec::i18n::Lang::En, || rulec::check_source(&rule("税込"), "units.rule").iter().map(|d| d.title.clone()).collect());
-    assert!(en.iter().all(|t| t == "The tax `税込` is neither incl_tax nor excl_tax") && en.len() == 4, "{en:?}");
+    assert_eq!(said.iter().map(|(c, t, l, _)| (c.as_str(), t.as_str(), *l)).collect::<Vec<_>>(), [("E103", "税区分 `foo` は incl_tax でも excl_tax でもありません", 4)]);
+    assert!(said[0].3.iter().any(|n| n == "`money[円, foo]` は 7、9、13 行目にも書かれています。"), "{:?}", said[0].3);
+    let en: Vec<rulec::diag::Diag> = rulec::i18n::with(rulec::i18n::Lang::En, || rulec::check_source(&rule("税込"), "units.rule"));
+    assert!(en.len() == 1 && en[0].title == "The tax `税込` is neither incl_tax nor excl_tax", "{:?}", en.iter().map(|d| &d.title).collect::<Vec<_>>());
+    assert!(en[0].notes.iter().any(|n| n == "`money[円, 税込]` is written on lines 7, 9 and 13 too."), "{:?}", en[0].notes);
+}
+
+// ── Two spellings of one unit (§15.332) ──────────────────────────────────────────────────────────
+
+/// A rule whose output is `money[円]` and whose table and examples write it `money[JPY]`.
+const HEADING: &str = "rule heading v1\n\ninputs\n  price : money[円]  range >=0円 <=10_000円\n\noutputs\n  fee : money[円]  round down(1円)\n\ntable fee\n| price     | -> fee : money[JPY] |\n| <1_000円  | 100JPY              |\n| >=1_000円 | 0JPY                |\n\nexamples\n| price    | -> fee : money[JPY] |\n| 999円    | 100JPY              |\n| 1_000円  | 0JPY                |\n";
+
+/// `JPY` is another spelling of `円`, `mL` of `cm3` and `kL` of `m3`, and two types are compared as
+/// the units they are, not as they are spelled (§15.332). The heading of a table and of the
+/// examples, the two sides of a sum or a `max`, a divisor and the answer of a fold read the
+/// spelling as the unit: a rule that wrote `円` beside `JPY` mixed units (E103), had a compound
+/// dimension, or gave its fold an answer of another type (E021). A hundredth is a unit of its own,
+/// as a gram is beside a kilogram and a tax beside the other.
+#[test]
+fn 一つの単位の二つの綴りは同じ単位() {
+    let passes = |what: &str, src: &str| assert!(check(src).is_empty(), "{what}: {:?}", check(src));
+    passes("見出しの型", HEADING);
+    passes(
+        "セルの名前",
+        "rule assign v1\n\ninputs\n  price : money[JPY]  range >=0JPY <=10_000JPY\n\noutputs\n  fee : money[円]  round down(1円)\n\ntable fee\n| price     | -> fee |\n| <1000JPY  | price  |\n| >=1000JPY | 0円    |\n",
+    );
+    passes(
+        "引き算",
+        "rule volume v1\n\ninputs\n  capacity : volume[mL]  range >=0mL <=2_000mL\n\noutputs\n  left : volume[cm3]  round down(1cm3)\n\ndefine after_cup : volume[cm3] = capacity - 200cm3\n\ntable left\n| after_cup  | -> left    |\n| <0cm3      | 0cm3       |\n| >=0cm3     | after_cup  |\n",
+    );
+    passes(
+        "割り算",
+        "rule grid v1\n\ninputs\n  price : money[円]  range >=0円 <=10_000円\n\noutputs\n  points : number  round down(1)\n\ndefine per : number = down(price / 100JPY, 1)\n\ntable points\n| -> points |\n| per       |\n",
+    );
+    passes(
+        "max",
+        "rule larger v1\n\ninputs\n  price  : money[JPY]  range >=0JPY <=10_000JPY\n  budget : money[円]   range >=0円 <=10_000円\n\noutputs\n  larger : money[円]  round down(1円)\n\ndefine top : money[円] = max(price, budget)\n\ntable larger\n| -> larger |\n| top       |\n",
+    );
+    passes(
+        "畳み込みの答え",
+        "rule first_price v1\n\nenum mark = skip | pick\n\nelements lines\n  price   : money[JPY]  range >=0JPY <=10_000JPY\n  flagged : bool\n\noutputs\n  chosen : money[円]  round down(1円)\n\ntable verdict_by_flag\npolicy unique\n| flagged | -> verdict : mark |\n| true    | pick              |\n| false   | skip              |\n\nfold verdict over lines -> chosen : money[JPY]\n  pick      -> take_first price\n  skip      -> next\n  empty     -> 0円\n  exhausted -> held\n",
+    );
+    // other units, and the other tax, stay other types
+    for (written, code) in [("money[USD]", "E103"), ("money[銭]", "E103"), ("money[円, incl_tax]", "E103")] {
+        let src = HEADING.replace("-> fee : money[JPY] |", &format!("-> fee : {written} |"));
+        assert!(check(&src).contains(&code.to_string()), "{written}: {:?}", check(&src));
+    }
+    let kg = "rule heavy v1\n\ninputs\n  w : mass[g]  range >=0g <=9_000g\n\noutputs\n  left : mass[g]  round down(1g)\n\ndefine limit : mass[kg] = 1kg\ndefine rest : mass[g] = w - limit\n\ntable left\n| -> left |\n| rest    |\n";
+    assert!(check(kg).contains(&"E103".to_string()), "{:?}", check(kg));
+    // a hundredth of the yen is of the yen's dimension: the divisor is in another unit of it, not a
+    // compound dimension
+    let sen = "rule sen v1\n\ninputs\n  price : money[円]  range >=0円 <=10_000円\n\noutputs\n  points : number  round down(1)\n\ndefine per : number = down(price / 10銭, 1)\n\ntable points\n| -> points |\n| per       |\n";
+    let said = rulec::i18n::with(rulec::i18n::Lang::En, || rulec::check_source(sen, "units.rule"));
+    assert_eq!(said.iter().map(|d| (d.code, d.title.as_str())).collect::<Vec<_>>(), [("E103", "The divisor's unit does not match: money[円] divided by money[銭]")]);
+}
+
+/// The linear model reads two spellings of one unit as one unit too (§15.332): `excess` is
+/// `money[円]`, computed from `added` in `JPY` and `limit` in `円`, and the row that asks
+/// `excess >= 1円` with `added <= 1JPY` is reached by no input, as it is when the three are
+/// spelled alike. The equation is one fact of one system, and the sentence says it as it says the
+/// rule written in one spelling, each value in the spelling its name was declared in. So is what
+/// a computed value comes to while a row of a table above fires (E102's third form, §15.195).
+#[test]
+fn 線形の式も綴りの違う一つの単位を一つの系で読む() {
+    let same = "rule excess_flag v1\n\ninputs\n  added : money[JPY]  range >=0JPY <=10_000JPY\n  limit : money[JPY]  range >=1JPY <=5_000JPY\n\noutputs\n  flag : bool\n\ndefine excess : money[JPY] = added - limit\n\ntable flag\n| excess  | added   | -> flag |\n| >=1JPY  | <=1JPY  | true    |\n| >=1JPY  | >1JPY   | true    |\n| <1JPY   | -       | false   |\n";
+    let mixed = same
+        .replace("limit : money[JPY]  range >=1JPY <=5_000JPY", "limit : money[円]  range >=1円 <=5_000円")
+        .replace("define excess : money[JPY]", "define excess : money[円]")
+        .replace("| >=1JPY  |", "| >=1円   |")
+        .replace("| <1JPY   |", "| <1円    |");
+    assert_eq!(mixed.matches('円').count(), 7, "{mixed}");
+    for (src, unit) in [(same, "JPY"), (mixed.as_str(), "円")] {
+        let said = rulec::i18n::with(rulec::i18n::Lang::En, || rulec::check_source(src, "units.rule"));
+        assert_eq!(said.iter().map(|d| d.code).collect::<Vec<_>>(), ["E102"], "{src}");
+        let notes = &said[0].notes;
+        assert!(notes.iter().any(|n| n == "`excess = added - limit` holds for every input, and with it no values meet all of this row's conditions."), "{unit}: {notes:?}");
+        assert!(notes.iter().any(|n| n == &format!("Over the ranges of the inputs, `excess` can only come to >=-5000{unit} <=9999{unit}.")), "{unit}: {notes:?}");
+    }
+    // the same while a row of a table above fires: `net` is `money[円]` beside `subtotal` in `JPY`,
+    // which the table reads first
+    let same = "rule tiered_flag v1\n\ninputs\n  subtotal : money[JPY]  range >=0JPY <=10_000JPY\n  credit   : money[JPY]  range >=0JPY <=1_000JPY\n\noutputs\n  flag : bool\n\nenum band = low | high\n\ntable band_of\npolicy unique\n| subtotal    | -> band : band |\n| <5_000JPY   | low            |\n| >=5_000JPY  | high           |\n\ndefine net : money[JPY] = subtotal - credit\n\ntable flag\n| band | subtotal | net         | -> flag |\n| low  | -        | >=5_000JPY  | true    |\n| low  | -        | <5_000JPY   | false   |\n| high | -        | -           | true    |\n";
+    let mixed = same
+        .replace("credit   : money[JPY]  range >=0JPY <=1_000JPY", "credit   : money[円]   range >=0円 <=1_000円")
+        .replace("define net : money[JPY]", "define net : money[円]")
+        .replace("| >=5_000JPY  | true    |", "| >=5_000円   | true    |")
+        .replace("| <5_000JPY   | false   |", "| <5_000円    | false   |");
+    assert_eq!(mixed.matches('円').count(), 6, "{mixed}");
+    for (src, unit) in [(same, "JPY"), (mixed.as_str(), "円")] {
+        let said = rulec::i18n::with(rulec::i18n::Lang::En, || rulec::check_source(src, "units.rule"));
+        assert_eq!(said.iter().map(|d| d.code).collect::<Vec<_>>(), ["E102"], "{src}");
+        let want = format!("`band` is low only where row 1 of table band_of (subtotal < 5_000JPY) fires. There `net` can only come to >=-1000{unit} <=4999{unit}, and none of those values meets this row's conditions.");
+        assert!(said[0].notes.iter().any(|n| *n == want), "{unit}: {:?}", said[0].notes);
+    }
+}
+
+fn materials() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/unit_spellings")
+}
+
+/// `rulec <args>` from `dir`, and what it prints.
+fn rulec_in(dir: &std::path::Path, args: &[&str]) -> (i32, String) {
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(dir).args(args).output().expect("cannot start rulec");
+    (o.status.code().unwrap_or(-1), format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)))
+}
+
+fn golden(name: &str, got: &str, failures: &mut Vec<String>) {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/unit_spellings").join(name);
+    if let Err(e) = ritsu_testkit::golden::check(&path, got) {
+        failures.push(e);
+    }
+}
+
+/// The materials of `tests/unit_spellings`, English first with the Japanese version beside each
+/// (§15.332). A rule that writes `JPY` applies a shared rule that writes `円`: it passes its subtotal
+/// in, and adds the fee that comes out to it (`order_total`, and `注文の合計`, which writes the two the
+/// other way round). Another binds its lines to the lines of a shared rule whose price is spelled
+/// the other way (`order_lines`, `注文の明細`). A contribution declares the input of the rule it adds
+/// to again, in the other spelling, and adds a fee of its spelling to the rule's
+/// (`contrib/remote_island`, `寄与/離島`). Each was stopped by E042 (and the sum by E103), and passes
+/// now, in both languages. Passed more than the shared rule takes, the binding stops at E043 as its
+/// golden files hold, and a contribution whose range is another range stops at E042 however it is
+/// spelled.
+#[test]
+fn 綴りの違う準用と寄与も通る() {
+    let dir = materials();
+    for f in ["order_total.rule", "注文の合計.rule", "order_lines.rule", "注文の明細.rule", "contrib/remote_island.rule", "寄与/離島.rule"] {
+        for lang in ["en", "ja"] {
+            let (code, out) = rulec_in(&dir, &["check", f, "--lang", lang]);
+            assert_eq!(code, 0, "{f} ({lang}):\n{out}");
+        }
+    }
+    let mut failures = Vec::new();
+    for (f, name) in [("E043_order_total_wide.rule", "E043_order_total_wide"), ("E043_注文の合計_広い.rule", "E043_注文の合計_広い")] {
+        for lang in ["en", "ja"] {
+            let (code, out) = rulec_in(&dir, &["check", f, "--lang", lang]);
+            assert_eq!(code, 1, "{f} ({lang}):\n{out}");
+            golden(&format!("{name}.{lang}.txt"), &out, &mut failures);
+        }
+    }
+    // a contribution's range is read by value: written another way it is the same range, and another
+    // range is another, however its unit is spelled
+    for (base, contrib, written, same, other) in [
+        ("delivery_charge.rule", "contrib/remote_island.rule", "range >=0JPY <=100_000JPY", "range >=0円 <=100000JPY", "range >=0JPY <=50_000JPY"),
+        ("配送料.rule", "寄与/離島.rule", "range >=0円 <=100_000円", "range >=0JPY <=10万円", "range >=0円 <=5万円"),
+    ] {
+        let t = ritsu_testkit::TempDir::new("unit-spellings-contrib");
+        let lay = |range: &str| {
+            std::fs::create_dir_all(t.path().join(contrib).parent().unwrap()).unwrap();
+            std::fs::copy(dir.join(base), t.path().join(base)).unwrap();
+            let body = std::fs::read_to_string(dir.join(contrib)).unwrap();
+            assert_eq!(body.matches(written).count(), 1, "{contrib}");
+            std::fs::write(t.path().join(contrib), body.replace(written, range)).unwrap();
+        };
+        lay(same);
+        let (code, out) = rulec_in(t.path(), &["check", contrib]);
+        assert_eq!(code, 0, "{contrib} with {same}:\n{out}");
+        lay(other);
+        for lang in ["en", "ja"] {
+            let (code, out) = rulec_in(t.path(), &["check", contrib, "--lang", lang]);
+            assert_eq!(code, 1, "{contrib} with {other} ({lang}):\n{out}");
+            let stem = contrib.trim_end_matches(".rule").replace('/', "_");
+            golden(&format!("E042_{stem}.{lang}.txt"), &out, &mut failures);
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The certificate of a rule that writes one unit two ways passes both re-checkers (§15.332). For
+/// each pair of spellings ritsu's table of units reads as one unit, a value in one spelling is added
+/// to a value in the other, a table reads the sum through the linear model, and an output in the
+/// other spelling answers it. The re-checkers compare units as `check` does from a list of their
+/// own (`ONE_UNIT` in `tools/recheck.py`, `oneUnit` in ritsu's `proofs/RulecCert/Read.lean`), and a
+/// pair the table gains that the lists lack fails here. The Lean one runs where `proofs/` is built.
+#[test]
+fn 綴りの違う一つの単位の証明書も二つの再検査を通る() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let python = || Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success());
+    if !ritsu_testkit::ready(ritsu_testkit::Need::Python, python, "python3 is not found") {
+        return;
+    }
+    let all = ritsu_units::table::spellings();
+    let pairs: Vec<(&String, &String)> = all.iter().enumerate().flat_map(|(i, a)| all[i + 1..].iter().filter(move |b| rulec::types::one_unit(a, b)).map(move |b| (a, b))).collect();
+    // `cm3` and `mL`, `m3` and `kL`, `円` and `JPY` when this was written
+    assert!(pairs.len() >= 3, "{pairs:?}");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let built = root.join("../../proofs/.lake/build/bin/rulec-recheck");
+    let lean = ritsu_testkit::ready(ritsu_testkit::Need::Lean, || built.exists(), "ritsu's proofs/ is not built (lake build there makes rulec-recheck)").then_some(built);
+    let recheck = root.join("tools/recheck.py");
+    let t = ritsu_testkit::TempDir::new("unit-spellings-recheck");
+    let mut failures = Vec::new();
+    for (i, (a, b)) in pairs.into_iter().enumerate() {
+        let k = ritsu_units::table::unit(a).map(|(d, _)| d.word().to_string()).unwrap();
+        let file = format!("pair_{i}.rule");
+        let rule = format!(
+            "rule spellings v1\ndescription \"One unit written two ways: a value in {a} added to one in {b}, and the band it falls in\"\n\n\
+             enum band = small | large\n\ninputs\n  first  : {k}[{a}]  range >=0{a} <=1000{a}\n  second : {k}[{b}]  range >=0{b} <=1000{b}\n\n\
+             outputs\n  total : {k}[{b}]  round down(1{b})\n  size  : band\n\ndefine combined : {k}[{a}] = first + second\n\n\
+             table size_of\npolicy first\n| combined  | -> size |\n| <=500{a} | small   |\n| -         | large   |\n\nresult total = combined\n"
+        );
+        std::fs::write(t.path().join(&file), &rule).unwrap();
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(t.path()).args(["certificate", &file]).output().expect("cannot start rulec");
+        assert!(o.status.success(), "{a} and {b}: no certificate:\n{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+        let mut programs = vec![("tools/recheck.py", Command::new("python3"))];
+        programs[0].1.arg(&recheck);
+        if let Some(bin) = &lean {
+            programs.push(("rulec-recheck", Command::new(bin)));
+        }
+        for (who, mut cmd) in programs {
+            let mut p = cmd.current_dir(t.path()).args(["--rule", &file]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().expect("cannot start a re-checker");
+            p.stdin.as_mut().unwrap().write_all(&o.stdout).unwrap();
+            let q = p.wait_with_output().unwrap();
+            let said = String::from_utf8_lossy(&q.stdout).into_owned();
+            if !q.status.success() || said.contains("FAILED") {
+                failures.push(format!("{who}, {a} and {b}:\n{said}{}", String::from_utf8_lossy(&q.stderr)));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// E103 names the operation the expression was doing — a comparison says "comparing", not
+/// "adding" — and its hint about dimensions is written only when the two are of different
+/// dimensions: `mass[g]` and `mass[kg]` are one dimension in two spellings, and a number
+/// against an enum carries no dimension at all (§15.350).
+#[test]
+fn 単位の混同は演算の言葉で言う() {
+    use rulec::i18n::Lang::*;
+    let rule = |expr: &str| {
+        format!("rule t(t) v1\n\nenum tier = a | b\n\ninputs\n  g(g) : mass[g]  range >=0g <=2000g\n  k(k) : mass[kg]  range >=0kg <=2kg\n  n(n) : number  range >=0 <=9\n  t(t) : tier\n\noutputs\n  r(r) : bool\n\nderive z(z) : bool = {expr}\n\nresult r = z\n")
+    };
+    let e103 = |lang, expr: &str| {
+        rulec::i18n::with(lang, || rulec::check_source(&rule(expr), "t.rule")).into_iter().find(|d| d.code == "E103").unwrap_or_else(|| panic!("{expr}: no E103"))
+    };
+    // The title names the operation.
+    assert!(e103(En, "g < k").title.contains("comparing mass[g] and mass[kg]"), "{}", e103(En, "g < k").title);
+    assert!(e103(En, "g = k").title.contains("comparing"), "{}", e103(En, "g = k").title);
+    assert!(e103(En, "g + k < 0g").title.contains("adding mass[kg] to mass[g]"), "{}", e103(En, "g + k < 0g").title);
+    assert!(e103(En, "g - k < 0g").title.contains("subtracting mass[kg] from mass[g]"), "{}", e103(En, "g - k < 0g").title);
+    assert!(e103(Ja, "g < k").title.contains("比べています"), "{}", e103(Ja, "g < k").title);
+    assert!(e103(Ja, "g - k < 0g").title.contains("引いています"), "{}", e103(Ja, "g - k < 0g").title);
+    // The hint: different dimensions (money is a dimension of its own), same dimension in
+    // another unit, and no dimension at all.
+    let notes = e103(En, "g + k < 0g").notes.join(" ");
+    assert!(notes.contains("one dimension") && !notes.contains("different dimensions"), "{notes}");
+    let notes = e103(En, "g + n < 0g").notes.join(" ");
+    assert!(notes.contains("different dimensions"), "{notes}");
+    let notes = e103(En, "n < t").notes.join(" ");
+    assert!(!notes.contains("dimension"), "{notes}");
+}
+
+/// An answer cell that writes one unit's other spelling — `800JPY` under `money[円]`,
+/// `5mL` under `volume[cm3]` — is read back by its number by both re-checkers, not counted
+/// among the literals they cannot convert (§15.351).
+#[test]
+fn 答えのセルの別の綴りは値で読み戻される() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let python = || Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success());
+    if !ritsu_testkit::ready(ritsu_testkit::Need::Python, python, "python3 is not found") {
+        return;
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let built = root.join("../../proofs/.lake/build/bin/rulec-recheck");
+    let lean = ritsu_testkit::ready(ritsu_testkit::Need::Lean, || built.exists(), "ritsu's proofs/ is not built (lake build there makes rulec-recheck)").then_some(built);
+    let recheck = root.join("tools/recheck.py");
+    let t = ritsu_testkit::TempDir::new("answer-spellings-recheck");
+    let file = "spellings.rule";
+    let rule = "rule spellings v1\n\ninputs\n  n : number  range >=0 <=100\n\noutputs\n  fee : money[円]  round down(1円)\n  vol : volume[cm3]  round down(1cm3)\n\ntable t\npolicy first\n| n    | -> fee   | -> vol   |\n| <=50 | 800JPY   | 5mL      |\n| -    | 0円      | 0cm3     |\n";
+    std::fs::write(t.path().join(file), rule).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(t.path()).args(["certificate", file]).output().expect("cannot start rulec");
+    assert!(o.status.success(), "no certificate:\n{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    let mut programs = vec![("tools/recheck.py", Command::new("python3"))];
+    programs[0].1.arg(&recheck);
+    if let Some(bin) = &lean {
+        programs.push(("rulec-recheck", Command::new(bin)));
+    }
+    for (who, mut cmd) in programs {
+        let mut p = cmd.current_dir(t.path()).args(["--rule", file]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().expect("cannot start a re-checker");
+        p.stdin.as_mut().unwrap().write_all(&o.stdout).unwrap();
+        let q = p.wait_with_output().unwrap();
+        let said = String::from_utf8_lossy(&q.stdout).into_owned();
+        assert!(q.status.success() && !said.contains("FAILED"), "{who}:\n{said}{}", String::from_utf8_lossy(&q.stderr));
+        assert!(!said.contains("cannot read") && !said.contains("not pinned") && !said.contains("does not convert"), "{who} counted a same-unit spelling as unconvertible:\n{said}");
+    }
 }

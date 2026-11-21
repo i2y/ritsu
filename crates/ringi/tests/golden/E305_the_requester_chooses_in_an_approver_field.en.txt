@@ -1,0 +1,3 @@
+error[E305]: tests/mutants/E305_the_requester_chooses_in_an_approver_field.ringi:13:44: `chosen_reviewer` is chosen by the requester, in `reviewer`, and only approvers fill in `reviewer`
+    13 |   chosen_reviewer = chosen by requester in reviewer
+  = For an approver to choose, write `chosen by previous approver in reviewer`; for the requester to, take `approvers only` off `reviewer`.

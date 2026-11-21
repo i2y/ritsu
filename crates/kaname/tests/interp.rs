@@ -266,6 +266,16 @@ fn the_places_hold_what_they_declare() {
     // a rate with a step and no range is held to 0% to 100% at the entry (DESIGN 3.9)
     assert_eq!(ok(&c, "share", r#"{"r": 100}"#), "100");
     assert_eq!(fails(&c, "share", r#"{"r": 101}"#).0, Kind::Input);
+    // ranges whose ends are int64's own, of a number and of a count of a rate's step: the ends go in
+    // and the values past them do not (DESIGN 44)
+    assert_eq!(ok(&c, "whole", r#"{"n": 9223372036854775807}"#), "9223372036854775807");
+    assert_eq!(ok(&c, "whole", r#"{"n": -9223372036854775808}"#), "-9223372036854775808");
+    assert_eq!(fails(&c, "whole", r#"{"n": 9223372036854775808}"#).0, Kind::Input);
+    assert_eq!(ok(&c, "whole_share", r#"{"r": -9223372036854775808, "s": null}"#), "-9223372036854775808");
+    assert_eq!(ok(&c, "whole_share", r#"{"r": 0, "s": 9223372036854775807}"#), "9223372036854775807");
+    assert_eq!(fails(&c, "whole_share", r#"{"r": 0, "s": 9223372036854775808}"#).0, Kind::Input);
+    assert_eq!(ok(&c, "wide_share", r#"{"w": {"share": 9223372036854775807}}"#), "9223372036854775807");
+    assert_eq!(fails(&c, "wide_share", r#"{"w": {"share": -9223372036854775809}}"#).0, Kind::Input);
 }
 
 #[test]
@@ -280,6 +290,15 @@ fn enums_and_values_that_may_be_none() {
     assert_eq!(ok(&c, "or_zero", r#"{"x": 4}"#), "5");
     // an optional parameter may be left out
     assert_eq!(ok(&c, "or_zero", "{}"), "0");
+    // a rate that may be none goes in and comes back as a count of its step (125 of 0.25%: 31.25%),
+    // held to 0% to 100% where it is there
+    assert_eq!(ok(&c, "kept_share", r#"{"r": null}"#), "null");
+    assert_eq!(ok(&c, "kept_share", r#"{"r": 125}"#), "125");
+    assert_eq!(fails(&c, "kept_share", r#"{"r": 401}"#).0, Kind::Input);
+    // parameters the body never reads are held to what they declare all the same
+    assert_eq!(ok(&c, "unread", r#"{"r": 400, "s": null, "m": 0, "n": null}"#), "0");
+    assert_eq!(fails(&c, "unread", r#"{"r": 401, "s": null, "m": 0, "n": null}"#).0, Kind::Input);
+    assert_eq!(fails(&c, "unread", r#"{"r": 0, "s": -1, "m": 0, "n": null}"#).0, Kind::Input);
 }
 
 const LISTS: &str = include_str!("modules/lists.kn");
@@ -451,7 +470,7 @@ fn the_trace_keeps_the_calls_and_the_lets_in_order() {
             "20: terms.due(invoiced: 2026-03-02) = 2026-03-31",
             "20: let due = 2026-03-31",
             "21: let late = 50",
-            "23: charges(debt: 100000GBPc, days_late: 50, reference_rate: 0.5%) = { compensation: 70GBP, interest: 1150GBPc }",
+            "23: charges(debt: 100_000GBPc, days_late: 50, reference_rate: 0.5%) = { compensation: 70GBP, interest: 1150GBPc }",
             "23: let c = { compensation: 70GBP, interest: 1150GBPc }",
         ]
     );
@@ -511,7 +530,7 @@ fn a_function_of_another_module() {
     match it.call(&c, 0, args, 0) {
         Err(Stop::Failed(fl)) => {
             assert_eq!((fl.kind, fl.module.as_str(), fl.line), (Kind::Range, "pricing", 8));
-            assert_eq!(fl.message.en, "The answer of `line_total`, 25000USDc, is outside its range >=0USDc <=24000USDc");
+            assert_eq!(fl.message.en, "The answer of `line_total`, 25_000USDc, is outside its range >=0USDc <=24_000USDc");
             assert_eq!(fl.stack, [("total".to_string(), 0), ("line_total".to_string(), 6)]);
         }
         other => panic!("{other:?}"),
@@ -555,6 +574,18 @@ fn values_that_hold_themselves_deep() {
         let fl = Interp::new(&p, &suite).check_entry(&c, f, &[v]).unwrap_err();
         assert!(fl.message.en.contains(&format!("nests `{ty}` more than 200 deep")), "{}", fl.message.en);
     }
+    // inside the records the built-in functions answer too: the vectors nest a category given as
+    // an indexed item, as the value of an entry and as the item of a running total as deep, and
+    // the entry holds it to 200
+    let n = module(include_str!("modules/nests.kn"));
+    let pn = Program::of(&n);
+    for name in ["under_indexed", "under_entry", "under_running"] {
+        let f = kaname::interp::function(&n, name).unwrap();
+        let t = n.decls.fns[f].params[0].slot.ty.clone();
+        let v = kaname::vectors::nested_value(&pn, &t, 201).unwrap_or_else(|| panic!("the vectors nest no value of `{name}`"));
+        let fl = Interp::new(&pn, &suite).check_entry(&n, f, &[v]).unwrap_err();
+        assert!(fl.message.en.contains("nests `Category` more than 200 deep"), "{}", fl.message.en);
+    }
     // a call of kaname gives a share of 500% on; a host's share past 100% fails, inside the value too
     assert_eq!(ok(&c, "wide_shares", r#"{"p": 500}"#), "2");
     let shares = c.decls.fns[kaname::interp::function(&c, "shares").unwrap()].line;
@@ -570,4 +601,35 @@ fn values_that_hold_themselves_deep() {
     assert_eq!(ok(&c, "size", r#"{"c": {"name": "a", "children": [{"name": "b", "children": [{"name": "c", "children": []}]}]}}"#), "3");
     assert_eq!(ok(&c, "same", r#"{"a": {"name": "a", "children": []}, "b": {"name": "a", "children": []}}"#), "true");
     assert_eq!(ok(&c, "length", r#"{"n": {"value": 1, "next": {"value": 2, "next": {"value": 3, "next": null}}}}"#), "3");
+}
+
+/// A dict's value and a set's member whose range reaches an end of int64 are given one past that end,
+/// which does not fit in int64, in TypeScript and Python, which hold such a number and refuse it as
+/// outside the range at the entry; Go and Rust, whose values cannot hold it, are not given it
+/// (DESIGN 22.4, 44). Before, the cases gave it to no target.
+#[test]
+fn the_ends_past_int64_of_a_dict_and_a_set_go_to_typescript_and_python() {
+    use kaname::r#gen::{Target, harness};
+    let c = module(&std::fs::read_to_string("tests/modules/wide.kn").unwrap());
+    let cases = harness::outside_cases(std::slice::from_ref(&c), &common::joined(), Lang::En);
+    let past = |t: Target| -> Vec<String> {
+        harness::of_target(&cases, t)
+            .iter()
+            .filter(|k| {
+                // the numbers one past the ends, not the ends themselves (a set at its count may hold
+                // -9223372036854775808, which is in its range)
+                let i = k.input.compact();
+                i.split(|ch: char| !(ch.is_ascii_digit() || ch == '-')).any(|w| w == "9223372036854775808" || w == "-9223372036854775809")
+            })
+            .map(|k| format!("{} {} {}", k.function, k.input.compact(), k.expected.as_ref().map(|e| e.compact()).unwrap_or_default()))
+            .collect()
+    };
+    for t in [Target::TypeScript, Target::Python] {
+        let p = past(t);
+        assert_eq!(p.len(), 2, "{t:?}: {p:?}");
+        assert!(p.iter().all(|x| x.contains("\"kind\":\"input\"")), "{t:?}: {p:?}");
+    }
+    for t in [Target::Go, Target::Rust] {
+        assert_eq!(past(t), Vec::<String>::new(), "{t:?}");
+    }
 }

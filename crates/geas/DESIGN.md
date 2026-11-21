@@ -936,7 +936,8 @@ As built:
   with `nth`.
 - An answer with `error` is E035, and the screen it carries is in the
   message's notes. A driver that exits or closes its stdout before
-  answering is E037, with the last lines of its stderr.
+  answering is E037, with the last lines of its stderr; of a driver that
+  exited, read to the end of the pipe (§25).
 - At the claim's end the driver gets `{"do":"close"}` and 5 s to exit; what
   is left of its process group is then killed.
 
@@ -1303,11 +1304,19 @@ cut to one line.
   `code`, `severity`, `line`, `col`, `message`, `notes`, `path`, and one
   more, `file`: a diagnostic can point into a file other than the spec (a
   line of the baseline for E051), and without it that line would be read as
-  the spec's.
+  the spec's. A run that stops before its work, at the command line (E080)
+  or at a spec it cannot read (E081), puts that diagnostic in the object a
+  spec that cannot run gets, with `file` `null` for E080, and says it on
+  stderr as well, as every command of ritsu does (ritsu's DESIGN 6.2, item
+  10). A line with `--json` anywhere gets it so, even from a command that
+  does not take `--json`.
 - `geas explain <code>` prints when a code appears, what usually fixes it,
   and a spec that produces it; `geas explain --all` prints every one, and
   the skill carries that output. With `--json` each repro comes as files
   and arguments a program can run, and the tests run every one of them.
+  One code is one indented object, and two or more codes, or `--all`, one
+  indented array of them, as every tool of ritsu writes its `explain`
+  (ritsu's DESIGN 6.2, item 10).
 
 | code | what it reports |
 |---|---|
@@ -1447,6 +1456,36 @@ or of a spec that does not parse, each with its JSON as `--json` writes a
 diagnostic, and the summary line. The claims run as `geas check` runs them,
 and the journal is written beside the spec. The command line, its exit
 codes, its output and its JSON did not change.
+
+### 13.2 One mistake, said once (2026-11-16)
+
+geas follows the rule of ritsu's DESIGN 8.3: a mistake is said once, where
+it is, and the lines that follow from it say nothing. A target the file
+does not declare (E002 at a `when`) is said once, at the first line that
+names it, and the note gives the lines of the others. A `{name}` no `keep`
+holds (W016) is said once in a claim, where it is first written, with the
+other lines in the note; another claim says it again, since what a claim
+keeps is its own. Before, a target misspelled where it is declared was said
+at every `when` that named it (nine times in one spec), and a misspelled
+keep at every string that used it (six times in another). Nothing passes for being
+silent: the exit code of every spec is what it was.
+
+`tests/chains/chain_names.geas` misspells a target and a keep where they are
+declared; 4 errors and 3 warnings became 1 and 1 (the Japanese version too),
+and the exit code is 2 before and after:
+
+```text
+error[E002]: chain_names.geas:12:8: there is no target `api`
+    12 |   when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+  = the targets in this file: apii
+  = `api` is written on lines 15, 17 and 22 too
+warning[W016]: chain_names.geas:12:98: `{token}` is not a name this claim keeps, so it stays as written
+    12 |   when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+  = the names it keeps: tokn, id
+  = `{token}` is written on lines 15 and 17 too
+```
+
+The test is `tests/chains.rs`.
 
 ## 14. Distribution through the agent channel
 
@@ -2740,3 +2779,62 @@ where a `when` is written, and `tests/readme.rs` the story of `examples/webhooks
 - The report and `--json` show the checks of one order, the first that failed; the journal has every
   order's.
 - `map` keeps the lines of the claim, all orders together, not of each order.
+
+## 24. One spec, however its path is written (2026-11-15)
+
+ritsu's DESIGN 4.15 and 6.2 item 8 now hold every language to one rule: a file is told by its path made
+absolute with `.` and `..` folded, a run writes the paths it holds from the directory it runs in, the
+shortest way (absolute only when it was given an absolute path), and a sentence about a path a file
+wrote says it as written.
+
+**Decided.** `geas` decides how its run writes paths from the first file it is given
+(`paths::run_from`). The ports name a spec they cannot read, and a record of `map` they cannot parse
+(`map_record`), the way the run writes its paths; before, they were the paths as they were reached,
+which for a project run from its root were joined to the directory of the run. A spec checked whole is counted in
+`ritsu_base::tally` as `geas`, and a spec the ports read for its claims as `geas.read`, so that
+ritsu's `tests/once.rs` sees one that is read twice in a run.
+
+**The paths given (2026-11-16).** The files given, and the paths `--out`, `--map`, `--openspec` and
+`--install` take, are held with `.` and `..` folded (ritsu's DESIGN 4.15): `geas check ./orders.geas`
+and `geas check x/../orders.geas` are `geas check orders.geas`, byte for byte, and say the journal
+`journal: .geas/orders.journal.jsonl`; before, they said `./.geas/…` and `x/../.geas/…`, the path given
+with `.geas/` joined to it. A path given absolute is said absolute. The paths the flags take are
+said folded too: `geas map calc.geas --out ./calc.map.jsonl` writes the record to `calc.map.jsonl`
+and says `→ calc.map.jsonl`, and `geas affected … --map x/../rec.jsonl` says `record: rec.jsonl`;
+before, they said the path as it was given.
+
+**Changes.** None in what `check` and `run` say for a spec given by its name, by its absolute path or
+from another directory: the journal line and the paths of the report were already written from the
+directory of the run. Given every `.geas` file of the tree (247) by its name, by its absolute path,
+from the root of the tree and from a directory beside the root through `..`, the outputs differ in 81
+files before and after: 80 differ only in the journal's path, written from where each run is, and
+one in how many calls a `within` made in its five seconds.
+
+**Checked.** ritsu's `tests/once.rs`, which runs `ritsu check`, `ritsu run` and `ritsu gen` of the
+test projects and counts every spec checked.
+
+## 25. The last of what a program wrote (2026-11-16)
+
+geas reads a program's stderr on a thread of its own, so that a program whose pipe something
+else holds open still gives what it wrote by a deadline. A driver that exits before it answers
+is E037, and the notes quote the last lines of its stderr. They were what that thread had read
+by the time geas learned the driver ended: what the driver wrote just before it exited could
+still be in the pipe, and on a busy machine the notes left out its last lines, or all of them.
+The same spec gave a different message from one run to the next.
+
+**Decided.** Once geas knows a program has ended, it reads its pipes until they close, and at
+most 1 s (`READ_GRACE` in `proc.rs`), as it already did for a program it stops. That holds for
+the stderr of a driver that exited (E037), and for the output of a `run` that ends just before
+its 5 s are out: its pipes get 1 s from its end, not what is left of the 5 s. A driver that
+only closed its stdout still runs, and is quoted as far as it has written, as is one that does
+not answer within 5 s: a program that runs on has no end of its stderr to wait for.
+
+**Changes.** None in what a run says on a machine that keeps up: E037 of a driver that exits
+quotes the same lines, now on every run.
+
+**Checked.** `proc.rs`'s `a_program_that_ended_is_read_to_the_end_of_its_stderr` and
+`a_program_that_ends_by_its_deadline_is_read_to_the_end`, and `driver.rs`'s
+`a_driver_that_exits_is_quoted_to_the_end_of_its_stderr`: a program writes forty lines on
+stderr and exits at once, and the thread that reads its stderr starts reading only 300 ms
+later, as on a busy machine. Read as before, the notes were empty and the output of the `run`
+was cut off before its first line; now both end with the fortieth line.

@@ -69,7 +69,8 @@ func newStandIn(sp spec, run taker) *standIn {
 		for i, p := range parts {
 			parts[i] = regexp.QuoteMeta(p)
 		}
-		t.re = regexp.MustCompile("^" + strings.Join(parts, "[^/?]*") + "$")
+		// the URL of a call fills the placeholders, with the query of its arguments after it (DESIGN 43)
+		t.re = regexp.MustCompile("^" + strings.Join(parts, "[^/?]*") + "([?&].*)?$")
 		s.http = append(s.http, t)
 	}
 	return s

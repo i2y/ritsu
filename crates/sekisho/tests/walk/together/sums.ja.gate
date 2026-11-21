@@ -1,0 +1,40 @@
+gate 合計(sums_ja) v1
+description "二つの数の合計から出す二つの値。どの組が起こるかは、片方の数だけを動かしても分からない。入力の見つからなかった組は、起こるかもしれないものとして数える"
+namespace DocsJa
+
+use rule 合計の区分 from "合計の区分.rule"
+
+principal 利用者(User)
+  description "二つの点数を持つ人"
+  attributes
+    一つ目(first)  : number  range >=0 <=100
+    二つ目(second) : number  range >=0 <=100
+
+resource 文書(Doc)
+  description "文書"
+
+action 読む(read_doc)
+  description "文書を読む"
+  principal 利用者
+  resource 文書
+  context
+    前(x) = 合計の区分(甲: principal.一つ目, 乙: principal.二つ目).前
+    後(y) = 合計の区分(甲: principal.一つ目, 乙: principal.二つ目).後
+
+permit 前が低なら読める(low_x_reads)
+  description "前が低の人は読める"
+  principal is 利用者
+  action 読む
+  when 前 is 低
+
+permit 後が高なら読める(high_y_reads)
+  description "後が高の人は読める"
+  principal is 利用者
+  action 読む
+  when 後 is 高
+
+expect deny 前が低なら後は高にならない
+  description "合計が 100 以下なら 150 を超えないので、前が低で後が高の人はいない"
+  principal is 利用者
+  action 読む
+  when 前 is 低 and 後 is 高

@@ -550,7 +550,7 @@ pub fn module(u: &Unit) -> String {
             u.t(tr!("ある日がカレンダー{}の営業日かを返す。", "Whether a day is a business day of the calendar {}.", n.ja; n.en))
         }
     };
-    o.push_str(&format!("//! {what}\n\nuse std::fmt;\nuse std::str::FromStr;\n\n"));
+    o.push_str(&format!("//! {what}\n\n#![allow(dead_code, clippy::all)]\n\nuse std::fmt;\nuse std::str::FromStr;\n\n"));
     o.push_str(&doc(
         &[u.t(tr!(
             "先発グレゴリオ暦の日付（0001-01-01〜9999-12-31。タイムゾーンを持たない）。",
@@ -590,7 +590,7 @@ pub fn runner(u: &Unit) -> String {
             "Reads the lines of koyomi vectors on standard input and writes what the functions give, a line each (separated by a space; error <kind> for an error)"
         ))
     ));
-    o.push_str(&format!("// The runner uses only some of what the module offers.\n#[allow(dead_code)]\n#[path = \"{a}.rs\"]\nmod {a};\n\n"));
+    o.push_str(&format!("// The runner uses only some of what the module offers.\n#![allow(dead_code, clippy::all)]\n#[path = \"{a}.rs\"]\nmod {a};\n\n"));
     // A file with no date gives an empty line for every input, and reads nothing of it.
     let reads = u.kind == Kind::Calendar || !u.outputs().is_empty();
     if reads {

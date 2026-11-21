@@ -1,0 +1,441 @@
+scenario 金額の大きいライセンス契約, line 66: submit by e1201 at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, line 67: approve by e1101 at 2026-11-16 11:00 -> 要約, in progress
+scenario 金額の大きいライセンス契約, line 68: note ready at 2026-11-16 11:05 -> 受付, in progress
+scenario 金額の大きいライセンス契約, line 69: edit by e9002 at 2026-11-16 14:00 -> 受付, in progress
+scenario 金額の大きいライセンス契約, line 70: approve by e9002 at 2026-11-16 14:05 -> 確認, in progress
+scenario 金額の大きいライセンス契約, line 71: pause by e9003 at 2026-11-17 10:00 -> 確認, paused
+scenario 金額の大きいライセンス契約, line 72: resume by e9003 at 2026-11-18 10:00 -> 確認, in progress
+scenario 金額の大きいライセンス契約, line 73: approve by e9003 at 2026-11-18 15:00 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, line 74: approve by e9001 at 2026-11-19 10:00 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, line 75: approve by e9002 at 2026-11-19 11:00 -> 法務部長, in progress
+scenario 金額の大きいライセンス契約, line 76: approve by e9001 at 2026-11-20 10:00 -> approved
+scenario 金額の大きいライセンス契約, after it ended: comment by e1201 at 2026-11-20 10:00 -> refused (state)
+scenario 金額の大きいライセンス契約, after line 66: approvals: approve by e1101 at 2026-11-16 10:00 -> 要約, in progress
+scenario 金額の大きいライセンス契約, after line 66: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario 金額の大きいライセンス契約, after line 66: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario 金額の大きいライセンス契約, after line 66: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 66: the requester: comment by e1201 at 2026-11-16 10:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 66: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 66: sent back: resubmit by e1201 at 2026-11-17 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario 金額の大きいライセンス契約, after line 66: sent back: comment by e1101 at 2026-11-16 10:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 66: sent back: comment by e1201 at 2026-11-16 10:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 66: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 66: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 66: edited, a field shown on a condition: edit by e1101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: paused: pause by e1101 at 2026-11-16 10:00 -> 上長, paused
+scenario 金額の大きいライセンス契約, after line 66: paused: resume by e1101 at 2026-11-17 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: paused: comment by e1201 at 2026-11-16 10:00 -> 上長, paused
+scenario 金額の大きいライセンス契約, after line 66: paused: pause ends at 2026-12-01 00:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: an administrator: add approver at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: an administrator: hand over at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: an administrator, by name: add approver by e0101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: an administrator, by name: hand over by e0101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: clocks: remind at 2026-11-18 09:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: clocks: late at 2026-11-20 00:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: clocks: remind at 2026-11-24 09:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: clocks: late at 2026-11-26 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 66: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario 金額の大きいライセンス契約, after line 66: clocks: approve by e1101 at 2026-11-18 09:00 -> refused (clock)
+scenario 金額の大きいライセンス契約, after line 66: clocks: comment by e1101 at 2026-11-18 09:00 -> refused (clock)
+scenario 金額の大きいライセンス契約, after line 66: comments: comment by e1101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: comments: comment by e1201 at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario 金額の大きいライセンス契約, after line 66: comments: comment by e1101 at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario 金額の大きいライセンス契約, after line 66: comments: approve by e1101 at 2026-11-16 10:00 -> 要約, in progress
+scenario 金額の大きいライセンス契約, after line 66: comments: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 66: comments: approve by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario 金額の大きいライセンス契約, after line 66: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 66: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 66: sent back to the limit: resubmit by e1201 at 2026-11-19 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 66: sent back to the limit: send back by e1101 at 2026-11-19 10:00 -> refused (limit)
+scenario 金額の大きいライセンス契約, after line 67: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
+scenario 金額の大きいライセンス契約, after line 67: the requester: withdraw by e1201 at 2026-11-16 11:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 67: retracted: retract by e1101 at 2026-11-16 11:00 -> refused (event)
+scenario 金額の大きいライセンス契約, after line 67: flows: agent answered at 2026-11-16 11:00 -> refused (event)
+scenario 金額の大きいライセンス契約, after line 67: flows: agent answered at 2026-11-16 11:00 -> refused (event)
+scenario 金額の大きいライセンス契約, after line 67: flows: flow failed at 2026-11-16 11:00 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 67: clocks: remind at 2026-11-18 09:00 -> 要約, in progress
+scenario 金額の大きいライセンス契約, after line 67: clocks: late at 2026-11-20 00:00 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 67: clocks: remind at 2026-11-24 09:00 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 67: clocks: late at 2026-11-26 00:00 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 67: clocks: remind at 2026-11-30 09:00 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 67: clocks: late at 2026-12-02 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 68: approvals: approve by e9001 at 2026-11-16 11:05 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 68: approvals: approve by e9002 at 2026-11-16 11:05 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 68: approvals: approve by e9003 at 2026-11-16 11:05 -> refused (form)
+scenario 金額の大きいライセンス契約, after line 68: rejections: reject by e9001 at 2026-11-16 11:05 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 68: rejections: reject by e9002 at 2026-11-16 11:05 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 68: rejections: reject by e9003 at 2026-11-16 11:05 -> rejected
+scenario 金額の大きいライセンス契約, after line 68: the requester: approve by e1201 at 2026-11-16 11:05 -> refused (person)
+scenario 金額の大きいライセンス契約, after line 68: the requester: withdraw by e1201 at 2026-11-16 11:05 -> with requester
+scenario 金額の大きいライセンス契約, after line 68: sent back: send back by e9001 at 2026-11-16 11:05 -> with requester
+scenario 金額の大きいライセンス契約, after line 68: sent back: resubmit by e1201 at 2026-11-17 11:05 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 68: sent back: discard by e1201 at 2026-11-16 11:05 -> withdrawn
+scenario 金額の大きいライセンス契約, after line 68: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 68: sent back: send back by e9001 at 2026-11-16 11:05 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 68: paused: pause by e9001 at 2026-11-16 11:05 -> 受付, paused
+scenario 金額の大きいライセンス契約, after line 68: paused: resume by e9001 at 2026-11-17 11:05 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 68: paused: pause ends at 2026-12-01 00:00 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 68: clocks: remind at 2026-11-18 09:00 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 68: clocks: late at 2026-11-20 00:00 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 68: clocks: remind at 2026-11-24 09:00 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 68: clocks: late at 2026-11-26 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 70: approvals: approve by e9003 at 2026-11-16 14:05 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, after line 70: rejections: reject by e9003 at 2026-11-16 14:05 -> rejected
+scenario 金額の大きいライセンス契約, after line 70: the requester: approve by e1201 at 2026-11-16 14:05 -> refused (person)
+scenario 金額の大きいライセンス契約, after line 70: the requester: withdraw by e1201 at 2026-11-16 14:05 -> with requester
+scenario 金額の大きいライセンス契約, after line 70: sent back: send back by e9003 at 2026-11-16 14:05 -> with requester
+scenario 金額の大きいライセンス契約, after line 70: sent back: resubmit by e1201 at 2026-11-17 14:05 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 70: sent back: discard by e1201 at 2026-11-16 14:05 -> withdrawn
+scenario 金額の大きいライセンス契約, after line 70: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 70: sent back: send back by e9003 at 2026-11-16 14:05 -> 受付, in progress
+scenario 金額の大きいライセンス契約, after line 70: paused: pause by e9003 at 2026-11-16 14:05 -> 確認, paused
+scenario 金額の大きいライセンス契約, after line 70: paused: resume by e9003 at 2026-11-17 14:05 -> 確認, in progress
+scenario 金額の大きいライセンス契約, after line 70: paused: pause ends at 2026-12-01 00:00 -> 確認, in progress
+scenario 金額の大きいライセンス契約, after line 70: clocks: remind at 2026-11-18 09:00 -> 確認, in progress
+scenario 金額の大きいライセンス契約, after line 70: clocks: late at 2026-11-20 00:00 -> 確認, in progress
+scenario 金額の大きいライセンス契約, after line 70: clocks: remind at 2026-11-24 09:00 -> 確認, in progress
+scenario 金額の大きいライセンス契約, after line 70: clocks: late at 2026-11-26 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 73: approvals: approve by e9001 at 2026-11-18 15:00 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, after line 73: approvals: approve by e9002 at 2026-11-18 15:00 -> 法務部長, in progress
+scenario 金額の大きいライセンス契約, after line 73: rejections: reject by e9001 at 2026-11-18 15:00 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, after line 73: rejections: reject by e9002 at 2026-11-18 15:00 -> rejected
+scenario 金額の大きいライセンス契約, after line 73: the requester: approve by e1201 at 2026-11-18 15:00 -> refused (person)
+scenario 金額の大きいライセンス契約, after line 73: the requester: withdraw by e1201 at 2026-11-18 15:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 73: sent back: send back by e9001 at 2026-11-18 15:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 73: sent back: resubmit by e1201 at 2026-11-19 15:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 73: sent back: discard by e1201 at 2026-11-18 15:00 -> withdrawn
+scenario 金額の大きいライセンス契約, after line 73: sent back: resubmit late at 2026-12-03 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 73: sent back: send back by e9001 at 2026-11-18 15:00 -> 確認, in progress
+scenario 金額の大きいライセンス契約, after line 73: paused: pause by e9001 at 2026-11-18 15:00 -> 二人目, paused
+scenario 金額の大きいライセンス契約, after line 73: paused: resume by e9001 at 2026-11-19 15:00 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, after line 73: paused: pause ends at 2026-12-02 00:00 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, after line 73: clocks: remind at 2026-11-20 09:00 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, after line 73: clocks: late at 2026-11-24 00:00 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, after line 73: clocks: remind at 2026-11-26 09:00 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, after line 73: clocks: late at 2026-11-28 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 75: approvals: approve by e9001 at 2026-11-19 11:00 -> approved
+scenario 金額の大きいライセンス契約, after line 75: rejections: reject by e9001 at 2026-11-19 11:00 -> rejected
+scenario 金額の大きいライセンス契約, after line 75: the requester: approve by e1201 at 2026-11-19 11:00 -> refused (person)
+scenario 金額の大きいライセンス契約, after line 75: the requester: withdraw by e1201 at 2026-11-19 11:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 75: sent back: send back by e9001 at 2026-11-19 11:00 -> with requester
+scenario 金額の大きいライセンス契約, after line 75: sent back: resubmit by e1201 at 2026-11-20 11:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, after line 75: sent back: discard by e1201 at 2026-11-19 11:00 -> withdrawn
+scenario 金額の大きいライセンス契約, after line 75: sent back: resubmit late at 2026-12-04 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 75: sent back: send back by e9001 at 2026-11-19 11:00 -> 二人目, in progress
+scenario 金額の大きいライセンス契約, after line 75: paused: pause by e9001 at 2026-11-19 11:00 -> 法務部長, paused
+scenario 金額の大きいライセンス契約, after line 75: paused: resume by e9001 at 2026-11-20 11:00 -> 法務部長, in progress
+scenario 金額の大きいライセンス契約, after line 75: paused: pause ends at 2026-12-03 00:00 -> 法務部長, in progress
+scenario 金額の大きいライセンス契約, after line 75: clocks: remind at 2026-11-23 09:00 -> 法務部長, in progress
+scenario 金額の大きいライセンス契約, after line 75: clocks: late at 2026-11-25 00:00 -> 法務部長, in progress
+scenario 金額の大きいライセンス契約, after line 75: clocks: remind at 2026-11-27 09:00 -> 法務部長, in progress
+scenario 金額の大きいライセンス契約, after line 75: clocks: late at 2026-12-01 00:00 -> expired
+scenario 相手の案が届かない契約, line 83: submit by e1201 at 2026-11-16 10:00 -> 上長, in progress
+scenario 相手の案が届かない契約, line 84: approve by e1101 at 2026-11-16 11:00 -> 要約, in progress
+scenario 相手の案が届かない契約, line 85: note ready at 2026-11-16 11:05 -> 受付, in progress
+scenario 相手の案が届かない契約, line 86: send back by e9002 at 2026-11-16 14:00 -> with requester
+scenario 相手の案が届かない契約, line 87: resubmit late at 2026-12-01 00:00 -> expired
+scenario 相手の案が届かない契約, after line 83: approvals: approve by e1101 at 2026-11-16 10:00 -> 要約, in progress
+scenario 相手の案が届かない契約, after line 83: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario 相手の案が届かない契約, after line 83: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario 相手の案が届かない契約, after line 83: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario 相手の案が届かない契約, after line 83: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario 相手の案が届かない契約, after line 83: sent back: resubmit by e1201 at 2026-11-17 10:00 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 83: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario 相手の案が届かない契約, after line 83: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 相手の案が届かない契約, after line 83: paused: pause by e1101 at 2026-11-16 10:00 -> 上長, paused
+scenario 相手の案が届かない契約, after line 83: paused: resume by e1101 at 2026-11-17 10:00 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 83: paused: pause ends at 2026-12-01 00:00 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 83: an administrator: add approver at 2026-11-16 10:00 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 83: an administrator: hand over at 2026-11-16 10:00 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 83: clocks: remind at 2026-11-18 09:00 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 83: clocks: late at 2026-11-20 00:00 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 83: clocks: remind at 2026-11-24 09:00 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 83: clocks: late at 2026-11-26 00:00 -> expired
+scenario 相手の案が届かない契約, after line 83: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario 相手の案が届かない契約, after line 83: clocks: approve by e1101 at 2026-11-18 09:00 -> refused (clock)
+scenario 相手の案が届かない契約, after line 83: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario 相手の案が届かない契約, after line 83: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 83: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> with requester
+scenario 相手の案が届かない契約, after line 83: sent back to the limit: resubmit by e1201 at 2026-11-19 10:00 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 83: sent back to the limit: send back by e1101 at 2026-11-19 10:00 -> refused (limit)
+scenario 相手の案が届かない契約, after line 84: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
+scenario 相手の案が届かない契約, after line 84: the requester: withdraw by e1201 at 2026-11-16 11:00 -> with requester
+scenario 相手の案が届かない契約, after line 84: retracted: retract by e1101 at 2026-11-16 11:00 -> refused (event)
+scenario 相手の案が届かない契約, after line 84: flows: agent answered at 2026-11-16 11:00 -> refused (event)
+scenario 相手の案が届かない契約, after line 84: flows: agent answered at 2026-11-16 11:00 -> refused (event)
+scenario 相手の案が届かない契約, after line 84: flows: flow failed at 2026-11-16 11:00 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 84: clocks: remind at 2026-11-18 09:00 -> 要約, in progress
+scenario 相手の案が届かない契約, after line 84: clocks: late at 2026-11-20 00:00 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 84: clocks: remind at 2026-11-24 09:00 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 84: clocks: late at 2026-11-26 00:00 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 84: clocks: remind at 2026-11-30 09:00 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 84: clocks: late at 2026-12-02 00:00 -> expired
+scenario 相手の案が届かない契約, after line 85: approvals: approve by e9001 at 2026-11-16 11:05 -> refused (form)
+scenario 相手の案が届かない契約, after line 85: approvals: approve by e9002 at 2026-11-16 11:05 -> refused (form)
+scenario 相手の案が届かない契約, after line 85: approvals: approve by e9003 at 2026-11-16 11:05 -> refused (form)
+scenario 相手の案が届かない契約, after line 85: rejections: reject by e9001 at 2026-11-16 11:05 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 85: rejections: reject by e9002 at 2026-11-16 11:05 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 85: rejections: reject by e9003 at 2026-11-16 11:05 -> rejected
+scenario 相手の案が届かない契約, after line 85: the requester: approve by e1201 at 2026-11-16 11:05 -> refused (person)
+scenario 相手の案が届かない契約, after line 85: the requester: withdraw by e1201 at 2026-11-16 11:05 -> with requester
+scenario 相手の案が届かない契約, after line 85: sent back: send back by e9001 at 2026-11-16 11:05 -> with requester
+scenario 相手の案が届かない契約, after line 85: sent back: resubmit by e1201 at 2026-11-17 11:05 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 85: sent back: discard by e1201 at 2026-11-16 11:05 -> withdrawn
+scenario 相手の案が届かない契約, after line 85: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 相手の案が届かない契約, after line 85: sent back: send back by e9001 at 2026-11-16 11:05 -> 上長, in progress
+scenario 相手の案が届かない契約, after line 85: paused: pause by e9001 at 2026-11-16 11:05 -> 受付, paused
+scenario 相手の案が届かない契約, after line 85: paused: resume by e9001 at 2026-11-17 11:05 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 85: paused: pause ends at 2026-12-01 00:00 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 85: clocks: remind at 2026-11-18 09:00 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 85: clocks: late at 2026-11-20 00:00 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 85: clocks: remind at 2026-11-24 09:00 -> 受付, in progress
+scenario 相手の案が届かない契約, after line 85: clocks: late at 2026-11-26 00:00 -> expired
+scenario 秘密保持契約, line 94: submit by e1201 at 2026-11-16 10:00 -> 上長, in progress
+scenario 秘密保持契約, line 95: approve by e1101 at 2026-11-16 11:00 -> 要約, in progress
+scenario 秘密保持契約, line 96: note ready at 2026-11-16 11:05 -> 受付, in progress
+scenario 秘密保持契約, line 97: edit by e9002 at 2026-11-16 14:00 -> 受付, in progress
+scenario 秘密保持契約, line 98: approve by e9002 at 2026-11-16 14:05 -> 確認, in progress
+scenario 秘密保持契約, line 99: approve by e9003 at 2026-11-17 10:00 -> approved
+scenario 秘密保持契約, after line 94: approvals: approve by e1101 at 2026-11-16 10:00 -> 要約, in progress
+scenario 秘密保持契約, after line 94: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario 秘密保持契約, after line 94: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario 秘密保持契約, after line 94: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario 秘密保持契約, after line 94: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario 秘密保持契約, after line 94: sent back: resubmit by e1201 at 2026-11-17 10:00 -> 上長, in progress
+scenario 秘密保持契約, after line 94: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario 秘密保持契約, after line 94: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 秘密保持契約, after line 94: edited, a field shown on a condition: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario 秘密保持契約, after line 94: paused: pause by e1101 at 2026-11-16 10:00 -> 上長, paused
+scenario 秘密保持契約, after line 94: paused: resume by e1101 at 2026-11-17 10:00 -> 上長, in progress
+scenario 秘密保持契約, after line 94: paused: pause ends at 2026-12-01 00:00 -> 上長, in progress
+scenario 秘密保持契約, after line 94: an administrator: add approver at 2026-11-16 10:00 -> 上長, in progress
+scenario 秘密保持契約, after line 94: an administrator: hand over at 2026-11-16 10:00 -> 上長, in progress
+scenario 秘密保持契約, after line 94: clocks: remind at 2026-11-18 09:00 -> 上長, in progress
+scenario 秘密保持契約, after line 94: clocks: late at 2026-11-20 00:00 -> 上長, in progress
+scenario 秘密保持契約, after line 94: clocks: remind at 2026-11-24 09:00 -> 上長, in progress
+scenario 秘密保持契約, after line 94: clocks: late at 2026-11-26 00:00 -> expired
+scenario 秘密保持契約, after line 94: clocks: remind at 2026-11-18 08:59 -> refused (clock)
+scenario 秘密保持契約, after line 94: clocks: approve by e1101 at 2026-11-18 09:00 -> refused (clock)
+scenario 秘密保持契約, after line 94: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario 秘密保持契約, after line 94: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> 上長, in progress
+scenario 秘密保持契約, after line 94: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> with requester
+scenario 秘密保持契約, after line 94: sent back to the limit: resubmit by e1201 at 2026-11-19 10:00 -> 上長, in progress
+scenario 秘密保持契約, after line 94: sent back to the limit: send back by e1101 at 2026-11-19 10:00 -> refused (limit)
+scenario 秘密保持契約, after line 95: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
+scenario 秘密保持契約, after line 95: the requester: withdraw by e1201 at 2026-11-16 11:00 -> with requester
+scenario 秘密保持契約, after line 95: retracted: retract by e1101 at 2026-11-16 11:00 -> refused (event)
+scenario 秘密保持契約, after line 95: flows: agent answered at 2026-11-16 11:00 -> refused (event)
+scenario 秘密保持契約, after line 95: flows: agent answered at 2026-11-16 11:00 -> refused (event)
+scenario 秘密保持契約, after line 95: flows: flow failed at 2026-11-16 11:00 -> 受付, in progress
+scenario 秘密保持契約, after line 95: clocks: remind at 2026-11-18 09:00 -> 要約, in progress
+scenario 秘密保持契約, after line 95: clocks: late at 2026-11-20 00:00 -> 受付, in progress
+scenario 秘密保持契約, after line 95: clocks: remind at 2026-11-24 09:00 -> 受付, in progress
+scenario 秘密保持契約, after line 95: clocks: late at 2026-11-26 00:00 -> 受付, in progress
+scenario 秘密保持契約, after line 95: clocks: remind at 2026-11-30 09:00 -> 受付, in progress
+scenario 秘密保持契約, after line 95: clocks: late at 2026-12-02 00:00 -> expired
+scenario 秘密保持契約, after line 96: approvals: approve by e9001 at 2026-11-16 11:05 -> refused (form)
+scenario 秘密保持契約, after line 96: approvals: approve by e9002 at 2026-11-16 11:05 -> refused (form)
+scenario 秘密保持契約, after line 96: approvals: approve by e9003 at 2026-11-16 11:05 -> refused (form)
+scenario 秘密保持契約, after line 96: rejections: reject by e9001 at 2026-11-16 11:05 -> 受付, in progress
+scenario 秘密保持契約, after line 96: rejections: reject by e9002 at 2026-11-16 11:05 -> 受付, in progress
+scenario 秘密保持契約, after line 96: rejections: reject by e9003 at 2026-11-16 11:05 -> rejected
+scenario 秘密保持契約, after line 96: the requester: approve by e1201 at 2026-11-16 11:05 -> refused (person)
+scenario 秘密保持契約, after line 96: the requester: withdraw by e1201 at 2026-11-16 11:05 -> with requester
+scenario 秘密保持契約, after line 96: sent back: send back by e9001 at 2026-11-16 11:05 -> with requester
+scenario 秘密保持契約, after line 96: sent back: resubmit by e1201 at 2026-11-17 11:05 -> 上長, in progress
+scenario 秘密保持契約, after line 96: sent back: discard by e1201 at 2026-11-16 11:05 -> withdrawn
+scenario 秘密保持契約, after line 96: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 秘密保持契約, after line 96: sent back: send back by e9001 at 2026-11-16 11:05 -> 上長, in progress
+scenario 秘密保持契約, after line 96: paused: pause by e9001 at 2026-11-16 11:05 -> 受付, paused
+scenario 秘密保持契約, after line 96: paused: resume by e9001 at 2026-11-17 11:05 -> 受付, in progress
+scenario 秘密保持契約, after line 96: paused: pause ends at 2026-12-01 00:00 -> 受付, in progress
+scenario 秘密保持契約, after line 96: clocks: remind at 2026-11-18 09:00 -> 受付, in progress
+scenario 秘密保持契約, after line 96: clocks: late at 2026-11-20 00:00 -> 受付, in progress
+scenario 秘密保持契約, after line 96: clocks: remind at 2026-11-24 09:00 -> 受付, in progress
+scenario 秘密保持契約, after line 96: clocks: late at 2026-11-26 00:00 -> expired
+scenario 秘密保持契約, after line 98: approvals: approve by e9003 at 2026-11-16 14:05 -> approved
+scenario 秘密保持契約, after line 98: rejections: reject by e9003 at 2026-11-16 14:05 -> rejected
+scenario 秘密保持契約, after line 98: the requester: approve by e1201 at 2026-11-16 14:05 -> refused (person)
+scenario 秘密保持契約, after line 98: the requester: withdraw by e1201 at 2026-11-16 14:05 -> with requester
+scenario 秘密保持契約, after line 98: sent back: send back by e9003 at 2026-11-16 14:05 -> with requester
+scenario 秘密保持契約, after line 98: sent back: resubmit by e1201 at 2026-11-17 14:05 -> 上長, in progress
+scenario 秘密保持契約, after line 98: sent back: discard by e1201 at 2026-11-16 14:05 -> withdrawn
+scenario 秘密保持契約, after line 98: sent back: resubmit late at 2026-12-01 00:00 -> expired
+scenario 秘密保持契約, after line 98: sent back: send back by e9003 at 2026-11-16 14:05 -> 受付, in progress
+scenario 秘密保持契約, after line 98: paused: pause by e9003 at 2026-11-16 14:05 -> 確認, paused
+scenario 秘密保持契約, after line 98: paused: resume by e9003 at 2026-11-17 14:05 -> 確認, in progress
+scenario 秘密保持契約, after line 98: paused: pause ends at 2026-12-01 00:00 -> 確認, in progress
+scenario 秘密保持契約, after line 98: clocks: remind at 2026-11-18 09:00 -> 確認, in progress
+scenario 秘密保持契約, after line 98: clocks: late at 2026-11-20 00:00 -> 確認, in progress
+scenario 秘密保持契約, after line 98: clocks: remind at 2026-11-24 09:00 -> 確認, in progress
+scenario 秘密保持契約, after line 98: clocks: late at 2026-11-26 00:00 -> expired
+scenario 人の減った法務の契約, line 107: submit by e9003 at 2027-04-12 10:00 -> 上長, in progress
+scenario 人の減った法務の契約, line 108: approve by e0102 at 2027-04-12 11:00 -> 要約, in progress
+scenario 人の減った法務の契約, line 109: note ready at 2027-04-12 11:05 -> 受付, in progress
+scenario 人の減った法務の契約, line 110: edit by e9002 at 2027-04-12 14:00 -> 受付, in progress
+scenario 人の減った法務の契約, line 111: approve by e9002 at 2027-04-12 14:05 -> 確認, in progress
+scenario 人の減った法務の契約, line 112: approve by e9002 at 2027-04-13 10:00 -> 二人目, in progress
+scenario 人の減った法務の契約, line 113: add approver at 2027-04-13 11:00 -> 二人目, in progress
+scenario 人の減った法務の契約, line 114: approve by e9002 at 2027-04-13 15:00 -> 二人目, in progress
+scenario 人の減った法務の契約, line 115: approve by e0102 at 2027-04-14 10:00 -> approved
+scenario 人の減った法務の契約, after line 107: approvals: approve by e0102 at 2027-04-12 10:00 -> 要約, in progress
+scenario 人の減った法務の契約, after line 107: rejections: reject by e0102 at 2027-04-12 10:00 -> rejected
+scenario 人の減った法務の契約, after line 107: the requester: approve by e9003 at 2027-04-12 10:00 -> refused (person)
+scenario 人の減った法務の契約, after line 107: the requester: withdraw by e9003 at 2027-04-12 10:00 -> with requester
+scenario 人の減った法務の契約, after line 107: sent back: send back by e0102 at 2027-04-12 10:00 -> with requester
+scenario 人の減った法務の契約, after line 107: sent back: resubmit by e9003 at 2027-04-13 10:00 -> 上長, in progress
+scenario 人の減った法務の契約, after line 107: sent back: discard by e9003 at 2027-04-12 10:00 -> withdrawn
+scenario 人の減った法務の契約, after line 107: sent back: resubmit late at 2027-04-27 00:00 -> expired
+scenario 人の減った法務の契約, after line 107: paused: pause by e0102 at 2027-04-12 10:00 -> 上長, paused
+scenario 人の減った法務の契約, after line 107: paused: resume by e0102 at 2027-04-13 10:00 -> 上長, in progress
+scenario 人の減った法務の契約, after line 107: paused: pause ends at 2027-04-27 00:00 -> 上長, in progress
+scenario 人の減った法務の契約, after line 107: an administrator: add approver at 2027-04-12 10:00 -> 上長, in progress
+scenario 人の減った法務の契約, after line 107: an administrator: hand over at 2027-04-12 10:00 -> 上長, in progress
+scenario 人の減った法務の契約, after line 107: clocks: remind at 2027-04-14 09:00 -> 上長, in progress
+scenario 人の減った法務の契約, after line 107: clocks: late at 2027-04-16 00:00 -> 上長, in progress
+scenario 人の減った法務の契約, after line 107: clocks: remind at 2027-04-20 09:00 -> 上長, in progress
+scenario 人の減った法務の契約, after line 107: clocks: late at 2027-04-22 00:00 -> expired
+scenario 人の減った法務の契約, after line 107: clocks: remind at 2027-04-14 08:59 -> refused (clock)
+scenario 人の減った法務の契約, after line 107: clocks: approve by e0102 at 2027-04-14 09:00 -> refused (clock)
+scenario 人の減った法務の契約, after line 107: sent back to the limit: send back by e0102 at 2027-04-13 10:00 -> with requester
+scenario 人の減った法務の契約, after line 107: sent back to the limit: resubmit by e9003 at 2027-04-14 10:00 -> 上長, in progress
+scenario 人の減った法務の契約, after line 107: sent back to the limit: send back by e0102 at 2027-04-14 10:00 -> with requester
+scenario 人の減った法務の契約, after line 107: sent back to the limit: resubmit by e9003 at 2027-04-15 10:00 -> 上長, in progress
+scenario 人の減った法務の契約, after line 107: sent back to the limit: send back by e0102 at 2027-04-15 10:00 -> refused (limit)
+scenario 人の減った法務の契約, after line 108: the requester: approve by e9003 at 2027-04-12 11:00 -> refused (person)
+scenario 人の減った法務の契約, after line 108: the requester: withdraw by e9003 at 2027-04-12 11:00 -> with requester
+scenario 人の減った法務の契約, after line 108: retracted: retract by e0102 at 2027-04-12 11:00 -> refused (event)
+scenario 人の減った法務の契約, after line 108: flows: agent answered at 2027-04-12 11:00 -> refused (event)
+scenario 人の減った法務の契約, after line 108: flows: agent answered at 2027-04-12 11:00 -> refused (event)
+scenario 人の減った法務の契約, after line 108: flows: flow failed at 2027-04-12 11:00 -> 受付, in progress
+scenario 人の減った法務の契約, after line 108: clocks: remind at 2027-04-14 09:00 -> 要約, in progress
+scenario 人の減った法務の契約, after line 108: clocks: late at 2027-04-16 00:00 -> 受付, in progress
+scenario 人の減った法務の契約, after line 108: clocks: remind at 2027-04-20 09:00 -> 受付, in progress
+scenario 人の減った法務の契約, after line 108: clocks: late at 2027-04-22 00:00 -> 受付, in progress
+scenario 人の減った法務の契約, after line 108: clocks: remind at 2027-04-26 09:00 -> 受付, in progress
+scenario 人の減った法務の契約, after line 108: clocks: late at 2027-04-28 00:00 -> expired
+scenario 人の減った法務の契約, after line 109: approvals: approve by e9002 at 2027-04-12 11:05 -> refused (form)
+scenario 人の減った法務の契約, after line 109: rejections: reject by e9002 at 2027-04-12 11:05 -> rejected
+scenario 人の減った法務の契約, after line 109: the requester: approve by e9003 at 2027-04-12 11:05 -> refused (person)
+scenario 人の減った法務の契約, after line 109: the requester: withdraw by e9003 at 2027-04-12 11:05 -> with requester
+scenario 人の減った法務の契約, after line 109: sent back: send back by e9002 at 2027-04-12 11:05 -> with requester
+scenario 人の減った法務の契約, after line 109: sent back: resubmit by e9003 at 2027-04-13 11:05 -> 上長, in progress
+scenario 人の減った法務の契約, after line 109: sent back: discard by e9003 at 2027-04-12 11:05 -> withdrawn
+scenario 人の減った法務の契約, after line 109: sent back: resubmit late at 2027-04-27 00:00 -> expired
+scenario 人の減った法務の契約, after line 109: sent back: send back by e9002 at 2027-04-12 11:05 -> 上長, in progress
+scenario 人の減った法務の契約, after line 109: paused: pause by e9002 at 2027-04-12 11:05 -> 受付, paused
+scenario 人の減った法務の契約, after line 109: paused: resume by e9002 at 2027-04-13 11:05 -> 受付, in progress
+scenario 人の減った法務の契約, after line 109: paused: pause ends at 2027-04-27 00:00 -> 受付, in progress
+scenario 人の減った法務の契約, after line 109: clocks: remind at 2027-04-14 09:00 -> 受付, in progress
+scenario 人の減った法務の契約, after line 109: clocks: late at 2027-04-16 00:00 -> 受付, in progress
+scenario 人の減った法務の契約, after line 109: clocks: remind at 2027-04-20 09:00 -> 受付, in progress
+scenario 人の減った法務の契約, after line 109: clocks: late at 2027-04-22 00:00 -> expired
+scenario 人の減った法務の契約, after line 111: approvals: approve by e9002 at 2027-04-12 14:05 -> 二人目, in progress
+scenario 人の減った法務の契約, after line 111: rejections: reject by e9002 at 2027-04-12 14:05 -> rejected
+scenario 人の減った法務の契約, after line 111: the requester: approve by e9003 at 2027-04-12 14:05 -> refused (person)
+scenario 人の減った法務の契約, after line 111: the requester: withdraw by e9003 at 2027-04-12 14:05 -> with requester
+scenario 人の減った法務の契約, after line 111: sent back: send back by e9002 at 2027-04-12 14:05 -> with requester
+scenario 人の減った法務の契約, after line 111: sent back: resubmit by e9003 at 2027-04-13 14:05 -> 上長, in progress
+scenario 人の減った法務の契約, after line 111: sent back: discard by e9003 at 2027-04-12 14:05 -> withdrawn
+scenario 人の減った法務の契約, after line 111: sent back: resubmit late at 2027-04-27 00:00 -> expired
+scenario 人の減った法務の契約, after line 111: sent back: send back by e9002 at 2027-04-12 14:05 -> 受付, in progress
+scenario 人の減った法務の契約, after line 111: paused: pause by e9002 at 2027-04-12 14:05 -> 確認, paused
+scenario 人の減った法務の契約, after line 111: paused: resume by e9002 at 2027-04-13 14:05 -> 確認, in progress
+scenario 人の減った法務の契約, after line 111: paused: pause ends at 2027-04-27 00:00 -> 確認, in progress
+scenario 人の減った法務の契約, after line 111: clocks: remind at 2027-04-14 09:00 -> 確認, in progress
+scenario 人の減った法務の契約, after line 111: clocks: late at 2027-04-16 00:00 -> 確認, in progress
+scenario 人の減った法務の契約, after line 111: clocks: remind at 2027-04-20 09:00 -> 確認, in progress
+scenario 人の減った法務の契約, after line 111: clocks: late at 2027-04-22 00:00 -> expired
+scenario 人の減った法務の契約, after line 112: the requester: approve by e9003 at 2027-04-13 10:00 -> refused (person)
+scenario 人の減った法務の契約, after line 112: the requester: withdraw by e9003 at 2027-04-13 10:00 -> with requester
+scenario 人の減った法務の契約, after line 112: flows: note ready at 2027-04-13 10:00 -> refused (state)
+scenario 人の減った法務の契約, after line 112: flows: flow failed at 2027-04-13 10:00 -> refused (state)
+scenario 人の減った法務の契約, after line 112: an administrator: add approver at 2027-04-13 10:00 -> 二人目, in progress
+scenario 人の減った法務の契約, after line 112: clocks: remind at 2027-04-15 09:00 -> 二人目, in progress
+scenario 人の減った法務の契約, after line 112: clocks: late at 2027-04-17 00:00 -> 二人目, in progress
+scenario 人の減った法務の契約, after line 112: clocks: remind at 2027-04-20 09:00 -> 二人目, in progress
+scenario 人の減った法務の契約, after line 112: clocks: late at 2027-04-22 00:00 -> expired
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: reject by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: send back by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: retract by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: pause by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: resume by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: edit by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: withdraw by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: discard by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: resubmit by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: add approver at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: hand over at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: agent answered at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: note ready at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before: flow failed at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: no revision: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, after line 67: a comment, which says no revision: comment by e1101 at 2026-11-16 11:00 -> 要約, in progress
+scenario 金額の大きいライセンス契約, after line 67: made on the revision before, with a comment too long: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario 金額の大きいライセンス契約, made on 2026-11-20 (closed from 2026-11-21): submit by e1201 at 2026-11-20 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, made on 2026-11-20 (closed from 2026-11-21): remind at 2026-11-24 09:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-26 00:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, made on 2026-11-20 (closed from 2026-11-21): remind at 2026-11-30 09:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, made on 2026-11-20 (closed from 2026-11-21): late at 2026-12-02 00:00 -> expired
+scenario 金額の大きいライセンス契約, made on 2026-12-28 (closed from 2026-12-29): submit by e1201 at 2026-12-28 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, made on 2026-12-28 (closed from 2026-12-29): remind at 2027-01-05 09:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-07 00:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, made on 2026-12-28 (closed from 2026-12-29): remind at 2027-01-11 09:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-13 00:00 -> expired
+scenario 金額の大きいライセンス契約, made with a comment: submit by e1201 at 2026-11-16 10:00 -> 上長, in progress
+scenario 金額の大きいライセンス契約, made with a comment: submit by e1201 at 2026-11-16 10:00 -> refused (comment)
+requester e0001: submit by e0001 at 2026-11-16 10:00 -> 要約, in progress
+requester e0101: submit by e0101 at 2026-11-16 10:00 -> 上長, in progress
+requester e0102: submit by e0102 at 2026-11-16 10:00 -> 上長, in progress
+requester e0201: submit by e0201 at 2026-11-16 10:00 -> 上長, in progress
+requester e0202: submit by e0202 at 2026-11-16 10:00 -> 上長, in progress
+requester e0203: submit by e0203 at 2026-11-16 10:00 -> 上長, in progress
+requester e0204: submit by e0204 at 2026-11-16 10:00 -> 上長, in progress
+requester e1001: submit by e1001 at 2026-11-16 10:00 -> 上長, in progress
+requester e1002: submit by e1002 at 2026-11-16 10:00 -> 上長, in progress
+requester e1101: submit by e1101 at 2026-11-16 10:00 -> 上長, in progress
+requester e1203: submit by e1203 at 2026-11-16 10:00 -> 上長, in progress
+requester e3101: submit by e3101 at 2026-11-16 10:00 -> 上長, in progress
+requester e4001: submit by e4001 at 2026-11-16 10:00 -> 上長, in progress
+requester e5001: submit by e5001 at 2026-11-16 10:00 -> 上長, in progress
+requester e6001: submit by e6001 at 2026-11-16 10:00 -> 上長, in progress
+requester e7001: submit by e7001 at 2026-11-16 10:00 -> 上長, in progress
+requester e7101: submit by e7101 at 2026-11-16 10:00 -> 上長, in progress
+requester e7102: submit by e7102 at 2026-11-16 10:00 -> 上長, in progress
+requester e7201: submit by e7201 at 2026-11-16 10:00 -> 上長, in progress
+requester e7202: submit by e7202 at 2026-11-16 10:00 -> 上長, in progress
+requester e9001: submit by e9001 at 2026-11-16 10:00 -> 上長, in progress
+requester e9002: submit by e9002 at 2026-11-16 10:00 -> 上長, in progress
+requester e9003: submit by e9003 at 2026-11-16 10:00 -> 上長, in progress
+proxy e0001 for e1201: submit by e0001 at 2026-11-16 10:00 -> refused (person)
+across the versions of the organization: submit by e1201 at 2027-03-31 10:00 -> 上長, in progress
+across the versions of the organization: approve by e1101 at 2027-04-01 10:00 -> 要約, in progress
+across the versions of the organization: send back by e1101 at 2027-03-31 10:00 -> with requester
+across the versions of the organization: resubmit by e1201 at 2027-04-01 10:00 -> 上長, in progress
+edge of 金額, going up: 1_000_000_000円: submit by e1201 at 2026-11-16 10:00 -> 上長, in progress
+edge of 金額, going up: 1_000_000_001円: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of 金額, going down: 0円: submit by e1201 at 2026-11-16 10:00 -> 上長, in progress
+edge of 金額, going down: -1円: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of 月数, going up: 60: submit by e1201 at 2026-11-16 10:00 -> 上長, in progress
+edge of 月数, going up: 61: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of 月数, going down: 1: submit by e1201 at 2026-11-16 10:00 -> 上長, in progress
+edge of 月数, going down: 0: submit by e1201 at 2026-11-16 10:00 -> refused (form)

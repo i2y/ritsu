@@ -28,10 +28,13 @@ fn root() -> PathBuf {
 }
 
 fn rulec(lang: &str, args: &[&str]) -> (i32, String, String) {
+    // What `gen` and `api` write is in the language of `--lang` alone (the root DESIGN 4.1).
+    let written_in = if args.contains(&"--lang") { vec![] } else { vec!["--lang", lang] };
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", lang)
         .current_dir(root())
         .args(args)
+        .args(written_in)
         .output()
         .expect("cannot start rulec");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
@@ -300,20 +303,20 @@ fn the_wasm_entry_says_what_its_module_answers() {
             "en",
             "tests/corpus/nationwide_freight.rule",
             r#"{"freight_rows":[{"row_zone":"kinki","threshold":1000,"row_fee":500}]}"#,
-            (r#"{"freight_rows":[{"row_zone":"kinki","threshold":1000,"row_fee":200000}]}"#, "row_fee is out of range: 200000"),
+            (r#"{"freight_rows":[{"row_zone":"kinki","threshold":1000,"row_fee":200000}]}"#, "freight_rows[0].row_fee is out of range: 200000"),
             (
                 r#"{"freight_rows":[{"row_zone":"kinki","threshold":1000,"row_fee":500},{"row_zone":"kinki","threshold":900,"row_fee":700}]}"#,
-                "fold verdict: two elements matched a take_unique",
+                "fold verdict: two elements matched a take_unique (freight_rows[0] and freight_rows[1])",
             ),
         ),
         (
             "ja",
             "tests/corpus/全国運賃.rule",
             r#"{"運賃行":[{"行ゾーン":"近畿圏","閾値":1000,"行運賃":500}]}"#,
-            (r#"{"運賃行":[{"行ゾーン":"近畿圏","閾値":1000,"行運賃":200000}]}"#, "行運賃 が範囲の外です: 200000"),
+            (r#"{"運賃行":[{"行ゾーン":"近畿圏","閾値":1000,"行運賃":200000}]}"#, "運賃行[0].行運賃 が範囲の外です: 200000"),
             (
                 r#"{"運賃行":[{"行ゾーン":"近畿圏","閾値":1000,"行運賃":500},{"行ゾーン":"近畿圏","閾値":900,"行運賃":700}]}"#,
-                "畳み込み 採用: take_unique に二件当たりました",
+                "畳み込み 採用: take_unique に二件当たりました（運賃行[0] と 運賃行[1]）",
             ),
         ),
     ] {

@@ -1,0 +1,18 @@
+rule top_up_to_minimum v1
+description "Small orders are topped up to a minimum of 25 yen, and the table reads the top-up beside the amount. Above 25 yen the top-up is 0 yen, which the check reads off the amount itself, as the amount less the amount, not as the span of one less the span of the other"
+
+enum handling = standard | small_order
+
+inputs
+  amount : money[JPY]  range >=1JPY <=351JPY
+
+define top_up : money[JPY] = max(amount, 25JPY) - amount
+
+outputs
+  handling : handling
+
+table handling_of
+| amount  | top_up        | -> handling |
+| <=58JPY | <=3JPY        | standard    |
+| <=58JPY | >3JPY <=24JPY | small_order |
+| >58JPY  | <=3JPY        | standard    |

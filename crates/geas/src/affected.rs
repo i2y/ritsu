@@ -170,10 +170,12 @@ pub fn command(spec_file: &str, diff_arg: &str, o: &Opts) -> i32 {
             if o.json {
                 let pairs: Vec<(String, Diag)> = problems.iter().map(|(f, d, _)| (f.clone(), d.clone())).collect();
                 println!("{}", report::failure_json(spec_file, &pairs, o.lang));
-            } else {
-                for (f, d, src) in &problems {
-                    eprint!("{}", d.shown(f, src, o.lang));
-                }
+            }
+            // a file it cannot read and a line it cannot run are said on stderr with the JSON too,
+            // as `geas check --json` says them (ritsu's DESIGN 6.2, item 10); the spec's own
+            // diagnostics go in the JSON alone
+            for (f, d, src) in problems.iter().filter(|(_, d, _)| !o.json || matches!(d.code, "E080" | "E081")) {
+                eprint!("{}", d.shown(f, src, o.lang));
             }
             2
         }
@@ -181,8 +183,8 @@ pub fn command(spec_file: &str, diff_arg: &str, o: &Opts) -> i32 {
 }
 
 fn e081(file: &str, e: std::io::Error) -> Problem {
-    let d = diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"));
-    (file.to_string(), d, String::new())
+    let said = if file == "-" { ritsu_base::cli::cannot_read_stdin(&e) } else { ritsu_base::cli::cannot_read(file, &e) };
+    (file.to_string(), diag::named("E081", said), String::new())
 }
 
 fn answer(spec_file: &str, diff_arg: &str, o: &Opts) -> Result<Answer, Vec<Problem>> {
@@ -383,18 +385,21 @@ fn read_record(shown: &str, spec_file: &str, spec_rel: &str) -> Result<Rec, Prob
     let text = match ritsu_base::fs::read_to_string(shown) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // the commands named the way the person ran this one (ritsu's DESIGN 6.2, item 10)
+            let run = ritsu_base::cli::command_name("geas");
             let d = diag::error("E060", 0, 0, tr!("{shown} に記録がありません", "there is no record at {shown}"))
                 .note(tr!(
-                    "先に `geas map {spec_file}` を走らせてください。`geas affected` はそれが書く記録を読みます",
-                    "run `geas map {spec_file}` first; `geas affected` reads the record it writes",
+                    "先に `{run} map {spec_file}` を走らせてください。`{run} affected` はそれが書く記録を読みます",
+                    "run `{run} map {spec_file}` first; `{run} affected` reads the record it writes",
                 ));
             return Err((spec_file.to_string(), d, String::new()));
         }
         Err(e) => return Err(e081(shown, e)),
     };
+    let run = ritsu_base::cli::command_name("geas");
     let again = tr!(
-        "記録は `geas map` が書きます。`geas map {spec_file}` を走らせると、記録が書き直されます",
-        "the record is written by `geas map`; run `geas map {spec_file}` to write it again",
+        "記録は `{run} map` が書きます。`{run} map {spec_file}` を走らせると、記録が書き直されます",
+        "the record is written by `{run} map`; run `{run} map {spec_file}` to write it again",
     );
     let r = match Record::parse(&text) {
         Ok(r) => r,

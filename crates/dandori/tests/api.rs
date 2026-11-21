@@ -60,6 +60,55 @@ fn declared(src: &str, keyword: &str) -> Vec<String> {
         .collect()
 }
 
+/// The port `Flows::declared` and `dandori api` say the same of a flow's inputs and outputs: the
+/// names in the order written, the types, whether a place may be left out, the ranges and the
+/// lines. What a place carries is the ends its range writes.
+#[test]
+fn the_port_says_of_the_inputs_and_outputs_what_the_api_says() {
+    use ritsu_ports::{Carried, Flows, Found, Ports};
+    let ports = Ports { rules: Rc::new(rulec::ports::Engine::with_dates(std::sync::Arc::new(koyomi::ports::Engine))), dates: Rc::new(koyomi::ports::Engine), books: Rc::new(chobo::ports::Engine) };
+    let mut flows = Vec::new();
+    flows_under(&root().join("examples"), &mut flows);
+    flows_under(&root().join("tests/flows"), &mut flows);
+    let (mut seen, mut ranges) = (0, 0);
+    for f in flows {
+        let (code, out, _) = run(&["api", f.to_str().unwrap()]);
+        if code != 0 {
+            continue;
+        }
+        let j: Value = serde_json::from_str(&out).unwrap();
+        let d = match dandori::ports::Engine::default().declared(&f, &ports) {
+            Ok(Found::Value(d)) => d,
+            other => panic!("{}: {other:?}", rel(&f)),
+        };
+        assert_eq!(j["workflow"]["name"], d.name.as_str(), "{}", rel(&f));
+        for (key, places) in [("inputs", &d.inputs), ("outputs", &d.outputs)] {
+            let api = j[key].as_array().unwrap();
+            assert_eq!(api.len(), places.len(), "{} {key}", rel(&f));
+            for (a, p) in api.iter().zip(places) {
+                let at = format!("{} {key} {}", rel(&f), p.name);
+                assert_eq!((a["name"].as_str(), a["type"].as_str(), a["optional"].as_bool(), a["line"].as_u64()), (Some(p.name.as_str()), Some(p.ty.as_str()), Some(p.optional), Some(p.line as u64)), "{at}");
+                assert_eq!(a["range"]["text"].as_str(), p.range.as_deref(), "{at}");
+                // the ends of a number's range are what the place carries
+                if let (Some(min), Carried::Num { min: lo, .. }) = (a["range"]["min"].as_i64(), p.carried.present().0) {
+                    assert_eq!(*lo, Some(i128::from(min)), "{at}");
+                    ranges += 1;
+                }
+                if let (Some(max), Carried::Num { max: hi, .. }) = (a["range"]["max"].as_i64(), p.carried.present().0) {
+                    assert_eq!(*hi, Some(i128::from(max)), "{at}");
+                }
+                assert_eq!(p.optional, p.carried.present().1, "{at}");
+            }
+        }
+        seen += 1;
+    }
+    assert!(seen >= 20 && ranges >= 5, "{seen} flows, {ranges} ranges");
+    // a flow that does not pass its check is no answer
+    let t = TempDir::new("declared");
+    std::fs::write(t.path().join("broken.flow"), "workflow broken v1\ndescription \"no flow\"\n").unwrap();
+    assert!(dandori::ports::Engine::default().declared(&t.path().join("broken.flow"), &ports).is_err());
+}
+
 #[test]
 fn every_flow_of_the_examples_has_an_api_that_is_the_file() {
     let mut flows = Vec::new();

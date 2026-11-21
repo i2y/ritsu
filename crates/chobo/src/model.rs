@@ -344,7 +344,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                                 ),
                             ));
                         } else {
-                            d.push(diag::error("E002", p.ty.span.line, p.ty.span.col, tr!("型 `{ty}` がありません。勘定の引数の型は string です", "there is no type `{ty}`; an account's parameters are strings")));
+                            d.push(diag::error("E002", p.ty.span.line, p.ty.span.col, tr!("型 `{ty}` がありません。勘定の引数の型は string です", "there is no type `{ty}`; an account's parameters are strings")).same(ty.clone()));
                         }
                     }
                     params.push(pn.clone());
@@ -356,7 +356,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             Some(&u) => u,
             None => {
                 let un = &a.unit.text;
-                d.push(diag::error("E002", a.unit.span.line, a.unit.span.col, tr!("単位 `{un}` が宣言されていません", "no unit `{un}` is declared")));
+                d.push(diag::error("E002", a.unit.span.line, a.unit.span.col, tr!("単位 `{un}` が宣言されていません", "no unit `{un}` is declared")).same(un.clone()));
                 usize::MAX
             }
         };
@@ -490,6 +490,9 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             continue;
         }
         let mut params: Vec<TParam> = Vec::new();
+        // The parameters whose type is no type (E002): what reads them is not held to the string
+        // they are read as (ritsu's DESIGN 8.3).
+        let mut untyped: Vec<usize> = Vec::new();
         for p in &t.params {
             let pn = &p.name.text;
             if params.iter().any(|x| &x.name == pn) {
@@ -502,12 +505,16 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                 Ty::Amount(u)
             } else {
                 let tn = &p.ty.text;
-                d.push(diag::error(
-                    "E002",
-                    p.ty.span.line,
-                    p.ty.span.col,
-                    tr!("型 `{tn}` がありません。型は string か、宣言した単位の名前です", "there is no type `{tn}`; a type is string or a declared unit"),
-                ));
+                d.push(
+                    diag::error(
+                        "E002",
+                        p.ty.span.line,
+                        p.ty.span.col,
+                        tr!("型 `{tn}` がありません。型は string か、宣言した単位の名前です", "there is no type `{tn}`; a type is string or a declared unit"),
+                    )
+                    .same(tn.clone()),
+                );
+                untyped.push(params.len());
                 Ty::Str
             };
             params.push(TParam { name: pn.clone(), ty, line: p.name.span.line, col: p.name.span.col });
@@ -544,7 +551,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                 for n in &k.names {
                     let x = &n.text;
                     match param(x) {
-                        None => d.push(diag::error("E030", n.span.line, n.span.col, tr!("キーの `{x}` は振替 `{tname}` の引数にありません", "`{x}` in the key is not a parameter of `{tname}`"))),
+                        None => d.push(diag::error("E030", n.span.line, n.span.col, tr!("キーの `{x}` は振替 `{tname}` の引数にありません", "`{x}` in the key is not a parameter of `{tname}`")).same_in(tname.clone(), x.clone())),
                         Some(i) if key.contains(&i) => d.push(diag::error("E003", n.span.line, n.span.col, tr!("キーに `{x}` が二度あります", "`{x}` appears twice in the key"))),
                         Some(i) => {
                             if matches!(params[i].ty, Ty::Amount(_)) {
@@ -629,7 +636,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             let resolve_ref = |r: &parse::AccountRef, d: &mut Vec<Diag>| -> Option<Ref> {
                 let an = &r.name.text;
                 let Some(&k) = acct_ix.get(an) else {
-                    d.push(diag::error("E002", r.name.span.line, r.name.span.col, tr!("勘定 `{an}` が宣言されていません", "no account `{an}` is declared")));
+                    d.push(diag::error("E002", r.name.span.line, r.name.span.col, tr!("勘定 `{an}` が宣言されていません", "no account `{an}` is declared")).same(an.clone()));
                     return None;
                 };
                 let want = accounts[k].params.len();
@@ -656,7 +663,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                             let pn = &n.text;
                             match param(pn) {
                                 None => {
-                                    d.push(diag::error("E002", n.span.line, n.span.col, tr!("振替 `{tname}` に引数 `{pn}` がありません", "the transfer `{tname}` has no parameter `{pn}`")));
+                                    d.push(diag::error("E002", n.span.line, n.span.col, tr!("振替 `{tname}` に引数 `{pn}` がありません", "the transfer `{tname}` has no parameter `{pn}`")).same_in(tname.clone(), pn.clone()));
                                     good = false;
                                 }
                                 Some(i) => {
@@ -694,7 +701,12 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                     let pn = &n.text;
                     match param(pn) {
                         None => {
-                            d.push(diag::error("E002", n.span.line, n.span.col, tr!("振替 `{tname}` に引数 `{pn}` がありません", "the transfer `{tname}` has no parameter `{pn}`")));
+                            d.push(diag::error("E002", n.span.line, n.span.col, tr!("振替 `{tname}` に引数 `{pn}` がありません", "the transfer `{tname}` has no parameter `{pn}`")).same_in(tname.clone(), pn.clone()));
+                            ok = false;
+                            None
+                        }
+                        // a parameter whose type is no type: E002 said so
+                        Some(i) if untyped.contains(&i) => {
                             ok = false;
                             None
                         }
@@ -797,6 +809,8 @@ pub fn load(src: &str) -> (Option<Book>, Vec<Diag>) {
     }
     let Some(ast) = ast else { return (None, d) };
     let (book, mut d) = resolve(&ast);
+    // a name declared nowhere is said once, where it is first written (ritsu's DESIGN 8.3)
+    ritsu_base::diag::once_with(&mut d, |n, l| ritsu_base::diag::unstopped(ritsu_base::diag::written_too(n, l)));
     sort(&mut d);
     (book, d)
 }

@@ -1,0 +1,8 @@
+summary.flow: ok
+ok contract.ringi: a request, 4 fields, 2 stages
+  may never end: the stages `summary` and `review` have no deadline (`due in …`), and wait until they are answered
+error[ritsu E210]: contract.ringi:12: The flow `summarize` writes the note of the stage `summary` of `contract`, and its output `summary` is `json`: a note does not hold a value of no set shape (json)
+    12 |   summary  note from summarize  when amount >= 1_000_000JPY and amount <= 50_000_000JPY
+  = A note holds text (a string, a date, a timestamp, an enum), a whole number (an int, or a number with a unit, carried as the whole number counted in its unit), a truth (a bool), rows (a list of records whose fields hold these too), and a `T?` of these (nothing where it has no value).
+  = Give the outputs of "summary.flow" a type a note holds (a record as the one row of a `list[…]`).
+ritsu check: 2 files (dandori 1, ringi 1): 1 fail (1 error); borders between the languages: 5 checked, 0 undecided

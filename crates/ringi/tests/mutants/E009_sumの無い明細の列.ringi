@@ -1,0 +1,16 @@
+request 例(example) v1 "例"
+
+form
+  明細(items) : rows "明細"  count >=1 <=20
+    品目(what)  : text "品目"  count <=100
+    金額(price) : money[円] "金額"  range >=1円 <=1_000_000円
+  領収書(receipt) : attachment "領収書"  required when 明細.金額 > 30_000円
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

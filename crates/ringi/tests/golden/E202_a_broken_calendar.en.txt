@@ -1,0 +1,4 @@
+error[E202]: tests/mutants/E202_a_broken_calendar.ringi:3:26: `shared/broken_office.cal` does not pass koyomi's check
+     3 | use calendar office from "shared/broken_office.cal"
+  = E002: A day of the week is `mon`, `tue`, `wed`, `thu`, `fri`, `sat` or `sun` (found `sunday`) (tests/mutants/shared/broken_office.cal:5)
+  = Correct that file until koyomi's check passes.

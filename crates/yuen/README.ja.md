@@ -4,7 +4,7 @@
 
 yuen は、要件と、その出どころを書く小さな言語です。`.req` のファイルに、何が求められているか、それが法令のどの条か、誰のどの決定から来たか、持ち主は誰か、何が満たすのか（規則の表、カレンダーの日付、帳簿の勘定、コードのファイル）、何が確かめるのか（主張、規則そのものの検査）を書きます。そのつながりの一本ずつに、人が確かめたことを、両端のハッシュと一緒に記録します。条文が改正されたり、規則が書き換えられたり、コードの一行が変わったりすると、ハッシュが合わなくなり、検査はそのつながりで止まります。確かめたときとの差分を見せ、誰かが確かめ直すまで止まったままです。
 
-yuen は [ritsu](https://github.com/i2y/ritsu) の九つの言語の一つです。ほかの言語が持つもの（rulec の規則の表、koyomi のカレンダーの日付と条件、chobo の帳簿の勘定と振替、geas の spec の主張、dandori のワークフローのタスク、sakai の地図の語、sekisho のゲートのポリシーと期待、kaname のモジュールの関数、`.proto` のサービスとメッセージ）は、同じプロセスの中で、それぞれの言語に読んでもらいます。OpenAPI と AsyncAPI の文書の操作とスキーマ、[Cedar](https://www.cedarpolicy.com/) のポリシーとアクションは、yuen が要素ごとに読みます。[OpenSpec](https://github.com/Fission-AI/OpenSpec) の仕様の要件は、出典として、要件ごとに読みます。
+yuen は [ritsu](https://github.com/i2y/ritsu) の十の言語の一つです。ほかの言語が持つもの（rulec の規則の表、koyomi のカレンダーの日付と条件、chobo の帳簿の勘定と振替、geas の spec の主張、dandori のワークフローのタスク、sakai の地図の語、sekisho のゲートのポリシーと期待、kaname のモジュールの関数、ringi の申請の表とステップと期限、`.proto` のサービスとメッセージ）は、同じプロセスの中で、それぞれの言語に読んでもらいます。OpenAPI と AsyncAPI の文書の操作とスキーマ、[Cedar](https://www.cedarpolicy.com/) のポリシーとアクションは、yuen が要素ごとに読みます。[OpenSpec](https://github.com/Fission-AI/OpenSpec) の仕様の要件は、出典として、要件ごとに読みます。
 
 ## 例：民法の期間
 
@@ -61,6 +61,21 @@ examples/civil_code_periods_reread/civil_code_periods_reread.ja.req: エラー 1
 止まるのは、書き換えた日付へのつながり一本だけです。yuen が日付についてハッシュを取るのはファイル全体ではなく、その日付の定義の文なので、同じカレンダーのほかの日付と条件へのつながりは止まりません。逆に、条文そのものが改正されれば、要件のハッシュ（引いた条のハッシュを含む）が変わり、その要件から先のつながりが全部止まります。
 
 人が差分を読み、カレンダーの書き換えが決めた読み方と合っていると確かめたら、その人の役割で `yuen review` を走らせて、記録を書き直します。合っていなければ、カレンダーを直すか、要件と決めたことを書き直します。
+
+差分がどの要件に触るかは、`yuen affected` が答えます。リンクが指すファイルの行が一つも変わらなくても、そのファイルが読むファイルが変われば、要件に届きます。`affected` は、リンクが指すファイルが読むファイルを何段でもたどります。何を読むかは、それぞれの言語が答えます。読むものは、規則が準用する規則、日付のファイルが使うカレンダーと、そのカレンダーのもとになる表、ゲートが使う規則と日付、申請が使う組織・マスタ・経路・カレンダー・規則、文書の `$ref` が届くほかのファイル、`.proto` が `import` するファイルなどです。指すだけのもの（固定している文書のコピー、コンテキストが持つコード、値の出どころ）は、読むものに入りません。どのファイルにも書かれていないファイルも、たどりません。コードが走るときに開くデータのファイルのように、どの言語のファイルも指していないファイルの変更は、要件に届きません。次は、日付のファイルが使うカレンダーに、事務所の夏季休暇を足した差分です。
+
+```console
+$ ritsu yuen affected examples/payment_terms/payment_terms.ja.req --root examples/payment_terms --diff examples/payment_terms/changes/closed.ja.diff --lang ja
+差分: examples/payment_terms/changes/closed.ja.diff
+要件が指すファイルが読むファイルで、差分が触るもの:
+  examples/payment_terms/calendars/東京の営業日.cal
+    koyomi "payment_20th_close_next_10th.ja.cal" の 3 行目（use calendar）: 満たす要件 支払日、営業日、確かめる要件 支払日、営業日
+どの要件にも届かない変更: なし
+触る要件:
+  支払日（examples/payment_terms/payment_terms.ja.req:11）持ち主 経理。2026-10-04 に 経理 が「20 日に締めて翌月 10 日に払えば、どの支払も受領から 60 日以内に収まる。この例のために決めたもの」と決めました
+  営業日（examples/payment_terms/payment_terms.ja.req:23）持ち主 経理、出どころ 祝日
+触る要件は 2 件です。経理 に見てもらってください
+```
 
 モジュールでは、この理由が新しい版を読む人に届きます。`ritsu mod diff` と一覧の Changes のタブは、要件の前と今の文、新しい版が足した `decided` の行、確認した人を出します。どれもファイルに書かれた言葉です。検査が言うのは、書いたときの相手が確認のあと動いていないことで、書いた中身が正しいことではありません。
 
@@ -119,13 +134,13 @@ $ ritsu yuen source outdated examples/openspec_greeter/greeter.ja.req --root exa
 
 ```console
 $ ritsu yuen check examples/openspec_greeter_archived/greeter.ja.req --root examples/openspec_greeter_archived --lang ja
-警告[W102]: examples/openspec_greeter_archived/greeter.ja.req:7:8: 仕様 examples/openspec_greeter_archived/ja/openspec/specs/greeting/spec.md の要件のうち 1 件を、プロジェクトのどの出典も固定していません: ヘルスチェック
+警告[W102]: examples/openspec_greeter_archived/greeter.ja.req:7:8: 仕様 ja/openspec/specs/greeting/spec.md の要件のうち 1 件を、プロジェクトのどの出典も固定していません: ヘルスチェック
      7 | source 挨拶 = openspec "ja/openspec/specs/greeting/spec.md"
   = 要件ごとに、固定の行と、それを引く要件を書いてください。読まないと決めた要件も、引く要件を書いて `not satisfied` と `not verified` に理由を書けば、外したことが承認とともに残ります。
 エラー[E103]: examples/openspec_greeter_archived/greeter.ja.req:8:3: 挨拶 名前で挨拶する が固定と違います（固定は sha256:584f410eda34b49e、いまの要件は sha256:7b148317fa6902cd）
      8 |   名前で挨拶する sha256:584f410eda34b49e
   = 固定したあとで、仕様の要件が変わりました（変更の archive か、仕様の書き直し）。何が変わったかを読んでから、固定を書き換えてください（`yuen source pin`）。
-  固定したときの要件からの差分（仕様は examples/openspec_greeter_archived/ja/openspec/specs/greeting/spec.md）:
+  固定したときの要件からの差分（仕様は ja/openspec/specs/greeting/spec.md）:
       @@ -1,4 +1,4 @@
         ### Requirement: 名前で挨拶する
       - サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が `Hello, <名前>` の JSON で答える（SHALL）。空の名前には、ステータス 400 で答える（SHALL）。
@@ -197,6 +212,8 @@ sekisho のゲートも、同じ書き方で、sekisho に読んでもらって�
 
 kaname のモジュールも、同じ書き方で、kaname に読んでもらって指せます。関数が要件を満たし（`satisfied by kaname "支払い/支払い.kn" function 精算する`）、モジュールそのものが要件を確かめます（`verified by kaname "支払い/支払い.kn"`）。kaname は、型と単位と丸め、呼び出しで渡す値、書いたエフェクト、例を確かめ、どれかが成り立たなければ落ちるからです。関数の端は、見出しから本体の最後の行までです。
 
+ringi の申請も、同じ書き方で、ringi に読んでもらって指せます。経路の表、ステップ、期限が要件を満たし（`satisfied by ringi "経費.ringi" table route`）、ファイルの主張、例、シナリオが要件を確かめます（`verified by ringi "経費.ringi" claim 催促は期限より前`）。種類を付けずにファイルを書くと、ringi がそのファイルを検査することが確かめになります。端はその物の行なので、同じ経路のほかのステップを直しても、どちらのつながりも止まりません。
+
 ## 確かめること、確かめないこと
 
 yuen が確かめるのは、つながりとハッシュと期間です。名前がどれも何かを指していること、法令のコピーが固定と同じこと、確かめた記録が今のハッシュと合うこと、どの要件にも満たすものと確かめるもの（か、人が承認した見送りと、その理由）があること、宣言した範囲の成果物がどれも要件に辿れること、要件の版の期間が隙間も重なりもなく並ぶこと、要件が自分自身から読み出されていないこと。通信するのは `source fetch` と `source outdated` だけで、主張もテストも走らせません。
@@ -243,7 +260,7 @@ $ ritsu yuen source fetch examples/stamp_tax/stamp_tax.ja.req
 $ ritsu yuen explain E303 --lang ja
 ```
 
-どのコマンドにも `--lang ja|en` と `--root <dir>` を付けられます。フラグと終了コードは `ritsu yuen <コマンド> --help` で見られます。言語とコマンドの全部は [docs/reference.md](docs/reference.md)（英語）、診断のコードは 48 個（うち二つは退いたもの）で、[docs/codes.ja.md](docs/codes.ja.md) にあります。
+`ritsu yuen explain` はコードをいくつでも取り、渡した順に説明します。二つ以上のときは、`--all` と同じ形で、渡したコードだけを書きます。どのコマンドにも `--lang ja|en` と `--root <dir>` を付けられます。フラグと終了コードは `ritsu yuen <コマンド> --help` で見られます。言語とコマンドの全部は [docs/reference.md](docs/reference.md)（英語）、診断のコードは 48 個（うち二つは退いたもの）で、[docs/codes.ja.md](docs/codes.ja.md) にあります。
 
 ## 例
 

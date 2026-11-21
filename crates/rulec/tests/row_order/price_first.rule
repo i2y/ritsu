@@ -1,0 +1,14 @@
+rule price_first v1
+description "A price, or zero where it is not given: the row that binds the input comes first"
+
+inputs
+  price       : money[JPY]  range >=1JPY <=1000JPY
+  price_given : bool
+
+outputs
+  counted : money[JPY]  round down(1JPY)
+
+table counted
+| price_given | -> counted |
+| true        | price      |
+| false       | 0JPY       |

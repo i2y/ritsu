@@ -866,12 +866,13 @@ fn judge_all(b: &Base, changes: &[Change]) -> Vec<Outcome> {
     };
     let port = crate::days::port();
     let lang = crate::i18n::current();
-    let set = [b.path.clone()];
+    // the file's place among the contributions, told once for every thread
+    let set = crate::link::contributions(&[b.path.clone()]);
     let mut all: Vec<(usize, Outcome)> = std::thread::scope(|s| {
         let mut handles = Vec::new();
         for _ in 1..threads {
-            let (port, worker, set) = (port.clone(), &worker, &set);
-            let spawned = std::thread::Builder::new().stack_size(STACK).spawn_scoped(s, move || crate::days::with(port, || crate::i18n::with(lang, || crate::link::with_set(set, worker))));
+            let (port, worker, set) = (port.clone(), &worker, set.clone());
+            let spawned = std::thread::Builder::new().stack_size(STACK).spawn_scoped(s, move || crate::days::with(port, || crate::i18n::with(lang, || crate::link::with_contributions(set, worker))));
             // Where no thread can be started, this one does the work.
             if let Ok(h) = spawned {
                 handles.push(h);

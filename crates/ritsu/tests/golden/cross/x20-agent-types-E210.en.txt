@@ -1,0 +1,10 @@
+precheck.flow: ok
+ok purchase.ringi: a request, 3 fields, 2 stages
+  may never end: the stages `decide` and `check` have no deadline (`due in …`), and wait until they are answered
+error[ritsu E210]: purchase.ringi:17: What `purchase` gives the flow `precheck` as its input `purpose` is not what the input takes, int
+    17 |   small   = agent precheck, else finance
+  = `purpose` is string.
+  = The request gives string, and the flow takes int: the types differ.
+  = At a stage of the way `small`, ringi gives the flow the ticket's ID (`request_id`) and the fields of the form the flow declares as its inputs.
+  = Give the field of the form and the input `purpose` of "precheck.flow" (line 13) the same type.
+ritsu check: 2 files (dandori 1, ringi 1): 1 fail (1 error); borders between the languages: 4 checked, 0 undecided

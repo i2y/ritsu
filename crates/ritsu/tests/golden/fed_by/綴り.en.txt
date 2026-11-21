@@ -1,0 +1,7 @@
+ok 送料.rule
+ok 送料の免除.rule
+error[ritsu E207]: 送料の免除.rule:5:1: `input 送料` takes money[円] >=0円 <=1000円, and its source rulec "送料.rule" output 送料 can be 1200円
+     5 |   送料(fee) : money[円]  range >=0円 <=1_000円  fed by rulec "送料.rule" output 送料
+  = rulec "送料.rule" output 送料 comes to 1200円 at 重さ = 2001g.
+  = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
+ritsu check: 2 files (rulec 2): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

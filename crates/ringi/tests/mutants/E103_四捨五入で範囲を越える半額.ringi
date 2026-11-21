@@ -1,0 +1,15 @@
+request 例(example) v1 "例"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=3円
+  # 1 円の半分は 0.5 円で、四捨五入すると 1 円になる。半額が 1 円未満になることは無い
+  半額(half)   : money[円] "半額" = 金額 * 50%  round half_up(1円)  range <1円
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

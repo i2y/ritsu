@@ -1,2 +1,2 @@
-エラー[E080]: `geas snap` には主張のファイルが一つ以上要ります
-  = 使い方: geas snap <spec.geas>...
+エラー[E080]: `geas snap` に渡すのは <spec.geas>... です
+  = 使い方: geas snap <spec.geas>... [--jobs <n>] [--json]

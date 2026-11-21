@@ -1,0 +1,12 @@
+rule kept v1
+description "A rule kept where ringi lays the route it lowers"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  ok : bool
+
+table ok
+| amount | -> ok |
+| -      | true  |

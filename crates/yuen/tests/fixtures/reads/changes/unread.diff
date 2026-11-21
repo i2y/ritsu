@@ -1,0 +1,47 @@
+diff --git a/app/desk.py b/app/desk.py
+index 6030b1f..0e73966 100644
+--- a/app/desk.py
++++ b/app/desk.py
+@@ -1,2 +1,2 @@
+ def refund(order, items):
+-    return {"order": order, "items": items}
++    return {"order": order, "items": items, "desk": "refunds"}
+diff --git a/data/branch_closures.csv b/data/branch_closures.csv
+index ba2255e..f8b13fb 100644
+--- a/data/branch_closures.csv
++++ b/data/branch_closures.csv
+@@ -1,2 +1,3 @@
+ date,name
+ 2027-08-13,Summer
++2027-08-16,Summer
+diff --git a/dates/branch.cal b/dates/branch.cal
+index 94f2885..e5a3574 100644
+--- a/dates/branch.cal
++++ b/dates/branch.cal
+@@ -6,5 +6,5 @@ source closures = file "../data/branch_closures.csv" sha256:04a1cd8075140088
+   format csv
+   covers 2027-01-01..2027-12-31
+ 
+-closed weekly sat, sun
++closed weekly sun
+ closed closures
+diff --git a/notes.txt b/notes.txt
+index b015015..e2cbc4e 100644
+--- a/notes.txt
++++ b/notes.txt
+@@ -1,3 +1,3 @@
+ # Notes
+ 
+-The desk answers refunds. Nothing reads this file.
++The desk answers refunds. Nothing reads this file, and no requirement names it.
+diff --git a/shop.ctx b/shop.ctx
+index 7235fc3..eb748ac 100644
+--- a/shop.ctx
++++ b/shop.ctx
+@@ -1,5 +1,5 @@
+ map Shop(shop) v1
+-description "The refund desk of a small shop: written for the tests of yuen affected"
++description "The refund desk of a small shop, and its code: written for the tests of yuen affected"
+ 
+ use context "contexts/desk.ctx"
+ 

@@ -1,0 +1,20 @@
+rule needs_accounting v1
+description "Whether accounting checks a claim of a category. Reads its category from expense_categories.rule"
+import enum category from "expense_categories.rule"
+
+inputs
+  category : category
+
+outputs
+  accounting : bool
+
+table pick
+policy unique
+| category | -> accounting |
+| travel   | false         |
+| purchase | true          |
+| training | false         |
+
+examples
+| category | -> accounting |
+| purchase | true          |

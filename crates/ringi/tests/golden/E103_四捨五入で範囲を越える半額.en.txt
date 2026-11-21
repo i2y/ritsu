@@ -1,0 +1,4 @@
+error[E103]: tests/mutants/E103_四捨五入で範囲を越える半額.ringi:6:61: The range `<1円` of the field 半額 holds no value its computation comes to
+     6 |   半額(half)   : money[円] "半額" = 金額 * 50%  round half_up(1円)  range <1円
+  = The computation comes to `>=1円 <=2円` (from the ranges of what it reads). With this range no request can be made.
+  = Correct the range so that it meets what the computation comes to. A request whose value falls outside the range is refused; a range wider or narrower than that is no mistake.

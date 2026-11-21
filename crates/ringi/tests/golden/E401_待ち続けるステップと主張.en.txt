@@ -1,0 +1,4 @@
+error[E401]: tests/mutants/E401_待ち続けるステップと主張.ringi:22:3: The claim `期限のうちに終わる` says every ticket ends within 30 business days, and a ticket may never end
+    22 |   期限のうちに終わる : every ticket ends within 30 business days
+  = Line 16: the stage `確かめ` waits on when it is late (`when late stay`).
+  = For it to end, write `expire` or `escalate` in place of `stay`; if it may wait, take the claim out.

@@ -1,12 +1,12 @@
 name: ritsu
-description: Put one release of ritsu on the PATH, with the command of each of its nine languages, verified against the checksums published with it; and cosign, when asked.
+description: Put one release of ritsu on the PATH, with the command of each of its ten languages, verified against the checksums published with it; and cosign, when asked.
 author: Yasushi Itoh
 
 # `uses: i2y/ritsu@v0.55.2` installs release v0.55.2: the ref the action is referenced with is the
 # release, so the action and the binary cannot drift apart. Nothing else is done here — the gate
 # is a few `run:` lines anyone can read. The release holds `ritsu` and a link to it for each of
-# the nine languages, so `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen`, `sakai`,
-# `sekisho` and `kaname` are on the PATH as well (DESIGN 2.3, 13.2).
+# the ten languages, so `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen`, `sakai`,
+# `sekisho`, `kaname` and `ringi` are on the PATH as well (DESIGN 2.3, 13.2).
 #
 # `cosign: true` puts cosign beside them, for a `signature` line of a `ritsu.mod` or of a list of
 # modules: the version ritsu's own workflows test with, each platform's binary held to its line of

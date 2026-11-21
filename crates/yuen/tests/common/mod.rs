@@ -10,7 +10,8 @@ use std::process::Command;
 use std::rc::Rc;
 
 /// Every language yuen reads, joined through the ports, each language's own engine (ritsu's
-/// DESIGN 3.3): what `ritsu yuen` hands it, the things of every file in one index.
+/// DESIGN 3.3): what `ritsu yuen` hands it, the things of every file, and what each file names
+/// outside itself and reads, in one index.
 pub fn suite() -> yuen::suite::Suite {
     suite_where(None)
 }
@@ -18,20 +19,49 @@ pub fn suite() -> yuen::suite::Suite {
 /// [`suite`], with what the files of one language hold answered by `port` instead of the
 /// language's engine.
 pub fn suite_where(instead: Option<(ritsu_base::naming::Tool, Rc<dyn ritsu_ports::Items>)>) -> yuen::suite::Suite {
-    use ritsu_base::naming::Tool;
+    suite_with(instead, None, Rc::new(rulec::ports::Engine::new()))
+}
+
+/// [`suite`], with what the files of one language name and read answered by `port` instead of
+/// the language's engine.
+pub fn suite_reading(tool: ritsu_base::naming::Tool, port: Rc<dyn ritsu_ports::References>) -> yuen::suite::Suite {
+    suite_with(None, Some((tool, port)), Rc::new(rulec::ports::Engine::new()))
+}
+
+/// [`suite`], with rulec's engine given the rule files of a project (`files`, as `ritsu check`
+/// gives them): the contributions among them are merged into the rules they reach.
+pub fn suite_of_project(files: Vec<String>) -> yuen::suite::Suite {
     let rules = Rc::new(rulec::ports::Engine::new());
+    rules.set_project(files);
+    suite_with(None, None, rules)
+}
+
+fn suite_with(instead: Option<(ritsu_base::naming::Tool, Rc<dyn ritsu_ports::Items>)>, reading: Option<(ritsu_base::naming::Tool, Rc<dyn ritsu_ports::References>)>, rules: Rc<rulec::ports::Engine>) -> yuen::suite::Suite {
+    use ritsu_base::naming::Tool;
     let dates = Rc::new(koyomi::ports::Engine);
     let claims = Rc::new(geas::ports::Engine);
+    let flows = Rc::new(dandori::ports::Engine::default());
+    let gates = Rc::new(sekisho::ports::Engine::default());
+    let maps = Rc::new(sakai::ports::Engine);
     let mut index = ritsu_ports::Index::new()
         .with_items(Tool::Rulec, rules.clone())
+        .with_references(Tool::Rulec, rules.clone())
         .with_items(Tool::Koyomi, dates.clone())
+        .with_references(Tool::Koyomi, dates.clone())
         .with_items(Tool::Chobo, Rc::new(chobo::ports::Engine))
         .with_items(Tool::Geas, claims.clone())
-        .with_items(Tool::Dandori, Rc::new(dandori::ports::Engine))
-        .with_items(Tool::Sekisho, Rc::new(sekisho::ports::Engine::default()))
-        .with_items(Tool::Sakai, Rc::new(sakai::ports::Engine));
+        .with_items(Tool::Dandori, flows.clone())
+        .with_references(Tool::Dandori, flows)
+        .with_items(Tool::Sekisho, gates.clone())
+        .with_references(Tool::Sekisho, gates.clone())
+        .with_references(Tool::Cedar, gates)
+        .with_items(Tool::Sakai, maps.clone())
+        .with_references(Tool::Sakai, maps);
     if let Some((tool, port)) = instead {
         index = index.with_items(tool, port);
+    }
+    if let Some((tool, port)) = reading {
+        index = index.with_references(tool, port);
     }
     let mut s = yuen::suite::Suite::default();
     s.index = Rc::new(index);
@@ -47,12 +77,17 @@ pub fn suite_where(instead: Option<(ritsu_base::naming::Tool, Rc<dyn ritsu_ports
 /// run (the crate's directory): paths are written from there, or absolute. English unless the
 /// arguments say otherwise, whatever the environment says.
 pub fn run(args: &[&str]) -> Ran {
+    run_with(args, suite())
+}
+
+/// [`run`], with the languages `suite` joins.
+pub fn run_with(args: &[&str], suite: yuen::suite::Suite) -> Ran {
     let mut args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
     if !args.iter().any(|a| a == "--lang" || a.starts_with("--lang=")) {
         args.extend(["--lang".to_string(), "en".to_string()]);
     }
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let code = yuen::run::run(&args, suite(), &mut out, &mut err);
+    let code = yuen::run::run(&args, suite, &mut out, &mut err);
     Ran { code: code as i32, stdout: String::from_utf8_lossy(&out).to_string(), stderr: String::from_utf8_lossy(&err).to_string() }
 }
 

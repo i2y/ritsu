@@ -1,0 +1,140 @@
+error[E010]: tests/fixtures/match_runs.flow:37:1: `match` has no arm for gold, platinum, which `w` can be here
+    37 |   match w
+  the run that gets there:
+      31  w = narrow
+      34  match private: false
+      35  w = wide
+error[E010]: tests/fixtures/match_runs.flow:43:1: `match` has no arm for gold, platinum, which `u` can be here
+    43 |     match u
+  the run that gets there:
+      31  w = narrow
+      33  match private: true
+      38  match w: basic
+      41  u = narrow
+      42  repeat (at most 3 times)
+      44  match u: basic
+      46  u = wide
+      47  s = greet(…)
+      50  match s.done: false
+error[E010]: tests/fixtures/match_runs.flow:61:1: `match` has no arm for gold, platinum, which `x` can be here
+    61 |       match x
+  the run that gets there:
+      31  w = narrow
+      34  match private: false
+      35  w = wide
+      38  match w: basic
+      41  u = narrow
+      42  repeat (at most 3 times)
+      44  match u: basic
+      46  u = wide
+      47  s = greet(…)
+      50  match s.done: false
+      52  o = narrow
+      55  match private: false
+      56  o = maybe
+      60  match o: gold
+error[E010]: tests/fixtures/match_runs.flow:71:1: `match` has no arm for gold, platinum, which `p` can be here
+    71 |   match p
+  the run that gets there:
+      31  w = narrow
+      34  match private: false
+      35  w = wide
+      38  match w: basic
+      41  u = narrow
+      42  repeat (at most 3 times)
+      44  match u: basic
+      46  u = wide
+      47  s = greet(…)
+      50  match s.done: false
+      52  o = narrow
+      55  match private: false
+      56  o = maybe
+      59  match o: none
+      65  p = narrow
+      68  match private: false
+      69  p = pick(…)
+error[E010]: tests/fixtures/match_runs.flow:78:1: `match` has no arm for gold, platinum, which `q` can be here
+    78 |   match q
+  the run that gets there:
+      31  w = narrow
+      33  match private: true
+      38  match w: basic
+      41  u = narrow
+      42  repeat (at most 3 times)
+      44  match u: basic
+      46  u = wide
+      47  s = greet(…)
+      50  match s.done: false
+      52  o = narrow
+      54  match private: true
+      59  match o: none
+      65  p = narrow
+      67  match private: true
+      72  match p: basic
+      75  q = narrow
+      76  for t in levels (at most 3)
+      77  q = t
+error[E010]: tests/fixtures/match_runs.flow:85:1: `match` has no arm for gold, platinum, which `a` can be here
+    85 |     match a
+  the run that gets there:
+      31  w = narrow
+      33  match private: true
+      38  match w: basic
+      41  u = narrow
+      42  repeat (at most 3 times)
+      44  match u: basic
+      46  u = wide
+      47  s = greet(…)
+      50  match s.done: false
+      52  o = narrow
+      54  match private: true
+      59  match o: none
+      65  p = narrow
+      67  match private: true
+      72  match p: basic
+      75  q = narrow
+      76  for t in levels (at most 3)
+      79  match q: basic
+      82  a = narrow
+      83  b = narrow
+      84  repeat (at most 3 times)
+      86  match a: basic
+      88  a = b
+      89  b = wide
+      86  match a: basic
+      88  a = b
+      89  b = wide
+error[E010]: tests/fixtures/match_runs.flow:98:1: `match` has no arm for gold, platinum, which `j` can be here
+    98 |   match j
+  the run that gets there:
+      31  w = narrow
+      34  match private: false
+      35  w = wide
+      38  match w: basic
+      41  u = narrow
+      42  repeat (at most 3 times)
+      44  match u: basic
+      46  u = wide
+      47  s = greet(…)
+      50  match s.done: false
+      52  o = narrow
+      55  match private: false
+      56  o = maybe
+      59  match o: none
+      65  p = narrow
+      68  match private: false
+      69  p = pick(…)
+      72  match p: basic
+      75  q = narrow
+      76  for t in levels (at most 3)
+      79  match q: basic
+      82  a = narrow
+      83  b = narrow
+      84  repeat (at most 3 times)
+      86  match a: basic
+      88  a = b
+      89  b = wide
+      91  k = narrow
+      94  match private: false
+      95  k = wide
+      97  j = k

@@ -1,0 +1,61 @@
+# API の記述を通る日付と日時（DESIGN 39）。記述は、文字列のどれが日（`format: date`）で、どれが
+# 時刻（`format: date-time`）かを言う。date は、本文のレコードの中、本文のすぐ下、パス、クエリの日へ
+# 行き、timestamp は時刻へ行き、string は日へそのまま行く。応答の日は date で読み、時刻は timestamp
+# でも string でも読み、記述が挙げる幾つかの日の一つは、範囲を書いた date で読む。どのプラット
+# フォームでも動く。どれも日を `2026-11-16` の形で送り、読んだ日を date として確かめる。
+workflow 休暇の日付 v1
+description "日を日付、時刻を日時と書いた API で休暇を取る。期間は本文に入れ、初日をパスに、最終日をクエリに入れ、応答の日は date で読む"
+
+use openapi 勤怠 from "apis/leave.json"
+
+record 期間
+  first_day : date
+  last_day  : date
+
+record 取った休暇
+  id        : string
+  first_day : date
+  booked_at : timestamp
+
+record 移した休暇
+  id        : string
+  first_day : date
+  booked_at : string
+
+enum 日の種類 = working | holiday
+
+record 日
+  day     : date
+  kind    : 日の種類
+  closing : date  range >=2026-12-01 <=2026-12-31
+
+inputs
+  社員     : string
+  休む期間 : 期間
+
+outputs
+  初日     : date
+  締め日   : date  range >=2026-12-01 <=2026-12-31
+  取った時 : string
+
+# パスとクエリに日を一つずつ入れる。
+task 休みの日か(day: date, until: date?) -> 日
+  http GET 勤怠 "/days/{day}"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/leave/0a1b2c3d"
+  idempotent
+
+# 期間は本文に入り、その日はどれも記述の日付として行く。
+task 取る(employee: string, period: 期間) -> 取った休暇
+  http POST 勤怠 "/leaves"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/leave/0a1b2c3d"
+
+# 本文のすぐ下に日と時刻を一つずつ入れ、記述が日と言う所に文字列を入れる。
+task 移す(id: string, first_day: date, previous: string, asked_at: timestamp) -> 移した休暇
+  http POST 勤怠 "/leaves/{id}/move"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/leave/0a1b2c3d"
+
+flow
+  let その日 = 休みの日か(day: 休む期間.first_day, until: 休む期間.last_day)
+  let 取った = 取る(employee: 社員, period: 休む期間)
+  let 移した = 移す(id: 取った.id, first_day: その日.day, previous: "{休む期間.first_day}", asked_at: 取った.booked_at)
+  succeed 初日 = 移した.first_day, 締め日 = その日.closing, 取った時 = 移した.booked_at

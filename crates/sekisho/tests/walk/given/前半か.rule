@@ -1,0 +1,19 @@
+rule 前半か(early) v1
+description "日が 2026 年の前半かどうか。書かなければならない日付の入力"
+
+inputs
+  日(on) : date  range >=2026-01-01 <=2026-12-31
+
+outputs
+  前半(early) : bool
+
+table 日から(early_of)
+policy unique
+| 日           | -> 前半 |
+| <2026-07-01  | true    |
+| >=2026-07-01 | false   |
+
+examples
+| 日         | -> 前半 |
+| 2026-02-01 | true    |
+| 2026-09-01 | false   |

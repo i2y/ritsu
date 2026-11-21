@@ -233,6 +233,13 @@ pub fn local_name(dir: &str, name: &str) -> String {
     if c.is_empty() { name.to_string() } else { format!("{}_{name}", c.join("_")) }
 }
 
+/// The flag of `rulec gen` that writes its Python modules to be put inside a package, as the
+/// package of a workflow dandori writes holds them (`<package>/rulec/python/`): a rule's module then
+/// reads the module of each `enums` file it reads by a relative import, which in the package is
+/// the module beside it (rulec's DESIGN §15.319). rulec's command line takes the flag by this name,
+/// and the comment at the top of the rules.py dandori writes gives it in the command it names.
+pub const PYTHON_PACKAGE: &str = "--python-package";
+
 #[cfg(test)]
 mod tests {
     use super::*;

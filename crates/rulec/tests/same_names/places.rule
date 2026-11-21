@@ -1,0 +1,5 @@
+enums places v1
+description "Places, with a kind of their own (fictional)"
+
+enum region = east | west
+enum kind = city | town

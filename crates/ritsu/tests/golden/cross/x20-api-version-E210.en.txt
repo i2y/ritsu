@@ -1,0 +1,14 @@
+restock.flow: ok
+ok company.ringi: an organization, 3 positions, 2 kinds of team
+  data `org`: 1 version (2026-04-01), 3 teams and 5 people, no proxies
+ok purchase.ringi: a request, 2 fields, 1 stage
+  used from 2026-04-01: the first version of the organization `company.ringi` (data `org`)
+  used with no end: no data it reads ends
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+error[ritsu E210]: restock.flow:28: The flow calls `submit_purchase` of "out/requests/openapi.json", which is not written from `purchase.ringi` as it is now
+    28 |   let moved = submit_purchase(form: purchase)
+  = The document says the operation is written from the request `purchase` (version 1).
+  = `x-ritsu-request.version` is 1 in the document, and 2 now.
+  = dandori holds what the flow sends to this document, not to what the request takes now.
+  = Write "out/requests/openapi.json" again (`ritsu gen --target requests`), then check the flow again.
+ritsu check: 3 files (dandori 1, ringi 2): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

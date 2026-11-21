@@ -1,0 +1,7 @@
+order.flow: 検査を通りました
+ok purchase.ringi: 申請の種類、フィールド 1 個、ステップ 1 個
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます
+エラー[ritsu E210]: purchase.ringi:15: `purchase` は flow `order` を、入力 `amount`（`money[JPY]`）を渡さずに始めます
+    15 |   on approved  launch order(request_id: ticket.id)
+  = 呼び出しで渡すか（`amount: …`）、"order.flow" の入力を `amount : money[JPY]?` にしてください（6 行目）。
+ritsu check: ファイル 2 個（dandori 1、ringi 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 2 か所、決められない 0 か所

@@ -102,8 +102,9 @@ struct List {
 /// The text of the list at `file` (as the command line writes it), and the directory it is in.
 fn list_text(file: &str) -> Result<(String, PathBuf), Text> {
     let path = Path::new(file);
-    let bytes = std::fs::read(path).map_err(|e| tr!("{file} を読めません（{e}）", "cannot read {file} ({e})"))?;
-    let text = String::from_utf8(bytes).map_err(|_| tr!("{file} は UTF-8 のテキストではありません", "{file} is not UTF-8 text"))?;
+    // in the words every command says a file it was given and cannot read (DESIGN 6.2, item 10)
+    let bytes = std::fs::read(path).map_err(|e| ritsu_base::cli::cannot_read(file, &e))?;
+    let text = String::from_utf8(bytes).map_err(|_| ritsu_base::cli::not_utf8(file))?;
     let dir = std::fs::canonicalize(path).ok().and_then(|p| p.parent().map(Path::to_path_buf)).unwrap_or_else(|| PathBuf::from("."));
     Ok((text, dir))
 }
@@ -520,29 +521,31 @@ pub fn site(ctx: &Ctx, a: &Args) -> u8 {
         return ctx.refuse(ritsu_base::wasi::cannot_start_programs());
     }
     let Some(out) = a.get("--out") else {
-        return ctx.refuse(tr!("書く先のディレクトリを `--out <ディレクトリ>` で渡してください", "say where the site goes with `--out <dir>`"));
+        return ctx.refuse(super::cli::table().needs_of("site", "--out <dir>"));
     };
     let file = a.pos[0].as_str();
     let (text, dir) = match list_text(file) {
         Ok(x) => x,
-        Err(t) => return ctx.refuse(t.then(&tr!("。何も書いていません", "; nothing was written"))),
+        Err(t) => return ctx.refuse(t),
     };
     let list = match read_list(file, &text, dir) {
         Ok(l) => l,
         Err(ts) => {
-            let head = if ctx.lang == Lang::Ja { "エラー" } else { "error" };
             for t in &ts {
-                eprintln!("{head}: {}", ctx.say(t));
+                eprintln!("{}", ritsu_base::cli::refusal(&ctx.say(t), ctx.lang));
             }
             return ctx.refuse(tr!("一覧を読めません。何も書いていません", "the list cannot be read; nothing was written"));
         }
     };
+    // the pages are in `--lang`, else English, whatever the environment says (DESIGN 4.1); what the
+    // run prints is in `ctx.lang`
+    let made = Lang::made(a.get("--lang"));
     let playground = match a.get("--playground") {
         Some(u) => match playground_problem(u) {
             None => u.to_string(),
             Some(t) => return ctx.refuse(t),
         },
-        None => list.playground.clone().unwrap_or_else(|| if ctx.lang == Lang::Ja { PLAYGROUND_JA } else { PLAYGROUND_EN }.to_string()),
+        None => list.playground.clone().unwrap_or_else(|| if made == Lang::Ja { PLAYGROUND_JA } else { PLAYGROUND_EN }.to_string()),
     };
     let alternate = match a.get("--alternate").map(alternate_of) {
         None => None,
@@ -553,18 +556,17 @@ pub fn site(ctx: &Ctx, a: &Args) -> u8 {
         Ok(s) => s,
         Err(t) => return ctx.refuse(t.then(&tr!("。何も書いていません", "; nothing was written"))),
     };
-    let mut w = pages::Writer { out: PathBuf::from(out), lang: ctx.lang, list: &list, playground, alternate, joined: Joined::new(), written: 0 };
+    let mut w = pages::Writer { out: PathBuf::from(out), lang: made, list: &list, playground, alternate, joined: Joined::new(), written: 0 };
     if let Err(t) = w.all(&shelves) {
         return ctx.refuse(t);
     }
-    let head = if ctx.lang == Lang::Ja { "エラー" } else { "error" };
     let mut failed = false;
     for s in &shelves {
         for v in &s.versions {
             if let Some(t) = &v.failed {
                 failed = true;
                 let (name, version, why) = (&s.name, &v.version, ctx.say(t));
-                eprintln!("{head}: {}", ctx.say(&tr!("`{name}` {version} を確かめられません。{why}", "`{name}` {version} could not be verified: {why}")));
+                eprintln!("{}", ritsu_base::cli::refusal(&ctx.say(&tr!("`{name}` {version} を確かめられません。{why}", "`{name}` {version} could not be verified: {why}")), ctx.lang));
             }
         }
         for v in &s.shadowed {

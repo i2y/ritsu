@@ -1,0 +1,25 @@
+rule tool_route v1
+description "Whether an order's tools go out at once or are looked at first: a gold order's always go at once, and a basic order's are looked at when it has three tools or more."
+
+enum path = at_once | review
+enum tier = basic | gold
+
+inputs
+  tools : number  range >=0 <=5
+  tier  : tier
+
+outputs
+  route : path
+
+table pick
+policy unique
+| tier  | tools | -> route : path |
+| basic | <=2   | at_once         |
+| basic | >=3   | review          |
+| gold  | -     | at_once         |
+
+examples
+| tools | tier  | -> route |
+| 2     | basic | at_once  |
+| 3     | basic | review   |
+| 4     | gold  | at_once  |

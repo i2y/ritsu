@@ -1,0 +1,16 @@
+rule odd_cell v1
+description "A row for three sheets, which the sheets never are: they come in twos"
+
+inputs
+  gifts : number  range >=0 <=5
+
+define sheets : number = gifts * 2
+
+outputs
+  note : bool
+
+table note_of
+policy first
+| sheets | -> note |
+| 3      | true    |
+| -      | false   |

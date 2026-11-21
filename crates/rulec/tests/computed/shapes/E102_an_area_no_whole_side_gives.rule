@@ -1,0 +1,16 @@
+rule area_no_whole_side_gives v1
+description "The area of a square room with a side of whole metres, and a band read off it. No whole number times itself is 2, so no input reaches the row for 2 square metres: the check cuts the side into pieces, and none of them gives an area of 2"
+
+inputs
+  side : number  range >=0 <=10
+
+outputs
+  band : number  round down(1)
+
+define area : number = side * side
+
+table band_of
+| area | -> band |
+| <2   | 1       |
+| 2    | 2       |
+| >2   | 3       |

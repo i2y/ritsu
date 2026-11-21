@@ -1,0 +1,148 @@
+$ echo '{"price":1,"discount":1,"day":"2026-04-01","age":6,"seat":"reserved"}' | rulec run season_ticket.rule --input -
+charged = 1JPY
+early = true
+fare = child
+lounge = false
+$ echo '{"price":99999,"discount":49,"day":"2026-09-30","age":119,"seat":"premium"}' | rulec run season_ticket.rule --input -
+charged = 51_000JPY
+early = false
+fare = adult
+lounge = true
+$ echo '{"price":0,"discount":1,"day":"2026-04-01","age":6,"seat":"reserved"}' | rulec run season_ticket.rule --input -
+refused (input): price is out of range
+$ echo '{"price":100000,"discount":1,"day":"2026-04-01","age":6,"seat":"reserved"}' | rulec run season_ticket.rule --input -
+refused (input): price is out of range
+$ echo '{"price":1,"discount":0,"day":"2026-04-01","age":6,"seat":"reserved"}' | rulec run season_ticket.rule --input -
+refused (input): discount is out of range
+$ echo '{"price":1,"discount":50,"day":"2026-04-01","age":6,"seat":"reserved"}' | rulec run season_ticket.rule --input -
+refused (input): discount is out of range
+$ echo '{"price":1,"discount":1,"day":"2026-03-31","age":6,"seat":"reserved"}' | rulec run season_ticket.rule --input -
+refused (input): day is out of range
+$ echo '{"price":1,"discount":1,"day":"2026-10-01","age":6,"seat":"reserved"}' | rulec run season_ticket.rule --input -
+refused (input): day is out of range
+$ echo '{"price":1,"discount":1,"day":"2026-04-01","age":5,"seat":"reserved"}' | rulec run season_ticket.rule --input -
+refused (input): age is out of range
+$ echo '{"price":1,"discount":1,"day":"2026-04-01","age":120,"seat":"reserved"}' | rulec run season_ticket.rule --input -
+refused (input): age is out of range
+$ echo '{"price":1,"discount":1,"day":"2026-04-01","age":null,"seat":"standing"}' | rulec run season_ticket.rule --input -
+refused (input): seat is out of range
+
+$ echo '{"価格":1,"割引率":1,"日付":"2026-04-01","年齢":6,"席":"指定席"}' | rulec run シーズン券.rule --input -
+請求額 = 1円
+早期 = true
+料金区分 = 子供
+ラウンジ = false
+$ echo '{"価格":99999,"割引率":49,"日付":"2026-09-30","年齢":119,"席":"特別席"}' | rulec run シーズン券.rule --input -
+請求額 = 51_000円
+早期 = false
+料金区分 = 大人
+ラウンジ = true
+$ echo '{"価格":0,"割引率":1,"日付":"2026-04-01","年齢":6,"席":"指定席"}' | rulec run シーズン券.rule --input -
+断った（input）: 価格 が範囲の外です
+$ echo '{"価格":100000,"割引率":1,"日付":"2026-04-01","年齢":6,"席":"指定席"}' | rulec run シーズン券.rule --input -
+断った（input）: 価格 が範囲の外です
+$ echo '{"価格":1,"割引率":0,"日付":"2026-04-01","年齢":6,"席":"指定席"}' | rulec run シーズン券.rule --input -
+断った（input）: 割引率 が範囲の外です
+$ echo '{"価格":1,"割引率":50,"日付":"2026-04-01","年齢":6,"席":"指定席"}' | rulec run シーズン券.rule --input -
+断った（input）: 割引率 が範囲の外です
+$ echo '{"価格":1,"割引率":1,"日付":"2026-03-31","年齢":6,"席":"指定席"}' | rulec run シーズン券.rule --input -
+断った（input）: 日付 が範囲の外です
+$ echo '{"価格":1,"割引率":1,"日付":"2026-10-01","年齢":6,"席":"指定席"}' | rulec run シーズン券.rule --input -
+断った（input）: 日付 が範囲の外です
+$ echo '{"価格":1,"割引率":1,"日付":"2026-04-01","年齢":5,"席":"指定席"}' | rulec run シーズン券.rule --input -
+断った（input）: 年齢 が範囲の外です
+$ echo '{"価格":1,"割引率":1,"日付":"2026-04-01","年齢":120,"席":"指定席"}' | rulec run シーズン券.rule --input -
+断った（input）: 年齢 が範囲の外です
+$ echo '{"価格":1,"割引率":1,"日付":"2026-04-01","年齢":null,"席":"立ち見"}' | rulec run シーズン券.rule --input -
+断った（input）: 席 が範囲の外です
+
+$ echo '{"lines":[{"price":500,"wrapped":true}]}' | rulec run gift_basket.rule --input -
+free_shipping = false
+card = false
+$ echo '{"lines":[{"price":20000,"wrapped":true},{"price":20000,"wrapped":true},{"price":20000,"wrapped":false},{"price":20000,"wrapped":false},{"price":20000,"wrapped":false}]}' | rulec run gift_basket.rule --input -
+free_shipping = true
+card = true
+$ echo '{"lines":[]}' | rulec run gift_basket.rule --input -
+refused (input): wrapped_items is out of range
+$ echo '{"lines":[{"price":500,"wrapped":false}]}' | rulec run gift_basket.rule --input -
+refused (input): wrapped_items is out of range
+$ echo '{"lines":[{"price":499,"wrapped":true}]}' | rulec run gift_basket.rule --input -
+refused (input): amount is out of range
+$ echo '{"lines":[{"price":50000,"wrapped":true},{"price":50000,"wrapped":true},{"price":1,"wrapped":true}]}' | rulec run gift_basket.rule --input -
+refused (input): amount is out of range
+$ echo '{"lines":[{"price":100,"wrapped":true},{"price":100,"wrapped":true},{"price":100,"wrapped":true},{"price":100,"wrapped":true},{"price":100,"wrapped":true},{"price":100,"wrapped":true}]}' | rulec run gift_basket.rule --input -
+refused (input): lines has too many elements (at most 5)
+
+$ echo '{"明細":[{"価格":500,"包装":true}]}' | rulec run 贈り物のかご.rule --input -
+送料無料 = false
+カード = false
+$ echo '{"明細":[{"価格":20000,"包装":true},{"価格":20000,"包装":true},{"価格":20000,"包装":false},{"価格":20000,"包装":false},{"価格":20000,"包装":false}]}' | rulec run 贈り物のかご.rule --input -
+送料無料 = true
+カード = true
+$ echo '{"明細":[]}' | rulec run 贈り物のかご.rule --input -
+断った（input）: 包装した品 が範囲の外です
+$ echo '{"明細":[{"価格":500,"包装":false}]}' | rulec run 贈り物のかご.rule --input -
+断った（input）: 包装した品 が範囲の外です
+$ echo '{"明細":[{"価格":499,"包装":true}]}' | rulec run 贈り物のかご.rule --input -
+断った（input）: 金額 が範囲の外です
+$ echo '{"明細":[{"価格":50000,"包装":true},{"価格":50000,"包装":true},{"価格":1,"包装":true}]}' | rulec run 贈り物のかご.rule --input -
+断った（input）: 金額 が範囲の外です
+$ echo '{"明細":[{"価格":100,"包装":true},{"価格":100,"包装":true},{"価格":100,"包装":true},{"価格":100,"包装":true},{"価格":100,"包装":true},{"価格":100,"包装":true}]}' | rulec run 贈り物のかご.rule --input -
+断った（input）: 明細 の要素が多すぎます（上限 5）
+
+$ echo '{"parcels":[{"weight":1000,"fragile":true}]}' | rulec run parcel_batch.rule --input -
+truck = van
+padding = false
+$ echo '{"parcels":[{"weight":30000,"fragile":true},{"weight":29999,"fragile":true},{"weight":1,"fragile":true}]}' | rulec run parcel_batch.rule --input -
+truck = lorry
+padding = true
+$ echo '{"parcels":[{"weight":999,"fragile":true}]}' | rulec run parcel_batch.rule --input -
+refused (input): total is out of range
+$ echo '{"parcels":[{"weight":30000,"fragile":true},{"weight":30000,"fragile":true},{"weight":1,"fragile":true}]}' | rulec run parcel_batch.rule --input -
+refused (input): total is out of range
+$ echo '{"parcels":[{"weight":1000,"fragile":false}]}' | rulec run parcel_batch.rule --input -
+refused (input): fragile_parcels is out of range
+$ echo '{"parcels":[{"weight":0,"fragile":true}]}' | rulec run parcel_batch.rule --input -
+refused (input): parcels[0].weight is out of range
+$ echo '{"parcels":[{"weight":30001,"fragile":true}]}' | rulec run parcel_batch.rule --input -
+refused (input): parcels[0].weight is out of range
+$ echo '{"parcels":[{"weight":1000,"fragile":true},{"weight":1000,"fragile":true},{"weight":1000,"fragile":true},{"weight":1000,"fragile":true}]}' | rulec run parcel_batch.rule --input -
+refused (input): parcels has too many elements (at most 3)
+
+$ echo '{"小包":[{"重さ":1000,"割れ物":true}]}' | rulec run 小包のまとめ出荷.rule --input -
+車 = バン
+緩衝材 = false
+$ echo '{"小包":[{"重さ":30000,"割れ物":true},{"重さ":29999,"割れ物":true},{"重さ":1,"割れ物":true}]}' | rulec run 小包のまとめ出荷.rule --input -
+車 = トラック
+緩衝材 = true
+$ echo '{"小包":[{"重さ":999,"割れ物":true}]}' | rulec run 小包のまとめ出荷.rule --input -
+断った（input）: 総重量 が範囲の外です
+$ echo '{"小包":[{"重さ":30000,"割れ物":true},{"重さ":30000,"割れ物":true},{"重さ":1,"割れ物":true}]}' | rulec run 小包のまとめ出荷.rule --input -
+断った（input）: 総重量 が範囲の外です
+$ echo '{"小包":[{"重さ":1000,"割れ物":false}]}' | rulec run 小包のまとめ出荷.rule --input -
+断った（input）: 割れ物の数 が範囲の外です
+$ echo '{"小包":[{"重さ":0,"割れ物":true}]}' | rulec run 小包のまとめ出荷.rule --input -
+断った（input）: 小包[0].重さ が範囲の外です
+$ echo '{"小包":[{"重さ":30001,"割れ物":true}]}' | rulec run 小包のまとめ出荷.rule --input -
+断った（input）: 小包[0].重さ が範囲の外です
+$ echo '{"小包":[{"重さ":1000,"割れ物":true},{"重さ":1000,"割れ物":true},{"重さ":1000,"割れ物":true},{"重さ":1000,"割れ物":true}]}' | rulec run 小包のまとめ出荷.rule --input -
+断った（input）: 小包 の要素が多すぎます（上限 3）
+
+$ echo '{"share":0}' | rulec run loan_share.rule --input -
+refused (input): share is out of range
+$ echo '{"share":1}' | rulec run loan_share.rule --input -
+larger = false
+$ echo '{"share":99}' | rulec run loan_share.rule --input -
+larger = true
+$ echo '{"share":100}' | rulec run loan_share.rule --input -
+refused (input): share is out of range
+
+$ echo '{"持分":0}' | rulec run 借入の持分.rule --input -
+断った（input）: 持分 が範囲の外です
+$ echo '{"持分":1}' | rulec run 借入の持分.rule --input -
+半分以上 = false
+$ echo '{"持分":99}' | rulec run 借入の持分.rule --input -
+半分以上 = true
+$ echo '{"持分":100}' | rulec run 借入の持分.rule --input -
+断った（input）: 持分 が範囲の外です
+

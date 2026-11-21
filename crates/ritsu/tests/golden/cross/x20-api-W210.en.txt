@@ -1,0 +1,9 @@
+restock.flow: ok
+ok company.ringi: an organization, 3 positions, 2 kinds of team
+  data `org`: 1 version (2026-04-01), 3 teams and 5 people, no proxies
+warning[ritsu W210]: restock.flow:28: Whether `submit_purchase` of "out/requests/openapi.json", which the flow calls, is what the request is now cannot be decided
+    28 |   let moved = submit_purchase(form: purchase)
+  = The document says the operation is written from the request `purchase` (version 1), and the project has no request's file `purchase.ringi`.
+  = dandori holds what the flow sends to the document alone.
+  = If the request is in this project, write "out/requests/openapi.json" again with `ritsu gen --target requests` from the project's root; if it is another project's, replace the document with the one that project writes now.
+ritsu check: 2 files (dandori 1, ringi 1): all pass (1 warning); borders between the languages: 1 checked, 1 undecided

@@ -1,0 +1,17 @@
+ok refund_limit.rule
+ok research.rule
+ok review.rule
+due.cal: ok — issued_on 2026-01-01〜2026-12-31 の 365 日のすべてで、どの日付も計算できます
+refunds.book: ok
+  sell.do    拒否されうる理由: more_than_paid（remaining(order) at most 100000.00）、key_conflict、already_refused
+  refund.do  拒否されうる理由: nothing_left（remaining(order) at least 0.00）、key_conflict、already_refused
+  キー: sell は、order ごとに一度だけ動きます。キーが同じで amount が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: refund は、request ごとに一度だけ動きます。キーが同じで order、amount のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+ok bill.kn: 関数 1 個、total
+refund.flow: 検査を通りました
+desk.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
+エラー[ritsu E207]: due.cal:5:1: `input issued_on` は date >=2026-01-01 <=2026-12-31 を受け取りますが、出どころ jsonschema "schemas/order.schema.json" def Order property issued_on は string (format: date-time) です
+     5 |   issued_on : date  range >=2026-01-01 <=2026-12-31  fed by jsonschema "schemas/order.schema.json" def Order property issued_on
+  = 契約はこの文字列を `format: date-time`（`2026-11-16T09:00:00Z` のような、時刻の付いた日時）とし、受け取る側は日付を受け取ります
+  = 受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。
+ritsu check: ファイル 8 個（rulec 3、koyomi 1、chobo 1、kaname 1、dandori 1、sekisho 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 10 か所、決められない 0 か所

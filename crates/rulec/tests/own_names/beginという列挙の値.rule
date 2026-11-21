@@ -1,0 +1,17 @@
+rule 段階ごとの手数料(fee_by_step) v1
+description "Ruby では予約語の定数 BEGIN になる名前の、列挙の値"
+
+enum 段階(step) = 始め(begin) | 途中(middle) | 終わり(finish)
+
+inputs
+  時点(at) : 段階
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 時点ごとの手数料(fee_by_at)
+policy unique
+| 時点   | -> 手数料 |
+| 始め   | 1USD      |
+| 途中   | 2USD      |
+| 終わり | 3USD      |

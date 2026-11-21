@@ -1,0 +1,21 @@
+rule 区分の行を抜いた表(band_row_left_out) v1
+description "同じ表から 2 行目を抜いた物。51 円から 80 円までは区分が小で、その金額を取る行が無い"
+
+enum 大きさ(size) = 小(small) | 大(large)
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=300円
+
+outputs
+  答え(x) : 選択
+
+table 区分の表(band_of)
+| 金額   | -> 区分(band) : 大きさ |
+| <=50円 | 大                     |
+| >50円  | 小                     |
+
+table 選ぶ(pick)
+| 金額   | 区分 | -> 答え |
+| <=50円 | 大   | 一      |
+| >80円  | 小   | 二      |

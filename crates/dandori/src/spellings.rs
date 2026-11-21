@@ -300,6 +300,11 @@ impl ClientNames {
         self.own.iter().find(|o| o.0 == id).map(|o| o.1.clone())
     }
 
+    /// What the client has written for the methods and the messages: the names it declares.
+    pub(crate) fn declared(&self) -> Vec<String> {
+        self.written.iter().map(|(id, _, _)| id.clone()).collect()
+    }
+
     /// The function of `method`, when the client is to write one: not when one of the client's own
     /// does what the method does (`same`), nor when the name is taken, which is noted.
     pub(crate) fn function(&mut self, id: String, method: &str, same: bool) -> Option<String> {

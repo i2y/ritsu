@@ -24,6 +24,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
         .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
+        .args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] })
         .output()
         .expect("rulec を起動できない");
     (
@@ -198,6 +199,23 @@ const CORPUS: &[&str] = &[
 "tests/corpus/商品の料金.rule",
 "tests/corpus/商品の税.rule",
 "tests/corpus/商品の配送.rule",
+// §15.313: the range a rule accepts for a value it works out, once for a call, on each element,
+// and from random inputs. The page says it as the range the value is accepted in.
+"tests/corpus/card_fee.rule",
+"tests/corpus/カード手数料.rule",
+"tests/corpus/order_line_subtotals.rule",
+"tests/corpus/明細の小計.rule",
+"tests/corpus/dice_total.rule",
+"tests/corpus/さいころの合計.rule",
+// §15.314: ranges whose ends do not take the value they write, on every kind of input and on the
+// fields, the sum and the count of a walk; and a sum and a count whose ranges start above zero.
+// The page shows each range as it is read, and says that a walk under a bottom is refused.
+"tests/corpus/season_ticket.rule",
+"tests/corpus/シーズン券.rule",
+"tests/corpus/gift_basket.rule",
+"tests/corpus/贈り物のかご.rule",
+"tests/corpus/parcel_batch.rule",
+"tests/corpus/小包のまとめ出荷.rule",
 ];
 
 /// The `enums` files rules above read (§15.212, §15.228). They hold no table, so the checks of
@@ -596,6 +614,39 @@ fn html版は表の行に名前と番号を持ち_生成したjavascriptを積�
     assert!(dir.join("shipping_fee.html").exists(), "shipping_fee.html が出ていない");
 }
 
+/// The page of a rule that reads an `enums` file (§15.319) is one file: the `enums` file's module
+/// is inside the page's script, which reads no file beside it. Run on its own, the module of the
+/// page answers with the order and the display names the rule's module hands on, and parses with
+/// the rule's own parser. The page the MCP server shows is the same page.
+#[test]
+fn a_page_holds_the_module_of_the_enums_file_its_rule_reads() {
+    let call = "categoryLabel(parseCategory(Category.ELECTRONICS)), zoneRank(Zone.NATIONAL), zoneLabel(Zone.NATIONAL)";
+    let tmp = TempDir::new("doc-enums-page");
+    for (i, (rule, want)) in [("tests/corpus/catalog_shipping.rule", "Electronics 2 Rest of the country"), ("tests/corpus/品目の送料.rule", "電子機器 2 国内のほかの地方")].into_iter().enumerate() {
+        let (c, html, e) = run(&["doc", rule, "--format", "html"]);
+        assert_eq!(c, 0, "{rule}: {e}");
+        let start = html.find("<script type=\"module\">\n").expect("script が無い") + "<script type=\"module\">\n".len();
+        let script = &html[start..start + html[start..].find("</script>").unwrap()];
+        assert!(!script.contains(" from \"./"), "{rule}: the page's script imports a file beside it:\n{script}");
+        if ready(Need::Node, || have("node"), "node が無いので、ページのモジュールを走らせる確かめを飛ばした") {
+            let module = &script[..script.find("\nconst RULE = ").expect("the module comes before the rule's JSON")];
+            let p = tmp.path().join("page.mjs");
+            std::fs::write(&p, format!("{module}\nconsole.log({call});\n")).unwrap();
+            let o = Command::new("node").arg(&p).output().expect("node を起動できない");
+            assert!(o.status.success(), "{rule}: {}", String::from_utf8_lossy(&o.stderr));
+            assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), want, "{rule}");
+        }
+        // the page of the MCP server
+        let out = tmp.path().join(format!("mcp{i}"));
+        let (c, _, e) = run(&["gen", rule, "--target", "javascript", "--extra", "mcp", "--out", &out.to_string_lossy()]);
+        assert_eq!(c, 0, "{rule}: {e}");
+        let page = std::fs::read_dir(out.join("javascript")).unwrap().filter_map(|d| d.ok()).map(|d| d.path()).find(|p| p.to_string_lossy().ends_with("_page.html")).expect("the MCP page");
+        let page = std::fs::read_to_string(page).unwrap();
+        let head = script.lines().take(8).collect::<Vec<_>>().join("\n");
+        assert!(page.contains(&head) && !page.contains(" from \"./"), "{rule}: the MCP page is not the page `doc` writes");
+    }
+}
+
 fn have(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
@@ -735,7 +786,7 @@ fn ページはホストの枠の中で名乗る() {
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
-        .args(["doc", "tests/corpus/送料.rule", "--format", "html"])
+        .args(["doc", "tests/corpus/送料.rule", "--format", "html", "--lang", "ja"])
         .output()
         .expect("rulec を起動できない");
     let html = String::from_utf8_lossy(&o.stdout).into_owned();
@@ -804,7 +855,7 @@ fn 率の範囲はパーセントで書く() {
     let tmp = TempDir::new("doc-rate-ranges-ja");
     let p = tmp.path().join("t.rule");
     std::fs::write(&p, ja).unwrap();
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["doc", p.to_str().unwrap()]).output().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["doc", p.to_str().unwrap(), "--lang", "ja"]).output().unwrap();
     let out = String::from_utf8_lossy(&o.stdout);
     for want in ["0% 〜 20%", "0.5% 〜 50%", "0% 〜 100%"] {
         assert!(out.contains(want), "`{want}` が資料にありません:\n{out}");

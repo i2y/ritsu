@@ -25,7 +25,13 @@ or an extra that a later rulec adds is not written until a command line asks for
 `gen --check` does not fail over it. With no `--target` at all, `gen` writes nothing, exits 2
 and prints the command that writes what it wrote up to 0.40.0: every target, with every extra.
 
-A rule that does not pass `check` generates nothing.
+A rule that does not pass `check` generates nothing. Nor does a run in which two files would
+write one place: one file, two paths that differ only in the case of their letters (one file
+where the file system does not tell them apart), one Go package, one PHP namespace or one Ruby
+module. `gen` names the two files and the place before it writes anything, and exits 2. A name
+the code of a target cannot take stops a run too, but only one that asks for that target:
+`check` warns of it (W121), so that no name has to change for a language nobody generates, and
+`gen` with that target reports it as E153, writes no file of any target and exits 1.
 
 ## Output languages
 
@@ -212,6 +218,16 @@ Four rules keep it readable.
   binds the builtins it needs to names of its own (`_isinstance`, `_int`,
   `_len`, …) and defines `_min` and `_max`, and the functions call those.
 
+The code is also quiet under each language's strict checker — `mypy --strict`,
+clippy with `-D warnings`, `go vet` and `gofmt`, `swiftc -warnings-as-errors`,
+`ruby -w`, `javac -Xlint:all -Werror`, and `tsc --strict` with the flags of
+unused locals and parameters — so it can sit in a project that builds with
+them. A value the rule works out and never reads is read once in the way the
+language says a value is left unused (`_ = x`, `let _ = x;`, `void x;`). Every
+file of Rust allows `dead_code` and clippy's lints at its head: the file is not
+edited by hand, its helpers keep the shape the proof reads, and a lint a newer
+clippy adds must not fail your build.
+
 That the reference evaluator and every generated language answer the same
 is checked by streaming automatically generated boundary cases through all
 of them and comparing **canonical JSON byte for byte**.
@@ -270,11 +286,13 @@ print(shipment_fee_from(json.loads(body)))  # 5100
 
 Each value it reads is held to the rule's type before the rule is called. A value of
 another type, a value that is missing, or something other than the object or the array a
-path goes through stops the call with `RuleInputError`, which says where the value is: a
-line whose `chilled` is `"yes"` gets `order.lines[].chilled is not a boolean: 'yes'`, and an
-order whose `shipping` is a string gets `order.shipping is not an object: 'okinawa'`. The
-five languages say the same and read the values in the same order. A value the rule does
-not read is not looked at.
+path goes through stops the call with `RuleInputError`, which says where the value is: an
+order whose second line has `chilled` as `"yes"` gets
+`order.lines[1].chilled is not a boolean: 'yes'`, and an order whose `shipping` is a string
+gets `order.shipping is not an object: 'okinawa'`. A line is named by its index from 0, the
+index the rule's own check names the same line by when a value of the right type is out of
+its range. The five languages say the same and read the values in the same order. A value
+the rule does not read is not looked at.
 
 It is written for five of the twelve targets. In Python, TypeScript, JavaScript, Ruby and
 PHP, parsed JSON is usually used as it comes, as a plain map (a `dict` in Python, a `Hash`
@@ -341,8 +359,8 @@ exactly once.
 It is worth running because the model checker and the checker that
 proved the table share no code. Where they agree, two unrelated tools
 say the same thing; where they disagree, one of them is wrong and you
-get the input that shows it. On the corpus of 159 rules, 335 harnesses
-verify in 888 seconds.
+get the input that shows it. On the corpus of 171 rules, 357 harnesses
+verify in 930 seconds.
 
 What it does not say: anything about the table itself, or about any
 target but this one. And two kinds of rule get no harness at all, the
@@ -541,10 +559,10 @@ $ rulec gen rules/ --target python --target go --extra runner --extra mcp --extr
 …
 $ rulec test generated/
 note: Connect: the service and its runner were not generated, so it was not run (`rulec gen --target python --target proto --extra connect --extra runner` writes them)
-ok    member_shipping_fee (Python) 70 vectors, 16 refused
-ok    member_shipping_fee (Python, MCP) 70 vectors, 16 refused
-ok    member_shipping_fee (Python, MCP/HTTP) 70 vectors, 16 refused
-ok    member_shipping_fee (Go) 70 vectors, 16 refused
+ok    member_shipping_fee (Python) 70 vectors, 18 refused
+ok    member_shipping_fee (Python, MCP) 70 vectors, 18 refused
+ok    member_shipping_fee (Python, MCP/HTTP) 70 vectors, 18 refused
+ok    member_shipping_fee (Go) 70 vectors, 18 refused
 ok    rounding helper (Python) unit vectors
 ok    rounding helper (Go) unit vectors
 
@@ -594,9 +612,9 @@ $ rulec gen rules/ --target rust --target wasm --extra runner --extra vectors --
 …
 $ rulec test generated/
 note: the round tests were not generated, so the rounding helpers were not run (`rulec gen --extra round-test` writes them)
-ok    member_shipping_fee (Rust) 70 vectors, 16 refused
-ok    member_shipping_fee (Rust, WASI) 70 vectors, 16 refused
-ok    member_shipping_fee (Wasm) 70 vectors, 16 refused
+ok    member_shipping_fee (Rust) 70 vectors, 18 refused
+ok    member_shipping_fee (Rust, WASI) 70 vectors, 18 refused
+ok    member_shipping_fee (Wasm) 70 vectors, 18 refused
 
 All 3 matched.
 ```
@@ -653,6 +671,14 @@ otherwise an implementation that returned a constant there would match every
 vector. A value that can only ever be one value — an output that rounds to the
 same amount whatever comes in — raises no such obligation. A refund of the amount paid, tried only where the amount is 0 yen,
 is the case it was made for.
+
+A boundary pair is the two values on either side of a boundary that the column can take. For an
+input they are the boundary and the value one step past it. For a value the rule works out, they
+are the values it takes nearest the boundary on each side: `sheets = gifts * 2` is always even, so
+the pair of a row `<4` is 2 and 4, and no input is asked for 3 sheets, which none gives. A value
+worked out from what a walk answers — a `sum`, a `count`, a `max`, a `min` — is brought to each
+side by moving those answers one after another, each kept where it was brought; a pair that search
+does not reach is named missing, and never passed.
 
 A rounding tie is the value exactly half a step off the grid, the one
 point where `half_up` and `half_down` part company. Every output that

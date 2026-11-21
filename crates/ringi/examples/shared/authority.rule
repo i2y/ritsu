@@ -1,0 +1,33 @@
+rule authority v1
+description "Who reviews and decides a purchase ringi, by its kind and amount: the company's table of authority (Authority Rules, Article 20, fictional), shared by every request that spends the company's money on a purchase"
+
+enum kind = goods "Goods and services" | capex "Capital expenditure" | software "Software"
+enum decider = dept_head "Head of department" | division_head "Head of division" | president "President"
+
+inputs
+  kind   : kind
+  amount : money[JPY]  range >=1JPY <=100_000_000JPY
+
+outputs
+  finance : bool
+  board   : bool
+  decider : decider
+
+table authority  # Authority Rules, Article 20 (fictional)
+| kind     | amount                        | -> finance | board | decider       |
+| goods    | <=1_000_000JPY                | false      | false | dept_head     |
+| goods    | >1_000_000JPY <=10_000_000JPY | true       | false | division_head |
+| goods    | >10_000_000JPY                | true       | true  | president     |
+| capex    | <=5_000_000JPY                | true       | false | division_head |
+| capex    | >5_000_000JPY                 | true       | true  | president     |
+| software | <=3_000_000JPY                | false      | false | division_head |
+| software | >3_000_000JPY                 | true       | true  | president     |
+
+possible board = true
+
+examples
+| kind     | amount        | -> finance | board | decider       |
+| goods    | 1_000_000JPY  | false      | false | dept_head     |
+| goods    | 1_000_001JPY  | true       | false | division_head |
+| capex    | 5_000_001JPY  | true       | true  | president     |
+| software | 3_000_000JPY  | false      | false | division_head |

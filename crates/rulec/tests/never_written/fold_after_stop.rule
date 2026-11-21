@@ -1,0 +1,23 @@
+rule fold_after_stop v1
+description "A fold every line stops, with an arm after the stop for a verdict the table never writes (fictional)"
+
+enum verdict_kind = halt | take
+
+elements lines
+  kind : verdict_kind
+
+outputs
+  fee : money[JPY]  round down(1JPY)
+
+# Every line halts the fold, whatever its kind
+table decide
+policy unique
+| kind | -> verdict : verdict_kind |
+| halt | halt                      |
+| take | halt                      |
+
+fold verdict over lines -> fee
+  halt -> stop with 0JPY
+  take -> stop with 100JPY
+  empty -> 0JPY
+  exhausted -> 0JPY

@@ -1,0 +1,30 @@
+  The request `leave` (v1 → v2): `leave_old.ringi` → `leave_new.ringi`
+Route:
+  Requests where “Business days” is from 4 to 5: the stage “head” (dept_head) comes.
+  In the organization from 2026-04-01, the approvers change for 20 of 20 requesters.
+    e0101 (Head of Sales Division), head: does not come → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e0102 (Head of Corporate Division), head: does not come → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e1001 (Head of Accounting), head: does not come → dept_head: it comes to the requester alone; it goes up to e0102 (Head of Corporate Division)
+    e1002 (Accountant), head: does not come → dept_head: e1001 (Head of Accounting)
+    e1101 (Manager of Section 1A), head: does not come → dept_head: e3101 (Head of Sales Department 1)
+    e1201 (Sales staff 1), head: does not come → dept_head: e3101 (Head of Sales Department 1)
+    e1203 (Sales staff 3), head: does not come → dept_head: e3101 (Head of Sales Department 1)
+    e3101 (Head of Sales Department 1), head: does not come → dept_head: it comes to the requester alone; it goes up to e0101 (Head of Sales Division)
+    e4001 (Head of Finance), head: does not come → dept_head: it comes to the requester alone; it goes up to e0102 (Head of Corporate Division)
+    e5001 (Head of General Affairs), head: does not come → dept_head: it comes to the requester alone; it goes up to e0102 (Head of Corporate Division)
+  And 10 more: `--format json` lists them all.
+  In the organization from 2027-04-01, the approvers change for 18 of 18 requesters.
+    e0101 (Head of Sales Division), head: does not come → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e0102 (Head of Corporate Division), head: does not come → dept_head: no team of the kind `department` is above the requester; it goes up to e0001 (President (fictional))
+    e1001 (Head of Accounting), head: does not come → dept_head: it comes to the requester alone; it goes up to e0102 (Head of Corporate Division)
+    e1002 (Accountant), head: does not come → dept_head: e1001 (Head of Accounting)
+    e1101 (Manager of Section 1A), head: does not come → dept_head: e3101 (Head of Sales Department 1)
+    e1201 (Sales staff 1), head: does not come → dept_head: e3101 (Head of Sales Department 1)
+    e1203 (Sales staff 3), head: does not come → dept_head: e3101 (Head of Sales Department 1)
+    e3101 (Head of Sales Department 1), head: does not come → dept_head: it comes to the requester alone; it goes up to e0101 (Head of Sales Division)
+    e4001 (Head of Finance), head: does not come → dept_head: it comes to the requester alone; it goes up to e0102 (Head of Corporate Division)
+    e5001 (Head of General Affairs), head: does not come → dept_head: it comes to the requester alone; it goes up to e0102 (Head of Corporate Division)
+  And 8 more: `--format json` lists them all.
+  Every other request comes to the same stages.
+Tickets in progress:
+  A ticket finishes with the version of the request it was submitted with: tickets submitted with version 1 finish as version 1 says, and what changes here applies to requests submitted with version 2.

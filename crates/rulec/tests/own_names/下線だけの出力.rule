@@ -1,0 +1,15 @@
+rule 手数料と区分(fee_and_band) v1
+description "出力が二つある規則の、下線だけの名前の出力"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+  _           : number  round down(1)
+
+table 数量ごとの手数料(fee_by_qty)
+policy unique
+| 数量 | -> 手数料 | _ |
+| <=5  | 3USD      | 1 |
+| >5   | 2USD      | 2 |

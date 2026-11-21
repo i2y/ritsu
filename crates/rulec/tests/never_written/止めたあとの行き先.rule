@@ -1,0 +1,23 @@
+rule 止めたあとの行き先(fold_after_stop) v1
+description "どの明細も止める畳み込み。止める行き先のあとに、表が書かない判定の行き先を持つ（架空）"
+
+enum 判定(verdict_kind) = 打ち切る(halt) | 取る(take)
+
+elements 明細(lines)
+  種類(kind) : 判定
+
+outputs
+  手数料(fee) : money[円]  round down(1円)
+
+# どの明細も、種類によらず畳み込みを打ち切る
+table 判定する(decide)
+policy unique
+| 種類     | -> 判定(verdict) : 判定 |
+| 打ち切る | 打ち切る                |
+| 取る     | 打ち切る                |
+
+fold 判定 over 明細 -> 手数料
+  打ち切る -> stop with 0円
+  取る -> stop with 100円
+  empty -> 0円
+  exhausted -> 0円

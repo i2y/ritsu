@@ -715,8 +715,12 @@ impl<'a> Parser<'a> {
             // A line at the left margin starts a section.
             block_indent = None;
             let Tok::Word(w) = &t0.tok else {
-                self.err("E002", line.no, t0.col, tr!("行の初めに `{}` は書けません", "A line cannot start with `{}`", show(&t0.tok)));
-                block = Block::None;
+                let d = self.err("E002", line.no, t0.col, tr!("行の初めに `{}` は書けません", "A line cannot start with `{}`", show(&t0.tok)));
+                if matches!(block, Block::Date(_)) && matches!(t0.tok, Tok::Plus | Tok::Minus) {
+                    d.notes.push(tr!("`date` の操作は、`date` の行の下に字下げして書きます（`  + 2 business days`）。", "The operations of a `date` are indented under its line (`  + 2 business days`)."));
+                }
+                // the lines indented under it are its (ritsu's DESIGN 8.3)
+                block = Block::Skip;
                 continue;
             };
             let w = w.as_str();

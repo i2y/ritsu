@@ -1,0 +1,4 @@
+error[E303]: tests/mutants/E303_a_row_past_the_range.ringi:10:1: No request reaches this row of the route
+    10 | | >1_000_000JPY              | head      |
+  = As rulec says it: Unreachable row: row 3 never matches
+  = Correct the row's bounds, or remove the row.

@@ -1,0 +1,28 @@
+gate 図書室(library_ja) v1
+description "図書室の文書の索引を、だれが作ってよいか。permit の行が外すのは、forbid が拒む組み合わせだけ"
+namespace LibraryJa
+
+principal サービス(Service)
+  description "ひとりでに動くプログラム"
+
+resource 文書(Doc)
+  description "文書"
+  attributes
+    公開(open_to_all) : bool
+
+action 索引を作る(index_doc)
+  description "文書の索引を作る"
+  principal サービス
+  resource 文書
+
+permit サービスは索引を作れる(services_index)
+  description "サービスは、公開の文書の索引を作れる"
+  principal is サービス
+  action 索引を作る
+  when resource.公開
+
+forbid サービスは非公開の文書に触れない(services_skip_closed_docs)
+  description "サービスは、公開でない文書には触れない"
+  principal is サービス
+  action 索引を作る
+  unless resource.公開

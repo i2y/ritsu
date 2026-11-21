@@ -107,9 +107,9 @@ fn ts(my: &MySql, place: &Place, books: &[&str], body: &str, multi: bool) -> Val
     );
     let file = place.dir.join(format!("step-{}.ts", std::process::id() as u64 * 1000 + rand_suffix()));
     std::fs::write(&file, script).unwrap();
-    let out = Command::new("node").arg("--no-warnings").arg(&file).output().unwrap();
-    assert!(out.status.success(), "{} on {}:\n{}{}{}", file.display(), my.label, String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr), errors_of(my));
-    let text = String::from_utf8_lossy(&out.stdout);
+    let out = finish(Command::new("node").arg("--no-warnings").arg(&file), CLIENT_LIMIT, "the TypeScript of the steps on a MySQL-family server");
+    assert!(out.ok, "{} on {}:\n{}{}{}", file.display(), my.label, out.stdout, out.stderr, errors_of(my));
+    let text = out.stdout;
     serde_json::from_str(text.trim().lines().last().unwrap_or("null")).unwrap_or_else(|e| panic!("{e}: {text}"))
 }
 
@@ -129,9 +129,9 @@ fn py(my: &MySql, place: &Place, python: &Path, books: &[&str], body: &str) -> V
     let file = place.dir.join(format!("step-{}.py", std::process::id() as u64 * 1000 + rand_suffix()));
     std::fs::write(&file, script).unwrap();
     // -B: nothing is written into the runner's venv, nor beside the clients
-    let out = Command::new(python).arg("-B").arg(&file).output().unwrap();
-    assert!(out.status.success(), "{} on {}:\n{}{}", file.display(), my.label, String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    let text = String::from_utf8_lossy(&out.stdout);
+    let out = finish(Command::new(python).arg("-B").arg(&file), CLIENT_LIMIT, "the Python of the steps on a MySQL-family server");
+    assert!(out.ok, "{} on {}:\n{}{}", file.display(), my.label, out.stdout, out.stderr);
+    let text = out.stdout;
     serde_json::from_str(text.trim().lines().last().unwrap_or("null")).unwrap_or_else(|e| panic!("{e}: {text}"))
 }
 
@@ -160,9 +160,9 @@ fn go_main(my: &MySql, place: &Place, work: &Path, book: &str, main: &str) -> Va
     let bin = module.join("steps");
     let built = go_in(&module).args(["build", "-mod=readonly", "-o"]).arg(&bin).arg(".").output().unwrap();
     assert!(built.status.success(), "the Go of the steps did not build:\n{}{}", String::from_utf8_lossy(&built.stdout), String::from_utf8_lossy(&built.stderr));
-    let out = Command::new(&bin).arg(format!("{}@tcp({}:{})/{}", my.user, my.host, my.port, place.db)).output().unwrap();
-    assert!(out.status.success(), "the Go of the steps on {}:\n{}{}", my.label, String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    let text = String::from_utf8_lossy(&out.stdout);
+    let out = finish(Command::new(&bin).arg(format!("{}@tcp({}:{})/{}", my.user, my.host, my.port, place.db)), CLIENT_LIMIT, "the Go of the steps on a MySQL-family server");
+    assert!(out.ok, "the Go of the steps on {}:\n{}{}", my.label, out.stdout, out.stderr);
+    let text = out.stdout;
     serde_json::from_str(text.trim().lines().last().unwrap_or("null")).unwrap_or_else(|e| panic!("{e}: {text}"))
 }
 
@@ -573,9 +573,9 @@ print(json.dumps({\"own\": own, \"begun\": begun, \"off\": off, \"after\": after
         match rust() {
             Ok(()) => {
                 let bin = whose_rust(work, &place.db, &my.host, my.port, &my.user, &tenant_of("stock_reservation", "whose-rust"));
-                let out = Command::new(&bin).output().unwrap();
-                assert!(out.status.success(), "the Rust of the steps on {}:\n{}{}", my.label, String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-                let v: Value = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&out.stdout)));
+                let out = finish(&mut Command::new(&bin), CLIENT_LIMIT, "the Rust of the steps on a MySQL-family server");
+                assert!(out.ok, "the Rust of the steps on {}:\n{}{}", my.label, out.stdout, out.stderr);
+                let v: Value = serde_json::from_str(&out.stdout).unwrap_or_else(|e| panic!("{e}: {}", out.stdout));
                 assert_eq!(v, json!({"conn": "done", "seen": 3, "tx": "done", "unseen": 0, "again": "done", "b": 5, "orders": 0}), "{} Rust", my.label);
                 eprintln!("whose transaction on {}, Rust: on a connection in no transaction, a call is its own; on a Transaction of sqlx's, part of the caller's", my.label);
             }
@@ -854,9 +854,9 @@ print(json.dumps({\"out\": out, \"posted\": s.posted, \"held\": s.held_out}))"
         match rust() {
             Ok(()) => {
                 let bin = again_rust(work, &place.db, &my.host, my.port, &my.user);
-                let out = Command::new(&bin).output().unwrap();
-                assert!(out.status.success(), "the Rust of a refused key called again on {}:\n{}{}", my.label, String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-                let v: Value = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&out.stdout)));
+                let out = finish(&mut Command::new(&bin), CLIENT_LIMIT, "the Rust of a refused key called again on a MySQL-family server");
+                assert!(out.ok, "the Rust of a refused key called again on {}:\n{}{}", my.label, out.stdout, out.stderr);
+                let v: Value = serde_json::from_str(&out.stdout).unwrap_or_else(|e| panic!("{e}: {}", out.stdout));
                 assert_eq!(v, want, "{} Rust", my.label);
                 eprintln!("a refused key called again on {}, Rust: the same call {r}, other contents and a row without its reason already_refused", my.label);
             }

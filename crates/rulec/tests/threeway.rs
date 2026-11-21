@@ -12,6 +12,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need, ready, skip};
 use ritsu_testkit::tmp::tmpdir_in;
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -33,6 +39,7 @@ fn rulec(args: &[&str]) -> String {
         .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
+        .args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] })
         .output()
         .expect("rulec を起動できない");
     assert!(out.status.success(), "rulec {args:?} が失敗: {}", String::from_utf8_lossy(&out.stderr));
@@ -214,6 +221,23 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/領地の成長.rule", "province_growth_ja"),
     ("tests/corpus/商品の税.rule", "goods_tax"),
     ("tests/corpus/商品の配送.rule", "goods_delivery"),
+    // §15.313: the range a value the rule works out is accepted in, on a value of the inputs, on a
+    // value of each element, and on a value a drawn input works out.
+    ("tests/corpus/card_fee.rule", "card_fee"),
+    ("tests/corpus/カード手数料.rule", "card_fee_ja"),
+    ("tests/corpus/order_line_subtotals.rule", "order_line_subtotals"),
+    ("tests/corpus/明細の小計.rule", "line_subtotals"),
+    ("tests/corpus/dice_total.rule", "dice_total"),
+    ("tests/corpus/さいころの合計.rule", "dice_total_ja"),
+    // §15.314: ends written with `>` and `<` on a money, a rate, a date, an optional and an enum
+    // input; a sum and a count whose ranges start above zero; and the same ends on the fields,
+    // the sum and the count of a walk. The examples put each walk on both ends of its ranges.
+    ("tests/corpus/season_ticket.rule", "season_ticket"),
+    ("tests/corpus/シーズン券.rule", "season_ticket_ja"),
+    ("tests/corpus/gift_basket.rule", "gift_basket"),
+    ("tests/corpus/贈り物のかご.rule", "gift_basket_ja"),
+    ("tests/corpus/parcel_batch.rule", "parcel_batch"),
+    ("tests/corpus/小包のまとめ出荷.rule", "parcel_batch_ja"),
 ];
 
 #[test]
@@ -858,7 +882,9 @@ fn tsc() -> Option<PathBuf> {
 /// languages passes whatever the types say; `order_state` and five more rules of the corpus did
 /// not type, because an array of an enum's members did not take a value of the whole enum
 /// (§15.171). It came out in a workflow that compiles a rule's module with its own code. The
-/// module, the runner (the worked example of a call) and the MCP server, of every rule.
+/// module, the runner (the worked example of a call) and the MCP server, of every rule, with
+/// `--noUnusedLocals --noUnusedParameters` as well, which a project that compiles the module with
+/// its own code may set (§15.342).
 #[test]
 fn 生成typescriptはtsc_strictを通る() {
     if !need(Need::Node) {
@@ -888,18 +914,328 @@ fn 生成typescriptはtsc_strictを通る() {
         }
     }
     let mut c = Command::new(&tsc);
-    c.args(["--strict", "--noEmit", "--allowImportingTsExtensions", "--erasableSyntaxOnly", "--module", "nodenext", "--target", "es2022", "--types", "node"]);
+    c.args(["--strict", "--noUnusedLocals", "--noUnusedParameters", "--noEmit", "--allowImportingTsExtensions", "--erasableSyntaxOnly", "--module", "nodenext", "--target", "es2022", "--types", "node"]);
     if let Ok(types) = std::fs::canonicalize("tools/node_modules/@types") {
         c.arg("--typeRoots").arg(types);
     }
     let o = c.args(&files).current_dir(&ts).output().expect("tsc を起動できない");
     assert!(
         o.status.success(),
-        "生成した TypeScript が tsc --strict を通らない:\n{}{}",
+        "生成した TypeScript が tsc --strict --noUnusedLocals --noUnusedParameters を通らない:\n{}{}",
         String::from_utf8_lossy(&o.stdout),
         String::from_utf8_lossy(&o.stderr)
     );
-    println!("typescript: {} 本の規則の {} のファイルが tsc --strict を通る（{}）", CORPUS.len(), files.len(), ritsu_testkit::tools::version(&tsc, "--version"));
+    println!(
+        "typescript: {} 本の規則の {} のファイルが tsc --strict --noUnusedLocals --noUnusedParameters を通る（{}）",
+        CORPUS.len(),
+        files.len(),
+        ritsu_testkit::tools::version(&tsc, "--version")
+    );
+}
+
+/// Every `.rule` under `dir`, at any depth.
+fn rules_under(dir: &Path, out: &mut Vec<PathBuf>) {
+    for e in std::fs::read_dir(dir).unwrap().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            rules_under(&p, out);
+        } else if p.extension().is_some_and(|x| x == "rule") {
+            out.push(p);
+        }
+    }
+}
+
+/// Every rule of the tests, not the corpus alone, in TypeScript: the module, the runner and the
+/// MCP server, and the unit tests of the rounding helpers once, pass `tsc --strict`, run once as it
+/// is and once with `--noUnusedLocals --noUnusedParameters`, and the same files in JavaScript pass
+/// `node --check`. Rules outside the corpus did not pass `tsc --strict` where the code compared a
+/// value with one TypeScript had narrowed it away from, and nearly every module had a helper it
+/// never called, which `--noUnusedLocals` refuses (§15.342). Each rule is written alone, from its
+/// own directory, beside the files it applies. A rule that does not pass check writes nothing, nor
+/// does a target or an extra that cannot take the rule's names as they stand (E153): those are
+/// passed over.
+#[test]
+fn 試験の規則は全部tsc_strictを通る() {
+    if !need(Need::Node) {
+        return;
+    }
+    let Some(tsc) = tsc() else {
+        skip("tsc が無いので飛ばした（npm ci --prefix tools で入る）");
+        return;
+    };
+    let mut rules: Vec<PathBuf> = Vec::new();
+    rules_under(&root().join("tests"), &mut rules);
+    rules.sort();
+    let tmp = TempDir::new("tsc-every");
+    let out = tmp.path().to_path_buf();
+    // `rulec gen` of one rule into `dir`, from the rule's directory: whether it wrote, and what it said
+    let write = |rule: &Path, dir: &Path, targets: &[&str], extras: &[&str]| -> (bool, String) {
+        let _ = std::fs::remove_dir_all(dir);
+        let mut c = Command::new(env!("CARGO_BIN_EXE_rulec"));
+        c.env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&out)).current_dir(rule.parent().unwrap());
+        c.args(["gen", rule.file_name().unwrap().to_str().unwrap(), "--out", dir.to_str().unwrap()]);
+        for t in targets {
+            c.args(["--target", t]);
+        }
+        for e in extras {
+            c.args(["--extra", e]);
+        }
+        let o = c.output().expect("rulec を起動できない");
+        (o.status.success(), String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr))
+    };
+    // what each rule left: written or passed over, or what went wrong
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let results: std::sync::Mutex<Vec<(usize, Result<bool, String>)>> = std::sync::Mutex::new(Vec::new());
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(8));
+    std::thread::scope(|s| {
+        for _ in 0..threads {
+            s.spawn(|| {
+                loop {
+                    let k = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let Some(rule) = rules.get(k) else { break };
+                    let dir = out.join(format!("r{k}"));
+                    let (mut targets, mut extras) = (vec!["typescript", "javascript"], vec!["runner", "mcp"]);
+                    let mut r = Ok(false);
+                    while !targets.is_empty() {
+                        let (ok, said) = write(rule, &dir, &targets, &extras);
+                        if ok {
+                            r = Ok(true);
+                            break;
+                        }
+                        if said.contains("does not pass check") {
+                            break;
+                        }
+                        // E153 names each target and extra that cannot take the names, and the rest is
+                        // written without them
+                        let (t0, e0) = (targets.len(), extras.len());
+                        targets.retain(|t| !said.contains(&format!("`--target {t}`")));
+                        extras.retain(|e| !said.contains(&format!("`--extra {e}`")));
+                        if !said.contains("E153") || (targets.len(), extras.len()) == (t0, e0) {
+                            r = Err(format!("{}: {said}", rule.display()));
+                            break;
+                        }
+                    }
+                    results.lock().unwrap().push((k, r));
+                }
+            });
+        }
+    });
+    let mut results = results.into_inner().unwrap();
+    results.sort_by_key(|(k, _)| *k);
+    let wrong: Vec<&str> = results.iter().filter_map(|(_, r)| r.as_ref().err().map(String::as_str)).collect();
+    assert!(wrong.is_empty(), "rulec gen が、検査を通らない規則とも E153 とも違う形で止まった:\n{}", wrong.join("\n"));
+    let written: Vec<usize> = results.iter().filter(|(_, r)| matches!(r, Ok(true))).map(|(k, _)| *k).collect();
+    assert!(!written.is_empty(), "どの規則も書かなかった");
+    // the unit tests of the rounding helpers are the same beside every rule: once, beside the first
+    let first = &rules[written[0]];
+    let (ok, said) = write(first, &out.join("round"), &["typescript", "javascript"], &["round-test"]);
+    assert!(ok, "{}: {said}", first.display());
+    // node and tsc read `import … from "./x.ts"` inside a package of ES modules
+    std::fs::write(out.join("package.json"), "{\"type\": \"module\"}\n").unwrap();
+    let types = match std::fs::canonicalize(root().join("tools/node_modules/@types")) {
+        Ok(t) => format!(", \"typeRoots\": [{:?}]", t.to_string_lossy()),
+        Err(_) => String::new(),
+    };
+    std::fs::write(
+        out.join("tsconfig.json"),
+        format!(
+            "{{\"compilerOptions\": {{\"strict\": true, \"noEmit\": true, \"allowImportingTsExtensions\": true, \"erasableSyntaxOnly\": true, \"module\": \"nodenext\", \"moduleResolution\": \"nodenext\", \"target\": \"es2022\", \"types\": [\"node\"], \"skipLibCheck\": true{types}}}, \"include\": [\"r*/typescript/*.ts\", \"round/typescript/*.ts\"]}}\n"
+        ),
+    )
+    .unwrap();
+    let files_of = |d: String, sub: &str, ext: &str| -> Vec<PathBuf> {
+        std::fs::read_dir(out.join(d).join(sub))
+            .map(|d| d.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == ext)).collect())
+            .unwrap_or_default()
+    };
+    let dirs: Vec<String> = written.iter().map(|k| format!("r{k}")).chain(["round".to_string()]).collect();
+    let ts: usize = dirs.iter().map(|d| files_of(d.clone(), "typescript", "ts").len()).sum();
+    assert!(files_of("round".into(), "typescript", "ts").iter().any(|p| p.ends_with("_round_test.ts")), "丸めの補助関数の試験が書かれていない");
+    let runs: [&[&str]; 2] = [&[], &["--noUnusedLocals", "--noUnusedParameters"]];
+    for flags in runs {
+        let o = Command::new(&tsc).args(["-p", "tsconfig.json"]).args(flags).current_dir(&out).output().expect("tsc を起動できない");
+        assert!(
+            o.status.success(),
+            "試験の規則の生成した TypeScript が tsc --strict {} を通らない:\n{}{}",
+            flags.join(" "),
+            String::from_utf8_lossy(&o.stdout),
+            String::from_utf8_lossy(&o.stderr)
+        );
+    }
+    let mjs: Vec<PathBuf> = dirs.iter().flat_map(|d| files_of(d.clone(), "javascript", "mjs")).collect();
+    let at = std::sync::atomic::AtomicUsize::new(0);
+    let bad: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    std::thread::scope(|s| {
+        for _ in 0..threads {
+            s.spawn(|| {
+                loop {
+                    let Some(f) = mjs.get(at.fetch_add(1, std::sync::atomic::Ordering::SeqCst)) else { break };
+                    let o = Command::new("node").arg("--check").arg(f).output().expect("node を起動できない");
+                    if !o.status.success() {
+                        bad.lock().unwrap().push(format!("{}: {}", f.display(), String::from_utf8_lossy(&o.stderr)));
+                    }
+                }
+            });
+        }
+    });
+    let bad = bad.into_inner().unwrap();
+    assert!(bad.is_empty(), "生成した JavaScript が node --check を通らない:\n{}", bad.join("\n"));
+    // a comparison is read as the whole type only where TypeScript refused it: in the rules of WIDENED
+    let mut widening: Vec<String> = Vec::new();
+    for k in &written {
+        let rel = rules[*k].strip_prefix(root()).unwrap().to_string_lossy().into_owned();
+        let found = files_of(format!("r{k}"), "typescript", "ts").iter().any(|f| !widened(&std::fs::read_to_string(f).unwrap()).is_empty());
+        if found != WIDENED.iter().any(|(r, _)| *r == rel) {
+            widening.push(rel);
+        }
+    }
+    assert!(widening.is_empty(), "比べを型に広げる規則が WIDENED と違う（広げるのに無い、または挙げてあるのに広げない）:\n{}", widening.join("\n"));
+    println!(
+        "typescript: 試験の規則 {} 本のうち {} 本の {} のファイルが、tsc --strict を、--noUnusedLocals と --noUnusedParameters を付けても付けなくても通り、{} の JavaScript が node --check を通る（{}）。比べを型に広げるのは {} 本",
+        rules.len(),
+        written.len(),
+        ts,
+        mjs.len(),
+        ritsu_testkit::tools::version(&tsc, "--version"),
+        WIDENED.len()
+    );
+}
+
+/// The rules whose TypeScript compares a value with one TypeScript has narrowed it away from, and
+/// the comparisons, which read the value as its whole type: a row of a rule an `apply` reads, an
+/// arm of a fold, a `count`'s `where`, an expression, each for a value nothing above gives it; a
+/// value that may be absent; a fold's answer and a `max`, read through an `apply`; and, the same
+/// way, a `max` whose `where` tests the field it reads, a fold that takes a value a table works out
+/// or its own verdict, and a column a row hands another column's value to.
+const WIDENED: [(&str, &[&str]); 19] = [
+    ("tests/above_never/lifted_credit.rule", &["if ((lift as Tier) === Tier.BASIC) { // row 1: basic | 0USD"]),
+    ("tests/above_never/引き上げた段階の値引き.rule", &["if ((lift as Tier) === Tier.BASIC) { // row 1: 一般 | 0USD"]),
+    ("tests/mutants/m_w115.rule", &["if ((verdict as Verdict) === Verdict.SKIP) { // スキップ"]),
+    ("tests/never_written/count_never.rule", &["if ((verdict as VerdictKind) === VerdictKind.SKIP) { // skips"]),
+    ("tests/never_written/書かない判定の件数.rule", &["if ((verdict as VerdictKind) === VerdictKind.SKIP) { // 飛ばした数"]),
+    ("tests/never_written/fold_arm_never.rule", &["if ((verdict as VerdictKind) === VerdictKind.SKIP) { // skip"]),
+    ("tests/never_written/書かない判定の行き先.rule", &["if ((verdict as VerdictKind) === VerdictKind.SKIP) { // 飛ばす"]),
+    ("tests/never_written/compare_never.rule", &["const at_floor = (lift as Tier) == floor; // derived value"]),
+    ("tests/never_written/出会わない段階の比べ.rule", &["const at_floor = (lift as Tier) == floor; // derived value"]),
+    (
+        "tests/never_written/absent_lifted.rule",
+        &["if ((lift as Tier | null) === Tier.BASIC) { // row 1: basic | 0USD", "if ((priority as boolean | null) === false) { // row 1: false | 0USD"],
+    ),
+    (
+        "tests/never_written/値の無いことのある段階と優先.rule",
+        &["if ((lift as Tier | null) === Tier.BASIC) { // row 1: 一般 | 0USD", "if ((priority as boolean | null) === false) { // row 1: false | 0USD"],
+    ),
+    (
+        "tests/never_written/walk_answers.rule",
+        &["if ((chosen as Tier) === Tier.BASIC) { // row 1: basic | 0USD", "} else if ((top as Tier) === Tier.SILVER) { // row 2: silver | 3USD"],
+    ),
+    (
+        "tests/never_written/歩いて決める段階.rule",
+        &["if ((chosen as Tier) === Tier.BASIC) { // row 1: 一般 | 0USD", "} else if ((top as Tier) === Tier.SILVER) { // row 2: シルバー | 3USD"],
+    ),
+    ("tests/never_written/gold_lines_top.rule", &["} else if ((top as Tier) === Tier.SILVER) { // row 2: silver | 3USD"]),
+    ("tests/never_written/ゴールドの明細の最高の段階.rule", &["} else if ((top as Tier) === Tier.SILVER) { // row 2: シルバー | 3USD"]),
+    (
+        "tests/never_written/taken_tiers.rule",
+        &[
+            "if ((grade as Tier) === Tier.BASIC) { // basic",
+            "if ((grade as Tier) === Tier.PLATINUM) { // platinum",
+            "if ((chosen as Tier) === Tier.BASIC) { // row 1: basic | 0USD",
+            "} else if ((own as Tier) === Tier.SILVER) { // row 2: silver | 3USD",
+        ],
+    ),
+    (
+        "tests/never_written/取った段階.rule",
+        &[
+            "if ((grade as Tier) === Tier.BASIC) { // 一般",
+            "if ((grade as Tier) === Tier.PLATINUM) { // プラチナ",
+            "if ((chosen as Tier) === Tier.BASIC) { // row 1: 一般 | 0USD",
+            "} else if ((own as Tier) === Tier.SILVER) { // row 2: シルバー | 3USD",
+        ],
+    ),
+    ("tests/never_written/handed_tier.rule", &["if ((lift as Tier) === Tier.BASIC) { // row 1: basic | 0USD"]),
+    ("tests/never_written/渡した段階.rule", &["if ((lift as Tier) === Tier.BASIC) { // row 1: 一般 | 0USD"]),
+];
+
+/// `line` as the JavaScript writes it: without the types the casts read the values as.
+fn without_casts(line: &str) -> String {
+    let mut o = String::new();
+    let mut rest = line;
+    while let Some(i) = rest.find(" as ") {
+        o.push_str(&rest[..i]);
+        rest = &rest[i + rest[i..].find(')').unwrap_or(rest.len() - i)..];
+    }
+    o.push_str(rest);
+    o
+}
+
+/// The lines of `text` that compare a value read as its whole type: `(lift as Tier) === …` or
+/// `(lift as Tier | null) === …`, a name and its type alone in the parentheses, without their indent.
+/// A value parsed and then cast (`_enum(…) as Size, wrap: (… === null`) is not one.
+fn widened(text: &str) -> Vec<&str> {
+    let word = |c: char| c.is_alphanumeric() || c == '_' || c == '$';
+    text.lines()
+        .map(str::trim)
+        .filter(|l| {
+            l.match_indices(" as ").any(|(i, _)| {
+                let (before, after) = (&l[..i], &l[i + 4..]);
+                let open = before.trim_end_matches(|c: char| word(c) || c == '.');
+                let mut close = after.trim_start_matches(word);
+                while let Some(rest) = close.strip_prefix(" | null") {
+                    close = rest;
+                }
+                open.len() < before.len() && open.ends_with('(') && close.len() < after.len() && close.starts_with(") ==")
+            })
+        })
+        .collect()
+}
+
+/// Where the code compares a value with one no row above writes, TypeScript has narrowed the value
+/// to what the rows write, and `tsc --strict` refused the comparison as one that cannot be true
+/// (TS2367): a row of a rule an `apply` reads, an arm of a fold, a `count`'s `where`, a comparison
+/// in an expression; and a value that may be absent, a fold's answer and a `max` that an `apply`
+/// reads, a `max` whose `where` narrows the field it reads, a fold that takes a value a table
+/// works out or its own verdict, and a column a row hands another column's value to, the same way.
+/// The value is read there as its whole type, `(lift as Tier)`, which
+/// the JavaScript reads as `(lift)`. Where the rows above have narrowed the value to nothing left
+/// before the comparison (a fold's arm after one that stops it, a row after rows that take every
+/// value the column has), TypeScript refuses nothing, and the code is as it was (§15.342).
+#[test]
+fn 書かない値との比べだけを型に広げる() {
+    let tmp = TempDir::new("widened");
+    let write = |rule: &str, k: usize| -> (String, String) {
+        let path = root().join(rule);
+        let out = tmp.path().join(format!("w{k}"));
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", "en")
+            .current_dir(path.parent().unwrap())
+            .args(["gen", path.file_name().unwrap().to_str().unwrap(), "--out", out.to_str().unwrap(), "--target", "typescript", "--target", "javascript"])
+            .output()
+            .expect("rulec を起動できない");
+        assert!(o.status.success(), "{rule}: {}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+        let only = |sub: &str, ext: &str| -> String {
+            let files: Vec<PathBuf> = std::fs::read_dir(out.join(sub)).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == ext)).collect();
+            assert_eq!(files.len(), 1, "{rule}: {files:?}");
+            std::fs::read_to_string(&files[0]).unwrap()
+        };
+        (only("typescript", "ts"), only("javascript", "mjs"))
+    };
+    for (k, (rule, lines)) in WIDENED.iter().enumerate() {
+        let (ts, js) = write(rule, k);
+        assert_eq!(widened(&ts), *lines, "{rule}: 型に広げる比べがこの行だけであるはず");
+        // the JavaScript reads the value as it is, in parentheses
+        for line in *lines {
+            let plain = without_casts(line);
+            assert!(js.lines().any(|l| l.trim_start() == plain), "{rule}: JavaScript に `{plain}` が無い:\n{js}");
+        }
+    }
+    for (k, rule) in ["tests/never_written/fold_after_stop.rule", "tests/never_written/止めたあとの行き先.rule", "tests/never_written/lifted_in_order.rule", "tests/never_written/引き上げて順に読む値引き.rule"]
+        .iter()
+        .enumerate()
+    {
+        let (ts, _) = write(rule, WIDENED.len() + k);
+        assert!(widened(&ts).is_empty(), "{rule}: そこでは TypeScript が値を絞り切っていて、どの比べも断らないので、型に広げない:\n{:?}", widened(&ts));
+    }
 }
 
 /// `steep`, if it is installed. There is no `uvx` for gems, so this is all or nothing.
@@ -997,9 +1333,9 @@ fn 数の集合は全言語で集合として読まれる() {
     std::fs::write(&p, "rule 個数の割引(pieces) v1\n\ninputs\n  個数(n) : number  range >=1 <=500\n\noutputs\n  割引(off) : money[円]  round down(1円)\n\ntable 割引表(t)\npolicy first\n| 個数         | -> 割引 |\n| 100, 200     | 500円   |\n| not: 300, 400 | 100円   |\n| -            | 0円     |\n").unwrap();
     let out = dir.join("gen");
     rulec(&rulec::targets::up_to_0_40(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]));
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-    assert!(o.status.success(), "{said}");
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap(), "--lang", "en"]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
     assert!(said.contains("matched"), "{said}");
     for l in said.lines().filter(|l| l.starts_with("warning")) {
         eprintln!("{l}");
@@ -1022,9 +1358,9 @@ fn 率の出力は全言語で宣言した刻みで返る() {
         std::fs::write(&p, src).unwrap();
         let out = dir.join(format!("gen-{name}"));
         rulec(&rulec::targets::up_to_0_40(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]));
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
-        let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-        assert!(o.status.success(), "{name}: {said}");
+        let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap(), "--lang", "en"]), RULEC_LIMIT, "rulec test running the generated code");
+        let said = o.stdout.clone() + &o.stderr;
+        assert!(o.ok, "{name}: {said}");
         assert!(said.contains("matched"), "{name}: {said}");
     }
 }

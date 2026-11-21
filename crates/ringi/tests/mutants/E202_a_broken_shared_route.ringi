@@ -1,0 +1,11 @@
+request example v1 "Example"
+
+use route standard from "shared/broken_route.ringi"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route standard(long: amount > 50_000JPY)
+
+ticket
+  self approval  not allowed

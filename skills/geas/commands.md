@@ -177,7 +177,10 @@ In text, a screen is one node a line, two spaces a level: `button "Greet" disabl
   `"map":{"record","files","code","ran"}` and `"diagnostics"`. Several specs print one object a
   line.
 - A spec that does not parse: `{"geas":1,"ok":false,"file","diagnostics":[…]}`, each diagnostic
-  `{"code","severity","file","line","col","message","notes","path"}`.
+  `{"code","severity","file","line","col","message","notes","path"}`. A run that stops before
+  its work writes the same object, with E081 for a spec it cannot read (`file` is that spec) and
+  E080 for the command line (`file` is null), and says it on stderr too; a line with `--json`
+  anywhere gets it so, even from a command that does not take `--json`.
 - `drift`: `{"geas":1,"file","compared","drifted","unclaimed","claimed","changes":[{"claim","when",
   "line","call","field","old","new","claimed"}],"notes","diagnostics"}`; a change of a claim with
   `in any order` adds `"order"` after `claim`. A wait whose time ran out adds a note: the answer
@@ -193,5 +196,6 @@ In text, a screen is one node a line, two spaces a level: `button "Greet" disabl
   "claims_no_scenario_names":[…],"scenarios","answered","unanswered","exit"}`. `delta` is true for a
   change's delta spec, and `op` is then `ADDED` or `MODIFIED` (null for a spec); `claims` are the
   claims of the scenario's name, `near` those whose names differ only in case or spaces.
-- `explain`: one object a line, `{"geas":1,"code","severity","summary","when","fix","repro":{"args",
-  "files":[{"name","text"}],"exit","needs","env"}}`.
+- `explain`: `{"geas":1,"code","severity","summary","when","fix","repro":{"args","files":[{"name",
+  "text"}],"exit","needs","env"}}`, indented, for one code; two or more codes, or `--all`, print one
+  indented array of them, in the order given, as every language of ritsu prints its `explain`.

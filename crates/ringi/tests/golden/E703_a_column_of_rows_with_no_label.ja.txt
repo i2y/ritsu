@@ -1,0 +1,3 @@
+エラー[E703]: tests/mutants/E703_a_column_of_rows_with_no_label.ringi:23:1: `labels ja` に、画面に出る項目のうち 1 個の文言がありません: `items.price`
+    23 | labels ja
+  = 画面は、この言語の文言が無い所に、ファイルの言語の題を出してしまいます。

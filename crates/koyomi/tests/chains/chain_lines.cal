@@ -1,0 +1,20 @@
+dates approval_terms v1
+description "An operation of a date not indented: it is said once, and the line after it is not said again"
+
+inputs
+  received : date  range >=2026-01-01 <=2027-12-31
+
+date reminder = received
+  + 2 days
+  at 09:00
+
+date due = received
++ 3 days
+  at end of day
+
+claims
+  reminder_before_due : reminder < due
+
+examples
+| received   | -> reminder | -> due     |
+| 2026-11-13 | 2026-11-15  | 2026-11-16 |

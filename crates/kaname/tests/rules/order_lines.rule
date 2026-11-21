@@ -1,0 +1,45 @@
+rule order_lines v1
+description "The lines of an order, each with a field of every kind a line can have, some of which may be missing: how many lines are gifts and how many need care, the earliest day, the most taken off a line, how many items there are and what the lines cost"
+
+enum size = small | large
+
+# One line of an order. The caller passes up to three
+elements lines
+  label : string
+  note  : string?
+  size  : size
+  box   : size?
+  qty   : number          range >=1 <=9
+  spare : number?         range >=0 <=9
+  price : money[USDc]     range >=0USDc <=900USDc
+  tip   : money[USDc]?    range >=0USDc <=900USDc
+  off   : rate[step 1%]   range >=0% <=50%
+  extra : rate[step 1%]?  range >=0% <=50%
+  on    : date            range >=2026-01-01 <=2027-12-31
+  upto  : date?
+  gift  : bool
+  rush  : bool?
+
+# Whether a line needs care: a large one or one boxed, one with a spare, a tip, a rate taken off it
+# more, a day it is held to, or a rush
+table care_of
+policy first
+| size  | box  | spare | tip  | extra | upto | rush | -> care : bool |
+| large | -    | -     | -    | -     | -    | -    | true           |
+| small | none | none  | none | none  | none | none | false          |
+| -     | -    | -     | -    | -     | -    | -    | true           |
+
+count gifts over lines where gift  range >=0 <=3
+count cared over lines where care  range >=0 <=3
+min first over lines of on empty 2027-12-31
+max most_off over lines of off empty 0%
+sum items over lines of qty  range >=0 <=27
+sum spent over lines of price  range >=0USDc <=2_700USDc
+
+outputs
+  gifts    : number  round down(1)
+  cared    : number  round down(1)
+  first    : date
+  most_off : rate[step 1%]  round down(1%)
+  items    : number  round down(1)
+  spent    : money[USDc]  round down(1USDc)

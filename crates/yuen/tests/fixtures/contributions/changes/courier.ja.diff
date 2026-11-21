@@ -1,0 +1,15 @@
+diff --git a/rules/extra/courier.ja.rule b/rules/extra/courier.ja.rule
+index 5476bf0..e9414a8 100644
+--- a/rules/extra/courier.ja.rule
++++ b/rules/extra/courier.ja.rule
+@@ -6,8 +6,8 @@ extend 戻し方 with 集荷(courier) "集荷で受け取る"
+ 
+ clause 集荷の手数料(courier_fee) -> 手数料
+   when 戻し方 集荷
+-  then 8
++  then 9
+ 
+ examples
+ | 戻し方 | -> 手数料 |
+-| 集荷   | 8         |
++| 集荷   | 9         |

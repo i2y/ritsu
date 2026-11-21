@@ -1,0 +1,15 @@
+警告[W101]: tests/fixtures/settling_retry.flow:48:1: `on failure` が `goods` を片付けている最中に `put_back` が失敗すると、`goods` が held のままワークフローが失敗します（そうなる呼び出しは 1 か所）
+    48 |   goods <- put_back(order: order, sku: sku)
+  = `put_back` の `retry` は失敗を無くしません。リトライを使い切ると、呼び出しは失敗します。
+  = `on failure` の中で呼び出しが失敗すると、`goods` はもう `on failure` では片付けられません。`put_back` の呼び出しで失敗を受け、`goods` をそのまま人に渡してください（`on failure, timeout => fail <エラー> "…" leaving goods`）。
+  そうなる例:
+      39  reserve: goods が held で始まる
+      42  approve が失敗する（timeout・failure）
+      48  on failure
+      48  put_back が失敗する（timeout・failure）
+gen --target asl:
+エラー[E050]: tests/fixtures/settling_retry.flow:20:1: `approve` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります
+    20 | task approve(order: string)
+gen --target argo:
+エラー[E050]: tests/fixtures/settling_retry.flow:20:1: `approve` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります
+    20 | task approve(order: string)

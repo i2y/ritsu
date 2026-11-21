@@ -15,14 +15,14 @@ behavior:
     14 cells, of which 14 are inputs that can occur: 10 same, 4 differ, 0 unsettled, 0 unrealized
 
       region = domestic  and  weight >=2001g <=2500g
-        fee: 695 → 395
+        fee: 695GBPc → 395GBPc
         rows: table fee_by_weight row 2 → table fee_by_weight row 1
-        example: region=domestic, weight=2001
+        example: region=domestic, weight=2001g
 
       region = world  and  weight >=2001g <=2500g
-        fee: 2950 → 1850
+        fee: 2950GBPc → 1850GBPc
         rows: table fee_by_weight row 4 → table fee_by_weight row 5
-        example: region=world, weight=2001
+        example: region=world, weight=2001g
 
     of the inputs both versions accept, those outside this region get the same answer; what they accept differs as listed above.
 

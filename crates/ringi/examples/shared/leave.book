@@ -1,0 +1,21 @@
+book leave v1
+description "The paid leave each member of the staff has left (fictional). A leave request takes the days while it is approved, the approval posts them, and a rejection, an expiry, a withdrawal or a send-back voids them"
+
+unit day
+
+account leave_left(person: string) : day
+  description "the paid leave the person has left"
+  at least 0 refused as over_balance
+account granted : day outside
+account taken : day outside
+
+transfer grant(person: string, year: string, days: day)
+  description "the paid leave a person is given for a year"
+  key person, year
+  move days from granted to leave_left(person)
+
+transfer take(request: string, attempt: string, person: string, days: day)
+  description "held when a leave request is submitted, posted when it is approved, voided when it is rejected, expires, is withdrawn or sent back"
+  key request, attempt
+  pending expires after 120 days
+  move days from leave_left(person) to taken

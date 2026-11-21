@@ -1,0 +1,3 @@
+error[E305]: tests/mutants/E305_承認者のフィールドで申請者が指名.ringi:13:52: `指名された人` is chosen by the requester, in `確かめる人`, and only approvers fill in `確かめる人`
+    13 |   指名された人(chosen_reviewer) = chosen by requester in 確かめる人
+  = For an approver to choose, write `chosen by previous approver in 確かめる人`; for the requester to, take `approvers only` off `確かめる人`.

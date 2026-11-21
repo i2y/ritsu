@@ -1,0 +1,14 @@
+rule one_day v1
+description "The day an order ships, by whether it was placed late: a rule of one output, a date"
+
+inputs
+  late : bool
+
+outputs
+  ships : date
+
+table ships_of
+policy unique
+| late  | -> ships : date |
+| false | 2026-01-05      |
+| true  | 2027-01-05      |

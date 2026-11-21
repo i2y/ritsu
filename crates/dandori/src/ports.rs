@@ -8,17 +8,69 @@ use crate::syntax::{self, Binding, Program};
 use ritsu_base::naming::{Name as Naming, Tool};
 use ritsu_base::text::Text;
 use ritsu_ports::{Item, Reference, Said};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
-/// dandori, as the ports reach it.
+/// dandori, as the ports reach it. It keeps the checks it makes of a flow (DESIGN 31): the
+/// checks across the languages ask several things of one flow in a run (`ritsu check`, `ritsu run`),
+/// and each needs the flow checked; one check answers them all while the flow, every file the check
+/// read and the ports it read them through are the same. A flow is kept by the file, however its
+/// path is written (ritsu's DESIGN 4.15): the check names it the way the run writes its paths, so
+/// every way of asking gets the same answer. A child flow a check reads is asked of the same keeping.
 #[derive(Default)]
-pub struct Engine;
+pub struct Engine {
+    kept: Keeping,
+}
+
+/// The checks an engine keeps, and how many it has made; shared with the thread while the engine
+/// checks, so that a child flow ([`crate::check::child`]) is asked of it.
+#[derive(Clone, Default)]
+struct Keeping {
+    kept: Rc<std::cell::RefCell<Vec<Kept>>>,
+    checks: Rc<std::cell::Cell<usize>>,
+}
+
+thread_local! {
+    /// The keeping of the engine that is checking on this thread, while it is.
+    static KEEPING: std::cell::RefCell<Option<Keeping>> = const { std::cell::RefCell::new(None) };
+}
+
+/// A check of a flow kept: the file (its path made absolute and folded), the flow's text, the ports
+/// it read the rules, the dates files and the books through, what it read of the files, and what it
+/// came to.
+struct Kept {
+    file: PathBuf,
+    text: String,
+    ports: Option<crate::sources::Held>,
+    seen: Seen,
+    checked: Rc<(String, crate::check::Checked)>,
+}
+
+/// How many checks of one flow are kept: its text read through as many sets of files in one run
+/// (the two sides of `ritsu impact`, the base and the head of `ritsu mod diff`).
+const KEPT_EACH: usize = 4;
+
+// What a check read through `ritsu_base::fs`, each question once, with its answer (ritsu-base's
+// `Seen`): the flow, and whatever its check reads besides (the rules, the dates files and the books
+// through their ports, the `.proto`s, the OpenAPI documents, the child flows, a module's
+// `ritsu.mod` and lock).
+use ritsu_base::fs::{Seen, watched};
+
+/// A model of a flow that passes `dandori check`, as an Engine keeps it.
+struct ModelRef(Rc<(String, crate::check::Checked)>);
+
+impl std::ops::Deref for ModelRef {
+    type Target = crate::model::Model;
+    fn deref(&self) -> &crate::model::Model {
+        self.0 .1.model.as_ref().expect("a model is handed out only for a flow that passes")
+    }
+}
 
 /// The file and what it says, parsed as `dandori check` parses it; else what the parser says.
 fn parsed(root: &Path, file: &str) -> Result<(String, Program), Vec<Said>> {
     let disk = ritsu_base::paths::on_disk(root, file);
-    let path = disk.to_string_lossy().to_string();
-    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+    let path = ritsu_base::paths::show(&disk);
+    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e)])?;
     match syntax::parse(&src) {
         Ok(p) => Ok((src, p)),
         Err(d) => Err(vec![Said { code: d.code.to_string(), file: path, line: Some(d.line), message: Text { ja: d.ja, en: d.en } }]),
@@ -31,7 +83,80 @@ fn definition(lines: &[&str], from: usize, to: usize) -> String {
     ritsu_base::definition::block(lines, from, to)
 }
 
+impl Keeping {
+    /// `dandori check` of the flow at `file` (`check::check_source`), read through the ports and the
+    /// files of now: the check kept, while the flow, what the check read and the ports are the same;
+    /// else a check made now, of the file named the way the run writes its paths, and kept. Err is
+    /// why the flow cannot be read, as the files say it, which each asker puts in its own words.
+    fn check(&self, file: &Path) -> Result<Rc<(String, crate::check::Checked)>, crate::check::Unread> {
+        let shown = PathBuf::from(ritsu_base::paths::show(file));
+        let text = crate::sources::read(&shown).map_err(Rc::new)?;
+        let id = ritsu_base::paths::opened(file);
+        let ports = crate::sources::held();
+        let same_ports = |k: &Kept| match (&k.ports, &ports) {
+            (Some(a), Some(b)) => a.same(b),
+            (None, None) => true,
+            _ => false,
+        };
+        if let Some(k) = self.kept.borrow().iter().find(|k| k.file == id && k.text == text && same_ports(k) && k.seen.still()) {
+            return Ok(k.checked.clone());
+        }
+        self.checks.set(self.checks.get() + 1);
+        // the child flows the check reads are asked of this keeping too
+        let outer = KEEPING.with(|k| k.borrow_mut().replace(self.clone()));
+        let (got, seen) = watched(|| crate::check::check_source(&text, &shown));
+        KEEPING.with(|k| *k.borrow_mut() = outer);
+        let checked = Rc::new((text.clone(), got));
+        let mut kept = self.kept.borrow_mut();
+        if kept.iter().filter(|k| k.file == id).count() >= KEPT_EACH {
+            if let Some(i) = kept.iter().position(|k| k.file == id) {
+                kept.remove(i);
+            }
+        }
+        kept.push(Kept { file: id, text, ports, seen, checked: checked.clone() });
+        Ok(checked)
+    }
+}
+
+/// A child flow a check reads ([`crate::check::child`]), asked of the keeping of the engine that is
+/// checking on this thread; None when no engine is.
+pub(crate) fn child(file: &Path) -> Option<Result<Rc<(String, crate::check::Checked)>, crate::check::Unread>> {
+    let keeping = KEEPING.with(|k| k.borrow().clone())?;
+    Some(keeping.check(file))
+}
+
 impl Engine {
+    /// `dandori check` of the flow at `file`, kept ([`Keeping::check`]).
+    fn check(&self, file: &Path) -> Result<Rc<(String, crate::check::Checked)>, crate::check::Unread> {
+        self.kept.check(file)
+    }
+
+    /// `dandori check` of the flow at `file`, read with the other languages through `ports`, as the
+    /// engine keeps it ([`Keeping::check`]): what `ritsu gen` makes a workflow's code from, so that
+    /// the flow is checked once in the run (ritsu's DESIGN 4.15). Err is what `dandori check` says
+    /// of a flow it cannot read, in both languages.
+    pub fn kept_check(&self, file: &Path, ports: &ritsu_ports::Ports) -> Result<Rc<(String, crate::check::Checked)>, ritsu_base::text::Text> {
+        crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || self.check(file)).map_err(|why| crate::check::cannot_read(file, &why))
+    }
+
+    /// How many times the engine has checked a flow, for a port's answer, for `ritsu check`'s report
+    /// or as the child of another: once for each flow and each set of files and ports it is read
+    /// through, in a run that asks the same flow many things.
+    pub fn checks(&self) -> usize {
+        self.kept.checks.get()
+    }
+
+    /// `f`, with the engine's keeping lent to the thread: the `dandori` command run inside it checks
+    /// its flow through the engine ([`crate::check::check_kept`]), so the questions the program
+    /// running it asks of the same engine about the flow (the preconditions ritsu could not decide)
+    /// are answered from that one check (ritsu's DESIGN 4.15).
+    pub fn lending<R>(&self, f: impl FnOnce() -> R) -> R {
+        let outer = KEEPING.with(|k| k.borrow_mut().replace(self.kept.clone()));
+        let got = f();
+        KEEPING.with(|k| *k.borrow_mut() = outer);
+        got
+    }
+
     /// `dandori check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3), the rules the
     /// flows use read through `rules`, and no dates file or book: every finding, as the command
     /// prints it and as its `--format json` prints it, then the line that says a file passes.
@@ -48,8 +173,9 @@ impl Engine {
         crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || {
             files
                 .iter()
-                .map(|f| match crate::check::check_file(Path::new(f)) {
-                    Ok((src, c)) => {
+                .map(|f| match self.check(Path::new(f)) {
+                    Ok(kept) => {
+                        let (src, c) = (&kept.0, &kept.1);
                         let file = ritsu_base::paths::from_root(root, Path::new(f));
                         let mut parts: Vec<Part> = c
                             .diags
@@ -82,7 +208,7 @@ impl Engine {
                         let json = ritsu_base::json::Json::obj([("file", ritsu_base::json::Json::str(f.as_str())), ("diagnostics", ritsu_base::json::Json::arr(diagnostics))]);
                         Unit { label: f.clone(), parts, verdict, json }
                     }
-                    Err(msg) => Unit::unchecked(f, format!("{msg}\n")),
+                    Err(why) => Unit::unchecked(f, format!("{}\n", ritsu_base::cli::refusal(crate::check::cannot_read(Path::new(f), &why).get(lang), lang))),
                 })
                 .collect()
         })
@@ -90,14 +216,34 @@ impl Engine {
 }
 
 impl ritsu_ports::Flows for Engine {
+    /// The workflow's name, and its inputs and outputs with their types and ranges, from the same
+    /// list `dandori api` writes them from ([`crate::api::declared`]); what each carries is what
+    /// the port of `fed by` says of it ([`carried`]).
+    fn declared(&self, file: &Path, ports: &ritsu_ports::Ports) -> Result<ritsu_ports::Found<ritsu_ports::FlowDeclared>, Vec<Said>> {
+        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || self.model_with(file))?;
+        let (inputs, outputs) = crate::api::declared(&m);
+        let place = |d: &crate::api::Declared| ritsu_ports::FlowPlace {
+            name: d.name.to_string(),
+            ty: m.ty_name(d.ty),
+            optional: matches!(d.ty, crate::model::Ty::Opt(_)),
+            // as `dandori api` writes it: a program's reading, a number's ends the whole numbers on
+            // the wire (DESIGN 23 and 39)
+            range: d.range.map(|r| m.range_wire(d.ty, r)),
+            carried: carried(&m, ports, d.ty, d.range),
+            line: d.line,
+        };
+        Ok(ritsu_ports::Found::Value(ritsu_ports::FlowDeclared { name: m.name.clone(), version: m.version, workflow_type: crate::temporal::workflow_type(&m), inputs: inputs.iter().map(place).collect(), outputs: outputs.iter().map(place).collect() }))
+    }
+
     /// The calls of rules in a flow that passes `dandori check`, with the range of each value given
-    /// as dandori's own range check reads it (its E014): every value put in a variable anywhere in
-    /// the flow, joined. A value with a place it comes from that has no range carries that place.
+    /// as dandori's own range check reads it (its E014): a variable is what the runs that reach the
+    /// call last put in it. A value with a place it comes from that has no range carries that place.
     fn rule_calls(&self, file: &Path, rules: std::rc::Rc<dyn ritsu_ports::Rules>) -> Result<Vec<ritsu_ports::RuleCall>, Vec<Said>> {
         crate::sources::with_rules(rules, || {
-            let path = file.to_string_lossy().to_string();
-            let (_, c) = crate::check::check_file(file).map_err(|e| vec![Said::unreadable(&path, &e)])?;
-            let Some(m) = c.model else {
+            let path = ritsu_base::paths::show(file);
+            let kept = self.check(file).map_err(|e| vec![Said::unreadable(&path, &e)])?;
+            let c = &kept.1;
+            let Some(m) = &c.model else {
                 return Err(c.diags.iter().filter(|d| d.severity == crate::diag::Severity::Error).map(|d| Said { code: d.code.to_string(), file: path.clone(), line: Some(d.line), message: Text { ja: d.ja.clone(), en: d.en.clone() } }).collect());
             };
             Ok(crate::ranges::rule_calls(&m)
@@ -108,11 +254,12 @@ impl ritsu_ports::Flows for Engine {
                     name: m.rules[r].name.clone(),
                     args: args
                         .into_iter()
-                        .map(|(input, shown, range, unknown)| ritsu_ports::CallArg {
+                        .map(|(input, shown, range, unknown, values)| ritsu_ports::CallArg {
                             input,
                             shown,
                             range: range.map(|r| (r.lo.map(i128::from), r.hi.map(i128::from))),
                             unknown: unknown.map(|t| Text { ja: t.ja, en: t.en }),
+                            values,
                             // where a value comes from is `crossings`'s, which reads the dates files and books too
                             from: Vec::new(),
                         })
@@ -127,7 +274,7 @@ impl ritsu_ports::Flows for Engine {
     /// call its expiry can refuse (`crossings`); the flow read with the rules, the dates files and
     /// the books through `ports`.
     fn crossings(&self, file: &Path, ports: &ritsu_ports::Ports) -> Result<ritsu_ports::Crossings, Vec<Said>> {
-        crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(file).map(|m| crate::crossings::of(&m)))
+        crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || self.model_with(file).map(|m| crate::crossings::of(&m)))
     }
 
     /// Every call of a flow that passes `dandori check` that gives a secret to a file of the project
@@ -138,7 +285,7 @@ impl ritsu_ports::Flows for Engine {
     /// outside the project are dandori's own to say (its E906).
     fn sends(&self, file: &Path, ports: &ritsu_ports::Ports) -> Result<Vec<ritsu_ports::Send>, Vec<Said>> {
         crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || {
-            Engine::model_with(file).map(|m| {
+            self.model_with(file).map(|m| {
                 crate::secrets::sends(&m)
                     .into_iter()
                     .map(|s| ritsu_ports::Send {
@@ -162,12 +309,12 @@ impl ritsu_ports::Flows for Engine {
     /// documents are; a contract outside the root has none, and its calls are left out.
     fn operation_calls(&self, root: &Path, file: &str, ports: &ritsu_ports::Ports) -> Result<(String, Vec<ritsu_ports::OperationCall>), Vec<Said>> {
         let disk = ritsu_base::paths::on_disk(root, file);
-        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(&disk))?;
+        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || self.model_with(&disk))?;
         // the bindings as written: which `use` a task's operation is of, and how the task names it
         let (_, prog) = parsed(root, file)?;
         let from_root = |api: &str, kind: ApiKind| -> Option<String> {
             let u = prog.apis.iter().find(|a| a.name.0 == api && a.kind == kind)?;
-            ritsu_base::modules::join(root, file, &u.path).ok()
+            ritsu_base::modules::join_opened(root, file, &u.path).ok()
         };
         // each document read once: what ritsu-base's reader names its operations by
         let mut docs: std::collections::BTreeMap<String, Option<ritsu_base::openapi::Document>> = std::collections::BTreeMap::new();
@@ -202,20 +349,197 @@ impl ritsu_ports::Flows for Engine {
                 _ => continue,
             };
             let denied = task.errors.iter().find(|e| e.status == Some(403)).map(|e| e.name.clone());
-            out.push(ritsu_ports::OperationCall { line: s.line, task: task.name.clone(), operation, denied });
+            out.push((s.site, ritsu_ports::OperationCall { line: s.line, task: task.name.clone(), operation, denied, args: Vec::new(), reached: None }));
         }
+        // what each call gives, and what the runs that reach it hold there
+        let sites: std::collections::BTreeSet<usize> = out.iter().map(|(site, _)| *site).collect();
+        let mut reached = crate::crossings::reached(&m, &sites);
+        let vars = crate::ranges::variables(&m);
+        for s in m.all_stmts() {
+            let crate::model::TK::Call { callee: crate::model::Callee::Task(t), args, .. } = &s.kind else { continue };
+            let Some((_, call)) = out.iter_mut().find(|(site, _)| *site == s.site) else { continue };
+            let reached = reached.remove(&s.site);
+            // a variable the call gives is what the runs that reach the call last put in it
+            let here = reached.as_ref().map(|r| r.over(&vars));
+            let at = here.as_ref().unwrap_or(&vars);
+            let params = &m.tasks[*t].params;
+            call.args = args
+                .iter()
+                .map(|(p, e)| {
+                    // a number written out is one of the parameter's unit, on the wire (as dandori's
+                    // check takes it, and the code it writes passes it): where an integer on the
+                    // wire counts steps of the unit (`rate[step 0.1%]`), `fee: 5` is 5 steps, 0.5%
+                    let as_param = match (e, params.iter().find(|(n, _)| n == p).map(|(_, ty)| ty.inner())) {
+                        (crate::model::TExpr::Int(_), Some(ty @ crate::model::Ty::Num(_))) => Some(ty.clone()),
+                        _ => None,
+                    };
+                    let mut v = flow_value_as(&m, ports, crate::ranges::estimate(&m, at, e), e, path_of(&m, e), as_param);
+                    // a number written with a unit is said as written (DESIGN 40)
+                    v.shown = m.shown_at(s.site, p, e);
+                    (p.clone(), v)
+                })
+                .collect();
+            // the inputs and the variables that hold less at the call than anywhere in the flow
+            let values = reached
+                .as_ref()
+                .map(|r| {
+                    r.followed()
+                        .iter()
+                        .filter(|(n, est)| m.case_index(n).is_none() && vars.get(*n) != Some(*est))
+                        .filter_map(|(n, est)| {
+                            let ty = m.var_ty(n)?.clone();
+                            let e = crate::model::TExpr::Var { name: n.clone(), fields: Vec::new(), ty };
+                            Some((n.clone(), flow_value(&m, ports, est.clone(), &e, Some(n.clone()))))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            call.reached = reached.map(|r| ritsu_ports::Reached {
+                values,
+                held: r.held,
+                answers: r
+                    .answers
+                    .into_iter()
+                    .map(|(x, calls)| {
+                        let calls = calls
+                            .into_iter()
+                            .map(|c| ritsu_ports::AnswerCall { line: c.line, rule: m.rules[c.rule].info.path.clone(), inputs: c.inputs.into_iter().map(|(input, e, key, est)| (input, flow_value(&m, ports, est, &e, key))).collect() })
+                            .collect();
+                        (x, calls)
+                    })
+                    .collect(),
+                set: r.set,
+            });
+        }
+        let mut out: Vec<ritsu_ports::OperationCall> = out.into_iter().map(|(_, c)| c).collect();
         out.sort_by_key(|c| c.line);
         Ok((m.name.clone(), out))
     }
+
+    /// What an input, a variable or a field of one holds wherever the flow reads it (sekisho's
+    /// `resource` lines under a workflow name them): its type, and the range dandori's own range
+    /// check knows it in. A case, and a field read through a value that may be none, is no such
+    /// value.
+    fn value(&self, root: &Path, file: &str, ports: &ritsu_ports::Ports, path: &str) -> Result<Option<ritsu_ports::FlowValue>, Vec<Said>> {
+        use crate::model::Ty;
+        let disk = ritsu_base::paths::on_disk(root, file);
+        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || self.model_with(&disk))?;
+        let mut parts = path.split('.');
+        let Some(name) = parts.next() else { return Ok(None) };
+        if m.case_index(name).is_some() {
+            return Ok(None);
+        }
+        let Some(mut ty) = m.var_ty(name).cloned() else { return Ok(None) };
+        let fields: Vec<String> = parts.map(str::to_string).collect();
+        for f in &fields {
+            let Ty::Record(r) = ty else { return Ok(None) };
+            let Some(t) = m.field_ty(r, f) else { return Ok(None) };
+            ty = t.clone();
+        }
+        let e = crate::model::TExpr::Var { name: name.to_string(), fields, ty };
+        let vars = crate::ranges::variables(&m);
+        Ok(Some(flow_value(&m, ports, crate::ranges::estimate(&m, &vars, &e), &e, Some(path.to_string()))))
+    }
+
+    /// The inputs and the variables of the flow, in the model's order (a case is none of them, as
+    /// it is no value of [`Flows::value`]); or the fields of the record `under` is.
+    fn value_names(&self, root: &Path, file: &str, ports: &ritsu_ports::Ports, under: &str) -> Result<Vec<String>, Vec<Said>> {
+        use crate::model::Ty;
+        let disk = ritsu_base::paths::on_disk(root, file);
+        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || self.model_with(&disk))?;
+        if under.is_empty() {
+            let mut names: Vec<String> = Vec::new();
+            for (n, _) in &m.vars {
+                if m.case_index(n).is_none() && !names.contains(n) {
+                    names.push(n.clone());
+                }
+            }
+            return Ok(names);
+        }
+        let mut parts = under.split('.');
+        let Some(mut ty) = parts.next().filter(|n| m.case_index(n).is_none()).and_then(|n| m.var_ty(n)).cloned() else { return Ok(Vec::new()) };
+        for f in parts {
+            let Ty::Record(r) = ty else { return Ok(Vec::new()) };
+            let Some(t) = m.field_ty(r, f) else { return Ok(Vec::new()) };
+            ty = t.clone();
+        }
+        match ty {
+            Ty::Record(r) => Ok(m.records[r].fields.iter().map(|(n, _)| n.clone()).collect()),
+            _ => Ok(Vec::new()),
+        }
+    }
+}
+
+/// The input, the variable or the field a value reads (`amount`, `order.total`); None for a value
+/// written out, and for the state of a case.
+fn path_of(m: &crate::model::Model, e: &crate::model::TExpr) -> Option<String> {
+    match e {
+        crate::model::TExpr::Var { name, fields, .. } if m.case_index(name).is_none() => Some(e.show()),
+        _ => None,
+    }
+}
+
+/// A value of a flow, as the port says it (X16): what it holds by its type, with what dandori's
+/// range check knows it can be (`est`: where the flow makes a call, of the values the runs that
+/// reach the call last put in it; for [`Flows::value`], of every value put in it anywhere) — a
+/// number in its range (no end where a place it comes from has none), an enum with the values it
+/// can be.
+fn flow_value(m: &crate::model::Model, ports: &ritsu_ports::Ports, est: crate::ranges::Est, e: &crate::model::TExpr, path: Option<String>) -> ritsu_ports::FlowValue {
+    flow_value_as(m, ports, est, e, path, None)
+}
+
+/// [`flow_value`], of the type `as_ty` where it is given (a number written out, given to a
+/// parameter of a number's type, is a number of that type), else of its own.
+fn flow_value_as(m: &crate::model::Model, ports: &ritsu_ports::Ports, est: crate::ranges::Est, e: &crate::model::TExpr, path: Option<String>, as_ty: Option<crate::model::Ty>) -> ritsu_ports::FlowValue {
+    use ritsu_ports::Carried;
+    let range = if est.unknown.is_none() { est.known } else { None };
+    // an enum's values are counted by name, not by a range of their places
+    let ty = as_ty.unwrap_or_else(|| e.ty());
+    let numbers = if ty.enum_inside().is_some() { None } else { range.as_ref() };
+    fn keep(c: Carried, values: &std::collections::BTreeSet<String>) -> Carried {
+        match c {
+            Carried::Enum { name, values: all } if !values.is_empty() => Carried::Enum { name, values: all.into_iter().filter(|v| values.contains(&v.written)).collect() },
+            Carried::Opt(t) => Carried::Opt(Box::new(keep(*t, values))),
+            c => c,
+        }
+    }
+    let holds = keep(carried(m, ports, &ty, numbers), &est.values);
+    // a bool written out, or one the runs that reach the call put one value in
+    let constant = match e {
+        crate::model::TExpr::Bool(b) => Some(*b),
+        _ if ty == crate::model::Ty::Bool && est.values.len() == 1 => est.values.first().map(|v| v == "true"),
+        _ => None,
+    };
+    ritsu_ports::FlowValue { shown: e.show(), path, holds, constant }
 }
 
 impl Engine {
+    /// What `ritsu run` runs (`check::built`, DESIGN 1.17): the flow at `file` read with the other
+    /// languages through `ports`, checked as the answers of the port check it and kept with them,
+    /// and in its model a check of each precondition `undecided` says ritsu could not decide at a
+    /// call. `undecided` asks the port of the same flow, by the same path, which the check kept
+    /// answers: the run checks the flow once for both (DESIGN 31, 32).
+    pub fn built(&self, file: &Path, ports: &ritsu_ports::Ports, undecided: Rc<dyn ritsu_ports::Undecided>) -> Result<(String, crate::check::Checked), ritsu_base::text::Text> {
+        crate::sources::with_undecided(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), undecided, || {
+            let kept = self.check(file).map_err(|why| crate::check::cannot_read(file, &why))?;
+            let (src, checked) = &*kept;
+            let mut model = checked.model.clone();
+            if let Some(m) = &mut model {
+                crate::prechecks::insert(m, &crate::sources::undecided(file));
+            }
+            Ok((src.clone(), crate::check::Checked { model, diags: checked.diags.clone() }))
+        })
+    }
+
     /// The model of a flow that passes `dandori check`, read with the other languages through
     /// `ports`; else the errors of the check.
-    fn model_with(file: &Path) -> Result<crate::model::Model, Vec<Said>> {
-        let path = file.to_string_lossy().to_string();
-        let (_, c) = crate::check::check_file(file).map_err(|e| vec![Said::unreadable(&path, &e)])?;
-        c.model.ok_or_else(|| c.diags.iter().filter(|d| d.severity == crate::diag::Severity::Error).map(|d| Said { code: d.code.to_string(), file: path.clone(), line: Some(d.line), message: Text { ja: d.ja.clone(), en: d.en.clone() } }).collect())
+    fn model_with(&self, file: &Path) -> Result<ModelRef, Vec<Said>> {
+        let path = ritsu_base::paths::show(file);
+        let kept = self.check(file).map_err(|e| vec![Said::unreadable(&path, &e)])?;
+        match &kept.1.model {
+            Some(_) => Ok(ModelRef(kept)),
+            None => Err(kept.1.diags.iter().filter(|d| d.severity == crate::diag::Severity::Error).map(|d| Said { code: d.code.to_string(), file: path.clone(), line: Some(d.line), message: Text { ja: d.ja.clone(), en: d.en.clone() } }).collect()),
+        }
     }
 }
 
@@ -278,7 +602,7 @@ impl ritsu_ports::References for Engine {
     /// its `.proto`'s package.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let (_, prog) = parsed(root, file)?;
-        let from_root = |written: &str| ritsu_base::modules::join(root, file, written).ok();
+        let from_root = |written: &str| ritsu_base::modules::join_opened(root, file, written).ok();
         // the `.proto` a `use proto` name stands for, from the root
         let proto = |api: &str| prog.apis.iter().find(|a| a.kind == ApiKind::Proto && a.name.0 == api).and_then(|a| from_root(&a.path));
         let mut out = Vec::new();
@@ -389,7 +713,7 @@ impl ritsu_ports::Feeds for Engine {
             return Ok(Vec::new());
         }
         let disk = ritsu_base::paths::on_disk(root, file);
-        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(&disk))?;
+        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || self.model_with(&disk))?;
         let place = |fb: &syntax::FedBy, place: Naming, takes| ritsu_ports::Fed { line: fb.span.line, place, takes, source: ritsu_base::fed::from_root(root, file, &fb.name), written: fb.written.clone() };
         let mut out = Vec::new();
         for f in &prog.inputs {
@@ -410,7 +734,7 @@ impl ritsu_ports::Feeds for Engine {
     /// A workflow's input or output, or a field of a record it knows.
     fn holds(&self, root: &Path, file: &str, thing: &Naming, ports: &ritsu_ports::Ports) -> Result<Option<ritsu_ports::Carried>, Vec<Said>> {
         let disk = ritsu_base::paths::on_disk(root, file);
-        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(&disk))?;
+        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || self.model_with(&disk))?;
         let items: Vec<(&str, &str)> = thing.items.iter().map(|(k, n)| (k.as_str(), n.as_str())).collect();
         Ok(match items.as_slice() {
             [("output", n)] => m.outputs.iter().find(|(x, _)| x == n).map(|(_, t)| carried(&m, ports, t, m.output_ranges.get(*n))),

@@ -1,0 +1,4 @@
+error[E306]: tests/mutants/E306_成り立たないonly_when.ringi:19:3: The claim 小さい額は上長が決める does not hold: some request outside the condition comes to `上長` at the stage 決裁
+    19 |   小さい額は上長が決める : 決裁 is 上長 only when 金額 <= 50_000円
+  = Such a request: 金額 = 50_001円
+  = Correct the route, or the condition.

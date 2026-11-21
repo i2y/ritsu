@@ -10,7 +10,7 @@ requirement 入金までは顧客が取り消せる(customers_cancel_until_paid)
   satisfied by sekisho "../gates/注文.gate" policy 顧客は入金前の自分の注文を取り消せる
     reviewed 2026-10-07 by 顧客対応 sha256:0a9cbe45a19b8645 -> sha256:f282ee290429be9c
   satisfied by sekisho "../gates/注文.gate" policy 係は営業日に返金できる
-    reviewed 2026-10-07 by 顧客対応 sha256:0a9cbe45a19b8645 -> sha256:6b268108f9362802
+    reviewed 2026-11-17 by 顧客対応 sha256:0a9cbe45a19b8645 -> sha256:dbca5f0f0812e633
   verified by sekisho "../gates/注文.gate" expect 顧客は返金しない
     reviewed 2026-10-07 by 顧客対応 sha256:0a9cbe45a19b8645 -> sha256:d56e6122c9788a4b
 

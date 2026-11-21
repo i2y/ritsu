@@ -1,0 +1,124 @@
+// Command server serves the requests of the project: the pages people use in a browser, and the
+// API. Where it keeps the tickets and how people sign in come from its flags:
+//
+//	go run ./cmd/server -dev-login
+//
+// lets you choose who you are on a page, on this computer only (-addr stays on 127.0.0.1). Without
+// -dev-login, the person is the header X-Person, which a proxy in front of the server sets after it
+// signs people in; with -oidc-issuer, -oidc-client-id and -oidc-redirect-url, the server signs
+// people in with an OpenID Connect provider. -db keeps the tickets in PostgreSQL; without it, they
+// are kept in memory and lost when the server stops. go run ./cmd/server -h lists every flag.
+{{if mcp}}
+//
+// The agents' tools are at /mcp (HandleTools): an agent signs in as a browser does.
+{{end}}
+{{if temporal}}
+//
+// The flows run on Temporal, at the address -temporal gives (localhost:7233, where Temporal's dev
+// server listens, by default): the server starts them, and cmd/worker runs them. The server stops
+// when it cannot reach Temporal, and warns in its log when no worker runs a flow.
+{{end}}
+package main
+
+import (
+	"context"
+{{if temporal}}
+	"errors"
+{{end}}
+	"flag"
+{{if temporal}}
+	"fmt"
+{{end}}
+	"log/slog"
+	"os"
+	"os/signal"
+{{if temporal}}
+	"sync"
+{{end}}
+	"syscall"
+{{if temporal}}
+	"time"
+
+	"go.temporal.io/sdk/client"
+	sdklog "go.temporal.io/sdk/log"
+{{end}}
+
+	server "{{framework}}"
+	"{{framework}}/serve"
+
+	{{root_import}}
+)
+
+func main() {
+	var flags serve.Flags
+	flags.Register(flag.CommandLine)
+{{if temporal}}
+	temporal := flag.String("temporal", "localhost:7233", "the address of the Temporal server the flows run on")
+{{end}}
+	flag.Parse()
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+{{if temporal}}
+	if err := run(flags, *temporal, log); err != nil {
+{{else}}
+	if err := run(flags, log); err != nil {
+{{end}}
+		server.LogStop(log, "the server stopped", err)
+		os.Exit(1)
+	}
+}
+
+{{if temporal}}
+func run(flags serve.Flags, temporal string, log *slog.Logger) error {
+{{else}}
+func run(flags serve.Flags, log *slog.Logger) error {
+{{end}}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	stores, err := serve.Open(ctx, flags, log)
+	if err != nil {
+		return err
+	}
+	defer stores.Close()
+	cfg, err := {{root}}.Parts(log)
+	if err != nil {
+		return err
+	}
+{{if mcp}}
+	{{root}}.HandleTools(stores, log)
+{{end}}
+{{if temporal}}
+	c, err := client.Dial(client.Options{HostPort: temporal, Logger: sdklog.NewStructuredLogger(log)})
+	if err != nil {
+		return fmt.Errorf("-temporal %s: %w", temporal, err)
+	}
+	defer c.Close()
+	flows, err := {{root}}.Flows(c, cfg.Packages...)
+	if err != nil {
+		return err
+	}
+	cfg.Flows, cfg.Agents = flows, flows
+	ctx, cancel := context.WithCancelCause(ctx)
+	var running sync.WaitGroup
+	err = stores.Serve(ctx, cfg, func(srv *server.Server) {
+		{{root}}.Started(cfg, srv)
+		// Beside the server, the worker that gives it the answers of the flows a stage asks (an
+		// agent's step, a note): a worker that cannot go on stops the server.
+		running.Go(func() { cancel(flows.Run(ctx, srv)) })
+		running.Go(func() {
+			ready, stop := context.WithTimeout(ctx, 30*time.Second)
+			defer stop()
+			if err := flows.CheckWorkers(ready); err != nil && ctx.Err() == nil {
+				log.Warn("the flows wait for their workers: go run ./cmd/worker", "err", err)
+			}
+		})
+	})
+	cancel(nil)
+	running.Wait()
+	if cause := context.Cause(ctx); err == nil && !errors.Is(cause, context.Canceled) {
+		err = cause
+	}
+	return err
+{{else}}
+	return stores.Serve(ctx, cfg, func(srv *server.Server) { {{root}}.Started(cfg, srv) })
+{{end}}
+}

@@ -398,19 +398,19 @@ unread
 == ../dandori/tests/encrypted/renamed/protos/calls.ja.proto
 package calls.ja.v1
 message calls.ja.v1.Ack
-message calls.ja.v1.CallRequest
-  field number json=番号 ty=Scalar("string") repeated=false presence=false rules=null
-  field line json=回線 ty=Named("calls.ja.v1.Line") repeated=false presence=false rules=null
+message calls.ja.v1.ClientOptions
+  field reason json=理由 ty=Scalar("string") repeated=false presence=false rules=null
 message calls.ja.v1.ConfirmNote
   field note json=確認 ty=Scalar("string") repeated=false presence=false rules=null
-message calls.ja.v1.HoldNote
-  field reason json=理由 ty=Scalar("string") repeated=false presence=false rules=null
-message calls.ja.v1.PickUpNote
-  field answered json=出た ty=Scalar("bool") repeated=false presence=false rules=null
-message calls.ja.v1.Receipt
-  field memo json=記録 ty=Scalar("string") repeated=false presence=false rules=null
-message calls.ja.v1.ReplyNote
+message calls.ja.v1.Connection
+  field number json=番号 ty=Scalar("string") repeated=false presence=false rules=null
+  field line json=回線 ty=Named("calls.ja.v1.Line") repeated=false presence=false rules=null
+message calls.ja.v1.DataConverter
   field answer json=答え ty=Scalar("string") repeated=false presence=false rules=null
+message calls.ja.v1.NewType
+  field memo json=記録 ty=Scalar("string") repeated=false presence=false rules=null
+message calls.ja.v1.PayloadCodec
+  field answered json=出た ty=Scalar("bool") repeated=false presence=false rules=null
 message calls.ja.v1.StatusRequest
 message dandori.v1.AnswerOptions
   field task json=task ty=Scalar("string") repeated=false presence=false rules=null
@@ -429,13 +429,13 @@ message dandori.v1.WorkflowOptions
 enum calls.ja.v1.Line = landline mobile
 service calls.ja.v1.CallService imports_options=true
   option dandori.v1.workflow = {"name":"名前の重なり","version":1}
-  method Begin in=calls.ja.v1.CallRequest out=calls.ja.v1.Receipt streams=false
+  method Begin in=calls.ja.v1.Connection out=calls.ja.v1.NewType streams=false
     option dandori.v1.start = {"fails":["出ない","確かめられない"]}
-  method PickUp in=calls.ja.v1.PickUpNote out=calls.ja.v1.Ack streams=false
+  method PickUp in=calls.ja.v1.PayloadCodec out=calls.ja.v1.Ack streams=false
     option dandori.v1.event = {"task":"出る"}
-  method Hold in=calls.ja.v1.HoldNote out=calls.ja.v1.Ack streams=false
+  method Encrypted in=calls.ja.v1.ClientOptions out=calls.ja.v1.Ack streams=false
     option dandori.v1.event = {"task":"待たせる"}
-  method Reply in=calls.ja.v1.ReplyNote out=calls.ja.v1.Ack streams=false
+  method Reply in=calls.ja.v1.DataConverter out=calls.ja.v1.Ack streams=false
     option dandori.v1.answer = {"task":"かける"}
   method Confirm in=calls.ja.v1.ConfirmNote out=calls.ja.v1.Ack streams=false
     option dandori.v1.answer = {"task":"確かめる"}
@@ -445,19 +445,19 @@ unread
 == ../dandori/tests/encrypted/renamed/protos/calls.proto
 package calls.v1
 message calls.v1.Ack
-message calls.v1.CallRequest
-  field number json=number ty=Scalar("string") repeated=false presence=false rules=null
-  field line json=line ty=Named("calls.v1.Line") repeated=false presence=false rules=null
+message calls.v1.ClientOptions
+  field reason json=reason ty=Scalar("string") repeated=false presence=false rules=null
 message calls.v1.ConfirmNote
   field note json=note ty=Scalar("string") repeated=false presence=false rules=null
-message calls.v1.HoldNote
-  field reason json=reason ty=Scalar("string") repeated=false presence=false rules=null
-message calls.v1.PickUpNote
-  field answered json=answered ty=Scalar("bool") repeated=false presence=false rules=null
-message calls.v1.Receipt
-  field receipt json=receipt ty=Scalar("string") repeated=false presence=false rules=null
-message calls.v1.ReplyNote
+message calls.v1.Connection
+  field number json=number ty=Scalar("string") repeated=false presence=false rules=null
+  field line json=line ty=Named("calls.v1.Line") repeated=false presence=false rules=null
+message calls.v1.DataConverter
   field answer json=answer ty=Scalar("string") repeated=false presence=false rules=null
+message calls.v1.NewType
+  field receipt json=receipt ty=Scalar("string") repeated=false presence=false rules=null
+message calls.v1.PayloadCodec
+  field answered json=answered ty=Scalar("bool") repeated=false presence=false rules=null
 message calls.v1.StatusRequest
 message dandori.v1.AnswerOptions
   field task json=task ty=Scalar("string") repeated=false presence=false rules=null
@@ -476,13 +476,13 @@ message dandori.v1.WorkflowOptions
 enum calls.v1.Line = landline mobile
 service calls.v1.CallService imports_options=true
   option dandori.v1.workflow = {"name":"names","version":1}
-  method Begin in=calls.v1.CallRequest out=calls.v1.Receipt streams=false
+  method Begin in=calls.v1.Connection out=calls.v1.NewType streams=false
     option dandori.v1.start = {"fails":["NoAnswer","Unconfirmed"]}
-  method PickUp in=calls.v1.PickUpNote out=calls.v1.Ack streams=false
+  method PickUp in=calls.v1.PayloadCodec out=calls.v1.Ack streams=false
     option dandori.v1.event = {"task":"pick_up"}
-  method Hold in=calls.v1.HoldNote out=calls.v1.Ack streams=false
+  method Encrypted in=calls.v1.ClientOptions out=calls.v1.Ack streams=false
     option dandori.v1.event = {"task":"hold"}
-  method Reply in=calls.v1.ReplyNote out=calls.v1.Ack streams=false
+  method Reply in=calls.v1.DataConverter out=calls.v1.Ack streams=false
     option dandori.v1.answer = {"task":"call"}
   method Confirm in=calls.v1.ConfirmNote out=calls.v1.Ack streams=false
     option dandori.v1.answer = {"task":"confirm"}
@@ -515,6 +515,23 @@ message common.v1.Money
   field nanos json=nanos ty=Scalar("int32") repeated=false presence=false rules={"int32":{"gte":0,"lte":999999999}}
 enum common.v1.Currency = CURRENCY_UNSPECIFIED CURRENCY_JPY CURRENCY_USD
 unread
+== ../dandori/tests/fixtures/protos/dates.proto
+package days.v1
+message days.v1.ShiftRequest
+  field day json=day ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field by json=by ty=Scalar("int32") repeated=false presence=false rules=null
+message days.v1.ShiftResponse
+  field day json=day ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field also json=also ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field more json=more ty=Named("google.type.Date") repeated=true presence=false rules=null
+  field own json=own ty=Named("days.v1.Ymd") repeated=false presence=true rules=null
+message days.v1.Ymd
+  field year json=year ty=Scalar("int32") repeated=false presence=false rules=null
+  field month json=month ty=Scalar("int32") repeated=false presence=false rules=null
+  field day json=day ty=Scalar("int32") repeated=false presence=false rules=null
+service days.v1.DayService imports_options=false
+  method Shift in=days.v1.ShiftRequest out=days.v1.ShiftResponse streams=false
+unread google/type/date.proto
 == ../dandori/tests/fixtures/protos/shop/v1/order.proto
 package shop.v1
 message common.v1.Money
@@ -694,6 +711,43 @@ message receipts.v1.Receipt
 service receipts.v1.ReceiptService imports_options=false
   method GetReceipt in=receipts.v1.GetReceiptRequest out=receipts.v1.Receipt streams=false
 unread
+== ../dandori/tests/fixtures/services/dates.proto
+package dates.v1
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+message dates.v1.BookRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field since json=since ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field closed json=closed ty=Named("google.type.Date") repeated=true presence=false rules=null
+  field extra json=extra ty=Named("google.protobuf.Value") repeated=false presence=true rules=null
+message dates.v1.BookResponse
+  field booked_on json=bookedOn ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field span json=span ty=Named("dates.v1.Span") repeated=false presence=true rules=null
+  field days json=days ty=Named("google.type.Date") repeated=true presence=false rules=null
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+message dates.v1.Span
+  field first json=first ty=Named("google.type.Date") repeated=false presence=true rules=null
+service dates.v1.BookingService imports_options=true
+  option dandori.v1.workflow = {"name":"service_date_outputs","version":1}
+  method Book in=dates.v1.BookRequest out=dates.v1.BookResponse streams=false
+    option dandori.v1.start = {}
+service dates.v1.BookingServiceJa imports_options=true
+  option dandori.v1.workflow = {"name":"予約の日付の出力","version":1}
+  method Book in=dates.v1.BookRequest out=dates.v1.BookResponse streams=false
+    option dandori.v1.start = {}
+unread google/type/date.proto
 == ../dandori/tests/fixtures/services/methods.proto
 package shop.v1
 message shop.v1.ArrivedRequest
@@ -893,6 +947,50 @@ service approvals.v1.ApprovalService imports_options=true
   method GetStatus in=approvals.v1.GetStatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
+== ../dandori/tests/flows/protos/date_names.proto
+package date_names.v1
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+message date_names.v1.AnswerReturnRequest
+  field returned_on json=returnedOn ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field km json=km ty=Scalar("int32") repeated=false presence=false rules=null
+message date_names.v1.AnswerReturnResponse
+message date_names.v1.Driver
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field licensed_on json=licensedOn ty=Named("google.type.Date") repeated=false presence=true rules=null
+message date_names.v1.RentRequest
+  field car json=car ty=Scalar("string") repeated=false presence=false rules=null
+  field pickup json=pickup ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field dropoff json=dropoff ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field closed json=closed ty=Named("google.type.Date") repeated=true presence=false rules=null
+  field driver json=driver ty=Named("date_names.v1.Driver") repeated=false presence=true rules=null
+  field others json=others ty=Named("date_names.v1.Driver") repeated=true presence=false rules=null
+message date_names.v1.RentResponse
+service date_names.v1.DateNames imports_options=true
+  option dandori.v1.workflow = {"name":"service_date_names","version":1}
+  method Rent in=date_names.v1.RentRequest out=date_names.v1.RentResponse streams=false
+    option dandori.v1.start = {"fails":["late"]}
+  method AnswerReturn in=date_names.v1.AnswerReturnRequest out=date_names.v1.AnswerReturnResponse streams=false
+    option dandori.v1.answer = {"task":"wait_for_return"}
+service date_names.v1.DateNamesJa imports_options=true
+  option dandori.v1.workflow = {"name":"日付の名前のサービス","version":1}
+  method Rent in=date_names.v1.RentRequest out=date_names.v1.RentResponse streams=false
+    option dandori.v1.start = {"fails":["返却の遅れ"]}
+  method AnswerReturn in=date_names.v1.AnswerReturnRequest out=date_names.v1.AnswerReturnResponse streams=false
+    option dandori.v1.answer = {"task":"返却を待つ"}
+unread google/type/date.proto
 == ../dandori/tests/flows/protos/order.proto
 package order.v1
 message order.v1.GetRequest
@@ -922,6 +1020,50 @@ service order.v1.OrderService imports_options=false
   method Ship in=order.v1.ShipRequest out=order.v1.Order streams=false
   method Pick in=order.v1.PickRequest out=order.v1.PickResponse streams=false
 unread
+== ../dandori/tests/flows/protos/rentals.proto
+package rentals.v1
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+message rentals.v1.AnswerReturnRequest
+  field returned_on json=returnedOn ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field km json=km ty=Scalar("int32") repeated=false presence=false rules=null
+message rentals.v1.AnswerReturnResponse
+message rentals.v1.Driver
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field licensed_on json=licensedOn ty=Named("google.type.Date") repeated=false presence=true rules=null
+message rentals.v1.RentRequest
+  field car json=car ty=Scalar("string") repeated=false presence=false rules=null
+  field pickup json=pickup ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field dropoff json=dropoff ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field closed json=closed ty=Named("google.type.Date") repeated=true presence=false rules=null
+  field driver json=driver ty=Named("rentals.v1.Driver") repeated=false presence=true rules=null
+  field others json=others ty=Named("rentals.v1.Driver") repeated=true presence=false rules=null
+message rentals.v1.RentResponse
+service rentals.v1.RentalService imports_options=true
+  option dandori.v1.workflow = {"name":"service_dates","version":1}
+  method Rent in=rentals.v1.RentRequest out=rentals.v1.RentResponse streams=false
+    option dandori.v1.start = {"fails":["late"]}
+  method AnswerReturn in=rentals.v1.AnswerReturnRequest out=rentals.v1.AnswerReturnResponse streams=false
+    option dandori.v1.answer = {"task":"wait_for_return"}
+service rentals.v1.RentalServiceJa imports_options=true
+  option dandori.v1.workflow = {"name":"貸し出しの日付","version":1}
+  method Rent in=rentals.v1.RentRequest out=rentals.v1.RentResponse streams=false
+    option dandori.v1.start = {"fails":["返却の遅れ"]}
+  method AnswerReturn in=rentals.v1.AnswerReturnRequest out=rentals.v1.AnswerReturnResponse streams=false
+    option dandori.v1.answer = {"task":"返却を待つ"}
+unread google/type/date.proto
 == ../dandori/tests/flows/protos/shelf.proto
 package shelf.v1
 message shelf.v1.CountRequest
@@ -1003,6 +1145,34 @@ service shipping.v1.ShippingService imports_options=true
   method AnswerPacking in=shipping.v1.AnswerPackingRequest out=shipping.v1.AnswerPackingResponse streams=false
     option dandori.v1.answer = {"task":"梱包を待つ"}
 unread
+== ../dandori/tests/flows/protos/trips.proto
+package trips.v1
+message trips.v1.BookRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field start json=start ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field rest_days json=restDays ty=Named("google.type.Date") repeated=true presence=false rules=null
+  field first json=first ty=Named("trips.v1.Stop") repeated=false presence=true rules=null
+  field stops json=stops ty=Named("trips.v1.Stop") repeated=true presence=false rules=null
+message trips.v1.BookResponse
+  field booking_id json=bookingId ty=Scalar("string") repeated=false presence=false rules=null
+  field booked_on json=bookedOn ty=Named("google.type.Date") repeated=false presence=true rules={"required":true}
+message trips.v1.PlanRequest
+  field traveller json=traveller ty=Scalar("string") repeated=false presence=false rules=null
+  field start json=start ty=Named("google.type.Date") repeated=false presence=true rules=null
+message trips.v1.PlanResponse
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field start json=start ty=Named("google.type.Date") repeated=false presence=true rules={"required":true}
+  field end json=end ty=Named("google.type.Date") repeated=false presence=true rules=null
+  field rest_days json=restDays ty=Named("google.type.Date") repeated=true presence=false rules=null
+  field first json=first ty=Named("trips.v1.Stop") repeated=false presence=true rules={"required":true}
+  field stops json=stops ty=Named("trips.v1.Stop") repeated=true presence=false rules=null
+message trips.v1.Stop
+  field city json=city ty=Scalar("string") repeated=false presence=false rules=null
+  field day json=day ty=Named("google.type.Date") repeated=false presence=true rules={"required":true}
+service trips.v1.TripService imports_options=false
+  method Plan in=trips.v1.PlanRequest out=trips.v1.PlanResponse streams=false
+  method Book in=trips.v1.BookRequest out=trips.v1.BookResponse streams=false
+unread google/type/date.proto
 == ../dandori/tests/spellings/protos/client_answer.proto
 package client_answer.v1
 message client_answer.v1.Ack
@@ -1135,6 +1305,39 @@ service client_histories_status.v1.Svc imports_options=true
   method Histories in=client_histories_status.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
+== ../dandori/tests/spellings/protos/client_keyword.proto
+package client_keyword.v1
+message client_keyword.v1.Ack
+message client_keyword.v1.Reply
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_keyword.v1.Sent
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+message client_keyword.v1.StatusRequest
+message client_keyword.v1.number
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+service client_keyword.v1.Svc imports_options=true
+  option dandori.v1.workflow = {"name":"client_keyword","version":1}
+  method Begin in=client_keyword.v1.number out=client_keyword.v1.Reply streams=false
+    option dandori.v1.start = {"fails":["Late"]}
+  method Delete in=client_keyword.v1.Sent out=client_keyword.v1.Ack streams=false
+    option dandori.v1.event = {"task":"wait"}
+  method GetStatus in=client_keyword.v1.StatusRequest out=dandori.v1.Status streams=false
+    option dandori.v1.status = {}
+unread
 == ../dandori/tests/spellings/protos/client_message.proto
 package client_message.v1
 message client_message.v1.Ack
@@ -1166,6 +1369,39 @@ service client_message.v1.Svc imports_options=true
   method Tell in=client_message.v1.Client out=client_message.v1.Ack streams=false
     option dandori.v1.event = {"task":"wait"}
   method GetStatus in=client_message.v1.StatusRequest out=dandori.v1.Status streams=false
+    option dandori.v1.status = {}
+unread
+== ../dandori/tests/spellings/protos/client_module.proto
+package client_module.v1
+message client_module.v1.Ack
+message client_module.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_module.v1.Reply
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_module.v1.Sent
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+message client_module.v1.StatusRequest
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+service client_module.v1.Svc imports_options=true
+  option dandori.v1.workflow = {"name":"client_module","version":1}
+  method Require in=client_module.v1.Order out=client_module.v1.Reply streams=false
+    option dandori.v1.start = {"fails":["Late"]}
+  method Exports in=client_module.v1.Sent out=client_module.v1.Ack streams=false
+    option dandori.v1.event = {"task":"wait"}
+  method GlobalThis in=client_module.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
 == ../dandori/tests/spellings/protos/client_run_status.proto
@@ -1366,6 +1602,39 @@ service client_send_starts.v1.Svc imports_options=true
   method GetStatus in=client_send_starts.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
+== ../dandori/tests/spellings/protos/client_sent_error.proto
+package client_sent_error.v1
+message client_sent_error.v1.Ack
+message client_sent_error.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_sent_error.v1.Reply
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_sent_error.v1.SentWithAnotherValueError
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+message client_sent_error.v1.StatusRequest
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+service client_sent_error.v1.Svc imports_options=true
+  option dandori.v1.workflow = {"name":"client_sent_error","version":1}
+  method Begin in=client_sent_error.v1.Order out=client_sent_error.v1.Reply streams=false
+    option dandori.v1.start = {"fails":["Late"]}
+  method Tell in=client_sent_error.v1.SentWithAnotherValueError out=client_sent_error.v1.Ack streams=false
+    option dandori.v1.event = {"task":"wait"}
+  method GetStatus in=client_sent_error.v1.StatusRequest out=dandori.v1.Status streams=false
+    option dandori.v1.status = {}
+unread
 == ../dandori/tests/spellings/protos/client_shared.proto
 package client_shared.v1
 message client_shared.v1.Ack
@@ -1531,6 +1800,16 @@ service client_two_types.v1.Svc imports_options=true
   method GetStatus in=client_two_types.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
+== ../dandori/tests/spellings/protos/proto_type_name.proto
+package shop.v1
+message shop.v1.Line
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+unread
+== ../dandori/tests/spellings/protos/protoの型の名前.proto
+package shop.ja.v1
+message shop.ja.v1.Item
+  field sku json=品番 ty=Scalar("string") repeated=false presence=false rules=null
+unread
 == ../dandori/tests/spellings/protos/クライアントのAnswerCallback.proto
 package client_answer_callback.ja.v1
 message client_answer_callback.ja.v1.Ack
@@ -1661,6 +1940,39 @@ service client_send_once.ja.v1.Svc imports_options=true
   method SendOnce in=client_send_once.ja.v1.Sent out=client_send_once.ja.v1.Ack streams=false
     option dandori.v1.event = {"task":"待つ"}
   method GetStatus in=client_send_once.ja.v1.StatusRequest out=dandori.v1.Status streams=false
+    option dandori.v1.status = {}
+unread
+== ../dandori/tests/spellings/protos/クライアントのSentWithAnotherValueError.proto
+package client_sent_error.ja.v1
+message client_sent_error.ja.v1.Ack
+message client_sent_error.ja.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_sent_error.ja.v1.Reply
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_sent_error.ja.v1.SentWithAnotherValueError
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+message client_sent_error.ja.v1.StatusRequest
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+service client_sent_error.ja.v1.Svc imports_options=true
+  option dandori.v1.workflow = {"name":"クライアントのSentWithAnotherValueError","version":1}
+  method Begin in=client_sent_error.ja.v1.Order out=client_sent_error.ja.v1.Reply streams=false
+    option dandori.v1.start = {"fails":["Late"]}
+  method Tell in=client_sent_error.ja.v1.SentWithAnotherValueError out=client_sent_error.ja.v1.Ack streams=false
+    option dandori.v1.event = {"task":"待つ"}
+  method GetStatus in=client_sent_error.ja.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
 == ../dandori/tests/spellings/protos/クライアントのStatusと並ぶレコード.proto
@@ -1894,6 +2206,39 @@ service client_status.ja.v1.Svc imports_options=true
   method Status in=client_status.ja.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
+== ../dandori/tests/spellings/protos/クライアントのキーワード.proto
+package client_keyword.ja.v1
+message client_keyword.ja.v1.Ack
+message client_keyword.ja.v1.Reply
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_keyword.ja.v1.Sent
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+message client_keyword.ja.v1.StatusRequest
+message client_keyword.ja.v1.number
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+service client_keyword.ja.v1.Svc imports_options=true
+  option dandori.v1.workflow = {"name":"クライアントのキーワード","version":1}
+  method Begin in=client_keyword.ja.v1.number out=client_keyword.ja.v1.Reply streams=false
+    option dandori.v1.start = {"fails":["Late"]}
+  method Delete in=client_keyword.ja.v1.Sent out=client_keyword.ja.v1.Ack streams=false
+    option dandori.v1.event = {"task":"待つ"}
+  method GetStatus in=client_keyword.ja.v1.StatusRequest out=dandori.v1.Status streams=false
+    option dandori.v1.status = {}
+unread
 == ../dandori/tests/spellings/protos/クライアントのグローバル.proto
 package client_global.ja.v1
 message client_global.ja.v1.Ack
@@ -1958,6 +2303,39 @@ service client_message.ja.v1.Svc imports_options=true
   method Tell in=client_message.ja.v1.Client out=client_message.ja.v1.Ack streams=false
     option dandori.v1.event = {"task":"待つ"}
   method GetStatus in=client_message.ja.v1.StatusRequest out=dandori.v1.Status streams=false
+    option dandori.v1.status = {}
+unread
+== ../dandori/tests/spellings/protos/クライアントのモジュール.proto
+package client_module.ja.v1
+message client_module.ja.v1.Ack
+message client_module.ja.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_module.ja.v1.Reply
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_module.ja.v1.Sent
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+message client_module.ja.v1.StatusRequest
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+service client_module.ja.v1.Svc imports_options=true
+  option dandori.v1.workflow = {"name":"クライアントのモジュール","version":1}
+  method Require in=client_module.ja.v1.Order out=client_module.ja.v1.Reply streams=false
+    option dandori.v1.start = {"fails":["Late"]}
+  method Exports in=client_module.ja.v1.Sent out=client_module.ja.v1.Ack streams=false
+    option dandori.v1.event = {"task":"待つ"}
+  method GlobalThis in=client_module.ja.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
 == ../dandori/tests/spellings/protos/クライアントの二つの型.proto
@@ -2125,39 +2503,6 @@ service client_answer_callback.v1.Svc imports_options=true
   method GetStatus in=client_answer_callback.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
-== ../dandori/tests/spellings/renamed/protos/client_global.proto
-package client_global.v1
-message client_global.v1.Ack
-message client_global.v1.Order
-  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
-message client_global.v1.Reply
-  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
-message client_global.v1.Sent
-  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
-message client_global.v1.StatusRequest
-message dandori.v1.AnswerOptions
-  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
-message dandori.v1.EventOptions
-  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
-message dandori.v1.StartOptions
-  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
-message dandori.v1.Status
-  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
-  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
-  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
-message dandori.v1.StatusOptions
-message dandori.v1.WorkflowOptions
-  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
-  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
-service client_global.v1.Svc imports_options=true
-  option dandori.v1.workflow = {"name":"client_global","version":1}
-  method Begin in=client_global.v1.Order out=client_global.v1.Reply streams=false
-    option dandori.v1.start = {"fails":["Late"]}
-  method Tell in=client_global.v1.Sent out=client_global.v1.Ack streams=false
-    option dandori.v1.event = {"task":"wait"}
-  method GetStatus in=client_global.v1.StatusRequest out=dandori.v1.Status streams=false
-    option dandori.v1.status = {}
-unread
 == ../dandori/tests/spellings/renamed/protos/client_histories_status.proto
 package client_histories_status.v1
 message client_histories_status.v1.Ack
@@ -2191,16 +2536,16 @@ service client_histories_status.v1.Svc imports_options=true
   method GetStatus in=client_histories_status.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
-== ../dandori/tests/spellings/renamed/protos/client_message.proto
-package client_message.v1
-message client_message.v1.Ack
-message client_message.v1.Customer
+== ../dandori/tests/spellings/renamed/protos/client_keyword.proto
+package client_keyword.v1
+message client_keyword.v1.Ack
+message client_keyword.v1.Amount
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_keyword.v1.Reply
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_keyword.v1.Sent
   field note json=note ty=Scalar("string") repeated=false presence=false rules=null
-message client_message.v1.Order
-  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
-message client_message.v1.Reply
-  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
-message client_message.v1.StatusRequest
+message client_keyword.v1.StatusRequest
 message dandori.v1.AnswerOptions
   field task json=task ty=Scalar("string") repeated=false presence=false rules=null
 message dandori.v1.EventOptions
@@ -2215,13 +2560,13 @@ message dandori.v1.StatusOptions
 message dandori.v1.WorkflowOptions
   field name json=name ty=Scalar("string") repeated=false presence=false rules=null
   field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
-service client_message.v1.Svc imports_options=true
-  option dandori.v1.workflow = {"name":"client_message","version":1}
-  method Begin in=client_message.v1.Order out=client_message.v1.Reply streams=false
+service client_keyword.v1.Svc imports_options=true
+  option dandori.v1.workflow = {"name":"client_keyword","version":1}
+  method Begin in=client_keyword.v1.Amount out=client_keyword.v1.Reply streams=false
     option dandori.v1.start = {"fails":["Late"]}
-  method Tell in=client_message.v1.Customer out=client_message.v1.Ack streams=false
+  method Remove in=client_keyword.v1.Sent out=client_keyword.v1.Ack streams=false
     option dandori.v1.event = {"task":"wait"}
-  method GetStatus in=client_message.v1.StatusRequest out=dandori.v1.Status streams=false
+  method GetStatus in=client_keyword.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
 == ../dandori/tests/spellings/renamed/protos/client_run_status_starts.proto
@@ -2354,6 +2699,39 @@ service client_send_starts.v1.Svc imports_options=true
   method Tell in=client_send_starts.v1.Sent out=client_send_starts.v1.Ack streams=false
     option dandori.v1.event = {"task":"wait"}
   method GetStatus in=client_send_starts.v1.StatusRequest out=dandori.v1.Status streams=false
+    option dandori.v1.status = {}
+unread
+== ../dandori/tests/spellings/renamed/protos/client_sent_error.proto
+package client_sent_error.v1
+message client_sent_error.v1.Ack
+message client_sent_error.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_sent_error.v1.Reply
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_sent_error.v1.StatusRequest
+message client_sent_error.v1.Told
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+service client_sent_error.v1.Svc imports_options=true
+  option dandori.v1.workflow = {"name":"client_sent_error","version":1}
+  method Begin in=client_sent_error.v1.Order out=client_sent_error.v1.Reply streams=false
+    option dandori.v1.start = {"fails":["Late"]}
+  method Tell in=client_sent_error.v1.Told out=client_sent_error.v1.Ack streams=false
+    option dandori.v1.event = {"task":"wait"}
+  method GetStatus in=client_sent_error.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
 == ../dandori/tests/spellings/renamed/protos/client_status_type.proto
@@ -2521,6 +2899,39 @@ service client_send_once.ja.v1.Svc imports_options=true
   method GetStatus in=client_send_once.ja.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
+== ../dandori/tests/spellings/renamed/protos/クライアントのSentWithAnotherValueError.proto
+package client_sent_error.ja.v1
+message client_sent_error.ja.v1.Ack
+message client_sent_error.ja.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_sent_error.ja.v1.Reply
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message client_sent_error.ja.v1.StatusRequest
+message client_sent_error.ja.v1.Told
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+service client_sent_error.ja.v1.Svc imports_options=true
+  option dandori.v1.workflow = {"name":"クライアントのSentWithAnotherValueError","version":1}
+  method Begin in=client_sent_error.ja.v1.Order out=client_sent_error.ja.v1.Reply streams=false
+    option dandori.v1.start = {"fails":["Late"]}
+  method Tell in=client_sent_error.ja.v1.Told out=client_sent_error.ja.v1.Ack streams=false
+    option dandori.v1.event = {"task":"待つ"}
+  method GetStatus in=client_sent_error.ja.v1.StatusRequest out=dandori.v1.Status streams=false
+    option dandori.v1.status = {}
+unread
 == ../dandori/tests/spellings/renamed/protos/クライアントのStatusのレコード.proto
 package client_status_type.ja.v1
 message client_status_type.ja.v1.Ack
@@ -2686,16 +3097,16 @@ service client_send_starts.ja.v1.Svc imports_options=true
   method GetStatus in=client_send_starts.ja.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
-== ../dandori/tests/spellings/renamed/protos/クライアントのグローバル.proto
-package client_global.ja.v1
-message client_global.ja.v1.Ack
-message client_global.ja.v1.Order
+== ../dandori/tests/spellings/renamed/protos/クライアントのキーワード.proto
+package client_keyword.ja.v1
+message client_keyword.ja.v1.Ack
+message client_keyword.ja.v1.Amount
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
-message client_global.ja.v1.Reply
+message client_keyword.ja.v1.Reply
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
-message client_global.ja.v1.Sent
+message client_keyword.ja.v1.Sent
   field note json=note ty=Scalar("string") repeated=false presence=false rules=null
-message client_global.ja.v1.StatusRequest
+message client_keyword.ja.v1.StatusRequest
 message dandori.v1.AnswerOptions
   field task json=task ty=Scalar("string") repeated=false presence=false rules=null
 message dandori.v1.EventOptions
@@ -2710,46 +3121,13 @@ message dandori.v1.StatusOptions
 message dandori.v1.WorkflowOptions
   field name json=name ty=Scalar("string") repeated=false presence=false rules=null
   field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
-service client_global.ja.v1.Svc imports_options=true
-  option dandori.v1.workflow = {"name":"クライアントのグローバル","version":1}
-  method Begin in=client_global.ja.v1.Order out=client_global.ja.v1.Reply streams=false
+service client_keyword.ja.v1.Svc imports_options=true
+  option dandori.v1.workflow = {"name":"クライアントのキーワード","version":1}
+  method Begin in=client_keyword.ja.v1.Amount out=client_keyword.ja.v1.Reply streams=false
     option dandori.v1.start = {"fails":["Late"]}
-  method Tell in=client_global.ja.v1.Sent out=client_global.ja.v1.Ack streams=false
+  method Remove in=client_keyword.ja.v1.Sent out=client_keyword.ja.v1.Ack streams=false
     option dandori.v1.event = {"task":"待つ"}
-  method GetStatus in=client_global.ja.v1.StatusRequest out=dandori.v1.Status streams=false
-    option dandori.v1.status = {}
-unread
-== ../dandori/tests/spellings/renamed/protos/クライアントのメッセージ.proto
-package client_message.ja.v1
-message client_message.ja.v1.Ack
-message client_message.ja.v1.Customer
-  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
-message client_message.ja.v1.Order
-  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
-message client_message.ja.v1.Reply
-  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
-message client_message.ja.v1.StatusRequest
-message dandori.v1.AnswerOptions
-  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
-message dandori.v1.EventOptions
-  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
-message dandori.v1.StartOptions
-  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
-message dandori.v1.Status
-  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
-  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
-  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
-message dandori.v1.StatusOptions
-message dandori.v1.WorkflowOptions
-  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
-  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
-service client_message.ja.v1.Svc imports_options=true
-  option dandori.v1.workflow = {"name":"クライアントのメッセージ","version":1}
-  method Begin in=client_message.ja.v1.Order out=client_message.ja.v1.Reply streams=false
-    option dandori.v1.start = {"fails":["Late"]}
-  method Tell in=client_message.ja.v1.Customer out=client_message.ja.v1.Ack streams=false
-    option dandori.v1.event = {"task":"待つ"}
-  method GetStatus in=client_message.ja.v1.StatusRequest out=dandori.v1.Status streams=false
+  method GetStatus in=client_keyword.ja.v1.StatusRequest out=dandori.v1.Status streams=false
     option dandori.v1.status = {}
 unread
 == ../dandori/tests/spellings/renamed/protos/クライアントの二つの型.proto
@@ -3090,6 +3468,306 @@ service warehouse.v1.StockService imports_options=false
   method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
   method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
   method Post in=warehouse.v1.PostRequest out=warehouse.v1.PostResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/tests/chains/names/proto/shop/common/v1/money.proto
+package shop.common.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+unread
+== ../sakai/tests/chains/names/proto/shop/ordering/v1/fulfillment_lite.proto
+package shop.ordering.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message shop.ordering.v1.FulfillResponse
+  field reservations json=reservations ty=Named("warehouse.v1.ReserveResponse") repeated=true presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+  field price json=price ty=Named("shop.common.v1.Money") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/tests/chains/names/proto/shop/ordering/v1/order.proto
+package shop.ordering.v1
+message shop.ordering.v1.GetOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderResponse
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+message shop.ordering.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
+service shop.ordering.v1.OrderService imports_options=false
+  method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+unread
+== ../sakai/tests/chains/names/proto/warehouse/v1/stock.proto
+package warehouse.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+  field price json=price ty=Named("shop.common.v1.Money") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/tests/chains/names.ja/proto/shop/common/v1/money.proto
+package shop.common.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+unread
+== ../sakai/tests/chains/names.ja/proto/shop/ordering/v1/fulfillment_lite.proto
+package shop.ordering.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message shop.ordering.v1.FulfillResponse
+  field reservations json=reservations ty=Named("warehouse.v1.ReserveResponse") repeated=true presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+  field price json=price ty=Named("shop.common.v1.Money") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/tests/chains/names.ja/proto/shop/ordering/v1/order.proto
+package shop.ordering.v1
+message shop.ordering.v1.GetOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderResponse
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+message shop.ordering.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
+service shop.ordering.v1.OrderService imports_options=false
+  method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+unread
+== ../sakai/tests/chains/names.ja/proto/warehouse/v1/stock.proto
+package warehouse.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+  field price json=price ty=Named("shop.common.v1.Money") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/tests/chains/published/proto/shop/common/v1/money.proto
+package shop.common.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+unread
+== ../sakai/tests/chains/published/proto/shop/ordering/v1/fulfillment_lite.proto
+package shop.ordering.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message shop.ordering.v1.FulfillResponse
+  field reservations json=reservations ty=Named("warehouse.v1.ReserveResponse") repeated=true presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+  field price json=price ty=Named("shop.common.v1.Money") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/tests/chains/published/proto/shop/ordering/v1/order.proto
+package shop.ordering.v1
+message shop.ordering.v1.GetOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderResponse
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+message shop.ordering.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
+service shop.ordering.v1.OrderService imports_options=false
+  method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+unread
+== ../sakai/tests/chains/published/proto/warehouse/v1/stock.proto
+package warehouse.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+  field price json=price ty=Named("shop.common.v1.Money") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/tests/chains/published.ja/proto/shop/common/v1/money.proto
+package shop.common.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+unread
+== ../sakai/tests/chains/published.ja/proto/shop/ordering/v1/fulfillment_lite.proto
+package shop.ordering.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message shop.ordering.v1.FulfillResponse
+  field reservations json=reservations ty=Named("warehouse.v1.ReserveResponse") repeated=true presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+  field price json=price ty=Named("shop.common.v1.Money") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/tests/chains/published.ja/proto/shop/ordering/v1/order.proto
+package shop.ordering.v1
+message shop.ordering.v1.GetOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderResponse
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+message shop.ordering.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
+service shop.ordering.v1.OrderService imports_options=false
+  method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+unread
+== ../sakai/tests/chains/published.ja/proto/warehouse/v1/stock.proto
+package warehouse.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+  field price json=price ty=Named("shop.common.v1.Money") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread

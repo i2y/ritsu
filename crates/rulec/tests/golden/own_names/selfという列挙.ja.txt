@@ -1,0 +1,19 @@
+警告[W121]: `self` は PHP で書くと予約語になるので、その生成コードでは後ろに `_` を付けて書きます
+  --> tests/own_names/selfという列挙.rule:4
+  |
+4 | enum self = 個人(person) | 会社(company)
+  |      ^^^^ 列挙の名前
+  |
+ PHP: 列挙のクラスを `Self_` と書きます。呼ぶ側もその名前で読みます。
+ 生成コードはこのままで組めます。どの言語でも `_` の付かない名前にするなら、別名を付けてください（`self(<別名>)`）。
+
+警告[W121]: `self` は、Rust・Swift・Wasm の生成コードが自分で使う名前と同じになります
+  --> tests/own_names/selfという列挙.rule:4
+  |
+4 | enum self = 個人(person) | 会社(company)
+  |      ^^^^ 列挙の名前
+  |
+ Rust・Swift・Wasm: `Self` はこの言語の予約語なので、そう書く列挙の名前を書けず、組めません。
+ 使わない生成先なら、このままで構いません。使うなら、別名を付けてください（`self(<別名>)`）。
+
+ok tests/own_names/selfという列挙.rule

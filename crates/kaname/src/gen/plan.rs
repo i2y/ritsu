@@ -87,57 +87,37 @@ pub fn member_name(t: Target, enum_alias: &str, value_alias: &str) -> String {
 }
 
 /// The function a host calls: its alias (TypeScript, Python, Rust), in Pascal case in Go
-/// (`total_weight` is `TotalWeight`). A Go function whose name a type of the module has (`fn claim`
-/// and `record Claim` are both `Claim`) takes `Fn` after it; Rust's functions and types are apart,
-/// and a Rust function takes `_` after it where its name is a value of the prelude ([`RUST_STD_VALUES`])
-/// or a word no raw identifier writes.
+/// (`total_weight` is `TotalWeight`). A Go function whose name a type or a constant of the module has
+/// (`fn claim` and `record Claim` are both `Claim`) takes `Fn` after it, and a number after that where
+/// a name of the module has that too; Rust's functions and types are apart, and a Rust function takes
+/// `_` after it where its name is a value of the prelude ([`RUST_STD_VALUES`]) or a word no raw
+/// identifier writes. The module's table of names says it ([`super::taken`], DESIGN 10.3).
 pub fn fn_name(t: Target, c: &Checked, f: usize) -> String {
-    let alias = c.decls.fns[f].name.ascii().to_string();
-    match t {
-        Target::Go => {
-            let g = type_name(t, &alias);
-            let mut types: BTreeSet<String> =
-                c.decls.records.iter().map(|r| hidden(type_name(t, r.name.ascii()), r.private)).chain(c.decls.enums.iter().map(|e| hidden(type_name(t, e.name.ascii()), e.private))).collect();
-            for e in c.decls.enums.iter().filter(|e| e.is_sum()) {
-                types.extend(e.values.iter().map(|v| hidden(variant_name(t, e.name.ascii(), v.ascii()), e.private)));
-            }
-            if types.contains(&g) { format!("{g}Fn") } else { g }
-        }
-        Target::Rust if RUST_STD_VALUES.contains(&alias.as_str()) => format!("{alias}_"),
-        Target::Rust => ritsu_emit::ident::rust_name(&alias),
-        _ => alias,
-    }
+    super::taken::of(t, c).fns[f].clone()
 }
 
 /// The function of the module the others call, past the check of what a host gives (DESIGN 4.4):
-/// `_claim`, `_weight_of`, and in Go `_weightOf`.
+/// `_claim`, `_weight_of`, and in Go `_weightOf`; with a number after it where a name of the module
+/// has that (`_claim_2`, Go's `_weightOf2`), or, in Python, a parameter of the function a host calls
+/// by name.
 pub fn inner_name(t: Target, c: &Checked, f: usize) -> String {
-    let a = c.decls.fns[f].name.ascii();
-    match t {
-        Target::Go => format!("_{}", go_camel(a)),
-        _ => format!("_{a}"),
-    }
+    super::taken::of(t, c).inner[f].clone()
 }
 
-/// Rust's check of what a host gives a function (DESIGN 36.3): `check_claim`, from the alias; with a
-/// number after it where a function of the module has that name (`check_claim2`).
+/// The check of what a host gives a function (DESIGN 4.4, 36.3): Rust's `check_claim`, from the
+/// alias, and Go's `CheckClaim`, from the function's name; with a number after it where a name of the
+/// module has that (`check_claim2`, `CheckClaim2`). None in TypeScript and Python.
 pub fn check_name(t: Target, c: &Checked, f: usize) -> String {
-    let base = format!("check_{}", c.decls.fns[f].name.ascii());
-    let taken: BTreeSet<String> = (0..c.decls.fns.len()).flat_map(|g| [fn_name(t, c, g), inner_name(t, c, g)]).collect();
-    let mut name = base.clone();
-    let mut i = 2;
-    while taken.contains(&name) {
-        name = format!("{base}{i}");
-        i += 1;
-    }
-    name
+    super::taken::of(t, c).checks[f].clone()
 }
 
-/// The one function of a generic function (DESIGN 21.3, 26.7), which the generated code of every module
-/// calls and no host: `_first_or` in TypeScript (exported) and Python, `FirstOr` in Go.
-/// Whether Rust's function `f` of `c` answers a `Result` (DESIGN 36.4): it can fail, or it takes a
-/// function whose type writes no effect, which may be given one that fails and goes on to the callers
-/// (`through`, DESIGN 27.5).
+/// The checks of the fields of the record or the sum `name` of the module `c` (DESIGN 4.4, 28.1): of
+/// what a parameter reaches, and of what a host gives (`_outside_Line` and `_enter_Line`, Go's
+/// methods `KanameOutside` and `KanameEnter`, Rust's `kaname_outside` and `kaname_enter`).
+pub fn checks_of(t: Target, c: &Checked, name: &str) -> (String, String) {
+    super::taken::of(t, c).checks_of.get(name).cloned().unwrap_or_default()
+}
+
 /// Rust: the places of the type parameters of the enum `e` that the fields of its value `value` name
 /// (DESIGN 36.2). The value's struct takes those alone: a struct of Rust uses every type parameter it
 /// takes (`FoundMiss { why }` of `Found[T]`).
@@ -164,11 +144,16 @@ fn names_param(t: &Ty, n: &str) -> bool {
     }
 }
 
+/// Whether Rust's function `f` of `c` answers a `Result` (DESIGN 36.4): it can fail, or it takes a
+/// function whose type writes no effect, which may be given one that fails and goes on to the callers
+/// (`through`, DESIGN 27.5).
 pub fn rs_fails(c: &Checked, f: usize) -> bool {
     let own = c.analysis.get().and_then(|a| a.fns.get(f)).is_some_and(|x| !x.effect.fails.is_empty());
     own || c.decls.fns.get(f).is_some_and(|info| !crate::effects::through(info).is_empty())
 }
 
+/// The one function of a generic function (DESIGN 21.3, 26.7), which the generated code of every module
+/// calls and no host: `_first_or` in TypeScript (exported) and Python, `FirstOr` in Go.
 pub fn generic_name(t: Target, c: &Checked, f: usize) -> String {
     match t {
         // a `private` function is not exported (DESIGN 28.2)
@@ -227,13 +212,18 @@ pub fn param_names(g: &Gen, f: usize) -> Vec<String> {
     let t = g.t;
     let params = &g.c.decls.fns[f].params;
     let mut locals = Locals::default();
+    // the type parameters' names, which a parameter of the name would hide in the body (Go's, and
+    // Python's type variables)
+    for n in g.tparam_names(&g.c.decls.fns[f].tparams) {
+        locals.taken.insert(n);
+    }
     match t {
         Target::Go => params.iter().map(|p| locals.fresh(t, p.name.ascii(), &g.outer)).collect(),
         _ => params
             .iter()
             .map(|p| {
                 let a = p.name.ascii().to_string();
-                let taken = |n: &str, l: &Locals| l.taken.contains(n) || g.outer.contains(n) || kept(t, n);
+                let taken = |n: &str, l: &Locals| l.taken.contains(n) || g.outer.contains(n) || kept(t, n) || helper_like(n);
                 let mut name = a.clone();
                 let mut i = 1;
                 while taken(&name, &locals) {
@@ -251,9 +241,10 @@ pub fn param_names(g: &Gen, f: usize) -> Vec<String> {
     }
 }
 
-/// The alias of the type of what a function can fail with (DESIGN 4.5): `ClaimFails`.
-pub fn fails_name(c: &Checked, f: usize) -> String {
-    format!("{}Fails", ritsu_emit::ident::pascal(c.decls.fns[f].name.ascii()))
+/// The alias of the type of what a function can fail with (DESIGN 4.5): `ClaimFails`, with a number
+/// after it where a name of the module has that (`ClaimFails_2`). TypeScript and Python.
+pub fn fails_name(t: Target, c: &Checked, f: usize) -> String {
+    super::taken::of(t, c).fails[f].clone()
 }
 
 /// The Go package of a module, from its alias.
@@ -268,6 +259,50 @@ pub fn field_name(t: Target, alias: &str) -> String {
         Target::Rust => ritsu_emit::ident::rust_name(alias),
         _ => alias.to_string(),
     }
+}
+
+/// Python: whether a local of this name hides a name the code of its function may reach for: a
+/// builtin, a name of `typing`, the module `dataclasses`.
+fn py_shadowed(w: &str) -> bool {
+    PY_BUILTINS.contains(&w) || PY_TYPING.contains(&w) || w == "dataclasses"
+}
+
+/// Whether a name is one the module's code gives a function it makes (`_outside1`, `_rank2`, DESIGN
+/// 10.3): a local does not take it, which would hide the function where the code calls it.
+fn helper_like(w: &str) -> bool {
+    ["_outside", "_nest", "_eq", "_rank", "_cmp", "_key"].iter().any(|p| w.strip_prefix(p).is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit())))
+}
+
+/// `text` with each word that `with` gives another text for written as that, but a word after `.`
+/// (a name of a module's, `kaname.Q`).
+pub fn replace_words(text: &str, with: &dyn Fn(&str) -> Option<String>) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut word = String::new();
+    let mut prev: Option<char> = None;
+    let flush = |word: &mut String, out: &mut String, before: Option<char>| {
+        if !word.is_empty() {
+            match (before == Some('.')).then_some(None).unwrap_or_else(|| with(word)) {
+                Some(r) => out.push_str(&r),
+                None => out.push_str(word),
+            }
+            word.clear();
+        }
+    };
+    let mut before: Option<char> = None;
+    for c in text.chars() {
+        if c == '_' || c.is_alphanumeric() {
+            if word.is_empty() {
+                before = prev;
+            }
+            word.push(c);
+        } else {
+            flush(&mut word, &mut out, before);
+            out.push(c);
+        }
+        prev = Some(c);
+    }
+    flush(&mut word, &mut out, before);
+    out
 }
 
 /// The words a name of the module's code may not be, besides its own names: the target's keywords,
@@ -294,7 +329,12 @@ fn kept(t: Target, w: &str) -> bool {
 fn type_kept(t: Target, w: &str) -> bool {
     kept(t, w)
         || match t {
-            Target::TypeScript => ["ReadonlyMap", "ReadonlySet", "Readonly", "Record", "Partial", "Boolean", "Date", "Promise", "Iterable"].contains(&w),
+            // and the predefined types, which no type parameter is named (TypeScript's checker,
+            // `checkTypeNameIsReserved`)
+            Target::TypeScript => {
+                ["ReadonlyMap", "ReadonlySet", "Readonly", "Record", "Partial", "Boolean", "Date", "Promise", "Iterable"].contains(&w)
+                    || ["any", "unknown", "never", "number", "bigint", "boolean", "string", "symbol", "void", "object", "undefined"].contains(&w)
+            }
             Target::Python => [
                 "Any", "Callable", "Generic", "TypeVar", "Union", "Literal", "NoReturn", "AbstractSet", "Mapping", "Sequence", "Iterable", "dict", "set", "frozenset", "tuple", "dataclass", "dataclasses", "enum", "_MODULE", "_dt",
             ]
@@ -344,7 +384,7 @@ impl Locals {
         let base = if t == Target::Rust && ritsu_emit::words::rust::NAMES.contains(&base) && !ritsu_emit::ident::RUST_UNRAW.contains(&base.as_str()) { format!("r#{base}") } else { base };
         let mut name = base.clone();
         let mut i = 2;
-        while self.taken.contains(&name) || outer.contains(&name) || kept(t, &name) {
+        while self.taken.contains(&name) || outer.contains(&name) || kept(t, &name) || helper_like(&name) {
             name = if t == Target::Go { format!("{base}{i}") } else { format!("{base}_{i}") };
             i += 1;
         }
@@ -385,6 +425,12 @@ fn num_of(t: &Ty) -> Option<&NumTy> {
         Ty::Opt(x) => num_of(x),
         _ => None,
     }
+}
+
+/// Rust: whether a function of this effect answers its value rather than a `Result` (DESIGN 36.4):
+/// its type writes `total`, or an effect with no kind of failure.
+fn total_fn(eff: &Option<crate::ty::FnEffect>) -> bool {
+    matches!(eff, Some(e) if e.fails.is_empty())
 }
 
 /// The step a declared rate travels in. Never 0: a rate on the step 0 is always 0 (the weight `0%` of
@@ -629,6 +675,59 @@ pub struct Gen<'a> {
     /// Rust: the parameters of the function written last that its body never reads, which its
     /// signature names `_` (DESIGN 36.4).
     pub unread: RefCell<Vec<String>>,
+    /// The name of the constant of the module's name (`_module`, `_MODULE`).
+    pub module_name: String,
+    /// Every name of the module's code outside its functions' bodies so far, in its spaces: the
+    /// table's ([`super::taken`]), the constant's, the imports' and the helpers' (DESIGN 10.3).
+    pub names: RefCell<super::taken::Taken>,
+    /// The names the imports are read by, each given once.
+    pub imports: RefCell<BTreeMap<Import, String>>,
+    /// Python: the parameters of the functions a host calls, by their names, which hide the module's
+    /// names in those functions' bodies.
+    pub given: BTreeSet<String>,
+    /// Python: the fields of the module's classes, which hide the module's names in a class's body.
+    pub fields: BTreeSet<String>,
+    /// The builtins of Python and the globals of TypeScript that a name of the module hides, and how
+    /// the code reaches each ([`Gen::builtin`]).
+    pub hidden: BTreeMap<String, String>,
+    /// TypeScript: the global types a type of the module hides (`globalThis.ReadonlyMap`).
+    pub hidden_types: BTreeMap<String, String>,
+    /// Python: the builtins a field of a class hides in the class's body, and how its annotations
+    /// reach each (`_builtins.int`).
+    pub in_class: BTreeMap<String, String>,
+    /// Python: the names the module imports `builtins`, `typing` and `dataclasses` by where a name
+    /// hides theirs (`_builtins`, `_typing`, `_dataclasses`), kept whether or not the code reads them.
+    pub py_alias: BTreeMap<&'static str, String>,
+    /// Python: the builtins the locals of the function being written hide in it, which its code
+    /// reaches past them ([`Gen::builtin`]); none outside a function's body.
+    pub shadow: RefCell<BTreeSet<String>>,
+}
+
+/// Python's builtins the generated code names: what it calls, and the types its annotations name.
+pub const PY_BUILTINS: [&str; 20] = ["len", "isinstance", "str", "int", "bool", "list", "dict", "tuple", "set", "frozenset", "object", "enumerate", "sorted", "next", "range", "map", "ord", "reversed", "min", "max"];
+
+/// The names of Python's `typing` the generated code imports.
+pub const PY_TYPING: [&str; 9] = ["Any", "AbstractSet", "Callable", "Generic", "Literal", "Mapping", "NoReturn", "TypeVar", "Union"];
+
+/// The names of Python's standard library the generated code imports: two modules and a decorator.
+pub const PY_STD: [&str; 3] = ["dataclasses", "dataclass", "enum"];
+
+/// TypeScript's global values the generated code names.
+pub const TS_VALUES: [&str; 5] = ["BigInt", "Number", "String", "Map", "Set"];
+
+/// TypeScript's global types the generated code names.
+pub const TS_TYPES: [&str; 2] = ["ReadonlyMap", "ReadonlySet"];
+
+/// The words an import is not named, besides the module's names: those the code names bare in the
+/// file where the import's name would hide them (Go's predeclared identifiers, Rust's crates, Python's
+/// builtins and the names it imports, TypeScript's globals).
+fn import_kept(t: Target, w: &str) -> bool {
+    match t {
+        Target::Go => ritsu_emit::words::go::NAMES.contains(w),
+        Target::Rust => ["std", "core", "alloc"].contains(&w),
+        Target::Python => PY_BUILTINS.contains(&w) || PY_TYPING.contains(&w) || PY_STD.contains(&w) || ["builtins", "typing", "datetime"].contains(&w),
+        Target::TypeScript => TS_VALUES.contains(&w) || TS_TYPES.contains(&w) || w == "globalThis",
+    }
 }
 
 /// A type parameter of the declaration written now, as the code names it (DESIGN 26.7).
@@ -672,53 +771,238 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        let mut outer: BTreeSet<String> = BTreeSet::new();
-        for (f, _) in c.decls.fns.iter().enumerate() {
-            outer.insert(fn_name(t, c, f));
-            outer.insert(inner_name(t, c, f));
-            outer.insert(fails_name(c, f));
-            if t == Target::Rust {
-                outer.insert(check_name(t, c, f));
-            }
+        // the names of the module's code (DESIGN 10.3): its table's, and those of the code that held
+        // them before the table took them apart, which the locals keep out of as they did
+        let table = super::taken::of(t, c);
+        let mut outer: BTreeSet<String> = table.taken.all();
+        for (f, info) in c.decls.fns.iter().enumerate() {
+            outer.insert(table.fns[f].clone());
+            outer.insert(format!("{}Fails", ritsu_emit::ident::pascal(info.name.ascii())));
         }
-        for r in &c.decls.records {
-            outer.insert(hidden(type_name(t, r.name.ascii()), r.private));
-            outer.insert(format!("_outside_{}", hidden(type_name(t, r.name.ascii()), r.private)));
-            outer.insert(format!("_enter_{}", hidden(type_name(t, r.name.ascii()), r.private)));
-        }
-        for e in &c.decls.enums {
-            outer.insert(hidden(type_name(t, e.name.ascii()), e.private));
-            if e.is_sum() {
-                // the types of its values, and the check of their fields
-                for v in &e.values {
-                    outer.insert(hidden(variant_name(t, e.name.ascii(), v.ascii()), e.private));
-                }
-                outer.insert(format!("_outside_{}", hidden(type_name(t, e.name.ascii()), e.private)));
-                outer.insert(format!("_enter_{}", hidden(type_name(t, e.name.ascii()), e.private)));
-            } else if t == Target::Go {
-                for v in &e.values {
-                    outer.insert(hidden(member_name(t, e.name.ascii(), v.ascii()), e.private));
-                }
-            }
+        let checked = c.decls.records.iter().map(|r| (r.name.ascii(), r.private)).chain(c.decls.enums.iter().filter(|e| e.is_sum()).map(|e| (e.name.ascii(), e.private)));
+        for (alias, private) in checked {
+            let ty = hidden(type_name(t, alias), private);
+            outer.insert(format!("_outside_{ty}"));
+            outer.insert(format!("_enter_{ty}"));
         }
         // Rust reads `kaname::…` and `units::…` as paths, which no local hides (DESIGN 36.3)
-        let words: &[&str] = if t == Target::Rust { &["_MODULE"] } else { &["_module", "_dt", "_units", "kaname", "units"] };
+        let words: &[&str] = match t {
+            Target::Rust => &["_MODULE"],
+            Target::Python => &["_module", "_MODULE", "_dt", "_units", "kaname", "units"],
+            _ => &["_module", "_dt", "_units", "kaname", "units"],
+        };
         for w in words {
             outer.insert(w.to_string());
         }
-        let g = Gen { t, lang: opts.lang, p, c: c.clone(), opts, places, used: RefCell::default(), units: RefCell::default(), outsides: RefCell::default(), nests: RefCell::default(), ranks: RefCell::default(), eqs: RefCell::default(), cmps: RefCell::default(), outer, tscope: RefCell::default(), unread: RefCell::default() };
-        // the names the imports are read by
-        let mut outer = g.outer.clone();
-        for t in g.c.uses.iter() {
-            let imp = match t {
+        // Python's function a host calls takes its parameters by their names, which hide the names of
+        // the module in its body (the check of what a host gives); a field of a class hides them in
+        // the class's body (its annotations)
+        let given: BTreeSet<String> = if t == Target::Python { c.decls.fns.iter().filter(|i| !i.inner()).flat_map(|i| i.params.iter().map(|p| p.name.ascii().to_string())).collect() } else { BTreeSet::new() };
+        let fields: BTreeSet<String> = if t == Target::Python {
+            c.decls.records.iter().flat_map(|r| r.fields.iter()).chain(c.decls.enums.iter().flat_map(|e| e.fields.iter().flatten())).map(|f| field_name(t, f.name.ascii())).collect()
+        } else {
+            BTreeSet::new()
+        };
+        let mut names = table.taken.clone();
+        // the constant of the module's name
+        let base = if matches!(t, Target::Python | Target::Rust) { "_MODULE" } else { "_module" };
+        let module_name = names.fresh(t, super::taken::Kind::Value, base, |i| super::taken::numbered(t, base, i), |w| given.contains(w));
+        let g = Gen {
+            t,
+            lang: opts.lang,
+            p,
+            c: c.clone(),
+            opts,
+            places,
+            used: RefCell::default(),
+            units: RefCell::default(),
+            outsides: RefCell::default(),
+            nests: RefCell::default(),
+            ranks: RefCell::default(),
+            eqs: RefCell::default(),
+            cmps: RefCell::default(),
+            outer,
+            tscope: RefCell::default(),
+            unread: RefCell::default(),
+            module_name,
+            names: RefCell::new(names),
+            imports: RefCell::default(),
+            given,
+            fields,
+            hidden: BTreeMap::new(),
+            hidden_types: BTreeMap::new(),
+            in_class: BTreeMap::new(),
+            py_alias: BTreeMap::new(),
+            shadow: RefCell::default(),
+        };
+        // the names the imports are read by: the helper module's, the units', Python's datetime, then
+        // each `use`'s in its order
+        let mut imports = vec![Import::Kaname, Import::Units];
+        if t == Target::Python {
+            imports.push(Import::Datetime);
+        }
+        for u in g.c.uses.iter() {
+            imports.push(match u {
                 crate::names::Target::Rule { canon, .. } => Import::Rule(canon.clone()),
                 crate::names::Target::Dates { canon, .. } => Import::Dates(canon.clone()),
                 crate::names::Target::Book { canon, .. } => Import::Book(canon.clone()),
                 crate::names::Target::Module(m) => Import::Module(m.canon.clone()),
-            };
-            outer.insert(g.import_name(&imp));
+            });
         }
-        Gen { outer, ..g }
+        let mut outer = g.outer.clone();
+        for i in &imports {
+            outer.insert(g.import_name(i));
+        }
+        // Python: the names the module imports `builtins`, `typing` and `dataclasses` by where a name
+        // hides theirs, kept from the start (no local takes them): a local hides a builtin in its
+        // function, which the code learns as it writes the function
+        let mut py_alias = BTreeMap::new();
+        if t == Target::Python {
+            for m in ["builtins", "typing", "dataclasses"] {
+                let base = format!("_{m}");
+                let a = g.names.borrow_mut().fresh(t, super::taken::Kind::Import, &base, |i| super::taken::numbered(t, &base, i), |w| g.fields.contains(w) || g.given.contains(w));
+                outer.insert(a.clone());
+                py_alias.insert(m, a);
+            }
+        }
+        let g = Gen { outer, py_alias, ..g };
+        let (hidden, hidden_types, in_class) = g.hidden_builtins();
+        Gen { hidden, hidden_types, in_class, ..g }
+    }
+
+    /// The name of a function the module's code makes (a check, an order, DESIGN 10.3): `prefix` with
+    /// the first number from `n` that no name of the module has; one the function a host calls calls
+    /// (`given`: `_outside…`, `_nest…`) no parameter of Python's function a host calls either.
+    pub fn helper_name(&self, prefix: &str, n: usize, given: bool) -> String {
+        let t = self.t;
+        let mut i = n;
+        loop {
+            let name = format!("{prefix}{i}");
+            if !self.names.borrow().has(t, super::taken::Kind::Value, &name) && !(given && self.given.contains(&name)) {
+                self.names.borrow_mut().add(t, super::taken::Kind::Value, &name);
+                return name;
+            }
+            i += 1;
+        }
+    }
+
+    /// The builtins of the target the names of the module hide, and how the code reaches each past
+    /// them (DESIGN 10.3): Python's through the modules `builtins` and `typing` imported under a name
+    /// of their own (`_builtins.len`, `_typing.Literal`) and the standard library's names under one
+    /// (`_dataclasses`, `_enum`), TypeScript's through `globalThis` (`globalThis.BigInt`); the values,
+    /// and TypeScript's types apart; and Python's builtins a field hides in its class's body (the
+    /// class's annotations, [`Gen::class_hidden`]). Empty where no name of the module is one, as for
+    /// most modules.
+    fn hidden_builtins(&self) -> (BTreeMap<String, String>, BTreeMap<String, String>, BTreeMap<String, String>) {
+        let t = self.t;
+        let mut hidden = BTreeMap::new();
+        let mut types = BTreeMap::new();
+        let mut in_class = BTreeMap::new();
+        match t {
+            Target::Python => {
+                // and the module's type variables (DESIGN 26.7)
+                let mut taken: BTreeSet<String> = self.table_names();
+                let c = &self.c;
+                let lists = c.decls.records.iter().map(|r| &r.tparams).chain(c.decls.enums.iter().filter(|e| e.is_sum()).map(|e| &e.tparams)).chain(c.decls.fns.iter().map(|f| &f.tparams));
+                for ps in lists {
+                    taken.extend(self.tparam_names(ps));
+                }
+                for w in PY_BUILTINS.iter().chain(&PY_TYPING).chain(&PY_STD) {
+                    if taken.contains(*w) {
+                        let a = match self.py_reach(w) {
+                            Some(a) => a,
+                            // `dataclass` and `enum`, which the module's classes name
+                            None => {
+                                let base = format!("_{w}");
+                                self.names.borrow_mut().fresh(t, super::taken::Kind::Import, &base, |i| super::taken::numbered(t, &base, i), |x| self.fields.contains(x) || self.given.contains(x))
+                            }
+                        };
+                        hidden.insert(w.to_string(), a);
+                    } else if self.fields.contains(*w)
+                        && let Some(a) = self.py_reach(w)
+                    {
+                        in_class.insert(w.to_string(), a);
+                    }
+                }
+            }
+            Target::TypeScript => {
+                let names = self.names.borrow();
+                for w in TS_VALUES.iter().filter(|w| names.has(t, super::taken::Kind::Value, w)) {
+                    hidden.insert(w.to_string(), format!("globalThis.{w}"));
+                }
+                for w in TS_TYPES.iter().filter(|w| names.has(t, super::taken::Kind::Type, w)) {
+                    types.insert(w.to_string(), format!("globalThis.{w}"));
+                }
+            }
+            _ => {}
+        }
+        (hidden, types, in_class)
+    }
+
+    /// The names of the module's table, its constant's and its imports': the names the module's code
+    /// gives at its top.
+    fn table_names(&self) -> BTreeSet<String> {
+        let mut all = super::taken::of(self.t, &self.c).taken.all();
+        all.insert(self.module_name.clone());
+        all.extend(self.imports.borrow().values().cloned());
+        all
+    }
+
+    /// Python: how the code reaches a builtin, a name of `typing` or the module `dataclasses` past a
+    /// name that hides it (`_builtins.len`, `_typing.Any`, `_dataclasses`); None for `dataclass` and
+    /// `enum`, which the module's classes alone name.
+    fn py_reach(&self, w: &str) -> Option<String> {
+        if PY_BUILTINS.contains(&w) {
+            Some(format!("{}.{w}", self.py_alias.get("builtins")?))
+        } else if PY_TYPING.contains(&w) {
+            Some(format!("{}.{w}", self.py_alias.get("typing")?))
+        } else if w == "dataclasses" {
+            self.py_alias.get("dataclasses").cloned()
+        } else {
+            None
+        }
+    }
+
+    /// A builtin of Python or a global of TypeScript, as the code names it: past a name of the module
+    /// that hides it (`_builtins.len`, `globalThis.BigInt`), or past a local of Python's function
+    /// being written (its code written again, [`Fx::body_with`]); else as it is.
+    pub fn builtin(&self, w: &str) -> String {
+        if let Some(h) = self.hidden.get(w) {
+            return h.clone();
+        }
+        if self.t == Target::Python
+            && self.shadow.borrow().contains(w)
+            && let Some(a) = self.py_reach(w)
+        {
+            return a;
+        }
+        w.to_string()
+    }
+
+    /// The builtins whose calls the code reaches past a name of the module (DESIGN 10.3): Python's
+    /// builtins and TypeScript's global values, which no name the code calls has (no local takes their
+    /// names, [`kept`], and a function of the module's is called by its inner function's name).
+    pub fn called_hidden(&self) -> BTreeMap<String, String> {
+        self.hidden.iter().filter(|(w, _)| PY_BUILTINS.contains(&w.as_str()) || TS_VALUES.contains(&w.as_str())).map(|(w, h)| (w.clone(), h.clone())).collect()
+    }
+
+    /// The modules of Python's standard library the code imports under a name of their own where a
+    /// name hides theirs, and the names: `builtins`, `typing` and `dataclasses` (an import is written
+    /// where the code reads it).
+    pub fn py_aliases(&self) -> &BTreeMap<&'static str, String> {
+        &self.py_alias
+    }
+
+    /// A type of TypeScript's globals, as the code names it: `globalThis.ReadonlyMap` past a type of the
+    /// module of that name, else as it is.
+    pub fn global_type(&self, w: &str) -> String {
+        self.hidden_types.get(w).cloned().unwrap_or_else(|| w.to_string())
+    }
+
+    /// The names of Python's builtins that a class whose fields are `fields` hides in its body, and how
+    /// the class's annotations reach each (`_builtins.int` in a class with a field `int`).
+    pub fn class_hidden(&self, fields: &[String]) -> BTreeMap<String, String> {
+        fields.iter().filter_map(|f| self.in_class.get(f).map(|h| (f.clone(), h.clone()))).collect()
     }
 
     pub fn say(&self, t: &Text) -> String {
@@ -732,10 +1016,24 @@ impl<'a> Gen<'a> {
         n
     }
 
-    /// The name an import is read by: for a file of a dependency's, with the names of the
+    /// The name an import is read by: the one it is spelled by ([`Gen::import_base`]), unless a name
+    /// of the module, another import or a word the code names bare has it; then with a number after
+    /// it (`units_2`, Go's `units2`, DESIGN 10.3). Each import is given its name once.
+    pub fn import_name(&self, i: &Import) -> String {
+        if let Some(n) = self.imports.borrow().get(i) {
+            return n.clone();
+        }
+        let t = self.t;
+        let base = self.import_base(i);
+        let n = self.names.borrow_mut().fresh(t, super::taken::Kind::Import, &base, |k| super::taken::numbered(t, &base, k), |w| import_kept(t, w) || self.fields.contains(w));
+        self.imports.borrow_mut().insert(i.clone(), n.clone());
+        n
+    }
+
+    /// The name an import is spelled by: for a file of a dependency's, with the names of the
     /// dependencies on the way to it before its own (`rule_pricing_fee`, ritsu's DESIGN 17.8), so
     /// that the files of one name of two modules are two names.
-    pub fn import_name(&self, i: &Import) -> String {
+    pub fn import_base(&self, i: &Import) -> String {
         let t = self.t;
         let of = |f: &std::path::Path, name: String| ritsu_emit::package::local_name(&self.opts.dir_of(f), &name);
         match i {
@@ -858,9 +1156,11 @@ impl<'a> Gen<'a> {
         })
     }
 
-    /// Whether `x` is the absent value, written out.
+    /// Whether `x` is the absent value, written out: the target's own (`null`, `None`, `nil`). A
+    /// local named another target's word is a name there (`nil` in TypeScript, Python and Rust), and
+    /// the target's word itself no name is (each is kept, [`kept`]).
     pub fn absent(&self, x: &Ex) -> bool {
-        matches!(x, Ex::Atom(a) if a == "null" || a == "None" || a == "nil")
+        matches!((x, self.null()), (Ex::Atom(a), Ex::Atom(n)) if *a == n)
     }
 
     pub fn null(&self) -> Ex {
@@ -892,9 +1192,10 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The module's name, as the code passes it to an error.
+    /// The module's name, as the code passes it to an error: the constant `_module` (`_MODULE` in
+    /// Python and Rust), with a number after it where a name of the module has it.
     pub fn module_const(&self) -> Ex {
-        Ex::atom(if matches!(self.t, Target::Python | Target::Rust) { "_MODULE" } else { "_module" })
+        Ex::atom(self.module_name.clone())
     }
 
     /// The three arguments of where an operation fails: the module, the line, the message.
@@ -918,6 +1219,16 @@ impl<'a> Gen<'a> {
     pub fn held_call(&self, args: Vec<Ex>) -> Ex {
         let call = self.kcall(&self.helper("held", "held", "Held"), args);
         if self.t == Target::Rust { call.tried() } else { call }
+    }
+
+    /// Go: the name of a helper of `kaname` whose type parameter a collection's type and a value both
+    /// give (`Append[T any](xs []T, x T)`, `Put`), with its types written where the code writes the
+    /// value as one of a sum's values' structs ([`Fx::go_variant`]) and the collection holds the sum's
+    /// interface (DESIGN 23.8): Go reads the struct as the type, which is not the collection's
+    /// (`kaname.Append[Shape](shapes, ShapeCircle{R: 1})`). The name alone otherwise.
+    pub fn go_targs(&self, f: &str, tys: Vec<String>, variant: bool, place: &Ty) -> String {
+        let sum = matches!(place, Ty::Enum(id) if self.p.is_sum(id));
+        if variant && sum { format!("{f}[{}]", tys.join(", ")) } else { f.to_string() }
     }
 
     pub fn kcall(&self, f: &str, args: Vec<Ex>) -> Ex {
@@ -973,11 +1284,29 @@ impl<'a> Gen<'a> {
 
     /// Whether a value of `t` is `Copy` in Rust: given by value, never lent, never cloned.
     pub fn is_copy(&self, t: &Ty) -> bool {
+        // a column of a rule's code: `Copy` but a string, and what may be none of one
+        fn column(t: &ColumnType) -> bool {
+            match t {
+                ColumnType::Str => false,
+                ColumnType::Opt(x) => column(x),
+                _ => true,
+            }
+        }
+        // a struct of rulec's Rust: `Copy` where no field is a string or may be none (rulec's
+        // `rs_derive`)
+        let derived = |cols: &[ritsu_ports::Column]| cols.iter().all(|c| !matches!(c.ty, ColumnType::Str | ColumnType::Opt(_)));
         match t {
             Ty::Num(_) | Ty::Bool | Ty::Date | Ty::Fn(..) | Ty::None | Ty::Error => true,
             Ty::Enum(id) => !self.p.is_sum(id),
             Ty::Opt(x) => self.is_copy(x),
             Ty::Result(a, e) => self.is_copy(a) && self.is_copy(e),
+            // a rule's answer as its code gives it (DESIGN 36.4): one output is the value itself
+            Ty::Record(RecId::Outputs(f)) => match self.p.rules.get(f) {
+                Some(facts) if facts.outputs.len() == 1 => column(&facts.outputs[0].ty),
+                Some(facts) => derived(&facts.outputs),
+                None => false,
+            },
+            Ty::Record(RecId::Element(f, seq)) => self.p.rules.get(f).and_then(|r| r.elements.iter().find(|(n, _, _)| n == seq)).is_some_and(|(_, _, cols)| derived(cols)),
             _ => false,
         }
     }
@@ -1069,7 +1398,12 @@ impl<'a> Gen<'a> {
                 Ty::List(_) => v.ex.clone().method("map", vec![Ex::atom("<[_]>::to_vec")]),
                 _ => v.ex.clone().method("cloned", vec![]),
             },
-            _ => v.ex.clone().method("clone", vec![]),
+            // a place lent by a borrow, cloned from the place (`x.q.clone()`: `(&x.q).clone()` is
+            // clippy's `needless_borrow`)
+            _ => match &v.ex {
+                Ex::Ref(x) => (**x).clone().method("clone", vec![]),
+                _ => v.ex.clone().method("clone", vec![]),
+            },
         }
     }
 
@@ -1197,8 +1531,8 @@ impl<'a> Gen<'a> {
     /// map.
     pub fn dict_type(&self, k: String, v: String) -> String {
         match self.t {
-            Target::TypeScript => format!("ReadonlyMap<{k}, {v}>"),
-            Target::Python => format!("Mapping[{k}, {v}]"),
+            Target::TypeScript => format!("{}<{k}, {v}>", self.global_type("ReadonlyMap")),
+            Target::Python => format!("{}[{k}, {v}]", self.builtin("Mapping")),
             Target::Go => format!("map[{k}]{v}"),
             Target::Rust => format!("{}<{k}, {v}>", self.std_type("BTreeMap")),
         }
@@ -1208,8 +1542,8 @@ impl<'a> Gen<'a> {
     /// made), Go's map to `struct{}`.
     pub fn set_type(&self, x: String) -> String {
         match self.t {
-            Target::TypeScript => format!("ReadonlySet<{x}>"),
-            Target::Python => format!("AbstractSet[{x}]"),
+            Target::TypeScript => format!("{}<{x}>", self.global_type("ReadonlySet")),
+            Target::Python => format!("{}[{x}]", self.builtin("AbstractSet")),
             Target::Go => format!("map[{x}]struct{{}}"),
             Target::Rust => format!("{}<{x}>", self.std_type("BTreeSet")),
         }
@@ -1420,7 +1754,7 @@ impl<'a> Gen<'a> {
         match t {
             ColumnType::Bool => self.bool_type().into(),
             ColumnType::Str => self.str_type().into(),
-            ColumnType::Date => self.int_type().into(),
+            ColumnType::Date { .. } => self.int_type().into(),
             ColumnType::Enum { name: n, .. } => match self.rule_enum(f, n) {
                 Some(e) => self.path(&self.imp(Import::Rule(f.to_path_buf())), &e.alias),
                 None => self.str_type().into(),
@@ -1449,6 +1783,11 @@ impl<'a> Gen<'a> {
 
     /// The type of a value of `t` while it is worked on (DESIGN 10.2).
     pub fn flight(&self, t: &Ty) -> String {
+        let s = self.flight_bare(t);
+        self.unhidden(s)
+    }
+
+    fn flight_bare(&self, t: &Ty) -> String {
         match t {
             Ty::Num(n) => match rep(n) {
                 Rep::Int => self.int_type().into(),
@@ -1480,13 +1819,25 @@ impl<'a> Gen<'a> {
     /// The type of a value of `t` as it travels: what a function takes and answers, what a record
     /// holds (DESIGN 9): an amount as the package's type of its unit, a rate as a count of its step.
     pub fn boundary(&self, t: &Ty) -> String {
-        match t {
+        let s = match t {
             Ty::Num(n) if n.is_rate() => self.int_type().into(),
             Ty::Num(n) => self.unit_type(&n.unit),
             Ty::List(x) => self.list_type(self.boundary(x)),
             Ty::Opt(x) => self.opt_type(self.boundary(x)),
             t => self.flight(t),
+        };
+        self.unhidden(s)
+    }
+
+    /// Python: a type as the code writes it where a name of the module or a local of the function
+    /// being written hides a builtin it names (`_builtins.int`, DESIGN 10.3). A word after `.` is a
+    /// module's own (`kaname.Q`); a type of the module's is no builtin's name (its name is in Pascal
+    /// case), and the names of `typing` a type names are written so where they are.
+    fn unhidden(&self, s: String) -> String {
+        if self.t != Target::Python || (self.hidden.is_empty() && self.shadow.borrow().is_empty()) {
+            return s;
         }
+        replace_words(&s, &|w: &str| (PY_BUILTINS.contains(&w) && (self.hidden.contains_key(w) || self.shadow.borrow().contains(w))).then(|| self.builtin(w)))
     }
 
     /// A function type in the target (DESIGN 27.6): its parameters and its answer as they travel, as a
@@ -1503,7 +1854,7 @@ impl<'a> Gen<'a> {
                 };
                 format!("({}) => {rt}", named.join(", "))
             }
-            Target::Python => format!("Callable[[{}], {rt}]", pts.join(", ")),
+            Target::Python => format!("{}[[{}], {rt}]", self.builtin("Callable"), pts.join(", ")),
             Target::Go => format!("func({}) {rt}", pts.join(", ")),
             // lent, as a parameter is (DESIGN 36.2): what has no effect written may be given one
             // that fails, so it answers a `Result`; `total` answers the value
@@ -1847,7 +2198,7 @@ impl<'a> Gen<'a> {
     /// argument is held at every depth and a kaname call's is held short of the values of types that
     /// hold themselves (DESIGN 28.1), the two are two functions; elsewhere one.
     pub fn outside_fn(&self, slot: &Slot, reach: Reach) -> Option<String> {
-        if !self.checkable(&slot.ty, slot.range.is_some() || slot.count.is_some(), reach, 0) {
+        if !self.checkable(&slot.ty, slot.range.is_some() || slot.count.is_some(), reach, 0) || self.finds_nothing(slot, reach) {
             return None;
         }
         let tparams = self.tparams_of(&slot.ty);
@@ -1856,8 +2207,7 @@ impl<'a> Gen<'a> {
         if let Some(o) = self.outsides.borrow().iter().find(|o| o.key == key) {
             return Some(o.name.clone());
         }
-        let n = self.outsides.borrow().len() + 1;
-        let name = format!("_outside{n}");
+        let name = self.helper_name("_outside", self.outsides.borrow().len() + 1, true);
         // made first, so that a record that holds itself is not made forever (it cannot: E108)
         self.outsides.borrow_mut().push(Outside { key: key.clone(), name: name.clone(), body: Vec::new(), ty: String::new(), tparams });
         let v = Ex::atom("v");
@@ -1870,6 +2220,24 @@ impl<'a> Gen<'a> {
             o.ty = ty;
         }
         Some(name)
+    }
+
+    /// Whether the check of a value of `slot` finds nothing in Go and Rust, though the slot declares a
+    /// range: the numbers it holds to it (the value, there or not; a list's elements, a set's members,
+    /// a dict's values where its keys are not checked) have none of its ends as they travel, each at or
+    /// past int64's own (`num_ends`, DESIGN 44). No check of it is made.
+    fn finds_nothing(&self, slot: &Slot, reach: Reach) -> bool {
+        let nothing = |x: &Ty| match (x.present(), &slot.range) {
+            (Ty::Num(n), Some(r)) => self.num_ends(n, r) == (None, None),
+            _ => false,
+        };
+        matches!(self.t, Target::Go | Target::Rust)
+            && slot.count.is_none()
+            && match slot.ty.present() {
+                Ty::List(x) | Ty::Set(x) => nothing(x),
+                Ty::Dict(k, x) => !self.checkable(k, false, reach, 0) && nothing(x),
+                x => nothing(x),
+            }
     }
 
     /// Whether a value of `t` can be outside what its place declares.
@@ -1892,7 +2260,11 @@ impl<'a> Gen<'a> {
             // a string, to its count, and where a parameter reaches it to be well formed (DESIGN 25.1):
             // a string of Rust's is always (DESIGN 36.5)
             Ty::Str => declared || (reached && self.t != Target::Rust),
-            Ty::Record(RecId::Module { .. } | RecId::Variant { .. }) if reached => self.record_checkable(t, depth, reach),
+            // a module's record, a value of a sum, a record a built-in function answers, and where a host
+            // gives it, an element of a list a rule walks (DESIGN 4.4)
+            Ty::Record(RecId::Module { .. } | RecId::Variant { .. } | RecId::Indexed(_) | RecId::Entry(..) | RecId::Running(..) | RecId::Element(..)) if reached => {
+                self.record_checkable(t, depth, reach)
+            }
             Ty::Enum(id) if reached && self.p.is_sum(id) => self.record_checkable(t, depth, reach),
             // a result, by the value it holds (DESIGN 26.3)
             Ty::Result(a, e) if reached => self.checkable(a, false, reach, depth + 1) || self.checkable(e, false, reach, depth + 1),
@@ -1924,7 +2296,10 @@ impl<'a> Gen<'a> {
             Ty::Str => (counted, reached && self.t != Target::Rust),
             Ty::List(x) | Ty::Set(x) => self.strings_in(x, false, reach, depth + 1),
             Ty::Dict(k, x) => or(self.strings_in(k, false, reach, depth + 1), self.strings_in(x, false, reach, depth + 1)),
-            Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. })) if inside => {
+            Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. } | RecId::Indexed(_) | RecId::Entry(..) | RecId::Running(..))) if inside => {
+                self.p.fields(id).iter().fold((false, false), |acc, (_, s)| or(acc, self.strings_in(&s.ty, s.count.is_some(), reach, depth + 1)))
+            }
+            Ty::Record(id @ RecId::Element(..)) if reach == Reach::Entry => {
                 self.p.fields(id).iter().fold((false, false), |acc, (_, s)| or(acc, self.strings_in(&s.ty, s.count.is_some(), reach, depth + 1)))
             }
             Ty::Enum(id) if inside && self.p.is_sum(id) => self.p.values(id).0.iter().fold((false, false), |acc, v| {
@@ -1945,7 +2320,10 @@ impl<'a> Gen<'a> {
             Ty::Opt(x) => self.counts_in(x, counted, reach, depth),
             Ty::List(x) | Ty::Set(x) => counted || self.counts_in(x, false, reach, depth + 1),
             Ty::Dict(k, x) => counted || self.counts_in(k, false, reach, depth + 1) || self.counts_in(x, false, reach, depth + 1),
-            Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. })) if inside => self.p.fields(id).iter().any(|(_, s)| self.counts_in(&s.ty, s.count.is_some(), reach, depth + 1)),
+            Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. } | RecId::Indexed(_) | RecId::Entry(..) | RecId::Running(..))) if inside => {
+                self.p.fields(id).iter().any(|(_, s)| self.counts_in(&s.ty, s.count.is_some(), reach, depth + 1))
+            }
+            Ty::Record(id @ RecId::Element(..)) if reach == Reach::Entry => self.p.fields(id).iter().any(|(_, s)| self.counts_in(&s.ty, s.count.is_some(), reach, depth + 1)),
             Ty::Enum(id) if inside && self.p.is_sum(id) => self.p.values(id).0.iter().any(|v| self.p.value_fields(id, &v.text).iter().any(|(_, s)| self.counts_in(&s.ty, s.count.is_some(), reach, depth + 1))),
             Ty::Result(a, e) if reached => self.counts_in(a, false, reach, depth + 1) || self.counts_in(e, false, reach, depth + 1),
             _ => false,
@@ -1954,17 +2332,23 @@ impl<'a> Gen<'a> {
 
     /// Whether a record, a value of a sum or the type of one of its values has a field a parameter
     /// reaching it can find outside what it declares, as `reach` holds it: a kaname call does not hold
-    /// a value of a type that holds itself (DESIGN 28.1).
+    /// a value of a type that holds itself (DESIGN 28.1). The records the built-in functions answer
+    /// are held as a module's, and an element of a list a rule walks where a host gives it.
     pub fn record_checkable(&self, t: &Ty, depth: usize, reach: Reach) -> bool {
         if reach == Reach::Call && self.p.recursive(t) {
             return false;
         }
         let fields: Vec<(crate::ast::Name, Slot)> = match t {
-            Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. })) => self.p.fields(id),
+            Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. } | RecId::Indexed(_) | RecId::Entry(..) | RecId::Running(..))) => self.p.fields(id),
+            // one kaname builds is the rule's to hold where kaname calls it (DESIGN 4.4)
+            Ty::Record(id @ RecId::Element(..)) if reach == Reach::Entry => self.p.fields(id),
             Ty::Enum(id) if self.p.is_sum(id) => self.p.values(id).0.iter().flat_map(|v| self.p.value_fields(id, &v.text)).collect(),
             _ => return false,
         };
-        fields.iter().any(|(_, s)| self.checkable(&s.ty, s.range.is_some() || s.count.is_some(), reach, depth + 1))
+        // Python holds the date of an element as the rule's count of days, which can be past the days
+        // of its date ([`Self::element_checks`])
+        let days = self.t == Target::Python && matches!(t, Ty::Record(RecId::Element(..)));
+        fields.iter().any(|(_, s)| (days && matches!(s.ty.present(), Ty::Date)) || (self.checkable(&s.ty, s.range.is_some() || s.count.is_some(), reach, depth + 1) && !self.finds_nothing(s, reach)))
     }
 
     /// The sum a type is of, for a value of it or the type of one of its values: the check of its fields
@@ -2050,7 +2434,7 @@ impl<'a> Gen<'a> {
                 if !inner.is_empty() {
                     let head = match self.t {
                         Target::TypeScript => format!("for (let {} = 0; {} < {}.length; {}++)", i.print(self.t), i.print(self.t), v.print(self.t), i.print(self.t)),
-                        Target::Python => format!("for {}, {} in enumerate({})", i.print(self.t), el.print(self.t), v.print(self.t)),
+                        Target::Python => format!("for {}, {} in {}({})", i.print(self.t), el.print(self.t), self.builtin("enumerate"), v.print(self.t)),
                         Target::Go => format!("for {}, {} := range {}", i.print(self.t), el.print(self.t), v.print(self.t)),
                         // an element of a `Copy` type by value, any other lent
                         Target::Rust => format!("for ({}, {}{}) in {}.iter().enumerate()", i.print(self.t), if self.is_copy(x) { "&" } else { "" }, el.print(self.t), v.print(self.t)),
@@ -2157,7 +2541,7 @@ impl<'a> Gen<'a> {
                             if valued {
                                 body.push(Node::Line(format!("{} = {}[{}]", val.print(self.t), v.print(self.t), key.print(self.t))));
                             }
-                            format!("for {}, {} in enumerate({})", i.print(self.t), key.print(self.t), keys.print(self.t))
+                            format!("for {}, {} in {}({})", i.print(self.t), key.print(self.t), self.builtin("enumerate"), keys.print(self.t))
                         }
                         Target::Go => {
                             if valued {
@@ -2197,6 +2581,28 @@ impl<'a> Gen<'a> {
                 }
             }
             // a result: the value it holds, where a parameter reaches it (`r.ok.qty`, DESIGN 26.3)
+            // a record a built-in function answers (`indexed`, `entries`, `running_totals`), which a host
+            // gives as any other and which has no check of its own: each field by the check of its slot,
+            // as the interpreter's `outside` holds it (`x.item.name`)
+            Ty::Record(id @ (RecId::Indexed(_) | RecId::Entry(..) | RecId::Running(..))) => {
+                if !reached || !self.record_checkable(t, depth, reach) {
+                    return out;
+                }
+                for (k, (f, s)) in self.p.fields(id).iter().enumerate() {
+                    let Some(fun) = self.outside_fn(s, reach) else { continue };
+                    let x = self.lent_field(v, t, f.ascii(), &s.ty);
+                    let o = Ex::atom(format!("o{depth}_{}", k + 1));
+                    let at = self.what_arg(&self.what_at(&what, &f.text));
+                    out.extend(self.if_found(&o, Ex::call(fun, vec![x, at]), vec![Node::Line(self.ret_found(o.clone()))]));
+                }
+            }
+            // an element of a list a rule walks, where a host gives it: each field to the rule's column
+            // (`p.weight`, DESIGN 4.4)
+            Ty::Record(RecId::Element(file, seq)) => {
+                if reach == Reach::Entry {
+                    out.extend(self.element_checks(v, file, seq, &what, depth));
+                }
+            }
             Ty::Result(a, er) => {
                 if !reached {
                     return out;
@@ -2221,15 +2627,17 @@ impl<'a> Gen<'a> {
                             out.push(Node::Switch(format!("switch {} := {}.(type)", x.print(self.t), v.print(self.t)), cases, Vec::new()));
                         }
                     }
-                    // Rust's lent `Result`: what it holds, by `if let`
+                    // Rust's lent `Result`: what it holds, by `if let`; a value that is `Copy` copied
+                    // out of the `Result` of references `as_ref` makes (a `&` pattern matches no value
+                    // a lent `Result` holds)
                     Target::Rust => {
                         let x = Ex::atom(format!("r{depth}"));
                         let mut arms = Vec::new();
                         for (tag, ctor, inner) in [("ok", "Ok", &**a), ("err", "Err", &**er)] {
                             let body = self.outside_body(&x, inner, None, None, at(tag), reach, depth + 1);
                             if !body.is_empty() {
-                                let pat = if self.is_copy(inner) { format!("&{}", x.print(self.t)) } else { x.print(self.t) };
-                                arms.push((Ex::atom(format!("let {ctor}({pat}) = {}", v.print(self.t))), body));
+                                let (pat, of) = if self.is_copy(inner) { (format!("&{}", x.print(self.t)), v.clone().method("as_ref", vec![])) } else { (x.print(self.t), v.clone()) };
+                                arms.push((Ex::atom(format!("let {ctor}({pat}) = {}", of.print(self.t))), body));
                             }
                         }
                         if !arms.is_empty() {
@@ -2389,7 +2797,7 @@ impl<'a> Gen<'a> {
         let name = match found {
             Some(n) => n,
             None => {
-                let n = format!("_outside{}", self.outsides.borrow().len() + 1);
+                let n = self.helper_name("_outside", self.outsides.borrow().len() + 1, true);
                 self.outsides.borrow_mut().push(Outside { key: key.clone(), name: n.clone(), body: Vec::new(), ty: String::new(), tparams: String::new() });
                 let body = self.inst_body(t, if deep { Reach::Entry } else { Reach::Call });
                 let ty = if self.t == Target::Rust { self.lent_type(t, true) } else { self.boundary(t) };
@@ -2470,7 +2878,7 @@ impl<'a> Gen<'a> {
         if let Some(o) = self.nests.borrow().iter().find(|o| o.key == key) {
             return Some(o.name.clone());
         }
-        let name = format!("_nest{}", self.nests.borrow().len() + 1);
+        let name = self.helper_name("_nest", self.nests.borrow().len() + 1, true);
         // made first, so that the function of a type that holds itself can call itself
         self.nests.borrow_mut().push(Outside { key: key.clone(), name: name.clone(), body: Vec::new(), ty: String::new(), tparams });
         let body = self.nest_body(t);
@@ -2575,13 +2983,16 @@ impl<'a> Gen<'a> {
                         }
                         out.push(Node::Switch("switch r := v.(type)".into(), cases, Vec::new()));
                     }
+                    // what the `Result` holds is reached through a reference, and lent as the
+                    // function takes it (`Option<&T>` of an `&Option<T>`)
                     Target::Rust => {
+                        let lent = |t: &Ty| self.lent(&Val::held(Ex::atom("r"), t.clone(), Held::Ref));
                         let mut arms = Vec::new();
                         if let Some(f) = fa {
-                            arms.push((Ex::atom("let Ok(r) = v"), back(Ex::call(f, vec![Ex::atom("r"), above.clone()]))));
+                            arms.push((Ex::atom("let Ok(r) = v"), back(Ex::call(f, vec![lent(a), above.clone()]))));
                         }
                         if let Some(f) = fe {
-                            arms.push((Ex::atom("let Err(r) = v"), back(Ex::call(f, vec![Ex::atom("r"), above.clone()]))));
+                            arms.push((Ex::atom("let Err(r) = v"), back(Ex::call(f, vec![lent(e), above.clone()]))));
                         }
                         out.push(Node::If(arms, Vec::new()));
                     }
@@ -2635,6 +3046,9 @@ impl<'a> Gen<'a> {
                 match (t, Self::sum_of(t)) {
                     (Ty::Record(id @ RecId::Module { .. }), _) => out.extend(fields_of(&v, t, &self.p.fields(id))),
                     (Ty::Record(id @ RecId::Variant { .. }), _) => out.extend(fields_of(&v, t, &self.p.fields(id))),
+                    // the records the built-in functions answer (`indexed`, `entries`,
+                    // `running_totals`): their fields, as the interpreter's `nesting` walks them
+                    (Ty::Record(id @ (RecId::Indexed(_) | RecId::Entry(..) | RecId::Running(..))), _) => out.extend(fields_of(&v, t, &self.p.fields(id))),
                     (Ty::Enum(_), Some(id)) => {
                         let Owner::Module(file) = &id.owner else { return out };
                         let mut arms: Vec<(String, Ex, Vec<Node>)> = Vec::new();
@@ -2674,7 +3088,7 @@ impl<'a> Gen<'a> {
         let text = tr!("関数 `{fun}` の引数 `{param}` は、`{P}` の入れ子が {most} 段を超えています", "The argument `{param}` of `{fun}` nests `{P}` more than {most} deep");
         if self.t == Target::Rust {
             let msg = self.rs_format(template(&text, self.lang).into_iter().map(|p| p.map_err(|_| n.clone())).collect());
-            return vec![self.fail_line("input", line, msg)];
+            return vec![self.fail_input_line(line, self.string(param), msg)];
         }
         let msg = template(&text, self.lang)
             .into_iter()
@@ -2684,7 +3098,96 @@ impl<'a> Gen<'a> {
             })
             .reduce(|a, b| Ex::bin(Op::Add, a, b))
             .unwrap_or(self.string(""));
-        vec![self.fail_line("input", line, msg)]
+        vec![self.fail_input_line(line, self.string(param), msg)]
+    }
+
+    /// The path of the field `name` of the place `what` (`what + ".item"`; Rust's `format!`).
+    fn what_at(&self, what: &Ex, name: &str) -> Ex {
+        match self.t {
+            Target::Rust => self.rs_format(vec![Err(what.clone()), Ok(format!(".{name}"))]),
+            _ => Ex::bin(Op::Add, what.clone(), self.string(&format!(".{name}"))),
+        }
+    }
+
+    /// The checks of an element of a list a rule walks that a host gives (DESIGN 4.4): each field of
+    /// `v`, as the rule's code holds it, read as kaname's types hold it (a date from the rule's count of
+    /// days, a rate from Go's and Rust's type of it), held to the rule's column by the check of its
+    /// slot; a field that may be none, where it is there. Python's date holds no day past 0001-01-01 to
+    /// 9999-12-31 (`date_of` raises on one): there a date is held as the count of days it is, to the
+    /// range of its column, its ends the calendar's where none is written (DESIGN 22.5).
+    fn element_checks(&self, v: &Ex, file: &Path, seq: &str, what: &Ex, depth: usize) -> Vec<Node> {
+        let mut out = Vec::new();
+        let Some(facts) = self.p.rules.get(file) else { return out };
+        let Some((_, _, cols)) = facts.elements.iter().find(|(n, _, _)| n == seq) else { return out };
+        let fields = self.p.fields(&RecId::Element(file.to_path_buf(), seq.to_string()));
+        for (k, ((f, s), col)) in fields.iter().zip(cols).enumerate() {
+            let present = s.ty.present().clone();
+            let slot = Slot { ty: present.clone(), range: s.range.clone(), count: s.count.clone() };
+            let mut inner = &col.ty;
+            while let ColumnType::Opt(x) = inner {
+                inner = x;
+            }
+            let days = (self.t == Target::Python && matches!(inner, ColumnType::Date { .. })).then(|| crate::ty::filled(s.range.as_ref(), crate::ty::whole_range(&Ty::Date)).unwrap_or_default());
+            let fun = self.outside_fn(&slot, Reach::Entry);
+            if fun.is_none() && days.is_none() {
+                continue;
+            }
+            let name = match self.t {
+                Target::Go => ritsu_emit::ident::pascal(&col.alias),
+                Target::Rust => ritsu_emit::ident::rust_name(&col.alias),
+                _ => col.alias.clone(),
+            };
+            let raw = v.clone().dot(name);
+            let o = Ex::atom(format!("o{depth}_{}", k + 1));
+            let at = self.what_arg(&self.what_at(what, &f.text));
+            let check = |x: Ex| -> Vec<Node> {
+                if let Some(r) = &days {
+                    let ends = [r.min.map(|lo| Ex::bin(Op::Lt, x.clone(), self.int(lo.num))), r.max.map(|hi| Ex::bin(Op::Gt, x.clone(), self.int(hi.num)))];
+                    let Some(test) = ends.into_iter().flatten().reduce(|a, b| Ex::bin(Op::Or, a, b)) else { return Vec::new() };
+                    let found = self.outside_value(at.clone(), self.kcall("day_text", vec![x]), self.string(&crate::value::range_text(r, &Ty::Date)), None);
+                    return vec![Node::If(vec![(test, vec![Node::Line(self.ret_found(found))])], Vec::new())];
+                }
+                let Some(fun) = &fun else { return Vec::new() };
+                let read = self.lent(&Val::held(self.from_rule_col(x, inner), present.clone(), Held::Kept));
+                self.if_found(&o, Ex::call(fun, vec![read, at.clone()]), vec![Node::Line(self.ret_found(o.clone()))])
+            };
+            if !matches!(col.ty, ColumnType::Opt(_)) {
+                out.extend(check(raw));
+                continue;
+            }
+            // a field that may be none: where it is there
+            let (test, there) = match self.t {
+                Target::TypeScript => (Ex::bin(Op::Ne, raw.clone(), self.null()), raw),
+                Target::Python => (Ex::atom(format!("{} is not None", raw.print(self.t))), raw),
+                Target::Go => (Ex::bin(Op::Ne, raw.clone(), self.null()), Ex::Deref(Box::new(raw))),
+                Target::Rust => {
+                    let x = Ex::atom(format!("x{depth}_{}", k + 1));
+                    let of = if matches!(inner, ColumnType::Str) { raw.borrow() } else { raw };
+                    (Ex::atom(format!("let Some({}) = {}", x.print(self.t), of.print(self.t))), x)
+                }
+            };
+            out.push(Node::If(vec![(test, check(there))], Vec::new()));
+        }
+        out
+    }
+
+    /// A value of a rule's column as kaname's types hold it where a host gives it, for a check: a date
+    /// from the rule's count of days, a rate as the count of its step from Go's and Rust's type of it;
+    /// any other as it is (the package's type of a unit is the rule's and kaname's).
+    fn from_rule_col(&self, x: Ex, col: &ColumnType) -> Ex {
+        match col {
+            ColumnType::Date { .. } => match self.t {
+                Target::TypeScript => self.kcall("dateOf", vec![Ex::call("Number", vec![x])]),
+                Target::Python => self.kcall("date_of", vec![x]),
+                Target::Go | Target::Rust => self.kcall("DateOf", vec![x]),
+            },
+            ColumnType::Num { unit: Some(u), .. } if u.dim == Dim::Rate => match self.t {
+                Target::Go => Ex::call("int64", vec![x]),
+                Target::Rust => x.dot("0"),
+                _ => x,
+            },
+            _ => x,
+        }
     }
 
     /// The check of a record of a module, reached from a parameter: `deep` the check of a host's
@@ -2693,13 +3196,13 @@ impl<'a> Gen<'a> {
     pub fn record_check_call(&self, id: &RecId, v: Ex, what: Ex, deep: bool) -> Ex {
         let RecId::Module { file, name, .. } = id else { return self.null() };
         let m = self.p.module(file);
-        let (alias, private) = m.decls.records.iter().find(|r| r.name.text == *name).map(|r| (r.name.ascii().to_string(), r.private)).unwrap_or_default();
+        let (outside, enter) = checks_of(self.t, m, name);
+        let f = if deep { enter } else { outside };
         match self.t {
-            Target::Go => Ex::Call(Box::new(v.dot(if deep { "KanameEnter" } else { "KanameOutside" })), vec![what]),
+            Target::Go => Ex::Call(Box::new(v.dot(f)), vec![what]),
             // the method of the type, as Go's (DESIGN 36.5)
-            Target::Rust => v.method(if deep { "kaname_enter" } else { "kaname_outside" }, vec![self.what_arg(&what)]),
+            Target::Rust => v.method(&f, vec![self.what_arg(&what)]),
             _ => {
-                let f = format!("{}{}", if deep { "_enter_" } else { "_outside_" }, hidden(type_name(self.t, &alias), private));
                 let f = if *file == self.c.canon { f } else { format!("{}.{f}", self.imp(Import::Module(file.clone()))) };
                 Ex::call(f, vec![v, what])
             }
@@ -2710,13 +3213,12 @@ impl<'a> Gen<'a> {
     /// `_outside_Order(v, what)` in TypeScript and Python, the method of the value in Go.
     pub fn sum_check_call(&self, id: &EnumId, v: Ex, what: Ex, deep: bool) -> Ex {
         let Owner::Module(file) = &id.owner else { return self.null() };
+        let (outside, enter) = checks_of(self.t, self.p.module(file), &id.name);
+        let f = if deep { enter } else { outside };
         match self.t {
-            Target::Go => Ex::Call(Box::new(v.dot(if deep { "KanameEnter" } else { "KanameOutside" })), vec![what]),
-            Target::Rust => v.method(if deep { "kaname_enter" } else { "kaname_outside" }, vec![self.what_arg(&what)]),
+            Target::Go => Ex::Call(Box::new(v.dot(f)), vec![what]),
+            Target::Rust => v.method(&f, vec![self.what_arg(&what)]),
             _ => {
-                let m = self.p.module(file);
-                let (alias, private) = m.decls.enums.iter().find(|e| e.name.text == id.name).map(|e| (e.name.ascii().to_string(), e.private)).unwrap_or_default();
-                let f = format!("{}{}", if deep { "_enter_" } else { "_outside_" }, hidden(type_name(self.t, &alias), private));
                 let f = if *file == self.c.canon { f } else { format!("{}.{f}", self.imp(Import::Module(file.clone()))) };
                 Ex::call(f, vec![v, what])
             }
@@ -2828,19 +3330,27 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The ends of a range a number of `n` is held to as it travels. A rate travels as a count of its
+    /// step: the range as counts, the lower end up and the upper end down to a whole count. Go's and
+    /// Rust's int64 is never past its own ends: an end there tests nothing, and is none (rustc's
+    /// `unused_comparisons`, clippy's `absurd_extreme_comparisons`. DESIGN 44).
+    fn num_ends(&self, n: &NumTy, r: &Range) -> (Option<i128>, Option<i128>) {
+        let (lo, hi) = if n.is_rate() {
+            let s = rate_step(n);
+            (r.min.map(|v| ceil(v.div(s))), r.max.map(|v| floor(v.div(s))))
+        } else {
+            (r.min.map(ceil), r.max.map(floor))
+        };
+        let int64 = matches!(self.t, Target::Go | Target::Rust);
+        (lo.filter(|&l| !(int64 && l <= i128::from(i64::MIN))), hi.filter(|&h| !(int64 && h >= i128::from(i64::MAX))))
+    }
+
     /// The test of a value as it travels against a range (None for a type no range is of).
     fn out_of(&self, v: &Ex, t: &Ty, r: &Range) -> Option<Ex> {
         let mut tests = Vec::new();
         match t {
             Ty::Num(n) => {
-                // a rate travels as a count of its step: the range as counts, the lower end up and the
-                // upper end down to a whole count
-                let (lo, hi) = if n.is_rate() {
-                    let s = rate_step(n);
-                    (r.min.map(|v| ceil(v.div(s))), r.max.map(|v| floor(v.div(s))))
-                } else {
-                    (r.min.map(ceil), r.max.map(floor))
-                };
+                let (lo, hi) = self.num_ends(n, r);
                 let x = match self.t {
                     Target::Go if n.unit.type_name().is_some() && !n.is_rate() => Ex::call("int64", vec![v.clone()]),
                     Target::Rust if n.unit.type_name().is_some() && !n.is_rate() => v.clone().dot("0"),
@@ -2881,12 +3391,14 @@ impl<'a> Gen<'a> {
         tests.into_iter().reduce(|a, b| Ex::bin(Op::Or, a, b))
     }
 
-    /// A value as it travels, as a message writes it: `1150GBPc`, `0.5%`, `2026-04-01`.
+    /// A value as it travels, as a message writes it: `1150GBPc`, `100_000_000GBPc`, `0.5%`,
+    /// `2026-04-01` (the helper module's `numShown`, as the reference interpreter's
+    /// `value::num_shown`).
     fn shown(&self, v: &Ex, t: &Ty) -> Ex {
         match t {
             Ty::Num(n) if n.is_rate() => {
                 let q = self.kcall(&self.helper("rate", "rate", "Rate"), vec![v.clone(), self.frac(rate_step(n))]);
-                self.kcall(&self.helper("numText", "num_text", "NumText"), vec![q, self.string("%")])
+                self.kcall(&self.helper("numShown", "num_shown", "NumShown"), vec![q, self.string("%")])
             }
             Ty::Num(n) => {
                 let x = match self.t {
@@ -2894,7 +3406,7 @@ impl<'a> Gen<'a> {
                     Target::Rust if n.unit.type_name().is_some() => v.clone().dot("0"),
                     _ => v.clone(),
                 };
-                self.kcall(&self.helper("numText", "num_text", "IntText"), vec![if matches!(self.t, Target::Go | Target::Rust) { x } else { self.to_q_ex(x) }, self.string(&unit_suffix(&n.unit))])
+                self.kcall(&self.helper("numShown", "num_shown", "IntShown"), vec![if matches!(self.t, Target::Go | Target::Rust) { x } else { self.to_q_ex(x) }, self.string(&unit_suffix(&n.unit))])
             }
             Ty::Date => match self.t {
                 Target::TypeScript => v.clone(),
@@ -2936,9 +3448,9 @@ impl<'a> Gen<'a> {
             };
             let x = o.clone().dot(field);
             match (self.t, key) {
-                (Target::TypeScript, "count") => Ex::call("String", vec![x]),
-                // the helper's, not `str`, which a parameter of the function a host calls may hide
-                (Target::Python, "count") => self.kcall("itoa", vec![x]),
+                // the helper's, which writes a count as a message writes a number (`10_000`), and not
+                // Python's `str`, which a parameter of the function a host calls may hide
+                (Target::TypeScript | Target::Python, "count") => self.kcall("itoa", vec![x]),
                 (Target::Go, "count") => self.kcall("Itoa", vec![x]),
                 (Target::Rust, "count") => self.kcall("itoa", vec![x]),
                 _ => x,
@@ -2955,7 +3467,15 @@ impl<'a> Gen<'a> {
             .reduce(|a, b| Ex::bin(Op::Add, a, b))
             .unwrap_or(self.string(""))
         };
-        let fail = |msg: Ex| -> Node { self.fail_line(kind, line, msg) };
+        // a host's argument: the error holds the place besides the message (DESIGN 4.2), Rust's lent,
+        // as the message reads it too
+        let fail = |msg: Ex| -> Node {
+            match (kind, self.t) {
+                ("input", Target::Rust) => self.fail_input_line(line, part("path").borrow(), msg),
+                ("input", _) => self.fail_input_line(line, part("path"), msg),
+                _ => self.fail_line(kind, line, msg),
+            }
+        };
         let is_count = match self.t {
             Target::TypeScript => Ex::bin(Op::Ne, o.clone().dot("count"), self.null()),
             Target::Python => Ex::atom(format!("{}.count is not None", o.print(self.t))),
@@ -3009,6 +3529,16 @@ impl<'a> Gen<'a> {
     /// the helper's `fail` (a throw, a raise, a panic), and Rust's return of the error (DESIGN 36.5).
     pub fn fail_line(&self, kind: &str, line: usize, msg: Ex) -> Node {
         let call = self.kcall(&self.helper("fail", "fail", "Fail"), vec![self.string(kind), self.module_const(), Ex::atom(line.to_string()), msg]);
+        match self.t {
+            Target::Rust => Node::Line(format!("return Err({});", call.print(self.t))),
+            _ => Node::Line(self.stmt(call)),
+        }
+    }
+
+    /// The code that fails with the error of the kind `input` at `line`: the argument is not taken at
+    /// `path`, which the error holds besides its message (DESIGN 4.2).
+    pub fn fail_input_line(&self, line: usize, path: Ex, msg: Ex) -> Node {
+        let call = self.kcall(&self.helper("failInput", "fail_input", "FailInput"), vec![self.module_const(), Ex::atom(line.to_string()), path, msg]);
         match self.t {
             Target::Rust => Node::Line(format!("return Err({});", call.print(self.t))),
             _ => Node::Line(self.stmt(call)),
@@ -3092,7 +3622,7 @@ impl<'a> Gen<'a> {
         if let Some((_, n, _)) = self.eqs.borrow().iter().find(|(k, _, _)| *k == key) {
             return n.clone();
         }
-        let n = format!("_eq{}", self.eqs.borrow().len() + 1);
+        let n = self.helper_name("_eq", self.eqs.borrow().len() + 1, false);
         self.eqs.borrow_mut().push((key.clone(), n.clone(), String::new()));
         let def = self.eq_def(&n, t, boundary);
         if let Some(x) = self.eqs.borrow_mut().iter_mut().find(|(k, _, _)| *k == key) {
@@ -3218,7 +3748,7 @@ impl<'a> Gen<'a> {
         if let Some((_, n)) = self.ranks.borrow().iter().find(|(k, _)| k.same_decl(id)) {
             return n.clone();
         }
-        let n = format!("_rank{}", self.ranks.borrow().len() + 1);
+        let n = self.helper_name("_rank", self.ranks.borrow().len() + 1, false);
         self.ranks.borrow_mut().push((id.clone(), n.clone()));
         n
     }
@@ -3312,8 +3842,8 @@ impl<'a> Gen<'a> {
             return n.clone();
         }
         let n = match self.t {
-            Target::Python => format!("_key{}", self.cmps.borrow().len() + 1),
-            _ => format!("_cmp{}", self.cmps.borrow().len() + 1),
+            Target::Python => self.helper_name("_key", self.cmps.borrow().len() + 1, false),
+            _ => self.helper_name("_cmp", self.cmps.borrow().len() + 1, false),
         };
         self.cmps.borrow_mut().push((key.clone(), n.clone(), String::new()));
         let ty = self.record_type(id);
@@ -3329,9 +3859,9 @@ impl<'a> Gen<'a> {
             Target::Python => {
                 let parts: Vec<String> = fields.iter().map(|(f, t)| self.py_key(t, Ex::atom(format!("r.{f}"))).print(self.t)).collect();
                 format!("
-def {n}(r: {ty}) -> tuple[Any, ...]:
+def {n}(r: {ty}) -> {}[{}, ...]:
     return ({},)
-", parts.join(", "))
+", self.builtin("tuple"), self.builtin("Any"), parts.join(", "))
             }
             Target::Go => {
                 let mut body = String::new();
@@ -3401,7 +3931,7 @@ impl Gen<'_> {
         let n = match known {
             Some(n) => n,
             None => {
-                let n = format!("_cmp{}", self.cmps.borrow().len() + 1);
+                let n = self.helper_name("_cmp", self.cmps.borrow().len() + 1, false);
                 self.cmps.borrow_mut().push((key.clone(), n.clone(), String::new()));
                 let decl = ps.iter().map(|p| format!("{} {}", p.ty, if p.key { "comparable" } else { "any" })).collect::<Vec<_>>().join(", ");
                 let args = ps.iter().filter_map(|p| p.order.as_ref().map(|o| format!("{o} func(a, b {}) int", p.ty))).collect::<Vec<_>>().join(", ");
@@ -3479,11 +4009,14 @@ pub struct Fx<'g, 'a> {
     /// parameter each lambda given as an argument goes to, by the lambda's expression: the closure
     /// takes its parameters as `&dyn Fn` of that type does (`&T` for `T`, DESIGN 36.4).
     fn_place: std::collections::HashMap<usize, Ty>,
+    /// Python: the names of the function's locals and parameters that a builtin, a name of `typing`
+    /// or the module `dataclasses` has, which hide it in the whole function (DESIGN 10.3).
+    shadowing: BTreeSet<String>,
 }
 
 impl<'g, 'a> Fx<'g, 'a> {
     pub fn new(g: &'g Gen<'a>, f: usize) -> Fx<'g, 'a> {
-        Fx { g, f, out: Vec::new(), scope: Vec::new(), locals: Locals::default(), tries: rs_fails(&g.c, f), fn_place: std::collections::HashMap::new() }
+        Fx { g, f, out: Vec::new(), scope: Vec::new(), locals: Locals::default(), tries: rs_fails(&g.c, f), fn_place: std::collections::HashMap::new(), shadowing: BTreeSet::new() }
     }
 
     /// Rust: the call `call` of what answers a `Result` (DESIGN 36.4): with `?` where the code being
@@ -3505,10 +4038,34 @@ impl<'g, 'a> Fx<'g, 'a> {
         self.g.c.typed.refs.get(e.id).cloned().unwrap_or(Ref::None)
     }
 
+    /// Go: whether the code writes `e`, a value of `ty`, as one of a sum's values' structs rather than
+    /// as the sum's interface (DESIGN 23.8): a value read as one (`circle c` of a `match`), one built
+    /// (`Shape.circle { r: 1 }`, and `Shape.circle { ..c, r: 2 }` in a local of the struct's type) and
+    /// one with no fields (`Shape.dot`, written `ShapeDot{}`). A local, a call, an `if` and a `match`
+    /// answer the sum's interface.
+    fn go_variant(&self, e: &Expr, ty: &Ty) -> bool {
+        let sum = |t: &Ty| matches!(t, Ty::Enum(id) if self.g.p.is_sum(id));
+        match &e.kind {
+            _ if matches!(ty, Ty::Record(RecId::Variant { .. })) => true,
+            ExprKind::Record(..) => sum(&self.ty(e)),
+            ExprKind::Var(_) | ExprKind::Field(..) => matches!(self.rf(e), Ref::EnumValue(id, _) if self.g.p.is_sum(&id)),
+            _ => false,
+        }
+    }
+
     /// A name for a value of the source.
     fn local(&mut self, base: &str) -> String {
         let t = self.t();
-        self.locals.fresh(t, base, &self.g.outer)
+        let n = self.locals.fresh(t, base, &self.g.outer);
+        self.shadows(&n);
+        n
+    }
+
+    /// Python: a name of the function's that hides a builtin in it, kept ([`Fx::body_with`]).
+    fn shadows(&mut self, n: &str) {
+        if self.t() == Target::Python && py_shadowed(n) {
+            self.shadowing.insert(n.to_string());
+        }
     }
 
     fn temp(&mut self) -> String {
@@ -3606,7 +4163,10 @@ impl<'g, 'a> Fx<'g, 'a> {
     // ── Values from the left ───────────────────────────────────────────────
 
     /// The values of expressions, from the left (DESIGN 8): one whose code comes before a later
-    /// one's statements is made a name first, so that it is evaluated before them.
+    /// one's statements is made a name first, so that it is evaluated before them. A number written
+    /// out is not: it is the same wherever it is worked out, and read in a type it is written as the
+    /// constant it is there ([`Self::convert`]), so a name made of it would go unread (Go's `declared
+    /// and not used`).
     fn values(&mut self, es: &[&Expr]) -> Vec<Val> {
         let mut parts: Vec<(Val, Vec<Node>)> = Vec::new();
         for e in es {
@@ -3617,7 +4177,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let mut out = Vec::new();
         for (i, (v, stmts)) in parts.into_iter().enumerate() {
             self.out.extend(stmts);
-            out.push(if later[i] { self.spill(v) } else { v });
+            out.push(if later[i] && !literal(es[i]) { self.spill(v) } else { v });
         }
         out
     }
@@ -3627,9 +4187,10 @@ impl<'g, 'a> Fx<'g, 'a> {
     /// `to` gives, for each, the place it goes to in the callee's order and the type it is read in;
     /// `checked` says checks of what the places declare come after them. Where the code places them
     /// otherwise than written, where checks come after them, or where reading one in its type could
-    /// fail before a later one is worked out, each is made a name first, in the order written. The
-    /// values, and whether each must be made a name again once it is read in its type (so that the
-    /// readings too come in the order written, and before the checks).
+    /// fail before a later one is worked out, each is made a name first, in the order written (a
+    /// number written out aside, as in [`Self::values`]). The values, and whether each must be made a
+    /// name again once it is read in its type (so that the readings too come in the order written,
+    /// and before the checks).
     fn arg_values(&mut self, es: &[&Expr], to: &[Option<(usize, Ty)>], checked: bool) -> (Vec<Val>, bool) {
         let vals = self.values(es);
         let placed: Vec<usize> = to.iter().flatten().map(|(k, _)| *k).collect();
@@ -3639,7 +4200,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             fails && vals[i + 1..].iter().any(|v| !v.ex.is_simple())
         });
         if keep || early {
-            let vals = vals.into_iter().map(|v| self.spill(v)).collect();
+            let vals = vals.into_iter().zip(es).map(|(v, e)| if literal(e) { v } else { self.spill(v) }).collect();
             return (vals, keep);
         }
         (vals, keep)
@@ -3662,13 +4223,24 @@ impl<'g, 'a> Fx<'g, 'a> {
     /// in.
     fn adapt(&mut self, v: Val, to: &Ty, at: &Expr) -> Val {
         let from = v.ty.clone();
-        if matches!(from, Ty::None) || matches!(v.ex, Ex::Atom(ref s) if s == "null" || s == "None" || s == "nil") && matches!(to, Ty::Opt(_)) {
+        if matches!(from, Ty::None) || self.g.absent(&v.ex) && matches!(to, Ty::Opt(_)) {
             return Val::new(self.g.null(), to.clone());
         }
         if matches!(from, Ty::Empty) {
             return Val::new(self.empty_list(to), to.clone());
         }
         match (&from, to) {
+            // Rust: a function value given where the other form is taken (DESIGN 36.4). A function
+            // that answers its value, where one that answers a `Result` is taken (a type that writes
+            // no effect), answers in `Ok`; one that answers a `Result`, where a `total` one is taken
+            // (the check holds what it is given to the effect written, E402), answers what its
+            // `Result` holds, as a `total` function's call of one that can fail takes it.
+            (Ty::Fn(ps, _, fe), Ty::Fn(_, _, te)) if self.t() == Target::Rust && total_fn(fe) != total_fn(te) => {
+                let names: Vec<String> = ps.iter().map(|_| self.temp()).collect();
+                let call = Ex::call(v.ex.print(Target::Rust), names.iter().map(|n| Ex::atom(n.clone())).collect());
+                let body = if total_fn(fe) { Ex::call("Ok", vec![call]) } else { call.method("unwrap_or_else", vec![Ex::atom("|e| panic!(\"{e}\")")]) };
+                Val::new(Ex::atom(format!("&|{}| {}", names.join(", "), body.print(Target::Rust))), to.clone())
+            }
             (Ty::Opt(f), Ty::Opt(t)) => {
                 if self.adapt_is_identity(f, t) {
                     return Val { held: v.held, ..Val::new(v.ex, to.clone()) };
@@ -3683,7 +4255,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     _ => v.ex.clone(),
                 };
                 let x = self.adapt(Val::new(inner, (**f).clone()), t, at);
-                self.opt_map(v.ex, x.ex, to)
+                self.opt_map(v.ex, x.ex, to, self.g.flight(to))
             }
             (Ty::Opt(f), t) => {
                 // a value that may be absent, read where one is there: only a branch that has split it
@@ -3796,7 +4368,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let (kb, vb) = (self.g.boundary(bk), self.g.boundary(bv));
                 match t {
                     Target::TypeScript => {
-                        self.emit(Node::Line(format!("const {out} = new Map<{kb}, {vb}>();")));
+                        self.emit(Node::Line(format!("const {out} = new {}<{kb}, {vb}>();", self.g.builtin("Map"))));
                         body.push(Node::Line(format!("{out}.set({}, {});", kx.print(t), vx.print(t))));
                         format!("for (const [{k}, {x}] of {})", src.print(t))
                     }
@@ -3827,7 +4399,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 };
                 match t {
                     Target::TypeScript => {
-                        self.emit(Node::Line(format!("const {out} = new Set<{xb}>();")));
+                        self.emit(Node::Line(format!("const {out} = new {}<{xb}>();", self.g.builtin("Set"))));
                         body.push(Node::Line(format!("{out}.add({});", vx.print(t))));
                         format!("for (const {x} of {})", src.print(t))
                     }
@@ -3857,7 +4429,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         };
         self.emit(Node::Block(head, body, Vec::new()));
         let ex = match (t, to) {
-            (Target::Python, Ty::Set(_)) => Ex::call("frozenset", vec![Ex::atom(out)]),
+            (Target::Python, Ty::Set(_)) => Ex::call(self.g.builtin("frozenset"), vec![Ex::atom(out)]),
             _ => Ex::atom(out),
         };
         Val::new(ex, to.clone())
@@ -3931,15 +4503,16 @@ impl<'g, 'a> Fx<'g, 'a> {
         Val::held(Ex::atom(n), to.clone(), Held::Kept)
     }
 
-    /// `x` of a value that may be absent, mapped where it is there.
-    fn opt_map(&mut self, v: Ex, mapped: Ex, to: &Ty) -> Val {
+    /// `x` of a value that may be absent, mapped where it is there. Go declares what it maps into as
+    /// `decl`: `to` as it is worked on, or as it travels where `mapped` is a value as it travels (a
+    /// rate as a count of its step, DESIGN 43).
+    fn opt_map(&mut self, v: Ex, mapped: Ex, to: &Ty, decl: String) -> Val {
         match self.t() {
             Target::TypeScript => Val::new(Ex::Cond(Box::new(Ex::bin(Op::Eq, v, self.g.null())), Box::new(self.g.null()), Box::new(mapped)), to.clone()),
             Target::Python => Val::new(Ex::Cond(Box::new(Ex::atom(format!("{} is None", v.print(Target::Python)))), Box::new(self.g.null()), Box::new(mapped)), to.clone()),
             Target::Go => {
                 let n = self.temp();
-                let ty = self.g.flight(to);
-                self.declare(&n, &ty);
+                self.declare(&n, &decl);
                 let then = vec![self.assign_line(&n, self.g.kcall("Some", vec![mapped]))];
                 self.emit(Node::If(vec![(Ex::bin(Op::Ne, v, self.g.null()), then)], Vec::new()));
                 Val::new(Ex::atom(n), to.clone())
@@ -4292,7 +4865,13 @@ impl<'g, 'a> Fx<'g, 'a> {
             .collect();
         let stmts = super::ex::tail(stmts);
         self.emit(Node::Block(format!("let {name} = &|{}| -> {ret}", sig.join(", ")), stmts, Vec::new()));
-        Val::new(Ex::atom(name), ty.clone())
+        // the value of the form it is written in: the effect of the place it is given to, which
+        // `adapt` reads (a closure written `total` is not wrapped again)
+        let vty = match (ty, decl) {
+            (Ty::Fn(p, r, _), Some(Ty::Fn(_, _, de))) => Ty::Fn(p.clone(), r.clone(), de.clone()),
+            _ => ty.clone(),
+        };
+        Val::new(Ex::atom(name), vty)
     }
 
     /// A function value called (DESIGN 27.6): what it is, its arguments from the left, each read in its
@@ -4342,7 +4921,13 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let Some(facts) = self.g.p.rules.get(file).cloned() else { return Val::new(self.g.null(), ty.clone()) };
                 let Some(col) = facts.outputs.iter().find(|c| c.name == name) else { return Val::new(self.g.null(), ty.clone()) };
                 let raw = if facts.outputs.len() == 1 {
-                    b.ex
+                    // Rust: the one output is the value itself, so what is lent it is read through
+                    // where the output is `Copy` (`*got`), as a field read through a reference is
+                    if self.t() == Target::Rust && matches!(b.held, Held::Lent | Held::Ref) && self.g.is_copy(&crate::names::column_ty(&col.ty, file)) {
+                        Ex::Deref(Box::new(b.ex))
+                    } else {
+                        b.ex
+                    }
                 } else {
                     let call = self.g.call_of(&facts);
                     let alias = call.outputs.iter().find(|p| p.name == name).map(|p| p.alias.clone()).unwrap_or_else(|| col.alias.clone());
@@ -4463,7 +5048,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     }
                     let inner = if t == Target::Go { Ex::Deref(Box::new(v.ex.clone())) } else { v.ex.clone() };
                     let m = self.from_boundary(inner, s, &inner_ty);
-                    let mut r = self.opt_map(v.ex, m.ex, ty);
+                    let mut r = self.opt_map(v.ex, m.ex, ty, self.g.flight(ty));
                     r.ty = ty.clone();
                     r
                 }
@@ -4560,12 +5145,23 @@ impl<'g, 'a> Fx<'g, 'a> {
                 } else {
                     let x = if t == Target::Go { Ex::Deref(Box::new(v.ex.clone())) } else { v.ex.clone() };
                     let inner = self.to_boundary(Val::new(x, inner_ty), s);
-                    self.opt_map(v.ex, inner, slot).ex
+                    // what it maps into travels, as `inner` does
+                    self.opt_map(v.ex, inner, slot, self.g.boundary(slot)).ex
                 }
             }
             // Rust: what is put where a value travels is owned there (DESIGN 36.4)
             _ if t == Target::Rust => self.g.owned(&v),
             _ => v.ex,
+        }
+    }
+
+    /// Rust: whether a rule's code holds a number of the column `col` as a value of `ty` is worked
+    /// on, so that reading it from one into the other changes nothing: a number whose unit has no
+    /// type of its own in the package (rulec's `number`), not a rate, worked on as a whole number.
+    fn rule_holds_as_worked(col: &ColumnType, ty: &Ty) -> bool {
+        match col {
+            ColumnType::Num { unit, .. } => unit.as_ref().is_none_or(|u| u.dim != Dim::Rate && u.type_name().is_none()) && ty.num().map(rep).unwrap_or(Rep::Int) == Rep::Int,
+            _ => false,
         }
     }
 
@@ -4581,6 +5177,11 @@ impl<'g, 'a> Fx<'g, 'a> {
                 }
                 let inner_ty = ty.present().clone();
                 let target = if matches!(ty, Ty::Opt(_)) { ty.clone() } else { Ty::Opt(Box::new(ty.clone())) };
+                // a value read as it is: the `Option` as it is, not mapped to itself (`x.map(|y| y)`,
+                // clippy's `map_identity`)
+                if Self::rule_holds_as_worked(inner, &inner_ty) {
+                    return Val::held(v.ex, target, v.held);
+                }
                 let inner = (**inner).clone();
                 self.opt_map_rs(&v, &inner_ty, &target, |f, el| f.rule_out(el.ex, &inner, &inner_ty))
             }
@@ -4596,9 +5197,9 @@ impl<'g, 'a> Fx<'g, 'a> {
                 }
                 let m = self.rule_out(deref, inner, &inner_ty);
                 let target = if matches!(ty, Ty::Opt(_)) { ty.clone() } else { Ty::Opt(Box::new(ty.clone())) };
-                self.opt_map(v.ex, m.ex, &target)
+                self.opt_map(v.ex, m.ex, &target, self.g.flight(&target))
             }
-            ColumnType::Date => Val::new(
+            ColumnType::Date { .. } => Val::new(
                 match t {
                     Target::TypeScript => self.g.kcall("dateOf", vec![Ex::call("Number", vec![x])]),
                     Target::Python => self.g.kcall("date_of", vec![x]),
@@ -4649,6 +5250,12 @@ impl<'g, 'a> Fx<'g, 'a> {
                     return self.g.owned(&v);
                 }
                 let v = self.spill(v);
+                // a value the rule's code takes as it is: the `Option` as it is, not mapped to itself
+                // (`x.map(|y| y)`, clippy's `map_identity`), kept in a name first as the mapping kept
+                // it, so that the arguments are worked out in the same order
+                if Self::rule_holds_as_worked(inner, &present) {
+                    return self.g.owned(&v);
+                }
                 let (inner, file) = ((**inner).clone(), file.to_path_buf());
                 let to = v.ty.clone();
                 self.opt_map_rs(&v, &present, &to, |f, el| {
@@ -4658,7 +5265,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 .ex
             }
             ColumnType::Opt(inner) => {
-                if matches!(v.ex, Ex::Atom(ref s) if s == "null" || s == "None" || s == "nil") {
+                if self.g.absent(&v.ex) {
                     return self.g.null();
                 }
                 let present = v.ty.present().clone();
@@ -4684,7 +5291,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     Target::Rust => unreachable!("Rust reads an optional column above"),
                 }
             }
-            ColumnType::Date => match t {
+            ColumnType::Date { .. } => match t {
                 Target::TypeScript => Ex::call("BigInt", vec![self.g.kcall("dayOf", vec![v.ex])]),
                 Target::Python => self.g.kcall("day_of", vec![v.ex]),
                 Target::Go => Ex::Call(Box::new(v.ex.dot("Days")), vec![]),
@@ -5112,13 +5719,25 @@ impl<'g, 'a> Fx<'g, 'a> {
     fn matching(&mut self, e: &Expr, s: &Expr, arms: &[Arm], sink: &Sink) {
         let ty = self.ty(e);
         let st = self.ty(s);
-        let v = self.expr(s);
         // a value of a sum is named first, so that the target narrows the name by the tests
         let sum = match st.present() {
             Ty::Enum(id) if self.g.p.is_sum(id) => Some(id.clone()),
             _ => None,
         };
         let result = matches!(st, Ty::Result(..));
+        // one arm that names no value is written as its body, and the value split is read nowhere
+        // (Go's type switch of a sum or a result reads it all the same): a name only it reads is a
+        // name never read, and a value worked out first is still worked out, in a name of its own
+        let unread = arms.len() == 1 && !arms[0].patterns.iter().any(|p| matches!(p, Pattern::Some(..) | Pattern::Value(_, Some(_), _))) && !(self.t() == Target::Go && (sum.is_some() || result));
+        let marks: Vec<bool> = if unread { self.scope.iter().map(|(_, _, used)| used.get()).collect() } else { Vec::new() };
+        let (v, wrote) = self.apart(|f| f.expr(s));
+        if unread && wrote.is_empty() && v.ex.is_simple() {
+            for ((_, _, used), was) in self.scope.iter().zip(marks) {
+                used.set(was);
+            }
+        }
+        let worked = !wrote.is_empty() || !v.ex.is_simple();
+        self.out.extend(wrote);
         if self.t() == Target::Rust {
             let v = self.spill(v);
             return self.match_rs(&ty, &st, &v, arms, sink);
@@ -5131,7 +5750,13 @@ impl<'g, 'a> Fx<'g, 'a> {
         } else {
             self.spill(v)
         };
-        if let (Some(id), Target::Go) = (&sum, self.t()) {
+        // Go asks a name that is never read to be read once
+        if unread && worked && self.t() == Target::Go {
+            self.emit(Node::Line(format!("_ = {}", v.ex.print(Target::Go))));
+        }
+        // a sum that may be absent is split by `none` and `some x` as any optional value is, and the
+        // value `some x` names is the sum's, which a match of its own splits
+        if let (Some(id), Target::Go, false) = (&sum, self.t(), matches!(st, Ty::Opt(_))) {
             return self.go_switch(id, &ty, &v, arms, sink);
         }
         if result && self.t() == Target::Go {
@@ -5238,6 +5863,10 @@ impl<'g, 'a> Fx<'g, 'a> {
     /// a literal), the value an arm names bound by the pattern; a literal Rust cannot write as a
     /// pattern (a fraction) a guard; the last arm `_` unless it names a value.
     fn match_rs(&mut self, ty: &Ty, st: &Ty, v: &Val, arms: &[Arm], sink: &Sink) {
+        if let Some(x) = self.unwrap_or_rs(ty, st, v, arms) {
+            self.sink(x, sink);
+            return;
+        }
         let copy = self.g.is_copy(st);
         let src = if copy { v.ex.clone() } else { self.g.lent(v) };
         let opt = matches!(st, Ty::Opt(_));
@@ -5341,7 +5970,58 @@ impl<'g, 'a> Fx<'g, 'a> {
             };
             cases.push((pattern, body));
         }
+        // one arm that takes every value and names none is its body, as the other targets write it
+        // (clippy's `match_single_binding`)
+        if let [(pattern, _)] = cases.as_slice()
+            && pattern == "_"
+        {
+            let (_, body) = cases.remove(0);
+            self.out.extend(body);
+            return;
+        }
         self.emit(Node::Switch(format!("match {}", super::ex::rust_cond(&src)), cases, Vec::new()));
+    }
+
+    /// Rust: `v.unwrap_or(c)` for a `match` of `v`, a value that may be absent and is `Copy`, whose
+    /// arms are `none => c` and `some y => y` (the value as it is, of the match's type), `c` a literal
+    /// or a name, which Rust works out as cheaply as the arm (clippy's `manual_unwrap_or`), and
+    /// `v.unwrap_or_default()` where `c` is the type's default, 0 or false (clippy's
+    /// `manual_unwrap_or_default`); None for any other `match`, written as a `match`.
+    fn unwrap_or_rs(&mut self, ty: &Ty, st: &Ty, v: &Val, arms: &[Arm]) -> Option<Val> {
+        let Ty::Opt(inner) = st else { return None };
+        if **inner != *ty || !self.g.is_copy(st) {
+            return None;
+        }
+        let (mut absent, mut present) = (None, None);
+        for arm in arms {
+            match arm.patterns.as_slice() {
+                [Pattern::None(_)] => absent = Some(arm),
+                [Pattern::Some(x, _)] => present = Some((x, arm)),
+                _ => return None,
+            }
+        }
+        let (absent, (x, present)) = (absent?, present?);
+        if !absent.body.lets.is_empty() || !present.body.lets.is_empty() || !matches!(&present.body.answer.kind, ExprKind::Var(n) if n == x) {
+            return None;
+        }
+        let c = &absent.body.answer;
+        if !matches!(c.kind, ExprKind::Num(_) | ExprKind::Bool(_) | ExprKind::Date(_) | ExprKind::Var(_)) {
+            return None;
+        }
+        let (cv, wrote) = self.apart(|f| {
+            let cv = f.expr(c);
+            f.adapt(cv, ty, c)
+        });
+        if !wrote.is_empty() || !cv.ex.is_simple() {
+            return None;
+        }
+        let default = match &c.kind {
+            ExprKind::Bool(b) => !b,
+            ExprKind::Num(_) => matches!(crate::interp::literal(&self.g.c, c, ty), Some(crate::value::Value::Num(r)) if r == Rat::zero()),
+            _ => false,
+        };
+        let ex = if default { v.ex.clone().method("unwrap_or_default", vec![]) } else { v.ex.clone().method("unwrap_or", vec![cv.ex]) };
+        Some(Val::new(ex, ty.clone()))
     }
 
     /// Rust: a literal of an arm as a pattern (`5`, `-3`, `"a"`, `kaname::Date { … }`), read in the
@@ -5522,6 +6202,13 @@ impl<'g, 'a> Fx<'g, 'a> {
         let ty = self.ty(e);
         let Ref::Record(id) = self.rf(e) else { return Val::new(self.g.null(), ty) };
         let fields = self.g.p.fields(&id);
+        // Rust: a value whose every field is written is built with no base (clippy's
+        // `needless_update`, below), and a name the base is, which nothing else need read, is not
+        // read for it (rustc's `unused_variables`: an arm's name is then `_`, a parameter `_`)
+        let base = match base {
+            Some(b) if self.t() == Target::Rust && matches!(b.kind, ExprKind::Var(_)) && fields.iter().all(|(n, _)| inits.iter().any(|fi| n.is(&fi.name))) => None,
+            b => b,
+        };
         let mut es: Vec<&Expr> = Vec::new();
         let mut to: Vec<Option<(usize, Ty)>> = Vec::new();
         if let Some(b) = base {
@@ -5648,7 +6335,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             }
             (Some(fv), Target::Python) => {
                 let kw: Vec<String> = parts.iter().map(|(k, v)| format!("{k}={}", v.print(Target::Python))).collect();
-                Ex::atom(format!("dataclasses.replace({}{}{})", fv.ex.print(Target::Python), if kw.is_empty() { "" } else { ", " }, kw.join(", ")))
+                Ex::atom(format!("{}.replace({}{}{})", self.g.builtin("dataclasses"), fv.ex.print(Target::Python), if kw.is_empty() { "" } else { ", " }, kw.join(", ")))
             }
             (Some(fv), Target::Go) => {
                 let n = self.temp();
@@ -5719,7 +6406,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         // type parameters put in (DESIGN 26.2)
         let tn = crate::names::tnames(&info.tparams);
         let targs: Vec<Ty> = g.c.typed.inst.get(&e.id).cloned().unwrap_or_default();
-        let slots: Vec<Slot> = info.params.iter().map(|p| subst_slot(&p.slot, &tn, &targs)).collect();
+        let slots: Vec<Slot> = info.params.iter().map(|p| crate::ty::subst_param(&p.slot, &tn, &targs)).collect();
         let ret_ty = subst(&info.ret.ty, &tn, &targs);
         let to: Vec<Option<(usize, Ty)>> = args
             .iter()
@@ -5954,7 +6641,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 if open {
                     let body = vec![Node::Line(format!("{out}: {rt} = {}", raw.print(self.t())))];
                     let k = g.imp(Import::Kaname);
-                    let catch = vec![Node::Line(format!("raise {k}.KanameError(\"rule\", _MODULE, {line}, {}) from e", g.string(&said).print(self.t())))];
+                    let catch = vec![Node::Line(format!("raise {k}.KanameError(\"rule\", {}, {line}, {}) from e", g.module_name, g.string(&said).print(self.t())))];
                     self.emit(Node::Block("try".into(), body, vec![(format!("except ({r}.RuleInputError, {r}.RuleContradictionError) as e"), catch)]));
                 } else {
                     self.bind(&out, &rt, raw);
@@ -6059,7 +6746,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 if open {
                     let body = vec![Node::Line(format!("{out}: {dt} = {}", raw.print(self.t())))];
                     let k = g.imp(Import::Kaname);
-                    let catch = vec![Node::Line(format!("raise {k}.KanameError(\"date\", _MODULE, {line}, {}) from e", g.string(&said).print(self.t())))];
+                    let catch = vec![Node::Line(format!("raise {k}.KanameError(\"date\", {}, {line}, {}) from e", g.module_name, g.string(&said).print(self.t())))];
                     self.emit(Node::Block("try".into(), body, vec![(format!("except {d}.KoyomiError as e"), catch)]));
                 } else {
                     self.bind(&out, &dt, raw);
@@ -6107,7 +6794,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             let v = if let (Ty::Num(nt), true) = (&pt, g.open(x.id, |w| matches!(w, What::Amount { .. }))) {
                 let v = self.spill(v);
                 let t = format!("{}.{}", id.transfer, id.op);
-                let shown = g.kcall(&g.helper("numText", "num_text", "IntText"), vec![if matches!(self.t(), Target::Go | Target::Rust) { v.ex.clone() } else { g.to_q_ex(v.ex.clone()) }, g.string(&unit_suffix(&nt.unit))]);
+                let shown = g.kcall(&g.helper("numShown", "num_shown", "IntShown"), vec![if matches!(self.t(), Target::Go | Target::Rust) { v.ex.clone() } else { g.to_q_ex(v.ex.clone()) }, g.string(&unit_suffix(&nt.unit))]);
                 let parts = template(&tr!("振替 `{t}` の額 `{n}` に、負の値 \u{1}shown\u{1} を渡しています", "The amount `{n}` of the transfer `{t}` is given \u{1}shown\u{1}, which is below 0"), g.lang);
                 let msg = if self.t() == Target::Rust {
                     g.rs_format(parts.into_iter().map(|p| p.map_err(|_| shown.clone())).collect())
@@ -6621,7 +7308,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let (kb, eb) = (g.boundary(&kt), g.boundary(&elem_ty));
                 let k = g.imp(Import::Kaname);
                 match t {
-                    Target::TypeScript => self.emit(Node::Line(format!("const {acc} = new Map<{kb}, {eb}[]>();"))),
+                    Target::TypeScript => self.emit(Node::Line(format!("const {acc} = new {}<{kb}, {eb}[]>();", self.g.builtin("Map")))),
                     Target::Python => self.emit(Node::Line(format!("{acc}: dict[{kb}, list[{eb}]] = {{}}"))),
                     Target::Go => self.emit(Node::Line(format!("var {acc} = map[{kb}][]{eb}{{}}"))),
                     Target::Rust => self.emit(Node::Line(format!("let mut {acc}: {} = {}::new();", g.dict_type(kb.clone(), format!("Vec<{eb}>")), g.std_type("BTreeMap")))),
@@ -6674,7 +7361,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let out = self.temp();
         let (kb, vb) = (g.boundary(&kt), g.boundary(&vt));
         match t {
-            Target::TypeScript => self.emit(Node::Line(format!("const {out} = new Map<{kb}, {vb}>();"))),
+            Target::TypeScript => self.emit(Node::Line(format!("const {out} = new {}<{kb}, {vb}>();", self.g.builtin("Map")))),
             Target::Python => self.emit(Node::Line(format!("{out}: dict[{kb}, {vb}] = {{}}"))),
             Target::Go => self.emit(Node::Line(format!("var {out} = map[{kb}]{vb}{{}}"))),
             Target::Rust => self.emit(Node::Line(format!("let mut {out}: {} = {}::new();", g.dict_type(kb.clone(), vb.clone()), g.std_type("BTreeMap")))),
@@ -6723,7 +7410,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let (kb, vb) = (g.boundary(&kt), g.boundary(&vt));
         let out = self.temp();
         match t {
-            Target::TypeScript => self.emit(Node::Line(format!("const {out} = new Map<{kb}, {vb}>();"))),
+            Target::TypeScript => self.emit(Node::Line(format!("const {out} = new {}<{kb}, {vb}>();", self.g.builtin("Map")))),
             Target::Python => self.emit(Node::Line(format!("{out}: dict[{kb}, {vb}] = {{}}"))),
             Target::Go => self.emit(Node::Line(format!("var {out} = map[{kb}]{vb}{{}}"))),
             Target::Rust => self.emit(Node::Line(format!("let mut {out}: {} = {}::new();", g.dict_type(kb.clone(), vb.clone()), g.std_type("BTreeMap")))),
@@ -6806,7 +7493,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let (kb, ub) = (g.boundary(&kt), g.boundary(&ut));
         let out = self.temp();
         match t {
-            Target::TypeScript => self.emit(Node::Line(format!("const {out} = new Map<{kb}, {ub}>();"))),
+            Target::TypeScript => self.emit(Node::Line(format!("const {out} = new {}<{kb}, {ub}>();", self.g.builtin("Map")))),
             Target::Python => self.emit(Node::Line(format!("{out}: dict[{kb}, {ub}] = {{}}"))),
             Target::Go => self.emit(Node::Line(format!("var {out} = map[{kb}]{ub}{{}}"))),
             Target::Rust => self.emit(Node::Line(format!("let mut {out}: {} = {}::new();", g.dict_type(kb.clone(), ub.clone()), g.std_type("BTreeMap")))),
@@ -6871,8 +7558,11 @@ impl<'g, 'a> Fx<'g, 'a> {
         let (kb, vb) = (g.boundary(&kt), g.boundary(&vt));
         let out = self.temp();
         match t {
-            Target::TypeScript => self.emit(Node::Line(format!("const {out} = new Map<{kb}, {vb}>({});", a.ex.print(t)))),
-            Target::Python => self.emit(Node::Line(format!("{out}: dict[{kb}, {vb}] = dict({})", a.ex.print(t)))),
+            Target::TypeScript => self.emit(Node::Line(format!("const {out} = new {}<{kb}, {vb}>({});", self.g.builtin("Map"), a.ex.print(t)))),
+            Target::Python => {
+                let d = self.g.builtin("dict");
+                self.emit(Node::Line(format!("{out}: {d}[{kb}, {vb}] = {d}({})", a.ex.print(t))))
+            }
             Target::Go => self.emit(Node::Line(format!("var {out} = {}", g.kcall("Merge", vec![a.ex.clone(), Ex::atom(format!("map[{kb}]{vb}{{}}"))]).print(t)))),
             Target::Rust => self.emit(Node::Line(format!("let mut {out}: {} = {};", g.dict_type(kb.clone(), vb.clone()), g.owned(&a).print(t)))),
         }
@@ -7019,7 +7709,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         match t {
             Target::TypeScript => {
                 if pairs.is_empty() {
-                    return Val::new(Ex::atom(format!("new Map<{kb}, {vb}>()")), ty);
+                    return Val::new(Ex::atom(format!("new {}<{kb}, {vb}>()", self.g.builtin("Map"))), ty);
                 }
                 let list = Ex::List(String::new(), pairs.into_iter().map(|(a, b)| Ex::List(String::new(), vec![a, b])).collect());
                 Val::new(Ex::Call(Box::new(Ex::atom(format!("{}.mapOf<{kb}, {vb}>", g.imp(Import::Kaname)))), vec![list, g.order_fn(&kt, false)]), ty)
@@ -7130,7 +7820,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                         let ex = match t {
                             Target::TypeScript => g.kcall("put", vec![d, kx, vx, g.order_fn(&kt, false)]),
                             Target::Python => g.kcall("put", vec![d, kx, vx, g.py_key_fn(&kt)]),
-                            Target::Go => g.kcall("Put", vec![d, kx, vx]),
+                            Target::Go => g.kcall(&g.go_targs("Put", vec![g.boundary(&kt), g.boundary(&vt)], self.go_variant(xs[2], &vals[2].ty), &vt), vec![d, kx, vx]),
                             Target::Rust => g.kcall("Put", vec![lent0, kx, vx]),
                         };
                         Val::new(ex, me)
@@ -7283,7 +7973,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                         let ex = match t {
                             Target::Python => Ex::atom(format!("[*{}, {}]", xs0.print(t), x.ex.print(t))),
                             Target::TypeScript => g.kcall("append", vec![xs0, x.ex]),
-                            Target::Go => g.kcall("Append", vec![xs0, x.ex]),
+                            Target::Go => g.kcall(&g.go_targs("Append", vec![g.flight(&et)], self.go_variant(xs[1], &vals[1].ty), &et), vec![xs0, x.ex]),
                             Target::Rust => g.kcall("Append", vec![lent0, g.owned(&x)]),
                         };
                         Val::new(ex, me)
@@ -7315,7 +8005,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                         let ex = match t {
                             Target::Python => match &*et {
                                 Ty::Enum(_) | Ty::Param(_) => Ex::Call(Box::new(Ex::atom("sorted")), vec![xs0, Ex::atom(format!("key={}", g.py_key_fn(&et).print(t)))]),
-                                _ => Ex::call("sorted", vec![xs0]),
+                                _ => Ex::call(self.g.builtin("sorted"), vec![xs0]),
                             },
                             Target::TypeScript => g.kcall("sorted", vec![xs0, g.order_fn(&et, true)]),
                             Target::Go => g.kcall("Sorted", vec![xs0, g.order_fn(&et, true)]),
@@ -7386,7 +8076,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                                 body.insert(0, Node::Line(format!("const {x} = {}[{i}];", xs0.print(t))));
                                 format!("for (let {i} = 0; {i} < {}.length; {i}++)", xs0.print(t))
                             }
-                            Target::Python => format!("for {i}, {x} in enumerate({})", xs0.print(t)),
+                            Target::Python => format!("for {i}, {x} in {}({})", self.g.builtin("enumerate"), xs0.print(t)),
                             Target::Go => format!("for {i}, {x} := range {}", xs0.print(t)),
                             Target::Rust => format!("for ({i}, {}) in {}.iter().enumerate()", if copy { format!("&{x}") } else { x.clone() }, xs0.print(t)),
                         };
@@ -7403,7 +8093,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                         let lb = self.to_boundary(Val::new(xs0, t0.clone()), &Ty::List(et.clone()));
                         let ex = match t {
                             Target::TypeScript => g.kcall("setOf", vec![lb, g.order_fn(&et, false)]),
-                            Target::Python => Ex::call("frozenset", vec![lb]),
+                            Target::Python => Ex::call(self.g.builtin("frozenset"), vec![lb]),
                             Target::Go | Target::Rust => g.kcall("SetOf", vec![lb]),
                         };
                         Val::new(ex, me)
@@ -7552,7 +8242,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         body.push(self.assign_line(&before, Ex::atom(upto.clone())));
         let head = match self.t() {
             Target::TypeScript => format!("for (let {i} = 0; {i} < {}.length; {i}++)", xs.ex.print(self.t())),
-            Target::Python => format!("for {i} in range(len({}))", xs.ex.print(self.t())),
+            Target::Python => format!("for {i} in {}({}({}))", self.g.builtin("range"), self.g.builtin("len"), xs.ex.print(self.t())),
             Target::Go => format!("for {i} := range {}", xs.ex.print(self.t())),
             Target::Rust => format!("for ({}, &{wv}) in {}.iter().zip({weights}.iter())", if item_copy { format!("&{i}") } else { i.clone() }, xs.ex.print(self.t())),
         };
@@ -7862,7 +8552,9 @@ impl<'g, 'a> Fx<'g, 'a> {
                 if t == Target::Rust {
                     let parts: Vec<Val> = vals.iter().zip(xs).map(|(v, x)| self.adapt(v.clone(), &me, x)).collect();
                     let slices: Vec<String> = parts.iter().map(|v| if v.held == Held::Lent { v.ex.print(t) } else { v.ex.clone().method("as_slice", vec![]).print(t) }).collect();
-                    return Val::new(Ex::atom(format!("[{}].concat()", slices.join(", "))), me);
+                    // a call, not a name: a value made, which a place takes as it is (a name would be
+                    // lent, and the list made would be dropped while lent)
+                    return Val::new(Ex::atom(format!("[{}]", slices.join(", "))).method("concat", vec![]), me);
                 }
                 let lists: Vec<Ex> = vals.iter().zip(xs).map(|(v, x)| self.adapt(v.clone(), &me, x).ex).collect();
                 let ex = match t {
@@ -7876,7 +8568,9 @@ impl<'g, 'a> Fx<'g, 'a> {
             // Rust: the strings lent to one array, joined
             "concat" if t == Target::Rust => {
                 let parts: Vec<String> = vals.iter().map(|v| g.lent(v).print(t)).collect();
-                Val::new(Ex::atom(format!("[{}].concat()", parts.join(", "))), me)
+                // a call, not a name: a string made, which a place takes as it is (`Some(s)`); read
+                // as a name, it was lent (`Some([…].concat().as_str())`) and dropped while lent
+                Val::new(Ex::atom(format!("[{}]", parts.join(", "))).method("concat", vec![]), me)
             }
             "concat" => {
                 let ex = vals.iter().map(|v| v.ex.clone()).reduce(|a, b| Ex::bin(Op::Add, a, b)).unwrap_or(g.string(""));
@@ -7903,7 +8597,9 @@ impl<'g, 'a> Fx<'g, 'a> {
                     },
                     Ty::Enum(id) => match (t, &id.owner) {
                         (Target::TypeScript, _) => v.ex.clone(),
-                        (Target::Python, _) => v.ex.clone().dot("value"),
+                        // `str(…)`: the value of an `enum.Enum` is `Any` to a checker of types, and a
+                        // function that answers it as is answers `Any` (mypy's `no-any-return`)
+                        (Target::Python, _) => Ex::call("str", vec![v.ex.clone().dot("value")]),
                         (Target::Go, Owner::Module(_)) => Ex::call("string", vec![v.ex.clone()]),
                         (Target::Go, Owner::Rule(_)) => Ex::Call(Box::new(v.ex.clone().dot("String")), vec![]),
                         // the value's name, as both kaname's and rulec's enums give it
@@ -7939,7 +8635,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let ex = match (name, t) {
             ("chars", Target::Python) => Ex::call("list", vec![s0]),
             ("chars", _) => g.kcall(&g.helper("chars", "", "Chars"), vec![s0]),
-            ("code_points", Target::Python) => Ex::call("list", vec![Ex::call("map", vec![Ex::atom("ord"), s0])]),
+            ("code_points", Target::Python) => Ex::call("list", vec![Ex::call(g.builtin("map"), vec![Ex::atom(g.builtin("ord")), s0])]),
             ("code_points", _) => g.kcall(&g.helper("codePoints", "", "CodePoints"), vec![s0]),
             ("to_text", _) => g.kcall(&g.helper("toText", "to_text", "ToText"), vec![s0]),
             ("slice", _) => g.kcall(&g.helper("cpSlice", "text_slice", "TextSlice"), vec![s0, int(self, 1), int(self, 2)]),
@@ -7981,36 +8677,64 @@ impl<'g, 'a> Fx<'g, 'a> {
     }
 
     /// The same, the names in `hidden` taken too: the orders a generic function is given (DESIGN 26.7).
-    pub fn body_with(mut self, params: &[String], hidden: &[String]) -> Vec<Node> {
+    /// Python: where a name of the function's has a builtin's, which hides the builtin in the whole
+    /// function, the function's code is written again, reaching the builtins it names past it
+    /// (`_builtins.sorted`, DESIGN 10.3); the names are the same both times, and so are the helpers.
+    pub fn body_with(self, params: &[String], hidden: &[String]) -> Vec<Node> {
+        let (g, f) = (self.g, self.f);
+        let (out, shadowing) = self.body_once(params, hidden);
+        if shadowing.is_empty() {
+            return out;
+        }
+        *g.shadow.borrow_mut() = shadowing;
+        let (out, _) = Fx::new(g, f).body_once(params, hidden);
+        g.shadow.borrow_mut().clear();
+        out
+    }
+
+    fn body_once(mut self, params: &[String], hidden: &[String]) -> (Vec<Node>, BTreeSet<String>) {
         for h in hidden {
             self.locals.taken.insert(h.clone());
+            self.shadows(h);
+        }
+        // the type parameters' names, which a local would hide in the body (Go's, Python's type
+        // variables)
+        for n in self.g.tparam_names(&self.g.c.decls.fns[self.f].tparams) {
+            self.locals.taken.insert(n);
         }
         let g = self.g;
         let info = g.c.decls.fns[self.f].clone();
         let mut cells = Vec::new();
         for (p, name) in info.params.iter().zip(params) {
             self.locals.taken.insert(name.clone());
+            self.shadows(name);
             let held = if self.t() == Target::Rust && !g.is_copy(&p.slot.ty) { Held::Lent } else { Held::Made };
+            let first = self.out.len();
             let v = self.from_boundary_as(Ex::atom(name.clone()), &p.slot.ty, &p.slot.ty, held);
             let start = self.out.len();
             let v = if v.ex.is_simple() { v } else { self.spill(v) };
-            // Rust names a parameter the body never reads `_` (DESIGN 36.4)
-            let used = Rc::new(Cell::new(self.t() != Target::Rust));
-            cells.push((name.clone(), used.clone(), start..self.out.len()));
+            // Rust names a parameter the body never reads `_` (DESIGN 36.4); Go declares no value of
+            // one as it is worked on, which Go would ask to be read (a rate, an amount: every line
+            // that reads it in, `if` and all, where it may be absent. DESIGN 43)
+            let used = Rc::new(Cell::new(!matches!(self.t(), Target::Rust | Target::Go)));
+            let from = if self.t() == Target::Go { first } else { start };
+            cells.push((name.clone(), used.clone(), from..self.out.len()));
             self.scope.push((p.name.text.clone(), v, used));
         }
         let decl = &g.c.module.fns[self.f];
         self.block(&decl.body, &Sink::Return);
-        if self.t() == Target::Rust {
+        if matches!(self.t(), Target::Rust | Target::Go) {
             // a parameter never read: nor is it read in its type first
             for (_, used, at) in cells.iter().rev() {
                 if !used.get() {
                     self.out.drain(at.clone());
                 }
             }
+        }
+        if self.t() == Target::Rust {
             *g.unread.borrow_mut() = cells.iter().filter(|(_, c, _)| !c.get()).map(|(n, ..)| n.clone()).collect();
         }
-        self.out
+        (self.out, self.shadowing)
     }
 }
 

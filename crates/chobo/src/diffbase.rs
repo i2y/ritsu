@@ -9,21 +9,15 @@ use crate::model::{self, *};
 use std::path::Path;
 
 /// The book at `rev`, read with git; Ok(None) when the revision has no such file. What git
-/// answers is read from its exit codes, not its messages, which follow the user's locale. Built
-/// for WASI (ritsu's npm package), where no program starts, the error says so (ritsu-base's
-/// `wasi`).
+/// answers is read from its exit codes, not its messages, which follow the user's locale. Err when
+/// there is no revision to read it at — the book is in no git repository, git does not know the
+/// revision, or git cannot start (as where no program can, ritsu built for WASI and its npm package)
+/// — in the words `ritsu impact --base` says them in (ritsu-base's `fs::GitRevision`).
 pub fn read_at(path: &Path, rev: &str) -> Result<Option<String>, Text> {
     let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    let name = path.file_name().ok_or(Text::same("no file name"))?.to_string_lossy().to_string();
-    let git = |args: &[&str]| {
-        std::process::Command::new("git").arg("-C").arg(dir).args(args).output().map_err(|e| {
-            if ritsu_base::wasi::unsupported(&e) { ritsu_base::wasi::cannot_start("git") } else { Text::same(format!("cannot run git: {e}")) }
-        })
-    };
-    let found = git(&["rev-parse", "--verify", "--quiet", &format!("{rev}^{{commit}}")])?;
-    if !found.status.success() {
-        return Err(Text::same(format!("git: no revision `{rev}` in {}", dir.display())));
-    }
+    let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().to_string());
+    ritsu_base::fs::GitRevision::open(dir, rev)?;
+    let git = |args: &[&str]| std::process::Command::new("git").arg("-C").arg(dir).args(args).output().map_err(|e| ritsu_base::cli::cannot_start("git", &e));
     let spec = format!("{rev}:./{name}");
     if !git(&["cat-file", "-e", &spec])?.status.success() {
         return Ok(None);

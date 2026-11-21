@@ -1,0 +1,18 @@
+rule credit_in_order v1
+description "A credit for a tier, one row for each tier: the rule lifted_in_order.rule reads with an apply (fictional)"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  tier : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table credit_by_tier
+policy unique
+| tier     | -> credit |
+| silver   | 3USD      |
+| gold     | 5USD      |
+| basic    | 0USD      |
+| platinum | 8USD      |

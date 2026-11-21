@@ -1,0 +1,91 @@
+request 備品(supplies_ja) v1 "備品の申請"
+description "チームの備品の申請（架空の決まり）。条件で見せるフィールドを出し直しと直しで変え、フィールドを空にする"
+
+use organization 組織(org) from "../../examples/shared/company.ringi"
+use calendar 本社(office) from "../../examples/shared/office.cal"
+
+form
+  種類(kind)       : choice "種類"
+    物品(goods)    "物品"
+    役務(service)  "役務"
+  単価(price)      : money[円] "単価"  range >=1円 <=1_000_000円
+  数量(quantity)   : number "数量"  range >=1 <=100
+  合計(total)      : money[円] "合計" = 単価 * 数量  range >=1円 <=100_000_000円
+  仕入先(vendor)   : text "仕入先"  count <=100  optional  shown when 種類 is 物品
+  連絡先(contact)  : text "仕入先の連絡先"  count <=100  shown when 仕入先 is not none
+  メモ(note)       : long text "メモ"  count <=200  optional
+  資産番号(label)  : text "資産番号"  count <=20  approvers only  optional  shown when 種類 is 物品
+  確認者(checked)  : text "確認した人"  count <=40  approvers only  optional
+
+route
+  一次(first)  上長
+  経理(check)  経理  when 仕入先 is not none
+
+who
+  上長(manager)    = manager of requester
+  経理(accounting) = team accounting
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval   not allowed
+  send back       to the requester, at most 3 times
+  resubmit        within 3 business days
+  approvers edit  種類, 仕入先, メモ
+
+# 出し直しで種類を変えた。仕入先は見せなくなり、値を落とす。仕入先を書いたときに見せる連絡先も、
+# 一緒に落ちる。仕入先を確かめる経理は、答えない
+scenario 出し直しで種類を変えた
+  requester e1201
+  form 種類 = 物品, 単価 = 30_000円, 数量 = 2, 仕入先 = "加藤商事", 連絡先 = "sales@example.com"
+| at               | event                | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit               | e1201 | 一次     | in progress    |
+| 2026-11-16 11:00 | send back            | e1101 |          | with requester |
+| 2026-11-16 13:00 | resubmit(種類: 役務) | e1201 | 一次     | in progress    |
+| 2026-11-16 14:00 | approve              | e1101 |          | approved       |
+
+# 出し直しのセルの `none` は、フィールドを空にする
+scenario メモを空にした
+  requester e1201
+  form 種類 = 役務, 単価 = 30_000円, 数量 = 1, メモ = "月末までに"
+| at               | event                | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit               | e1201 | 一次     | in progress    |
+| 2026-11-16 11:00 | send back            | e1101 |          | with requester |
+| 2026-11-16 13:00 | resubmit(メモ: none) | e1201 | 一次     | in progress    |
+| 2026-11-16 14:00 | approve              | e1101 |          | approved       |
+
+# 出し直しで隠れるフィールドを空にしても、落ちるのと同じになる。値の無いフィールドを空にしても、
+# 空のまま
+scenario 隠れるフィールドと値の無いフィールドを空にした
+  requester e1201
+  form 種類 = 物品, 単価 = 30_000円, 数量 = 1, 仕入先 = "加藤商事", 連絡先 = "sales@example.com"
+| at               | event                                       | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit                                      | e1201 | 一次     | in progress    |
+| 2026-11-16 11:00 | send back                                   | e1101 |          | with requester |
+| 2026-11-16 13:00 | resubmit(種類: 役務, 仕入先: none, メモ: none) | e1201 | 一次 | in progress    |
+| 2026-11-16 14:00 | approve                                     | e1101 |          | approved       |
+
+# 承認者が資産番号と確認した人を入れ、種類を変えてメモを空にする。物品のときに見せる仕入先、
+# その連絡先、資産番号は落ちる。そのあと、確認した人を空にする
+scenario 承認者が直した
+  requester e1201
+  form 種類 = 物品, 単価 = 30_000円, 数量 = 1, 仕入先 = "加藤商事", 連絡先 = "sales@example.com", メモ = "急ぎ"
+| at               | event                                   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                  | e1201 | 一次     | in progress |
+| 2026-11-16 11:00 | edit(資産番号: "A-12", 確認者: "e1101") | e1101 | 一次     | in progress |
+| 2026-11-16 12:00 | edit(種類: 役務, メモ: none)            | e1101 | 一次     | in progress |
+| 2026-11-16 13:00 | edit(確認者: none)                      | e1101 | 一次     | in progress |
+| 2026-11-16 14:00 | approve                                 | e1101 |          | approved    |
+
+# 承認者が仕入先を空にした。連絡先も一緒に落ち、承認者が値を変えたときと同じに、このステップより
+# 後を決め直す。経理は、もう答えない
+scenario 承認者が仕入先を空にした
+  requester e1201
+  form 種類 = 物品, 単価 = 30_000円, 数量 = 1, 仕入先 = "加藤商事", 連絡先 = "sales@example.com"
+| at               | event              | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit             | e1201 | 一次     | in progress |
+| 2026-11-16 11:00 | edit(仕入先: none) | e1101 | 一次     | in progress |
+| 2026-11-16 13:00 | approve            | e1101 |          | approved    |

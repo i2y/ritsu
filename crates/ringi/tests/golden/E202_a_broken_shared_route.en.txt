@@ -1,0 +1,4 @@
+error[E202]: tests/mutants/E202_a_broken_shared_route.ringi:3:25: `shared/broken_route.ringi` does not pass ringi's check
+     3 | use route standard from "shared/broken_route.ringi"
+  = E004: `heads` is not declared in `who` (tests/mutants/shared/broken_route.ringi:8:10)
+  = Correct that file until its check passes.

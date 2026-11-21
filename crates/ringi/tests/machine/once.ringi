@@ -1,0 +1,187 @@
+request expense v1 "Expense, approved once"
+description "An expense one person may come to answer at two stages (fictional rules): `same approver approves once`, where it does a stage with the approval before it and where it does not"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+use flow precheck_agent from "precheck.flow"
+
+form
+  what  : text "What"  count >=1 <=100
+  shape : choice "Shape of the route"
+    plain    "Manager, head of department, head of division"
+    between  "Accounting between the manager and the head of department"
+    joint    "The head of department and accounting together"
+    agent    "An agent between the manager and the head of department"
+    reversed "The head of department before the manager"
+    both     "The manager and the head of department together"
+    traced   "The head of department three times"
+
+route
+| shape    | -> first  | middle                   | second    | decide        |
+| plain    | manager   |                          | dept_head | division_head |
+| between  | manager   | accounting               | dept_head | division_head |
+| joint    | manager   | dept_head and accounting |           | division_head |
+| agent    | manager   | check                    | dept_head | division_head |
+| reversed | dept_head |                          | manager   | division_head |
+| both     | manager and dept_head |              |           | division_head |
+| traced   | dept_head | dept_head                | dept_head | division_head |
+
+who
+  manager       = manager of requester
+  dept_head     = head of requester.department
+  division_head = nearest division_head above requester
+  accounting    = team accounting
+  check         = agent precheck_agent, else manager
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval     not allowed
+  same approver     approves once
+  send back         to any earlier stage, at most 2 times
+  resubmit          within 3 business days
+  withdraw          until second
+  retract approval  until the next stage answers
+
+# the head of the department is the manager's manager too: one approval does both stages
+scenario done_with_the_approval_before
+  requester e1101
+  form what = "A projector", shape = plain
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | first    | in progress |
+| 2026-11-16 11:00 | approve | e3101 | decide   | in progress |
+| 2026-11-16 12:00 | approve | e0101 |          | approved    |
+
+# accounting answers between the two: the head of the department answers again
+scenario not_across_a_stage_between
+  requester e1101
+  form what = "A projector", shape = between
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | first    | in progress |
+| 2026-11-16 11:00 | approve | e3101 | middle   | in progress |
+| 2026-11-16 12:00 | approve | e1001 | second   | in progress |
+| 2026-11-16 13:00 | approve | e3101 | decide   | in progress |
+
+# a joint stage: the part of the head of the department is done, and accounting's waits
+scenario one_part_of_a_joint_stage
+  requester e1101
+  form what = "A projector", shape = joint
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | first    | in progress |
+| 2026-11-16 11:00 | approve | e3101 | middle   | in progress |
+| 2026-11-16 12:00 | approve | e1002 | decide   | in progress |
+
+# an agent answers between the two: the head of the department answers again
+scenario not_across_an_agent
+  requester e1101
+  form what = "A projector", shape = agent
+| at               | event                       | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                      | e1101 | first    | in progress |
+| 2026-11-16 11:00 | approve                     | e3101 | middle   | in progress |
+| 2026-11-16 11:01 | agent answered(verdict: ok) |       | second   | in progress |
+| 2026-11-16 12:00 | approve                     | e3101 | decide   | in progress |
+
+# the head of a department asks: the stage that comes to them alone goes up to the head of the
+# division, who has approved the stage before, and decides too: one approval does all three
+scenario done_where_it_went_up_to_for_lack_of_an_approver
+  requester e3101
+  form what = "A projector", shape = plain
+| at               | event   | by    | -> stage | status   |
+| 2026-11-16 10:00 | submit  | e3101 | first    | in progress |
+| 2026-11-16 11:00 | approve | e0101 |          | approved |
+
+# a stage that is late goes up to the one who approved the stage before: it has started already,
+# and they answer it
+scenario not_done_where_it_went_up_to_late
+  requester e1201
+  form what = "A projector", shape = reversed
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve | e3101 | second   | in progress |
+| 2026-11-20 00:00 | late    |       | second   | in progress |
+| 2026-11-20 10:00 | approve | e3101 | decide   | in progress |
+
+# the one a late stage went up to approves it: the next stage, which is theirs, is done with it
+scenario done_after_the_one_it_went_up_to_approves
+  requester e1201
+  form what = "A projector", shape = plain
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-20 00:00 | late    |       | first    | in progress |
+| 2026-11-20 10:00 | approve | e3101 | decide   | in progress |
+
+# a proxy answers for the head of the department: it is the head's approval, and the proxy's own
+# stage, which comes next, is not done with it
+scenario a_proxy_answers_for_one_and_then_for_themselves
+  requester e1201
+  form what = "A projector", shape = reversed
+| at               | event   | by    | -> stage | status      |
+| 2026-12-28 10:00 | submit  | e1201 | first    | in progress |
+| 2026-12-28 11:00 | approve | e1101 | second   | in progress |
+| 2026-12-28 12:00 | approve | e1101 | decide   | in progress |
+
+# sent back to a stage that was done: it is answered this time, and what comes after may be done
+scenario sent_back_to_a_stage_that_was_done
+  requester e1101
+  form what = "A projector", shape = plain
+| at               | event                 | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                | e1101 | first    | in progress |
+| 2026-11-16 11:00 | approve               | e3101 | decide   | in progress |
+| 2026-11-16 12:00 | send back(to: second) | e0101 | second   | in progress |
+| 2026-11-16 13:00 | approve               | e3101 | decide   | in progress |
+
+# sent back to a stage that was done with the approval before it, and answered this time: the
+# stage after it is done with that answer, not with the approval further back
+scenario done_with_the_answer_the_stage_gave
+  requester e1201
+  form what = "A projector", shape = traced
+| at               | event                 | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve               | e3101 | decide   | in progress |
+| 2026-11-16 12:00 | send back(to: middle) | e0101 | middle   | in progress |
+| 2026-11-16 13:00 | approve               | e3101 | decide   | in progress |
+
+# the same where a proxy gave the first approval: the stage it went back to is answered itself,
+# and the stage after it is done with that answer
+scenario done_with_the_answer_the_stage_gave_after_a_proxy
+  requester e1201
+  form what = "A projector", shape = traced
+| at               | event                 | by    | -> stage | status      |
+| 2026-12-28 10:00 | submit                | e1201 | first    | in progress |
+| 2026-12-28 11:00 | approve               | e1101 | decide   | in progress |
+| 2026-12-28 12:00 | send back(to: middle) | e0101 | middle   | in progress |
+| 2026-12-28 13:00 | approve               | e3101 | decide   | in progress |
+
+# sent back to the requester and made again: the approval of the round before does nothing
+scenario made_again_after_it_was_done
+  requester e1101
+  form what = "A projector", shape = plain
+| at               | event     | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit    | e1101 | first    | in progress    |
+| 2026-11-16 11:00 | approve   | e3101 | decide   | in progress    |
+| 2026-11-16 12:00 | send back | e0101 |          | with requester |
+| 2026-11-17 10:00 | resubmit  | e1101 | first    | in progress    |
+| 2026-11-17 11:00 | approve   | e3101 | decide   | in progress    |
+
+# the approval taken back: the stage it did goes back with it
+scenario taken_back_with_the_stage_it_did
+  requester e1101
+  form what = "A projector", shape = plain
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1101 | first    | in progress |
+| 2026-11-16 11:00 | approve | e3101 | decide   | in progress |
+| 2026-11-16 12:00 | retract | e3101 | first    | in progress |
+| 2026-11-16 13:00 | approve | e3101 | decide   | in progress |
+
+# a proxy who is an approver of the stage too: the first answer is their own, the second is for
+# the one they stand in for. One answer uses one person's authority
+scenario a_proxy_with_a_part_of_their_own
+  requester e1201
+  form what = "A projector", shape = both
+| at               | event   | by    | -> stage | status      |
+| 2026-12-28 10:00 | submit  | e1201 | first    | in progress |
+| 2026-12-28 11:00 | approve | e1101 | first    | in progress |
+| 2026-12-28 12:00 | approve | e1101 | decide   | in progress |

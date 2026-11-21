@@ -1,0 +1,19 @@
+request example v1 "Example"
+
+use book budget from "shared/budget.book"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  dept   : text "Department"  count >=1 <=20
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed
+  on submitted   hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)
+  on approved    post budget.reserve(request: ticket.id, attempt: ticket.attempt)
+  on rejected    void budget.reserve(request: ticket.id, attempt: ticket.attempt)  when amount > 10_000JPY

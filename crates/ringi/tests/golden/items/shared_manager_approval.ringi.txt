@@ -1,0 +1,16 @@
+8-8 ringi "examples/shared/manager_approval.ringi" input long
+    long : bool
+11-11 ringi "examples/shared/manager_approval.ringi" stage manager
+    manager manager
+12-12 ringi "examples/shared/manager_approval.ringi" stage head
+    head dept_head when long
+15-15 ringi "examples/shared/manager_approval.ringi" who manager
+    manager = manager of requester
+16-16 ringi "examples/shared/manager_approval.ringi" who dept_head
+    dept_head = head of requester.department
+18-24 ringi "examples/shared/manager_approval.ringi" deadline every_stage
+    every stage
+    due in 2 business days at end of day
+    remind after 1 business day at 09:00
+    when late escalate, then expire
+    when empty escalate, then skip

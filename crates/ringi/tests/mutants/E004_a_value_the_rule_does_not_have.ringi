@@ -1,0 +1,18 @@
+request example v1 "Example"
+
+use rule authority from "shared/authority.rule"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  level  : choice from authority.decider "Who decides"
+
+route
+  check  managers
+  audit  cfos  when level is ceo
+
+who
+  managers = team managers
+  cfos     = team cfos
+
+ticket
+  self approval  not allowed

@@ -1,0 +1,16 @@
+request 例(example) v1 "例"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+  確かめる人(reviewer) : person "確かめる人"  approvers only
+
+route
+  確かめ(check)   経理
+  審査(review)    指名された人
+
+who
+  経理(finance)                 = team finance
+  指名された人(chosen_reviewer) = chosen by requester in 確かめる人
+
+ticket
+  self approval  not allowed

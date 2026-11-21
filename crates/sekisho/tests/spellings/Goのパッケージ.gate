@@ -1,0 +1,27 @@
+gate 席替え(switch) v1
+description "Go の予約語を名前にしたファイル。Go はその名前でパッケージを書く"
+namespace Air
+
+role 係員(agent)
+  description "便の搭乗口で働く"
+  can 席を移す
+
+principal 職員(Agent)
+  description "尋ねる人"
+  roles 係員
+
+resource 席(Seat)
+  description "便の席"
+  attributes
+    空き(vacant) : bool
+
+action 席を移す(move_seat)
+  description "乗客の席を移す"
+  principal 職員
+  resource 席
+
+permit 係員は空いた席に移せる(agents_move_to_vacant_seats)
+  description "係員は次のことができる: 乗客の席を移す"
+  principal in 係員
+  action 席を移す
+  when resource.空き

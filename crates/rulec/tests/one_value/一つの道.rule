@@ -1,0 +1,43 @@
+rule 一つの道(one_way_ja) v1
+description "道が一つしかない申請で、最初に答える人と、値が一つの種類（架空）"
+
+# ここの列挙は、どれも値が一つである。値ごとの関数は答えが一つで選ぶものが無いが、どの出力先の
+# コードも、その言語が読める形で書かなければならない。
+import enum 道 from "道の一覧.rule"
+
+enum 最初(first_by) = 部長(manager) "部長"
+enum 種類(kind) = 一つ(only)
+
+inputs
+  金額(amount)   : money[JPY]  range >=1JPY <=1_000JPY
+  渡す種類(given) : 種類
+  任意の種類(maybe) : 種類?
+  通る道(path)   : 道
+
+outputs
+  最初の人(first) : 最初
+  返す種類(again) : 種類
+  手数料(fee)     : money[JPY]  round down(1JPY)
+  行く道(way)     : 道
+
+table 最初の表(first)
+| -> 最初の人 |
+| 部長        |
+
+table 種類の表(again)
+| 渡す種類 | -> 返す種類 |
+| 一つ     | 一つ        |
+
+table 手数料の表(fee)
+| 任意の種類 | -> 手数料 |
+| 一つ       | 0JPY      |
+| none       | 金額      |
+
+table 道の表(way)
+| 通る道 | -> 行く道 |
+| 直行   | 直行      |
+
+examples
+| 金額 | 渡す種類 | 任意の種類 | 通る道 | -> 最初の人 | -> 返す種類 | -> 手数料 | -> 行く道 |
+| 1JPY | 一つ     | 一つ       | 直行   | 部長        | 一つ        | 0JPY      | 直行      |
+| 2JPY | 一つ     | none       | 直行   | 部長        | 一つ        | 2JPY      | 直行      |

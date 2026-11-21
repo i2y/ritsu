@@ -1,0 +1,19 @@
+rule three_or_more v1
+description "Whether an order is large. An order has three paid lines or more, and a line is 100 yen at most: a total of 150 yen carried by two lines comes with too few of them"
+
+# A line of the order
+elements lines
+  price : money[JPY]  range >=1JPY <=100JPY
+  paid  : bool
+
+count paid_lines over lines where paid  range >=3 <=5
+sum total over lines of price  range >=0JPY <=500JPY
+
+outputs
+  large : bool
+
+table large_of
+policy unique
+| total    | -> large |
+| <150JPY  | false    |
+| >=150JPY | true     |

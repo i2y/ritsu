@@ -1,0 +1,26 @@
+rule unread_kinds v1
+description "A fee by the amount, with one of each kind of value nothing reads (fictional)"
+
+enum channel = shop | web
+
+elements lines
+  qty : number  range >=0 <=100
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+  via    : channel
+
+outputs
+  fee : money[JPY]  round down(1JPY)
+
+derive doubled : money[JPY] = amount * 2  range >=2JPY <=200_000JPY
+
+define tripled : money[JPY] = amount * 3
+
+sum total_qty over lines of qty  range >=0 <=10000
+
+table fee_of
+policy unique
+| amount     | -> fee | band : channel |
+| <30000JPY  | 100JPY | shop           |
+| >=30000JPY | 500JPY | web            |

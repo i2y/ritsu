@@ -1,0 +1,24 @@
+workflow フィールドの連鎖 v1
+description "型の分からない値のフィールドを読む行。読めない規則の型のフィールドを、同じ名前で持つレコードがあるとき。chain_fields.flow の日本語の版"
+
+use rule 地域 from "rules/無い地域.rule"
+
+record 荷物
+  ID   : string
+  区域 : 地域.区域
+
+inputs
+  荷 : 荷物
+  ID : string
+
+outputs
+  札   : string
+  ほか : string
+
+task 探す(ID: string) -> string
+
+flow
+  # タスクが無いので、`場所` は型を持たず、それを読むところは何も言わない
+  let 場所 = 探ス(ID: ID)
+  # `どこにも` に値を入れる行は無い。フィールド `区域` を持つレコードがあっても、無い名前である
+  succeed 札 = 場所.区域, ほか = どこにも.区域

@@ -1,0 +1,23 @@
+rule 手数料で決まる区分(tier_from_the_fee) v1
+description "手数料で決まる区分を、手数料のもとの金額と一緒に読む。手数料は 33 円までは 0 円、それを超えると 1 円なので、少ない金額で有料の区分になることはない。検査は、行ごとの金額で手数料を計算し直す"
+
+enum 選択(choice) = 一(one) | 二(two)
+enum 区分(tier) = 無料(free) | 有料(paid)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=61円
+
+define 手数料(fee) : money[円] = min(down(金額 * 3%, 1円), 26円)
+
+outputs
+  答え(x) : 選択
+
+table 区分の表(tier_of)
+| 手数料 | -> 区分(tier) : 区分 |
+| 0円    | 無料                 |
+| 1円    | 有料                 |
+
+table 選ぶ(pick)
+| 金額   | 手数料      | 区分 | -> 答え |
+| <=33円 | >-1円 <3円 | 無料 | 一      |
+| >33円  | >-1円 <3円 | 有料 | 二      |

@@ -1,0 +1,8 @@
+diff: tests/fixtures/reads/changes/money.diff
+files read by the files that requirements name, that the diff touches:
+  tests/fixtures/reads/proto/money.proto
+    proto "proto/refunds.proto" line 5 (import): met by refund_messages
+changes no requirement reaches: none
+requirements touched:
+  refund_messages (tests/fixtures/reads/refunds.req:42): owner finance; decided 2026-11-02 by finance: "Written for this test"
+1 requirement touched; ask finance

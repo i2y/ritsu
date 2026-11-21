@@ -840,7 +840,7 @@ fn kaniの件数はページと記録と実物で揃っている() {
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", "tests/corpus/", "--out", &out.to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
+        .args(["gen", "tests/corpus/", "--out", &out.to_string_lossy(), "--lang", "ja"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "gen が失敗した");
@@ -893,7 +893,7 @@ fn トップと道案内が言う規則の本数は実物と合っている() {
     let n = corpus_rules();
     // The ones written rather than transcribed, as tests/readme.rs counts them. The English
     // page said nine for a while after the tenth went in.
-    const WRITTEN: usize = 119;
+    const WRITTEN: usize = 131;
     for (page, want) in [
         ("website/rulec/docs/index.md", format!("{n} rules checked, generated and run on every commit")),
         ("website/rulec/docs/assurance.md", format!("**{n} rules** — {} transcribed from a published source, {WRITTEN} written", n - WRITTEN)),

@@ -118,7 +118,7 @@ impl Outcome {
     }
 
     /// The file as parsed, when the check has one.
-    fn file(&self) -> Option<&File> {
+    pub(crate) fn file(&self) -> Option<&File> {
         match &self.checked {
             Some(Checked::Dates(m, _)) => Some(&m.file),
             Some(Checked::Calendar(_)) => self.calendar_file.as_ref(),
@@ -141,18 +141,31 @@ pub fn compare_across(o: &mut Outcome, earlier: &mut Vec<File>) {
     earlier.push(f);
 }
 
-/// The first line of a `.cal`, for choosing what to do with it before parsing.
-fn read(path: &str) -> Result<Vec<u8>, String> {
-    ritsu_base::fs::read(path).map_err(|e| e.to_string())
-}
-
-/// Check a file on disk. `Err` is a file that cannot be read at all (exit 2).
+/// Check a file on disk. `Err` is a file that cannot be read at all; one that is not UTF-8 is read,
+/// and its E001 says so (what a language that reads it with `use dates` is told).
 pub fn check_file(path: &str, opts: &Options, loader: &mut Loader) -> Result<Outcome, String> {
-    let bytes = read(path)?;
+    let bytes = ritsu_base::fs::read(path).map_err(|e| e.to_string())?;
     Ok(check_bytes(path, &bytes, opts, loader))
 }
 
+/// Check a file given to a command (koyomi's own, and `ritsu check`'s). `Err` is a file the command
+/// cannot check at all, and exits 2 for, as every command of the toolchain does (ritsu's DESIGN
+/// 6.2, item 10): one that cannot be read, and one that is not UTF-8.
+pub fn check_given(path: &str, opts: &Options, loader: &mut Loader) -> std::io::Result<Outcome> {
+    let bytes = ritsu_base::fs::read(path)?;
+    if std::str::from_utf8(&bytes).is_err() {
+        return Err(not_utf8());
+    }
+    Ok(check_bytes(path, &bytes, opts, loader))
+}
+
+/// What reading a file that is not UTF-8 answers, as `std::fs::read_to_string` answers it.
+pub fn not_utf8() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, "stream did not contain valid UTF-8")
+}
+
 pub fn check_bytes(path: &str, bytes: &[u8], opts: &Options, loader: &mut Loader) -> Outcome {
+    ritsu_base::tally::count("koyomi", std::path::Path::new(path));
     let Ok(src) = std::str::from_utf8(bytes) else {
         let d = Diag::error("E001", path, 0, 0, tr!("ファイルが UTF-8 ではありません", "The file is not UTF-8"));
         return Outcome { path: path.into(), diags: vec![d], checked: None, ok: None, spelled: Vec::new(), calendar_file: None };
@@ -192,11 +205,12 @@ pub fn check_bytes(path: &str, bytes: &[u8], opts: &Options, loader: &mut Loader
     }
 }
 
-/// Stages 1 to 4 of a dates file: what `eval` and `api` need before they compute. The
-/// warnings come back beside the model.
-pub fn prepare(path: &str, loader: &mut Loader) -> Result<(Model, Vec<Diag>), Result<Vec<Diag>, String>> {
-    let bytes = read(path).map_err(Err)?;
-    let src = std::str::from_utf8(&bytes).map_err(|_| Ok(vec![Diag::error("E001", path, 0, 0, tr!("ファイルが UTF-8 ではありません", "The file is not UTF-8"))]))?;
+/// Stages 1 to 4 of a dates file: what `eval` needs before it computes. The warnings come back
+/// beside the model. A file the command cannot read, or that is not UTF-8, is `Err(Err(_))`
+/// ([`check_given`]).
+pub fn prepare(path: &str, loader: &mut Loader) -> Result<(Model, Vec<Diag>), Result<Vec<Diag>, std::io::Error>> {
+    let bytes = ritsu_base::fs::read(path).map_err(Err)?;
+    let src = std::str::from_utf8(&bytes).map_err(|_| Err(not_utf8()))?;
     let parsed = crate::parse::parse(path, src);
     let Some(f) = parsed.file else { return Err(Ok(parsed.diags)) };
     if f.kind != Kind::Dates {
@@ -218,13 +232,11 @@ fn prepare_file(f: File, path: &str, bytes: &[u8], loader: &mut Loader, opts: &O
     let mut m = match model {
         Ok(m) => m,
         Err(mut ds) => {
-            // Read the calendar too, so its own errors are said in the same run.
+            // Read the calendar too, so that one that does not pass is said in the same run (E015).
             if let Some((cp, sp)) = &use_cal {
                 let parsed = crate::parse::parse(path, std::str::from_utf8(bytes).unwrap_or(""));
                 if let Some(ff) = parsed.file
-                    && let Err(d) = loader.use_calendar(&ff, &dir, cp, *sp).map(|(_, mut x)| {
-                        ds.append(&mut x);
-                    })
+                    && let Err(d) = loader.use_calendar(&ff, &dir, cp, *sp)
                 {
                     ds.push(*d);
                 }
@@ -232,7 +244,7 @@ fn prepare_file(f: File, path: &str, bytes: &[u8], loader: &mut Loader, opts: &O
             return Err(ds);
         }
     };
-    // Stage 2: the calendar it uses (E015, and the calendar's own diagnostics).
+    // Stage 2: the calendar it uses (E015).
     if let Some((cp, sp)) = &use_cal {
         match loader.use_calendar(&m.file, &dir, cp, *sp) {
             Ok((cal, mut ds)) => {

@@ -134,18 +134,42 @@ counts the table's rows.
 
 An alias that is **a word one of the targets has taken** is W121. A builtin is the quiet case:
 the rule's alias names the generated function and an enum's alias names a type, so `sum` or
-`list` there hides Python's. A keyword is the hard one — `type` as an input's alias generates
-Rust that does not compile — and an alias stays as written, since it is the identifier its
-author chose. A name with no alias is its own identifier, and there the generated code does
-the renaming: an input, an output, a `derive`, a `define`, a table's output column, a sequence
-or one of its fields called `type`, `class`, `def` or `from` — a keyword in some of the
-languages that write a name as it is — is written with `_` after it in every language
-(`class_`), `rulec api` names it so, and the name a value travels under — the keys of the input
-JSON, the records — stays the one declared. Where `class_` is already the identifier of another
-name of the rule, a number goes after it (`class_2`). W121 says which languages took the word,
-and an alias chooses the identifier instead. A parameter or a local hides nothing outside its own
-body, so the warning is raised for those only when the word is a keyword. It is a warning
-because a target you do not generate cannot hurt you.
+`list` there hides the language's own in the module. The generated code reaches most such
+builtins another way (`_builtins.sum`, `globalThis.JSON`, `::Kernel.format`), and then nothing is
+said; W121 names the languages where it does not, comparing the name as each language writes the
+function or the type. A keyword is the hard one — `type` as an input's alias generates Rust that
+does not compile — and an alias stays as written, since it is the identifier its author chose.
+
+A keyword is compared in the spelling and the case each language writes the name in. A value's
+alias is held to the keywords of the languages that write it as it stands: Swift writes a value's
+keyword in backticks and Java with `_` after it, so an alias `int` or `TRUE` is said nowhere.
+
+The rule's alias is held to them as each language writes the rule's function and the module or
+the package the rule is, and an enum's as each writes its type, in PascalCase, as the names with
+no alias are: `self` for an enum is the type `Self`, a keyword of Rust's and Swift's in that
+case; `fall_through` for a rule is the package `fallthrough`, a keyword
+where the function `FallThrough` is none; and a function defined on the rule's module
+(`def self.for`) takes any keyword as its name. An `enums` file's name is held to them as the
+module, the class or the package each language writes the file as, which the rules that read
+from it import.
+
+PHP and Java put `_` after such a keyword instead, where a caller reads the name, and their code
+builds. PHP does so after the rule's function and its namespace (`list_`, `List_`), an `enums`
+file's namespace, an enum's class (`Array_`, and `Float_` for `float`) and a value's case
+(`Kind::FINAL_`), whatever the case of the keyword; Java after the rule's method (`for_`, in the
+class `For`). W121 says what
+each writes there and names no target, so `gen` writes both; an alias that is no keyword there
+keeps the `_` out.
+
+A value with no alias is its own identifier, and there the generated code does the renaming: an
+input, an output, a `derive`, a `define`, a table's output column, a sequence or one of its fields
+called `type`, `class`, `def` or `from` — a keyword in some of the languages that write a name as
+it is — is written with `_` after it in every language (`class_`), `rulec api` names it so, and
+the name a value travels under — the keys of the input JSON, the records — stays the one declared.
+Where `class_` is already the identifier of another name of the rule, a number goes after it
+(`class_2`). W121 says which languages took the word, and an alias chooses the identifier instead.
+A parameter or a local hides nothing outside its own body, so the warning is raised for those only
+when the word is a keyword. It is a warning because a target you do not generate cannot hurt you.
 
 An identifier rulec makes — that `_`, and those of everything an `apply` or a contribution brings
 in (below) — is never one the rule has already, in any language's spelling of it: as it is, in
@@ -187,8 +211,10 @@ the one that reads the caller's objects.
 **Two names one language spells alike.** Each language writes an identifier its own way, and
 `check` holds the identifiers the rule declares to all of them. Two names whose identifiers differ
 as written but are one in some language's spelling are W121, which names the languages, the
-identifier each writes and why. The identifiers stay as the author wrote them, the generated code
-is written for every language, and an alias on one of the two sets them apart.
+identifier each writes and why. The identifiers stay as the author wrote them, and an alias on one
+of the two sets them apart. W121 is a warning, so that no name has to change for a language nobody
+generates; `gen` asked for a language whose code W121 says would not build, would not load or would
+answer otherwise writes nothing of it — the targets the warnings do not name are written — and stops with E153, at the place W121 names.
 
 `base_fee` and `baseFee`, for one, are both `baseFee` in Swift and Java.
 
@@ -200,29 +226,40 @@ bytes PostgreSQL keeps of a name are one name to PostgreSQL. Two values of an en
 makes one (`gold_plus` and `goldplus`, both `GOLDPLUS`) meet wherever the values are written in
 upper case.
 
-A name a language cannot take where its code puts it is W121 too: one that starts with a capital,
-which Ruby reads as a constant; an output of a rule with two or more, or a field of an element,
-that starts with `_`, which Python's `NamedTuple` does not take; an output or a table's row column
-longer than 63 bytes, whose column PostgreSQL returns under a cut name; a name of `_` alone, which
-four of the languages take for no variable and no field; a name rulec writes with `_` after it
-that starts with a capital (`True_`), a constant there as well; a value whose
-alias is `true` or `false` in any case (`True`), which SQLite gives no column; and an enum on the
-wire whose name is not in ASCII, which the `.proto` cannot write. An alias makes the name one the
-language takes.
+A name a caller reads that a language cannot take where its code puts it is W121 too: an output of
+a rule with two or more, or a field of an element, that starts with `_`, which Python's `NamedTuple`
+does not take; an output or a table's row column longer than 63 bytes, whose column PostgreSQL
+returns under a cut name; a value of an enum that a language writes as one of its keywords,
+`self` as the variant `Self`, its keyword for the type, or `begin` and `end` as Ruby's constants
+`BEGIN` and `END`; a name of `_` alone where it names a field of a struct, a record or a
+`NamedTuple` (the outputs of a rule with two or more, the fields of an element, the inputs where
+the code takes them in a struct) or the label of an argument (the inputs where the code takes them
+as labelled arguments), which those languages take for no field and no label; an
+output whose alias is `true` or `false` in any case (`True`), which SQLite gives no column; and an
+enum on the wire whose name is not in ASCII, which the `.proto` cannot write. An alias makes the
+name one the language takes. A value Ruby would read as a constant, one that starts with a capital
+(`READ_CREDIT`, `True_`), is bound under another name inside the rule's Ruby function, and a value
+of `_` alone that is a local of a function only is bound so in the languages that take no variable
+of that name: nothing is said of either.
 
 **A name the generated code uses itself.** The code each language writes declares names of its
-own beside the rule's: the types of the rows that matched (`Fired`), of the answer of a rule of two
-outputs or more (`Output`) and of one element, the errors, the brands of the units, the helpers
-that round and that write a record, the locals it keeps, and the names the language has built in
-that it reads; and the `.proto` declares its messages, its service, the field `trace` of
-`DecideResponse` that carries the rows that matched, and the zero value `<TYPE>_UNSPECIFIED` of
-every enum. A name of the rule's that a language writes as one of these is W121, which names the
-languages and what the name meets there: an output called `trace` and a value of an enum on the
-wire called `unspecified` (Connect), an enum called `output` in a rule of two outputs (ten
-languages), a definition called `round_down` (the helper one language rounds an output with), and
-a rule called `main` (a package name the go command keeps, and the file a program starts in). The
-generated code keeps its own names for every rule, and an alias on the rule's name sets the two
-apart.
+own beside the rule's. Some a caller reads too: the types of the rows that matched (`Fired`), of
+the answer of a rule of two outputs or more (`Output`) and of one element, the errors and the
+brands of the units, the module, the package and the file of the rule; and the `.proto` declares its
+messages, its service, the field `trace` of `DecideResponse` that carries the rows that matched,
+and the zero value `<TYPE>_UNSPECIFIED` of every enum. A name of the rule's that a language writes
+as one of these is W121, which names the languages and what the name meets there: an output called
+`trace` and a value of an enum on the wire called `unspecified` (Connect), an enum called `output`
+in a rule of two outputs (every target whose code declares the outputs' type `Output`), an enum
+read with `import enum` whose type is one of the module's (`Fired`), and a rule called `main` (a
+package name the go command keeps, and the file a program starts in). Those names stay what they
+are in every rule, and an alias on the rule's name
+sets the two apart. The others the code keeps to itself: the helpers that round and that write a
+record, the locals and the parameters of its functions, the names it imports, the names the
+language has built in that it reads, the columns of the query and the records of the runner. Where
+a name of the rule's meets one of these, the code of that language writes its own name apart, or
+binds the rule's under another inside its functions, and nothing is said: a definition called
+`round_down`, the helper Rust rounds an output with, is one.
 
 **Numbers** are digits, optionally with `_` as a separator, optionally preceded by `-`,
 optionally followed by a multiplier and then a unit:
@@ -284,7 +321,7 @@ Fourteen, and no others.
 | temperature | `temperature[℃]`, `temperature[℉]` | `℃` `℉`. **Ordered, not arithmetic**: comparison and `range` only (E048). 41℉ is exactly 5℃, and a literal converts between them; a difference of two temperatures is not written at all |
 | sound | `sound[dB]` | `dB`, a sound pressure level. **Ordered, not arithmetic** (E048): a decibel is a logarithm, so adding two of them is not two sounds' worth |
 | money | `money[JPY, incl_tax]`, `money[USD, excl_tax]` | currency **and** tax flag are both part of the type. The currency is `円` (`JPY` is the same) or one of the ISO 4217 codes `USD` `EUR` `GBP` `CHF` `CAD` `AUD` `NZD` `CNY` `HKD` `SGD` `KRW` `INR` `TWD` `THB` `SEK` `NOK` `DKK` `PLN` `CZK` `HUF` `TRY` `BRL` `MXN` `ZAR` `AED` `SAR` `ILS` `PHP` `IDR` `MYR` `VND`. The hundredth of a code is the code plus `c`, so `money[USD]` counts dollars and `money[USDc]` counts cents; the hundredth of yen is `銭`, and there is no `JPYc`. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
-| rate | `rate[step 1%]`, `rate[step 0.1%]`, `rate` | the stored integer counts steps. **An input declares its step** (E103 without one): what the caller passes is that integer, and its meaning cannot change when a row is added. **An output travels at the step it declares**, or with none declared at its rounding grid, which every answer sits on — never at whatever its rows happen to write, so no row can change what the integer counts. A rounding grid that is not a whole number of the declared step is E114. A computed rate that is not an output may leave the step out; it is held at whatever its literals need |
+| rate | `rate[step 1%]`, `rate[step 0.1%]`, `rate` | the stored integer counts steps. **An input declares its step** (E103 without one): what the caller passes is that integer, and its meaning cannot change when a row is added. **An output travels at the step it declares**, or with none declared at its rounding grid, which every answer sits on — never at whatever its rows happen to write, so no row can change what the integer counts. A rounding grid that is not a whole number of the declared step is E114. A computed rate that is not an output may leave the step out; it is held at whatever its literals need. One that writes it — on a table's heading (`-> markup : rate[step 1%]`), or on a `derive` or a `define` — holds what it takes to it: a cell off the step, a name in a cell that can come to a value off it, or an expression that can, is E114. The values an expression takes are read off it as for a `define`'s range (§6); one they are not read off is left alone |
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score |
 | date | `date` | comparison and range only. **There is no date arithmetic** (E048) |
 | string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
@@ -295,6 +332,13 @@ units whether or not a literal is written in it: `money[RUB]` and `money[JPYc]` 
 `mass[cm]` names a unit of another dimension, `money` and `mass` alone name none, and `mass[g, kg]`
 and `number[kg]` hold what the type does not read. An amount in a currency the table does not have
 is a `number`.
+
+A type that is none of these and no enum the rule declares or imports (`tierr` for `tier`) is
+E012, with the closest type or enum in its note, and a `[` that is never closed is E058. A type
+that names nothing, or a unit the brackets cannot hold, is said once, where the type is first
+written, with the other lines that write it in the note; the column, the cells, the range, the
+definitions, the `constraint` lines, the `count`, `sum`, `max` and `min` over it and the examples
+say nothing more.
 
 Every quantity, money, rate, number and date is an **integer** internally. No floating point appears
 anywhere in the tool or in the generated code.
@@ -411,9 +455,9 @@ rows, not amounts, not another rule.
 > `rulec check`. A header or a value the lexer does not read as a name (`Weight (kg)`,
 > `re-quote`, `<=2000g`) is named for now by its column's alias (`c2`) or by `v1`, `v2` …, and so
 > is a second column headed alike. A name the code generated for some language cannot take as
-> written, or would make one identifier with another (`Zone`, which Ruby reads as a constant;
+> written, or would make one identifier with another (`type`, a keyword of some languages;
 > `North` beside `north`), is given an alias: the importer checks the draft as `rulec check`
-> does, and spells such a name otherwise until the check says nothing of it (`Zone(zone)`,
+> does, and spells such a name otherwise until the check says nothing of it (`type(type_)`,
 > `North(v2)`). Each word is kept in the `# guess` note on the line that declares it, and `check`
 > reads the draft as it is written.
 
@@ -479,16 +523,42 @@ owns **which values exist**; the `.rule` owns **what they are called here** and 
 treated (a value named in Japanese takes its name from the rule; the proto has only the ASCII one).
 So what is checked is that they agree:
 
-- the value names are matched by the ASCII alias, with the enum's own name taken off the front
-  (`MEMBER_TIER_GOLD` is `gold`), which is the prefix convention `buf lint` enforces. The prefix
-  is the name split into words the way buf splits it, so `HTTPMethod` asks for `HTTP_METHOD_`
-  and `Tier2` for `TIER2_`. It is taken off only when what is left begins with a letter:
-  `SIZE_60` is `size_60`, since an alias cannot begin with a digit;
-- the zero value is proto3's "not set" when it is named `…_UNSPECIFIED`, so it is not a value
-  the table answers for — the generated code refuses it at the entry like any other non-member.
-  A zero value named anything else is a value like any other;
-- a value on one side only is **E032**, in either direction;
+- each value of the `.proto` is matched by the ASCII alias it reads as: the enum's own name taken
+  off the front and the rest in lower case, so `MEMBER_TIER_GOLD` is `gold` (the table below has
+  every form);
+- the zero value is proto3's "not set" when it reads as `unspecified` (`MEMBER_TIER_UNSPECIFIED`,
+  `Member_Tier_Unspecified`, `UNSPECIFIED`), so it is not a value the table answers for — the
+  generated code refuses it at the entry like any other non-member. A zero value read as anything
+  else is a value like any other;
+- the names of one number (`option allow_alias = true`) are one value: the rule writes it by any
+  one of them, and writing two of them is **E032**;
+- a value on one side only is **E032**, in either direction, and its notes say how each name of
+  the contract they involve was read;
 - and once the sets agree, a value that no row names and no `default` marks is **E033**.
+
+The enum is named by its name. One nested in a message may also be named with the messages it is
+nested in (`Order.Status`), and the file's package may go in front (`shop.v1.Order.Status`). When
+two messages each nest an enum of the name written, the line is E013 and its note names both.
+
+How the names of a contract's values read (the enum is `Category` unless the row says otherwise):
+
+| The value's name | Reads as | Why |
+|---|---|---|
+| `CATEGORY_TRAVEL`, `CATEGORY_AIR_TRAVEL` | `travel`, `air_travel` | the prefix `buf lint` asks for: the enum's name split into words as buf splits it (`HTTPMethod` is `HTTP_METHOD_`, `Tier2` is `TIER2_`) |
+| `Category_Food`, `category_drink` | `food`, `drink` | the prefix in any case |
+| `MEMBERTIER_GOLD`, `Member_Tier_Basic` (enum `MemberTier`) | `gold`, `basic` | the prefix with its `_`s anywhere |
+| `MemberTierGold` (enum `MemberTier`) | `gold` | the prefix ends where a capital begins a word |
+| `CATEGORYTRAVEL`; `STATUSBAR_HIDDEN` (enum `Status`) | `categorytravel`; `statusbar_hidden` | the enum's name runs on into a word, with no `_` or capital after it, so it is no prefix |
+| `TRAVEL`, `Purchase` | `travel`, `purchase` | no prefix: the name in lower case |
+| `SIZE_60` (enum `Size`) | `size_60` | what is left would begin with a digit, which an alias cannot, so the prefix stays |
+| `COLOR_RED` beside `RED` (enum `Color`) | `color_red` and `red` | without its prefix `COLOR_RED` would read as `RED` does, so the prefix stays |
+| `COLOR_RED` beside `Color_Red` (enum `Color`) | `COLOR_RED` and `Color_Red` | the two differ only in case, so each reads as written |
+| `CATEGORY_TRAVEL = 1` and `CATEGORY_TRIP = 1` | `travel` or `trip`: one value | the names of one number. On the wire it goes by the first of them (`CATEGORY_TRAVEL`), the name protojson writes for the number and the `alias` `rulec api` gives |
+| `CATEGORY_UNSPECIFIED = 0`, `Category_Unspecified = 0`, `UNSPECIFIED = 0` | not set | the zero value read as `unspecified`. `UNKNOWN = 0` and `CATEGORY_NONE = 0` are values |
+| `CATEGORY_TRAVEL` in `message Order { enum Category {…} }` | `travel` | a nested enum takes off its own name, not the message's |
+
+Two values of different numbers never read as one name. sekisho's `use proto` (E203) and the
+check across the languages (`fed by proto`) read a contract's enum the same way.
 
 E033 is the reason this exists. Adding a value to an enum is a compatible change on the wire,
 so the tools that guard the contract let it through; a table with a `-` row then passes the
@@ -557,7 +627,11 @@ declares under a name an import brings is E034.
 The generated code of a rule declares none of these types. Each language imports them from the
 one module the `enums` file becomes, which `rulec gen` writes beside the rule's whether or not
 the file is named on the command line (generated-code.md), so an app that calls two rules hands
-both the same value. `rulec api` of an `enums` file names that module in each language, and
+both the same value. The rule's module hands on what it reads, as it has the names of an enum it
+declares itself: the type, a parser, and the functions of the order and the display names, so
+code that imports the rule's module alone finds them. Python written to be put inside a package
+(`rulec gen --python-package`) reads the `enums` file's module by a relative import.
+`rulec api` of an `enums` file names that module in each language, and
 `rulec doc` renders its enums with their order and display names. The commands that are about
 a decision — `schema`, `adapter`, `verify`, `replay`, `fixtures lint`, `diff`, and `doc` as
 HTML or for customers — refuse one, and a contribution to one, which stands for it there (§6.7).
@@ -726,8 +800,8 @@ error[E101]: Completeness gap: some input matches no row
    |       ^^^^^^^^^^^^^^ the input space is not fully covered
    |
  An input that matches no row: closes_on = 2026-04-01, kind = general
- hint: add a row that matches this input.
- The shape of the row to add: `| 2026-04-01 | general | 0.55% |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
+ hint: add this row, with what it answers written in place of `?`: `| 2026-04-01 | general | ? |`
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.
 ```
 
 Close the last year's rows on both ends, as above. Then widening `closes_on` to the next fiscal year
@@ -828,8 +902,11 @@ element of it, nothing filtered. Every field of such a sequence says with its ow
 it is read in an element — a path from the element and nothing else (`from qty`,
 `from unit.kind`) — and a field that says none, or a field that says one under a sequence not
 taken from a contract, is E074. The elements are then elements like any other: the checks, the
-walks and the vectors are exactly what they are for a sequence the caller passes. A message
-names a field of an element by the collection with `[]` after it, `order.lines[].qty`.
+walks and the vectors are exactly what they are for a sequence the caller passes. A message of
+`rulec check` names a field of an element by the collection with `[]` after it,
+`order.lines[].qty`: it is about that field in every element. When the projection function
+refuses a value at run time, it names the one element by its index from 0,
+`order.lines[1].qty`.
 
 **One collection, and a unary test on a field of an element.** A join, a nested quantifier
 and a path inside a cell are all refused, for the reason §0 gives: the cell language is where
@@ -850,6 +927,11 @@ count as well from JSON Schema 2019-09 on, which OpenAPI 3.1 follows, and are ig
 as draft-07 and OpenAPI 3.0 say. A `.proto` is read far enough for the same: messages and
 their fields, `repeated` included, with `map` skipped rather than guessed at; the members of a
 `oneof` are fields of the message, each with presence of its own like an `optional` field.
+The `shape` line names its message as `import proto` names an enum: by its name, by its name
+after the messages it is nested in (`Order.Item`), or with the file's package in front; a name
+two messages nest is E013, which names both. The type of a field is found as protobuf finds it,
+from the message the field is in outward: in `message Order`, `Item` is `Order.Item`, whatever
+other message nests an `Item` too.
 A path that cannot be resolved is **E121**, which says how far it got and which names were
 there. A path that goes on through a collection is E121 too: a path reads one value, and each
 element has its own. It names every collection along the path and, where the rest of the path
@@ -885,7 +967,51 @@ a path is. A sequence taken from a contract has each field of its elements held 
 (its `required`, its null, its range, its enum's values, its proto3 default); its length held
 to the cap its `count`s put on it; and its total of a column to the upper end of each `sum` over
 it, the column's largest value times the longest sequence the contract and the cap let through.
+The largest value of one element is the top of the field's range, or what the contract lets the
+field be where that is less: ten lines the contract keeps to 50 come to 500, whatever more the
+rule takes of a line.
 A field of an element is no input, so its E122 carries no example under `inputs`.
+
+The bottom of a `sum` or a `count` over such a sequence is held to the contract too, where it is
+above zero, since the walk refuses a call that ends under it (§6.3). The least a total comes to
+is the fewest elements the contract lets through, each at the column's smallest value — the
+bottom of the field's range, or what the contract lets the field be where that is more. With
+lines of at least 50 and no `minItems`, an empty collection passes the contract, and a `sum` that
+takes no less than 250 is E122, with `"minItems": 5` as the narrowing; where one element can be
+0 no number of them keeps a total up, and the fix is `none`. Which elements a `count … where`
+counts is nothing a contract read here promises, so a `count` whose range starts above zero over
+a sequence taken from a contract is always E122, with the fix `none`. On the rule's side the
+answer to either is to start the range at 0 and decide in a table what the rule answers there.
+
+Three more things the walk and the rule turn a call away for are held to the contract the same
+way, each E122 where a request the contract lets through is one of them (§15.314):
+
+- **A `unique` field** (§6.2). The door refuses a sequence in which two elements share its value,
+  and nothing a contract read here keeps one field apart between elements: `uniqueItems` in a JSON
+  Schema compares whole elements, so two that differ in another field pass it, and the `unique` of
+  a `repeated` field is of scalars. A `unique` field of a sequence taken from a contract is E122,
+  with the fix `none`, unless the contract and the `count`s let through one element at most. On
+  the rule's side the answer is to take `unique` off and decide what the rule answers when two
+  elements share a value.
+- **The weights of a pick** (`take_weighted`, §6.6). The walk adds them up in an int64 and refuses
+  the call the moment the total would pass it. The most they come to is the longest sequence the
+  contract and the cap let through, each weight at its largest — the top of what the rule takes of
+  it, or what the contract lets the field be where the weight is one field and that is less. Past
+  int64, or with no end on how many elements the contract lets through, it is E122, with the
+  `maxItems` (`max_items` in a `.proto`) an int64 holds the total of as the narrowing.
+- **The range a `define` is accepted in** (§6). The generated code refuses a call whose value
+  falls outside it, where it works the value out. The value is asked for over what the contract
+  lets each input and each field it is worked out from be: a request that takes it outside is
+  E122 with that request as the example (`amount = 701` for a fee of 3% accepted up to 20), and a
+  value neither shown to stay inside nor found outside is E122 too, saying which. The fix is
+  `none`: narrow what the contract lets those paths be, or widen the range and decide what the
+  rule answers there. A value worked out from nothing a contract gives is the caller's to keep.
+
+```text
+error[E122]: The contract lets two elements of `order.lines` have the same sku, and the sequence items takes no two with the same sku
+error[E122]: The contract lets `team.reviewers` hold 3 elements, whose weights come to 12_000_000_000_000_000_000 in all, and the sequence reviewers takes only weights that total within int64
+error[E122]: With values the contract lets through, the fee the rule works out falls outside the range it accepts, >=0 <=20
+```
 
 **Conditions across fields are read too.** A contract relates fields to each other: a CEL
 expression on a `.proto` message (`(buf.validate.message).cel`, `cel_expression`) or on a field,
@@ -968,10 +1094,13 @@ string, a `YYYY-MM-DD` string of a day the calendar has, a value of the enum. A 
 tests is held to what the contract carries there, and a date there is compared as the day it
 is. A value that is not — `1.5`, `true` or `"7"` where an amount is read, `"yes"` where a
 `where` reads a boolean — is refused with `RuleInputError` and a sentence naming its path as the
-rule writes it, `order.lines[].amount_usd is not an integer`; so are a place on the way that is
-not an object, a value that is not there, and a collection that is not an array. The five
-languages read in one order — the inputs as declared, then the sequences; element by element,
-the `where` and then the value — and stop at the same value (DESIGN §15.234).
+rule writes it, with the index of the element where the path goes through a collection,
+`order.lines[1].amount_usd is not an integer` for the second line; so are a place on the way that
+is not an object, a value that is not there, and a collection that is not an array. The index
+counts from 0 and is the one the rule's own door names the same element by
+(`lines[1].quantity is out of range`), since `elements … from` takes every element in its order.
+The five languages read in one order — the inputs as declared, then the sequences; element by
+element, the `where` and then the value — and stop at the same value (DESIGN §15.234).
 
 **Five of the twelve targets generate the projection function** — Python, TypeScript,
 JavaScript, Ruby and PHP, where the caller's object is a plain map and needs no name; a sequence
@@ -1174,6 +1303,29 @@ One declaration does three jobs.
 The form is `range` followed by one or two bounds: `range >=0JPY <=10_000_000JPY`, `range >=1g`.
 `range` with no bound after it is E149: it decides nothing, and a line left half written could not
 be told from it. A value with no range leaves `range` off.
+
+**`>=` and `<=` take the value they write; `>` and `<` leave it out.** An end written with `>` or
+`<` is read on the step of the value, as the first value inside it: one unit of an amount, a
+quantity or a `number`, the step a rate declares, one day of a date, the next value of an ordered
+enum.
+
+| written | read as |
+|---|---|
+| `amount : money[JPY]  range >0JPY <100JPY` | 1 yen to 99 yen |
+| `discount : rate[step 1%]  range >0% <50%` | 1% to 49% |
+| `day : date  range >2026-03-31 <2026-10-01` | April 1 to September 30, 2026 |
+| `count hits over lines where hit  range >0 <4` | 1 to 3, and at most 3 elements |
+
+Every reader takes the ends that way (§15.314): the three jobs above, the examples and the
+vectors, the page, `rulec api`, `rulec schema` (which writes them as `minimum` and `maximum`), the
+certificate and ritsu's port. So a call on the value such an end writes is refused, and no table
+needs a row for it; a row written for it is one no input reaches (E102). The vectors stand on the
+first value inside each such end, and the refused inputs on the value it writes. An end of a
+rate's range that is not on its step is read as the nearest step inside:
+`rate[step 1%]  range >=0.5% <=99.5%` is 1% to 99%. A range with no value on the step between its
+ends, `range >0JPY <1JPY`, is E061. Where the range is a claim — on a `derive`, a `max` or a `min`,
+an output (below) — `>` and `<` are held as they are written: a value that can come to the end
+itself breaks the claim (E112, E140).
 A bound the range does not write is the end of what the type holds: ±(2^63−1) in the integer the
 value travels as. The entry guard holds an input to each bound it
 writes and, on a side it writes none, to that end, in every language and in `rulec run`
@@ -1205,6 +1357,21 @@ values its rows write, and a table needs no row for a value nothing writes. A va
 the rule states — an input, a `derive`, a `count`, a `sum`, an open value — is read over that
 range, and what a walk answers (`max`, `min`, a fold's answer) over the range the check works
 out for it (§6.2, §6.3).
+
+**`range` says one of two things, by where it is written.** On an input, a field of `elements`, a
+`count`, a `sum` and a `define`, it is **the range the rule accepts**: a call outside it is
+refused, and every check reads only what lies inside. On a `derive` and an output, it is **what the
+value can come to**: a claim `rulec check` verifies, which refuses nothing.
+
+| where `range` is written | what it says | what holds it to that |
+|---|---|---|
+| an input, a field of `elements` | the values the rule accepts | the door of the generated code refuses a call outside it |
+| a `count`, a `sum` | the counts and totals the rule accepts | the door refuses a sequence longer than the top of a `count`; the walk refuses a call that ends past the top of a `sum`, or under the bottom of either where that is above zero (§6.3) |
+| a `define` | the values the rule accepts for what it works out | where the generated code works the value out, it refuses a call whose value falls outside it (§6) |
+| a `derive`, an output | what the value can come to | `rulec check`: E112, E140 |
+
+The page `rulec doc` keeps the two apart in words: a `define`'s range is shown as the range it
+accepts, a `derive`'s as the range it was checked to stay in.
 
 `contract_only` marks an input that is only ever an entry check and appears in no table:
 
@@ -1293,11 +1460,11 @@ A contract often leaves a bound to the code, which checks it by hand and then gi
 
 - **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
 - **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
-- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date (a string, or a `.proto`'s `google.type.Date`) and lists no days.
 
 E208 says the source is not there: its file, or the name in it.
 
-Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. A string an OpenAPI document or a JSON Schema marks `format: date-time` is a moment, a day with a time of day: no date takes it, and a workflow's `timestamp` does, as it does another workflow's `timestamp` and a `.proto`'s `google.protobuf.Timestamp`. A `.proto`'s `google.type.Date` is a date, known by its name as dandori knows it. A field of a `.proto` that may be left unset (`optional`, in a `oneof`, or a message, unless a rule or proto2 marks it `required`) can come as no value, which a place that is not `T?` refuses. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
 
 **What is not checked.** Nothing checks that the hand-written code really carries that value. The
 table of inputs in `rulec doc` says so beside the input: Comes from `…` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked).
@@ -1340,8 +1507,9 @@ Five modes, each pinned down for negative values:
 | `half_even` | an exact half goes to the even neighbour | 2.5 → 2, 3.5 → 4 |
 
 The value in parentheses is the **grid**: `up(10JPY)` rounds to a multiple of 10 yen. Rounding
-is applied once per output, last. A missing one is E104; an output literal that is not a
-multiple of the grid is E106.
+is applied once per output, last. A missing one is E104; a mode that is none of the five is E154,
+which names the nearest (`half_up` for `half`); an output literal that is not a multiple of the
+grid is E106.
 
 An optional number (`price : money[USD]?  round down(1USD)`) declares its rounding the same
 way, written in the unit of the type it wraps. It applies where the output has a value; where a
@@ -1396,6 +1564,36 @@ from.
 `range from koyomi` (E065) and `random` (E070) are an input's alone. A word an output's line does
 not read, anything but `range` and `round`, is E047, as on every declaration line.
 
+### What decides an output
+
+Every output is decided by something in the rule: a table's column after `->`, a `define` or a
+`derive` of its name, a `sum`, `count`, `max`, `min` or `fold` that answers it, an output an `apply`
+brings in, or, for the first output, the `result` line. An output that nothing decides is E151, and
+one that may have no value (`?`) is held to the same: decide when it has none with a row that writes
+`none`. Such a rule would answer the output with no value on every call, and its generated code
+would read a name it never set.
+
+So is an output that a table or a definition reads above what decides it. The tables and the
+definitions are worked out in the order they are written — the tables that decide one output
+together, at the last of them — and `result` decides the first output after all of them, so where
+the output is read it has no value yet:
+
+```text
+$ rulec check read_result.rule
+error[E151]: The output `fee` is read before it is decided
+  --> read_result.rule:13 table review_of
+   |
+13 | | fee       | -> review |
+   |   ^^^ it is read here
+17 | result fee = down(amount * 3%, 1JPY)
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this `result` line is what decides `fee`
+```
+
+Move what reads it below what decides it, or, for an output only `result` decides, decide it with a
+`define` above where it is read. A `define` of an output whose expression reads that output is
+E151 as well. A name that is not an output can be read only below its own line (E012); an output is
+declared in `outputs`, above everything, which is why it is checked here.
+
 ## 5. derive
 
 A value computed from the inputs, with a declared range, which **can be used as a table column
@@ -1418,7 +1616,7 @@ amount up to 50 pounds, `low` beside an excess over the limit past 50 pounds is 
 asks no row for it. A constant that is a fraction puts the values between whole units —
 `amount * 10%` comes in tenths of a pound — and the checks read them on that step: rows `<=1GBP`
 and `>=2GBP` leave `1.1GBP` to no row, and E101 says so with the amount that makes it
-(`amount = 11`).
+(`amount = 11GBP`).
 
 A derive whose expression only adds, subtracts and multiplies by constants is an equation as well
 as an interval, as such a `define` is (§6). With `excess = amount - limit`, a row asking for an
@@ -1468,14 +1666,143 @@ limit of one or more is an `added` of two or more, so a row asking for that exce
 and an `added` of at most one is E102, and E101 asks no row for it. The certificate carries the
 equation as a fact of the `define` (formats.md).
 
-Where a row asks a computed column (a derive, a `define`) for values and neither an input that
-reaches the row nor a proof that none does was found, the check says the row is undecided
-(W128) rather than passing it as reached: the product of two numbers is 997 only as one box of
+Where a table reads a `define` together with the inputs its expression reads, the check reads the
+two together: the expression is worked out again over the values each cell gives those inputs. With
+`define fee : money[JPY] = down(amount * 3%, 1JPY)`, the fee comes to at most 900 yen where `amount`
+is at most 30,000 yen, and passes 900 yen only from 30,034 yen, so a row that asks for a fee over
+900 yen on an amount up to 30,000 yen is E102, and E101 asks no row for that combination. A boolean
+`define` of one comparison is read the same way, for the truth value it takes over the cell. The
+interval is worked out as the `define`'s reach is. Where the expression reads each input once and
+moves one way with it, as this one does, the ends of the interval are what it comes to at the ends
+of the cell. Where it reads an input twice, the interval over the whole cell can be wider than what
+the value comes to: `max(amount, 30JPY) - amount` comes to -10 to 10 yen over the amounts from 30
+to 40 yen by the interval, and to 0 yen alone. So the check also reads the expression as each input
+the cells hold times a number, and an interval left over: from 30 yen on, `max(amount, 30JPY)` is
+`amount`, the two cancel, and the value is 0 yen over the whole cell. Where that does not settle it
+— a cell over which `max` takes one side for some amounts and the other for the rest — the check
+cuts what the cell gives that input into pieces and works both out again over each, halving a piece
+until each leaves the value out. One value is cut into 64 pieces at most, and a table works out
+4,096 pieces at most. Past that, a combination past the value but inside the interval is still
+asked for (E101), and a row written for one is left undecided (W128) rather than passed. Where the
+table reads none of the inputs the expression reads, the check cuts those inputs the same way over
+their ranges: `down(amount * 1%, 1JPY) - up(amount * 2%, 1JPY)` comes to -3 to 0 yen by the
+interval, and to -1 or -2 yen on each piece of the amount, so a table that reads that net alone
+needs no row for -3 or 0 yen.
+
+A value a rounding works out sits on the grid of its step, whatever it rounds: `up(amount * 10%,
+10JPY)` comes to multiples of 10 yen alone. The check reads the grid of a `define` of numbers off
+its expression — a rounding gives the multiples of its step, a sum or a difference a step both
+sides' steps are whole numbers of, a product with a constant or a quotient by one that multiple of
+the step, `min` and `max` a step both grids and the distance between them are whole numbers of —
+and asks no row for a value between two points of it. A table that reads that fee alone needs no
+row for 11 to 19 yen, and a row that asks only for 15 yen is E102. Where the table reads the amount
+too, the grid is read inside what the expression comes to over the cell. An input sits on its own
+step, so `sheets = gifts * 2` comes to even numbers alone, and a row for three sheets is E102. A part
+of the expression the cells hold to one value is that value, and a product with it sits on that
+multiple of the other side's grid: on amounts under 100 yen, `down(amount * 1%, 1JPY)` is 0 yen, so
+`down(amount * 1%, 1JPY) + boxes * 37JPY` comes to multiples of 37 yen there, and no row is asked for
+a fee of 38 or 39 yen.
+
+A `define` whose expression is linear is read by its equation, as above, and over the cell as well,
+for what only whole numbers leave out. The equation is read over fractions, where an `excess` over 0
+with fewer than two items and a limit of one or more is still there, at one and a half items; over
+the cell the whole numbers leave none, and no row is asked for it. So `fee = amount - qty * 32JPY`
+never comes to -81 or -80 yen on amounts from 22 to 43 yen, since the quantity is a whole number.
+The certificate carries each fact as `narrowed`, with the pieces where it was cut, and the two
+re-checkers work the interval and the grid out again from the expression (formats.md).
+
+Where a row asks a computed column (a derive, a `define`, an output of a rule brought in with
+`apply` or of another table of this rule) for values and neither an input that reaches the row nor
+a proof that none does was
+found, the check says the row is undecided (W128) rather than passing it as reached: the product of two numbers is 997 only as one box of
 997 or 997 boxes of one, which no candidate the search walks need be. An example that reaches the
 row decides it, and the warning goes. So does the gap the row leaves: taken out of the table, the
 row leaves inputs no other row covers, the completeness check finds one, and that input — run
-through the rule to confirm it — reaches the row; the vectors take it too. A row of inputs and
-enums alone is never undecided: its point is an input.
+through the rule to confirm it — reaches the row; the vectors take it too. So does an input built
+inside one of the row's boxes so that the computed columns land in the row's cells, which the check
+tries in up to eight of them. A row of inputs and enums alone is never undecided: its point is an
+input.
+
+Where the inputs the computed columns are worked out from are few enough to run every one (16,384
+combinations at most), the check runs them through the rule before it says W128. A row one of them
+reaches is decided. Of a row none reaches, the warning says just that, and that the check cannot
+show it: the check decides only by what the certificate carries for a re-checker to confirm, and a
+run of every input is not among it, so the row stays undecided, and can be deleted. A gap or an
+overlap no input falls into is said the same way, and the error stays.
+
+### `range` on a define — the values the rule accepts
+
+A `define` of a number may end with `range`, spelled as an input's is:
+
+```rule
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0JPY <=20_000JPY
+```
+
+It is **the range the rule accepts for the value**, not what the value can come to. A call whose
+value falls outside it is refused where the value is worked out, with the sentence a range at the
+door gives:
+
+```console
+$ rulec run card_fee.rule amount=666699
+charged = 20_000JPY
+review = true
+$ rulec run card_fee.rule amount=666700
+refused (input): fee is out of range
+```
+
+3% of 1,000,000 yen is 30,000 yen, so every amount from 666,700 yen up is refused. Everything
+that reads `fee` — a table, an expression, another `define`, a `sum`, a claim, an output — reads
+only the values inside: the part of what `fee` reaches that lies in the range. A table over `fee`
+is complete when it covers 0 to 20,000 yen, and a row that asks only for a fee past 20,000 yen is
+E102, whose message names the range. Read beside the amount it is worked out from, the value is held
+to the range over each cell too: with `fee = 19JPY - down(amount * 30%, 1JPY)  range >=5JPY <=12JPY`
+and amounts from 1 yen, an amount under 24 yen makes a fee past 12 yen, which the rule refuses, so a
+table that reads the amount and the fee needs no row for those amounts. An output that is the
+`define` is read there too: its reach for E140, and what the other languages read it in. A
+`define` with no range is as it always was.
+
+- **The ends** are values of the `define`'s type (E103), and a range no value lies in is E061. An
+  end written with `>` or `<` does not take the value it writes: on a value kept in whole yen,
+  `>0JPY` is `>=1JPY`. Only a number takes a range — money, a quantity, a rate or `number` (E103);
+  a date is never worked out (E048), so its range goes on the date input.
+- **A range that meets nothing the value reaches is E150:** every call would be refused. A range
+  wider than what the value reaches, or one that meets part of it, is said nothing of: narrowing
+  what a value reaches is what such a range is written for. A range that meets what the value
+  reaches and holds none of the values it takes is E150 as well: `gifts * 2 + 1` is odd, and
+  `range >=2 <=2` holds no odd number. The values are read off the expression — a literal, a name, a sum,
+  a difference, a product, a quotient by a whole constant, `min`, `max`, a rounding to a grid
+  written as a literal, `mod` by a constant, `allocate` and `isqrt` — and an expression they are not
+  read off is said nothing of.
+- **On each element.** A `define` worked out from the fields of `elements` is worked out once for
+  each element, and its range holds each one. `tests/corpus/order_line_subtotals.rule` writes
+  `define subtotal : money[JPY] = quantity * price  range >=1JPY <=10_000_000JPY`, and a line of
+  ten at 1,000,001 yen is refused whichever line it is. The sentence names the line by its place,
+  the index from 0 in the input's array: put second, it is `refused (input): lines[1].subtotal is
+  out of range` (§15.324).
+- **After a table.** A `define` that reads a table's output is refused where it is worked out,
+  after that table. The tables above it are checked over every input as before — a call the
+  `define` refuses goes through them first — and only what reads the `define` reads the inside.
+- **Examples and vectors.** An `examples` row whose inputs take the value outside the range is
+  E019, as one that breaks a `constraint` is. The witnesses, the vectors and `possible` never take
+  such an input. `rulec vectors` puts the value at each end the range writes, and `gen` writes the
+  input one step past each end to the file of refused inputs, which `rulec test` holds every
+  language to.
+- **Callers.** `rulec api` lists the range under `preconditions` (`"kind": "define"`), and
+  `ritsu check` holds a call from a workflow or a function of kaname to it as to a `constraint`
+  (ritsu's E201 and W201).
+
+**Why `define` and not `derive`.** A `derive`'s range is a claim the check verifies (E112). Were the
+same word on the same line also to mean "a call outside it is refused", a reader would have to read
+the expression to know which of the two a `range` says. A value the rule accepts only inside a range
+is written as a `define`, which the tables and expressions read as they read a `derive`.
+
+**A `define`'s range or a `constraint`.** A relation between inputs is a `constraint` (§6.1). A
+bound on something the rule works out from them — a product, a rate of an amount — is the range of
+a `define`: `constraint quantity * price <= 10_000_000JPY` is E017, and `define subtotal … range
+<=10_000_000JPY` says it.
 
 ## 6.1 constraint
 
@@ -1500,7 +1827,9 @@ constraint roll < challenger_strength + holder_strength
 ```
 
 Only inputs joined by `+`, and on one side only: `a + b <= c + d` and a constant or a factor in
-the sum (`a + 3 <= b`, `2 * a <= b`) are E017, and something other than an input is E018. The
+the sum (`a + 3 <= b`, `2 * a <= b`) are E017, and something other than an input is E018. A bound
+on a value worked out from the inputs — `quantity * price` up to a cap — is the range of a `define`
+(§6). The
 inputs of a sum are of the other side's type (E103), and a date is not added (E048). A sum is
 read everywhere a pair is: the completeness check drops what the inputs' ranges show it rules
 out and takes it into the elimination with the other linear relations, so a table needs no row
@@ -1523,6 +1852,20 @@ Three things follow from one line.
 The vectors follow the same line: `rulec vectors` never produces a combination a constraint
 excludes, and an `examples` row that breaks one is an error (E019) rather than a case. Two
 dates are compared by the days they are, in all of these as at the door.
+
+The first two hold for a value the rule works out too, with no line to write. A table that reads a
+derive, a `define`, or an output of a table above — one of this rule's, or one of a rule brought in
+with `apply` — beside the inputs it is worked out from is asked for no row where the two never come
+together, as far as the check follows the value (§6, and "Applying another rule" in §7, say how
+far). An example a check gives on such a column is an
+input it has run through the rule: the example is the values that input gives the table's columns,
+and a line under it gives the whole input where the input holds values the table does not read.
+Where no such input is found, the example is called a combination, not an input, and the check says
+it found none; the JSON `witness` is then empty (formats.md). The third needs no guard:
+the value is worked out from the inputs, by the generated code as by the check, and nothing at the
+door can contradict it. An input `fed by` another rule's output is not such a value: the line says
+where it comes from, not what that rule was given, so the checks read it free of the other inputs,
+and where that leaves a gap, E101 says so and points to `apply`.
 
 Writing `-` in a cell says "this column does not matter here". Before constraints it also
 had to stand in for "this cannot happen", and the two read the same on the page. A constraint
@@ -1679,8 +2022,8 @@ The arms:
 | arm | what it does |
 |---|---|
 | `next` | leave this element, look at the next |
-| `stop` | end the walk; the answer is what `exhausted` says |
-| `stop with <value>` | end the walk with this answer |
+| `stop` | end the fold's walk; the answer is what `exhausted` says. The door still holds the elements after it to their ranges and `unique` fields ([An input with two things wrong](#an-input-with-two-things-wrong)) |
+| `stop with <value>` | end the fold's walk with this answer, the door going on as for `stop` |
 | `take_unique <value>` | take this element's value; a second element that also takes is an error at run time |
 | `take_first <value>` | take the first, ignore any later one |
 | `keep_max <value> by <key>` | hold this element's value, replacing what is held when the key is larger |
@@ -1874,7 +2217,51 @@ it, as the contradiction it is. That is what makes the last fold transition cove
 merely named. The same file holds an input for every reason the door turns one away — the
 sequence and the fields of its elements among them — and every language has to refuse each for
 that reason, with the sentence the reference evaluator says
-([formats.md](formats.md#vectors-rulec-vectors-generatedvectorsaliasjsonl), §15.204).
+([formats.md](formats.md#vectors-rulec-vectors-generatedvectorsaliasjsonl), §15.204). A reason
+about one element names it by its place, the index from 0 in the input's array
+(`lines[1].amount is out of range`, `lines[1] is not an object`), and a reason two elements give
+names both (`(lines[1] and lines[3])` after the sentence): where more than one element is at
+fault for the same reason, every language names the first (§15.324), and where the reasons
+differ, the order below decides.
+
+### An input with two things wrong
+
+An input with two or more things wrong with it is refused for the first of them in this order, by
+every way the rule is reached: the reference evaluator (`rulec run`), the module of every language
+called directly, its runner, the MCP servers, the Connect service, the two targets that answer
+many rows in one call (for a rule without a sequence), and the port through which the other
+languages of ritsu call a rule, in its own words (DESIGN §15.328). A module called from code looks at what the
+types of its parameters leave open, in the same order; the compiler of a language with types has
+seen to the rest. A string is the one kind a module that holds its arguments to their kinds when
+it runs does not look at: it takes a value of another kind for a string input or field as it
+comes, answering if nothing else is wrong and saying the next thing wrong if something is, where
+its runner, the MCP servers and the Connect service refuse the value as they read it.
+
+1. **The arguments, as they are read**, in the order the function takes them. Each input, in the
+   order the rule declares them: there, and of its kind — a whole number that int64 holds, a day
+   the calendar has, a value of its enum, a truth value, a string. Then each sequence, in the order
+   the rule declares them: there, an array, and each element, from the first, an object whose
+   fields, in the order the rule declares them, are there and of their kinds.
+2. **Where the function begins**: each input inside its range, in the order the rule declares
+   them; each `constraint`; each `never` the door holds; the days of a koyomi date; each sequence
+   no longer than a `count` over it can be.
+3. **What the function works out, in the order it works it out**: a value worked out before the
+   walks outside the range the rule accepts for it; then each walk, element by element — on the
+   first walk over a sequence, the element's fields inside their ranges and then its `unique`
+   fields, then the values worked out for the element and each summary's step (a second element
+   taking under `take_unique`, weights whose total passes int64) — and once a walk is over, a
+   `sum` or a `count` outside its range and a drawn value not below the weights; then what reads
+   what the walks answered.
+
+A fold's `stop` ends the fold's work and not the door's: on the first walk over a sequence, the
+elements after the one it stops at are still held to their ranges and their `unique` fields. So
+`[a, a, a weight past its range]` under a `unique` label is refused for the two the same, which the
+walk meets first; `[a good element, one past its range, one of another kind]` for the element of
+another kind, read before any range is looked at; two elements taking under a `take_unique` and a
+third past its range, for the two; and an input whose first argument is of another kind and whose
+sequence has an element of another kind, for the argument.
+`vectors/<alias>.refused.jsonl` holds an input with two things wrong for each pair of these places
+the rule has, so `rulec test` holds every way to the order.
 
 ### `unique` — a field no two elements share
 
@@ -1886,10 +2273,11 @@ elements buildings
   building : building  unique
 ```
 
-The door refuses a sequence with two (`buildings has two elements with the same building`) before
-it adds up the `sum`s over it: the reference evaluator (`rulec run`) once it has read every element
-of the sequence and held each to its type and range, the generated code at the second of the two,
-right after holding that element to its type and range. An input refused for that alone gets that
+The door refuses a sequence with two (`buildings has two elements with the same building
+(buildings[0] and buildings[2])`, the two by their places, the earlier first) before
+it adds up the `sum`s over it: every way at the second of the two, on the first walk over the
+sequence, once it has held that element to its ranges ([An input with two things
+wrong](#an-input-with-two-things-wrong)). An input refused for that alone gets that
 sentence in every language, and `vectors/<alias>.refused.jsonl` holds one such input for each
 `unique` field, so `rulec test` holds every language to it. Values are compared as values: `1` and
 `1.0` are the same number, and two dates are the same when they are the same day. A field of any
@@ -1952,6 +2340,21 @@ covering a count of −1 — and it is **the cap on the sequence**: the generate
 sequence longer than the smallest bound any count over it declares, the way it refuses a number
 outside its range. A count cannot leave the space the proof was made over.
 
+**A bottom above zero is held too.** `range >=1 <=100` says the rule takes no sequence in which
+nothing counts. The walk refuses a call whose count ends under the bottom, an empty sequence among
+them, with the sentence a number outside its range gets (`hits is out of range`), and a table over
+the count needs no row for 0; a row written for 0 is one no call reaches (E102). A bottom of 0
+cannot be passed, and the generated code compares nothing for it. `rulec api` lists a bottom above
+zero among the preconditions (`"kind":"count"`), since a caller can break it.
+
+**A bottom no sequence comes to is E150.** Every `count` over a sequence caps its length, so the
+least top among them is the most elements the sequence has. A `count` whose bottom is above that —
+`range >=6 <=10` beside another `count` over the same sequence with `range >=0 <=5` — is one no
+sequence the door lets in comes to, and every call would be refused once the walk is over. The
+message gives the numbers: `lines has at most 5 elements (the top of the count fragile_items), so
+no sequence comes to the bottom 6 of wrapped_items`. A `unique` field of an enum or a truth value
+caps the length too (see `sum` below).
+
 ### sum
 
 `sum` totals one column of the elements instead of counting them.
@@ -1972,7 +2375,56 @@ quantity, `number` or `rate` (E029). The total keeps that column's type, so `tot
 running total move one way only: the walk refuses the moment it passes the declared maximum,
 so one test at the end is a test everywhere, and the accumulator never leaves `maximum plus
 one element` — which is what keeps E108's int64 claim true of a sequence whose length nothing
-caps. To take a difference, sum two non-negative columns and subtract.
+caps. To take a difference, sum two non-negative columns and subtract. A cap on each element's
+value rather than on the total is the range of a `define` worked out for each element (§6).
+
+**The bottom of the range is held where the walk ends.** A total only goes up, so a bottom above
+zero can be tested once the walk is over and no sooner: `range >=500JPY <=100_000JPY` refuses a
+call whose total ends under 500 yen, with the sentence one past the top gets (`amount is out of
+range`). An empty sequence totals 0, and is such a call.
+
+```text
+$ echo '{"lines":[{"price":499,"wrapped":true}]}' | rulec run gift_basket.rule --input -
+refused (input): amount is out of range
+$ echo '{"lines":[{"price":500,"wrapped":true}]}' | rulec run gift_basket.rule --input -
+free_shipping = false
+card = false
+```
+
+A table over the total is checked from the bottom up and needs no row under it. The generated
+code compares a bottom only where it is above zero — a total cannot come in under 0 — so a rule
+whose `sum` starts at 0 has no such line. Where several `count` and `sum` lines end outside their
+ranges on one call, the refusal names the first of them in the order the rule writes them, in
+every language. The vectors stand on each end the walk holds a total to, and the refused inputs
+one step past it; `rulec api` gives a bottom above zero as the `min` of the `sum` precondition.
+
+**A range no total comes to is E150**, as a `define`'s is (§6). The most a total can be is the
+most elements the sequence has — the least top of the `count` lines over it — times the top of
+the summed column, and the least it can be is the most elements a `count` asks for at least times
+the bottom of the column. Where the first is short of the bottom of the range, or the second is
+past its top, every call would be refused once the walk is over, and `rulec check` says so with
+the numbers:
+
+```text
+error[E150]: The range of the sum does not meet the values it can reach
+  --> gift_basket.rule:10 sum
+   |
+10 | sum amount over lines of price  range >=300_000JPY <=1_000_000JPY
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ amount can only be <=250_000JPY
+   |
+ lines has at most 5 elements (the top of the count wrapped_items), and price is at most 50_000JPY in each: 5 × 50_000JPY = 250_000JPY, short of the bottom 300_000JPY of this range. The generated code would refuse every call once the walk is over.
+ Hint: bring the bottom of the range down to 250_000JPY or less. Raising the top of wrapped_items or of price reaches it too.
+```
+
+A field of an enum or a truth value marked `unique` caps the sequence as a `count` does — no two
+elements share a value of it, so there are at most as many as it has values (§6.2) — and a bottom
+that cap leaves out of reach is said the same way, of a `count` and of a `sum`. Where the summed
+column is written by rows that test such a field, the total with every value once is what the
+bottom is compared with: three buildings that add 40, 2 and 1 come to 43, short of a range that
+starts at 50.
+
+A range that meets part of what the total reaches is said nothing of, and neither is a sequence
+nothing caps: its total has no top to fall short with.
 
 **What a sum can reach, with a `unique` field.** Where a field of an enum or a truth value is
 `unique` (§6.2), the sequence holds each of its values once at most, and a `sum` over it comes to at
@@ -2444,7 +2896,10 @@ can be drawn is finite and countable:
 
 Where a `constraint` names a random input, the draw is uniform over the points that meet it:
 with `constraint roll < challenger_strength + holder_strength`, `roll` is drawn from 0 to the
-two strengths added together, less one. Completeness and overlap are proved over the random
+two strengths added together, less one. So it is where the range of a `define` reads one (§6):
+with `define total : number = first + second  range <=10` over two dice, the 33 rolls the rule
+accepts are drawn, each as likely, and a total of 8 or more is 12 of them, 4/11
+(`tests/corpus/dice_total.rule`). Completeness and overlap are proved over the random
 inputs as over any other, and a `machine`'s claims (§6.4) treat a random input as any value it can
 be, since they are about what can happen.
 
@@ -2866,9 +3321,12 @@ policy unique
 | not: remote | >2000g  | 1100JPY                        |
 ```
 
-The first row is the header. Left of `->` are input columns, right of it output columns. A
-column may name an input, a `derive`, a boolean or enum `define`, or an output of an earlier
-table. An output column that introduces a new name declares its type there. One under a name
+The first row is the header. Left of `->` are input columns, right of it output columns. A heading
+with no `->` is E152: every column would be read as a condition, a column that names an output
+among them, and no row would decide anything. Where the heading ends with columns that name
+outputs, the message gives the heading with `->` before the first of them. A column may name an
+input, a `derive`, a boolean or enum `define`, or an output of a table above it (one read above
+what decides it is E151, §4). An output column that introduces a new name declares its type there. One under a name
 that already has a type — an output, or a name a table above decides — may write that type
 again and no other (E103): what the column decides is what the name answers.
 
@@ -3027,6 +3485,41 @@ code gives the name: `apply キャンペーン(campaign)` brings `値引き(cred
 Where that is already an identifier of this rule — `credit -> campaign_credit`, or a second apply
 whose name runs into it — a number goes after it (`campaign_credit_2`), so one rule may be applied
 any number of times and an output named anything without a rename.
+
+A table of this rule that reads an output of the callee beside the inputs this rule passes it
+reads the two together. The output is read through the rows of the callee's table that decide it,
+with the callee's inputs as this rule binds them: a purchase route that reads the kind and the
+amount beside whether the applied table of authority sends the request to finance needs rows only
+for the answers that table gives for that kind and amount. A combination the callee never answers
+is asked for no row (E101), a row that asks only for one is E102, and two rows that meet only there
+do not overlap. A number the callee's table writes is read the same way, and no row is asked for a
+number none of its rows writes. A row is E102 only when no input its cells let through gets from
+the callee the value the row asks for. The callee's table cuts the amount at its own boundaries,
+and a row's cells need not keep to them: a row that asks for the band the callee gives from 51 yen
+on, on an amount from 51 to 80 yen, is reached, though the callee's row for that band runs on past
+80 yen. Under `policy first`, a row of the callee's table is read where the rows before it leave
+it, by a row's own question and by completeness alike: where the rows before it take every amount
+from 38 yen, the fee of 50 yen the last row writes comes only below 38 yen, and no row is asked
+for that fee from 38 yen. Where the callee's table reads more than one input, the rows before a row
+are read together: where between them they take every input of the later row that a cell of this
+table can hold, the later row gives nothing there. A row of this table every input of which either
+a row above it takes first or the callee does not give the value for is E102, and the note says so:
+the tables above leave out every input it asks for that the earlier rows do not take first. The
+same goes for a table of this
+rule that another of its tables reads. The reading follows
+`with`, the rules the callee applies in turn, and a binding to a derive or to a `define` whose
+expression only adds, subtracts and multiplies by constants. A date the callee's table writes is
+read as the day it is: a table that reads only the shipping day the callee gives, the first or the
+third of July, needs no row for the second. A table above may decide its value from one the rule
+works out, a tier from the fee and the fee from the amount: the rows that write the tier are read
+with the fee worked out again over this table's cell, so where they ask for fees the amounts of the
+cell never come to, the tier never comes there, and no row is asked for it. So are a row on the way
+that writes into a column of this table a value the cell does not take — the fee table's 260 yen
+beside a fee under 101 yen — and two rows on the way that take values of one column that never meet
+there. A binding it cannot carry over (a
+rounding, say) leaves the callee's rows apart from this rule's inputs, and the check asks for the
+rows it cannot rule out. The certificate names the rows of the callee's tables each such reason
+rests on (`via`, formats.md).
 
 A callee may apply a rule in turn: it is expanded as its own check expands it, and what it brought
 in comes in under both names (`a:b:name`). A callee that walks a sequence is applied by binding

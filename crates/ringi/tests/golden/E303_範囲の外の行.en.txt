@@ -1,0 +1,4 @@
+error[E303]: tests/mutants/E303_範囲の外の行.ringi:10:1: No request reaches this row of the route
+    10 | | >1_000_000円             | 部長            |
+  = As rulec says it: Unreachable row: row 3 never matches
+  = Correct the row's bounds, or remove the row.

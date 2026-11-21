@@ -23,7 +23,7 @@ Answers of the legacy implementation outside what the rule can produce: 3 (fee: 
 
 Affected 17 (17.708%)  amount -17
   table size_of row 1 / table base_rate row 6 / table fuel_rate row 2 / table signature_fee row 1    10 records  difference -1 uniform  total -10
-    Example: dest=overseas, girth=1, signature=true, weight=1 → rule fee=22 / legacy fee=23
+    Example: dest=overseas, girth=1in, signature=true, weight=1lb → rule fee=22USD / legacy fee=23USD
   …
 ```
 
@@ -125,14 +125,14 @@ rule parcel_rate v3 → v4
 210 cells, of which 210 are inputs that can occur: 194 same, 16 differ, 0 unsettled, 0 unrealized
 
   signature = false  and  dest = north_america  and  weight >=11lb <=70lb  and  girth >=23in <=60in
-    fee: 19 → 20
+    fee: 19USD → 20USD
     rows: table size_of row 2, table base_rate row 3, table fuel_rate row 1, table signature_fee row 2
-    example: dest=domestic, girth=23, signature=false, weight=11
+    example: dest=domestic, girth=23in, signature=false, weight=11lb
 
   signature = true  and  dest = north_america  and  weight >=11lb <=70lb  and  girth >=23in <=60in
-    fee: 23 → 24
+    fee: 23USD → 24USD
     rows: table size_of row 2, table base_rate row 3, table fuel_rate row 1, table signature_fee row 1
-    example: dest=domestic, girth=23, signature=true, weight=11
+    example: dest=domestic, girth=23in, signature=true, weight=11lb
 
 outside this region the two versions answer alike.
 ```
@@ -200,7 +200,7 @@ Excluded 1 record (not matching the old version's declared format)
 
 Affected 9 (9.474%)  amount -91
   table size_of row 2→row 1 / table base_rate row 2→row 1 / table fuel_rate row 1 / table signature_fee row 1     4 records  difference -6 uniform  total -24
-    Example: dest=domestic, girth=23, signature=true, weight=1 → rule fee=11 / old version fee=17
+    Example: dest=domestic, girth=23in, signature=true, weight=1lb → rule fee=11USD / old version fee=17USD
   …
 ```
 
@@ -244,7 +244,7 @@ Excluded 1 record (not matching the old version's declared format)
 
 Not accepted by the new version 22 (23.158%)
   weight is outside the new version's range 1lb..50lb    22 records
-    Example: dest=domestic, girth=2, signature=true, weight=69 → old version fee=11
+    Example: dest=domestic, girth=2in, signature=true, weight=69lb → old version fee=11USD
 ```
 
 The JSON names every one of them under `refused`, with the `kind` of

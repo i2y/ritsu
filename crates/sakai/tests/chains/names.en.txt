@@ -1,0 +1,4 @@
+error[E007]: ctx/ordering.ctx:18:10: There is no context Inventory in the map
+    18 | upstream Inventory conformist
+  = The map reads the contexts Ordering, Inventry.
+  = `Inventory` is written on line 21 too.

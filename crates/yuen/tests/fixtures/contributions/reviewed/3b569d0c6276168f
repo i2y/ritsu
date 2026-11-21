@@ -1,0 +1,3 @@
+clause 集荷の手数料(courier_fee) -> 手数料
+  when 戻し方 集荷
+  then 8

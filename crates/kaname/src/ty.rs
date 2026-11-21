@@ -306,6 +306,25 @@ pub fn subst_slot(s: &Slot, params: &[String], args: &[Ty]) -> Slot {
     Slot { ty: subst(&s.ty, params, args), ..s.clone() }
 }
 
+/// A parameter of a function, with the types a call gives its type parameters put in (DESIGN 26.2).
+/// A value of a type parameter keeps the range it is given: where what a range holds (the value, the
+/// elements of a list or a set, the values of a dict) is of a type parameter that takes a rate, the
+/// place holds it to a range with both ends open, so that the rate is not held to 0% to 100% as a
+/// rate written with no range is (DESIGN 3.9).
+pub fn subst_param(s: &Slot, params: &[String], args: &[Ty]) -> Slot {
+    fn held(t: &Ty) -> &Ty {
+        match t {
+            Ty::Opt(x) | Ty::List(x) | Ty::Set(x) | Ty::Dict(_, x) => held(x),
+            t => t,
+        }
+    }
+    let mut out = subst_slot(s, params, args);
+    if out.range.is_none() && matches!(held(&s.ty), Ty::Param(_)) && matches!(held(&out.ty), Ty::Num(n) if n.is_rate()) {
+        out.range = Some(Range::default());
+    }
+    out
+}
+
 /// The ends of a declared range or count, both in, in the unit of what it holds (a date as its day
 /// number); None at an open end.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]

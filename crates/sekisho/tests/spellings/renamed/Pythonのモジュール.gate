@@ -1,0 +1,27 @@
+gate 席の等級(seat_class) v1
+description "Pythonのモジュール.gate のファイルの別名を、注のとおりに seat_class にしたもの"
+namespace Air
+
+role 係員(agent)
+  description "便の搭乗口で働く"
+  can 等級を上げる
+
+principal 職員(Agent)
+  description "尋ねる人"
+  roles 係員
+
+resource 席(Seat)
+  description "便の席"
+  attributes
+    空き(vacant) : bool
+
+action 等級を上げる(upgrade_seat)
+  description "席の等級を上げる"
+  principal 職員
+  resource 席
+
+permit 係員は空いた席に上げられる(agents_upgrade_to_vacant_seats)
+  description "係員は次のことができる: 席の等級を上げる"
+  principal in 係員
+  action 等級を上げる
+  when resource.空き

@@ -1,0 +1,10 @@
+dates leave_ja_form v1
+description "What ringi writes from the form of leave.ja.ringi: the dates it counts in business days"
+use calendar "../../../../examples/shared/office.cal"
+
+inputs
+  first_day : date  range >=2026-01-01 <=2027-12-31
+  days_value : int  range >=1 <=20
+
+date back_on = first_day
+  + days_value business days

@@ -56,8 +56,8 @@ macro_rules! stand_in {
             fn facts(&self, rule: &Path) -> Result<ritsu_ports::RuleFacts, Vec<Said>> {
                 self.0.facts(rule)
             }
-            fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)], max_len: Option<i128>) -> Result<Vec<(ritsu_ports::Precondition, ritsu_ports::Answer<Values>)>, Vec<Said>> {
-                self.0.preconditions_hold(rule, ranges, max_len)
+            fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)], min_len: Option<i128>, max_len: Option<i128>) -> Result<Vec<(ritsu_ports::Precondition, ritsu_ports::Answer<Values>)>, Vec<Said>> {
+                self.0.preconditions_hold(rule, ranges, min_len, max_len)
             }
             fn output_values(&self, rule: &Path, output: &str) -> Result<Found<ritsu_ports::OutputValues>, Vec<Said>> {
                 self.0.output_values(rule, output)
@@ -103,6 +103,34 @@ fn the_diffs_held_to_golden_files() {
                 }
             }
         }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The lines under a workflow (`resource … from`, and what is under it): no answer of the gate
+/// reads them, and `ritsu check` holds the flow's calls to them, so a diff says each line the two
+/// versions write differently — changed, only in the old version, only in the new — beside the
+/// answers, which do not change; and a diff with such a line differs (exit 1). Golden files of the
+/// three formats, in each language, with the materials of each.
+#[test]
+fn the_lines_under_a_workflow() {
+    let suite = common::joined();
+    let mut failures = Vec::new();
+    for (old, new, l, lang) in [("claims.gate", "claims_v2.gate", "en", Lang::En), ("請求.gate", "請求_二版.gate", "ja", Lang::Ja)] {
+        let d = run(old, new, &suite, false);
+        assert!(d.differs(), "{old} {new}");
+        let shown: Vec<(Option<&str>, Option<&str>)> = d.lines.iter().map(|x| (x.old.as_deref(), x.new.as_deref())).collect();
+        assert_eq!(shown.len(), 3, "{shown:?}");
+        assert_eq!(shown.iter().filter(|(o, n)| o.is_some() && n.is_some()).count(), 1, "{shown:?}");
+        assert!(d.actions.iter().all(|a| a.groups.iter().all(|g| g.change == Change::Reasons)), "{old} {new}: the answers change");
+        for (ext, out) in [("txt", diff::text(&d, lang)), ("md", diff::markdown(&d, lang)), ("json", diff::to_json(&d, lang).pretty() + "\n")] {
+            if let Err(e) = ritsu_testkit::golden::check(Path::new(&format!("{DIR}/golden/lines.{l}.{ext}")), &out) {
+                failures.push(e);
+            }
+        }
+        // a version against itself
+        let same = run(old, old, &suite, false);
+        assert!(!same.differs() && same.lines.is_empty(), "{old}");
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -178,10 +206,11 @@ fn the_command_and_what_stops_it() {
     let (code, _, err) = sekisho(&["diff", "tests/diff/held.gate", "tests/diff/held_v2.gate"]);
     assert_eq!((code, err.as_str()), (2, "error: `tests/diff/held.gate` reads a file of a language this sekisho does not read; run `ritsu sekisho diff tests/diff/held.gate tests/diff/held_v2.gate`\n"));
     let (code, _, err) = sekisho(&["diff", "tests/diff/shop.gate"]);
-    assert_eq!((code, err.as_str()), (2, "error: `sekisho diff` takes two sides, the old and the new\n"));
+    assert_eq!(code, 2);
+    assert!(err.starts_with("error: `sekisho diff` takes <old> <new>\nusage: sekisho diff <old> <new> "), "{err}");
     let (code, _, err) = sekisho(&["diff", "tests/diff/shop.gate", "tests/diff/none.gate"]);
     assert_eq!(code, 2);
-    assert!(err.starts_with("error: cannot read `tests/diff/none.gate`"), "{err}");
+    assert_eq!(err, "error: `tests/diff/none.gate` is not there\n");
     let (code, _, err) = sekisho(&["diff", "tests/diff/shop.gate", "tests/none.gate@HEAD"]);
     assert_eq!(code, 2, "{err}");
 }

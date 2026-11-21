@@ -1,0 +1,45 @@
+// The services tests/fixtures/service_date_outputs.flow and its Japanese version implement (DESIGN
+// 42): the response has google.type.Date, one, a list of them and one in a message, which a run does
+// not write as protobuf's JSON does; the request has them too, which a run reads as dates.
+syntax = "proto3";
+
+package dates.v1;
+
+import "dandori/v1/options.proto";
+import "google/protobuf/struct.proto";
+import "google/type/date.proto";
+
+service BookingService {
+  option (dandori.v1.workflow) = {name: "service_date_outputs", version: 1};
+
+  rpc Book(BookRequest) returns (BookResponse) {
+    option (dandori.v1.start) = {};
+  }
+}
+
+// The same service, for the Japanese version of the flow.
+service BookingServiceJa {
+  option (dandori.v1.workflow) = {name: "予約の日付の出力", version: 1};
+
+  rpc Book(BookRequest) returns (BookResponse) {
+    option (dandori.v1.start) = {};
+  }
+}
+
+message BookRequest {
+  string id = 1;
+  google.type.Date since = 2;
+  repeated google.type.Date closed = 3;
+  google.protobuf.Value extra = 4;
+}
+
+message Span {
+  google.type.Date first = 1;
+}
+
+message BookResponse {
+  google.type.Date booked_on = 1;
+  Span span = 2;
+  repeated google.type.Date days = 3;
+  string note = 4;
+}

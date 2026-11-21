@@ -1,0 +1,6 @@
+エラー[E008]: tests/mutants/E008_a_request_alone.ringi:1:1: このファイルには kaname が要りますが、この ringi には入っていません（申請の種類は kaname のモジュールに下ろします）
+     1 | request example v1 "Example"
+  = ringi 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`ritsu ringi check <file.ringi>` のように走らせてください。
+エラー[E008]: tests/mutants/E008_a_request_alone.ringi:3:1: このファイルには rulec が要りますが、この ringi には入っていません（フォームを rulec の規則に下ろします）
+     3 | form
+  = ringi 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`ritsu ringi check <file.ringi>` のように走らせてください。

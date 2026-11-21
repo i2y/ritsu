@@ -15,7 +15,7 @@ Obj(
                     "add_row",
                 ),
                 "text": Str(
-                    "| 山梨県 | S60 | 820円 |",
+                    "| 山梨県 | - | ? |",
                 ),
             },
         ),
@@ -25,16 +25,19 @@ Obj(
         "notes": Arr(
             [
                 Str(
+                    "No row matches: あて先 = 山梨県",
+                ),
+                Str(
                     "An input that matches no row: あて先 = 山梨県, サイズ = S60",
                 ),
                 Str(
-                    "An input producing this example: あて先 = 山梨県, 三辺合計 = 1, 重量 = 1",
+                    "An input producing this example: あて先 = 山梨県, 三辺合計 = 1cm, 重量 = 1g",
                 ),
                 Str(
-                    "hint: add a row that matches this input.",
+                    "hint: add this row, with what it answers written in place of `?`: `| 山梨県 | - | ? |`",
                 ),
                 Str(
-                    "The shape of the row to add: `| 山梨県 | S60 | 820円 |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.",
+                    "The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.",
                 ),
             ],
         ),

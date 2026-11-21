@@ -1,0 +1,26 @@
+rule 小さな注文の梱包料(packing_on_small_orders) v1
+description "手数料は金額の 10% に梱包料を足した額。50 円未満の注文で手数料が 8 円以上なら上の段階になるが、梱包料が 2 円以下ではそうならない。検査は、段階の表のその行がとる金額に抑えて、手数料を計算し直す"
+
+enum 選択(choice) = 一(one) | 二(two)
+enum 段階(tier) = 下(low) | 中(mid) | 上(high)
+
+inputs
+  金額(amount)    : money[円]  range >=0円 <=100円
+  梱包料(packing) : money[円]  range >=0円 <=10円
+
+define 手数料(fee) : money[円] = down(金額 * 10%, 1円) + 梱包料
+
+outputs
+  答え(x) : 選択
+
+table 段階の表(tier_of)
+| 金額   | 手数料 | -> 段階(tier) : 段階 |
+| <50円  | <8円   | 下                   |
+| <50円  | >=8円  | 上                   |
+| >=50円 | -      | 中                   |
+
+table 選ぶ(pick)
+| 梱包料 | 段階 | -> 答え |
+| <=2円  | 下   | 一      |
+| <=2円  | 中   | 二      |
+| >2円   | -    | 二      |

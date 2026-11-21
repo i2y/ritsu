@@ -1,0 +1,30 @@
+rule 小包の数(parcel_count) v1
+description "名前が下線で始まる並び"
+
+elements 小包(_parcels)
+  重い(heavy) : bool
+
+count 重い小包(heavy_parcels) over 小包 where 重い  range >=0 <=5
+
+outputs
+  緩衝材(padding) : bool
+
+table 緩衝材の判定(padding_of)
+policy unique
+| 重い小包 | -> 緩衝材 |
+| 0        | false     |
+| >=1      | true      |
+
+examples
+| 小包 | -> 緩衝材 |
+| 軽い | false     |
+| 重い | true      |
+
+sequence 軽い(light)
+| 重い  |
+| false |
+
+sequence 重い(heavy)
+| 重い  |
+| true  |
+| false |

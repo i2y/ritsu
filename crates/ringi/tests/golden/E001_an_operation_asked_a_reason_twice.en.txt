@@ -1,0 +1,2 @@
+error[E001]: tests/mutants/E001_an_operation_asked_a_reason_twice.ringi:15:44: `reject` is written twice: write it once
+    15 |   comment required  for reject, send back, reject

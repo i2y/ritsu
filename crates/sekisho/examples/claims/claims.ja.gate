@@ -1,0 +1,46 @@
+gate 請求(claims_ja) v1
+description "請求をだれが支払ってよいか。査定の係はどの請求も支払い、窓口のワークフローは、決まりが窓口に任せる請求を支払う。claims.gate の日本語の版"
+namespace ClaimsJa
+
+use rule 支払う人 from "rules/支払う人.rule"
+use openapi 窓口 from "api/desk.json"
+
+role 査定(adjuster)
+  description "窓口が支払わない請求を支払う"
+  can 請求を支払う
+
+principal 職員(User)
+  description "サインインした職員"
+  roles 査定
+
+# `resource` の下の行は、フローが支払う請求について何を持っているかを言う。フローの `請求番号` が
+# 請求の ID で、フローの `金額` が請求の金額である。サービスが同じ金額を読むことは、どの検査も
+# 確かめない。`ritsu check` がフローの呼び出しについて言うことは、この行を前提にしている。
+workflow 支払い(pay) from "flows/pay.ja.flow"
+  description "決まりが窓口に任せる請求を支払い、ほかの請求は担当者に回す"
+  resource 請求 from 請求番号
+    金額 = 金額
+
+resource 請求(Claim)
+  description "請求"
+  attributes
+    金額(amount) : money[JPY]  range >=1JPY <=10_000JPY
+
+action 請求を支払う(pay_claim)
+  description "請求を支払う"
+  guards 窓口 payClaim
+  principal 職員, Workflow
+  resource 請求 from claimId
+  context
+    支払う人(payer) = 支払う人(金額: resource.金額).だれ
+
+permit 査定は請求を支払える(adjusters_pay_claims)
+  description "査定の係は、どの請求も支払える"
+  principal in 査定
+  action 請求を支払う
+
+permit ワークフローは窓口の請求を支払える(the_workflow_pays_the_desks_claims)
+  description "ワークフローは、決まりが窓口に任せる請求を支払える"
+  principal is workflow 支払い
+  action 請求を支払う
+  when 支払う人 is 窓口

@@ -8,6 +8,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::tmp::tmpdir_in;
 use ritsu_testkit::{Need, TempDir, ready};
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -114,14 +120,9 @@ fn a_character_no_language_takes_is_written_as_an_underscore() {
     if !ready(Need::Python, || have("python3"), "no python3, so the generated code was not run") {
         return;
     }
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmpdir_in(&generated))
-        .args(["test", generated.to_str().unwrap()])
-        .output()
-        .expect("cannot start rulec test");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-    assert!(o.status.success(), "{said}");
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&generated)).args(["test", generated.to_str().unwrap()]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
     assert!(said.lines().any(|l| l.starts_with("ok    takeable (Python)")), "{said}");
     for l in said.lines().filter(|l| l.starts_with("warning") || l.starts_with("skip")) {
         eprintln!("{l}");
@@ -155,14 +156,9 @@ fn a_shape_with_such_a_character_is_a_parameter_of_another_name() {
     if !ready(Need::Python, || have("python3"), "no python3, so the generated code was not run") {
         return;
     }
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmpdir_in(&generated))
-        .args(["test", generated.to_str().unwrap()])
-        .output()
-        .expect("cannot start rulec test");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-    assert!(o.status.success(), "{said}");
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&generated)).args(["test", generated.to_str().unwrap()]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
     assert!(said.lines().any(|l| l.starts_with("ok    rush_fee (Python)")), "{said}");
 }
 

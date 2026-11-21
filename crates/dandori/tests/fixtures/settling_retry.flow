@@ -1,0 +1,49 @@
+workflow settling_retry v1
+description "Goods held, a person's approval, then the goods shipped. When the run fails, `on failure` puts the goods back with a call that retries three times; the retries can run out, and the call fail all the same, with the goods still held"
+
+use book stock from "books/stock.book"
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:stock"
+
+inputs
+  order : string
+  sku   : string
+
+outputs
+  done : bool
+
+task reserve(order: string, sku: string, qty: int) -> stock.reserve
+  book stock.reserve.hold
+  starts stock.reserve
+  errors out_of_stock
+  timeout 30 seconds
+
+task approve(order: string)
+  timeout 1 day
+
+task ship(order: string, sku: string) -> stock.reserve
+  book stock.reserve.post
+  sends post
+  errors expired
+  timeout 30 seconds
+
+task put_back(order: string, sku: string) -> stock.reserve
+  book stock.reserve.void
+  sends void
+  errors expired, already_posted
+  timeout 30 seconds
+  retry 3 times every 10 seconds
+
+case goods : stock.reserve follows stock.reserve
+
+flow
+  goods <- reserve(order: order, sku: sku, qty: 1)
+    on out_of_stock => succeed done = false
+    on failure, timeout => fail HoldFailed "The goods could not be held"
+  approve(order: order)
+  goods <- ship(order: order, sku: sku)
+    on expired => fail HoldExpired "The hold expired before the goods were shipped"
+  succeed done = true
+
+on failure
+  goods <- put_back(order: order, sku: sku)
+    on expired, already_posted => pass

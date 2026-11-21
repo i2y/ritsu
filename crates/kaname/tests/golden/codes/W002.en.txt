@@ -1,0 +1,5 @@
+warning[W002]: example.kn:6:4: In the generated code, this function `totalWeight` and the function `total_weight` on line 3 are named alike: `TotalWeight` (Go)
+     6 | fn totalWeight() -> number
+  = The generated code writes each name as its target writes names: a type's name in every target, and Go's function, field and constant of a value of an enum and Rust's value of an enum, with each word's first letter in upper case and no `_` (`foo_bar` is `FooBar`); TypeScript's and Python's value of an enum in upper case (`gold` is `GOLD`).
+  = `ritsu gen --target go` stops at this module (E008). If you do not generate Go, leave it; if you do, rename one of them, or give it another alias.
+ok example.kn: 2 functions, total

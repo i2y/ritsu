@@ -1,0 +1,2 @@
+エラー[E006]: tests/mutants/E006_form_twice.ringi:6:1: `form` は一つのファイルに一度だけ書けます
+     6 | form

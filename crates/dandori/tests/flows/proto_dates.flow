@@ -1,0 +1,53 @@
+# protobuf's `google.type.Date` at a Connect service (DESIGN 44). protobuf's JSON writes a date as
+# `{"year": 2026, "month": 11, "day": 16}`, and a flow holds it as `2026-11-16`. A date goes to one
+# at the top of the request, to a list of them, to one in a message and to those in a list of
+# messages; the answer's dates, at the same places, are read as dates: one in a range, one that may
+# be absent, and those of a record made from the `.proto`. A date short of its day, as protobuf's
+# JSON writes one whose day is 0, is no date, and the answer's check refuses it. Runs on every
+# platform: each sends a day as `{"year": 2026, "month": 11, "day": 16}`, and reads one back as
+# `2026-11-16`.
+workflow proto_dates v1
+description "Plan a trip at a Connect service that holds its days as google.type.Date, and book it: the first day goes out as protobuf's JSON writes a date, and the plan's days come back as dates and go on to the booking"
+
+use proto trips from "protos/trips.proto"
+  url "https://trips.example.com"
+
+record Plan
+  id       : string
+  start    : date  range >=2026-01-01 <=2027-12-31
+  end      : date?
+  restDays : list[date]
+  first    : trips.Stop
+  stops    : list[trips.Stop]
+
+record Booked
+  bookingId : string
+  bookedOn  : date
+
+inputs
+  traveller : string
+  start     : date
+
+outputs
+  plan_id   : string
+  first_day : date
+  last_day  : date
+  booked_on : date
+
+# The first day at the top of the request.
+task plan(traveller: string, start: date) -> Plan
+  connect trips "TripService/Plan"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/trips/7a8b9c0d"
+
+# The plan's days at the top, in a list, in a message and in a list of messages.
+task book(id: string, start: date, restDays: list[date], first: trips.Stop, stops: list[trips.Stop]) -> Booked
+  connect trips "TripService/Book"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/trips/7a8b9c0d"
+
+flow
+  let p = plan(traveller: traveller, start: start)
+  let b = book(id: p.id, start: p.start, restDays: p.restDays, first: p.first, stops: p.stops)
+  match p.end
+    some e => let last = e
+    none => let last = p.start
+  succeed plan_id = p.id, first_day = p.first.day, last_day = last, booked_on = b.bookedOn

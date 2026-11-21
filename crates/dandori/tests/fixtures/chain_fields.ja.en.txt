@@ -1,0 +1,8 @@
+error[E005]: tests/fixtures/chain_fields.ja.flow:4:10: could not read the rule `rules/無い地域.rule`
+     4 | use rule 地域 from "rules/無い地域.rule"
+  = `tests/fixtures/rules/無い地域.rule` is not there
+error[E002]: tests/fixtures/chain_fields.ja.flow:22:12: there is no task or rule `探ス`
+    22 |   let 場所 = 探ス(ID: ID)
+error[E002]: tests/fixtures/chain_fields.ja.flow:24:27: there is no variable or value `どこにも`
+    24 |   succeed 札 = 場所.区域, ほか = どこにも.区域
+  = a value is a variable, a field of one, a string, a number, true or false

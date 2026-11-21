@@ -1,0 +1,500 @@
+{
+  "ringi": "0.55.2",
+  "file": "examples/leave.ringi",
+  "kind": "request",
+  "name": "leave",
+  "written": "leave",
+  "version": 1,
+  "title": "Leave request",
+  "description": "Paid leave, sick leave or special leave, approved by the requester's manager, and by the head of the department too for more than five business days (fictional rules). Paid leave takes the days from the balance the leave book keeps",
+  "owner": "hr",
+  "effective_from": null,
+  "uses": [
+    {
+      "kind": "organization",
+      "alias": "org",
+      "written": "org",
+      "file": "shared/company.ringi",
+      "line": 5
+    },
+    {
+      "kind": "calendar",
+      "alias": "office",
+      "written": "office",
+      "file": "shared/office.cal",
+      "line": 6
+    },
+    {
+      "kind": "book",
+      "alias": "leave",
+      "written": "leave",
+      "file": "shared/leave.book",
+      "line": 7
+    },
+    {
+      "kind": "gate",
+      "alias": null,
+      "written": null,
+      "file": "shared/company.gate",
+      "line": 8
+    },
+    {
+      "kind": "route",
+      "alias": "standard",
+      "written": "standard",
+      "file": "shared/manager_approval.ringi",
+      "line": 9
+    }
+  ],
+  "form": [
+    {
+      "name": "kind",
+      "written": "kind",
+      "label": "Kind of leave",
+      "type": "choice",
+      "type_written": "choice",
+      "min": null,
+      "max": null,
+      "count_min": null,
+      "count_max": null,
+      "values": [
+        "paid",
+        "sick",
+        "special"
+      ],
+      "optional": false,
+      "computed": false,
+      "approvers_only": false,
+      "line": 12,
+      "fields": []
+    },
+    {
+      "name": "first_day",
+      "written": "first_day",
+      "label": "First day",
+      "type": "date",
+      "type_written": "date",
+      "min": "2026-01-01",
+      "max": "2027-12-31",
+      "count_min": null,
+      "count_max": null,
+      "values": [],
+      "optional": false,
+      "computed": false,
+      "approvers_only": false,
+      "line": 16,
+      "fields": []
+    },
+    {
+      "name": "days",
+      "written": "days",
+      "label": "Business days",
+      "type": "number",
+      "type_written": "number",
+      "min": 1,
+      "max": 20,
+      "count_min": null,
+      "count_max": null,
+      "values": [],
+      "optional": false,
+      "computed": false,
+      "approvers_only": false,
+      "line": 17,
+      "fields": []
+    },
+    {
+      "name": "back_on",
+      "written": "back_on",
+      "label": "Back at work on",
+      "type": "date",
+      "type_written": "date",
+      "min": null,
+      "max": null,
+      "count_min": null,
+      "count_max": null,
+      "values": [],
+      "optional": false,
+      "computed": true,
+      "approvers_only": false,
+      "line": 18,
+      "fields": []
+    },
+    {
+      "name": "reason",
+      "written": "reason",
+      "label": "Reason",
+      "type": "long text",
+      "type_written": "long text",
+      "min": null,
+      "max": null,
+      "count_min": null,
+      "count_max": 200,
+      "values": [],
+      "optional": false,
+      "computed": false,
+      "approvers_only": false,
+      "line": 19,
+      "fields": []
+    },
+    {
+      "name": "cover",
+      "written": "cover",
+      "label": "Who covers for you",
+      "type": "person",
+      "type_written": "person",
+      "min": null,
+      "max": null,
+      "count_min": null,
+      "count_max": null,
+      "values": [],
+      "optional": true,
+      "computed": false,
+      "approvers_only": false,
+      "line": 20,
+      "fields": []
+    }
+  ],
+  "items": [
+    {
+      "kind": "field",
+      "name": "kind",
+      "written": "kind",
+      "lines": [
+        12,
+        15
+      ],
+      "text": "kind : choice \"Kind of leave\"\npaid \"Paid leave\"\nsick \"Sick leave\"\nspecial \"Special leave\""
+    },
+    {
+      "kind": "field",
+      "name": "first_day",
+      "written": "first_day",
+      "lines": [
+        16,
+        16
+      ],
+      "text": "first_day : date \"First day\" range >=2026-01-01 <=2027-12-31 open in office"
+    },
+    {
+      "kind": "field",
+      "name": "days",
+      "written": "days",
+      "lines": [
+        17,
+        17
+      ],
+      "text": "days : number \"Business days\" range >=1 <=20"
+    },
+    {
+      "kind": "field",
+      "name": "back_on",
+      "written": "back_on",
+      "lines": [
+        18,
+        18
+      ],
+      "text": "back_on : date \"Back at work on\" = first_day + days business days in office"
+    },
+    {
+      "kind": "field",
+      "name": "reason",
+      "written": "reason",
+      "lines": [
+        19,
+        19
+      ],
+      "text": "reason : long text \"Reason\" count <=200 required when kind is special"
+    },
+    {
+      "kind": "field",
+      "name": "cover",
+      "written": "cover",
+      "lines": [
+        20,
+        20
+      ],
+      "text": "cover : person \"Who covers for you\" optional"
+    },
+    {
+      "kind": "ticket",
+      "name": "submitted_by",
+      "written": "submitted_by",
+      "lines": [
+        26,
+        26
+      ],
+      "text": "submitted by everyone except team board"
+    },
+    {
+      "kind": "ticket",
+      "name": "self_approval",
+      "written": "self_approval",
+      "lines": [
+        27,
+        27
+      ],
+      "text": "self approval not allowed"
+    },
+    {
+      "kind": "ticket",
+      "name": "same_approver",
+      "written": "same_approver",
+      "lines": [
+        29,
+        29
+      ],
+      "text": "same approver approves once"
+    },
+    {
+      "kind": "ticket",
+      "name": "send_back",
+      "written": "send_back",
+      "lines": [
+        30,
+        30
+      ],
+      "text": "send back to the requester, at most 2 times"
+    },
+    {
+      "kind": "ticket",
+      "name": "comment_required",
+      "written": "comment_required",
+      "lines": [
+        32,
+        32
+      ],
+      "text": "comment required for reject, send back"
+    },
+    {
+      "kind": "ticket",
+      "name": "resubmit",
+      "written": "resubmit",
+      "lines": [
+        33,
+        33
+      ],
+      "text": "resubmit within 5 business days"
+    },
+    {
+      "kind": "ticket",
+      "name": "withdraw",
+      "written": "withdraw",
+      "lines": [
+        34,
+        34
+      ],
+      "text": "withdraw until it is decided"
+    },
+    {
+      "kind": "ticket",
+      "name": "hold_leave.take",
+      "written": "hold_leave.take",
+      "lines": [
+        35,
+        35
+      ],
+      "text": "on submitted hold leave.take(request: ticket.id, attempt: ticket.attempt, person: requester.id, days: days) when kind is paid"
+    },
+    {
+      "kind": "ticket",
+      "name": "post_leave.take",
+      "written": "post_leave.take",
+      "lines": [
+        36,
+        36
+      ],
+      "text": "on approved post leave.take(request: ticket.id, attempt: ticket.attempt) when kind is paid"
+    },
+    {
+      "kind": "ticket",
+      "name": "void_leave.take",
+      "written": "void_leave.take",
+      "lines": [
+        37,
+        37
+      ],
+      "text": "on sent back, rejected, withdrawn, expired void leave.take(request: ticket.id, attempt: ticket.attempt) when kind is paid"
+    },
+    {
+      "kind": "claim",
+      "name": "ends_in_time",
+      "written": "ends_in_time",
+      "lines": [
+        40,
+        40
+      ],
+      "text": "ends_in_time : every ticket ends within 40 business days"
+    },
+    {
+      "kind": "scenario",
+      "name": "a_long_paid_leave",
+      "written": "a_long_paid_leave",
+      "lines": [
+        42,
+        51
+      ],
+      "text": "scenario a_long_paid_leave\nrequester e1203\ngiven leave.grant(person: \"e1203\", year: \"2026\", days: 20)\nform kind = paid, first_day = 2026-12-21, days = 8, reason = \"A family visit\"\n| at | event | by | -> stage | status |\n| 2026-11-16 09:00 | submit | e1203 | manager | in progress |\n| 2026-11-16 17:00 | approve | e1101 | head | in progress |\n| 2026-11-17 09:00 | remind | | head | in progress |\n| 2026-11-19 00:00 | late | | head | in progress |\n| 2026-11-19 10:00 | approve | e0101 | | approved |"
+    },
+    {
+      "kind": "scenario",
+      "name": "a_leave_sent_back_with_a_comment",
+      "written": "a_leave_sent_back_with_a_comment",
+      "lines": [
+        55,
+        67
+      ],
+      "text": "scenario a_leave_sent_back_with_a_comment\nrequester e1203\ngiven leave.grant(person: \"e1203\", year: \"2026\", days: 20)\nform kind = paid, first_day = 2026-12-21, days = 3, reason = \"A family visit\"\n| at | event | by | comment | -> stage | status |\n| 2026-11-16 09:00 | submit | e1203 | | manager | in progress |\n| 2026-11-16 11:00 | comment | e1101 | \"Who covers for you while you are away?\" | manager | in progress |\n| 2026-11-16 13:00 | comment | e1203 | \"e1201 does\" | manager | in progress |\n| 2026-11-16 17:00 | send back | e1101 | \"Write e1201 as the cover, please\" | | with requester |\n| 2026-11-16 17:30 | comment | e1203 | \"Where do I write the cover?\" | | with requester |\n| 2026-11-16 17:45 | comment | e1101 | \"In the cover field of the form\" | | with requester |\n| 2026-11-17 09:00 | resubmit(cover: person \"e1201\") | e1203 | \"e1201 is written as the cover\" | manager | in progress |\n| 2026-11-17 10:00 | approve | e1101 | \"Have a good trip\" | | approved |"
+    },
+    {
+      "kind": "scenario",
+      "name": "a_leave_rejected_with_a_reason",
+      "written": "a_leave_rejected_with_a_reason",
+      "lines": [
+        70,
+        77
+      ],
+      "text": "scenario a_leave_rejected_with_a_reason\nrequester e1203\ngiven leave.grant(person: \"e1203\", year: \"2026\", days: 20)\nform kind = paid, first_day = 2026-12-21, days = 8, reason = \"A family visit\"\n| at | event | by | comment | -> stage | status |\n| 2026-11-16 09:00 | submit | e1203 | | manager | in progress |\n| 2026-11-16 17:00 | approve | e1101 | | head | in progress |\n| 2026-11-16 18:00 | reject | e3101 | \"The week before the year end is our busiest\" | | rejected |"
+    }
+  ],
+  "usable": {
+    "from": "2026-04-01",
+    "from_by": [
+      {
+        "kind": "organization",
+        "name": "org",
+        "written": "org",
+        "file": "examples/org",
+        "line": null,
+        "data": null,
+        "text": "the first version of the organization `shared/company.ringi` (data `../org`)"
+      }
+    ],
+    "through": null,
+    "through_by": []
+  },
+  "utc_offset_minutes": 540,
+  "ticket": {
+    "self_approval": false,
+    "self_approval_line": 27,
+    "gates": [
+      {
+        "file": "examples/shared/company.gate",
+        "line": 8
+      }
+    ],
+    "operations": [
+      {
+        "name": "submit",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "withdraw",
+        "line": 34,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "approve",
+        "line": null,
+        "by_approver": true,
+        "decides": true
+      },
+      {
+        "name": "reject",
+        "line": null,
+        "by_approver": true,
+        "decides": true
+      },
+      {
+        "name": "send_back",
+        "line": 30,
+        "by_approver": true,
+        "decides": true
+      },
+      {
+        "name": "add_approver",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "hand_over",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "change_request_type",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "comment",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "see",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "read_audit",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "import_organization",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "read_organization_audit",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      }
+    ],
+    "endings": [
+      "approved",
+      "sent back",
+      "rejected",
+      "withdrawn",
+      "expired"
+    ],
+    "time": {
+      "round": 10,
+      "send_backs": 2,
+      "resubmit": 5,
+      "pause": null,
+      "total": 40,
+      "held": 10,
+      "no_end": [],
+      "calendars": [
+        {
+          "alias": "office",
+          "written": "office",
+          "file": "examples/shared/office.cal"
+        }
+      ]
+    },
+    "holds": [
+      {
+        "alias": "leave",
+        "written": "leave",
+        "book": "examples/shared/leave.book",
+        "transfer": "take",
+        "line": 35,
+        "requester_arguments": []
+      }
+    ],
+    "flows": []
+  }
+}

@@ -1,0 +1,9 @@
+company.gate: ok — action 10、ポリシー 4（permit 3、forbid 1）、期待 0、職務の分離 0
+ok purchase.ringi: 申請の種類、フィールド 1 個、ステップ 1 個
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます
+エラー[ritsu E911]: purchase.ringi:3: ゲート company.gate に、`purchase` のチケットの操作 `see` の action がありません
+     3 | use gate "company.gate"
+  = `see` は、チケットに載っていない人にチケットを見せるかを、サーバーがゲートに尋ねる action です。無ければ、申請者の側と承認者の側の人のほかはだれも見られず、チケットに載っていない管理する人は、承認者を足すことも引き継がせることもできません（見られない人の操作は 404 になります）。
+  = サーバーは、操作を受け付ける前にゲートに尋ねます。ゲートに無い action はだれにも許されないので、その操作はどのチケットでも拒まれます。
+  = company.gate に action を宣言し（`action see` と、受け取る principal と resource）、だれに許すかを permit で書いてください。
+ritsu check: ファイル 2 個（sekisho 1、ringi 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 3 か所、決められない 0 か所

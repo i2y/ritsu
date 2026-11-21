@@ -1,0 +1,16 @@
+module {{module}}
+
+go {{go}}
+
+require (
+	github.com/cedar-policy/cedar-go {{cedar_go}}
+	{{framework}} {{framework_version}}
+{{if mcp}}
+	{{framework}}/mcp {{framework_version}}
+{{end}}
+{{if temporal}}
+	{{framework}}/temporal {{framework_version}}
+	go.temporal.io/api {{temporal_api}}
+	go.temporal.io/sdk {{temporal_sdk}}
+{{end}}
+)

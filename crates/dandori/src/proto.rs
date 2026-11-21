@@ -10,8 +10,9 @@
 //! sources (the disk, through ritsu_base::fs, which ritsu's playground holds in memory), and with an
 //! import that was not read it keeps a name it cannot resolve as written.
 //!
-//! Google's well-known types, `buf/validate/validate.proto` and dandori's
-//! `dandori/v1/options.proto` are known without their files; any other import is read from the
+//! Google's well-known types, `google.type.Date` (`google/type/date.proto`, DESIGN 44),
+//! `buf/validate/validate.proto` and dandori's `dandori/v1/options.proto` are known without their
+//! files; any other import is read from the
 //! root of the importing file's module when the file sits where its package says (buf's layout),
 //! else from the file's directory. An import that is on the disk in neither place is passed over
 //! and told in `ProtoFile::unread` (a `.proto` imports `google/api/annotations.proto` for options,
@@ -20,6 +21,7 @@
 
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
+use ritsu_base::text::Text;
 use std::path::{Path, PathBuf};
 
 /// dandori's options, the file `proto/dandori/v1/options.proto` of this repository. It is known
@@ -29,6 +31,15 @@ pub const DANDORI_OPTIONS: &str = include_str!("../proto/dandori/v1/options.prot
 
 /// How a `.proto` imports dandori's options.
 pub const OPTIONS_IMPORT: &str = "dandori/v1/options.proto";
+
+/// The date of `google/type/date.proto`, which a flow reads as a `date` (DESIGN 44). It is known by
+/// its full name, as the well-known types are: its file is not read even when it is on the disk, and
+/// a name that comes to it by protobuf's rule is it, imported or not (protoc wants the import; the
+/// checker does not).
+pub use ritsu_proto::DATE;
+
+/// How a `.proto` imports `google.type.Date`.
+pub const DATE_IMPORT: &str = "google/type/date.proto";
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum PType {
@@ -120,7 +131,7 @@ impl ProtoFile {
     /// Whether a type name is one the files read have: a message, an enum, or a well-known type.
     /// A name that is not is a type of an import that was not read.
     pub fn knows(&self, name: &str) -> bool {
-        self.messages.contains_key(name) || self.enums.contains_key(name) || WELL_KNOWN.contains(&name)
+        self.messages.contains_key(name) || self.enums.contains_key(name) || WELL_KNOWN.contains(&name) || name == DATE
     }
 }
 
@@ -142,7 +153,9 @@ struct Reading {
     reached: BTreeMap<String, PathBuf>,
 }
 
-pub fn load(path: &Path) -> Result<ProtoFile, String> {
+/// The file at `path` and every file it imports, or why they cannot be read, in both languages
+/// (what the system says is in its own words in both).
+pub fn load(path: &Path) -> Result<ProtoFile, Text> {
     let mut rd = Reading::default();
     let first = read(path, None, &mut rd)?;
     resolve_all(&first, rd)
@@ -150,7 +163,7 @@ pub fn load(path: &Path) -> Result<ProtoFile, String> {
 
 /// A `.proto` given as text, read as if its file were `name`, in the current directory: for what
 /// is tried without a file. The imports other than the well-known ones are read from the disk.
-pub fn load_text(name: &str, text: &str) -> Result<ProtoFile, String> {
+pub fn load_text(name: &str, text: &str) -> Result<ProtoFile, Text> {
     let mut rd = Reading::default();
     let first = read(Path::new(name), Some(text), &mut rd)?;
     resolve_all(&first, rd)
@@ -158,7 +171,7 @@ pub fn load_text(name: &str, text: &str) -> Result<ProtoFile, String> {
 
 /// Read one file (from its text when it is given) and every file it imports, each before the
 /// files it imports and those in the order written: the name the file is known by.
-fn read(path: &Path, text: Option<&str>, rd: &mut Reading) -> Result<String, String> {
+fn read(path: &Path, text: Option<&str>, rd: &mut Reading) -> Result<String, Text> {
     let canon = if text.is_some() { path.to_path_buf() } else { crate::sources::canonical(path) };
     if let Some((_, name)) = rd.seen.iter().find(|(c, _)| *c == canon) {
         return Ok(name.clone());
@@ -168,15 +181,20 @@ fn read(path: &Path, text: Option<&str>, rd: &mut Reading) -> Result<String, Str
     rd.reached.insert(name.clone(), path.to_path_buf());
     let src = match text {
         Some(t) => t.to_string(),
-        None => crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?,
+        None => crate::sources::read(path).map_err(|e| ritsu_base::tr!("{} を読めません: {e}", "cannot read {}: {e}", ritsu_base::paths::show(path)))?,
     };
-    let f = ritsu_proto::read(&name, &src).map_err(|e| format!("{}:{}:{}: {}", path.display(), e.line, e.col, e.message("dandori").en))?;
+    let f = ritsu_proto::read(&name, &src).map_err(|e| {
+        let why = e.message("dandori");
+        let at = format!("{}:{}:{}", ritsu_base::paths::show(path), e.line, e.col);
+        ritsu_base::tr!("{at}: {}", "{at}: {}", why.ja; why.en)
+    })?;
     // dandori reads proto3; a file that says nothing of its syntax is read as such
     if f.syntax_line.is_some() && f.syntax != "proto3" {
+        let shown = ritsu_base::paths::show(path);
         return Err(if f.syntax.starts_with("edition") {
-            format!("{}: editions are not read; dandori reads proto3", path.display())
+            ritsu_base::tr!("{shown}: editions は読みません。dandori が読むのは proto3 だけです", "{shown}: editions are not read; dandori reads proto3")
         } else {
-            format!("{}: `{}` is not read; dandori reads proto3", path.display(), f.syntax)
+            ritsu_base::tr!("{shown}: `{}` は読みません。dandori が読むのは proto3 だけです", "{shown}: `{}` is not read; dandori reads proto3", f.syntax)
         });
     }
     let imports = f.imports.clone();
@@ -189,7 +207,7 @@ fn read(path: &Path, text: Option<&str>, rd: &mut Reading) -> Result<String, Str
     let mut at = Vec::new();
     for imp in &imports {
         let imp = &imp.path;
-        if imp.starts_with("google/protobuf/") || imp == "buf/validate/validate.proto" {
+        if imp.starts_with("google/protobuf/") || imp == "buf/validate/validate.proto" || imp == DATE_IMPORT {
             at.push(None);
             continue;
         }
@@ -268,18 +286,20 @@ fn json(j: &ritsu_base::json::Json) -> Value {
 /// Every message, enum and service of the files read, with the names of their types resolved
 /// from the file that writes them. With an import that was not read, a name nothing has may be in
 /// it: it stays as written, a type that is not known, and is told where a flow comes to it.
-fn resolve_all(first: &str, rd: Reading) -> Result<ProtoFile, String> {
+fn resolve_all(first: &str, rd: Reading) -> Result<ProtoFile, Text> {
     use ritsu_proto::{Label, Resolved, Type};
     let Reading { ps, unread, reached, .. } = rd;
     let reached_as = |name: &str| reached.get(name).cloned().unwrap_or_else(|| PathBuf::from(name));
     let lenient = !unread.is_empty();
-    let resolve = |file: &str, scope: &str, name: &str| -> Result<String, String> {
+    let resolve = |file: &str, scope: &str, name: &str| -> Result<String, Text> {
         match ps.resolve(file, scope, name) {
             Resolved::Found(s) => Ok(s.full),
             Resolved::Known(k) if WELL_KNOWN.contains(&k.as_str()) => Ok(k),
+            // `google.type.Date`, which no file read has: by protobuf's rule, from the scope out
+            _ if ritsu_proto::resolve_name(scope, name, |full| (full == DATE).then_some(())).is_some() => Ok(DATE.to_string()),
             _ if lenient => Ok(name.trim_start_matches('.').to_string()),
-            _ if name.starts_with('.') => Err(format!("there is no type `{name}`")),
-            _ => Err(format!("there is no type `{name}` (in `{scope}`)")),
+            _ if name.starts_with('.') => Err(ritsu_base::tr!("型 `{name}` はありません", "there is no type `{name}`")),
+            _ => Err(ritsu_base::tr!("型 `{name}` はありません（`{scope}` から探しました）", "there is no type `{name}` (in `{scope}`)")),
         }
     };
     let mut f = ProtoFile { package: ps.files[first].package.clone(), unread, ..ProtoFile::default() };
@@ -352,7 +372,7 @@ mod tests {
     use serde_json::json;
 
     fn one(text: &str) -> ProtoFile {
-        load_text("t.proto", text).unwrap_or_else(|e| panic!("{e}"))
+        load_text("t.proto", text).unwrap_or_else(|e| panic!("{}", e.en))
     }
 
     fn field<'a>(f: &'a ProtoFile, msg: &str, name: &str) -> &'a PField {
@@ -534,7 +554,7 @@ mod tests {
                 ("common/v1/money.proto", r#"syntax = "proto3"; package common.v1; message Money { string currency = 1; int64 units = 2; }"#),
             ],
         );
-        let f = load(&dir.path().join("shop/v1/order.proto")).unwrap_or_else(|e| panic!("{e}"));
+        let f = load(&dir.path().join("shop/v1/order.proto")).unwrap_or_else(|e| panic!("{}", e.en));
         assert!(f.messages.contains_key("common.v1.Money"));
         assert_eq!(f.messages["shop.v1.Order"][0].ty, PType::Named("common.v1.Money".into()));
     }
@@ -548,7 +568,7 @@ mod tests {
                 ("specs/money.proto", r#"syntax = "proto3"; package shop.v1; message Money { string currency = 1; }"#),
             ],
         );
-        let f = load(&dir.path().join("specs/order.proto")).unwrap_or_else(|e| panic!("{e}"));
+        let f = load(&dir.path().join("specs/order.proto")).unwrap_or_else(|e| panic!("{}", e.en));
         assert!(f.messages.contains_key("shop.v1.Money"));
     }
 
@@ -566,7 +586,7 @@ message Order { string id = 1; google.type.Money total = 2; repeated google.type
 service OrderService { rpc Place(Order) returns (Order) { option (google.api.http) = {post: "/v1/orders" body: "*"}; } }"#,
             )],
         );
-        let f = load(&dir.path().join("specs/order.proto")).unwrap_or_else(|e| panic!("{e}"));
+        let f = load(&dir.path().join("specs/order.proto")).unwrap_or_else(|e| panic!("{}", e.en));
         // in the order they were met; the well-known file is known without its file, so it is not among them
         assert_eq!(f.unread, ["google/api/annotations.proto", "google/type/money.proto"]);
         // what is read stays as it is; a type of an import that was not read stays a name nothing has
@@ -577,9 +597,44 @@ service OrderService { rpc Place(Order) returns (Order) { option (google.api.htt
         // a name nothing has, with every import read, is still the trouble
         let all = scratch("typo", &[("specs/order.proto", r#"syntax = "proto3"; package shop.v1; message Order { Moneyy total = 1; }"#)]);
         let e = load(&all.path().join("specs/order.proto")).unwrap_err();
-        assert!(e.contains("there is no type `Moneyy`"), "{e}");
+        assert!(e.en.contains("there is no type `Moneyy`") && e.ja.contains("型 `Moneyy` はありません"), "{e:?}");
         // a file that is there and is not a `.proto` is the trouble too
         let bad = scratch("bad", &[("specs/order.proto", r#"syntax = "proto3"; package shop.v1; import "money.proto"; message Order {}"#), ("specs/money.proto", "message {")]);
         assert!(load(&bad.path().join("specs/order.proto")).is_err());
+    }
+
+    #[test]
+    fn googles_date_is_known_by_its_name_and_its_file_is_not_read() {
+        // imported, the file is not read, and not told as one that was not
+        let f = one(r#"syntax = "proto3"; package shop.v1; import "google/type/date.proto"; message Order { google.type.Date due = 1; repeated .google.type.Date stops = 2; }"#);
+        assert!(f.unread.is_empty(), "{:?}", f.unread);
+        assert_eq!(field(&f, "shop.v1.Order", "due").ty, PType::Named(DATE.into()));
+        assert_eq!(field(&f, "shop.v1.Order", "stops").ty, PType::Named(DATE.into()));
+        // a date says whether it is set, as a message does
+        assert!(field(&f, "shop.v1.Order", "due").presence);
+        assert!(f.knows(DATE) && !f.messages.contains_key(DATE));
+        // not imported, which protoc refuses: the name is enough
+        let g = one(r#"syntax = "proto3"; package shop.v1; message Order { google.type.Date due = 1; }"#);
+        assert_eq!(field(&g, "shop.v1.Order", "due").ty, PType::Named(DATE.into()));
+        // its file on the disk is passed over all the same: the name says what it is
+        let dir = scratch(
+            "date",
+            &[
+                ("specs/order.proto", r#"syntax = "proto3"; package shop.v1; import "google/type/date.proto"; message Order { google.type.Date due = 1; }"#),
+                ("specs/google/type/date.proto", r#"syntax = "proto3"; package google.type; message Date { int32 year = 1; int32 month = 2; int32 day = 3; }"#),
+            ],
+        );
+        let h = load(&dir.path().join("specs/order.proto")).unwrap_or_else(|e| panic!("{}", e.en));
+        assert!(h.unread.is_empty() && !h.messages.contains_key(DATE));
+        assert_eq!(field(&h, "shop.v1.Order", "due").ty, PType::Named(DATE.into()));
+        // with another import not read, the date is still the date, and another type of `google/type/` a name nothing has
+        let gone = scratch("date-gone", &[("specs/order.proto", r#"syntax = "proto3"; package shop.v1; import "google/type/money.proto"; message Order { google.type.Date due = 1; google.type.Money total = 2; }"#)]);
+        let i = load(&gone.path().join("specs/order.proto")).unwrap_or_else(|e| panic!("{}", e.en));
+        assert_eq!(i.unread, ["google/type/money.proto"]);
+        assert_eq!(field(&i, "shop.v1.Order", "due").ty, PType::Named(DATE.into()));
+        assert!(i.knows(DATE) && !i.knows("google.type.Money"));
+        // and without one, a name like it is no date
+        let e = load_text("t.proto", r#"syntax = "proto3"; package shop.v1; message Order { google.type.Day due = 1; }"#).unwrap_err();
+        assert!(e.en.contains("there is no type `google.type.Day`"), "{e:?}");
     }
 }

@@ -8,7 +8,7 @@
 
 use crate::check::{self, Run};
 use crate::suite::Suite;
-use ritsu_base::cli::{Args, Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
+use ritsu_base::cli::{Args, Cmd, Flag, Reading, Table, flag, help_flag, lang_flag, made_lang_flag};
 use ritsu_base::text::{Lang, Text};
 use std::io::Write;
 
@@ -55,7 +55,7 @@ fn run_flags() -> Vec<Flag> {
     // the lines under the flag's start where its text does, after the widest flag the page prints
     let w = rest.iter().chain([lang_flag("KANAME_LANG"), help_flag()].iter()).map(|f| ritsu_base::text::width(&f.spelled())).chain([input.len()]).max().unwrap_or(0);
     let under = " ".repeat(w + 4);
-    let kinds: [Text; 13] = [
+    let kinds: [Text; 12] = [
         tr!("数・お金・量（number、money、mass など）: 単位を付けない整数（money[JPY] の 1JPY は 1）", "number, money, mass and the other quantities: a whole number of its unit, with no unit (1 for 1JPY of money[JPY])"),
         tr!("率（rate）: 刻みの数の整数（rate[step 0.01%] の 5% は 500）", "rate: a whole number of its steps (500 for 5% of rate[step 0.01%])"),
         tr!("真偽値（bool）: true か false", "bool: true or false"),
@@ -71,7 +71,6 @@ fn run_flags() -> Vec<Flag> {
         tr!("辞書（dict）: 組 [鍵, 値] の配列（順は問わず、同じ鍵は一度だけ）", "dict: an array of its pairs [key, value], in any order, each key once"),
         tr!("T?: T の書き方か null", "T?: as T, or null"),
         tr!("result: {{\"ok\": 値}} か {{\"err\": 値}}", "result: {{\"ok\": value}} or {{\"err\": value}}"),
-        tr!("振替: \"book\"、\"transfer\"、\"op\"、\"args\" を持つオブジェクト", "a transfer: an object of \"book\", \"transfer\", \"op\" and \"args\""),
     ];
     let lines = |ja: bool| kinds.iter().map(|k| format!("\n{under}{}", if ja { &k.ja } else { &k.en })).collect::<String>();
     let help = tr!(
@@ -169,6 +168,7 @@ pub fn table() -> Table {
                 flags: vec![
                     flag("--function", Some("<name>"), tr!("この関数のベクタだけ（名前か別名）", "the vectors of this function only (its name or its alias)")),
                     flag("--trace", None, tr!("規則と日付の呼び出しとその答え、作った振替も書く（calls）", "write the calls of rules and dates with their answers, and the transfers built, too (calls)")),
+                    made_lang_flag("KANAME_LANG"),
                 ],
                 exits: vec![
                     (0, tr!("出した", "printed")),
@@ -196,6 +196,7 @@ pub fn table() -> Table {
                 flags: vec![
                     flag("--format", Some("markdown|html"), tr!("Markdown（既定）か、外から何も読まない一つの HTML のファイル", "Markdown (the default), or one HTML file that reads nothing from outside")).choices(&["markdown", "html"]),
                     page_root_flag(),
+                    made_lang_flag("KANAME_LANG"),
                 ],
                 exits: vec![
                     (0, tr!("書いた", "written")),
@@ -236,14 +237,14 @@ pub fn table() -> Table {
                 codes: vec![],
             },
             Cmd {
-                usage: Some("kaname explain <code> | --all [--format markdown|json] [--lang ja|en]"),
+                usage: Some("kaname explain <code>... | --all [--format markdown|json] [--lang ja|en]"),
                 name: "explain",
-                args: "<code>",
+                args: "<code>... | --all",
                 purpose: tr!(
                     "診断のコードを説明する。いつ出るか、直し方、それを出す一番小さな例",
-                    "explain a diagnostic code: when it is printed, how to fix it, and the smallest module that prints it"
+                    "explain diagnostic codes: when each is printed, how to fix it, and the smallest module that prints it"
                 ),
-                params: vec![("<code>", tr!("`E102` のようなコード", "a code such as `E102`"))],
+                params: vec![("<code>...", tr!("`E102` のようなコード。いくつでも渡せて、渡した順に説明する。`--all` とは一緒に渡さない", "codes such as `E102`, any number, explained in the order given; not given with `--all`"))],
                 flags: vec![
                     flag("--all", None, tr!("全部のコード", "every code")),
                     flag("--format", Some("markdown|json"), tr!("Markdown（docs/codes.md の形）か JSON", "Markdown (as docs/codes.md is) or JSON")).choices(&["markdown", "json"]),
@@ -266,9 +267,8 @@ pub fn table() -> Table {
 
 /// Say what is wrong with the command line, or with a file it cannot read: one line on `w`, exit 2.
 pub(crate) fn refuse(w: &mut dyn Write, msg: Text, lang: Lang) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    let _ = writeln!(w, "{head}: {}", msg.get(lang));
-    2
+    // in the words of every command of ritsu (ritsu's DESIGN 6.2, item 10)
+    ritsu_base::cli::refuse(w, &msg, lang)
 }
 
 /// `--lang ja`, `--lang=ja`, anywhere on the line: decided before anything is printed.
@@ -286,6 +286,12 @@ fn lang_word(args: &[String]) -> Option<String> {
 
 /// The command line, read against the table and run: the exit code.
 pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    // a line that asks for JSON is answered in JSON when the command stops before its work too: the
+    // last value on standard output is `{"error": …}` (ritsu's DESIGN 6.2, item 10)
+    ritsu_base::cli::answering(args, out, |out| command(args, suite, out, err))
+}
+
+fn command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let lang = Lang::pick(lang_word(args).as_deref(), "KANAME_LANG");
     let table = table();
     let Some(first) = args.first() else {
@@ -314,14 +320,14 @@ pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Wr
                         let _ = write!(out, "{}", table.help_cmd(c, lang));
                         0
                     }
-                    None => refuse(err, tr!("`{n}` というコマンドはありません。`kaname --help` を読んでください", "there is no command `{n}`; run `kaname --help`"), lang),
+                    None => refuse(err, ritsu_base::cli::no_command("kaname", n), lang),
                 },
             };
         }
         _ => {}
     }
     let Some(cmd) = table.command(first) else {
-        return refuse(err, tr!("`{first}` というコマンドはありません。`kaname --help` を読んでください", "there is no command `{first}`; run `kaname --help`"), lang);
+        return refuse(err, ritsu_base::cli::no_command("kaname", first), lang);
     };
     let a = match table.parse(cmd, &args[1..]) {
         Ok(a) => a,
@@ -335,11 +341,30 @@ pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Wr
     if let Err(t) = ritsu_base::modules::given_all(&a.pos) {
         return refuse(err, t, lang);
     }
+    // The function `run` is asked after its file and the code `explain` takes are no paths; every
+    // other positional argument is one.
+    let end = match cmd.name {
+        "explain" => 0,
+        "run" => a.pos.len().min(1),
+        _ => a.pos.len(),
+    };
+    // the paths the run holds are written the way the first path given was (ritsu's DESIGN 4.15),
+    // and so are the paths given: `./payout.kn` and `x/../payout.kn` are `payout.kn` (6.2 item 8)
+    let _way = ritsu_base::paths::run_from(a.pos.first().filter(|_| end > 0).map_or(".", String::as_str));
+    let mut a = a;
+    for p in a.pos.iter_mut().take(end) {
+        *p = ritsu_base::paths::show_given(p);
+    }
+    // and so is the file `--input` takes: `--input ./in.json` is `in.json`
+    a.fold_paths(&["--input"]);
     match cmd.name {
         "check" => check_cmd(&a, lang, suite, out, err),
         "run" => run_cmd(&a, lang, suite, out, err),
-        "vectors" => vectors_cmd(&a, lang, suite, out, err),
-        "doc" => doc_cmd(&a, lang, suite, out, err),
+        // what `vectors` and `doc` write for others to keep is in the language `--lang` alone gives,
+        // English without it, whatever the environment says (ritsu's DESIGN 4.1); what they print
+        // for the person running them stays in the language of the run
+        "vectors" => vectors_cmd(&a, lang, Lang::made(Lang::flag_of(args).as_deref()), suite, out, err),
+        "doc" => doc_cmd(&a, lang, Lang::made(Lang::flag_of(args).as_deref()), suite, out, err),
         "api" => api_cmd(&a, lang, suite, out, err),
         "explain" => explain_cmd(&a, lang, out, err),
         _ => unreachable!("every command in the table is dispatched"),
@@ -348,7 +373,7 @@ pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Wr
 
 fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.pos.is_empty() {
-        return refuse(err, tr!("`kaname check` には .kn のファイルが要ります", "`kaname check` needs .kn files"), lang);
+        return refuse(err, table().takes_of("check"), lang);
     }
     let root = match a.get("--root") {
         Some(r) if !ritsu_base::fs::is_dir(std::path::Path::new(r)) => return refuse(err, tr!("`--root {r}` はディレクトリではありません", "`--root {r}` is not a directory"), lang),
@@ -361,7 +386,7 @@ fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
         return refuse(err, crate::lean::LeanError::Missing.text(), lang);
     }
     let run = Run::new(suite.clone());
-    let mut checked: Vec<(&String, Result<std::rc::Rc<check::Outcome>, String>)> = a.pos.iter().map(|f| (f, run.file(f))).collect();
+    let mut checked: Vec<(&String, Result<std::rc::Rc<check::Outcome>, check::Unread>)> = a.pos.iter().map(|f| (f, run.file(f))).collect();
     if lean {
         let given: Vec<std::rc::Rc<check::Outcome>> = checked.iter().filter_map(|(_, o)| o.as_ref().ok().cloned()).collect();
         let answered = match check::with_lean(&given, &crate::lean::LeanOptions::default()) {
@@ -388,7 +413,7 @@ fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
             }
             Err(e) => {
                 worst = 2;
-                refuse(err, tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang);
+                refuse(err, ritsu_base::cli::cannot_read(f, &e), lang);
             }
         }
     }
@@ -399,6 +424,10 @@ fn explain_cmd(a: &Args, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -
     let format = a.get("--format");
     let ledger = crate::codes::ledger();
     if a.has("--all") {
+        // codes and `--all` are the two ways to call it, not one: what it takes
+        if !a.pos.is_empty() {
+            return refuse(err, table().takes_of("explain"), lang);
+        }
         match format {
             Some("markdown") => {
                 let _ = write!(out, "{}", ledger.render_markdown(lang));
@@ -417,27 +446,20 @@ fn explain_cmd(a: &Args, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -
         }
         return 0;
     }
-    let Some(code) = a.pos.first() else {
-        return refuse(err, tr!("`kaname explain` には `E102` のようなコードか `--all` が要ります", "`kaname explain` needs a code such as `E102`, or `--all`"), lang);
-    };
-    match ledger.find(code) {
-        Some(e) => {
-            match format {
-                Some("markdown") => {
-                    let _ = write!(out, "{}", ledger.render_markdown_one(e, lang));
-                }
-                Some("json") => {
-                    let _ = writeln!(out, "{}", ledger.to_json(e, lang).pretty());
-                }
-                _ => {
-                    let _ = write!(out, "{}", ledger.render_text(e, lang));
-                }
-            }
+    if a.pos.is_empty() {
+        return refuse(err, table().takes_of("explain"), lang);
+    }
+    match ledger.look_up(&a.pos) {
+        Ok(entries) => {
+            let shape = match format {
+                Some("markdown") => ritsu_base::ledger::Shape::Markdown,
+                Some("json") => ritsu_base::ledger::Shape::Json,
+                _ => ritsu_base::ledger::Shape::Text,
+            };
+            let _ = write!(out, "{}", ledger.explained(&entries, shape, lang));
             0
         }
-        None => {
-            refuse(err, tr!("`{code}` という診断のコードはありません。`kaname explain --all` で全部を見られます", "there is no diagnostic code `{code}`; `kaname explain --all` lists them all"), lang)
-        }
+        Err(unknown) => refuse(err, ritsu_base::cli::no_codes("kaname", &unknown), lang),
     }
 }
 
@@ -459,7 +481,7 @@ fn rooted(root: &std::path::Path, f: &str) -> String {
 fn passing(f: &str, what: Text, suite: &Suite, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -> Result<std::rc::Rc<check::Checked>, u8> {
     let o = match Run::new(suite.clone()).file(f) {
         Ok(o) => o,
-        Err(e) => return Err(refuse(err, tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang)),
+        Err(e) => return Err(refuse(err, ritsu_base::cli::cannot_read(f, &e), lang)),
     };
     if o.unjoined() {
         let _ = write!(out, "{}", check::render(&o, lang));
@@ -469,8 +491,7 @@ fn passing(f: &str, what: Text, suite: &Suite, lang: Lang, out: &mut dyn Write, 
         Some(c) if !o.has_errors() => Ok(c.clone()),
         _ => {
             let _ = write!(out, "{}", check::render(&o, lang));
-            let head = if lang == Lang::Ja { "エラー" } else { "error" };
-            let _ = writeln!(err, "{head}: {}", what.get(lang));
+            let _ = writeln!(err, "{}", ritsu_base::cli::refusal(what.get(lang), lang));
             Err(1)
         }
     }
@@ -499,10 +520,10 @@ fn place(root: &std::path::Path, here: &str, file: &str, line: usize, lang: Lang
 fn run_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     use crate::interp::{Event, Interp, Stop};
     let [f, word] = a.pos.as_slice() else {
-        return refuse(err, tr!("`kaname run` には .kn のファイルと関数の名前を渡してください", "`kaname run` takes a .kn file and the name of a function"), lang);
+        return refuse(err, table().takes_of("run"), lang);
     };
     let Some(input_at) = a.get("--input") else {
-        return refuse(err, tr!("`kaname run` には `--input <file.json|->` が要ります", "`kaname run` needs `--input <file.json|->`"), lang);
+        return refuse(err, table().needs_of("run", "--input <file.json|->"), lang);
     };
     let root = match root(a, f, lang, err) {
         Ok(r) => r,
@@ -535,12 +556,12 @@ fn run_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
         let mut s = String::new();
         match std::io::Read::read_to_string(&mut std::io::stdin(), &mut s) {
             Ok(_) => s,
-            Err(e) => return refuse(err, tr!("標準入力を読めません: {e}", "cannot read standard input: {e}"), lang),
+            Err(e) => return refuse(err, ritsu_base::cli::cannot_read_stdin(&e), lang),
         }
     } else {
         match ritsu_base::fs::read_to_string(input_at) {
             Ok(s) => s,
-            Err(e) => return refuse(err, tr!("`{input_at}` を読めません: {e}", "cannot read `{input_at}`: {e}"), lang),
+            Err(e) => return refuse(err, ritsu_base::cli::cannot_read(input_at, &e), lang),
         }
     };
     // the input is read as deep as the arguments' JSON can nest, their values of types that hold
@@ -589,16 +610,20 @@ fn run_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
         }
         match &outcome {
             Ok(v) => fields.push(("result".into(), p.to_json(v, &info.ret.ty))),
-            Err(Stop::Failed(fl)) => fields.push((
-                "failure".into(),
-                ritsu_base::json::Json::obj([
+            Err(Stop::Failed(fl)) => {
+                let mut failure = vec![
                     ("kind", ritsu_base::json::Json::str(fl.kind.word())),
                     ("file", ritsu_base::json::Json::str(rooted(&root, &fl.file))),
                     ("module", ritsu_base::json::Json::str(fl.module.clone())),
                     ("line", ritsu_base::json::Json::int(fl.line as i128)),
                     ("message", ritsu_base::json::Json::str(ritsu_base::text::spaced(&fl.message, lang))),
-                ]),
-            )),
+                ];
+                // the place of what is not taken, for the kind `input` (DESIGN 4.2)
+                if let Some(p) = &fl.path {
+                    failure.push(("path", ritsu_base::json::Json::str(p.clone())));
+                }
+                fields.push(("failure".into(), ritsu_base::json::Json::obj(failure)));
+            }
             Err(Stop::Diverged(d)) => fields.push((
                 "diverged".into(),
                 ritsu_base::json::Json::obj([("function", ritsu_base::json::Json::str(d.function.clone())), ("module", ritsu_base::json::Json::str(d.module.clone())), ("line", ritsu_base::json::Json::int(d.line as i128)), ("depth", ritsu_base::json::Json::int(d.depth as i128))]),
@@ -648,9 +673,9 @@ fn run_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     if diverged { 1 } else { 0 }
 }
 
-fn vectors_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+fn vectors_cmd(a: &Args, lang: Lang, made: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let [f] = a.pos.as_slice() else {
-        return refuse(err, tr!("`kaname vectors` には .kn のファイルを一つ渡してください", "`kaname vectors` takes one .kn file"), lang);
+        return refuse(err, table().takes_of("vectors"), lang);
     };
     let c = match passing(f, tr!("`{f}` は検査を通らないので、ベクタを出しません", "`{f}` does not pass check, so it has no vectors"), suite, lang, out, err) {
         Ok(c) => c,
@@ -677,7 +702,7 @@ fn vectors_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &m
         }
         let (vs, cut) = crate::vectors::choose(&p, &c, fi);
         for v in &vs {
-            let _ = writeln!(out, "{}", crate::vectors::line(&p, suite, &c, fi, v, a.has("--trace"), lang).compact());
+            let _ = writeln!(out, "{}", crate::vectors::line(&p, suite, &c, fi, v, a.has("--trace"), made).compact());
         }
         if cut {
             let (fun, most) = (&c.decls.fns[fi].name.text, crate::vectors::MOST);
@@ -693,7 +718,7 @@ fn vectors_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &m
 /// pass, whatever else its check finds.
 fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let [f] = a.pos.as_slice() else {
-        return refuse(err, tr!("`kaname api` には .kn のファイルを一つ渡してください", "`kaname api` takes one .kn file"), lang);
+        return refuse(err, table().takes_of("api"), lang);
     };
     let root = match root(a, f, lang, err) {
         Ok(r) => r,
@@ -701,7 +726,7 @@ fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     };
     let o = match Run::new(suite.clone()).file(f) {
         Ok(o) => o,
-        Err(e) => return refuse(err, tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang),
+        Err(e) => return refuse(err, ritsu_base::cli::cannot_read(f, &e), lang),
     };
     if o.unjoined() {
         let _ = write!(out, "{}", check::render(&o, lang));
@@ -714,9 +739,8 @@ fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
         }
         None => {
             let _ = write!(out, "{}", check::render(&o, lang));
-            let head = if lang == Lang::Ja { "エラー" } else { "error" };
             let msg = tr!("`{f}` の名前か型が検査を通らないので、api を出しません", "the names or the types of `{f}` do not pass check, so it has no api");
-            let _ = writeln!(err, "{head}: {}", msg.get(lang));
+            let _ = writeln!(err, "{}", ritsu_base::cli::refusal(msg.get(lang), lang));
             1
         }
     }
@@ -724,9 +748,9 @@ fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
 
 /// `doc`: the page for people (DESIGN 13), for a module whose names and types pass, whatever else
 /// its check finds: the page shows where its functions can fail.
-fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+fn doc_cmd(a: &Args, lang: Lang, made: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let [f] = a.pos.as_slice() else {
-        return refuse(err, tr!("`kaname doc` には .kn のファイルを一つ渡してください", "`kaname doc` takes one .kn file"), lang);
+        return refuse(err, table().takes_of("doc"), lang);
     };
     let root = match root(a, f, lang, err) {
         Ok(r) => r,
@@ -735,22 +759,21 @@ fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     let format = if a.get("--format") == Some("html") { crate::doc::Format::Html } else { crate::doc::Format::Markdown };
     let o = match Run::new(suite.clone()).file(f) {
         Ok(o) => o,
-        Err(e) => return refuse(err, tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang),
+        Err(e) => return refuse(err, ritsu_base::cli::cannot_read(f, &e), lang),
     };
     if o.unjoined() {
         let _ = write!(out, "{}", check::render(&o, lang));
         return 2;
     }
-    match crate::doc::page(&o, suite, &root, lang, format) {
+    match crate::doc::page(&o, suite, &root, made, format) {
         Some(p) => {
             let _ = write!(out, "{}", crate::doc::write(&p, format));
             0
         }
         None => {
             let _ = write!(out, "{}", check::render(&o, lang));
-            let head = if lang == Lang::Ja { "エラー" } else { "error" };
             let msg = tr!("`{f}` の名前か型が検査を通らないので、ページを書きません", "the names or the types of `{f}` do not pass check, so it has no page");
-            let _ = writeln!(err, "{head}: {}", msg.get(lang));
+            let _ = writeln!(err, "{}", ritsu_base::cli::refusal(msg.get(lang), lang));
             1
         }
     }

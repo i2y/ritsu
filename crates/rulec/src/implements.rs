@@ -348,7 +348,7 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
                     .note(tr!(
                         "パスは規則ファイルのある場所からたどります（探した先: {}）。",
                         "The path is followed from the directory of the rule file (looked for: {}).",
-                        disk.display()
+                        ritsu_base::paths::show(&disk)
                     ))
                     .maybe_note(crate::vfs::outside_note(d.dir(rule_path), &d.file)),
             ];
@@ -414,9 +414,9 @@ impl<'a> Hold<'a> {
     fn read_enums(&mut self) {
         for im in self.f.enum_imports.iter().filter(|im| im.kind == EnumSource::Proto) {
             let id = im.file_path(self.rule_path).ok().and_then(|p| {
-                let pf = ritsu_proto::read(&im.file, &ritsu_base::fs::read_to_string(&p).ok()?).ok()?;
-                let e = pf.enums.iter().find(|e| e.name.rsplit('.').next() == Some(im.source.as_str()))?;
-                Some((file_key(&p), pf.full(&e.name)))
+                let pf = crate::proto::read(&im.file, &ritsu_base::fs::read_to_string(&p).ok()?).ok()?;
+                let e = pf.enum_named(&im.source).ok()?;
+                Some((file_key(&p), pf.package.as_ref().map_or_else(|| e.path.clone(), |pkg| format!("{pkg}.{}", e.path))))
             });
             self.enums.insert(im.target.text.clone(), id);
         }

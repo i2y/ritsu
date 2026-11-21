@@ -5,7 +5,7 @@
 //! worked (koyomi's and chobo's `cli.rs` work the same way).
 //! The table is sakai's; how it is drawn and read is ritsu-base's ([`ritsu_base::cli`]).
 
-use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
+use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag, made_lang_flag};
 
 pub use ritsu_base::cli::Args;
 
@@ -66,7 +66,8 @@ pub fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--target", Some("<tool>"), tr!("書く設定のツール", "a tool whose settings to write"))
                     .choices(&["import-linter", "dependency-cruiser", "archunit", "go-arch-lint"])
-                    .once_each(),
+                    .once_each()
+                    .needed(),
                 flag(
                     "--out",
                     Some("<dir>"),
@@ -77,6 +78,7 @@ pub fn commands() -> Vec<Cmd> {
                 ),
                 flag("--check", None, tr!("書く代わりに、いまの設定が地図から書くものと同じかを確かめる（違えば E502）", "rather than write, check that the settings there are what the map writes (else E502)")),
                 root_flag(),
+                made_lang_flag("SAKAI_LANG"),
             ],
             exits: vec![
                 (0, tr!("書いた（--check なら、同じだった）", "written (with --check: up to date)")),
@@ -99,7 +101,7 @@ pub fn commands() -> Vec<Cmd> {
                 ("cml", tr!("書き出す形（いまは cml だけ）", "the form to write (cml, for now)")),
                 ("<map.ctx>", tr!("検査を通る map のファイル", "a map file that passes check")),
             ],
-            flags: vec![flag("--out", Some("<file>"), tr!("書くファイル。無ければ標準出力", "the file to write; else standard output")), root_flag()],
+            flags: vec![flag("--out", Some("<file>"), tr!("書くファイル。無ければ標準出力", "the file to write; else standard output")), root_flag(), made_lang_flag("SAKAI_LANG")],
             exits: vec![
                 (0, tr!("書いた", "written")),
                 (1, tr!("地図にエラーがある（診断は標準エラーに出す）", "the map has errors (the diagnostics go to standard error)")),
@@ -128,6 +130,7 @@ pub fn commands() -> Vec<Cmd> {
                     ),
                 ),
                 root_flag(),
+                made_lang_flag("SAKAI_LANG"),
             ],
             exits: vec![
                 (0, tr!("書いた", "written")),
@@ -176,14 +179,14 @@ pub fn commands() -> Vec<Cmd> {
         Cmd {
             usage: None,
             name: "explain",
-            args: "<CODE>",
-            purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look a diagnostic code up: when it comes, how to fix it, the smallest reproduction"),
-            params: vec![("<CODE>", tr!("`E201` のような診断のコード。`--all` なら要らない", "a diagnostic code such as `E201`; not needed with `--all`"))],
+            args: "<CODE>... | --all",
+            purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look diagnostic codes up: when each comes, how to fix it, the smallest reproduction"),
+            params: vec![("<CODE>...", tr!("`E201` のような診断のコード。いくつでも渡せて、渡した順に出す。`--all` とは一緒に渡さない", "diagnostic codes such as `E201`, any number, printed in the order given; not given with `--all`"))],
             flags: vec![
                 flag("--all", None, tr!("全部のコードを出す", "print every code")),
-                flag("--format", Some("markdown"), tr!("Markdown で出す（docs/codes.md の元）", "print Markdown (what docs/codes.md is made from)")).choices(&["markdown"]),
+                flag("--format", Some("markdown|json"), tr!("Markdown（docs/codes.md の元）か JSON で出す", "print Markdown (what docs/codes.md is made from) or JSON")).choices(&["markdown", "json"]),
             ],
-            exits: vec![(0, tr!("引けた", "found")), (2, tr!("そのコードが無い、または引数の誤り", "no such code, or bad arguments"))],
+            exits: vec![(0, tr!("引けた", "found")), (2, tr!("無いコードがある、または引数の誤り", "a code it does not have, or bad arguments"))],
             examples: vec!["sakai explain E401", "sakai explain --all --format markdown --lang ja"],
             codes: vec![],
         },
@@ -204,8 +207,8 @@ pub fn table() -> Table {
         commands: commands(),
         footer: vec![
             tr!(
-                "どのコマンドにも --lang ja|en を付けられます（既定は en。環境変数 SAKAI_LANG か RITSU_LANG でも指定できます）。",
-                "Every command takes --lang ja|en (default en; the SAKAI_LANG or RITSU_LANG environment variable works too)."
+                "どのコマンドにも --lang ja|en を付けられます（既定は en。環境変数 SAKAI_LANG か RITSU_LANG は出す文の言語を決め、gen、export、doc が書く物は --lang だけで決まります）。",
+                "Every command takes --lang ja|en (default en; the SAKAI_LANG or RITSU_LANG environment variable sets the language of the text printed, and what gen, export and doc write follows --lang alone)."
             ),
             tr!(
                 "exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル、つながっていない言語の成果物（E104）",

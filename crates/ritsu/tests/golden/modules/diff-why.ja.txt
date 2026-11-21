@@ -13,16 +13,16 @@ require：変わりません
 振る舞い：
   fine.rule (rulec)：答えが変わります
     規則 fine v1 → v1
-      出力の範囲が変わった: most  100..100 → 200..200
+      出力の範囲が変わった: most  100USD..100USD → 200USD..200USD
     入力の組み合わせ 2 通り。うち起きうるのは 2 通りで、同じ 0 / 違う 2 / 決められず 0 / 入力を作れず 0
 
       violation = serious
-        most: 100 → 200
+        most: 100USD → 200USD
         当たる行: 表 amounts 行1
         例: violation=serious
 
       violation = other
-        most: 100 → 200
+        most: 100USD → 200USD
         当たる行: 表 amounts 行2
         例: violation=other
 

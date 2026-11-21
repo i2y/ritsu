@@ -1,0 +1,17 @@
+rule number_define v1
+description "A fee a `define` works out with a rate and a rounding, read with the amount: up to 30,000 yen the fee is at most 900 yen, and past it at least 900 yen"
+
+enum route = desk | finance
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)
+
+outputs
+  who : route
+
+table pick
+| amount      | fee      | -> who  |
+| <=30_000JPY | <=900JPY | desk    |
+| >30_000JPY  | >=900JPY | finance |

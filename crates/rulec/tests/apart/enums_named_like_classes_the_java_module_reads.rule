@@ -1,0 +1,28 @@
+rule parcel_fee v1
+description "Enums named like classes of the JDK the Java module reads, each a type inside the rule's class (the first takes the name by its alias, which the rule's language keeps for its strings)"
+
+enum cord_kind(string) = plain | braided
+enum long = short_haul | long_haul
+enum math = flat | stepped
+enum integer = whole | split
+
+inputs
+  cord     : cord_kind
+  distance : long
+  pricing  : math
+  packing  : integer
+  weight   : number  range >=0 <=100
+
+outputs
+  fee  : money[USD]  round down(1USD)
+  band : math
+
+table fee_by_parcel
+policy unique
+| cord    | distance   | pricing | packing | weight | -> fee | band    |
+| plain   | short_haul | flat    | -       | -      | 3USD   | flat    |
+| plain   | short_haul | stepped | whole   | <=50   | 4USD   | stepped |
+| plain   | short_haul | stepped | whole   | >50    | 6USD   | stepped |
+| plain   | short_haul | stepped | split   | -      | 7USD   | stepped |
+| plain   | long_haul  | -       | -       | -      | 9USD   | flat    |
+| braided | -          | -       | -       | -      | 12USD  | stepped |

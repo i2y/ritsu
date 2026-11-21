@@ -1,0 +1,36 @@
+error[E012]: There is no type `tierr`
+  --> chain_types.rule:11
+   |
+11 |   member(member) : tierr
+   |                    ^^^^^
+   |
+ Did you mean `tier`?
+ A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. The enums of this file are `kind`, `tier`.
+
+error[E103]: `UDS` is not a unit of money
+  --> chain_types.rule:13
+   |
+13 |   list_price(list_price) : money[UDS]  range >=0USD <=1000USD
+   |                            ^^^^^^^^^^
+   |
+ The units of money are 円 (yen, the same as JPY) 銭 (a hundredth of 円), or one of the ISO 4217 codes USD EUR GBP CHF CAD AUD NZD CNY HKD SGD KRW INR TWD THB SEK NOK DKK PLN CZK HUF TRY BRL MXN ZAR AED SAR ILS PHP IDR MYR VND (its hundredth is the code plus c: USD and USDc).
+
+error[E012]: Column `item_kind` is not a declared name
+  --> chain_types.rule:20 table markup_of
+   |
+20 | | item_kind | -> markup : rate[step 1%] |
+   |   ^^^^^^^^^
+   |
+ Did you mean `item_knd` (line 9)?
+ A column can only be an input, a derived value, or a boolean/enum intermediate value.
+ `item_kind` is written on line 35 too.
+
+warning[W111]: Input item_knd is not used by any table
+  --> chain_types.rule:9
+  |
+9 |   item_knd(item_knd) : kind
+  |   ^^^^^^^^ appears in no column
+  |
+ A column that should use it may have been left out.
+ If it is meant only as an entry check on its range, add `contract_only` to the declaration (W111).
+

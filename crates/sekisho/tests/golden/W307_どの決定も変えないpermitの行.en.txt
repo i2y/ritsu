@@ -1,0 +1,6 @@
+warning[W307]: tests/mutants/W307_どの決定も変えないpermitの行.gate:22:1: The line `when resource.公開` of the permit `サービスは索引を作れる` changes no decision: a forbid denies every combination it leaves out
+    22 |   when resource.公開
+  = Without it, the permit would also apply to the 1 combination only this line is not met on, which `サービスは非公開の文書に触れない` denies.
+  = For example: サービス, 文書 (公開: no); denied by `サービスは非公開の文書に触れない`.
+  = Taking it out changes no answer: remove it, or correct it if it is meant to leave out something else.
+tests/mutants/W307_どの決定も変えないpermitの行.gate: ok — 1 action, 2 policies (1 permit, 1 forbid), 0 expectations, 0 separations

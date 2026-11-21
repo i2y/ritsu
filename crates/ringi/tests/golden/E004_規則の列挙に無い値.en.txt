@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_規則の列挙に無い値.ringi:11:30: `ceo` is not one of the values to choose from
+    11 |   監査(audit)  財務  when 決裁者 is ceo
+  = The values declared: `manager` and `cfo`

@@ -1,0 +1,36 @@
+rule account_route v1
+description "What ringi writes from the route of account.ringi: one optional output for each stage, whose value is the approver the stage names; a blank cell is none, the stage is not there"
+
+import enum level from "choices.rule"
+enum manager_by = manager_approver "manager"
+enum owner_by = system_owner "system_owner"
+enum security_by = security_approver "security"
+enum operations_by = circulate_to_operations "circulate to operations"
+
+inputs
+  level : level
+
+outputs
+  manager    : manager_by
+  owner      : owner_by
+  security   : security_by?
+  operations : operations_by
+
+table manager
+| -> manager       |
+| manager_approver |
+
+table owner
+| -> owner     |
+| system_owner |
+
+table security
+| level      | -> security       |
+| not: admin | none              |
+| admin      | security_approver |
+
+table operations
+| -> operations           |
+| circulate_to_operations |
+
+possible security = security_approver

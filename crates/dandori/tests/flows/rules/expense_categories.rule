@@ -1,0 +1,4 @@
+enums expense_categories v1
+description "The categories of an expense claim, read by shared_enums.flow and by the two rules it calls, each with import enum"
+
+enum category = travel | purchase | training

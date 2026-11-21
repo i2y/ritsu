@@ -1,0 +1,37 @@
+module shop v1
+description "Declarations whose names are written wrong, and the lines that use them: each name is said once, where it is first written, and what follows from it is not said again"
+
+# a field named wrong where it is declared: the sum and the examples still write `qty`, and the
+# records the examples build are not said to leave a field out
+record Line
+  sku : string
+  qy : number  range >=1 <=20
+
+# a value named wrong where it is declared: the `match` and the example still write `gold`, and
+# the `match` is not said to leave `gld` out
+enum Tier = plain | gld
+
+# the record named wrong where it is declared: every type that writes `Order` is said once
+record Ordr
+  lines : list[Line]  count <=10
+  tier : Tier
+
+fn discount(t: Tier) -> number
+  match t
+    plain => 0
+    gold => 5
+
+fn count_of(lines: list[Line] count <=10) -> number
+  sum(lines, l => l.qty)
+
+fn bill(o: Order, price: money[USDc] range >=1USDc <=1000USDc) -> money[USDc]
+  let gross = price * count_of(lines: o.lines)
+  gross - down(gross * discount(t: o.tier) / 100, 1USDc)
+
+fn lines_of(o: Order) -> number
+  count_of(lines: o.lines)
+
+examples
+  discount(t: Tier.gold) = 5
+  count_of(lines: [Line { sku: "a", qty: 2 }]) = 2
+  count_of(lines: [Line { sku: "a", qty: 2 }, Line { sku: "b", qty: 3 }]) = 5

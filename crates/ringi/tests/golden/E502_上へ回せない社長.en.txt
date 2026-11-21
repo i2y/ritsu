@@ -1,0 +1,6 @@
+error[E502]: tests/mutants/E502_上へ回せない社長.ringi:9:15: In the organization from 2026-04-01, the stage `確かめ` has no approver
+     9 |   確かめ(check)  上長
+  = `上長` finds no head above the requester.
+  = For 1 requester: e01 (President (fictional)).
+  = The stage is `when empty escalate`, and nobody is above (the top of the organization): a ticket that comes to it waits there until an administrator adds an approver.
+  = If the stage may be skipped for them, write `when empty escalate, then skip`; if someone must see their requests, write after `then` the way to choose who answers them (`when empty escalate, then board`, with `board = team board` in `who`).

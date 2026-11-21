@@ -1,0 +1,20 @@
+rule Kind v1
+description "Whether an order is large, by its kind read from the choices, the rule named like the kind in another case (fictional)"
+
+import enum kind from "shapes.rule"
+
+inputs
+  what : kind
+
+outputs
+  large : bool
+
+table large
+| what  | -> large |
+| goods | false    |
+| capex | true     |
+
+examples
+| what  | -> large |
+| goods | false    |
+| capex | true     |

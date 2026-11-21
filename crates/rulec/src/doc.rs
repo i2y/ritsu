@@ -220,34 +220,36 @@ pub(crate) fn range_text(c: &Checked, name: &str) -> String {
     // An output's range is the one its answer is read in, which can be narrower than the one the
     // rule reads its name in (§15.303).
     let Some((lo, hi)) = c.answer_ranges.get(name).or_else(|| c.ranges.get(name)) else { return String::new() };
-    // An optional input's range is the range of its values when it has one (§15.201).
-    let ty = c.ty_of(name).map(|t| t.present().clone());
-    let unit = match ty.clone() {
-        Some(Ty::Qty { unit, .. }) => unit,
-        Some(Ty::Money { cur, .. }) => cur,
-        _ => String::new(),
-    };
-    // What the source wrote as `100万円` must not be shown as `1000000円` (§1.6; the same
-    // write-back as §2.1).
-    let is_date = matches!(ty, Some(Ty::Date));
-    let is_rate = matches!(ty, Some(Ty::Rate));
+    bounds_text(c, name, lo, hi)
+}
+
+/// The range the rule accepts for a `define` (§15.313), shown as the ranges of the inputs are: its
+/// ends brought onto the value's step, the ends the value is compared with where it is worked out.
+/// Nothing for a `define` with no range.
+fn accepted_text(c: &Checked, name: &str) -> Option<String> {
+    let (lo, hi) = c.accepts.get(name)?;
+    Some(bounds_text(c, name, lo, hi))
+}
+
+/// The two ends of a range of the value `name`, in its unit: [`range_text`] and [`accepted_text`].
+fn bounds_text(c: &Checked, name: &str, lo: &Option<crate::num::Rat>, hi: &Option<crate::num::Rat>) -> String {
     let s = |b: &Option<crate::num::Rat>| match b {
-        // A date is held as its day number (§2.1); the reader reads the calendar date the
-        // rule wrote, not `16161 〜 22279` (§15.71).
-        Some(v) if is_date => {
-            let (y, m, d) = crate::types::ord_to_date(*v);
-            format!("{y:04}-{m:02}-{d:02}")
-        }
-        // A rate is held as the fraction it is; the reader reads it in percent, as the rule
-        // writes it: `0% to 100%`, not `0 to 1` (§15.241).
-        Some(v) if is_rate => crate::eval::Val::Num(*v).show(&Ty::Rate),
-        Some(v) => format!("{}{unit}", crate::types::fmt_big_pub(*v)),
+        Some(v) => end_text(c, name, *v),
         None => "…".into(),
     };
     match (lo, hi) {
         (None, None) => String::new(),
         _ => tr!("{} 〜 {}", "{} to {}", s(lo), s(hi)),
     }
+}
+
+/// One end of a range of the value `name`, in its unit, as the rule writes a value of its type
+/// (`types::fmt_val`): a date as the calendar date the rule wrote, not `16161 〜 22279` (a date is
+/// held as its day number, §15.71); a rate in percent, `0% to 100%` and not `0 to 1` (§15.241);
+/// an amount with its digits grouped as the languages group them, `1_000_000円` (§15.333).
+fn end_text(c: &Checked, name: &str, v: crate::num::Rat) -> String {
+    // An optional input's range is the range of its values when it has one (§15.201).
+    crate::types::fmt_val(v, &c.ty_of(name).unwrap_or(Ty::Unknown))
 }
 
 /// Where a column comes from. Lets the reader trace "who decided this value".
@@ -862,6 +864,16 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
             ));
         } else {
             o.push_str(&tr!("表の列に置けます。\n\n", "Each can be a table column.\n\n"));
+        }
+        // A range that starts above zero refuses the walks that come in under it (§15.314): the
+        // reader of the tables below is told, since no row answers them.
+        let floored: Vec<String> = counts.iter().filter(|d| c.walk_floor(d).is_some()).map(|d| d.name.text.clone()).collect();
+        if !floored.is_empty() {
+            let names = floored.join(if crate::i18n::ja() { "、" } else { ", " });
+            o.push_str(&tr!(
+                "並びをたどり終えたときに範囲の下限より小さい呼び出しは受け付けません（{names}）。要素が一件も無い並びでは、合計も数も 0 です。\n\n",
+                "A call that ends its walk under the bottom of the range is refused ({names}). With no elements, a sum and a count both come to 0.\n\n"
+            ));
         }
         o.push_str(&tr!(
             "| 名前 | 何を求めるか | 範囲 | 注記 |\n|---|---|---|---|\n",
@@ -2134,11 +2146,15 @@ fn defs_section(f: &RuleFile, c: &Checked, lines: &[&str], skip: &dyn Fn(&str) -
         }
         for d in &defines {
             let e = expr_src(&lines, d.name.span.line);
+            // The range the rule accepts for it (§15.313), named so: not what the value can come
+            // to, as a derived value's range is, but what a call may work it out to.
+            let range = accepted_text(c, &d.name.text).map(|r| tr!("受け付ける範囲 {r}", "accepted {r}")).unwrap_or_default();
             o.push_str(&tr!(
-                "| {} | 定義 | {} |  | {} |\n",
-                "| {} | Definition | {} |  | {} |\n",
+                "| {} | 定義 | {} | {} | {} |\n",
+                "| {} | Definition | {} | {} | {} |\n",
                 md_esc(&d.name.text),
                 expr_cell(&e, &d.expr),
+                md_esc(&range),
                 md_esc(&with_checked(note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)), &arith_facts(c, &d.expr)))
             ));
         }
@@ -2146,6 +2162,12 @@ fn defs_section(f: &RuleFile, c: &Checked, lines: &[&str], skip: &dyn Fn(&str) -
             o.push_str(&tr!(
                 "\n導出の宣言範囲が、入力範囲から実際に到達しうる値をすべて含んでいることは `rulec check` が確かめました（E112）。\n",
                 "\nThat the declared range of every derived value contains all the values actually reachable from the input ranges was verified by `rulec check` (E112).\n"
+            ));
+        }
+        if defines.iter().any(|d| c.accepts.contains_key(&d.name.text)) {
+            o.push_str(&tr!(
+                "\n定義の範囲は、計算した値を**受け付ける範囲**です。導出の範囲（値が取りうる範囲で、`rulec check` が確かめます）とは意味が違います。計算した値がこの範囲の外になる呼び出しは、生成コードがその値を計算した所で受け付けず、入力の誤りとして返します。表と式は、この範囲の中の値だけを読みます。\n",
+                "\nThe range of a definition is the range **its value is accepted in**. It is not what the value can come to, as a derived value's range is (which `rulec check` verifies): a call whose worked-out value falls outside it is refused by the generated code where the value is worked out, as an error in the input. The tables and the expressions read only the values inside it.\n"
             ));
         }
     }
@@ -2260,7 +2282,7 @@ fn apply_section(f: &RuleFile, c: &Checked, a: &ApplyDecl, lines: &[&str], path:
     if let Some(cm) = trailing_comment(lines, a.span.line) {
         o.push_str(&format!("{}\n\n", md_esc(&cm)));
     }
-    let callee = crate::prepare(&a.callee_src, &a.callee_path).ok();
+    let callee = crate::prepare(&a.callee_src, &crate::apply::checked_as(&a.callee_path)).ok();
     match &callee {
         Some((cf, _)) => {
             o.push_str(&tr!(
@@ -2772,7 +2794,13 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
             o.push_str(&format!("- **{}** = `{}`{}\n", md_esc(&d.name.text), md_esc(&expr_src(&lines, d.name.span.line)), customer_reading(&d.expr)));
         }
         for d in &defines {
-            o.push_str(&format!("- **{}** = `{}`{}\n", md_esc(&d.name.text), md_esc(&expr_src(&lines, d.name.span.line)), customer_reading(&d.expr)));
+            o.push_str(&format!(
+                "- **{}** = `{}`{}{}\n",
+                md_esc(&d.name.text),
+                md_esc(&expr_src(&lines, d.name.span.line)),
+                customer_reading(&d.expr),
+                customer_accepted(c, &d.name.text)
+            ));
         }
     }
 
@@ -2854,7 +2882,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
                         "\n\n状態のほかに {} を持ち越し、始まりは {} です。",
                         "\n\nBesides its state it carries {}, starting at {}.",
                         a.more.iter().map(|it| it.input.clone()).collect::<Vec<_>>().join(&tr!("・", ", ")),
-                        a.more.iter().map(|it| format!("{} = {}", it.input, it.initial.show(&it.ty))).collect::<Vec<_>>().join(&tr!("、", ", "))
+                        a.more.iter().map(|it| format!("{} = {}", it.input, words::number(&it.initial.show(&it.ty)))).collect::<Vec<_>>().join(&tr!("、", ", "))
                     )
                 }
             ));
@@ -3053,7 +3081,7 @@ fn customer_apply(a: &ApplyDecl, lines: &[&str]) -> String {
     if let Some(cm) = trailing_comment(lines, a.span.line) {
         o.push_str(&format!("{}\n\n", md_esc(&cm)));
     }
-    let callee = crate::prepare(&a.callee_src, &a.callee_path).ok();
+    let callee = crate::prepare(&a.callee_src, &crate::apply::checked_as(&a.callee_path)).ok();
     if let Some((cf, _)) = &callee {
         o.push_str(&tr!("「{}」の決まりを、次のように読み替えて使います。\n\n", "The rule \"{}\" is used, read as follows.\n\n", cf.name.text));
     }
@@ -3350,6 +3378,26 @@ fn customer_reading(e: &Expr) -> String {
     }
 }
 
+/// The range the rule accepts for a `define` (§15.313), for the customer: a case is taken only
+/// where the value worked out lies in it. Nothing for a `define` with no range.
+fn customer_accepted(c: &Checked, name: &str) -> String {
+    let Some((lo, hi)) = c.accepts.get(name) else { return String::new() };
+    // As the customer page writes the range of an input ([`customer_input`]).
+    let end = |v: crate::num::Rat| -> String {
+        match c.ty_of(name).map(|t| t.present().clone()) {
+            Some(Ty::Qty { unit, .. }) => qty_words(v, &unit),
+            _ => words::number(&end_text(c, name, v)),
+        }
+    };
+    let words = match (lo, hi) {
+        (Some(l), Some(h)) => tr!("{} 〜 {} の場合だけ受け付けます", "accepted only from {} to {}", end(*l), end(*h)),
+        (Some(l), None) => tr!("{} 以上の場合だけ受け付けます", "accepted only from {} up", end(*l)),
+        (None, Some(h)) => tr!("{} 以下の場合だけ受け付けます", "accepted only up to {}", end(*h)),
+        (None, None) => return String::new(),
+    };
+    tr!("。{}。", ". It is {}.", md_esc(&words))
+}
+
 /// What an input can be, for the customer: the values of a small enum, the name of a large
 /// one, the range of a quantity with its unit, yes/no for a flag.
 fn customer_input(c: &Checked, name: &str) -> String {
@@ -3487,6 +3535,9 @@ fn customer_val(c: &Checked, name: &str, v: &crate::eval::Val) -> String {
             words::number(&qty_words(*r, unit))
         }
         (Val::Enum(w), Some(Ty::Opt(_))) if w == crate::kw::NONE => tr!("無し", "none"),
+        // Any other number — a count, a rate — in the same digits: `show_named` groups by `_` as a
+        // rule is written (§15.333), and the page groups by `,`.
+        (Val::Num(_), _) => words::number(&crate::vectors::show_named(c, name, v)),
         _ => crate::vectors::show_named(c, name, v),
     }
 }
@@ -4028,11 +4079,24 @@ function fromWire(inp, el, v) {
       el.value = v;
   }
 }
+// A number as the rule writes it, its digits grouped by `_` from five (§15.333), as the page says
+// the ends of its ranges. The fields are typed into, so they keep the plain digits.
+function grouped(t) {
+  const m = /^(-?)([0-9]+)(\.[0-9]+)?$/.exec(t);
+  if (!m || m[2].length < 5) return t;
+  let w = "";
+  for (let i = 0; i < m[2].length; i++) {
+    if (i > 0 && (m[2].length - i) % 3 === 0) w += "_";
+    w += m[2][i];
+  }
+  return m[1] + w + (m[3] || "");
+}
 function shown(o, v) {
   if (v === null) return "none";
-  if (o.kind === "rate") return String((Number(v) * 100) / o.scale) + "%";
+  if (o.kind === "rate") return grouped(String((Number(v) * 100) / o.scale)) + "%";
   if (o.kind === "bool") return v ? "true" : "false";
   if (o.kind === "date") return dateOf(v);
+  if (o.kind === "number") return grouped(String(v)) + (o.unit ? o.unit : "");
   return String(v) + (o.unit ? o.unit : "");
 }
 // The last answer, kept because the board is built after the first run: a page opened on

@@ -1,0 +1,15 @@
+request 例(example) v1 "例"
+
+form
+  種類(kind) : choice "種類"
+    none      "無し"
+    有給(paid) "有給"
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

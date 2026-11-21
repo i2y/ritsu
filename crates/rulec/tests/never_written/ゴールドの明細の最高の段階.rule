@@ -1,0 +1,18 @@
+rule ゴールドの明細の最高の段階(gold_lines_top) v1
+description "ゴールドの明細の最も高い段階、無ければ一般。それを読む準用の 2 行目はシルバーをとるが、この段階はシルバーにならない（架空）"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+# 注文の明細の一行
+elements 明細(lines)
+  段階(tier) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+# ゴールドの明細だけを見るので、最も高いのはゴールド、無ければ一般
+max 最高(top) over 明細 of 段階 where 段階 = ゴールド empty 一般
+
+apply 引き上げ(lifted) = "一般から読む値引き.rule" meaning:32fe498486d05d88
+  段階 = 最高
+  値引き -> 値引き

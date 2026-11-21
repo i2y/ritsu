@@ -1,0 +1,25 @@
+rule 注文の確認(order_review_ja) v1
+description "注文の等級と、確認に回すかどうか。どの出力も表が決め、等級を読む表は、等級を決める表より下にある。このディレクトリのほかの規則は、これを崩した形"
+
+enum 段階(level) = 低(low) | 高(high)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100000円
+  会員(member) : bool
+
+outputs
+  等級(grade)  : 段階
+  確認(review) : bool
+
+table 等級を決める(grade_of)
+policy unique
+| 金額      | -> 等級 |
+| <10000円  | 低      |
+| >=10000円 | 高      |
+
+table 確認の要否(review_of)
+policy unique
+| 等級 | 会員  | -> 確認 |
+| 低   | -     | false   |
+| 高   | true  | false   |
+| 高   | false | true    |

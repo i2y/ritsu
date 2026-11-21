@@ -216,6 +216,25 @@ EXAMPLES = [
         ],
     ),
     (
+        "カード手数料.rule",
+        "計算した手数料に上限を付ける",
+        "カード払いの手数料は金額の 3% で、手数料は 2 万円までしか受け付けません。`define` の行の終わりの `range` が、規則がその値として受け付ける範囲です。",
+        [
+            "**`range >=0円 <=20000円` は、手数料がとりうる範囲ではなく、受け付ける範囲です。** 100 万円の 3% は 3 万円なので、666,700 円以上の支払いは、手数料を計算したところで `手数料 が範囲の外です` と受け付けません。`derive` の範囲（とりうる範囲を検査が確かめる主張、E112）とは意味が違います。",
+            "**手数料を読む表は、受け付ける手数料だけを見ます。** 表は 0 円から 2 万円を覆えば完全で、2 万円を超える手数料だけを求める行は E102 になります。",
+            "**入力どうしの関係は `constraint`、計算した値の上限と下限は `define` の範囲です。** `constraint 金額 * 3% <= 20000円` は書けません（E017）。",
+            "**ベクタは手数料がちょうど 2 万円になる支払いを答えのある例に、1 円超える支払いを受け付けない入力に入れます。** 生成したどの言語も、それを同じ文で受け付けません。",
+        ],
+        "A cap on the fee the rule works out",
+        "The fee on a card payment is 3% of the amount, and a fee is accepted only up to 20,000 yen. `range` at the end of a `define` line is the range the rule accepts for the value.",
+        [
+            "**`range >=0JPY <=20_000JPY` is the range the rule accepts, not what the fee can come to.** 3% of 1,000,000 yen is 30,000 yen, so a payment of 666,700 yen or more is refused where the fee is worked out: `fee is out of range`. It is not a `derive`'s range, which is a claim the check verifies (E112).",
+            "**What reads the fee reads only the fees the rule accepts.** The table is complete when it covers 0 to 20,000 yen, and a row that asks only for a fee past 20,000 yen is E102.",
+            "**A relation between inputs is a `constraint`; a cap on a value worked out from them is a `define`'s range.** `constraint amount * 3% <= 20_000JPY` cannot be written (E017).",
+            "**The vectors take the payment whose fee is exactly 20,000 yen as a case with an answer, and the one whose fee is a yen past it as an input to refuse**, which every generated language refuses with the same sentence.",
+        ],
+    ),
+    (
         "会員特典.rule",
         "表を三段重ねて、出力を二つ返す",
         "重量から重さ区分、重さ区分と会員区分から帯、帯と支払額から送料と倍率。前の表が出した値が、そのまま次の表の列になります。返るのは請求額とポイントの二つです。",
@@ -293,6 +312,23 @@ EXAMPLES = [
             "**`sum total over lines of amount` leaves one amount behind.** From there it is an ordinary column, so `>=5000JPY` becomes a boundary and completeness and overlap are checked as they always are.",
             "**The summed column cannot go negative** (E029). The running total then only rises, so the entry guard can refuse the moment it leaves the declared range — which is what keeps the int64 claim true of a sequence whose length nothing caps. For a difference, sum two non-negative columns and subtract.",
             "**An average divides inside a rounding**: the total over the count is a division by a value, so it is written as a rounding's outermost operation, `half_up(total / max(n, 1), 1JPY)` — \"Dividing by a value: the average unit price\" below.",
+        ],
+    ),
+    (
+        "明細の小計.rule",
+        "明細の一行ずつに上限を付ける",
+        "一行の小計は数量 × 単価で、一行は 1,000 万円まで受け付けます。要素の列から計算する `define` の範囲は、要素の一つずつに効きます。",
+        [
+            "**`define 小計(subtotal) … range >=1円 <=10000000円` は、どの行の小計にも効きます。** 1,000,001 円の品を 10 個載せた行があれば、何行目でも受け付けません。文はその行を 0 から数えた番号で言い、二行目なら `明細[1].小計 が範囲の外です` です。",
+            "**合計の範囲は合計に、`define` の範囲は一行に効きます。** 一行の上限は `sum` には書けず、`constraint 数量 * 単価 <= …` も書けません（E017）。",
+            "**小計を足す `sum` も、受け付ける小計だけを足します。** 一行が 1,000 万円を超えないので、上限 1 億円の合計を超えるのは、11 行以上の注文だけです。",
+        ],
+        "A cap on each line of an order",
+        "A line's subtotal is its quantity times its price, and one line is accepted up to 10,000,000 yen. The range of a `define` worked out from the fields of `elements` holds each element.",
+        [
+            "**`define subtotal … range >=1JPY <=10_000_000JPY` holds the subtotal of every line.** A line of ten at 1,000,001 yen is refused, whichever line it is, and the sentence names the line by its index from 0: the second is `lines[1].subtotal is out of range`.",
+            "**A `sum`'s range holds the total; a `define`'s range holds each line.** A cap on one line cannot be written on the `sum`, and `constraint quantity * price <= …` is E017.",
+            "**The `sum` adds only the subtotals the rule accepts.** No line passes 10,000,000 yen, so the total passes its cap of 100,000,000 yen only on an order of more than ten lines.",
         ],
     ),
     (
@@ -624,7 +660,7 @@ EXAMPLES = [
             "**`elements 明細 from 注文.lines` で、明細を契約の配列からそのまま取ります。** フィールドはそれぞれ、要素の中のどこから読むかを `from quantity` のように書きます。取り出した要素は、呼び出し側が並びを渡すときとまったく同じに検査され、たどられます。",
             "**契約の検証とも突き合わせます。** 契約は明細を 20 件まで、一件の額を 5000 まで通すので、合計は 10 万まで届き、規則の `合計` の範囲と同じです。`maxItems` を消すと、合計が範囲を超える注文と、21 件の明細を持つ注文が契約を通ってしまうので、どちらも E122 で止まります。",
             "**`rulec gen` が書く `order_handling_from(order)` は、注文をそのまま受け取ります。** 明細の並びは関数の中で組み立てるので、引数は注文だけです。この関数が出るのは Python・TypeScript・JavaScript・Ruby・PHP で、Go・Swift・Java・Rust・SQL・NumPy・Wasm には出ません。",
-            "**読む値は、規則の型どおりかを確かめます。** 明細の `amount_usd` が `1.5` や `\"7\"` なら、関数は答えを返さず、`注文.lines[].amount_usd is not an integer: 1.5` のように値の場所を言って `RuleInputError` で止まります。五つの言語で同じ文です。",
+            "**読む値は、規則の型どおりかを確かめます。** 二つ目の明細の `amount_usd` が `1.5` や `\"7\"` なら、関数は答えを返さず、`注文.lines[1].amount_usd is not an integer: 1.5` のように値の場所を言って `RuleInputError` で止まります。明細は 0 から数えた番号で言い、規則の入口が同じ明細を言う番号と同じです。五つの言語で同じ文です。",
         ],
         "A total, a largest value and the lines, taken from the contract",
         "The handling fee of an order, decided from the order object the shop's API receives. The order's total and its most expensive fragile line are read out of the object's lines with `from sum` and `from max`, and the lines themselves are taken with `elements … from`, as the sequence the rule walks.",
@@ -633,7 +669,7 @@ EXAMPLES = [
             "**`elements lines from order.lines` takes the lines from the contract's array as they are.** Each field says where it is read in an element, as `from quantity`. The elements taken are checked and walked exactly as a sequence the caller passes would be.",
             "**The contract's validation is held to the rule too.** The contract lets through up to 20 lines of at most 5000 each, so the total reaches 100,000, the same as the range of `total`. Take `maxItems` away, and an order whose total passes the range and an order of 21 lines both pass the contract; each stops at E122.",
             "**The `order_handling_fee_from(order)` that `rulec gen` writes takes the order as it is.** The lines are built inside the function, so the order is its only argument. It is written for Python, TypeScript, JavaScript, Ruby and PHP; Go, Swift, Java, Rust, SQL, NumPy and Wasm do not get it.",
-            "**Every value it reads is held to the rule's type.** An `amount_usd` of `1.5` or `\"7\"` gets no answer: the function stops with `RuleInputError` and says where the value is, `order.lines[].amount_usd is not an integer: 1.5`, the same sentence in all five languages.",
+            "**Every value it reads is held to the rule's type.** An `amount_usd` of `1.5` or `\"7\"` on the second line gets no answer: the function stops with `RuleInputError` and says where the value is, `order.lines[1].amount_usd is not an integer: 1.5`, the line by its index from 0, which is the index the rule's own door names it by. The sentence is the same in all five languages.",
         ],
     ),
     (
@@ -653,6 +689,21 @@ EXAMPLES = [
             "**A row of `chances` claims the chance of an answer for every combination of the inputs that are not random.** A chance is written `1/1000`, `0.9%` or `>=1/2`. The rows of a table are boxes, so `rulec check` counts the numbers interval by interval and compares exact rationals.",
             "**A poster that disagrees with the table stops the check.** Write 6% for the third prize out of a campaign, and E133 says: \"With campaign = false, the chance of prize = third is 1/20 (5.0%).\"",
             "**`rulec gen` writes a function that counts the chances, too.** `prize_lottery_chances(campaign)` returns how many numbers win each prize and how many numbers there are. It is written for every target but SQL and Wasm, and the panel of the HTML page shows each prize's chance with it.",
+        ],
+    ),
+    (
+        "さいころの合計.rule",
+        "受け付けない目を除いて確率を数える",
+        "二つのさいころを振って景品を決めます。目の合計は 10 までしか受け付けないので、11 と 12 の目は受け付けません。`chances` は、規則が答える目だけで数えます。",
+        [
+            "**`define 合計(total) : number = 一つ目 + 二つ目  range <=10` は、乱数の入力から計算した値の範囲です。** 36 通りの目のうち、規則が答えるのは 33 通りです。",
+            "**確率は、受け付ける目の中で数えます。** 合計が 8 以上になる目は 33 通りのうち 12 通りなので、大きい景品は 4/11 です。`rulec check` は表の行からそれを数えて確かめます。",
+        ],
+        "The chances, counted over the rolls the rule accepts",
+        "Two dice are rolled for a prize. The total is accepted only up to 10, so a roll of 11 or 12 is refused, and `chances` counts only the rolls the rule answers.",
+        [
+            "**`define total : number = first + second  range <=10` is the range of a value worked out from random inputs.** Of the 36 rolls, the rule answers 33.",
+            "**The chances are counted over the rolls the rule accepts.** A total of 8 or more is 12 of the 33, so the large prize is 4/11, which `rulec check` counts from the rows and confirms.",
         ],
     ),
     (

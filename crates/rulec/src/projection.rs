@@ -102,7 +102,11 @@ pub struct Contract {
     /// For a `.proto`: every enum of the file. A field of one travels as its value's name, and
     /// a field left at the value numbered 0 is left out (§15.133).
     enums: Vec<crate::proto::Enum>,
-    /// Where the root stands: a pointer into the schema, or a message name.
+    /// For a `.proto`: the file's package, which the full names of its messages and enums begin
+    /// with.
+    package: Option<String>,
+    /// Where the root stands: a pointer into the schema, or the path of a message from the
+    /// package (`Order`, `Cart.Item`).
     at: String,
     /// For a schema: whether the keywords beside a `$ref` apply too (§15.140).
     siblings: bool,
@@ -118,6 +122,9 @@ pub enum Unread {
     /// Nothing stands where the shape points — or a JSON Schema does not read as JSON, which
     /// has always been said this way.
     Nothing(String),
+    /// More than one message of the `.proto` has the name the shape writes: their paths
+    /// (§15.346).
+    Several(Vec<String>),
 }
 
 /// Read the contract a `shape` names, or say why it cannot be read.
@@ -126,31 +133,52 @@ pub fn read(d: &ShapeDecl, text: &str) -> Result<Contract, Unread> {
         EnumSource::JsonSchema => {
             let doc = crate::jsonschema::read(text, &d.file).map_err(Unread::Nothing)?;
             let siblings = siblings_apply(&doc);
-            Ok(Contract { kind: d.source, doc: Some(doc), msgs: Vec::new(), enums: Vec::new(), at: d.at.clone(), siblings, read_items: Vec::new() })
+            Ok(Contract { kind: d.source, doc: Some(doc), msgs: Vec::new(), enums: Vec::new(), package: None, at: d.at.clone(), siblings, read_items: Vec::new() })
         }
         EnumSource::Proto => {
             let file = crate::proto::read(&d.file, text).map_err(|e| Unread::File(crate::proto::unreadable(&e)))?;
-            let msgs = file.messages;
-            if !msgs.iter().any(|m| crate::proto::same_message(&m.name, &d.at)) {
-                return Err(Unread::Nothing(if msgs.is_empty() {
-                    tr!("そのファイルにメッセージは一つもありません。", "That file declares no message at all.")
-                } else {
-                    tr!(
+            // The message the line names, as an `import proto` line names an enum: two messages
+            // may each nest an `Item`, and the line then says which (§15.346).
+            let at = match file.message_named(&d.at) {
+                Ok(m) => m.path.clone(),
+                Err(several) if !several.is_empty() => return Err(Unread::Several(several.iter().map(|m| m.path.clone()).collect())),
+                Err(_) if file.messages.is_empty() => {
+                    return Err(Unread::Nothing(tr!("そのファイルにメッセージは一つもありません。", "That file declares no message at all.")));
+                }
+                Err(_) => {
+                    return Err(Unread::Nothing(tr!(
                         "そのファイルにあるメッセージ: {}",
                         "The messages in that file: {}",
-                        msgs.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(", ")
-                    )
-                }));
-            }
-            Ok(Contract { kind: d.source, doc: None, msgs, enums: file.enums, at: d.at.clone(), siblings: false, read_items: Vec::new() })
+                        file.messages.iter().map(|m| m.path.as_str()).collect::<Vec<_>>().join(", ")
+                    )));
+                }
+            };
+            Ok(Contract { kind: d.source, doc: None, msgs: file.messages, enums: file.enums, package: file.package, at, siblings: false, read_items: Vec::new() })
         }
     }
 }
 
 impl Contract {
-    /// The enum of the `.proto` a field's type names, if the file declares it.
-    pub(crate) fn enum_of(&self, ty: &str) -> Option<&crate::proto::Enum> {
-        self.enums.iter().find(|e| crate::proto::same_message(&e.name, ty))
+    /// What the type of a field of the `.proto` is, found from the message the field is in
+    /// outward (§15.346).
+    fn declared(&self, fd: &crate::proto::Field) -> Option<crate::proto::Declared<'_>> {
+        crate::proto::declared(self.package.as_deref(), &self.msgs, &self.enums, fd)
+    }
+
+    /// The enum a field's type names, if the file declares it.
+    pub(crate) fn enum_of(&self, fd: &crate::proto::Field) -> Option<&crate::proto::Enum> {
+        match self.declared(fd)? {
+            crate::proto::Declared::Enum(e) => Some(e),
+            crate::proto::Declared::Message(_) => None,
+        }
+    }
+
+    /// The message a field's type names, if the file declares it.
+    fn message_of(&self, fd: &crate::proto::Field) -> Option<&crate::proto::Message> {
+        match self.declared(fd)? {
+            crate::proto::Declared::Message(m) => Some(m),
+            crate::proto::Declared::Enum(_) => None,
+        }
     }
 
     /// What stands at a path from the root, or where the walk got stuck.
@@ -178,7 +206,7 @@ impl Contract {
     }
 
     fn proto_at(&self, path: &[String]) -> Result<At, Stuck> {
-        let mut msg = self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &self.at));
+        let mut msg = self.root_message();
         let mut reached = String::new();
         let mut last = None;
         for (i, step) in path.iter().enumerate() {
@@ -197,7 +225,7 @@ impl Contract {
             });
             msg = match &scalar {
                 Some(_) => None,
-                None => self.msgs.iter().find(|x| crate::proto::same_message(&x.name, &fd.ty)),
+                None => self.message_of(fd),
             };
             let here = match (&scalar, msg) {
                 (Some(s), _) => s.clone(),
@@ -206,7 +234,7 @@ impl Contract {
                 // what is there rather than that nothing is: an enum of the file, `bytes`, or a
                 // type the file does not declare (§15.133).
                 (None, None) if i + 1 == path.len() => {
-                    At::Other(if self.enum_of(&fd.ty).is_some() { format!("enum {}", fd.ty) } else { fd.ty.clone() })
+                    At::Other(if self.enum_of(fd).is_some() { format!("enum {}", fd.ty) } else { fd.ty.clone() })
                 }
                 // A message the file does not hold: the path cannot go on.
                 (None, None) => return Err(Stuck { reached, had: Vec::new(), collection: fd.repeated }),
@@ -459,10 +487,11 @@ impl Contract {
             }
             EnumSource::Proto => {
                 let last = *self.proto_chain(steps)?.last()?;
-                if !last.repeated || !self.msgs.iter().any(|m| crate::proto::same_message(&m.name, &last.ty)) {
+                if !last.repeated {
                     return None;
                 }
-                Some(Contract { at: last.ty.clone(), ..self.clone() })
+                let m = self.message_of(last)?;
+                Some(Contract { at: m.path.clone(), ..self.clone() })
             }
         }
     }
@@ -499,6 +528,17 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
                 Err(Unread::File(why)) => out.push(
                     Diag::error("E013", tr!("`{}` を読めません", "Cannot read `{}`", d.file)).at(at).mark(d.span.clone(), "").note(why),
                 ),
+                // Two messages each nest a message of the name: the line says which (§15.346).
+                Err(Unread::Several(paths)) => out.push(
+                    Diag::error("E013", tr!("`{}` に、`{}` という名前のメッセージが複数あります", "`{}` has more than one message named `{}`", d.file, d.at))
+                        .at(at)
+                        .mark(d.span.clone(), "")
+                        .note(tr!(
+                            "どれを読むかを、入れ子にしているメッセージの名前を前に付けて書いてください: {}",
+                            "Say which, by the messages it is nested in: {}",
+                            paths.iter().map(|p| format!("`{p}`")).collect::<Vec<_>>().join(tr!("、", ", ").as_str())
+                        )),
+                ),
             },
             Err(_) => out.push(
                 Diag::error("E013", tr!("`{}` を読めません", "Cannot read `{}`", d.file))
@@ -507,7 +547,7 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
                     .note(tr!(
                         "パスは規則ファイルのある場所からたどります（探した先: {}）。",
                         "The path is followed from the directory of the rule file (looked for: {}).",
-                        p.display()
+                        ritsu_base::paths::show(&p)
                     ))
                     .maybe_note(crate::vfs::outside_note(d.dir(rule_path), &d.file)),
             ),
@@ -554,6 +594,9 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
     let (found, more) = sequences(f, c, &read_ok, rule_path);
     out.extend(found);
     doms.extend(more);
+    // The range a `define` is accepted in, where what it is worked out from is read from a
+    // contract (§15.313).
+    out.extend(defines_hold(f, c, &doms, rule_path));
     let w123 = dead_rows(f, c, &doms, rule_path);
     let dead: BTreeSet<(String, usize)> = w123.iter().filter_map(|d| Some((d.table.clone()?, d.row?))).collect();
     out.extend(w123);
@@ -910,10 +953,10 @@ impl Contract {
                 Some(self.kind_at(f))
             }
             EnumSource::Proto => {
-                let mut msg = self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &self.at))?;
+                let mut msg = self.root_message()?;
                 for s in steps {
                     let fd = msg.fields.iter().find(|x| x.name == *s)?;
-                    msg = self.msgs.iter().find(|x| crate::proto::same_message(&x.name, &fd.ty))?;
+                    msg = self.message_of(fd)?;
                 }
                 let fd = msg.fields.iter().find(|x| x.name == field)?;
                 Some(match crate::proto::scalar(&fd.ty) {
@@ -923,8 +966,8 @@ impl Contract {
                     Some(crate::proto::Scalar::Bool) => At::Bool,
                     // An enum travels as the name of its value (§15.133), which a `where`
                     // compares like any other string.
-                    None if self.enum_of(&fd.ty).is_some() => At::Str,
-                    None => match self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &fd.ty)) {
+                    None if self.enum_of(fd).is_some() => At::Str,
+                    None => match self.message_of(fd) {
                         Some(m) => At::Object(m.fields.iter().map(|x| x.name.clone()).collect()),
                         None => At::Other(fd.ty.clone()),
                     },
@@ -995,13 +1038,13 @@ impl Contract {
 
     /// The field at each step of a path.
     fn proto_chain(&self, path: &[String]) -> Option<Vec<&crate::proto::Field>> {
-        let mut msg = self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &self.at))?;
+        let mut msg = self.root_message()?;
         let mut out = Vec::new();
         for (i, s) in path.iter().enumerate() {
             let fd = msg.fields.iter().find(|x| x.name == *s)?;
             out.push(fd);
             if i + 1 < path.len() {
-                msg = self.msgs.iter().find(|x| crate::proto::same_message(&x.name, &fd.ty))?;
+                msg = self.message_of(fd)?;
             }
         }
         Some(out)
@@ -1354,7 +1397,7 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                 // mismatch E120 is about.
                 let seen = match (leaf_schema, leaf_proto, con.doc.as_ref()) {
                     (Some(n), _, Some(_)) if con.kind_at(n) == At::Int => Some((con.ints_at(n), con.unread_at(n, false), None)),
-                    (_, Some(fd), _) => proto_ints(fd).map(|s| (s, fd.rules.unread.clone(), Some(fd.ty.rsplit('.').next().unwrap_or(&fd.ty).to_string()))),
+                    (_, Some(fd), _) => proto_ints(fd).map(|s| (s, fd.rules.unread.clone(), Some(fd.ty.clone()))),
                     _ => None,
                 };
                 // Under a step the contract lets be unset, the value arrives as its default
@@ -1682,7 +1725,7 @@ fn numeric_holds(con: &Contract, pr: &Projection, of: &crate::ast::Name, filtere
             }
             let mut unread = fd.rules.unread.clone();
             unread.extend(coll.rules.unread.iter().cloned());
-            let kind = fd.ty.rsplit('.').next().unwrap_or(&fd.ty).to_string();
+            let kind = fd.ty.clone();
             (count, proto_ints(&fd), unread, Some(kind), Some(fd))
         }
     };
@@ -2057,10 +2100,13 @@ fn sequences(f: &RuleFile, c: &Checked, read_ok: &[(&ShapeDecl, Contract)], rule
             );
             continue;
         };
-        out.extend(collection_holds(f, c, con, sp, seq, &at));
         // Each field, held to the element's contract as an input is held to the root's. A path is
-        // shown from the collection, `order.lines[].qty`.
+        // shown from the collection, `order.lines[].qty`. What is found is said after what is
+        // found of the collection, which reads the ends of what the contract lets each number be:
+        // the least and the most a total over it comes to (§15.314).
         let root = crate::ast::Name { text: format!("{full}[]"), ascii: None, span: sp.span.clone() };
+        let mut of_fields = Vec::new();
+        let mut ends: Vec<(String, Option<i128>, Option<i128>)> = Vec::new();
         for fd in &el.fields {
             let Some(p) = &fd.from else { continue };
             let dp = Projection {
@@ -2077,13 +2123,18 @@ fn sequences(f: &RuleFile, c: &Checked, read_ok: &[(&ShapeDecl, Contract)], rule
                 for d in &mut found {
                     d.witness.inputs.clear();
                 }
-                out.extend(found);
+                of_fields.extend(found);
                 if let Some(d) = dom {
+                    if let Dom::Ints(seen, _) = &d {
+                        ends.push((fd.name.text.clone(), seen.min(), seen.max()));
+                    }
                     doms.push((fd.name.text.clone(), d, full_path(&dp)));
                 }
             }
-            out.extend(resolved);
+            of_fields.extend(resolved);
         }
+        out.extend(collection_holds(f, c, con, sp, seq, &at, &ends));
+        out.extend(of_fields);
     }
     (out, doms)
 }
@@ -2091,8 +2142,13 @@ fn sequences(f: &RuleFile, c: &Checked, read_ok: &[(&ShapeDecl, Contract)], rule
 /// E122 for the collection a sequence is taken from (§15.223). The function that reads it out
 /// indexes straight into the object, so every step to it has to be there; and the walk's door
 /// holds the sequence to the cap its `count`s put on its length, and to the upper end of each
-/// `sum` over it — either of which a collection the contract lets through can pass.
-fn collection_holds(f: &RuleFile, c: &Checked, con: &Contract, sp: &Projection, seq: &str, at: &str) -> Vec<Diag> {
+/// `sum` over it — either of which a collection the contract lets through can pass. Where the
+/// range of a `sum` or a `count` starts above zero, the walk holds the sequence to that bottom
+/// too (§15.314), and a collection the contract lets through can come in under it. `ends` is the
+/// least and the most the contract lets each number of an element be, on the wire: one element
+/// adds no more than the smaller of that and the top of what the rule takes, and no less than the
+/// larger of that and the bottom.
+fn collection_holds(f: &RuleFile, c: &Checked, con: &Contract, sp: &Projection, seq: &str, at: &str, ends: &[(String, Option<i128>, Option<i128>)]) -> Vec<Diag> {
     let mut out = Vec::new();
     let steps = sp.path_steps();
     let full = full_path(sp);
@@ -2172,7 +2228,12 @@ fn collection_holds(f: &RuleFile, c: &Checked, con: &Contract, sp: &Projection, 
         (n, k) => n.or(k),
     };
     for d in crate::door::sums(f).into_iter().filter(|d| d.over == seq) {
-        let (Some((_, Some(hi))), Some((_, Some(col_hi)))) = (c.ranges.get(&d.name.text).copied(), c.ranges.get(&d.column.text).copied()) else { continue };
+        let (Some((_, Some(hi))), Some((_, Some(mut col_hi)))) = (c.ranges.get(&d.name.text).copied(), c.ranges.get(&d.column.text).copied()) else { continue };
+        if let Some(x) = ends.iter().find(|(n, _, _)| *n == d.column.text).and_then(|(_, _, m)| *m).map(|m| Rat::new(m, c.wire_scale(&d.column.text)))
+            && x.cmp_to(col_hi).is_lt()
+        {
+            col_hi = x;
+        }
         if col_hi.cmp_to(Rat::zero()).is_le() {
             continue;
         }
@@ -2215,6 +2276,331 @@ fn collection_holds(f: &RuleFile, c: &Checked, con: &Contract, sp: &Projection, 
             e = e.note(u);
         }
         out.push(e);
+    }
+    // The bottoms (§15.314): the walk refuses a call whose `sum` or `count` ends under the bottom
+    // of its range, where that is above zero. The least a total comes to is the fewest elements
+    // the contract lets through, each at the least its column can be: the bottom of what the rule
+    // takes of it, or what the contract lets it be where that is more. Which elements a `count`
+    // counts is nothing a contract read here promises (as with the least of a `from count … where`),
+    // so the least it comes to is none of them.
+    let fewest = count.min().unwrap_or(0).max(0);
+    let zero = Rat::zero();
+    for d in f.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None }).filter(|d| d.over == seq) {
+        let Some(lo) = c.walk_floor(d) else { continue };
+        let ty = c.ty_of(&d.name.text).unwrap_or(Ty::Unknown);
+        let shown = |v: Rat| crate::types::fmt_val(v, &ty);
+        let name = &d.name.text;
+        let lets = count.describe_in("件");
+        let mut e = if d.kind == crate::ast::AggKind::Sum {
+            let col = &d.column.text;
+            let mut col_lo = c.ranges.get(col).and_then(|(lo, _)| *lo).unwrap_or(zero);
+            if let Some(x) = ends.iter().find(|(n, _, _)| n == col).and_then(|(_, m, _)| *m).map(|m| Rat::new(m, c.wire_scale(col)))
+                && x.cmp_to(col_lo).is_gt()
+            {
+                col_lo = x;
+            }
+            if col_lo.cmp_to(zero).is_lt() {
+                col_lo = zero;
+            }
+            // A total past what a number holds is nowhere near the bottom.
+            let Some(reach) = col_lo.checked_mul(Rat::int(fewest)) else { continue };
+            if reach.cmp_to(lo).is_ge() {
+                continue;
+            }
+            let (to, under) = (shown(reach), shown(lo));
+            let title = if fewest == 0 {
+                tr!("契約は `{full}` が 0 件でも通しますが、{name} は {under} からしか受け付けません", "The contract lets `{full}` hold no elements, and {name} takes no less than {under}")
+            } else {
+                let elements = if fewest == 1 { "element" } else { "elements" };
+                tr!(
+                    "契約は `{full}` を {fewest} 件から通し、{col} の合計は {to} のこともありますが、{name} は {under} からしか受け付けません",
+                    "The contract lets `{full}` hold as few as {fewest} {elements}, whose total of {col} can be as little as {to}, and {name} takes no less than {under}"
+                )
+            };
+            // As many elements at the column's least value as reach the bottom, where the sequence
+            // takes that many.
+            let need = if col_lo.cmp_to(zero).is_gt() { lo.checked_div(col_lo).map(ceil).filter(|m| longest.is_none_or(|n| *m <= n)) } else { None };
+            let fix = need.map(|m| match (proto, count.max()) {
+                (true, Some(k)) => format!("[(buf.validate.field).repeated = {{min_items: {m}, max_items: {k}}}]"),
+                (true, None) => format!("[(buf.validate.field).repeated = {{min_items: {m}}}]"),
+                (false, Some(k)) => format!("\"minItems\": {m}, \"maxItems\": {k}"),
+                (false, None) => format!("\"minItems\": {m}"),
+            });
+            let widen = tr!(
+                "{name} の範囲を {} からにして、{under} に届かない合計のときの答えを決めてください",
+                "start the range of {name} at {} and decide what it answers for a total under {under}",
+                shown(zero)
+            );
+            let e = Diag::error("E122", title)
+                .at(at.to_string())
+                .mark(sp.span.clone(), tr!("契約では {lets}、一件の {col} は {} から", "the contract lets through {lets}; one element's {col} is at least {}", shown(col_lo)))
+                .note(tr!(
+                    "生成したコードは、{col} の合計が {name} の範囲の下の端に届かない並びを、歩き終えたところで受け付けません。",
+                    "The generated code refuses a sequence whose total of {col} ends under the bottom of the range of {name}, once it has walked it."
+                ))
+                .note(refused_note());
+            match &fix {
+                Some(x) => e.fix(FixKind::NarrowContract, x.clone()).note(two_ways(Some(x), widen)),
+                None => e.fix_kind(FixKind::None).note(two_ways(None, widen)),
+            }
+        } else {
+            let n = crate::types::wire_int(lo, 1);
+            let title = if fewest == 0 {
+                tr!(
+                    "契約は `{full}` が 0 件でも通しますが、{name} は数える要素が {n} 件からしか受け付けません",
+                    "The contract lets `{full}` hold no elements, and {name} takes no fewer than {n} that count"
+                )
+            } else if fewest < n {
+                let elements = if fewest == 1 { "element" } else { "elements" };
+                tr!(
+                    "契約は `{full}` が {fewest} 件でも通しますが、{name} は数える要素が {n} 件からしか受け付けません",
+                    "The contract lets `{full}` hold as few as {fewest} {elements}, and {name} takes no fewer than {n} that count"
+                )
+            } else {
+                tr!(
+                    "契約は、`{full}` の要素のうちいくつが {name} に数えられるかを約束しませんが、{name} は {n} からしか受け付けません",
+                    "The contract does not promise how many elements of `{full}` count for {name}, and {name} takes no fewer than {n}"
+                )
+            };
+            let widen = if n == 1 {
+                tr!("{name} の範囲を 0 からにして、数える要素が無いときの答えを決めてください", "start the range of {name} at 0 and decide what it answers when no element counts")
+            } else {
+                tr!(
+                    "{name} の範囲を 0 からにして、数える要素が {n} 件に届かないときの答えを決めてください",
+                    "start the range of {name} at 0 and decide what it answers when fewer than {n} elements count"
+                )
+            };
+            Diag::error("E122", title)
+                .at(at.to_string())
+                .mark(sp.span.clone(), tr!("契約では {lets}。どの要素を数えるかは、契約から読めません", "the contract lets through {lets}; which of them count is not read from a contract"))
+                .fix_kind(FixKind::None)
+                .note(tr!(
+                    "生成したコードは、数えた要素が {name} の範囲の下の端に届かない並びを、歩き終えたところで受け付けません。",
+                    "The generated code refuses a sequence in which fewer elements count than the range of {name} starts at, once it has walked it."
+                ))
+                .note(refused_note())
+                .note(two_ways(None, widen))
+        };
+        if let Some(u) = unread_note(&unread) {
+            e = e.note(u);
+        }
+        out.push(e);
+    }
+    // No value twice (§15.290): the door refuses a sequence with two elements that share a value
+    // of a `unique` field, and nothing a contract read here says the elements differ in one
+    // field — `uniqueItems` compares whole elements, and the `unique` of a `repeated` field is of
+    // scalars. Only a collection of one element at most cannot hold two alike.
+    if longest.is_none_or(|n| n > 1)
+        && let Some(el) = f.elements.iter().find(|e| e.name.text == seq)
+    {
+        for fd in &el.fields {
+            let (Some(mark), Some(p)) = (&fd.unique, &fd.from) else { continue };
+            let field = &fd.name.text;
+            let path = format!("{full}[].{}", full_path(p));
+            let at_field = at.rsplit_once(':').map_or_else(|| at.to_string(), |(file, _)| format!("{file}:{}", mark.line));
+            let mut e = Diag::error(
+                "E122",
+                tr!(
+                    "契約は `{full}` に {field} が同じ要素が二つあっても通しますが、並び {seq} は {field} が同じ要素を二つ受け付けません",
+                    "The contract lets two elements of `{full}` have the same {field}, and the sequence {seq} takes no two with the same {field}"
+                ),
+            )
+            .at(at_field)
+            .mark(mark.clone(), tr!("契約には、要素どうしで `{path}` が違うという決まりがありません", "nothing in the contract keeps `{path}` apart between elements"))
+            .fix_kind(FixKind::None)
+            .note(tr!(
+                "生成したコードは、`unique` のフィールドが同じ要素が二つある並びを、入口で受け付けません（「{}」）。",
+                "The generated code refuses, at its door, a sequence with two elements that share a value of a `unique` field (`{}`).",
+                crate::door::duplicate(seq, field, "i", "j")
+            ))
+            .note(refused_note());
+            if !proto {
+                e = e.note(tr!(
+                    "JSON Schema の `uniqueItems` は要素を丸ごと比べるので、ほかのフィールドが違う二つの要素は通ります。",
+                    "`uniqueItems` in a JSON Schema compares whole elements, so two that differ in another field pass it."
+                ));
+            }
+            if let Some(u) = unread_note(&unread) {
+                e = e.note(u);
+            }
+            out.push(e.note(two_ways(
+                None,
+                tr!("{field} の `unique` を外して、同じ値の要素が二つ来たときの答えを決めてください", "take `unique` off {field} and decide what the rule answers when two elements share a value"),
+            )));
+        }
+    }
+    // The weights of a pick (§15.226): the walk adds them up in an int64 and refuses the call the
+    // moment the total would pass it. The most they come to is the longest sequence the contract
+    // lets through, each weight at its largest — what the rule takes of it, or what the contract
+    // lets it be where the weight is one field and that is less.
+    let limit = Rat::int(i128::from(i64::MAX));
+    for fold in f.folds().filter(|d| d.over == seq) {
+        for (_, arm, _) in &fold.arms {
+            let crate::ast::Arm::TakeWeighted { weight, .. } = arm else { continue };
+            let Some((_, mut top)) = c.int64_interval(weight, &Ty::Number) else { continue };
+            if let crate::ast::Expr::Name(n, _) = weight
+                && let Some(x) = ends.iter().find(|(m, _, _)| m == n).and_then(|(_, _, hi)| *hi).map(|m| Rat::new(m, c.wire_scale(n)))
+                && x.cmp_to(top).is_lt()
+            {
+                top = x;
+            }
+            if top.cmp_to(zero).is_le() {
+                continue;
+            }
+            let reach = longest.map(|n| top.checked_mul(Rat::int(n)));
+            if reach.is_some_and(|r| r.is_some_and(|r| r.cmp_to(limit).is_le())) {
+                continue;
+            }
+            let shown = |v: Rat| crate::types::fmt_val(v, &Ty::Number);
+            let title = match (longest, reach.flatten()) {
+                (Some(n), Some(r)) => tr!(
+                    "契約は `{full}` を {n} 件まで通し、重みの合計は {} に届きますが、並び {seq} は、重みの合計が int64 に収まる並びしか受け付けません",
+                    "The contract lets `{full}` hold {n} elements, whose weights come to {} in all, and the sequence {seq} takes only weights that total within int64",
+                    shown(r)
+                ),
+                (Some(n), None) => tr!(
+                    "契約は `{full}` を {n} 件まで通しますが、並び {seq} は、重みの合計が int64 に収まる並びしか受け付けません",
+                    "The contract lets `{full}` hold {n} elements, and the sequence {seq} takes only weights that total within int64"
+                ),
+                (None, _) => tr!(
+                    "契約は `{full}` の件数に上限を置いていないので、重みの合計にも上限がありませんが、並び {seq} は、重みの合計が int64 に収まる並びしか受け付けません",
+                    "The contract puts no upper end on how many elements `{full}` holds, so the total of the weights has none either, and the sequence {seq} takes only weights that total within int64"
+                ),
+            };
+            // As many elements at the largest weight as an int64 holds the total of.
+            let most = limit.checked_div(top).map(|q| q.num.div_euclid(q.den)).filter(|m| *m >= 1);
+            let fix = most.map(|m| if proto { format!("[(buf.validate.field).repeated = {{max_items: {m}}}]") } else { format!("\"maxItems\": {m}") });
+            let coarser = tr!(
+                "重みの範囲を狭めるか、重みを粗い単位で数えて、合計が int64 に収まるようにしてください",
+                "narrow the range of the weight, or count the weights in a coarser unit, so that their total fits int64"
+            );
+            let mut e = Diag::error("E122", title)
+                .at(at.to_string())
+                .mark(sp.span.clone(), tr!("一件の重みは {} まで", "one element's weight is at most {}", shown(top)))
+                .note(tr!(
+                    "生成したコードは、重みを int64 で足していき、合計が収まらなくなったところで呼び出しを受け付けません（「{}」）。",
+                    "The generated code adds the weights up in an int64, and refuses the call the moment the total would pass it (`{}`).",
+                    crate::door::weights_past(seq)
+                ))
+                .note(refused_note());
+            e = match &fix {
+                Some(x) => e.fix(FixKind::NarrowContract, x.clone()).note(two_ways(Some(x), coarser)),
+                None => e.fix_kind(FixKind::None).note(two_ways(None, coarser)),
+            };
+            if let Some(u) = unread_note(&unread) {
+                e = e.note(u);
+            }
+            out.push(e);
+        }
+    }
+    out
+}
+
+/// E122 for a `define` with a range (§15.313): the generated code refuses a call where the value it
+/// works out falls outside the range the rule accepts for it, and a request the contract lets
+/// through can bring it there — an amount of 1,000 the contract takes, whose fee of 3% is past the
+/// 20 the rule accepts. The value is asked for over what the contract lets each input and each
+/// field it is worked out from be, as the port asks it over the ranges a caller gives
+/// (`over::define_kept`): a request that takes it outside is the example, and where it is neither
+/// shown to stay inside nor found outside, that is said too, a contract being read no narrower
+/// than it is. A value worked out from nothing a contract gives is the caller's to keep, as it was.
+fn defines_hold(f: &RuleFile, c: &Checked, doms: &[(String, Dom, String)], rule_path: &str) -> Vec<Diag> {
+    let mut out = Vec::new();
+    // Not while the rule is read again with some of its inputs held: that is another question.
+    if c.accepts.is_empty() || crate::over::holding() {
+        return out;
+    }
+    let Ok(src) = ritsu_base::fs::read_to_string(std::path::Path::new(rule_path)) else { return out };
+    for p in crate::verify::preconditions(f, c) {
+        let crate::verify::Pre::Define { name, range: said, from, .. } = p else { continue };
+        let read: Vec<&(String, Dom, String)> = doms.iter().filter(|(n, ..)| from.contains(n)).collect();
+        let Some(d) = f.items.iter().find_map(|it| match it {
+            Item::Define(d) if d.name.text == name => Some(d),
+            _ => None,
+        }) else {
+            continue;
+        };
+        if read.is_empty() {
+            continue;
+        }
+        let ranges: Vec<(String, Option<i128>, Option<i128>)> = read
+            .iter()
+            .filter_map(|(n, dom, _)| match dom {
+                Dom::Ints(seen, _) => Some((n.clone(), seen.min(), seen.max())),
+                _ => None,
+            })
+            .collect();
+        let paths = read.iter().map(|(_, _, path)| format!("`{path}`")).collect::<Vec<_>>().join(if crate::i18n::ja() { "、" } else { ", " });
+        let (title, how) = match crate::over::define_kept(f, c, &src, rule_path, &name, &said, &ranges) {
+            ritsu_ports::Answer::Holds => continue,
+            ritsu_ports::Answer::Fails(at) => {
+                // The inputs it is worked out from as the request has them, and of a sequence the
+                // fields of its first elements.
+                let mut shown: Vec<String> = Vec::new();
+                for n in from.iter().filter(|n| f.inputs.iter().any(|i| i.name.text == **n)) {
+                    if let (Some(v), Some(ty)) = (at.get(n), c.ty_of(n)) {
+                        shown.push(format!("{n} = {}", v.show(&ty)));
+                    }
+                }
+                for el in &f.elements {
+                    let fields: Vec<&String> = from.iter().filter(|n| el.fields.iter().any(|x| x.name.text == **n)).collect();
+                    let Some(crate::eval::Val::Seq(xs)) = at.get(&el.name.text) else { continue };
+                    if fields.is_empty() {
+                        continue;
+                    }
+                    let each: Vec<String> = xs
+                        .iter()
+                        .take(3)
+                        .map(|x| fields.iter().filter_map(|n| Some(format!("{n} {}", x.get(*n)?.show(&c.ty_of(n)?)))).collect::<Vec<_>>().join(", "))
+                        .collect();
+                    shown.push(format!("{} = [{}{}]", el.name.text, each.join("; "), if xs.len() > 3 { "; …" } else { "" }));
+                }
+                let at = shown.join(", ");
+                (
+                    tr!(
+                        "契約が通す値で、規則の計算する {name} が、受け付ける範囲 {said} の外になります",
+                        "With values the contract lets through, the {name} the rule works out falls outside the range it accepts, {said}"
+                    ),
+                    tr!("たとえば {at} のとき。", "For example, at {at}."),
+                )
+            }
+            ritsu_ports::Answer::Undecided(why) => (
+                tr!(
+                    "契約が通す値で、規則の計算する {name} が、受け付ける範囲 {said} に収まると示せません",
+                    "With values the contract lets through, the {name} the rule works out is not shown to stay inside the range it accepts, {said}"
+                ),
+                if crate::i18n::ja() {
+                    format!("{}。", why.ja)
+                } else {
+                    let mut said = why.en.chars();
+                    match said.next() {
+                        Some(first) => format!("{}{}.", first.to_uppercase(), said.as_str()),
+                        None => String::new(),
+                    }
+                },
+            ),
+        };
+        let widen = tr!(
+            "{name} の範囲を広げて、その値のときの答えを決めてください",
+            "widen the range of {name} and decide what the rule answers at that value"
+        );
+        out.push(
+            Diag::error("E122", title)
+                .at(format!("{rule_path}:{}", d.span.line))
+                .mark(d.range.as_ref().map_or_else(|| d.span.clone(), |r| r.span.clone()), tr!("{paths} から計算します", "worked out from {paths}"))
+                .fix_kind(FixKind::None)
+                .note(how)
+                .note(tr!(
+                    "生成したコードは、{name} を計算したところで、範囲の外になる呼び出しを受け付けません（「{}」）。",
+                    "The generated code refuses a call whose {name} falls outside the range, where it works the value out (`{}`).",
+                    crate::door::out_of_range(&name)
+                ))
+                .note(refused_note())
+                .note(tr!(
+                    "ヒント: その値が来ないはずなら、契約で {paths} の範囲を狭めてください。来るのなら、{widen}。どちらにするかは人が決めることです。",
+                    "hint: if those values cannot occur, narrow what the contract lets {paths} be. If they can, {widen}. Which of the two is a person's decision."
+                )),
+        );
     }
     out
 }
@@ -2612,8 +2998,10 @@ impl Contract {
         }
     }
 
+    /// The message the root stands at: the one the `shape` line names, or the element of a
+    /// collection (`element`).
     fn root_message(&self) -> Option<&crate::proto::Message> {
-        self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &self.at))
+        self.msgs.iter().find(|m| m.path == self.at)
     }
 
     fn proto_kind(&self, path: &[String]) -> Option<Kind> {
@@ -2626,7 +3014,7 @@ impl Contract {
             if fd.repeated {
                 return None;
             }
-            msg = self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &fd.ty))?;
+            msg = self.message_of(fd)?;
         }
         Some(Kind::Msg)
     }
@@ -2642,8 +3030,8 @@ impl Contract {
             Some(crate::proto::Scalar::Bool) => Kind::Bool { presence },
             Some(crate::proto::Scalar::Frac) => Kind::Other,
             // An enum is its number in CEL.
-            None if self.enum_of(&fd.ty).is_some() => Kind::Int { presence },
-            None if self.msgs.iter().any(|m| crate::proto::same_message(&m.name, &fd.ty)) => Kind::Msg,
+            None if self.enum_of(fd).is_some() => Kind::Int { presence },
+            None if self.message_of(fd).is_some() => Kind::Msg,
             None => Kind::Other,
         }
     }
@@ -2760,7 +3148,7 @@ impl Contract {
                 // A message on the way to something read: what it asks of itself, when set.
                 let mut inner: Vec<Formula> = r.cel.iter().map(|e| crate::cel::read_src(e, p, &kind)).collect();
                 let on_path = reads.iter().any(|x| x.path().len() > p.len() && x.under(p));
-                if let (true, Some(m)) = (on_path && depth < DEPTH, self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &fd.ty))) {
+                if let (true, Some(m)) = (on_path && depth < DEPTH, self.message_of(fd)) {
                     inner.push(self.proto_message(m, p, reads, depth + 1));
                 }
                 let inner = Formula::and(inner);
@@ -3273,7 +3661,7 @@ fn broken_constraints(f: &RuleFile, c: &Checked, con: &Contract, ac: &Across, sh
         );
         d = match &fix {
             Some(x) => {
-                let msg = con.at.rsplit('.').next().unwrap_or(&con.at).to_string();
+                let msg = con.at.clone();
                 d.fix(FixKind::NarrowContract, x.clone()).note(tr!(
                     "ヒント: その組み合わせが来ないはずなら、メッセージ `{msg}` に {x} と書いて、契約で約束してください。来るのなら、{widen}。どちらにするかは人が決めることです。",
                     "hint: if that combination cannot occur, promise it in the contract: write {x} on the message `{msg}`. If it can, {widen}. Which of the two is a person's decision."
@@ -3430,7 +3818,7 @@ fn zero_of(con: &Contract, fd: &crate::proto::Field) -> Option<Zero> {
         Some(crate::proto::Scalar::Str) => Zero::Str,
         Some(crate::proto::Scalar::Bool) => Zero::Bool,
         None => {
-            let e = con.enum_of(&fd.ty)?;
+            let e = con.enum_of(fd)?;
             // proto3 puts 0 first; proto2's default is the first value written.
             let v = e.values.iter().find(|v| v.number == 0).or(e.values.first())?;
             Zero::Enum(v.name.clone())
@@ -3467,9 +3855,9 @@ pub fn proto_paths(f: &RuleFile, rule_path: &str) -> std::collections::HashMap<S
         let text = ritsu_base::fs::read_to_string(d.contract_path(rule_path).ok()?).ok()?;
         read(d, &text).ok()
     };
-    // One field of the element message `ty`, as a `where` or an `of` reads it.
-    let elem_field = |con: &Contract, ty: &str, field: &str| -> Option<(String, String, Zero)> {
-        let m = con.msgs.iter().find(|m| crate::proto::same_message(&m.name, ty))?;
+    // One field of the element message of the collection `coll`, as a `where` or an `of` reads it.
+    let elem_field = |con: &Contract, coll: &crate::proto::Field, field: &str| -> Option<(String, String, Zero)> {
+        let m = con.message_of(coll)?;
         let fd = m.fields.iter().find(|x| x.name == field)?;
         Some((fd.json(), fd.name.clone(), zero_of(con, fd)?))
     };
@@ -3484,7 +3872,7 @@ pub fn proto_paths(f: &RuleFile, rule_path: &str) -> std::collections::HashMap<S
         let Some(con) = contract(&pr.root.text) else { continue };
         let steps = pr.path_steps();
         let Some(mut pp) = path_of(&con, &steps) else { continue };
-        let Some(leaf) = con.proto_chain(&steps).and_then(|ch| ch.last().map(|fd| fd.ty.clone())) else { continue };
+        let Some(leaf) = con.proto_chain(&steps).and_then(|ch| ch.last().map(|fd| (*fd).clone())) else { continue };
         pp.elem = pr.kind.test().and_then(|(field, _)| elem_field(&con, &leaf, &field.text));
         pp.of = pr.kind.of().and_then(|of| elem_field(&con, &leaf, &of.text));
         out.insert(i.name.text.clone(), pp);

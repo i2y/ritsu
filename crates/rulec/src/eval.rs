@@ -31,16 +31,13 @@ impl Val {
             Val::Enum(s) | Val::Str(s) => s.clone(),
             Val::Bool(b) => if *b { crate::kw::TRUE } else { crate::kw::FALSE }.into(),
             Val::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
-            // A value of `T?` that is there is shown as a value of `T` (§15.249).
-            Val::Num(r) => match ty.present() {
-                Ty::Money { cur, .. } => format!("{r}{cur}"),
-                Ty::Qty { unit, .. } => format!("{r}{unit}"),
-                Ty::Rate => format!("{}%", r.mul(Rat::int(100))),
-                _ => format!("{r}"),
-            },
+            // As the rule writes a value of its type, its digits grouped as the languages group
+            // them (`51_000JPY`; §15.333). A value of `T?` that is there is shown as a value of
+            // `T` (§15.249).
+            Val::Num(r) => crate::types::fmt_val(*r, ty),
             // A sequence is never spelled into a cell or a message; how many there are is
             // the only thing about it a reader of prose ever needs (§15.56).
-            Val::Seq(xs) => tr!("{} 件", "{} elements", xs.len()),
+            Val::Seq(xs) => tr!("{} 件", "{} elements", ritsu_units::written::digits(xs.len() as i128)),
         }
     }
 }
@@ -54,12 +51,25 @@ pub struct Env<'a> {
     /// the tags rather than parsed back out of them: `row_tag` is prose, and prose is allowed
     /// to change (§11 principle 5).
     pub fired_rows: Vec<(String, usize)>,
+    /// The first `define` whose value fell outside the range the rule accepts for it, by its name
+    /// (§15.313): the generated code refuses the call right where it works the value out. The
+    /// value is bound all the same, so that what reads it can still be asked about.
+    pub outside: Option<String>,
 }
 
 impl<'a> Env<'a> {
     pub fn new(c: &'a Checked, vals: HashMap<String, Val>) -> Env<'a> {
-        Env { vals, c, fired: Vec::new(), fired_rows: Vec::new() }
+        Env { vals, c, fired: Vec::new(), fired_rows: Vec::new(), outside: None }
     }
+}
+
+/// Whether a value of a `define` lies outside the range the rule accepts for it (§15.313). A value
+/// of a `define` with no such range is never outside.
+pub fn outside_accepted(c: &Checked, name: &str, v: &Val) -> bool {
+    let Some((lo, hi)) = c.accepts.get(name) else { return false };
+    let Val::Num(x) = v else { return false };
+    let x = *x;
+    lo.is_some_and(|l| x.cmp_to(l) == std::cmp::Ordering::Less) || hi.is_some_and(|h| x.cmp_to(h) == std::cmp::Ordering::Greater)
 }
 
 /// A value as it goes into a diagnostic's witness: an integer in the canonical unit, an enum
@@ -391,6 +401,10 @@ fn run_item(it: &Item, env: &mut Env) {
         }
         Item::Define(d) => {
             if let Some(v) = env.expr(&d.expr) {
+                // Past the range the rule accepts for it, the call is refused here (§15.313).
+                if env.outside.is_none() && outside_accepted(env.c, &d.name.text, &v) {
+                    env.outside = Some(d.name.text.clone());
+                }
                 env.vals.insert(d.name.text.clone(), v);
             }
         }
@@ -462,21 +476,31 @@ enum Acc {
     /// The largest (smallest) value so far of the elements the `where` let in, and whether an
     /// element it let in had no value in the column.
     Extreme { best: Option<Val>, missing: bool },
-    /// A fold: what it has taken and kept, by what key, and whether it stopped (with the value
-    /// `stop with` gave, if any). A pick by weight adds its weights up in `weights`, and keeps the
+    /// A fold: what it has taken (and the index of the element it took it from, `took`, §15.324)
+    /// and kept, by what key, and whether it stopped (with the value `stop with` gave, if any). A pick by weight adds its weights up in `weights`, and keeps the
     /// running total after each element it weighed in `cuts` (§15.226).
-    Fold { taken: Option<Val>, held: Option<Val>, best: Option<Val>, stopped: Option<Option<Val>>, weights: Rat, cuts: Vec<Rat> },
+    Fold { taken: Option<Val>, took: usize, held: Option<Val>, best: Option<Val>, stopped: Option<Option<Val>>, weights: Rat, cuts: Vec<Rat> },
+}
+
+/// A `sum` or a `count` that ended its walk outside the range it declares, by its name, and the
+/// end it is past (§15.100, §15.314): a `sum` above the top of its range, or either under the
+/// bottom of its own. A `count` never passes its top: the sequence is held to it at the door.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Past {
+    pub name: String,
+    /// Under the bottom of the range, and not above its top.
+    pub below: bool,
 }
 
 /// Everything one walk left behind: the answers bound to their names, and — for the coverage
 /// audit — the verdict each element landed on, per fold.
 struct Walked {
-    /// Two elements took under `take_unique`, in the fold at this place among the items: the
-    /// rule has no answer.
-    broken: Option<usize>,
-    /// A `sum` whose total passed the top of the range it declares, by its name: the generated
-    /// code refuses the call there (§15.100), and the rule has no answer either.
-    past: Option<String>,
+    /// Two elements took under `take_unique`, in the fold at this place among the items, and which
+    /// two (§15.324): the rule has no answer.
+    broken: Option<Broke>,
+    /// A `sum` or a `count` that ended its walk outside the range it declares (§15.100, §15.314):
+    /// the generated code refuses the call there, and the rule has no answer either.
+    past: Option<Past>,
     /// The drawn value of a pick by weight that is not below the total of the weights, by its name
     /// (§15.226): the generated code refuses the call once the walk is over, and the rule has no
     /// answer either.
@@ -486,6 +510,111 @@ struct Walked {
     /// the total would pass it, without reading the elements after, and the rule has no answer
     /// either.
     heavy: Option<String>,
+    /// The first `define` of one element whose value fell outside the range the rule accepts for
+    /// it (§15.313): the generated code refuses the call at that element, before the element's
+    /// summaries take it in, and reads no element after it.
+    outside: Option<Outside>,
+    /// The first element the door refused on the walk, where the walk looks at it (§15.328): a
+    /// field outside its range, or a `unique` field with the value of an element before it.
+    refused: Option<crate::door::ElementRefused>,
+}
+
+/// Why the generated code refuses a call once its door has looked at the inputs (§15.328), where
+/// the function works it out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Refused {
+    /// The door's look at an element on the walk, in the sequence at this place among the rule's.
+    Element(usize, crate::door::ElementRefused),
+    /// A value worked out outside the range the rule accepts for it (§15.313).
+    Outside(Outside),
+    /// Weights of a pick by weight whose total passes int64, by the sequence it walks (§15.226).
+    Heavy(String),
+    /// A `sum` or a `count` outside its range once its walk is over (§15.100, §15.314).
+    Past(Past),
+    /// A drawn value not below the total of the weights, by its name (§15.226).
+    Drawn(String),
+    /// Two elements took under `take_unique`: the rule's side, `RuleContradictionError`.
+    Contradiction(Broke),
+}
+
+impl Refused {
+    /// The sentence the generated code raises `RuleInputError` with, for the caller's side; `None`
+    /// for the rule's contradiction.
+    pub fn said(&self, f: &RuleFile) -> Option<String> {
+        Some(match self {
+            Refused::Element(s, why) => why.said(&f.elements[*s].name.text),
+            Refused::Outside(x) => crate::door::out_of_range(&x.said(f)),
+            Refused::Heavy(seq) => crate::door::weights_past(seq),
+            Refused::Past(p) => crate::door::out_of_range(&p.name),
+            Refused::Drawn(n) => crate::door::draw_past(n),
+            Refused::Contradiction(_) => return None,
+        })
+    }
+}
+
+/// What the generated code refuses these inputs for past the door's second look at the inputs
+/// (§15.328, `door::read`), in the order the function works the rule out: a value worked out before
+/// the walks outside the range the rule accepts for it; then each walk, element by element — on the
+/// first walk over a sequence the door's look at the element (its fields' ranges, then its `unique`
+/// fields), past a `stop` too — the values worked out for the element and each summary's step; once
+/// a walk is over, what it refuses at its end; and the values worked out from what the walks
+/// answered. The inputs are of their types and inside their ranges, and each sequence no longer
+/// than a `count` over it can be. `None` when the call is answered.
+pub fn walked_refusal(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Option<Refused> {
+    if !f.walks() {
+        if c.accepts.is_empty() {
+            return None;
+        }
+        return run_flat(f, c, inputs).outside.map(|name| Refused::Outside(Outside { name, at: None }));
+    }
+    let mut o = Observe { door: true, ..Observe::default() };
+    let _ = walk_all(f, c, inputs, &mut o);
+    // The walk stops at the first of them, so only one is there.
+    if let Some((s, why)) = o.refused {
+        return Some(Refused::Element(s, why));
+    }
+    if let Some(x) = o.outside {
+        return Some(Refused::Outside(x));
+    }
+    if let Some(seq) = o.heavy {
+        return Some(Refused::Heavy(seq));
+    }
+    if let Some(p) = o.past {
+        return Some(Refused::Past(p));
+    }
+    if let Some(n) = o.drawn {
+        return Some(Refused::Drawn(n));
+    }
+    o.broke.map(Refused::Contradiction)
+}
+
+/// A value the rule does not accept, where it was worked out (§15.313, §15.324): the `define`, and
+/// for one worked out for each element, the sequence by its place among the rule's sequences and the
+/// element by its index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Outside {
+    pub name: String,
+    pub at: Option<(usize, usize)>,
+}
+
+impl Outside {
+    /// What a sentence calls it: `subtotal`, or `lines[1].subtotal` for one worked out for each
+    /// element (§15.324).
+    pub fn said(&self, f: &RuleFile) -> String {
+        match self.at {
+            Some((s, k)) => crate::door::element(&f.elements[s].name.text, k, &self.name),
+            None => self.name.clone(),
+        }
+    }
+}
+
+/// Two elements both taking under `take_unique` (§15.56, §15.324): the fold by its place among the
+/// rule's items, the index of the element it took, and of the one that matched again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Broke {
+    pub item: usize,
+    pub before: usize,
+    pub here: usize,
 }
 
 /// A rule that walks sequences (§15.56, §15.58, §15.219), in the stages its items fall into
@@ -527,17 +656,28 @@ fn run_walking(
 /// read what was found after it.
 #[derive(Default)]
 struct Observe {
-    /// Go on past a `stop`, a contradiction, a sum past its range and weights whose total passes
-    /// int64, so that every element is seen: what the coverage of a fold's transitions is judged on.
+    /// Go on past a `stop`, a contradiction, a summary outside its range and weights whose total
+    /// passes int64, so that every element is seen: what the coverage of a fold's transitions is
+    /// judged on.
     all: bool,
+    /// Look at each element with the door where the generated walk does (§15.328): on the first
+    /// walk over its sequence, before anything is worked out for it, and past a `stop` too, where
+    /// the walk's work has ended and the door's has not. What `door::read` asks for; without it a
+    /// sequence over its cap or with a `unique` value twice has no answer, said by nothing.
+    door: bool,
+    /// The first element the door refused on a walk, with the sequence's place among the rule's.
+    refused: Option<(usize, crate::door::ElementRefused)>,
     /// Collect the case of every element of a walk after the first (`ElementCase`).
     cases: bool,
     /// Per fold, by its place among the items, the verdict of every element of its sequence.
     verdicts: HashMap<usize, Vec<Option<String>>>,
-    /// The fold two elements both took under `take_unique` in, by its place among the items.
-    broke: Option<usize>,
-    /// The `sum` whose total passed the top of the range it declares, by its name.
-    past: Option<String>,
+    /// The fold two elements both took under `take_unique` in, and the two (§15.324).
+    broke: Option<Broke>,
+    /// The first `sum` or `count` that ended its walk outside the range it declares.
+    past: Option<Past>,
+    /// The first `define` whose value fell outside the range the rule accepts for it (§15.313), and
+    /// where (§15.324).
+    outside: Option<Outside>,
     /// The drawn value a pick by weight found not below the total of its weights, by its name.
     drawn: Option<String>,
     /// The pick by weight whose total of the weights passed int64, by the sequence it walks.
@@ -571,11 +711,13 @@ pub struct ElementCase {
     pub fired: Vec<String>,
 }
 
-/// The `sum` whose total passed the top of the range it declares on these inputs, by its name:
-/// the generated code refuses the call the moment the walk is over (§15.100), so the reference
-/// evaluator has no answer for it either. `None` when every total stays inside.
-pub fn sum_past_range(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Option<String> {
-    if !f.aggs().any(|d| d.kind == AggKind::Sum) {
+/// The first `sum` or `count` that ends its walk outside the range it declares on these inputs
+/// (§15.100, §15.314): a `sum` whose total passed the top of its range, or a `sum` or a `count`
+/// that came in under the bottom of its own — an empty sequence where the range starts above zero.
+/// The generated code refuses the call the moment the walk is over, so the reference evaluator has
+/// no answer for it either. `None` when every walk ends inside.
+pub fn summary_outside(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Option<Past> {
+    if !f.aggs().any(|d| d.kind == AggKind::Sum || c.walk_floor(d).is_some()) {
         return None;
     }
     let mut o = Observe::default();
@@ -583,11 +725,31 @@ pub fn sum_past_range(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -
     o.past
 }
 
+/// What a `sum` or a `count` comes to on these inputs, whether or not the call is answered: the
+/// walks are gone through to their ends past what refuses them. The vectors ask it of a sequence
+/// they build to bring a summary to an end of its range (§15.314).
+pub fn summary_value(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>, name: &str) -> Option<Rat> {
+    let mut o = Observe { all: true, ..Observe::default() };
+    let (_, _, _, binds) = walk_all(f, c, inputs, &mut o);
+    match binds.get(name) {
+        Some(Val::Num(r)) => Some(*r),
+        _ => None,
+    }
+}
+
+/// What every summary comes to on these inputs, whether or not the call is answered, as
+/// `summary_value` reads one of them: the vectors aim a case at a value of one summary while another
+/// is outside its range, and bring that one inside afterwards (§15.323).
+pub fn summaries_past(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> HashMap<String, Val> {
+    let mut o = Observe { all: true, ..Observe::default() };
+    walk_all(f, c, inputs, &mut o).3
+}
+
 /// Why the reference evaluator has no answer for an input the checks would otherwise ask about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NoAnswer {
-    /// The door refuses it: a `constraint`, a sum past its range, a drawn value past the weights,
-    /// weights whose total passes int64.
+    /// The door refuses it: a `constraint`, a `sum` or a `count` outside its range, a drawn value
+    /// past the weights, weights whose total passes int64.
     Refused,
     /// The rule contradicts itself on it: two elements took under `take_unique`.
     Contradiction,
@@ -604,7 +766,12 @@ pub fn answer(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Result
         }
     }
     if !f.walks() {
-        return Ok(run_all_traced(f, c, inputs).0);
+        // A value the rule does not accept refuses the call where it is worked out (§15.313).
+        let mut env = run_flat(f, c, inputs);
+        if env.outside.is_some() {
+            return Err(NoAnswer::Refused);
+        }
+        return Ok(outputs_of(f, c, &mut env));
     }
     let mut o = Observe::default();
     let (outs, _, _, _) = walk_all(f, c, inputs, &mut o);
@@ -612,7 +779,7 @@ pub fn answer(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Result
         return Err(NoAnswer::Contradiction);
     }
     // A sequence past the cap a `count` over it declares has no answer either, and no flag says so.
-    if o.past.is_some() || o.drawn.is_some() || o.heavy.is_some() || (!outs.is_empty() && outs.iter().all(|(_, v)| v.is_none())) {
+    if o.past.is_some() || o.drawn.is_some() || o.heavy.is_some() || o.outside.is_some() || (!outs.is_empty() && outs.iter().all(|(_, v)| v.is_none())) {
         return Err(NoAnswer::Refused);
     }
     Ok(outs)
@@ -646,12 +813,15 @@ pub fn weights_past(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> 
 }
 
 /// What the generated code refuses the sequences on these inputs for, in the order its door and its
-/// walk look (§15.226, §15.290, §15.100), in the sentence it refuses them with: more elements than a
-/// `count` over a sequence can be, an element's field outside its range, two elements with the same
-/// value of a `unique` field, and — when `walk` — weights whose total passes int64 and a `sum` past
-/// its range. A claim of `chances` that names such a sequence speaks of a call nobody can make. A
-/// drawn value not below the total of the weights is the draw's and not the sequence's, and is not
-/// looked at. `None` when the code takes the sequences.
+/// walk look (§15.328), in the sentence it refuses them with: more elements than a `count` over a
+/// sequence can be; then, element by element, an element's field outside its range and two elements
+/// with the same value of a `unique` field (§15.290) — and when `walk`, what the walk refuses on the
+/// way: a value worked out outside the range the rule accepts for it, weights whose total passes
+/// int64, a `sum` or a `count` outside its range (§15.226, §15.100). A claim of `chances` that names
+/// such a sequence speaks of a call nobody can make. A drawn value not below the total of the
+/// weights is the draw's and not the sequence's, and a walk that comes to it or to the rule's own
+/// contradiction first has refused nothing of the sequence's. `None` when the code takes the
+/// sequences.
 pub fn sequence_refused(f: &RuleFile, c: &Checked, inputs: &HashMap<String, Val>, walk: bool) -> Option<String> {
     for el in &f.elements {
         let seq = &el.name.text;
@@ -661,31 +831,28 @@ pub fn sequence_refused(f: &RuleFile, c: &Checked, inputs: &HashMap<String, Val>
                 return Some(crate::door::too_many(seq, cap));
             }
         }
-        let one: HashMap<String, Val> = std::iter::once((seq.clone(), Val::Seq(xs.clone()))).collect();
-        if let Some((name, _, _)) = outside_range(f, c, &one) {
-            return Some(crate::door::out_of_range(&name));
+    }
+    if walk && f.walks() {
+        return match walked_refusal(f, c, inputs.clone()) {
+            Some(r @ (Refused::Element(..) | Refused::Outside(_) | Refused::Heavy(_) | Refused::Past(_))) => r.said(f),
+            _ => None,
+        };
+    }
+    for (s, el) in f.elements.iter().enumerate() {
+        let Some(Val::Seq(xs)) = inputs.get(&el.name.text) else { continue };
+        if let Some(why) = (0..xs.len()).find_map(|k| crate::door::element_refusal(f, c, s, k, xs)) {
+            return Some(why.said(&el.name.text));
         }
-        if let Some(field) = crate::door::repeated(el, xs) {
-            return Some(crate::door::duplicate(seq, field));
-        }
     }
-    if !walk || !f.walks() {
-        return None;
-    }
-    let mut o = Observe::default();
-    let _ = walk_all(f, c, inputs.clone(), &mut o);
-    if let Some(seq) = o.heavy {
-        return Some(crate::door::weights_past(&seq));
-    }
-    o.past.map(|name| crate::door::out_of_range(&name))
+    None
 }
 
 /// What the generated code refuses an example's input for past the door's look at each value
 /// (§15.226, §15.100), as E019 says it: the heading, the code's own sentence, why the example is
 /// wrong, and what to do. A sequence longer than a `count` over it can be, then what the walk
-/// refuses, in the order the code looks: weights whose total passes int64, a `sum` past its range
-/// once the walk is over, a drawn value not below the total of the weights. `None` when the code
-/// takes the input that far.
+/// refuses, in the order the code looks: weights whose total passes int64, a `sum` or a `count`
+/// outside its range once the walk is over, a drawn value not below the total of the weights.
+/// `None` when the code takes the input that far.
 fn refused_on_walk(f: &RuleFile, c: &Checked, env: &HashMap<String, Val>) -> Option<(String, String, String, String)> {
     if !f.walks() {
         return None;
@@ -724,10 +891,10 @@ fn refused_on_walk(f: &RuleFile, c: &Checked, env: &HashMap<String, Val>) -> Opt
             ),
         ));
     }
-    if let Some(name) = o.past {
+    if let Some(Past { name, below: false }) = &o.past {
         return Some((
             tr!("例の入力で、`sum` が宣言した範囲を越えます", "On an example's inputs, a `sum` passes its declared range"),
-            crate::door::out_of_range(&name),
+            crate::door::out_of_range(name),
             tr!(
                 "`sum` の合計は、歩きが終わったところで宣言した範囲と比べ、越えると生成コードが断ります。例はその入力に答えがあると言っていることになります。",
                 "A `sum` is held to its declared range once the walk is over, and the generated code refuses the call past it. The example claims an answer for an input it refuses."
@@ -735,6 +902,23 @@ fn refused_on_walk(f: &RuleFile, c: &Checked, env: &HashMap<String, Val>) -> Opt
             tr!(
                 "例の並びを直すか、その合計が本当に来るなら `sum` の範囲を広げてください。",
                 "Correct the example's sequence, or widen the range of the `sum` if that total really comes."
+            ),
+        ));
+    }
+    // Under the bottom of the range a `sum` or a `count` declares (§15.314): an empty sequence, or
+    // one that adds up to less.
+    if let Some(Past { name, below: true }) = &o.past {
+        let word = f.aggs().find(|d| d.name.text == *name).map(|d| d.kind.word()).unwrap_or(crate::kw::SUM);
+        return Some((
+            tr!("例の入力で、`{word}` が宣言した範囲の下限に届きません", "On an example's inputs, a `{word}` comes in under its declared range"),
+            crate::door::out_of_range(name),
+            tr!(
+                "`{word}` の結果は、並びをたどり終えたところで宣言した範囲と比べ、下限より小さいと、生成コードはその呼び出しを受け付けません。空の並びの結果は 0 です。例は、その入力に答えがあると言っていることになります。",
+                "A `{word}` is held to its declared range once the walk is over, and the generated code refuses a call that comes in under the bottom of it; an empty sequence comes to 0. The example claims an answer for an input it refuses."
+            ),
+            tr!(
+                "例の並びを直すか、その値が本当に来るなら `{word}` の範囲の下限を下げてください。",
+                "Correct the example's sequence, or lower the bottom of the range of the `{word}` if that value really comes."
             ),
         ));
     }
@@ -778,6 +962,11 @@ pub fn weighted_cuts(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) ->
 /// what the generated code raises on, and the reason the reference evaluator has no answer
 /// (§15.56). `None` when no fold did.
 pub fn contradiction(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Option<usize> {
+    contradiction_at(f, c, inputs).map(|b| b.item)
+}
+
+/// The same as [`contradiction`], with the two elements (§15.324).
+pub fn contradiction_at(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Option<Broke> {
     if !f.walks() {
         return None;
     }
@@ -830,8 +1019,10 @@ fn walk_all(
 
     // A sequence is capped by the smallest bound any count over it declares, and a longer one has
     // no answer here for the same reason the generated code refuses it: the completeness proof was
-    // made over the declared universe (§15.58). A sum's range bounds its total, not the length.
-    for (k, el) in f.elements.iter().enumerate() {
+    // made over the declared universe (§15.58). A sum's range bounds its total, not the length. The
+    // door that looks on the walk has held each sequence to its cap already, and finds a `unique`
+    // value twice where the walk comes to it (§15.328).
+    for (k, el) in f.elements.iter().enumerate().filter(|_| !obs.door) {
         let cap = f
             .aggs()
             .filter(|d| d.kind == AggKind::Count && d.over == el.name.text)
@@ -854,6 +1045,14 @@ fn walk_all(
     for i in st.once(0) {
         run_item(&f.items[i], &mut env);
     }
+    // A value worked out before the walks that the rule does not accept is refused there, before
+    // any element is read (§15.313).
+    if let Some(n) = env.outside.clone() {
+        obs.outside.get_or_insert(Outside { name: n, at: None });
+        if !obs.all {
+            return (nothing(), Vec::new(), Vec::new(), HashMap::new());
+        }
+    }
     let mut one: HashMap<String, Val> = HashMap::new();
     let mut broken = false;
     for level in 1..=st.depth {
@@ -862,6 +1061,16 @@ fn walk_all(
                 continue;
             }
             let walked = walk_one(f, c, &st, s, level, &seqs[s], &mut env, &mut one, obs);
+            if let Some(why) = walked.refused {
+                obs.refused.get_or_insert((s, why));
+                return (nothing(), Vec::new(), Vec::new(), HashMap::new());
+            }
+            if let Some(n) = walked.outside {
+                obs.outside.get_or_insert(n);
+                if !obs.all {
+                    return (nothing(), Vec::new(), Vec::new(), HashMap::new());
+                }
+            }
             if let Some(n) = walked.heavy {
                 obs.heavy.get_or_insert(n);
                 if !obs.all {
@@ -896,6 +1105,12 @@ fn walk_all(
         // What reads the answers of the walks up to this one.
         for i in st.once(level) {
             run_item(&f.items[i], &mut env);
+        }
+        if let Some(n) = env.outside.clone() {
+            obs.outside.get_or_insert(Outside { name: n, at: None });
+            if !obs.all {
+                return (nothing(), Vec::new(), Vec::new(), HashMap::new());
+            }
         }
     }
     let outs = outputs_of(f, c, &mut env);
@@ -941,12 +1156,29 @@ fn walk_one(
         .map(|&i| match &f.items[i] {
             Item::Agg(d) if d.kind.extreme() => Acc::Extreme { best: None, missing: false },
             Item::Agg(_) => Acc::Tally(Some(Rat::zero())),
-            _ => Acc::Fold { taken: None, held: None, best: None, stopped: None, weights: Rat::zero(), cuts: Vec::new() },
+            _ => Acc::Fold { taken: None, took: 0, held: None, best: None, stopped: None, weights: Rat::zero(), cuts: Vec::new() },
         })
         .collect();
-    let mut broken: Option<usize> = None;
+    let mut broken: Option<Broke> = None;
     let mut heavy: Option<String> = None;
-    'elements: for e in seq {
+    let mut outside: Option<Outside> = None;
+    // The door looks at each element on the first walk over its sequence, before anything is
+    // worked out for the element (§15.328), and goes on past a `stop`: the walk's work ends there,
+    // the door's does not (`ended`).
+    let door = obs.door && st.walks().iter().filter(|(_, x)| *x == s).map(|(w, _)| *w).min() == Some(level);
+    let mut refused: Option<crate::door::ElementRefused> = None;
+    let mut ended = false;
+    // The index of each element, from 0, is what a sentence about one element says (§15.324).
+    'elements: for (k, e) in seq.iter().enumerate() {
+        if door {
+            if let Some(why) = crate::door::element_refusal(f, c, s, k, seq) {
+                refused = Some(why);
+                break 'elements;
+            }
+            if ended {
+                continue;
+            }
+        }
         let mut m = before.clone();
         for (k, v) in e {
             m.insert(k.clone(), v.clone());
@@ -954,6 +1186,14 @@ fn walk_one(
         let mut eenv = Env::new(c, m);
         for &i in &body {
             run_item(&f.items[i], &mut eenv);
+        }
+        // A value of one element the rule does not accept refuses the call at that element, before
+        // its summaries take it in (§15.313).
+        if let Some(n) = eenv.outside.clone() {
+            outside.get_or_insert(Outside { name: n, at: Some((s, k)) });
+            if !observe {
+                break 'elements;
+            }
         }
         if obs.cases && level > 1 {
             obs.found.push(ElementCase {
@@ -1017,7 +1257,7 @@ fn walk_one(
                         }
                     }
                 }
-                (Item::Fold(fold), Acc::Fold { taken, held, best, stopped, weights, cuts }) => {
+                (Item::Fold(fold), Acc::Fold { taken, took, held, best, stopped, weights, cuts }) => {
                     let v = match eenv.vals.get(&fold.verdict) {
                         Some(Val::Enum(v)) => Some(v.clone()),
                         _ => None,
@@ -1045,7 +1285,7 @@ fn walk_one(
                         Arm::Take { expr, unique } => {
                             if taken.is_some() {
                                 if *unique {
-                                    broken.get_or_insert(i);
+                                    broken.get_or_insert(Broke { item: i, before: *took, here: k });
                                     if !observe {
                                         break 'elements;
                                     }
@@ -1053,6 +1293,7 @@ fn walk_one(
                                 // take_first: the first one stands and the rest are passed over.
                             } else {
                                 *taken = eenv.expr(expr);
+                                *took = k;
                             }
                         }
                         Arm::KeepMax { expr, key } => {
@@ -1094,23 +1335,36 @@ fn walk_one(
                         }
                     }
                     if alone && stopped.is_some() && !observe {
-                        break 'elements;
+                        if door {
+                            ended = true;
+                        } else {
+                            break 'elements;
+                        }
                     }
                 }
                 _ => {}
             }
         }
     }
+    if refused.is_some() {
+        return Walked { broken: None, past: None, drawn: None, heavy: None, outside: None, refused };
+    }
     if broken.is_some() {
-        return Walked { broken, past: None, drawn: None, heavy: None };
+        return Walked { broken, past: None, drawn: None, heavy: None, outside, refused: None };
     }
-    // The walk stopped where the total of the weights passed int64: nothing after it is read, and
-    // nothing is answered.
+    // The walk stopped at an element the rule refuses, or where the total of the weights passed
+    // int64: nothing after it is read, and nothing is answered.
+    if outside.is_some() && !observe {
+        return Walked { broken: None, past: None, drawn: None, heavy: None, outside, refused: None };
+    }
     if heavy.is_some() && !observe {
-        return Walked { broken: None, past: None, drawn: None, heavy };
+        return Walked { broken: None, past: None, drawn: None, heavy, outside: None, refused: None };
     }
-    let mut past: Option<String> = None;
+    let mut past: Option<Past> = None;
     let mut drawn: Option<String> = None;
+    // The generated code looks at the end of each summary in the order the rule writes them, and
+    // the door says the first it refuses (§15.328).
+    let first_only = obs.door;
 
     // The walk is over: what each summary answered, under its name.
     for (si, &i) in sums.iter().enumerate() {
@@ -1121,8 +1375,15 @@ fn walk_one(
                 // it (§15.100).
                 let hi = c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi);
                 if let (AggKind::Sum, Some(t), Some(hi)) = (d.kind, t, hi) {
-                    if t.cmp_to(hi) == std::cmp::Ordering::Greater {
-                        past.get_or_insert(d.name.text.clone());
+                    if t.cmp_to(hi) == std::cmp::Ordering::Greater && !(first_only && drawn.is_some()) {
+                        past.get_or_insert(Past { name: d.name.text.clone(), below: false });
+                    }
+                }
+                // So is a total or a count under the bottom of its range (§15.314): the code
+                // compares it with the bottom right after the top, summary by summary.
+                if let (Some(t), Some(lo)) = (t, c.walk_floor(d)) {
+                    if t.cmp_to(lo) == std::cmp::Ordering::Less && !(first_only && drawn.is_some()) {
+                        past.get_or_insert(Past { name: d.name.text.clone(), below: true });
                     }
                 }
                 if let Some(t) = t {
@@ -1144,7 +1405,7 @@ fn walk_one(
                 if fold.weighted() {
                     if let Some(d) = &fold.draw {
                         if let Some(Val::Num(r)) = before.get(&d.text) {
-                            if weights.num > 0 && r.cmp_to(weights) != std::cmp::Ordering::Less {
+                            if weights.num > 0 && r.cmp_to(weights) != std::cmp::Ordering::Less && !(first_only && past.is_some()) {
                                 drawn.get_or_insert(d.text.clone());
                             }
                         }
@@ -1167,7 +1428,7 @@ fn walk_one(
             _ => {}
         }
     }
-    Walked { broken: None, past, drawn, heavy }
+    Walked { broken: None, past, drawn, heavy, outside, refused: None }
 }
 
 /// The rule's outputs, read out of an environment that has finished running: the `result`
@@ -1206,29 +1467,44 @@ pub fn run_all_traced(
     if f.walks() {
         return run_walking(f, c, inputs);
     }
-    let mut env = Env::new(c, inputs);
-    for it in &f.items {
-        match it {
-            Item::Derived(d) => {
-                if let Some(v) = env.expr(&d.expr) {
-                    env.vals.insert(d.name.text.clone(), v);
-                }
-            }
-            Item::Define(d) => {
-                if let Some(v) = env.expr(&d.expr) {
-                    env.vals.insert(d.name.text.clone(), v);
-                }
-            }
-            Item::Table(t) => {
-                env.table(t);
-            }
-            Item::Agg(_) | Item::Fold(_) => {}
-        }
-    }
+    let mut env = run_flat(f, c, inputs);
     // The rounding declared on the output applies last — §7.2, "an unrounded value never
     // reaches the output".
     let outs = outputs_of(f, c, &mut env);
     (outs, env.fired, env.fired_rows, env.vals)
+}
+
+/// The items of a rule that walks no sequence, run in the order written, in one environment.
+fn run_flat<'a>(f: &RuleFile, c: &'a Checked, inputs: HashMap<String, Val>) -> Env<'a> {
+    let mut env = Env::new(c, inputs);
+    for it in &f.items {
+        run_item(it, &mut env);
+    }
+    env
+}
+
+/// The first `define` whose value falls outside the range the rule accepts for it on these
+/// inputs, by its name, in the order the generated code works the values out (§15.313): it refuses
+/// the call there, so the reference evaluator has no answer for it either. In a rule that walks, a
+/// refusal the walk comes to first — a `sum` past its range, weights past int64, a drawn value
+/// past the weights — is that refusal and not this one. `None` when every such value is inside,
+/// and for a rule with no `define … range`.
+pub fn define_outside(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Option<String> {
+    define_outside_at(f, c, inputs).map(|o| o.name)
+}
+
+/// The same as [`define_outside`], with where it was worked out: for a `define` worked out for each
+/// element, the element (§15.324).
+pub fn define_outside_at(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Option<Outside> {
+    if c.accepts.is_empty() {
+        return None;
+    }
+    if !f.walks() {
+        return run_flat(f, c, inputs).outside.map(|name| Outside { name, at: None });
+    }
+    let mut o = Observe::default();
+    let _ = walk_all(f, c, inputs, &mut o);
+    o.outside
 }
 
 /// The match test for a single cell, used from outside the table (the coverage check of §9.2).
@@ -1292,7 +1568,9 @@ pub fn example_env(f: &RuleFile, c: &Checked, ex: &crate::ast::Table, row: &Row)
 /// The first value of an example that lies outside what the generated code takes at its
 /// door: an input, or a field of an element of the sequence, beyond its range — the declared
 /// one, or the one a rate has without a declaration. Returned with the value and its type.
-fn outside_range(f: &RuleFile, c: &Checked, env: &HashMap<String, Val>) -> Option<(String, Val, Ty)> {
+/// The first value outside the range its door holds it to, as `(name, said, value, type)`: `said` is
+/// what a sentence calls it, the name, or for a field of an element its place (§15.324).
+fn outside_range(f: &RuleFile, c: &Checked, env: &HashMap<String, Val>) -> Option<(String, String, Val, Ty)> {
     let doors: Vec<&str> = f
         .inputs
         .iter()
@@ -1322,17 +1600,17 @@ fn outside_range(f: &RuleFile, c: &Checked, env: &HashMap<String, Val>) -> Optio
     for name in names {
         match &env[name] {
             Val::Seq(elements) => {
-                for el in elements {
+                for (i, el) in elements.iter().enumerate() {
                     for (k, v) in el {
-                        if let Some(hit) = out(k, v) {
-                            return Some(hit);
+                        if let Some((n, v, ty)) = out(k, v) {
+                            return Some((n, crate::door::element(name, i, k), v, ty));
                         }
                     }
                 }
             }
             v => {
-                if let Some(hit) = out(name, v) {
-                    return Some(hit);
+                if let Some((n, v, ty)) = out(name, v) {
+                    return Some((n.clone(), n, v, ty));
                 }
             }
         }
@@ -1416,7 +1694,7 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
         // The declared range is the door as well: the generated code refuses a value outside
         // it, the elements of a sequence field by field. An example there passed the check,
         // and its vector then failed against the generated code (§15.156).
-        if let Some((name, v, ty)) = outside_range(f, c, &env) {
+        if let Some((name, said, v, ty)) = outside_range(f, c, &env) {
             let (lo, hi) = c.ranges.get(&name).copied().unwrap_or((None, None));
             let end = |x: Option<Rat>| x.map(|x| Val::Num(x).show(&ty)).unwrap_or_else(|| "…".into());
             let shown = v.show(&ty);
@@ -1430,7 +1708,7 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
             out.push(
                 Diag::error("E019", tr!("例の値が、宣言した範囲の外です", "An example's value is outside the declared range"))
                     .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
-                    .mark(row.span.clone(), tr!("{name} = {shown} は {range} の外です", "{name} = {shown} is outside {range}"))
+                    .mark(row.span.clone(), tr!("{said} = {shown} は {range} の外です", "{said} = {shown} is outside {range}"))
                     .note(tr!(
                         "範囲の外の入力は、生成コードが入口で受け付けません。例はその入力に答えがあると言っていることになり、検査もその入力には行を求めていません。",
                         "The generated code refuses an input outside the range at its door. The example claims an answer for it, and the checks never asked a row to cover it."
@@ -1520,12 +1798,12 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
                 // Two elements with the same value of a `unique` field (§15.290).
                 for el in &f.elements {
                     let Some(Val::Seq(xs)) = a.get(&el.name.text) else { continue };
-                    let Some(field) = crate::door::repeated(el, xs) else { continue };
+                    let Some((field, before, here)) = crate::door::repeated(el, xs) else { continue };
                     let seq = &el.name.text;
                     out.push(
                         Diag::error("E019", tr!("例の並びに、`unique` のフィールドが同じ要素が二つあります", "An example's sequence has two elements with the same `unique` field"))
                             .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
-                            .mark(row.span.clone(), tr!("{seq} の要素に {field} が同じものが二つあります", "{seq} has two elements with the same {field}"))
+                            .mark(row.span.clone(), crate::door::duplicate(seq, &field, before, here))
                             .note(tr!(
                                 "`unique` は、並びの要素どうしでそのフィールドが同じにならないという約束です。同じ要素が二つある並びは、生成コードが入口で受け付けません。例はその並びに答えがあると言っていることになります。",
                                 "`unique` is the promise that no two elements of the sequence have the same value of that field, and the generated code refuses a sequence with two at its door. The example claims an answer for one."
@@ -1534,6 +1812,28 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
                                 "例の並びを直すか、同じ値の要素が本当に来るなら `unique` を外してください。",
                                 "Correct the example's sequence, or take `unique` off if two elements with the same value really come."
                             )),
+                    );
+                }
+                // A value worked out on the example's inputs that the rule does not accept for it
+                // (§15.313): the generated code refuses the call where it works the value out.
+                if let Some(x) = define_outside_at(f, c, env.clone()) {
+                    let mut d = Diag::error("E019", tr!("例の入力で、定義の値が受け付ける範囲の外になります", "On an example's inputs, a definition falls outside the range it accepts"))
+                        .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
+                        .mark(row.span.clone(), crate::door::out_of_range(&x.said(f)));
+                    for (col, _) in &ex.inputs {
+                        if let Some(v) = env.get(col) {
+                            d = d.win(col.clone(), wval(c, col, v));
+                        }
+                    }
+                    out.push(
+                        d.note(tr!(
+                            "定義の範囲は、その値を受け付ける範囲です。外になる呼び出しは、生成コードがその値を計算したところで受け付けません。例は、その入力に答えがあると言っていることになります。",
+                            "The range of a definition is where its value lies, and the generated code refuses a call whose value falls outside, where it works the value out. The example claims an answer for an input it refuses."
+                        ))
+                        .note(tr!(
+                            "例の値を直すか、その値が本当に来るなら定義の範囲を広げてください。",
+                            "Correct the example's values, or widen the definition's range if that value really comes."
+                        )),
                     );
                 }
                 continue;

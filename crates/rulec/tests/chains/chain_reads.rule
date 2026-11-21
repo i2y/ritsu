@@ -1,0 +1,40 @@
+rule batch(batch) v1
+description "Types written wrong, and the other kinds of line that read what they declare: each mistake is said once, at its declaration"
+
+enum size(size) = small(small) "Small" | big(big) "Big"
+
+inputs
+  # the type written wrong: the `constraint` that reads it is not checked
+  limit(limit) : numbr  range >=0 <=10
+  cap(cap) : number  range >=0 <=10
+
+elements parcels(parcels)
+  # the types written wrong: the count, the largest and the sum over them are not checked
+  kind(kind) : sizee
+  level(level) : numbr  range >=0 <=10
+  weight(weight) : mas[g]  range >0g <30001g
+
+constraint limit <= cap
+
+count bigs(bigs) over parcels where kind = big  range >=0 <=3
+max top(top) over parcels of level empty 0
+sum total(total) over parcels of weight  range >=0g <=90000g
+
+outputs
+  # the unit written wrong, here and in the table's heading: said once, and the range and the
+  # cells are not checked
+  fee(fee) : money[UDS]  round up(1USD)  range >=0USD <=100USD
+
+table fee_of(fee_of)
+policy unique
+| limit | cap | top | total | bigs | -> fee(fee) : money[UDS] |
+| -     | -   | -   | -     | >=2  | 10USD                    |
+| -     | -   | -   | -     | <2   | 0USD                     |
+
+examples
+| limit | cap | parcels  | -> fee |
+| 1     | 2   | lightest | 0USD   |
+
+sequence lightest(lightest)
+| kind  | level | weight |
+| small | 1     | 1000g  |

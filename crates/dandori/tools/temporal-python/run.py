@@ -228,6 +228,13 @@ async def runs_of(client: Any, workflow_id: str, first_run_id: str | None) -> li
     return out
 
 
+async def pass_on(stream: asyncio.StreamReader) -> None:
+    """What the other language's runner prints once it serves, on this runner's standard error, as it comes."""
+    while line := await stream.readline():
+        sys.stderr.write(line.decode(errors="replace"))
+        sys.stderr.flush()
+
+
 async def replay(package: str, histories: list[Any]) -> dict[str, str | None]:
     """Replay histories with the generated worker's replay: for each workflow, the error of a run of it that it finds nondeterministic, or None."""
     worker = importlib.import_module(f"{package}.worker")
@@ -569,6 +576,7 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
             await asyncio.sleep(attempt)
     results = []
     other: asyncio.subprocess.Process | None = None
+    passed_on: asyncio.Future[None] | None = None
     steps_dir: str | None = None
     try:
         base = worker.worker_options(own, transport=make_transport(spec, Run()))
@@ -589,6 +597,9 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
             while b"serving" not in await other.stdout.readline():
                 if other.stdout.at_eof():
                     raise RuntimeError("the activities' runner ended before it served")
+            # the rest of what it prints goes on to this runner's standard error, read as it comes, so
+            # that it never waits to write
+            passed_on = asyncio.ensure_future(pass_on(other.stdout))
             del base["activities"]
             queues = [client.TASK_QUEUE, *sorted({c["queue"] for c in spec.get("children", []) if c.get("queue") and c["queue"] != client.TASK_QUEUE})]
         async with contextlib.AsyncExitStack() as stack:
@@ -647,13 +658,27 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
                     shown = list(attribute) if attribute is not None else None
                 return {"end": end, "cases": cases, "shown": shown, "asked": asked, "histories": await runs_of(env.client, r["id"], handle.first_execution_run_id)}
 
-            ends = await asyncio.gather(*(one(r) for r in spec["runs"]))
+            runs_over = asyncio.ensure_future(asyncio.gather(*(one(r) for r in spec["runs"])))
+            if other is not None:
+                # the activities are the other runner's alone: when it ends before the runs are over,
+                # nothing serves them, and the runs would wait without end. What it said is on the
+                # standard error, which it shares with this runner.
+                gone = asyncio.ensure_future(other.wait())
+                await asyncio.wait({runs_over, gone}, return_when=asyncio.FIRST_COMPLETED)
+                if not runs_over.done():
+                    runs_over.cancel()
+                    raise RuntimeError(f"the activities' runner exited with {other.returncode} before the runs were over")
+                gone.cancel()
+            ends = await runs_over
             if other is not None:
                 # the calls each run made, as the other language's runner saw them
                 assert other.stdin is not None
                 other.stdin.close()
                 if await other.wait() != 0:
                     raise RuntimeError(f"the activities' runner exited with {other.returncode}")
+                if passed_on is not None:
+                    # the last of what it printed, for a few seconds at the most
+                    await asyncio.wait({passed_on}, timeout=5)
                 with open(steps_file, encoding="utf-8") as f:
                     steps = json.load(f)
                 for r in spec["runs"]:

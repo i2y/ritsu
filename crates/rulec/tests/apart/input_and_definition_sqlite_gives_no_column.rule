@@ -1,0 +1,16 @@
+rule truth_fee v1
+description "An input and a definition SQLite gives no column of their names in a WITH"
+
+inputs
+  TRUE : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define fALSE : money[USD] = TRUE * 1USD
+
+table fee_by_qty
+policy unique
+| TRUE | -> fee |
+| <=5 | fALSE |
+| >5  | 2USD |

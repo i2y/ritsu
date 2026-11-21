@@ -1,0 +1,14 @@
+request example v1 "Example"
+
+form
+  system : text "System"  count <=30
+  access : text "API key"  count <=80
+
+route
+  check  it_desk
+
+who
+  it_desk = team it_desk
+
+ticket
+  self approval  not allowed

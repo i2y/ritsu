@@ -1,0 +1,24 @@
+rule 同じ規則の表の日付を一日ずつ読む(same_rule_date_on_its_day) v1
+description "同じ規則の表が書く日付を、policy first の表で日ごとに読む。店で受け取る注文には日付が無い。行は、日付が無いとき、最初の日、残りの日の順に並ぶ"
+
+enum 地域(zone) = 県内(local) | 県外(national) | 店で受け取る(pickup)
+enum 時期(timing) = 早い(early) | 遅い(late) | 受け取り(collected)
+
+inputs
+  地域(zone) : 地域
+
+outputs
+  答え(x) : 時期
+
+table 出荷日の表(ships_of)
+| 地域         | -> 出荷日 : date? |
+| 県内         | 2026-07-01        |
+| 県外         | 2026-07-03        |
+| 店で受け取る | none              |
+
+table 選ぶ(pick)
+policy first
+| 出荷日     | -> 答え  |
+| none       | 受け取り |
+| 2026-07-01 | 早い     |
+| -          | 遅い     |

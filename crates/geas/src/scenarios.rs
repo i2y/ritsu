@@ -40,8 +40,9 @@ struct File {
     reqs: Vec<Req>,
 }
 
-fn e081(path: &str, why: Text) -> (String, Diag) {
-    (path.to_string(), diag::error("E081", 0, 0, tr!("このファイルを読めません: {}", "cannot read this file: {}", why.ja; why.en)))
+/// A file it cannot read, in the words of every command of ritsu (ritsu's DESIGN 6.2, item 10).
+fn e081(path: &str, said: Text) -> (String, Diag) {
+    (path.to_string(), diag::named("E081", said))
 }
 
 fn e090(path: &str, why: Text) -> (String, Diag) {
@@ -103,7 +104,7 @@ fn read_openspec(given: &[String], passed: &mut Vec<String>) -> Result<Vec<File>
         } else if p.is_file() {
             paths.push(p);
         } else {
-            errs.push(e081(g, tr!("ありません", "it is not there")));
+            errs.push(e081(g, ritsu_base::cli::not_there(g)));
         }
     }
     let mut files = Vec::new();
@@ -112,7 +113,7 @@ fn read_openspec(given: &[String], passed: &mut Vec<String>) -> Result<Vec<File>
         let bytes = match ritsu_base::fs::read(&p) {
             Ok(b) => b,
             Err(e) => {
-                errs.push(e081(&path, Text::same(e.to_string())));
+                errs.push(e081(&path, ritsu_base::cli::cannot_read(&path, &e)));
                 continue;
             }
         };
@@ -155,7 +156,7 @@ fn read_claims(specs: &[String]) -> Result<Vec<Claim>, Vec<(String, Diag, String
         let src = match ritsu_base::fs::read_to_string(f) {
             Ok(s) => s,
             Err(e) => {
-                let (p, d) = e081(f, Text::same(e.to_string()));
+                let (p, d) = e081(f, ritsu_base::cli::cannot_read(f, &e));
                 errs.push((p, d, String::new()));
                 continue;
             }
@@ -168,6 +169,21 @@ fn read_claims(specs: &[String]) -> Result<Vec<Claim>, Vec<(String, Diag, String
     if errs.is_empty() { Ok(out) } else { Err(errs) }
 }
 
+/// The files that stop the command, one JSON line each with its diagnostics, as `geas check --json`
+/// writes a spec it cannot run.
+fn failures_json(errs: Vec<(String, Diag)>, lang: Lang) {
+    let mut by_file: Vec<(String, Vec<(String, Diag)>)> = Vec::new();
+    for (f, d) in errs {
+        match by_file.iter_mut().find(|(g, _)| *g == f) {
+            Some((_, ds)) => ds.push((f, d)),
+            None => by_file.push((f.clone(), vec![(f, d)])),
+        }
+    }
+    for (f, ds) in by_file {
+        println!("{}", crate::report::failure_json(&f, &ds, lang));
+    }
+}
+
 /// The fold OpenSpec uses for its near names: case and the runs of white space.
 fn fold(s: &str) -> String {
     openspec::fold(s)
@@ -178,8 +194,13 @@ pub fn command(specs: &[String], o: &Opts) -> i32 {
     let claims = match read_claims(specs) {
         Ok(c) => c,
         Err(errs) => {
-            for (f, d, src) in errs {
-                eprint!("{}", d.shown(&f, &src, lang));
+            // asked for JSON, what stops it is in the JSON, as `geas check --json` writes it, and a
+            // file it cannot read is said on stderr too (ritsu's DESIGN 6.2, item 10)
+            if o.json {
+                failures_json(errs.iter().map(|(f, d, _)| (f.clone(), d.clone())).collect(), lang);
+            }
+            for (f, d, src) in errs.iter().filter(|(_, d, _)| !o.json || matches!(d.code, "E080" | "E081")) {
+                eprint!("{}", d.shown(f, src, lang));
             }
             return 2;
         }
@@ -192,8 +213,11 @@ pub fn command(specs: &[String], o: &Opts) -> i32 {
     let files = match read {
         Ok(f) => f,
         Err(errs) => {
-            for (f, d) in errs {
-                eprint!("{}", d.shown(&f, "", lang));
+            if o.json {
+                failures_json(errs.clone(), lang);
+            }
+            for (f, d) in errs.iter().filter(|(_, d)| !o.json || matches!(d.code, "E080" | "E081")) {
+                eprint!("{}", d.shown(f, "", lang));
             }
             return 2;
         }

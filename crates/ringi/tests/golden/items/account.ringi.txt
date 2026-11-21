@@ -1,0 +1,72 @@
+12-12 ringi "examples/account.ringi" field person
+    person : person "For whom"
+13-13 ringi "examples/account.ringi" field system
+    system : choice from m.systems "System"
+14-17 ringi "examples/account.ringi" field level
+    level : choice "Access level"
+    read "Read"
+    write "Write"
+    admin "Administrator"
+18-18 ringi "examples/account.ringi" field until
+    until : date "Until" range >=2026-01-01 <=2028-12-31
+19-19 ringi "examples/account.ringi" field reason
+    reason : long text "Why it is needed" count >=1 <=300
+24-25 ringi "examples/account.ringi" stage manager
+    manager manager
+    when empty escalate, then skip
+26-26 ringi "examples/account.ringi" stage owner
+    owner system_owner
+27-27 ringi "examples/account.ringi" stage security
+    security security when level is admin
+28-28 ringi "examples/account.ringi" stage operations
+    operations circulate to operations
+31-31 ringi "examples/account.ringi" who manager
+    manager = manager of requester
+32-32 ringi "examples/account.ringi" who system_owner
+    system_owner = lookup m.systems.owner by system
+33-33 ringi "examples/account.ringi" who security
+    security = team it_security
+34-34 ringi "examples/account.ringi" who operations
+    operations = team it_operations
+36-40 ringi "examples/account.ringi" deadline every_stage
+    every stage
+    due in 2 business days at end of day
+    remind after 1 business day at 09:00
+    when late escalate, then expire
+    when empty escalate
+25-25 ringi "examples/account.ringi" deadline manager
+    when empty escalate, then skip
+43-43 ringi "examples/account.ringi" ticket self_approval
+    self approval not allowed
+46-46 ringi "examples/account.ringi" ticket same_approver
+    same approver approves once, at the last stage
+47-47 ringi "examples/account.ringi" ticket send_back
+    send back to any earlier stage, at most 2 times
+48-48 ringi "examples/account.ringi" ticket resubmit
+    resubmit within 5 business days
+49-49 ringi "examples/account.ringi" ticket withdraw
+    withdraw until security
+50-50 ringi "examples/account.ringi" ticket launch_provision
+    on approved launch provision(request_id: ticket.id, person: person, system: system, level: level, until: until)
+53-53 ringi "examples/account.ringi" claim admins_pass_security
+    admins_pass_security : possible security is security
+54-54 ringi "examples/account.ringi" claim ends_in_time
+    ends_in_time : every ticket ends within 55 business days
+56-64 ringi "examples/account.ringi" scenario administrator_access
+    scenario administrator_access
+    requester e1201
+    form person = person "e1203", system = crm, level = admin, until = 2027-03-31, reason = "To set up the accounts of the new members of the section"
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | manager | in progress |
+    | 2026-11-16 11:00 | approve | e1101 | owner | in progress |
+    | 2026-11-16 16:00 | approve | e3101 | security | in progress |
+    | 2026-11-17 09:00 | remind | | security | in progress |
+    | 2026-11-17 15:00 | approve | e7102 | | approved |
+68-74 ringi "examples/account.ringi" scenario the_manager_answers_once_at_security
+    scenario the_manager_answers_once_at_security
+    requester e7102
+    form person = person "e7102", system = wiki, level = admin, until = 2027-03-31, reason = "To keep the pages of the security team"
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e7102 | owner | in progress |
+    | 2026-11-16 11:00 | approve | e7001 | security | in progress |
+    | 2026-11-16 15:00 | approve | e7101 | | approved |

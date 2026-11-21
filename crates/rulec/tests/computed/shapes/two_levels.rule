@@ -1,0 +1,19 @@
+rule two_levels v1
+description "An output of a rule that applies a rule in turn: the way the value arrives goes through both tables"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+apply w = "shared/twolevel.rule" meaning:fd833fbaca4dc192
+  amount = amount
+  big -> w_big
+
+outputs
+  x : choice
+
+table pick
+| amount       | w_big | -> x |
+| <=100_000JPY | false | one  |
+| >100_000JPY  | true  | two  |

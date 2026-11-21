@@ -1,5 +1,7 @@
 //! The one entry (DESIGN 8.1, 8.2): `ritsu --help` and `--version`, `ritsu <language>` for each of
-//! the nine, and ritsu called by a language's name.
+//! the ten, and ritsu called by a language's name.
+
+mod common;
 
 use ritsu_testkit::TempDir;
 use std::path::{Path, PathBuf};
@@ -13,7 +15,7 @@ fn crates() -> PathBuf {
 fn run_in(program: &Path, dir: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(program);
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run it");
@@ -61,10 +63,10 @@ fn ritsu_says_what_it_has() {
     assert_eq!((code, err.as_str()), (2, "エラー: `nope` というコマンドはありません。`ritsu --help` を読んでください\n"));
 }
 
-/// `ritsu <language>` is the language's own command, for every one of the nine.
+/// `ritsu <language>` is the language's own command, for every one of the ten.
 #[test]
 fn ritsu_is_every_language() {
-    for name in ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname"] {
+    for name in ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname", "ringi"] {
         let (code, out, err) = ritsu(&[name, "--version"]);
         assert!(code == 0 && out.starts_with(&format!("{name} ")) && out.lines().count() == 1, "{name}: {out}{err}");
     }
@@ -76,7 +78,7 @@ fn ritsu_is_every_language() {
     let (code, out, _) = ritsu(&["chobo", "explain", "E014"]);
     assert!(code == 0 && out.starts_with("error[E014]: A tax on a unit that is not money"), "{out}");
     let (code, _, err) = ritsu(&["geas", "check"]);
-    assert!(code == 2 && err.contains("`geas check` needs at least one spec"), "{err}");
+    assert!(code == 2 && err.starts_with("error[E080]: `ritsu geas check` takes <spec.geas>...\n  = usage: ritsu geas check "), "{err}");
     // a gate that takes a rule's answer and dates as conditions: the languages it reads are joined
     let gate = "sekisho/examples/refunds/refunds.gate";
     let (code, out, err) = ritsu(&["sekisho", "check", gate, "--root", "sekisho/examples/refunds"]);
@@ -86,6 +88,10 @@ fn ritsu_is_every_language() {
     let kn = "kaname/examples/late_payment/late_payment.kn";
     let (code, out, err) = ritsu(&["kaname", "check", kn]);
     assert!(code == 0 && err.is_empty() && out.starts_with(&format!("warning[W603]: {kn}:")) && out.ends_with(&format!("ok {kn}: 1 function, total\n")), "{out}{err}");
+    // a request that reads an organization and the rules, dates, books and flows of its stages
+    let req = "ringi/examples/expense.ringi";
+    let (code, out, err) = ritsu(&["ringi", "check", req]);
+    assert!(code == 0 && out.contains(&format!("ok {req}: a request, 8 fields, 4 stages\n")) && !out.contains("E008") && !err.contains("E008"), "{out}{err}");
 }
 
 /// Called by a language's name, ritsu is that command: what the release's links do (DESIGN 2.3).

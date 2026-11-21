@@ -1,0 +1,83 @@
+workflow python_names v1
+description "Types named as what the code of Python has for itself or reads from its builtins: what types.py imports, the helpers it declares and the builtins its checks call. The code reads its own by other names, and the flow runs on every platform"
+
+# what types.py imports
+record annotations
+  text : string
+
+record re
+  pattern : string
+
+record Any
+  note : string
+
+enum Literal = one | two
+enum NotRequired = one | two
+enum TypedDict = one | two
+enum TypeGuard = one | two
+
+# what types.py declares for itself
+enum TIMESTAMP = early | late
+enum DATE = weekday | weekend
+enum is_int = yes | no
+enum dd_field = one | two
+
+# the builtins its checks call
+record all
+  count : int
+
+record dict
+  key : string
+
+record float
+  value : int
+
+record isinstance
+  kind : string
+
+record list
+  items : list[string]
+
+record str
+  text : string
+
+record tuple
+  first : string
+
+record Everything
+  the_annotations : annotations
+  the_re          : re
+  the_any         : Any
+  the_literal     : Literal
+  the_not_required : NotRequired
+  the_typed_dict  : TypedDict
+  the_type_guard  : TypeGuard
+  the_timestamp   : TIMESTAMP
+  the_date        : DATE
+  the_is_int      : is_int
+  the_dd_field    : dd_field
+  the_all         : all
+  the_dict        : dict
+  the_float       : float
+  the_isinstance  : isinstance
+  the_list        : list
+  the_str         : str
+  the_tuple       : tuple
+
+inputs
+  id  : string
+  day : date
+  at  : timestamp
+
+outputs
+  everything : Everything
+  day        : date
+  at         : timestamp
+
+task gather(id: string, day: date, at: timestamp) -> Everything
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:gather"
+  idempotent
+
+flow
+  let everything = gather(id: id, day: day, at: at)
+  succeed everything = everything, day = day, at = at

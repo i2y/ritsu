@@ -18,6 +18,7 @@ inputs
   interface_changes   : number  range >=0 <=1000000
   interface_breaks    : number  range >=0 <=1000000
   requirements_moved  : number  range >=0 <=1000000
+  requirements_read   : number  range >=0 <=1000000
   opaque_specs        : number  range >=0 <=1000000
   unclaimed_lines     : number  range >=0 <=1000000
   other_files         : number  range >=0 <=1000000
@@ -26,7 +27,7 @@ outputs
   route        : destination
   person_reads : bool
 
-define moved : number = rule_changes + date_changes + allow_gained + allow_lost + policies_moved + book_changes + interface_changes + interface_breaks + requirements_moved
+define moved : number = rule_changes + date_changes + allow_gained + allow_lost + policies_moved + book_changes + interface_changes + interface_breaks + requirements_moved + requirements_read
 define unread : number = undecided + generated_unchecked + opaque_specs + unclaimed_lines + other_files + new_warnings
 
 table route
@@ -52,14 +53,15 @@ policy unique
 | false         | merge             | false                  |
 
 examples
-| new_errors | new_warnings | undecided | generated_stale | generated_unchecked | rule_changes | date_changes | allow_gained | allow_lost | policies_moved | book_changes | interface_changes | interface_breaks | requirements_moved | opaque_specs | unclaimed_lines | other_files | -> route    | -> person_reads |
-| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0            | 0               | 0           | merge       | false           |
-| 0          | 0            | 0         | false           | 0                   | 2            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0            | 0               | 0           | owner_reads | true            |
-| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 1          | 0              | 0            | 0                 | 0                | 0                  | 0            | 0               | 0           | owner_reads | true            |
-| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 1                  | 0            | 0               | 0           | owner_reads | true            |
-| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0            | 3               | 0           | owner_reads | true            |
-| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0            | 0               | 1           | owner_reads | true            |
-| 0          | 0            | 0         | false           | 1                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0            | 0               | 0           | owner_reads | true            |
-| 1          | 0            | 0         | false           | 0                   | 2            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0            | 0               | 0           | stop        | true            |
-| 0          | 0            | 0         | true            | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0            | 0               | 0           | stop        | true            |
-| 0          | 0            | 1         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0            | 0               | 0           | owner_reads | true            |
+| new_errors | new_warnings | undecided | generated_stale | generated_unchecked | rule_changes | date_changes | allow_gained | allow_lost | policies_moved | book_changes | interface_changes | interface_breaks | requirements_moved | requirements_read | opaque_specs | unclaimed_lines | other_files | -> route    | -> person_reads |
+| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0                 | 0            | 0               | 0           | merge       | false           |
+| 0          | 0            | 0         | false           | 0                   | 2            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0                 | 0            | 0               | 0           | owner_reads | true            |
+| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 1          | 0              | 0            | 0                 | 0                | 0                  | 0                 | 0            | 0               | 0           | owner_reads | true            |
+| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 1                  | 0                 | 0            | 0               | 0           | owner_reads | true            |
+| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0                 | 0            | 3               | 0           | owner_reads | true            |
+| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0                 | 0            | 0               | 1           | owner_reads | true            |
+| 0          | 0            | 0         | false           | 1                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0                 | 0            | 0               | 0           | owner_reads | true            |
+| 1          | 0            | 0         | false           | 0                   | 2            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0                 | 0            | 0               | 0           | stop        | true            |
+| 0          | 0            | 0         | true            | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0                 | 0            | 0               | 0           | stop        | true            |
+| 0          | 0            | 1         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 0                 | 0            | 0               | 0           | owner_reads | true            |
+| 0          | 0            | 0         | false           | 0                   | 0            | 0            | 0            | 0          | 0              | 0            | 0                 | 0                | 0                  | 2                 | 0            | 0               | 0           | owner_reads | true            |

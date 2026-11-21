@@ -1,0 +1,8 @@
+The files under specification/ and catalogs/ are copied, unchanged, from the A2UI project
+(https://github.com/a2ui-project/a2ui) as it was on 2026-11-14, at commit
+5f6d26c48a5c61bf845cf1ef2a02a47e31e8d9ba: four JSON Schemas of version 1.0 of the protocol
+(specification/v1_0/json/) and its basic catalog (catalogs/basic/v1/catalog.json). ringi's tests
+validate the screens `ritsu gen --target requests` writes with them, and the messages the screens'
+buttons make as a renderer sends them back (tests/a2ui.rs, tests/a2ui/forms.rs). They are
+under the Apache License, Version 2.0: LICENSE beside this file is the A2UI repository's LICENSE,
+as it is.

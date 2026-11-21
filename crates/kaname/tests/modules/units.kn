@@ -1,0 +1,5 @@
+module units v1
+description "A module named as the package of units the generated Go imports: the module that reads it imports it under another name"
+
+fn three(n: number range >=0 <=9) -> number
+  n

@@ -116,7 +116,7 @@ fn a_sequence_is_read_and_its_witness_is_the_array() {
     let (code, out, err) = rulec_in(&dir, &["replay", "cart.rule", "--fixtures", "fx.jsonl"]);
     assert_eq!(code, 1, "{out}{err}");
     assert!(out.contains("Compared 3 / matched 2"), "{out}");
-    assert!(out.contains("rule fee=500 / observed fee=400"), "{out}");
+    assert!(out.contains("rule fee=500JPY / observed fee=400JPY"), "{out}");
     let (_, json, _) = rulec_in(&dir, &["replay", "cart.rule", "--fixtures", "fx.jsonl", "--format", "json"]);
     assert!(
         json.contains(r#""in":{"lines":[{"amount":1000,"due":"2026-03-01","gift":false,"quantity":1,"sku":"a"}],"ship":"normal"}"#),
@@ -175,7 +175,8 @@ fn a_sequence_is_held_to_the_door() {
 
 /// `diff` hands each record's sequence to the new version, element by element: an answer that
 /// moves is compared, and a sequence or a field of an element the new version does not take is
-/// refused by its reason — `length` for more elements than its `count` allows.
+/// refused by its reason — `length` for more elements than its `count` allows — the field named
+/// with its sequence, as `fixtures lint` names it.
 #[test]
 fn diff_hands_a_sequence_to_the_new_version() {
     let ok = |sku: &str, amount: &str| line(sku, "1", amount, "2026-03-01");
@@ -197,10 +198,10 @@ fn diff_hands_a_sequence_to_the_new_version() {
     assert!(out.contains("Compared 4 / matched 1"), "{out}");
     assert!(out.contains("table fee_of row 4→row 3"), "the answer that moved: {out}");
     assert!(out.contains("lines has more elements than the new version takes (at most 2)"), "{out}");
-    assert!(out.contains("amount is outside the new version's range"), "{out}");
+    assert!(out.contains("lines[].amount is outside the new version's range"), "{out}");
     let (_, json, _) = rulec_in(&dir, &["diff", "cart.rule", "cart2.rule", "--fixtures", "fx.jsonl", "--format", "json"]);
     assert!(json.contains(r#""kind":"length","field":"lines""#), "{json}");
-    assert!(json.contains(r#""kind":"input_range","field":"amount""#), "{json}");
+    assert!(json.contains(r#""kind":"input_range","field":"lines[].amount""#), "{json}");
 }
 
 /// A byte order mark at the head of the file is no part of the first record, and a tag that is a
@@ -241,7 +242,7 @@ fn replay_takes_one_rule() {
     std::fs::write(dir.join("other.rule"), CART.replace("rule cart v1", "rule other v1")).unwrap();
     let (code, out, err) = rulec_in(&dir, &["replay", "cart.rule", "other.rule", "--fixtures", "fx.jsonl"]);
     assert_eq!(code, 2, "{out}{err}");
-    assert!(err.contains("takes one rule (2 were given: cart.rule, other.rule)"), "{err}");
+    assert!(err.starts_with("error: `rulec replay` takes <file.rule>\nusage: rulec replay <file.rule> --fixtures <f.jsonl> "), "{err}");
     let (code, _, err) = rulec_in(&dir, &["replay", ".", "--fixtures", "fx.jsonl"]);
     assert_eq!(code, 2, "{err}");
     let (code, _, err) = rulec_in(&dir, &["fixtures", "lint", "fx.jsonl", "cart.rule", "other.rule"]);

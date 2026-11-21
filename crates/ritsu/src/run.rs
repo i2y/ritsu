@@ -22,16 +22,22 @@ use serde_json::{json, Value};
 use std::path::Path;
 use std::rc::Rc;
 
+/// What stops the command before its work, in the words of every command of the toolchain (DESIGN
+/// 6.2, item 10), and 2.
 fn refuse(msg: Text, lang: Lang) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    eprintln!("{head}: {}", msg.get(lang));
-    2
+    ritsu_base::cli::refuse(&mut std::io::stderr(), &msg, lang)
 }
 
 /// `ritsu run <file.flow> --scenario <file.json> [--target <target>] [--format json]`: the exit
 /// code. 0 when the run comes to its end, however it ends; 1 when the flow has errors, or the run
 /// cannot go on; 2 for bad arguments, a file that cannot be read, or a scenario that cannot be run.
+/// A line that asks for JSON is answered in JSON when the run stops before its work too (DESIGN
+/// 6.2, item 10).
 pub fn command(args: &[String], lang: Lang) -> u8 {
+    ritsu_base::cli::answering(args, &mut std::io::stdout(), |_| run_command(args, lang))
+}
+
+fn run_command(args: &[String], lang: Lang) -> u8 {
     let table = cli::table();
     let cmd = table.command("run").expect("run is in the table");
     let asked = args.iter().enumerate().find_map(|(i, x)| if x == "--lang" { args.get(i + 1).cloned() } else { x.strip_prefix("--lang=").map(str::to_string) });
@@ -45,17 +51,23 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         return 0;
     }
     let [flow] = a.pos.as_slice() else {
-        eprintln!("{}", table.usage_line(cmd));
-        return 2;
+        return refuse(table.takes(cmd), lang);
     };
     let Some(scenario) = a.get("--scenario") else {
-        return refuse(tr!("`--scenario <file.json>` が要ります", "`--scenario <file.json>` is required"), lang);
+        return refuse(table.needs(cmd, "--scenario <file.json>"), lang);
     };
     // a path that starts with `@`, in a module, is read as a path written in a file is (DESIGN 17.6)
     let given: Vec<&str> = [flow.as_str(), scenario].into_iter().chain(a.all("--with")).collect();
     if let Err(t) = ritsu_base::modules::given_all(&given) {
         return refuse(t, lang);
     }
+    // the paths the run holds are written the way the first path given was (ritsu's DESIGN 4.15),
+    // and so is the flow given: `./hotel.flow` and `x/../hotel.flow` are `hotel.flow` (6.2 item 8)
+    let _way = ritsu_base::paths::run_from(flow);
+    let flow = &ritsu_base::paths::show_given(flow);
+    // and so are the paths the flags take: `--scenario ./sc/001.json` is `sc/001.json`
+    let scenario = &ritsu_base::paths::fold_given(scenario);
+    let with: Vec<String> = a.all("--with").into_iter().map(ritsu_base::paths::fold_given).collect();
     // In a module, the tree first, as `ritsu check` and `ritsu gen` read it (DESIGN 17.8): what stops
     // the run is said on the standard error (exit 2); the tree's errors are said, and the flow is not
     // run (exit 1).
@@ -66,7 +78,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     // own (DESIGN 17.8): the contributions of another module's directory would not reach the rules
     // the flow reads, which name a dependency's files by `@`. The scenario is data, and is not held
     // to this.
-    for w in a.all("--with") {
+    for w in &with {
         if let Some(t) = with_elsewhere(flow, w) {
             return refuse(t, lang);
         }
@@ -82,33 +94,37 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         _ => View::Graph,
     };
     // through ritsu_base::fs, as every file a language reads (DESIGN 4.15): the page in the browser runs on files in memory
-    let sc: Value = match ritsu_base::fs::read_to_string(scenario).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string())) {
+    let sc: Value = match ritsu_base::fs::read_to_string(scenario)
+        .map_err(|e| ritsu_base::cli::cannot_read(scenario, &e))
+        .and_then(|t| serde_json::from_str(&t).map_err(|e| ritsu_base::cli::not_json(scenario, &e.to_string())))
+    {
         Ok(v) => v,
-        Err(e) => return refuse(tr!("シナリオ `{scenario}` を読めません: {e}", "cannot read the scenario `{scenario}`: {e}"), lang),
+        Err(e) => return refuse(e, lang),
     };
     // the flow, checked with every language it reads joined, as `ritsu dandori` checks it
     let j = Joined::new();
     // The contributions given with `--with` are merged into the rules the flow calls (rulec's
     // §15.231), as `ritsu check` merges a project's.
-    let with: Vec<String> = a.all("--with").into_iter().map(str::to_string).collect();
     if !with.is_empty() {
         let mut files: Vec<String> = Vec::new();
         for w in &with {
             if !ritsu_base::fs::exists(w) {
-                return refuse(tr!("`{w}` がありません", "`{w}` is not there"), lang);
+                return refuse(ritsu_base::cli::not_there(w), lang);
             }
             files.extend(whole_module(w).unwrap_or_else(|| rule_files_under(w, lang)));
         }
         j.rulec.set_project(files);
     }
     let (rules, dates, books): (_, Rc<dyn Dates>, Rc<dyn Books>) = (j.rules(), j.koyomi.clone(), j.chobo.clone());
+    // with a check of each precondition of a rule that ritsu cannot decide at a call, where the
+    // values it reads are made (dandori's DESIGN 1.17): the code dandori writes checks them when the
+    // workflow runs, and `ritsu dandori run` runs the flow with them. The port of dandori checks the
+    // flow, by the path given here, once for the run and for the preconditions it asks of the flow
+    let undecided = Rc::new(ritsu_cross::UndecidedCalls::new(&j));
     let path = Path::new(flow);
-    let (src, checked) = match dandori::sources::with_ports(rules.clone(), dates.clone(), books.clone(), || dandori::check::check_file(path)) {
+    let (src, checked) = match j.dandori.built(path, &j.ports(), undecided) {
         Ok(x) => x,
-        Err(msg) => {
-            eprintln!("{msg}");
-            return 2;
-        }
+        Err(msg) => return refuse(msg, lang),
     };
     let diagnostics: Vec<Value> = checked.diags.iter().map(|d| d.to_json(lang)).collect();
     if !json_out {
@@ -120,6 +136,24 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         }
         return 1;
     };
+    // What `ritsu check` finds at the borders of the flow (DESIGN 7.9): a call that can give a rule, a
+    // date or a book what it does not take is an error of the flow. A run of one scenario would show
+    // the flow working where the check says it does not, even when the scenario does not come to that
+    // value, so the flow is not run, as with an error of dandori's.
+    let crossed = match crossed(flow, &j, lang) {
+        Ok(c) => c,
+        Err(t) => return refuse(t, lang),
+    };
+    if !crossed.is_empty() {
+        if json_out {
+            let ours = crossed.iter().map(|f| serde_json::from_str(&crate::check::entry("ritsu", f).compact()).unwrap_or(Value::Null));
+            let all: Vec<Value> = diagnostics.into_iter().chain(ours).collect();
+            println!("{}", pretty(&json!({ "ritsu": env!("CARGO_PKG_VERSION"), "flow": flow, "diagnostics": all })));
+        } else {
+            eprint!("{}", crossed.iter().map(|f| f.text_of("ritsu")).collect::<String>());
+        }
+        return 1;
+    }
     match dandori::computed::run(&model, &sc, view, rules, dates, books) {
         Ok(ran) => {
             if json_out {
@@ -127,13 +161,26 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
             } else {
                 print!("{}", text(flow, scenario, &ran, lang));
             }
-            0
+            // the run is shown to its end; answers it did not take are the scenario's error, and the
+            // run ends as one that runs out of answers does (dandori's DESIGN 36)
+            match &ran.unused {
+                Some(left) => {
+                    for (i, line) in left.said(ran.computes()).iter().enumerate() {
+                        if i == 0 {
+                            eprintln!("{}", ritsu_base::cli::refusal(line.get(lang), lang));
+                        } else {
+                            eprintln!("  {}", line.get(lang));
+                        }
+                    }
+                    1
+                }
+                None => 0,
+            }
         }
         Err(Stopped::Scenario(t)) => refuse(tr!("シナリオ `{scenario}` を流せません: {}", "the scenario `{scenario}` cannot be run: {}", t.ja; t.en), lang),
         Err(Stopped::Run(e)) => {
-            let head = if lang == Lang::Ja { "エラー" } else { "error" };
-            let msg = tr!("流れが途中で止まりました: {e}", "the run could not go on: {e}");
-            eprintln!("{head}: {}", msg.get(lang));
+            let msg = tr!("流れが途中で止まりました: {}", "the run could not go on: {}", e.ja; e.en);
+            eprintln!("{}", ritsu_base::cli::refusal(msg.get(lang), lang));
             1
         }
     }
@@ -164,7 +211,7 @@ fn whole(flow: &str, scenario: &str, target: &str, diagnostics: Vec<Value>, ran:
         })
         .collect();
     let books: Vec<Value> = ran.books.iter().map(book_json).collect();
-    json!({
+    let mut v = json!({
         "ritsu": env!("CARGO_PKG_VERSION"),
         "flow": flow,
         "scenario": scenario,
@@ -177,7 +224,12 @@ fn whole(flow: &str, scenario: &str, target: &str, diagnostics: Vec<Value>, ran:
         "trace": ran.trace,
         "books": books,
         "replay": ran.replay,
-    })
+    });
+    // the answers of the scenario the run did not take, which make it end with 1
+    if let (Some(left), Some(o)) = (&ran.unused, v.as_object_mut()) {
+        o.insert("unused".into(), left.json());
+    }
+    v
 }
 
 /// A book as `chobo run --format json` writes the accounts and the holds of a scenario's end.
@@ -210,6 +262,7 @@ fn why_word(w: Passing) -> &'static str {
         Passing::Wait => "wait",
         Passing::Retry => "retry",
         Passing::Timeout => "timeout",
+        Passing::Now => "now",
     }
 }
 
@@ -319,6 +372,10 @@ fn text(flow: &str, scenario: &str, ran: &Ran, lang: Lang) -> String {
             .before
             .iter()
             .map(|(op, result)| {
+                // time that went by before the run, as `chobo run` writes it
+                if result == "passed" {
+                    return (format!("pass {}", op["duration"].as_str().unwrap_or_default()), tr!("時間が過ぎる", "time goes by").get(lang).to_string());
+                }
                 let args = op["args"].as_object().cloned().unwrap_or_default();
                 let call = call_text(&format!("{}.{}", op["kind"].as_str().unwrap_or_default(), op["op"].as_str().unwrap_or_default()), &args);
                 let said = if result == "done_before" { tr!("done_before（前に済んでいる）", "done_before") } else { tr!("通る", "done") };
@@ -344,6 +401,8 @@ fn text(flow: &str, scenario: &str, ran: &Ran, lang: Lang) -> String {
                     // `timeout until`: the wait for the answer ended at the time the call gave
                     (Passing::Timeout, Some(u)) => tr!("タイムアウト（{u} まで待つ）", "the timeout of the wait until {u}").get(lang).to_string(),
                     (Passing::Timeout, None) => tr!("タイムアウト", "the timeout").get(lang).to_string(),
+                    // the scenario gives a statement that reads `now` a later moment (its `now`, a list)
+                    (Passing::Now, _) => tr!("シナリオが `now` に与える時刻", "the moment the scenario gives `now`").get(lang).to_string(),
                 };
                 let (ja, en) = (duration_text(*seconds, Lang::Ja), duration_text(*seconds, Lang::En));
                 let went = tr!("{ja}、{after} まで", "{en}, to {after}");
@@ -362,7 +421,9 @@ fn text(flow: &str, scenario: &str, ran: &Ran, lang: Lang) -> String {
     }
     out.push_str(&format!("{}\n", end_text(&ran.trace["end"], lang)));
     for b in &ran.books {
-        out.push_str(&format!("{}\n", tr!("終わりの帳簿 {}（{}）:", "book {} ({}) at the end:", b.name, b.file.display()).get(lang)));
+        // the book named the way the run writes its paths (DESIGN 4.15)
+        let file = ritsu_base::paths::show(&b.file);
+        out.push_str(&format!("{}\n", tr!("終わりの帳簿 {}（{file}）:", "book {} ({file}) at the end:", b.name).get(lang)));
         if !b.accounts.is_empty() {
             out.push_str(&format!("  {}\n", tr!("勘定:", "accounts:").get(lang)));
             let names: Vec<String> = b.accounts.iter().map(|(n, args, _)| if args.is_empty() { n.clone() } else { format!("{n}({})", args.join(", ")) }).collect();
@@ -400,12 +461,11 @@ fn text(flow: &str, scenario: &str, ran: &Ran, lang: Lang) -> String {
 /// module whose tree is read, and outside every module.
 fn tree_stops(flow: &str, json_out: bool, lang: Lang) -> Option<u8> {
     let project = ritsu_project::Project::load(&[flow.to_string()], None).ok()?;
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
     match project.tree.clone()?.as_ref() {
         Ok(_) => None,
         Err(ritsu_base::modules::Problem::Stop(said)) => {
             for t in said {
-                eprintln!("{head}: {}", t.get(lang));
+                refuse(t.clone(), lang);
             }
             Some(2)
         }
@@ -419,7 +479,8 @@ fn tree_stops(flow: &str, json_out: bool, lang: Lang) -> Option<u8> {
                 let errors = ritsu_base::text::plural(n, "error", "errors");
                 let text: String = found.iter().map(|f| f.text_of("ritsu")).collect();
                 eprint!("{text}");
-                eprintln!("{head}: {}", tr!("モジュールを読めません（エラー {n} 件）。フローは流しません", "the modules could not be read ({errors}), so the flow is not run").get(lang));
+                let why = tr!("モジュールを読めません（エラー {n} 件）。フローは流しません", "the modules could not be read ({errors}), so the flow is not run");
+                eprintln!("{}", ritsu_base::cli::refusal(why.get(lang), lang));
             }
             Some(1)
         }
@@ -529,4 +590,16 @@ fn rule_files_under(p: &str, lang: Lang) -> Vec<String> {
         }
     }
     out
+}
+
+/// The errors ritsu's checks across the languages find in the project of the flow alone (DESIGN
+/// 7.9): the flow, under the root `ritsu check` finds for it, with the rules, the dates files and the
+/// books it reads through the ports `joined` reads them through, the contributions given with
+/// `--with` merged into the rules. Its calls of rules, dates and books are what the run computes.
+/// What a gate or a map of the project says of the flow is not run here, and is not asked.
+fn crossed(flow: &str, joined: &Joined, lang: Lang) -> Result<Vec<ritsu_ports::Finding>, Text> {
+    let project = ritsu_project::Project::load(&[flow.to_string()], None)?;
+    let verdicts = ritsu_cross::ProgramVerdicts::new(joined);
+    let found = ritsu_cross::check_with(&project, joined, &verdicts, lang).findings;
+    Ok(found.into_iter().filter(|f| f.severity == ritsu_base::diag::Severity::Error).collect())
 }

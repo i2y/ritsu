@@ -1,0 +1,3 @@
+error[E406]: tests/mutants/E406_a_post_with_no_hold.ringi:16:23: `post budget.reserve` has no hold before it: there is no `on submitted hold budget.reserve(…)` line
+    16 |   on approved    post budget.reserve(request: ticket.id, attempt: ticket.attempt)
+  = Add `on submitted hold budget.reserve(…)`, or take this line out.

@@ -1,0 +1,269 @@
+{
+  "ritsu": "0.55.2",
+  "root": ".",
+  "ok": false,
+  "files": [
+    {
+      "tool": "koyomi",
+      "file": "calendars/office.cal",
+      "ok": true,
+      "check": {
+        "ok": true,
+        "summary": "calendar office: no table, so the data range is 0001-01-01..9999-12-31"
+      }
+    },
+    {
+      "tool": "koyomi",
+      "file": "dates/approval_terms.cal",
+      "ok": false,
+      "check": {
+        "ok": false,
+        "summary": null
+      }
+    },
+    {
+      "tool": "dandori",
+      "file": "flows/approvals.flow",
+      "ok": false,
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ],
+      "check": {}
+    },
+    {
+      "tool": "dandori",
+      "file": "flows/joint.flow",
+      "ok": false,
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ],
+      "check": {}
+    },
+    {
+      "tool": "dandori",
+      "file": "flows/stage.flow",
+      "ok": false,
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ],
+      "check": {}
+    },
+    {
+      "tool": "sekisho",
+      "file": "gates/expense.gate",
+      "ok": false,
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ],
+      "check": {
+        "ok": false,
+        "summary": null
+      }
+    },
+    {
+      "tool": "yuen",
+      "file": "requirements/expense.req",
+      "ok": false,
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ],
+      "check": {
+        "ok": false,
+        "summary": "requirements/expense.req: 2 errors"
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "tool": "koyomi",
+      "code": "E301",
+      "severity": "error",
+      "file": "dates/approval_terms.cal",
+      "line": 19,
+      "col": 3,
+      "message": "The claim due_within_eleven_days fails for 3 of the 730 days of received",
+      "notes": [
+        "It fails on 2026-12-24..2026-12-25 (2 days), 2027-12-24",
+        "The farthest is received 2026-12-24, where due 2027-01-04 is 11 days after received"
+      ],
+      "inputs": {
+        "received": "2026-12-24"
+      },
+      "steps": [
+        {
+          "line": 6,
+          "name": "received",
+          "date": "2026-12-24",
+          "label": "",
+          "note": null,
+          "detail": null
+        },
+        {
+          "line": 13,
+          "name": "due",
+          "date": "2027-01-04",
+          "label": "+ 3 business days",
+          "note": "not counted: 2026-12-26 (Saturday), 2026-12-27 (Sunday), 2026-12-29..2027-01-01 (New Year break), 2027-01-02 (Saturday and New Year break) and 2027-01-03 (Sunday and New Year break) are closed",
+          "detail": null
+        },
+        {
+          "line": 14,
+          "text": "time 2027-01-05T00:00:00+09:00 (2027-01-04T15:00:00Z in UTC)"
+        },
+        {
+          "line": 19,
+          "text": "due is 11 days after received, and the claim allows at most 10 days after"
+        }
+      ],
+      "fails": [
+        {
+          "from": "2026-12-24",
+          "to": "2026-12-25",
+          "params": {}
+        },
+        {
+          "from": "2027-12-24",
+          "to": "2027-12-24",
+          "params": {}
+        }
+      ],
+      "fix": null
+    },
+    {
+      "tool": "dandori",
+      "file": "flows/approvals.flow",
+      "code": "E015",
+      "severity": "error",
+      "line": 24,
+      "col": 3,
+      "message": "`joint.flow` does not pass check",
+      "notes": [
+        "line 20: `stage.flow` does not pass check (E015)"
+      ],
+      "path": [],
+      "reads": "flows/joint.flow",
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ]
+    },
+    {
+      "tool": "dandori",
+      "file": "flows/approvals.flow",
+      "code": "E015",
+      "severity": "error",
+      "line": 29,
+      "col": 3,
+      "message": "`stage.flow` does not pass check",
+      "notes": [
+        "line 5: could not read the dates file `../dates/approval_terms.cal` (E005)"
+      ],
+      "path": [],
+      "reads": "flows/stage.flow",
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ]
+    },
+    {
+      "tool": "dandori",
+      "file": "flows/joint.flow",
+      "code": "E015",
+      "severity": "error",
+      "line": 20,
+      "col": 3,
+      "message": "`stage.flow` does not pass check",
+      "notes": [
+        "line 5: could not read the dates file `../dates/approval_terms.cal` (E005)"
+      ],
+      "path": [],
+      "reads": "flows/stage.flow",
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ]
+    },
+    {
+      "tool": "dandori",
+      "file": "flows/stage.flow",
+      "code": "E005",
+      "severity": "error",
+      "line": 5,
+      "col": 11,
+      "message": "could not read the dates file `../dates/approval_terms.cal`",
+      "notes": [
+        "E301: The claim due_within_eleven_days fails for 3 of the 730 days of received (dates/approval_terms.cal, line 19)"
+      ],
+      "path": [],
+      "reads": "dates/approval_terms.cal",
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ]
+    },
+    {
+      "tool": "sekisho",
+      "code": "E208",
+      "severity": "error",
+      "file": "gates/expense.gate",
+      "line": 14,
+      "col": 1,
+      "message": "`../flows/approvals.flow` does not pass dandori's check, or cannot be read",
+      "notes": [
+        "[E015] flows/approvals.flow:24: `joint.flow` does not pass check",
+        "[E015] flows/approvals.flow:29: `stage.flow` does not pass check",
+        "Fix the workflow until dandori's check passes."
+      ],
+      "example": null,
+      "fix": null,
+      "reads": "flows/approvals.flow",
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ]
+    },
+    {
+      "tool": "yuen",
+      "code": "E203",
+      "severity": "error",
+      "file": "requirements/expense.req",
+      "line": 13,
+      "col": 16,
+      "message": "koyomi cannot answer for koyomi \"dates/approval_terms.cal\" date due",
+      "notes": [
+        "what koyomi says: [E301] dates/approval_terms.cal:19: The claim due_within_eleven_days fails for 3 of the 730 days of received",
+        "Make the file pass koyomi's check; no end is made from a file that does not."
+      ],
+      "diff": [],
+      "chain": [],
+      "candidates": [],
+      "fix": null,
+      "reads": "dates/approval_terms.cal",
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ]
+    },
+    {
+      "tool": "yuen",
+      "code": "E203",
+      "severity": "error",
+      "file": "requirements/expense.req",
+      "line": 19,
+      "col": 15,
+      "message": "koyomi cannot answer for koyomi \"dates/approval_terms.cal\" claim due_is_open",
+      "notes": [
+        "what koyomi says: [E301] dates/approval_terms.cal:19: The claim due_within_eleven_days fails for 3 of the 730 days of received",
+        "Make the file pass koyomi's check; no end is made from a file that does not."
+      ],
+      "diff": [],
+      "chain": [],
+      "candidates": [],
+      "fix": null,
+      "reads": "dates/approval_terms.cal",
+      "waits_for": [
+        "dates/approval_terms.cal"
+      ]
+    }
+  ],
+  "borders": {
+    "held": 0,
+    "failed": 0,
+    "undecided": 0,
+    "records": []
+  }
+}

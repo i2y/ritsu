@@ -1,0 +1,18 @@
+rule twolevel v1
+description "Whether an amount is big, read off the band another rule gives it: a rule that applies a rule"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+apply inner = "band_only.rule" meaning:0c5627e13a3f4b51
+  amount = amount
+  band -> inner_band
+
+outputs
+  big : bool
+
+table bigness
+| inner_band | -> big |
+| small      | false  |
+| medium     | false  |
+| large      | true   |

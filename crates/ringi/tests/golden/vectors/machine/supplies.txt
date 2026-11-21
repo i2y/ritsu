@@ -1,0 +1,220 @@
+scenario a_kind_changed_on_resubmit, line 46: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, line 47: send back by e1101 at 2026-11-16 11:00 -> with requester
+scenario a_kind_changed_on_resubmit, line 48: resubmit by e1201 at 2026-11-16 13:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, line 49: approve by e1101 at 2026-11-16 14:00 -> approved
+scenario a_kind_changed_on_resubmit, after it ended: comment by e1201 at 2026-11-16 14:00 -> refused (state)
+scenario a_kind_changed_on_resubmit, after line 46: approvals: approve by e1101 at 2026-11-16 10:00 -> check, in progress
+scenario a_kind_changed_on_resubmit, after line 46: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario a_kind_changed_on_resubmit, after line 46: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario a_kind_changed_on_resubmit, after line 46: the requester: withdraw by e1201 at 2026-11-16 10:00 -> refused (event)
+scenario a_kind_changed_on_resubmit, after line 46: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario a_kind_changed_on_resubmit, after line 46: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: made again, with fields made empty: resubmit by e1201 at 2026-11-17 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario a_kind_changed_on_resubmit, after line 46: sent back: comment by e1101 at 2026-11-16 10:00 -> with requester
+scenario a_kind_changed_on_resubmit, after line 46: sent back: comment by e1201 at 2026-11-16 10:00 -> with requester
+scenario a_kind_changed_on_resubmit, after line 46: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario a_kind_changed_on_resubmit, after line 46: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: edited, with fields made empty: edit by e1101 at 2026-11-16 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 46: edited, a field shown on a condition: edit by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: edited, a field shown on a condition: edit by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario a_kind_changed_on_resubmit, after line 46: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: an administrator, by name: add approver by e0101 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: an administrator, by name: hand over by e0101 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_kind_changed_on_resubmit, after line 46: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario a_kind_changed_on_resubmit, after line 46: clocks: approve by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario a_kind_changed_on_resubmit, after line 46: clocks: comment by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario a_kind_changed_on_resubmit, after line 46: comments: comment by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: comments: comment by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario a_kind_changed_on_resubmit, after line 46: comments: comment by e1101 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: comments: comment by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario a_kind_changed_on_resubmit, after line 46: comments: approve by e1101 at 2026-11-16 10:00 -> check, in progress
+scenario a_kind_changed_on_resubmit, after line 46: comments: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario a_kind_changed_on_resubmit, after line 46: comments: approve by e1101 at 2026-11-16 10:00 -> refused (comment)
+scenario a_kind_changed_on_resubmit, after line 46: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario a_kind_changed_on_resubmit, after line 46: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> with requester
+scenario a_kind_changed_on_resubmit, after line 46: sent back to the limit: resubmit by e1201 at 2026-11-19 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 46: sent back to the limit: send back by e1101 at 2026-11-19 10:00 -> refused (limit)
+scenario a_kind_changed_on_resubmit, after line 48: approvals: approve by e1101 at 2026-11-16 13:00 -> approved
+scenario a_kind_changed_on_resubmit, after line 48: rejections: reject by e1101 at 2026-11-16 13:00 -> rejected
+scenario a_kind_changed_on_resubmit, after line 48: the requester: approve by e1201 at 2026-11-16 13:00 -> refused (person)
+scenario a_kind_changed_on_resubmit, after line 48: the requester: withdraw by e1201 at 2026-11-16 13:00 -> refused (event)
+scenario a_kind_changed_on_resubmit, after line 48: sent back: send back by e1101 at 2026-11-16 13:00 -> with requester
+scenario a_kind_changed_on_resubmit, after line 48: sent back: resubmit by e1201 at 2026-11-17 13:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 48: sent back: discard by e1201 at 2026-11-16 13:00 -> withdrawn
+scenario a_kind_changed_on_resubmit, after line 48: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario a_kind_changed_on_resubmit, after line 48: edited, a field shown on a condition: edit by e1101 at 2026-11-16 13:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 48: edited, a field shown on a condition: edit by e1101 at 2026-11-16 13:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, after line 48: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, after line 48: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_note_made_empty, line 56: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario a_note_made_empty, line 57: send back by e1101 at 2026-11-16 11:00 -> with requester
+scenario a_note_made_empty, line 58: resubmit by e1201 at 2026-11-16 13:00 -> first, in progress
+scenario a_note_made_empty, line 59: approve by e1101 at 2026-11-16 14:00 -> approved
+scenario a_note_made_empty, after line 56: approvals: approve by e1101 at 2026-11-16 10:00 -> approved
+scenario a_note_made_empty, after line 56: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario a_note_made_empty, after line 56: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario a_note_made_empty, after line 56: the requester: withdraw by e1201 at 2026-11-16 10:00 -> refused (event)
+scenario a_note_made_empty, after line 56: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario a_note_made_empty, after line 56: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario a_note_made_empty, after line 56: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario a_note_made_empty, after line 56: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario a_note_made_empty, after line 56: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario a_note_made_empty, after line 56: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario a_note_made_empty, after line 56: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario a_note_made_empty, after line 56: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario a_note_made_empty, after line 56: clocks: late at 2026-11-26 00:00 -> expired
+scenario a_note_made_empty, after line 56: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario a_note_made_empty, after line 56: clocks: approve by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario a_note_made_empty, after line 56: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario a_note_made_empty, after line 56: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
+scenario a_note_made_empty, after line 56: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> with requester
+scenario a_note_made_empty, after line 56: sent back to the limit: resubmit by e1201 at 2026-11-19 10:00 -> first, in progress
+scenario a_note_made_empty, after line 56: sent back to the limit: send back by e1101 at 2026-11-19 10:00 -> refused (limit)
+scenario a_note_made_empty, after line 58: approvals: approve by e1101 at 2026-11-16 13:00 -> approved
+scenario a_note_made_empty, after line 58: rejections: reject by e1101 at 2026-11-16 13:00 -> rejected
+scenario a_note_made_empty, after line 58: the requester: approve by e1201 at 2026-11-16 13:00 -> refused (person)
+scenario a_note_made_empty, after line 58: the requester: withdraw by e1201 at 2026-11-16 13:00 -> refused (event)
+scenario a_note_made_empty, after line 58: sent back: send back by e1101 at 2026-11-16 13:00 -> with requester
+scenario a_note_made_empty, after line 58: sent back: resubmit by e1201 at 2026-11-17 13:00 -> first, in progress
+scenario a_note_made_empty, after line 58: sent back: discard by e1201 at 2026-11-16 13:00 -> withdrawn
+scenario a_note_made_empty, after line 58: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario a_note_made_empty, after line 58: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario a_note_made_empty, after line 58: clocks: late at 2026-11-26 00:00 -> expired
+scenario made_empty_where_it_is_hidden_or_empty, line 67: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario made_empty_where_it_is_hidden_or_empty, line 68: send back by e1101 at 2026-11-16 11:00 -> with requester
+scenario made_empty_where_it_is_hidden_or_empty, line 69: resubmit by e1201 at 2026-11-16 13:00 -> first, in progress
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: approvals: approve by e1101 at 2026-11-16 10:00 -> check, in progress
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: the requester: withdraw by e1201 at 2026-11-16 10:00 -> refused (event)
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: clocks: late at 2026-11-26 00:00 -> expired
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: clocks: approve by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> with requester
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: sent back to the limit: resubmit by e1201 at 2026-11-19 10:00 -> first, in progress
+scenario made_empty_where_it_is_hidden_or_empty, after line 67: sent back to the limit: send back by e1101 at 2026-11-19 10:00 -> refused (limit)
+scenario edited_by_an_approver, line 79: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario edited_by_an_approver, line 80: edit by e1101 at 2026-11-16 11:00 -> first, in progress
+scenario edited_by_an_approver, line 81: edit by e1101 at 2026-11-16 12:00 -> first, in progress
+scenario edited_by_an_approver, line 82: edit by e1101 at 2026-11-16 13:00 -> first, in progress
+scenario edited_by_an_approver, line 83: approve by e1101 at 2026-11-16 14:00 -> approved
+scenario edited_by_an_approver, after line 79: approvals: approve by e1101 at 2026-11-16 10:00 -> check, in progress
+scenario edited_by_an_approver, after line 79: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario edited_by_an_approver, after line 79: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario edited_by_an_approver, after line 79: the requester: withdraw by e1201 at 2026-11-16 10:00 -> refused (event)
+scenario edited_by_an_approver, after line 79: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario edited_by_an_approver, after line 79: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario edited_by_an_approver, after line 79: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario edited_by_an_approver, after line 79: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario edited_by_an_approver, after line 79: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario edited_by_an_approver, after line 79: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario edited_by_an_approver, after line 79: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario edited_by_an_approver, after line 79: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario edited_by_an_approver, after line 79: clocks: late at 2026-11-26 00:00 -> expired
+scenario edited_by_an_approver, after line 79: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario edited_by_an_approver, after line 79: clocks: approve by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario edited_by_an_approver, after line 79: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario edited_by_an_approver, after line 79: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
+scenario edited_by_an_approver, after line 79: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> with requester
+scenario edited_by_an_approver, after line 79: sent back to the limit: resubmit by e1201 at 2026-11-19 10:00 -> first, in progress
+scenario edited_by_an_approver, after line 79: sent back to the limit: send back by e1101 at 2026-11-19 10:00 -> refused (limit)
+scenario the_vendor_made_empty_by_an_approver, line 92: edit by e1101 at 2026-11-16 11:00 -> first, in progress
+scenario the_vendor_made_empty_by_an_approver, line 93: approve by e1101 at 2026-11-16 13:00 -> approved
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: reject by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: send back by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: retract by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: pause by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: resume by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: edit by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: withdraw by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: discard by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: resubmit by e1201 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: add approver at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: hand over at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: agent answered at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: note ready at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before: flow failed at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: no revision: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, after line 47: a comment, which says no revision: comment by e1101 at 2026-11-16 11:00 -> with requester
+scenario a_kind_changed_on_resubmit, after line 47: made on the revision before, with a comment too long: approve by e1101 at 2026-11-16 11:00 -> refused (stale)
+scenario a_kind_changed_on_resubmit, made on 2026-11-20 (closed from 2026-11-21): submit by e1201 at 2026-11-20 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, made on 2026-11-20 (closed from 2026-11-21): late at 2026-11-26 00:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, made on 2026-11-20 (closed from 2026-11-21): late at 2026-12-02 00:00 -> expired
+scenario a_kind_changed_on_resubmit, made on 2026-12-28 (closed from 2026-12-29): submit by e1201 at 2026-12-28 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-07 00:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, made on 2026-12-28 (closed from 2026-12-29): late at 2027-01-13 00:00 -> expired
+scenario a_kind_changed_on_resubmit, made with a comment: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario a_kind_changed_on_resubmit, made with a comment: submit by e1201 at 2026-11-16 10:00 -> refused (comment)
+requester e0001: submit by e0001 at 2026-11-16 10:00 -> check, in progress
+requester e0101: submit by e0101 at 2026-11-16 10:00 -> first, in progress
+requester e0102: submit by e0102 at 2026-11-16 10:00 -> first, in progress
+requester e0201: submit by e0201 at 2026-11-16 10:00 -> first, in progress
+requester e0202: submit by e0202 at 2026-11-16 10:00 -> first, in progress
+requester e0203: submit by e0203 at 2026-11-16 10:00 -> first, in progress
+requester e0204: submit by e0204 at 2026-11-16 10:00 -> first, in progress
+requester e1001: submit by e1001 at 2026-11-16 10:00 -> first, in progress
+requester e1002: submit by e1002 at 2026-11-16 10:00 -> first, in progress
+requester e1101: submit by e1101 at 2026-11-16 10:00 -> first, in progress
+requester e1203: submit by e1203 at 2026-11-16 10:00 -> first, in progress
+requester e3101: submit by e3101 at 2026-11-16 10:00 -> first, in progress
+requester e4001: submit by e4001 at 2026-11-16 10:00 -> first, in progress
+requester e5001: submit by e5001 at 2026-11-16 10:00 -> first, in progress
+requester e6001: submit by e6001 at 2026-11-16 10:00 -> first, in progress
+requester e7001: submit by e7001 at 2026-11-16 10:00 -> first, in progress
+requester e7101: submit by e7101 at 2026-11-16 10:00 -> first, in progress
+requester e7102: submit by e7102 at 2026-11-16 10:00 -> first, in progress
+requester e7201: submit by e7201 at 2026-11-16 10:00 -> first, in progress
+requester e7202: submit by e7202 at 2026-11-16 10:00 -> first, in progress
+requester e9001: submit by e9001 at 2026-11-16 10:00 -> first, in progress
+requester e9002: submit by e9002 at 2026-11-16 10:00 -> first, in progress
+requester e9003: submit by e9003 at 2026-11-16 10:00 -> first, in progress
+proxy e0001 for e1201: submit by e0001 at 2026-11-16 10:00 -> refused (person)
+across the versions of the organization: submit by e1201 at 2027-03-31 10:00 -> first, in progress
+across the versions of the organization: approve by e1101 at 2027-04-01 10:00 -> check, in progress
+across the versions of the organization: approve by e1001 at 2027-04-01 10:00 -> approved
+across the versions of the organization: send back by e1101 at 2027-03-31 10:00 -> with requester
+across the versions of the organization: resubmit by e1201 at 2027-04-01 10:00 -> first, in progress
+edge of price, going up: 1_000_000JPY: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of price, going up: 1_000_001JPY: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of price, going down: 1JPY: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of price, going down: 0JPY: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of quantity, going up: 100: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of quantity, going up: 101: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+edge of quantity, going down: 1: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+edge of quantity, going down: 0: submit by e1201 at 2026-11-16 10:00 -> refused (form)
+scenario a_kind_changed_on_resubmit, with contact left empty: submit by e1201 at 2026-11-16 10:00 -> refused (form)

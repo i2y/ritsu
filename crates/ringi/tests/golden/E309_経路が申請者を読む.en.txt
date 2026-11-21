@@ -1,0 +1,4 @@
+error[E309]: tests/mutants/E309_経路が申請者を読む.ringi:8:27: The route cannot read `requester.id`
+     8 |   監査(audit)    取締役会  when requester.id is "e01"
+  = A condition of the route reads the fields of the form whose values a table can hold (a choice of its own values or of a rule's values, a number, an amount, a date, yes or no), the outputs of the rules the request uses, and the inputs of a shared route: the route is lowered to a table of them, which rulec checks.
+  = To let only some people submit the request, write `submitted by` under `ticket`. To have someone approve the requests of the person at the top of the organization, write where a stage goes when there is no one above (`when empty escalate, then board`, with `board = team board` in `who`).

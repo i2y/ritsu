@@ -105,7 +105,7 @@ See also: [E007](#e007)
 
 ## E006 — The same name is given twice
 
-**When**: In a module, two of the `use` names and the declarations (`enum`, `record`, `fn`) share a name or an alias; or two fields of a record, two parameters of a function or two values of an enum do. So does a function or a `use` given the name of a builtin called as a function (`sum`, `map`, `numbers`, `char`, `ok`, `err`; the name of one written after a value, such as `get`, `sort_by` or `trim`, is free to take), and a `let` or a `some` whose name is taken where it stands; and, for an enum whose values have fields, the name the generated code gives the type of a value, the enum's and the value's joined (`Order.placed` is `OrderPlaced`), where it is the name of a record, an enum or another value's type. A type parameter shares its name with no other of its declaration, and with no record or enum of the module.
+**When**: In a module, two of the `use` names and the declarations (`enum`, `record`, `fn`) share a name or an alias; or two fields of a record, two parameters of a function or two values of an enum do. So does a function or a `use` given the name of a builtin called as a function (`sum`, `map`, `numbers`, `char`, `ok`, `err`; the name of one written after a value, such as `get`, `sort_by` or `trim`, is free to take), and a `let` or a `some` whose name is taken where it stands; and, for an enum whose values have fields, the name the generated code gives the type of a value, the enum's and the value's joined (`Order.placed` is `OrderPlaced`), where it is the name of a record, an enum or another value's type. A type parameter shares its name with no other of its declaration, and with no record or enum of the module. Two names a host reads also share a name where every target writes them alike: a type's name is written in every target with each word's first letter in upper case and no `_`, and `line_item` and `LineItem` are both `LineItem`. Two that some targets alone write alike are W002, a warning. A name the generated code alone reads (a function's inner one, a check, the constant of the module's name, the name of an import) kaname moves aside from the others itself, and it is no cause.
 
 **Fix**: Rename one of them.
 
@@ -121,15 +121,53 @@ fn quote() -> number
   2
 ```
 
-See also: [E005](#e005), [E110](#e110)
+See also: [E005](#e005), [E110](#e110), [W002](#w002)
 
 <a id="e007"></a>
 
 ## E007 — A name the generated code cannot take
 
-**When**: A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart. A reserved word of Rust is free to be a name (it is a raw identifier, `r#ref`; five names of a module are W001).
+**When**: A name the generated code takes (the alias, or the name with none) is a name of kaname's helper module (`kaname`, `KanameError`, `Q`, `Date`, `Rat`, `glue`), by which the generated code of every target reads the helper, so that no target can take it. A name some targets alone cannot write (a target's keyword, among others) is W001, a warning.
 
 **Fix**: Choose another name or alias.
+
+**Example**:
+
+```kn
+module example v1
+
+record KanameError
+  a : string
+```
+
+See also: [E005](#e005), [W001](#w001)
+
+<a id="e008"></a>
+
+## E008 — A name a target to be generated cannot write
+
+**When**: A target `ritsu gen` writes (`--target`'s, or else the `target` line of `ritsu.mod`) is one W001 or W002 names. As written, that target's code would not build, or would hold a name a host cannot read it by, so `ritsu gen` writes no file of any target and exits 1. Where it writes none of the targets the warning names, it does not stop, and `kaname check` does not give this code. It says what the warning says, with its last note in place of what to do.
+
+**Fix**: Choose another name or alias (of two names, rename one of them). For a target you do not use, name the ones you use with `--target`.
+
+**Example**:
+
+```kn
+module door v1
+
+fn one() -> number
+  1
+```
+
+See also: [W001](#w001), [W002](#w002)
+
+<a id="w001"></a>
+
+## W001 — A name some targets cannot write
+
+**When**: A name the generated code takes (the alias, or the name with none) is one some targets cannot write; the warning names them, and why. Of a module's name: a keyword of Python (Python), a name that is a keyword of Go with no `_` (Go's package: `go_to` is `goto`), and `crate`, `self`, `super`, `Self`, `mod` and `door` (Rust: words Rust names no module, and the files kaname writes into `glue/`). Of a function a host calls: a word TypeScript takes as no name (a reserved word, or one strict mode does not bind, such as `arguments` and `eval`) and a keyword of Python; of its parameter, a keyword of Python (Python's function takes what a host gives it by the parameters' names). Of a field: a keyword of Python, a name that starts with `__` (Python renames it in its class, or keeps it for itself), `__proto__` (TypeScript's prototype of an object), and `kind` in a value of an enum whose values have fields (by which the generated TypeScript tells the values apart). A function of the form `__x__`, and a value of an enum Python would write `_x_` or starting with `__`, are names Python keeps. A type's name that is empty or starts with a digit once written with each word's first letter in upper case and no `_` (TypeScript, Python and Rust), such a value of an enum (Rust), and a type's name that is then a keyword of Python (`none_` is `None`) are warned of too. The other targets take the name, so it is a warning; `ritsu gen` stops at the module where it writes a target the warning names (E008). A name a target writes otherwise (in Pascal case, in upper case, or as Rust's raw identifier `r#ref`), and a name the generated code moves aside from the others itself (an inner function, a type parameter, a parameter no host sees), is free to be a target's word. A name no target can write is E007.
+
+**Fix**: If you do not generate the targets the warning names, leave it; if you do, choose another name or alias.
 
 **Example**:
 
@@ -140,45 +178,29 @@ record Seat
   class : string
 ```
 
-See also: [E005](#e005), [W001](#w001)
-
-<a id="e008"></a>
-
-## E008 — A name the generated Rust cannot give a module
-
-**When**: `ritsu gen --target rust` is to write a module whose name W001 warns of. The Rust as written would not build, so `ritsu gen` writes no file of any target and exits 1. Without `rust` among the targets it does not stop, and `kaname check` does not give this code.
-
-**Fix**: Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
-
-**Example**:
-
-```kn
-module door v1
-
-fn one() -> number
-  1
-```
-
-See also: [E007](#e007), [W001](#w001)
-
-<a id="w001"></a>
-
-## W001 — A name the generated Rust cannot give a module
-
-**When**: The module's name (the alias, or the name with none) is `crate`, `self`, `Self`, `mod` or `door`. In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: the first three are words Rust names no module, and the other two are the files kaname writes into `glue/` itself (the directory's own, and the package's door). TypeScript, Python and Go take all five, so it is a warning; `ritsu gen --target rust` stops at the module (E008).
-
-**Fix**: If you do not generate Rust, leave it; if you do, choose another name or alias.
-
-**Example**:
-
-```kn
-module door v1
-
-fn one() -> number
-  1
-```
-
 See also: [E007](#e007), [E008](#e008)
+
+<a id="w002"></a>
+
+## W002 — Two names some targets write alike
+
+**When**: Two names a host reads are alike once some targets write them as they write names: Go's function, field and constant of a value of an enum, and Rust's value of an enum, are written with each word's first letter in upper case and no `_` (`total_weight` and `totalWeight` are both `TotalWeight` in Go); TypeScript's and Python's value of an enum in upper case (`gold` and `GOLD`). Python holds its classes and its functions in one namespace (`record total` and `fn Total`), TypeScript an enum whose values have no fields and the functions (`enum kind` and `fn Kind`), and Go the constants of the values of enums and the types. The warning names the other name, and the targets that write the two alike with what they write. The other targets write the two apart, so it is a warning; `ritsu gen` stops at the module where it writes a target the warning names (E008). Two every target writes alike (two types) are E006.
+
+**Fix**: If you do not generate the targets the warning names, leave it; if you do, rename one of them, or give it another alias.
+
+**Example**:
+
+```kn
+module example v1
+
+fn total_weight() -> number
+  1
+
+fn totalWeight() -> number
+  2
+```
+
+See also: [E006](#e006), [E008](#e008)
 
 <a id="e009"></a>
 
@@ -201,7 +223,7 @@ record order
 
 ## E101 — Nothing has this name
 
-**When**: A name in an expression, a type (the type of a value too, `Order.placed`), a function, an output of a rule, a field of a record or of a value, a value of an enum or a date of a dates file names nothing. A value of an enum is written `<enum>.<value>` where no type says which enum. So does a builtin written after a value (`get`, `sort_by`, `trim`) that is called as a function, and one called as a function (`numbers`, `char`) that is written after a value; the note shows how it is written. So does a `private` function, record or enum of another module, and the note says it is `private`.
+**When**: A name in an expression, a type (the type of a value too, `Order.placed`), a function, an output of a rule, a field of a record or of a value, a value of an enum or a date of a dates file names nothing. A value of an enum is written `<enum>.<value>` where no type says which enum. So does a builtin written after a value (`get`, `sort_by`, `trim`) that is called as a function, and one called as a function (`numbers`, `char`) that is written after a value; the note shows how it is written. So does a `private` function, record or enum of another module, and the note says it is `private`. A name of one kind written in several places is said once, where it is first written, and the note gives the lines of the others (a field, once for each record; a value, for each enum; an argument, for each function).
 
 **Fix**: Check the spelling. What a `use` reads is written `<use name>.<name>`; a builtin written after a value goes after the value and a `.`, as in `xs.sort_by(x => x.due)`. What is `private` is used in its own module alone.
 
@@ -220,9 +242,9 @@ See also: [E110](#e110)
 
 ## E102 — The types do not agree
 
-**When**: A value is not of the type of where it goes (a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer). A unit and a tax are part of the type: two units of one dimension (`money[USD]` and `money[USDc]`) do not agree, nor do with tax and without. So do the two sides of a sum or a comparison, the answers of an `if` or a `match`, and the elements of a list, that are of two types, and the value after `..` in a record made from another that is not of the type built. So do two function types (`(T) -> U`) whose parameters differ in number or in type, or whose answers differ (an amount or a quantity in another unit too), and what is no function given to a parameter of a function type.
+**When**: A value is not of the type of where it goes (a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer). A unit and a tax are part of the type: two units of one dimension (`money[USD]` and `money[USDc]`) do not agree, nor do with tax and without. So do the two sides of a sum or a comparison, the answers of an `if` or a `match`, and the elements of a list, that are of two types, and the value after `..` in a record made from another that is not of the type built. So do two function types (`(T) -> U`) whose parameters differ in number or in type, or whose answers differ (an amount or a quantity in another unit too), and what is no function given to a parameter of a function type. An enum is the place it is declared: two enums declared at two places do not agree even with the same values (the note says where each is declared). An enum of an `enums` file is one type by the name of the file read with `use rule` and by the name of each rule that reads it whole.
 
-**Fix**: Give a value of the type; a conversion is written, as in `fee in USDc` (kaname converts nothing unasked).
+**Fix**: Give a value of the type; a conversion is written, as in `fee in USDc` (kaname converts nothing unasked). To make two enums one type, put the enum in an `enums` file, read it with `import enum` in each rule, and read that file in the module with `use rule`.
 
 **Example**:
 
@@ -296,7 +318,7 @@ See also: [E102](#e102)
 
 ## E106 — The match leaves values out
 
-**When**: The arms of a `match` leave out a value of the enum, `true` or `false`, or `none` or `some x`, and there is no `else`; or an arm repeats a value or a literal an arm above takes. So does a `match` by literals (numbers, amounts, quantities, dates, strings) with no `else`, an `else` that is not the last arm, takes no value or shares its arm, a name given to a value with no fields, and a value given a name that shares its arm.
+**When**: The arms of a `match` leave out a value of the enum, `true` or `false`, or `none` or `some x`, and there is no `else`; or an arm repeats a value or a literal an arm above takes. So does a `match` by literals (numbers, amounts, quantities, dates, strings) with no `else`, an `else` that is not the last arm, takes no value or shares its arm, a name given to a value with no fields, and a value given a name that shares its arm. A `match` with an arm for a value the enum does not have (E101) is not said to leave values out: a value written wrong where it is declared is not said twice.
 
 **Fix**: Add an arm for each value left out, or take the rest with `else =>`, and keep each value in one arm. `else` is the last arm, with no other value in it.
 
@@ -319,7 +341,7 @@ See also: [E105](#e105)
 
 ## E107 — The call does not give what it takes
 
-**When**: A call of a function, a rule or a date misses an argument, gives one it does not take, gives one twice, or gives one with no name; a builtin is given a named argument or the wrong number of them; a record or a value with fields (`Order.placed { … }`) is built with a field missing or given twice, or a value with fields is written without them (`Order.placed`); the name of a rule, a dates file, a book or a module is written as a value; a dict literal gives one constant key twice (`["a": 1, "a": 2]`); a function value is given named arguments, or a number of them it does not take.
+**When**: A call of a function, a rule or a date misses an argument, gives one it does not take, gives one twice, or gives one with no name; a builtin is given a named argument or the wrong number of them; a record or a value with fields (`Order.placed { … }`) is built with a field missing or given twice, or a value with fields is written without them (`Order.placed`); the name of a rule, a dates file, a book or a module is written as a value; a dict literal gives one constant key twice (`["a": 1, "a": 2]`); a function value is given named arguments, or a number of them it does not take. A record or a call that writes no fewer fields or arguments it does not have (E101) than it leaves out is not said to leave them out: a name written wrong is not said twice.
 
 **Fix**: Give every argument once, by name (`charges(debt: d, days_late: n)`); a builtin and a function value take their arguments in order, with no names (`amount(x)`).
 
@@ -420,7 +442,7 @@ See also: [E004](#e004)
 
 ## E112 — A type argument cannot be worked out, or does not fit
 
-**When**: Where a generic function is called, a type parameter takes no type from the arguments nor from the place the call is put in (only `[]` or `none` is given), or two arguments say two types for one (a list of dollars and a value of cents for one `T`). So does a generic record, enum or function given a number of type arguments that is not the number of its type parameters, a type argument whose values may be none (`number?`) or that is a function type, a parameter of a lambda whose type the function type of its place does not say (a lambda a `let` with no type names), and a generic function of a ring of calls given a type argument made from a type parameter (`wrap_deep[T]` calling itself as `wrap_deep(x: [x], …)` gives `list[T]`).
+**When**: Where a generic function is called, a type parameter takes no type from the arguments nor from the place the call is put in (only `[]` or `none` is given), or two arguments say two types for one (a list of dollars and a value of cents for one `T`, or two rates on steps neither of which is a whole number of the other). So does a generic record, enum or function given a number of type arguments that is not the number of its type parameters, a type argument whose values may be none (`number?`) or that is a function type, a parameter of a lambda whose type the function type of its place does not say (a lambda a `let` with no type names), and a generic function of a ring of calls given a type argument made from a type parameter (`wrap_deep[T]` calling itself as `wrap_deep(x: [x], …)` gives `list[T]`).
 
 **Fix**: Put the call where a type is written (`let p : Page[number] = …`), or write the types after the function's name (`empty_page[number]()`); convert an amount or a quantity of another unit with `in`. Where a value may be none, give the type with no `?` and write the parameter `T?`. Write the types of a lambda's parameters (`(l: Line) => …`). In a ring of calls, give the type parameters as they are, or types that name none.
 
@@ -505,11 +527,49 @@ fn next(n: number range >=0 <=98) -> number
 
 See also: [E102](#e102)
 
+<a id="e116"></a>
+
+## E116 — A function a host calls takes a value another language makes
+
+**When**: A function a host calls (one not `private`, with no type parameter and no parameter of a function type) has a parameter that is, or holds anywhere in it, a value another language works out and makes: a rule's outputs (`r.outputs`) or a transfer of a book (`ledger.capture.do`), also in a field of a record or of a value of a sum, an element of a list, a set or a dict, the value of a result, or inside `indexed`, `entry` and `running`. An element of a list a rule walks (`r.lines`), a rule's enum and a record of another module are values a host makes, which the entry takes and checks.
+
+**Fix**: Call the rule inside the function; or take what the host gives in a record of your own with its ranges written; or, if no host calls the function, make it `private`. The function's answer, and the parameters of a function no host calls, may hold such a value.
+
+**Example**:
+
+```kn
+module example v1
+
+use book ledger from "ledger.book"
+
+fn kept(t: ledger.capture.do) -> ledger.capture.do
+  t
+```
+
+`ledger.book`:
+
+```
+book ledger v1
+description "A marketplace's money, in cents"
+
+unit USD scale 2
+
+account seller_balance(seller: string) : USD
+  at least 0 refused as insufficient_balance
+account cards : USD outside
+
+transfer capture(payment: string, seller: string, amount: USD)
+  key payment
+  move amount from cards to seller_balance(seller)
+```
+
+See also: [E113](#e113), [E204](#e204)
+
 <a id="e201"></a>
 
 ## E201 — A file this module uses cannot be read
 
-**When**: A file a `use` reads is not there, its extension is not its kind's (`use rule` reads a `.rule`, `use dates` a `.cal`, `use book` a `.book`, `use module` a `.kn`), or it does not pass its language's check (the notes give what rulec, koyomi, chobo or kaname says of it). So does a call of a rule with no outputs (an `enums` file), and its outputs written as a type: nothing to call is generated from it. What a module reads it for is its enums, written `<rule>.<enum>` where a type goes.
+**When**: A file a `use` reads is not there, its extension is not its kind's (`use rule` reads a `.rule`, `use dates` a `.cal`, `use book` a `.book`, `use module` a `.kn`), or it does not pass its language's check (the notes give what rulec, koyomi, chobo or kaname says of it). So does a call of a rule with no outputs (an `enums` file), and its outputs written as a type: nothing to call is generated from it. What a module reads it for is its enums, written `<rule>.<enum>` where a type goes. A file that could not be read is said once, at the line of its `use`, and nothing is said where its name is written: what it names is of no type that can be told, and what does not touch it is checked to its types.
 
 **Fix**: Check the path (it is written from the directory of the module's file); correct a file that does not pass until its language's check passes it. Do not call an `enums` file: write its enums as types.
 
@@ -857,7 +917,7 @@ See also: [W603](#w603), [E601](#e601)
 
 ## E604 — Lean does not take the proof
 
-**When**: `--lean` checks the proof file and does not take it: the file holds what a proof file may not (what, and on which line); it does not build (Lean's error, at its line in the proof file); a theorem's type is not the property's statement; a theorem rests on an axiom other than `propext`, `Classical.choice` and `Quot.sound` (`sorryAx` for a `sorry`, and `native_decide` by that name); the name is declared as something other than a theorem; the kernel does not take a declaration; the file cannot be read beside the Lean written from the .kn; or Lean does not finish in time. What is wrong with the file as a whole is said once, of the file.
+**When**: `--lean` checks the proof file and does not take it: the file holds what a proof file may not (what, and on which line); the proof file does not build (Lean's error, at its line in the proof file); the Lean written from the .kn does not build (Lean's error, at its line in the written file); a theorem's type is not the property's statement; a theorem rests on an axiom other than `propext`, `Classical.choice` and `Quot.sound` (`sorryAx` for a `sorry`, and `native_decide` by that name); the name is declared as something other than a theorem; the kernel does not take a declaration; the file cannot be read beside the Lean written from the .kn; or Lean does not finish in time. What is wrong with the file as a whole is said once, of the file.
 
 **Fix**: Mend what the notes say. For each property, `theorem <property's alias> : Kaname.<module's alias>.<property's alias>` goes in the namespace `Proofs.<module's alias>`; the file imports only `Kaname.…`.
 

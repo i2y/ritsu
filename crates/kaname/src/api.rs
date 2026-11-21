@@ -38,15 +38,16 @@ fn private(o: &mut Vec<(String, Json)>, private: bool) {
     }
 }
 
-/// A range as the module writes it, in its type's unit: `>=1GBPc <=100000000GBPc`; null for none. The
-/// range of a list or a set is its elements', of a dict its values'.
+/// A range in its type's unit, its numbers as `text` writes them (a field a program reads):
+/// `>=1GBPc <=100000000GBPc`; null for none. The range of a list or a set is its elements', of a
+/// dict its values'.
 fn range_json(r: &Option<Range>, t: &Ty) -> Json {
     let mut t = t;
     while let Ty::Opt(x) | Ty::List(x) | Ty::Set(x) | Ty::Dict(_, x) = t {
         t = x;
     }
     match r {
-        Some(r) => Json::str(crate::value::range_text(r, t)),
+        Some(r) => Json::str(crate::value::range_plain(r, t)),
         None => Json::Null,
     }
 }
@@ -232,14 +233,19 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
         let calls = facts.map(|x| Json::arr(x.calls.iter().map(|k| Json::obj([("line", Json::int(k.line as i128)), ("function", Json::str(k.function.clone()))]))));
         o.push(("calls".into(), calls.unwrap_or(Json::Null)));
         // an inner function's one function, which the generated code calls (DESIGN 21.3, 26.7)
-        let a = if info.inner() { crate::r#gen::plan::inner_name(crate::r#gen::Target::TypeScript, c, f) } else { alias(&info.name) };
+        let named = |t| if info.inner() { crate::r#gen::plan::inner_name(t, c, f) } else { alias(&info.name) };
+        let (ts, py) = (named(crate::r#gen::Target::TypeScript), named(crate::r#gen::Target::Python));
         let named_in = |t| if info.inner() { crate::r#gen::plan::generic_name(t, c, f) } else { crate::r#gen::plan::fn_name(t, c, f) };
         let (go, rust) = (named_in(crate::r#gen::Target::Go), named_in(crate::r#gen::Target::Rust));
         // the checks of what a host gives the function, which a host calls first where it does not
         // trust its input: Go's `Check<function>` (DESIGN 10.3) and Rust's `check_<function>`
         // (DESIGN 36.4), whose functions panic where it is outside; an inner function has none
-        let check = if info.inner() { Json::Null } else { Json::obj([("go", Json::str(format!("Check{go}"))), ("rust", Json::str(crate::r#gen::plan::check_name(crate::r#gen::Target::Rust, c, f)))]) };
-        o.push(("generated".into(), Json::obj([("typescript", Json::str(a.clone())), ("python", Json::str(a)), ("go", Json::str(go)), ("rust", Json::str(rust))])));
+        let check = if info.inner() {
+            Json::Null
+        } else {
+            Json::obj([("go", Json::str(crate::r#gen::plan::check_name(crate::r#gen::Target::Go, c, f))), ("rust", Json::str(crate::r#gen::plan::check_name(crate::r#gen::Target::Rust, c, f)))])
+        };
+        o.push(("generated".into(), Json::obj([("typescript", Json::str(ts)), ("python", Json::str(py)), ("go", Json::str(go)), ("rust", Json::str(rust))])));
         o.push(("check".into(), check));
         Json::Obj(o)
     });
@@ -294,7 +300,7 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
     }
     let builds = !ops.is_empty();
     let transfers = ops.into_iter().map(|(op, book, written, kind, reasons)| {
-        let book_file = ritsu_base::paths::from_root(root, &book).unwrap_or_else(|| book.to_string_lossy().to_string());
+        let book_file = ritsu_base::paths::from_root(root, &book).unwrap_or_else(|| ritsu_base::paths::show(&book));
         let refusable = kind == "do" || kind == "hold";
         Json::obj([
             ("type", Json::str(written)),
@@ -320,6 +326,25 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
     if let (Json::Obj(top), Some(ps)) = (&mut out, properties) {
         let at = top.iter().position(|(k, _)| k == "functions").map_or(top.len(), |i| i + 1);
         top.insert(at, ("properties".into(), Json::arr(ps)));
+    }
+    // the enums the module reads by two or more names (DESIGN 3.5), only where there are any, as
+    // `properties` is
+    let one = crate::names::one_enum_names(c);
+    if let Json::Obj(top) = &mut out
+        && !one.is_empty()
+    {
+        let at = top.iter().position(|(k, _)| k == "enums").map_or(top.len(), |i| i + 1);
+        let groups = one.into_iter().map(|g| {
+            // from the root, else from the module's directory, as a `use` line would write it
+            let file = ritsu_base::paths::from_root(root, &g.file).unwrap_or_else(|| ritsu_base::paths::relative(&c.canon.parent().unwrap_or(Path::new("")).to_string_lossy(), &g.file.to_string_lossy()));
+            Json::obj([
+                ("names", Json::arr(g.names.into_iter().map(Json::str))),
+                ("file", Json::str(file)),
+                ("name", Json::str(g.name)),
+                ("values", Json::arr(g.values.into_iter().map(Json::str))),
+            ])
+        });
+        top.insert(at, ("names_of_one_enum".into(), Json::arr(groups)));
     }
     out
 }

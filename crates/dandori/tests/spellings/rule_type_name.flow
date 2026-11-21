@@ -1,0 +1,25 @@
+workflow rule_type_name v1
+description "A record named as the code of TypeScript and of Python names an enum of a rule."
+
+use rule urgency from "../../examples/order/rules/urgency.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:urgency"
+
+record urgency_carrier
+  note : string
+
+inputs
+  id     : string
+  member : bool
+  amount : money[JPY, incl_tax]  range >=0 <=1000000
+
+outputs
+  carrier : urgency.carrier
+  note    : string
+
+task find_note(id: string) -> urgency_carrier
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:find-note"
+
+flow
+  let decision = urgency(member: member, amount: amount)
+  let n = find_note(id: id)
+  succeed carrier = decision.carrier, note = n.note

@@ -1,0 +1,28 @@
+workflow chain_names v1
+description "A name written wrong on several lines: it is said once, where it is first written, with the lines that write it too"
+
+record Quote
+  total : int
+
+inputs
+  id   : string
+  # a type written wrong in two declarations
+  kind : strng
+
+outputs
+  label : strng
+  total : int
+
+task fetch(id: string) -> Quote
+task notify(id: string)
+
+flow
+  # a task called three times and declared nowhere
+  notfy(id: id)
+  let q = fetch(id: id)
+  notfy(id: kind)
+  notfy(id: id)
+  # a name that nothing gives a value, read on two lines
+  notify(id: rle)
+  notify(id: rle)
+  succeed label = kind, total = q.total

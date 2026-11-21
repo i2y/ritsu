@@ -1,10 +1,10 @@
 error[E005]: tests/fixtures/books.flow:6:10: could not read the book `books/無い.book`
      6 | use book 無い from "books/無い.book"
-  = cannot read `books/無い.book`: No such file or directory (os error 2)
+  = `tests/fixtures/books/無い.book` is not there
 error[E005]: tests/fixtures/books.flow:7:10: could not read the book `books/壊れた.book`
      7 | use book 壊れた from "books/壊れた.book"
-  = E020: the account `棚` has no bound; give it `at least` or `at most`, or mark it `outside` if it stands for the world outside the book (books/壊れた.book, line 6)
-  = E002: no account `倉` is declared (books/壊れた.book, line 11)
+  = E020: the account `棚` has no bound; give it `at least` or `at most`, or mark it `outside` if it stands for the world outside the book (tests/fixtures/books/壊れた.book, line 6)
+  = E002: no account `倉` is declared (tests/fixtures/books/壊れた.book, line 11)
 error[E006]: tests/fixtures/books.flow:8:10: `倉庫` is used twice (rules, dates files and books share names)
      8 | use book 倉庫 from "../flows/books/倉庫.book"
 error[E002]: tests/fixtures/books.flow:19:8: there is no book `棚卸し`; name one read by `use book`

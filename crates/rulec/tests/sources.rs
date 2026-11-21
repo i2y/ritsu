@@ -45,6 +45,7 @@ fn rulec(dir: &Path, args: &[&str]) -> (i32, String) {
         .env("RULEC_LANG", "ja")
         .current_dir(dir)
         .args(args)
+        .args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] })
         .output()
         .expect("rulec を起動できない");
     (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr))

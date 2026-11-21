@@ -9,6 +9,10 @@
 //!   them), in each language.
 //! - A permit of a gate, a calendar the gate reads through a dates file, and a file nothing reads,
 //!   which shows no difference on a gate with a date condition.
+//! - A request whose approvers move with the data of the organization it reads: `request_changes`.
+//! - A file only read by the files the requirements name: `requirements_read`, apart from
+//!   `requirements_moved`. The example's rule sends it to the owners, and the same rule without that
+//!   fact lets it through when no answer moved, but not a change to a file the requirements name.
 //! - An error only the head has (exit 1), what cannot be compared (exit 2), JSON printed to the end
 //!   in each.
 //! - The route rule: where a change goes, an input that is no fact, a type that is not the fact's, a
@@ -21,6 +25,8 @@
 //!   line the record holds no statement on, a rename. The example rule sends each to a person.
 //! - The pages show what the example prints, and every fact.
 
+mod common;
+
 use ritsu_testkit::git::{GitServer, Options, Repo};
 use ritsu_testkit::{TempDir, skip};
 use serde_json::Value;
@@ -31,7 +37,7 @@ fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-const LANG_VARS: [&str; 10] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"];
+const LANG_VARS: [&str; 11] = common::LANG_VARS;
 
 /// A repository of the test's, and what it needs to stay.
 struct Desk {
@@ -161,7 +167,7 @@ fn yes(v: &Value, name: &str) -> bool {
 
 /// The facts of an answer that moved are all 0.
 fn nothing_moved(v: &Value) {
-    for name in ["rule_changes", "date_changes", "allow_gained", "allow_lost", "policies_moved", "book_changes", "interface_changes", "interface_breaks"] {
+    for name in ["rule_changes", "date_changes", "allow_gained", "allow_lost", "policies_moved", "book_changes", "request_changes", "interface_changes", "interface_breaks"] {
         assert_eq!(fact(v, name), 0, "{name}: {}", v["facts"]);
     }
 }
@@ -562,6 +568,88 @@ fn a_calendar_the_gate_reads_moves_the_dates_and_the_gate() {
     assert_eq!(the_route(&v), ("owner_reads", true));
 }
 
+/// The example's rule without `requirements_read`: its input, its term in `moved`, its column of the
+/// examples and the row that has it.
+fn without_read(rule: &str) -> String {
+    let lines: Vec<&str> = rule.lines().collect();
+    let e = lines.iter().position(|l| *l == "examples").expect("the rule has examples");
+    let col = lines[e + 1].split('|').position(|c| c.trim() == "requirements_read").expect("the examples have the fact");
+    let mut out = Vec::new();
+    for (i, l) in lines.iter().enumerate() {
+        if l.trim_start().starts_with("requirements_read ") {
+            continue;
+        }
+        if i > e && l.starts_with('|') {
+            let mut cells: Vec<&str> = l.split('|').collect();
+            if i > e + 1 && cells[col].trim() != "0" {
+                continue;
+            }
+            cells.remove(col);
+            out.push(cells.join("|"));
+        } else {
+            out.push(l.replace(" + requirements_read", ""));
+        }
+    }
+    out.join("\n") + "\n"
+}
+
+#[test]
+fn a_file_only_read_is_a_fact_of_its_own_and_a_rule_can_let_it_through() {
+    if no_git() {
+        return;
+    }
+    let d = Desk::empty("impact-read");
+    copy_into(&d.repo, &here().join("examples/impact"), "");
+    let fewer = without_read(&std::fs::read_to_string(here().join("examples/impact/route.rule")).unwrap());
+    assert!(!fewer.contains("requirements_read"), "{fewer}");
+    d.repo.write("without_read.rule", &fewer);
+    d.repo.commit("the desk, and a rule that does not take requirements_read");
+    d.repo.tag("base");
+    let routes = |d: &Desk| -> (Value, Value) {
+        let (code, v, err) = d.json(&["--route", "route.rule"]);
+        assert_eq!(code, 0, "{err}\n{}", v["markdown"]);
+        let (code, w, err) = d.json(&["--route", "without_read.rule"]);
+        assert_eq!(code, 0, "{err}\n{}", w["markdown"]);
+        (v, w)
+    };
+
+    // the description of the office's calendar: the dates file and the gate read it, and no answer moves
+    let office = std::fs::read_to_string(d.repo.work.join("office.cal")).unwrap();
+    d.edit("office.cal", "description \"The days the office is open:", "description \"The days the office is open to customers:");
+    let (v, w) = routes(&d);
+    nothing_moved(&v);
+    assert_eq!(fact(&v, "requirements_moved"), 0, "{}", v["facts"]);
+    assert_eq!(fact(&v, "requirements_read"), 2, "who_refunds through the gate, refund_period through the dates file: {}", v["requirements"]);
+    assert_eq!(fact(&v, "requirements_unknown"), 0);
+    let read: Vec<&Value> = v["requirements"]["moved"].as_array().unwrap().iter().map(|r| &r["only_through_reads"]).collect();
+    assert_eq!(read, [&Value::Bool(true), &Value::Bool(true)], "{}", v["requirements"]);
+    assert_eq!(v["requirements"]["owners"], serde_json::json!(["finance"]));
+    assert_eq!(the_route(&v), ("owner_reads", true), "the example sends a file only read to the owners");
+    assert_eq!(the_route(&w), ("merge", false), "a rule without the fact lets it through: {}", w["facts"]);
+    d.put("office.cal", &office);
+
+    // the description of the dates file a requirement names: no answer moves, the description is in
+    // the file's interface, and the rule without the fact sends it to the owner too
+    d.edit("refund_terms.cal", "description \"The last day to ask for a refund:", "description \"The last day a customer can ask for a refund:");
+    let (v, w) = routes(&d);
+    for name in ["rule_changes", "date_changes", "allow_gained", "allow_lost", "policies_moved", "book_changes", "interface_breaks"] {
+        assert_eq!(fact(&v, name), 0, "{name}: {}", v["facts"]);
+    }
+    assert_eq!(fact(&v, "interface_changes"), 1, "the description of a dates file is in its interface: {}", v["facts"]);
+    assert_eq!(fact(&v, "requirements_moved"), 1, "refund_period names the file: {}", v["requirements"]);
+    assert_eq!(fact(&v, "requirements_read"), 1, "who_refunds, through the gate: {}", v["requirements"]);
+    assert_eq!(the_route(&v), ("owner_reads", true));
+    assert_eq!(the_route(&w), ("owner_reads", true), "a file a requirement names goes to its owner: {}", w["facts"]);
+
+    // the twin with Japanese names: its rule takes the fact by its alias
+    let d = Desk::ja("impact-read-ja");
+    d.edit("office.ja.cal", "description \"事務所が開いている日。", "description \"事務所が客に開いている日。");
+    let (code, v, err) = d.json(&["--route", "route.ja.rule"]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(fact(&v, "requirements_read"), 2, "{}", v["requirements"]);
+    assert_eq!(the_route(&v), ("owner_reads", true), "{}", v["route"]);
+}
+
 #[test]
 fn a_file_nothing_reads_shows_no_difference_on_a_gate_with_a_date_condition() {
     if no_git() {
@@ -693,6 +781,100 @@ fn a_line_on_a_values_source_and_a_line_on_what_callers_may_send() {
     assert_eq!(the_route(&v), ("owner_reads", true), "{}", v["markdown"]);
 }
 
+// ── A request ───────────────────────────────────────────────────────────
+
+/// A request of the test's own (fictional): the requester's manager approves a trip.
+const TRIP: &str = "request trip v1 \"Trip\"
+description \"A trip the requester's manager approves (fictional)\"
+
+use organization org from \"shared/company.ringi\"
+use calendar office from \"shared/office.cal\"
+
+form
+  where_to : text \"Where to\"  count >=1 <=100
+
+route
+  first  manager
+
+who
+  manager = manager of requester
+
+every stage
+  due in 3 business days at end of day
+  when late expire
+  when empty skip
+
+ticket
+  self approval  not allowed
+";
+
+/// A route rule of the test's own: a change that moves what a request answers goes to its owner.
+const REQUEST_ROUTE: &str = "rule request_route(request_route) v1
+description \"Where a change of a request goes\"
+
+enum destination(destination) = merge | owner_reads
+
+inputs
+  request_changes : number  range >=0
+
+outputs
+  route : destination
+
+table route
+policy unique
+| request_changes | -> route : destination |
+| 0               | merge                  |
+| >=1             | owner_reads            |
+";
+
+/// The data of the organization moves a person to another team, and nothing else changes: the
+/// request's bytes stay, and its approvers move. `request_changes` is what `ringi diff` lists of
+/// each file of ringi's the report compares (the boxes of the route, the lines of the sections, the
+/// requesters whose stages are answered otherwise), as its behavior says; a route rule takes it.
+#[test]
+fn the_data_a_request_reads_moves_its_approvers() {
+    if no_git() {
+        return;
+    }
+    let d = Desk::empty("impact-request");
+    let ringi = here().join("../ringi/examples");
+    for f in ["company.ringi", "office.cal"] {
+        d.repo.write(&format!("shared/{f}"), std::fs::read(ringi.join("shared").join(f)).unwrap());
+    }
+    copy_into(&d.repo, &ringi.join("org"), "org");
+    d.repo.write("trip.ringi", TRIP);
+    d.repo.write("route.rule", REQUEST_ROUTE);
+    d.repo.commit("a request");
+    d.repo.tag("base");
+    d.edit("org/2026-04-01/members.csv", "e1201,sales1_a,staff,yes", "e1201,accounting,staff,yes");
+    let (code, v, err) = d.json(&["--route", "route.rule"]);
+    assert_eq!(code, 0, "{err}\n{}", v["markdown"]);
+    // what the behavior lists of each file of ringi's, or 1 where it says only that the two differ
+    let listed = |r: &Value| -> i64 {
+        let list = |k: &str| r[k].as_array().cloned().unwrap_or_default();
+        let inner = |k: &str| list(k).iter().map(|x| x["changes"].as_array().map_or(0, Vec::len)).sum::<usize>();
+        ((list("route").len() + inner("sections") + inner("approvers")) as i64).max(i64::from(r["differs"] == true))
+    };
+    let of: Vec<(&str, i64)> = v["behavior"].as_array().unwrap().iter().filter(|b| b["tool"] == "ringi").map(|b| (b["file"].as_str().unwrap(), listed(&b["result"]))).collect();
+    assert_eq!(of, [("shared/company.ringi", 3), ("trip.ringi", 1)], "{}", v["behavior"]);
+    assert_eq!(fact(&v, "request_changes"), 4, "{}", v["facts"]);
+    assert_eq!(fact(&v, "rule_changes") + fact(&v, "date_changes"), 0, "{}", v["facts"]);
+    assert_eq!(v["route"]["outputs"]["route"], "owner_reads", "{}", v["route"]);
+    for (lang, moved) in [("en", "The answers moved (request_changes 4)"), ("ja", "答えが動きました（request_changes 4）")] {
+        let (code, out, err) = d.ritsu(&["impact", "--base", "base", "--route", "route.rule", "--lang", lang]);
+        assert_eq!(code, 0, "{err}");
+        assert!(out.contains(moved) && out.contains("\n  request_changes = 4\n"), "{lang}:\n{out}");
+        let (_, md, _) = d.ritsu(&["impact", "--base", "base", "--route", "route.rule", "--format", "markdown", "--lang", lang]);
+        assert!(md.contains("| `request_changes` | 4 |"), "{lang}:\n{md}");
+    }
+    // the data as it was: nothing moved
+    d.edit("org/2026-04-01/members.csv", "e1201,accounting,staff,yes", "e1201,sales1_a,staff,yes");
+    let (code, v, err) = d.json(&["--route", "route.rule"]);
+    assert_eq!(code, 0, "{err}\n{}", v["markdown"]);
+    nothing_moved(&v);
+    assert_eq!(v["route"]["outputs"]["route"], "merge", "{}", v["route"]);
+}
+
 // ── The route rule ──────────────────────────────────────────────────────
 
 /// A route rule whose inputs are `inputs` and which always answers `merge`.
@@ -729,13 +911,13 @@ fn a_route_rule_takes_only_the_facts_by_their_types() {
     let (code, _, err) = d.ritsu(&["impact", "--base", "base", "--route", "wrong.rule"]);
     assert_eq!(code, 2);
     assert!(err.contains("the route rule `wrong.rule` does not pass its check") && err.contains("wrong.rule"), "{err}");
-    // no such file
+    // no such file: as every command says a file given that is not there (DESIGN 6.2, item 10)
     let (code, _, err) = d.ritsu(&["impact", "--base", "base", "--route", "nowhere.rule"]);
     assert_eq!(code, 2);
-    assert!(err.contains("there is no route rule `nowhere.rule`"), "{err}");
+    assert!(err.contains("error: `nowhere.rule` is not there"), "{err}");
     let (code, _, err) = d.ritsu(&["impact", "--base", "base", "--route", "nowhere.rule", "--lang", "ja"]);
     assert_eq!(code, 2);
-    assert!(err.contains("経路の規則 `nowhere.rule` がありません"), "{err}");
+    assert!(err.contains("エラー: `nowhere.rule` がありません"), "{err}");
 }
 
 #[test]
@@ -908,6 +1090,40 @@ fn the_generated_files_are_held_to_what_gen_writes_when_there_is_a_target() {
     assert!(v["generated"]["note"].as_str().unwrap().contains("not checked"), "{}", v["generated"]);
 }
 
+/// A package's comments are in the language of the run that wrote it, so `ritsu impact` holds it to
+/// what a run in that language writes, whichever language it runs in itself: a package written in
+/// Japanese is fresh to a run in English, and one written in English to a run in Japanese, and a
+/// changed rule makes the same files stale in both.
+#[test]
+fn the_generated_files_are_held_to_a_run_in_the_language_they_are_written_in() {
+    if no_git() {
+        return;
+    }
+    let d = Desk::en("impact-target-lang");
+    d.put("ritsu.mod", "module example.com/desk\n\ntarget python\n");
+    let impact = |base: &str, lang: &str| -> Value {
+        let (_, out, err) = d.ritsu(&["impact", "--base", base, "--format", "json", "--lang", lang]);
+        serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}\n{err}"))
+    };
+    for (wrote, runs) in [("ja", "en"), ("en", "ja")] {
+        let (code, out, err) = d.ritsu(&["gen", "--lang", wrote]);
+        assert_eq!(code, 0, "{out}\n{err}");
+        d.repo.git(&["add", "-A"]);
+        d.repo.commit(&format!("generated in {wrote}"));
+        d.repo.tag(&format!("generated-{wrote}"));
+        for lang in [wrote, runs] {
+            let v = impact(&format!("generated-{wrote}"), lang);
+            assert!(yes(&v, "generated_checked") && !yes(&v, "generated_stale"), "written in {wrote}, run in {lang}: {}", v["generated"]);
+        }
+    }
+    // the package is in English now
+    d.move_the_band();
+    let (en, ja) = (impact("generated-en", "en"), impact("generated-en", "ja"));
+    assert!(yes(&en, "generated_stale") && yes(&ja, "generated_stale"), "{}\n{}", en["generated"], ja["generated"]);
+    assert_eq!(en["generated"]["stale"], serde_json::json!(["generated/python/generated/rules/refund_band.py"]), "{}", en["generated"]);
+    assert_eq!(ja["generated"]["stale"], en["generated"]["stale"], "{}", ja["generated"]);
+}
+
 // ── What stops a run ────────────────────────────────────────────────────
 
 #[test]
@@ -917,7 +1133,7 @@ fn what_stops_a_run_in_each_language() {
     }
     let d = Desk::en("impact-stops");
     let cases: [(&[&str], &str, &str); 5] = [
-        (&["impact"], "`--base <revision>` is required", "`--base <git の版>`"),
+        (&["impact"], "`ritsu impact` needs `--base <revision>`", "`ritsu impact` には `--base <revision>` が要ります"),
         (&["impact", "--base", "no-such-tag"], "no-such-tag", "no-such-tag"),
         (&["impact", "--base", "base", "--format", "pdf"], "--format", "--format"),
         (&["impact", "--base", "base", "--root", "app.py"], "`--root app.py` is not a directory", "`--root app.py` はディレクトリではありません"),
@@ -1014,7 +1230,7 @@ fn the_pages_show_what_the_example_prints_and_every_fact() {
     let read = |p: PathBuf| std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
     let golden_json: Value = serde_json::from_str(&read(here().join("tests/golden/impact/rule.en.json"))).unwrap();
     let facts: Vec<&String> = golden_json["facts"].as_object().unwrap().keys().collect();
-    assert_eq!(facts.len(), 26);
+    assert_eq!(facts.len(), 28);
     for (page, printed, rule, shown) in [
         ("website/docs/impact.md", "rule.en.txt", "examples/impact/route.rule", 3),
         ("website/docs-ja/impact.md", "rule.ja.txt", "examples/impact.ja/route.ja.rule", 3),

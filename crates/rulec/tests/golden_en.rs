@@ -274,8 +274,9 @@ fn english_help_pages_have_no_japanese_but_what_is_kept() {
 }
 
 /// A range and a big amount are written in English as the rule's source writes them: `to` between
-/// the ends, and the digits in groups of three joined by `_` (`10_000_000JPY`), where Japanese
-/// writes `〜` and `1000万JPY`. The Japanese page is as it was.
+/// the ends, and the digits in groups of three joined by `_` (`10_000_000JPY`). The Japanese page
+/// writes `〜` between the ends and the digits the same way: it wrote `4万g` and `1000万JPY`, which
+/// no file can take as it is (§15.333).
 #[test]
 fn english_doc_writes_ranges_and_big_amounts_in_english() {
     let file = "tests/corpus/member_shipping_fee.rule";
@@ -284,7 +285,8 @@ fn english_doc_writes_ranges_and_big_amounts_in_english() {
     assert!(en.contains("| total | money[JPY, incl_tax] | 0JPY to 10_000_000JPY |"), "{en}");
     assert!(!en.contains('万') && !en.contains('億') && !en.contains('〜'), "{en}");
     let ja = run(&["doc", file], "ja");
-    assert!(ja.contains("| weight | mass[g] | 1g 〜 4万g |") && ja.contains("0JPY 〜 1000万JPY"), "{ja}");
+    assert!(ja.contains("| weight | mass[g] | 1g 〜 40_000g |") && ja.contains("0JPY 〜 10_000_000JPY"), "{ja}");
+    assert!(!ja.contains("4万g") && !ja.contains("1000万JPY"), "{ja}");
 }
 
 // §15.227–§15.230: the merging of files.
@@ -311,6 +313,15 @@ golden!(e144_fed_by_with_from_count, "E144", "tests/mutants/m_e144.rule", "E144"
 golden!(e147_a_sum_each_value_once_reaches, "E147", "tests/mutants/m_e147.rule", "E147");
 golden!(e148_unique_on_an_input, "E148", "tests/mutants/m_e148.rule", "E148");
 golden!(e149_a_range_with_no_end, "E149", "tests/mutants/m_e149.rule", "E149");
+golden!(e150_a_define_range_that_meets_nothing_it_reaches, "E150", "tests/mutants/m_e150.rule", "E150");
+// §15.314: the range of a `sum` or a `count` no sequence comes to.
+golden!(e150_a_sum_the_most_elements_come_short_of, "E150-sum", "tests/mutants/m_e150sum.rule", "E150");
+golden!(e150_a_sum_the_fewest_elements_come_past, "E150-top", "tests/mutants/m_e150top.rule", "E150");
+golden!(e150_a_count_above_the_most_elements, "E150-count", "tests/mutants/m_e150count.rule", "E150");
+// §15.323: an output nothing decides, one read before it is decided, a table with no `->`.
+golden!(e151_an_output_nothing_decides, "E151", "tests/mutants/m_e151.rule", "E151");
+golden!(e151_an_output_read_before_result, "E151-result", "tests/mutants/m_e151result.rule", "E151");
+golden!(e152_a_table_with_no_output_column, "E152", "tests/mutants/m_e152.rule", "E152");
 
 // The service a rule implements (§15.274): a value the contract does not have, and a service the
 // contract does not declare.

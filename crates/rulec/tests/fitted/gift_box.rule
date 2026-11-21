@@ -1,0 +1,26 @@
+rule gift_box v1
+description "Whether a box ships free and holds a card. A box comes to 200 yen or more, and a line is 100 yen at most: a box of one gift reaches the bottom only with other lines beside it"
+
+# A line of the box
+elements lines
+  price : money[JPY]  range >=1JPY <=100JPY
+  gift  : bool
+
+count gifts over lines where gift  range >=0 <=3
+sum total over lines of price  range >=200JPY <=2_000JPY
+
+outputs
+  free : bool
+  card : bool
+
+table free_of
+policy unique
+| total    | -> free |
+| <250JPY  | false   |
+| >=250JPY | true    |
+
+table card_of
+policy unique
+| gifts | -> card |
+| <2    | false   |
+| >=2   | true    |

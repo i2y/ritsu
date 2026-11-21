@@ -1,0 +1,4 @@
+error[E105]: tests/mutants/E105_隠れたまま必須の領収書.ringi:8:71: The field 領収書 may be asked for while it is hidden
+     8 |   領収書(receipt) : attachment "領収書"  shown when 種別 is 出張  required when 金額 > 30_000円
+  = Such a request: 金額 = 30_001円, 種別 = 経費
+  = A hidden field cannot be filled. Correct the conditions so that the field is shown whenever `required when` holds.

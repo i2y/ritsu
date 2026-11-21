@@ -1,0 +1,127 @@
+workflow 送れないHTTPの引数 v1
+description "記述どおりに、また記述が無ければ OpenAPI の既定どおりに送れない、HTTP の呼び出しの引数。どれも、タスクの所で言われる（DESIGN 43）"
+
+use openapi 場所 from "apis/places.json"
+
+# 記述のクエリの `years` は、`first` と `last` を持つオブジェクト
+record 年の幅
+  first : int
+  last  : int
+
+record 並び順
+  by    : string
+  order : string
+
+record 年の範囲
+  最初 : int
+  最後 : int
+
+record 置き場
+  部屋 : string
+  棚   : int
+
+record 済み
+  done : bool
+
+# `x_id` は、クエリの `x_id` にも、ヘッダーの `X-Id` にも当たる
+task どちらにも(x_id: string) -> 済み
+  http GET 場所 "/either"
+
+# ヘッダーの名前は大文字と小文字を区別しないので、二つとも `X-Key` に当たる
+task 二つの鍵(x_key: string, X_Key: string) -> 済み
+  http GET 場所 "/keys"
+
+# OpenAPI に無い書き方
+task タブ区切り(days: list[string]) -> 済み
+  http GET 場所 "/tabs"
+
+# 記述が、絞り込みの書き方をメディアタイプで言う
+task メディアタイプで(filter: 年の幅) -> 済み
+  http GET 場所 "/content"
+
+# `Host` は HTTP のクライアントが自分で書く。クッキーは `in: cookie` の引数で送る
+task ホストを渡す(host: string) -> 済み
+  http GET 場所 "/host"
+
+task クッキーのヘッダーを渡す(cookie: string) -> 済み
+  http GET 場所 "/cookie-header"
+
+# ヘッダーとクッキーの名前に書けない字
+task 書けない名前(x_印: string, セッション: string) -> 済み
+  http GET 場所 "/odd-names"
+
+# 置き場が取らない書き方
+task ヘッダーをformで(x_tags: list[string]) -> 済み
+  http GET 場所 "/header-form"
+
+task パスをformで(ids: list[string]) -> 済み
+  http GET 場所 "/path-form/{ids}"
+
+task クッキーをsimpleで(prefs: list[string]) -> 済み
+  http GET 場所 "/cookie-simple"
+
+# OpenAPI が決めていない形。explode: true（既定）のクッキーのリスト、deepObject のリスト、
+# explode: true の pipeDelimited、explode: false の deepObject
+task クッキーのリスト(prefs: list[string]) -> 済み
+  http GET 場所 "/cookie-list"
+
+task deepObjectのリスト(ids: list[string]) -> 済み
+  http GET 場所 "/deep-list"
+
+task 縦棒で区切る(codes: list[string]) -> 済み
+  http GET 場所 "/pipes"
+
+task deepObjectをfalseで(sort: 並び順) -> 済み
+  http GET 場所 "/deep-false"
+
+# `json` の値は JSON の文字列で行くので、オブジェクトやリストの書き方にならない
+task deepObjectにjson(filter: json) -> 済み
+  http GET 場所 "/deep-json"
+
+task リストにjson(tags: json) -> 済み
+  http GET 場所 "/json-list"
+
+# JSON の本文のほかに、レコードのリストを書く書き方は無い
+task 入れ子(ranges: list[年の幅]) -> 済み
+  http GET 場所 "/nested"
+
+# 操作が要るヘッダーとクッキー。一つは無いことがあり、一つは渡していない
+task 無いことがある(x_board_key: string?, session: string) -> 済み
+  http GET 場所 "/needs"
+
+task 渡していない(x_board_key: string) -> 済み
+  http GET 場所 "/needs"
+
+# レコードのフィールド `first` と引数の `first` が、クエリで一つの名前になる
+task 名前が重なる(years: 年の幅, first: int) -> 済み
+  http GET 場所 "/clash"
+
+# `key` の冪等キーは `Idempotency-Key` に入る
+task 注文する(item: string, idempotency_key: string) -> 済み
+  http POST 場所 "/orders"
+  key
+
+# `key` が無いので、タスクは `Idempotency-Key` を送らない
+task もう一度注文する(item: string) -> 済み
+  http POST 場所 "/orders"
+
+# 記述が JSON で書くと言う、URL エンコードの本文のプロパティ
+task メモを書く(text: string, meta: 年の幅) -> 済み
+  http POST 場所 "/notes"
+
+# 記述が無い。クエリと URL エンコードの本文に入るレコードのリストと、一つの名前に値を入れる
+# 二つの引数。JSON の本文なら受け取る
+task 記述なしの入れ子(範囲: list[年の範囲]) -> 済み
+  http GET "https://places.example.com/plain"
+
+task 記述なしの重なり(年: 年の範囲, 最初: int) -> 済み
+  http GET "https://places.example.com/plain"
+
+task 記述なしのフォーム(範囲: list[年の範囲], 置き場所: 置き場, 部屋: string) -> 済み
+  http POST "https://places.example.com/plain" form
+
+task 記述なしのJSON(範囲: list[年の範囲], 置き場所: 置き場, 部屋: string) -> 済み
+  http POST "https://places.example.com/plain"
+
+flow
+  pass

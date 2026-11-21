@@ -1,0 +1,21 @@
+warning[W121]: `for` is a keyword as written in PHP, so the generated code there writes it with `_` after it
+  --> tests/own_names/enums_files/enums_file_named_like_a_keyword.rule:1
+  |
+1 | enums for v1
+  |       ^^^ the enums file's name
+  |
+ PHP: the enums file's namespace is `For_`, the name a caller reads it by, as do the rules that read from the file.
+ The code builds as it is. For a name with no `_` in any language, give it an alias (`for(<alias>)`).
+
+warning[W121]: `for` takes a name the code generated for Python, Rust, Go and Connect uses itself
+  --> tests/own_names/enums_files/enums_file_named_like_a_keyword.rule:1
+  |
+1 | enums for v1
+  |       ^^^ the enums file's name
+  |
+ Python and Connect: `for` is a keyword of the language, and the rule's module imports the enums file's module by that name (`from for import …`): it does not load.
+ Rust: `for` is a keyword of the language, and the enums file's module is declared by that name (`mod for;`): it does not build.
+ Go: `for` is a keyword of the language, and the enums file's package is named so (`package for`): it does not build.
+ For a target you do not generate, leave it. For one you do, give it an alias (`for(<alias>)`).
+
+ok tests/own_names/enums_files/enums_file_named_like_a_keyword.rule

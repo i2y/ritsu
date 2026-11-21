@@ -1,0 +1,88 @@
+workflow reached_values v1
+description "What a variable holds is what the runs that reach a statement last put in it: a secret put in it on one way, a value of an enum held to a range on one way, through the arms of a match and the rounds of a loop"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:member-tier-shipping"
+
+record Reply
+  done : bool
+
+inputs
+  private : bool
+  name    : string
+  token   : string  secret
+  narrow  : tiers.tier  range >=basic <=silver
+  wide    : tiers.tier
+
+outputs
+  done : bool
+
+task greet(text: string) -> Reply
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:greet"
+  idempotent
+
+flow
+  # the secret goes into `text` on one way only: the call on the other way is not given it,
+  # and after the match it may be
+  let text = name
+  match private
+    true =>
+      let text = token
+      pass
+    false => greet(text: text)
+  greet(text: text)
+  # the first round gives `note` the name, every later round the secret
+  let note = name
+  repeat at most 3 times
+    greet(text: note)
+    let note = token
+    let r = greet(text: name)
+    match r.done
+      true => break
+      false => pass
+  # the secret goes into `memo` only on the way out of the loop: no round's call is given it
+  let memo = name
+  repeat at most 3 times
+    greet(text: memo)
+    let m = greet(text: name)
+    match m.done
+      true =>
+        let memo = token
+        break
+      false => pass
+  # `t` is held to basic and silver on the way to the inner match, and to none on the other way
+  let t = narrow
+  match private
+    true =>
+      let t = wide
+      pass
+    false =>
+      match t
+        basic => pass
+        silver => pass
+        gold => pass
+  # every round puts basic or silver in `v`, and what is put in it after the loop does not come
+  # back to it: the match needs no other arm
+  let v = narrow
+  repeat at most 3 times
+    match v
+      basic => pass
+      silver => pass
+    let v = narrow
+    let q = greet(text: name)
+    match q.done
+      true => break
+      false => pass
+  let v = wide
+  # from the second round on, `u` can be any tier: the match needs every arm
+  let u = narrow
+  repeat at most 3 times
+    match u
+      basic => pass
+      silver => pass
+    let u = wide
+    let s = greet(text: name)
+    match s.done
+      true => break
+      false => pass
+  succeed done = true

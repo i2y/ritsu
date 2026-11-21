@@ -1,0 +1,6 @@
+エラー[E017]: tests/fixtures/service_date_outputs.flow:1:45: 出力 `bookedOn` は `BookResponse` の `bookedOn` に入りますが、そこは `google.type.Date` か、それを中に持つメッセージです。実行の出力は、日付を protobuf の JSON の形（`{year, month, day}`）では書きません。そのフィールドを `string` にしてください
+     1 | workflow service_date_outputs v1 implements dates.BookingService
+エラー[E017]: tests/fixtures/service_date_outputs.flow:1:45: 出力 `span` は `BookResponse` の `span` に入りますが、そこは `google.type.Date` か、それを中に持つメッセージです。実行の出力は、日付を protobuf の JSON の形（`{year, month, day}`）では書きません。そのフィールドを `string` にしてください
+     1 | workflow service_date_outputs v1 implements dates.BookingService
+エラー[E017]: tests/fixtures/service_date_outputs.flow:1:45: 出力 `days` は `BookResponse` の `days` に入りますが、そこは `google.type.Date` か、それを中に持つメッセージです。実行の出力は、日付を protobuf の JSON の形（`{year, month, day}`）では書きません。そのフィールドを `string` にしてください
+     1 | workflow service_date_outputs v1 implements dates.BookingService

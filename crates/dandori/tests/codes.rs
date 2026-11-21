@@ -103,7 +103,7 @@ fn explain_prints_the_ledger() {
     assert_eq!(v[0]["code"], "E001");
     // what there is not
     let (code, _, err) = explain(&["E999"]);
-    assert_eq!((code, err.as_str()), (2, "error: there is no diagnostic code `E999`; `dandori explain --all` lists them\n"));
+    assert_eq!((code, err.as_str()), (2, "error: there is no code `E999`; run `dandori explain --all`\n"));
     assert_eq!(explain(&[]).0, 2);
     assert_eq!(explain(&["--all", "E001"]).0, 2);
 }

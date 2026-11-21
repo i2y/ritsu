@@ -1,0 +1,14 @@
+rule one_label v1
+description "What the box of a quantity is labelled: a rule of one output, a string"
+
+inputs
+  qty : number  range >=0 <=99
+
+outputs
+  label : string
+
+table label_of
+policy unique
+| qty  | -> label : string |
+| <10  | "small box"       |
+| >=10 | "large box"       |

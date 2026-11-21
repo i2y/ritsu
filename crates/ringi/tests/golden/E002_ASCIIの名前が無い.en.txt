@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_ASCIIの名前が無い.ringi:4:3: `金額` needs an ASCII name: write it in brackets right after it, as in `金額(ascii_name)`
+     4 |   金額 : money[円] "金額"  range >=1円 <=100_000円
+  = The generated code and the JSON take the ASCII name: a letter or `_`, then letters, digits and `_`.

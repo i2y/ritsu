@@ -1,0 +1,8 @@
+company.gate: ok — 11 actions, 4 policies (3 permits, 1 forbid), 0 expectations, 0 separations
+ok purchase.ringi: a request, 1 field, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+error[ritsu E911]: purchase.ringi:3: The action `import_organization` of the gate company.gate takes inputs of its own (`dry_run`), which the server has nothing to give when it asks the gate for an operation of its administration
+     3 | use gate "company.gate"
+  = The server hands the gate the person, the resource (the ticket, the stage, the kind of request or the organization, with the attributes ringi decides) and the time, and nothing else: an action that takes inputs of its own is always denied (a refusal of the kind `input`).
+  = Take the `input` lines off `import_organization` in company.gate. A rule that needs inputs of its own is another action, which a program asks through that action's own function.
+ritsu check: 2 files (sekisho 1, ringi 1): 1 fail (1 error); borders between the languages: 3 checked, 0 undecided

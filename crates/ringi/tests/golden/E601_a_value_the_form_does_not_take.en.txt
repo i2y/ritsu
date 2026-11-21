@@ -1,0 +1,3 @@
+error[E601]: tests/mutants/E601_a_value_the_form_does_not_take.ringi:21:15: `99` is outside the range of `count` (`>=1 <=10`)
+    21 | | 50_000JPY | 99    | manager   |
+  = A row of the examples is a request: write values the form takes, whether the route reads the column or not.

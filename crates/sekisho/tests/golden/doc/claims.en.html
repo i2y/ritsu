@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="sekisho <version>">
+<title>claims v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 44px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 30px 0 8px; }
+h4 { font-size: 14px; margin: 20px 0 6px; color: var(--dim); }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; white-space: nowrap; }
+th { background: var(--soft); }
+td:last-child { white-space: normal; min-width: 18ch; }
+tr.allow td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+tr.deny td:first-child { box-shadow: inset 4px 0 0 var(--bad); }
+details { margin: 8px 0 16px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+details > summary { cursor: pointer; font-weight: 600; }
+details[open] > summary { margin-bottom: 6px; }
+.side { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 12px; margin: 8px 0 20px; }
+figure.code { margin: 0; min-width: 0; }
+figure.code figcaption { font-size: 12px; color: var(--dim); margin: 0 0 4px; }
+pre { margin: 0 0 12px; padding: 10px 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+figure.code pre { margin: 0; }
+pre code { background: none; padding: 0; font: inherit; }
+button.open { font: inherit; font-size: 14px; padding: 5px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--bg); color: var(--accent); cursor: pointer; }
+button.open:hover, button.open:focus-visible { background: var(--soft); }
+.sheet { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: var(--bg); }
+.sheet[hidden] { display: none; }
+.sheet .bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+.sheet .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet button.close { font: inherit; font-size: 16px; line-height: 1; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+.sheet button.close:hover { border-color: var(--accent); }
+.sheet iframe { flex: 1; width: 100%; border: 0; }
+body.sheet-open { overflow: hidden; }
+:target { scroll-margin-top: 8px; }
+@media print { .sheet, button.open { display: none; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>claims v1</h1>
+<p class="desc">Who may pay a claim: an adjuster pays any claim, and the desk&#39;s workflow pays the claims a rule leaves to the desk</p>
+</header>
+<ul>
+<li>File: <code>claims.gate</code> (gate claims v1, sha256:338fa5c96f2c05a2)</li>
+<li>Cedar namespace: <code>Claims</code></li>
+<li>sekisho: <version></li>
+</ul>
+<p>sekisho <version> made this page by checking the file above and the files it reads. If the file&#39;s digest is no longer what it says here, the page is out of date.</p>
+<p>The Cedar <code>sekisho gen --target cedar --lang en</code> writes from it:</p>
+<div class="scroll"><table>
+<thead><tr><th>File</th><th>SHA-256 (first 16 digits)</th></tr></thead>
+<tbody>
+<tr><td><code>cedar/claims.cedar</code></td><td><code>&lt;sha256&gt;</code></td></tr>
+<tr><td><code>cedar/claims.cedarschema</code></td><td><code>&lt;sha256&gt;</code></td></tr>
+<tr><td><code>cedar/claims.cedarschema.json</code></td><td><code>&lt;sha256&gt;</code></td></tr>
+<tr><td><code>cedar/claims.policies.json</code></td><td><code>&lt;sha256&gt;</code></td></tr>
+</tbody>
+</table></div>
+<p class="note"><code>sekisho check</code> walked all 6 combinations of the action, and decided each as Cedar does. The role that writes <code>can</code> is allowed the actions its <code>can</code> lists, and no other.</p>
+<nav class="toc" aria-label="Contents">
+<ul>
+<li><a href="#actions">Who may do what</a>
+<ul>
+<li><a href="#action-pay-claim">action <code>pay_claim</code></a></li>
+</ul>
+</li>
+<li><a href="#policies">Policies</a></li>
+<li><a href="#computed">Computed values</a></li>
+<li><a href="#roles">Roles</a></li>
+<li><a href="#workflows">Workflows</a></li>
+<li><a href="#operations">Operations guarded</a></li>
+</ul>
+</nav>
+<h2 id="actions">Who may do what</h2>
+<p>For each action, the combinations <code>sekisho check</code> walked, put together where Cedar answers them alike and the same policies decide. Rows that differ in one column only are one row, the column holding their values: <code>any</code> is every value the column takes, <code>not …</code> every value but one. <code>-</code> is a column that does not apply to the row (the roles of a workflow, say).</p>
+<h3 id="action-pay-claim">action <code>pay_claim</code></h3>
+<p>Pay a claim</p>
+<ul>
+<li>It guards <code>openapi &quot;api/desk.json&quot; operation payClaim</code>.</li>
+<li>Principals: <code>User</code>, <code>Workflow</code>. Resources: <code>Claim</code>, the id read from the operation&#39;s argument <code>claimId</code>.</li>
+<li>Computed: <code>payer</code> (under Computed values below).</li>
+<li>6 combinations, 3 of them allowed.</li>
+</ul>
+<h4 id="action-pay-claim-allowed">Allowed</h4>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>adjuster</th><th>workflow</th><th>payer</th><th>Deciding policies</th></tr></thead>
+<tbody>
+<tr class="allow"><td>User</td><td>yes</td><td>-</td><td>any</td><td>adjusters_pay_claims</td></tr>
+<tr class="allow"><td>Workflow</td><td>-</td><td>pay</td><td>desk</td><td>the_workflow_pays_the_desks_claims</td></tr>
+</tbody>
+</table></div>
+<h4 id="action-pay-claim-denied">Denied</h4>
+<ul>
+<li>No permit applies to the 3 combinations that are denied.</li>
+</ul>
+<details>
+<summary>The 2 rows that deny</summary>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>adjuster</th><th>workflow</th><th>payer</th><th>Deciding policies</th></tr></thead>
+<tbody>
+<tr class="deny"><td>User</td><td>no</td><td>-</td><td>any</td><td>no permit applies</td></tr>
+<tr class="deny"><td>Workflow</td><td>-</td><td>pay</td><td>person</td><td>no permit applies</td></tr>
+</tbody>
+</table></div>
+</details>
+<h2 id="policies">Policies</h2>
+<p>Each policy as the <code>.gate</code> writes it, beside the Cedar <code>sekisho gen --target cedar</code> generates for it. A permit allows the combinations it applies to; a forbid denies those it applies to, and wins where a permit applies too. Cedar denies a combination no policy applies to. A condition on a rule&#39;s answer names the value as the <code>.rule</code> writes it (<code>desk</code>) in the <code>.gate</code>, and as the string Cedar is given (<code>&quot;desk&quot;</code>) in the Cedar.</p>
+<h3 id="policy-claims-adjusters-pay-claims">permit <code>adjusters_pay_claims</code></h3>
+<p>An adjuster pays any claim</p>
+<ul>
+<li>On <code>pay_claim</code>, it allows 2 combinations, and no other permit allows any of them.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>claims.gate</code></figcaption><pre><code class="language-gate">permit adjusters_pay_claims
+  description &quot;An adjuster pays any claim&quot;
+  principal in adjuster
+  action pay_claim</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/claims.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;claims/adjusters_pay_claims&quot;)
+@doc(&quot;An adjuster pays any claim&quot;)
+permit (
+  principal in Claims::Role::&quot;adjuster&quot;,
+  action == Claims::Action::&quot;pay_claim&quot;,
+  resource is Claims::Claim
+);</code></pre></figure>
+</div>
+<h3 id="policy-claims-the-workflow-pays-the-desks-claims">permit <code>the_workflow_pays_the_desks_claims</code></h3>
+<p>The workflow pays the claims the rule leaves to the desk</p>
+<ul>
+<li>On <code>pay_claim</code>, it allows 1 combination, which no other permit allows.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>claims.gate</code></figcaption><pre><code class="language-gate">permit the_workflow_pays_the_desks_claims
+  description &quot;The workflow pays the claims the rule leaves to the desk&quot;
+  principal is workflow pay
+  action pay_claim
+  when payer is desk</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/claims.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;claims/the_workflow_pays_the_desks_claims&quot;)
+@doc(&quot;The workflow pays the claims the rule leaves to the desk&quot;)
+permit (
+  principal == Claims::Workflow::&quot;pay&quot;,
+  action == Claims::Action::&quot;pay_claim&quot;,
+  resource is Claims::Claim
+)
+when { context.payer == &quot;desk&quot; };</code></pre></figure>
+</div>
+<h2 id="computed">Computed values</h2>
+<p>What an action computes and gives Cedar in its context. The generated code computes each one from the service&#39;s own data, the operation&#39;s arguments and the server&#39;s clock, and never takes it from the caller. The pages of the rules and the dates are the pages for people that rulec and koyomi draw, as they draw them.</p>
+<h3 id="computed-pay-claim-payer"><code>payer</code> of <code>pay_claim</code></h3>
+<ul>
+<li>Written: <code>payer = who_pays(amount: resource.amount).who</code></li>
+<li>Computed by <code>rulec &quot;rules/who_pays.rule&quot; output who</code>, from <code>resource.amount</code>.</li>
+<li>Its values: <code>desk</code> and <code>person</code>; Cedar is given the strings <code>&quot;desk&quot;</code> and <code>&quot;person&quot;</code>.</li>
+</ul>
+<p><button class="open" type="button" data-page="0">Open the page of <code>rules/who_pays.rule</code> (<code>rulec doc</code>)</button></p>
+<h2 id="roles">Roles</h2>
+<ul>
+<li><code>adjuster</code>: Pays the claims the desk does not. Its <code>can</code> lists <code>pay_claim</code>.</li>
+</ul>
+<p>Whether a principal holding one role alone (and the roles it includes) is allowed each action: always, in every combination of the rest; sometimes, allowed in some combinations and denied in others; never, denied in every one. <code>-</code> is an action that does not take the principal&#39;s type. Where a role writes <code>can</code>, <code>sekisho check</code> holds the actions it is always or sometimes allowed to it.</p>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th><code>pay_claim</code></th></tr></thead>
+<tbody>
+<tr><td><code>User</code> holding <code>adjuster</code></td><td>always</td></tr>
+</tbody>
+</table></div>
+<h2 id="workflows">Workflows</h2>
+<p>A workflow calls the operations as itself: in Cedar, the principal <code>Workflow::&quot;&lt;name&gt;&quot;</code>. For each workflow, the actions it is allowed, and how far.</p>
+<h3 id="workflow-pay">workflow <code>pay</code></h3>
+<p>Pays a claim the rule leaves to the desk, and hands the others to a person</p>
+<ul>
+<li>Its flow: <code>dandori &quot;flows/pay.flow&quot;</code>.</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>action</th><th>Allowed</th></tr></thead>
+<tbody>
+<tr><td><code>pay_claim</code></td><td>sometimes (1 of 2 combinations allowed)</td></tr>
+</tbody>
+</table></div>
+<h4 id="workflow-pay-holds">What the gate says the flow holds of a resource</h4>
+<p>The <code>resource</code> lines under the workflow. Where the flow gives the value as the id of the resource, the gate says each attribute of the resource is the value of the flow beside it. <code>ritsu check</code> rests on these lines when it asks whether the gate allows the calls of the flow.</p>
+<div class="scroll"><table>
+<thead><tr><th>Line</th><th>resource</th><th>The flow&#39;s value that is its id</th><th>Attribute</th><th>The flow&#39;s value</th></tr></thead>
+<tbody>
+<tr><td>22</td><td><code>Claim</code></td><td><code>claim_id</code></td><td><code>amount</code></td><td><code>amount</code></td></tr>
+</tbody>
+</table></div>
+<p class="note">These lines are an assumption whoever wrote the gate makes. Nothing checks that the resource the service reads holds what the flow holds. That each value of the flow is one its attribute takes is checked by <code>ritsu sekisho check</code> (E212).</p>
+<h4 id="workflow-pay-calls">What the flow calls</h4>
+<p>Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action at the call: over the combinations the runs that reach the call can come to (what the call gives, and what the arms of each <code>match</code> on the way leave). It is what <code>ritsu check</code> holds across the languages.</p>
+<div class="scroll"><table>
+<thead><tr><th>Line</th><th>Task</th><th>Operation</th><th>Guarded by</th><th>Allowed</th><th>Error on a denial</th></tr></thead>
+<tbody>
+<tr><td>30</td><td><code>pay_claim</code></td><td><code>openapi &quot;api/desk.json&quot; operation payClaim</code></td><td><code>pay_claim</code></td><td>always (given the gate&#39;s <code>resource</code> lines)</td><td><code>denied</code></td></tr>
+</tbody>
+</table></div>
+<p>What the runs that reach a call hold there:</p>
+<ul>
+<li>Line 30: <code>who_pays(amount: resource.amount).who</code> (the flow&#39;s <code>r.who</code>) is <code>desk</code>.</li>
+</ul>
+<p class="note">An answer marked &quot;given the gate&#39;s <code>resource</code> lines&quot; is the answer where the resource the service reads holds what the <code>resource</code> lines under the workflow say the flow holds. Nothing checks that it does.</p>
+<h2 id="operations">Operations guarded</h2>
+<p>The operations of the contracts each action guards: before it does an operation, the service asks Cedar about the action. The paths of the references are from the root.</p>
+<div class="scroll"><table>
+<thead><tr><th>action</th><th>Operation</th><th>How it is called</th></tr></thead>
+<tbody>
+<tr><td><code>pay_claim</code></td><td><code>openapi &quot;api/desk.json&quot; operation payClaim</code></td><td><code>POST /claims/{claimId}/payments</code></td></tr>
+</tbody>
+</table></div>
+<p>Every action guards an operation.</p>
+<div class="sheet" id="sk-sheet" role="dialog" aria-modal="true" aria-label="doc" hidden><div class="bar"><span class="what"></span><button class="close" type="button" title="Close" aria-label="Close">×</button></div><iframe sandbox="allow-scripts" title="doc"></iframe></div>
+<script type="application/json" id="sk-pages">[{"tool":"rulec","file":"rules/who_pays.rule","page":"[the page rulec doc draws of rules/who_pays.rule]","error":null}]</script>
+<script>
+(function () {
+  var pages = JSON.parse(document.getElementById('sk-pages').textContent);
+  var sheet = document.getElementById('sk-sheet');
+  var frame = sheet.querySelector('iframe');
+  var opener = null;
+  function code(t) { var c = document.createElement('code'); c.textContent = t; return c; }
+  function open(k) {
+    var p = pages[k];
+    if (!p) return;
+    if (sheet.hidden) opener = document.activeElement;
+    sheet.querySelector('.what').replaceChildren(code(p.file), ' · ' + p.tool + ' doc');
+    if (p.page !== null) {
+      frame.srcdoc = p.page;
+    } else {
+      var pre = document.createElement('pre');
+      pre.textContent = p.error;
+      pre.setAttribute('style', 'white-space:pre-wrap;font:13px ui-monospace,monospace;padding:16px');
+      frame.srcdoc = '<!doctype html><meta charset="utf-8">' + pre.outerHTML;
+    }
+    sheet.hidden = false;
+    document.body.classList.add('sheet-open');
+    sheet.querySelector('.close').focus();
+    try { history.replaceState(null, '', '#page=' + (k + 1)); } catch (e) {}
+  }
+  function close() {
+    if (sheet.hidden) return;
+    sheet.hidden = true;
+    frame.srcdoc = '';
+    document.body.classList.remove('sheet-open');
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (opener && opener.focus) opener.focus();
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('button[data-page]');
+    if (b) open(+b.dataset.page);
+  });
+  sheet.querySelector('.close').addEventListener('click', close);
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(); });
+  var m = /^#page=(\d+)$/.exec(location.hash);
+  if (m) open(+m[1] - 1);
+})();
+</script>
+</main>
+</body>
+</html>

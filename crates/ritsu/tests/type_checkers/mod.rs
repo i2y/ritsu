@@ -1,11 +1,41 @@
 //! The type checkers the tests of `ritsu gen` hold a package's code to (tests/gen.rs and
 //! tests/modules_gen.rs): `tsc --strict`, `mypy --strict`, `go vet` and gofmt, each with the packages
-//! the generated code imports, from the tools the languages' tests install.
+//! the generated code imports, from the tools the languages' tests install. Each is waited for with
+//! a limit ([`run_for`]).
 
 #![allow(dead_code)]
 
+use ritsu_testkit::run::Ran;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
+
+/// How long a program that checks or runs code may take: `tsc`, mypy, gofmt, `node`, `python3`, a
+/// harness, an app over a package. A few seconds each now, so that one that hangs is stopped long
+/// before the job's limit. tests/gen_requests.rs gives its drivers the same.
+pub const RUN: Duration = Duration::from_secs(300);
+
+/// How long a program that builds may take: `go vet`, `go build`, `go run`, `go test`, cargo. The
+/// first build of a module with its dependencies takes the longest. tests/gen_requests.rs gives its
+/// builds the same.
+pub const LIMIT: Duration = Duration::from_secs(1800);
+
+/// `cmd` run to its end for no longer than `limit` ([`ritsu_testkit::run::finish`]): past it, the
+/// program is stopped with every process it started, and the test fails there, naming the program,
+/// its arguments and the directory it ran in ([`command_line`]), with what it printed until then.
+pub fn run_for(cmd: &mut Command, limit: Duration) -> Ran {
+    let what = command_line(cmd);
+    ritsu_testkit::run::finish(cmd, limit, &what)
+}
+
+/// The program `cmd` runs and its arguments, a space between each, and the directory it runs in.
+pub fn command_line(cmd: &Command) -> String {
+    let words: Vec<String> = std::iter::once(cmd.get_program()).chain(cmd.get_args()).map(|w| w.to_string_lossy().into_owned()).collect();
+    match cmd.get_current_dir() {
+        Some(dir) => format!("{} (in {})", words.join(" "), dir.display()),
+        None => words.join(" "),
+    }
+}
 
 fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -39,12 +69,65 @@ pub fn tsc() -> Option<(PathBuf, Vec<PathBuf>)> {
 /// type, as dandori's own test of its TypeScript does.
 pub fn type_check_typescript(dir: &Path, tsc: &Path, modules: &[PathBuf]) {
     let out = tsc_in(dir, tsc, modules);
-    assert!(out.status.success(), "{}: tsc --strict finds fault with the package:\n{}{}", dir.display(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(out.ok, "{}: tsc --strict finds fault with the package:\n{}", dir.display(), out.both());
+    type_check_typescript_rules(dir, tsc);
+}
+
+/// The rules of the TypeScript package at `dir` (`rules/`, what rulec writes, and what they import)
+/// held to `tsc --strict --noUnusedLocals --noUnusedParameters`, which a project that compiles the
+/// package with its own code may set (rulec's DESIGN §15.342). The rest of the package is held to
+/// `tsc --strict` alone. The rules are each folder named `rules` under `dir` that holds TypeScript:
+/// the package's own, a place's in it, or, where `dir` is a project that keeps its `.rule` files in
+/// its own `rules/`, the package's under it. Nothing to do for a package with no rules.
+pub fn type_check_typescript_rules(dir: &Path, tsc: &Path) {
+    let mut found = Vec::new();
+    rules_of_typescript(dir, dir, &mut found);
+    if found.is_empty() {
+        return;
+    }
+    // the types tsc reads beside it: `<tools>/node_modules/.bin/tsc` reads `<tools>/node_modules/@types`
+    let types = tsc.parent().and_then(Path::parent).map(|m| m.join("@types")).expect("tsc is in node_modules/.bin");
+    let tsconfig = serde_json::json!({
+        "compilerOptions": {
+            "strict": true, "noUnusedLocals": true, "noUnusedParameters": true, "noEmit": true, "module": "nodenext",
+            "moduleResolution": "nodenext", "target": "es2022", "skipLibCheck": true, "types": ["node"], "typeRoots": [types]
+        },
+        "include": found.iter().map(|r| format!("{r}/**/*.ts")).collect::<Vec<_>>(),
+        "exclude": ["node_modules"]
+    });
+    std::fs::write(dir.join("tsconfig.rules.json"), serde_json::to_string_pretty(&tsconfig).unwrap()).unwrap();
+    let out = run_for(Command::new(tsc).arg("-p").arg("tsconfig.rules.json").current_dir(dir), RUN);
+    assert!(out.ok, "{}: tsc --strict --noUnusedLocals --noUnusedParameters finds fault with the rules:\n{}", dir.display(), out.both());
+}
+
+/// The folders named `rules` under `dir` that hold TypeScript, by their paths from `root`, outside
+/// `node_modules`: a folder of `.rule` files is looked into, not taken.
+fn rules_of_typescript(root: &Path, dir: &Path, found: &mut Vec<String>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut dirs: Vec<PathBuf> = entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    dirs.sort();
+    for p in dirs {
+        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name == "node_modules" || name == ".git" {
+            continue;
+        }
+        if name == "rules" && holds_typescript(&p) {
+            found.push(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"));
+        } else {
+            rules_of_typescript(root, &p, found);
+        }
+    }
+}
+
+fn holds_typescript(dir: &Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().map(|e| e.path()).any(|p| if p.is_dir() { holds_typescript(&p) } else { p.extension().is_some_and(|x| x == "ts") })
+    })
 }
 
 /// `tsc --strict` on the TypeScript under `dir`, as [`type_check_typescript`] runs it, in `dir`: what
 /// it answers, the files it names by their paths from `dir`.
-pub fn tsc_in(dir: &Path, tsc: &Path, modules: &[PathBuf]) -> std::process::Output {
+pub fn tsc_in(dir: &Path, tsc: &Path, modules: &[PathBuf]) -> Ran {
     let nm = dir.join("node_modules");
     std::fs::create_dir_all(&nm).unwrap();
     for m in modules {
@@ -61,7 +144,7 @@ pub fn tsc_in(dir: &Path, tsc: &Path, modules: &[PathBuf]) -> std::process::Outp
         "exclude": ["node_modules"]
     });
     std::fs::write(dir.join("tsconfig.json"), serde_json::to_string_pretty(&tsconfig).unwrap()).unwrap();
-    Command::new(tsc).arg("-p").arg("tsconfig.json").current_dir(dir).output().unwrap()
+    run_for(Command::new(tsc).arg("-p").arg("tsconfig.json").current_dir(dir), RUN)
 }
 
 /// mypy (koyomi's, or one on the PATH), the Python whose packages it reads (dandori's runner's, with
@@ -81,12 +164,12 @@ pub fn mypy() -> Option<(PathBuf, PathBuf, PathBuf)> {
 /// it, and followed without their own errors said, as an installed package is.
 pub fn type_check_python(dir: &Path, mypy: &Path, python: &Path, extra_packages: &[PathBuf]) {
     let out = mypy_in(dir, mypy, python, extra_packages, &["-p", "generated"], &[]);
-    assert!(out.status.success(), "{}: mypy --strict finds fault with the package:\n{}{}", dir.display(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(out.ok, "{}: mypy --strict finds fault with the package:\n{}", dir.display(), out.both());
 }
 
 /// `mypy --strict` in `dir` on `what`, as [`type_check_python`] runs it, with `path` on its path
 /// beside the installed packages: what it answers.
-pub fn mypy_in(dir: &Path, mypy: &Path, python: &Path, extra_packages: &[PathBuf], what: &[&str], path: &[PathBuf]) -> std::process::Output {
+pub fn mypy_in(dir: &Path, mypy: &Path, python: &Path, extra_packages: &[PathBuf], what: &[&str], path: &[PathBuf]) -> Ran {
     let extra = dir.join("extra");
     std::fs::create_dir_all(&extra).unwrap();
     let mut ini = String::from("[mypy]\n");
@@ -97,16 +180,17 @@ pub fn mypy_in(dir: &Path, mypy: &Path, python: &Path, extra_packages: &[PathBuf
     }
     std::fs::write(dir.join("mypy.ini"), ini).unwrap();
     let mypypath = std::env::join_paths(path.iter().chain([&extra])).unwrap();
-    Command::new(mypy)
-        .args(["--strict", "--config-file", "mypy.ini", "--no-incremental", "--cache-dir"])
-        .arg(dir.join(".mypy_cache"))
-        .arg("--python-executable")
-        .arg(python)
-        .args(what)
-        .env("MYPYPATH", mypypath)
-        .current_dir(dir)
-        .output()
-        .unwrap()
+    run_for(
+        Command::new(mypy)
+            .args(["--strict", "--config-file", "mypy.ini", "--no-incremental", "--cache-dir"])
+            .arg(dir.join(".mypy_cache"))
+            .arg("--python-executable")
+            .arg(python)
+            .args(what)
+            .env("MYPYPATH", mypypath)
+            .current_dir(dir),
+        RUN,
+    )
 }
 
 /// cedarpy, from sekisho's runner of Python (tools/runner-py), which the Python of a gate imports.
@@ -172,10 +256,10 @@ pub fn go_in(dir: &Path) -> Command {
 /// `go vet` and gofmt on the Go package at `package`, in a module made in `dir`.
 pub fn type_check_go(dir: &Path, package: &Path, gomod: &(String, String)) {
     go_module_in(dir, package, gomod);
-    let out = go_in(dir).args(["vet", "./..."]).output().unwrap();
-    assert!(out.status.success(), "{}: go vet finds fault with the package:\n{}{}", package.display(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    let fmt = Command::new("gofmt").arg("-l").arg("generated").current_dir(dir).output().unwrap();
-    assert!(fmt.status.success() && fmt.stdout.is_empty(), "{}: gofmt would write these otherwise:\n{}{}", package.display(), String::from_utf8_lossy(&fmt.stdout), String::from_utf8_lossy(&fmt.stderr));
+    let out = run_for(go_in(dir).args(["vet", "./..."]), LIMIT);
+    assert!(out.ok, "{}: go vet finds fault with the package:\n{}", package.display(), out.both());
+    let fmt = run_for(Command::new("gofmt").arg("-l").arg("generated").current_dir(dir), RUN);
+    assert!(fmt.ok && fmt.stdout.is_empty(), "{}: gofmt would write these otherwise:\n{}", package.display(), fmt.both());
 }
 
 pub fn have_go() -> bool {
@@ -217,7 +301,7 @@ pub fn rust_crate(dir: &Path, tag: &str) {
     static FETCHED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
     let tools = workspace().join("crates/kaname/tools/rust");
     FETCHED.get_or_init(|| {
-        let fetch = |more: &[&str]| Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into())).args(["fetch", "--locked"]).args(more).current_dir(&tools).output().is_ok_and(|o| o.status.success());
+        let fetch = |more: &[&str]| run_for(Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into())).args(["fetch", "--locked"]).args(more).current_dir(&tools), LIMIT).ok;
         assert!(fetch(&["--offline"]) || fetch(&[]), "cargo fetch of the crates of {} failed", tools.display());
     });
     let toml = read(&dir.join("Cargo.toml"));

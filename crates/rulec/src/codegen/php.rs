@@ -26,7 +26,7 @@
 //! which side of the proof the language sits on.
 
 use super::{
-    cell_src, civil_needed, fired_doc, mode_fn, out_src, pascal, plain_doc, pub_name,
+    cell_src, civil_needed, fired_doc, leading_params, mode_fn, out_src, pascal, plain_doc, pub_name,
     raw_base, record_doc, round_cases, traced_doc, unparen, walked_doc, wire_of, Expr2, Gen, Lang, Phase, WalkStep, Wire,
 };
 use crate::ast::{Arm, Cell, CmpOp, Item, Lit, OutCell, Table};
@@ -53,7 +53,7 @@ const PHP_KEYWORDS: &[&str] = &[
 /// A name PHP will accept where a function, class or constant is declared. A keyword takes a
 /// trailing `_` — there is no backtick escape as there is in Swift (§15.24) — and a name that
 /// starts with a digit takes a leading one.
-pub(super) fn php_name(s: &str) -> String {
+pub(crate) fn php_name(s: &str) -> String {
     let mut n = s.to_string();
     if n.starts_with(|c: char| c.is_ascii_digit()) {
         n.insert(0, '_');
@@ -99,6 +99,44 @@ pub(super) fn php_prop(s: &str) -> String {
 /// dollar sign and not the start of an interpolation.
 pub(super) fn php_str(s: &str) -> String {
     format!("'{}'", s.replace('\\', "\\\\").replace('\'', "\\'"))
+}
+
+/// A sentence as a PHP string: the pieces of text in single quotes, and the indices joined on with
+/// `.` where it names an element by its index (§15.324).
+pub(super) fn php_said(s: &str, here: &str, before: &str) -> String {
+    if !super::names_element(s) {
+        return php_str(s);
+    }
+    super::pieces(s)
+        .into_iter()
+        .filter_map(|p| match p {
+            super::Piece::Text("") => None,
+            super::Piece::Text(t) => Some(php_str(t)),
+            super::Piece::Here => Some(here.to_string()),
+            super::Piece::Before => Some(before.to_string()),
+        })
+        .collect::<Vec<_>>()
+        .join(" . ")
+}
+
+/// A path the projection function reads, or a sentence that names one, as a PHP string: where it
+/// is a path in an element (`order.lines[1].amount_usd`), the index `$i` of the element the
+/// function is at joined on, counted from 0 as the rule's own door counts it (§15.234, §15.324).
+fn php_q(s: &str) -> String {
+    php_said(s, "$i", "$i")
+}
+
+/// Whether a function over the elements of a collection is handed the index `$i` beside the
+/// element `$e`: where an expression of `inner`, written for each element, names the element by it.
+fn php_indexed(inner: &[&str]) -> bool {
+    inner.iter().any(|t| t.contains(" . $i"))
+}
+
+/// The function `f` of each element of the list `seq` and its index, in order (§15.324): what
+/// `array_map` gives over the elements and their keys. Written where it is called, with no function
+/// of the module's own, so that no name of a rule's meets it.
+fn php_each(seq: &str, f: &str) -> String {
+    format!("(fn(array $xs) => array_map({f}, $xs, array_keys($xs)))({seq})")
 }
 
 /// `(a // b)` → `intdiv(a, b)`.
@@ -239,16 +277,176 @@ function _max(int $a, int $b): int
     )
 }
 
+thread_local! {
+    /// Set while `Gen::php_names` reads the module: the rule's function is then called by its full
+    /// name wherever the module calls it.
+    static PROBE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The words of PHP that read like a function's name followed by `(` and are not one: the
+/// language's own constructs.
+const PHP_CONSTRUCTS: &[&str] = &[
+    "and", "array", "case", "catch", "clone", "declare", "default", "die", "do", "echo", "else", "elseif", "empty", "eval", "exit",
+    "finally", "fn", "for", "foreach", "function", "if", "include", "include_once", "instanceof", "isset", "list", "match", "new", "or",
+    "parent", "print", "require", "require_once", "return", "self", "static", "switch", "throw", "try", "unset", "use", "while", "xor",
+    "yield",
+];
+
+/// A word of PHP's code, outside its strings and comments, with what stands around it.
+struct PhpWord<'t> {
+    word: &'t str,
+    /// Its byte offset in the text.
+    start: usize,
+    /// `(` follows it.
+    calls: bool,
+    /// `function ` stands before it and `(` after: a function is declared by it.
+    declares: bool,
+    /// No `$`, `\`, `->` or `::` stands before it: it is not a variable, a qualified name or a member.
+    bare: bool,
+    /// `new ` stands before it: a class is made.
+    after_new: bool,
+}
+
+/// Each word of the PHP `text` outside its strings and comments, in order (§15.336).
+fn php_words<'t>(text: &'t str, mut each: impl FnMut(PhpWord<'t>)) {
+    let b = text.as_bytes();
+    let word_byte = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c >= 0x80;
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'\'' | b'"' => {
+                let quote = b[i];
+                i += 1;
+                while i < b.len() && b[i] != quote {
+                    i += if b[i] == b'\\' { 2 } else { 1 };
+                }
+                i += 1;
+            }
+            b'/' if b.get(i + 1) == Some(&b'/') => {
+                while i < b.len() && b[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'#' => {
+                while i < b.len() && b[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'/' if b.get(i + 1) == Some(&b'*') => {
+                i += 2;
+                while i + 1 < b.len() && !(b[i] == b'*' && b[i + 1] == b'/') {
+                    i += 1;
+                }
+                i += 2;
+            }
+            c if word_byte(c) => {
+                let start = i;
+                while i < b.len() && word_byte(b[i]) {
+                    i += 1;
+                }
+                let before = &text[..start];
+                let calls = b.get(i) == Some(&b'(');
+                each(PhpWord {
+                    word: &text[start..i],
+                    start,
+                    calls,
+                    declares: calls && before.ends_with("function "),
+                    bare: !(before.ends_with('$') || before.ends_with('\\') || before.ends_with("->") || before.ends_with("::")),
+                    after_new: before.ends_with("new "),
+                });
+            }
+            _ => i += 1,
+        }
+    }
+}
+
 impl<'a> Gen<'a> {
     /// The namespace: the rule's ASCII alias in PascalCase, like the Go package and the Ruby
     /// module.
-    pub(super) fn php_ns(&self) -> String {
+    pub(crate) fn php_ns(&self) -> String {
         php_name(&pascal(&pub_name(&self.f.name)))
     }
 
     /// The public function's name.
     pub(super) fn php_fname(&self) -> String {
         php_name(&pub_name(&self.f.name))
+    }
+
+    /// The rule's functions in the module, as PHP names them: the function, its traced twin, the
+    /// record, the projection, the function that counts the answers and the walk of a pick by weight.
+    pub(super) fn php_family(&self) -> Vec<String> {
+        let f = self.php_fname();
+        vec![f.clone(), format!("{f}_traced"), format!("{f}_record"), format!("{f}_from"), self.chances_name("php"), self.walked_fn("php")]
+    }
+
+    /// What the module declares and calls besides the rule's own calls, read off the module as this
+    /// generator writes it (§15.336): the functions it declares other than the rule's (each of the
+    /// rule's declared once less), and the functions it calls by a bare name that it does not declare
+    /// — the builtins — with the rule's function among them only where the module calls a builtin of
+    /// its name. The rule's function is called by its full name while the module is read, so that a
+    /// bare call of its name is one of something else.
+    pub(super) fn php_names(&self) -> (Vec<String>, Vec<String>) {
+        PROBE.with(|p| p.set(true));
+        let text = self.php();
+        PROBE.with(|p| p.set(false));
+        let mut declared: Vec<String> = Vec::new();
+        let mut called: Vec<String> = Vec::new();
+        php_words(&text, |w| {
+            if w.declares && !w.word.starts_with("__") {
+                declared.push(w.word.to_string());
+            } else if w.calls && w.bare && !w.after_new && !PHP_CONSTRUCTS.contains(&w.word) && !called.iter().any(|c| c == w.word) {
+                called.push(w.word.to_string());
+            }
+        });
+        let family = self.php_family();
+        for f in &family {
+            if let Some(i) = declared.iter().position(|n| n == f) {
+                declared.remove(i);
+            }
+        }
+        // The rule's functions besides its own name call one another by their bare names.
+        let theirs = &family[1..];
+        called.retain(|c| !declared.contains(c) && !theirs.contains(c));
+        (declared, called)
+    }
+
+    /// The rule's function, as the module's own code calls it: by its name, or, where a function of
+    /// the module's own or a builtin it calls goes by that name (`Gen::php_apart`), as the function of
+    /// this namespace (`namespace\f`).
+    fn php_call_rule(&self) -> String {
+        let f = self.php_fname();
+        if self.owns.contains_key(&f) || PROBE.with(|p| p.get()) {
+            format!("namespace\\{f}")
+        } else {
+            f
+        }
+    }
+
+    /// `text`, a part of the module, with each function of the module's own that is written otherwise
+    /// (§15.336) written so where it is declared and where it is called, and each builtin the module
+    /// calls by its full name where one of the rule's functions has its name (`apart::php`). A string,
+    /// a comment, a variable (`$`), a name already qualified (`\`) and a member (`->`, `::`) stay as
+    /// they are, and so does the declaration of each of `keep`, the rule's functions the part declares.
+    /// The part that reads a caller's object declares `<rule>_from` alone: a helper of its beside it
+    /// that has the name of another of the rule's functions (`_at`) is the module's own.
+    fn php_apart(&self, text: &str, keep: &[String]) -> String {
+        if self.owns.is_empty() {
+            return text.to_string();
+        }
+        let family = keep;
+        let mut out = String::with_capacity(text.len() + 16);
+        let mut at = 0;
+        php_words(text, |w| {
+            let to = match self.owns.get(w.word) {
+                Some(to) if w.bare && (w.calls || w.declares) && !(w.declares && family.iter().any(|f| f == w.word)) => to,
+                _ => return,
+            };
+            out.push_str(&text[at..w.start]);
+            out.push_str(to);
+            at = w.start + w.word.len();
+        });
+        out.push_str(&text[at..]);
+        out
     }
 
     /// The type PHP declares for a value. Enums, strings, booleans and integers are all
@@ -327,7 +525,9 @@ impl<'a> Gen<'a> {
     fn php_fn_of(&self, en: &str, what: &str) -> String {
         let f = self.php_own_fn(en, what);
         match self.c.owners.get(en) {
-            Some(o) => format!("\\{}\\{f}", php_name(&pascal(&pub_name(&o.module)))),
+            // the file's module's name for it, should the enum be handed on under another type
+            // here (§15.326)
+            Some(o) => format!("\\{}\\{}", php_name(&pascal(&pub_name(&o.module))), self.theirs("php", en, &f)),
             None => f,
         }
     }
@@ -343,7 +543,7 @@ impl<'a> Gen<'a> {
     pub(super) fn php_enum_fqn(&self, en: &str) -> String {
         let cls = php_name(&self.enum_names.get(en).cloned().unwrap_or_default());
         match self.c.owners.get(en) {
-            Some(o) => format!("\\{}\\{cls}", php_name(&pascal(&pub_name(&o.module)))),
+            Some(o) => format!("\\{}\\{}", php_name(&pascal(&pub_name(&o.module))), php_name(&self.owner_type(en))),
             None => format!("\\{}\\{cls}", self.php_ns()),
         }
     }
@@ -471,8 +671,14 @@ impl<'a> Gen<'a> {
         let foreign = self.foreign_enums();
         for (module, types) in &foreign {
             o.push_str(&format!("require_once __DIR__ . {};\n", php_str(&format!("/{module}.php"))));
-            for (_, ascii) in types {
-                o.push_str(&format!("use {}\\{};\n", php_name(&pascal(module)), php_name(ascii)));
+            for (jp, ascii) in types {
+                // under the type it has here, should its names meet the rule's own (§15.326)
+                let owned = self.owner_type(jp);
+                if owned == *ascii {
+                    o.push_str(&format!("use {}\\{};\n", php_name(&pascal(module)), php_name(ascii)));
+                } else {
+                    o.push_str(&format!("use {}\\{} as {};\n", php_name(&pascal(module)), php_name(&owned), php_name(ascii)));
+                }
             }
         }
         if !foreign.is_empty() {
@@ -483,6 +689,22 @@ impl<'a> Gen<'a> {
         // (§10.2), so the runner converts in one call and never keeps a table of its own.
         for (jp, ascii) in self.own_enums() {
             o.push_str(&self.php_enum(&jp, &ascii));
+        }
+        // An enum of an `enums` file is that file's (§15.212). The rule's namespace has it under its
+        // name as well, as it has one of the rule's own enums, and the functions of its order and its
+        // display names, each calling the file's (§15.319). `use` above names it in this file alone;
+        // the alias is the name code outside the file finds (`\ImpPrice\Kind`), the same enum.
+        for (module, types) in &foreign {
+            let ns = php_name(&pascal(module));
+            for (jp, ascii) in types {
+                let cls = php_name(ascii);
+                o.push_str(&format!("class_alias({cls}::class, __NAMESPACE__ . '\\\\{cls}');\n\n"));
+                for (f, rank, doc) in self.handed_fns(jp, ascii) {
+                    let ret = if rank { "int" } else { "string" };
+                    let theirs = self.theirs("php", jp, &f);
+                    o.push_str(&format!("/** {doc} */\nfunction {f}({cls} $x): {ret}\n{{\n    return \\{ns}\\{theirs}($x);\n}}\n\n"));
+                }
+            }
         }
         o.push_str(&self.php_enum_helpers());
         // Which values need which before them (§15.222).
@@ -546,17 +768,25 @@ impl<'a> Gen<'a> {
         o.push_str(round_php().trim_start_matches('\n'));
         o.push_str(&super::arith::php_helpers(&super::arith::Uses::of(self.f)));
         o.push('\n');
-        o.push_str(&self.php_fn());
+        // The functions of the module's own and the builtins it calls, where one of the rule's
+        // functions has the name of one (§15.336): the part that declares the rule's function keeps
+        // that declaration. The part of a record declares the helpers `_json_str` and `_civil`
+        // beside the rule's `_record`: keeping the whole family would keep a helper of a rule's
+        // function's name, which the part that keeps the family's declarations writes a second
+        // time — the family name of the part alone is kept.
+        let family = self.php_family();
+        let mut o = self.php_apart(&o, &[]);
+        o.push_str(&self.php_apart(&self.php_fn(), &family));
         o.push('\n');
-        o.push_str(&self.php_record());
+        o.push_str(&self.php_apart(&self.php_record(), &[format!("{}_record", self.php_fname())]));
         if self.projects() {
             o.push('\n');
-            o.push_str(&self.php_from());
+            o.push_str(&self.php_apart(&self.php_from(), &[format!("{}_from", self.php_fname())]));
         }
         // The function that counts the answers (§15.225).
         if self.f.has_random() {
             o.push('\n');
-            o.push_str(self.php_chances().trim_end());
+            o.push_str(self.php_apart(&self.php_chances(), &[self.chances_name("php")]).trim_end());
             o.push('\n');
         }
         o
@@ -587,6 +817,14 @@ impl<'a> Gen<'a> {
                         php_expr(unparen(&e.text)),
                         tr!("定義", "definition")
                     ));
+                    // The range the rule accepts for it, held where it is worked out (§15.313).
+                    let n = php_var(&self.ident(&d.name.text));
+                    if let Some(test) = self.accepted_ends(d).and_then(|ends| crate::codegen::or_out_of(&n, ends, "")) {
+                        o.push_str(&format!(
+                            "    if ({test}) {{\n        throw new RuleInputError({}, {n});\n    }}\n",
+                            php_said(&crate::door::out_of_range(&self.said_name(&d.name.text)), &self.here(), ""),
+                        ));
+                    }
                 }
                 Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
@@ -636,10 +874,16 @@ impl<'a> Gen<'a> {
             }
         };
         let mut o = String::new();
+        let index = php_var(&self.index_var(s));
+        self.walk_begin(s, &index);
         let mut body = self.php_element_guards(s, &local);
         let (seen, step) = self.php_unique(s, sums, &local);
         o.push_str(&seen);
         body.push_str(&step);
+        // Past a `stop`, the door alone (§15.328).
+        if let Some(i) = self.walk_goes_past_stop(sums) {
+            body.push_str(&format!("    if ({}) {{\n        continue;\n    }}\n", php_var(&self.fold_names(i).done)));
+        }
         body.push_str(&self.php_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -669,6 +913,14 @@ impl<'a> Gen<'a> {
                             php_str(&crate::door::out_of_range(&d.name.text)),
                         ));
                     }
+                    // The bottom of its range, where a walk can come in under it (§15.314).
+                    if let Some(floor) = self.walk_floor(d) {
+                        let n = php_var(&self.ident(&d.name.text));
+                        after.push_str(&format!(
+                            "    if ({n} < {floor}) {{\n        throw new RuleInputError({}, {n});\n    }}\n",
+                            php_str(&crate::door::out_of_range(&d.name.text)),
+                        ));
+                    }
                 }
                 crate::ast::Item::Fold(fold) => {
                     let (init, step, fin) = self.php_fold(i, fold, &seq, &local);
@@ -679,7 +931,12 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
-        o.push_str(&format!("    foreach ({seq} as {e}) {{\n"));
+        // The index of the element is bound where a sentence of the walk says it (§15.324).
+        if self.walk_end() {
+            o.push_str(&format!("    foreach ({seq} as {index} => {e}) {{\n"));
+        } else {
+            o.push_str(&format!("    foreach ({seq} as {e}) {{\n"));
+        }
         o.push_str(&Self::indent_block(&body, "    "));
         o.push_str("    }\n");
         o.push_str(&after);
@@ -734,7 +991,10 @@ impl<'a> Gen<'a> {
         let (answer, stopped, done) = (php_var(&names.answer), php_var(&names.stopped), php_var(&names.done));
         let (taken, kept, best) = (php_var(&names.taken), php_var(&names.kept), php_var(&names.best));
         let (held, key) = (php_var(&names.held), php_var(&names.key));
+        let taken_at = php_var(&names.taken_at);
         let alone = self.fold_alone(i);
+        // Ends the loop at a `stop`: a fold alone in its walk with no door to keep past it (§15.328).
+        let ends = alone && !self.stop_keeps_door(i);
         let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
         let (out_name, answer_ty) = self.fold_target(fold);
         // An answer is read in the type the fold answers with: a value of its enum is that
@@ -754,10 +1014,15 @@ impl<'a> Gen<'a> {
             tr!("要素ゼロ件の答え", "the answer for no elements")
         ));
         init.push_str(&format!("    {stopped} = false;\n"));
-        if !alone {
+        if !ends {
             init.push_str(&format!("    {done} = false;\n"));
         }
         init.push_str(&format!("    {taken} = null;\n    {kept} = null;\n    {best} = null;\n"));
+        // The element a `take_unique` took, which the sentence says beside the one that matched
+        // again (§15.324).
+        if fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { unique: true, .. })) {
+            init.push_str(&format!("    {taken_at} = 0;\n"));
+        }
         let weighted = fold.weighted();
         let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
         let (total, weight, cuts) = (php_var(&names.total), php_var(&names.weight), php_var(&names.cuts));
@@ -772,11 +1037,11 @@ impl<'a> Gen<'a> {
             arms.push_str(&format!("    if ({v} === {is}) {{  // {}\n", name.text));
             match arm {
                 Arm::Next => arms.push_str("        // next\n"),
-                Arm::Stop(None) if alone => arms.push_str("        break;\n"),
+                Arm::Stop(None) if ends => arms.push_str("        break;\n"),
                 Arm::Stop(None) => arms.push_str(&format!("        {done} = true;\n")),
                 Arm::Stop(Some(x)) => {
                     arms.push_str(&format!("        {answer} = {};\n", val(x, local)));
-                    if alone {
+                    if ends {
                         arms.push_str(&format!("        {stopped} = true;\n        break;\n"));
                     } else {
                         arms.push_str(&format!("        {stopped} = true;\n        {done} = true;\n"));
@@ -784,16 +1049,13 @@ impl<'a> Gen<'a> {
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
+                        let here = self.here_used();
                         arms.push_str(&format!("        if ({taken} !== null) {{\n"));
                         arms.push_str(&format!(
                             "            throw new RuleContradictionError({});\n        }}\n",
-                            php_str(&tr!(
-                                "畳み込み {}: take_unique に二件当たりました",
-                                "fold {}: two elements matched a take_unique",
-                                fold.verdict
-                            ))
+                            php_said(&crate::door::fold_contradiction(&fold.verdict, &fold.over, crate::door::BEFORE, crate::door::HERE), &here, &taken_at)
                         ));
-                        arms.push_str(&format!("        {taken} = {};\n", val(expr, local)));
+                        arms.push_str(&format!("        {taken} = {};\n        {taken_at} = {here};\n", val(expr, local)));
                     } else {
                         arms.push_str(&format!("        if ({taken} === null) {{\n"));
                         arms.push_str(&format!("            {taken} = {};\n        }}\n", val(expr, local)));
@@ -848,10 +1110,13 @@ impl<'a> Gen<'a> {
         for fd in self.unique_fields(s, sums) {
             let seen = php_var(&self.temp(&format!("{}_seen", self.ident(&fd.name.text))));
             let v = local(&fd.name.text);
+            // The list holds one value per element, at the element's index: where a value was first
+            // seen is the sentence's earlier element (§15.324).
+            let here = self.here_used();
             init.push_str(&format!("    {seen} = [];\n"));
             step.push_str(&format!(
                 "    if (in_array({v}, {seen}, true)) {{\n        throw new RuleInputError({});\n    }}\n    {seen}[] = {v};\n",
-                php_str(&crate::door::duplicate(seq, &fd.name.text))
+                php_said(&crate::door::duplicate(seq, &fd.name.text, crate::door::BEFORE, crate::door::HERE), &here, &format!("array_search({v}, {seen}, true)"))
             ));
         }
         (init, step)
@@ -872,9 +1137,10 @@ impl<'a> Gen<'a> {
                 // Each end the range writes, and −(2^63−1) where it writes no lower one: PHP's
                 // int holds one value below that, and the door refuses it (§15.295).
                 if let Some(test) = super::or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
+                    // The sentence names the field by its place on the element (§15.324).
                     o.push_str(&format!(
                         "    if ({test}) {{\n        throw new RuleInputError({}, {v});\n    }}\n",
-                        php_str(&crate::door::out_of_range(&i.name.text)),
+                        php_said(&crate::door::out_of_range(&self.said_name(&i.name.text)), &self.here(), ""),
                     ));
                 }
             }
@@ -1232,8 +1498,8 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&format!("/** {} */\n", record_doc()));
         o.push_str(&format!(
-            "function {fname}_record({}, {ret} {v_out}, array {v_trace}, string {v_tag} = ''): string\n{{\n",
-            params.join(", ")
+            "function {fname}_record({}{ret} {v_out}, array {v_trace}, string {v_tag} = ''): string\n{{\n",
+            leading_params(&params)
         ));
         let (v_ins, v_obs, v_rows, v_head) =
             (php_var(&self.temp("ins")), php_var(&self.temp("obs")), php_var(&self.temp("rows")), php_var(&self.temp("head")));
@@ -1308,12 +1574,14 @@ impl<'a> Gen<'a> {
         let fname = self.php_fname();
         let ns = self.php_ns();
         let d = php_var(&self.temp("d"));
-        let read = |ty: &Ty, src: &str, name: &str| -> String {
+        // `said` is what the sentences call the value: the name, or for a field of an element its
+        // place, `lines[\u{1}].amount`, which takes the index `at` of the element (§15.324).
+        let read = |ty: &Ty, src: &str, name: &str, said: &str, at: &str| -> String {
             let optional = matches!(ty, Ty::Opt(_));
             let take = format!(
                 "_take({src}, {}, {}{})",
                 php_str(name),
-                php_str(&crate::door::missing(name)),
+                php_said(&crate::door::missing(said), at, ""),
                 if optional { ", true" } else { "" }
             );
             let one = |v: &str| -> String {
@@ -1321,12 +1589,12 @@ impl<'a> Gen<'a> {
                     Ty::Enum(n) => format!(
                         "_enum({}::class, {v}, {})",
                         self.php_enum_fqn(n),
-                        php_str(&crate::door::not_in_enum(name, n))
+                        php_said(&crate::door::not_in_enum(said, n), at, "")
                     ),
-                    Ty::Bool => format!("_bool({v}, {})", php_str(&crate::door::not_bool(name))),
-                    Ty::Date => format!("_date({v}, {})", php_str(&crate::door::not_date(name))),
-                    Ty::Str => format!("_str({v}, {})", php_str(&crate::door::not_string(name))),
-                    _ => format!("_int({v}, {}, {})", php_str(&crate::door::not_integer(name)), php_str(&crate::door::out_of_range(name))),
+                    Ty::Bool => format!("_bool({v}, {})", php_said(&crate::door::not_bool(said), at, "")),
+                    Ty::Date => format!("_date({v}, {})", php_said(&crate::door::not_date(said), at, "")),
+                    Ty::Str => format!("_str({v}, {})", php_said(&crate::door::not_string(said), at, "")),
+                    _ => format!("_int({v}, {}, {})", php_said(&crate::door::not_integer(said), at, ""), php_said(&crate::door::out_of_range(said), at, "")),
                 }
             };
             if optional {
@@ -1335,27 +1603,52 @@ impl<'a> Gen<'a> {
                 one(&take)
             }
         };
-        let mut args: Vec<String> = self.f.inputs.iter().map(|i| read(&self.ty_of(&i.name.text), &d, &i.name.text)).collect();
-        // The sequence a walk reads, one element at a time (§15.56).
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| read(&self.ty_of(&i.name.text), &d, &i.name.text, &i.name.text, "")).collect();
+        // The sequence a walk reads, one element at a time (§15.56), after the inputs: every reader
+        // takes the arguments in the order the function does (§15.328).
         let mut seq = String::new();
+        let mut els: Vec<String> = Vec::new();
         for (k, el) in self.f.elements.iter().enumerate() {
             let e = php_var(&self.temp("e"));
+            // A sentence about an element names it by its index (§15.324).
+            let at = php_var(&self.temp("i"));
             let v = php_var(&if k == 0 { self.temp("els") } else { self.temp(&format!("els{}", k + 1)) });
             let s = &el.name.text;
-            let obj = format!("_obj({e}, {})", php_str(&crate::door::not_object(s)));
-            let fields: Vec<String> = el.fields.iter().map(|fd| read(&self.ty_of(&fd.name.text), &obj, &fd.name.text)).collect();
+            let obj = format!("_obj({e}, {})", php_said(&crate::door::not_object(s, crate::door::HERE), &at, ""));
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| read(&self.ty_of(&fd.name.text), &obj, &fd.name.text, &crate::door::element(s, crate::door::HERE, &fd.name.text), &at))
+                .collect();
             seq.push_str(&format!(
-                "        {v} = [];\n        foreach (_seq(_take({d}, {}, {}), {}) as {e}) {{\n            {v}[] = new \\{ns}\\{}({});\n        }}\n",
+                "        {v} = [];\n        foreach (_seq(_take({d}, {}, {}), {}) as {at} => {e}) {{\n            {v}[] = new \\{ns}\\{}({});\n        }}\n",
                 php_str(s),
                 php_str(&crate::door::missing(s)),
                 php_str(&crate::door::not_sequence(s)),
                 self.element_type(k),
                 fields.join(", ")
             ));
-            args.push(v);
+            els.push(v);
         }
+        // The lines that read the arguments before the call, and what the list of them is made of:
+        // the inputs read first, into a list of their own, and then each sequence.
+        let ins = php_var(&self.temp("ins"));
+        let call = |args: &[String]| -> (String, String) {
+            if els.is_empty() {
+                return (String::new(), args.join(", "));
+            }
+            let (mut prelude, mut list) = (String::new(), Vec::new());
+            if !args.is_empty() {
+                prelude.push_str(&format!("        {ins} = [{}];\n", args.join(", ")));
+                list.push(format!("...{ins}"));
+            }
+            prelude.push_str(&seq);
+            list.extend(els.iter().cloned());
+            (prelude, list.join(", "))
+        };
         // `--chances` reads a line's inputs as the vectors are read (§15.225).
-        let chances_mode = self.php_chances_mode(&d, &seq, &args);
+        let (chance_prelude, chance_args) = call(&args);
+        let chances_mode = self.php_chances_mode(&d, &chance_prelude, &[chance_args]);
         let a = php_var(&self.temp("args"));
         let (r, trace, line) = (php_var(&self.temp("r")), php_var(&self.temp("trace")), php_var(&self.temp("line")));
         // A machine's traces (§15.148): the carried input is the state this language answered
@@ -1380,15 +1673,17 @@ impl<'a> Gen<'a> {
                 more_head.push_str(&format!("{local} = \\{ns}\\{};\n", mc.upper()));
                 let shown = if mc.kind() == super::MoreKind::Enum { format!("\\{ns}\\{}->value", mc.upper()) } else { format!("\\{ns}\\{}", mc.upper()) };
                 more_meta.push(format!("{} => {shown}", php_str(&mc.input)));
-                more_start.push_str(&format!("        {local} = {};\n", read(&mc.ty, &format!("{v}['carried']"), &mc.input)));
+                more_start.push_str(&format!("        {local} = {};\n", read(&mc.ty, &format!("{v}['carried']"), &mc.input, &mc.input, "")));
                 more_tail.push_str(&format!("        {local} = {r}->{};\n", mc.out_alias));
             }
             let carried_meta = if more_meta.is_empty() { String::new() } else { format!(", 'carried' => [{}]", more_meta.join(", ")) };
             head = format!("{state} = \\{ns}\\INITIAL;\n{more_head}");
+            // The machine's helper, as the module declares it (§15.336).
+            let is_final = self.own("is_final");
             body = format!(
                 "{v} = json_decode({line}, true, 512, JSON_THROW_ON_ERROR);\n    \
                  if (isset({v}['machine'])) {{\n        \
-                     $fin = array_values(array_map(fn($s) => $s->value, array_filter({cls}::cases(), fn($s) => \\{ns}\\is_final($s))));\n        \
+                     $fin = array_values(array_map(fn($s) => $s->value, array_filter({cls}::cases(), fn($s) => \\{ns}\\{is_final}($s))));\n        \
                      echo json_encode(['initial' => \\{ns}\\INITIAL->value, 'final' => $fin{carried_meta}], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), \"\\n\";\n        \
                      continue;\n    }}\n    \
                  {d} = {v}['in'];\n    \
@@ -1396,6 +1691,7 @@ impl<'a> Gen<'a> {
             );
             tail = format!("    if (isset({v}['step'])) {{\n        {state} = {};\n{more_tail}    }}\n", self.next_state_of(&r, &format!("->{out}")));
         }
+        let (seq, args) = call(&args);
         format!(
             "<?php\n\n\
              // Code generated by rulec {}. DO NOT EDIT.\n\n\
@@ -1430,7 +1726,7 @@ impl<'a> Gen<'a> {
             ritsu_emit::header::VERSION,
             PHP_WIRE.replace("@NS@", &ns),
             self.php_labels_mode() + &self.php_prereq_mode() + &chances_mode,
-            args.join(", "),
+            args,
         )
     }
 
@@ -1496,10 +1792,10 @@ impl<'a> Gen<'a> {
     /// §15.234).
     fn php_obj_at(&self, kind: &super::from::Kind, o: &str, k: &str, at: &str) -> String {
         use super::from::Kind;
-        let (kq, aq) = (php_str(k), php_str(at));
+        let (kq, aq) = (php_str(k), php_q(at));
         match kind {
             Kind::Int => format!("_int_at({o}, {kq}, {aq})"),
-            Kind::IntPb => format!("_int_pb(_at({o}, {kq}, {aq}), {})", php_str(&format!("{at}.{k}"))),
+            Kind::IntPb => format!("_int_pb(_at({o}, {kq}, {aq}), {})", php_q(&format!("{at}.{k}"))),
             Kind::Bool => format!("_bool_at({o}, {kq}, {aq})"),
             Kind::Str => format!("_str_at({o}, {kq}, {aq})"),
             Kind::Date => format!("_date_at({o}, {kq}, {aq})"),
@@ -1507,7 +1803,7 @@ impl<'a> Gen<'a> {
             Kind::Enum(n) => format!(
                 "_enum_of({}::class, _at({o}, {kq}, {aq}), {})",
                 self.php_enum_fqn(n),
-                php_str(&crate::door::not_in_enum(&format!("{at}.{k}"), n))
+                php_q(&crate::door::not_in_enum(&format!("{at}.{k}"), n))
             ),
         }
     }
@@ -1515,7 +1811,7 @@ impl<'a> Gen<'a> {
     /// A value already read, `at` naming it, held to `kind` (PHP).
     fn php_obj_of(&self, kind: &super::from::Kind, v: &str, at: &str) -> String {
         use super::from::Kind;
-        let aq = php_str(at);
+        let aq = php_q(at);
         match kind {
             Kind::Int => format!("_int_of({v}, {aq})"),
             Kind::IntPb => format!("_int_pb({v}, {aq})"),
@@ -1523,7 +1819,7 @@ impl<'a> Gen<'a> {
             Kind::Str => format!("_str_of({v}, {aq})"),
             Kind::Date => format!("_date_of({v}, {aq})"),
             Kind::Num => format!("_num_of({v}, {aq})"),
-            Kind::Enum(n) => format!("_enum_of({}::class, {v}, {})", self.php_enum_fqn(n), php_str(&crate::door::not_in_enum(at, n))),
+            Kind::Enum(n) => format!("_enum_of({}::class, {v}, {})", self.php_enum_fqn(n), php_q(&crate::door::not_in_enum(at, n))),
         }
     }
 
@@ -1538,7 +1834,7 @@ impl<'a> Gen<'a> {
                 let kind = test_kind(cell, None, Some(&z));
                 let zero = super::pb_zero(&z, "false", &php_str);
                 let at = elem_at(p);
-                (kind.clone(), self.php_obj_of(&kind, &format!("_pget($e, {}, {}, {zero}, {})", php_str(&j), php_str(&n), php_str(&at)), &format!("{at}.{}", field.text)))
+                (kind.clone(), self.php_obj_of(&kind, &format!("_pget($e, {}, {}, {zero}, {})", php_str(&j), php_str(&n), php_q(&at)), &format!("{at}.{}", field.text)))
             }
             None => {
                 let kind = test_kind(cell, p.test_kind.as_ref(), None);
@@ -1558,7 +1854,7 @@ impl<'a> Gen<'a> {
             Some((j, n, z)) => {
                 let kind = if matches!(p.ty, Ty::Date) { Kind::Date } else { Kind::IntPb };
                 let zero = super::pb_zero(&z, "false", &php_str);
-                self.php_obj_of(&kind, &format!("_pget($e, {}, {}, {zero}, {})", php_str(&j), php_str(&n), php_str(&elem_at(p))), &at)
+                self.php_obj_of(&kind, &format!("_pget($e, {}, {}, {zero}, {})", php_str(&j), php_str(&n), php_q(&elem_at(p))), &at)
             }
             None => {
                 let kind = if matches!(p.ty, Ty::Date) { Kind::Date } else { Kind::Int };
@@ -1572,11 +1868,11 @@ impl<'a> Gen<'a> {
         match &p.proto {
             Some(pp) => {
                 let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", php_str(j), php_str(n))).collect();
-                format!("_seq_of(_proto({root}, [{}], [], [], {}), {})", steps.join(", "), php_str(&super::from::base_of(p)), php_str(&p.shown))
+                format!("_seq_of(_proto({root}, [{}], [], [], {}), {})", steps.join(", "), php_q(&super::from::base_of(p)), php_q(&p.shown))
             }
             None => {
-                let (o, at) = self.walk_to_last(p, root, &|o, k, at| format!("_at({o}, {}, {})", php_str(k), php_str(at)));
-                format!("_seq_at({o}, {}, {})", php_str(p.path.last().map(String::as_str).unwrap_or("")), php_str(&at))
+                let (o, at) = self.walk_to_last(p, root, &|o, k, at| format!("_at({o}, {}, {})", php_str(k), php_q(at)));
+                format!("_seq_at({o}, {}, {})", php_str(p.path.last().map(String::as_str).unwrap_or("")), php_q(&at))
             }
         }
     }
@@ -1595,17 +1891,17 @@ impl<'a> Gen<'a> {
                         let lit = |z: &crate::projection::Zero| super::pb_zero(z, "false", &php_str);
                         let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", php_str(j), php_str(n))).collect();
                         let (absent, unset) = self.proto_defaults(p, pp, &lit, "null");
-                        let walk = format!("_proto({root}, [{}], {absent}, {unset}, {})", steps.join(", "), php_str(&super::from::base_of(p)));
+                        let walk = format!("_proto({root}, [{}], {absent}, {unset}, {})", steps.join(", "), php_q(&super::from::base_of(p)));
                         let read = self.php_obj_of(&kind, &walk, &p.shown);
                         if opt { format!("({walk} === null ? null : {read})") } else { read }
                     }
                     None if opt => {
                         let keys: Vec<String> = p.path.iter().map(|s| php_str(s)).collect();
-                        let walk = format!("_opt({root}, [{}], {})", keys.join(", "), php_str(&super::from::base_of(p)));
+                        let walk = format!("_opt({root}, [{}], {})", keys.join(", "), php_q(&super::from::base_of(p)));
                         format!("({walk} === null ? null : {})", self.php_obj_of(&kind, &walk, &p.shown))
                     }
                     None => {
-                        let (o, at) = self.walk_to_last(p, &root, &|o, k, at| format!("_at({o}, {}, {})", php_str(k), php_str(at)));
+                        let (o, at) = self.walk_to_last(p, &root, &|o, k, at| format!("_at({o}, {}, {})", php_str(k), php_q(at)));
                         self.php_obj_at(&kind, &o, p.path.last().map(String::as_str).unwrap_or(""), &at)
                     }
                 }
@@ -1614,17 +1910,26 @@ impl<'a> Gen<'a> {
                 let seq = self.php_obj_collection(p, &root);
                 let test = p.kind.test().map(|t| self.php_obj_test(p, t));
                 let t = || test.clone().unwrap_or_else(|| "true".into());
+                // Where a sentence names the element by its index, the function over the elements
+                // is handed the index `$i` beside it: `array_map` over the elements and their keys
+                // (`php_each`), and `array_filter` with `ARRAY_FILTER_USE_BOTH` (§15.324).
+                let indexed = |inner: &[&str]| php_indexed(inner);
                 match p.kind {
                     // Every element is tested, as in every other language.
+                    crate::ast::ProjKind::Any(..) if indexed(&[&t()]) => format!("in_array(true, {}, true)", php_each(&seq, &format!("fn($e, $i) => {}", t()))),
+                    crate::ast::ProjKind::All(..) if indexed(&[&t()]) => format!("!in_array(false, {}, true)", php_each(&seq, &format!("fn($e, $i) => {}", t()))),
                     crate::ast::ProjKind::Any(..) => format!("array_reduce({seq}, fn($a, $e) => ({}) || $a, false)", t()),
                     crate::ast::ProjKind::All(..) => format!("array_reduce({seq}, fn($a, $e) => ({}) && $a, true)", t()),
                     crate::ast::ProjKind::Count(None) => format!("count({seq})"),
+                    crate::ast::ProjKind::Count(Some(_)) if indexed(&[&t()]) => format!("count(array_filter({seq}, fn($e, $i) => {}, ARRAY_FILTER_USE_BOTH))", t()),
                     crate::ast::ProjKind::Count(Some(_)) => format!("count(array_filter({seq}, fn($e) => {}))", t()),
                     _ => {
                         let Some(of) = p.kind.of().cloned() else { return "0".into() };
                         let each = self.php_obj_of_field(p, &of);
                         let vals = match &test {
+                            Some(c) if indexed(&[c, &each]) => format!("array_merge([], ...{})", php_each(&seq, &format!("fn($e, $i) => {c} ? [{each}] : []"))),
                             Some(c) => format!("array_merge([], ...array_map(fn($e) => {c} ? [{each}] : [], {seq}))"),
+                            None if indexed(&[&each]) => php_each(&seq, &format!("fn($e, $i) => {each}")),
                             None => format!("array_map(fn($e) => {each}, {seq})"),
                         };
                         match p.kind {
@@ -1657,7 +1962,12 @@ impl<'a> Gen<'a> {
             }
         };
         let fields: Vec<String> = q.fields.iter().map(|p| self.php_obj_read(p)).collect();
-        format!("array_map(fn($e) => new {}({}), {seq})", self.element_type(q.s), fields.join(", "))
+        let fields = fields.join(", ");
+        if php_indexed(&[&fields]) {
+            php_each(&seq, &format!("fn($e, $i) => new {}({fields})", self.element_type(q.s)))
+        } else {
+            format!("array_map(fn($e) => new {}({fields}), {seq})", self.element_type(q.s))
+        }
     }
 
     /// The helpers the PHP projection function calls, the ones `body` uses and what they call
@@ -1774,7 +2084,7 @@ impl<'a> Gen<'a> {
             return String::new();
         }
         let fname = self.php_fname();
-        let mut body = format!("/** {} */\nfunction {fname}_from({})\n{{\n    return {fname}(\n", self.proj_doc(), self.php_from_params().join(", "));
+        let mut body = format!("/** {} */\nfunction {fname}_from({})\n{{\n    return {}(\n", self.proj_doc(), self.php_from_params().join(", "), self.php_call_rule());
         let projs = self.projections();
         let mut args: Vec<String> = Vec::new();
         for i in &self.f.inputs {
@@ -1970,7 +2280,7 @@ impl<'a> Gen<'a> {
         let (doc_fn, doc_ty) = self.chances_docs();
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 { self.php_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
-        let fname = self.php_fname();
+        let call_rule = self.php_call_rule();
         let name = self.chances_name("php");
         let mut params: Vec<String> = self
             .f
@@ -2020,13 +2330,13 @@ impl<'a> Gen<'a> {
                 let (cuts, low, cut, n) = (php_var(&self.temp("cuts")), php_var(&self.temp("low")), php_var(&self.temp("cut")), php_var(&self.temp("n")));
                 o.push_str(&format!("    {cuts} = {}({})[2];\n", self.walked_fn("php"), call(Some((&draw, &lo.to_string())))));
                 o.push_str(&format!(
-                    "    if (count({cuts}) === 0 || {cuts}[count({cuts}) - 1] === 0) {{\n        return new Chances({all}, [[{fname}({}), {all}]]);\n    }}\n",
+                    "    if (count({cuts}) === 0 || {cuts}[count({cuts}) - 1] === 0) {{\n        return new Chances({all}, [[{call_rule}({}), {all}]]);\n    }}\n",
                     call(Some((&draw, &lo.to_string()))),
                     all = hi - lo + 1
                 ));
                 o.push_str(&format!("    {low} = {lo};\n    foreach ({cuts} as {cut}) {{\n        if ({cut} > {low} && {low} <= {hi}) {{\n"));
                 o.push_str(&format!("            {n} = min({cut}, {}) - {low};\n", hi + 1));
-                o.push_str(&format!("            {out} = {fname}({});\n", call(Some((&draw, &low)))));
+                o.push_str(&format!("            {out} = {call_rule}({});\n", call(Some((&draw, &low)))));
                 o.push_str(&add("            ", &n));
                 o.push_str(&format!("            {total} += {n};\n        }}\n        if ({cut} > {low}) {{\n            {low} = {cut};\n        }}\n    }}\n    return new Chances({total}, {ways});\n}}\n\n"));
             }
@@ -2049,7 +2359,7 @@ impl<'a> Gen<'a> {
                     ind.push_str("    ");
                 }
                 o.push_str(&format!(
-                    "{ind}try {{\n{ind}    {out} = {fname}({});\n{ind}}} catch (RuleInputError {e}) {{\n{ind}    {last} = {e};\n{ind}    continue;\n{ind}}}\n{ind}{total} += 1;\n",
+                    "{ind}try {{\n{ind}    {out} = {call_rule}({});\n{ind}}} catch (RuleInputError {e}) {{\n{ind}    {last} = {e};\n{ind}    continue;\n{ind}}}\n{ind}{total} += 1;\n",
                     call(None)
                 ));
                 o.push_str(&add(&ind, "1"));

@@ -1,0 +1,4 @@
+error[E202]: tests/mutants/E202_壊れた共有の経路.ringi:3:29: `shared/壊れた経路.ringi` does not pass ringi's check
+     3 | use route 標準(standard) from "shared/壊れた経路.ringi"
+  = E004: `部長たち` is not declared in `who` (tests/mutants/shared/壊れた経路.ringi:8:16)
+  = Correct that file until its check passes.

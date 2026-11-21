@@ -1,0 +1,16 @@
+workflow refunds v1
+description "Says how many days an order may still be refunded in. The flow, the rule it asks and the gate read the states from one enums file, so the state the flow is given goes to the rule as it is"
+
+import enum order_state from "rules/order_states.rule"
+use rule refund_window from "rules/refund_window.rule"
+
+inputs
+  order_id : string
+  state    : order_state
+
+outputs
+  days : int
+
+flow
+  let w = refund_window(state: state)
+  succeed days = w.days

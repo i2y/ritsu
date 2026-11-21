@@ -1,0 +1,31 @@
+gate refund_access v1
+description "Who may refund an order. The states of an order are read from the enums file the refund flow and its rule read too"
+namespace Refunds
+
+import enum order_state from "rules/order_states.rule"
+
+role clerk
+  can refund_order
+
+principal User
+  roles clerk
+
+workflow refunds from "refunds.flow"
+
+resource Order
+  attributes
+    state : order_state
+
+action refund_order
+  principal User, Workflow
+  resource Order
+
+permit clerks_refund_returned_orders
+  principal in clerk
+  action refund_order
+  when resource.state is returned
+
+permit the_workflow_refunds_shipped_orders
+  principal is workflow refunds
+  action refund_order
+  when resource.state is shipped

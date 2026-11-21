@@ -389,6 +389,7 @@ TigerBeetle はリクエストを一つずつ処理し、一つの操作は一�
 - ターゲットのコードで一つの識別子になる名前と、そのままでは使えない名前（W108）は、原文の行と、ターゲットごとの綴りと、どう壊れるかを言う（16 章）。
 - それ以外（E012、W101〜W104）は、そこに至る操作の列を添える。操作の列は、検査が参照インタプリタで実際に流して、言ったとおりの結果になることを確かめてから出す。確かめられなかったら、その診断を出さない。
 - 書き方の誤りが一つでもあると、そこで止まる。読めない行（E001）があれば名前の解決をせず、名前や型の誤りがあれば、呼ぶと分かること（E012、W101〜W106）を調べない。どちらも、そこから先は推測になるからである。
+- 一つの誤りは一度だけ言う（2026-11-16、ritsu の DESIGN 8.3）。宣言の無い名前（E002 の単位・勘定・型と振替の引数、E030 のキーの名前）は、帳簿の中で最初に書いた所で一度だけ言い、同じ名前を書いたほかの行の番号を注に挙げる（「`USD` is written on lines 11, 12 and 15 too」。chobo の注は句点で終わらない）。振替の引数は振替ごとに数え、別の振替の同じ名前は別に言う。単位の名前は、単位と型のどちらの位置に書いても一つに数える。型の無い振替の引数（E002）を読む `move` の行は、その引数を額にも文字列にも照らさず、何も言わない（前は文字列として読み、額にできないと E005 を言った）。字下げの足りない `move`・`key`・`pending`・`at`・`description` の行は、その行で E001 を一度言い、上の勘定か振替の行として読む。続く字下げした行は、その勘定か振替の行のままである（前は続く行ごとに「字下げした行を書けるのは `account` と `transfer` の下だけ」と重ねた）。読めなかった `account` と `transfer` の見出しの下の行と、行の初めに書けない語で始まる行の下の行は、何も言わない。黙るのは、ほかの行がエラーを言った誤りから決まる行だけなので、通るか通らないかと終了コードは変わらない。試験は `tests/chains.rs`（`tests/chains/` の `chain_declarations` と `chain_lines`、英日の版。8 件が 3 件、5 件が 2 件）。
 - 帳簿に書いた鍵（W901）は、書き方の誤りがあっても、帳簿の全文から探す。原文の行は引用しない（その行に鍵があるため）。場所と、鍵の種類と接頭辞と長さだけを言う。
 
 操作の列は次のように探す。まず呼び出しの引数に、ほかと重ならない値（`注文-1`、`sku-2`）と小さな額を入れ、取る元の勘定が足りなければ、その勘定へ入れる振替を探して先に呼ぶ（その振替の取る元も足りなければ同じように探し、三つ先までたどる）。それで言いたい結果にならなければ、額を 1、2、3、5、10、100、1000 から組み合わせて試す。前の移動が入れた額を後の移動が取る振替（分配の帳簿の `売上`）は、前の額のほうが大きくないと通らないので、ここで見つかる。値の番号は、列の中で最初に出てくる順に振り直す。
@@ -1114,7 +1115,7 @@ chobo scenarios <file.book> [--out <dir>]
 chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]
 chobo doc <file.book> [--format html] [--out <dir>]
 chobo api <file.book>
-chobo explain <コード> | --all [--format markdown]
+chobo explain <コード> | --all [--format markdown|json]
 ```
 
 段階 B で `check`、`run`、`scenarios`、`api`、`explain` と `--help`、`--version` を、段階 C で出力先を書くコマンド（いまの `gen`）と `run --show` を、段階 D で `doc` を作った。`doc` は標準出力に書き、`--out <dir>` があれば、帳簿のファイル名から `<名前>.md` か `<名前>.html` を書く（`gen` と違い、帳簿の名前ではなくファイル名を使う。英語の版と日本語の版が同じディレクトリにあっても、ぶつからない）。`run` の `--scenario` には、シナリオを一つ書いたファイルか、`chobo scenarios` が出す配列をそのまま渡せる。`gen` は、`--target` に挙げた言語を全部作ってから書き、書いたファイルのパスを一つずつ標準エラーに出す。帳簿にエラーがあるとき、挙げた出力先のどれかが帳簿を受け取れないとき（E060〜E064）は、どの出力先も書かずに exit 1 で終わる。`--check` は何も書かずに比べ、無いファイルと違うファイルを標準エラーに挙げて exit 1 で終わる（17 章）。
@@ -1313,7 +1314,7 @@ ritsu の言語の生成物が Rust でも書かれるようになり（kaname �
 
 - 帳簿の値は `postgres(db, tenant)`、`tigerbeetle(client, tenant)`、`mysql(db, tenant, batch)` が返す `Book`。振替の種類ごとのメソッド（`book.reserve()`）が操作を持つ値を返し、操作は `hold`・`post`・`void`・`status`、押さえない振替は `r#do`（`do` は Rust のキーワード）である。残高は `book.balance().stock(StockAccount { sku: "A-1" })`、PostgreSQL と MySQL の系統の帳簿の値には `expire()` がある。
 - 引数は振替ごとの構造体で、文字列は借りる（`ReserveArgs { order: "o-1", sku: "A-1", qty: 2 }`）。確定と取消と状態は仮押さえのキーの構造体（`ReserveKey`）を受け取り、一部の確定の額は `Option<ReserveAmounts>`（`None` で全額）。額は `i64` で、負の額は `Error::Argument` になる。
-- 名前は帳簿の名前をそのまま使う（日本語の名前もそのまま。Rust の識別子は Unicode の字を持てる）。キーワードは前に `r#` を付け、`r#` にできない `self`・`Self`・`super`・`crate` と `_` は後ろに `_` を付ける。型の名前は、帳簿の名前の語の頭を大文字にしたもの（`take_back` は `TakeBack`、`引当` は `引当`）。帳簿の名前は Rust の名前の慣習（snake_case と CamelCase）に合わないことがあるので、モジュールの頭で `non_snake_case` と `non_camel_case_types` を許す。使わない定義の警告（`dead_code`）も許す。
+- 名前は帳簿の名前をそのまま使う（日本語の名前もそのまま。Rust の識別子は Unicode の字を持てる）。キーワードは前に `r#` を付け、`r#` にできない `self`・`Self`・`super`・`crate` と `_` は後ろに `_` を付ける。型の名前は、帳簿の名前の語の頭を大文字にしたもの（`take_back` は `TakeBack`、`引当` は `引当`）。帳簿の名前は Rust の名前の慣習（snake_case と CamelCase）に合わないことがあるので、モジュールの頭で `non_snake_case` と `non_camel_case_types` を許す。使わない定義の警告（`dead_code`）と clippy の lint の全部（`clippy::all`）も許す。生成した Rust のファイルのどれもが持つ決まりで、人が手で直すファイルではなく、新しい版の clippy が足す lint で使う人の `-D warnings` の組みが落ちないようにするためである（rulec の DESIGN §15.340）。
 - 拒否の理由は列挙 `Reason` で、帳簿の境界の理由を先に、chobo の理由（2.7）をあとに並べる。帳簿の理由の値は、理由の名前の語の頭を大文字にしたもの（`out_of_stock` は `OutOfStock`）で、chobo の理由の値の名前（`KeyConflict`、`NoSuchHold` …）は決まった名前である。二つが同じ名前になるとき（理由 `keyConflict`）と、帳簿の二つの理由が同じ値になるとき（`short` と `Short`）は、W108 と E064 になる（16 章）。`as_str()` が帳簿と chobo の書く名前を返す。
 
 **決定（答えと誤り）**：操作は `Result<Outcome, Error>` を返す。`Outcome` は `Done`、`DoneBefore`、`Refused(Reason)` で、拒否は答えであって誤りではない（2.7、4.3）。`Error` は答えの無いもので、出力先ごとの型にした。PostgreSQL は `Argument`、`Database(sqlx::Error)`、`Answer` で、`code()` が SQLSTATE を返す（境界を書き換えた行は `CB001`）。MySQL の系統は `Database` に加えて `Book { code: "CB001", … }` を持ち、`number()` が MySQL の誤りの番号を返す。TigerBeetle は `TigerBeetle(tigerbeetle::Error)` を持つ。どれも `#[non_exhaustive]` で、`std::error::Error` を実装する。状態は `Option<HoldState>`（無ければ `None`）、残高は `Balance { posted, held_in, held_out }`。
@@ -1395,7 +1396,7 @@ rulec は、書いた人の名前どうしが生成先の綴りで一つの識�
 | MySQL の系統の SQL | 文の中の値 | 同じ | 同じ | 文字列 | 帳簿の名前から作るテーブルと制約の名前（E062） |
 | TigerBeetle | ID の元と、表示のための 16 ビットのコード | 同じ | 同じ | 文字列 | 無い |
 
-PascalCase は、`_` で区切った語の頭を大文字にして `_` を除いたもの（`take_back` は `TakeBack`）である。クライアントのファイルは帳簿の名前で書くので、Python のクライアントはモジュール `<帳簿>.py` になる。Rust のクライアントは、帳簿の名前を小文字にしたモジュールで、ファイルの中に `#![allow(non_snake_case, non_camel_case_types, dead_code)]` を持つ。表から、次の形が一つの言語か PostgreSQL のターゲットを壊す。どれも 0.40.0 の `check` は何も言わなかった。
+PascalCase は、`_` で区切った語の頭を大文字にして `_` を除いたもの（`take_back` は `TakeBack`）である。クライアントのファイルは帳簿の名前で書くので、Python のクライアントはモジュール `<帳簿>.py` になる。Rust のクライアントは、帳簿の名前を小文字にしたモジュールで、ファイルの中に `#![allow(non_snake_case, non_camel_case_types, dead_code, clippy::all)]` を持つ。表から、次の形が一つの言語か PostgreSQL のターゲットを壊す。どれも 0.40.0 の `check` は何も言わなかった。
 
 - Go：頭の一字の大文字と小文字だけが違う二つの名前（勘定 `stock` と `Stock`、振替 `sale` と `Sale`）、大文字の無い字で始まる名前と、その頭に `X` を付けた名前（`在庫` と `X在庫`）。一つの構造体の、そうなる二つの引数も同じである。
 - Rust：PascalCase で同じになる二つの振替か勘定（`take_back` と `takeBack`）と二つの拒否の理由（`short` と `Short`）、chobo の理由の値になる理由（`keyConflict` は `KeyConflict`）、後ろに `_` を付けると同じになる二つの名前（引数 `crate` と `crate_`）。
@@ -1415,7 +1416,7 @@ PascalCase は、`_` で区切った語の頭を大文字にして `_` を除い
 6. ★ **名前は付け替えない。** 四つのクライアントの生成器から `unique` を全部外した（`Book` のメンバー、Go のフィールドとメソッド、Rust の型の名前、Python の引数と属性）。呼ぶ側は、どの言語でも帳簿に書いた名前で呼ぶ。名前を変えるのは帳簿を書く人で、W108 の注のとおりに変えれば、どのターゲットも組める。
 7. ★ **Go のパッケージの名前は、`main` も飛ばす。** パッケージの名前は、帳簿の名前が ASCII の識別子でキーワードでなければその名前、そうでなければファイルの名前、それも使えなければ `book` である。`main` はキーワードではないので、0.40.0 は帳簿 `main` のパッケージを `main` にしていた。Go は `main` のパッケージをプログラムとして組み、ほかのパッケージから読み込めないので、キーワードと同じく次の候補へ進む（`shop.book` の `book main v1` は `shop`）。koyomi はパッケージの名前をファイルの別名から作り、ほかの候補が無いので W001 と E016 で言う（koyomi の DESIGN 15 章）が、chobo には前から次の候補があるので、それを使った。
 8. ★ **クライアントがそのままでは使えない名前も W108 にする。** Python の名前修飾、Python のモジュールの名前、TypeScript の引数 `__proto__` である。綴りで二つがぶつかる形ではないが、クライアントがその名前のままでは使えない形で、rulec の DESIGN 15.263 が生成先の使えない識別子を W121 にしたのと同じに扱った。見出しは「帳簿 `import` は、Python のクライアントでそのままでは使えません」「振替 `入荷` の引数 `__proto__` は、TypeScript のクライアントでそのままでは使えません」である。
-9. ★ **帳簿の名前に `_` が二つ続いても（`my__shop`）、W108 にしない。** 使う側のクレートは Rust のクライアントを `mod my__shop;` で宣言し、rustc のリント `non_snake_case` はモジュールの名前も見る。けれども、クライアントのファイルの中の `#![allow(non_snake_case, non_camel_case_types, dead_code)]` が、この宣言の警告も消すので、`-D warnings` で組める（rustc 1.94.1 で確かめた。同じ一行の無いモジュールは ``module `my__shop` should have a snake case name`` で止まる）。koyomi の Rust のコードにはこの一行が無いので、koyomi は同じ形を W001 と E016 にしている（koyomi の DESIGN 15 章）。
+9. ★ **帳簿の名前に `_` が二つ続いても（`my__shop`）、W108 にしない。** 使う側のクレートは Rust のクライアントを `mod my__shop;` で宣言し、rustc のリント `non_snake_case` はモジュールの名前も見る。けれども、クライアントのファイルの中の `#![allow(non_snake_case, non_camel_case_types, dead_code, clippy::all)]` が、この宣言の警告も消すので、`-D warnings` で組める（rustc 1.94.1 で確かめた。同じ一行の無いモジュールは ``module `my__shop` should have a snake case name`` で止まる）。koyomi の Rust のコードにはこの一行が無いので、koyomi は同じ形を W001 と E016 にしている（koyomi の DESIGN 15 章）。
 10. **見出しは名前と、壊れる言語（PostgreSQL なら SQL）を言い、注は言語ごとにターゲットと綴りと壊れ方を言う。** 見出しは「勘定 `在庫` と `X在庫` は、Go のクライアントで同じ識別子になります」。注は「Go（`postgres-go`、`tigerbeetle-go`、`mysql-go`）: クライアントは、名前の頭の一字を大文字にして書く（大文字の無い字で始まる名前には、頭に `X` を付ける）ので、どちらも `X在庫` です。`Balances` のメソッド `X在庫` を二度宣言することになり、コンパイルできません。」のように言う。ヒントは、使わないターゲットならそのままでよいこと、使うなら名前を変えること、すでに使っている帳簿なら、名前を変えたあと使っているリビジョンと `chobo check --diff-base` で比べることである。名前を変えると、前の名前の勘定の残高はデータベースに残る（W107）。
 11. **番号は W108 と E064 にした。** 警告と、ターゲットの限りのエラー（E060〜E063）の、それぞれの番台の次の番号である。台帳の E064 の再現は、W108 の再現の帳簿を `postgres-go` でビルドするもので、`tests/fixtures/one_identifier.book` と日本語の版 `一つの識別子.book` が、`postgres-go` のビルドの出力を golden にしている。`chobo build --help` の終了コード 1 の文と、関係するコードの一覧も E064 を挙げる。
 12. ★ **PostgreSQL のテナントの引数は、これまでどおり離す。** 帳簿の引数 `tenant` は関数の引数 `p_tenant` になるので、そのときテナントの引数を `p_tenant_` にする。呼ぶ側が書く名前ではない（引数は順に渡す）ので、付け替えないことの外に置いた。
@@ -1474,14 +1475,16 @@ PascalCase は、`_` で区切った語の頭を大文字にして `_` を除い
 ### 17.3 決定
 
 1. **動詞は `gen`。** `chobo build` は知らないコマンドとして exit 2 で止まり、新しい名前を言う（`` `chobo build` is `chobo gen` from 0.41.0``、`` `chobo build` は 0.41.0 から `chobo gen` です``）。`ritsu chobo build` も同じ文で止まる。動く別名にはしない。書くのはソースと SQL で、バイナリを作るコマンド（`cargo build`、`go build`）とは違う。ritsu の生成のコマンドは、どれも `gen` にした。
-2. **`--target sql|typescript|python|go|rust` を何度でも書き、`--books postgres|tigerbeetle|mysql` を一度書く。** `--books` の既定は `postgres` で、`ritsu gen` の `--books` と同じ名前、同じ既定である。書く順はフラグの順ではなく言語の表の順（`sql`、`typescript`、`python`、`go`、`rust`。`target::LANGS`）で、`wrote` の行もその順に並ぶ。同じ `--target` を二度書けば exit 2。TigerBeetle は SQL を受け取らないので、`--books tigerbeetle` の `--target sql` は exit 2 で、クライアントの書き方を言う。`--target` が無ければ、何も書かずに exit 2 で止まり、二つのフラグを言う。0.40.0 も `--target` が要ったので、koyomi や rulec と違い、0.40.0 と同じものを書くコマンドは示さない。
+2. **`--target sql|typescript|python|go|rust` を何度でも書き、`--books postgres|tigerbeetle|mysql` を一度書く。** `--books` の既定は `postgres` で、`ritsu gen` の `--books` と同じ名前、同じ既定である。書く順はフラグの順ではなく言語の表の順（`sql`、`typescript`、`python`、`go`、`rust`。`target::LANGS`）で、`wrote` の行もその順に並ぶ。同じ `--target` を二度書けば exit 2。TigerBeetle は SQL を受け取らないので、`--books tigerbeetle` の `--target sql` は exit 2 で、クライアントの書き方を言う。`--target` が無ければ、何も書かずに exit 2 で止まり、要るフラグと、`--books` も書いた使い方の行を言う（ritsu の DESIGN 6.2 の 10）。0.40.0 も `--target` が要ったので、koyomi や rulec と違い、0.40.0 と同じものを書くコマンドは示さない。
 
    ```text
-   error: `chobo gen` needs one or more `--target sql|typescript|python|go|rust`; `--books postgres|tigerbeetle|mysql` says which database they are for (postgres if it is not given)
+   error: `chobo gen` needs `--target sql|typescript|python|go|rust`
+   usage: chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]
    ```
 
    ```text
-   エラー: `chobo gen` には `--target sql|typescript|python|go|rust` が一つ以上要ります。どのデータベースのためのものかは `--books postgres|tigerbeetle|mysql` で指定します（無ければ postgres）
+   エラー: `chobo gen` には `--target sql|typescript|python|go|rust` が要ります
+   使い方: chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]
    ```
 
 3. **0.40.0 の組の名前を `--target` に渡せば、それに当たるフラグを言って exit 2 で止まる**（`` `tigerbeetle-go` is `--target go --books tigerbeetle` from 0.41.0``、`` `postgres` は 0.41.0 から `--target sql` です``）。表は `target::RENAMED` の 14 行で、引数を読むところ（ritsu-base の `Flag::renamed`）が言う。
@@ -1655,3 +1658,18 @@ E063 は Rust のターゲットの表だけを読んでいた。ほかの三つ
 - TigerBeetle の二つの違い（4.2）：違う中身の呼び直しに境界の理由を返すことと、同じ中身でも、あいだに残高が変わるとチェーンの前の振替の理由になりうること。
 - キーに入らない引数の無い振替の種類で、帳簿の定義を変えたあとに同じ呼び出しを繰り返すと、PostgreSQL と MySQL の系統は `already_refused` を返す。`chobo check` は一つの版の帳簿について言うので、これを挙げない。いまの木の帳簿にこの形の振替の種類は無い。
 - 手元の macOS で `tests/backends.rs` の MySQL の系統を回すと、Go のランナーの組み合わせで、最初の呼び出しが `invalid connection` になるシナリオが出る（二回の実行で 59 と 311。ほかの言語には出ず、MySQL のログにエラーは無い）。Go のランナーは全シナリオを一度に始め、シナリオごとに接続を開くので、接続の受け付けの待ち行列（`kern.ipc.somaxconn` が 128）を越えるためとみられる。
+
+## 21. パスをどう書いて尋ねても、帳簿の検査は一回の実行で一度（2026-11-15）
+
+**きっかけ**：ritsu の DESIGN の 4.15 で、一回の実行の中で、一つのファイルの検査を一度にすると決めた。chobo の口は検査を覚えず、フローが一冊の帳簿に事実、振替ごとの拒否の理由、走らせるたびの台帳を尋ねるたびに検査し直していた。`ritsu check` の報告と `ritsu gen` も、それぞれ検査した。
+
+**決定**：
+
+- 口は検査を、ファイル（絶対にして、`.` と `..` をシステムが開くとおりに畳んだパス。`paths::opened`、ritsu の DESIGN 4.15）で、スレッドに覚える。帳簿は何も読まないので、覚えた検査を使うのは、帳簿の中身が同じあいだだけである。スレッドが覚えるのは 256 冊までで、越えたら覚え直す。
+- 帳簿は、走らせたディレクトリからのパス（`paths::show`。絶対パスを渡した実行では絶対パス）で読み、読めないときもそのパスで言う。
+- `ritsu check` の報告と `ritsu gen`（`Engine::kept`）も、口の覚えから作る。
+- 検査した帳簿を `ritsu_base::tally` に `chobo` として数え、`Engine::checks` が回数を言う。
+
+**変わること**：一回の実行の中で、一冊の帳簿は、パスの書き方によらず一度だけ検査する。`ritsu check` が読めない帳簿を言う文のパスは、渡したとおりから、走らせたディレクトリからの `.` と `..` を畳んだパスになる。診断の文は変わらない。木の `.book` の全部（219 本）を四つの書き方で渡しても、文の違う本は前と同じく無い。
+
+**確かめたこと**：`tests/ports.rs` の `a_book_is_one_file_however_its_path_is_written`。四つの書き方で尋ねても検査は 1 回で、通らない帳簿について口が言うことは、どの書き方でも同じである。帳簿を書き換えると、どの書き方で尋ねても、検査し直すのは 1 回である。

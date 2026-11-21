@@ -19,13 +19,14 @@ use crate::suite::Suite;
 use ritsu_base::naming::{Name, Tool};
 use ritsu_base::text::Lang;
 use ritsu_ports::{Allowance, Asker, Found, GateAction, GateFacts, GatePolicy, GateWorkflow, Item, Reference, Said};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-/// A check kept for a run: by the root and the file as it is reached.
-type Kept = RefCell<BTreeMap<(PathBuf, PathBuf), Rc<Result<Outcome, String>>>>;
+/// A check kept for a run: by the root and the file (each made absolute and folded, so that every
+/// way of writing a path to one file is one file).
+type Kept = RefCell<BTreeMap<(PathBuf, PathBuf), Rc<Result<Outcome, std::io::Error>>>>;
 
 /// sekisho, as the ports reach it, with the languages a gate reads joined (`ritsu sekisho` and
 /// `ritsu check` hand it every one; the default joins none, and a gate that reads another language
@@ -34,6 +35,8 @@ type Kept = RefCell<BTreeMap<(PathBuf, PathBuf), Rc<Result<Outcome, String>>>>;
 pub struct Engine {
     suite: Suite,
     kept: Kept,
+    /// How many times a file has been checked whole for the engine.
+    checks: Cell<usize>,
     /// The most combinations of one action a check walks (`--budget`).
     budget: u64,
 }
@@ -41,7 +44,13 @@ pub struct Engine {
 impl Engine {
     /// sekisho with the languages `suite` joins.
     pub fn new(suite: Suite) -> Engine {
-        Engine { suite, kept: RefCell::default(), budget: crate::check::DEFAULT_BUDGET }
+        Engine { suite, kept: RefCell::default(), checks: Cell::new(0), budget: crate::check::DEFAULT_BUDGET }
+    }
+
+    /// How many times a file has been checked whole for the engine (a question about a file whose
+    /// check is kept checks nothing): what a test of the keeping counts.
+    pub fn checks(&self) -> usize {
+        self.checks.get()
     }
 
     /// The same engine, with the check of each action held to `budget` combinations: what
@@ -52,30 +61,43 @@ impl Engine {
     }
 
     /// The check of the file at `disk` with the references written from `root`, made once in a
-    /// run; `shown` is how its diagnostics name it, when this is the first time it is asked. Err
-    /// when the file cannot be read.
-    fn outcome(&self, root: &Path, disk: &Path, shown: &str) -> Rc<Result<Outcome, String>> {
-        let key = (root.to_path_buf(), disk.to_path_buf());
+    /// run, its diagnostics naming the file the way the run writes its paths (ritsu's DESIGN 4.15),
+    /// so that the first to ask and every one after get the same answer. Err when the file cannot be
+    /// read. The root and the file are kept as the directory and the file the system opens, as the
+    /// paths from the root are named.
+    fn outcome(&self, root: &Path, disk: &Path) -> Rc<Result<Outcome, std::io::Error>> {
+        let key = (ritsu_base::paths::opened(root), ritsu_base::paths::opened(disk));
         if let Some(o) = self.kept.borrow().get(&key) {
             return o.clone();
         }
         let opts = Options { root: Some(root.to_path_buf()), budget: self.budget };
+        let shown = ritsu_base::paths::show(disk);
         let o = Rc::new(match ritsu_base::fs::read_to_string(disk) {
-            Ok(src) => Ok(crate::check::check_text(shown, &src, &self.suite, &opts)),
-            Err(e) => Err(e.to_string()),
+            Ok(src) => {
+                self.checks.set(self.checks.get() + 1);
+                Ok(crate::check::check_text(&shown, &src, &self.suite, &opts))
+            }
+            Err(e) => Err(e),
         });
         self.kept.borrow_mut().insert(key, o.clone());
         o
     }
 
+    /// The check of the gate at `file` (from where the program runs) with the references written
+    /// from `root`, as the engine keeps it: what `ritsu gen` makes a gate's code from, so that the
+    /// gate is checked once in the run (ritsu's DESIGN 4.15). Err inside when it cannot be read.
+    pub fn outcome_of(&self, root: &Path, file: &Path) -> Rc<Result<Outcome, std::io::Error>> {
+        self.outcome(root, &ritsu_base::paths::opened(file))
+    }
+
     /// The check of a file of the project (`file`, from `root`): what it found, when it passes;
     /// else what it says, as the ports say it.
-    fn passing(&self, root: &Path, file: &str) -> Result<Rc<Result<Outcome, String>>, Vec<Said>> {
+    fn passing(&self, root: &Path, file: &str) -> Result<Rc<Result<Outcome, std::io::Error>>, Vec<Said>> {
         let disk = ritsu_base::paths::on_disk(root, file);
-        let path = disk.to_string_lossy().to_string();
-        let o = self.outcome(root, &disk, &path);
+        let path = ritsu_base::paths::show(&disk);
+        let o = self.outcome(root, &disk);
         match o.as_ref() {
-            Err(e) => Err(vec![Said::unreadable(&path, e)]),
+            Err(e) => Err(vec![Said::unreadable(&path, &e)]),
             Ok(x) if x.has_errors() || x.walked.is_none() => Err(x.diags.iter().filter(|d| d.is_error()).map(|d| Said { file: path.clone(), ..Said::of(d) }).collect()),
             Ok(_) => Ok(o.clone()),
         }
@@ -89,9 +111,9 @@ impl Engine {
         files
             .iter()
             .map(|f| {
-                let disk = ritsu_base::paths::absolute(Path::new(f));
-                let o = self.outcome(root, &disk, f);
-                crate::check::unit(root, f, o.as_ref().as_ref().map_err(|e| e.clone()), lang)
+                let disk = ritsu_base::paths::opened(Path::new(f));
+                let o = self.outcome(root, &disk);
+                crate::check::unit(root, f, o.as_ref().as_ref(), lang)
             })
             .collect()
     }
@@ -134,12 +156,25 @@ impl ritsu_ports::Gates for Engine {
                     principals: a.principals.iter().map(alias_of).collect(),
                     resources: a.resources.iter().map(alias_of).collect(),
                     nobody: a.nobody.as_ref().map(|(r, _)| r.clone()),
+                    inputs: a.inputs.iter().map(|f| ritsu_ports::GateInput { name: f.named.name.clone(), alias: f.named.alias.clone(), holds: carried(g, f), line: f.named.line }).collect(),
                 })
                 .collect(),
             workflows: g
                 .workflows
                 .iter()
-                .filter_map(|wf| Some(GateWorkflow { name: wf.named.name.clone(), alias: wf.named.alias.clone(), flow: Name::file(Tool::Dandori, g.from_root(&wf.file)?), line: wf.named.line }))
+                .filter_map(|wf| {
+                    let holds = wf
+                        .holds
+                        .iter()
+                        .map(|h| ritsu_ports::GateHolds {
+                            resource: g.types[h.resource].named.name.clone(),
+                            id: h.id.clone(),
+                            line: h.line,
+                            attributes: h.attrs.iter().map(|(a, value, line)| (g.types[h.resource].attrs[*a].named.name.clone(), value.clone(), *line)).collect(),
+                        })
+                        .collect();
+                    Some(GateWorkflow { name: wf.named.name.clone(), alias: wf.named.alias.clone(), flow: Name::file(Tool::Dandori, g.from_root(&wf.file)?), line: wf.named.line, holds })
+                })
                 .collect(),
             policies: g
                 .policies
@@ -165,7 +200,7 @@ impl ritsu_ports::Gates for Engine {
         let w = x.walked.as_ref().expect("a file that passes is walked");
         let g = &w.gate;
         let Some(ai) = g.actions.iter().position(|a| a.named.is(action)) else {
-            let path = ritsu_base::paths::on_disk(root, file).to_string_lossy().to_string();
+            let path = ritsu_base::paths::show(&ritsu_base::paths::on_disk(root, file));
             return Err(vec![Said { code: String::new(), file: path.clone(), line: None, message: tr!("{path} に action `{action}` はありません", "There is no action `{action}` in {path}") }]);
         };
         let Some(space) = w.report.spaces.get(ai).and_then(|s| s.as_ref()) else {
@@ -174,14 +209,68 @@ impl ritsu_ports::Gates for Engine {
         let langs = crate::borders::Langs { rules: self.suite.rules.as_deref().filter(|r| r.joined()), dates: self.suite.dates.as_deref().filter(|d| d.joined()), books: None, flows: None };
         Ok(crate::checks::allowance(g, space, &w.known, &langs, asker))
     }
+
+    /// [`Gates::allowed`] with some attributes held to values, for a `.gate`
+    /// ([`crate::checks::allowance_with`]), over the combinations the check walked. Cedar written
+    /// by hand keeps the port's default: undecided.
+    fn allowed_with(&self, root: &Path, file: &str, action: &str, principal: Option<&str>, given: &[ritsu_ports::GateGiven]) -> Result<Found<Allowance>, Vec<Said>> {
+        if is_cedar(file) {
+            return Ok(Found::Undecided(tr!("手で書いた Cedar には、属性の値を決めた問いを尋ねられません", "a question that holds attributes to values is not asked of Cedar written by hand")));
+        }
+        let o = self.passing(root, file)?;
+        let Ok(x) = o.as_ref() else { unreachable!("a check that passes") };
+        let w = x.walked.as_ref().expect("a file that passes is walked");
+        let g = &w.gate;
+        let Some(ai) = g.actions.iter().position(|a| a.named.is(action)) else {
+            let path = ritsu_base::paths::show(&ritsu_base::paths::on_disk(root, file));
+            return Err(vec![Said { code: String::new(), file: path.clone(), line: None, message: tr!("{path} に action `{action}` はありません", "There is no action `{action}` in {path}") }]);
+        };
+        let Some(space) = w.report.spaces.get(ai).and_then(|s| s.as_ref()) else {
+            return Ok(Found::Undecided(tr!("action `{action}` の組み合わせを数えていません", "the combinations of the action `{action}` were not walked")));
+        };
+        let langs = crate::borders::Langs { rules: self.suite.rules.as_deref().filter(|r| r.joined()), dates: self.suite.dates.as_deref().filter(|d| d.joined()), books: None, flows: None };
+        Ok(crate::checks::allowance_with(g, space, &w.known, &langs, principal, given))
+    }
+
+    /// How far a workflow is allowed the action at one call of its flow, for a `.gate`
+    /// ([`crate::at::allowed_at`]): the action walked again, within the engine's budget, over the
+    /// combinations the runs that reach the call can come to. Cedar written by hand has no word
+    /// for what a flow holds, and keeps the port's default: [`Gates::allowed`] for the workflow.
+    fn allowed_at(&self, root: &Path, file: &str, action: &str, workflow: &str, call: &ritsu_ports::OperationCall) -> Result<ritsu_ports::AllowedAt, Vec<Said>> {
+        if is_cedar(file) {
+            return self.allowed(root, file, action, &Asker::Workflow(workflow.to_string())).map(ritsu_ports::AllowedAt::of);
+        }
+        let o = self.passing(root, file)?;
+        let Ok(x) = o.as_ref() else { unreachable!("a check that passes") };
+        let w = x.walked.as_ref().expect("a file that passes is walked");
+        let g = &w.gate;
+        let Some(ai) = g.actions.iter().position(|a| a.named.is(action)) else {
+            let path = ritsu_base::paths::show(&ritsu_base::paths::on_disk(root, file));
+            return Err(vec![Said { code: String::new(), file: path.clone(), line: None, message: tr!("{path} に action `{action}` はありません", "There is no action `{action}` in {path}") }]);
+        };
+        let ports = match (&self.suite.rules, &self.suite.dates, &self.suite.books) {
+            (Some(r), Some(d), Some(b)) => Some(ritsu_ports::Ports { rules: r.clone(), dates: d.clone(), books: b.clone() }),
+            _ => None,
+        };
+        let langs = crate::borders::Langs {
+            rules: self.suite.rules.as_deref().filter(|r| r.joined()),
+            dates: self.suite.dates.as_deref().filter(|d| d.joined()),
+            books: None,
+            flows: match (&self.suite.flows, ports) {
+                (Some(f), Some(p)) => Some((f.as_ref(), p)),
+                _ => None,
+            },
+        };
+        Ok(crate::at::allowed_at(w, &langs, self.budget as u128, ai, workflow, call))
+    }
 }
 
 /// The file read and parsed, for what it holds and names; else what the parser says (or why it
 /// cannot be read).
 fn parsed(root: &Path, file: &str) -> Result<crate::ast::File, Vec<Said>> {
     let disk = ritsu_base::paths::on_disk(root, file);
-    let path = disk.to_string_lossy().to_string();
-    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+    let path = ritsu_base::paths::show(&disk);
+    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e)])?;
     let p = crate::parse::parse(&path, &src);
     if crate::diag::has_errors(&p.diags) {
         return Err(p.diags.iter().filter(|d| d.is_error()).map(Said::of).collect());
@@ -267,7 +356,7 @@ impl ritsu_ports::References for Engine {
             return crate::cedar_in::references(root, file);
         }
         let f = parsed(root, file)?;
-        let from_root = |written: &str| ritsu_base::modules::join(root, file, written).ok();
+        let from_root = |written: &str| ritsu_base::modules::join_opened(root, file, written).ok();
         let mut out = Vec::new();
         for u in &f.uses {
             let Some(p) = from_root(&u.path.0) else { continue };
@@ -295,7 +384,7 @@ impl ritsu_ports::References for Engine {
         }
         // the operations, as the check of the contracts found them
         let disk = ritsu_base::paths::on_disk(root, file);
-        let o = self.outcome(root, &disk, &disk.to_string_lossy());
+        let o = self.outcome(root, &disk);
         if let Ok(x) = o.as_ref()
             && let Some(w) = &x.walked
         {

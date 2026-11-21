@@ -1,0 +1,16 @@
+organization deep_org v1 "Deep organization"
+description "The shape of a tall organization (fictional): thirty-two teams in a line above a requester, for how far up `manager of` looks"
+
+positions
+  staff     "Staff"
+  dept_head "Head of department"
+  president "President"
+
+team kinds
+  company    "Company"
+  division   "Division"
+  department "Department"
+  section    "Section"
+  committee  "Committee"
+
+data "."

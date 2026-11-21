@@ -1,0 +1,8 @@
+ok order_lines.rule
+ok order.kn: 1 function, fails rule
+error[ritsu E201]: order.kn:11:3: The call of the rule order_lines can give it values that break its precondition `1 <= amount <= 100_000_000`
+    11 |   order_lines(lines: map(lines, l => order_lines.lines { quantity: l.quantity, price: l.price })).amount
+  = For example, `amount_of(lines: [])` gives the rule lines = [0 elements].
+  = The rule's generated code refuses a call that breaks a precondition at its door, and the kaname function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or correct the ranges of the values given.
+ritsu check: 2 files (rulec 1, kaname 1): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided

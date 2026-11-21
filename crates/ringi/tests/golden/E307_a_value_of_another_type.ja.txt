@@ -1,0 +1,2 @@
+エラー[E307]: tests/mutants/E307_a_value_of_another_type.ringi:8:22: `long` は `bool` を受け取りますが、渡した `amount` は `money[JPY]` です
+     8 | route standard(long: amount)

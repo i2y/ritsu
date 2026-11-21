@@ -1,0 +1,92 @@
+request アカウント(account_ja) v1 "アカウントの申請"
+description "社員が会社のシステムを使うための申請（架空の決まり）。上長が承認し、次にシステムの一覧が示すシステムの持ち主が承認する。管理者の権限なら情報セキュリティの担当も承認する。承認されたら情報システムの運用担当に回覧する"
+owner it
+
+use organization 組織(org) from "shared/company.ringi"
+use masters マスタ(m) from "shared/masters.ringi"
+use calendar 本社(office) from "shared/office.cal"
+use gate "shared/company.gate"
+use flow 払い出し(provision) from "shared/provision.flow"
+
+form
+  利用者(person)  : person "使う人"
+  システム(system) : choice from マスタ.systems "システム"
+  権限(level) : choice "権限"
+    読み取り(read) "読み取り"
+    書き込み(write) "書き込み"
+    管理者(admin)  "管理者"
+  期限(until)  : date "使える期限"  range >=2026-01-01 <=2028-12-31
+  理由(reason) : long text "必要な理由"  count >=1 <=300
+
+route
+  # 社長には上長がいないので、社長の申請はこのステップを飛ばす。ほかの人の申請と同じく、
+  # システムの持ち主が承認し、管理者の権限なら情報セキュリティも承認する。
+  上長(manager)        上長
+    when empty escalate, then skip
+  持ち主(owner)        システムの持ち主
+  セキュリティ(security) 情報セキュリティ  when 権限 is 管理者
+  運用(operations)     circulate to 運用担当
+
+who
+  上長(manager)                   = manager of requester
+  システムの持ち主(system_owner)   = lookup マスタ.systems.owner by システム
+  情報セキュリティ(it_security)    = team it_security
+  運用担当(it_operations)          = team it_operations
+
+every stage
+  due in 2 business days at end of day
+  remind after 1 business day at 09:00
+  when late escalate, then expire
+  when empty escalate
+
+ticket
+  self approval  not allowed
+  # 上長がシステムの持ち主や情報セキュリティの担当でもあるときは、その人の最後のステップで一度だけ答える。
+  same approver  approves once, at the last stage
+  send back      to any earlier stage, at most 2 times
+  resubmit       within 5 business days
+  withdraw       until セキュリティ
+  on approved    launch 払い出し(request_id: ticket.id, person: 利用者, system: システム, level: 権限, until: 期限)
+
+claims
+  管理者の権限は情報セキュリティを通る場合がある : possible セキュリティ is 情報セキュリティ
+  期限内に終わる                             : every ticket ends within 55 business days
+
+scenario 管理者の権限の申請
+  requester e1201
+  form 利用者 = person "e1203", システム = crm, 権限 = 管理者, 期限 = 2027-03-31, 理由 = "課の新しいメンバーのアカウントを作るため"
+| at               | event   | by    | -> stage     | status      |
+| 2026-11-16 10:00 | submit  | e1201 | 上長         | in progress |
+| 2026-11-16 11:00 | approve | e1101 | 持ち主       | in progress |
+| 2026-11-16 16:00 | approve | e3101 | セキュリティ | in progress |
+| 2026-11-17 09:00 | remind  |       | セキュリティ | in progress |
+| 2026-11-17 15:00 | approve | e7102 |              | approved    |
+
+# 情報セキュリティ課長が申請者の上長で、情報セキュリティの担当としても答える。
+# システムの持ち主のあとの「セキュリティ」で、一度だけ答える
+scenario 上長がセキュリティで一度だけ答える
+  requester e7102
+  form 利用者 = person "e7102", システム = wiki, 権限 = 管理者, 期限 = 2027-03-31, 理由 = "情報セキュリティ課のページを管理するため"
+| at               | event   | by    | -> stage     | status      |
+| 2026-11-16 10:00 | submit  | e7102 | 持ち主       | in progress |
+| 2026-11-16 11:00 | approve | e7001 | セキュリティ | in progress |
+| 2026-11-16 15:00 | approve | e7101 |              | approved    |
+
+labels en
+  request               "Account request"
+  利用者                "For whom"
+  システム              "System"
+  権限                  "Access level"
+  権限.読み取り         "Read"
+  権限.書き込み         "Write"
+  権限.管理者           "Administrator"
+  期限                  "Until"
+  理由                  "Why it is needed"
+  stage 上長            "Manager"
+  stage 持ち主          "Owner of the system"
+  stage セキュリティ    "Security"
+  stage 運用            "Operations"
+  who 上長              "Manager"
+  who システムの持ち主  "Owner of the system"
+  who 情報セキュリティ  "Information security"
+  who 運用担当          "IT operations"

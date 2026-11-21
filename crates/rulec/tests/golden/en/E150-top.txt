@@ -1,0 +1,8 @@
+error[E150]: The range of the sum does not meet the values it can reach
+  --> tests/mutants/m_e150top.rule:10 sum
+   |
+10 | sum amount over lines of price  range >=500JPY <=100_000JPY
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^ amount can only be >=200_000JPY
+   |
+ lines has at least 1 element (the bottom of the count wrapped_items), and price is at least 200_000JPY in each: 1 × 200_000JPY = 200_000JPY, past the top 100_000JPY of this range. The generated code would refuse every call once the walk is over.
+ Hint: bring the top of the range up to 200_000JPY or more. Lowering the bottom of wrapped_items or of price fits it too.

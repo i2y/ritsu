@@ -1,0 +1,8 @@
+precheck.flow: ok
+ok purchase.ringi: a request, 3 fields, 2 stages
+  may never end: the stages `decide` and `check` have no deadline (`due in …`), and wait until they are answered
+error[ritsu E210]: purchase.ringi:17: The flow `precheck` answers the stages of the way `small` of `purchase`, and it has no output `reason`
+    17 |   small   = agent precheck, else finance
+  = ringi reads an agent's answer from two outputs: `verdict`, an enum whose values are `ok` and `doubt`, and `reason`, a string.
+  = Write `enum Check = ok | doubt` and the outputs `verdict : Check` and `reason : string` in "precheck.flow".
+ritsu check: 2 files (dandori 1, ringi 1): 1 fail (1 error); borders between the languages: 4 checked, 0 undecided

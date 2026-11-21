@@ -10,6 +10,7 @@
 -/
 import Lean
 import RulecCert
+import KoyomiModel.Date
 
 open Lean RulecCert
 
@@ -318,6 +319,19 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
         | _ => none)
   let (outs, unstated, insides, badWrites) := writtenCols cert types
   let isOut : String → Bool := fun n => outs.any (fun o => o.1 == n)
+  -- The range the rule accepts for a `define` (rulec's §15.313), each end `none` where it is open.
+  -- The generated code turns a call away where the value falls outside, where it works the value
+  -- out, as its entry turns away an input outside its declared range: what reads the value reads it
+  -- inside, as what reads an input reads it inside its range. The value's own claim keeps what it
+  -- reaches before that.
+  let acceptsJ := (field cert "accepts").getD Json.null
+  let acceptsOf : String → Option (Option Rat × Option Rat) := fun n =>
+    ((objPairs acceptsJ).find? (fun p => p.1 == n)).bind (fun p => do
+      let a ← arr p.2
+      some ((a[0]? >>= optRat), (a[1]? >>= optRat)))
+  let inside : String → Span2 → Span2 := fun n I => match acceptsOf n with
+    | some (lo, hi) => (match lo with | some l => max I.1 l | none => I.1, match hi with | some h => min I.2 h | none => I.2)
+    | none => I
   -- What bounds a name: the interval this program computed for it where there is one, and the
   -- declared range otherwise. Taking the declared range in preference would let a forged
   -- `ranges` entry override the arithmetic — the theorem needs the bound that really holds of
@@ -342,7 +356,7 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
           | some I => some I
           | none => if isOut n then none else declared n
       match interval ranges within (expandShares shareDefs e) with
-      | some I => got := got ++ [(name, I)]; moved := true
+      | some I => got := got ++ [(name, inside name I)]; moved := true
       | none => pure ()
     for (col, es) in outs do
       if wrote.any (fun p => p.1 == col) then continue
@@ -426,7 +440,7 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
       if gotF.any (fun p => p.1 == name) || wideGot.any (fun p => p.1 == name) then continue
       let some e := (field v "expr" >>= exprOfJson) | continue
       match interval (wideAt wideGot wideWrote) within (expandShares shareDefs e) with
-      | some I => wideGot := wideGot ++ [(name, I)]; moved := true
+      | some I => wideGot := wideGot ++ [(name, inside name I)]; moved := true
       | none => pure ()
     for (col, es) in outs do
       if wroteF.any (fun p => p.1 == col) || wideWrote.any (fun p => p.1 == col) then continue
@@ -453,6 +467,12 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
   let mut r := r
   for why in badWrites do
     r := r.fail why
+  -- A range the rule accepts for a `define` that meets nothing the value reaches turns every call
+  -- away, which `check` refuses (rulec's E150): a certificate that states one is refused here, as
+  -- what reads the value would otherwise be read in an empty interval.
+  for (name, I) in gotF ++ wideF do
+    if (acceptsOf name).isSome && I.2 < I.1 then
+      r := r.fail s!"{name}: the range the rule accepts for it meets nothing it reaches"
   -- What a row says it writes where its own cell narrows it (§15.213) holds what this program works
   -- out from the cell: a row that claimed less would be the certificate narrowing the column past
   -- what the cell lets through.
@@ -525,7 +545,11 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
       some (lo, hi)
     match (gotF.find? (fun p => p.1 == name)).map (fun p => p.2) with
     | none =>
-      match (wideF.find? (fun p => p.1 == name)).map (fun p => p.2), stated with
+      -- A `define` the rule accepts only inside a range: its claim is about what it reaches before
+      -- the door (rulec's §15.313).
+      let wideOwn := (wideF.find? (fun p => p.1 == name)).map (fun p =>
+        if (acceptsOf name).isSome then (interval wideEnv within (expandShares shareDefs e)).getD p.2 else p.2)
+      match wideOwn, stated with
       -- An end read at the end of its type (rulec's §15.294): the int64 claim, and no declared
       -- range held to it, as `check` holds none (E112).
       | some I, some S =>
@@ -555,6 +579,9 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
         if !(D.1 ≤ I.1 && I.2 ≤ D.2) then
           r := r.fail s!"{name}: the range the rule declares is narrower than what its expression reaches"
       | none => pure ()
+      -- A `define` the rule accepts only inside a range: its own claim is about what it reaches
+      -- before the door turns the call away, worked out again here (rulec's §15.313).
+      let I := if (acceptsOf name).isSome then (interval rangesF within (expandShares shareDefs e)).getD I else I
       match stated with
       | none => r := r.fail s!"{name}: it states no interval, and this program derives one"
       | some S =>
@@ -1056,9 +1083,23 @@ def fieldsOf (line : ByteArray) : Array (Nat × Nat) := Id.run do
 /-- The number a cell of digits stands for: `ds` read in base ten. -/
 def digitsVal (ds : List Char) : Nat := ds.foldl (fun n c => n * 10 + (c.toNat - '0'.toNat)) 0
 
+/-- The day number of a date as a rule writes it (`2026-07-01`), counted from 1970-01-01 as the
+    certificate counts it; `none` for text that is not one, or a day no month has. -/
+def dateNumber (text : String) : Option Rat :=
+  let cs := ((text.toList.dropWhile Char.isWhitespace).reverse.dropWhile Char.isWhitespace).reverse
+  if cs.length != 10 || cs[4]? != some '-' || cs[7]? != some '-' then none else
+  let digits := (cs.take 4) ++ ((cs.drop 5).take 2) ++ (cs.drop 8)
+  if !digits.all Char.isDigit then none else
+  let y := digitsVal (cs.take 4)
+  let m := digitsVal ((cs.drop 5).take 2)
+  let d := digitsVal (cs.drop 8)
+  if y < 1 || m < 1 || m > 12 || d < 1 || d > KoyomiModel.monthLen (y : Int) m then none else
+  some ((KoyomiModel.daysFromCivil (y : Int) m d : Int) : Rat)
+
 /-- The number an answer cell writes (rulec's §15.196), with the one multiplier §2.1 allows (`万`,
-    `億`, `兆`) and its unit: `%` is a hundredth, no unit or the currency of a money column the
-    number itself. `none` when the text is not a number; `some none` for a unit this program does
+    `億`, `兆`) and its unit: `%` is a hundredth, no unit or the unit the column counts in — the
+    currency of a money column, or one spelling of it (`oneUnit`, rulec's §15.332) — the number
+    itself. `none` when the text is not a number; `some none` for a unit this program does
     not convert — a unit table is what it deliberately does not have. -/
 def literalValue (text : String) (cur : Option String) : Option (Option Rat) :=
   let cs := ((text.toList.dropWhile Char.isWhitespace).reverse.dropWhile Char.isWhitespace).reverse
@@ -1082,7 +1123,15 @@ def literalValue (text : String) (cur : Option String) : Option (Option Rat) :=
   if unit == ['%'] then some (some (v / 100))
   else if unit.isEmpty then some (some v)
   else match cur with
-    | some c => if unit == c.toList then some (some v) else some none
+    | some c =>
+      -- Two spellings of one unit are one unit (rulec's §15.332): `800JPY` in a `money[円]`
+      -- column is the value 800, compared as a number. Any other pair is a unit this
+      -- program does not convert.
+      if unit == c.toList ||
+          oneUnit.any (fun p =>
+            (p.1.toList == unit && p.2.toList == c.toList) ||
+            (p.2.toList == unit && p.1.toList == c.toList))
+        then some (some v) else some none
     | none => some none
 
 /-- What each answer cell of a row says, as the certificate reads it: the word it writes
@@ -1244,7 +1293,13 @@ def checkSpans (t : ReadTable) (linesOf : String → Array ByteArray) (r : Repor
                   -- the rule with (rulec's §15.231).
                   let named := sp.text == wc.says ||
                     (wc.isName && !row.contribution.isEmpty && row.contribution ++ ":" ++ sp.text.trimAscii.toString == wc.says)
-                  if out != some sp.text || !named then
+                  if wc.isDate then
+                    -- A date the row writes (rulec's §15.325): the day the file names.
+                    if out == some sp.text && (dateNumber sp.text).isSome && dateNumber sp.text == wc.value then
+                      read := read + 1
+                    else
+                      r := r.fail s!"{t.name}: row {row.index}, -> {wc.column}: the file writes `{out.getD ""}`, and the certificate reads it as another day"
+                  else if out != some sp.text || !named then
                     r := r.fail s!"{t.name}: row {row.index}, -> {wc.column}: the file does not say `{wc.says}` there"
                   else if wc.isName then
                     read := read + 1
@@ -1349,18 +1404,31 @@ def decider (all : Array Json) (column : String) : Option (Json × Nat) :=
     all of it — so a row counts only while no single earlier row takes the whole of its box
     at that coordinate. That is loose the safe way: what drops out certainly cannot fire, so
     the span contains every input on which the column really holds the value. -/
-def producedWhere (all : Array Json) (column value input : String) : Option Span := do
-  let (u, oi) ← decider all column
+def producedWhere (src : String → Option (Json × Nat × List (RoundMode × Rat))) (column value input : String)
+    (at_ : Option (Json × Nat) := none) : Option Span := do
+  -- A column an `apply` brings in is decided by the table it is brought from (rulec's §15.322).
+  let (u, oi, rounds) ← src column
   let axes := fieldArr u "axes"
   let ai ← axes.toList.findIdx? (fun a => fieldStr a "column" == input)
   let rows := (fieldArr u "rows").toList
-  let outs ← rows.mapM (fun r => (fieldArr r "produces")[oi]? >>= str)
   let accepts : List (List (List Nat)) := rows.map (fun r =>
     (fieldArr r "accepts").toList.map (fun xs => ((arr xs).getD #[]).toList.filterMap nat))
   let first := fieldStr u "policy" == "first"
   let arity : Nat → Nat := fun a => (fieldArr ((axes[a]?).getD Json.null) "coords").size
   let nAx := axes.size
-  let picked := (List.range rows.length).filter (fun i => (outs[i]?).getD "" == value)
+  -- On an axis of numbers the rows are those whose number, put through the roundings on the way,
+  -- lands in the coordinate (rulec's §15.322); a row this program cannot read leaves no span.
+  let numAt : Option (Json × Nat) := match at_ with
+    | some (tax, ci) => if (fieldArr tax "bounds").any (fun b => !b.isNull) then some (tax, ci) else none
+    | none => none
+  let picked ← match numAt with
+    | some (tax, ci) =>
+      let puts := rows.map (fun r => putOf r oi rounds true)
+      if puts.any (fun p => match p with | .any => true | _ => false) then none
+      else some ((List.range rows.length).filter (fun i => putTakes tax ci ((puts[i]?).getD .any)))
+    | none => do
+      let outs ← rows.mapM (fun r => (fieldArr r "produces")[oi]? >>= str)
+      pure ((List.range rows.length).filter (fun i => (outs[i]?).getD "" == value))
   if picked.isEmpty then none else
   let boxOf : Nat → Nat → List Nat := fun i a => (((accepts[i]?).getD [])[a]?).getD []
   let takenEarlier : Nat → Nat → Bool := fun i x =>
@@ -1442,12 +1510,395 @@ def passedAxis (u row : Json) (oi : Nat) : Option Nat := do
   else if (fieldArr ax "coords").any (fun c => (str c).isNone) then none
   else some a
 
+/-- The interval a name is read in while some axes are held to one coordinate each (rulec's
+    §15.322): a held name in the closed span of its coordinate, a value in `inline` worked out again
+    from its own expression the same way, and any other name as `base` reads it. -/
+def heldLook (base : String → Option Span2) (within : RulecCert.Expr → RulecCert.Expr → Bool)
+    (held : List (String × Span2)) (inline : List (String × RulecCert.Expr)) : Nat → String → Option Span2
+  | fuel, n =>
+    match held.find? (·.1 == n) with
+    | some h => some h.2
+    | none =>
+      match inline.find? (·.1 == n) with
+      | some ie => match fuel with
+        | 0 => none
+        | k + 1 => interval (heldLook base within held inline k) within ie.2
+      | none => base n
+
+/-- The names an expression of the certificate reads, as the certificate writes it. -/
+partial def jsonNames (e : Json) : List String :=
+  let here := match field e "name" >>= str with
+    | some n => [n]
+    | none => []
+  let kids := match e with
+    | .obj kvs => kvs.toList.flatMap (fun kv => match kv.2 with
+        | .obj _ => jsonNames kv.2
+        | .arr xs => xs.toList.flatMap jsonNames
+        | _ => [])
+    | .arr xs => xs.toList.flatMap jsonNames
+    | _ => []
+  here ++ kids
+
+/-- The grid a value the rule works out sits on, from its expression (`gridOf`, rulec's §15.322):
+    a `define` or a derive that is not open, followed through the names it reads `fuel` deep. -/
+def gridLook (values : List Json) (opens : List String) : Nat → String → Option (Rat × Rat)
+  | 0, _ => none
+  | k + 1, n => do
+    let x ← values.find? (fun x => fieldStr x "name" == n)
+    if opens.contains n || !(["define", "derive"].contains (fieldStr x "of")) then none else
+    let e ← field x "expr" >>= exprOfJson
+    RulecCert.gridOf (fun _ => none) (gridLook values opens k) e
+
+/-- The values worked out again while names are held (rulec's §15.322): every `define` and derive of
+    the certificate other than `col`, the held names and the open values, that reads a held name
+    through the values it reads. -/
+def inlineFor (values : List Json) (opens : List String) (col : String) (heldNames : List String) :
+    List (String × RulecCert.Expr) :=
+  let readsHeld : String → Bool := fun n => Id.run do
+    let mut seen : List String := []
+    let mut todo : List String := [n]
+    let mut hit := false
+    for _ in [0 : values.length + 1] do
+      match todo with
+      | [] => break
+      | m :: rest =>
+        todo := rest
+        if seen.contains m then continue
+        seen := m :: seen
+        match values.find? (fun x => fieldStr x "name" == m) with
+        | none => pure ()
+        | some x =>
+          let ns := jsonNames ((field x "expr").getD Json.null)
+          if ns.any heldNames.contains then hit := true; break
+          todo := todo ++ ns
+    return hit
+  values.filterMap (fun x =>
+    let n := fieldStr x "name"
+    if n == col || heldNames.contains n || opens.contains n then none
+    else if !(["define", "derive"].contains (fieldStr x "of")) then none
+    else if !readsHeld n then none
+    else (field x "expr" >>= exprOfJson).map (fun ex => (n, ex)))
+
+/-- **What a value comes to with the names of `piece` held** (rulec's §15.325): the interval arithmetic
+    met with the range of its linear form over the held names (`heldInterval`, which
+    `eval_mem_heldInterval` settles), each value of `inline` put in place of its name 16 deep. -/
+def heldIv (base : String → Option Span2) (within : RulecCert.Expr → RulecCert.Expr → Bool)
+    (piece : List (String × Span2)) (inline : List (String × RulecCert.Expr)) (e : RulecCert.Expr) : Option Span2 :=
+  RulecCert.heldInterval piece (heldLook base within piece inline 16) within (RulecCert.substInline inline 16 e)
+
+/-- **The truth value a comparison `define` takes with the names of `piece` held** (rulec's
+    §15.322): each side worked out with them held (`heldIv`), a date literal its day number. `none`
+    where either value is possible as far as this program works out, or the value is no comparison
+    of a truth value. -/
+def heldTruth (base : String → Option Span2) (within : RulecCert.Expr → RulecCert.Expr → Bool)
+    (inline : List (String × RulecCert.Expr)) (v : Json) (piece : List (String × Span2)) : Option Bool := do
+  let ej := (field v "expr").getD Json.null
+  let op ← match fieldStr ej "op" with
+    | "<=" => some Cmp.le
+    | "<" => some Cmp.lt
+    | ">=" => some Cmp.ge
+    | ">" => some Cmp.gt
+    | _ => none
+  let side : Json → Option Span2 := fun x =>
+    if (field x "lit").isSome && fieldStr x "type" == "date" then do
+      let d ← field x "value" >>= optRat
+      some (d, d)
+    else (exprOfJson x).bind (heldIv base within piece inline)
+  if fieldStr v "type" != "bool" then none
+  let L ← field ej "l" >>= side
+  let R ← field ej "r" >>= side
+  let T : Truth := { op := op, l := L, r := R, trueAt := 0 }
+  if T.always then some true else if T.never then some false else none
+
+/-- What a value comes to, met with the range the rule accepts for it (rulec's §15.313): a call whose
+    value falls outside is turned away, so no call the rule answers has it there. The two ends cross
+    where no such call is left. -/
+def meetAccepted (cert : Json) (n : String) (I : Span2) : Span2 :=
+  match (objPairs ((field cert "accepts").getD Json.null)).find? (fun p => p.1 == n) with
+  | some p =>
+    let a := (arr p.2).getD #[]
+    ((match a[0]? >>= optRat with | some l => rmax I.1 l | none => I.1),
+     (match a[1]? >>= optRat with | some h => rmin I.2 h | none => I.2))
+  | none => I
+
+/-- Whether a coordinate lies wholly outside an interval: a point beyond either end, an interval
+    coordinate whose open ends do not reach inside. -/
+def coordOutside (cd : Coord) (I : Span2) : Bool :=
+  match cd with
+  | .exactly a => decide (a < I.1) || decide (I.2 < a)
+  | .between lo hi =>
+    (match hi with | some b => decide (b ≤ I.1) | none => false) ||
+    (match lo with | some a => decide (I.2 ≤ a) | none => false)
+
+/-- **The grid a value sits on with the names of `piece` held** (rulec's §15.325): `gridOf` over the
+    value's expression with each value of `inline` put in place of its name, where a part the held
+    names pin to one value (`heldInterval` comes to a point; `eval_eq_heldPoint`) is that value, a
+    value the rule works out is on its expression's grid (`gridLook`), and an input on the step it is
+    stored at — one over the scale the certificate states for it (`scales`, §15.190). -/
+def heldGrid (cert : Json) (base : String → Option Span2) (within : RulecCert.Expr → RulecCert.Expr → Bool)
+    (piece : List (String × Span2)) (inline : List (String × RulecCert.Expr)) (e : RulecCert.Expr) :
+    Option (Rat × Rat) :=
+  let values := (fieldArr cert "values").toList
+  let opens := (fieldArr cert "opens").toList.map (fun o => fieldStr o "name")
+  let inputs := (fieldArr cert "inputs").toList.filterMap str
+  let look := heldLook base within piece inline 16
+  let pt : RulecCert.Expr → Option Rat := fun x =>
+    match RulecCert.heldInterval piece look within x with
+    | some (a, b) => if a == b then some a else none
+    | none => none
+  let step : String → Option (Rat × Rat) := fun n =>
+    if inputs.contains n then
+      match field ((field cert "scales").getD Json.null) n >>= nat with
+      | some k => if k == 0 then none else some (0, 1 / (k : Rat))
+      | none => none
+    else none
+  let names : String → Option (Rat × Rat) := fun n => (gridLook values opens 16 n).orElse (fun _ => step n)
+  RulecCert.gridOf pt names (RulecCert.substInline inline 16 e)
+
+/-- The span of some coordinates of an axis, closed on its step, an end no range writes read the way
+    `base` reads the column; none for no coordinate, the absent value, or an end nothing reads. -/
+def coordsHull (base : String → Option Span2) (ax : Json) (xs : List Nat) : Option Span2 := Id.run do
+  let bs := fieldArr ax "bounds"
+  let wide := base (fieldStr ax "column")
+  let mut lo? : Option Rat := none
+  let mut hi? : Option Rat := none
+  for x in xs do
+    let some bj := bs[x]? | return none
+    if bj.isNull then return none
+    let (lo, hi) := closedAt ax x
+    let (some l, some h) := (lo.orElse (fun _ => wide.map (·.1)), hi.orElse (fun _ => wide.map (·.2)))
+      | return none
+    lo? := some (match lo? with | some a => rmin a l | none => l)
+    hi? := some (match hi? with | some a => rmax a h | none => h)
+  match lo?, hi? with
+  | some l, some h => some (l, h)
+  | _, _ => none
+
+/-- **A value the rule works out, read over a box of another table** (rulec's §15.325): whether each
+    coordinate `rxs` of the axis `vax` lies outside what the value `col` — a `define` or a derive of the
+    certificate, not an open one — comes to with each axis of `held` held to the span of the
+    coordinates it names on it, met with the span of what the row takes of the same column where its
+    table cuts it, and met with the span of what the box takes of the value itself (`own`) and with
+    the range the rule accepts for it (§15.313); or holds no value of the grid the value sits on
+    inside it (`heldGrid`, `gridMisses`). A truth value of one comparison is worked out the same way
+    (`heldTruth`), and every coordinate is the other one. Where `cuts` cuts the span of one held axis
+    into pieces on its step, every piece has to leave every coordinate out. A held axis is one of
+    numbers where no absent value is named; an end no range writes is read as the int64 claim reads
+    it. -/
+def heldReachOut (cert : Json) (w : Worked) (col : String) (held : List (Json × List Nat × Option (Json × List Nat)))
+    (own : Option (Json × List Nat)) (cuts : Option (Nat × List Rat)) (vax : Json) (rxs : List Nat) : Bool := Id.run do
+  let values := (fieldArr cert "values").toList
+  let opens := (fieldArr cert "opens").toList.map (fun o => fieldStr o "name")
+  let base : String → Option Span2 := fun n => (w.rangesOf n).orElse (fun _ => w.wideOf n)
+  let some v := values.find? (fun v => fieldStr v "name" == col && (fieldStr v "of" == "define" || fieldStr v "of" == "derive"))
+    | return false
+  if opens.contains col then return false
+  let some e := field v "expr" >>= exprOfJson | return false
+  let mut piece : List (String × Span2) := []
+  for (ax, xs, row) in held do
+    let bcol := fieldStr ax "column"
+    if bcol == col || piece.any (·.1 == bcol) || xs.isEmpty || !((fieldArr ax "bounds").any (fun q => !q.isNull)) then return false
+    let some (l, h) := coordsHull base ax xs | return false
+    -- What the row itself takes of the column, where its table cuts it too.
+    let (l, h) := match row.bind (fun (rax, ys) => coordsHull base rax ys) with
+      | some (rl, rh) => (rmax l rl, rmin h rh)
+      | none => (l, h)
+    if decide (h < l) then return false
+    piece := piece ++ [(bcol, (l, h))]
+  -- What the box takes of the value itself, where this table cuts it.
+  let mine := own.bind (fun (ax, xs) => if xs.isEmpty then none else coordsHull base ax xs)
+  -- The pieces of one held span, where the reason cuts it: on the axis's step, in order inside it.
+  let pieces? : Option (List (List (String × Span2))) := match cuts with
+    | none => some [piece]
+    | some (k, ats) => do
+      let (ax, _, _) ← held[k]?
+      let bcol := fieldStr ax "column"
+      let st ← (field ax "step") >>= optRat
+      let span ← (piece.find? (·.1 == bcol)).map (·.2)
+      if !(decide (0 < st)) || ats.isEmpty then none else
+      let ends := span.1 :: ats
+      let ordered := (ends.zip ats).all (fun p => decide (p.1 < p.2))
+      if !ordered || !(ats.all (fun x => decide (x ≤ span.2) && gridB st x)) then none else
+      let stops := ats.map (· - st) ++ [span.2]
+      some ((ends.zip stops).map (fun p => piece.map (fun h => if h.1 == bcol then (h.1, (p.1, p.2)) else h)))
+  let some pieces := pieces? | return false
+  let inline := inlineFor values opens col (piece.map (·.1))
+  if rxs.isEmpty then return false
+  if !((fieldArr vax "bounds").any (fun q => !q.isNull)) then
+    -- A truth value: every piece comes to one, and the row takes only the other.
+    let labels := (fieldArr vax "coords").toList.filterMap str
+    return pieces.all (fun pc => match heldTruth base w.within inline v pc with
+      | some t => rxs.all (fun x => match labels[x]? with
+          | some "true" => !t
+          | some "false" => t
+          | _ => false)
+      | none => false)
+  let some cs := rxs.mapM (fun x => (fieldArr vax "bounds")[x]? >>= coordOfJson) | return false
+  for pc in pieces do
+    let some I := heldIv base w.within pc inline e | return false
+    -- A call whose value falls outside the range the rule accepts for it is turned away (rulec's
+    -- §15.313).
+    let I := meetAccepted cert col I
+    let I := match mine with
+      | some (l, h) => (rmax I.1 l, rmin I.2 h)
+      | none => I
+    -- Nothing the value comes to in the box is left in this piece.
+    if decide (I.2 < I.1) then continue
+    let grid := heldGrid cert base w.within pc inline e
+    if !(cs.all (fun cd => coordOutside cd I ||
+        (match grid with | some g => RulecCert.gridMisses g cd I | none => false))) then
+      return false
+  return true
+
+/-- **What a `define` comes to with the axes it reads held to one coordinate each** (rulec's
+    §15.322), earned back from its expression: a held name read in the closed span of its
+    coordinate, a value that reads a held name worked out again from its own expression, and any
+    other name read the way a comparison's sides are. A coordinate of numbers has to lie outside
+    what comes out, or hold no value of the grid the define's values sit on inside it (`gridOf`,
+    `gridMisses`), and a truth value has to be the one the comparison never takes. A fact that holds
+    no axis reads the define over the whole ranges. Where a fact cuts one held coordinate into pieces
+    (`cuts`: that axis, and where each piece after the first starts, a whole number of the axis's
+    step), each piece is worked out on its own. Each fact that holds comes back as a line of the
+    sieve — the define's axis at the coordinates it names, every held axis at its coordinate — which
+    leaves out the points inside all of it, as a `never` line does. -/
+def checkNarrowed (cert : Json) (w : Worked) (tj : Json) (r : Report) : Report × List (List (Nat × List Nat)) := Id.run do
+  let mut r := r
+  let mut out : List (List (Nat × List Nat)) := []
+  let name := fieldStr tj "table"
+  let axes := fieldArr tj "axes"
+  let values := (fieldArr cert "values").toList
+  let opens := (fieldArr cert "opens").toList.map (fun o => fieldStr o "name")
+  let base : String → Option Span2 := fun n => (w.rangesOf n).orElse (fun _ => w.wideOf n)
+  for nf in fieldArr tj "narrowed" do
+    let some ai := fieldNat nf "axis"
+      | r := r.fail s!"{name}: a fact of what a `define` comes to points at no axis"; continue
+    let some ax := axes[ai]?
+      | r := r.fail s!"{name}: a fact of what a `define` comes to points at axis {ai}, which does not exist"; continue
+    let col := fieldStr ax "column"
+    let some v := values.find? (fun v => fieldStr v "name" == col && fieldStr v "of" == "define")
+      | r := r.fail s!"{name}: a fact says what {col} comes to, and no `define` of it is in the certificate"; continue
+    if opens.contains col then
+      r := r.fail s!"{name}: a fact says what {col} comes to, and {col} is an open value"; continue
+    let some e := field v "expr" >>= exprOfJson
+      | r := r.fail s!"{name}: this program cannot read the expression of {col}"; continue
+    let mut held : List (String × Span2) := []
+    let mut line : List (Nat × List Nat) := []
+    let mut bad := false
+    for b in fieldArr nf "by" do
+      let (some j, some x) := (fieldNat b "axis", fieldNat b "coord") | bad := true; break
+      let some bx := axes[j]? | bad := true; break
+      let bs := fieldArr bx "bounds"
+      let bcol := fieldStr bx "column"
+      if j == ai || !(bs.any (fun q => !q.isNull)) || held.any (·.1 == bcol) then bad := true; break
+      let some bj := bs[x]? | bad := true; break
+      if bj.isNull then bad := true; break
+      let (lo, hi) := closedAt bx x
+      let wide := base bcol
+      let (some l, some h) := (lo.orElse (fun _ => wide.map (·.1)), hi.orElse (fun _ => wide.map (·.2)))
+        | bad := true; break
+      held := held ++ [(bcol, (l, h))]
+      line := line ++ [(j, [x])]
+    if bad then
+      r := r.fail s!"{name}: a fact of what {col} comes to holds an axis it cannot, at a coordinate it cannot"
+      continue
+    -- The pieces of one held coordinate, where the fact cuts it: the values of an axis are whole
+    -- numbers of its step, so a cut on one leaves no value between two pieces.
+    let inputs := (fieldArr cert "inputs").toList.filterMap str
+    -- An input the table has no axis for, cut over the whole of what the int64 claim reads it in on
+    -- the step it is stored at (§15.325).
+    let cutName : Option String := (field nf "cuts").bind (fun cj => (field cj "name").bind str)
+    let pieces? : Option (List (List (String × Span2))) := match field nf "cuts", cutName with
+      | none, _ => some [held]
+      | some cj, some n => do
+        let k ← field ((field cert "scales").getD Json.null) n >>= nat
+        if k == 0 || !inputs.contains n || held.any (·.1 == n)
+            || axes.any (fun a => fieldStr a "column" == n) then none else
+        let st : Rat := 1 / (k : Rat)
+        let span ← base n
+        let ats ← (fieldArr cj "at").toList.mapM optRat
+        if ats.isEmpty then none else
+        let ends := span.1 :: ats
+        let ordered := (ends.zip ats).all (fun p => decide (p.1 < p.2))
+        if !ordered || !(ats.all (fun v => decide (v ≤ span.2) && gridB st v)) then none else
+        let stops := ats.map (· - st) ++ [span.2]
+        some ((ends.zip stops).map (fun p => held ++ [(n, (p.1, p.2))]))
+      | some cj, none => do
+        let j ← fieldNat cj "axis"
+        let bx ← axes[j]?
+        let bcol := fieldStr bx "column"
+        let st ← (field bx "step") >>= optRat
+        let ats ← (fieldArr cj "at").toList.mapM optRat
+        let span ← (held.find? (·.1 == bcol)).map (·.2)
+        if !(decide (0 < st)) || ats.isEmpty then none else
+        let ends := span.1 :: ats
+        let ordered := (ends.zip ats).all (fun p => decide (p.1 < p.2))
+        if !ordered || !(ats.all (fun v => decide (v ≤ span.2) && gridB st v)) then none else
+        let stops := ats.map (· - st) ++ [span.2]
+        some ((ends.zip stops).map (fun p => held.map (fun h => if h.1 == bcol then (h.1, (p.1, p.2)) else h)))
+    let some pieces := pieces?
+      | r := r.fail s!"{name}: a fact of what {col} comes to cuts an axis it does not hold, or at values not in order on its step inside its coordinate"
+        continue
+    -- The values that read a held name, through the values they read, are worked out again.
+    let heldNames := held.map (·.1) ++ cutName.toList
+    let inline := inlineFor values opens col heldNames
+    let coords := (fieldArr nf "coords").toList.filterMap nat
+    if coords.isEmpty || coords.length != (fieldArr nf "coords").size
+        || coords.any (fun x => x ≥ (fieldArr ax "coords").size) then
+      r := r.fail s!"{name}: a fact of what {col} comes to names coordinates it cannot"; continue
+    let isNum := (fieldArr ax "bounds").any (fun q => !q.isNull)
+    if isNum then
+      let mut fault : Option String := none
+      for piece in pieces do
+        -- The interval met with the value's linear form over the held names, and the grid read with
+        -- them held (§15.325).
+        let some I := heldIv base w.within piece inline e
+          | fault := some s!"{name}: this program cannot work out what {col} comes to with {heldNames} held"; break
+        -- A call whose value falls outside the range the rule accepts for it is turned away
+        -- (rulec's §15.313): no call the rule answers has the held values here.
+        let I := meetAccepted cert col I
+        if decide (I.2 < I.1) then continue
+        let grid := heldGrid cert base w.within piece inline e
+        let outside : Nat → Bool := fun x =>
+          match (fieldArr ax "bounds")[x]? >>= coordOfJson with
+          | some cd => coordOutside cd I
+          | none => false
+        let missed : Nat → Bool := fun x =>
+          match grid, (fieldArr ax "bounds")[x]? >>= coordOfJson with
+          | some g, some cd => RulecCert.gridMisses g cd I
+          | _, _ => false
+        if let some x := coords.find? (fun x => !(outside x || missed x)) then
+          fault := some s!"{name}: {col} comes to {((fieldArr ax "coords")[x]? >>= str).getD "?"} with {piece.map (fun h => s!"{h.1} in [{h.2.1}, {h.2.2}]")} held, so the fact does not hold"
+          break
+      match fault with
+      | some m => r := r.fail m
+      | none => out := out ++ [(ai, coords) :: line]
+    else
+      -- A truth value of one comparison, each side worked out with the names held; a date literal
+      -- is its day number.
+      let tvAt : List (String × Span2) → Option Bool := heldTruth base w.within inline v
+      -- Every piece has to come to the same truth value.
+      let tv : Option Bool := match pieces.map tvAt with
+        | some t :: rest => if rest.all (· == some t) then some t else none
+        | _ => none
+      let labels := (fieldArr ax "coords").toList.filterMap str
+      match tv with
+      | none => r := r.fail s!"{name}: {col} can be either truth value with {heldNames} held, as far as this program works out"
+      | some t =>
+        if coords.all (fun x => match labels[x]? with
+            | some "true" => !t
+            | some "false" => t
+            | _ => false) then
+          out := out ++ [(ai, coords) :: line]
+        else
+          r := r.fail s!"{name}: {col} can take a truth value the fact names with {heldNames} held, so the fact does not hold"
+  return (r, out)
+
 /-- **Every fact this table rests on, earned back from the tables that decide its columns.**
     A `never` fact is settled by reading those rows; an `apart` fact by recomputing both
     spans and finding they do not meet. The spans the certificate wrote have to contain the
     ones recomputed, so it cannot write a narrower span than the truth and call apart two
     things that meet. The verdict rests on the recomputed pair (§15.115). -/
-def checkAbove (tj : Json) (all : Array Json) (r : Report) : Report := Id.run do
+def checkAbove (tj : Json) (src : String → Option (Json × Nat × List (RoundMode × Rat))) (r : Report) : Report := Id.run do
   let mut r := r
   let name := fieldStr tj "table"
   let axes := fieldArr tj "axes"
@@ -1461,9 +1912,20 @@ def checkAbove (tj : Json) (all : Array Json) (r : Report) : Report := Id.run do
     match named f with
     | none => r := r.fail s!"{name}: a fact points at a coordinate that does not exist"
     | some (col, val) =>
-      match decider all col with
+      match src col with
       | none => r := r.fail s!"{name}: a fact says {col} is never {val}, and no table here decides {col}"
-      | some (u, oi) =>
+      | some (u, oi, rounds) =>
+        let tax := (fieldArr tj "axes")[(fieldNat f "axis").getD 0]!
+        if (fieldArr tax "bounds").any (fun b => !b.isNull) then
+          -- A number no row puts into the coordinate, each row's number put through the roundings
+          -- on the way (rulec's §15.322).
+          for row in fieldArr u "rows" do
+            match putOf row oi rounds true with
+            | .any => r := r.fail s!"{name}: a row of {fieldStr u "table"} writes something this program cannot read, so «{col} is never {val}» is not settled"
+            | p =>
+              if putTakes tax ((fieldNat f "coord").getD 0) p then
+                r := r.fail s!"{name}: {fieldStr u "table"} does write {col} = {val}, so it is not a value the tables above never reach"
+          continue
         for row in fieldArr u "rows" do
           match (fieldArr row "produces")[oi]? >>= str with
           | none =>
@@ -1497,7 +1959,13 @@ def checkAbove (tj : Json) (all : Array Json) (r : Report) : Report := Id.run do
         let real :=
           if col == input then
             (fieldNat (ends[i]!) "coord").map (spanAt (axes[ai]!))
-          else producedWhere all col val input
+          else
+            let at_ : Option (Json × Nat) := do
+              let j ← fieldNat (ends[i]!) "axis"
+              let x ← fieldNat (ends[i]!) "coord"
+              let tax ← axes[j]?
+              some (tax, x)
+            producedWhere src col val input at_
         match real with
         | none => r := r.fail s!"{name}: this program cannot work out where {col} = {val} puts {input}"; ok := false
         | some sp =>
@@ -1542,7 +2010,7 @@ def checkTable (t : ReadTable) (r : Report) : Report := Id.run do
   let claimed := C.rows.filter (fun row => !t.unused.contains row.index && !t.ruledOut.contains row.index)
   let mut notes : Array String := #[]
   -- E101
-  if t.upstream && !t.kinds.contains "upstream" then
+  if t.upstream && !t.kinds.contains "upstream" && !t.fromAbove then
     r := r.fail s!"{t.name}: the cover rests on a table above, and no column of this table comes from one"
   if C.coverChecks then
     notes := notes.push "complete"
@@ -3375,6 +3843,14 @@ def checkChances (cert : Json) (r : Report) : Report := Id.run do
       | r := r.fail s!"{where_}: a cell of its outputs cannot be read"; continue
     let classes := (fieldArr cl "classes").toList
     if axes.isEmpty then
+      -- A rule that turns a call away at a value it works out (rulec's §15.313) counts only the draws
+      -- it answers, and the claims this program runs turn none away: its lowest and highest chance
+      -- still pass the claim, and the rest is stated.
+      if !(objPairs ((field cert "accepts").getD Json.null)).isEmpty then
+        for k in classes do
+          r := runArith where_ k test r
+        r := r.state s!"{where_}: the rule turns some calls away at a value it works out, which this program does not run"
+        continue
       -- Run one by one: every combination the cells let in, every draw (§15.224, rulec's `by_points`).
       -- A pick by weight over a sequence the claim names (rulec's §15.226): the walk is run at every
       -- draw, its elements as the certificate carries them, read back out of the file.
@@ -3618,13 +4094,17 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     let mut r : Report := {}
     r := r.say s!"{fieldStr cert "rule"} ({fieldStr cert "rulec"}), re-checked against the Lean proofs"
     let (r', worked) := checkValues cert r
-    -- The currency a money column is written in, for reading an answer cell back (§15.196).
+    -- The unit a column counts in — the currency of a `money[円]`, the unit of a `mass[g]` —
+    -- for reading an answer cell back (§15.196).
     let curOf : String → Option String := fun n =>
       match (objPairs ((field cert "types").getD Json.null)).find? (fun p => p.1 == n) with
       | some (_, j) => match str j with
-        | some ty => if ty.startsWith "money[" then
-            (((ty.drop 6).takeWhile (fun c => c != ',' && c != ']')).toString.trimAscii.toString : String) |> some
-          else none
+        | some ty =>
+          let cs := ty.toList
+          match cs.idxOf? '[' with
+          | none => none
+          | some i =>
+            some (((cs.drop (i + 1)).takeWhile (fun c => c != ',' && c != ']')) |> String.ofList |>.trimAscii.toString)
         | none => none
       | none => none
     -- A value whose own interval reads an end no range writes reaches what it comes to with that
@@ -3743,11 +4223,15 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         if ((fieldArr cert "ordered").toList.filterMap str).contains ty then
           ((field ((field cert "enums").getD Json.null) ty).bind arr).map (·.toList.filterMap str) |>.getD []
         else []
-      match readTable reachOf groups declaredRange factOf daysOf (fieldArr cert "tables") (truthOfValue cert worked) optionalOf orderOf tj with
+      -- What a `define` comes to with the axes it reads held (rulec's §15.322), each fact earned
+      -- back here before the cover may rest on it.
+      let (r', narrowedLines) := checkNarrowed cert worked tj r
+      r := r'
+      match readTable reachOf groups declaredRange factOf daysOf (truthOfValue cert worked) optionalOf orderOf (sourceOf cert) narrowedLines (heldReachOut cert worked) tj with
       | none => r := r.fail s!"{fieldStr tj "table"}: this program cannot read the table"
       | some t =>
         r := checkWords cert tj r
-        r := checkAbove tj (fieldArr cert "tables") r
+        r := checkAbove tj (sourceOf cert) r
         r := checkTable t r
         r := checkSteps t (columnStep cert []) r
         let (r', enumAxes) := checkEnumAxes cert t r

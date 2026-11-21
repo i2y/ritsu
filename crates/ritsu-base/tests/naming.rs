@@ -42,6 +42,9 @@ fn reason(why: &str) -> ErrorKind {
         "only field under record (function)" => ErrorKind::WrongChild { kind: "function".into(), parent: "record".into(), allowed: &["field"] },
         "property only right after def" => ErrorKind::ChildFirst { kind: "property".into(), parents: vec!["def"] },
         "nothing under pointer" => ErrorKind::NothingUnder("pointer".into()),
+        "a kind without a name (who)" => ErrorKind::MissingName("who".into()),
+        "ringi has no nested kinds" => ErrorKind::NoNesting(Tool::Ringi),
+        "unknown kind for ringi" => ErrorKind::UnknownKind { tool: Tool::Ringi, kind: "route".into() },
         other => panic!("the reason `{other}` is new to this test; say which error it is"),
     }
 }
@@ -80,7 +83,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused_for_its_reason() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!((ok, refused), (58, 34), "the table has 58 namings and 34 refusals");
+    assert_eq!((ok, refused), (64, 37), "the table has 64 namings and 37 refusals");
 }
 
 #[test]

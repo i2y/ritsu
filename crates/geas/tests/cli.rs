@@ -31,7 +31,7 @@ fn a_flag_the_command_does_not_take() {
     let s = Scratch::new("cli-flag");
     let (out, err, code) = run(s.path(), &["drift", "x.geas", "--all"], &[]);
     assert_eq!((out.as_str(), code), ("", 2));
-    assert!(err.starts_with("error[E080]: `--all` is not an option of `geas drift`"), "{err}");
+    assert_eq!(err, "error[E080]: unknown flag `--all`; run `geas drift --help`\n");
 }
 
 /// Two specs in one directory keep two journals, the exit status is the worst of
@@ -64,13 +64,18 @@ fn two_specs_in_one_directory() {
     assert_eq!(no_process_left(&log), 5);
 }
 
-/// A spec in the working directory writes `.geas/` there, named after it.
+/// A spec in the working directory writes `.geas/` there, named after it, and says so the same
+/// however its path is written (ritsu's DESIGN 4.15): `./here.geas` and `x/../here.geas` (`x` a
+/// directory) are `here.geas`.
 #[test]
 fn a_spec_in_the_working_directory() {
     let s = Scratch::new("cli-here");
     s.write("here.geas", "target echo {\n  run \"echo hi\"\n}\n\nclaim \"says hi\" {\n  when echo.run()\n  then stdout is \"hi\"\n}\n");
-    let (out, err, code) = run(s.path(), &["check", "here.geas"], &[]);
-    assert_eq!((err.as_str(), code), ("", 0));
-    assert_eq!(out, "ok 1 - says hi\n1 claim · 1 ok · 0 failed · journal: .geas/here.journal.jsonl\n");
+    std::fs::create_dir_all(s.path().join("x")).unwrap();
+    for given in ["here.geas", "./here.geas", "x/../here.geas"] {
+        let (out, err, code) = run(s.path(), &["check", given], &[]);
+        assert_eq!((err.as_str(), code), ("", 0), "{given}");
+        assert_eq!(out, "ok 1 - says hi\n1 claim · 1 ok · 0 failed · journal: .geas/here.journal.jsonl\n", "{given}");
+    }
     assert!(s.exists(".geas/here.journal.jsonl"));
 }

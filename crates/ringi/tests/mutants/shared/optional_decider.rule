@@ -1,0 +1,16 @@
+rule optional_decider v1
+description "Who decides a purchase by its amount, where a small one needs no decider (fictional)"
+
+enum decider = manager "Manager" | cfo "Chief financial officer"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  decider : decider?
+
+table decider
+| amount      | -> decider |
+| <=10_000JPY | none       |
+| >10_000JPY <=50_000JPY | manager |
+| >50_000JPY  | cfo        |

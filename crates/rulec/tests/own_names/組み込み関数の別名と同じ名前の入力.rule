@@ -1,0 +1,20 @@
+rule 歩く手数料(walked_fee) v1
+description "歩きが要素を数える組み込み関数に、モジュールが付ける名前と同じ名前の入力"
+
+inputs
+  急ぎ(_enumerate) : bool
+
+elements 明細(lines)
+  数量(qty) : number  range >=1 <=100
+
+sum 合計(total) over 明細 of 数量  range >=0 <=1_000
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 合計ごとの手数料(fee_by_total)
+policy unique
+| 急ぎ  | 合計 | -> 手数料 |
+| true  | <50  | 1USD      |
+| true  | >=50 | 2USD      |
+| false | -    | 3USD      |

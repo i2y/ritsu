@@ -1,0 +1,16 @@
+rule 包装紙(wrapping_ja) v1
+description "贈り物の注文が、大きなロールの紙を使うか。贈り物一つに紙を二枚使うので、枚数は二枚ずつ増える。四枚以上なら大きなロールを使う"
+
+inputs
+  贈り物の数(gifts) : number  range >=0 <=5
+
+define 枚数(sheets) : number = 贈り物の数 * 2
+
+outputs
+  大きなロール(large_roll) : bool
+
+table ロールの判定(roll_of)
+policy unique
+| 枚数 | -> 大きなロール |
+| <4   | false           |
+| >=4  | true            |

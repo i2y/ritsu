@@ -1,0 +1,33 @@
+workflow joint_approval v1
+  now range >=2026-01-01 <=2027-12-31 offset +09:00
+description "A stage two roles approve together, side by side: approved when both approve; when one sends the request back, rejects it or lets it expire, this workflow fails with that"
+
+enum Verdict = approve | send_back | reject
+
+record StageAnswer
+  verdict  : Verdict
+  approver : string
+
+inputs
+  request_id : string
+  amount     : money[JPY]  range >=1JPY <=10_000_000JPY
+  roles      : list[string]
+
+outputs
+  approvers : list[string]
+
+task stage(request_id: string, role: string, amount: money[JPY]  range >=1JPY <=10_000_000JPY) -> StageAnswer
+  flow "stage.flow"
+  errors Expired
+  timeout 30 days
+
+flow
+  let both = for role in roles at most 2 in parallel
+    let s = stage(request_id: request_id, role: role, amount: amount)
+      on Expired => fail Expired "{role} did not answer in time"
+    match s.verdict
+      approve => pass
+      send_back => fail SentBack "{s.approver} sent it back"
+      reject => fail Rejected "{s.approver} rejected it"
+    yield s.approver
+  succeed approvers = both

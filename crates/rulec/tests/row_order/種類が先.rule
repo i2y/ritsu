@@ -1,0 +1,28 @@
+rule 種類が先(kinds_first_ja) v1
+description "重さと率は、入力か 0 で、入力の行が先にある。明細ごとの料金は、その明細の料金か 0"
+
+inputs
+  重さ(weight)     : mass[kg]  range >=0kg <=30kg
+  値引率(discount) : rate[step 1%]  range >=0% <=50%
+  指定(given)      : bool
+
+elements 明細(lines)
+  明細料(line_fee) : money[円]  range >=0円 <=10_000円
+  無料(free)       : bool
+
+outputs
+  請求重さ(billed_weight) : mass[kg]  round down(1kg)
+  適用率(applied)         : rate[step 1%]  round down(1%)
+  合計(total)             : money[円]  round down(1円)
+
+table 請求
+| 指定  | -> 請求重さ | 適用率 |
+| true  | 重さ        | 値引率 |
+| false | 0kg         | 0%     |
+
+table 明細ごと
+| 無料  | -> 請求料(charged) : money[円] |
+| false | 明細料                         |
+| true  | 0円                            |
+
+sum 合計 over 明細 of 請求料  range >=0円 <=1_000_000円

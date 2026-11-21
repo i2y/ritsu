@@ -92,11 +92,13 @@ pub fn has_extra(target: &str, extra: &str) -> bool {
 }
 
 /// What one run of `gen` was asked to write: the targets and the extras, each in the order of its
-/// list rather than the order of the command line.
+/// list rather than the order of the command line, and how the Python modules are to be put.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Asked {
     targets: Vec<&'static str>,
     extras: Vec<&'static str>,
+    /// The Python modules go inside a package ([`ritsu_emit::package::PYTHON_PACKAGE`], §15.319).
+    python_package: bool,
 }
 
 impl Asked {
@@ -135,6 +137,7 @@ impl Asked {
         let asked = Asked {
             targets: names.iter().copied().filter(|n| targets.contains(n)).collect(),
             extras: EXTRAS.iter().copied().filter(|n| extras.contains(n)).collect(),
+            python_package: false,
         };
         // The service is Python, and imports the stubs buf builds from the `.proto`.
         if asked.extra("connect") && !(asked.target("python") && asked.target(PROTO)) {
@@ -189,6 +192,44 @@ impl Asked {
         Asked::from_flags(UP_TO_0_40).expect("the flags of 0.40.0 name targets and extras that exist")
     }
 
+    /// The same, with the Python modules written to be put inside a package
+    /// ([`ritsu_emit::package::PYTHON_PACKAGE`], §15.319): a rule's module reads the module of each
+    /// `enums` file it reads by a relative import, and the runner and the MCP server beside it read
+    /// those modules as the modules of a package their directory makes (§15.327). `Err` is the
+    /// sentence `gen` stops with (exit 2): when there is no Python to write, and beside the Connect
+    /// service, which is read at the top of the output directory beside the modules buf writes, and
+    /// type-checked there.
+    pub fn in_python_package(mut self) -> Result<Asked, String> {
+        let flag = ritsu_emit::package::PYTHON_PACKAGE;
+        if !self.target("python") {
+            return Err(no_python_for_package());
+        }
+        if self.extra("connect") {
+            return Err(tr!(
+                "`--extra connect` のサービスは、buf が書く protobuf のモジュールと並べて出力のディレクトリのトップレベルで読み、型の検査（`mypy --strict`）もそこで通します。パッケージの中に置くモジュール（`{flag}`）は隣のモジュールを相対の import で読むので、そこからは型の検査が辿れません",
+                "`--extra connect` writes a service that is read at the top of the output directory beside the protobuf modules buf writes there, and type-checked there (`mypy --strict`); a module put inside a package (`{flag}`) reads its neighbours by relative imports, which the type checker cannot follow from there"
+            ));
+        }
+        self.python_package = true;
+        Ok(self)
+    }
+
+    /// The same, without the targets and extras `stops` names: what E153 leaves the run to write
+    /// (§15.335). `Asked::new`'s checks are not run again — a stopped extra is taken out beside
+    /// its target, and what remains is written.
+    pub fn without(&self, stops: &[&str]) -> Asked {
+        Asked {
+            targets: self.targets.iter().copied().filter(|t| !stops.contains(t)).collect(),
+            extras: self.extras.iter().copied().filter(|e| !stops.contains(e)).collect(),
+            python_package: self.python_package,
+        }
+    }
+
+    /// Whether the Python modules go inside a package (§15.319).
+    pub fn python_package(&self) -> bool {
+        self.python_package
+    }
+
     /// The targets given, in the order they are written.
     pub fn targets(&self) -> &[&'static str] {
         &self.targets
@@ -238,9 +279,22 @@ impl Asked {
 /// The first sentence of the refusal: what `gen` writes, and the names it takes.
 fn only_given() -> String {
     let (t, e) = (target_names().join("|"), EXTRAS.join("|"));
+    // the command named the way the person ran this one (ritsu's DESIGN 6.2, item 10)
+    let run = ritsu_base::cli::command_name("rulec");
     tr!(
-        "`rulec gen` が書くのは、指定した出力先だけです。`--target {t}` を一つ以上付けてください。横に書く付属物は `--extra {e}` で指定します",
-        "`rulec gen` writes only the targets it is given: give one or more `--target {t}`, and `--extra {e}` for what to write beside them"
+        "`{run} gen` が書くのは、指定した出力先だけです。`--target {t}` を一つ以上付けてください。横に書く付属物は `--extra {e}` で指定します",
+        "`{run} gen` writes only the targets it is given: give one or more `--target {t}`, and `--extra {e}` for what to write beside them"
+    )
+}
+
+/// What `gen` says of `--python-package` with no `--target python` (§15.319), and with no `--target`
+/// at all: the line that writes what 0.40.0 wrote cannot carry the flag, since that version's
+/// extras run their Python at the top of the output directory.
+pub fn no_python_for_package() -> String {
+    let flag = ritsu_emit::package::PYTHON_PACKAGE;
+    tr!(
+        "`{flag}` は Python のモジュールの置き方です。`--target python` がありません",
+        "`{flag}` says how the Python modules are put, and there is no `--target python`"
     )
 }
 
@@ -262,11 +316,12 @@ pub fn no_target(typed: &[String]) -> String {
         i += 1;
     }
     words.extend(UP_TO_0_40.iter().map(|w| w.to_string()));
-    let cmd = format!("rulec {}", words.join(" "));
+    let run = ritsu_base::cli::command_name("rulec");
+    let cmd = format!("{run} {}", words.join(" "));
     let first = only_given();
     tr!(
-        "{first}\n注記: 0.40.0 までの `rulec gen` は、`--target` が無ければ、全部の出力先を全部の付属物つきで書きました。同じファイルを書くのは次のコマンドです\n  {cmd}",
-        "{first}\nnote: up to 0.40.0, `rulec gen` with no `--target` wrote every target with every extra; this writes the same files:\n  {cmd}"
+        "{first}\n注記: 0.40.0 までの `{run} gen` は、`--target` が無ければ、全部の出力先を全部の付属物つきで書きました。同じファイルを書くのは次のコマンドです\n  {cmd}",
+        "{first}\nnote: up to 0.40.0, `{run} gen` with no `--target` wrote every target with every extra; this writes the same files:\n  {cmd}"
     )
 }
 

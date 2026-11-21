@@ -1,0 +1,178 @@
+15-18 ringi "examples/expense.ringi" field category
+    category : choice "Category"
+    travel "Travel"
+    expense "Expenses"
+    purchase "Purchase"
+19-21 ringi "examples/expense.ringi" field items
+    items : rows "Items" count >=1 <=20
+    what : text "What" count <=100
+    price : money[JPY] "Price" range >=1JPY <=1_000_000JPY
+20-20 ringi "examples/expense.ringi" field items.what
+    what : text "What" count <=100
+21-21 ringi "examples/expense.ringi" field items.price
+    price : money[JPY] "Price" range >=1JPY <=1_000_000JPY
+22-22 ringi "examples/expense.ringi" field amount
+    amount : money[JPY] "Amount" = sum(items.price) range >=1JPY <=10_000_000JPY
+23-23 ringi "examples/expense.ringi" field purpose
+    purpose : long text "Purpose" count >=1 <=200
+24-24 ringi "examples/expense.ringi" field used_on
+    used_on : date "Date of use" range >=2026-01-01 <=2027-12-31
+25-25 ringi "examples/expense.ringi" field trip_to
+    trip_to : text "Destination" count <=100 shown when category is travel
+26-26 ringi "examples/expense.ringi" field receipt
+    receipt : attachment "Receipt" required when amount > 30_000JPY
+27-27 ringi "examples/expense.ringi" field account
+    account : choice from m.accounts "Account code" approvers only
+29-38 ringi "examples/expense.ringi" table route
+    route
+    | category | amount | -> precheck | first | second | decide |
+    | travel | <=30_000JPY | | | | travel_agent |
+    | travel | >30_000JPY <=100_000JPY | | | | manager |
+    | travel | >100_000JPY | | manager | | dept_head |
+    | expense | <=100_000JPY | check | | | manager |
+    | expense | >100_000JPY <=1_000_000JPY | check | manager | | dept_head |
+    | expense | >1_000_000JPY | | manager | dept_head | division_head |
+    | purchase | <=1_000_000JPY | | manager | accounting | dept_head |
+    | purchase | >1_000_000JPY | | manager | dept_head and accounting | division_head |
+57-65 ringi "examples/expense.ringi" table next_up
+    table next_up
+    | approver | -> goes_to |
+    | check | manager |
+    | travel_agent | manager |
+    | manager | dept_head |
+    | dept_head | division_head |
+    | accounting | division_head |
+    | division_head | division_head |
+    | board | board |
+29-38 ringi "examples/expense.ringi" stage precheck
+    category | amount : precheck
+    travel | <=30_000JPY : 
+    travel | >30_000JPY <=100_000JPY : 
+    travel | >100_000JPY : 
+    expense | <=100_000JPY : check
+    expense | >100_000JPY <=1_000_000JPY : check
+    expense | >1_000_000JPY : 
+    purchase | <=1_000_000JPY : 
+    purchase | >1_000_000JPY : 
+29-38 ringi "examples/expense.ringi" stage first
+    category | amount : first
+    travel | <=30_000JPY : 
+    travel | >30_000JPY <=100_000JPY : 
+    travel | >100_000JPY : manager
+    expense | <=100_000JPY : 
+    expense | >100_000JPY <=1_000_000JPY : manager
+    expense | >1_000_000JPY : manager
+    purchase | <=1_000_000JPY : manager
+    purchase | >1_000_000JPY : manager
+29-38 ringi "examples/expense.ringi" stage second
+    category | amount : second
+    travel | <=30_000JPY : 
+    travel | >30_000JPY <=100_000JPY : 
+    travel | >100_000JPY : 
+    expense | <=100_000JPY : 
+    expense | >100_000JPY <=1_000_000JPY : 
+    expense | >1_000_000JPY : dept_head
+    purchase | <=1_000_000JPY : accounting
+    purchase | >1_000_000JPY : dept_head and accounting
+29-38 ringi "examples/expense.ringi" stage decide
+    category | amount : decide
+    travel | <=30_000JPY : travel_agent
+    travel | >30_000JPY <=100_000JPY : manager
+    travel | >100_000JPY : dept_head
+    expense | <=100_000JPY : manager
+    expense | >100_000JPY <=1_000_000JPY : dept_head
+    expense | >1_000_000JPY : division_head
+    purchase | <=1_000_000JPY : dept_head
+    purchase | >1_000_000JPY : division_head
+41-41 ringi "examples/expense.ringi" who manager
+    manager = manager of requester
+42-42 ringi "examples/expense.ringi" who dept_head
+    dept_head = head of requester.department
+43-43 ringi "examples/expense.ringi" who accounting
+    accounting = team accounting
+44-44 ringi "examples/expense.ringi" who division_head
+    division_head = nearest division_head above requester
+45-45 ringi "examples/expense.ringi" who check
+    check = agent precheck_agent, else manager
+46-46 ringi "examples/expense.ringi" who travel_agent
+    travel_agent = agent travel_decision, else manager
+47-47 ringi "examples/expense.ringi" who board
+    board = team board
+49-55 ringi "examples/expense.ringi" deadline every_stage
+    every stage
+    due in 3 business days at end of day
+    remind after 2 business days at 09:00
+    when late escalate by next_up, then expire
+    when empty escalate, then board
+68-68 ringi "examples/expense.ringi" ticket self_approval
+    self approval not allowed
+70-70 ringi "examples/expense.ringi" ticket same_approver
+    same approver approves once
+71-71 ringi "examples/expense.ringi" ticket send_back
+    send back to the requester, at most 3 times
+72-72 ringi "examples/expense.ringi" ticket resubmit
+    resubmit within 3 business days
+73-73 ringi "examples/expense.ringi" ticket withdraw
+    withdraw until decide
+76-76 ringi "examples/expense.ringi" ticket hold_budget.reserve
+    on submitted hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: requester.department, amount: amount) when requester.department is not none
+77-77 ringi "examples/expense.ringi" ticket post_budget.reserve
+    on approved post budget.reserve(request: ticket.id, attempt: ticket.attempt)
+78-78 ringi "examples/expense.ringi" ticket launch_pay
+    on approved launch pay(request_id: ticket.id, requester: requester.id, amount: amount, purpose: purpose)
+79-79 ringi "examples/expense.ringi" ticket void_budget.reserve
+    on sent back, rejected, withdrawn, expired void budget.reserve(request: ticket.id, attempt: ticket.attempt)
+82-82 ringi "examples/expense.ringi" claim the_agent_decides_up_to_30000_yen
+    the_agent_decides_up_to_30000_yen : decide is travel_agent only when amount <= 30_000JPY
+83-83 ringi "examples/expense.ringi" claim a_joint_second_stage
+    a_joint_second_stage : possible second is dept_head and accounting
+84-84 ringi "examples/expense.ringi" claim reminder_before_due
+    reminder_before_due : every stage reminds before it is due
+85-85 ringi "examples/expense.ringi" claim ends_in_time
+    ends_in_time : every ticket ends within 93 business days
+87-93 ringi "examples/expense.ringi" example route
+    examples
+    | category | amount | -> precheck | first | second | decide |
+    | travel | 30_000JPY | | | | travel_agent |
+    | travel | 30_001JPY | | | | manager |
+    | expense | 100_000JPY | check | | | manager |
+    | expense | 100_001JPY | check | manager | | dept_head |
+    | purchase | 1_000_001JPY | | manager | dept_head and accounting | division_head |
+95-104 ringi "examples/expense.ringi" scenario a_joint_purchase
+    scenario a_joint_purchase
+    requester e1201
+    given budget.allocate(dept: "sales1", period: "2026", amount: 5_000_000JPY)
+    form category = purchase, items = [{what: "Server", price: 800_000JPY}, {what: "Storage", price: 400_000JPY}], purpose = "A server and its storage for the test lab", used_on = 2026-11-16, receipt = "receipt.pdf"
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | first | in progress |
+    | 2026-11-16 15:00 | approve | e1101 | second | in progress |
+    | 2026-11-17 11:00 | approve | e1001 | second | in progress |
+    | 2026-11-17 16:00 | approve | e3101 | decide | in progress |
+    | 2026-11-18 09:30 | approve | e0101 | | approved |
+107-113 ringi "examples/expense.ringi" scenario a_day_trip_the_agent_decides
+    scenario a_day_trip_the_agent_decides
+    requester e1201
+    given budget.allocate(dept: "sales1", period: "2026", amount: 5_000_000JPY)
+    form category = travel, items = [{what: "Train to Osaka and back", price: 28_000JPY}], purpose = "A visit to a customer in Osaka", used_on = 2026-11-20, trip_to = "Osaka", receipt = "receipt.pdf"
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | decide | in progress |
+    | 2026-11-16 10:01 | agent answered(verdict: ok) | | | approved |
+116-123 ringi "examples/expense.ringi" scenario a_trip_the_agent_doubts
+    scenario a_trip_the_agent_doubts
+    requester e1201
+    given budget.allocate(dept: "sales1", period: "2026", amount: 5_000_000JPY)
+    form category = travel, items = [{what: "Flight to Sapporo and back", price: 29_500JPY}], purpose = "A visit to a customer in Sapporo", used_on = 2026-11-27, trip_to = "Sapporo", receipt = "receipt.pdf"
+    | at | event | by | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | decide | in progress |
+    | 2026-11-16 10:01 | agent answered(verdict: doubt, reason: "The fare is above the usual one") | | decide | in progress |
+    | 2026-11-16 14:00 | approve | e1101 | | approved |
+127-135 ringi "examples/expense.ringi" scenario a_trip_called_off
+    scenario a_trip_called_off
+    requester e1201
+    given budget.allocate(dept: "sales1", period: "2026", amount: 5_000_000JPY)
+    form category = travel, items = [{what: "Flight to Fukuoka and back", price: 64_000JPY}, {what: "Hotel, three nights", price: 54_000JPY}], purpose = "A visit to a customer in Fukuoka", used_on = 2026-12-02, trip_to = "Fukuoka", receipt = "receipt.pdf"
+    | at | event | by | comment | -> stage | status |
+    | 2026-11-16 10:00 | submit | e1201 | | first | in progress |
+    | 2026-11-16 15:00 | approve | e1101 | | decide | in progress |
+    | 2026-11-17 09:00 | withdraw | e1201 | "The customer has put the visit off to spring" | | with requester |
+    | 2026-11-17 09:05 | discard | e1201 | | | withdrawn |

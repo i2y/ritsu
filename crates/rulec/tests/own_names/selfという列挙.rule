@@ -1,0 +1,16 @@
+rule 支払う人ごとの手数料(fee_by_payer) v1
+description "Rust と Swift が型そのものを指すのに使う予約語と同じ名前の列挙"
+
+enum self = 個人(person) | 会社(company)
+
+inputs
+  支払う人(payer) : self
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 支払う人ごとの手数料表(fee_by_payer_kind)
+policy unique
+| 支払う人 | -> 手数料 |
+| 個人     | 3USD      |
+| 会社     | 5USD      |

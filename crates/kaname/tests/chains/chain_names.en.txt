@@ -1,0 +1,11 @@
+error[E101]: chain_names.kn:22:5: `gold` is not a value of the enum `Tier`
+    22 |     gold => 5
+  = `gold` is written on line 35 too.
+error[E101]: chain_names.kn:25:21: There is no field `qty` in Line
+    25 |   sum(lines, l => l.qty)
+  = The fields of Line are `sku`, `qy`.
+  = `qty` is written on lines 36 and 37 too.
+error[E101]: chain_names.kn:27:12: There is no type `Order`
+    27 | fn bill(o: Order, price: money[USDc] range >=1USDc <=1000USDc) -> money[USDc]
+  = A type is `number`, `bool`, `string`, `date`, `rate`, a type of a unit (`money[USD]`, `mass[kg]`), `list[…]`, a record or an enum of this module, the type of a value of an enum whose values have fields (`<enum>.<value>`), one a `use` reads (`<rule>.outputs`, `<rule>.<enum>`, `<rule>.<list>`, `<book>.<transfer>.<operation>`, `<module>.<record>`), a type parameter or `result[…]`.
+  = `Order` is written on line 31 too.

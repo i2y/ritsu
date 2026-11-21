@@ -14,13 +14,17 @@
 //!    the check found, in a few sentences;
 //! 2. the decisions in tables: each rule and each dates file it calls, with the page its language
 //!    draws, and each transfer it builds, with the reasons the book can refuse it with;
-//! 3. the functions in three parts: those that are total, those checked at some places when they run
+//! 3. the names of one enum (DESIGN 3.5), when the module reads an enum by two or more names through
+//!    the rules it uses: each enum with its names, the file that declares it, its name there and its
+//!    values;
+//! 4. where the fields come from (DESIGN 37), when a field or a parameter writes `fed by`;
+//! 5. the functions in three parts: those that are total, those checked at some places when they run
 //!    (each place, and why the check could not show it), and those that may not stop;
-//! 4. the properties (DESIGN 38), when the module writes any: each with its `when` lines and its
+//! 6. the properties (DESIGN 38), when the module writes any: each with its `when` lines and its
 //!    last line, and whether a proof file is beside the `.kn` — not their answers, which are
 //!    `check`'s;
-//! 5. the decisions written in code (W501), or that there are none;
-//! 6. the `examples`, with what each answers.
+//! 7. the decisions written in code (W501), or that there are none;
+//! 8. the `examples`, with what each answers.
 
 pub mod html;
 pub mod markdown;
@@ -104,6 +108,7 @@ pub fn page(o: &Outcome, suite: &Suite, root: &Path, lang: Lang, format: Format)
     let mut b = Builder { o, c, p: Program::of(c), suite, root, lang, format, blocks: Vec::new(), embedded: Vec::new() };
     b.head();
     b.tables();
+    b.one_enum();
     b.fed();
     b.functions();
     b.properties();
@@ -510,7 +515,32 @@ impl<'a> Builder<'a> {
     }
 
     // -----------------------------------------------------------------------------------------
-    // 3. The functions
+    // 3. The names of one enum, and 4. where the fields come from
+
+    /// The enums the module reads by two or more names (DESIGN 3.5): one row each, with the file that
+    /// declares it, its name there and its values. Nothing for a module that reads none so.
+    fn one_enum(&mut self) {
+        let groups = crate::names::one_enum_names(self.c);
+        if groups.is_empty() {
+            return;
+        }
+        self.heading(2, self.t(tr!("一つの列挙の名前", "Names of one enum")), "one-enum".into());
+        self.push(Block::Para(self.t(tr!(
+            "一行が一つの列挙です。モジュールは、使う規則を通して、同じファイルの同じ列挙をこれらの名前で読んでいます。一つの型なので、一つの名前の値を、ほかの名前が要るところに渡せます。",
+            "Each row is one enum, which the module reads by these names through the rules it uses: the same enum of one file. They are one type, so a value of one name goes where another is expected."
+        ))));
+        let sep = if self.ja() { "、" } else { ", " };
+        let dir = self.c.canon.parent().unwrap_or(Path::new("")).to_string_lossy().to_string();
+        let rows = groups
+            .iter()
+            .map(|g| {
+                let file = ritsu_base::paths::from_root(self.root, &g.file).unwrap_or_else(|| ritsu_base::paths::relative(&dir, &g.file.to_string_lossy()));
+                vec![g.names.iter().map(|n| code(n)).collect::<Vec<_>>().join(sep), code(&file), code(&g.name), g.values.iter().map(|v| code(v)).collect::<Vec<_>>().join(sep)]
+            })
+            .collect();
+        let head = vec![self.t(tr!("名前", "Names")), self.t(tr!("宣言しているファイル", "Declared in")), self.t(tr!("そこでの名前", "Name there")), self.t(tr!("値", "Values"))];
+        self.push(Block::Table { head, rows });
+    }
 
     /// The fields of the records that say where hand-written code takes their values from (DESIGN
     /// 37): what `ritsu check` holds, and what nothing holds. A parameter is said with its function.
@@ -529,6 +559,9 @@ impl<'a> Builder<'a> {
             self.push(Block::List(items));
         }
     }
+
+    // -----------------------------------------------------------------------------------------
+    // 5. The functions
 
     fn functions(&mut self) {
         self.heading(2, self.t(tr!("関数", "Functions")), "functions".into());
@@ -752,7 +785,7 @@ impl<'a> Builder<'a> {
     }
 
     // -----------------------------------------------------------------------------------------
-    // 3b. The properties
+    // 6. The properties
 
     /// The properties of the module (DESIGN 38), after its functions: nothing for a module that
     /// writes none. The page holds what a property says and whether a proof file is beside the
@@ -800,7 +833,7 @@ impl<'a> Builder<'a> {
     }
 
     // -----------------------------------------------------------------------------------------
-    // 4. The decisions written in code
+    // 7. The decisions written in code
 
     fn in_code(&mut self) {
         self.heading(2, self.t(tr!("コードにある判断", "Decisions in code")), "code".into());
@@ -827,7 +860,7 @@ impl<'a> Builder<'a> {
     }
 
     // -----------------------------------------------------------------------------------------
-    // 5. The examples
+    // 8. The examples
 
     fn examples(&mut self) {
         self.heading(2, self.t(tr!("例", "Examples")), "examples".into());

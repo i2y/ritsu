@@ -1,0 +1,3 @@
+error[E703]: tests/mutants/E703_題の無い規則の列挙の値.ringi:8:1: The screens show 1 thing with no title in the file's language (`ja`): `決裁者.cfo`
+     8 |   決裁者(level)  : choice from 権限.decider "決裁する人"
+  = Title each value under the field, as `goods "Goods and services"`; where the rule is written in the file's language (`ja`), the display name it writes for a value titles it too. Without either, a screen would show the value's name as the rule writes it.

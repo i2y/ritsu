@@ -1,0 +1,18 @@
+2026-11-16 10:00  submit   by e1101  -> first (manager: e3101; accounting: one of e1001, e1002), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e3101  -> first (accounting: one of e1001, e1002), due 2026-11-19 end of day
+2026-11-16 12:00  approve  by e1002  -> last (e4001), due 2026-11-19 end of day
+2026-11-16 13:00  approve  by e4001  -> approved
+scenario `the_later_stage_does_not_come`: as written (4 rows)
+
+2026-11-16 10:00  submit   by e1101  -> first (accounting: one of e1001, e1002), due 2026-11-19 end of day; first waits for the approval of second (e3101)
+2026-11-16 12:00  approve  by e1002  -> second (e3101), due 2026-11-19 end of day
+2026-11-16 13:00  approve  by e3101  -> last (e4001), due 2026-11-19 end of day; first done with the approval of second (e3101)
+2026-11-16 14:00  approve  by e4001  -> approved
+scenario `one_way_waits_for_the_later_stage`: as written (4 rows)
+
+2027-03-30 10:00  submit   by e9002  -> first (accounting: one of e1001, e1002), due 2027-04-02 end of day; first waits for the approval of second (e9001)
+2027-04-01 09:00  remind             -> first (accounting: one of e1001, e1002), due 2027-04-02 end of day; reminded e1001, e1002
+2027-04-01 11:00  approve  by e1002  -> first (e0102), due 2027-04-06 end of day; first no longer waits for second, and starts (e0102; the stage it waited for does not come to e9001 alone)
+2027-04-01 12:00  approve  by e0102  -> last (e4001), due 2027-04-06 end of day; second skipped (the head of legal is empty)
+2027-04-01 13:00  approve  by e4001  -> approved
+scenario `the_later_stage_is_skipped_for_lack_of_an_approver`: as written (5 rows)

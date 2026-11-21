@@ -12,6 +12,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::tmp::tmpdir_in;
 use ritsu_testkit::{Need, TempDir, ready, skip};
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -113,6 +119,237 @@ fn an_app_passes_one_value_of_a_shared_enum_to_two_rules() {
         };
         let o = Command::new(&my[0]).args(&my[1..]).args(["--strict", "--no-color-output", "app.py"]).current_dir(&py).output().expect("cannot start mypy");
         assert!(o.status.success(), "the app does not pass mypy --strict:\n{}", String::from_utf8_lossy(&o.stdout));
+    }
+}
+
+/// A program, run in `dir`, that is to print `want`.
+fn prints(dir: &Path, program: &[&str], want: &str) {
+    let o = Command::new(program[0]).args(&program[1..]).current_dir(dir).output().unwrap_or_else(|e| panic!("cannot start {}: {e}", program[0]));
+    assert!(o.status.success(), "{} in {}:\n{}{}", program.join(" "), dir.display(), String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), want, "{} in {}", program.join(" "), dir.display());
+}
+
+/// A rule's module hands on, beside the type of each enum it reads from a file of enums, what the
+/// enums file's module has for the enum (§15.319): the functions of its order and of its display
+/// names, in the languages where they are functions and not methods of the type — TypeScript,
+/// JavaScript, Python, Ruby with its signatures, PHP. An app written against the rule's module alone
+/// calls them, and the type is the enums module's own. Go, Rust, Swift and Java have them as methods
+/// of the one type the rule's module names.
+#[test]
+fn a_rules_module_hands_on_the_order_and_display_names_of_the_enums_it_reads() {
+    let tmp = TempDir::new("enums-handed");
+    let out = tmp.path().to_string_lossy().into_owned();
+    let (c, _, e) = run(&["gen", "tests/corpus/catalog_shipping.rule", "--target", "python", "--target", "typescript", "--target", "javascript", "--target", "ruby", "--target", "php", "--out", &out]);
+    assert_eq!(c, 0, "{e}");
+    // Fragile goods to the rest of the country, 10 kg: 14USD, and 7USD for the packing.
+    let want = "21 Electronics 2 Rest of the country";
+    if ready(Need::Python, || have("python3"), "no python3, so the Python app was not run") {
+        let py = tmp.path().join("python");
+        std::fs::write(
+            py.join("app.py"),
+            "import catalog\n\
+             from catalog_shipping import Category, Kilogram, Zone, catalog_shipping, category_label, zone_label, zone_rank\n\n\
+             assert Category is catalog.Category and Zone is catalog.Zone\n\
+             print(catalog_shipping(Category.ELECTRONICS, Zone.NATIONAL, Kilogram(10)), category_label(Category.ELECTRONICS), zone_rank(Zone.NATIONAL), zone_label(Zone.NATIONAL))\n",
+        )
+        .unwrap();
+        prints(&py, &["python3", "app.py"], want);
+        match mypy() {
+            Some(my) => {
+                let o = Command::new(&my[0]).args(&my[1..]).args(["--strict", "--no-color-output", "app.py"]).current_dir(&py).output().expect("cannot start mypy");
+                assert!(o.status.success(), "the app does not pass mypy --strict:\n{}", String::from_utf8_lossy(&o.stdout));
+            }
+            None => skip("neither mypy nor uvx, so the types of the Python app were not checked"),
+        }
+    }
+    if ready(Need::Node, || have("node"), "no node, so the TypeScript and JavaScript apps were not run") {
+        let ts = tmp.path().join("typescript");
+        std::fs::write(ts.join("package.json"), "{\"type\": \"module\"}\n").unwrap();
+        std::fs::write(
+            ts.join("app.ts"),
+            "import * as catalog from \"./catalog.ts\";\n\
+             import { Category, Zone, catalog_shipping, categoryLabel, parseCategory, zoneLabel, zoneRank, type Kilogram } from \"./catalog_shipping.ts\";\n\n\
+             const goods = parseCategory(\"electronics\");\n\
+             if (Category !== catalog.Category || goods !== catalog.Category.ELECTRONICS) throw new Error(\"two types of one enum\");\n\
+             console.log(String(catalog_shipping(goods, Zone.NATIONAL, 10n as Kilogram)), categoryLabel(goods), zoneRank(Zone.NATIONAL), zoneLabel(Zone.NATIONAL));\n",
+        )
+        .unwrap();
+        prints(&ts, &["node", "--no-warnings", "app.ts"], want);
+        match ritsu_testkit::tools::find("TSC", Some(Path::new("tools/node_modules/.bin/tsc")), "tsc", &["--version"]) {
+            Some(tsc) => {
+                let mut c = Command::new(&tsc);
+                // with the two flags a project that compiles the modules may set (§15.342)
+                c.args(["--strict", "--noUnusedLocals", "--noUnusedParameters", "--noEmit", "--allowImportingTsExtensions", "--erasableSyntaxOnly", "--module", "nodenext", "--target", "es2022", "--types", "node"]);
+                if let Ok(types) = std::fs::canonicalize(root().join("tools/node_modules/@types")) {
+                    c.arg("--typeRoots").arg(types);
+                }
+                let o = c.arg("app.ts").current_dir(&ts).output().expect("cannot start tsc");
+                assert!(
+                    o.status.success(),
+                    "the app does not pass tsc --strict --noUnusedLocals --noUnusedParameters:\n{}{}",
+                    String::from_utf8_lossy(&o.stdout),
+                    String::from_utf8_lossy(&o.stderr)
+                );
+            }
+            None => skip("tsc is not here (npm ci --prefix tools puts it there); the TypeScript app is not held to tsc --strict"),
+        }
+        let js = tmp.path().join("javascript");
+        std::fs::write(
+            js.join("app.mjs"),
+            "import * as catalog from \"./catalog.mjs\";\n\
+             import { Category, Zone, catalog_shipping, categoryLabel, parseCategory, zoneLabel, zoneRank } from \"./catalog_shipping.mjs\";\n\n\
+             const goods = parseCategory(\"electronics\");\n\
+             if (Category !== catalog.Category || goods !== catalog.Category.ELECTRONICS) throw new Error(\"two types of one enum\");\n\
+             console.log(String(catalog_shipping(goods, Zone.NATIONAL, 10n)), categoryLabel(goods), zoneRank(Zone.NATIONAL), zoneLabel(Zone.NATIONAL));\n",
+        )
+        .unwrap();
+        prints(&js, &["node", "app.mjs"], want);
+    }
+    if ready(Need::Ruby, || have("ruby"), "no ruby, so the Ruby app was not run") {
+        let rb = tmp.path().join("ruby");
+        std::fs::write(
+            rb.join("app.rb"),
+            "require_relative \"catalog_shipping\"\n\n\
+             raise \"two types of one enum\" unless CatalogShipping::Category.equal?(Catalog::Category)\n\
+             goods = CatalogShipping::Category::ELECTRONICS\n\
+             zone = CatalogShipping::Zone::NATIONAL\n\
+             puts [CatalogShipping.catalog_shipping(goods, zone, 10), CatalogShipping.category_label(goods), CatalogShipping.zone_rank(zone), CatalogShipping.zone_label(zone)].join(\" \")\n",
+        )
+        .unwrap();
+        prints(&rb, &["ruby", "app.rb"], want);
+        if have("steep") && have("rbs") {
+            std::fs::write(rb.join("Steepfile"), "target :app do\n  signature \"sig\"\n  check \"catalog.rb\", \"catalog_shipping.rb\"\nend\n").unwrap();
+            let o = Command::new("steep").arg("check").current_dir(&rb).output().expect("cannot start steep");
+            let said = String::from_utf8_lossy(&o.stdout).into_owned();
+            assert!(said.contains("No type error detected"), "the Ruby does not pass steep against its signature:\n{said}");
+        } else {
+            skip("steep or rbs is not here; the Ruby is not held to its signature");
+        }
+    }
+    if ready(Need::Php, || have("php"), "no php, so the PHP app was not run") {
+        let php = tmp.path().join("php");
+        std::fs::write(
+            php.join("app.php"),
+            "<?php\n\ndeclare(strict_types=1);\n\nrequire_once __DIR__ . '/catalog_shipping.php';\n\n\
+             use CatalogShipping\\Category;\nuse CatalogShipping\\Zone;\n\n\
+             if (Category::ELECTRONICS !== \\Catalog\\Category::ELECTRONICS) {\n    throw new \\RuntimeException('two types of one enum');\n}\n\
+             echo implode(' ', [CatalogShipping\\catalog_shipping(Category::ELECTRONICS, Zone::NATIONAL, 10), CatalogShipping\\category_label(Category::ELECTRONICS), CatalogShipping\\zone_rank(Zone::NATIONAL), CatalogShipping\\zone_label(Zone::NATIONAL)]), \"\\n\";\n",
+        )
+        .unwrap();
+        prints(&php, &["php", "app.php"], want);
+        // The rule's name for the enum (`class_alias`) as a type PHP holds a value to when it runs:
+        // a parameter and what is returned take the owner's value, `instanceof` says so both ways,
+        // and a value of another enum is refused. No static analyser is run (§15.319).
+        std::fs::write(
+            php.join("types.php"),
+            "<?php\n\ndeclare(strict_types=1);\n\nrequire_once __DIR__ . '/catalog_shipping.php';\n\n\
+             use CatalogShipping\\Category;\nuse CatalogShipping\\Zone;\n\n\
+             function goods(Category $c): Category\n{\n    return $c;\n}\n\n\
+             $owners = \\Catalog\\Category::ELECTRONICS;\n\
+             $said = [goods($owners)->name, var_export($owners instanceof Category, true), var_export(Category::FOOD instanceof \\Catalog\\Category, true)];\n\
+             try {\n    goods(Zone::NATIONAL);\n    $said[] = 'let through';\n} catch (\\TypeError $e) {\n    $said[] = 'TypeError';\n}\n\
+             echo implode(' ', $said), \"\\n\";\n",
+        )
+        .unwrap();
+        prints(&php, &["php", "types.php"], "ELECTRONICS true true TypeError");
+    }
+}
+
+/// `--python-package` (§15.319) writes the Python modules to be put inside a package: a rule's
+/// module reads the module of the enums file by a relative import, and an app's package reads both
+/// where it puts them (`<package>/rulec/python/`). The same rule's module without the flag reads it
+/// from the top of the output directory, so `--check` holds a directory to the flag it was written
+/// with. The flag wants `--target python`, and refuses the Connect service, which is read and
+/// type-checked at the top of the output directory beside buf's modules (§15.327).
+#[test]
+fn python_package_writes_modules_a_package_reads() {
+    let tmp = TempDir::new("enums-package");
+    let shop = tmp.path().join("shop");
+    let out = shop.join("rulec").to_string_lossy().into_owned();
+    let write = |more: &[&str]| run(&[&["gen", "tests/corpus/catalog_shipping.rule", "--target", "python", "--out", &out][..], more].concat());
+    let (c, _, e) = write(&["--python-package"]);
+    assert_eq!(c, 0, "{e}");
+    let module = std::fs::read_to_string(shop.join("rulec/python/catalog_shipping.py")).unwrap();
+    assert!(module.contains("\nfrom .catalog import Category as Category, Zone as Zone, "), "{module}");
+    assert_eq!(write(&["--python-package", "--check"]).0, 0, "--check with the flag the directory was written with");
+    assert_eq!(write(&["--check"]).0, 1, "--check without it");
+    if ready(Need::Python, || have("python3"), "no python3, so the app over the package was not run") {
+        std::fs::write(shop.join("__init__.py"), "").unwrap();
+        std::fs::write(
+            tmp.path().join("app.py"),
+            "from shop.rulec.python import catalog\n\
+             from shop.rulec.python.catalog_shipping import Category, Kilogram, Zone, catalog_shipping, category_label\n\n\
+             assert Category is catalog.Category\n\
+             print(catalog_shipping(Category.ELECTRONICS, Zone.NATIONAL, Kilogram(10)), category_label(Category.ELECTRONICS))\n",
+        )
+        .unwrap();
+        prints(tmp.path(), &["python3", "app.py"], "21 Electronics");
+        match mypy() {
+            Some(my) => {
+                let o = Command::new(&my[0]).args(&my[1..]).args(["--strict", "--no-color-output", "app.py"]).current_dir(tmp.path()).output().expect("cannot start mypy");
+                assert!(o.status.success(), "the app does not pass mypy --strict:\n{}", String::from_utf8_lossy(&o.stdout));
+            }
+            None => skip("neither mypy nor uvx, so the types of the app were not checked"),
+        }
+    }
+    let flag = "`--python-package` says how the Python modules are put, and there is no `--target python`";
+    for (args, said) in [
+        (&["gen", "tests/corpus/catalog_shipping.rule", "--target", "go", "--python-package"][..], flag.to_string()),
+        (&["gen", "tests/corpus/catalog_shipping.rule", "--python-package"][..], flag.to_string()),
+        (
+            &["gen", "tests/corpus/catalog_shipping.rule", "--target", "python", "--target", "proto", "--extra", "connect", "--extra", "runner", "--python-package"][..],
+            "`--extra connect` writes a service that is read at the top of the output directory beside the protobuf modules buf writes there, and type-checked there (`mypy --strict`); a module put inside a package (`--python-package`) reads its neighbours by relative imports, which the type checker cannot follow from there".to_string(),
+        ),
+    ] {
+        let at = tmp.path().join("refused").to_string_lossy().into_owned();
+        let (c, o, e) = run(&[args, &["--out", &at]].concat());
+        assert_eq!((c, o.as_str(), e.trim_end()), (2, "", format!("error: {said}").as_str()), "{args:?}");
+        assert!(!tmp.path().join("refused").exists(), "{args:?} wrote files");
+    }
+}
+
+/// The runner and the MCP server beside modules written to go inside a package (`--python-package`,
+/// §15.327) read them as the modules of a package their directory makes, so `rulec test` holds the
+/// modules a package puts in place to the reference evaluator as it holds any other: two rules that
+/// read an `enums` file, in English and in Japanese, through the runner, its display names and the
+/// MCP server over stdio and HTTP. A rule that reads no `enums` file is written the same with the
+/// flag and without it, its runner and its MCP server too.
+#[test]
+fn rulec_test_runs_the_modules_written_to_go_inside_a_package() {
+    let tmp = TempDir::new("enums-package-runner");
+    let write = |rules: &[&str], at: &Path, more: &[&str]| {
+        let out = at.to_string_lossy().into_owned();
+        let (c, _, e) = run(&[&["gen"][..], rules, &["--target", "python", "--extra", "runner", "--extra", "mcp", "--extra", "vectors", "--out", &out], more].concat());
+        assert_eq!(c, 0, "{e}");
+    };
+    let generated = tmp.path().join("gen");
+    write(&["tests/corpus/catalog_shipping.rule", "tests/corpus/品目の送料.rule"], &generated, &["--python-package"]);
+    for alias in ["catalog_shipping", "goods_shipping"] {
+        for file in [format!("{alias}_runner.py"), format!("{alias}_mcp.py")] {
+            let code = std::fs::read_to_string(generated.join("python").join(&file)).unwrap();
+            assert!(code.contains(&format!("\nm = importlib.import_module(\"_rulec.{alias}\")\n")), "{file} does not read the module from the package:\n{code}");
+            assert!(!code.contains(&format!("\nimport {alias} as m\n")), "{file} reads the module by its name");
+        }
+    }
+    let (plain, flagged) = (tmp.path().join("plain"), tmp.path().join("flagged"));
+    write(&["tests/corpus/期間区分.rule"], &plain, &[]);
+    write(&["tests/corpus/期間区分.rule"], &flagged, &["--python-package"]);
+    let python = std::fs::read_dir(plain.join("python")).unwrap().count();
+    assert_eq!(std::fs::read_dir(flagged.join("python")).unwrap().count(), python);
+    for f in std::fs::read_dir(plain.join("python")).unwrap().flatten() {
+        let name = f.file_name();
+        assert_eq!(std::fs::read(f.path()).unwrap(), std::fs::read(flagged.join("python").join(&name)).unwrap(), "{name:?} differs with the flag");
+    }
+    if !ready(Need::Python, || have("python3"), "no python3, so the runner and the MCP server were not run") {
+        return;
+    }
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&generated)).args(["test", generated.to_str().unwrap()]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
+    for alias in ["catalog_shipping", "goods_shipping"] {
+        for via in ["(Python)", "(Python, labels)", "(Python, MCP)", "(Python, MCP/HTTP)"] {
+            assert!(said.lines().any(|l| l.starts_with(&format!("ok    {alias} {via} "))), "{alias} {via} did not run:\n{said}");
+        }
     }
 }
 
@@ -289,17 +526,48 @@ fn every_language_answers_the_display_names_and_the_keyword_names() {
     args.extend(rulec::targets::UP_TO_0_40.iter().map(|s| s.to_string()));
     let (c, _, e) = run_in(d, &args.iter().map(String::as_str).collect::<Vec<_>>());
     assert_eq!(c, 0, "{e}");
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmpdir_in(&generated))
-        .args(["test", generated.to_str().unwrap()])
-        .output()
-        .expect("cannot start rulec test");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-    assert!(o.status.success(), "{said}");
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&generated)).args(["test", generated.to_str().unwrap()]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
     assert!(said.contains("ok    plan_receipt (Python, labels) 4 display names"), "{said}");
     assert!(said.contains("ok    plan_fee (Python, labels) 4 display names"), "{said}");
     assert!(said.lines().any(|l| l.starts_with("ok    fare (Python)")), "{said}");
+    for l in said.lines().filter(|l| l.starts_with("warning") || l.starts_with("skip")) {
+        eprintln!("{l}");
+    }
+}
+
+/// An enum of one value, with a display name and without, the rule's own and one an `enums` file
+/// declares: every language's code reads it, and answers as the reference does. A function over
+/// the values of such an enum has one answer and no choice to make; Ruby read no `case` with only
+/// an `else` (`expected a when or in clause after case`).
+#[test]
+fn an_enum_of_one_value_is_written_so_that_every_language_reads_it() {
+    if !ready(Need::Python, || have("python3"), "no python3, so nothing was run") {
+        return;
+    }
+    let tmp = TempDir::new("enums-one-value");
+    let generated = tmp.path().join("gen");
+    let dir = root().join("tests/one_value");
+    let mut args: Vec<String> = vec!["gen".into()];
+    for f in ["one_way.rule", "一つの道.rule"] {
+        args.push(dir.join(f).to_string_lossy().into_owned());
+    }
+    args.extend(["--out".into(), generated.to_string_lossy().into_owned()]);
+    args.extend(rulec::targets::UP_TO_0_40.iter().map(|s| s.to_string()));
+    let (c, _, e) = run(&args.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(c, 0, "{e}");
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&generated)).args(["test", generated.to_str().unwrap()]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
+    for alias in ["one_way", "one_way_ja"] {
+        assert!(said.lines().any(|l| l.starts_with(&format!("ok    {alias} (Python)"))), "{said}");
+        assert!(said.contains(&format!("ok    {alias} (Python, labels) 2 display names")), "{said}");
+        if ready(Need::Ruby, || have("ruby"), "ruby is not installed") {
+            assert!(said.lines().any(|l| l.starts_with(&format!("ok    {alias} (Ruby)"))), "{said}");
+            assert!(said.contains(&format!("ok    {alias} (Ruby, labels) 2 display names")), "{said}");
+        }
+    }
     for l in said.lines().filter(|l| l.starts_with("warning") || l.starts_with("skip")) {
         eprintln!("{l}");
     }
@@ -352,8 +620,9 @@ fn a_value_every_range_keeps_out_is_not_said_to_be_unused() {
 /// package then names the type by the package that owns it, `sizes.Size`, as Java names it by its
 /// class, and declares no alias of it; the constants and the parser are there as for any other
 /// enum it reads. Before, the package declared both and did not compile, and `check` said nothing.
-/// A rule and an enum it declares itself under one name cannot be written apart in Go or Java, and
-/// `check` says so (W121), naming both targets.
+/// For a rule and an enum it declares itself under one name, the code written for them puts a number
+/// on the enum's type in Go and Java (§15.326, `tests/same_names.rs`), and W121 says the type each
+/// writes and the two names that met, keeping no target from being written (§15.337).
 #[test]
 fn a_rule_named_like_the_enum_it_reads_compiles_in_go() {
     let t = TempDir::new("enums-rule-named-like-its-enum");
@@ -379,19 +648,24 @@ fn a_rule_named_like_the_enum_it_reads_compiles_in_go() {
     let field = j.get("go").and_then(|g| g.get("input_fields")).and_then(|x| x.as_arr()).and_then(|a| a.first().cloned()).unwrap();
     assert_eq!(field.get("type").and_then(|x| x.as_str()), Some("sizes.Size"), "{api}");
     if ready(Need::Go, || Command::new("go").arg("version").output().is_ok_and(|o| o.status.success()), "go is not installed") {
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&d.join("gen"))).current_dir(d).args(["test", "gen"]).output().expect("cannot start rulec test");
-        let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-        assert!(o.status.success(), "{said}");
+        let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&d.join("gen"))).current_dir(d).args(["test", "gen"]), RULEC_LIMIT, "rulec test running the generated code");
+        let said = o.stdout.clone() + &o.stderr;
+        assert!(o.ok, "{said}");
         assert!(said.lines().any(|l| l.starts_with("ok    size (Go)")), "{said}");
     }
-    // The rule's own enum of the same name: no way to write the two apart in Go and Java.
+    // The rule's own enum of the same name: W121, saying the type Go and Java write, and no target.
     let own = rule.replace("import enum size from \"shared/sizes.rule\"", "enum size = small | large");
-    std::fs::write(d.join("own.rule"), own).unwrap();
+    std::fs::write(d.join("own.rule"), &own).unwrap();
     let (c, out, _) = run_in(d, &["check", "own.rule"]);
     assert_eq!(c, 0, "{out}");
-    assert!(out.contains("warning[W121]: The type of enum `size` takes the name the rule takes"), "{out}");
-    assert!(out.contains(" Go: the rule's package declares the rule's function `Size` and the enum's type `Size` side by side"), "{out}");
-    assert!(out.contains(" Java: the enum is nested in the class `Size` the rule is"), "{out}");
+    assert!(out.contains("warning[W121]: The type of enum `size` is written `Size2` in the code generated for Go and Java"), "{out}");
+    assert!(out.contains(" Go: the rule's package declares `Size` for the rule, and one of the names made of the enum is `Size` as well; a package holds one thing of a name, so the enum's type is `Size2` there. The names made of it follow (`Size2Small`, `Size2Large`, `ParseSize2`)."), "{out}");
+    assert!(out.contains(" Java: the enum is nested in the rule's class `Size`, which holds no type of its own name, so the enum's type is `Size2` there."), "{out}");
+    let path = d.join("own.rule").to_string_lossy().into_owned();
+    let ds = rulec::check_source(&own, &path);
+    assert!(ds.iter().all(|d| d.code != "W121" || d.targets.is_empty()), "{:?}", ds.iter().map(|d| (d.code, d.targets.clone())).collect::<Vec<_>>());
+    let (c, out, e) = run_in(d, &rulec::targets::up_to_0_40(&["gen", "own.rule", "--out", "gen-own"]));
+    assert_eq!(c, 0, "{out}{e}");
 }
 
 /// A contribution stands for the file it comes down to (§15.231), and one that adds to an `enums`

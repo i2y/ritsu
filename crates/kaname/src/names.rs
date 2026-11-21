@@ -303,7 +303,7 @@ pub fn column_ty(t: &ColumnType, rule: &Path) -> Ty {
     match t {
         ColumnType::Bool => Ty::Bool,
         ColumnType::Str => Ty::Str,
-        ColumnType::Date => Ty::Date,
+        ColumnType::Date { .. } => Ty::Date,
         ColumnType::Enum { name: n, .. } => Ty::Enum(EnumId::plain(Owner::Rule(rule.to_path_buf()), n.clone())),
         ColumnType::Num { unit: Some(u), .. } => Ty::Num(NumTy::of(u.clone())),
         ColumnType::Num { unit: None, .. } => Ty::Error,
@@ -312,7 +312,8 @@ pub fn column_ty(t: &ColumnType, rule: &Path) -> Ty {
 }
 
 /// The place a rule's input or field is: its type, and its range as values of its unit (the
-/// integers on the wire are counted in steps for a rate).
+/// integers on the wire are counted in steps for a rate), a date's as day numbers, as kaname holds a
+/// date's range.
 pub fn column_slot(c: &Column, rule: &Path) -> Slot {
     let ty = column_ty(&c.ty, rule);
     let mut inner = &c.ty;
@@ -324,9 +325,33 @@ pub fn column_slot(c: &Column, rule: &Path) -> Slot {
             let step = unit_step(u);
             Some(Range { min: min.map(|v| Rat::int(v).mul(step)), max: max.map(|v| Rat::int(v).mul(step)) })
         }
+        ColumnType::Date { min, max } if min.is_some() || max.is_some() => Some(Range { min: min.map(|v| Rat::int(v.into())), max: max.map(|v| Rat::int(v.into())) }),
         _ => None,
     };
     Slot { ty, range, count: None }
+}
+
+/// The place an output of a rule is, as a module reads the answer: the column's, a rate on the step
+/// its `round` puts it on where that is a whole number of the steps it travels in (`round down(0.5%)`
+/// of a `rate[step 0.25%]` answers on 0.5%, DESIGN 6.1). What travels is the column's:
+/// the generated code and the interpreter count the integer on the wire in [`column_slot`]'s step.
+pub fn output_slot(c: &Column, rule: &Path) -> Slot {
+    fn on(t: &mut Ty, g: Rat) {
+        match t {
+            Ty::Opt(x) => on(x, g),
+            Ty::Num(n) if n.is_rate() && g.num > 0 && n.step.is_some_and(|s| s.num > 0 && g.checked_div(s).is_some_and(|q| q.is_int())) => n.step = Some(g),
+            _ => {}
+        }
+    }
+    let mut s = column_slot(c, rule);
+    let mut inner = &c.ty;
+    while let ColumnType::Opt(t) = inner {
+        inner = t;
+    }
+    if let ColumnType::Num { round: Some(g), .. } = inner {
+        on(&mut s.ty, *g);
+    }
+    s
 }
 
 /// The values an input of a rule of an ordered enum lets in, where it holds the enum to a range
@@ -367,39 +392,490 @@ pub fn book_unit(facts: &BookFacts, unit: &str) -> Option<Unit> {
     })
 }
 
-/// The words the generated code cannot take as a name (E007): the reserved words of TypeScript's
-/// strict mode, Python's keywords, Go's keywords, and kaname's own helpers.
-pub fn taken_word(w: &str) -> bool {
-    ritsu_emit::words::typescript::NAMES.contains(w) || ritsu_emit::words::python::KEYWORDS.contains(&w) || ritsu_emit::words::go::KEYWORDS.contains(&w) || kw::HELPERS.contains(&w)
+/// The names the Rust of a package cannot give a module (W001 and E008, DESIGN 36.3): a module is a
+/// module of Rust's `glue/` and its file, and `crate`, `self`, `super` and `Self` are words Rust names
+/// no module, and `mod` and `door` the files kaname writes there itself (the directory's own, which
+/// `glue.rs` is, and the package's door).
+pub const NO_RUST_MODULE: [&str; 6] = ["crate", "self", "super", "Self", "mod", "door"];
+
+/// A name as a target spells it, for [`Dc::spelled`]: the spelling, the name in the source and what
+/// it names; for a type, its name in Pascal case before the target's marks (the type of a value of a
+/// sum is said of already where that is another's, E006 of [`Dc::names`]).
+#[derive(Clone)]
+struct Spelled {
+    spelled: String,
+    shown: String,
+    at: Span,
+    keys: Vec<String>,
+    what: Text,
+    pascal: Option<String>,
+    variant: bool,
 }
 
-/// The names the Rust of a package cannot give a module (W001 and E008, DESIGN 36.3): a module is a
-/// module of Rust's `glue/` and its file, and `crate`, `self` and `Self` are words Rust names no
-/// module (`super` is a reserved word of TypeScript, E007), and `mod` and `door` the files kaname
-/// writes there itself (the directory's own, which `glue.rs` is, and the package's door). The other
-/// targets take all five: `check` warns (W001), and the package of Rust stops (E008).
-pub const NO_RUST_MODULE: [&str; 5] = ["crate", "self", "Self", "mod", "door"];
-
-/// W001: the module is named with one of [`NO_RUST_MODULE`], which breaks the generated Rust alone (DESIGN
-/// 36.3). Its last note says what to do, which `gen::stops` says otherwise where the warning stops a
-/// package of Rust (E008).
-pub fn no_rust_module(m: &Module, path: &str, src: &str) -> Option<Diag> {
-    let a = m.name.ascii();
-    if !NO_RUST_MODULE.contains(&a) || !ritsu_emit::ident::is_ascii_ident(a) {
-        return None;
+impl Spelled {
+    fn new(spelled: String, n: &Name, what: Text, pascal: Option<String>) -> Spelled {
+        let at = n.alias.as_ref().map(|(_, s)| *s).unwrap_or(n.span);
+        let mut keys = vec![n.text.clone()];
+        if let Some((a, _)) = &n.alias {
+            keys.push(a.clone());
+        }
+        Spelled { spelled, shown: n.text.clone(), at, keys, what, pascal, variant: false }
     }
-    let sp = m.name.alias.as_ref().map(|(_, s)| *s).unwrap_or(m.name.span);
-    let d = Diag::at("W001", path, sp.line, sp.col, tr!("生成する Rust は、`{a}` をモジュールの名前に使えません", "The generated Rust cannot take `{a}` as the name of a module")).source(src);
-    Some(
-        d.note(tr!(
-            "生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になります。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。",
-            "In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: `crate`, `self` and `Self` are words Rust names no module, and `mod` and `door` are the files kaname writes into `glue/` itself (the directory's own, and the package's door)."
-        ))
-        .note(tr!(
-            "`ritsu gen --target rust` はこのモジュールで止まります（E008）。Rust を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。",
-            "`ritsu gen --target rust` stops at this module (E008). If you do not generate Rust, leave it; if you do, choose another name or alias."
-        )),
-    )
+
+    fn variant(self) -> Spelled {
+        Spelled { variant: true, ..self }
+    }
+
+    /// A value of the enum `e`, shown with the enum's name (`way.ab`).
+    fn of(self, e: &Name) -> Spelled {
+        Spelled { shown: format!("{}.{}", e.text, self.shown), ..self }
+    }
+
+    /// Whether the check says the two already: one name twice in one space of the source (E006 of
+    /// [`Dc::unique`]), or the type of a value of a sum named as another type is (E006 of
+    /// [`Dc::names`]).
+    fn said_already(&self, other: &Spelled) -> bool {
+        if self.variant || other.variant {
+            return self.pascal.is_some() && self.pascal == other.pascal;
+        }
+        self.keys.iter().any(|k| other.keys.contains(k))
+    }
+}
+
+/// Whether a name is of the form `__x__`, which Python keeps for itself.
+fn dunder(a: &str) -> bool {
+    a.len() > 4 && a.starts_with("__") && a.ends_with("__")
+}
+
+/// A target's name, as a message shows it.
+fn target_shown(t: crate::r#gen::Target) -> &'static str {
+    match t {
+        crate::r#gen::Target::TypeScript => "TypeScript",
+        crate::r#gen::Target::Python => "Python",
+        crate::r#gen::Target::Go => "Go",
+        crate::r#gen::Target::Rust => "Rust",
+    }
+}
+
+/// Words joined as a message lists them: `A`, `A と B` and `A and B`, `A、B、C` and `A, B and C`.
+fn joined(xs: &[String]) -> (String, String) {
+    match xs {
+        [] => (String::new(), String::new()),
+        [a] => (a.clone(), a.clone()),
+        [a, b] => (format!("{a} と {b}"), format!("{a} and {b}")),
+        [rest @ .., z] => (xs.join("、"), format!("{} and {z}", rest.join(", "))),
+    }
+}
+
+/// Targets as a message names them, in their order: `Python`, `TypeScript and Python`, `TypeScript,
+/// Python and Rust` (`TypeScript と Python`, `TypeScript、Python、Rust`).
+fn targets_shown(ts: &[crate::r#gen::Target]) -> (String, String) {
+    joined(&ts.iter().map(|t| target_shown(*t).to_string()).collect::<Vec<_>>())
+}
+
+/// The generated code of the targets `ts`, as a headline names it: the targets (` Python `), or
+/// `コード` and `code` where they are every target.
+fn generated(ts: &[crate::r#gen::Target]) -> (String, String) {
+    if ts.len() == crate::r#gen::Target::ALL.len() {
+        ("コード".to_string(), "code".to_string())
+    } else {
+        let (ja, en) = targets_shown(ts);
+        (format!(" {ja} "), en)
+    }
+}
+
+/// The last note of W001 and W002 (DESIGN 10.3): the commands that stop at the module (E008), and
+/// what to do where one of the targets is generated; for two names, to rename one of them.
+fn stops_note(ts: &[crate::r#gen::Target], two: bool) -> Text {
+    let (ja_keys, en_keys) = joined(&ts.iter().map(|t| format!("`ritsu gen --target {}`", t.key())).collect::<Vec<_>>());
+    let (ja_do, en_do) = if two { ("どちらかの名前か別名を替えてください", "rename one of them, or give it another alias") } else { ("別の名前か別名にしてください", "choose another name or alias") };
+    let names: Vec<&str> = ts.iter().map(|t| target_shown(*t)).collect();
+    match names.as_slice() {
+        [t] => tr!(
+            "{ja_keys} はこのモジュールで止まります（E008）。{t} を生成しないなら、このままで構いません。生成するなら、{ja_do}。",
+            "{en_keys} stops at this module (E008). If you do not generate {t}, leave it; if you do, {en_do}."
+        ),
+        [a, b] => tr!(
+            "{ja_keys} はこのモジュールで止まります（E008）。{a} と {b} のどちらも生成しないなら、このままで構いません。生成するなら、{ja_do}。",
+            "{en_keys} stop at this module (E008). If you generate neither {a} nor {b}, leave it; if you do, {en_do}."
+        ),
+        _ => {
+            let (ja_t, _) = targets_shown(ts);
+            let (rest, z) = names.split_at(names.len() - 1);
+            let en_t = format!("{} or {}", rest.join(", "), z[0]);
+            tr!(
+                "{ja_keys} はこのモジュールで止まります（E008）。{ja_t} のどれも生成しないなら、このままで構いません。生成するなら、{ja_do}。",
+                "{en_keys} stop at this module (E008). If you generate none of {en_t}, leave it; if you do, {en_do}."
+            )
+        }
+    }
+}
+
+/// A name a host reads that some targets cannot write as the host reads it, or two that some write
+/// alike, as [`unwritten`] finds it: what `check` says of it, and the targets it holds for.
+pub struct Unwritten {
+    pub diag: Diag,
+    pub targets: Vec<crate::r#gen::Target>,
+    /// Two names, one of which is to be renamed.
+    two: bool,
+}
+
+impl Unwritten {
+    /// E008 (DESIGN 10.3): the warning, where `ritsu gen` writes a target it holds for, at the same
+    /// place and in the same words, with what to do in place of its last note (which says the command
+    /// stops).
+    pub fn stop(self) -> Diag {
+        let mut d = self.diag;
+        d.code = "E008";
+        d.severity = crate::diag::Severity::Error;
+        d.notes.pop();
+        d.notes.push(if self.two {
+            tr!(
+                "どちらかの名前か別名を替えてください。使わない出力先なら、`--target` で使う出力先を挙げてください。",
+                "Rename one of them, or give it another alias. For a target you do not use, name the ones you use with `--target`."
+            )
+        } else {
+            tr!(
+                "別の名前か別名にしてください。使わない出力先なら、`--target` で使う出力先を挙げてください。",
+                "Choose another name or alias. For a target you do not use, name the ones you use with `--target`."
+            )
+        });
+        d
+    }
+}
+
+/// The names a host reads that a target cannot write as the host reads them, or writes alike (DESIGN
+/// 10.3), each with the targets it holds for: one name ([`unwritable`]) and two ([`alike`]). Where a
+/// target remains that writes it, `check` warns (W001, W002) and `ritsu gen` stops at it for each
+/// target it holds for that the command names (E008, [`Unwritten::stop`]); where none does, `check`
+/// says it as an error (E007, E006). The other names of the generated code (a function's inner one,
+/// the checks, the module's constant, the names of the imports, and the parameters and the type
+/// parameters the code does not show a host) are the generator's, which moves them aside from these
+/// and from the targets' words ([`crate::r#gen::taken`], [`crate::r#gen::plan::param_names`]). The
+/// functions after the module's own `own` are its properties (DESIGN 38.2), which no host reads.
+pub fn unwritten(m: &Module, d: &Decls, own: usize, path: &str, src: &str) -> Vec<Unwritten> {
+    let mut out = unwritable(m, d, own, path, src);
+    out.extend(alike(d, own, path, src));
+    out
+}
+
+/// What the headline of a name a target cannot write says it is (DESIGN 10.3).
+#[derive(Clone, PartialEq)]
+enum Head {
+    /// `The generated Python cannot take `class` as the name of a field`.
+    Take(String, Text),
+    /// `… cannot write `_1` as the name of a type`: a name in Pascal case that is no name.
+    Write(String, Text),
+    /// `… cannot write `tier._gold_` as the value `_GOLD_` of an enum`.
+    Value(String, String),
+    /// `… cannot write `none_` as the type `None``.
+    Type(String, String),
+}
+
+impl Head {
+    fn text(&self, ts: &[crate::r#gen::Target]) -> Text {
+        let (x, xe) = generated(ts);
+        match self {
+            Head::Take(a, what) => tr!("生成する{x}は、`{a}` を{}の名前に使えません", "The generated {xe} cannot take `{a}` as the name of a {}", what.ja; what.en),
+            Head::Write(a, what) => tr!("生成する{x}は、`{a}` を{}の名前に書けません", "The generated {xe} cannot write `{a}` as the name of a {}", what.ja; what.en),
+            Head::Value(v, m) => tr!("生成する{x}は、`{v}` を列挙の値の名前 `{m}` に書けません", "The generated {xe} cannot write `{v}` as the value `{m}` of an enum"),
+            Head::Type(a, p) => tr!("生成する{x}は、`{a}` を型の名前 `{p}` に書けません", "The generated {xe} cannot write `{a}` as the type `{p}`"),
+        }
+    }
+}
+
+/// One name a host reads that some targets cannot write as the host reads it (DESIGN 10.3): W001,
+/// or E007 where no target writes it. The reasons are each of some targets: the words of a target,
+/// where it writes the name as it is (Python's keywords in a module, a function a host calls, its
+/// parameter and a field; Go's keywords in a module's package; TypeScript's reserved words and the
+/// names strict mode does not bind in a function a host calls); what Python and TypeScript make of
+/// a name of a class or an object (`__x`, `__x__`, `__proto__`, TypeScript's `kind` of a value of a
+/// sum, Python's value `_x_` of an enum); a type's name in Pascal case that is no name or a keyword of
+/// Python (`_1`, `none_`); and the names Rust gives no module ([`NO_RUST_MODULE`]). A name a target
+/// writes otherwise (in Pascal case, in upper case, or as a raw identifier of Rust) is free to be one
+/// of its words.
+fn unwritable(m: &Module, d: &Decls, own: usize, path: &str, src: &str) -> Vec<Unwritten> {
+    use crate::r#gen::Target as Out;
+    use ritsu_emit::words::{go, python, typescript};
+    let at = |n: &Name| n.alias.as_ref().map(|(_, s)| *s).unwrap_or(n.span);
+    let mut found: Vec<(Span, Head, Vec<(Vec<Out>, Text)>)> = Vec::new();
+    let mut say = |sp: Span, head: Head, ts: Vec<Out>, why: Text| match found.iter_mut().find(|(s, h, _)| *s == sp && *h == head) {
+        Some((_, _, whys)) => whys.push((ts, why)),
+        None => found.push((sp, head, vec![(ts, why)])),
+    };
+    let keyword = |a: &str| tr!("`{a}` は Python の予約語です。", "`{a}` is a keyword of Python.");
+    // the module: its name is a module of `glue/` in every target, and Go's package
+    let a = m.name.ascii().to_string();
+    if ritsu_emit::ident::is_ascii_ident(&a) {
+        let head = Head::Take(a.clone(), tr!("モジュール", "module"));
+        if python::KEYWORDS.contains(&a.as_str()) {
+            say(at(&m.name), head.clone(), vec![Out::Python], keyword(&a));
+        }
+        let p = crate::r#gen::plan::go_package(&a);
+        if go::KEYWORDS.contains(&p.as_str()) {
+            say(at(&m.name), head.clone(), vec![Out::Go], tr!("Go のパッケージの名前は、`_` を除いた `{p}` で、Go の予約語です。", "Go's package is named `{p}`, the name with no `_`, a keyword of Go."));
+        }
+        if NO_RUST_MODULE.contains(&a.as_str()) {
+            say(at(&m.name), head, vec![Out::Rust], tr!(
+                "生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になります。`crate`、`self`、`super`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。",
+                "In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: `crate`, `self`, `super` and `Self` are words Rust names no module, and `mod` and `door` are the files kaname writes into `glue/` itself (the directory's own, and the package's door)."
+            ));
+        }
+    }
+    // the functions a host calls by name: TypeScript and Python write them as they are; Python keeps
+    // the names `__x__` for itself, and a module's (`__getattr__`, `__dir__`) change what it does
+    for f in &d.fns[..own.min(d.fns.len())] {
+        let a = f.name.ascii().to_string();
+        let head = Head::Take(a.clone(), tr!("関数", "function"));
+        if !f.inner() {
+            if typescript::NAMES.contains(&a) {
+                say(at(&f.name), head.clone(), vec![Out::TypeScript], tr!("`{a}` は、TypeScript が名前にできない語です（予約語と、strict mode が名前にしない語）。", "`{a}` is a word TypeScript takes as no name (a reserved word, or one strict mode does not bind)."));
+            }
+            if python::KEYWORDS.contains(&a.as_str()) {
+                say(at(&f.name), head.clone(), vec![Out::Python], keyword(&a));
+            }
+            // Python's function a host calls takes what it is given by the parameters' names
+            for p in &f.params {
+                let b = p.name.ascii().to_string();
+                if python::KEYWORDS.contains(&b.as_str()) {
+                    say(at(&p.name), Head::Take(b.clone(), tr!("引数", "parameter")), vec![Out::Python], tr!(
+                        "生成する Python の関数は、ホストが引数を名前で渡す形なので、引数の名前をそのまま書きます。`{b}` は Python の予約語です。",
+                        "The generated Python's function takes what a host gives it by the parameters' names, which it writes as they are, and `{b}` is a keyword of Python."
+                    ));
+                }
+            }
+        }
+        if dunder(&a) {
+            say(at(&f.name), head, vec![Out::Python], tr!(
+                "Python は、`__x__` の形の名前を言語のために取ってあります（モジュールの `__getattr__` や `__dir__` は、モジュールの働きを変えます）。",
+                "Python keeps the names of the form `__x__` for itself (a module's `__getattr__` and `__dir__` change what the module does)."
+            ));
+        }
+    }
+    // the fields: Python writes each as the name of an attribute of its class, renames one that starts
+    // with `__` there (`_Line__x`) and keeps the names `__x__` for itself; an object of TypeScript's
+    // takes `__proto__` as its prototype, and tells the values of a sum apart by `kind`
+    let fields = d.records.iter().flat_map(|r| r.fields.iter().map(|f| (f, false))).chain(d.enums.iter().filter(|e| e.is_sum()).flat_map(|e| e.fields.iter().flatten().map(|f| (f, true))));
+    for (fd, of_sum) in fields {
+        let n = &fd.name;
+        let a = n.ascii().to_string();
+        let head = Head::Take(a.clone(), tr!("フィールド", "field"));
+        if python::KEYWORDS.contains(&a.as_str()) {
+            say(at(n), head.clone(), vec![Out::Python], tr!("生成する Python は、フィールドの名前を、データクラスの属性の名前としてそのまま書きます。`{a}` は Python の予約語です。", "The generated Python writes a field's name as it is, as the name of an attribute of a data class, and `{a}` is a keyword of Python."));
+        }
+        if dunder(&a) {
+            say(at(n), head.clone(), vec![Out::Python], tr!("Python は、`__x__` の形の名前を言語のために取ってあります（`__init__`、`__eq__` など、クラスの働きを決める名前）。", "Python keeps the names of the form `__x__` for itself (`__init__`, `__eq__`: the names that make what a class does)."));
+        } else if a.starts_with("__") {
+            say(at(n), head.clone(), vec![Out::Python], tr!("Python は、クラスの中の `__` で始まる名前を、クラスの名前を前に付けた名前に書き換えます（`__x` は `_Line__x`）。ホストは、フィールドをこの名前で読めません。", "Python renames a name that starts with `__` in a class, the class's name before it (`__x` is `_Line__x`): a host could not read the field by its name."));
+        }
+        if a == "__proto__" {
+            say(at(n), head.clone(), vec![Out::TypeScript], tr!("TypeScript（JavaScript）は、オブジェクトを書いたときの `__proto__` を、フィールドでなくオブジェクトのプロトタイプとして読みます。", "TypeScript (JavaScript) reads `__proto__` in an object it writes as the object's prototype, not as a field."));
+        }
+        if of_sum && a == "kind" {
+            say(at(n), head, vec![Out::TypeScript], tr!("生成する TypeScript は、フィールドを持つ値のある列挙の値を、フィールド `kind` で見分けます。", "The generated TypeScript tells the values of an enum whose values have fields apart by the field `kind`."));
+        }
+    }
+    // the values of enums whose values have no fields: Python's `enum` keeps the names `_x_` and
+    // `__x__` for itself, and takes one that starts with `__` as the class's own (no member)
+    for e in d.enums.iter().filter(|e| !e.is_sum()) {
+        for v in &e.values {
+            let m = crate::r#gen::plan::member_name(Out::Python, e.name.ascii(), v.ascii());
+            let sunder = m.len() > 2 && m.starts_with('_') && m.ends_with('_');
+            if sunder || m.starts_with("__") {
+                let (en, vn) = (&e.name.text, &v.text);
+                say(at(v), Head::Value(format!("{en}.{vn}"), m), vec![Out::Python], tr!(
+                    "Python の列挙（`enum.Enum`）は、`_x_` と `__x__` の形の名前を自分のために取ってあり、`__` で始まる名前を値にしません。",
+                    "Python's enum (`enum.Enum`) keeps the names of the forms `_x_` and `__x__` for itself, and makes no value of a name that starts with `__`."
+                ));
+            }
+        }
+    }
+    // the types, and the values of Rust's enums: a name in Pascal case is its words with their first
+    // letters in upper case and no `_`, which for `_1` is no name (Go puts an `X` before a name that
+    // starts with no capital); Python's `None`, `True` and `False` are its keywords
+    let mut named: Vec<(String, &Name, Text, bool)> = Vec::new();
+    for r in &d.records {
+        named.push((ritsu_emit::ident::pascal(r.name.ascii()), &r.name, tr!("型", "type"), true));
+    }
+    for e in &d.enums {
+        named.push((ritsu_emit::ident::pascal(e.name.ascii()), &e.name, tr!("型", "type"), true));
+        for v in &e.values {
+            if e.is_sum() {
+                named.push((variant_type_name(e.name.ascii(), v.ascii()), v, tr!("型", "type"), true));
+            }
+            named.push((ritsu_emit::ident::pascal(v.ascii()), v, tr!("列挙の値", "value of an enum"), false));
+        }
+    }
+    for (p, n, what, ty) in named {
+        let a = n.ascii().to_string();
+        if p.chars().next().is_none_or(|c| c.is_ascii_digit()) {
+            let ts = if ty { vec![Out::TypeScript, Out::Python, Out::Rust] } else { vec![Out::Rust] };
+            say(at(n), Head::Write(a.clone(), what.clone()), ts, tr!(
+                "{}の名前は、語の頭を大文字にして `_` を除いた名前になります（`foo_bar` は `FooBar`）。`{a}` からは、空の名前か数字で始まる名前になります。",
+                "The name of a {} is its words with their first letters in upper case and no `_` (`foo_bar` is `FooBar`), which `{a}` makes empty or starting with a digit.",
+                what.ja; what.en
+            ));
+        } else if ty && ["None", "True", "False"].contains(&p.as_str()) {
+            say(at(n), Head::Type(a.clone(), p.clone()), vec![Out::Python], tr!(
+                "型の名前は、語の頭を大文字にした名前になります。`{p}` は Python の予約語です。",
+                "The name of a type is its words with their first letters in upper case, and `{p}` is a keyword of Python."
+            ));
+        }
+    }
+    let mut out = Vec::new();
+    for (sp, head, whys) in found {
+        let mut ts: Vec<Out> = whys.iter().flat_map(|(ts, _)| ts.iter().copied()).collect();
+        ts.sort();
+        ts.dedup();
+        let every = ts.len() == Out::ALL.len();
+        let mut diag = Diag::at(if every { "E007" } else { "W001" }, path, sp.line, sp.col, head.text(&ts)).source(src);
+        for (_, why) in whys {
+            if !diag.notes.contains(&why) {
+                diag.notes.push(why);
+            }
+        }
+        diag.notes.push(if every { tr!("別の名前か別名にしてください。", "Choose another name or alias.") } else { stops_note(&ts, false) });
+        out.push(Unwritten { diag, targets: ts, two: false });
+    }
+    out
+}
+
+/// Two names a host reads that a target writes alike (DESIGN 10.3), each pair once, the later said
+/// with the earlier named: W002, or E006 where every target writes them alike. Two the check says
+/// already (one name twice, E006 of [`Dc::unique`]; the type of a value of a sum, E006 of
+/// [`Dc::names`]) are not said again.
+fn alike(d: &Decls, own: usize, path: &str, src: &str) -> Vec<Unwritten> {
+    use crate::r#gen::Target as Out;
+    use crate::r#gen::plan::{field_name, hidden, member_name, type_name, variant_name};
+    // the pairs a target spells alike, each once: the later's place and the earlier's, and the
+    // spellings with the targets that write them
+    type Pair = ((usize, usize), (usize, usize));
+    let mut alike: BTreeMap<Pair, (Spelled, Spelled, Vec<(String, Out)>)> = BTreeMap::new();
+    for t in Out::ALL {
+        let mut spaces: Vec<Vec<Spelled>> = Vec::new();
+        // the types: the records, the enums and the types of the values of sums
+        let mut types: Vec<Spelled> = Vec::new();
+        for r in &d.records {
+            types.push(Spelled::new(hidden(type_name(t, r.name.ascii()), r.private), &r.name, tr!("レコード", "record"), Some(ritsu_emit::ident::pascal(r.name.ascii()))));
+        }
+        for e in &d.enums {
+            types.push(Spelled::new(hidden(type_name(t, e.name.ascii()), e.private), &e.name, tr!("列挙", "enum"), Some(ritsu_emit::ident::pascal(e.name.ascii()))));
+            if e.is_sum() {
+                for v in &e.values {
+                    let raw = variant_type_name(e.name.ascii(), v.ascii());
+                    types.push(Spelled::new(hidden(variant_name(t, e.name.ascii(), v.ascii()), e.private), v, tr!("値", "value"), Some(raw)).variant().of(&e.name));
+                }
+            }
+        }
+        // the functions a host calls by name: in Go, every function not `private` (a generic one
+        // is one function there, DESIGN 26.7)
+        let fns: Vec<Spelled> = d.fns[..own.min(d.fns.len())]
+            .iter()
+            .filter(|f| if t == Out::Go { !f.private } else { !f.inner() })
+            .map(|f| Spelled::new(crate::r#gen::taken::fn_spelled(t, f.name.ascii()), &f.name, tr!("関数", "function"), None))
+            .collect();
+        match t {
+            // Python: one space for the classes and the functions
+            Out::Python => {
+                let mut all = types.clone();
+                all.extend(fns.iter().cloned());
+                spaces.push(all);
+            }
+            // TypeScript: the types apart from the values, where an enum whose values have no
+            // fields is a value too (a frozen object)
+            Out::TypeScript => {
+                spaces.push(types.clone());
+                let mut values: Vec<Spelled> = d.enums.iter().filter(|e| !e.is_sum()).map(|e| Spelled::new(hidden(type_name(t, e.name.ascii()), e.private), &e.name, tr!("列挙", "enum"), Some(ritsu_emit::ident::pascal(e.name.ascii())))).collect();
+                values.extend(fns.iter().cloned());
+                spaces.push(values);
+            }
+            // Go: one space for the types and the constants of the values of enums; a function
+            // whose name one of them has moves aside (`ClaimFn`), and two functions do not
+            Out::Go => {
+                let mut all = types.clone();
+                for e in d.enums.iter().filter(|e| !e.is_sum()) {
+                    for v in &e.values {
+                        all.push(Spelled::new(hidden(member_name(t, e.name.ascii(), v.ascii()), e.private), v, tr!("値", "value"), None).of(&e.name));
+                    }
+                }
+                spaces.push(all);
+                spaces.push(fns.clone());
+            }
+            // Rust: the types apart from the functions
+            Out::Rust => {
+                spaces.push(types.clone());
+                spaces.push(fns.clone());
+            }
+        }
+        // the values of each enum, and the fields of each record and of each value of a sum
+        for e in &d.enums {
+            spaces.push(e.values.iter().map(|v| Spelled::new(member_name(t, e.name.ascii(), v.ascii()), v, tr!("値", "value"), None).of(&e.name)).collect());
+            for fs in &e.fields {
+                spaces.push(fs.iter().map(|f| Spelled::new(field_name(t, f.name.ascii()), &f.name, tr!("フィールド", "field"), None)).collect());
+            }
+        }
+        for r in &d.records {
+            spaces.push(r.fields.iter().map(|f| Spelled::new(field_name(t, f.name.ascii()), &f.name, tr!("フィールド", "field"), None)).collect());
+        }
+        for space in &spaces {
+            for (j, b) in space.iter().enumerate() {
+                for a in &space[..j] {
+                    if a.spelled != b.spelled || a.said_already(b) {
+                        continue;
+                    }
+                    let (first, later) = if (a.at.line, a.at.col) <= (b.at.line, b.at.col) { (a, b) } else { (b, a) };
+                    let key = ((later.at.line, later.at.col), (first.at.line, first.at.col));
+                    alike.entry(key).or_insert_with(|| (later.clone(), first.clone(), Vec::new())).2.push((b.spelled.clone(), t));
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for (later, first, by) in alike.into_values() {
+        // the spellings, each with the targets that write it
+        let mut spellings: Vec<(String, Vec<Out>)> = Vec::new();
+        let mut ts: Vec<Out> = Vec::new();
+        for (sp, t) in by {
+            if !ts.contains(&t) {
+                ts.push(t);
+            }
+            match spellings.iter_mut().find(|(x, _)| *x == sp) {
+                Some((_, xs)) if !xs.contains(&t) => xs.push(t),
+                Some(_) => {}
+                None => spellings.push((sp, vec![t])),
+            }
+        }
+        ts.sort();
+        let shown = |ja: bool| -> String {
+            spellings
+                .iter()
+                .map(|(sp, xs)| {
+                    let names: Vec<&str> = xs.iter().map(|t| target_shown(*t)).collect();
+                    if ja { format!("`{sp}`（{}）", names.join("、")) } else { format!("`{sp}` ({})", names.join(", ")) }
+                })
+                .collect::<Vec<_>>()
+                .join(if ja { "、" } else { "; " })
+        };
+        let (ja, en) = (shown(true), shown(false));
+        let (b, a, line) = (later.shown.clone(), first.shown.clone(), first.at.line);
+        let (wb, wa) = (later.what.clone(), first.what.clone());
+        let every = ts.len() == Out::ALL.len();
+        let mut diag = Diag::at(
+            if every { "E006" } else { "W002" },
+            path,
+            later.at.line,
+            later.at.col,
+            tr!("生成するコードで、この{} `{b}` と {line} 行目の{} `{a}` が同じ名前になります：{ja}", "In the generated code, this {} `{b}` and the {} `{a}` on line {line} are named alike: {en}", wb.ja, wa.ja; wb.en, wa.en),
+        )
+        .source(src);
+        diag.notes.push(tr!(
+            "生成するコードは、名前をそれぞれの出力先の書き方に直します。型の名前（どの出力先でも）と、Go の関数・フィールド・列挙の値の定数、Rust の列挙の値は、語の頭を大文字にして `_` を除きます（`foo_bar` は `FooBar`）。TypeScript と Python の列挙の値は、すべて大文字にします（`gold` は `GOLD`）。",
+            "The generated code writes each name as its target writes names: a type's name in every target, and Go's function, field and constant of a value of an enum and Rust's value of an enum, with each word's first letter in upper case and no `_` (`foo_bar` is `FooBar`); TypeScript's and Python's value of an enum in upper case (`gold` is `GOLD`)."
+        ));
+        diag.notes.push(if every { tr!("どちらかの名前か別名を替えてください。", "Rename one of them, or give it another alias.") } else { stops_note(&ts, true) });
+        out.push(Unwritten { diag, targets: ts, two: true });
+    }
+    out
 }
 
 /// The declarations of a module and the names they give, checked: what [`declare`] answers.
@@ -472,13 +948,15 @@ impl<'a> Dc<'a> {
                     .notes
                     .push(tr!("別名は、英字か `_` で始まり、英字・数字・`_` だけでできた名前にしてください。", "An alias starts with a letter or `_` and has only letters, digits and `_`."));
             }
+            // a name of kaname's helper module, which the code of every target reads by it; the words
+            // of a target are the target's ([`unwritten`], W001)
             _ => {
                 let a = n.ascii().to_string();
-                if taken_word(&a) {
+                if kw::HELPERS.contains(&a.as_str()) {
                     let sp = n.alias.as_ref().map(|(_, s)| *s).unwrap_or(n.span);
                     self.err("E007", sp, tr!("生成するコードは、`{a}` を名前に使えません", "The generated code cannot take `{a}` as a name")).notes.push(tr!(
-                        "`{a}` は、生成する TypeScript、Python、Go のどれかの予約語か、kaname の補助のモジュールの名前です。別の名前か別名にしてください。",
-                        "`{a}` is a reserved word of the TypeScript, Python or Go the module is generated in, or a name of kaname's helper module; choose another name or alias."
+                        "`{a}` は、kaname の補助のモジュールの名前です。生成するコードは、どの出力先でも補助をこの名前で読みます。別の名前か別名にしてください。",
+                        "`{a}` is a name of kaname's helper module, which the generated code of every target reads by that name. Choose another name or alias."
                     ));
                 }
             }
@@ -515,7 +993,6 @@ impl<'a> Dc<'a> {
     pub fn names(&mut self) {
         let m = self.module;
         self.public_name(&m.name, &tr!("モジュール", "module"));
-        self.diags.extend(no_rust_module(m, self.path, self.src));
         let mut all: Vec<(Name, Text)> = Vec::new();
         for u in &m.uses {
             all.push((Name { text: u.name.clone(), alias: None, span: u.name_span }, tr!("`use` の名前", "`use` name")));
@@ -548,21 +1025,11 @@ impl<'a> Dc<'a> {
         for e in &m.enums {
             self.public_name(&e.name, &tr!("列挙", "enum"));
             self.unique(e.values.iter().map(|v| (&v.name, tr!("値", "value"))));
-            let sum = e.values.iter().any(|v| !v.fields.is_empty());
             for v in &e.values {
                 self.public_name(&v.name, &tr!("列挙の値", "value"));
                 self.unique(v.fields.iter().map(|f| (&f.name, tr!("フィールド", "field"))));
                 for f in &v.fields {
                     self.public_name(&f.name, &tr!("フィールド", "field"));
-                    // TypeScript tells the values of a sum apart by the field `kind` (DESIGN 23.8)
-                    if sum && f.name.ascii() == "kind" {
-                        let sp = f.name.alias.as_ref().map(|(_, s)| *s).unwrap_or(f.name.span);
-                        let (en, vn) = (&e.name.text, &v.name.text);
-                        self.err("E007", sp, tr!("生成するコードは、`{en}.{vn}` のフィールドの名前に `kind` を使えません", "The generated code cannot take `kind` as the name of a field of `{en}.{vn}`")).notes.push(tr!(
-                            "生成する TypeScript は、フィールドを持つ値のある列挙の値を、フィールド `kind` で見分けます。別の名前か別名にしてください。",
-                            "The generated TypeScript tells the values of an enum whose values have fields apart by the field `kind`; choose another name or alias."
-                        ));
-                    }
                 }
             }
         }
@@ -641,6 +1108,14 @@ impl<'a> Dc<'a> {
                 }
             }
         }
+    }
+
+    // ── The names as the targets spell them ───────────────────────────────────────
+
+    /// The names a host reads as the targets write them (DESIGN 10.3), as [`unwritten`] finds them.
+    pub fn spelled(&mut self, d: &Decls, own: usize) {
+        let found = unwritten(self.module, d, own, self.path, self.src);
+        self.diags.extend(found.into_iter().map(|u| u.diag));
     }
 
     // ── Types ───────────────────────────────────────────────────────────────────
@@ -830,7 +1305,7 @@ impl<'a> Dc<'a> {
         match found {
             Some(x) => Some(x),
             None => {
-                self.err("E101", at, tr!("`{shown}` という型はありません", "There is no type `{shown}`")).notes.push(tr!(
+                self.err("E101", at, tr!("`{shown}` という型はありません", "There is no type `{shown}`")).same_mut(shown.clone()).notes.push(tr!(
                     "型に書けるのは、`number`、`bool`、`string`、`date`、`rate`、単位の型（`money[USD]`、`mass[kg]`）、`list[…]`、このモジュールのレコードと列挙、フィールドを持つ値の型（`<列挙>.<値>`）、`use` で読んだもの（`<規則>.outputs`、`<規則>.<列挙>`、`<規則>.<並び>`、`<帳簿>.<振替>.<操作>`、`<モジュール>.<レコード>`）、型の引数、`result[…]` です。",
                     "A type is `number`, `bool`, `string`, `date`, `rate`, a type of a unit (`money[USD]`, `mass[kg]`), `list[…]`, a record or an enum of this module, the type of a value of an enum whose values have fields (`<enum>.<value>`), one a `use` reads (`<rule>.outputs`, `<rule>.<enum>`, `<rule>.<list>`, `<book>.<transfer>.<operation>`, `<module>.<record>`), a type parameter or `result[…]`."
                 ));
@@ -985,7 +1460,7 @@ impl<'a> Dc<'a> {
             return true;
         }
         let shown = self.show_type(t);
-        self.err("E114", at, tr!("{shown} は鍵にできません", "{shown} cannot be a key")).notes.push(key_note());
+        self.err("E114", at, tr!("{shown} は鍵にできません", "The type {shown} cannot be a key")).notes.push(key_note());
         false
     }
 
@@ -1891,12 +2366,54 @@ pub fn rule_enum_is(e: &ritsu_ports::RuleEnum, w: &str) -> bool {
     e.name == w || e.public == w
 }
 
-/// Whether two enums of rules are one type: the same enum of the same rule, or the same enum of the
-/// same `enums` file read whole by two rules (`import enum … from`, DESIGN 3.5), with the same
-/// values. An enum is otherwise the type of the place that declares it.
-pub fn rule_enums_same(a: &ritsu_ports::RuleEnum, b: &ritsu_ports::RuleEnum) -> bool {
-    match (&a.origin, &b.origin) {
-        (Some((fa, na)), Some((fb, nb))) => na == nb && canonical(fa) == canonical(fb) && a.values.iter().map(|v| &v.name).eq(b.values.iter().map(|v| &v.name)),
-        _ => false,
+/// Where an enum of the rule in `file` is declared (DESIGN 3.5): the `enums` file the rule reads it
+/// whole from (`import enum … from`, the port's `origin`), else the rule's own file; the file made
+/// canonical, so that two ways to reach it are one, and the enum's name there.
+pub fn rule_enum_declared(file: &Path, e: &ritsu_ports::RuleEnum) -> (PathBuf, String) {
+    match &e.origin {
+        Some((f, n)) => (canonical(f), n.clone()),
+        None => (canonical(file), e.name.clone()),
     }
+}
+
+/// Whether two enums of rules, each with the file of its rule, are one type (DESIGN 3.5): declared at
+/// one place, with the same values in the same order. An enum of an `enums` file is one type by
+/// every name a module reads it by: through a rule that reads it whole, and through the file itself
+/// read as a rule (`use rule`). An enum a rule declares itself is its own file's.
+pub fn rule_enums_same(fa: &Path, a: &ritsu_ports::RuleEnum, fb: &Path, b: &ritsu_ports::RuleEnum) -> bool {
+    rule_enum_declared(fa, a) == rule_enum_declared(fb, b) && a.values.iter().map(|v| &v.name).eq(b.values.iter().map(|v| &v.name))
+}
+
+/// An enum a module reads by two or more names through its `use rule` lines (DESIGN 3.5), as `doc`
+/// and `api` show it.
+pub struct OneEnum {
+    /// As the module writes them (`catalog.category`, `shipping.category`), in the order of the `use`
+    /// lines and of each rule's enums.
+    pub names: Vec<String>,
+    /// The file that declares it, made canonical, and its name there.
+    pub file: PathBuf,
+    pub name: String,
+    /// Its values, as the file names them, in their order.
+    pub values: Vec<String>,
+}
+
+/// The enums a module reads by two or more names (`OneEnum`): each enum of each rule it uses, put
+/// with the others declared at the same place with the same values in the same order.
+pub fn one_enum_names(c: &Checked) -> Vec<OneEnum> {
+    let mut out: Vec<OneEnum> = Vec::new();
+    for (u, t) in c.module.uses.iter().zip(&c.uses) {
+        let Target::Rule { canon, facts, .. } = t else { continue };
+        for e in &facts.enums {
+            let (file, name) = rule_enum_declared(canon, e);
+            let values: Vec<String> = e.values.iter().map(|v| v.name.clone()).collect();
+            let shown = format!("{}.{}", u.name, e.name);
+            match out.iter_mut().find(|g| g.file == file && g.name == name && g.values == values) {
+                Some(g) if !g.names.contains(&shown) => g.names.push(shown),
+                Some(_) => {}
+                None => out.push(OneEnum { names: vec![shown], file, name, values }),
+            }
+        }
+    }
+    out.retain(|g| g.names.len() > 1);
+    out
 }

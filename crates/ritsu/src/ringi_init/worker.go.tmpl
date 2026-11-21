@@ -1,0 +1,54 @@
+// Command worker runs the flows of the project on Temporal: the payment of an approved expense
+// claim (project/shared/pay.flow), with the tasks the project writes for it (Payments). Run it
+// beside the server, on the same Temporal (-temporal, localhost:7233 by default):
+//
+//	go run ./cmd/worker
+//
+// The server starts the flows; they wait in Temporal until a worker runs them. It runs until it is
+// told to stop.
+package main
+
+import (
+	"flag"
+	"fmt"
+	"log/slog"
+	"os"
+
+	"go.temporal.io/sdk/client"
+	sdklog "go.temporal.io/sdk/log"
+	"go.temporal.io/sdk/worker"
+
+	{{root_import}}
+)
+
+func main() {
+	address := flag.String("temporal", "localhost:7233", "the address of the Temporal server the flows run on")
+	flag.Parse()
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	if err := run(*address, log); err != nil {
+		log.Error("the worker stopped", "err", err)
+		os.Exit(1)
+	}
+}
+
+func run(address string, log *slog.Logger) error {
+	c, err := client.Dial(client.Options{HostPort: address, Logger: sdklog.NewStructuredLogger(log)})
+	if err != nil {
+		return fmt.Errorf("-temporal %s: %w", address, err)
+	}
+	defer c.Close()
+	workers := {{root}}.Workers(c, log)
+	for i, w := range workers {
+		if err := w.Start(); err != nil {
+			for _, started := range workers[:i] {
+				started.Stop()
+			}
+			return err
+		}
+	}
+	<-worker.InterruptCh()
+	for _, w := range workers {
+		w.Stop()
+	}
+	return nil
+}

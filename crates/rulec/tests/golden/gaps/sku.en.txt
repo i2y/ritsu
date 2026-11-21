@@ -1,0 +1,21 @@
+warning[W111]: Values of type lane appear in no row
+  --> tests/gaps/sku.rule:4
+  |
+4 | enum lane = frozen | chilled | dry
+  |      ^^^^
+  |
+ Values that never appear: dry
+ Table lanes, which writes this type, is short of rows (E101): what the rows it lacks answer may be where those values belong.
+
+error[E101]: Completeness gap: some input matches no row
+  --> tests/gaps/sku.rule:12 table lanes
+   |
+12 | table lanes
+   |       ^^^^^ the input space is not fully covered
+   |
+ No row matches: code starting with none of the prefixes the table writes
+ An input that matches no row: code = "z"
+ hint: add this row, with what it answers written in place of `?`: `| - | ? |`
+ Add it after the rows the table has: under `policy first` a row takes what the rows above it leave. It writes `-` in a column where no cell takes exactly the part (a string column holds `starts_with` and `-` only, and no one cell names the strings under none of the prefixes, or under a prefix the table writes a longer one of; a number column holds no boundary that is not a whole unit).
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.
+

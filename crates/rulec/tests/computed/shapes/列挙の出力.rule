@@ -1,0 +1,20 @@
+rule 列挙の出力(enum_output) v1
+description "取り込んだ規則の列挙の出力を、それを決める金額と一緒に読む"
+
+enum 選択(choice) = 一(one) | 二(two) | 三(three)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+apply 区分け(t) = "shared/金額の区分.rule" meaning:e7d6953fd795c588
+  金額 = 金額
+  区分 -> 受けた区分
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 金額                  | 受けた区分 | -> 答え |
+| <=10_000円            | 小         | 一      |
+| >10_000円 <=100_000円 | 中         | 二      |
+| >100_000円            | 大         | 三      |

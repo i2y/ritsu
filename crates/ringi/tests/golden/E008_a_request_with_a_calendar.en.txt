@@ -1,0 +1,9 @@
+error[E008]: tests/mutants/E008_a_request_with_a_calendar.ringi:1:1: The file needs kaname, which this ringi does not hold (a request is lowered to a module of kaname's)
+     1 | request example v1 "Example"
+  = The binary of ringi's own crate holds no other language; run the same command with every language joined, through ritsu: `ritsu ringi check <file.ringi>`.
+error[E008]: tests/mutants/E008_a_request_with_a_calendar.ringi:3:1: The file needs koyomi, which this ringi does not hold (it reads the calendar `office`)
+     3 | use calendar office from "office.cal"
+  = The binary of ringi's own crate holds no other language; run the same command with every language joined, through ritsu: `ritsu ringi check <file.ringi>`.
+error[E008]: tests/mutants/E008_a_request_with_a_calendar.ringi:5:1: The file needs rulec, which this ringi does not hold (its form is lowered to a rule)
+     5 | form
+  = The binary of ringi's own crate holds no other language; run the same command with every language joined, through ritsu: `ritsu ringi check <file.ringi>`.

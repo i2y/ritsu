@@ -1,0 +1,14 @@
+rule linked_hash_map v1
+description "A rule named like a class of the JDK the Java runner imports"
+
+inputs
+  zone : number  range >=1 <=9
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_zone
+policy unique
+| zone | -> fee |
+| <=3  | 4USD   |
+| >3   | 8USD   |

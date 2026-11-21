@@ -1,0 +1,16 @@
+rule no_arrow_inputs v1
+description "A table whose heading has no `->` and names no output: every column is an input"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+  member : bool
+
+outputs
+  review : bool
+
+table review_of
+policy unique
+| amount      | member |
+| <10_000JPY  | -      |
+| >=10_000JPY | true   |
+| >=10_000JPY | false  |

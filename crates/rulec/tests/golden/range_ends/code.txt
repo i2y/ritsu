@@ -1,0 +1,197 @@
+== go/cartshippingfee/cart_shipping_fee.go
+if int64(elem.Amount) < 0 || int64(elem.Amount) > 100000 {
+return 0, nil, &RuleInputError{What: fmt.Sprintf("lines[%d].amount is out of range", index), Value: int64(elem.Amount), HasValue: true}
+if total > 1000000 {
+return 0, nil, &RuleInputError{What: "total is out of range", Value: total, HasValue: true}
+== go/giftbasket/gift_basket.go
+if wrapped_items < 1 {
+return Output{}, nil, &RuleInputError{What: "wrapped_items is out of range", Value: wrapped_items, HasValue: true}
+if amount > 100000 {
+return Output{}, nil, &RuleInputError{What: "amount is out of range", Value: amount, HasValue: true}
+if amount < 500 {
+return Output{}, nil, &RuleInputError{What: "amount is out of range", Value: amount, HasValue: true}
+== go/parcelbatch/parcel_batch.go
+if total > 60000 {
+return Output{}, nil, &RuleInputError{What: "total is out of range", Value: total, HasValue: true}
+if total < 1000 {
+return Output{}, nil, &RuleInputError{What: "total is out of range", Value: total, HasValue: true}
+if fragile_parcels < 1 {
+return Output{}, nil, &RuleInputError{What: "fragile_parcels is out of range", Value: fragile_parcels, HasValue: true}
+== java/CartShippingFee.java
+if (elem.amount() < 0L || elem.amount() > 100000L) {
+throw new RuleInputError("lines[" + index + "].amount is out of range", elem.amount());
+if (total > 1000000L) {
+throw new RuleInputError("total is out of range", total);
+== java/GiftBasket.java
+if (wrappedItems < 1L) {
+throw new RuleInputError("wrapped_items is out of range", wrappedItems);
+if (amount > 100000L) {
+throw new RuleInputError("amount is out of range", amount);
+if (amount < 500L) {
+throw new RuleInputError("amount is out of range", amount);
+== java/ParcelBatch.java
+if (total > 60000L) {
+throw new RuleInputError("total is out of range", total);
+if (total < 1000L) {
+throw new RuleInputError("total is out of range", total);
+if (fragileParcels < 1L) {
+throw new RuleInputError("fragile_parcels is out of range", fragileParcels);
+== javascript/cart_shipping_fee.mjs
+if (elem.amount < -9223372036854775808n || elem.amount > 9223372036854775807n) {
+throw new RuleInputError(`lines[${index}].amount is out of range`, elem.amount);
+if (elem.amount < 0n || elem.amount > 100000n) {
+throw new RuleInputError(`lines[${index}].amount is out of range`, elem.amount);
+if (total > 1000000n) {
+throw new RuleInputError(`total is out of range`, total);
+== javascript/gift_basket.mjs
+if (wrapped_items < 1n) {
+throw new RuleInputError(`wrapped_items is out of range`, wrapped_items);
+if (amount > 100000n) {
+throw new RuleInputError(`amount is out of range`, amount);
+if (amount < 500n) {
+throw new RuleInputError(`amount is out of range`, amount);
+== javascript/parcel_batch.mjs
+if (total > 60000n) {
+throw new RuleInputError(`total is out of range`, total);
+if (total < 1000n) {
+throw new RuleInputError(`total is out of range`, total);
+if (fragile_parcels < 1n) {
+throw new RuleInputError(`fragile_parcels is out of range`, fragile_parcels);
+== php/cart_shipping_fee.php
+throw new RuleInputError('lines[' . $index . '].amount is out of range', $elem->amount);
+if ($total > 1000000) {
+throw new RuleInputError('total is out of range', $total);
+== php/gift_basket.php
+if ($wrapped_items < 1) {
+throw new RuleInputError('wrapped_items is out of range', $wrapped_items);
+if ($amount > 100000) {
+throw new RuleInputError('amount is out of range', $amount);
+if ($amount < 500) {
+throw new RuleInputError('amount is out of range', $amount);
+== php/parcel_batch.php
+if ($total > 60000) {
+throw new RuleInputError('total is out of range', $total);
+if ($total < 1000) {
+throw new RuleInputError('total is out of range', $total);
+if ($fragile_parcels < 1) {
+throw new RuleInputError('fragile_parcels is out of range', $fragile_parcels);
+== python/cart_shipping_fee.py
+if not -9223372036854775808 <= elem.amount <= 9223372036854775807:
+raise RuleInputError(f"lines[{index}].amount is out of range", _repr(elem.amount))
+if not 0 <= elem.amount <= 100000:
+raise RuleInputError(f"lines[{index}].amount is out of range", _repr(elem.amount))
+if total > 1000000:
+raise RuleInputError("total is out of range", _repr(total))
+== python/gift_basket.py
+if wrapped_items < 1:
+raise RuleInputError("wrapped_items is out of range", _repr(wrapped_items))
+if amount > 100000:
+raise RuleInputError("amount is out of range", _repr(amount))
+if amount < 500:
+raise RuleInputError("amount is out of range", _repr(amount))
+== python/parcel_batch.py
+if total > 60000:
+raise RuleInputError("total is out of range", _repr(total))
+if total < 1000:
+raise RuleInputError("total is out of range", _repr(total))
+if fragile_parcels < 1:
+raise RuleInputError("fragile_parcels is out of range", _repr(fragile_parcels))
+== ruby/cart_shipping_fee.rb
+raise RuleInputError.new("lines[#{index}].amount is out of range", elem.amount) unless (-9223372036854775808..9223372036854775807).cover?(elem.amount)
+raise RuleInputError.new("lines[#{index}].amount is out of range", elem.amount) unless (0..100000).cover?(elem.amount)
+raise RuleInputError.new("total is out of range", total) if total > 1000000
+== ruby/gift_basket.rb
+raise RuleInputError.new("wrapped_items is out of range", wrapped_items) if wrapped_items < 1
+raise RuleInputError.new("amount is out of range", amount) if amount > 100000
+raise RuleInputError.new("amount is out of range", amount) if amount < 500
+== ruby/parcel_batch.rb
+raise RuleInputError.new("total is out of range", total) if total > 60000
+raise RuleInputError.new("total is out of range", total) if total < 1000
+raise RuleInputError.new("fragile_parcels is out of range", fragile_parcels) if fragile_parcels < 1
+== rust/cart_shipping_fee.rs
+if elem.amount.0 < 0 || elem.amount.0 > 100000 {
+return Err(RuleError::Input { what: Said::at("lines[", index, "].amount is out of range"), value: Some(elem.amount.0) });
+if total > 1000000 {
+return Err(RuleError::Input { what: Said::of("total is out of range"), value: Some(total) });
+== rust/gift_basket.rs
+if wrapped_items < 1 {
+return Err(RuleError::Input { what: Said::of("wrapped_items is out of range"), value: Some(wrapped_items) });
+if amount > 100000 {
+return Err(RuleError::Input { what: Said::of("amount is out of range"), value: Some(amount) });
+if amount < 500 {
+return Err(RuleError::Input { what: Said::of("amount is out of range"), value: Some(amount) });
+== rust/gift_basket_proof.rs
+kani::assume(!matches!(answer, Err(RuleError::Input { what, value: Some(refused) }) if what.words().len() == 1 && said::<29>(what.words()[0], "wrapped_items is out of range") && (refused < 1)));
+kani::assume(!matches!(answer, Err(RuleError::Input { what, value: Some(refused) }) if what.words().len() == 1 && said::<22>(what.words()[0], "amount is out of range") && (refused < 500 || refused > 100000)));
+== rust/parcel_batch.rs
+if total > 60000 {
+return Err(RuleError::Input { what: Said::of("total is out of range"), value: Some(total) });
+if total < 1000 {
+return Err(RuleError::Input { what: Said::of("total is out of range"), value: Some(total) });
+if fragile_parcels < 1 {
+return Err(RuleError::Input { what: Said::of("fragile_parcels is out of range"), value: Some(fragile_parcels) });
+== rust/parcel_batch_proof.rs
+kani::assume(!matches!(answer, Err(RuleError::Input { what, value: Some(refused) }) if what.words().len() == 1 && said::<21>(what.words()[0], "total is out of range") && (refused < 1000 || refused > 60000)));
+kani::assume(!matches!(answer, Err(RuleError::Input { what, value: Some(refused) }) if what.words().len() == 1 && said::<31>(what.words()[0], "fragile_parcels is out of range") && (refused < 1)));
+== swift/cart_shipping_fee.swift
+if elem.amount.value < 0 || elem.amount.value > 100000 {
+throw RuleError.input(what: "lines[\(index)].amount is out of range", value: Int64(elem.amount.value))
+if total > 1000000 {
+throw RuleError.input(what: "total is out of range", value: Int64(total))
+== swift/gift_basket.swift
+if wrappedItems < 1 {
+throw RuleError.input(what: "wrapped_items is out of range", value: Int64(wrappedItems))
+if amount > 100000 {
+throw RuleError.input(what: "amount is out of range", value: Int64(amount))
+if amount < 500 {
+throw RuleError.input(what: "amount is out of range", value: Int64(amount))
+== swift/parcel_batch.swift
+if total > 60000 {
+throw RuleError.input(what: "total is out of range", value: Int64(total))
+if total < 1000 {
+throw RuleError.input(what: "total is out of range", value: Int64(total))
+if fragileParcels < 1 {
+throw RuleError.input(what: "fragile_parcels is out of range", value: Int64(fragileParcels))
+== typescript/cart_shipping_fee.ts
+if (elem.amount < -9223372036854775808n || elem.amount > 9223372036854775807n) {
+throw new RuleInputError(`lines[${index}].amount is out of range`, elem.amount);
+if (elem.amount < 0n || elem.amount > 100000n) {
+throw new RuleInputError(`lines[${index}].amount is out of range`, elem.amount);
+if (total > 1000000n) {
+throw new RuleInputError(`total is out of range`, total);
+== typescript/gift_basket.ts
+if (wrapped_items < 1n) {
+throw new RuleInputError(`wrapped_items is out of range`, wrapped_items);
+if (amount > 100000n) {
+throw new RuleInputError(`amount is out of range`, amount);
+if (amount < 500n) {
+throw new RuleInputError(`amount is out of range`, amount);
+== typescript/parcel_batch.ts
+if (total > 60000n) {
+throw new RuleInputError(`total is out of range`, total);
+if (total < 1000n) {
+throw new RuleInputError(`total is out of range`, total);
+if (fragile_parcels < 1n) {
+throw new RuleInputError(`fragile_parcels is out of range`, fragile_parcels);
+== wasm/cart_shipping_fee.rs
+if elem.amount.0 < 0 || elem.amount.0 > 100000 {
+return Err(RuleError::Input { what: Said::at("lines[", index, "].amount is out of range"), value: Some(elem.amount.0) });
+if total > 1000000 {
+return Err(RuleError::Input { what: Said::of("total is out of range"), value: Some(total) });
+== wasm/cart_shipping_fee_wasm.rs
+for (i, e) in list(take(&d, "lines", "lines is missing", false)?, "lines is not a sequence", |i| r::Said::at("lines[", i, "] is not an object"))?.iter().enumerate() {
+a1.push(r::Element { amount: r::JPY(int(take(e, "amount", r::Said::at("lines[", i, "].amount is missing"), false)?, r::Said::at("lines[", i, "].amount is not an integer"), r::Said::at("lines[", i, "].amount is out of range"))?) });
+== wasm/gift_basket.rs
+if wrapped_items < 1 {
+return Err(RuleError::Input { what: Said::of("wrapped_items is out of range"), value: Some(wrapped_items) });
+if amount > 100000 {
+return Err(RuleError::Input { what: Said::of("amount is out of range"), value: Some(amount) });
+if amount < 500 {
+return Err(RuleError::Input { what: Said::of("amount is out of range"), value: Some(amount) });
+== wasm/parcel_batch.rs
+if total > 60000 {
+return Err(RuleError::Input { what: Said::of("total is out of range"), value: Some(total) });
+if total < 1000 {
+return Err(RuleError::Input { what: Said::of("total is out of range"), value: Some(total) });
+if fragile_parcels < 1 {
+return Err(RuleError::Input { what: Said::of("fragile_parcels is out of range"), value: Some(fragile_parcels) });

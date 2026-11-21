@@ -1,18 +1,21 @@
 //! The links of a release (DESIGN 2.3, 8.2): one binary, `ritsu`, and a link to it named for each of
-//! the nine languages. `tests/entry.rs` calls two of the links; this file calls all nine, holds
-//! each against the same words after `ritsu`, reads what the five languages that read others get
+//! the ten languages. `tests/entry.rs` calls two of the links; this file calls all ten, holds
+//! each against the same words after `ritsu`, reads what the six languages that read others get
 //! from theirs, takes the name from the last part of `argv[0]`, closes a pipe on a command, and
 //! has `rulec mcp` call the binary the way a link does. The links are what a release makes:
 //! symbolic links in a temporary directory.
+
+mod common;
 
 use ritsu_testkit::TempDir;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::fs::symlink;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::time::{Duration, Instant};
 
-const LANGUAGES: [&str; 9] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname"];
+const LANGUAGES: [&str; 10] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname", "ringi"];
 
 fn ritsu() -> &'static str {
     env!("CARGO_BIN_EXE_ritsu")
@@ -22,7 +25,7 @@ fn crates() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
-/// A directory holding a link to `ritsu` for each of the nine names, and one for a name that is no
+/// A directory holding a link to `ritsu` for each of the ten names, and one for a name that is no
 /// language.
 fn links_in(t: &TempDir) -> PathBuf {
     for name in LANGUAGES.iter().copied().chain(["not-a-language"]) {
@@ -34,10 +37,31 @@ fn links_in(t: &TempDir) -> PathBuf {
 /// What a program printed and exited with.
 type Ran = (i32, String, String);
 
+/// How long a command these tests start and talk to may take to print or to end: a moment each.
+/// Past it, the command is stopped and the test fails, saying what it waited for.
+const LIMIT: Duration = Duration::from_secs(60);
+
+/// The child's status once it ends, within [`LIMIT`]; past it, it is killed and the test fails,
+/// saying `what` was waited for.
+fn ended(child: &mut Child, what: &str) -> ExitStatus {
+    let until = Instant::now() + LIMIT;
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            return status;
+        }
+        if Instant::now() > until {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{what}: it did not end within {} seconds, and was stopped", LIMIT.as_secs());
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 /// Run `c` with no language asked of the environment.
 fn run(mut c: Command, args: &[&str]) -> Ran {
     c.args(args);
-    for var in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
+    for var in common::LANG_VARS {
         c.env_remove(var);
     }
     let o = c.output().expect("could not run it");
@@ -73,11 +97,12 @@ fn sakai_map() -> String {
     maps.remove(0)
 }
 
-/// An example of each language, and the words that run its command on it. The last five read
+/// An example of each language, and the words that run its command on it. The last six read
 /// others, so the example reads another language: a flow that uses rules, a requirement that names
 /// a rule's source, a map that crosses into rules, calendars and flows, a gate that takes a rule's
 /// answer, dates and a calendar as conditions and names a workflow's flow, a module that calls a
-/// rule and a date of koyomi.
+/// rule and a date of koyomi, a request whose route reads an organization, rules, dates, books and
+/// flows.
 fn examples() -> Vec<(&'static str, Vec<String>)> {
     let s = |v: &[&str]| v.iter().map(|w| w.to_string()).collect::<Vec<_>>();
     vec![
@@ -90,6 +115,9 @@ fn examples() -> Vec<(&'static str, Vec<String>)> {
         ("sakai", vec!["check".to_string(), sakai_map()]),
         ("sekisho", s(&["check", "examples/refunds/refunds.gate", "--root", "examples/refunds"])),
         ("kaname", s(&["check", "examples/late_payment/late_payment.kn"])),
+        // not `check`: it names the command to run next as it was run (`ringi simulate …`, and
+        // `ritsu ringi simulate …` after `ritsu`), which is the one place the two differ
+        ("ringi", s(&["explain", "E101"])),
     ]
 }
 
@@ -128,12 +156,13 @@ fn a_link_and_the_same_words_after_ritsu_are_one_command() {
     }
 }
 
-/// What the five that read others get from their links: the ports are joined. A flow that uses
+/// What the six that read others get from their links: the ports are joined. A flow that uses
 /// rules passes check (the binary of dandori's crate stops at it), a requirement that names a
 /// rule's source is read (yuen's crate says to run it through ritsu), a map crosses into the
 /// rules, calendars and flows it names (sakai's crate stops at each), and a gate reads its rules,
 /// dates, calendar and flow (sekisho's crate stops at the first `use rule` with E209), and a module
-/// calls its rule and its book (kaname's crate stops at the first `use rule` with E202).
+/// calls its rule and its book (kaname's crate stops at the first `use rule` with E202), and a
+/// request reads its organization, rules, calendars, books and flows (ringi's crate stops at E008).
 #[test]
 fn the_links_of_the_languages_that_read_others_join_the_ports() {
     let t = TempDir::new("links-ports");
@@ -150,6 +179,9 @@ fn the_links_of_the_languages_that_read_others_join_the_ports() {
     assert_eq!(linked(&links, "sekisho", &["check", gate, "--root", "examples/refunds"]), (0, want, String::new()));
     let kn = "examples/payout/payout.kn";
     assert_eq!(linked(&links, "kaname", &["check", kn]), (0, format!("ok {kn}: 1 function, total\n"), String::new()));
+    let req = "examples/expense.ringi";
+    let (code, out, err) = linked(&links, "ringi", &["check", req]);
+    assert!(code == 0 && out.contains(&format!("ok {req}: a request, 8 fields, 4 stages\n")) && !out.contains("E008") && !err.contains("E008"), "{out}{err}");
 }
 
 /// A name that is no language is `ritsu` itself: a file called `ritsu-0.23.0`, or a link a user
@@ -192,13 +224,24 @@ fn a_reader_that_goes_away_ends_the_command_quietly() {
     for mut c in [by_link, after] {
         let mut child = c.args(["explain", "--all", "--format", "markdown"]).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().expect("could not start it");
         {
-            // one line, then the reading end of the pipe is closed
+            // one line, then the reading end of the pipe is closed; the line is read in a thread of
+            // its own, so that a command that prints nothing is not waited for without end
             let mut reader = BufReader::new(child.stdout.take().unwrap());
-            let mut line = String::new();
-            reader.read_line(&mut line).unwrap();
+            let (sent, got) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let mut line = String::new();
+                let _ = reader.read_line(&mut line);
+                drop(reader);
+                let _ = sent.send(line);
+            });
+            let Ok(line) = got.recv_timeout(LIMIT) else {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("rulec explain --all printed no line within {} seconds, and was stopped", LIMIT.as_secs());
+            };
             assert!(line.starts_with("<!-- Output of `rulec explain --all"), "{line}");
         }
-        let status = child.wait().unwrap();
+        let status = ended(&mut child, "rulec explain --all, once its reader went away");
         let mut err = String::new();
         child.stderr.take().unwrap().read_to_string(&mut err).unwrap();
         assert_eq!(status.signal(), Some(13), "stopped by SIGPIPE, not by an error of its own: {status:?} {err}");
@@ -217,23 +260,15 @@ fn rulec_mcp_runs_its_calls_as_rulec() {
     let by_link = Command::new(links.join("rulec"));
     let mut by_path = Command::new(ritsu());
     by_path.arg0("rulec");
+    // the three calls on its standard input, which is then closed: the server answers them and ends
+    let mut calls = Vec::new();
+    writeln!(calls, r#"{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{"protocolVersion":"2025-06-18","capabilities":{{}},"clientInfo":{{"name":"t","version":"0"}}}}}}"#).unwrap();
+    writeln!(calls, r#"{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{{"name":"rulec_check","arguments":{{"files":["tests/corpus/ec261.rule"]}}}}}}"#).unwrap();
+    writeln!(calls, r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"rulec_fmt","arguments":{{"files":["tests/corpus/ec261.rule"],"check":true}}}}}}"#).unwrap();
     for mut c in [by_link, by_path] {
-        let mut child = c
-            .current_dir(crates().join("rulec"))
-            .arg("mcp")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("could not start rulec mcp");
-        {
-            let mut stdin = child.stdin.take().unwrap();
-            writeln!(stdin, r#"{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{"protocolVersion":"2025-06-18","capabilities":{{}},"clientInfo":{{"name":"t","version":"0"}}}}}}"#).unwrap();
-            writeln!(stdin, r#"{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{{"name":"rulec_check","arguments":{{"files":["tests/corpus/ec261.rule"]}}}}}}"#).unwrap();
-            writeln!(stdin, r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"rulec_fmt","arguments":{{"files":["tests/corpus/ec261.rule"],"check":true}}}}}}"#).unwrap();
-        }
-        let answers: Vec<serde_json::Value> = BufReader::new(child.stdout.take().unwrap()).lines().map(|l| serde_json::from_str(&l.unwrap()).unwrap()).collect();
-        assert!(child.wait().unwrap().success());
+        let ran = ritsu_testkit::run::finish_with_input(c.current_dir(crates().join("rulec")).arg("mcp"), Some(&calls), LIMIT, "rulec mcp answering three calls");
+        let answers: Vec<serde_json::Value> = ran.stdout.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert!(ran.ok, "{}", ran.stderr);
         assert_eq!(answers.len(), 3, "{answers:?}");
         assert_eq!(answers[0]["result"]["serverInfo"]["name"], "rulec", "{answers:?}");
         // `rulec check`, and nothing more than it prints

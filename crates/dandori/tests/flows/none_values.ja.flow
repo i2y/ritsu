@@ -1,0 +1,48 @@
+# フローが持たない値を、HTTP の呼び出しに渡す（DESIGN 43）。終わりの日とメモは、実行によっては無い
+# 入力である。無い値は、クエリにも URL エンコードの本文にも入れず（`until=` も `note=` も無い）、JSON の
+# 本文には null で入れる。どのプラットフォームでも動く。既定の Transport は、実行が持つ値を送る。
+workflow 掲示板の投稿 v1
+description "ある日までの話題の投稿を数え、メモを付けて投稿し、それを固定する。日とメモは無いことがある"
+
+use openapi board from "apis/board.json"
+
+record 件数
+  count : int  range >=0 <=1000
+
+record 投稿
+  id : string
+
+record 固定
+  id     : string
+  pinned : bool
+
+inputs
+  話題     : string
+  いつまで : date?
+  メモ     : string?
+
+outputs
+  件数     : int  range >=0 <=1000
+  固定した : bool
+
+# 終わりの日はクエリに入る。
+task 数える(topic: string, until: date?) -> 件数
+  http GET board "/posts"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/board/4e5f6a7b"
+  idempotent
+
+# メモは URL エンコードの本文に入る。
+task 投稿する(topic: string, note: string?) -> 投稿
+  http POST board "/posts"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/board/4e5f6a7b"
+
+# メモは JSON の本文に入る。
+task 固定する(id: string, note: string?) -> 固定
+  http POST board "/posts/{id}/pin"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/board/4e5f6a7b"
+
+flow
+  let 数えた = 数える(topic: 話題, until: いつまで)
+  let 投稿した = 投稿する(topic: 話題, note: メモ)
+  let 固定の結果 = 固定する(id: 投稿した.id, note: メモ)
+  succeed 件数 = 数えた.count, 固定した = 固定の結果.pinned

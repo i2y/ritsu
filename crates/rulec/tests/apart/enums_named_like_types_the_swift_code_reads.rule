@@ -1,0 +1,13 @@
+enums measures v1
+description "Enums of an enums file named like types the Swift code reads"
+
+enum style(string) = plain | bold | italic
+enum flag(bool) = up | down
+enum count_kind(int) = few | many
+enum width(int64) = narrow | wide
+enum ratio(double) = half | whole
+
+prerequisites styling over style
+  start  plain
+  bold   requires plain
+  italic requires plain

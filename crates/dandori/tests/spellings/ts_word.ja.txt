@@ -1,0 +1,9 @@
+警告[W105]: tests/spellings/ts_word.flow:4:8: 型 `object`は、TypeScript のコードでそのままの名前では使えません
+     4 | record object
+  = TypeScript（`--target temporal-typescript`, `--target durable`）：`object` は TypeScript の語で、型の名前にできません。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
+警告[W105]: tests/spellings/ts_word.flow:7:6: 型 `keyof`は、TypeScript のコードでそのままの名前では使えません
+     7 | enum keyof = early | late
+  = TypeScript（`--target temporal-typescript`, `--target durable`）：`keyof` は TypeScript の語で、型の名前にできません。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
+tests/spellings/ts_word.flow: 検査を通りました（警告 2 件）

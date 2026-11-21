@@ -1,0 +1,18 @@
+request 例(example) v1 "例"
+
+use organization 組織(org) from "shared/空席のある会社.ringi"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確かめ(check)  部長
+
+who
+  部長(head) = head of requester.部
+
+every stage
+  when empty escalate
+
+ticket
+  self approval  allowed

@@ -1,0 +1,27 @@
+request example v1 "Example"
+
+use organization org from "shared/small.ringi"
+use calendar office from "shared/office.cal"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+every stage
+  due in 3 business days at end of day
+  when late expire
+
+ticket
+  self approval  allowed
+
+scenario nobody_answers
+  requester e03
+  form amount = 5_000JPY
+| at               | event  | by  | -> stage | status      |
+| 2026-06-01 09:00 | submit | e03 | check    | in progress |
+| 2026-06-04 23:59 | late   |     |          | expired     |

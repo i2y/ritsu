@@ -173,7 +173,7 @@ pub fn run_saying(
     // An adapter that broke the protocol is stopped when this returns, rather than left to run
     // on after rulec (§15.163).
     let mut child = crate::child::Owned::spawn(Command::new(cmd).args(args).stdin(Stdio::piped()).stdout(Stdio::piped()))
-        .map_err(|e| if ritsu_base::wasi::unsupported(&e) { crate::i18n::text(&ritsu_base::wasi::cannot_start(cmd)) } else { tr!("アダプタを起動できません: {e}", "Cannot start the adapter: {e}") })?;
+        .map_err(|e| crate::i18n::text(&ritsu_base::cli::cannot_start(cmd, &e)))?;
     let watch = Watch::default();
     // The sentence is built on the watching thread, in the language this one prints in.
     let lang = crate::i18n::current();
@@ -349,6 +349,9 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
             format!("{}[] ({})", el.name.text, el.fields.iter().map(|fd| fd.name.text.clone()).collect::<Vec<_>>().join(", "))
         }))
         .collect();
+    // A rule that reads no input is said to read none, where an empty list closed the sentence
+    // (§15.330).
+    let listed = if ins.is_empty() { tr!("なし", "none") } else { ins.join(", ") };
     // `out` holds every output by name. The template used to write the first one alone, and a
     // rule with two came out of a filled-in template at 0%, each answer missing the second.
     let outs: Vec<String> = f.outputs.iter().map(|o| o.name.text.clone()).collect();
@@ -407,7 +410,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              b, _ := json.Marshal(map[string]any{{\"id\": req.ID, \"out\": map[string]any{{{}}}}})\n\t\t\
              fmt.Println(string(b))\n\t}}\n}}\n",
             f.name.text,
-            ins.join(", "),
+            listed,
             out
         ),
         _ => tr!(
@@ -440,7 +443,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              got = 0  # TODO: legacy.compute(d)\n\n    \
              print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{}}}}}, ensure_ascii=False), flush=True)\n",
             f.name.text,
-            ins.join(", "),
+            listed,
             out
         ),
     }
@@ -605,8 +608,13 @@ pub enum Pre {
     /// `constraint <left> <op> <right>`, each side the inputs it adds: one name, or several for a
     /// side written as a sum (§15.216).
     Rel { left: Vec<String>, op: &'static str, right: Vec<String> },
-    /// The total of one column over a sequence, bounded above.
-    Sum { name: String, over: String, of: String, max: i128 },
+    /// The total of one column over a sequence, bounded above, and below where its range starts
+    /// above zero (§15.314): a walk that adds up to less — an empty sequence, to begin with — is
+    /// refused as one that passes the top is.
+    Sum { name: String, over: String, of: String, max: i128, min: Option<i128> },
+    /// How many elements of a sequence a `count` counts, bounded below, where its range starts
+    /// above zero (§15.314). The top of its range is the cap on the sequence (`Length`).
+    Count { name: String, over: String, min: i128 },
     /// How many elements a sequence may have.
     Length { sequence: String, max: i128 },
     /// No two elements of a sequence with the same value of a field marked `unique` (§15.290).
@@ -616,6 +624,62 @@ pub enum Pre {
     Days { input: String, file: String, date: String, days: Vec<i64> },
     /// A `never` line the door reads (§15.282): the line, and what it tests on the wire.
     Never { said: String, conds: Vec<ritsu_ports::NeverCond> },
+    /// A value a `define` works out, accepted only inside the range written for it (§15.313), where
+    /// what it reaches can pass an end: the `define`, its range as the rule writes it, the inputs
+    /// (and the fields of one element) it is worked out from, in the order the rule declares them,
+    /// and the sequence it is worked out on, one element at a time, for a value of one element.
+    Define { name: String, range: String, from: Vec<String>, over: Option<String> },
+}
+
+/// The inputs, and the fields of one element, a value is worked out from, in the order the rule
+/// declares them: what its expression reads, followed through the `define`s, `derive`s, tables and
+/// summaries it reads to the names a caller gives.
+pub(crate) fn worked_from(f: &RuleFile, name: &str) -> Vec<String> {
+    use crate::ast::{Item, OutCell};
+    let given = |n: &str| f.inputs.iter().any(|i| i.name.text == n) || f.elements.iter().flat_map(|e| &e.fields).any(|x| x.name.text == n);
+    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut todo = vec![name.to_string()];
+    while let Some(n) = todo.pop() {
+        if !seen.insert(n.clone()) {
+            continue;
+        }
+        if given(&n) {
+            found.insert(n);
+            continue;
+        }
+        for it in &f.items {
+            let mut reads: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+            match it {
+                Item::Define(d) if d.name.text == n => crate::coverage::expr_names(&d.expr, &mut reads),
+                Item::Derived(d) if d.name.text == n => crate::coverage::expr_names(&d.expr, &mut reads),
+                Item::Table(t) if t.outputs.iter().any(|o| o.name.text == n) => {
+                    reads.extend(t.inputs.iter().map(|(col, _)| col.clone()));
+                    for row in &t.rows {
+                        for out in &row.outs {
+                            if let OutCell::Name(x) = out {
+                                reads.insert(x.clone());
+                            }
+                        }
+                    }
+                }
+                Item::Agg(d) if d.name.text == n => {
+                    reads.insert(d.column.text.clone());
+                    if let Some(v) = &d.value {
+                        reads.insert(v.text.clone());
+                    }
+                }
+                _ => {}
+            }
+            todo.extend(reads);
+        }
+    }
+    f.inputs
+        .iter()
+        .map(|i| i.name.text.clone())
+        .chain(f.elements.iter().flat_map(|e| e.fields.iter().map(|x| x.name.text.clone())))
+        .filter(|n| found.contains(n))
+        .collect()
 }
 
 /// What one condition of a `never` line tests, on the wire: what a caller of the door can hold a
@@ -671,7 +735,7 @@ fn never_test(k: &crate::ast::NeverCond, c: &Checked) -> ritsu_ports::NeverTest 
 }
 
 /// Every precondition of the rule, in the order a reader meets them: the declared relations
-/// first, then what the walk is held to.
+/// first, then the ranges the values it works out are accepted in, then what the walk is held to.
 pub fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Pre> {
     use crate::ast::{AggKind, Item};
     let mut v: Vec<Pre> = f
@@ -679,6 +743,21 @@ pub fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Pre> {
         .iter()
         .map(|k| Pre::Rel { left: k.left.clone(), op: k.op.word(), right: k.right.clone() })
         .collect();
+    // A `define … range` that can refuse a call (§15.313), in the order the rule works them out.
+    let st = crate::types::stages(f);
+    for (i, it) in f.items.iter().enumerate() {
+        let Item::Define(d) = it else { continue };
+        let Some(r) = &d.range else { continue };
+        if c.refusing_ends(d).is_none() {
+            continue;
+        }
+        let over = match st.at(i) {
+            crate::types::Stage::Each { seq, .. } => Some(f.elements[seq].name.text.clone()),
+            _ => None,
+        };
+        let range = r.bounds.iter().map(|(op, l)| format!("{}{}", op.word(), crate::ast::lit_text(l))).collect::<Vec<_>>().join(" ");
+        v.push(Pre::Define { name: d.name.text.clone(), range, from: worked_from(f, &d.name.text), over });
+    }
     let aggs: Vec<&crate::ast::AggDecl> =
         f.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None }).collect();
     for d in aggs.iter().filter(|d| d.kind == AggKind::Sum) {
@@ -689,7 +768,14 @@ pub fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Pre> {
             over: d.over.clone(),
             of: d.column.text.clone(),
             max: crate::types::wire_int(hi, sc),
+            min: c.walk_floor(d).map(|lo| crate::types::wire_int(lo, sc)),
         });
+    }
+    // A `count` whose range starts above zero (§15.314), in the order the rule writes them.
+    for d in aggs.iter().filter(|d| d.kind == AggKind::Count) {
+        if let Some(lo) = c.walk_floor(d) {
+            v.push(Pre::Count { name: d.name.text.clone(), over: d.over.clone(), min: crate::types::wire_int(lo, 1) });
+        }
     }
     // A count can be as large as the sequence, so the smallest upper bound any of them over
     // one sequence declares is what its length is held to (§15.58). A `sum` says nothing about
@@ -759,13 +845,15 @@ pub fn preconditions_json(f: &RuleFile, c: &Checked) -> String {
                     };
                     crate::json::Obj::new().str("kind", "constraint").raw("left", side(left)).str("op", op).raw("right", side(right)).finish()
                 }
-                Pre::Sum { name, over, of, max } => crate::json::Obj::new()
-                    .str("kind", "sum")
-                    .str("name", name)
-                    .str("over", over)
-                    .str("of", of)
-                    .int("max", *max)
-                    .finish(),
+                // `min` is there only where the range starts above zero (§15.314).
+                Pre::Sum { name, over, of, max, min } => {
+                    let o = crate::json::Obj::new().str("kind", "sum").str("name", name).str("over", over).str("of", of).int("max", *max);
+                    match min {
+                        Some(min) => o.int("min", *min).finish(),
+                        None => o.finish(),
+                    }
+                }
+                Pre::Count { name, over, min } => crate::json::Obj::new().str("kind", "count").str("name", name).str("over", over).int("min", *min).finish(),
                 Pre::Length { sequence, max } => crate::json::Obj::new()
                     .str("kind", "length")
                     .str("sequence", sequence)
@@ -798,6 +886,15 @@ pub fn preconditions_json(f: &RuleFile, c: &Checked) -> String {
                         ),
                     )
                     .finish(),
+                // The range as the rule writes it: the value is never on the wire, so no integer
+                // of it is either (§15.313).
+                Pre::Define { name, range, from, over } => {
+                    let o = crate::json::Obj::new().str("kind", "define").str("name", name).str("range", range).raw("from", crate::json::strs(from));
+                    match over {
+                        Some(s) => o.str("over", s).finish(),
+                        None => o.finish(),
+                    }
+                }
             })
             .collect::<Vec<_>>(),
     )
@@ -814,8 +911,16 @@ fn pre_kinds(f: &RuleFile, c: &Checked) -> Option<String> {
     } else if ps.iter().any(|p| matches!(p, Pre::Rel { .. })) {
         words.push(tr!("入力どうしの関係", "a relation between two inputs"));
     }
-    if ps.iter().any(|p| matches!(p, Pre::Sum { .. })) {
+    if ps.iter().any(|p| matches!(p, Pre::Define { .. })) {
+        words.push(tr!("入力から計算した値を受け付ける範囲", "a range a value worked out from the inputs is accepted in"));
+    }
+    if ps.iter().any(|p| matches!(p, Pre::Sum { min: Some(_), .. })) {
+        words.push(tr!("並びの合計の上限と下限", "bounds on a sequence's total"));
+    } else if ps.iter().any(|p| matches!(p, Pre::Sum { .. })) {
         words.push(tr!("並びの合計の上限", "a bound on a sequence's total"));
+    }
+    if ps.iter().any(|p| matches!(p, Pre::Count { .. })) {
+        words.push(tr!("並びを数えた数の下限", "a bound from below on how many elements of a sequence are counted"));
     }
     if ps.iter().any(|p| matches!(p, Pre::Length { .. })) {
         words.push(tr!("並びの長さの上限", "a cap on a sequence's length"));

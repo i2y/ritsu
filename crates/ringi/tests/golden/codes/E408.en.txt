@@ -1,0 +1,3 @@
+error[E408]: example.ringi:17:23: The key of `budget.reserve` (`request`, `round`) does not take `ticket.attempt`: a try the book refused, or a hold voided because its ticket was not saved, stops every later try of the round
+    17 |   on submitted   hold budget.reserve(request: ticket.id, round: ticket.round, dept: dept, amount: amount)
+  = Give the transfer a parameter for the try in its key (`attempt: string`, `key …, attempt`), and pass `attempt: ticket.attempt` to the `hold`, the `post` and the `void`.

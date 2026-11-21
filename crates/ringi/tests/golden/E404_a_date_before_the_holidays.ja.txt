@@ -1,0 +1,3 @@
+エラー[E404]: tests/mutants/E404_a_date_before_the_holidays.ringi:8:3: `back_on` は `first_day` から営業日を数えますが、`first_day` は 2025-10-01 からを取り、カレンダー `office` のデータは 2026-01-01 からです
+     8 |   back_on   : date "Back at work on" = first_day + days business days in office
+  = `tests/mutants/shared/finite.cal` は 2026-01-01 より前の日が休みかを知りません。カレンダーの休みの表を広げるか、`first_day` の範囲を 2026-01-01 からにしてください。

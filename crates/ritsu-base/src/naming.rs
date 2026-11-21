@@ -14,9 +14,9 @@ use crate::paths::{self, PathError};
 use crate::text::Text;
 use crate::tr;
 
-/// The fifteen tools a naming can start with (DESIGN 6.2, item 2). `ritsu` is not one: it is not a
-/// language. Five are standard formats every language reads the same way: `.proto` files, OpenAPI
-/// and AsyncAPI documents, Cedar's policies and schemas, and JSON Schemas.
+/// The sixteen tools a naming can start with (DESIGN 6.2, item 2), [`Tool::ALL`]. `ritsu` is not
+/// one: it is not a language. Five are standard formats every language reads the same way:
+/// `.proto` files, OpenAPI and AsyncAPI documents, Cedar's policies and schemas, and JSON Schemas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tool {
     Rulec,
@@ -45,13 +45,18 @@ pub enum Tool {
     /// A JSON Schema (YAML or JSON), or a schema inside any document: a definition of its `$defs` or
     /// `definitions` with its properties, and anything else by its JSON Pointer (DESIGN 6.5).
     Jsonschema,
+    /// The language of `.ringi` files, a company's applications and approvals (ringi's DESIGN 9.7):
+    /// a request's fields, tables, stages, ways to choose an approver, deadlines, rules of the
+    /// ticket, claims, examples and scenarios; what a shared route takes; an organization's
+    /// positions and kinds of team; a master.
+    Ringi,
 }
 
 /// A tool's kinds, each with the kinds that can come right after it.
 pub type Kinds = &'static [(&'static str, &'static [&'static str])];
 
 impl Tool {
-    pub const ALL: [Tool; 15] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Openapi, Tool::Asyncapi, Tool::Cedar, Tool::File, Tool::Yuen, Tool::Sakai, Tool::Sekisho, Tool::Kaname, Tool::Jsonschema];
+    pub const ALL: [Tool; 16] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Openapi, Tool::Asyncapi, Tool::Cedar, Tool::File, Tool::Yuen, Tool::Sakai, Tool::Sekisho, Tool::Kaname, Tool::Jsonschema, Tool::Ringi];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -70,6 +75,7 @@ impl Tool {
             Tool::Sekisho => "sekisho",
             Tool::Kaname => "kaname",
             Tool::Jsonschema => "jsonschema",
+            Tool::Ringi => "ringi",
         }
     }
 
@@ -94,6 +100,7 @@ impl Tool {
             Tool::Sakai => Some("ctx"),
             Tool::Sekisho => Some("gate"),
             Tool::Kaname => Some("kn"),
+            Tool::Ringi => Some("ringi"),
         }
     }
 
@@ -114,6 +121,7 @@ impl Tool {
             Tool::Sakai => &[".ctx"],
             Tool::Sekisho => &[".gate"],
             Tool::Kaname => &[".kn"],
+            Tool::Ringi => &[".ringi"],
         }
     }
 
@@ -170,6 +178,23 @@ impl Tool {
             // A definition of `$defs` or `definitions`, a property of one, and anything else by its
             // JSON Pointer (DESIGN 6.5).
             Tool::Jsonschema => &[("def", &["property"]), ("pointer", &[])],
+            // ringi's DESIGN 9.7: a field of rows is named with its rows (`items.price`), as the
+            // file's own `labels` name it, so nothing comes under a pair
+            Tool::Ringi => &[
+                ("field", &[]),
+                ("input", &[]),
+                ("table", &[]),
+                ("stage", &[]),
+                ("who", &[]),
+                ("deadline", &[]),
+                ("ticket", &[]),
+                ("claim", &[]),
+                ("example", &[]),
+                ("scenario", &[]),
+                ("position", &[]),
+                ("team_kind", &[]),
+                ("master", &[]),
+            ],
         }
     }
 

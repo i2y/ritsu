@@ -1,0 +1,105 @@
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> board (2 of e0001, e0201, e0202, e0203, e0204), due 2026-11-19 end of day
+2026-11-16 13:00  approve  by e0201  -> board (one of e0001, e0202, e0203, e0204), due 2026-11-19 end of day
+2026-11-16 14:00  approve  by e0202  -> decide (e3101), due 2026-11-19 end of day
+2026-11-17 09:30  approve  by e3101  -> approved
+scenario `approved_by_a_quorum`: as written (5 rows)
+
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> board (2 of e0001, e0201, e0202, e0203, e0204), due 2026-11-19 end of day
+2026-11-16 13:00  reject   by e0201  -> board (2 of e0001, e0202, e0203, e0204), due 2026-11-19 end of day
+2026-11-16 14:00  reject   by e0202  -> board (2 of e0001, e0203, e0204), due 2026-11-19 end of day
+2026-11-16 15:00  reject   by e0203  -> board (2 of e0001, e0204), due 2026-11-19 end of day
+2026-11-16 16:00  reject   by e0204  -> rejected
+scenario `rejected_when_the_quorum_is_out_of_reach`: as written (6 rows)
+
+2026-11-16 10:00  submit                        by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  send back                     by e1101  -> with requester, resubmit by 2026-11-19 end of day
+2026-11-17 10:00  resubmit (price = 90_000JPY)  by e1201  -> first (e1101), due 2026-11-20 end of day
+2026-11-17 11:00  approve                       by e1101  -> decide (e3101), due 2026-11-20 end of day
+scenario `sent_back_and_made_again`: as written (4 rows); the ticket is left `in progress`; the clocks set: remind 2026-11-19 09:00 (decide), late 2026-11-21 00:00 (decide)
+
+2026-11-16 10:00  submit              by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve             by e1101  -> board (2 of e0001, e0201, e0202, e0203, e0204), due 2026-11-19 end of day
+2026-11-16 13:00  send back to first  by e0201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 15:00  approve             by e1101  -> board (2 of e0001, e0201, e0202, e0203, e0204), due 2026-11-19 end of day
+scenario `sent_back_to_a_stage`: as written (4 rows); the ticket is left `in progress`; the clocks set: remind 2026-11-18 09:00 (board), late 2026-11-20 00:00 (board)
+
+2026-11-16 10:00  submit    by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  withdraw  by e1201  -> with requester, resubmit by 2026-11-19 end of day
+2026-11-16 12:00  discard   by e1201  -> withdrawn
+scenario `withdrawn_and_discarded`: as written (3 rows)
+
+2026-11-16 10:00  submit         by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  send back      by e1101  -> with requester, resubmit by 2026-11-19 end of day
+2026-11-20 00:00  resubmit late            -> expired; expired (resubmit late)
+scenario `not_made_again_in_time`: as written (3 rows)
+
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-17 11:00  approve  by e1101  -> board (2 of e0001, e0201, e0202, e0203, e0204), due 2026-11-20 end of day
+2026-11-17 12:00  retract  by e1101  -> first (e1101), due 2026-11-19 end of day
+2026-11-17 13:00  approve  by e1101  -> board (2 of e0001, e0201, e0202, e0203, e0204), due 2026-11-20 end of day
+scenario `an_approval_taken_back`: as written (4 rows); the ticket is left `in progress`; the clocks set: remind 2026-11-19 09:00 (board), late 2026-11-21 00:00 (board)
+
+2026-11-16 10:00  submit  by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-18 09:00  remind            -> first (e1101), due 2026-11-19 end of day; reminded e1101
+2026-11-20 00:00  late              -> first (e3101), due 2026-11-25 end of day; first went up to e3101
+2026-11-24 09:00  remind            -> first (e3101), due 2026-11-25 end of day; reminded e3101
+2026-11-26 00:00  late              -> expired; expired (late)
+scenario `late_and_up`: as written (5 rows)
+
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-17 11:00  approve  by e1101  -> board (2 of e0001, e0201, e0202, e0203, e0204), due 2026-11-20 end of day
+2026-11-19 09:00  remind             -> board (2 of e0001, e0201, e0202, e0203, e0204), due 2026-11-20 end of day; reminded e0001, e0201, e0202, e0203, e0204
+2026-11-21 00:00  late               -> board (e0001), due 2026-11-25 end of day; board went up to e0001
+2026-11-24 09:00  remind             -> board (e0001), due 2026-11-25 end of day; reminded e0001
+2026-11-26 00:00  late               -> expired; expired (late)
+scenario `clocks_from_each_start`: as written (6 rows)
+
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-18 09:00  remind             -> first (e1101), due 2026-11-19 end of day; reminded e1101
+2026-11-20 00:00  late               -> first (e3101), due 2026-11-25 end of day; first went up to e3101
+2026-11-23 10:00  approve  by e3101  -> board (2 of e0001, e0201, e0202, e0203, e0204), due 2026-11-26 end of day
+2026-11-23 11:00  retract  by e3101  -> first (e3101), due 2026-11-25 end of day
+2026-11-24 09:00  remind             -> first (e3101), due 2026-11-25 end of day; reminded e3101
+2026-11-26 00:00  late               -> expired; expired (late)
+scenario `taken_back_where_it_went_up_to`: as written (7 rows)
+
+2026-11-16 10:00  submit   by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-17 10:00  pause    by e1101  -> paused at first (e1101), until 2026-11-24 end of day
+2026-11-19 10:00  resume   by e1101  -> first (e1101), due 2026-11-23 end of day
+2026-11-19 11:00  approve  by e1101  -> board (2 of e0001, e0201, e0202, e0203, e0204), due 2026-11-24 end of day
+scenario `paused_and_resumed`: as written (4 rows); the ticket is left `in progress`; the clocks set: remind 2026-11-23 09:00 (board), late 2026-11-25 00:00 (board)
+
+2026-11-16 10:00  submit      by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-17 10:00  pause       by e1101  -> paused at first (e1101), until 2026-11-24 end of day
+2026-11-25 00:00  pause ends            -> first (e1101), due 2026-11-26 end of day
+scenario `a_pause_used_up`: as written (3 rows); the ticket is left `in progress`; the clocks set: remind 2026-11-25 09:00 (first), late 2026-11-27 00:00 (first)
+
+2026-11-16 10:00  submit  by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-18 09:00  remind            -> first (e1101), due 2026-11-19 end of day; reminded e1101
+2026-11-20 00:00  late              -> first (e3101), due 2026-11-25 end of day; first went up to e3101
+2026-11-20 10:00  pause   by e3101  -> paused at first (e3101), until 2026-11-27 end of day
+2026-11-24 10:00  resume  by e3101  -> first (e3101), due 2026-11-27 end of day
+2026-11-26 09:00  remind            -> first (e3101), due 2026-11-27 end of day; reminded e3101
+2026-11-28 00:00  late              -> expired; expired (late)
+scenario `paused_where_it_went_up_to`: as written (7 rows)
+
+2026-11-16 10:00  submit                    by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  edit (price = 90_000JPY)  by e1101  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:05  approve                   by e1101  -> decide (e3101), due 2026-11-19 end of day
+scenario `edited_by_an_approver`: as written (3 rows); the ticket is left `in progress`; the clocks set: remind 2026-11-18 09:00 (decide), late 2026-11-20 00:00 (decide)
+
+2026-11-16 10:00  submit  by e0101  -> first (e0001), due 2026-11-19 end of day
+2026-11-18 09:00  remind            -> first (e0001), due 2026-11-19 end of day; reminded e0001
+2026-11-20 00:00  late              -> expired; expired (late; nowhere to go up)
+scenario `late_at_the_top`: as written (3 rows)
+
+2026-11-16 10:00  submit  by e0001  -> approved; first skipped (no head is above the requester; nobody is above to go up to); decide skipped (no team of the kind department is above the requester; nobody is above to go up to)
+scenario `nobody_answers_the_president`: as written (1 row)
+
+2027-03-31 10:00  submit              by e9001  -> first (e0102), due 2027-04-05 end of day
+2027-04-01 10:00  approve             by e0102  -> decide (nobody, until an administrator adds an approver), due 2027-04-06 end of day; decide has nobody (no head is above the requester; the requester e9001 is not in the organization from 2027-04-01)
+2027-04-01 11:00  add approver e0102            -> decide (e0102), due 2027-04-06 end of day
+2027-04-01 12:00  approve             by e0102  -> approved
+scenario `the_requester_has_left`: as written (4 rows)

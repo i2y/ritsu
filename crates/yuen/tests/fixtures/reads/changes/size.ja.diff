@@ -1,0 +1,19 @@
+diff --git a/rules/size.ja.rule b/rules/size.ja.rule
+index 67688aa..8676d7c 100644
+--- a/rules/size.ja.rule
++++ b/rules/size.ja.rule
+@@ -12,10 +12,10 @@ outputs
+ table 多さを決める
+ policy unique
+ | 点数 | -> 多さ : 多さ |
+-| <=20 | 少ない         |
+-| >20  | 多い           |
++| <=25 | 少ない         |
++| >25  | 多い           |
+ 
+ examples
+ | 点数 | -> 多さ |
+-| 20   | 少ない  |
+-| 21   | 多い    |
++| 25   | 少ない  |
++| 26   | 多い    |

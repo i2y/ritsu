@@ -1,0 +1,15 @@
+rule fee_and_band v1
+description "An output named by an underscore alone, in a rule of two outputs"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+  _   : number  round down(1)
+
+table fee_by_qty
+policy unique
+| qty | -> fee | _ |
+| <=5 | 3USD   | 1 |
+| >5  | 2USD   | 2 |

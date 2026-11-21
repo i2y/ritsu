@@ -1,0 +1,20 @@
+warning[W111]: Values of type level appear in no row
+  --> tests/gaps/fee_top_band.rule:4
+  |
+4 | enum level = low | mid | high
+  |      ^^^^^
+  |
+ Values that never appear: high
+ Table levels, which writes this type, is short of rows (E101): what the rows it lacks answer may be where those values belong.
+
+error[E101]: Completeness gap: some input matches no row
+  --> tests/gaps/fee_top_band.rule:12 table levels
+   |
+12 | table levels
+   |       ^^^^^^ the input space is not fully covered
+   |
+ No row matches: amount from 501JPY to 1000JPY
+ An input that matches no row: amount = 501JPY
+ hint: add this row, with what it answers written in place of `?`: `| >500JPY | ? |`
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.
+

@@ -1,0 +1,2 @@
+error[E007]: example.ringi:18:3: The label `stage approve` is for nothing: the route has no stage `approve`
+    18 |   stage approve  "承認"

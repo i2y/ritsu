@@ -4,8 +4,10 @@ description "履歴を暗号化するワークフローのクライアントが�
 
 use proto 通話 from "protos/calls.ja.proto"
 
-# 履歴を暗号化するとき、Go の client.go は Dial・EncryptedClient・CodecFailureConverter・
-# CodecDataConverter を宣言するので、check はこれらの型に W105 を出し、Go の gen は E051 で止まる。
+# 履歴を暗号化するとき、Go の client.go は呼ぶ側のために Dial と EncryptedClient を宣言するので、
+# check はこれらの型に W105 を出し、Go の gen は E051 で止まる。CodecFailureConverter と
+# CodecDataConverter は自分のためだけに宣言し、型がその名前を取れば自分の方を別の名前にする。同じ
+# 名前のサービスのメソッドとメッセージもフローの名前なので、Go ではこれらの型と一つの名前になる。
 record Dial
   答え : string
 

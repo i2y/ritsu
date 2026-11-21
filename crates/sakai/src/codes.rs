@@ -230,7 +230,10 @@ pub fn ledger() -> Ledger {
         e(
             "E003",
             tr!("ファイルが `map` か `context` の行で始まっていません", "The file does not start with a `map` or a `context` line"),
-            tr!("コメントと空行を除いた最初の行が、`map …` でも `context …` でもないとき。", "The first line that is not a comment or blank is neither `map …` nor `context …`."),
+            tr!(
+                "コメントと空行を除いた最初の行が、`map …` でも `context …` でもないとき。そういう行が一つも無いとき（空のファイル、コメントと空行だけのファイル）にも、1 行目に出ます。",
+                "The first line that is not a comment or blank is neither `map …` nor `context …`; also at line 1 when there is no such line (an empty file, or one of comments and blank lines)."
+            ),
             tr!(
                 "コンテキストマップなら `map 通販(shop) v1`、一つのコンテキストなら `context 在庫(inventory) v1` のように書き始めてください。",
                 "Start a context map like `map Shop(shop) v1`, and one context like `context Inventory(inventory) v1`."
@@ -292,8 +295,8 @@ pub fn ledger() -> Ledger {
             "E007",
             tr!("宣言されていない名前です", "A name is not declared"),
             tr!(
-                "関係の相手や `as` のコンテキストが地図に無いとき、`means` や対応の要素が proto に無いとき。短い書き方の名前が二つの package に当たるときにも出ます。",
-                "A relationship or an `as` names a context the map does not read, or `means` or a mapping names an element the proto does not have; also a short name that two packages have."
+                "関係の相手や `as` のコンテキストが地図に無いとき、`means` や対応の要素が proto に無いとき。短い書き方の名前が二つの package に当たるときにも出ます。地図に無い同じコンテキストを一つのファイルに何度も書いたときは、最初に書いた所で一度だけ出て、ほかの行の番号を注に挙げます。ほかのファイルが書けば、そのファイルでも一度出ます。",
+                "A relationship or an `as` names a context the map does not read, or `means` or a mapping names an element the proto does not have; also a short name that two packages have. A context the map does not read, named on several lines of a file, is said once, at the first, and the note gives the lines of the others; another file that names it says it once too."
             ),
             tr!("名前の書き違いを直すか、`use context` を足してください。二つの package に当たる名前は package から書いてください（`message warehouse.v1.ReserveResponse`）。", "Correct the spelling, or add the `use context`. Write a name two packages have with its package (`message warehouse.v1.ReserveResponse`)."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 丙 conformist\n  through b.v1\n")],
@@ -563,7 +566,7 @@ pub fn ledger() -> Ledger {
         e(
             "E203",
             tr!("`through` に無い package を通る参照です", "A reference goes through a package `through` does not list"),
-            tr!("上流の公表された言語のうち、関係の `through` に並べていない package を参照しているとき。", "A reference reaches a published package of the upstream that the relationship's `through` does not list."),
+            tr!("上流の公表された言語のうち、関係の `through` に並べていない package を参照しているとき。上流の見出しが proto の package と違うとき（E302）は、その package への参照には出ません。", "A reference reaches a published package of the upstream that the relationship's `through` does not list. It is not said of a reference to a package the upstream's proto declares under a heading that names another (E302 says that)."),
             tr!("`through` に package を足すか、参照を直してください。", "Add the package to `through`, or change the reference."),
             &[
                 A_CONFORMS,
@@ -762,8 +765,8 @@ pub fn ledger() -> Ledger {
             "E302",
             tr!("公表された言語のファイルが、そのコンテキストのものでないか、package が違います", "A file of a published language is not the context's, or has another package"),
             tr!(
-                "公表された言語の proto、規則、Rust のクレート、OpenAPI と AsyncAPI の文書、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときにも出ます。`rulec` に規則の代わりに `enums` のファイルを並べたときも同じです（`enums` のファイルからは Connect のサービスが生成されず、公表する package もありません）。",
-                "A proto, a rule, a Rust crate or the place of the generated code of a published language does not belong to the context; or a proto's package, or a crate's name (with `-` written `_`), is not what the heading names; or a `crate` is no crate of the workspace at the map's `code rust` place, or the map has no `code rust`; or a `rulec` line lists an `enums` file in the place of a rule, from which no Connect service is generated, so there is no package to publish."
+                "公表された言語の proto、規則、Rust のクレート、OpenAPI と AsyncAPI の文書、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときにも出ます。`rulec` に規則の代わりに `enums` のファイルを並べたときも同じです（`enums` のファイルからは Connect のサービスが生成されず、公表する package もありません）。proto の package が見出しと違うときは、この誤りだけを言い、その package を `through` に並べた関係（E312）と、それを参照するもの（E203）は何も言いません。",
+                "A proto, a rule, a Rust crate or the place of the generated code of a published language does not belong to the context; or a proto's package, or a crate's name (with `-` written `_`), is not what the heading names; or a `crate` is no crate of the workspace at the map's `code rust` place, or the map has no `code rust`; or a `rulec` line lists an `enums` file in the place of a rule, from which no Connect service is generated, so there is no package to publish. Where the package of a proto is not what the heading names, this is all that is said: a relationship whose `through` lists that package (E312) and what refers to it (E203) say nothing."
             ),
             tr!("見出しの package を直すか、そのコンテキストのファイルを並べてください。", "Correct the heading's package, or list the context's own files."),
             &[(
@@ -907,7 +910,7 @@ pub fn ledger() -> Ledger {
         e(
             "E312",
             tr!("上流が `through` の package を公表していません", "The upstream does not publish a package of `through`"),
-            tr!("`through` に並べた package が、上流の `published language` に無いとき。", "A package under `through` is not among the upstream's `published language`s."),
+            tr!("`through` に並べた package が、上流の `published language` に無いとき。上流の見出しが proto の package と違うとき（E302）は、その package については出ません。", "A package under `through` is not among the upstream's `published language`s. It is not said of a package the upstream's proto declares under a heading that names another (E302 says that)."),
             tr!("上流が公表している package を書いてください。", "Write a package the upstream publishes."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 conformist\n  through b.v9\n")],
             &["E203"],

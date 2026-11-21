@@ -50,18 +50,23 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         print!("{}", table.help_cmd(cmd, lang));
         return 0;
     }
+    // the paths the run holds are written the way the first path given was (DESIGN 4.15), and the
+    // rule `--route` takes as the run holds a path a flag takes: `--route ./route.rule` is `route.rule`
+    let _way = ritsu_base::paths::run_from(a.pos.first().map_or(".", String::as_str));
+    let mut a = a;
+    a.fold_paths(&["--route"]);
     run(&a, lang)
 }
 
+/// What stops the command before its work, in the words of every command of the toolchain (DESIGN
+/// 6.2, item 10), and 2.
 fn refuse(t: Text, lang: Lang) -> u8 {
-    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    eprintln!("{head}: {}", t.get(lang));
-    2
+    ritsu_base::cli::refuse(&mut std::io::stderr(), &t, lang)
 }
 
 fn run(a: &Args, lang: Lang) -> u8 {
     let Some(base) = a.get("--base") else {
-        return refuse(tr!("`--base <git の版>`（比べる前の版）を付けてください", "`--base <revision>` is required: the revision to compare with"), lang);
+        return refuse(ritsu::cli::table().needs_of("impact", "--base <revision>"), lang);
     };
     let budget = match diff::budget_of(a) {
         Ok(b) => b,
@@ -100,7 +105,10 @@ fn run(a: &Args, lang: Lang) -> u8 {
         match r.answer(&i.facts, &joined) {
             Ok(answered) => i.route = Some(answered),
             Err(t) => {
-                refuse(t, lang);
+                // the work is done and the report still comes to its end, with no route (in JSON
+                // too): said on stderr, not as what stops a run before its work, which a line that
+                // asks for JSON would get as `{"error": …}` after the report
+                eprintln!("{}", ritsu_base::cli::refusal(t.get(lang), lang));
                 route_stopped = true;
             }
         }
@@ -179,6 +187,9 @@ pub(crate) struct Requirements {
     pub note: Option<Text>,
     /// The requirements that moved, each as `yuen affected --format json` writes one.
     pub moved: Vec<Json>,
+    /// How many of them the change reaches only through the files the files they name read (yuen's
+    /// `only_through_reads`), and none of the requirements themselves says moved.
+    pub only_read: usize,
     pub owners: Vec<String>,
     /// The changes no requirement reaches: the file, and why (`unclaimed`, `untraced`, `unnamed`,
     /// `no_requirements`).
@@ -382,7 +393,7 @@ fn git_diff(root: &Path, base: &str, head: Option<&str>) -> Result<Vec<u8>, Text
             .args(["-c", "core.quotepath=false", "-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false", "-c", "core.safecrlf=false"])
             .args(args)
             .output()
-            .map_err(|e| tr!("git を起動できません（{e}）", "cannot start git ({e})"))
+            .map_err(|e| ritsu_base::cli::cannot_start("git", &e))
     };
     let mut args = vec!["diff", "--no-color", "--no-ext-diff", "--no-textconv", "--full-index", "-M", "--relative", "--src-prefix=a/", "--dst-prefix=b/", base];
     args.extend(head);
@@ -613,6 +624,17 @@ fn requirements_of(root: &Path, head: &Option<Rc<dyn Files>>, bytes: &[u8], move
             }
         }
     }
+    // reached only through what the files they name read, and not said to move by the requirements
+    // themselves: a rule can tell these from the others (`requirements_read`)
+    let said: BTreeSet<String> = d.why.iter().map(|w| w.name.clone()).collect();
+    for j in &mut r.moved {
+        let only = j.get("only_through_reads").and_then(Json::as_bool) == Some(true) && j.get("name").and_then(Json::as_str).is_none_or(|n| !said.contains(n));
+        if let Json::Obj(pairs) = j {
+            pairs.retain(|(k, _)| k != "only_through_reads");
+            pairs.push(("only_through_reads".to_string(), Json::Bool(only)));
+        }
+    }
+    r.only_read = r.moved.iter().filter(|j| j.get("only_through_reads").and_then(Json::as_bool) == Some(true)).count();
     // what the requirements themselves say moved: one the base has and the head does not, say
     let have: BTreeSet<String> = r.moved.iter().filter_map(|j| j.get("name").and_then(Json::as_str).map(str::to_string)).collect();
     for w in d.why.iter().filter(|w| !have.contains(&w.name)) {
@@ -630,6 +652,7 @@ fn requirements_of(root: &Path, head: &Option<Rc<dyn Files>>, bytes: &[u8], move
             ("owner", Json::opt_str(owner)),
             ("from", Json::arr([])),
             ("decided", Json::Null),
+            ("only_through_reads", Json::Bool(false)),
         ]));
     }
     r
@@ -805,14 +828,22 @@ fn opaque(tool: Option<Tool>) -> bool {
 fn facts_of(changed: &[Changed], new: &[Json], d: &ModDiff, undecided: &[(String, Text)], requirements: &Requirements, claims: &ClaimsSaid, generated: &GeneratedSaid) -> Vec<(&'static str, Fact)> {
     let of_kind = |k: Kind| changed.iter().filter(|f| f.kind == k).count() as i128;
     let severity = |s: &str| new.iter().filter(|d| d.get("severity").and_then(Json::as_str) == Some(s)).count() as i128;
-    let (mut rule, mut date, mut gained, mut lost, mut policies, mut book) = (0i128, 0i128, 0i128, 0i128, 0i128, 0i128);
+    let (mut rule, mut date, mut gained, mut lost, mut policies, mut book, mut request) = (0i128, 0i128, 0i128, 0i128, 0i128, 0i128, 0i128);
     let total = |j: &Json, k: &str| j.get("total").and_then(|t| t.get(k)).and_then(Json::as_int).unwrap_or(0);
     let regions = |j: &Json| j.get("changes").and_then(Json::as_arr).map_or(0, |c| c.len() as i128);
+    // what `ringi diff` lists: the boxes of the route, the lines of the sections, and the requesters'
+    // stages answered otherwise where the route stays
+    let listed = |j: &Json| {
+        let list = |k: &str| j.get(k).and_then(Json::as_arr).unwrap_or_default();
+        let inner = |k: &str| list(k).iter().map(|x| x.get("changes").and_then(Json::as_arr).map_or(0, <[Json]>::len)).sum::<usize>();
+        (list("route").len() + inner("sections") + inner("approvers")) as i128
+    };
     for b in &d.behavior {
         let Ok(s) = &b.result else { continue };
         match b.tool {
             Tool::Rulec => rule += regions(&s.json).max(i128::from(s.differs)),
             Tool::Koyomi => date += regions(&s.json).max(i128::from(s.differs)),
+            Tool::Ringi => request += listed(&s.json).max(i128::from(s.differs)),
             Tool::Sekisho => {
                 let (g, l) = (total(&s.json, "gained"), total(&s.json, "lost"));
                 gained += g;
@@ -833,6 +864,7 @@ fn facts_of(changed: &[Changed], new: &[Json], d: &ModDiff, undecided: &[(String
             Some(Tool::Koyomi) => date += 1,
             Some(Tool::Sekisho) => policies += 1,
             Some(Tool::Chobo) => book += 1,
+            Some(Tool::Ringi) => request += 1,
             _ => {}
         }
     }
@@ -872,11 +904,13 @@ fn facts_of(changed: &[Changed], new: &[Json], d: &ModDiff, undecided: &[(String
             "allow_lost" => Fact::Count(lost),
             "policies_moved" => Fact::Count(policies),
             "book_changes" => Fact::Count(book),
+            "request_changes" => Fact::Count(request),
             "interface_changes" => Fact::Count(iface),
             "interface_breaks" => Fact::Count(breaks),
             "undecided" => Fact::Count(undecided.len() as i128),
             "opaque_specs" => Fact::Count(opaque_specs),
-            "requirements_moved" => Fact::Count(requirements.moved.len() as i128),
+            "requirements_moved" => Fact::Count((requirements.moved.len() - requirements.only_read) as i128),
+            "requirements_read" => Fact::Count(requirements.only_read as i128),
             "requirements_unknown" => Fact::Count(requirements.unknown.len() as i128),
             "claims_touched" => Fact::Count(claims_touched),
             "unclaimed_lines" => Fact::Count(unclaimed_lines as i128),
@@ -905,7 +939,7 @@ fn type_said(t: &ColumnType) -> String {
     match t {
         ColumnType::Bool => "bool".into(),
         ColumnType::Str => "string".into(),
-        ColumnType::Date => "date".into(),
+        ColumnType::Date { .. } => "date".into(),
         ColumnType::Enum { name, .. } => format!("enum {name}"),
         ColumnType::Num { written, .. } => written.clone(),
         ColumnType::Opt(x) => format!("{}?", type_said(x)),
@@ -919,9 +953,18 @@ impl Route {
     fn read(file: &str, joined: &Joined) -> Result<Route, Vec<Text>> {
         let path = PathBuf::from(file);
         if !ritsu_base::fs::is_file(&path) {
-            return Err(vec![tr!("経路の規則 `{file}` がありません", "there is no route rule `{file}`")]);
+            // a file given through a flag, said as every command says a file it cannot read (DESIGN
+            // 6.2, item 10): not there, or a directory
+            let e = ritsu_base::fs::read(&path).err().unwrap_or_else(|| std::io::ErrorKind::NotFound.into());
+            return Err(vec![ritsu_base::cli::cannot_read(file, &e)]);
         }
         let facts = joined.rulec.facts(&path).map_err(|said| {
+            // a file that cannot be read at all (not UTF-8) is said alone, as every command says it
+            if let [only] = said.as_slice()
+                && only.code.is_empty()
+            {
+                return vec![only.message.clone()];
+            }
             let mut out = vec![tr!("経路の規則 `{file}` は検査を通りません", "the route rule `{file}` does not pass its check")];
             out.extend(said.iter().map(|s| {
                 let at = s.line.map_or(String::new(), |l| format!(":{l}"));

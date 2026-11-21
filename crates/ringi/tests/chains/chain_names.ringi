@@ -1,0 +1,45 @@
+request chain_names v1 "Names said once"
+description "A form whose names a few lines read are declared nowhere (fictional rules): each is said once, where the file first writes it, with the other lines that write it"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  lines   : rows "Lines"  count >=1 <=10
+    item  : text "Item"  count <=100
+    price : money[JPY] "Price"  range >=1JPY <=100_000JPY
+  fees    : rows "Fees"  count <=10
+    item  : text "Item"  count <=100
+    fee   : money[JPY] "Fee"  range >=1JPY <=100_000JPY
+  # a column declared in neither rows: two mistakes, one for each rows
+  amount  : money[JPY] "Amount" = sum(lines.cost)  range >=1JPY <=1_000_000JPY
+  charged : money[JPY] "Charged" = sum(fees.cost)  range >=1JPY <=1_000_000JPY
+  # declared misspelled: the route, `who` and the scenario read `reviewer`
+  reviewr : person "Technical reviewer"  optional
+
+route
+  # a stage misspelled where it is declared: the ticket and the scenario name `first`
+  frist      manager
+  technical  reviewer  when reviewer is not none
+  # a way to choose declared nowhere, which two stages name
+  finance    finanse   when amount > 100_000JPY
+  audit      finanse   when amount > 500_000JPY
+
+who
+  manager  = manager of requester
+  reviewer = chosen by requester in reviewer
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+  withdraw       until first
+
+scenario reviewed
+  requester e1201
+  form lines = [{item: "Desk", price: 50_000JPY}], fees = [], reviewer = person "e7201"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |

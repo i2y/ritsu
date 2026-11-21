@@ -1,0 +1,23 @@
+request expense v1 "Expense"
+description "An expense checked by the requester's manager and decided by finance (fictional)"
+
+use organization org from "org/company.ringi"
+use masters m from "masters/masters.ringi"
+
+form
+  amount  : money[JPY] "Amount"  range >=1JPY <=1_000_000JPY
+  account : choice from m.accounts "Account code"
+
+route
+  check   manager
+  decide  finance
+
+who
+  manager = manager of requester
+  finance = team finance
+
+every stage
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed

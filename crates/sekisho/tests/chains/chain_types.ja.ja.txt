@@ -1,0 +1,6 @@
+エラー[E101]: chain_types.ja.gate:24:13: 型 `利用者` はありません
+    24 |   principal 利用者
+  = 書ける principal の型は `利用` です。
+エラー[E101]: chain_types.ja.gate:25:12: 型 `注文` はありません
+    25 |   resource 注文
+  = 書ける resource の型は `注` です。

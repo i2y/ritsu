@@ -1,0 +1,42 @@
+gate library v1
+description "Who may read a document of the library and list a folder; a forbid names an action it never applies to"
+namespace Library
+
+role staff
+  description "Works in the library"
+
+principal User
+  description "A member of the staff"
+  roles staff
+  attributes
+    suspended : bool
+
+resource Doc
+  description "A document"
+  attributes
+    open_to_all : bool
+
+resource Folder
+  description "A folder of documents"
+
+action read_doc
+  description "Read a document"
+  principal User
+  resource Doc
+
+action list_folder
+  description "List what a folder holds"
+  principal User
+  resource Folder
+
+permit staff_read_and_list
+  description "Staff read documents and list folders"
+  principal in staff
+  action read_doc, list_folder
+
+forbid suspended_staff_see_nothing_open
+  description "A suspended member of the staff sees nothing that is open to all"
+  principal in staff
+  action read_doc, list_folder
+  when resource.open_to_all
+  when principal.suspended

@@ -11,6 +11,12 @@ use std::path::PathBuf;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need};
 use ritsu_testkit::tmp::tmpdir_in;
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -261,11 +267,11 @@ fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別�
     if !need(Need::Python) {
         return;
     }
-    let generated = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["gen", "束.rule", "--out", "out"]).args(rulec::targets::UP_TO_0_40).output().unwrap();
+    let generated = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["gen", "束.rule", "--out", "out", "--lang", "ja"]).args(rulec::targets::UP_TO_0_40).output().unwrap();
     assert!(generated.status.success(), "{}", String::from_utf8_lossy(&generated.stderr));
-    let test = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&d.join("out"))).current_dir(&d).args(["test", "out"]).output().unwrap();
-    let text = String::from_utf8_lossy(&test.stdout).into_owned() + &String::from_utf8_lossy(&test.stderr);
-    assert!(test.status.success() && !text.contains("FAIL"), "{text}");
+    let test = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&d.join("out"))).current_dir(&d).args(["test", "out"]), RULEC_LIMIT, "rulec test running the generated code");
+    let text = test.stdout.clone() + &test.stderr;
+    assert!(test.ok && !text.contains("FAIL"), "{text}");
 }
 
 /// A callee with the shapes the corpus's one applied rule does not have.
@@ -335,18 +341,12 @@ fn 呼び先の形が揃った規則も生成物は評価器と全言語で一�
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", PAIR.0, "--out", &dir.to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
+        .args(["gen", PAIR.0, "--out", &dir.to_string_lossy(), "--lang", "ja"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
-    let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "ja")
-        .env("TMPDIR", tmpdir_in(&dir))
-        .current_dir(root())
-        .args(["test", &dir.to_string_lossy()])
-        .output()
-        .expect("rulec を起動できない");
-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let out = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&dir)).current_dir(root()).args(["test", &dir.to_string_lossy()]), RULEC_LIMIT, "rulec test running the generated code");
+    let text = out.stdout.clone();
     assert!(!text.lines().any(|l| l.starts_with("FAIL")), "一致しない言語がある:\n{text}");
-    assert!(out.status.success(), "{text}");
+    assert!(out.ok, "{text}");
 }

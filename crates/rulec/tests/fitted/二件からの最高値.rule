@@ -1,0 +1,19 @@
+rule 二件からの最高値(dearest_of_two_ja) v1
+description "注文に高い品があるか。注文には出荷する明細が二件以上ある。一件だけの注文は、値段にかかわらず受け付けない"
+
+# 注文の明細の一件ぶん
+elements 明細(lines)
+  価格(price)   : money[円]  range >=1円 <=100円
+  出荷(shipped) : bool
+
+count 出荷する明細(shipped_lines) over 明細 where 出荷  range >=2 <=5
+max 最高値(dearest) over 明細 of 価格 empty 0円
+
+outputs
+  高い品(pricey) : bool
+
+table 高い品の判定(pricey_of)
+policy unique
+| 最高値 | -> 高い品 |
+| <50円  | false     |
+| >=50円 | true      |

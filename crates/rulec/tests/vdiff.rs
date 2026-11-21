@@ -27,7 +27,7 @@ fn repo() -> PathBuf {
 }
 
 fn rulec(args: &[&str]) -> (i32, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).output().expect("rulec を起動できない");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] }).output().expect("rulec を起動できない");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
 }
 
@@ -671,5 +671,223 @@ fn a_range_put_on_an_enum_input_is_a_change_of_what_the_version_takes() {
             let (_, text) = rulec(&["diff", from, to]);
             assert!(text.contains(&format!("{name}  {old} → {new}")) && text.contains("両方の版が受け付ける入力"), "{rule}:\n{text}");
         }
+    }
+}
+
+/// A rule that walks one sequence and tests nothing in a table, in English and in Japanese: the
+/// fees of the lots of a sale, added up.
+const LOTS: [(&str, [&str; 8]); 2] = [
+    (
+        "rule lots v1\n\
+         description \"What the lots of a sale add up to\"\n\n\
+         elements lots\n\
+         \x20 lot : number  range >=1 <=99\n\
+         \x20 big : bool\n\
+         \x20 fee : number  range >=0 <=100\n\n\
+         sum total_fee over lots of fee  range >=0 <=1000\n\
+         count bigs over lots where big  range >=0 <=20\n\n\
+         outputs\n\
+         \x20 total : number  round down(1)\n\n\
+         define total : number = total_fee\n",
+        ["lots", "lot", "fee", "total", "  lot : number  range >=1 <=99\n", "  fee : number  range >=0 <=100\n", "= total_fee\n", "bigs"],
+    ),
+    (
+        "rule 出品のまとめ(lots) v1\n\
+         description \"出品の手数料の合計\"\n\n\
+         elements 出品(lots)\n\
+         \x20 番号(lot) : number  range >=1 <=99\n\
+         \x20 大型(big) : bool\n\
+         \x20 手数料(fee) : number  range >=0 <=100\n\n\
+         sum 手数料の合計(total_fee) over 出品 of 手数料  range >=0 <=1000\n\
+         count 大型の数(bigs) over 出品 where 大型  range >=0 <=20\n\n\
+         outputs\n\
+         \x20 合計(total) : number  round down(1)\n\n\
+         define 合計 : number = 手数料の合計\n",
+        ["出品", "番号", "手数料", "合計", "  番号(lot) : number  range >=1 <=99\n", "  手数料(fee) : number  range >=0 <=100\n", "= 手数料の合計\n", "大型の数"],
+    ),
+];
+
+/// What `domain` says of the two files, as (what, name, old, new).
+fn domain_of(j: &rulec::json::Json) -> Vec<(String, String, String, String)> {
+    arr(j, "domain")
+        .iter()
+        .map(|d| {
+            let s = |k: &str| d.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+            (s("what"), s("name"), s("old"), s("new"))
+        })
+        .collect()
+}
+
+/// A field of an element is held at the door as an input is, so a version that changes one takes
+/// other sequences (§15.314): its range, its type, whether it is `unique`, and whether it is there.
+/// `diff` said nothing of any of them, and called two versions with another range on a field "the
+/// same answer for every input", passing. Each is said in `domain`, the field named with its
+/// sequence as the records hold it (`lots[].fee`); the run does not pass; and two versions with
+/// other fields are not compared point by point, as two with other inputs are not. What is
+/// compared is the sequences both take: no element past the lower top of a range, and no value of
+/// a `unique` field twice — a sequence that repeats one is refused by the version that holds it,
+/// and was shown as an answer that moved (`total: 0 → -`). Every cell is built: the total at its
+/// top beside every number of big lots takes elements of two kinds.
+#[test]
+fn a_change_to_a_field_of_an_element_is_a_change_of_what_the_version_takes() {
+    for (src, [seq, lot, fee, _, lot_line, fee_line, _, _]) in LOTS {
+        let tmp = TempDir::new("vdiff-fields");
+        let write = |name: &str, text: String| {
+            let p = tmp.path().join(name);
+            std::fs::write(&p, text).unwrap();
+            p.to_string_lossy().into_owned()
+        };
+        assert!(src.contains(lot_line) && src.contains(fee_line), "{seq}");
+        let v1 = write("v1.rule", src.to_string());
+        let narrow = write("narrow.rule", src.replace(fee_line, &fee_line.replace("<=100", "<=50")));
+        let once = write("once.rule", src.replace(lot_line, &lot_line.replace('\n', "  unique\n")));
+        let text_lot = write("text.rule", src.replace(lot_line, &lot_line.replace("number  range >=1 <=99", "string")));
+        let without = write("without.rule", src.replace(lot_line, ""));
+        let d = |what: &str, field: &str, old: &str, new: &str| (what.to_string(), format!("{seq}[].{field}"), old.to_string(), new.to_string());
+        for (from, to, want, compared) in [
+            (&v1, &narrow, vec![d("field_range", fee, "0..100", "0..50")], true),
+            (&narrow, &v1, vec![d("field_range", fee, "0..50", "0..100")], true),
+            (&v1, &once, vec![d("field_unique_added", lot, "", "")], true),
+            (&once, &v1, vec![d("field_unique_removed", lot, "", "")], true),
+            (&v1, &text_lot, vec![d("field_type", lot, "number", "string"), d("field_range", lot, "1..99", "")], true),
+            (&v1, &without, vec![d("field_removed", lot, "", "")], false),
+            (&without, &v1, vec![d("field_added", lot, "", "")], false),
+        ] {
+            let (c, out) = rulec(&["diff", from, to, "--format", "json"]);
+            assert_eq!(c, 1, "{seq}: {from} → {to}: {out}");
+            let j = json(&out);
+            assert_eq!(domain_of(&j), want, "{seq}: {from} → {to}: {out}");
+            assert!(arr(&j, "changes").is_empty() && int(&j, "differing") == 0, "{seq}: {out}");
+            let (_, text) = rulec(&["diff", from, to]);
+            if compared {
+                assert!(j.get("blocked").is_none_or(|b| matches!(b, rulec::json::Json::Null)), "{seq}: {out}");
+                assert_eq!((int(&j, "cells"), int(&j, "same"), int(&j, "unrealized")), (9, 9, 0), "{seq}: {from} → {to}: {out}");
+                assert!(text.contains("両方の版が受け付ける入力では、どれも答えは同じです"), "{seq}:\n{text}");
+            } else {
+                assert!(j.get("blocked").and_then(|b| b.as_str()).is_some_and(|b| b.contains("二つの版が取る入力が違う")), "{seq}: {out}");
+            }
+            assert!(text.contains(&format!("{seq}[].")), "{seq}:\n{text}");
+        }
+    }
+    // The gift basket of the corpus with the price of a line held to 100 to 40,000 yen: the range
+    // is said, and of four records the old version takes, the two with a line outside it are
+    // counted as ones the new version does not take, the field named the same way.
+    for (rule, range, narrow, name) in [
+        ("tests/corpus/gift_basket.rule", "range >=0JPY <=50_000JPY", "range >=100JPY <=40_000JPY", "lines[].price"),
+        ("tests/corpus/贈り物のかご.rule", "range >=0円 <=50000円", "range >=100円 <=40000円", "明細[].価格"),
+    ] {
+        let src = std::fs::read_to_string(root().join(rule)).unwrap();
+        assert_eq!(src.matches(range).count(), 1, "{rule}");
+        let tmp = TempDir::new("vdiff-field-records");
+        let (a, b, r) = (tmp.path().join("old.rule"), tmp.path().join("new.rule"), tmp.path().join("records.jsonl"));
+        std::fs::write(&a, &src).unwrap();
+        std::fs::write(&b, src.replace(range, narrow)).unwrap();
+        let (seq, field) = name.split_once("[].").unwrap();
+        let (wrapped, free, card) = if seq == "lines" { ("wrapped", "free_shipping", "card") } else { ("包装", "送料無料", "カード") };
+        let record = |lines: &[(i64, bool)], free_v: bool, card_v: bool| {
+            let ls: Vec<String> = lines.iter().map(|(p, w)| format!(r#"{{"{field}":{p},"{wrapped}":{w}}}"#)).collect();
+            format!(r#"{{"in":{{"{seq}":[{}]}},"observed":{{"{free}":{free_v},"{card}":{card_v}}}}}"#, ls.join(","))
+        };
+        let records = [
+            record(&[(600, true)], false, false),
+            record(&[(50, true), (700, false)], false, false),
+            record(&[(45000, true), (700, true)], true, true),
+            record(&[(20000, true), (20000, true)], true, true),
+        ];
+        std::fs::write(&r, records.join("\n") + "\n").unwrap();
+        let (a, b, r) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string(), r.to_string_lossy().to_string());
+        let (c, out) = rulec(&["diff", &a, &b, "--format", "json"]);
+        assert_eq!(c, 1, "{rule}: {out}");
+        assert_eq!(domain_of(&json(&out)), [("field_range".to_string(), name.to_string(), "0..50000".to_string(), "100..40000".to_string())], "{rule}: {out}");
+        let (c, out) = rulec(&["diff", &a, &b, "--fixtures", &r, "--format", "json"]);
+        assert_eq!(c, 1, "{rule}: {out}");
+        let j = json(&out);
+        assert_eq!((int(&j, "compared"), int(&j, "matched")), (4, 2), "{rule}: {out}");
+        let refused: Vec<(&str, &str, i128)> = arr(&j, "refused")
+            .iter()
+            .map(|x| (x.get("kind").and_then(|v| v.as_str()).unwrap_or(""), x.get("field").and_then(|v| v.as_str()).unwrap_or(""), x.get("count").and_then(|v| v.as_int()).unwrap_or(0)))
+            .collect();
+        assert_eq!(refused, [("input_range", name, 2)], "{rule}: {out}");
+    }
+}
+
+/// A rule whose answer reads what a walk comes to, with no table that tests it, had no column to
+/// cut its inputs by, and its one cell was every sequence there is, tried on the empty one. A
+/// version that adds one to the total answers every sequence differently, and `diff` said "nothing
+/// that decides an answer changed: every input gets the same answer" in text, though its JSON
+/// counted the cell as differing; a version that adds the count of the big lots agrees on the
+/// empty sequence, and was counted as proved the same; and a version that moves the number a
+/// total is compared with passed as the same. What a walk comes to is a column of the comparison
+/// whether a table tests it or an expression reads it: the first differs in every cell, the second
+/// where there is a big lot, with a sequence that shows it, and the third between the two numbers.
+#[test]
+fn a_walk_no_table_tests_is_not_called_the_same_on_one_sequence() {
+    let unchanged = "答えを決めるものは何も変わっていません";
+    for (src, [seq, _, _, total, _, _, define, bigs]) in LOTS {
+        let tmp = TempDir::new("vdiff-walk-only");
+        let write = |name: &str, text: String| {
+            let p = tmp.path().join(name);
+            std::fs::write(&p, text).unwrap();
+            p.to_string_lossy().into_owned()
+        };
+        assert!(src.ends_with(define), "{seq}");
+        let v1 = write("v1.rule", src.to_string());
+        let plus_one = write("plus_one.rule", src.replace(define, &define.replace('\n', " + 1\n")));
+        let plus_bigs = write("plus_bigs.rule", src.replace(define, &define.replace('\n', &format!(" + {bigs}\n"))));
+
+        let (c, out) = rulec(&["diff", &v1, &plus_one, "--format", "json"]);
+        assert_eq!(c, 1, "{seq}: {out}");
+        let j = json(&out);
+        assert_eq!((int(&j, "cells"), int(&j, "same"), int(&j, "differing"), int(&j, "unsettled"), int(&j, "unrealized")), (9, 0, 9, 0, 0), "{seq}: {out}");
+        let (c, text) = rulec(&["diff", &v1, &plus_one]);
+        assert_eq!(c, 1, "{seq}:\n{text}");
+        assert!(!text.contains(unchanged) && text.contains(&format!("{total}: 0 → 1")), "{seq}:\n{text}");
+
+        let (c, out) = rulec(&["diff", &v1, &plus_bigs, "--format", "json"]);
+        assert_eq!(c, 1, "{seq}: {out}");
+        let j = json(&out);
+        // the six cells with a big lot differ; with none, the two at an end of the total are the
+        // same and the one between is left unsettled
+        assert_eq!((int(&j, "same"), int(&j, "differing"), int(&j, "unsettled"), int(&j, "unrealized")), (2, 6, 1, 0), "{seq}: {out}");
+        assert!(!is_true(&j, "total") && arr(&j, "unknown").len() == 1, "{seq}: {out}");
+        let (_, text) = rulec(&["diff", &v1, &plus_bigs]);
+        assert!(!text.contains(unchanged) && text.contains(&format!("{bigs} >=1 <=20")) && text.contains(&format!("{total}: 0 → 1")), "{seq}:\n{text}");
+
+        // the version compared with itself is still the same, and passes
+        let (c, text) = rulec(&["diff", &v1, &v1]);
+        assert_eq!(c, 0, "{seq}:\n{text}");
+        assert!(text.contains(unchanged), "{seq}:\n{text}");
+    }
+    // Whether a sale is a big one, by what the fees of its lots add up to, and a version that
+    // moves the number from 500 to 600: a sale of 501 to 600 is big in one and not in the other,
+    // and the sequence shown adds up to a total between.
+    for (src, total_fee, big_sale) in [
+        (
+            "rule sale v1\n\nelements lots\n  fee : number  range >=0 <=100\n\nsum total_fee over lots of fee  range >=0 <=1000\n\n\
+             outputs\n  big_sale : bool\n\ndefine big_sale : bool = total_fee > 500\n",
+            "total_fee",
+            "big_sale",
+        ),
+        (
+            "rule 大口の判定(sale) v1\n\nelements 出品(lots)\n  手数料(fee) : number  range >=0 <=100\n\n\
+             sum 手数料の合計(total_fee) over 出品 of 手数料  range >=0 <=1000\n\n\
+             outputs\n  大口(big_sale) : bool\n\ndefine 大口 : bool = 手数料の合計 > 500\n",
+            "手数料の合計",
+            "大口",
+        ),
+    ] {
+        let tmp = TempDir::new("vdiff-walk-compared");
+        let (a, b) = (tmp.path().join("v1.rule"), tmp.path().join("v2.rule"));
+        assert!(src.ends_with("> 500\n"), "{total_fee}");
+        std::fs::write(&a, src).unwrap();
+        std::fs::write(&b, src.replace("> 500\n", "> 600\n")).unwrap();
+        let (a, b) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string());
+        let (c, out) = rulec(&["diff", &a, &b, "--format", "json"]);
+        assert_eq!(c, 1, "{total_fee}: {out}");
+        let j = json(&out);
+        assert!(!is_true(&j, "total") && int(&j, "differing") == 2 && int(&j, "unrealized") == 0, "{total_fee}: {out}");
+        let (c, text) = rulec(&["diff", &a, &b]);
+        assert_eq!(c, 1, "{total_fee}:\n{text}");
+        assert!(!text.contains(unchanged) && text.contains(&format!("{total_fee} >=501 <=600")) && text.contains(&format!("{big_sale}: true → false")), "{total_fee}:\n{text}");
     }
 }

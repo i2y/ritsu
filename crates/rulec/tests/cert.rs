@@ -1145,11 +1145,14 @@ policy unique
 | 0     | merge             | false                  |
 ";
 
-/// The pair rule written where `rulec certificate` can read it.
-fn pair_file(tag: &str) -> String {
-    let p = std::env::temp_dir().join(format!("rulec-pair-{tag}-{}.rule", std::process::id()));
+/// The pair rule written where `rulec certificate` can read it, in a directory of the test's that
+/// goes with the first of the two it hands back.
+fn pair_file(tag: &str) -> (TempDir, String) {
+    let t = TempDir::new(&format!("pair-{tag}"));
+    let p = t.path().join("pair.rule");
     std::fs::write(&p, PAIR).unwrap();
-    p.to_string_lossy().into_owned()
+    let p = p.to_string_lossy().into_owned();
+    (t, p)
 }
 
 /// The fact of `who_reads` that keeps `moved = 1` from `route = merge`, and a narrower one.
@@ -1164,7 +1167,7 @@ fn 数の列の座標と上の表の値の組も事実になる() {
     if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
-    let file = pair_file("cert");
+    let (_dir, file) = pair_file("cert");
     let (c, cert) = rulec(&["certificate", &file]);
     assert_eq!(c, 0, "{cert}");
     assert!(cert.contains(PAIR_FACT), "証明書の形が変わっています:\n{cert}");

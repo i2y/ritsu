@@ -1,0 +1,5 @@
+error[E001]: chain_lines.ja.book:8:23: unexpected `:`; write `account <name>(<parameter>: string, …) : <unit>` (no parentheses without parameters; `outside` at the end for an outside account)
+     8 | account 売上金(店: string : 円
+error[E001]: chain_lines.ja.book:22:1: a `key` line goes indented under an `account` or a `transfer`
+    22 | key 支払い
+chain_lines.ja.book: 2 error(s), 0 warning(s)

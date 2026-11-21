@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_a_kind_of_team_not_declared.ringi:12:28: `division` is not a kind of team of the organization
+    12 |   head = head of requester.division
+  = The kinds of team declared: `company` and `department`

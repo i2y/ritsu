@@ -1,0 +1,4 @@
+enums 繰り返し(for) v1
+description "名前をそのまま書く言語の予約語と同じ名前の enums ファイル"
+
+enum 地域(zone) = 北(north) | 南(south)

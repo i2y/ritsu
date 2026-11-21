@@ -1,9 +1,10 @@
 # What chobo reads and writes, as JSON
 
-chobo reads one kind of JSON, a scenario, and writes four: the result of a scenario, the
+chobo reads one kind of JSON, a scenario, and writes five: the result of a scenario, the
 diagnostics and the report of `chobo check --format json`, what `chobo api` says about a book,
-and what a client sends a target (`chobo run --show`). The keys are English whatever `--lang`
-says; only the prose in them (a diagnostic's title, its hint) follows the language. Every output
+what a client sends a target (`chobo run --show`), and the codes `chobo explain --format json`
+explains. The keys are English whatever `--lang` says; only the prose in them (a diagnostic's
+title, its hint) follows the language. Every output
 on this page is what chobo prints for the examples, cut where `…` stands.
 
 ## A scenario
@@ -185,6 +186,9 @@ $ chobo check tests/fixtures/split.book --format json
   answered, and the `hint` in the language asked for. `v` is 2 since the diagnostics took these
   keys (1 had `column` and `title`, and a `v` in each).
 - `ok` is false when the file has an error; the exit code is then 1.
+- A run that stops before its work (exit 2: a file that is not there or not UTF-8, a flag it does
+  not take) writes the files it read and its reason under `error`, the sentence it says on stderr
+  without its `error: ` head: `` {"v": 2, "files": [], "error": {"code": 2, "message": "`none.book` is not there"}} ``. Any other command asked for `--format json` writes `{"error": {…}}` alone.
 - `report` is there when the book has no error: for each transfer and operation, the reasons it
   can be refused with (`refusals`), each with an `example` that gets there. `because` is `bound`,
   `key` (`key_conflict`, `already_refused`), `account` (`same_account`) or `hold`; a bound's
@@ -385,3 +389,32 @@ $ chobo run examples/refunds/refunds.book --scenario examples/refunds/refunds.mo
   checks; for a post or a void, rolled back, or the writes that end the hold. An operation of a
   `together` can find another state than the one before the `together`, so the tests hold what it
   sent after the head to one of the tails.
+
+## The codes
+
+`chobo explain <code> --format json` writes what the text says of the code, as one object. Two or
+more codes, or `--all`, write one array of the objects, in the order given (`--all` in the order
+of [codes.md](codes.md)), so that the output is one JSON value either way.
+
+```console
+$ chobo explain E020 --format json
+{
+  "code": "E020",
+  "severity": "error",
+  "title": "An account with no bound",
+  …
+  "example": "book shop v1\nunit pcs\naccount stock(sku: string) : pcs\n",
+  "before": null,
+  "command": null,
+  "related": [
+    "E021"
+  ]
+}
+```
+
+- `example` is the smallest book that gets the code. `before` is, for a code of `--diff-base`
+  (E050, E051 and W107), the book at the revision it is compared with, and `command`, for a code
+  of `chobo gen` (E060 to E064), the command that gets it, such as `chobo gen <file.book> --target
+  sql --books postgres`. Each is `null` for the other codes.
+- `title`, `when` and `fix` are prose, in the language of `--lang`; the keys, the books and the
+  command are the same in both.

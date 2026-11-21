@@ -138,10 +138,10 @@
                           "to": "30000"
                         }
                       ],
-                      "text": "weight >=2501g <=30000g"
+                      "text": "weight >=2501g <=30_000g"
                     }
                   ],
-                  "text": "region = world  and  weight >=2501g <=30000g",
+                  "text": "region = world  and  weight >=2501g <=30_000g",
                   "outputs": [
                     {
                       "output": "fee",

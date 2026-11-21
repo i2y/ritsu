@@ -1,0 +1,26 @@
+rule order_total_wide v1
+description "The total of an order, for a subtotal up to 200,000 JPY: twice what the shared rule of the shipping fee takes (fictional)"
+
+inputs
+  subtotal : money[JPY]  range >=0JPY <=200_000JPY
+  weight   : mass[g]     range >=1g <=30_000g
+
+apply shipping = "shared/shipping_fee.rule" meaning:72bdbd6ecd9471a5
+  weight = weight
+  subtotal = subtotal
+  fee -> shipping_fee
+
+outputs
+  total : money[JPY]  round down(1JPY)
+
+define with_shipping : money[JPY] = subtotal + shipping_fee
+
+table total
+| -> total       |
+| with_shipping  |
+
+examples
+| subtotal  | weight  | -> total  |
+| 4_000JPY  | 2_000g  | 4_800JPY  |
+| 4_000JPY  | 2_001g  | 5_200JPY  |
+| 5_000JPY  | 2_001g  | 5_000JPY  |

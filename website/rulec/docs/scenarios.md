@@ -118,9 +118,9 @@ $ rulec gen rules/stamp_duty.rule --target python --target sql --extra runner --
 …
 $ rulec test generated/
 …
-ok    japan_stamp_duty_split (Python) 296 vectors, 13 refused
-ok    japan_stamp_duty_split (SQL) 296 vectors, 13 refused
-ok    japan_stamp_duty_split (SQL, PostgreSQL) 296 vectors, 13 refused
+ok    japan_stamp_duty_split (Python) 296 vectors, 15 refused
+ok    japan_stamp_duty_split (SQL) 296 vectors, 15 refused
+ok    japan_stamp_duty_split (SQL, PostgreSQL) 296 vectors, 15 refused
 
 All 3 matched.
 ```
@@ -199,7 +199,7 @@ policy unique
 …
 ```
 
-A word of the sheet that cannot stand as a name, like `<=2000g` and `>2000g` here, is named `v1`, `v2` for now, and the word is kept in the note; whether those values are really thresholds is for the person who confirms it. A header the code generated for some language cannot take as written gets an alias it can, with a note too: `Zone`, which Ruby reads as a constant, is declared `Zone(zone)`. Either way, `rulec check` reads the draft as it is written and says nothing of its names.
+A word of the sheet that cannot stand as a name, like `<=2000g` and `>2000g` here, is named `v1`, `v2` for now, and the word is kept in the note; whether those values are really thresholds is for the person who confirms it. A header the code generated for some language cannot take as written gets an alias it can, with a note too: `type`, a keyword in some of the languages, is declared `type(type_)`. Either way, `rulec check` reads the draft as it is written and says nothing of its names.
 
 A policy document is transcribed as in [1-1](#1-1-transcribe-citing-the-article). If all there is is the running code, hand that code to an agent to transcribe, and hold the table to the code in [2-3](#2-3-hold-it-to-the-code-that-runs-today). The running code is not touched.
 
@@ -307,7 +307,7 @@ Counterpart: legacy@2024-03
 
 Affected 3 (3.125%)  amount +6
   table size_of row 2 / table base_rate row 7 / table fuel_rate row 2 / table signature_fee row 1     3 records  difference +2 uniform  total +6
-    Example: dest=overseas, girth=23, signature=true, weight=1 → rule fee=47 / legacy fee=45
+    Example: dest=overseas, girth=23in, signature=true, weight=1lb → rule fee=47USD / legacy fee=45USD
 ```
 
 Mismatches come grouped by the rows that matched. Here only the row for small parcels going overseas disagrees. Whether that is a defect in the legacy code, a transcription error in the table or a rounding convention is decided from the row and its example; a mismatch is not automatically anyone's bug.
@@ -392,7 +392,7 @@ Who: rulec. A person answers each witness
 $ rulec check rules/tariff.rule
 ```
 
-A gap comes back **with the input that falls through it**, and the shape of the row to add. Only the amount is a person's to decide.
+A gap comes back **with the input that falls through it**, and the rows that close it, a `?` where each answers. Only the amount is a person's to decide.
 
 ```console
 error[E101]: Completeness gap: some input matches no row
@@ -402,8 +402,8 @@ error[E101]: Completeness gap: some input matches no row
    |       ^^^^^^^^ the input space is not fully covered
    |
  An input that matches no row: dest = overseas, size = S60
- hint: add a row that matches this input.
- The shape of the row to add: `| overseas | S60 | 8USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts.
+ hint: add this row, with what it answers written in place of `?`: `| overseas | S60 | ? |`
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. …
 ```
 
 A contradiction stops with **an input both rows match**:
@@ -411,6 +411,7 @@ A contradiction stops with **an input both rows match**:
 ```console
 error[E105]: Overlapping rows: the same input matches row 4 and row 9
   --> rules/tariff.rule:25 table decision
+ The cells of the two rows take the same inputs.
  Both rows match: dest = canada, size = S60
 ```
 
@@ -458,14 +459,14 @@ rule parcel_rate v3 → v4
 210 cells, of which 210 are inputs that can occur: 194 same, 16 differ, 0 unsettled, 0 unrealized
 
   signature = false  and  dest = north_america  and  weight >=11lb <=70lb  and  girth >=23in <=60in
-    fee: 19 → 20
+    fee: 19USD → 20USD
     rows: table size_of row 2, table base_rate row 3, table fuel_rate row 1, table signature_fee row 2
-    example: dest=domestic, girth=23, signature=false, weight=11
+    example: dest=domestic, girth=23in, signature=false, weight=11lb
 
   signature = true  and  dest = north_america  and  weight >=11lb <=70lb  and  girth >=23in <=60in
-    fee: 23 → 24
+    fee: 23USD → 24USD
     rows: table size_of row 2, table base_rate row 3, table fuel_rate row 1, table signature_fee row 1
-    example: dest=domestic, girth=23, signature=true, weight=11
+    example: dest=domestic, girth=23in, signature=true, weight=11lb
 
 outside this region the two versions answer alike.
 ```
@@ -545,12 +546,12 @@ Every generated language is run over the cases built from the table's boundaries
 ```console
 $ rulec test generated/
 …
-ok    shipping_fee (Python) 70 vectors, 16 refused
-ok    shipping_fee (TypeScript) 70 vectors, 16 refused
-ok    shipping_fee (Go) 70 vectors, 16 refused
-ok    shipping_fee (SQL) 70 vectors, 16 refused
-ok    shipping_fee (SQL, PostgreSQL) 70 vectors, 16 refused
-ok    shipping_fee (Wasm) 70 vectors, 16 refused
+ok    shipping_fee (Python) 70 vectors, 18 refused
+ok    shipping_fee (TypeScript) 70 vectors, 18 refused
+ok    shipping_fee (Go) 70 vectors, 18 refused
+ok    shipping_fee (SQL) 70 vectors, 18 refused
+ok    shipping_fee (SQL, PostgreSQL) 70 vectors, 18 refused
+ok    shipping_fee (Wasm) 70 vectors, 18 refused
 
 All 6 matched.
 ```

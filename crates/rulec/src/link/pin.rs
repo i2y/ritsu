@@ -250,16 +250,19 @@ fn parsed(path: &str) -> Option<RuleFile> {
 }
 
 /// The revisions of the file at `path` in git, newest first, with its text at each: where the shape
-/// a pin was taken from is looked for, to say what has moved since.
+/// a pin was taken from is looked for, to say what has moved since. Git is asked from the file's
+/// directory, so that the file is the one `path` names however it was written ([`crate::vfs::git_show_at`]).
 fn history(path: &str) -> Vec<String> {
-    let Ok(out) = std::process::Command::new("git").args(["log", "--format=%H", "-n", "60", "--", path]).output() else { return Vec::new() };
+    let p = std::path::Path::new(path);
+    let dir = p.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(std::path::Path::new("."));
+    let name = format!("./{}", p.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned()));
+    let Ok(out) = std::process::Command::new("git").arg("-C").arg(dir).args(["log", "--format=%H", "-n", "60", "--", &name]).output() else { return Vec::new() };
     if !out.status.success() {
         return Vec::new();
     }
     let mut texts = Vec::new();
     for rev in String::from_utf8_lossy(&out.stdout).lines() {
-        let spec = if std::path::Path::new(path).is_absolute() { format!("{rev}:{path}") } else { format!("{rev}:./{path}") };
-        if let Ok(o) = std::process::Command::new("git").args(["show", &spec]).output() {
+        if let Ok(o) = std::process::Command::new("git").args(crate::vfs::git_show_at(path, rev)).output() {
             if o.status.success() {
                 texts.push(String::from_utf8_lossy(&o.stdout).into_owned());
             }
@@ -325,13 +328,16 @@ pub(crate) fn check_pins(c: &Contrib, _cs: &[Contrib], _root: &str) -> Vec<Diag>
             out.push(Diag::error("E067", why).at(format!("{}:{}", c.shown, t.span.line)).mark(t.span.clone(), ""));
             continue;
         }
-        let p = followed.map(|p| super::normalize(&p)).unwrap_or_default();
+        let p = followed.map(|p| super::folded(&p)).unwrap_or_default();
         let Some(target) = parsed(&p) else {
             out.push(
                 Diag::error("E067", tr!("`{}` を読めません", "`{}` cannot be read", t.file))
                     .at(format!("{}:{}", c.shown, t.span.line))
                     .mark(t.span.clone(), "")
-                    .note(tr!("パスは寄与のファイルのある場所からたどります（探した先: {p}）。", "The path is followed from the directory of the contribution (looked for: {p})."))
+                    .note({
+                        let looked = ritsu_base::paths::show_str(&p);
+                        tr!("パスは寄与のファイルのある場所からたどります（探した先: {looked}）。", "The path is followed from the directory of the contribution (looked for: {looked}).")
+                    })
                     .maybe_note(crate::vfs::outside_note(dir, &t.file)),
             );
             continue;

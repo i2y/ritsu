@@ -1,0 +1,29 @@
+rule tier_witness_through v1
+description "A tier read with the fee it is decided from and the amount the fee is decided from: the fee is 190 yen up to 20 yen and from 36 yen, and 210 yen between, and the tier is t3 for 190 yen. A row for tier t3 above 33 yen is reached from 36 yen, and the point the certificate gives for it is at 36 yen"
+
+enum choice = one | two
+enum level = t1 | t3
+
+inputs
+  amount : money[JPY]  range >=1JPY <=93JPY
+
+outputs
+  x : choice
+
+table fee_of
+| amount         | -> fee : money[JPY] |
+| <=20JPY        | 190JPY              |
+| >=21JPY <36JPY | 210JPY              |
+| >35JPY         | 190JPY              |
+
+table tier_of
+| fee      | -> tier : level |
+| <191JPY  | t3              |
+| >=191JPY | t1              |
+
+table pick
+policy first
+| amount | fee    | tier | -> x |
+| >33JPY | 190JPY | t3   | one  |
+| >33JPY | 210JPY | t1   | two  |
+| -      | -      | -    | one  |

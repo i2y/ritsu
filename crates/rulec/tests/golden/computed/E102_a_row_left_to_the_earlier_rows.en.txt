@@ -1,0 +1,13 @@
+error[E102]: Unreachable row: row 4 never matches
+  --> tests/computed/shapes/E102_a_row_left_to_the_earlier_rows.rule:20 table pick
+   |
+20 | | <52JPY          | -     | one  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 4: no input reaches here
+ 9 | define big : bool = amount > 56JPY
+   |                     ^^^^^^^^^^^^^^ always false over the values of `amount` in this row
+   |
+ `big` follows from `amount`. Over the values of `amount` this row takes, `big` is always false.
+ Because of `policy first`, the earlier rows take the rest of this row's values first.
+ hint: compare the expression with this row's conditions. No input reaches this row, so if it is not needed, delete it.
+
+note tests/computed/shapes/E102_a_row_left_to_the_earlier_rows.rule: 1 shadow pairs (1 structural, 0 equivalent, 0 needs review)

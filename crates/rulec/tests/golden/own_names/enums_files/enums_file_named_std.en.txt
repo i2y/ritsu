@@ -1,0 +1,11 @@
+warning[W121]: `std` takes a name the code generated for Rust and Go uses itself
+  --> tests/own_names/enums_files/enums_file_named_std.rule:1
+  |
+1 | enums std v1
+  |       ^^^ the enums file's name
+  |
+ Rust: the enums file's module is declared at the root of the crate as `std`, which takes the place of the standard library's crate the generated code reads by that name: it does not build.
+ Go: the enums file's package is `std`, a name the go command keeps for itself (`go help packages`), so the rule's package cannot import it.
+ For a target you do not generate, leave it. For one you do, give it an alias (`std(<alias>)`).
+
+ok tests/own_names/enums_files/enums_file_named_std.rule

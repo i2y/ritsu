@@ -1,0 +1,4 @@
+エラー[E105]: tests/mutants/E105_隠れたまま必須の領収書.ringi:8:71: フィールド 領収書 は、必須なのに見せていないことがあります
+     8 |   領収書(receipt) : attachment "領収書"  shown when 種別 is 出張  required when 金額 > 30_000円
+  = その申請: 金額 = 30_001円、種別 = 経費
+  = 見せていないフィールドは入れられません。`required when` の条件が成り立つときは、`shown when` の条件も成り立つように直してください。

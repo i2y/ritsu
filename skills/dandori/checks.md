@@ -34,9 +34,14 @@ capture, the bank can still decline the payment.
 ## What it looks at
 
 **Types and names.** Every name is declared once and used with its type; a value that may be absent
-is matched before it is used; the arguments and outputs are all there (E001–E006).
+is matched before it is used; the arguments and outputs are all there (E001–E006). Enums are told
+apart by where they are declared: one enum of one `enums` file is one type by every name the flow and the
+rules it calls read it by, and enums declared at two places are two types, even with the same values
+(E003). A value of an enum written by its name where nothing says its type is of the one enum that
+has it, and when two enums have it, the type is written (E002).
 
-**Every arm, every place.** A `match` names every value (E010), and no arm is dead (E011). A
+**Every arm, every place.** A `match` names every value the runs that reach it can hold (E010), and
+no arm is dead: one for a value none of those runs holds is an error (E011). A
 variable is read only where it has a value on every way there (E012). `yield`, `break`, `succeed`
 and the calls on a case go only where they mean something (E009).
 
@@ -44,7 +49,9 @@ and the calls on a case go only where they mean something (E009).
 event the state machine refuses in every state is an error (E021), and one it can refuse must be
 handled (E022). When the workflow ends, every case it started is in a final state, unless the flow
 hands it over with `fail … leaving` (E020). An error nothing handles can leave a case unfinished too
-(W101), which `on failure` settles. A `match` on a case's state reads its record, which says what
+(W101), which `on failure` settles; a call with `retry` counts, since it fails once its retries run
+out. Once a call fails while `on failure` or `on cancel` settles the case, the block cannot settle it
+any more: handle that failure at the call, and hand the case over with `fail … leaving`. A `match` on a case's state reads its record, which says what
 the workflow last heard of the case. After a call that failed, the event may have happened on the
 other side all the same, and the case be further on than its record says: the checker keeps both,
 so a `match` narrows the record, never where the case may be, and an arm for a state the record
@@ -79,10 +86,16 @@ one input stays at or below another (`constraint asked <= paid`), that a combina
 (`never has_tool = true, all_parts = true`), or that a day is one of the days a koyomi date comes to
 (`range from koyomi`). `ritsu check` holds each such precondition to the values
 the call can give (ritsu's E201, with an example that breaks it), and says when nothing decides it
-(W201). What it cannot decide, the code that `ritsu dandori gen` writes checks when the workflow
+(W201). For a `never` line, a truth value or an enum's value the call gives is read as what it can
+be there: the value written out, or the values the arms of a `match` on the way leave of it. What it
+cannot decide, the code that `ritsu dandori gen` writes checks when the workflow
 runs, as soon as the values are made: right after the task whose answer they are, or later, where
 the run can no longer go another way before the call. A run whose values break it fails there with
-`Dandori.BrokenPrecondition`, on every platform.
+`Dandori.BrokenPrecondition`, on every platform, and so does a run of `ritsu dandori run` or
+`ritsu run`. The range a rule accepts for a value it works out (`define fee : money[JPY] = … range
+<=20_000JPY`) is a precondition too, which `ritsu check` holds the call to in the same way; what it
+cannot decide the workflow does not check, since that would repeat the rule's arithmetic, and the
+rule's generated code refuses the call where it works the value out.
 
 **The period a workflow runs in.** The period is checked when the workflow runs, as a precondition
 is, by the code that `gen` writes: a run that starts outside it calls nothing and fails with
@@ -152,11 +165,11 @@ A contract often leaves a bound to the code, which checks it by hand and then gi
 
 - **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
 - **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
-- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date (a string, or a `.proto`'s `google.type.Date`) and lists no days.
 
 E208 says the source is not there: its file, or the name in it.
 
-Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. A string an OpenAPI document or a JSON Schema marks `format: date-time` is a moment, a day with a time of day: no date takes it, and a workflow's `timestamp` does, as it does another workflow's `timestamp` and a `.proto`'s `google.protobuf.Timestamp`. A `.proto`'s `google.type.Date` is a date, known by its name as dandori knows it. A field of a `.proto` that may be left unset (`optional`, in a `oneof`, or a message, unless a rule or proto2 marks it `required`) can come as no value, which a place that is not `T?` refuses. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
 
 This is the book that lost its `at most`, which a run would otherwise find as `Dandori.BadResponse`:
 
@@ -168,7 +181,7 @@ books/refunds.book: ok
   key: sell once per order; a second call that differs only in amount is refused with key_conflict
   key: refund once per request; a second call that differs only in order or amount is refused with key_conflict
 refund_request.flow: ok
-error[ritsu E207]: refund_request.flow:9:1: `record Balance field left` takes money[USDc] >=0 <=10000000, and its source chobo "books/refunds.book" account remaining can be 10000001
+error[ritsu E207]: refund_request.flow:9:1: `record Balance field left` takes money[USDc] >=0USDc <=10_000_000USDc, and its source chobo "books/refunds.book" account remaining can be 10_000_001USDc
      9 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "books/refunds.book" account remaining
   = The book takes it: an end with no `at least` or `at most` goes as far as chobo's limit (2⁶³ − 1).
   = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
@@ -194,12 +207,41 @@ loop, or one round that is too large, and the diagnostic says which.
 
 ## Names in the code
 
-A generator does not pick another name. When the code of a platform cannot keep a name of the `.flow`
-or the `.proto`, because two names are one identifier there (`send_mail` and `sendMail` in Go) or the
-code has the name for itself (`Transport` in the Go package, `Array` in TypeScript, `str` in Python),
+The code dandori generates keeps the names of the `.flow` and the `.proto` that a caller reads: the
+types, the methods you implement, the fields, the inputs and the outputs, and the methods and
+messages of the service. When the code of a platform cannot keep one, because two such names are one
+identifier there (`send_mail` and `sendMail` in Go; the message `shop.Line` of a `.proto` and a
+record `shop_Line` in TypeScript, Python and Go), the code declares the name for a caller
+(`Transport` in the Go package, `WorkflowInput` in TypeScript and Python), or the name is a word the
+language keeps for itself (`class` and `def` in Python; `interface` and `any` in TypeScript),
 `dandori check` warns and names the platforms (W105), and `dandori gen` writes nothing when it is to
 write one of them (E051). Rename it, or leave that platform out of `--target`.
 
+A name the code has for itself alone stops nothing. Where a name of the flow takes it, the code
+gives its own another name, and code that takes no such name stays as it was:
+
+| Platform | The code's own name | Where the flow takes it |
+|---|---|---|
+| Go | a name the package declares for its own use (`WorkflowType`, `DefaultTransport`, `DATE`) | it goes by the name with `_` after it (`WorkflowType_`); `doc.go` lists those that do |
+| TypeScript | a global type `types.ts` reads (`Array`, `Record`) | `types.ts` reads the global as `globalThis.Array` |
+| TypeScript | a global type the client reads (`Promise`, `Omit`) | the client reads the global as `globalThis.Promise` |
+| TypeScript | a name the client imports or declares for itself (`Connection`, `encrypted`) | the client takes it in, or declares it, as `_Connection`, `_encrypted` |
+| TypeScript | a name the module of the client has (`require`, `exports`, `globalThis`) | the method's function is declared as `_require` and exported as `require` |
+| Python | a builtin the code reads (`str`, `list`), a name `types.py` uses (`Any`, `re`) | the code reads the builtin as `_builtins.str`, and its own name goes by `_Any` |
+| Python | a name `make_activities` reads (`transport`, `beating`) | the task's activity is the function `_transport`, still called `transport` on Temporal |
+| Argo | the types of the caller, which no caller reads | of two types of one name, the flow's own goes by the name with `_` after it |
+| TypeScript, Python, Go, Step Functions | a variable of the code (`dd_error`) | the flow's variable goes by the name with `_` after it |
+
+Two variables of the flow that a platform writes as one name (`class` and `class_` in Python, `_x`
+and `v_x`) are kept apart the same way: the one the platform takes as it is keeps it, the other
+takes `_` after it.
+
+In Go, `doc.go` lists the names the package gave its own, as `WorkflowType_ for WorkflowType`. Code
+that builds a worker from the package's parts reads them there, and a program that writes such code
+with dandori as a library has the same table from `dandori::temporal_go::renamed`, as dandori's
+runner of Go does. The names a caller reads (`Workflow`, `NewWorker`, `Start`) never change, so code
+that builds the worker with `NewWorker` needs neither.
+
 ## Every code
 
-[Diagnostics](codes.md) lists all 38, with what each one finds.
+[Diagnostics](codes.md) lists all 40, with what each one finds.

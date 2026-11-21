@@ -1,0 +1,16 @@
+rule 整数の辺では出ない面積(area_no_whole_side_gives) v1
+description "辺が整数メートルの正方形の部屋の面積と、そこから読む区分。整数を二乗して 2 になることはないので、2 平方メートルの行にはどの入力も届かない。検査は辺をいくつかに分け、どれも面積 2 にならないことを示す"
+
+inputs
+  辺(side) : number  range >=0 <=10
+
+outputs
+  区分(band) : number  round down(1)
+
+define 面積(area) : number = 辺 * 辺
+
+table 区分表(band_of)
+| 面積 | -> 区分 |
+| <2   | 1       |
+| 2    | 2       |
+| >2   | 3       |

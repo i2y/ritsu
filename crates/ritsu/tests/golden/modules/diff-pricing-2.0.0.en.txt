@@ -18,32 +18,32 @@ behavior:
       region = domestic  and  weight >=1g <=2500g
         fee: 395GBPc → -
         rows: table fee_by_weight row 1
-        example: region=domestic, weight=1
+        example: region=domestic, weight=1g
 
       region = world  and  weight >=1g <=2500g
         fee: 1850GBPc → -
         rows: table fee_by_weight row 5
-        example: region=world, weight=1
+        example: region=world, weight=1g
 
       region = eu  and  weight >=1g <=2500g
         fee: 1250GBPc → -
         rows: table fee_by_weight row 3
-        example: region=eu, weight=1
+        example: region=eu, weight=1g
 
-      region = domestic  and  weight >=2501g <=30000g
+      region = domestic  and  weight >=2501g <=30_000g
         fee: 695GBPc → -
         rows: table fee_by_weight row 2
-        example: region=domestic, weight=2501
+        example: region=domestic, weight=2501g
 
-      region = world  and  weight >=2501g <=30000g
+      region = world  and  weight >=2501g <=30_000g
         fee: 2950GBPc → -
         rows: table fee_by_weight row 6
-        example: region=world, weight=2501
+        example: region=world, weight=2501g
 
-      region = eu  and  weight >=2501g <=30000g
+      region = eu  and  weight >=2501g <=30_000g
         fee: 1950GBPc → -
         rows: table fee_by_weight row 4
-        example: region=eu, weight=2501
+        example: region=eu, weight=2501g
 
     outside this region the two versions answer alike.
 

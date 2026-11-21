@@ -1,0 +1,500 @@
+{
+  "ringi": "0.55.2",
+  "file": "examples/leave.ja.ringi",
+  "kind": "request",
+  "name": "leave_ja",
+  "written": "休暇",
+  "version": 1,
+  "title": "休暇の申請",
+  "description": "有給休暇・病気休暇・特別休暇の申請。上長が承認し、5 営業日を超えるときは部長も承認する（架空の決まり）。有給休暇は、休暇の帳簿が持つ残りから日数を引く",
+  "owner": "hr",
+  "effective_from": null,
+  "uses": [
+    {
+      "kind": "organization",
+      "alias": "org",
+      "written": "組織",
+      "file": "shared/company.ringi",
+      "line": 5
+    },
+    {
+      "kind": "calendar",
+      "alias": "office",
+      "written": "本社",
+      "file": "shared/office.cal",
+      "line": 6
+    },
+    {
+      "kind": "book",
+      "alias": "leave",
+      "written": "休暇",
+      "file": "shared/leave.book",
+      "line": 7
+    },
+    {
+      "kind": "gate",
+      "alias": null,
+      "written": null,
+      "file": "shared/company.gate",
+      "line": 8
+    },
+    {
+      "kind": "route",
+      "alias": "standard",
+      "written": "標準",
+      "file": "shared/manager_approval.ringi",
+      "line": 9
+    }
+  ],
+  "form": [
+    {
+      "name": "kind",
+      "written": "種類",
+      "label": "休暇の種類",
+      "type": "choice",
+      "type_written": "choice",
+      "min": null,
+      "max": null,
+      "count_min": null,
+      "count_max": null,
+      "values": [
+        "paid",
+        "sick",
+        "special"
+      ],
+      "optional": false,
+      "computed": false,
+      "approvers_only": false,
+      "line": 12,
+      "fields": []
+    },
+    {
+      "name": "first_day",
+      "written": "初日",
+      "label": "初日",
+      "type": "date",
+      "type_written": "date",
+      "min": "2026-01-01",
+      "max": "2027-12-31",
+      "count_min": null,
+      "count_max": null,
+      "values": [],
+      "optional": false,
+      "computed": false,
+      "approvers_only": false,
+      "line": 16,
+      "fields": []
+    },
+    {
+      "name": "days",
+      "written": "日数",
+      "label": "営業日の日数",
+      "type": "number",
+      "type_written": "number",
+      "min": 1,
+      "max": 20,
+      "count_min": null,
+      "count_max": null,
+      "values": [],
+      "optional": false,
+      "computed": false,
+      "approvers_only": false,
+      "line": 17,
+      "fields": []
+    },
+    {
+      "name": "back_on",
+      "written": "復帰日",
+      "label": "出社する日",
+      "type": "date",
+      "type_written": "date",
+      "min": null,
+      "max": null,
+      "count_min": null,
+      "count_max": null,
+      "values": [],
+      "optional": false,
+      "computed": true,
+      "approvers_only": false,
+      "line": 18,
+      "fields": []
+    },
+    {
+      "name": "reason",
+      "written": "理由",
+      "label": "理由",
+      "type": "long text",
+      "type_written": "long text",
+      "min": null,
+      "max": null,
+      "count_min": null,
+      "count_max": 200,
+      "values": [],
+      "optional": false,
+      "computed": false,
+      "approvers_only": false,
+      "line": 19,
+      "fields": []
+    },
+    {
+      "name": "cover",
+      "written": "代わり",
+      "label": "代わりに対応する人",
+      "type": "person",
+      "type_written": "person",
+      "min": null,
+      "max": null,
+      "count_min": null,
+      "count_max": null,
+      "values": [],
+      "optional": true,
+      "computed": false,
+      "approvers_only": false,
+      "line": 20,
+      "fields": []
+    }
+  ],
+  "items": [
+    {
+      "kind": "field",
+      "name": "kind",
+      "written": "種類",
+      "lines": [
+        12,
+        15
+      ],
+      "text": "種類(kind) : choice \"休暇の種類\"\n有給(paid) \"有給休暇\"\n病気(sick) \"病気休暇\"\n特別(special) \"特別休暇\""
+    },
+    {
+      "kind": "field",
+      "name": "first_day",
+      "written": "初日",
+      "lines": [
+        16,
+        16
+      ],
+      "text": "初日(first_day) : date \"初日\" range >=2026-01-01 <=2027-12-31 open in 本社"
+    },
+    {
+      "kind": "field",
+      "name": "days",
+      "written": "日数",
+      "lines": [
+        17,
+        17
+      ],
+      "text": "日数(days) : number \"営業日の日数\" range >=1 <=20"
+    },
+    {
+      "kind": "field",
+      "name": "back_on",
+      "written": "復帰日",
+      "lines": [
+        18,
+        18
+      ],
+      "text": "復帰日(back_on) : date \"出社する日\" = 初日 + 日数 business days in 本社"
+    },
+    {
+      "kind": "field",
+      "name": "reason",
+      "written": "理由",
+      "lines": [
+        19,
+        19
+      ],
+      "text": "理由(reason) : long text \"理由\" count <=200 required when 種類 is 特別"
+    },
+    {
+      "kind": "field",
+      "name": "cover",
+      "written": "代わり",
+      "lines": [
+        20,
+        20
+      ],
+      "text": "代わり(cover) : person \"代わりに対応する人\" optional"
+    },
+    {
+      "kind": "ticket",
+      "name": "submitted_by",
+      "written": "submitted_by",
+      "lines": [
+        26,
+        26
+      ],
+      "text": "submitted by everyone except team board"
+    },
+    {
+      "kind": "ticket",
+      "name": "self_approval",
+      "written": "self_approval",
+      "lines": [
+        27,
+        27
+      ],
+      "text": "self approval not allowed"
+    },
+    {
+      "kind": "ticket",
+      "name": "same_approver",
+      "written": "same_approver",
+      "lines": [
+        29,
+        29
+      ],
+      "text": "same approver approves once"
+    },
+    {
+      "kind": "ticket",
+      "name": "send_back",
+      "written": "send_back",
+      "lines": [
+        30,
+        30
+      ],
+      "text": "send back to the requester, at most 2 times"
+    },
+    {
+      "kind": "ticket",
+      "name": "comment_required",
+      "written": "comment_required",
+      "lines": [
+        32,
+        32
+      ],
+      "text": "comment required for reject, send back"
+    },
+    {
+      "kind": "ticket",
+      "name": "resubmit",
+      "written": "resubmit",
+      "lines": [
+        33,
+        33
+      ],
+      "text": "resubmit within 5 business days"
+    },
+    {
+      "kind": "ticket",
+      "name": "withdraw",
+      "written": "withdraw",
+      "lines": [
+        34,
+        34
+      ],
+      "text": "withdraw until it is decided"
+    },
+    {
+      "kind": "ticket",
+      "name": "hold_leave.take",
+      "written": "hold_休暇.take",
+      "lines": [
+        35,
+        35
+      ],
+      "text": "on submitted hold 休暇.take(request: ticket.id, attempt: ticket.attempt, person: requester.id, days: 日数) when 種類 is 有給"
+    },
+    {
+      "kind": "ticket",
+      "name": "post_leave.take",
+      "written": "post_休暇.take",
+      "lines": [
+        36,
+        36
+      ],
+      "text": "on approved post 休暇.take(request: ticket.id, attempt: ticket.attempt) when 種類 is 有給"
+    },
+    {
+      "kind": "ticket",
+      "name": "void_leave.take",
+      "written": "void_休暇.take",
+      "lines": [
+        37,
+        37
+      ],
+      "text": "on sent back, rejected, withdrawn, expired void 休暇.take(request: ticket.id, attempt: ticket.attempt) when 種類 is 有給"
+    },
+    {
+      "kind": "claim",
+      "name": "期限内に終わる",
+      "written": "期限内に終わる",
+      "lines": [
+        40,
+        40
+      ],
+      "text": "期限内に終わる : every ticket ends within 40 business days"
+    },
+    {
+      "kind": "scenario",
+      "name": "長い有給休暇",
+      "written": "長い有給休暇",
+      "lines": [
+        42,
+        51
+      ],
+      "text": "scenario 長い有給休暇\nrequester e1203\ngiven 休暇.grant(person: \"e1203\", year: \"2026\", days: 20)\nform 種類 = 有給, 初日 = 2026-12-21, 日数 = 8, 理由 = \"家族に会いに行く\"\n| at | event | by | -> stage | status |\n| 2026-11-16 09:00 | submit | e1203 | manager | in progress |\n| 2026-11-16 17:00 | approve | e1101 | head | in progress |\n| 2026-11-17 09:00 | remind | | head | in progress |\n| 2026-11-19 00:00 | late | | head | in progress |\n| 2026-11-19 10:00 | approve | e0101 | | approved |"
+    },
+    {
+      "kind": "scenario",
+      "name": "コメントを添えて差し戻す休暇",
+      "written": "コメントを添えて差し戻す休暇",
+      "lines": [
+        54,
+        66
+      ],
+      "text": "scenario コメントを添えて差し戻す休暇\nrequester e1203\ngiven 休暇.grant(person: \"e1203\", year: \"2026\", days: 20)\nform 種類 = 有給, 初日 = 2026-12-21, 日数 = 3, 理由 = \"家族に会いに行く\"\n| at | event | by | comment | -> stage | status |\n| 2026-11-16 09:00 | submit | e1203 | | manager | in progress |\n| 2026-11-16 11:00 | comment | e1101 | \"休みのあいだ、だれが代わりに対応しますか\" | manager | in progress |\n| 2026-11-16 13:00 | comment | e1203 | \"e1201 さんです\" | manager | in progress |\n| 2026-11-16 17:00 | send back | e1101 | \"代わりの人に e1201 さんを書いてください\" | | with requester |\n| 2026-11-16 17:30 | comment | e1203 | \"代わりの人は、どこに書けばよいですか\" | | with requester |\n| 2026-11-16 17:45 | comment | e1101 | \"フォームの「代わりに対応する人」の欄です\" | | with requester |\n| 2026-11-17 09:00 | resubmit(代わり: person \"e1201\") | e1203 | \"代わりの人に e1201 さんを書きました\" | manager | in progress |\n| 2026-11-17 10:00 | approve | e1101 | \"よい休みを\" | | approved |"
+    },
+    {
+      "kind": "scenario",
+      "name": "理由を添えて却下する休暇",
+      "written": "理由を添えて却下する休暇",
+      "lines": [
+        69,
+        76
+      ],
+      "text": "scenario 理由を添えて却下する休暇\nrequester e1203\ngiven 休暇.grant(person: \"e1203\", year: \"2026\", days: 20)\nform 種類 = 有給, 初日 = 2026-12-21, 日数 = 8, 理由 = \"家族に会いに行く\"\n| at | event | by | comment | -> stage | status |\n| 2026-11-16 09:00 | submit | e1203 | | manager | in progress |\n| 2026-11-16 17:00 | approve | e1101 | | head | in progress |\n| 2026-11-16 18:00 | reject | e3101 | \"年末の前の週は、一年でいちばん忙しい週です\" | | rejected |"
+    }
+  ],
+  "usable": {
+    "from": "2026-04-01",
+    "from_by": [
+      {
+        "kind": "organization",
+        "name": "org",
+        "written": "組織",
+        "file": "examples/org",
+        "line": null,
+        "data": null,
+        "text": "the first version of the organization `shared/company.ringi` (data `../org`)"
+      }
+    ],
+    "through": null,
+    "through_by": []
+  },
+  "utc_offset_minutes": 540,
+  "ticket": {
+    "self_approval": false,
+    "self_approval_line": 27,
+    "gates": [
+      {
+        "file": "examples/shared/company.gate",
+        "line": 8
+      }
+    ],
+    "operations": [
+      {
+        "name": "submit",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "withdraw",
+        "line": 34,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "approve",
+        "line": null,
+        "by_approver": true,
+        "decides": true
+      },
+      {
+        "name": "reject",
+        "line": null,
+        "by_approver": true,
+        "decides": true
+      },
+      {
+        "name": "send_back",
+        "line": 30,
+        "by_approver": true,
+        "decides": true
+      },
+      {
+        "name": "add_approver",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "hand_over",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "change_request_type",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "comment",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "see",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "read_audit",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "import_organization",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      },
+      {
+        "name": "read_organization_audit",
+        "line": null,
+        "by_approver": false,
+        "decides": false
+      }
+    ],
+    "endings": [
+      "approved",
+      "sent back",
+      "rejected",
+      "withdrawn",
+      "expired"
+    ],
+    "time": {
+      "round": 10,
+      "send_backs": 2,
+      "resubmit": 5,
+      "pause": null,
+      "total": 40,
+      "held": 10,
+      "no_end": [],
+      "calendars": [
+        {
+          "alias": "office",
+          "written": "本社",
+          "file": "examples/shared/office.cal"
+        }
+      ]
+    },
+    "holds": [
+      {
+        "alias": "leave",
+        "written": "休暇",
+        "book": "examples/shared/leave.book",
+        "transfer": "take",
+        "line": 35,
+        "requester_arguments": []
+      }
+    ],
+    "flows": []
+  }
+}

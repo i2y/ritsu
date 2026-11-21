@@ -1,0 +1,8 @@
+company.gate: ok — 10 actions, 4 policies (3 permits, 1 forbid), 0 expectations, 0 separations
+ok purchase.ringi: a request, 1 field, 1 stage
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+error[ritsu E911]: purchase.ringi:3: The gate company.gate declares no action `hand_over`, an operation the tickets of `purchase` have
+     3 | use gate "company.gate"
+  = The server asks the gate before it takes an operation, and an action the gate does not declare is allowed to no one: the operation would be denied on every ticket.
+  = Declare the action in company.gate (`action hand_over`, with the principal and the resource it takes), and write a permit for who may do it.
+ritsu check: 2 files (sekisho 1, ringi 1): 1 fail (1 error); borders between the languages: 3 checked, 0 undecided

@@ -1,0 +1,31 @@
+  The request `account` (v1): `account_old.ringi` → `account_new.ringi`
+How the approvers are chosen:
+    security — Who it is: the members of the team IT Security (`it_security`): one of them answers → the members of the team IT Operations (`it_operations`): one of them answers
+Approvers:
+  Where the route does not change, these requesters' stages are answered by others:
+  In the organization from 2026-04-01, the approvers change for 24 of 24 requesters.
+    e0001 (President (fictional)), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0101 (Head of Sales Division), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0102 (Head of Corporate Division), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0201 (Director 1), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0202 (Director 2), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0203 (Director 3), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0204 (Director 4), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e1001 (Head of Accounting), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e1002 (Accountant), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e1101 (Manager of Section 1A), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+  And 14 more: `--format json` lists them all.
+  In the organization from 2027-04-01, the approvers change for 23 of 23 requesters.
+    e0001 (President (fictional)), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0101 (Head of Sales Division), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0102 (Head of Corporate Division), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0201 (Director 1), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0202 (Director 2), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0203 (Director 3), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e0204 (Director 4), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e1001 (Head of Accounting), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e1002 (Accountant), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+    e1101 (Manager of Section 1A), security: security: one of e7101 (Manager of IT Security), e7102 (Security engineer) → security: one of e7201 (Manager of IT Operations), e7202 (Operator)
+  And 13 more: `--format json` lists them all.
+Tickets in progress:
+  Both are version 1. A ticket in progress is told from the requests submitted after the change only by the version it was submitted with: raise the version, so that the tickets in progress finish as they were submitted.

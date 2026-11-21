@@ -48,7 +48,7 @@ pub fn side(path: &str, shown: &str, files: Option<Rc<dyn ritsu_base::fs::Files>
         }
         let mut loader = Loader::default();
         // the check walks what `koyomi check` walks, and more when the diff is given more
-        let outcome = check::check_file(path, &Options { budget: budget.max(check::DEFAULT_BUDGET) }, &mut loader).map_err(|e| tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}"))?;
+        let outcome = check::check_given(path, &Options { budget: budget.max(check::DEFAULT_BUDGET) }, &mut loader).map_err(|e| ritsu_base::cli::cannot_read(shown, &e))?;
         Ok(Side { shown: shown.to_string(), outcome })
     };
     match files {
@@ -208,9 +208,11 @@ fn not_passing(s: &Side) -> Option<Text> {
     }
     let shown = &s.shown;
     let n = count(errors.max(1) as u64);
+    // the command named the way the person ran this one (ritsu's DESIGN 6.2, item 10)
+    let run = ritsu_base::cli::command_name("koyomi");
     Some(tr!(
-        "`{shown}` は検査を通りません（エラー {n} 件）。`koyomi check` で確かめてください",
-        "`{shown}` does not pass check ({n} {}); run `koyomi check` on it",
+        "`{shown}` は検査を通りません（エラー {n} 件）。`{run} check` で確かめてください",
+        "`{shown}` does not pass check ({n} {}); run `{run} check` on it",
         ; if errors == 1 { "error" } else { "errors" }
     ))
 }

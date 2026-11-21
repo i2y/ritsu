@@ -1,0 +1,14 @@
+rule fall_through v1
+description "A rule whose Go package, its name in lower case without the underscores, is fallthrough, a keyword of Go's"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | 3USD   |
+| >5  | 2USD   |

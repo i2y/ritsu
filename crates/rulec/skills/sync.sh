@@ -11,7 +11,7 @@
 #   $ skills/sync.sh
 set -eu
 cd "$(dirname "$0")"
-# The skill itself sits with the other nine at the root of the workspace.
+# The skill itself sits with the other ten at the root of the workspace.
 out=../../../skills/rulec
 
 # The repository's links, rewritten to the bundled copies.

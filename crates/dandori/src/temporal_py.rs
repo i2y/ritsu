@@ -21,6 +21,7 @@ use crate::diag::Diag;
 use crate::model::*;
 use crate::render::{self, ident};
 use crate::spellings::{Alias, Clash, ClientNames, Lang, Name, With};
+use crate::wire;
 use crate::diag::Text;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -40,9 +41,10 @@ pub fn py_name(name: &str) -> String {
     }
 }
 
-/// The method of `OwnTasks` that runs the task.
+/// The method of `OwnTasks` that runs the task: the task's name, which you implement. Only a
+/// keyword, which Python cannot declare, is written another way (W105 stops the target).
 pub fn method(task: &str) -> String {
-    py_name(task)
+    contract_name(task)
 }
 
 /// The package the build writes: the workflow's name.
@@ -50,13 +52,305 @@ pub fn package(m: &Model) -> String {
     ident(&m.name)
 }
 
+/// A type's name in types.py and after `T.` in the other files: the name you wrote, with its dots
+/// turned to underscores. Only a keyword, which Python cannot declare, is written another way
+/// (W105 stops the target).
 pub(crate) fn type_name(name: &str) -> String {
-    py_name(&name.replace('.', "_"))
+    contract_name(&name.replace('.', "_"))
+}
+
+/// A name a caller reads (a type, a method you implement) as Python writes it: the name itself,
+/// or, for a keyword, with `_` after it.
+fn contract_name(name: &str) -> String {
+    let s = ident(name);
+    if ritsu_emit::words::python::KEYWORDS.contains(&s.as_str()) {
+        format!("{s}_")
+    } else {
+        s
+    }
+}
+
+/// The names of `make_activities` (activities.py), its parameters and its local `t`, and what it
+/// and the activities in it read: an activity is a function of its own there, by its task's
+/// method, and one of these names would hide what the others read. Such an activity goes by the
+/// name with `_` before it, which no name of the flow begins with (W105); its name in Temporal is
+/// the task's, so nothing outside reads it.
+const MAKE_ACTIVITIES_READS: &[&str] = &["Any", "JEV", "RULES", "SCHEMAS", "T", "activity", "beating", "dict", "fail", "io", "list", "own", "str", "t", "transport"];
+
+/// The function of `make_activities` that runs `task` as an activity (`MAKE_ACTIVITIES_READS`).
+pub(crate) fn activity_function(task: &str) -> String {
+    let f = method(task);
+    if MAKE_ACTIVITIES_READS.contains(&f.as_str()) {
+        format!("_{f}")
+    } else {
+        f
+    }
+}
+
+/// What the body of `OwnTasks` reads, in its methods' annotations: a method you implement may have
+/// one of these names, and the body then reads the builtin from `builtins` and `Any` from `typing`
+/// (`_builtins.dict`, `_typing.Any`).
+const OWN_TASKS_READS: &[&str] = &["Any", "dict", "str"];
+
+/// The annotations of a method of `OwnTasks`, `(self, args: dict[str, Any]) -> Any`, as the body of
+/// the class reads them when a method of `own` has a name it reads (`OWN_TASKS_READS`); and
+/// the imports the file then needs besides its own.
+pub(crate) fn own_tasks_signature(own: &[&TaskDef]) -> (String, String) {
+    let taken: BTreeSet<String> = own.iter().map(|t| method(&t.name)).filter(|n| OWN_TASKS_READS.contains(&n.as_str())).collect();
+    let spell = |n: &str, module: &str| if taken.contains(n) { format!("_{module}.{n}") } else { n.to_string() };
+    let any = spell("Any", "typing");
+    let sig = format!("(self, args: {}[{}, {any}]) -> {any}", spell("dict", "builtins"), spell("str", "builtins"));
+    let mut imports = String::new();
+    if taken.contains("dict") || taken.contains("str") {
+        imports.push_str("import builtins as _builtins\n");
+    }
+    if taken.contains("Any") {
+        imports.push_str("import typing as _typing\n");
+    }
+    (sig, imports)
+}
+
+/// The names types.py binds for itself or reads — its imports, `TIMESTAMP`, `DATE`, `is_int`,
+/// `dd_field`, `fill`, `read_day`, and the builtins — as the code writes them, there and after `T.`
+/// in the other files. A type of the flow binds its name in types.py, and `<enum>_values` or
+/// `is_<record>` beside it. A name a type takes is written with `_` before it (`_re`, `_Any`,
+/// `_fill`), which no name of the flow begins with (W105), and a builtin a type takes is read as
+/// `_builtins.<name>`. A flow whose types take none of them has the text it had (DESIGN 22).
+pub(crate) struct PyOwn {
+    taken: BTreeSet<String>,
+}
+
+impl PyOwn {
+    pub(crate) fn of(m: &Model) -> PyOwn {
+        let (enums, recs) = crate::temporal::used_types(m);
+        let mut taken = BTreeSet::new();
+        for e in &enums {
+            let n = type_name(&m.enums[*e].name);
+            taken.insert(format!("{n}_values"));
+            taken.insert(n);
+        }
+        for r in &recs {
+            let n = type_name(&m.records[*r].name);
+            taken.insert(format!("is_{n}"));
+            taken.insert(n);
+        }
+        PyOwn { taken }
+    }
+
+    /// A name types.py binds for itself (an import, `TIMESTAMP`, `is_int`, `fill`…).
+    pub(crate) fn own(&self, n: &str) -> String {
+        if self.taken.contains(n) {
+            format!("_{n}")
+        } else {
+            n.to_string()
+        }
+    }
+
+    /// A builtin types.py reads.
+    pub(crate) fn builtin(&self, n: &str) -> String {
+        if self.taken.contains(n) {
+            format!("_builtins.{n}")
+        } else {
+            n.to_string()
+        }
+    }
+
+    /// `text`, Python dandori writes into types.py as it is (`FILL_PY`, `READ_DAY_PY`), with the
+    /// names it binds or reads as types.py has them.
+    fn respell(&self, text: &str, names: &[&str], builtins: &[&str]) -> String {
+        let mut to = BTreeMap::new();
+        for n in names {
+            if self.taken.contains(*n) {
+                to.insert(n.to_string(), format!("_{n}"));
+            }
+        }
+        for n in builtins {
+            if self.taken.contains(*n) {
+                to.insert(n.to_string(), format!("_builtins.{n}"));
+            }
+        }
+        respelled(text, &to)
+    }
+}
+
+/// Python's code `text`, with each name `to` has written as it says: a name the code binds or
+/// reads, and not an attribute after a `.`, a keyword argument's name, or what is in a string or a
+/// comment. An import of such a name comes in under the new one (`import re as _re`, `from typing
+/// import Any as _Any`, `from . import types as _T`); a builtin goes to `_builtins.<name>`, and the
+/// file then imports `builtins as _builtins`. A name `to` does not have is left as it is, so `to`
+/// lists what the code reads from its module or the builtins, and no parameter or local of its
+/// functions. The code dandori writes holds no other way to bind a name.
+pub(crate) fn respelled(text: &str, to: &BTreeMap<String, String>) -> String {
+    if to.is_empty() {
+        return text.to_string();
+    }
+    let cs: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len() + 64);
+    let mut i = 0;
+    let mut depth = 0usize;
+    // nothing but spaces since the start of the line, outside brackets
+    let mut line_start = true;
+    while i < cs.len() {
+        let c = cs[i];
+        if c == '#' {
+            while i < cs.len() && cs[i] != '\n' {
+                out.push(cs[i]);
+                i += 1;
+            }
+            continue;
+        }
+        if let Some(end) = python_string_end(&cs, i) {
+            out.extend(&cs[i..end]);
+            i = end;
+            line_start = false;
+            continue;
+        }
+        if c.is_alphabetic() || c == '_' {
+            let s = i;
+            while i < cs.len() && (cs[i].is_alphanumeric() || cs[i] == '_') {
+                i += 1;
+            }
+            let word: String = cs[s..i].iter().collect();
+            if line_start && depth == 0 && (word == "import" || word == "from") {
+                let e = cs[i..].iter().position(|&c| c == '\n').map(|p| i + p).unwrap_or(cs.len());
+                let stmt: String = cs[s..e].iter().collect();
+                out.push_str(&respelled_import(&stmt, to));
+                i = e;
+                line_start = false;
+                continue;
+            }
+            let after_dot = out.trim_end().ends_with('.');
+            let mut j = i;
+            while j < cs.len() && cs[j] == ' ' {
+                j += 1;
+            }
+            let keyword_argument = depth > 0 && cs.get(j) == Some(&'=') && cs.get(j + 1) != Some(&'=');
+            match to.get(&word) {
+                Some(n) if !after_dot && !keyword_argument => out.push_str(n),
+                _ => out.push_str(&word),
+            }
+            line_start = false;
+            continue;
+        }
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        if c == '\n' {
+            if depth == 0 {
+                line_start = true;
+            }
+        } else if c != ' ' && c != '\t' {
+            line_start = false;
+        }
+        out.push(c);
+        i += 1;
+    }
+    if out.contains("_builtins.") && !out.contains("import builtins as _builtins\n") {
+        out = with_builtins_import(&out);
+    }
+    out
+}
+
+/// `text` with `import builtins as _builtins` before its first import after the one of
+/// `__future__`.
+pub(crate) fn with_builtins_import(text: &str) -> String {
+    let mut at = 0;
+    for line in text.split_inclusive('\n') {
+        if (line.starts_with("import ") || line.starts_with("from ")) && !line.starts_with("from __future__ ") {
+            let mut out = text[..at].to_string();
+            out.push_str("import builtins as _builtins\n");
+            out.push_str(&text[at..]);
+            return out;
+        }
+        at += line.len();
+    }
+    text.to_string()
+}
+
+/// One import statement, with a name `to` has brought in under the new name.
+fn respelled_import(stmt: &str, to: &BTreeMap<String, String>) -> String {
+    let alias = |bound: &str| to.get(bound).filter(|n| !n.contains('.'));
+    let one = |part: &str| -> String {
+        let part = part.trim();
+        match part.split_once(" as ") {
+            Some((name, bound)) => match alias(bound.trim()) {
+                Some(n) => format!("{} as {n}", name.trim()),
+                None => part.to_string(),
+            },
+            None => match alias(part).filter(|_| !part.contains('.')) {
+                Some(n) => format!("{part} as {n}"),
+                None => part.to_string(),
+            },
+        }
+    };
+    if let Some(rest) = stmt.strip_prefix("from ") {
+        if let Some((module, names)) = rest.split_once(" import ") {
+            let names: Vec<String> = names.split(',').map(one).collect();
+            return format!("from {module} import {}", names.join(", "));
+        }
+    } else if let Some(names) = stmt.strip_prefix("import ") {
+        let names: Vec<String> = names.split(',').map(one).collect();
+        return format!("import {}", names.join(", "));
+    }
+    stmt.to_string()
+}
+
+/// Where the string that starts at `i` ends, with its prefix (`r`, `f`, `b`, `rb`…), if one does.
+fn python_string_end(cs: &[char], i: usize) -> Option<usize> {
+    if i > 0 && (cs[i - 1].is_alphanumeric() || cs[i - 1] == '_') {
+        return None;
+    }
+    let mut q = i;
+    while q < cs.len() && q - i < 2 && matches!(cs[q], 'r' | 'R' | 'b' | 'B' | 'f' | 'F' | 'u' | 'U') {
+        q += 1;
+    }
+    let quote = *cs.get(q).filter(|c| **c == '"' || **c == '\'')?;
+    let triple = cs.get(q + 1) == Some(&quote) && cs.get(q + 2) == Some(&quote);
+    let mut j = if triple { q + 3 } else { q + 1 };
+    while j < cs.len() {
+        if cs[j] == '\\' {
+            j += 2;
+            continue;
+        }
+        if triple {
+            if cs[j] == quote && cs.get(j + 1) == Some(&quote) && cs.get(j + 2) == Some(&quote) {
+                return Some(j + 3);
+            }
+        } else if cs[j] == quote || cs[j] == '\n' {
+            return Some(j + 1);
+        }
+        j += 1;
+    }
+    Some(cs.len())
 }
 
 /// A Python string literal (JSON's is one).
+/// An argument of an `http` task where it goes, as io.py's `Param` (DESIGN 43): the name it goes by
+/// there, its value, OpenAPI's style and explode, and what the value is (`"v"` one value, `"j"` a
+/// `json` one, `"l"` a list, or a record's fields in their order).
+fn param_py(w: &WireParam, k: &wire::Kind) -> String {
+    let shape = match k {
+        wire::Kind::One => q("v"),
+        wire::Kind::Json => q("j"),
+        wire::Kind::List => q("l"),
+        wire::Kind::Record(fs) => format!("[{}]", fs.iter().map(|f| q(f)).collect::<Vec<_>>().join(", ")),
+    };
+    format!("({}, args.get({}), {}, {}, {shape})", q(&w.name), q(&w.param), q(w.style.word()), if w.explode { "True" } else { "False" })
+}
+
 pub(crate) fn q(s: &str) -> String {
     serde_json::to_string(s).unwrap()
+}
+
+/// The read of the variable `name`, whose code is `code`, where the check says it has a value
+/// (E012): `dd.have(<code>, "<name>", <line>)`, the value, checked. A variable holds None until it
+/// is set, so its type has None in it, which `mypy --strict` does not let the code read past
+/// (DESIGN 34); None there ends the run with Dandori.UnexpectedValue at the statement's line, as
+/// the reference interpreter's does (DESIGN 38).
+pub(crate) fn have(code: &str, name: &str, line: usize) -> String {
+    format!("dd.have({code}, {}, {line})", q(name))
 }
 
 /// The Python type of `t`, as a hint in the workflow and the tasks (`T.` for types.py).
@@ -74,21 +368,25 @@ pub(crate) fn py_type(m: &Model, t: &Ty) -> String {
 }
 
 /// A check that `x` is a well-formed value of `t`, in `rg` (a number's range, or the values an
-/// enum's range lets in). `p` is how the code reaches types.py: "" inside it, "T." from the workflow.
-pub(crate) fn py_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, depth: usize) -> String {
+/// enum's range lets in). `p` is how the code reaches types.py: "" inside it, "T." from the workflow;
+/// `o` has the names of types.py as the code writes them (`PyOwn`). Inside types.py a type of the
+/// flow may take a builtin's name; outside it, the code reads the builtins as they are.
+pub(crate) fn py_check(m: &Model, o: &PyOwn, x: &str, t: &Ty, rg: Option<Range>, p: &str, depth: usize) -> String {
+    let b = |n: &str| if p.is_empty() { o.builtin(n) } else { n.to_string() };
+    let (isinstance, is_int) = (b("isinstance"), o.own("is_int"));
     match t {
         Ty::Int | Ty::Num(_) => match rg {
-            Some(r) => format!("({p}is_int({x}) and {})", r.tests(|op, n| format!("{x} {op} {n}")).join(" and ")),
-            None => format!("{p}is_int({x})"),
+            Some(r) => format!("({p}{is_int}({x}) and {})", r.tests(|op, n| format!("{x} {op} {n}")).join(" and ")),
+            None => format!("{p}{is_int}({x})"),
         },
-        Ty::Str => format!("isinstance({x}, str)"),
+        Ty::Str => format!("{isinstance}({x}, {})", b("str")),
         Ty::Timestamp | Ty::Date => {
-            let (re, head) = if *t == Ty::Date { ("DATE", x.to_string()) } else { ("TIMESTAMP", format!("{x}[:19]")) };
-            let mut parts = vec![format!("isinstance({x}, str)"), format!("{p}{re}.match({x}) is not None")];
+            let (re, head) = if *t == Ty::Date { (o.own("DATE"), x.to_string()) } else { (o.own("TIMESTAMP"), format!("{x}[:19]")) };
+            let mut parts = vec![format!("{isinstance}({x}, {})", b("str")), format!("{p}{re}.match({x}) is not None")];
             parts.extend(rg.map(|r| render::time_tests(t, &r, |op, end| format!("{head} {op} {}", q(end)))).unwrap_or_default());
             format!("({})", parts.join(" and "))
         }
-        Ty::Bool => format!("isinstance({x}, bool)"),
+        Ty::Bool => format!("{isinstance}({x}, {})", b("bool")),
         Ty::Enum(e) => match m.held_values(t, rg) {
             // a place that holds the enum to a range: the values the range lets in
             Some(values) => format!("({x} in ({}{}))", values.iter().map(|v| q(v)).collect::<Vec<_>>().join(", "), if values.len() == 1 { "," } else { "" }),
@@ -97,46 +395,67 @@ pub(crate) fn py_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, d
         Ty::Record(r) => format!("{p}is_{}({x})", type_name(&m.records[*r].name)),
         Ty::List(inner) => {
             let v = format!("dd_v{depth}");
-            format!("(isinstance({x}, list) and all({} for {v} in {x}))", py_check(m, &v, inner, rg, p, depth + 1))
+            format!("({isinstance}({x}, {}) and {}({} for {v} in {x}))", b("list"), b("all"), py_check(m, o, &v, inner, rg, p, depth + 1))
         }
-        Ty::Opt(inner) => format!("({x} is None or {})", py_check(m, x, inner, rg, p, depth)),
+        Ty::Opt(inner) => format!("({x} is None or {})", py_check(m, o, x, inner, rg, p, depth)),
         Ty::Json => "True".into(),
     }
 }
 
 /// The checks of the fields of a dict `v`: an absent field reads as None, which is a value of a `T?`
 /// and of a `json`.
-fn field_checks(m: &Model, v: &str, fields: &[(String, Ty)], ranges: &BTreeMap<String, Range>, p: &str) -> Vec<String> {
-    let mut conds = vec![format!("isinstance({v}, dict)")];
+fn field_checks(m: &Model, o: &PyOwn, v: &str, fields: &[(String, Ty)], ranges: &BTreeMap<String, Range>, p: &str) -> Vec<String> {
+    let mut conds = vec![format!("{}({v}, {})", o.builtin("isinstance"), o.builtin("dict"))];
     for (f, ft) in fields {
         if *ft != Ty::Json {
-            conds.push(py_check(m, &format!("{p}dd_field({v}, {})", q(f)), ft, ranges.get(f).copied(), p, 0));
+            conds.push(py_check(m, o, &format!("{p}{}({v}, {})", o.own("dd_field"), q(f)), ft, ranges.get(f).copied(), p, 0));
         }
     }
     conds
 }
 
+/// A type as a hint in types.py, whose names are as `o` writes them: a string, so that a record may
+/// name one defined after it.
+fn types_hint(m: &Model, o: &PyOwn, t: &Ty) -> String {
+    match t {
+        Ty::Int | Ty::Num(_) => o.builtin("int"),
+        Ty::Str | Ty::Timestamp | Ty::Date => o.builtin("str"),
+        Ty::Bool => o.builtin("bool"),
+        Ty::Enum(e) => type_name(&m.enums[*e].name),
+        Ty::Record(r) => type_name(&m.records[*r].name),
+        Ty::List(t) => format!("{}[{}]", o.builtin("list"), types_hint(m, o, t)),
+        Ty::Opt(t) => format!("{} | None", types_hint(m, o, t)),
+        Ty::Json => o.own("Any"),
+    }
+}
+
+/// The builtins types.py reads: a type of one of these names has the file import `builtins`.
+const TYPES_BUILTINS: &[&str] = &["all", "any", "bool", "dict", "float", "int", "isinstance", "list", "str", "tuple"];
+
 pub(crate) fn types_file(m: &Model, header: &str) -> String {
     let (enums, recs) = crate::temporal::used_types(m);
+    let o = PyOwn::of(m);
+    let (any, typed_dict, type_guard, not_required) = (o.own("Any"), o.own("TypedDict"), o.own("TypeGuard"), o.own("NotRequired"));
     let mut t = header.to_string();
     t.push_str(&format!("# The records and enums of {} v{}, and a check for each.\n\n", m.name, m.version));
-    t.push_str("from __future__ import annotations\n\nimport re\nfrom typing import Any, Literal, NotRequired, TypedDict\n\n");
-    t.push_str(&format!("TIMESTAMP = re.compile(r\"{}\")\n\n\n", render::TIMESTAMP_RE.replace("\\\\", "\\")));
+    let names = |ns: &[&str]| ns.iter().map(|n| if o.taken.contains(*n) { format!("{n} as _{n}") } else { n.to_string() }).collect::<Vec<_>>().join(", ");
+    let builtins = if o.taken.iter().any(|n| TYPES_BUILTINS.contains(&n.as_str())) { "import builtins as _builtins\n" } else { "" };
+    t.push_str(&format!("from __future__ import {}\n\n{builtins}import {}\nfrom typing import {}\n\n", names(&["annotations"]), names(&["re"]), names(&["Any", "Literal", "NotRequired", "TypedDict", "TypeGuard"])));
+    t.push_str(&format!("{} = {}.compile(r\"{}\")\n\n\n", o.own("TIMESTAMP"), o.own("re"), render::TIMESTAMP_RE.replace("\\\\", "\\")));
     if m.uses_dates() {
-        t.push_str(&format!("DATE = re.compile(r\"{}\")\n\n\n", render::DATE_RE));
+        t.push_str(&format!("{} = {}.compile(r\"{}\")\n\n\n", o.own("DATE"), o.own("re"), render::DATE_RE));
     }
-    t.push_str("def is_int(v: Any) -> bool:\n    \"\"\"An integer, as JSON carries it: a float with nothing after the point is one too.\"\"\"\n");
-    t.push_str("    return (isinstance(v, int) and not isinstance(v, bool)) or (isinstance(v, float) and v.is_integer())\n\n\n");
-    t.push_str("def dd_field(v: Any, name: str) -> Any:\n    \"\"\"A field of a dict, None when it is absent: what the checks read, of any type.\"\"\"\n    return v.get(name)\n\n\n");
+    let (isinstance, int, bool_, float, str_) = (o.builtin("isinstance"), o.builtin("int"), o.builtin("bool"), o.builtin("float"), o.builtin("str"));
+    t.push_str(&format!("def {}(v: {any}) -> {bool_}:\n    \"\"\"An integer, as JSON carries it: a float with nothing after the point is one too.\"\"\"\n", o.own("is_int")));
+    t.push_str(&format!("    return ({isinstance}(v, {int}) and not {isinstance}(v, {bool_})) or ({isinstance}(v, {float}) and v.is_integer())\n\n\n"));
+    t.push_str(&format!("def {}(v: {any}, name: {str_}) -> {any}:\n    \"\"\"A field of a dict, None when it is absent: what the checks read, of any type.\"\"\"\n    return v.get(name)\n\n\n", o.own("dd_field")));
     for e in &enums {
         let en = &m.enums[*e];
         let n = type_name(&en.name);
         let vals: Vec<String> = en.values.iter().map(|v| q(v)).collect();
-        t.push_str(&format!("{n}_values: tuple[str, ...] = ({}{})\n", vals.join(", "), if vals.len() == 1 { "," } else { "" }));
-        t.push_str(&format!("{n} = Literal[{}]\n\n", vals.join(", ")));
+        t.push_str(&format!("{n}_values: {}[{str_}, ...] = ({}{})\n", o.builtin("tuple"), vals.join(", "), if vals.len() == 1 { "," } else { "" }));
+        t.push_str(&format!("{n} = {}[{}]\n\n", o.own("Literal"), vals.join(", ")));
     }
-    // the types as strings, so that a record may name one defined after it
-    let hint = |m: &Model, ty: &Ty| py_type(m, ty).replace("T.", "");
     for r in &recs {
         let rd = &m.records[*r];
         let n = type_name(&rd.name);
@@ -144,37 +463,120 @@ pub(crate) fn types_file(m: &Model, header: &str) -> String {
             .fields
             .iter()
             .map(|(f, ft)| match ft {
-                Ty::Opt(_) | Ty::Json => format!("{}: \"NotRequired[{}]\"", q(f), hint(m, ft)),
-                _ => format!("{}: \"{}\"", q(f), hint(m, ft)),
+                Ty::Opt(_) | Ty::Json => format!("{}: \"{not_required}[{}]\"", q(f), types_hint(m, &o, ft)),
+                _ => format!("{}: \"{}\"", q(f), types_hint(m, &o, ft)),
             })
             .collect();
-        t.push_str(&format!("\n{n} = TypedDict({}, {{{}}})\n\n\n", q(&n), fields.join(", ")));
-        t.push_str(&format!("def is_{n}(v: Any) -> bool:\n    return (\n        {}\n    )\n\n", field_checks(m, "v", &rd.fields, &rd.ranges, "").join("\n        and ")));
+        t.push_str(&format!("\n{n} = {typed_dict}({}, {{{}}})\n\n\n", q(&n), fields.join(", ")));
+        t.push_str(&format!("def is_{n}(v: {any}) -> {type_guard}[{n}]:\n    return (\n        {}\n    )\n\n", field_checks(m, &o, "v", &rd.fields, &rd.ranges, "").join("\n        and ")));
     }
     // an input that may be absent (`T?`, `json`) may be left out of the execution's input
     let inputs: Vec<String> = m
         .inputs
         .iter()
         .map(|(n, ty)| match ty {
-            Ty::Opt(_) | Ty::Json => format!("{}: \"NotRequired[{}]\"", q(n), hint(m, ty)),
-            _ => format!("{}: \"{}\"", q(n), hint(m, ty)),
+            Ty::Opt(_) | Ty::Json => format!("{}: \"{not_required}[{}]\"", q(n), types_hint(m, &o, ty)),
+            _ => format!("{}: \"{}\"", q(n), types_hint(m, &o, ty)),
         })
         .collect();
-    t.push_str(&format!("\nWorkflowInput = TypedDict(\"WorkflowInput\", {{{}}})\n\n\n", inputs.join(", ")));
-    t.push_str(&format!("def is_WorkflowInput(v: Any) -> bool:\n    return (\n        {}\n    )\n\n", field_checks(m, "v", &m.inputs, &m.input_ranges, "").join("\n        and ")));
+    t.push_str(&format!("\nWorkflowInput = {typed_dict}(\"WorkflowInput\", {{{}}})\n\n\n", inputs.join(", ")));
+    t.push_str(&format!("def is_WorkflowInput(v: {any}) -> {type_guard}[WorkflowInput]:\n    return (\n        {}\n    )\n\n", field_checks(m, &o, "v", &m.inputs, &m.input_ranges, "").join("\n        and ")));
     let outputs: Vec<String> = m
         .outputs
         .iter()
         .map(|(n, ty)| match ty {
-            Ty::Opt(_) => format!("{}: \"NotRequired[{}]\"", q(n), hint(m, ty)),
-            _ => format!("{}: \"{}\"", q(n), hint(m, ty)),
+            Ty::Opt(_) => format!("{}: \"{not_required}[{}]\"", q(n), types_hint(m, &o, ty)),
+            _ => format!("{}: \"{}\"", q(n), types_hint(m, &o, ty)),
         })
         .collect();
-    t.push_str(&format!("\nWorkflowOutput = TypedDict(\"WorkflowOutput\", {{{}}})\n", outputs.join(", ")));
+    t.push_str(&format!("\nWorkflowOutput = {typed_dict}(\"WorkflowOutput\", {{{}}})\n", outputs.join(", ")));
     if m.service.is_some() {
-        t.push_str(FILL_PY);
+        // fill and read_day as types.py has them, and what they read
+        let (own, builtins) = (&["fill", "read_day", "Any"][..], &["any", "bool", "dict", "float", "int", "isinstance", "list", "str"][..]);
+        if crate::temporal::service_days(m) {
+            t.push_str(&o.respell(&fill_days_py(FILL_PY.to_string()), own, builtins));
+            t.push_str(&format!("\n\n{}", o.respell(READ_DAY_PY, own, builtins)));
+        } else {
+            t.push_str(&o.respell(FILL_PY, own, builtins));
+        }
     }
     t
+}
+
+/// `fill` (io.py's, or the one beside the types of a workflow that implements a service) reading
+/// the `google.type.Date`s under zeros["d"] as dates as well (`read_day`, DESIGN 44).
+fn fill_days_py(text: String) -> String {
+    use crate::temporal::put_once;
+    let zeros = "    for k, z in zeros.get(\"f\", {}).items():\n        if out.get(k) is None:\n            out[k] = z\n";
+    let text = put_once(text, "under zeros[\"l\"].\"\"\"\n", "under zeros[\"l\"]; and the `google.type.Date`s under\n    zeros[\"d\"] read as dates (read_day).\"\"\"\n");
+    put_once(
+        text,
+        zeros,
+        &format!("{zeros}    for k in zeros.get(\"d\", []):\n        if k in out:\n            out[k] = [read_day(x) for x in out[k]] if isinstance(out[k], list) else read_day(out[k])\n"),
+    )
+}
+
+/// How the Python dandori writes reads a `google.type.Date` (DESIGN 44), as `apis::day_read` does.
+const READ_DAY_PY: &str = r#"def read_day(v: Any) -> Any:
+    """A `google.type.Date` as protobuf's JSON writes it, {year, month, day}, as the date a flow
+    holds, 2026-11-16. A date short of its year, its month or its day (protobuf's JSON leaves a 0
+    out), one with a field of another name, and one with a number that is not whole or not in its
+    range (a year from 1 to 9999, a month to 12, a day to 31) is left as it is, for the check of
+    what came to refuse."""
+    if not isinstance(v, dict) or any(k not in ("year", "month", "day") for k in v):
+        return v
+
+    def part(k: str, hi: int) -> int | None:
+        n = v.get(k)
+        if isinstance(n, bool) or not isinstance(n, (int, float)) or not 1 <= n <= hi or n != int(n):
+            return None
+        return int(n)
+
+    y, m, d = part("year", 9999), part("month", 12), part("day", 31)
+    if y is None or m is None or d is None:
+        return v
+    return f"{y:04d}-{m:02d}-{d:02d}"
+"#;
+
+/// How io.py writes the dates a `connect` task sends (DESIGN 44), as `apis::wire_days` does.
+const WIRE_DAYS_PY: &str = r#"def wire_days(v: dict[str, Any], at: dict[str, Any]) -> dict[str, Any]:
+    """A request with the dates where `at` says (at["d"]: its fields, at["m"]: the messages inside
+    it, at["l"]: the lists of messages) as protobuf's JSON writes a `google.type.Date`,
+    {year, month, day}. What is not four, two and two digits between hyphens is left as it is, for
+    the service to refuse."""
+
+    def day(x: Any) -> Any:
+        digits = "0123456789"
+        if isinstance(x, str) and len(x) == 10 and x[4] == x[7] == "-" and all(c in digits for c in x[:4] + x[5:7] + x[8:]):
+            return {"year": int(x[:4]), "month": int(x[5:7]), "day": int(x[8:])}
+        return x
+
+    out = dict(v)
+    for k in at.get("d", []):
+        if k in out:
+            out[k] = [day(x) for x in out[k]] if isinstance(out[k], list) else day(out[k])
+    for k, s in at.get("m", {}).items():
+        if isinstance(out.get(k), dict):
+            out[k] = wire_days(out[k], s)
+    for k, s in at.get("l", {}).items():
+        if isinstance(out.get(k), list):
+            out[k] = [wire_days(x, s) if isinstance(x, dict) else x for x in out[k]]
+    return out
+"#;
+
+/// io.py of a flow whose `connect` tasks read or send a `google.type.Date` (DESIGN 44): `fill` reads
+/// the dates of an answer as dates (`read_day`), and `wire_days` writes the dates of a request as
+/// protobuf's JSON writes them. A flow that has none keeps the text as it was.
+fn connect_days_py(m: &Model, io: String) -> String {
+    use crate::temporal::put_once;
+    let (reads, writes) = crate::temporal::connect_days(m);
+    let anchor = "def status(r: dict[str, Any], names: dict[str, str], fail: Callable[[str, str], Exception]) -> Any:";
+    let io = if reads { put_once(fill_days_py(io), anchor, &format!("{READ_DAY_PY}\n\n{anchor}")) } else { io };
+    if writes {
+        put_once(io, anchor, &format!("{WIRE_DAYS_PY}\n\n{anchor}"))
+    } else {
+        io
+    }
 }
 
 /// How a workflow that implements a service reads what comes in (the input, the value of an event,
@@ -209,7 +611,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let header = m.head("#");
     // the rules whose code goes with the workflow are in rules.py; the others are called at their services, from activities.py
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
-    let mut g = Gen { m, out: String::new(), loops: vec![], can: None, now: None };
+    let mut g = Gen { m, out: String::new(), loops: vec![], can: None, now: None, own: PyOwn::of(m), vars: render::Vars::new(m, py_name, None), at: 0 };
     let wf = g.workflow(&header, !called.is_empty());
     let mut files = vec![
         (format!("{dir}/__init__.py"), format!("{header}# {} v{}: the workflow for Temporal's Python SDK. See workflow.py.\n", m.name, m.version)),
@@ -235,14 +637,12 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str(&format!("# Starting {} v{}, answering its callbacks, and asking where it is.\n\n", m.name, m.version));
     c.push_str("from __future__ import annotations\n\nimport hashlib\nimport json\nfrom typing import Any, AsyncIterator\n\n");
     c.push_str("from temporalio.client import Client, WorkflowHandle, WorkflowHistory\nfrom temporalio.common import WorkflowIDReusePolicy\n\n");
-    if m.service.is_some() {
-        c.push_str("from . import types as T\n");
-    }
+    c.push_str("from . import types as T\n");
     c.push_str("from .runtime import value_sha256 as _value_sha256\n\n");
     c.push_str(&format!("# The workflow's type. The `.flow`'s version is in it, so that a new version is a new workflow.\nWORKFLOW_TYPE = {}\n\n", q(&ty)));
     c.push_str(&format!("# The task queue of the workflow and its activities (the tasks that say `queue` go to theirs).\nTASK_QUEUE = {}\n\n", q(&ty)));
     c.push('\n');
-    c.push_str("async def start(client: Client, id: str, input: dict[str, Any], *, search_attributes: bool = False) -> WorkflowHandle[Any, Any]:\n");
+    c.push_str("async def start(client: Client, id: str, input: T.WorkflowInput, *, search_attributes: bool = False) -> WorkflowHandle[Any, Any]:\n");
     c.push_str("    \"\"\"Start the workflow as `id`. The idempotency keys of its calls are made from the id, so an id is\n    used once: a second start with it is refused, even after the first run has ended. With\n    `search_attributes`, the workflow keeps the search attribute DandoriCases (a keyword list) up to\n    date with the cases' states, as \"<case>=<state>\"; register it on the namespace first.\"\"\"\n");
     c.push_str("    extra: dict[str, Any] = {}\n    if search_attributes:\n        extra[\"memo\"] = {\"dandori.cases\": True}\n");
     c.push_str("    return await client.start_workflow(WORKFLOW_TYPE, input, id=id, task_queue=TASK_QUEUE, id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE, **extra)\n\n\n");
@@ -302,11 +702,47 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str("    async for w in client.list_workflows(query or f\"WorkflowType = '{WORKFLOW_TYPE}' AND ExecutionStatus = 'Running'\"):\n");
     c.push_str("        yield await client.get_workflow_handle(w.id, run_id=w.run_id).fetch_history()\n");
     c.push_str(UPDATE_ID_PY);
+    // the names of the service's functions and messages, which the code below holds apart from its own
+    let mut bound: Vec<String> = Vec::new();
     if let Some(s) = &m.service {
-        c.push_str(&service_client_py(m, s).0);
+        let (text, names, _) = service_client_py(m, s);
+        c.push_str(&text);
+        bound = names;
     }
     if m.history_encrypted.is_some() {
-        return encrypted_client_py(c);
+        c = encrypted_client_py(c);
+    }
+    respelled_client(c, &bound)
+}
+
+/// What client.py reads from its imports, besides the names a caller reads (`CLIENT_OWN`): a
+/// function or a message of the service of one of these names has them come in with `_` before
+/// them (`from typing import Any as _Any`, `from . import types as _T`).
+const CLIENT_IMPORTS: &[&str] = &["annotations", "hashlib", "json", "Any", "AsyncIterator", "Client", "WorkflowHandle", "WorkflowHistory", "WorkflowIDReusePolicy", "T", "dataclasses", "NewType", "temporalio", "DataConverter", "DefaultFailureConverterWithEncodedAttributes", "PayloadCodec"];
+
+/// The builtins client.py reads: a function or a message of one of these names has them read as
+/// `_builtins.<name>`. A parameter of its functions (`id`, `input`) is no builtin it reads.
+const CLIENT_BUILTINS: &[&str] = &["Exception", "ValueError", "bool", "dict", "int", "isinstance", "list", "str", "super"];
+
+/// client.py, `c`, whose service's functions and messages are written as `\u{1}<i>\u{2}`, the `i`th of
+/// `bound`: each with its name, and the names of the code it takes kept apart from it (DESIGN 22).
+fn respelled_client(c: String, bound: &[String]) -> String {
+    let mut to: BTreeMap<String, String> = BTreeMap::new();
+    for n in bound {
+        if CLIENT_IMPORTS.contains(&n.as_str()) {
+            to.insert(n.clone(), format!("_{n}"));
+        } else if CLIENT_BUILTINS.contains(&n.as_str()) {
+            to.insert(n.clone(), format!("_builtins.{n}"));
+        }
+    }
+    let mut c = c;
+    if to.remove("temporalio").is_some() {
+        // the package comes in for its module `converter` alone
+        c = c.replace("import temporalio.converter\n", "import temporalio.converter as _temporalio_converter\n").replace("temporalio.converter.default()", "_temporalio_converter.default()");
+    }
+    let mut c = respelled(&c, &to);
+    for (i, n) in bound.iter().enumerate() {
+        c = c.replace(&format!("\u{1}{i}\u{2}"), n);
     }
     c
 }
@@ -407,32 +843,47 @@ pub(crate) fn snake(name: &str) -> String {
 }
 
 /// The names client.py has besides its own when the workflow says `history encrypted` (DESIGN 1.18):
-/// what it imports for the codec, and what it declares. A method's function or a message's type of
-/// one of these names cannot be written, as for one of the client's own names (1.14; W105).
+/// what it imports for the codec, and what it declares. The ones a caller reads (`EncryptedClient`,
+/// `data_converter`, `connect`) a method's function or a message's type cannot have, as for one of
+/// the client's own names (1.14; W105); the others it imports come in under another name then
+/// (`CLIENT_IMPORTS`).
 pub const ENCRYPTED_CLIENT: &[&str] = &["dataclasses", "NewType", "temporalio", "DataConverter", "DefaultFailureConverterWithEncodedAttributes", "PayloadCodec", "EncryptedClient", "data_converter", "connect"];
+
+/// What client.py declares that a caller reads, besides its functions: a method's function or a
+/// message's type cannot have one of these names (W105).
+const CLIENT_OWN: &[&str] = &["WORKFLOW_TYPE", "TASK_QUEUE", "EVENTS", "SERVICE", "SentWithAnotherValueError"];
 
 /// client.py, for a workflow that implements a service: the service's name, a name for each
 /// message's type, and a function for each method, which calls the client's own `start`, `send`,
-/// `answer` or `status`. The names are those of client.ts, in Python's way. And the names it could
-/// not write.
-fn service_client_py(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
+/// `answer` or `status`. The names are those of client.ts, in Python's way. The text has each
+/// function's and message's name as `\u{1}<i>\u{2}`, the `i`th of the names it gives too, for
+/// `respelled_client`; and the names it could not write.
+fn service_client_py(m: &Model, s: &ServiceUse) -> (String, Vec<String>, Vec<(String, Name, With)>) {
     const FUNCTIONS: &[&str] = &["start", "answer", "send", "send_once", "status", "histories"];
-    const OTHERS: &[&str] = &["WORKFLOW_TYPE", "TASK_QUEUE", "EVENTS", "SERVICE", "json", "hashlib", "Any", "AsyncIterator", "Client", "WorkflowHandle", "WorkflowHistory", "WorkflowIDReusePolicy", "SentWithAnotherValueError", "T", "annotations"];
-    let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED_CLIENT } else { &[] };
-    let own: Vec<(String, With)> = OTHERS.iter().chain(encrypted).map(|x| (x.to_string(), With::Own)).collect();
+    let encrypted: &[&str] = if m.history_encrypted.is_some() { &["EncryptedClient", "data_converter", "connect"] } else { &[] };
+    let own: Vec<(String, With)> = CLIENT_OWN.iter().chain(encrypted).map(|x| (x.to_string(), With::Own)).collect();
     let mut names = ClientNames::new(own, FUNCTIONS);
+    let mut bound: Vec<String> = Vec::new();
+    let mut held = |bound: &mut Vec<String>, n: &str| -> String {
+        let i = bound.iter().position(|b| b == n).unwrap_or_else(|| {
+            bound.push(n.to_string());
+            bound.len() - 1
+        });
+        format!("\u{1}{i}\u{2}")
+    };
     let mut c = String::new();
     c.push_str(&format!("\n\n# The service the workflow implements, which `{}` describes. Its methods are the functions below.\nSERVICE = {}\n", s.file, q(&s.name)));
     // a name for a message's type, by its name in the .proto
-    let alias = |c: &mut String, names: &mut ClientNames, message: &str, ty: &str, what: String| -> String {
+    let alias = |c: &mut String, names: &mut ClientNames, bound: &mut Vec<String>, held: &mut dyn FnMut(&mut Vec<String>, &str) -> String, message: &str, ty: &str, what: String| -> String {
         let short = message.rsplit('.').next().unwrap_or(message);
         let id = type_name(short);
         if id != short {
             names.clashes.push((short.to_string(), Name::Message(message.to_string()), With::Own));
         }
         match names.message(id, message, ty, false) {
-            Alias::Use(n) => n,
+            Alias::Use(n) => held(bound, &n),
             Alias::Write(n) => {
+                let n = held(bound, &n);
                 c.push_str(&format!("\n\n# {what}: `{message}`.\n{n} = {ty}\n"));
                 n
             }
@@ -442,15 +893,15 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
     for mt in &s.methods {
         let label = s.label(mt);
         let plain = snake(&mt.name);
-        let base = py_name(&plain);
+        let base = contract_name(&plain);
         if base != plain {
             names.clashes.push((plain, Name::Method(mt.name.clone()), With::Own));
         }
         let (f, sig, call, what) = match mt.marks.first() {
             Some(Mark::Start { .. }) => {
                 let f = names.function(base.clone(), &mt.name, base == "start");
-                let req = alias(&mut c, &mut names, &mt.request, "T.WorkflowInput", format!("The request of {label}, the workflow's input"));
-                alias(&mut c, &mut names, &mt.response, "T.WorkflowOutput", format!("The response of {label}, the workflow's output"));
+                let req = alias(&mut c, &mut names, &mut bound, &mut held, &mt.request, "T.WorkflowInput", format!("The request of {label}, the workflow's input"));
+                alias(&mut c, &mut names, &mut bound, &mut held, &mt.response, "T.WorkflowOutput", format!("The response of {label}, the workflow's output"));
                 (
                     f,
                     format!("(client: Client, id: str, input: {req}, *, search_attributes: bool = False) -> WorkflowHandle[Any, Any]"),
@@ -460,7 +911,7 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
             }
             Some(Mark::Event { task }) => {
                 let f = names.function(base.clone(), &mt.name, false);
-                let req = alias(&mut c, &mut names, &mt.request, &task_type(task), format!("The request of {label}, the value of the event of `{task}`"));
+                let req = alias(&mut c, &mut names, &mut bound, &mut held, &mt.request, &task_type(task), format!("The request of {label}, the value of the event of `{task}`"));
                 (
                     f,
                     format!("(client: Client, workflow_id: str, value: {req}) -> None"),
@@ -470,7 +921,7 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
             }
             Some(Mark::Answer { task }) => {
                 let f = names.function(base.clone(), &mt.name, false);
-                let req = alias(&mut c, &mut names, &mt.request, &task_type(task), format!("The request of {label}, the answer of the callback of `{task}`"));
+                let req = alias(&mut c, &mut names, &mut bound, &mut held, &mt.request, &task_type(task), format!("The request of {label}, the answer of the callback of `{task}`"));
                 (
                     f,
                     format!("(client: Client, callback_id: str, value: {req}) -> None"),
@@ -485,28 +936,34 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
             None => continue,
         };
         if let Some(name) = f {
+            let name = held(&mut bound, &name);
             c.push_str(&format!("\n\nasync def {name}{sig}:\n    \"\"\"{label}: {what}.\"\"\"\n{call}"));
         }
     }
-    (c, names.clashes)
+    (c, bound, names.clashes)
 }
 
-/// Why the code of Python cannot keep `plain`, a name `py_name` writes another way.
+/// Why the code of Python cannot keep `plain`, a name a caller reads that `contract_name` writes
+/// another way: a keyword, or a name that begins with `_`.
 fn reserved_why(plain: &str, id: &str) -> Text {
-    use ritsu_emit::words::python::{KEYWORDS, SOFT_KEYWORDS};
     if id == ident(plain) {
         tr!("生成するコードの名前は `_` で始められないので、`{id}` になります。", "the name would be `{id}` in the code, which does not begin a name with `_`.")
-    } else if KEYWORDS.contains(&plain) || SOFT_KEYWORDS.contains(&plain) {
-        tr!("`{plain}` は Python のキーワードです。生成するコードはこの名前で宣言できません。", "`{plain}` is a keyword of Python: the code cannot declare it by that name.")
     } else {
-        tr!("`{plain}` は、生成するコードが使う名前か、読む Python の組み込みの名前です。同じ名前にすると、それを隠します。", "`{plain}` is a name the code uses itself, or a builtin of Python it reads, and a name of the flow would hide it.")
+        tr!("`{plain}` は Python のキーワードです。生成するコードはこの名前で宣言できません。", "`{plain}` is a keyword of Python: the code cannot declare it by that name.")
     }
 }
 
-/// What the code of Python cannot keep (DESIGN 22): a name `py_name` writes another way, which a
-/// type of `types.py` and a method of `OwnTasks` go by; a type's name that is one with what
-/// another type declares beside itself (`<type>_values`, `is_<type>`); and what its client could
-/// not write. pydantic-graph has the types and the methods, and no client.
+/// What types.py declares that a caller reads, besides the flow's types: a type of one of these
+/// names cannot be written (W105).
+const TYPES_OWN: &[&str] = &["WorkflowInput", "WorkflowOutput", "is_WorkflowInput"];
+
+/// What the code of Python cannot keep (DESIGN 22): a name a caller reads that Python cannot
+/// declare — a keyword, a name that begins with `_` — which a type of `types.py` and a method of
+/// `OwnTasks` go by; a type that is what types.py declares for a caller (`TYPES_OWN`); a type's
+/// name that is one with what another type declares beside itself (`<type>_values`, `is_<type>`);
+/// and what its client could not write. A name the code uses for itself, or a builtin it reads, is
+/// no such name: the code has its own under another name where a name of the flow takes it.
+/// pydantic-graph has the types and the methods, and no client.
 pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
     const TYPES: [&str; 2] = ["temporal-python", "pydantic-graph"];
     let mut out = Vec::new();
@@ -538,9 +995,8 @@ pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
             for target in TYPES {
                 said(target, &plain, &name, &With::Own, &why);
             }
-        }
-        if id == "DATE" && m.uses_dates() {
-            let why = tr!("日付を持つフローでは、`types.py` が `DATE` を宣言し、日付の検査に使います。同じ名前を宣言すると置き換わり、日付を検査できなくなります。", "a flow with dates has `DATE` in `types.py`, which checks a date with it: a declaration of that name takes its place, and a date can no longer be checked.");
+        } else if TYPES_OWN.contains(&id.as_str()) {
+            let why = tr!("`types.py` は `{id}` を自分で宣言し、呼ぶ側がそれを読みます。同じ名前を宣言すると置き換わります（`mypy --strict` は `already defined` と言います）。", "`types.py` declares `{id}` itself, which a caller reads: a declaration of that name takes its place (`mypy --strict` says `already defined`).");
             for target in TYPES {
                 said(target, &id, &name, &With::Own, &why);
             }
@@ -558,11 +1014,12 @@ pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
         }
     }
     if let Some(s) = &m.service {
-        for (id, name, with) in service_client_py(m, s).1 {
+        for (id, name, with) in service_client_py(m, s).2 {
             let why = match &with {
                 With::Name(_) => tr!("どちらも `client.py` の `{id}` です。後の宣言が前の宣言に置き換わります（`mypy --strict` は `already defined` と言います）。", "both are `{id}` in `client.py`: the later declaration takes the place of the earlier (`mypy --strict` says `already defined`)."),
                 With::TwoTypes => tr!("`client.py` の `{id}` は一つの型にしかなれません。", "`{id}` in `client.py` can be one type only."),
-                With::Own => tr!("`client.py` は `{id}` を自分で持っています。同じ名前を宣言すると、自分のものが置き換わります。", "`client.py` has `{id}` itself: a declaration of that name takes its place."),
+                With::Own if ritsu_emit::words::python::KEYWORDS.contains(&id.as_str()) => reserved_why(&id, &format!("{id}_")),
+                With::Own => tr!("`client.py` は `{id}` を自分で持ち、呼ぶ側がそれを読みます。同じ名前を宣言すると、自分のものが置き換わります。", "`client.py` has `{id}` itself, which a caller reads: a declaration of that name takes its place."),
             };
             said("temporal-python", &id, &name, &with, &why);
         }
@@ -650,7 +1107,8 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
             }
         }
         Some(Via::Http { method: hm, url, form }) => {
-            let used = crate::lower::placeholders(url);
+            // the path's arguments and the query in the URL, the headers and the cookies, and the
+            // body, each written as the description says or OpenAPI's defaults do (DESIGN 43)
             let mut url_parts: Vec<String> = Vec::new();
             let mut rest = url;
             while let Some(i) = rest.find('{') {
@@ -661,11 +1119,20 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
                 if i > 0 {
                     url_parts.push(q(&rest[..i]));
                 }
-                url_parts.push(format!("io.segment(args.get({}))", q(&rest[i + 1..j])));
+                let ph = &rest[i + 1..j];
+                url_parts.push(match wire::path_param(m, task, ph) {
+                    Some((w, k, _)) if !wire::plain_segment(w, &k) => format!("io.path({})", param_py(w, &k)),
+                    Some((w, _, _)) => format!("io.segment(args.get({}))", q(&w.param)),
+                    None => format!("io.segment(args.get({}))", q(ph)),
+                });
                 rest = &rest[j + 1..];
             }
             if !rest.is_empty() || url_parts.is_empty() {
                 url_parts.push(q(rest));
+            }
+            let query: Vec<String> = wire::at(m, task, Place::Query).iter().map(|(w, k, _)| param_py(w, k)).collect();
+            if !query.is_empty() {
+                url_parts.push(format!("io.query({}, [{}])", q(if url.contains('?') { "&" } else { "?" }), query.join(", ")));
             }
             let mut req = vec![format!("\"http\": {}", q(hm)), format!("\"url\": {}", url_parts.join(" + "))];
             let mut headers = Vec::new();
@@ -678,13 +1145,25 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
             if task.key {
                 headers.push("\"Idempotency-Key\": args[\"idempotency_key\"]".to_string());
             }
-            if !headers.is_empty() {
+            let (hs, cs) = (wire::at(m, task, Place::Header), wire::at(m, task, Place::Cookie));
+            if !hs.is_empty() || !cs.is_empty() {
+                let ps = |v: &[(&WireParam, wire::Kind, &Ty)]| v.iter().map(|(w, k, _)| param_py(w, k)).collect::<Vec<_>>().join(", ");
+                req.push(format!("**io.headers({{{}}}, [{}], [{}])", headers.join(", "), ps(&hs), ps(&cs)));
+            } else if !headers.is_empty() {
                 req.push(format!("\"headers\": {{{}}}", headers.join(", ")));
             }
-            let rest_args: Vec<String> = task.params.iter().filter(|(p, _)| !used.contains(p)).map(|(p, _)| format!("{}: args.get({})", q(p), q(p))).collect();
-            if !rest_args.is_empty() {
-                let place = if hm == "GET" || hm == "DELETE" { "query" } else { "body" };
-                req.push(format!("\"{place}\": {{{}}}", rest_args.join(", ")));
+            let body: Vec<&WireParam> = task.wire.iter().filter(|w| w.place == Place::Body).collect();
+            if form && !body.is_empty() && !wire::plain_form(m, task) {
+                let ps: Vec<String> = wire::at(m, task, Place::Body).iter().map(|(w, k, _)| param_py(w, k)).collect();
+                req.push(format!("\"body\": io.form([{}])", ps.join(", ")));
+            } else if !body.is_empty() {
+                // a JSON body by the parameters' names; a URL-encoded one of values that are always there by the names it takes
+                let fields: Vec<String> = body.iter().map(|w| format!("{}: args.get({})", q(if form { &w.name } else { &w.param }), q(&w.param))).collect();
+                match &task.request_days {
+                    // a `connect` task's dates, as protobuf's JSON writes a `google.type.Date` (DESIGN 44)
+                    Some(t) => req.push(format!("\"body\": io.wire_days({{{}}}, {})", fields.join(", "), render::layout(t, 0, "", true).replace('\n', ""))),
+                    None => req.push(format!("\"body\": {{{}}}", fields.join(", "))),
+                }
             }
             if form {
                 req.push("\"form\": True".into());
@@ -879,7 +1358,8 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("#   `dandori.answer`, or the signal `dandori.callback`): {\"callback_id\", \"ok\"} or {\"callback_id\", \"error\", \"message\"}.\n");
     a.push_str("# - A task that says `event` is not here: nothing is called, and its value is sent to the workflow\n");
     a.push_str("#   (client.py: send).\n\n");
-    a.push_str("from __future__ import annotations\n\nimport asyncio\nimport functools\nfrom typing import Any, Awaitable, Callable, Protocol\n\nfrom temporalio import activity\nfrom temporalio.exceptions import ApplicationError\n\n");
+    let (signature, imports) = own_tasks_signature(&own);
+    a.push_str(&format!("from __future__ import annotations\n\nimport asyncio\nimport functools\n{imports}from typing import Any, Awaitable, Callable, Protocol\n\nfrom temporalio import activity\nfrom temporalio.exceptions import ApplicationError\n\n"));
     a.push_str("from . import io\nfrom . import types as T\n\n\n");
     a.push_str(&schemas_block(m, &tasks, p));
     a.push_str(&jev_block(&tasks, p));
@@ -889,7 +1369,7 @@ fn tasks_file(m: &Model, header: &str) -> String {
         a.push('\n');
     }
     for task in &own {
-        a.push_str(&format!("\n    async def {}(self, args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n        ...\n", method(&task.name), task_doc(m, task)));
+        a.push_str(&format!("\n    async def {}{signature}:\n        \"\"\"{}\"\"\"\n        ...\n", method(&task.name), task_doc(m, task)));
     }
     a.push_str("\n\ndef fail(kind: str, message: str) -> ApplicationError:\n    return ApplicationError(message, type=kind, non_retryable=True)\n\n\n");
     a.push_str(&format!(
@@ -902,7 +1382,7 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("    t = transport if transport is not None else io.transport()\n");
     let mut names = Vec::new();
     for task in &tasks {
-        let fname = method(&task.name);
+        let fname = activity_function(&task.name);
         names.push(fname.clone());
         a.push_str(&format!("\n    @activity.defn(name={})\n    @beating\n    async def {fname}(args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n", q(&ident(&task.name)), task_doc(m, task)));
         for l in task_impl(m, task, p) {
@@ -981,7 +1461,12 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
         t.push_str("# The modules these imports read are the package's own, which `ritsu gen` writes beside the flows.\n");
     } else {
         if rules {
-            t.push_str("# `rulec gen <rule> --target python --out <this package>/rulec` writes the modules these imports read.\n");
+            // the modules go inside this package, where a rule's module reads the module of an
+            // `enums` file beside it by a relative import (rulec's §15.319)
+            t.push_str(&format!(
+                "# `rulec gen <rule> --target python {} --out <this package>/rulec` writes the modules these imports read.\n",
+                ritsu_emit::package::PYTHON_PACKAGE
+            ));
         }
         if dates {
             t.push_str("# `koyomi gen <file.cal> --target python --out <this package>/koyomi` writes the modules of the dates.\n");
@@ -1151,8 +1636,44 @@ pub(crate) fn io_py(m: &Model) -> String {
         .replace("    books: dict[str, Any] | None = None,\n) -> Transport:", "    books: Books | None = None,\n) -> Transport:")
 }
 
+/// io.py of a flow that calls an AWS API: the default Transport gives back the datetimes of what
+/// boto3 answers as RFC 3339 text in UTC (DESIGN 42). boto3 reads a timestamp's RFC 3339 text
+/// itself, and sends it in the form the API's model says. A flow that calls none keeps the text as
+/// it was.
+fn aws_times_py(m: &Model, io: String) -> String {
+    if !crate::temporal::calls_aws(m) {
+        return io;
+    }
+    use crate::temporal::put_once;
+    let io = put_once(io, "def encode(o: dict[str, Any]) -> str:", &format!("{AWS_TIMES_PY}def encode(o: dict[str, Any]) -> str:"));
+    let io = put_once(
+        io,
+        "        \"\"\"Call an AWS API, named as Step Functions names it (`sns`, `publish`); an exception comes back by its name.\"\"\"",
+        "        \"\"\"Call an AWS API, named as Step Functions names it (`sns`, `publish`); an exception comes back by its name.\n        A timestamp goes and comes as RFC 3339 text, in UTC.\"\"\"",
+    );
+    put_once(io, "            return {\"ok\": out}\n", "            # the datetimes of the answer as the text a flow holds a timestamp in\n            return {\"ok\": moments(out)}\n")
+}
+
+/// What io.py has for the timestamps of the AWS APIs (`aws_times_py`).
+const AWS_TIMES_PY: &str = r#"def moments(v: Any) -> Any:
+    """What boto3 answered, as JSON: a datetime as RFC 3339 text in UTC, with no zeros at the end of its fraction of a second."""
+    import datetime
+
+    if isinstance(v, datetime.datetime):
+        u = v.astimezone(datetime.timezone.utc) if v.tzinfo is not None else v.replace(tzinfo=datetime.timezone.utc)
+        fraction = f".{u.microsecond:06d}".rstrip("0") if u.microsecond else ""
+        return f"{u.year:04d}-{u.month:02d}-{u.day:02d}T{u.hour:02d}:{u.minute:02d}:{u.second:02d}{fraction}Z"
+    if isinstance(v, dict):
+        return {k: moments(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [moments(x) for x in v]
+    return v
+
+
+"#;
+
 fn io_py_alone(m: &Model) -> String {
-    let io = IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string());
+    let io = connect_days_py(m, aws_times_py(m, IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string())));
     let books = crate::asl::used_books(m);
     if books.is_empty() {
         return io;
@@ -1230,9 +1751,10 @@ from typing import Any, Callable, Protocol
 Answer = dict[str, Any]
 
 # An HTTP request as Step Functions' HTTP Task sends it: {"http": method, "url", "headers",
-# "body", "query", "form", "typesafe", "openai"}; `form` asks for a URL-encoded body, and
-# `typesafe` and `openai` say it is a call of TypeSafe's Jev or of OpenAI's Decisions API, to which
-# the default transport adds that API's key.
+# "body", "form", "typesafe", "openai"}. The URL has the query in it, and the headers the cookies in
+# one Cookie. `form` asks for a URL-encoded body, of each name with its value (a list's items one by
+# one), and `typesafe` and `openai` say it is a call of TypeSafe's Jev or of OpenAI's Decisions API,
+# to which the default transport adds that API's key.
 HttpRequest = dict[str, Any]
 
 # Where every target sends a Jev task's request: TypeSafe's API.
@@ -1303,7 +1825,7 @@ SERVICES = {"bedrockruntime": "bedrock-runtime", "eventbridge": "events", "sfn":
 
 
 def text(v: Any) -> str:
-    """A value put into a URL or a string: text as it is, nothing for none, anything else as JSON."""
+    """A value put into a URL, a header, a URL-encoded body or a string: text as it is, nothing for none, anything else as JSON."""
     if isinstance(v, str):
         return v
     if v is None:
@@ -1316,21 +1838,174 @@ def segment(v: Any) -> str:
     return urllib.parse.quote(text(v), safe="!*'()")
 
 
+# An argument of an `http` task where it goes (DESIGN 43): (the name it goes by there, its value,
+# OpenAPI's style, explode, what the value is: "v" one value, "j" a `json` one, "l" a list, or a
+# record's fields in their order).
+Param = tuple[str, Any, str, bool, Any]
+
+
+def _escape(s: str) -> str:
+    return urllib.parse.quote(s, safe="!*'()")
+
+
+def _items(v: Any) -> list[str]:
+    """The texts of the items of a list that are there."""
+    return [text(x) for x in (v if isinstance(v, list) else [v]) if x is not None]
+
+
+def _fields(v: Any, names: list[str]) -> list[tuple[str, str]]:
+    """The names and the texts of the fields of a record that are there, in the record's order."""
+    return [(f, text(v[f])) for f in names if v.get(f) is not None]
+
+
+def _joined(v: Any, shape: Any, sep: str, e: Callable[[str], str]) -> str | None:
+    """The items of a list, or the names and the values of a record's fields in turn, each through `e`, between `sep`; none when there are none."""
+    parts = _items(v) if isinstance(shape, str) else [x for pair in _fields(v, shape) for x in pair]
+    return sep.join(e(x) for x in parts) if parts else None
+
+
+def _named(name: str, t: str) -> str:
+    """`;name=text`, or `;name` for empty text (matrix)."""
+    return f";{name}" if t == "" else f";{name}={t}"
+
+
+def query(mark: str, params: list[Param]) -> str:
+    """The query of a call's arguments after `mark` ("?", or "&" after the URL's own): "" when none is there."""
+    e = _escape
+    pairs: list[str] = []
+    for name, v, style, explode, shape in params:
+        if v is None:
+            continue
+        if shape in ("v", "j"):
+            pairs.append(f"{e(name)}={e(text(v))}")
+        elif shape == "l" and style == "form" and explode:
+            pairs.extend(f"{e(name)}={e(t)}" for t in _items(v))
+        elif not isinstance(shape, str) and (style == "deepObject" or (style == "form" and explode)):
+            pairs.extend(f"{e(f'{name}[{f}]' if style == 'deepObject' else f)}={e(t)}" for f, t in _fields(v, shape))
+        else:
+            j = _joined(v, shape, "%20" if style == "spaceDelimited" else "%7C" if style == "pipeDelimited" else ",", e)
+            if j is not None:
+                pairs.append(f"{e(name)}={j}")
+    return mark + "&".join(pairs) if pairs else ""
+
+
+def path(p: Param) -> str:
+    """An argument put into the path, as its style writes it: `a,b`, `.a.b`, `;n=a;n=b`."""
+    name, v, style, explode, shape = p
+    if v is None:
+        return ""
+    e = _escape
+    if isinstance(shape, str) and shape != "l":
+        t = e(text(v))
+        return f".{t}" if style == "label" else _named(e(name), t) if style == "matrix" else t
+    if isinstance(shape, str):
+        its = [e(t) for t in _items(v)]
+        if not its:
+            return ""
+        if style == "label":
+            return "." + ("." if explode else ",").join(its)
+        if style == "matrix":
+            return "".join(_named(e(name), t) for t in its) if explode else _named(e(name), ",".join(its))
+        return ",".join(its)
+    fs = [(e(f), e(t)) for f, t in _fields(v, shape)]
+    if not fs:
+        return ""
+    flat = ",".join(x for pair in fs for x in pair)
+
+    def pairs(sep: str) -> str:
+        return sep.join(f"{f}={t}" for f, t in fs)
+
+    if style == "label":
+        return "." + (pairs(".") if explode else flat)
+    if style == "matrix":
+        return "".join(_named(f, t) for f, t in fs) if explode else _named(e(name), flat)
+    return pairs(",") if explode else flat
+
+
+def headers(own: dict[str, str], params: list[Param], cookies: list[Param]) -> dict[str, Any]:
+    """{"headers": the headers of a call} (DESIGN 43): dandori's own, then each argument that goes
+    in a header, as `simple` writes it with its text as it is, then the arguments that go in a
+    cookie, `name=value` as `form` writes them, in one Cookie; {} when there is none."""
+    out = dict(own)
+    for name, v, _style, explode, shape in params:
+        if v is None:
+            continue
+        t: str | None
+        if shape in ("v", "j"):
+            t = text(v)
+        elif not isinstance(shape, str) and explode:
+            fs = _fields(v, shape)
+            t = ",".join(f"{f}={x}" for f, x in fs) if fs else None
+        else:
+            t = _joined(v, shape, ",", lambda s: s)
+        if t is not None:
+            out[name] = t
+    pairs: list[str] = []
+    for name, v, _style, _explode, shape in cookies:
+        if v is None:
+            continue
+        c = _escape(text(v)) if shape in ("v", "j") else _joined(v, shape, ",", _escape)
+        if c is not None:
+            pairs.append(f"{name}={c}")
+    if pairs:
+        out["Cookie"] = "; ".join(pairs)
+    return {"headers": out} if out else {}
+
+
+def form(params: list[Param]) -> dict[str, Any]:
+    """A URL-encoded body of a call's arguments, as the Transport is handed it (DESIGN 43): one value
+    as it is (a `json` one as its text), a list `form` writes with `explode` as its items' texts,
+    which the name repeats for, a record's fields by their names or as `name[field]`, and the joined
+    text of the other styles; nothing for a value that is not there."""
+    out: dict[str, Any] = {}
+    for name, v, style, explode, shape in params:
+        if v is None:
+            continue
+        if shape == "v":
+            out[name] = v
+        elif shape == "j":
+            out[name] = text(v)
+        elif shape == "l" and style == "form" and explode:
+            its = _items(v)
+            if its:
+                out[name] = its
+        elif not isinstance(shape, str) and (style == "deepObject" or (style == "form" and explode)):
+            for f, t in _fields(v, shape):
+                out[f"{name}[{f}]" if style == "deepObject" else f] = t
+        else:
+            j = _joined(v, shape, " " if style == "spaceDelimited" else "|" if style == "pipeDelimited" else ",", lambda s: s)
+            if j is not None:
+                out[name] = j
+    return out
+
+
 def json_text(v: Any) -> str:
     """A value as JSON text, as Step Functions and the TypeScript code write it: no spaces, and text as it is."""
     return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
 
 
-def encode(o: dict[str, Any], prefix: str = "") -> str:
-    """`a=1&b[c]=2`, the way a URL-encoded body nests."""
+def encode(o: dict[str, Any]) -> str:
+    """`a=1&b=2&b=3`: a URL-encoded body, each name with its value, and with each item of a list for
+    one (DESIGN 43), both escaped as JavaScript's encodeURIComponent escapes them; a value that is
+    not there is left out."""
     parts = []
     for k, v in o.items():
-        key = f"{prefix}[{k}]" if prefix else str(k)
-        if isinstance(v, dict):
-            parts.append(encode(v, key))
-        else:
-            parts.append(f"{urllib.parse.quote(key, safe='')}={urllib.parse.quote('' if v is None else text(v), safe='')}")
-    return "&".join(p for p in parts if p)
+        for x in v if isinstance(v, list) else [v]:
+            if x is None:
+                # not `key=`: an empty string is a value, and the call has none
+                continue
+            parts.append(f"{_escape(str(k))}={_escape(text(x))}")
+    return "&".join(parts)
+
+
+def _with_cookies(request: str | None, added: str) -> str:
+    """The cookies of a request (`a=1; b=2`) with `added`'s, each of which takes the place of the request's of its name."""
+
+    def pairs(s: str) -> list[str]:
+        return [p.strip() for p in s.split(";") if p.strip()]
+
+    names = {p.split("=")[0] for p in pairs(added)}
+    return "; ".join([p for p in pairs(request or "") if p.split("=")[0] not in names] + pairs(added))
 
 
 class DefaultTransport:
@@ -1381,14 +2056,28 @@ class DefaultTransport:
 
     async def http(self, req: HttpRequest) -> dict[str, Any]:
         def call() -> dict[str, Any]:
-            url = req["url"]
-            if req.get("query") is not None:
-                url += ("&" if "?" in url else "?") + encode(req["query"])
-            # as fetch sends a URL: what is not ASCII, percent-encoded as UTF-8
-            url = urllib.parse.quote(url, safe=":/?#[]@!$&'()*+,;=%~")
-            headers = dict(req.get("headers") or {})
-            if self._headers is not None:
-                headers.update(self._headers(req["url"]))
+            # as fetch sends a URL: what is not ASCII, percent-encoded as UTF-8, and a ' in the query as %27
+            url = urllib.parse.quote(req["url"], safe=":/?#[]@!$&'()*+,;=%~")
+            head, mark, tail = url.partition("?")
+            url = head + mark + tail.replace("'", "%27")
+            # a header's name is one in any case: the last given of a name goes
+            headers: dict[str, str] = {}
+
+            def has(k: str) -> str | None:
+                return next((h for h in headers if h.lower() == k.lower()), None)
+
+            def put(k: str, v: str) -> None:
+                was = has(k)
+                if was is not None:
+                    del headers[was]
+                headers[k] = v
+
+            for k, v in (req.get("headers") or {}).items():
+                put(k, v)
+            # the options' headers take the place of the request's, but for the cookies, which join them
+            for k, v in (self._headers(req["url"]) if self._headers is not None else {}).items():
+                cookies = has(k) if k.lower() == "cookie" else None
+                put(k, _with_cookies(headers[cookies], v) if cookies is not None else v)
             if req.get("typesafe") and not any(h.lower() == "authorization" for h in headers):
                 key = self._typesafe.get("api_key") or os.environ.get("TYPESAFE_API_KEY")
                 if not key:
@@ -1405,8 +2094,11 @@ class DefaultTransport:
                     data = encode(req["body"]).encode()
                 else:
                     data = json_text(req["body"]).encode()
-                    headers.setdefault("Content-Type", "application/json")
-            r = urllib.request.Request(url, data=data, method=req["http"], headers=headers)
+                    if has("Content-Type") is None:
+                        headers["Content-Type"] = "application/json"
+            # http.client sends a header's text as latin-1: each value's UTF-8, as the other languages send it
+            sent = {k: v.encode("utf-8").decode("latin-1") for k, v in headers.items()}
+            r = urllib.request.Request(url, data=data, method=req["http"], headers=sent)
             try:
                 with urllib.request.urlopen(r) as res:
                     status, ctype, raw = res.status, res.headers.get("content-type") or "", res.read()
@@ -1755,7 +2447,7 @@ import hashlib
 import itertools
 import json
 from datetime import datetime, timedelta
-from typing import Any, Awaitable, Callable, Sequence
+from typing import Any, Awaitable, Callable, Sequence, TypeVar
 
 from temporalio import workflow
 from temporalio.common import SearchAttributeKey
@@ -1788,6 +2480,15 @@ class CallbackError(Exception):
         super().__init__(message)
         self.kind = kind
         self.message = message
+
+
+class Unexpected(ApplicationError):
+    """A fault of the code that the `.flow`'s check rules out, such as a variable read where it has
+    no value: the workflow fails with Dandori.UnexpectedValue, as the reference interpreter's run
+    does. `attempt` lets it through, so that it is no task's error."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, type="Dandori.UnexpectedValue", non_retryable=True)
 
 
 def kind_of(e: BaseException, declared: Sequence[str]) -> str:
@@ -1823,14 +2524,14 @@ def cancelled(e: BaseException) -> bool:
 
 async def attempt(call: Callable[[], Awaitable[Any]], retriers: Sequence[dict[str, Any]], declared: Sequence[str]) -> Any:
     """Call once, and again as the retriers say, waiting between as Step Functions would. A
-    cancellation is no task's error: it goes on as it is."""
+    cancellation and a fault of the code (Unexpected) are no task's error: they go on as they are."""
     counts = [0] * len(retriers)
     while True:
         try:
             return await call()
         except (ActivityError, ChildWorkflowError, ApplicationError, TemporalTimeout, CallbackTimeout, CallbackError) as e:
             # a local activity's error comes as it is (kind_of)
-            if cancelled(e):
+            if cancelled(e) or isinstance(e, Unexpected):
                 raise
             kind = kind_of(e, declared)
             again = False
@@ -1957,6 +2658,18 @@ def text(v: Any) -> str:
     if v is None:
         return ""
     return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+
+
+V = TypeVar("V")
+
+
+def have(value: V | None, name: str, line: int) -> V:
+    """The value of a variable where the `.flow`'s check says it has one: a variable holds None
+    until it is set. None here is a fault of the code, not a task's error: the workflow fails with
+    Dandori.UnexpectedValue (Unexpected), as the reference interpreter's run does."""
+    if value is None:
+        raise Unexpected(f"line {line}: {name} has no value")
+    return value
 
 
 async def wait_until(at: str) -> None:
@@ -2100,6 +2813,12 @@ struct Gen<'a> {
     can: Option<usize>,
     /// while a call that reads `now` is written: its site, whose variable read the clock for it
     now: Option<usize>,
+    /// the names of types.py, which the code reads as `T.<name>`
+    own: PyOwn,
+    /// the identifiers of the flow's variables (DESIGN 22)
+    vars: render::Vars,
+    /// the line of the statement being written, which a read of a variable with no value names
+    at: usize,
 }
 
 impl<'a> Gen<'a> {
@@ -2114,7 +2833,7 @@ impl<'a> Gen<'a> {
     }
 
     fn var(&self, name: &str) -> String {
-        py_name(name)
+        self.vars.get(name)
     }
 
     fn expr(&self, e: &TExpr) -> String {
@@ -2131,6 +2850,10 @@ impl<'a> Gen<'a> {
             TExpr::NowAt(site) => render::now_name(*site),
             TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
+                if e.must_have(self.m).is_some() {
+                    // a variable is declared with None in it until it is set; the check says it is set here (E012)
+                    s = have(&s, name, self.at);
+                }
                 for (i, f) in fields.iter().enumerate() {
                     // an absent field reads as None
                     if i + 1 == fields.len() && matches!(ty, Ty::Opt(_) | Ty::Json) {
@@ -2261,7 +2984,7 @@ impl<'a> Gen<'a> {
         let d = 2;
         if let Some(s) = &m.service {
             // the input is the request of the service's method that starts a run, read as protobuf reads it
-            self.line(d, &format!("input = T.fill(input, {})", render::layout(&s.input_zeros, d, "    ", true)));
+            self.line(d, &format!("input = T.{}(input, {})", self.own.own("fill"), render::layout(&s.input_zeros, d, "    ", true)));
         }
         self.line(d, "if not T.is_WorkflowInput(input):");
         self.line(d + 1, "raise dd.fail(\"Dandori.BadInput\", \"the execution's input does not have the declared shape\")");
@@ -2424,8 +3147,10 @@ impl<'a> Gen<'a> {
             self.line(d, &format!("{} = dd.now()", render::now_name(s.site)));
         }
         let outer = std::mem::replace(&mut self.now, once.then_some(s.site));
+        let at = std::mem::replace(&mut self.at, s.line);
         self.stmt_here(s, d);
         self.now = outer;
+        self.at = at;
     }
 
     fn stmt_here(&mut self, s: &TStmt, d: usize) {
@@ -2716,9 +3441,9 @@ impl<'a> Gen<'a> {
             // the answer: its declared type, and for a case the states it may carry
             if let (Some(v), Some(ty)) = (&var, &result_ty) {
                 if let Some(z) = filled {
-                    g.line(d, &format!("dd_r = T.fill(dd_r, {})", render::layout(z, d, "    ", true)));
+                    g.line(d, &format!("dd_r = T.{}(dd_r, {})", g.own.own("fill"), render::layout(z, d, "    ", true)));
                 }
-                g.line(d, &format!("if not {}:", py_check(m, "dd_r", ty, m.answer_range(callee), "T.", 0)));
+                g.line(d, &format!("if not {}:", py_check(m, &g.own, "dd_r", ty, m.answer_range(callee), "T.", 0)));
                 g.line(d + 1, &format!("raise dd.fail(\"Dandori.BadResponse\", {})", q(&format!("line {}: the answer from {} does not have the declared shape", s.line, cname))));
                 if let (Some(Target::Case(c)), Some((_, allowed))) = (target, m.monitors.get(&site)) {
                     let field = &m.cases[*c].state_field;

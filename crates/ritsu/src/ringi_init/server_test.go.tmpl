@@ -1,0 +1,344 @@
+package {{package}}
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"strings"
+	"testing"
+	"time"
+
+	server "{{framework}}"
+	"{{framework}}/memstore"
+	"{{framework}}/servertest"
+)
+
+// monday is a business day of the office's calendar, at 10:00 in its time.
+var monday = time.Date(2026, 11, 16, 10, 0, 0, 0, time.FixedZone("+09:00", 9*60*60))
+
+// newServer makes the server cmd/server makes, with the parts of the project (Parts), a store in
+// memory and a clock set to monday: sign says who sends each request, and the log goes to log.
+func newServer(t *testing.T, sign server.Authenticator, log *bytes.Buffer) *server.Server {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(log, nil))
+	cfg, err := Parts(logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Store, cfg.Authenticator, cfg.Clock, cfg.Logger = memstore.New(), sign, servertest.NewClock(monday), logger
+	srv, err := server.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	Started(cfg, srv)
+	if err := srv.ImportOrganization(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	return srv
+}
+
+// do does an operation as a person, and answers the reply.
+func do(t *testing.T, srv *server.Server, person, op, ticket, body string) server.Reply {
+	t.Helper()
+	key := person + "." + op + "." + ticket // the operation's idempotency key: visible ASCII
+	r, err := srv.Do(t.Context(), server.Call{Operation: op, Person: server.Person{ID: person}, Ticket: ticket, Body: []byte(body), Key: key})
+	if err != nil {
+		t.Fatalf("%s does %s: %v", person, op, err)
+	}
+	return r
+}
+
+// ticket is what the tests read of a ticket.
+type ticket struct {
+	ID       string          `json:"id"`
+	Status   string          `json:"status"`
+	Stage    *string         `json:"stage"`
+	Revision json.RawMessage `json:"revision"`
+}
+
+// ticketOf reads a ticket as a person who may see it.
+func ticketOf(t *testing.T, srv *server.Server, person, id string) ticket {
+	t.Helper()
+	r := do(t, srv, person, "get_ticket", id, "")
+	var b struct {
+		Ticket ticket `json:"ticket"`
+	}
+	if r.Outcome != server.OK || json.Unmarshal(r.Body, &b) != nil {
+		t.Fatalf("%s reads %s: %s %s %s", person, id, r.Outcome, r.Problem, r.Body)
+	}
+	return b.Ticket
+}
+
+// gateOrg is a version of an organization of two divisions, for the questions the tests ask the gate
+// themselves: a division has departments, a department sections, and the section facilities a unit.
+// Each team has one person, in_<the team>. kind gives the name the data uses for the kind of each
+// team, from the team's place in the list and the kind the organization declares.
+func gateOrg(kind func(place int, declared string) string) *server.OrgVersion {
+	teams := []server.Team{
+		{ID: "acme", Kind: "company"},
+		{ID: "corporate", Kind: "division", Parent: "acme"},
+		{ID: "product", Kind: "division", Parent: "acme"},
+		{ID: "general_affairs", Kind: "department", Parent: "corporate"},
+		{ID: "finance", Kind: "department", Parent: "corporate"},
+		{ID: "engineering", Kind: "department", Parent: "product"},
+		{ID: "front_desk", Kind: "section", Parent: "general_affairs"},
+		{ID: "facilities", Kind: "section", Parent: "general_affairs"},
+		{ID: "mail_room", Kind: "unit", Parent: "facilities"},
+		{ID: "accounting", Kind: "section", Parent: "finance"},
+		{ID: "web", Kind: "section", Parent: "engineering"},
+	}
+	v := &server.OrgVersion{Day: "2026-04-01"}
+	for i, team := range teams {
+		team.Name, team.Kind = team.ID, kind(i, team.Kind)
+		v.Teams = append(v.Teams, team)
+		join(v, "in_"+team.ID, team.ID)
+	}
+	return v
+}
+
+// join adds person to the version, with team their primary team.
+func join(v *server.OrgVersion, person, team string) {
+	v.People = append(v.People, server.OrgPerson{ID: person, Name: person})
+	v.Members = append(v.Members, server.Member{Person: person, Team: team, Primary: true})
+}
+
+// asDeclared names each kind of team as the organization declares it.
+func asDeclared(_ int, declared string) string { return declared }
+
+// question is what the server asks the gate when person does action at monday, with org the version
+// of the organization in effect: of the organization alone for the organization's operations; of
+// purchase (version 1, owned by owner, none for "") for those of a request type; for a submit, of the
+// person's own new ticket; else of the ticket T-1 of someone else, at its stage head.
+func question(org *server.OrgVersion, person server.Person, action, owner string) server.Question {
+	q := server.Question{Action: action, Person: person, Now: monday, Org: org}
+	switch action {
+	case "import_organization", "read_organization_audit":
+		return q
+	}
+	q.Kind, q.Version, q.Owner = "purchase", 1, owner
+	switch action {
+	case "change_request_type", "read_audit":
+	case "submit":
+		q.Ticket, q.Requester, q.Requesters = "T-2", person.ID, []string{person.ID}
+	default:
+		q.Ticket, q.Stage, q.Requester, q.Requesters = "T-1", "head", "the_requester", []string{"the_requester"}
+	}
+	return q
+}
+
+// allows answers whether g allows q. An error of the gate fails the test.
+func allows(t *testing.T, g *Gate, q server.Question) bool {
+	t.Helper()
+	ok, err := g.Allow(t.Context(), q)
+	if err != nil {
+		t.Fatalf("%s asks %s: %v", q.Person.ID, q.Action, err)
+	}
+	return ok
+}
+
+// TestGate checks the gate glue (gate.go) on what only the gate decides. Through the server: the
+// department that owns the request type sees its tickets and another department does not, and the
+// requester withdraws their request, which comes back to them. Asked as the server asks the gate, in
+// an organization of the test's own (gateOrg): who may do each of the four operations of the
+// administration, by role and by department; that a person the organization's version does not
+// have, and a request type that names no owner, are of no one's department; that a person's
+// department is found at the level of the team that owns the request type, whatever the organization
+// calls its kinds of team; and that the roles of a sign-in the gate does not declare are left out.
+func TestGate(t *testing.T) {
+	t.Run("tickets", func(t *testing.T) {
+		var log bytes.Buffer
+		srv := newServer(t, servertest.Header{}, &log)
+		r := do(t, srv, "s1201", "submit_purchase", "", `{"form":{"amount":30000,"purpose":"Books for the section"}}`)
+		var b struct {
+			Ticket ticket `json:"ticket"`
+		}
+		if r.Outcome != server.OK || json.Unmarshal(r.Body, &b) != nil {
+			t.Fatalf("the request: %s %s %s", r.Outcome, r.Problem, r.Body)
+		}
+		id := b.Ticket.ID
+		for person, want := range map[string]server.Outcome{
+			"s1101": server.OK,       // the manager, who answers its first stage
+			"g1201": server.OK,       // general affairs, the department that owns purchase
+			"e1201": server.NotFound, // engineering, who is not on it
+		} {
+			if r := do(t, srv, person, "get_ticket", id, ""); r.Outcome != want {
+				t.Errorf("%s reads the ticket: %s, want %s", person, r.Outcome, want)
+			}
+		}
+		tk := ticketOf(t, srv, "s1201", id)
+		if r := do(t, srv, "s1201", "withdraw", id, `{"revision":`+string(tk.Revision)+`}`); r.Outcome != server.OK {
+			t.Fatalf("the requester withdraws: %s %s %s", r.Outcome, r.Problem, r.Body)
+		}
+		if tk := ticketOf(t, srv, "s1201", id); tk.Status != "with_requester" {
+			t.Errorf("the ticket after the withdrawal: %s", tk.Status)
+		}
+	})
+
+	t.Run("administration", func(t *testing.T) {
+		org, g := gateOrg(asDeclared), &Gate{}
+		// in_front_desk is of general_affairs, which owns purchase in the first of the two answers,
+		// and not of engineering, which owns it in the second
+		for _, c := range []struct {
+			roles  []string
+			action string
+			want   [2]bool
+		}{
+			{nil, "submit", [2]bool{true, true}},
+			{nil, "change_request_type", [2]bool{false, false}},
+			{nil, "read_audit", [2]bool{false, false}},
+			{nil, "import_organization", [2]bool{false, false}},
+			{nil, "read_organization_audit", [2]bool{false, false}},
+			{[]string{"workflow_admin"}, "change_request_type", [2]bool{true, false}},
+			{[]string{"workflow_admin"}, "read_audit", [2]bool{true, false}},
+			{[]string{"workflow_admin"}, "import_organization", [2]bool{false, false}},
+			{[]string{"workflow_admin"}, "read_organization_audit", [2]bool{false, false}},
+			{[]string{"system_admin"}, "change_request_type", [2]bool{true, true}},
+			{[]string{"system_admin"}, "read_audit", [2]bool{true, true}},
+			{[]string{"system_admin"}, "import_organization", [2]bool{true, true}},
+			{[]string{"system_admin"}, "read_organization_audit", [2]bool{true, true}},
+			{[]string{"auditor"}, "change_request_type", [2]bool{false, false}},
+			{[]string{"auditor"}, "read_audit", [2]bool{true, true}},
+			{[]string{"auditor"}, "import_organization", [2]bool{false, false}},
+			{[]string{"auditor"}, "read_organization_audit", [2]bool{true, true}},
+			{[]string{"auditor"}, "add_approver", [2]bool{false, false}},
+		} {
+			for i, owner := range []string{"general_affairs", "engineering"} {
+				p := server.Person{ID: "in_front_desk", Roles: c.roles}
+				if got := allows(t, g, question(org, p, c.action, owner)); got != c.want[i] {
+					t.Errorf("%v: %s, purchase owned by %s: %v, want %v", c.roles, c.action, owner, got, c.want[i])
+				}
+			}
+		}
+	})
+
+	t.Run("no one's department", func(t *testing.T) {
+		// teams with the IDs gate.go would give a request type that names no owner, unless a team
+		// had them
+		org, g := gateOrg(asDeclared), &Gate{}
+		for _, id := range []string{"(no owner)", "((no owner))"} {
+			org.Teams = append(org.Teams, server.Team{ID: id, Name: id, Kind: "department", Parent: "corporate"})
+			join(org, "in_"+id, id)
+		}
+		// someone the version does not have does nothing, whatever their roles, with an owner or none
+		for _, roles := range [][]string{nil, {"workflow_admin"}, {"system_admin"}, {"auditor"}} {
+			p := server.Person{ID: "someone_else", Roles: roles}
+			for _, owner := range []string{"", "general_affairs"} {
+				for _, action := range []string{"submit", "see", "change_request_type", "read_audit", "import_organization", "read_organization_audit"} {
+					if allows(t, g, question(org, p, action, owner)) {
+						t.Errorf("someone_else %v: %s, purchase owned by %q: allowed", roles, action, owner)
+					}
+				}
+			}
+		}
+		// purchase with no owner is of no one's department, the teams above among them: no
+		// administrator of a department switches it or reads its record, a system administrator
+		// does, and an auditor reads it
+		for _, person := range []string{"in_front_desk", "in_(no owner)", "in_((no owner))"} {
+			for _, c := range []struct {
+				roles  []string
+				action string
+				want   bool
+			}{
+				{nil, "see", false},
+				{[]string{"workflow_admin"}, "change_request_type", false},
+				{[]string{"workflow_admin"}, "read_audit", false},
+				{[]string{"system_admin"}, "change_request_type", true},
+				{[]string{"auditor"}, "read_audit", true},
+			} {
+				if got := allows(t, g, question(org, server.Person{ID: person, Roles: c.roles}, c.action, "")); got != c.want {
+					t.Errorf("%s %v: %s, purchase with no owner: %v, want %v", person, c.roles, c.action, got, c.want)
+				}
+			}
+		}
+	})
+
+	t.Run("the owner's level", func(t *testing.T) {
+		// the kinds of team as the organization declares them, as it writes them in its own
+		// language, and both in one version
+		written := map[string]string{"company": "会社", "division": "本部", "department": "部", "section": "課", "unit": "係"}
+		forms := []struct {
+			name string
+			kind func(int, string) string
+		}{
+			{"as declared", asDeclared},
+			{"as written", func(_ int, k string) string { return written[k] }},
+			{"both", func(i int, k string) string {
+				if i%2 == 0 {
+					return k
+				}
+				return written[k]
+			}},
+		}
+		// whether each one sees a ticket of purchase they are not on, owned by the section
+		// facilities, by the department above it, and by the division above that
+		want := map[string][3]bool{
+			"in_facilities":      {true, true, true},
+			"in_mail_room":       {true, true, true},    // in a unit of the section
+			"in_front_desk":      {false, true, true},   // in another section of the department
+			"in_general_affairs": {false, true, true},   // in the department, above the section
+			"in_corporate":       {false, false, true},  // in the division, above the department
+			"in_finance":         {false, false, true},  // in another department of the division
+			"in_accounting":      {false, false, true},  // in a section of that department
+			"in_web":             {false, false, false}, // in another division
+			"in_acme":            {false, false, false}, // above every owner
+		}
+		g := &Gate{}
+		for _, f := range forms {
+			org := gateOrg(f.kind)
+			for person, w := range want {
+				for i, owner := range []string{"facilities", "general_affairs", "corporate"} {
+					if got := allows(t, g, question(org, server.Person{ID: person}, "see", owner)); got != w[i] {
+						t.Errorf("kinds %s: %s sees a ticket of purchase owned by %s: %v, want %v", f.name, person, owner, got, w[i])
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("roles", func(t *testing.T) {
+		org := gateOrg(asDeclared)
+		var log bytes.Buffer
+		g := &Gate{Log: slog.New(slog.NewTextHandler(&log, nil))}
+		// a role the gate does not declare is left out: with none of the gate's, the person is of
+		// the staff; with one of the gate's, they may do what it allows
+		for _, c := range []struct {
+			roles  []string
+			action string
+			want   bool
+		}{
+			{[]string{"employee", "vpn_user"}, "submit", true},
+			{[]string{"employee", "vpn_user"}, "change_request_type", false},
+			{[]string{"employee", "workflow_admin"}, "submit", true},
+			{[]string{"employee", "workflow_admin"}, "change_request_type", true},
+			{[]string{"employee", "workflow_admin"}, "import_organization", false},
+			{[]string{"system_admin", "employee"}, "import_organization", true},
+		} {
+			p := server.Person{ID: "in_front_desk", Roles: c.roles}
+			if got := allows(t, g, question(org, p, c.action, "general_affairs")); got != c.want {
+				t.Errorf("%v: %s: %v, want %v", c.roles, c.action, got, c.want)
+			}
+		}
+		// the log says each of them once
+		for _, role := range []string{"employee", "vpn_user"} {
+			if n := strings.Count(log.String(), "role="+role+" "); n != 1 {
+				t.Errorf("the log says %s %d times:\n%s", role, n, log.String())
+			}
+		}
+		// and the gate keeps a hundred names at the most, as a sign-in may give any number of roles
+		var many []string
+		for i := range 150 {
+			many = append(many, fmt.Sprintf("group_%03d", i))
+		}
+		log.Reset()
+		g = &Gate{Log: slog.New(slog.NewTextHandler(&log, nil))}
+		for range 2 {
+			if !allows(t, g, question(org, server.Person{ID: "in_front_desk", Roles: many}, "submit", "general_affairs")) {
+				t.Errorf("one with %d roles the gate does not declare does not submit", len(many))
+			}
+		}
+		if n := strings.Count(log.String(), "\n"); n != 100 || len(g.told) != 100 {
+			t.Errorf("the log has %d lines and the gate keeps %d names, want 100 of each", n, len(g.told))
+		}
+	})
+}

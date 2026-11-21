@@ -1,0 +1,20 @@
+rule 取扱手数料(handling) v1
+description "金額と種類と急ぎで決める手数料。穴が三か所ある。100 円を超える金額でどの行も書いていない種類、真ん中の帯の急ぎでない小包、上の帯の急ぎの注文"
+
+enum 種類(kind) = 手紙(letter) | 小包(parcel) | パレット(pallet)
+
+inputs
+  金額(amount) : money[JPY]  range >=1JPY <=1_000JPY
+  種類(kind)   : 種類
+  急ぎ(rush)   : bool
+
+outputs
+  手数料(fee) : money[JPY]  round down(1JPY)
+  窓口(desk)  : 種類
+
+table 手数料の表(fees)
+| 金額             | 種類       | 急ぎ  | -> 手数料 | 窓口 |
+| <=100JPY         | -          | -     | 100JPY    | 手紙 |
+| >100JPY <=500JPY | 手紙       | -     | 200JPY    | 手紙 |
+| >100JPY <=500JPY | 小包       | true  | 300JPY    | 小包 |
+| >500JPY          | 手紙, 小包 | false | 400JPY    | 小包 |

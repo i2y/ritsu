@@ -92,7 +92,7 @@ fn got(subject: &Subject, obs: &Obs) -> Got {
         (Subject::Body, Obs::Http { body, .. }) => Got::Text(body.clone()),
         (Subject::Screen, Obs::Screen(screen)) => Got::Screen(screen.clone()),
         (Subject::BodyJson(path), Obs::Http { body, .. }) => match json::parse(body) {
-            Err(e) => Got::Broken(tr!("<body が JSON ではありません>", "<body is not JSON: {e}>")),
+            Err(e) => Got::Broken(tr!("<body が JSON ではありません>", "<body is not JSON: {}>", ; e.en)),
             Ok(v) => match json::path_get(&v, path) {
                 Ok(leaf) => Got::Json(leaf.clone()),
                 Err(e) => Got::Missing(tr!("<{}>", "<{}>", e.ja(); e.en())),

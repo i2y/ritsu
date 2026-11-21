@@ -1,0 +1,69 @@
+{
+  "sekisho": "0.55.2",
+  "old": {
+    "file": "tests/diff/claims.gate",
+    "name": "claims",
+    "version": "v1"
+  },
+  "new": {
+    "file": "tests/diff/claims_v2.gate",
+    "name": "claims",
+    "version": "v2"
+  },
+  "actions": [
+    {
+      "action": "pay_claim",
+      "combinations": 2,
+      "gained": [],
+      "lost": [],
+      "reasons": [],
+      "unknown": [],
+      "frames_only_old": [],
+      "frames_only_new": [],
+      "same_elsewhere": true
+    }
+  ],
+  "only_old": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "only_new": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "workflow_lines": [
+    {
+      "workflow": "pay",
+      "head": "resource Claim from claim_id",
+      "attribute": "amount",
+      "old": "amount = amount",
+      "new": "amount = asked"
+    },
+    {
+      "workflow": "pay",
+      "head": "resource Claim from claim_id",
+      "attribute": "rush",
+      "old": null,
+      "new": "rush = rush"
+    },
+    {
+      "workflow": "pay",
+      "head": "resource Claim from claim_id",
+      "attribute": "checked",
+      "old": "checked = checked",
+      "new": null
+    }
+  ],
+  "total": {
+    "gained": 0,
+    "lost": 0,
+    "reasons": 0,
+    "unknown": 0
+  }
+}

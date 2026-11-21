@@ -1,0 +1,46 @@
+# protobuf の `google.type.Date` が、Python のコードが types.py でその日を読むために宣言する名前
+# （リクエストの日を埋める `fill` と、一つの日を読む `read_day`）をレコードに付けたワークフローに入って
+# くる（DESIGN 22）。コードは自分の名前を別の名前で読み、実行は service_dates.ja.flow と同じように、
+# どのプラットフォームでも日を読む。
+workflow 日付の名前のサービス v1 implements names.DateNamesJa
+description "service_dates と同じように車を貸す。運転者と返却のレコードに、Python のコードがリクエストの日を読むための名前 fill と read_day を付ける"
+
+use proto names from "protos/date_names.proto"
+
+record fill
+  name       : string
+  licensedOn : date
+
+record read_day
+  returnedOn : date
+  km         : int
+
+inputs
+  car     : string
+  pickup  : date
+  dropoff : date
+  closed  : list[date]
+  driver  : fill
+  others  : list[fill]
+
+task 引き渡す(車: string, 貸し出し: date, 返却予定: date, 休業日: list[date], 免許: date)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-desk"
+  idempotent
+
+# 窓口は車とコールバックの ID を受け取り、車が戻ったら答える。
+task 返却を待つ(車: string, 返却予定: date) -> read_day
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-return"
+  callback
+  timeout 7 days
+
+task 締める(車: string, 返却日: date, 距離: int)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-close"
+  idempotent
+
+flow
+  引き渡す(車: car, 貸し出し: pickup, 返却予定: dropoff, 休業日: closed, 免許: driver.licensedOn)
+  for ほか in others at most 3
+    引き渡す(車: car, 貸し出し: pickup, 返却予定: dropoff, 休業日: closed, 免許: ほか.licensedOn)
+  let 戻り = 返却を待つ(車: car, 返却予定: dropoff)
+    on timeout => fail 返却の遅れ "7 日たっても車が戻りません"
+  締める(車: car, 返却日: 戻り.returnedOn, 距離: 戻り.km)

@@ -54,9 +54,32 @@ pub fn not_sequence(name: &str) -> String {
     tr!("{name} が並びではありません", "{name} is not a sequence")
 }
 
-/// An element of the sequence that is not an object.
-pub fn not_object(name: &str) -> String {
-    tr!("{name} の要素がオブジェクトではありません", "an element of {name} is not an object")
+/// Where the generated code puts the index of the element a sentence is about (§15.324): each
+/// generator turns it into the index its walk or its reader is at, in the way its language builds a
+/// string. The reference evaluator says the index itself.
+pub const HERE: &str = "\u{1}";
+
+/// Where the generated code puts the index of the earlier element of the two a sentence is about:
+/// the element a value of a `unique` field was first seen on, or the element a `take_unique` first
+/// took (§15.324).
+pub const BEFORE: &str = "\u{2}";
+
+/// One element of a sequence as a sentence names it (§15.324): `lines[1]`, the sequence by the key
+/// the input's JSON has it under and the element by its index in that array, from 0.
+pub fn place(seq: &str, i: impl std::fmt::Display) -> String {
+    format!("{seq}[{i}]")
+}
+
+/// A field of one element as a sentence names it (§15.324): `lines[1].subtotal`. A `define` worked
+/// out for each element is named the same way, by its own name.
+pub fn element(seq: &str, i: impl std::fmt::Display, field: &str) -> String {
+    format!("{seq}[{i}].{field}")
+}
+
+/// An element of the sequence that is not an object, by its place (§15.324): `lines[1] is not an
+/// object`.
+pub fn not_object(seq: &str, i: impl std::fmt::Display) -> String {
+    not_an_object(&place(seq, i))
 }
 
 /// A place in the caller's object the projection function reads a field of, holding anything but
@@ -81,10 +104,12 @@ pub fn too_many(name: &str, cap: i128) -> String {
     tr!("{name} の要素が多すぎます（上限 {cap}）", "{name} has too many elements (at most {cap})")
 }
 
-/// Two elements of a sequence with the same value of a field marked `unique` (§15.290). The value is
-/// not in the sentence, as no other sentence carries one.
-pub fn duplicate(seq: &str, field: &str) -> String {
-    tr!("{seq} の要素に {field} が同じものが二つあります", "{seq} has two elements with the same {field}")
+/// Two elements of a sequence with the same value of a field marked `unique` (§15.290), and which
+/// two, the earlier one first (§15.324): the element the value was first seen on, and the one it
+/// came round again on. The value is not in the sentence, as no other sentence carries one.
+pub fn duplicate(seq: &str, field: &str, before: impl std::fmt::Display, here: impl std::fmt::Display) -> String {
+    let (a, b) = (place(seq, before), place(seq, here));
+    tr!("{seq} の要素に {field} が同じものが二つあります（{a} と {b}）", "{seq} has two elements with the same {field} ({a} and {b})")
 }
 
 /// A combination a `constraint` rules out, said the way the rule writes it.
@@ -120,9 +145,14 @@ pub fn weights_past(seq: &str) -> String {
     tr!("{seq} の重みの合計が int64 に収まりません", "the total of the weights of {seq} does not fit in int64")
 }
 
-/// Two elements both taking under `take_unique`: the rule has no answer.
-pub fn fold_contradiction(verdict: &str) -> String {
-    tr!("畳み込み {verdict}: take_unique に二件当たりました", "fold {verdict}: two elements matched a take_unique")
+/// Two elements both taking under `take_unique`: the rule has no answer. Which two, the earlier one
+/// first (§15.324): the element the fold took, and the one that matched again.
+pub fn fold_contradiction(verdict: &str, seq: &str, before: impl std::fmt::Display, here: impl std::fmt::Display) -> String {
+    let (a, b) = (place(seq, before), place(seq, here));
+    tr!(
+        "畳み込み {verdict}: take_unique に二件当たりました（{a} と {b}）",
+        "fold {verdict}: two elements matched a take_unique ({a} and {b})"
+    )
 }
 
 /// What a door refuses an input for: `input` for the caller's side of the contract, raised as
@@ -169,63 +199,117 @@ pub fn ends(c: &Checked, name: &str, wide: bool) -> (Option<i128>, Option<i128>)
 /// One value of an input or a field, read off the wire the way its door reads it: `None` where the
 /// door refuses it. What a case built on the wire is read back into the evaluator's values as.
 pub(crate) fn value(c: &Checked, name: &str, j: &Json) -> Option<Val> {
-    one(c, name, &c.ty_of(name)?, Some(j)).ok()
+    let ty = c.ty_of(name)?;
+    let v = typed(c, name, name, &ty, Some(j)).ok()?;
+    ranged(c, name, name, &ty, &v).ok().map(|_| v)
 }
 
-/// The input as one value of its declared type, or the sentence its door refuses it with:
-/// missing, of another kind, outside its range. The absent value of an optional input is
-/// `none`, as the reference evaluator reads it.
-fn one(c: &Checked, name: &str, ty: &Ty, j: Option<&Json>) -> Result<Val, String> {
-    let Some(j) = j else { return Err(missing(name)) };
+/// The first of the two looks the door takes at one value (§15.328), where every reader of the wire
+/// takes it: there at all, and of its kind — a whole number that int64 holds, a `YYYY-MM-DD` day the
+/// calendar has, a value of the enum, a truth value, a string. The absent value of an optional input
+/// is `none`, as the reference evaluator reads it. `name` is the input or the field, and `said` what
+/// the sentence calls it: the name itself, or for a field of an element its place, `lines[1].amount`
+/// (§15.324).
+fn typed(c: &Checked, name: &str, said: &str, ty: &Ty, j: Option<&Json>) -> Result<Val, String> {
+    let Some(j) = j else { return Err(missing(said)) };
     if *j == Json::Null {
-        return if matches!(ty, Ty::Opt(_)) { Ok(Val::Enum(crate::kw::NONE.into())) } else { Err(missing(name)) };
+        return if matches!(ty, Ty::Opt(_)) { Ok(Val::Enum(crate::kw::NONE.into())) } else { Err(missing(said)) };
     }
     let inner = ty.present().clone();
-    let range = |v: crate::num::Rat| -> Result<(), String> {
-        match c.ranges.get(name) {
-            Some((lo, hi))
-                if lo.is_some_and(|l| v.cmp_to(l) == std::cmp::Ordering::Less)
-                    || hi.is_some_and(|h| v.cmp_to(h) == std::cmp::Ordering::Greater) =>
-            {
-                Err(out_of_range(name))
-            }
-            _ => Ok(()),
-        }
-    };
     match &inner {
         Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
-            let Some(n) = whole(j) else { return Err(not_integer(name)) };
-            let v = crate::types::from_wire(n, c.wire_scale(name));
-            range(v)?;
-            // Nothing past ±(2^63−1) as it travels, whatever its range writes (§15.295).
-            if n.abs() > WIRE_MAX {
-                return Err(out_of_range(name));
+            let Some(n) = whole(j) else { return Err(not_integer(said)) };
+            // A whole number int64 does not hold is past what a reader of every language takes,
+            // there and not later (§15.298).
+            if n > i64::MAX as i128 || n < i64::MIN as i128 {
+                return Err(out_of_range(said));
             }
-            Ok(Val::Num(v))
+            Ok(Val::Num(crate::types::from_wire(n, c.wire_scale(name))))
         }
         Ty::Date => {
-            let Some((y, m, d)) = j.as_str().and_then(civil) else { return Err(not_date(name)) };
-            range(crate::types::date_ord(y, m, d))?;
+            let Some((y, m, d)) = j.as_str().and_then(civil) else { return Err(not_date(said)) };
             Ok(Val::Date(y, m, d))
         }
         Ty::Enum(en) => match j {
-            // A value of an ordered enum outside the range its input declares (§15.210).
-            Json::Str(s) if c.enum_ranges.get(name).is_some_and(|vs| !vs.contains(s)) && c.enums.get(en).is_some_and(|vs| vs.contains(s)) => {
-                Err(out_of_range(name))
-            }
             Json::Str(s) if c.enums.get(en).is_some_and(|vs| vs.iter().any(|v| v == s)) => Ok(Val::Enum(s.clone())),
-            _ => Err(not_in_enum(name, en)),
+            _ => Err(not_in_enum(said, en)),
         },
         Ty::Bool => match j {
             Json::Bool(b) => Ok(Val::Bool(*b)),
-            _ => Err(not_bool(name)),
+            _ => Err(not_bool(said)),
         },
         Ty::Str => match j {
             Json::Str(s) => Ok(Val::Str(s.clone())),
-            _ => Err(not_string(name)),
+            _ => Err(not_string(said)),
         },
-        _ => Err(not_integer(name)),
+        _ => Err(not_integer(said)),
     }
+}
+
+/// The second look at a value the first took (§15.328): inside the range its input or field
+/// declares — a number between the ends its range writes and nothing past ±(2^63−1) as it travels
+/// (§15.295), a date between its ends, a value of an ordered enum among those its range lets in
+/// (§15.210). An optional input with no value has nothing to look at.
+pub(crate) fn ranged(c: &Checked, name: &str, said: &str, ty: &Ty, v: &Val) -> Result<(), String> {
+    if matches!(ty, Ty::Opt(_)) && *v == Val::Enum(crate::kw::NONE.into()) {
+        return Ok(());
+    }
+    let outside = |x: crate::num::Rat| {
+        c.ranges.get(name).is_some_and(|(lo, hi)| {
+            lo.is_some_and(|l| x.cmp_to(l) == std::cmp::Ordering::Less) || hi.is_some_and(|h| x.cmp_to(h) == std::cmp::Ordering::Greater)
+        })
+    };
+    let past = match v {
+        Val::Num(x) => outside(*x) || crate::types::wire_int(*x, c.wire_scale(name)).abs() > WIRE_MAX,
+        Val::Date(y, m, d) => outside(crate::types::date_ord(*y, *m, *d)),
+        Val::Enum(s) => c.enum_ranges.get(name).is_some_and(|vs| !vs.contains(s)),
+        _ => false,
+    };
+    if past { Err(out_of_range(said)) } else { Ok(()) }
+}
+
+/// What the door refuses one element for where the walk comes to it (§15.328).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ElementRefused {
+    /// A field outside its range: the field, and the element's index.
+    Range { field: String, at: usize },
+    /// A field marked `unique` with the value an element before it had (§15.290): the field, the
+    /// element the value was first seen on, and this one.
+    Unique { field: String, before: usize, here: usize },
+}
+
+impl ElementRefused {
+    /// The door's sentence of it, for the sequence it is an element of.
+    pub fn said(&self, seq: &str) -> String {
+        match self {
+            ElementRefused::Range { field, at } => out_of_range(&element(seq, at, field)),
+            ElementRefused::Unique { field, before, here } => duplicate(seq, field, before, here),
+        }
+    }
+}
+
+/// What the door says of element `k` of sequence `s` where the walk comes to it (§15.328): each of
+/// its fields in the order the rule declares them, outside its range; then each field marked
+/// `unique`, in the same order, with the value an element before it had (§15.290). `elems` are the
+/// elements of the sequence, read in the first look. `None` when the door lets the element through.
+pub(crate) fn element_refusal(f: &RuleFile, c: &Checked, s: usize, k: usize, elems: &[BTreeMap<String, Val>]) -> Option<ElementRefused> {
+    let el = &f.elements[s];
+    let e = &elems[k];
+    for fd in &el.fields {
+        let name = &fd.name.text;
+        let Some(v) = e.get(name) else { continue };
+        if ranged(c, name, name, &c.ty_of(name).unwrap_or(Ty::Unknown), v).is_err() {
+            return Some(ElementRefused::Range { field: name.clone(), at: k });
+        }
+    }
+    for fd in el.fields.iter().filter(|fd| fd.unique.is_some()) {
+        let field = &fd.name.text;
+        let Some(v) = e.get(field) else { continue };
+        if let Some(before) = elems[..k].iter().position(|p| p.get(field) == Some(v)) {
+            return Some(ElementRefused::Unique { field: field.clone(), before, here: k });
+        }
+    }
+    None
 }
 
 /// A JSON number whose value is a whole number, as that integer (§15.205): `1000`, and `1000.0`
@@ -265,36 +349,50 @@ pub fn civil(s: &str) -> Option<(i32, u32, u32)> {
     (y >= 1 && (1..=last).contains(&d)).then_some((y, m, d))
 }
 
-/// What the door of every generated language refuses this input for, in the order the doors
-/// look: each input in the order the rule declares it — there at all, of its kind, inside its
-/// range — then the sequence and each of its elements, two elements with the same value of a
-/// `unique` field, then every `constraint`, then the days of a koyomi date, then what the walks
-/// refuse (weights whose total passes int64, a sum past its range, a drawn value past the weights);
-/// and last the rule's own contradiction, two elements taking under `take_unique`. `None` when the
-/// input is answered.
-/// `input` is the object a vector's `in` is.
+/// What every way the rule is reached refuses this input for: the first thing wrong with it, in
+/// the one order every door looks in (§15.328). `None` when the input is answered. `input` is the
+/// object a vector's `in` is.
 pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
     read(f, c, input_obj).err()
 }
 
-/// The input as the values the rule is run on, or what the door refuses it for: the same walk
-/// as [`refusal`], which is this with the values dropped. `rulec run` runs the reference
-/// evaluator on what this gives, so it answers where a generated door answers and refuses where
-/// it refuses (the sequences are in the map by their name, as `Val::Seq`).
+/// The input as the values the rule is run on, or what the door refuses it for: the same look as
+/// [`refusal`], which is this with the values dropped. `rulec run` runs the reference evaluator on
+/// what this gives, so it answers where a generated door answers and refuses where it refuses (the
+/// sequences are in the map by their name, as `Val::Seq`).
+///
+/// An input with two or more things wrong with it is refused for the first of them, in this order,
+/// by every way (§15.328):
+///
+/// 1. The first look, where a reader takes the arguments off the wire, in the order the function
+///    takes them: each input in the order the rule declares it, there at all and of its kind (a
+///    whole number int64 holds, a day the calendar has, a value of its enum, a truth value, a
+///    string); then each sequence in the order the rule declares them, there at all, an array, and
+///    each of its elements an object whose fields, in the order the rule declares them, are there
+///    and of their kinds.
+/// 2. The second look, where the function begins: each input inside its range, in the order the
+///    rule declares them; each `constraint`; each `never` the door holds; the days of a koyomi date;
+///    each sequence no longer than a `count` over it can be.
+/// 3. What the function works out, in the order it does ([`crate::eval::walked_refusal`]): a value
+///    worked out before the walks outside the range the rule accepts for it; then each walk, element
+///    by element — on the first walk over a sequence, the element's fields inside their ranges and
+///    its `unique` fields, then the values worked out for it and each summary's step (two elements
+///    taking under `take_unique`, weights whose total passes int64) — and once the walk is over, a
+///    `sum` or a `count` outside its range and a drawn value not below the weights; then what reads
+///    what the walk answered. A walk whose work ends at a `stop` still looks at each element after
+///    it with the door.
 pub fn read(f: &RuleFile, c: &Checked, input_obj: &Json) -> Result<BTreeMap<String, Val>, Refusal> {
     let get = |k: &str| input_obj.get(k);
+    let ty = |n: &str| c.ty_of(n).unwrap_or(Ty::Unknown);
     let mut vals: BTreeMap<String, Val> = BTreeMap::new();
+    // 1. The first look: each argument off the wire, the inputs and then the sequences.
     for i in &f.inputs {
         let name = &i.name.text;
-        let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
-        match one(c, name, &ty, get(name)) {
-            Ok(v) => {
-                vals.insert(name.clone(), v);
-            }
-            Err(e) => return Err(input(e)),
-        }
+        vals.insert(name.clone(), typed(c, name, name, &ty(name), get(name)).map_err(input)?);
     }
-    // Each sequence, in the order the rule declares them (§15.219).
+    // Each sequence, in the order the rule declares them (§15.219). An element is said by its index
+    // in the array, from 0 (§15.324).
+    let mut lengths: Vec<usize> = Vec::new();
     for el in &f.elements {
         let seq = &el.name.text;
         let items = match get(seq) {
@@ -302,52 +400,25 @@ pub fn read(f: &RuleFile, c: &Checked, input_obj: &Json) -> Result<BTreeMap<Stri
             Some(Json::Arr(xs)) => xs,
             Some(_) => return Err(input(not_sequence(seq))),
         };
-        if let Some(cap) = count_cap(f, c, seq) {
-            if items.len() as i128 > cap {
-                return Err(input(too_many(seq, cap)));
-            }
-        }
         let mut elems = Vec::new();
-        for x in items {
+        for (k, x) in items.iter().enumerate() {
             if !matches!(x, Json::Obj(_)) {
-                return Err(input(not_object(seq)));
+                return Err(input(not_object(seq, k)));
             }
             let mut e = BTreeMap::new();
             for fd in &el.fields {
                 let name = &fd.name.text;
-                let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
-                match one(c, name, &ty, x.get(name)) {
-                    Ok(v) => {
-                        e.insert(name.clone(), v);
-                    }
-                    Err(err) => return Err(input(err)),
-                }
+                e.insert(name.clone(), typed(c, name, &element(seq, k, name), &ty(name), x.get(name)).map_err(input)?);
             }
             elems.push(e);
         }
-        // Two elements with the same value of a `unique` field (§15.290), once every element has
-        // been read and before any sum over the sequence: element by element, each field in the
-        // order the rule declares them, as the generated walk looks.
-        if let Some(field) = repeated(el, &elems) {
-            return Err(input(duplicate(seq, field)));
-        }
-        // A sum over a field of the elements is refused the moment its total passes the top of
-        // the range it declares (§15.100); a sum over what a table decides per element is the
-        // walk's to work out, and is not looked at here.
-        for d in sums(f).into_iter().filter(|d| d.over == *seq) {
-            let Some(hi) = c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi) else { continue };
-            if !el.fields.iter().any(|fd| fd.name.text == d.column.text) {
-                continue;
-            }
-            let total = elems.iter().fold(crate::num::Rat::int(0), |t, e| match e.get(&d.column.text) {
-                Some(Val::Num(x)) => t.add(*x),
-                _ => t,
-            });
-            if total.cmp_to(hi) == std::cmp::Ordering::Greater {
-                return Err(input(out_of_range(&d.name.text)));
-            }
-        }
+        lengths.push(elems.len());
         vals.insert(seq.clone(), Val::Seq(elems));
+    }
+    // 2. The second look, where the function begins.
+    for i in &f.inputs {
+        let name = &i.name.text;
+        ranged(c, name, name, &ty(name), &vals[name]).map_err(input)?;
     }
     for k in &f.constraints {
         if !crate::vectors::constraint_holds(k, &|n| vals.get(n)) {
@@ -371,34 +442,32 @@ pub fn read(f: &RuleFile, c: &Checked, input_obj: &Json) -> Result<BTreeMap<Stri
             }
         }
     }
-    // Weights of a pick by weight whose total passes int64 (§15.226): the generated walk refuses the
-    // call the moment the total does, before it reads another element, so a walk that stopped there
-    // reaches none of what is looked at below.
-    if let Some(n) = crate::eval::weights_past(f, c, vals.clone().into_iter().collect()) {
-        return Err(input(weights_past(&n)));
-    }
-    // A sum over what a table decides per element, past the top of its range once the walk is
-    // over (§15.100): the generated code refuses it there.
-    if let Some(n) = crate::eval::sum_past_range(f, c, vals.clone().into_iter().collect()) {
-        return Err(input(out_of_range(&n)));
-    }
-    // A drawn value not below the total of the weights of a pick by weight (§15.226).
-    if let Some(n) = crate::eval::drawn_past(f, c, vals.clone().into_iter().collect()) {
-        return Err(input(draw_past(&n)));
-    }
-    if let Some(i) = crate::eval::contradiction(f, c, vals.clone().into_iter().collect()) {
-        if let Some(crate::ast::Item::Fold(fold)) = f.items.get(i) {
-            return Err(Refusal { kind: "contradiction", error: fold_contradiction(&fold.verdict) });
+    for (el, n) in f.elements.iter().zip(&lengths) {
+        if let Some(cap) = count_cap(f, c, &el.name.text) {
+            if *n as i128 > cap {
+                return Err(input(too_many(&el.name.text, cap)));
+            }
         }
     }
-    Ok(vals)
+    // 3. What the function works out, in the order it does.
+    match crate::eval::walked_refusal(f, c, vals.clone().into_iter().collect()) {
+        None => Ok(vals),
+        Some(crate::eval::Refused::Contradiction(b)) => match f.items.get(b.item) {
+            Some(crate::ast::Item::Fold(fold)) => {
+                Err(Refusal { kind: "contradiction", error: fold_contradiction(&fold.verdict, &fold.over, b.before, b.here) })
+            }
+            _ => Ok(vals),
+        },
+        Some(why) => Err(input(why.said(f).unwrap_or_default())),
+    }
 }
 
 /// The first field marked `unique` that an element shares with an element before it (§15.290):
 /// element by element, and for each element its fields in the order the rule declares them, which
 /// is the order the generated walk meets them in. Values compare as values: a number by its value, a
-/// date by its day.
-pub fn repeated<'e>(el: &'e crate::ast::ElementsDecl, elems: &[BTreeMap<String, Val>]) -> Option<&'e str> {
+/// date by its day. With the field, the index of the first element that had the value and of the
+/// element that has it again (§15.324).
+pub fn repeated<'e>(el: &'e crate::ast::ElementsDecl, elems: &[BTreeMap<String, Val>]) -> Option<(&'e str, usize, usize)> {
     let fields: Vec<&str> = el.fields.iter().filter(|fd| fd.unique.is_some()).map(|fd| fd.name.text.as_str()).collect();
     if fields.is_empty() {
         return None;
@@ -406,8 +475,8 @@ pub fn repeated<'e>(el: &'e crate::ast::ElementsDecl, elems: &[BTreeMap<String, 
     for (k, e) in elems.iter().enumerate() {
         for &field in &fields {
             let Some(v) = e.get(field) else { continue };
-            if elems[..k].iter().any(|p| p.get(field) == Some(v)) {
-                return Some(field);
+            if let Some(before) = elems[..k].iter().position(|p| p.get(field) == Some(v)) {
+                return Some((field, before, k));
             }
         }
     }

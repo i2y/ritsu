@@ -155,6 +155,11 @@ impl<'a> Gen<'a> {
                 format!("[{}]", inner.join(", "))
             };
             o.push_str(&format!("/** {doc_r} */\nexport function {}(value: {t}): {t}[][] {{\n", n.requires));
+            // Over an enum of one value nothing tests the value, and it is read where
+            // `tsc --noUnusedParameters` asks (§15.342).
+            if g.values.len() == 1 {
+                o.push_str("  void value;\n");
+            }
             let last = g.values.len().saturating_sub(1);
             for (i, v) in g.values.iter().enumerate() {
                 let ret = list(g.requires(v));
@@ -190,7 +195,9 @@ impl<'a> Gen<'a> {
                     imports.push(f.clone());
                 }
             }
-            match self.c.owners.get(&g.over).map(|o| pub_name(&o.module)) {
+            // the parser of an enum the module hands on under another type is the module's own
+            // (§15.326)
+            match self.c.owners.get(&g.over).filter(|_| !self.handed_here(&g.over)).map(|o| pub_name(&o.module)) {
                 Some(m) => match owners.iter_mut().find(|(x, _)| *x == m) {
                     Some((_, ns)) => {
                         if !ns.contains(&parse) {
@@ -348,17 +355,25 @@ impl<'a> Gen<'a> {
                 let inner: Vec<String> = gs.iter().map(|gr| format!("[{}]", gr.iter().map(|p| self.rb_value(p, &ty)).collect::<Vec<_>>().join(", "))).collect();
                 format!("[{}]", inner.join(", "))
             };
-            o.push_str(&format!("  # {doc_r}\n  def self.{}(value)\n    case value\n", n.requires));
-            let last = g.values.len().saturating_sub(1);
-            for (i, v) in g.values.iter().enumerate() {
-                if i == last {
-                    o.push_str(&format!("    else {}\n", list(g.requires(v))));
-                } else {
-                    o.push_str(&format!("    when {} then {}\n", self.rb_value(v, &ty), list(g.requires(v))));
+            o.push_str(&format!("  # {doc_r}\n  def self.{}(value)\n", n.requires));
+            // A block over an enum of one value answers without asking which: Ruby reads a `case`
+            // with no `when` as a syntax error, so the one answer stands alone.
+            if let [v] = g.values.as_slice() {
+                o.push_str(&format!("    {}\n", list(g.requires(v))));
+            } else {
+                o.push_str("    case value\n");
+                let last = g.values.len().saturating_sub(1);
+                for (i, v) in g.values.iter().enumerate() {
+                    if i == last {
+                        o.push_str(&format!("    else {}\n", list(g.requires(v))));
+                    } else {
+                        o.push_str(&format!("    when {} then {}\n", self.rb_value(v, &ty), list(g.requires(v))));
+                    }
                 }
+                o.push_str("    end\n");
             }
             o.push_str(&format!(
-                "    end\n  end\n\n  # {doc_a}\n  def self.{}(value, held)\n    return false if held.include?(value)\n\n    {}(value).all? {{ |group| group.any? {{ |p| held.include?(p) }} }}\n  end\n\n",
+                "  end\n\n  # {doc_a}\n  def self.{}(value, held)\n    return false if held.include?(value)\n\n    {}(value).all? {{ |group| group.any? {{ |p| held.include?(p) }} }}\n  end\n\n",
                 n.available, n.requires
             ));
         }
@@ -708,7 +723,7 @@ impl<'a> Gen<'a> {
         );
         let javascript = super::strip_types(&typescript).replace(".ts\";", ".mjs\";");
         let rust = format!(
-            "{}#![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code)]\n\n#[path = \"{alias}.rs\"]\nmod r;\n\nuse std::io::Read;\n\nfn main() {{\n    let mut src = String::new();\n    std::io::stdin().read_to_string(&mut src).unwrap();\n{}}}\n",
+            "{}#![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code, clippy::all)]\n\n#[path = \"{alias}.rs\"]\nmod r;\n\nuse std::io::Read;\n\nfn main() {{\n    let mut src = String::new();\n    std::io::stdin().read_to_string(&mut src).unwrap();\n{}}}\n",
             head("//"),
             self.rs_prereq_mode()
         );
@@ -723,12 +738,25 @@ impl<'a> Gen<'a> {
             head("//"),
             self.go_prereq_mode()
         );
-        let swift = format!("{}import Foundation\n\n@main\nenum Runner {{\n    static func main() throws {{\n{}    }}\n}}\n", head("//"), self.sw_prereq_mode());
-        let java = format!(
-            "{}\nimport java.io.BufferedReader;\nimport java.io.IOException;\nimport java.io.InputStreamReader;\nimport java.io.PrintStream;\nimport java.nio.charset.StandardCharsets;\n\npublic final class {cls}Runner {{\n    private {cls}Runner() {{\n    }}\n\n    public static void main(String[] args) throws IOException {{\n        BufferedReader in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));\n        PrintStream out = new PrintStream(System.out, true, StandardCharsets.UTF_8);\n        String line;\n{}    }}\n}}\n",
-            head("//"),
-            self.java_prereq_mode("line")
-        );
+        // The files of a Swift module share one scope, so an enum's type named like a type of the
+        // standard library hides it in the runner as in the module, and the runner reaches it past
+        // the enum's as the module does (`Swift.String`, §15.336, `Gen::apart_types`), with the
+        // generator of Swift's own. The runners of TypeScript and Rust read the module's enums
+        // through the functions they import and through `r::`, and have no enum's type in scope.
+        let sw = self.for_target("swift");
+        let swift = sw.as_ref().unwrap_or(self).apart_types(super::clash::Syntax::Swift, |g| {
+            format!("{}import Foundation\n\n@main\nenum Runner {{\n    static func main() throws {{\n{}    }}\n}}\n", head("//"), g.sw_prereq_mode())
+        });
+        // A file named like a class the runner imports is that class in the package, which the
+        // import hides in the runner (§15.336, `Gen::java_apart`).
+        let java = self.java_apart(self.java_hidden(false), |g| {
+            let cls = g.java_class();
+            format!(
+                "{}\nimport java.io.BufferedReader;\nimport java.io.IOException;\nimport java.io.InputStreamReader;\nimport java.io.PrintStream;\nimport java.nio.charset.StandardCharsets;\n\npublic final class {cls}Runner {{\n    private {cls}Runner() {{\n    }}\n\n    public static void main(String[] args) throws IOException {{\n        BufferedReader in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));\n        PrintStream out = new PrintStream(System.out, true, StandardCharsets.UTF_8);\n        String line;\n{}    }}\n}}\n",
+                head("//"),
+                g.java_prereq_mode("line")
+            )
+        });
         vec![
             (format!("python/{alias}_runner.py"), python),
             (format!("typescript/{alias}_runner.ts"), typescript),

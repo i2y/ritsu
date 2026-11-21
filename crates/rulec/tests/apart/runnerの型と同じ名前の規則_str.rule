@@ -1,0 +1,14 @@
+rule 文字列(str) v1
+description "Java のクラスの名前が、Java の runner が入力の文字列を読み込む型と同じになる規則"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 数量ごとの手数料(fee_by_qty)
+policy unique
+| 数量 | -> 手数料 |
+| <=5 | 3USD |
+| >5  | 2USD |

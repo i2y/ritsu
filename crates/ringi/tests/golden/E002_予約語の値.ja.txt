@@ -1,0 +1,3 @@
+エラー[E002]: tests/mutants/E002_予約語の値.ringi:5:5: `none` は条件を書く語なので、名前にできません
+     5 |     none      "無し"
+  = 名前にできない語は `and` `or` `not` `is` `none` `true` `false` の 7 つです。

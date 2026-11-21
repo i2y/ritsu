@@ -1,0 +1,20 @@
+request example v1 "Example"
+
+form
+  kind : choice "Kind"
+    paid  "Paid"
+    sick  "Sick"
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  self approval  not allowed
+
+labels ja
+  kind       "種類"
+  kind.paid  "有給"
+  kind.taxi  "タクシー"

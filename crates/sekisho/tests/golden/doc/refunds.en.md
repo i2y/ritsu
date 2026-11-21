@@ -65,7 +65,7 @@ Refund an order, in part or in whole
 
 - It guards `openapi "api/orders.json" operation refundOrder`.
 - Principals: `User`, `Workflow`. Resources: `Order`, the id read from the operation's argument `orderId`.
-- Input `amount`: `money[GBP, incl_tax]`, 1GBP to 10,000GBP.
+- Input `amount`: `money[GBP, incl_tax]`, 1GBP to 10_000GBP.
 - Computed: `refund_band`, `in_period`, `business_day` (under Computed values below).
 - 1,056 combinations, 88 of them allowed.
 
@@ -534,11 +534,15 @@ Refunds a returned order once the item is back at the warehouse
 
 #### What the flow calls
 
-Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action: what `ritsu check` holds across the languages.
+Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action at the call: over the combinations the runs that reach the call can come to (what the call gives, and what the arms of each `match` on the way leave). It is what `ritsu check` holds across the languages.
 
 | Line | Task | Operation | Guarded by | Allowed | Error on a denial |
 |---|---|---|---|---|---|
 | 22 | `refund_order` | `openapi "api/orders.json" operation refundOrder` | `refund_order` | sometimes | `denied` |
+
+What the runs that reach a call hold there:
+
+- Line 22: `amount` (what the call gives, `amount`) is 1GBP to 50GBP.
 
 ## Operations guarded
 

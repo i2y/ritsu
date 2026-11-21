@@ -1,0 +1,17 @@
+requirements refunds v1
+description "A role named wrong where it is declared, and the lines that name it: the role is said once, where it is first written"
+
+# the role named wrong: every `owner` and `decided … by` still writes `accounting`
+role acounting "Decides the refund policy"
+
+requirement within_sales
+  text "A refund does not exceed the sale of its order"
+  in force 2026-10-01..
+  owner accounting
+  decided 2026-10-04 by accounting "What is refunded on an order never exceeds what was sold on it. Decided for this example"
+
+requirement back_to_the_card
+  text "A refund goes back to the card that paid for the order"
+  in force 2026-10-01..
+  owner accounting
+  decided 2026-10-04 by accounting "A refund is not paid out another way. Decided for this example"

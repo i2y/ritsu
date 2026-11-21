@@ -131,6 +131,8 @@ func Wire(f harness.Flow, casesFile, outFile, moto string) error {
 	var mu sync.Mutex
 	var now map[string]any
 	received := map[string]any{}
+	// the requests that went to moto during a case, and its answers
+	toMoto := []any{}
 	motoURL, err := url.Parse(moto)
 	if err != nil {
 		return err
@@ -207,7 +209,7 @@ func Wire(f harness.Flow, casesFile, outFile, moto string) error {
 			w.WriteHeader(200)
 			_, _ = w.Write(out)
 		default:
-			// any other AWS API: moto's
+			// any other AWS API: moto's, and what went and came back written down
 			req, _ := http.NewRequest(r.Method, motoURL.String()+r.URL.RequestURI(), bytes.NewReader(body))
 			for k, v := range r.Header {
 				if !strings.EqualFold(k, "Host") {
@@ -221,6 +223,9 @@ func Wire(f harness.Flow, casesFile, outFile, moto string) error {
 			}
 			defer res.Body.Close()
 			out, _ := io.ReadAll(res.Body)
+			mu.Lock()
+			toMoto = append(toMoto, map[string]any{"method": r.Method, "path": r.URL.RequestURI(), "body": string(body), "answer": string(out)})
+			mu.Unlock()
 			for k, v := range res.Header {
 				switch strings.ToLower(k) {
 				case "content-length", "transfer-encoding", "connection", "server", "date":
@@ -238,7 +243,16 @@ func Wire(f harness.Flow, casesFile, outFile, moto string) error {
 	os.Setenv("AWS_REGION", region)
 	os.Setenv("AWS_ACCESS_KEY_ID", "wire")
 	os.Setenv("AWS_SECRET_ACCESS_KEY", "wire")
-	t := f.NewTransport(func(string) map[string]string { return map[string]string{"X-Dandori-Check": "wire"} }, nil)
+	// a header of the options' own; for the library of tests/flows/http_places.flow, one that takes the
+	// place of the request's of its name, which it gives in another case; and a cookie that joins the
+	// request's (DESIGN 43)
+	t := f.NewTransport(func(u string) map[string]string {
+		h := map[string]string{"X-Dandori-Check": "wire", "Cookie": "wire_session=1"}
+		if strings.Contains(u, "/library.example.com/") {
+			h["x-library-key"] = "wire-key"
+		}
+		return h
+	}, nil)
 	ctx := context.Background()
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region), config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("wire", "wire", "")), config.WithBaseEndpoint(moto))
 	if err != nil {
@@ -251,6 +265,7 @@ func Wire(f harness.Flow, casesFile, outFile, moto string) error {
 		mu.Lock()
 		now = c
 		received = nil
+		toMoto = []any{}
 		mu.Unlock()
 		var returned any
 		var messages any
@@ -272,7 +287,6 @@ func Wire(f harness.Flow, casesFile, outFile, moto string) error {
 			}
 			h.URL = target
 			h.Body = req["body"]
-			h.Query = req["query"]
 			res, err := t.HTTP(ctx, h)
 			if err != nil {
 				returned = map[string]any{"thrown": err.Error()}
@@ -285,6 +299,26 @@ func Wire(f harness.Flow, casesFile, outFile, moto string) error {
 			// moto as the case wants it: the topics and queues that exist, and a queue that listens
 			if _, err := http.Post(moto+"/moto-api/reset", "application/json", nil); err != nil {
 				return err
+			}
+			// what else the call needs there, as the case's requests to moto make it
+			for _, s := range list(c["setup"]) {
+				r := s.(map[string]any)
+				req, err := http.NewRequest(r["method"].(string), moto+r["path"].(string), strings.NewReader(r["body"].(string)))
+				if err != nil {
+					return err
+				}
+				for k, v := range r["headers"].(map[string]any) {
+					req.Header.Set(k, v.(string))
+				}
+				res, err := http.DefaultClient.Do(req)
+				if err != nil {
+					return err
+				}
+				made, _ := io.ReadAll(res.Body)
+				res.Body.Close()
+				if res.StatusCode/100 != 2 {
+					return fmt.Errorf("moto did not take %s %s: %d %s", r["method"], r["path"], res.StatusCode, made)
+				}
 			}
 			for _, n := range list(c["topics"]) {
 				if _, err := snsc.CreateTopic(ctx, &sns.CreateTopicInput{Name: aws.String(n.(string))}); err != nil {
@@ -334,7 +368,7 @@ func Wire(f harness.Flow, casesFile, outFile, moto string) error {
 			}
 		}
 		mu.Lock()
-		results = append(results, map[string]any{"received": received, "returned": returned, "messages": messages})
+		results = append(results, map[string]any{"received": received, "returned": returned, "messages": messages, "moto": toMoto})
 		mu.Unlock()
 	}
 	return writeJSON(outFile, results)

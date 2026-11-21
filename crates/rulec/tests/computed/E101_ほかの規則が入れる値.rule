@@ -1,0 +1,25 @@
+rule 経理の要否を受け取る経路(purchase_route_fed) v1
+description "同じ順で、経理が審査するかを、ほかの規則の出力が入れる入力として受け取る。`fed by` は値がどこから来るかを書くが、その規則に何を渡したかは書かないので、表はその入力を種類と金額から離して読む"
+
+enum 種類(kind) = 物品(goods) | 設備(capex) | ソフトウェア(software)
+enum 一次の確認(first_by) = 課長(manager)
+enum 経理の確認(finance_by) = 経理部(finance_team)
+enum 決める人(decide_by) = 部長(dept_head) | 本部長(division_head) | 社長(president)
+
+inputs
+  種類(kind)       : 種類
+  金額(amount)     : money[円]  range >=1円 <=100_000_000円
+  経理を通す(authority_finance) : bool  fed by rulec "shared/決裁権限.rule" output 経理
+
+outputs
+  一次(first)   : 一次の確認
+  経理(finance) : 経理の確認?
+  決裁(decide)  : 決める人
+
+table 経路(route)
+| 種類         | 金額          | 経理を通す | -> 一次 | 経理   | 決裁   |
+| 物品         | <=1_000_000円 | false      | 課長    | none   | 部長   |
+| 物品         | >1_000_000円  | true       | 課長    | 経理部 | 本部長 |
+| 設備         | -             | true       | 課長    | 経理部 | 社長   |
+| ソフトウェア | <=3_000_000円 | false      | 課長    | none   | 本部長 |
+| ソフトウェア | >3_000_000円  | true       | 課長    | 経理部 | 社長   |

@@ -1,0 +1,12 @@
+module shapes v1
+description "`Occ` is declared before `Shape`, which it holds: `Occ.Within` reads `Shape.Within`, so `Shape`'s is written first"
+
+record Occ
+  sh : Shape
+  m  : number  range >=0 <=10
+
+record Shape
+  k : number  range >=0 <=5
+
+fn fits(o: Occ) -> bool
+  o.m <= o.sh.k

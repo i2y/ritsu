@@ -270,6 +270,31 @@ pub struct WorkflowDecl {
     /// The `.flow`, as written (from the `.gate`'s directory), and where the string is.
     pub flow: (String, Span),
     pub description: Option<(String, Span)>,
+    /// What the gate says the flow holds of the resources it acts on (DESIGN 2.12): each `resource
+    /// … from …` under the workflow, in the order written.
+    pub holds: Vec<Holds>,
+}
+
+/// `resource Order from order.id` under a workflow, with the lines under it (DESIGN 2.12): where
+/// the flow gives `order.id` as the id of an `Order`, each attribute written is the value of the
+/// flow beside it.
+#[derive(Clone, Debug)]
+pub struct Holds {
+    /// The resource type.
+    pub resource: Ref,
+    /// The value of the flow that is the resource's id, as written (`order.id`), and where.
+    pub id: (String, Span),
+    pub span: Span,
+    pub lines: Vec<HoldsLine>,
+}
+
+/// `amount = order.total` under a workflow's `resource` line: the attribute, and the value of the
+/// flow it is.
+#[derive(Clone, Debug)]
+pub struct HoldsLine {
+    pub attribute: Ref,
+    pub value: (String, Span),
+    pub span: Span,
 }
 
 /// An attribute of a principal or a resource, or an input of an action:

@@ -98,7 +98,7 @@ Where an online order goes on a payment, a shipment, a delivery or a request to 
 |---|---|---|---|
 | state | state（5 値） |  |  |
 | event | event（4 値） |  |  |
-| amount_paid | money[JPY, incl_tax] | 0JPY 〜 100万JPY |  |
+| amount_paid | money[JPY, incl_tax] | 0JPY 〜 1_000_000JPY |  |
 
 ## 出力
 

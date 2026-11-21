@@ -177,11 +177,18 @@ pub fn run(dir: &Path) -> Result<Run, String> {
 /// 33 with the proofs, and a rule that walks fifty elements is 27 of those seconds on its
 /// own. The vectors are what `test` is for; the proofs are what `--proofs` asks for.
 pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
+    // a directory that is not there is said as every command says a path given that is not there
+    // (ritsu's DESIGN 6.2, item 10), before what to write into it
+    if !dir.exists() {
+        return Err(crate::i18n::text(&ritsu_base::cli::not_there(&dir.display().to_string())));
+    }
     let vdir = dir.join("vectors");
+    // the command named the way the person ran this one (ritsu's DESIGN 6.2, item 10)
+    let run = ritsu_base::cli::command_name("rulec");
     let rd = std::fs::read_dir(&vdir).map_err(|_| {
         tr!(
-            "`{}` にベクタがありません。先に `rulec gen <file.rule>... --target <出力先> --extra runner --extra vectors --out {}` を実行してください",
-            "no vectors in `{}`; run `rulec gen <file.rule>... --target <target> --extra runner --extra vectors --out {}` first",
+            "`{}` にベクタがありません。先に `{run} gen <file.rule>... --target <出力先> --extra runner --extra vectors --out {}` を実行してください",
+            "no vectors in `{}`; run `{run} gen <file.rule>... --target <target> --extra runner --extra vectors --out {}` first",
             vdir.display(),
             dir.display()
         )
@@ -223,8 +230,8 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     let generated: Vec<&crate::backend::Backend> = crate::backend::ALL.iter().filter(|b| dir.join(b.id).is_dir()).collect();
     if generated.is_empty() {
         return Err(tr!(
-            "`{}` には、どの言語の生成物もありません。先に `rulec gen <file.rule>... --target <出力先> --extra runner --extra vectors --out {}` を実行してください",
-            "no language's code is in `{}`; run `rulec gen <file.rule>... --target <target> --extra runner --extra vectors --out {}` first",
+            "`{}` には、どの言語の生成物もありません。先に `{run} gen <file.rule>... --target <出力先> --extra runner --extra vectors --out {}` を実行してください",
+            "no language's code is in `{}`; run `{run} gen <file.rule>... --target <target> --extra runner --extra vectors --out {}` first",
             dir.display(),
             dir.display()
         ));
@@ -777,6 +784,41 @@ fn via_mcp(
     // until it is told to stop, and a run that disagreed half way left it listening (§15.163).
     let mut child =
         crate::child::Owned::spawn(&mut cmd).map_err(|e| broken(tr!("起動できません: {e}", "cannot start: {e}")))?;
+    // What the server writes on stderr is read as it comes. Left in the pipe, a server that
+    // wrote more than the pipe holds — the traceback of a call that failed — stopped on the write
+    // while this waited for its answer, and neither ever went on (§15.338). It is what a failure
+    // shows, as a runner's is.
+    let mut err = child.stderr.take();
+    let said = std::thread::spawn(move || {
+        let mut s = String::new();
+        if let Some(e) = err.as_mut() {
+            let _ = e.read_to_string(&mut s);
+        }
+        s
+    });
+    let r = talk_mcp(&mut child, alias, want, refused, http, traces);
+    // Closing stdin is what ends the stdio server; the HTTP one waits for connections until
+    // it is told to stop.
+    child.stop();
+    let said = said.join().unwrap_or_default();
+    match r {
+        Err(Failure::Broken(m)) if !said.trim().is_empty() => {
+            Err(Failure::Broken(tr!("{m}\nサーバーが stderr に書いたこと:\n{}", "{m}\nwhat the server wrote on stderr:\n{}", said.trim())))
+        }
+        r => r,
+    }
+}
+
+/// The conversation of [`via_mcp`] with the server it started: what it answered for each
+/// expected record, and for each line of the traces.
+fn talk_mcp(
+    child: &mut crate::child::Owned,
+    alias: &str,
+    want: &str,
+    refused: &[String],
+    http: bool,
+    traces: Option<&str>,
+) -> Result<(String, String), Failure> {
     let si = child.stdin.take().ok_or_else(|| broken("stdin".into()))?;
     let mut so = BufReader::new(child.stdout.take().ok_or_else(|| broken("stdout".into()))?);
 
@@ -955,10 +997,6 @@ fn via_mcp(
         }
     }
     drop(wire);
-    // Closing stdin is what ends the stdio server; the HTTP one waits for connections until
-    // it is told to stop.
-    let _ = child.kill();
-    let _ = child.wait();
     Ok((got, got_traces))
 }
 
@@ -1180,7 +1218,8 @@ pub fn render(r: &Run) -> String {
                     tr!("前提 {} 件", "{} prerequisite cases", x.vectors)
                 } else if x.via == "chances" {
                     tr!("確率 {} 件", "{} chance cases", x.vectors)
-                } else if x.vectors > 0 {
+                } else if x.vectors > 0 || x.rule != ROUND_HELPER {
+                    // A rule with no answered case says so: its refused cases are what was run.
                     tr!("ベクタ {} 件", "{} vectors", x.vectors)
                 } else {
                     tr!("単体ベクタ", "unit vectors")

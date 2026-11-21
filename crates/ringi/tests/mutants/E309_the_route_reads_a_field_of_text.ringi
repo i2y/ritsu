@@ -1,0 +1,16 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+  place  : text "Place"  count <=20
+
+route
+  check  finance
+  audit  board    when place is "Osaka"
+
+who
+  finance = team finance
+  board   = team board
+
+ticket
+  self approval  not allowed

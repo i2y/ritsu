@@ -1,0 +1,6 @@
+error[E102]: main.kn:9:14: The input `goods` of the rule `own` is own.category; this is catalog.category
+     9 |   own(goods: c).by_hand
+  = `catalog.category` is the enum `category` of the `enums` file `rules/shared/catalog.rule`; `own.category` is the enum `category` that the rule `own` (`rules/own_category.rule`) declares itself. Enums declared at two places are two types, even with the same values; to make them one, put the enum in an `enums` file, read it with `import enum` in each rule, and read that file in the module with `use rule`.
+error[E102]: main.kn:12:14: The input `goods` of the rule `own` is own.category; this is category
+    12 |   own(goods: c).by_hand
+  = `category` is an enum this module declares; `own.category` is the enum `category` that the rule `own` (`rules/own_category.rule`) declares itself. Enums declared at two places are two types, even with the same values; to make them one, put the enum in an `enums` file, read it with `import enum` in each rule, and read that file in the module with `use rule`.

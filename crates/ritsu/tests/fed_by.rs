@@ -22,6 +22,8 @@
 //! - sakai holds a `fed by` across a boundary to what any reference needs, and `ritsu mod report`
 //!   gives a new E207 to the dependency that was raised.
 
+mod common;
+
 use ritsu_base::modules::store::{self, Store};
 use ritsu_ports::{Items, References};
 use ritsu_testkit::TempDir;
@@ -37,7 +39,7 @@ fn here() -> PathBuf {
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -212,7 +214,8 @@ fn the_project_holds_from_end_to_end() {
 fn a_flow_narrowed_below_its_contract() {
     let broken = Files::project().edit("refund.flow", "<=1000000USDc  fed by openapi", "<=100000USDc  fed by openapi");
     let (text, _) = stops(&broken, "fed-1", &[against("refund.flow", "input amount", "E207", Some("100001"))]);
-    assert!(text.contains("`input amount` takes money[USDc] >=1 <=100000, and its source openapi \"api/refunds.json\" schema RefundCreate property amount can be 100001"), "{text}");
+    // the record keeps the integers on the wire, and the sentence writes them as the flow does
+    assert!(text.contains("`input amount` takes money[USDc] >=1USDc <=100_000USDc, and its source openapi \"api/refunds.json\" schema RefundCreate property amount can be 100_001USDc"), "{text}");
 }
 
 /// A rule's output is raised above what the next rule takes: the value, and the input that gives it.
@@ -221,7 +224,7 @@ fn a_rule_raised_above_what_the_next_takes() {
     let broken = Files::project().edit("refund_limit.rule", "| >1000USDc  | 2                |", "| >1000USDc  | 3                |");
     let (text, v) = stops(&broken, "fed-2", &[against("review.rule", "input band", "E207", Some("3"))]);
     assert_eq!(record(&v, "input band")["example"]["at"], "left = 1001");
-    assert!(text.contains("rulec \"refund_limit.rule\" output band comes to 3 at left = 1001."), "{text}");
+    assert!(text.contains("rulec \"refund_limit.rule\" output band comes to 3 at left = 1001USDc."), "{text}");
     assert!(text.contains("Which of the two is a person's decision"), "{text}");
 }
 
@@ -253,7 +256,7 @@ fn a_book_with_no_upper_limit() {
             against("refund_limit.rule", "input left", "E207", Some("10000001")),
         ],
     );
-    assert!(text.contains("`record Balance field left` takes money[USDc] >=0 <=10000000, and its source chobo \"refunds.book\" account remaining can be 10000001"), "{text}");
+    assert!(text.contains("`record Balance field left` takes money[USDc] >=0USDc <=10_000_000USDc, and its source chobo \"refunds.book\" account remaining can be 10_000_001USDc"), "{text}");
     // the same with no lower limit: the balance can go below what the place takes
     let broken = Files::project().edit("refunds.book", "  at least 0 refused as nothing_left\n", "");
     stops(
@@ -312,15 +315,16 @@ fn a_json_schema_changed() {
     stops(&broken, "fed-6-day", &[against("due.cal", "input issued_on", "E207", Some("\"2027-06-01\""))]);
 }
 
-/// The same project broken four ways, in both languages, word by word.
+/// The same project broken five ways, in both languages, word by word.
 #[test]
 fn what_it_says_in_both_languages() {
     let mut failures = Vec::new();
-    let cases: [(&str, Files); 4] = [
+    let cases: [(&str, Files); 5] = [
         ("rule", Files::project().edit("refund_limit.rule", "| >1000USDc  | 2                |", "| >1000USDc  | 3                |")),
         ("book", Files::project().edit("refunds.book", "  at most 100000 refused as more_than_paid\n", "")),
         ("not-there", Files::project().edit("schemas/order.schema.json", "\"Order\": {", "\"Purchase\": {")),
         ("undecided", Files::project().edit("schemas/order.schema.json", "\"type\": \"string\", \"enum\": [\"2026-04-01\", \"2026-05-01\", \"2026-06-01\"]", "\"type\": \"string\"")),
+        ("moment", Files::project().edit("schemas/order.schema.json", "\"type\": \"string\", \"enum\": [\"2026-04-01\", \"2026-05-01\", \"2026-06-01\"]", "\"type\": \"string\", \"format\": \"date-time\"")),
     ];
     for (name, files) in cases {
         let t = files.lay_out(&format!("fed-says-{name}"));
@@ -511,6 +515,97 @@ fn a_contracts_date_with_no_list_of_days() {
     assert!(record(&v, "input issued_on")["why"].as_str().unwrap().contains("does not say which days"), "{}", v["borders"]);
 }
 
+/// A string a document marks `format: date-time` is a moment, a day with a time of day: no date
+/// takes it, with a range or without, and a `timestamp` does, as it does a workflow's `timestamp`
+/// and a `.proto`'s `google.protobuf.Timestamp`. A string marked `format: date`, or not marked,
+/// carries a date as before, and a `timestamp` does not take it.
+#[test]
+fn a_contracts_moment_is_no_date() {
+    let doc = |marks: &str| format!("{{ \"$defs\": {{ \"Req\": {{ \"type\": \"object\", \"required\": [\"at\"], \"properties\": {{ \"at\": {{ \"type\": \"string\"{marks} }} }} }} }} }}\n");
+    let flow = |input: &str| taking(&format!("{input}  fed by jsonschema \"s.json\" def Req property at"));
+    let moment = doc(", \"format\": \"date-time\"");
+    for (input, tag) in [("v : date", "fed-moment-date"), ("v : date  range >=2026-01-01", "fed-moment-date-range"), ("v : date?", "fed-moment-date-optional")] {
+        let (_, v) = stops(&Files::none().with("s.json", &moment).with("w.flow", &flow(input)), tag, &[against("w.flow", "input v", "E207", None)]);
+        let r = record(&v, "input v");
+        assert_eq!(r["gives"], "string (format: date-time)", "{tag}");
+        assert!(r["why"].as_str().unwrap().contains("marks this string `format: date-time`, a day with a time of day"), "{tag}: {}", v["borders"]);
+    }
+    for (input, tag) in [("v : timestamp", "fed-moment-timestamp"), ("v : timestamp?", "fed-moment-timestamp-optional"), ("v : string", "fed-moment-string")] {
+        holds(&Files::none().with("s.json", &moment).with("w.flow", &flow(input)), tag, 1);
+    }
+    // the days a moment lists are no days either
+    let listed = doc(", \"format\": \"date-time\", \"enum\": [\"2026-04-01T09:00:00Z\"]");
+    let (_, v) = stops(&Files::none().with("s.json", &listed).with("w.flow", &flow("v : date")), "fed-moment-listed", &[against("w.flow", "input v", "E207", None)]);
+    assert_eq!(record(&v, "input v")["gives"], "string (format: date-time; 2026-04-01T09:00:00Z)");
+    holds(&Files::none().with("s.json", &listed).with("w.flow", &flow("v : timestamp")), "fed-moment-listed-timestamp", 1);
+    // a date, marked as one and not: a date takes it, and a timestamp does not
+    for (marks, gives, tag) in [(", \"format\": \"date\"", "string (format: date)", "fed-day"), ("", "any string", "fed-day-plain")] {
+        holds(&Files::none().with("s.json", &doc(marks)).with("w.flow", &flow("v : date")), tag, 1);
+        let (_, v) = stops(&Files::none().with("s.json", &doc(marks)).with("w.flow", &flow("v : date  range >=2026-01-01")), &format!("{tag}-range"), &[against("w.flow", "input v", "W207", None)]);
+        assert_eq!(record(&v, "input v")["gives"], gives, "{tag}");
+        let (_, v) = stops(&Files::none().with("s.json", &doc(marks)).with("w.flow", &flow("v : timestamp")), &format!("{tag}-timestamp"), &[against("w.flow", "input v", "E207", None)]);
+        assert!(record(&v, "input v")["why"].as_str().unwrap().contains("the types differ"), "{tag}: {}", v["borders"]);
+    }
+    let days = doc(", \"format\": \"date\", \"enum\": [\"2026-04-01\", \"2027-01-01\"]");
+    let in_2026 = flow("v : date  range >=2026-01-01 <=2026-12-31");
+    stops(&Files::none().with("s.json", &days).with("w.flow", &in_2026), "fed-day-listed", &[against("w.flow", "input v", "E207", Some("\"2027-01-01\""))]);
+    // a workflow's timestamp, and a `.proto`'s
+    let first = "workflow first v1\n\ninputs\n  at : timestamp\n\noutputs\n  done : bool\n\nflow\n  succeed done = true\n";
+    holds(&Files::none().with("first.flow", first).with("w.flow", &taking("v : timestamp  fed by dandori \"first.flow\" input at")), "fed-moment-flow", 1);
+    stops(&Files::none().with("first.flow", first).with("w.flow", &taking("v : date  fed by dandori \"first.flow\" input at")), "fed-moment-flow-date", &[against("w.flow", "input v", "E207", None)]);
+    let proto = |field: &str| format!("syntax = \"proto3\";\npackage shop.v1;\n\nimport \"google/protobuf/timestamp.proto\";\nimport \"buf/validate/validate.proto\";\n\nmessage Order {{\n  {field}\n}}\n");
+    let placed = |field: &str, input: &str| Files::none().with("order.proto", &proto(field)).with("w.flow", &taking(&format!("{input}  fed by proto \"order.proto\" message Order field placed_at")));
+    let required = "google.protobuf.Timestamp placed_at = 1 [(buf.validate.field).required = true];";
+    holds(&placed(required, "v : timestamp"), "fed-moment-proto", 1);
+    // a message may be left unset, unless it is `required`
+    let plain = "google.protobuf.Timestamp placed_at = 1;";
+    stops(&placed(plain, "v : timestamp"), "fed-moment-proto-unset", &[against("w.flow", "input v", "E207", Some("none"))]);
+    holds(&placed(plain, "v : timestamp?"), "fed-moment-proto-optional", 1);
+}
+
+/// A `.proto`'s `google.type.Date` is a date, known by its name as dandori knows it (dandori's
+/// DESIGN 42): imported with no file on the disk, with a file whatever its fields, not imported,
+/// written with a leading `.`, and written as `Date` inside `google.type`. A date takes it, and a
+/// string; a range of days is undecided, since a contract says nothing of which days; a `timestamp`
+/// and a number do not take it. Another message called `Date` is no date. As any message, a field
+/// that is not `required` may be left unset.
+#[test]
+fn a_proto_date_is_a_day() {
+    let proto = |head: &str, field: &str| format!("syntax = \"proto3\";\npackage shop.v1;\n{head}\nmessage Order {{\n  {field}\n}}\n");
+    let import = "\nimport \"google/type/date.proto\";\nimport \"buf/validate/validate.proto\";\n";
+    let due = "google.type.Date due = 1 [(buf.validate.field).required = true];";
+    let files = |proto: &str, input: &str| Files::none().with("order.proto", proto).with("w.flow", &taking(&format!("{input}  fed by proto \"order.proto\" message Order field due")));
+    let v = holds(&files(&proto(import, due), "v : date"), "fed-proto-date", 1);
+    assert_eq!(record(&v, "input v")["gives"], "google.type.Date");
+    holds(&files(&proto(import, due), "v : string"), "fed-proto-date-string", 1);
+    // which days, it does not say
+    let (text, v) = stops(&files(&proto(import, due), "v : date  range >=2026-01-01"), "fed-proto-date-range", &[against("w.flow", "input v", "W207", None)]);
+    assert!(record(&v, "input v")["why"].as_str().unwrap().contains("a contract carries a date, and does not say which days can come"), "{}", v["borders"]);
+    assert!(text.contains("A `google.type.Date` lists no days; a string field that lists them (`in` in Protovalidate) can be decided."), "{text}");
+    // no moment, and no number
+    for (input, tag) in [("v : timestamp", "fed-proto-date-timestamp"), ("v : int", "fed-proto-date-int")] {
+        let (_, v) = stops(&files(&proto(import, due), input), tag, &[against("w.flow", "input v", "E207", None)]);
+        assert!(record(&v, "input v")["why"].as_str().unwrap().contains("the source is google.type.Date: the types differ"), "{tag}: {}", v["borders"]);
+    }
+    // the name decides: a file on the disk, whatever its fields; no import; a leading `.`; `Date`
+    // inside `google.type`
+    let file = "syntax = \"proto3\";\npackage google.type;\n\nmessage Date {\n  string iso = 1;\n}\n";
+    holds(&files(&proto(import, due), "v : date").with("google/type/date.proto", file), "fed-proto-date-file", 1);
+    holds(&files(&proto("\nimport \"buf/validate/validate.proto\";\n", due), "v : date"), "fed-proto-date-no-import", 1);
+    holds(&files(&proto(import, &due.replace("google.type.Date", ".google.type.Date")), "v : date"), "fed-proto-date-dot", 1);
+    let inside = proto(import, &due.replace("google.type.Date", "Date")).replace("package shop.v1;", "package google.type.shop;");
+    holds(&files(&inside, "v : date"), "fed-proto-date-inside", 1);
+    // another `Date`
+    let own = proto(import, &due.replace("google.type.Date", "Date")).replace("message Order", "message Date {\n  string iso = 1;\n}\n\nmessage Order");
+    let (_, v) = stops(&files(&own, "v : date"), "fed-proto-date-other", &[against("w.flow", "input v", "E207", None)]);
+    assert_eq!(record(&v, "input v")["gives"], "shop.v1.Date");
+    // not `required`
+    let plain = proto(import, "google.type.Date due = 1;");
+    let (_, v) = stops(&files(&plain, "v : date"), "fed-proto-date-unset", &[against("w.flow", "input v", "E207", Some("none"))]);
+    assert_eq!(record(&v, "input v")["gives"], "google.type.Date?");
+    holds(&files(&plain, "v : date?"), "fed-proto-date-optional", 1);
+}
+
 /// Numbers in other units are other numbers: the place and the source count the same way or the
 /// border does not hold, whatever the ends are. A step and a tax are part of how a value is counted.
 #[test]
@@ -540,8 +635,50 @@ fn units_steps_and_tax() {
     stops(&files, "fed-unit-number", &[against("r.rule", "input v", "E207", None)]);
 }
 
-/// The values of an enum, by their public names: from a rule, a document and a `.proto`, and an enum
-/// read as a string.
+/// The shipping fee of a parcel, in a rule that writes the yen `円`, and a place that writes it `JPY`
+/// takes it from there; the Japanese version writes the two the other way round.
+const SPELLINGS: [(&str, &str, &str, &str, &str); 2] = [
+    (
+        "spelling",
+        "shipping_fee.rule",
+        "rule shipping_fee v1\ndescription \"The shipping fee of a parcel by its weight, in yen (fictional)\"\n\ninputs\n  weight : mass[g]  range >=1g <=30_000g\n\noutputs\n  fee : money[円]  round down(1円)\n\ntable fee\npolicy unique\n| weight    | -> fee : money[円] |\n| <=2_000g  | 800円              |\n| >2_000g   | 1_200円            |\n",
+        "waiver.rule",
+        "rule waiver v1\ndescription \"Whether the shipping fee is waived, written in JPY (fictional)\"\n\ninputs\n  fee : money[JPY]  range >=0JPY <=2_000JPY  fed by rulec \"shipping_fee.rule\" output fee\n\noutputs\n  waived : bool\n\ntable waived\npolicy unique\n| fee         | -> waived : bool |\n| <1_000JPY   | true             |\n| >=1_000JPY  | false            |\n",
+    ),
+    (
+        "綴り",
+        "送料.rule",
+        "rule 送料(shipping_fee) v1\ndescription \"荷物の重さで決まる送料。通貨は JPY と書く（架空）\"\n\ninputs\n  重さ(weight) : mass[g]  range >=1g <=30_000g\n\noutputs\n  送料(fee) : money[JPY]  round down(1JPY)\n\ntable 送料\npolicy unique\n| 重さ       | -> 送料 : money[JPY] |\n| <=2_000g  | 800JPY              |\n| >2_000g   | 1_200JPY            |\n",
+        "送料の免除.rule",
+        "rule 送料の免除(waiver) v1\ndescription \"送料を免除するか。この規則は円と書く（架空）\"\n\ninputs\n  送料(fee) : money[円]  range >=0円 <=2_000円  fed by rulec \"送料.rule\" output 送料\n\noutputs\n  免除(waived) : bool\n\ntable 免除\npolicy unique\n| 送料        | -> 免除 : bool |\n| <1_000円    | true           |\n| >=1_000円   | false          |\n",
+    ),
+];
+
+/// Two spellings of one unit are one unit (rulec's §15.332): `JPY` is another spelling of `円`, so
+/// the place that writes one holds against the source that writes the other. Narrowed below what the
+/// source gives, the place stops, and the sentence says the source's value in the place's own
+/// spelling, as it says the range the place takes (`1200JPY`, `1200円`).
+#[test]
+fn two_spellings_of_one_unit() {
+    let mut failures = Vec::new();
+    for (name, source, source_body, place, place_body) in SPELLINGS {
+        let files = Files::none().with(source, source_body).with(place, place_body);
+        holds(&files, &format!("fed-{name}"), 1);
+        let (wide, narrow) = if place_body.contains("JPY") { ("<=2_000JPY", "<=1_000JPY") } else { ("<=2_000円", "<=1_000円") };
+        let narrowed = files.edit(place, wide, narrow);
+        let about = if name == "spelling" { "input fee" } else { "input 送料" };
+        stops(&narrowed, &format!("fed-{name}-narrowed"), &[against(place, about, "E207", Some("1200"))]);
+        let t = narrowed.lay_out(&format!("fed-{name}-says"));
+        for lang in ["en", "ja"] {
+            let (_, out, _) = ritsu_in(t.path(), &["check", ".", "--lang", lang]);
+            golden(&format!("{name}.{lang}.txt"), &out, &mut failures);
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The values of an enum, by their public names: from a rule (one whose values rulec does not count
+/// too), a document and a `.proto`, and an enum read as a string.
 #[test]
 fn the_values_of_an_enum() {
     let source = "rule tiers v1\n\nenum tier = basic | gold | platinum\n\ninputs\n  x : number  range >=0 <=2\n\noutputs\n  t : tier\n\ntable t1\npolicy unique\n| x | -> t : tier |\n| 0 | basic      |\n| 1 | gold       |\n| 2 | platinum   |\n";
@@ -549,6 +686,18 @@ fn the_values_of_an_enum() {
     holds(&Files::none().with("tiers.rule", source).with("r.rule", &taking("basic | gold | platinum | bronze")), "fed-enum-more", 1);
     let (_, v) = stops(&Files::none().with("tiers.rule", source).with("r.rule", &taking("basic | gold")), "fed-enum-less", &[against("r.rule", "input v", "E207", Some("platinum"))]);
     assert_eq!(record(&v, "input v")["example"]["at"], "x = 2");
+    // a rule that walks a list, whose values rulec does not count: a place decides it by taking the
+    // values it leaves out, which the note names (no end to count, as for a number)
+    let walks = "rule triage v1\n\nenum tier = basic | gold | platinum\n\nelements parcels\n  fragile : bool\n\ninputs\n  rush : bool\n\ncount fragile_parcels over parcels where fragile  range >=0 <=5\n\noutputs\n  t : tier\n\ntable t1\npolicy unique\n| rush  | fragile_parcels | -> t : tier |\n| true  | 0               | gold        |\n| true  | >=1             | platinum    |\n| false | -               | basic       |\n";
+    let short = Files::none().with("tiers.rule", walks).with("r.rule", &taking("basic | gold"));
+    let (text, v) = stops(&short, "fed-enum-walks", &[against("r.rule", "input v", "W207", None)]);
+    assert!(record(&v, "input v")["why"].as_str().unwrap().contains("walks the list `parcels`"), "{}", v["borders"]);
+    assert!(text.contains("Take `platinum` in this place too, and it can be decided."), "{text}");
+    assert!(!text.contains("min("), "{text}");
+    let t = short.lay_out("fed-enum-walks-ja");
+    let (_, ja, _) = ritsu_in(t.path(), &["check", ".", "--lang", "ja"]);
+    assert!(ja.contains("受け取る側が `platinum` も受け取れば、決められます。"), "{ja}");
+    holds(&Files::none().with("tiers.rule", walks).with("r.rule", &taking("basic | gold | platinum")), "fed-enum-walks-all", 1);
     // into a string, every value is one
     holds(&Files::none().with("tiers.rule", source).with("r.rule", &taker("v : string  fed by rulec \"tiers.rule\" output t")), "fed-enum-string", 1);
     // from a document: the values it lists, against the place's
@@ -603,6 +752,72 @@ fn a_proto_field() {
     holds(&Files::none().with("order.proto", &proto("Status status = 1;")).with("r.rule", enumed), "fed-proto-enum", 1);
     let other = enumed.replace("enum status = paid", "enum status = shipped");
     stops(&Files::none().with("order.proto", &proto("Status status = 1;")).with("r.rule", &other), "fed-proto-enum-other", &[against("r.rule", "input v", "E207", Some("\"paid\""))]);
+}
+
+/// A `.proto`'s enum is read as rulec's `import proto` reads it (rulec's DESIGN §15.59): the names
+/// of one number are one value, taken by any of them; an enum nested in a message drops its own name;
+/// a prefix in other cases is dropped too; and a list of values is no one value.
+#[test]
+fn a_proto_enum_read_as_rulec_reads_it() {
+    let taker = |values: &str, field: &str| {
+        format!("rule taker v1\n\nenum status = {values}\n\ninputs\n  v : status  fed by proto \"order.proto\" message Order field {field}\n\noutputs\n  z : bool\n\ntable t1\npolicy unique\n| v | -> z : bool |\n| - | true       |\n")
+    };
+    let aliased = "syntax = \"proto3\";\npackage shop.v1;\n\nenum Status {\n  option allow_alias = true;\n  STATUS_UNSPECIFIED = 0;\n  STATUS_PAID = 1;\n  STATUS_SETTLED = 1;\n}\n\nmessage Order {\n  Status status = 1;\n  repeated Status history = 2;\n}\n";
+    holds(&Files::none().with("order.proto", aliased).with("r.rule", &taker("paid", "status")), "fed-proto-alias", 1);
+    holds(&Files::none().with("order.proto", aliased).with("r.rule", &taker("settled", "status")), "fed-proto-alias-other", 1);
+    let (_, v) = stops(&Files::none().with("order.proto", aliased).with("r.rule", &taker("shipped", "status")), "fed-proto-alias-neither", &[against("r.rule", "input v", "E207", Some("\"paid\" / \"settled\""))]);
+    assert_eq!(record(&v, "input v")["gives"], "string (paid / settled)");
+    stops(&Files::none().with("order.proto", aliased).with("r.rule", &taker("paid", "history")), "fed-proto-repeated", &[against("r.rule", "input v", "E207", None)]);
+    let nested = "syntax = \"proto3\";\npackage shop.v1;\n\nmessage Order {\n  enum Status {\n    Status_Unspecified = 0;\n    Status_Paid = 1;\n  }\n  Status status = 1;\n}\n";
+    holds(&Files::none().with("order.proto", nested).with("r.rule", &taker("paid", "status")), "fed-proto-nested", 1);
+}
+
+/// A singular message of a `.proto` may be left unset, as protobuf has it and dandori reads it: its
+/// absence is the example where the place is not `T?`, unless a rule says the field is `required`,
+/// or it is proto2's `required`. An enum is not a message (`google.protobuf.NullValue` neither), and
+/// a type that is not known is not known to be one.
+#[test]
+fn a_proto_message_may_be_left_unset() {
+    let proto = |syntax: &str, fields: &str| {
+        format!("syntax = \"{syntax}\";\npackage shop.v1;\n\nimport \"google/protobuf/struct.proto\";\nimport \"buf/validate/validate.proto\";\nimport \"shop/v1/money.proto\";\n\nmessage Address {{\n  optional string city = 1;\n}}\n\nmessage Order {{\n{fields}\n}}\n")
+    };
+    let three = "  Address ship_to = 1;\n  Address bill_to = 2 [(buf.validate.field).required = true];\n  google.protobuf.NullValue nothing = 3;\n  shop.v1.Money total = 4;";
+    let flow = |input: &str| format!("workflow w v1\n\nrecord Place\n  city : string?\n\ninputs\n  {input}\n\noutputs\n  done : bool\n\nflow\n  succeed done = true\n");
+    let files = |proto: &str, input: &str| Files::none().with("order.proto", proto).with("w.flow", &flow(input));
+    let at = |field: &str, input: &str| format!("{input}  fed by proto \"order.proto\" message Order field {field}");
+    let p3 = proto("proto3", three);
+    let (_, v) = stops(&files(&p3, &at("ship_to", "v : Place")), "fed-proto-message-unset", &[against("w.flow", "input v", "E207", Some("none"))]);
+    assert!(record(&v, "input v")["why"].as_str().unwrap().contains("lets this field be left unset"), "{}", v["borders"]);
+    // a record compares no value of a message, which no list of values in the contract decides
+    for (input, tag) in [(at("ship_to", "v : Place?"), "fed-proto-message-optional"), (at("bill_to", "v : Place"), "fed-proto-message-required")] {
+        let (text, v) = stops(&files(&p3, &input), tag, &[against("w.flow", "input v", "W207", None)]);
+        assert!(record(&v, "input v")["why"].as_str().unwrap().contains("are not compared value by value"), "{tag}: {}", v["borders"]);
+        assert!(!text.contains("lists its values"), "{tag}: {text}");
+    }
+    // an enum and a type not known: the types differ, or they are not compared, with no absence
+    stops(&files(&p3, &at("nothing", "v : string")), "fed-proto-message-null", &[against("w.flow", "input v", "E207", None)]);
+    stops(&files(&p3, &at("total", "v : Place")), "fed-proto-message-unknown", &[against("w.flow", "input v", "W207", None)]);
+    // proto2's `required`, and its `optional`
+    let p2 = proto("proto2", "  required Address ship_to = 1;\n  optional Address bill_to = 2;");
+    stops(&files(&p2, &at("ship_to", "v : Place")), "fed-proto-message-proto2", &[against("w.flow", "input v", "W207", None)]);
+    stops(&files(&p2, &at("bill_to", "v : Place")), "fed-proto-message-proto2-optional", &[against("w.flow", "input v", "E207", Some("none"))]);
+}
+
+/// What is not compared value by value (a record, a list) cannot be decided, and the message names
+/// nothing on the source's line that would decide it: no range and no list of values does. A number
+/// from the same workflow, with no range on its line, is told to write one.
+#[test]
+fn what_is_not_compared_is_decided_by_nothing_on_the_source() {
+    let first = "workflow first v1\n\nrecord Place\n  city : string?\n\ninputs\n  place : Place\n  places : list[Place]\n  n : int\n\noutputs\n  done : bool\n\nflow\n  succeed done = true\n";
+    let flow = |line: &str| format!("workflow w v1\n\nrecord Place\n  city : string?\n\ninputs\n  {line}\n\noutputs\n  done : bool\n\nflow\n  succeed done = true\n");
+    let files = |line: &str| Files::none().with("first.flow", first).with("w.flow", &flow(line));
+    for (line, tag) in [("v : Place  fed by dandori \"first.flow\" input place", "fed-flow-record"), ("v : list[Place]  fed by dandori \"first.flow\" input places", "fed-flow-list")] {
+        let (text, v) = stops(&files(line), tag, &[against("w.flow", "input v", "W207", None)]);
+        assert!(record(&v, "input v")["why"].as_str().unwrap().contains("are not compared value by value"), "{tag}: {}", v["borders"]);
+        assert!(!text.contains("Write the range") && !text.contains("lists its values"), "{tag}: {text}");
+    }
+    let (text, _) = stops(&files("v : int  range >=0 <=9  fed by dandori \"first.flow\" input n"), "fed-flow-open", &[against("w.flow", "input v", "W207", None)]);
+    assert!(text.contains("Write the range on the source's line"), "{text}");
 }
 
 /// What a contract's number lets through (an open end, an exclusive end, a list of values), its
@@ -1286,7 +1501,9 @@ fn a_source_in_a_dependency() {
     let run = |args: &[&str]| -> (i32, String, String) {
         let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
         c.current_dir(t.path().join("app")).args(args).env(store::VARIABLE, &store_dir);
-        c.env_remove("RITSU_LANG");
+        for v in common::LANG_VARS {
+            c.env_remove(v);
+        }
         let o = c.output().expect("could not run ritsu");
         (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
     };

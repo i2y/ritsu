@@ -1,0 +1,7 @@
+map 店(shop) v1
+description "小さな店の返金の窓口。yuen affected の試験のために書いた"
+
+use context "contexts/desk.ja.ctx"
+
+covers "."
+code python "app"

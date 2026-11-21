@@ -1,0 +1,17 @@
+workflow TypeScriptのキーワード v1
+description "TypeScript の型の名前と同じレコードです。"
+
+record anything
+  注記 : string
+
+inputs
+  番号 : string
+
+outputs
+  注記 : string
+
+task 探す(番号: string) -> anything
+
+flow
+  let a = 探す(番号: 番号)
+  succeed 注記 = a.注記

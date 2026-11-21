@@ -1,0 +1,4 @@
+id,name,owner,valid_from,valid_to
+erp,Accounting system,e1001,2026-01-01,
+crm,Customer system,e3101,2026-01-01,
+wiki,Company wiki,e7001,2026-01-01,

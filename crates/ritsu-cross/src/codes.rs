@@ -236,6 +236,16 @@ const X16_GATE_NEVER_JA: &str = "gate 返金(refunds) v1\ndescription \"注文�
 const X16_GATE_SOMETIMES_JA: &str = "gate 返金(refunds) v1\ndescription \"注文を見て、返金してよい人\"\n\nuse openapi 注文 from \"orders.json\"\n\nenum 注文の状態(order_status) = 支払済(paid) | 返品済(returned)\n\nrole 係(clerk)\n  description \"客に応対し、返金する\"\n\nprincipal 職員(User)\n  description \"店の職員\"\n  roles 係\n\nworkflow 返品(returns) from \"返品.flow\"\n  description \"品物が戻ったら、注文を返金する\"\n\nresource 注文(Order)\n  description \"注文\"\n  attributes\n    状態(status) : 注文の状態\n\naction 返金する(refund_order)\n  description \"注文を返金する\"\n  guards 注文 refundOrder\n  principal 職員, Workflow\n  resource 注文 from orderId\n\npermit 係は返金できる(clerks_refund)\n  description \"係は注文を返金できる\"\n  principal in 係\n  action 返金する\n\npermit 返品は戻った注文を返金できる(returns_refunds_returned_orders)\n  description \"返品のワークフローは、戻ってきた注文を返金できる\"\n  principal is workflow 返品\n  action 返金する\n  when resource.状態 is 返品済\n";
 const X16_FLOW_DENIED_JA: &str = "workflow 返品 v1\ndescription \"品物が戻ったら、注文を返金する\"\n\nuse openapi 注文 from \"orders.json\"\n\ninputs\n  注文番号 : string\n\ntask 返金する(orderId: string)\n  http POST 注文 \"/orders/{orderId}/refunds\"\n  errors denied = 403\n  key\n\nflow\n  返金する(orderId: 注文番号)\n    on denied => fail Denied \"ゲートが返金を許さなかった\"\n";
 const X16_GATE_MORE_JA: &str = "gate 返金(refunds) v1\ndescription \"注文を見て、返金してよい人\"\n\nuse openapi 注文 from \"orders.json\"\n\nenum 注文の状態(order_status) = 支払済(paid) | 返品済(returned)\n\nrole 係(clerk)\n  description \"客に応対し、返金する\"\n\nprincipal 職員(User)\n  description \"店の職員\"\n  roles 係\n\nworkflow 返品(returns) from \"返品.flow\"\n  description \"品物が戻ったら、注文を返金する\"\n\nresource 注文(Order)\n  description \"注文\"\n  attributes\n    状態(status) : 注文の状態\n\naction 注文を見る(view_order)\n  description \"注文を見る\"\n  guards 注文 getOrder\n  principal 職員, Workflow\n  resource 注文 from orderId\n\naction 返金する(refund_order)\n  description \"注文を返金する\"\n  guards 注文 refundOrder\n  principal 職員, Workflow\n  resource 注文 from orderId\n\npermit 係は返金できる(clerks_refund)\n  description \"係は注文を返金できる\"\n  principal in 係\n  action 返金する\n\npermit 係は注文を見られる(clerks_look)\n  description \"係は注文を見られる\"\n  principal in 係\n  action 注文を見る\n\npermit 返品は注文を見て返金できる(returns_look_and_refund)\n  description \"返品のワークフローは、どの注文も見て、返金できる\"\n  principal is workflow 返品\n  action 注文を見る, 返金する\n";
+/// The OpenAPI document of E909: the refund takes the fee it keeps, a whole number up to 100.
+const ORDERS_FEE_API: &str = "{\n  \"openapi\": \"3.1.0\",\n  \"info\": {\"title\": \"Orders\", \"version\": \"1.0.0\"},\n  \"servers\": [{\"url\": \"https://orders.example.com\"}],\n  \"security\": [{\"bearer\": []}],\n  \"paths\": {\n    \"/orders/{orderId}/refunds\": {\n      \"post\": {\n        \"operationId\": \"refundOrder\",\n        \"parameters\": [{\"name\": \"orderId\", \"in\": \"path\", \"required\": true, \"schema\": {\"type\": \"string\"}}],\n        \"requestBody\": {\"required\": true, \"content\": {\"application/json\": {\"schema\": {\"type\": \"object\", \"required\": [\"fee\"], \"properties\": {\"fee\": {\"type\": \"integer\", \"minimum\": 0, \"maximum\": 100}}}}}},\n        \"responses\": {\"201\": {\"description\": \"Refunded\"}, \"403\": {\"description\": \"Not allowed\"}}\n      }\n    }\n  },\n  \"components\": {\"securitySchemes\": {\"bearer\": {\"type\": \"http\", \"scheme\": \"bearer\"}}}\n}\n";
+/// The workflow of E909: it refunds an order keeping a fee of 5 in its steps of 0.1%, which is 0.5%.
+const X16_FLOW_FEE: &str = "workflow returns v1\ndescription \"Refunds an order once the item is back, keeping a restocking fee\"\n\nuse openapi orders from \"orders.json\"\n\ninputs\n  order : string\n\ntask refund_order(orderId: string, fee: rate[step 0.1%] range >=0% <=10%)\n  http POST orders \"/orders/{orderId}/refunds\"\n  errors denied = 403\n  key\n\nflow\n  refund_order(orderId: order, fee: 0.5%)\n    on denied => fail Denied \"the gate did not let the workflow refund\"\n";
+/// The gate of E909: it reads the fee in steps of 1%, so the same 5 is 5% to it.
+const X16_GATE_FEE: &str = "gate refunds v1\ndescription \"Who may refund an order\"\n\nuse openapi orders from \"orders.json\"\n\nrole clerk\n  description \"Answers the customers, and refunds\"\n\nprincipal User\n  description \"A member of the staff\"\n  roles clerk\n\nworkflow returns from \"returns.flow\"\n  description \"Refunds an order once the item is back, keeping a restocking fee\"\n\nresource Order\n  description \"An order\"\n\naction refund_order\n  description \"Refund an order, keeping a restocking fee\"\n  guards orders refundOrder\n  principal User, Workflow\n  resource Order from orderId\n  input\n    fee : rate[step 1%]  range >=0% <=10%\n\npermit clerks_refund\n  description \"A clerk refunds an order\"\n  principal in clerk\n  action refund_order\n\npermit returns_keeps_a_small_fee\n  description \"The returns workflow refunds an order, keeping a fee of up to 1%\"\n  principal is workflow returns\n  action refund_order\n  when fee <= 1%\n";
+/// The same, in Japanese names.
+const ORDERS_FEE_API_JA: &str = "{\n  \"openapi\": \"3.1.0\",\n  \"info\": {\"title\": \"注文\", \"version\": \"1.0.0\"},\n  \"servers\": [{\"url\": \"https://orders.example.com\"}],\n  \"security\": [{\"bearer\": []}],\n  \"paths\": {\n    \"/orders/{orderId}/refunds\": {\n      \"post\": {\n        \"operationId\": \"refundOrder\",\n        \"parameters\": [{\"name\": \"orderId\", \"in\": \"path\", \"required\": true, \"schema\": {\"type\": \"string\"}}],\n        \"requestBody\": {\"required\": true, \"content\": {\"application/json\": {\"schema\": {\"type\": \"object\", \"required\": [\"fee\"], \"properties\": {\"fee\": {\"type\": \"integer\", \"minimum\": 0, \"maximum\": 100}}}}}},\n        \"responses\": {\"201\": {\"description\": \"返金した\"}, \"403\": {\"description\": \"許されていない\"}}\n      }\n    }\n  },\n  \"components\": {\"securitySchemes\": {\"bearer\": {\"type\": \"http\", \"scheme\": \"bearer\"}}}\n}\n";
+const X16_FLOW_FEE_JA: &str = "workflow 返品 v1\ndescription \"品物が戻ったら、手数料を引いて注文を返金する\"\n\nuse openapi 注文 from \"orders.json\"\n\ninputs\n  注文番号 : string\n\ntask 返金する(orderId: string, fee: rate[step 0.1%] range >=0% <=10%)\n  http POST 注文 \"/orders/{orderId}/refunds\"\n  errors denied = 403\n  key\n\nflow\n  返金する(orderId: 注文番号, fee: 0.5%)\n    on denied => fail Denied \"ゲートが返金を許さなかった\"\n";
+const X16_GATE_FEE_JA: &str = "gate 返金(refunds) v1\ndescription \"注文を返金してよい人\"\n\nuse openapi 注文 from \"orders.json\"\n\nrole 係(clerk)\n  description \"客に応対し、返金する\"\n\nprincipal 職員(User)\n  description \"店の職員\"\n  roles 係\n\nworkflow 返品(returns) from \"返品.flow\"\n  description \"品物が戻ったら、手数料を引いて注文を返金する\"\n\nresource 注文(Order)\n  description \"注文\"\n\naction 返金する(refund_order)\n  description \"手数料を引いて、注文を返金する\"\n  guards 注文 refundOrder\n  principal 職員, Workflow\n  resource 注文 from orderId\n  input\n    手数料(fee) : rate[step 1%]  range >=0% <=10%\n\npermit 係は返金できる(clerks_refund)\n  description \"係は注文を返金できる\"\n  principal in 係\n  action 返金する\n\npermit 返品は少しの手数料で返金できる(returns_keeps_a_small_fee)\n  description \"返品のワークフローは、1% までの手数料を引いて、注文を返金できる\"\n  principal is workflow 返品\n  action 返金する\n  when 手数料 <= 1%\n";
 
 /// The map of W907: Orders, and Payments, whose gate guards the operation it opens.
 const X15_MAP_TWO: &str = "map Shop(shop) v1\ndescription \"A shop that takes orders and charges cards\"\n\nuse context \"contexts/orders.ctx\"\nuse context \"contexts/payments.ctx\"\n\ncovers \"orders\", \"payments\"\n";
@@ -290,6 +300,136 @@ fn x16(flow: &'static str, gate: &'static str) -> Vec<(&'static str, &'static st
 /// The same, in Japanese names.
 fn x16_ja(flow: &'static str, gate: &'static str) -> Vec<(&'static str, &'static str)> {
     vec![("orders.json", ORDERS_API_JA), ("返品.flow", flow), ("返金.gate", gate)]
+}
+
+/// A request that reads the company's gate and lets no requester decide their own request (X18).
+const X18_REQUEST: &str = "request purchase v1 \"Purchase request\"\n\nuse gate \"company.gate\"\n\nform\n  amount : money[JPY] \"Amount\"  range >=1JPY <=100_000JPY\n\nroute\n  check  finance\n\nwho\n  finance = team finance\n\nticket\n  self approval  not allowed\n";
+
+/// The same, in Japanese.
+const X18_REQUEST_JA: &str = "request 購買(purchase) v1 \"購買の申請\"\n\nuse gate \"全社.gate\"\n\nform\n  金額(amount) : money[円] \"金額\"  range >=1円 <=100_000円\n\nroute\n  確認(check)  経理\n\nwho\n  経理(finance) = team finance\n\nticket\n  self approval  not allowed\n";
+
+/// The gate of E911: the approvers of a stage answer it, and nothing keeps a requester who is among them from
+/// deciding their own request.
+const X18_GATE: &str = "gate company v1\ndescription \"Who does what to a ticket: the approvers of a stage answer it\"\nnamespace Ringi\n\nprincipal Staff\nresource Approvers\nresource Ticket\nresource RequestType\nresource Organization\nresource Stage\n  attributes\n    requester     : Staff\n    approvers     : Approvers\n    self_approval : bool\n\naction submit\n  principal Staff\n  resource Ticket\naction see\n  principal Staff\n  resource Ticket\naction approve\n  principal Staff\n  resource Stage\naction reject\n  principal Staff\n  resource Stage\naction add_approver\n  principal Staff\n  resource Stage\naction hand_over\n  principal Staff\n  resource Stage\naction comment\n  principal Staff\n  resource Stage\naction change_request_type\n  principal Staff\n  resource RequestType\naction read_audit\n  principal Staff\n  resource RequestType\naction import_organization\n  principal Staff\n  resource Organization\naction read_organization_audit\n  principal Staff\n  resource Organization\n\npermit staff_submit_and_administer\n  principal is Staff\n  action submit, see, add_approver, hand_over, change_request_type, read_audit, import_organization, read_organization_audit\n\npermit staff_comment\n  principal is Staff\n  action comment\n\npermit approvers_answer_their_stage\n  principal is Staff\n  action approve, reject\n  when principal in resource.approvers\n";
+
+/// The same, in Japanese.
+const X18_GATE_JA: &str = "gate 全社(company) v1\ndescription \"チケットにだれが何をしてよいか。ステップの承認者が、そのステップに答える\"\nnamespace Ringi\n\nprincipal 職員(Staff)\nresource 承認者の組(Approvers)\nresource チケット(Ticket)\nresource 申請の種類(RequestType)\nresource 組織(Organization)\nresource ステップ(Stage)\n  attributes\n    申請者(requester)       : 職員\n    承認者(approvers)       : 承認者の組\n    自己承認(self_approval) : bool\n\naction 出す(submit)\n  principal 職員\n  resource チケット\naction 見る(see)\n  principal 職員\n  resource チケット\naction 承認する(approve)\n  principal 職員\n  resource ステップ\naction 却下する(reject)\n  principal 職員\n  resource ステップ\naction 承認者を足す(add_approver)\n  principal 職員\n  resource ステップ\naction 引き継ぐ(hand_over)\n  principal 職員\n  resource ステップ\naction コメントする(comment)\n  principal 職員\n  resource ステップ\naction 申請の種類を変える(change_request_type)\n  principal 職員\n  resource 申請の種類\naction 申請の種類の記録を読む(read_audit)\n  principal 職員\n  resource 申請の種類\naction 組織を取り込む(import_organization)\n  principal 職員\n  resource 組織\naction 組織の記録を読む(read_organization_audit)\n  principal 職員\n  resource 組織\n\npermit 職員は出せて管理できる(staff_submit_and_administer)\n  principal is 職員\n  action 出す, 見る, 承認者を足す, 引き継ぐ, 申請の種類を変える, 申請の種類の記録を読む, 組織を取り込む, 組織の記録を読む\n\npermit 職員はコメントを書ける(staff_comment)\n  principal is 職員\n  action コメントする\n\npermit 承認者は自分のステップに答える(approvers_answer_their_stage)\n  principal is 職員\n  action 承認する, 却下する\n  when principal in resource.承認者\n";
+
+/// The gate of W911: it keeps a requester from deciding their own request, with `self_approval` declared as an
+/// enum, where ringi hands the gate a bool.
+const X18_GATE_ENUM: &str = "gate company v1\ndescription \"Who does what to a ticket: the approvers of a stage answer it, and no one decides their own request unless its route lets them\"\nnamespace Ringi\n\nenum own_decision = permitted | not_permitted\n\nprincipal Staff\nresource Approvers\nresource Ticket\nresource RequestType\nresource Organization\nresource Stage\n  attributes\n    requester     : Staff\n    approvers     : Approvers\n    self_approval : own_decision\n\naction submit\n  principal Staff\n  resource Ticket\naction see\n  principal Staff\n  resource Ticket\naction approve\n  principal Staff\n  resource Stage\naction reject\n  principal Staff\n  resource Stage\naction add_approver\n  principal Staff\n  resource Stage\naction hand_over\n  principal Staff\n  resource Stage\naction comment\n  principal Staff\n  resource Stage\naction change_request_type\n  principal Staff\n  resource RequestType\naction read_audit\n  principal Staff\n  resource RequestType\naction import_organization\n  principal Staff\n  resource Organization\naction read_organization_audit\n  principal Staff\n  resource Organization\n\npermit staff_submit_and_administer\n  principal is Staff\n  action submit, see, add_approver, hand_over, change_request_type, read_audit, import_organization, read_organization_audit\n\npermit staff_comment\n  principal is Staff\n  action comment\n\npermit approvers_answer_their_stage\n  principal is Staff\n  action approve, reject\n  when principal in resource.approvers\n\nforbid no_one_decides_their_own\n  principal is Staff\n  action approve, reject\n  when resource.requester is principal\n  unless resource.self_approval is permitted\n";
+
+/// The same, in Japanese.
+const X18_GATE_ENUM_JA: &str = "gate 全社(company) v1\ndescription \"チケットにだれが何をしてよいか。ステップの承認者がそのステップに答え、経路が許さなければ自分の申請は決めない\"\nnamespace Ringi\n\nenum 自分で決める(own_decision) = 許す(permitted) | 許さない(not_permitted)\n\nprincipal 職員(Staff)\nresource 承認者の組(Approvers)\nresource チケット(Ticket)\nresource 申請の種類(RequestType)\nresource 組織(Organization)\nresource ステップ(Stage)\n  attributes\n    申請者(requester)       : 職員\n    承認者(approvers)       : 承認者の組\n    自己承認(self_approval) : 自分で決める\n\naction 出す(submit)\n  principal 職員\n  resource チケット\naction 見る(see)\n  principal 職員\n  resource チケット\naction 承認する(approve)\n  principal 職員\n  resource ステップ\naction 却下する(reject)\n  principal 職員\n  resource ステップ\naction 承認者を足す(add_approver)\n  principal 職員\n  resource ステップ\naction 引き継ぐ(hand_over)\n  principal 職員\n  resource ステップ\naction コメントする(comment)\n  principal 職員\n  resource ステップ\naction 申請の種類を変える(change_request_type)\n  principal 職員\n  resource 申請の種類\naction 申請の種類の記録を読む(read_audit)\n  principal 職員\n  resource 申請の種類\naction 組織を取り込む(import_organization)\n  principal 職員\n  resource 組織\naction 組織の記録を読む(read_organization_audit)\n  principal 職員\n  resource 組織\n\npermit 職員は出せて管理できる(staff_submit_and_administer)\n  principal is 職員\n  action 出す, 見る, 承認者を足す, 引き継ぐ, 申請の種類を変える, 申請の種類の記録を読む, 組織を取り込む, 組織の記録を読む\n\npermit 職員はコメントを書ける(staff_comment)\n  principal is 職員\n  action コメントする\n\npermit 承認者は自分のステップに答える(approvers_answer_their_stage)\n  principal is 職員\n  action 承認する, 却下する\n  when principal in resource.承認者\n\nforbid 自分の申請は決めない(no_one_decides_their_own)\n  principal is 職員\n  action 承認する, 却下する\n  when resource.申請者 is principal\n  unless resource.自己承認 is 許す\n";
+
+/// A request that holds its amount in the budget's book while it is approved, each stage due in ten business days
+/// (X19).
+const X19_REQUEST: &str = "request purchase v1 \"Purchase request\"\neffective from 2026-04-01\n\nuse calendar office from \"office.cal\"\nuse book budget from \"budget.book\"\n\nform\n  amount : money[JPY] \"Amount\"  range >=1JPY <=100_000JPY\n  dept   : text \"Department\"  count >=1 <=20\n\nroute\n  check  finance\n\nwho\n  finance = team finance\n\nevery stage\n  due in 10 business days at end of day\n  when late expire\n\nticket\n  on submitted  hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)\n  on approved   post budget.reserve(request: ticket.id, attempt: ticket.attempt)\n  on rejected, expired  void budget.reserve(request: ticket.id, attempt: ticket.attempt)\n";
+
+/// The same, in Japanese.
+const X19_REQUEST_JA: &str = "request 購買(purchase) v1 \"購買の申請\"\neffective from 2026-04-01\n\nuse calendar 本社(office) from \"本社.cal\"\nuse book 予算(budget) from \"予算.book\"\n\nform\n  金額(amount) : money[円] \"金額\"  range >=1円 <=100_000円\n  部(dept)     : text \"部\"  count >=1 <=20\n\nroute\n  確認(check)  経理\n\nwho\n  経理(finance) = team finance\n\nevery stage\n  due in 10 business days at end of day\n  when late expire\n\nticket\n  on submitted  hold 予算.押さえる(申請: ticket.id, 試み: ticket.attempt, 部: 部, 金額: 金額)\n  on approved   post 予算.押さえる(申請: ticket.id, 試み: ticket.attempt)\n  on rejected, expired  void 予算.押さえる(申請: ticket.id, 試み: ticket.attempt)\n";
+
+/// The calendar the request counts its business days in.
+const X19_CAL: &str = "calendar office v1\ndescription \"The business days of the office: Saturdays and Sundays are closed\"\noffset +00:00\n\nclosed weekly sat, sun\n";
+
+/// The same, in Japanese.
+const X19_CAL_JA: &str = "calendar 本社(office) v1\ndescription \"本社の営業日。土曜と日曜は休み\"\noffset +09:00\n\nclosed weekly sat, sun\n";
+
+/// The book of X19: a hold expires seven days after it is made.
+const X19_BOOK: &str = "book budget v1\ndescription \"The budget of each department: a purchase request holds its amount while it is approved\"\n\nunit JPY\n\naccount dept_budget(dept: string) : JPY\n  at least 0 refused as over_budget\naccount allocations : JPY outside\naccount payees : JPY outside\n\ntransfer allocate(dept: string, period: string, amount: JPY)\n  key dept, period\n  move amount from allocations to dept_budget(dept)\n\ntransfer reserve(request: string, attempt: string, dept: string, amount: JPY)\n  key request, attempt\n  pending expires after 7 days\n  move amount from dept_budget(dept) to payees\n";
+
+/// The same, in Japanese.
+const X19_BOOK_JA: &str = "book 予算 v1\ndescription \"部ごとの予算。購買の申請は、承認されるまで金額を押さえる\"\n\nunit 円\n\naccount 部の予算(部: string) : 円\n  at least 0 refused as 予算不足\naccount 配賦元 : 円 outside\naccount 支払先 : 円 outside\n\ntransfer 配賦(部: string, 期: string, 金額: 円)\n  key 部, 期\n  move 金額 from 配賦元 to 部の予算(部)\n\ntransfer 押さえる(申請: string, 試み: string, 部: string, 金額: 円)\n  key 申請, 試み\n  pending expires after 7 days\n  move 金額 from 部の予算(部) to 支払先\n";
+
+/// The request of W209: its stage has no deadline, so nothing says how long the hold stays open.
+const X19_REQUEST_OPEN: &str = "request purchase v1 \"Purchase request\"\n\nuse book budget from \"budget.book\"\n\nform\n  amount : money[JPY] \"Amount\"  range >=1JPY <=100_000JPY\n  dept   : text \"Department\"  count >=1 <=20\n\nroute\n  check  finance\n\nwho\n  finance = team finance\n\nticket\n  on submitted  hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)\n  on approved   post budget.reserve(request: ticket.id, attempt: ticket.attempt)\n  on rejected   void budget.reserve(request: ticket.id, attempt: ticket.attempt)\n";
+
+/// The same, in Japanese.
+const X19_REQUEST_OPEN_JA: &str = "request 購買(purchase) v1 \"購買の申請\"\n\nuse book 予算(budget) from \"予算.book\"\n\nform\n  金額(amount) : money[円] \"金額\"  range >=1円 <=100_000円\n  部(dept)     : text \"部\"  count >=1 <=20\n\nroute\n  確認(check)  経理\n\nwho\n  経理(finance) = team finance\n\nticket\n  on submitted  hold 予算.押さえる(申請: ticket.id, 試み: ticket.attempt, 部: 部, 金額: 金額)\n  on approved   post 予算.押さえる(申請: ticket.id, 試み: ticket.attempt)\n  on rejected   void 予算.押さえる(申請: ticket.id, 試み: ticket.attempt)\n";
+
+/// A request that starts the order's flow when it is approved, with an amount up to 1,000,000 JPY (X20).
+const X20_REQUEST: &str = "request purchase v1 \"Purchase request\"\n\nuse flow order from \"order.flow\"\n\nform\n  amount : money[JPY] \"Amount\"  range >=1JPY <=1_000_000JPY\n\nroute\n  check  finance\n\nwho\n  finance = team finance\n\nticket\n  on approved  launch order(request_id: ticket.id, amount: amount)\n";
+
+/// The same, in Japanese.
+const X20_REQUEST_JA: &str = "request 購買(purchase) v1 \"購買の申請\"\n\nuse flow 発注(order) from \"発注.flow\"\n\nform\n  金額(amount) : money[円] \"金額\"  range >=1円 <=1_000_000円\n\nroute\n  確認(check)  経理\n\nwho\n  経理(finance) = team finance\n\nticket\n  on approved  launch 発注(申請番号: ticket.id, 金額: 金額)\n";
+
+/// The flow of X20: it takes an amount up to 500,000 JPY.
+const X20_FLOW: &str = "workflow purchase_order v1\ndescription \"The order of an approved purchase request, placed with the supplier\"\n\ninputs\n  request_id : string\n  amount     : money[JPY]  range >=1JPY <=500_000JPY\n\noutputs\n  reference : string\n\nrecord Order\n  reference : string\n\ntask place_order(request_id: string, amount: money[JPY]) -> Order\n  timeout 1 day\n  idempotent\n\nflow\n  let o = place_order(request_id: request_id, amount: amount)\n  succeed reference = o.reference\n";
+
+/// The same, in Japanese.
+const X20_FLOW_JA: &str = "workflow 発注 v1\ndescription \"承認された購買の申請を、仕入先に発注する\"\n\ninputs\n  申請番号 : string\n  金額     : money[円]  range >=1円 <=500_000円\n\noutputs\n  発注番号 : string\n\nrecord 発注の控え\n  発注番号 : string\n\ntask 発注する(申請番号: string, 金額: money[円]) -> 発注の控え\n  timeout 1 day\n  idempotent\n\nflow\n  let 控え = 発注する(申請番号: 申請番号, 金額: 金額)\n  succeed 発注番号 = 控え.発注番号\n";
+
+/// The request of W210: the `on` line's `when` keeps the amount to what the flow takes, written with `not`, which
+/// ringi does not follow.
+const X20_REQUEST_NOT: &str = "request purchase v1 \"Purchase request\"\n\nuse flow order from \"order.flow\"\n\nform\n  amount : money[JPY] \"Amount\"  range >=1JPY <=1_000_000JPY\n\nroute\n  check  finance\n\nwho\n  finance = team finance\n\nticket\n  on approved  launch order(request_id: ticket.id, amount: amount)  when not (amount > 500_000JPY)\n";
+
+/// The same, in Japanese.
+const X20_REQUEST_NOT_JA: &str = "request 購買(purchase) v1 \"購買の申請\"\n\nuse flow 発注(order) from \"発注.flow\"\n\nform\n  金額(amount) : money[円] \"金額\"  range >=1円 <=1_000_000円\n\nroute\n  確認(check)  経理\n\nwho\n  経理(finance) = team finance\n\nticket\n  on approved  launch 発注(申請番号: ticket.id, 金額: 金額)  when not (金額 > 500_000円)\n";
+
+/// The other side of W210: the server's API, whose operation that takes a form says it is written
+/// from a request the project does not have (moved or taken away after the document was written),
+/// at `$file`.
+macro_rules! x20_api {
+    ($file:literal) => {
+        concat!("{\n  \"openapi\": \"3.1.0\",\n  \"info\": { \"title\": \"Requests\", \"version\": \"1\" },\n  \"paths\": {\n    \"/requests/supplies/tickets\": {\n      \"post\": {\n        \"operationId\": \"submit_supplies\",\n        \"requestBody\": {\n          \"required\": true,\n          \"content\": { \"application/json\": { \"schema\": {\n            \"type\": \"object\",\n            \"required\": [\"form\"],\n            \"properties\": {\n              \"form\": {\n                \"type\": \"object\",\n                \"required\": [\"item\", \"count\"],\n                \"properties\": {\n                  \"item\": { \"type\": \"string\", \"maxLength\": 100 },\n                  \"count\": { \"type\": \"integer\", \"minimum\": 1, \"maximum\": 100 }\n                },\n                \"additionalProperties\": false\n              }\n            },\n            \"additionalProperties\": false\n          } } }\n        },\n        \"responses\": {\n          \"200\": { \"description\": \"The ticket\", \"content\": { \"application/json\": { \"schema\": {\n            \"type\": \"object\",\n            \"required\": [\"ticket\"],\n            \"properties\": { \"ticket\": { \"type\": \"object\", \"required\": [\"id\"], \"properties\": { \"id\": { \"type\": \"string\" } } } }\n          } } } }\n        },\n        \"x-ritsu-request\": { \"file\": \"", $file, "\", \"name\": \"supplies\", \"version\": 1 }\n      }\n    }\n  }\n}\n")
+    };
+}
+
+/// [`x20_api`], naming `supplies.ringi`.
+const X20_API: &str = x20_api!("supplies.ringi");
+
+/// The same, naming `備品.ringi`.
+const X20_API_JA: &str = x20_api!("備品.ringi");
+
+/// A flow that submits the request of [`X20_API`] through the server.
+const X20_API_FLOW: &str = "workflow restock v1\ndescription \"Asks for the supplies that run low, through the server of the requests\"\n\nuse openapi requests from \"requests.json\"\n  url \"https://requests.example.com\"\n\nrecord Supplies\n  item  : string\n  count : int  range >=1 <=50\n\nrecord Ticket\n  id : string\n\nrecord Moved\n  ticket : Ticket\n\ninputs\n  supplies : Supplies\n\noutputs\n  ticket : string\n\ntask submit_supplies(form: Supplies) -> Moved\n  http POST requests \"/requests/supplies/tickets\"\n  key\n\nflow\n  let moved = submit_supplies(form: supplies)\n  succeed ticket = moved.ticket.id\n";
+
+/// The same, in Japanese.
+const X20_API_FLOW_JA: &str = "workflow 補充 v1\ndescription \"足りなくなった備品を、申請のサーバーで申請する\"\n\nuse openapi 申請 from \"申請.json\"\n  url \"https://requests.example.com\"\n\nrecord 備品\n  item  : string\n  count : int  range >=1 <=50\n\nrecord 票\n  id : string\n\nrecord 動いた票\n  ticket : 票\n\ninputs\n  足りない物 : 備品\n\noutputs\n  票番号 : string\n\ntask 備品を申請する(form: 備品) -> 動いた票\n  http POST 申請 \"/requests/supplies/tickets\"\n  key\n\nflow\n  let 動き = 備品を申請する(form: 足りない物)\n  succeed 票番号 = 動き.ticket.id\n";
+
+/// The files of X18's reproductions: a request and the gate it reads.
+fn x18(gate: &'static str) -> Vec<(&'static str, &'static str)> {
+    vec![("purchase.ringi", X18_REQUEST), ("company.gate", gate)]
+}
+
+/// The same, in Japanese names.
+fn x18_ja(gate: &'static str) -> Vec<(&'static str, &'static str)> {
+    vec![("購買.ringi", X18_REQUEST_JA), ("全社.gate", gate)]
+}
+
+/// The files of X20's reproductions: a request and the flow it starts.
+fn x20(request: &'static str) -> Vec<(&'static str, &'static str)> {
+    vec![("purchase.ringi", request), ("order.flow", X20_FLOW)]
+}
+
+/// The same, in Japanese names.
+fn x20_ja(request: &'static str) -> Vec<(&'static str, &'static str)> {
+    vec![("購買.ringi", request), ("発注.flow", X20_FLOW_JA)]
+}
+
+/// W210's files, both sides: [`x20`] with `request`, and a flow that submits a request through the
+/// server's API, which names a file the project does not have.
+fn x20_both(request: &'static str) -> Vec<(&'static str, &'static str)> {
+    let mut files = x20(request);
+    files.extend([("requests.json", X20_API), ("restock.flow", X20_API_FLOW)]);
+    files
+}
+
+/// The same, in Japanese names.
+fn x20_both_ja(request: &'static str) -> Vec<(&'static str, &'static str)> {
+    let mut files = x20_ja(request);
+    files.extend([("申請.json", X20_API_JA), ("補充.flow", X20_API_FLOW_JA)]);
+    files
+}
+
+/// The files of E909's project: X16's, with the document whose refund takes a fee.
+fn x16_fee() -> Vec<(&'static str, &'static str)> {
+    vec![("orders.json", ORDERS_FEE_API), ("returns.flow", X16_FLOW_FEE), ("refunds.gate", X16_GATE_FEE)]
+}
+
+/// The same, in Japanese names.
+fn x16_fee_ja() -> Vec<(&'static str, &'static str)> {
+    vec![("orders.json", ORDERS_FEE_API_JA), ("返品.flow", X16_FLOW_FEE_JA), ("返金.gate", X16_GATE_FEE_JA)]
 }
 
 /// The rule of the module at hand in the reproductions of the modules: a fee by the subtotal.
@@ -393,12 +533,12 @@ pub fn ledger() -> Ledger {
             "E201",
             tr!("規則を呼ぶところで、前提を破る値を渡すことがあります", "A call can give a rule values that break its precondition"),
             tr!(
-                "ワークフローか kaname の関数が規則を呼ぶところで、規則の前提（入力どうしの関係 `constraint`、起こらない組み合わせ `never`、並びの合計と長さの上限、並びの要素どうしで同じ値をとらない `unique` のフィールド、`range from koyomi` の日）を破る値を渡すことがあるとき。ワークフローでは、dandori が知っている値の範囲の中に、前提を破る組み合わせがあるときです。範囲は dandori が値を入れるすべての場所から集めたもので、dandori の E014 と同じ読み方です。範囲を `range from koyomi` にした日付の入力では、渡す値が koyomi の日付の日か、範囲を書いた日付（`range >=2026-01-01 <=2026-12-31`）で、その日のどれかが規則の日でないときも、このエラーです。kaname の関数では、関数のベクタを流したときに前提を破る値を渡す入力があるときです。kaname の範囲は上からの見積もりで、範囲の角は起きないことがあるので、角だけでは例にしません。前提を破る呼び出しは、規則から生成したコードが入口で受け付けないので、走らせたときに初めて落ちます。注には、値の範囲と前提を破る組み合わせや日か、前提を破る関数の入力が出ます。",
-                "Where a workflow or a function of kaname calls a rule, it can give the rule values that break one of its preconditions (a relation between inputs, `constraint`; a combination that cannot happen, `never`; a bound on the total or the length of the list it walks; a field no two elements of the list share, `unique`; the days of `range from koyomi`). For a workflow, the ranges dandori knows for the values it gives hold a combination that breaks it. The ranges are dandori's, gathered from every place a value comes from, read as dandori's E014 reads them. A date input whose range is `range from koyomi` and is given the day of a koyomi date, or a date the `.flow` holds to a range (`range >=2026-01-01 <=2026-12-31`), is this error too when one of those days is not one of the rule's. For a function of kaname, a run of the function's vectors gives values that break it: kaname's ranges are an estimate from above, so a corner of them alone is no example. The rule's generated code refuses such a call at its door, so it would fail only when it runs. The notes give the ranges and the combination or the day that breaks it, or the function's input that does."
+                "ワークフローか kaname の関数が規則を呼ぶところで、規則の前提（入力どうしの関係 `constraint`、起こらない組み合わせ `never`、並びの合計の範囲、並びを数えた数の下限、並びの長さの上限、並びの要素どうしで同じ値をとらない `unique` のフィールド、`range from koyomi` の日、入力から計算した値を受け付ける範囲 `define … range`）を破る値を渡すことがあるとき。ワークフローでは、dandori が知っている値の範囲の中に、前提を破る組み合わせがあるときです。範囲は、dandori が、呼び出しに届く実行が最後に入れた値から集めたもので、dandori の E014 と同じ読み方です。`never` の行が読む真偽と列挙の値は、呼び出しに届く実行で、その値がどれも条件に当たるとき（書き出した値、`match` の分岐が残した値、`range` に入る値。変数なら、届く実行が最後に入れた値）に、条件に当たると数えます。呼び出しが一つの値を渡して `never` の行に当たるとき（`express: true` と書いた、`let fast = true` のあとで `express: fast` と渡した）は、注がその値と、何を渡せば行が保たれるかを `never` の行から言います。範囲を `range from koyomi` にした日付の入力では、渡す値が koyomi の日付の日か、範囲を書いた日付（`range >=2026-01-01 <=2026-12-31`）で、その日のどれかが規則の日でないときも、このエラーです。kaname の関数では、関数のベクタを流したときに前提を破る値を渡す入力があるときです。kaname の範囲は上からの見積もりで、範囲の角は起きないことがあるので、角だけでは例にしません。前提を破る呼び出しは、規則から生成したコードが入口で（計算した値の範囲なら、その値を計算したところで）受け付けないので、走らせたときに初めて落ちます。注には、値の範囲と前提を破る組み合わせや日か、前提を破る関数の入力が出ます。",
+                "Where a workflow or a function of kaname calls a rule, it can give the rule values that break one of its preconditions (a relation between inputs, `constraint`; a combination that cannot happen, `never`; a bound on the total or the length of the list it walks, or on how few of its elements may count; a field no two elements of the list share, `unique`; the days of `range from koyomi`; the range a value it works out from the inputs is accepted in, `define … range`). For a workflow, the ranges dandori knows for the values it gives hold a combination that breaks it. The ranges are dandori's, from what the runs that reach the call last put in the values, read as dandori's E014 reads them. A truth value or an enum's value a `never` line reads counts as meeting its condition when every value it can be on the runs that reach the call does (a value written out, the values the arms of a `match` leave, the values a `range` lets in; for a variable, what those runs last put in it). Where the call gives one value that meets a condition of the line (`express: true` written out, or `express: fast` after `let fast = true`), a note says that value and, from the `never` line, what to give for the line to hold. A date input whose range is `range from koyomi` and is given the day of a koyomi date, or a date the `.flow` holds to a range (`range >=2026-01-01 <=2026-12-31`), is this error too when one of those days is not one of the rule's. For a function of kaname, a run of the function's vectors gives values that break it: kaname's ranges are an estimate from above, so a corner of them alone is no example. The rule's generated code refuses such a call at its door (the range of a value it works out, where it works the value out), so it would fail only when it runs. The notes give the ranges and the combination or the day that breaks it, or the function's input that does."
             ),
             tr!(
-                "呼ぶ前に前提が保たれるよう分岐するか、値の範囲を狭めてください（入力やタスクの結果の `range`。kaname では、呼ぶ前の `if`）。前提のほうが業務に合っていないなら、規則の `constraint` か `never` の行を直してください。",
-                "Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result; in kaname, an `if` before the call). If the precondition is the part that is wrong, correct the rule's `constraint` or `never` line."
+                "呼ぶ前に前提が保たれるよう分岐するか、値の範囲を狭めてください（入力やタスクの結果の `range`。kaname では、呼ぶ前の `if`）。書いた値で `never` の行に当たるなら、注が言う値を渡してください。前提のほうが業務に合っていないなら、規則の `constraint` か `never` の行、`define` の範囲を直してください。",
+                "Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result; in kaname, an `if` before the call). Where a value written out meets a `never` line, give the value the note says. If the precondition is the part that is wrong, correct the rule's `constraint` or `never` line, or the range of its `define`."
             ),
             Repro::Dir { files: vec![("refund_check.rule", REFUND_RULE), ("refund.flow", REFUND_FLOW), ("refund.kn", REFUND_KN)], command: CHECK.to_vec() },
             &["W201"],
@@ -407,12 +547,12 @@ pub fn ledger() -> Ledger {
             "W201",
             tr!("規則を呼ぶところで、前提が保たれるかを決められません", "Whether a call keeps a rule's precondition cannot be decided"),
             tr!(
-                "ワークフローか kaname の関数が規則を呼ぶところで、前提が保たれるかを決められないとき。ワークフローでは、渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計や長さの上限か、要素どうしで同じ値をとらない `unique` のフィールドである（dandori は並びの長さも中身も知りません）、前提が真偽か列挙を読む `never` の行である（範囲で数えられません）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（範囲を書いていない入力やタスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori gen` が書くワークフローのコードが実行時に確かめます。値ができたところですぐに確かめ、前提を破る実行を `Dandori.BrokenPrecondition` で失敗させます。kaname の関数では、範囲の解析が見積もった範囲と、kaname が知っている入力どうしの関係で示せず、関数のベクタにも前提を破る入力が無いときです。kaname の生成したコードがその場所で確かめ、規則が受け付けない呼び出しでは、関数が `rule` で失敗します。",
-                "Where a workflow or a function of kaname calls a rule, whether a precondition holds cannot be decided. For a workflow: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list, or asks that no two of its elements share a `unique` field (dandori knows neither a list's length nor what it holds), it is a `never` line that reads a truth value or an enum (a range cannot count those), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input or a task's answer with no range, `now`). The workflow's code that `ritsu dandori gen` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition`. For a function of kaname: neither the ranges kaname finds nor a relation it keeps between the inputs shows it, and no run of the function's vectors breaks it. kaname's generated code checks it there, and the function fails with `rule` where the rule refuses the call."
+                "ワークフローか kaname の関数が規則を呼ぶところで、前提が保たれるかを決められないとき。ワークフローでは、渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計の範囲や、数えた数の下限、長さの上限か、要素どうしで同じ値をとらない `unique` のフィールドである（dandori は並びの長さも中身も知りません）、前提が真偽か列挙を読む `never` の行で、呼び出しが渡すその値が、条件に当たることも当たらないこともある（値を書き出すか、その値の `match` の分岐の中で呼ぶか、呼び出しに届く実行で一つの値だけを入れた変数を渡せば決まります）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（範囲を書いていない入力やタスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori gen` が書くワークフローのコードも `ritsu run` も、値ができたところですぐに確かめ、前提を破る実行を `Dandori.BrokenPrecondition` で失敗させます。ただし、入力から計算した値を受け付ける範囲は、ワークフローのコードが規則の計算を繰り返さないので確かめません。範囲の外になる呼び出しは、規則から生成したコードが、その値を計算したところで受け付けません。kaname の関数では、範囲の解析が見積もった範囲と、kaname が知っている入力どうしの関係で示せず、関数のベクタにも前提を破る入力が無いときです。kaname の生成したコードがその場所で確かめ、規則が受け付けない呼び出しでは、関数が `rule` で失敗します。",
+                "Where a workflow or a function of kaname calls a rule, whether a precondition holds cannot be decided. For a workflow: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list or how few of its elements may count, or asks that no two of its elements share a `unique` field (dandori knows neither a list's length nor what it holds), it is a `never` line that reads a truth value or an enum, and the value the call gives can meet its condition or not (written out, given in the arm of a `match` on it, or a variable the runs that reach the call put one value in, it is decided), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input or a task's answer with no range, `now`). The workflow's code that `ritsu dandori gen` writes checks such a precondition as soon as the values are made, and so does `ritsu run`; a run that breaks it fails with `Dandori.BrokenPrecondition`. The range a value the rule works out is accepted in is the exception: the workflow's code does not repeat the rule's arithmetic, and the rule's generated code refuses a call whose value falls outside it where it works the value out. For a function of kaname: neither the ranges kaname finds nor a relation it keeps between the inputs shows it, and no run of the function's vectors breaks it. kaname's generated code checks it there, and the function fails with `rule` where the rule refuses the call."
             ),
             tr!(
-                "値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`。日付にも `range >=2026-01-01 <=2026-12-31` と書けます）。範囲を書けないなら、このままで構いません。ワークフローのコードが実行時に確かめます。kaname では、呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡してください。",
-                "Give the place the value comes from a range (the `range` of a task's result or of the workflow's input; a date takes one too, `range >=2026-01-01 <=2026-12-31`). Where none can be given, leave it: the workflow's code checks it at run time. In kaname, branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`)."
+                "値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`。日付にも `range >=2026-01-01 <=2026-12-31` と書けます）。範囲を書けないなら、このままで構いません。ワークフローのコードと `ritsu run` が、値ができたところで確かめます（計算した値の範囲は、規則のコードが確かめます）。kaname では、呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡してください。",
+                "Give the place the value comes from a range (the `range` of a task's result or of the workflow's input; a date takes one too, `range >=2026-01-01 <=2026-12-31`). Where none can be given, leave it: the workflow's code and `ritsu run` check it where the values are made (the range of a value the rule works out, the rule's code checks). In kaname, branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`)."
             ),
             Repro::Dir { files: vec![("refund_check.rule", REFUND_RULE), ("refund.flow", REFUND_FLOW_OPEN), ("refund.kn", REFUND_KN_CAPPED)], command: CHECK.to_vec() },
             &["E201"],
@@ -562,12 +702,12 @@ pub fn ledger() -> Ledger {
             "E207",
             tr!("出どころがとりうる値を、受け取る側が受け取りません", "What can come from a place's source is not what the place takes"),
             tr!(
-                "入力やフィールドの行に `fed by <参照>` と書いてあり、出どころがとりうる値のどれかを、その行が受け取らないとき。比べるのは、数なら単位と刻みと範囲（単位が違えば成り立ちません）、列挙なら公開名の値、日付なら日、真偽と文字列なら型です。文には値の例と、規則や日付のファイルならそれを出す入力を書きます。契約（proto、OpenAPI、JSON Schema）の上限が無いときと帳簿の上限が無いとき（chobo の上限の 2⁶³ − 1 まで）も、その値は来るので例になります。契約のプロパティが省略でき、null を通すのに、受け取る側が `T?` でないときも同じです。受け取る側が書いていない端は比べません。`fed by` は生成コードを変えず、手書きのコードが本当にその値を運ぶかも確かめません。確かめるのは値の範囲です。",
-                "A line of an input or a field writes `fed by <naming>`, and the line does not take something that can come from there. A number is compared by its unit, its step and its range (another unit does not hold); an enum by the public names of its values, a date by its days, a bool and a string by their type. The message gives an example value and, from a rule or a dates file, the input that gives it. A contract (proto, OpenAPI, JSON Schema) with no upper end, and a book with none (up to chobo's limit of 2⁶³ − 1), let that value come, so they are examples too; so is a contract's property that can be left out or be null, where the place is not `T?`. An end the place does not write is not compared. `fed by` changes no generated code and does not check that the hand-written code carries the value: it checks the range of the values."
+                "入力やフィールドの行に `fed by <参照>` と書いてあり、出どころがとりうる値のどれかを、その行が受け取らないとき。比べるのは、数なら単位と刻みと範囲（単位が違えば成り立ちません）、列挙なら公開名の値、日付なら日、真偽と文字列なら型です。OpenAPI の文書や JSON Schema が `format: date-time` と書いた文字列は、時刻（時刻の付いた日時）として読みます。日付を受け取る行には来ず、ワークフローの `timestamp` は受け取ります（ほかのワークフローの `timestamp` と、`.proto` の `google.protobuf.Timestamp` も同じです）。`.proto` の `google.type.Date` は、dandori と同じく名前で分かる日付として読みます。`.proto` の列挙の値の名前は、rulec の `import proto` と同じに読みます（頭にある列挙の名前を落として小文字にし、同じ番号の名前は一つの値。受け取る側はそのどれか一つを持てば足ります。表は rulec の reference の `import proto` にあります）。`repeated` のフィールドは値の並びなので、一つの値を受け取る行には来ません。文には値の例と、規則や日付のファイルならそれを出す入力を書きます。契約（proto、OpenAPI、JSON Schema）の上限が無いときと帳簿の上限が無いとき（chobo の上限の 2⁶³ − 1 まで）も、その値は来るので例になります。契約のプロパティが省略できるか null を通すとき、`.proto` のフィールドを設定しないことがあるとき（`optional`、`oneof` の中、メッセージ型。規則か proto2 の `required` が付いたものを除く）も、受け取る側が `T?` でなければ同じです。受け取る側が書いていない端は比べません。`fed by` は生成コードを変えず、手書きのコードが本当にその値を運ぶかも確かめません。確かめるのは値の範囲です。",
+                "A line of an input or a field writes `fed by <naming>`, and the line does not take something that can come from there. A number is compared by its unit, its step and its range (another unit does not hold); an enum by the public names of its values, a date by its days, a bool and a string by their type. A string an OpenAPI document or a JSON Schema marks `format: date-time` is read as a moment, a day with a time of day: it never comes to a line that takes a date, and a workflow's `timestamp` takes it (as it does another workflow's `timestamp` and a `.proto`'s `google.protobuf.Timestamp`). A `.proto`'s `google.type.Date` is read as a date, known by its name as dandori knows it. A `.proto` value's name is read as rulec's `import proto` reads it (the enum's own name taken off the front and the rest in lower case; the names of one number are one value, and the place holds it by any one of them; rulec's reference has the table, under `import proto`). A `repeated` field is a list of values, which never comes to a line that takes one. The message gives an example value and, from a rule or a dates file, the input that gives it. A contract (proto, OpenAPI, JSON Schema) with no upper end, and a book with none (up to chobo's limit of 2⁶³ − 1), let that value come, so they are examples too; so is a contract's property that can be left out or be null, and a `.proto`'s field that may be left unset (`optional`, in a `oneof`, or a message, unless a rule or proto2 marks it `required`), where the place is not `T?`. An end the place does not write is not compared. `fed by` changes no generated code and does not check that the hand-written code carries the value: it checks the range of the values."
             ),
             tr!(
-                "受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。",
-                "Widen what the place takes, or narrow what the source gives. Which of the two is a person's decision."
+                "受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。契約が `format: date-time` と書いた文字列が日だけを運ぶなら、契約のほうを `format: date` にします。",
+                "Widen what the place takes, or narrow what the source gives. Which of the two is a person's decision. Where a string a contract marks `format: date-time` carries only a day, the contract marks it `format: date`."
             ),
             Repro::Dir { files: vec![("収入.rule", FED_INCOME_JA), ("人口.rule", FED_POPULATION_JA)], command: CHECK.to_vec() },
             &["W207", "E208"],
@@ -577,12 +717,12 @@ pub fn ledger() -> Ledger {
             "W207",
             tr!("出どころの値を受け取るかを決められません", "Whether a place takes what can come from its source cannot be decided"),
             tr!(
-                "`fed by` の出どころが値の全部を言わないとき。rulec が規則の出力の端を数えられないとき、数えた範囲が受け取る側を外れるのに規則のベクタにその値になる入力が無いとき（rulec は出力の範囲を、入力をそれぞれの範囲で動かして数えます）、出どころのファイルをその言語が通さないとき（誤りはその言語が言います）、契約の日付に受け取る側が範囲を書いているとき（契約は日付を文字列として運ぶだけです）、レコードやリストどうしのときです。",
-                "The source of a `fed by` does not say all of its values: rulec does not count an end of a rule's output; what it counts lies outside what the place takes, and none of the rule's vectors comes to such a value (rulec bounds an output by moving each input over its own range); the source's language does not pass its file (which that language says); a contract's date where the place writes a range (a contract carries a date as a string); two records or lists."
+                "`fed by` の出どころが値の全部を言わないとき。rulec が規則の出力の端や、規則が渡す列挙の値を数えられないとき、数えた範囲が受け取る側を外れるのに規則のベクタにその値になる入力が無いとき（rulec は出力の範囲を、入力をそれぞれの範囲で動かして数えます）、出どころのファイルをその言語が通さないとき（誤りはその言語が言います）、契約の日付に受け取る側が範囲を書いているとき（契約は日付を、文字列か `.proto` の `google.type.Date` として運ぶだけで、日を並べていません）、レコードやリストどうしのときです。",
+                "The source of a `fed by` does not say all of its values: rulec does not count an end of a rule's output, or the values of an enum a rule gives; what it counts lies outside what the place takes, and none of the rule's vectors comes to such a value (rulec bounds an output by moving each input over its own range); the source's language does not pass its file (which that language says); a contract's date where the place writes a range (a contract carries a date as a string or as a `.proto`'s `google.type.Date`, and lists no days); two records or lists."
             ),
             tr!(
-                "規則なら、出力の端を数えられるように書くか（`min(…, 上限)` など）、受け取る側の範囲を広げてください。契約なら、とりうる値を並べてください（JSON Schema の `enum`、Protovalidate の `in`）。ワークフローや kaname なら、出どころの行に範囲を書いてください。",
-                "For a rule, write it so that rulec counts the output's ends (`min(…, <the limit>)`, say), or widen what the place takes. For a contract, list its values (`enum` in a schema, `in` in Protovalidate). For a workflow or a module of kaname, write the range on the source's line."
+                "規則なら、出力の端を数えられるように書くか（`min(…, 上限)` など）、受け取る側の範囲を広げてください。列挙の値を数えられないときは、受け取る側が足りない値も受け取るようにします。契約なら、とりうる値を並べてください（JSON Schema の `enum`、Protovalidate の `in`）。`.proto` の `google.type.Date` は日を並べられないので、日を並べた文字列のフィールドにします。ワークフローや kaname なら、出どころの行に範囲を書いてください。二つのレコードやリストは値を比べないので、出どころの行の書き方では決まりません。",
+                "For a rule, write it so that rulec counts the output's ends (`min(…, <the limit>)`, say), or widen what the place takes; for an enum whose values rulec does not count, take the values the place leaves out too. For a contract, list its values (`enum` in a schema, `in` in Protovalidate); a `.proto`'s `google.type.Date` lists no days, and a string field that lists them can be decided. For a workflow or a module of kaname, write the range on the source's line. Two records or lists are not compared value by value, and nothing on the source's line decides them."
             ),
             Repro::Dir { files: vec![("繰り越し.rule", FED_CARRY_JA), ("研究.rule", FED_RESEARCH_JA)], command: CHECK.to_vec() },
             &["E207"],
@@ -603,6 +743,67 @@ pub fn ledger() -> Ledger {
             &["E207"],
         )
         .english(Repro::Dir { files: vec![("income.rule", FED_INCOME), ("population.rule", FED_POPULATION_NOT_THERE)], command: CHECK.to_vec() }),
+        // ── What a ticket holds, gives and asks (ringi's DESIGN 9.3) ──
+        Entry::new(
+            "E209",
+            tr!("チケットの仮押さえの期限が、確定や取消の前に切れることがあります", "A ticket's hold can expire before its round posts or voids it"),
+            tr!(
+                "申請の種類が `on submitted hold` で作る仮押さえが、その `round` の終わり（承認、却下、差し戻し、取り下げ、期限切れ）で確定か取消にされる前に、帳簿の有効期限（振替の `pending expires after`）に届くとき。仮押さえが開いている長さは、ringi の検査が数える営業日です。一つの `round` と保留（`pause at most`）で、前のステップへ差し戻せる申請（`send back to any earlier stage`）では、差し戻しても `round` が変わらないので、差し戻すたびに同じ `round` を歩き直す分を足します。その営業日を、申請を出せるどの日からもカレンダーに置き、いちばん長くなる日を注に出します。長さは、出した日の 00:00 から最後の営業日の終わりまでです。営業日は ringi の検査が主張（`ends within`）を確かめるのと同じ上限で、そこまでかかるチケットがあるとは限りません。期限の切れた仮押さえの確定と取消を、帳簿は `expired` で拒否するので、承認されたチケットに押さえた分が残っていません。期限の切れない仮押さえ（`pending never expires`）と、期限に届かないと示せたときは、何も出しません。",
+                "A hold a request makes with `on submitted hold` can reach the book's expiry (the transfer's `pending expires after`) before the ending of its round (approved, rejected, sent back, withdrawn, expired) posts or voids it. How long the hold stays open is the business days ringi's check counts: one round and the pause (`pause at most`), and where a stage can send the ticket back to an earlier stage (`send back to any earlier stage`), which starts no new round, the round once more each time. The days are laid on the calendar from every day a request can be submitted on, and a note gives the day that makes the stretch the longest: from 00:00 of that day to the end of the last business day. The business days are the upper bound ringi's check holds its claims to (`ends within`), which a ticket need not take. The book refuses a post or a void of an expired hold with `expired`: the ticket would be approved with nothing held for it. A hold that never expires (`pending never expires`), and one shown to end before it expires, are not said."
+            ),
+            tr!(
+                "仮押さえの期限を延ばすか（振替の `pending expires after`）、ステップの期限を短くしてください。",
+                "Make the hold last longer (the transfer's `pending expires after`), or give the stages shorter deadlines."
+            ),
+            Repro::Dir { files: vec![("購買.ringi", X19_REQUEST_JA), ("本社.cal", X19_CAL_JA), ("予算.book", X19_BOOK_JA)], command: CHECK.to_vec() },
+            &["W209", "E206"],
+        )
+        .english(Repro::Dir { files: vec![("purchase.ringi", X19_REQUEST), ("office.cal", X19_CAL), ("budget.book", X19_BOOK)], command: CHECK.to_vec() }),
+        Entry::new(
+            "W209",
+            tr!("チケットの仮押さえの期限が切れるかを決められないか、仮押さえを作れない申請者がいます", "Whether a ticket's hold expires cannot be decided, or some requesters cannot make it"),
+            tr!(
+                "二つの場合があります。一つは、仮押さえが確定か取消の前に期限に届くかを決められないとき。`round` に終わりの無い待ちがある（期限の無いステップ、期限を過ぎても待つステップ）、営業日をいくつかのカレンダーで数えていて、どれかが休む日を休みとして数えた長さが期限に届く（そこまでかかるチケットがあるとは限りません）、カレンダーのデータが `round` の営業日に足りない、のどれかです。もう一つは、仮押さえの引数が申請者の上のチームを読み（`dept: requester.department`）、申請を出せる人の中に、その種類のチームが上に無い人がいるとき。仮押さえを作れないので、その人の `submit` は断られます。組織の版ごとに、何人のうち何人かと、その人の ID を注に出します。組織にデータが無ければ、決められないと言います。行の `when` が `requester.department is not none` なら、チームのある申請者だけが押さえるので、何も出しません。",
+                "Two cases. One: whether a hold reaches its expiry before it is posted or voided cannot be decided. A round has a wait with no end (a stage with no deadline, a stage that stays when it is late); the business days are counted in several calendars, and the stretch over the days all of them open reaches the expiry (which a ticket need not take); or a calendar's data does not cover the business days of a round. The other: an argument of the hold reads a team above the requester (`dept: requester.department`), and some of the people who may submit the request have no team of that kind above them. The hold cannot be made for them, so their `submit` is refused. The notes give, for each version of the organization, how many of how many, and their IDs; where the organization has no data, it is undecided. A line whose `when` says `requester.department is not none` makes the hold for the requesters who have the team alone, and nothing is said."
+            ),
+            tr!(
+                "期限のほうは、どのステップにも期限を書くか（`due in …`）、仮押さえの期限を延ばしてください。引数のほうは、その人が出さない申請なら `submitted by … except …` で外し、出す申請なら、だれにもある値を渡すか、行に `when requester.<種類> is not none` を書いて、その人の申請では押さえないようにしてください。",
+                "For the expiry: give every stage a deadline (`due in …`), or make the hold last longer. For the argument: if those people do not submit the request, leave them out (`submitted by … except …`); if they do, give the hold a value every requester has, or write `when requester.<kind> is not none` on the line, so that their requests hold nothing."
+            ),
+            Repro::Dir { files: vec![("購買.ringi", X19_REQUEST_OPEN_JA), ("予算.book", X19_BOOK_JA)], command: CHECK.to_vec() },
+            &["E209"],
+        )
+        .english(Repro::Dir { files: vec![("purchase.ringi", X19_REQUEST_OPEN), ("budget.book", X19_BOOK)], command: CHECK.to_vec() }),
+        Entry::new(
+            "E210",
+            tr!("チケットと flow の間で渡す値が合いません", "What a ticket and a workflow hand each other does not fit"),
+            tr!(
+                "申請の種類が flow に渡す値のどれかを、flow の入力が受け取らないとき。渡すのは、`on … launch` なら呼び出しに書いた値、エージェントの決め方（`agent <flow>, else …`）と要約（`note from <flow>`）なら、チケットの ID（`request_id`）と、flow が入力に宣言したフォームのフィールドです。比べるのは、数と金額なら単位と範囲、日付なら日、選択なら値の名前、ほかは型です。値の無いことがあるのに入力が `T?` でないときも成り立ちません。値は、flow に渡す所で絞って読みます。エージェントと要約なら、そのステップを決める経路の表の行。`when` の付いた行やステップなら、フォームのフィールドを定数と比べる条件（`and` でつないだものも）です。`launch` が渡していない必須の入力、flow に無い名前の引数、エージェントと要約の flow の、`request_id` でもフォームのフィールドでもない入力も、このエラーです。エージェントの flow は、答えを出力 `verdict`（値が `ok` と `doubt` の列挙）と `reason`（string）で返し、要約の flow は出力を一つ以上持ち、どの出力も要約が持てる型です。要約が持てるのは、文（string、date、timestamp、列挙）、整数（int と単位の付いた数）、真偽（bool）、行（レコードの list。レコードのフィールドもこれらの型）と、それらの `T?` で、一つのレコード、レコードでない物の list、`json` は持てません。そうでない flow も、このエラーです。反対の向きに、flow がサーバーの API（`ritsu gen --target requests` が書く `openapi.json`）で申請を出すときは、flow が呼ぶ操作を、今の申請から ringi が書く操作と比べます。比べるのは、操作の場所、本文が受け取る値（フォームのスキーマ）、操作が名指す申請（`x-ritsu-request` の名前と版）です。違うなら、文書は申請の前の姿から書いたもので、dandori が flow を比べた相手は今の申請ではありません。これもこのエラーです。今の申請に無い操作を呼ぶときも同じです。文書が今の申請のものなら、flow が送る値の型と範囲は、dandori が文書と比べます（dandori の E016）。",
+                "An input of a flow does not take something a request gives it. A `launch` (`on … launch`) gives what its call writes; an agent's way (`agent <flow>, else …`) and a summary (`note from <flow>`) are given the ticket's ID (`request_id`) and the fields of the form the flow declares as its inputs. A number and an amount are compared by unit and range, a date by its days, a choice by the names of its values, the rest by type; a value that can be absent where the input is not `T?` does not hold either. A value is read as the place the flow is given it holds it: for an agent and a summary, the rows of the route's table that give the stage; on a line or a stage with a `when`, the comparisons of fields of the form with constants (joined with `and`). An input a `launch` does not give, a value it gives that the flow has no input for, and an input of an agent's or a summary's flow that is neither `request_id` nor a field of the form, are this error too. An agent's flow answers in the outputs `verdict` (an enum whose values are `ok` and `doubt`) and `reason` (a string), and a summary's flow has at least one output, each of a type a note holds: text (a string, a date, a timestamp, an enum), a whole number (an int, or a number with a unit), a truth (a bool), rows (a list of records whose fields are of these types), or a `T?` of these, and not a record on its own, a list of what is not a record, or `json`; a flow that does not is this error. The other way, where a flow makes a request through the server's API (the `openapi.json` `ritsu gen --target requests` writes), the operation the flow calls is compared with the one ringi writes from the request now: where the operation is, what its body takes (the form's schema), and the request it names (the name and the version of `x-ritsu-request`). Where they differ, the document was written from the request as it was, and what dandori held the flow to is not the request now: this error too, as is a call of an operation the request no longer has. Where the document is the request's now, the types and the ranges of what the flow sends are dandori's to compare with the document (dandori's E016)."
+            ),
+            tr!(
+                "渡す値を flow が受け取る範囲に収めるか（フォームの `range`、`on` の行の `when`）、flow の入力を広げてください。どちらにするかは人が決めることです。flow が呼ぶ API が今の申請のものでないときは、`ritsu gen --target requests` で書き直してから、もう一度検査してください。",
+                "Hold the value to what the flow takes (the form's `range`, a `when` on the `on` line), or widen the flow's input. Which of the two is a person's decision. Where the API a flow calls is not the request's now, write it again with `ritsu gen --target requests`, and check again."
+            ),
+            Repro::Dir { files: x20_ja(X20_REQUEST_JA), command: CHECK.to_vec() },
+            &["W210", "E207"],
+        )
+        .english(Repro::Dir { files: x20(X20_REQUEST), command: CHECK.to_vec() }),
+        Entry::new(
+            "W210",
+            tr!("チケットと flow の間で渡す値が合うかを決められません", "Whether what a ticket and a workflow hand each other fits cannot be decided"),
+            tr!(
+                "flow の入力が、渡される値を受け取ると示せないとき。ringi が追わない値を渡している、値を一つずつ比べない型どうしである（明細の `rows` とレコードのリスト）、組織にデータが無く `requester.<種類>` に値があるかを決められない、値が合わないように見えるが渡す所の条件を ringi が追わない、のどれかです。追わない条件は、`or` や `not` のある `when`、渡す値と一緒に計算するフィールドを読む `when`、規則の出力が決め方を決める行、ほかの行が回してくるステップ、共有の経路です。型や単位が違うときは、条件に関係なく E210 です。flow がサーバーの API で申請を出すとき、API の操作が名指す申請のファイルがプロジェクトに無い（根の外、無いファイル、申請でないファイル）か、ringi がその申請の API を書けない（組織を読まない申請）ときも、決められません。flow は文書とだけ比べます。",
+                "An input of the flow is not shown to take what it is given: the request gives a value ringi does not follow; the two types are not compared value by value (a `rows` field and a list of records); the organization has no data, so that whether `requester.<kind>` has a value is not decided; or the values look as if they do not fit, at a place whose condition ringi does not follow. Such a condition is a `when` with `or` or `not`, a `when` that reads a field the value is counted with, the rows where a rule's output names the way, a stage another line sends there, a shared route. Two types or units that differ are E210 whatever the condition. Where a flow makes a request through the server's API, it cannot be decided either when the request's file an operation of the API names is not the project's (outside the root, not there, or no request's file), or ringi cannot write the API of the request (a request that reads no organization): the flow is held to the document alone."
+            ),
+            tr!(
+                "`when` を、フォームのフィールドを定数と比べる形（`amount <= 500_000JPY`、`and` でつないだものも）で書くと、ringi が追います。書けないなら、flow の入力を、フォームの範囲を受け取るように広げてください。flow が呼ぶ API の申請がこのプロジェクトにあるなら、プロジェクトの根から `ritsu gen --target requests` で書き直してください。",
+                "Write the `when` as comparisons of fields of the form with constants (`amount <= 500_000JPY`, joined with `and`), which ringi follows. Where that cannot be done, widen the flow's input to take the form's range. Where the request of the API a flow calls is in this project, write the API again with `ritsu gen --target requests` from the project's root."
+            ),
+            Repro::Dir { files: x20_both_ja(X20_REQUEST_NOT_JA), command: CHECK.to_vec() },
+            &["E210"],
+        )
+        .english(Repro::Dir { files: x20_both(X20_REQUEST_NOT), command: CHECK.to_vec() }),
         // ── The modules and their dependencies (DESIGN 17.20) ──
         Entry::new(
             "E301",
@@ -903,12 +1104,12 @@ pub fn ledger() -> Ledger {
             "E908",
             tr!("ワークフローが呼ぶ操作を、ゲートがそのワークフローにどの組み合わせでも許しません", "A gate allows a workflow an operation it calls in no combination"),
             tr!(
-                "`.gate` が `workflow … from` で書いたワークフローが、そのゲートの action が守る操作を呼び（`use openapi` の `http`、`use proto` の `connect`）、その action がワークフローをどの組み合わせでも許さないとき。その呼び出しまで進んだ実行は、いつもそこで拒まれます。",
-                "A workflow a `.gate` writes with `workflow … from` calls an operation an action of the gate guards (`http` on a `use openapi`, `connect` on a `use proto`), and the action allows the workflow in no combination: every run that comes to the call is denied there."
+                "`.gate` が `workflow … from` で書いたワークフローが、そのゲートの action が守る操作を呼び（`use openapi` の `http`、`use proto` の `connect`）、その action が、その呼び出しで起こりうるどの組み合わせでもワークフローを許さないとき。その呼び出しまで進んだ実行は、いつもそこで拒まれます。呼び出しで起こりうる組み合わせは、呼び出しが操作に渡す値（action の `input`）、ゲートが `workflow` の下の `resource` の行で書いた、resource の属性に当たるフローの値、そこまでの `match` の分岐が残した値（フローが呼んだ規則の答えも）で決まります。",
+                "A workflow a `.gate` writes with `workflow … from` calls an operation an action of the gate guards (`http` on a `use openapi`, `connect` on a `use proto`), and the action allows the workflow in no combination the call can come to: every run that comes to the call is denied there. What the call can come to is what it gives the operation (the action's `input`s), the values of the flow the gate's `resource` lines under the workflow say the resource's attributes are, and what the arms of a `match` on the way leave of each (of the answer of a rule the flow called, too)."
             ),
             tr!(
-                "ゲートに、ワークフローを許す permit を書くか（`principal is workflow <名前>`）、呼び出しを消してください。",
-                "Write a permit in the gate that allows the workflow (`principal is workflow <name>`), or take the call out."
+                "呼び出しを、ゲートがワークフローを許す所へ移すか、ゲートのポリシーを直してください。ワークフローを許す permit が無ければ、書いてください（`principal is workflow <名前>`）。要らない呼び出しなら消してください。",
+                "Make the call where the gate allows the workflow, or change the gate's policies. Where no permit allows the workflow, write one (`principal is workflow <name>`); or take the call out."
             ),
             Repro::Dir { files: x16_ja(X16_FLOW_JA, X16_GATE_NEVER_JA), command: CHECK.to_vec() },
             &["W909", "W908"],
@@ -927,11 +1128,26 @@ pub fn ledger() -> Ledger {
         )
         .english(Repro::Dir { files: x16(X16_FLOW_DENIED, X16_GATE_MORE), command: CHECK.to_vec() }),
         Entry::new(
+            "E909",
+            tr!("呼び出しが渡す数を、ゲートが違う単位か刻みで読みます", "The gate reads a number a call gives in another unit or step"),
+            tr!(
+                "`.gate` が `workflow … from` で書いたワークフローが、そのゲートの action が守る操作を呼び、引数に渡す数の型が、同じ名前の action の `input` と違う単位か刻みか税で数えるとき（タスクの `fee: rate[step 0.1%]` とゲートの `fee : rate[step 1%]`、`money[GBP]` と `money[GBPc]`）。フローから生成したコードは数を自分の型で送り、ゲートから生成したコードは同じ数を自分の型で読むので、二つは一つの呼び出しを違う値として読みます（フローの 0.5% は、ゲートでは 5%）。型は、`fed by` が受け取る側と出どころを比べるのと同じに比べます。呼び出しでのゲートの答えは、そうした引数を読みません。答えのうちで言うのは E908（引数がどうであれ、どの組み合わせでも許さない）だけで、拒まれうるか（W909）は、型をそろえたあとで確かめ直します。",
+                "A workflow a `.gate` writes with `workflow … from` calls an operation an action of the gate guards, and gives an argument a number whose type is counted in another unit, step or tax than the action's `input` of its name: `fee: rate[step 0.1%]` in the task and `fee : rate[step 1%]` in the gate, or `money[GBP]` and `money[GBPc]`. The code generated from the flow sends the number in its type, and the code generated from the gate reads the same number in its own, so the two read one call as two values (the flow's 0.5% is 5% to the gate). The types are compared as `fed by` compares a place with its source. The gate's answer at the call does not read such an argument: of it, only E908 is said (allowed in no combination, whatever the argument is), and whether the call can be denied (W909) is asked again once the types agree."
+            ),
+            tr!(
+                "どちらかの型を、もう一方に合わせてください。タスクの引数か、action の `input` です（範囲の端を単位なしで書いていれば、それも）。",
+                "Write one type as the other: the task's parameter, or the action's `input` (and the ends of its range, where they are written without a unit)."
+            ),
+            Repro::Dir { files: x16_fee_ja(), command: CHECK.to_vec() },
+            &["E908", "W909"],
+        )
+        .english(Repro::Dir { files: x16_fee(), command: CHECK.to_vec() }),
+        Entry::new(
             "W909",
             tr!("拒まれることのある呼び出しが、拒まれたときのエラーを宣言していません", "A call that can be denied declares no error for it"),
             tr!(
-                "ワークフローが呼ぶ操作を守る action が、ワークフローを組み合わせによっては拒む（拒むかを決められないときも）のに、呼ぶタスクが、拒まれたときのエラー（HTTP の 403、Connect の `permission_denied`）を宣言していないとき。拒まれると、ワークフローは宣言していない失敗で止まります。",
-                "The action that guards an operation a workflow calls denies the workflow in some combinations (or whether it does cannot be decided), and the task that calls it declares no error for a denial (403 for HTTP, `permission_denied` for Connect): a run that is denied stops with a failure the workflow does not declare."
+                "ワークフローが呼ぶ操作を守る action が、その呼び出しで起こりうる組み合わせによってはワークフローを拒むのに、呼ぶタスクが、拒まれたときのエラー（HTTP の 403、Connect の `permission_denied`）を宣言していないとき。拒まれると、ワークフローは宣言していない失敗で止まります。次のときも出ます。答えが resource の属性によって変わるのに、フローがその値について何を持つかをゲートが書いていないとき（`workflow` の下の `resource` の行）。いつも許されるのが、その `resource` の行のとおりのときだけのとき（サービスが読む resource がそのとおりであることは、どの検査も確かめていません）。拒むかを決められないとき。",
+                "The action that guards an operation a workflow calls denies the workflow in some of the combinations the call can come to, and the task that calls it declares no error for a denial (403 for HTTP, `permission_denied` for Connect): a run that is denied stops with a failure the workflow does not declare. Also where the answer reads attributes of the resource and the gate says nothing of what the flow holds of them (a `resource` line under the workflow); where every call is allowed only as far as those `resource` lines hold (nothing checks them of the resource the service reads); and where whether it denies cannot be decided."
             ),
             tr!(
                 "タスクに `errors denied = 403`（Connect なら `errors denied = permission_denied`）と書き、拒まれたときにどうするかを呼び出しの下に書いてください（`on denied => …`）。",
@@ -941,6 +1157,37 @@ pub fn ledger() -> Ledger {
             &["E908"],
         )
         .english(Repro::Dir { files: x16(X16_FLOW, X16_GATE_SOMETIMES), command: CHECK.to_vec() }),
+        // ── A request's route and the gate it reads (ringi's DESIGN 9.3) ──
+        Entry::new(
+            "E911",
+            tr!("申請の経路の決めと、ゲートが許すことが食い違っています", "A gate does not say what a request's route says"),
+            tr!(
+                "申請の種類が読むゲート（`use gate`）が、その申請の経路の決めと違うことを言うとき。確かめるのは三つです。一つ目は、チケットの操作とサーバーの管理の操作のどれにも、ゲートに action があり、その action が自分の入力（`input`）を受け取らないこと。チケットの操作は、`submit`、`approve`、`reject`、`add_approver`、`hand_over`、`comment`、チケットに載っていない人に見せるかを尋ねる `see` と、申請が書いていれば `withdraw`、`send_back`、`pause`、`retract` です。管理の操作は、申請の種類の版を切り替える `change_request_type` とその記録を読む `read_audit`、組織のデータを取り込む `import_organization` とその記録を読む `read_organization_audit` です。サーバーは操作を受け付ける前にゲートに尋ね、ゲートに無い action はだれにも許されません。サーバーが渡すのは人と resource と時刻だけなので、自分の入力を受け取る action は、どのチケットでも拒まれます。二つ目は、経路が決めた承認者に、承認者のする操作が許されること。principal が `resource.approvers` に入っていて申請者ではない、という形で尋ね、どの組み合わせでも許されなければエラーです。利用を止められた職員を拒むゲートのように、組み合わせによって許すのは成り立ちます。三つ目は自己承認です。経路が許さないなら（`self approval not allowed`、または行が無い）、`resource.requester` が principal 自身で `resource.self_approval` が false のとき、ステップを決める操作（`approve`、`reject`、`send_back`）がどの組み合わせでも許されないこと。経路が許すなら、申請者が承認者に入っていて `resource.self_approval` が true のとき、許される組み合わせがあること。ゲートには、ringi が渡す属性をその値に固定して尋ね、役割とほかの属性はどの値でも歩くので、組織のデータは読みません。",
+                "A gate a request reads (`use gate`) does not say what the route of the request says. Three things are asked. One: the gate declares an action for every operation of a ticket and of the server's administration, and none of them takes inputs of its own (`input`). The operations of a ticket are `submit`, `approve`, `reject`, `add_approver`, `hand_over`, `comment`, `see`, which is asked before a ticket is shown to someone not on it, and `withdraw`, `send_back`, `pause` and `retract` where the request has them; those of the administration, `change_request_type` and `read_audit`, which switch a version of a request type and read its record, and `import_organization` and `read_organization_audit`, which import the organization's data and read its record. The server asks the gate before it takes an operation: an action the gate does not declare is allowed to no one, and since the server gives the gate the person, the resource and the time only, an action that takes inputs of its own is denied on every ticket. Two: the approvers the route decides are allowed what an approver does, asked with the principal in `resource.approvers` and not the requester. Allowed in no combination is the error; allowed in some holds, as with a gate that denies a suspended member of the staff. Three, self approval. Where the route does not allow it (`self approval not allowed`, or no such line), nothing that decides a stage (`approve`, `reject`, `send_back`) is allowed in any combination where `resource.requester` is the principal and `resource.self_approval` is false. Where the route allows it, some combination is allowed where the requester is among the approvers and `resource.self_approval` is true. The gate is asked with the attributes ringi hands it held to those values, over every value of the rest (the roles, the other attributes), so the organization's data is not read."
+            ),
+            tr!(
+                "ゲートに、足りない action を宣言し、操作が尋ねる action から `input` の行を外し、ステップの承認者を許す permit（`when principal in resource.approvers`）と、自分の申請を決めさせない forbid（`when resource.requester is principal`、`unless resource.self_approval`）を書いてください。経路のほうを変えるなら、`self approval` の行を直してください。どちらに合わせるかは人が決めることです。",
+                "In the gate, declare the missing action, take the `input` lines off an action an operation asks, write a permit for the approvers of a stage (`when principal in resource.approvers`), and a forbid that keeps a requester from deciding their own request (`when resource.requester is principal`, `unless resource.self_approval`). Or change the `self approval` line of the request. Which of the two is right is a person's decision."
+            ),
+            Repro::Dir { files: x18_ja(X18_GATE_JA), command: CHECK.to_vec() },
+            &["W911", "E908"],
+        )
+        .english(Repro::Dir { files: x18(X18_GATE), command: CHECK.to_vec() }),
+        Entry::new(
+            "W911",
+            tr!("ゲートが、申請の経路の決めどおりに許すかを決められません", "Whether a gate says what a request's route says cannot be decided"),
+            tr!(
+                "E911 の二つ目か三つ目の問いに、sekisho が答えを出せないとき。ゲートが ringi の渡す属性を別の型で宣言しているとき（`self_approval` が bool でない、`requester` や `approvers` がエンティティを指さない）と、ゲートの答えが、ほかの言語に尋ねる条件の、その言語が決められない組み合わせによるときです。理由を注に出します。",
+                "sekisho does not answer the second or the third question of E911: the gate declares an attribute ringi hands it with another type (a `self_approval` that is not a bool, a `requester` or an `approvers` that does not point to an entity), or the gate's answer rests on a combination of a condition another language is asked, which that language does not decide. A note says why."
+            ),
+            tr!(
+                "ゲートの resource に、`requester`（principal と同じ型のエンティティ）、`approvers`（承認者がメンバーであるエンティティ）、`self_approval`（bool）を宣言してください。",
+                "Declare `requester` (an entity of the principal's type), `approvers` (an entity the approvers are members of) and `self_approval` (a bool) on the gate's resource."
+            ),
+            Repro::Dir { files: x18_ja(X18_GATE_ENUM_JA), command: CHECK.to_vec() },
+            &["E911"],
+        )
+        .english(Repro::Dir { files: x18(X18_GATE_ENUM), command: CHECK.to_vec() }),
     ];
     Ledger {
         tool: "ritsu",

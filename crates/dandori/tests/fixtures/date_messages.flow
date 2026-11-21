@@ -1,0 +1,26 @@
+workflow date_messages v1
+description "E016: google.type.Date, which a flow sends and reads as a date (DESIGN 44), held to something else: a number sent to one, and one read as a record of its year, month and day, as a number and as a list of numbers. A message of the same three fields is no date, and reads as the record it is"
+
+use proto days from "protos/dates.proto"
+  url "https://days.example.com"
+
+# protobuf's JSON writes a date as these three fields; dandori reads it as a `date`
+record Ymd
+  year  : int
+  month : int
+  day   : int
+
+record Shifted
+  day  : Ymd?
+  also : int?
+  more : list[int]
+  own  : days.Ymd?
+
+inputs
+  by : int
+
+task shift(day: int, by: int) -> Shifted
+  connect days "DayService/Shift"
+
+flow
+  let s = shift(day: 20261116, by: by)

@@ -1,0 +1,3 @@
+エラー[E004]: tests/mutants/E004_manager_with_no_organization.ringi:10:3: `manager of requester` は組織を読みますが、このファイルに `use organization` がありません
+    10 |   manager = manager of requester
+  = `use organization org from "company.ringi"` のように、組織のファイルを読んでください。

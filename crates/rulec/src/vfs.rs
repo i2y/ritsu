@@ -60,6 +60,18 @@ pub fn with_git_rev<R>(rev: &str, f: impl FnOnce() -> R) -> Result<R, String> {
     Ok(ritsu_base::fs::with(std::rc::Rc::new(g), f))
 }
 
+/// The arguments of the git that prints the file at `path` (a path the run holds: from where it
+/// runs, or absolute) as it was at the revision `rev`: run in the file's directory, `show
+/// <rev>:./<name>`. After `<rev>:`, git reads a path from the top of the repository unless it
+/// starts with `./`, so this is the file `path` names wherever in the repository the run is, and
+/// however the path was written (ritsu's DESIGN 4.15), as [`with_git_rev`] reads one.
+pub fn git_show_at(path: &str, rev: &str) -> Vec<String> {
+    let p = Path::new(path);
+    let dir = p.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let name = p.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    vec!["-C".to_string(), dir.to_string_lossy().into_owned(), "show".to_string(), format!("{rev}:./{name}")]
+}
+
 /// The bytes of a file, from the files of the thread: the working tree, or the revision
 /// [`with_git_rev`] reads at.
 pub fn read(path: &Path) -> std::io::Result<Vec<u8>> {

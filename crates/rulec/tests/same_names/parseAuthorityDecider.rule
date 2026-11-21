@@ -1,0 +1,22 @@
+rule parseAuthorityDecider v1
+description "Whether the president decides an order, by who the table of authority says decides it, the rule named like a name the code makes of that enum (fictional)"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000JPY
+
+apply authority = "authority.rule" meaning:6a85060cb702b57f
+  amount = amount
+  decider -> who
+
+outputs
+  boss : bool
+
+table boss
+| who       | -> boss |
+| dept_head | false   |
+| president | true    |
+
+examples
+| amount | -> boss |
+| 1JPY   | false   |
+| 501JPY | true    |

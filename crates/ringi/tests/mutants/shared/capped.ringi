@@ -1,0 +1,13 @@
+route capped v1 "Approval with a cap"
+
+inputs
+  long : bool
+  cap  : money[JPY] "Cap"  range >=1JPY <=100_000JPY  optional
+
+route
+  check  finance
+  head   heads  when long or cap > 50_000JPY
+
+who
+  finance = team finance
+  heads   = team finance_heads

@@ -1,0 +1,86 @@
+workflow 届く値 v1
+description "変数が持つのは、文に届く実行が最後に入れた値である：一方の道でだけ秘密を入れた変数、一方の道でだけ範囲に収まる列挙の値を入れた変数を、match の腕とループの回をまたいで追う"
+
+use rule 送料 from "rules/会員段階の送料.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:member-tier-shipping"
+
+record 返事
+  済み : bool
+
+inputs
+  内密   : bool
+  名前   : string
+  鍵     : string  secret
+  狭い   : 送料.段階  range >=一般 <=シルバー
+  広い   : 送料.段階
+
+outputs
+  済み : bool
+
+task 挨拶(文: string) -> 返事
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:greet"
+  idempotent
+
+flow
+  # 秘密を `文面` に入れるのは一方の道だけ：もう一方の道の呼び出しには渡らず、match のあとは渡りうる
+  let 文面 = 名前
+  match 内密
+    true =>
+      let 文面 = 鍵
+      pass
+    false => 挨拶(文: 文面)
+  挨拶(文: 文面)
+  # 一回目の回は `控え` に名前を、二回目から先の回は秘密を入れる
+  let 控え = 名前
+  repeat at most 3 times
+    挨拶(文: 控え)
+    let 控え = 鍵
+    let 答え = 挨拶(文: 名前)
+    match 答え.済み
+      true => break
+      false => pass
+  # 秘密を `メモ` に入れるのはループを出る道だけ：どの回の呼び出しにも渡らない
+  let メモ = 名前
+  repeat at most 3 times
+    挨拶(文: メモ)
+    let 返事1 = 挨拶(文: 名前)
+    match 返事1.済み
+      true =>
+        let メモ = 鍵
+        break
+      false => pass
+  # 内側の match へ向かう道では `段` は一般とシルバーだけ、もう一方の道では範囲が無い
+  let 段 = 狭い
+  match 内密
+    true =>
+      let 段 = 広い
+      pass
+    false =>
+      match 段
+        一般 => pass
+        シルバー => pass
+        ゴールド => pass
+  # どの回も `段3` には一般かシルバーを入れ、ループのあとで入れる値はループに戻らない：match にほかの腕は要らない
+  let 段3 = 狭い
+  repeat at most 3 times
+    match 段3
+      一般 => pass
+      シルバー => pass
+    let 段3 = 狭い
+    let 返事3 = 挨拶(文: 名前)
+    match 返事3.済み
+      true => break
+      false => pass
+  let 段3 = 広い
+  # 二回目の回から先は、`段2` はどの段階にもなる：match にはどの腕も要る
+  let 段2 = 狭い
+  repeat at most 3 times
+    match 段2
+      一般 => pass
+      シルバー => pass
+    let 段2 = 広い
+    let 返り = 挨拶(文: 名前)
+    match 返り.済み
+      true => break
+      false => pass
+  succeed 済み = true

@@ -1,0 +1,8 @@
+error[E212]: tests/mutants/E212_フローに無い値.gate:10:1: The flow `../../examples/claims/flows/pay.ja.flow` has no value `請求の番号`
+    10 |   resource 請求 from 請求の番号
+  = A `resource` line under a workflow names an input or a variable of the flow, or a field of one (`order.total`).
+  = The flow's inputs and variables are `p`, `r`, `請求番号` and `金額`.
+error[E212]: tests/mutants/E212_フローに無い値.gate:11:1: The flow `../../examples/claims/flows/pay.ja.flow` has no value `請求.合計`
+    11 |     金額 = 請求.合計
+  = A `resource` line under a workflow names an input or a variable of the flow, or a field of one (`order.total`).
+  = The flow's inputs and variables are `p`, `r`, `請求番号` and `金額`.

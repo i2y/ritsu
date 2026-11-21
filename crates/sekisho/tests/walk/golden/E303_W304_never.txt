@@ -1,0 +1,42 @@
+error[E303]: tests/walk/inline.gate:42:1: The permit `apart_side` applies to no combination
+    42 | permit apart_side
+  = Of the 1 combination its `principal` line takes, the lines are met: `when side is apart` on 0. A line is met on none.
+  = `side` is never `apart`: it is computed from `resource.amount` (given as both `first` and `second`), and the rule answers `apart` for none of the values the gate gives it.
+  = Correct the lines to a value the rule gives, or remove the permit itself.
+error[E303]: tests/walk/inline.gate:51:1: The permit `high_note` applies to no combination
+    51 | permit high_note
+  = Of the 1 combination its `principal` line takes, the lines are met: `when a is high` on 0. A line is met on none.
+  = `a` is never `high`: it is computed from `resource.amount`, and the rule answers `high` for none of the values the gate gives it.
+  = Correct the lines to a value the rule gives, or remove the permit itself.
+error[E303]: tests/walk/inline.gate:60:1: The permit `same_fixed` applies to no combination
+    60 | permit same_fixed
+  = Of the 1 combination its `principal` line takes, the lines are met: `when far is same` on 0. A line is met on none.
+  = `far` is never `same`: the rule answers `same` for none of the values the gate gives it.
+  = Correct the lines to a value the rule gives, or remove the permit itself.
+warning[W304]: tests/walk/inline.gate:65:1: The expectation `never_apart` picks no combination: it holds, and checks nothing
+    65 | expect deny never_apart
+  = Of the 2 combinations of `compare_doc`, the lines are met: `when side is apart` on 0. A line is met on none.
+  = `side` is never `apart`: it is computed from `resource.amount` (given as both `first` and `second`), and the rule answers `apart` for none of the values the gate gives it.
+  = The rules decide this whatever the policies say, so the expectation checks nothing of them. To hold what a rule answers, write it in the rule (its `examples`, which rulec checks); here, remove the expectation or correct its lines.
+
+エラー[E303]: tests/walk/inline.gate:42:1: permit `apart_side` は、どの組み合わせにも当てはまりません
+    42 | permit apart_side
+  = `principal` の行が当てはまる 1 通りのうち、`when side is apart` は 0 通りで満たされます。どの組み合わせでも満たされない行があります。
+  = `side` が `apart` になることはありません。`side` は `first` と `second` の両方に渡す `resource.amount` から計算する値で、ゲートが渡す値のどれにも、規則は `apart` を答えません。
+  = 規則が出す値に行を直すか、permit そのものを消してください。
+エラー[E303]: tests/walk/inline.gate:51:1: permit `high_note` は、どの組み合わせにも当てはまりません
+    51 | permit high_note
+  = `principal` の行が当てはまる 1 通りのうち、`when a is high` は 0 通りで満たされます。どの組み合わせでも満たされない行があります。
+  = `a` が `high` になることはありません。`a` は `resource.amount` から計算する値で、ゲートが渡す値のどれにも、規則は `high` を答えません。
+  = 規則が出す値に行を直すか、permit そのものを消してください。
+エラー[E303]: tests/walk/inline.gate:60:1: permit `same_fixed` は、どの組み合わせにも当てはまりません
+    60 | permit same_fixed
+  = `principal` の行が当てはまる 1 通りのうち、`when far is same` は 0 通りで満たされます。どの組み合わせでも満たされない行があります。
+  = `far` が `same` になることはありません。ゲートが渡す値のどれにも、規則は `same` を答えません。
+  = 規則が出す値に行を直すか、permit そのものを消してください。
+警告[W304]: tests/walk/inline.gate:65:1: 期待 `never_apart` は、どの組み合わせも選びません。成り立ちますが、何も確かめていません
+    65 | expect deny never_apart
+  = `compare_doc` の 2 通りのうち、`when side is apart` は 0 通りで満たされます。どの組み合わせでも満たされない行があります。
+  = `side` が `apart` になることはありません。`side` は `first` と `second` の両方に渡す `resource.amount` から計算する値で、ゲートが渡す値のどれにも、規則は `apart` を答えません。
+  = これは規則が決めていることで、ポリシーをどう書いても成り立ちます。この期待は、ポリシーについて何も確かめていません。規則の答えを確かめたいなら規則の側に書き（`examples`。rulec が検査します）、この期待は消すか、行を直してください。
+

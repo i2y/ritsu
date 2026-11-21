@@ -24,6 +24,7 @@ a guess, so ask. Each language prints what a file declares, as JSON, and answers
 | sekisho | `sekisho api <file>` | `sekisho vectors <file>` for every combination |
 | kaname | `kaname api <file>` | `kaname run <file> <function> --input <file.json>` |
 | sakai | `sakai api <file>` | `sakai vectors <file>`, what each layer's map says of each value |
+| ringi | `ringi api <file>` | `ringi simulate <file> --requester <id> --form <values>`, `ringi vectors <file>` for the ticket's transitions |
 
 ```console
 $ cd crates/sakai/examples/shop
@@ -81,6 +82,10 @@ left open is for what has no place after you have tried.
 | A combination of inputs that cannot happen | `never` in the rule | rulec E142 when the definitions give it, and the generated code at its door |
 | How a layer between contexts reads an enum | the map's `enum <upstream> -> <downstream>` lines, and a test of the layer's code that reads `sakai vectors` | sakai E401 for the map, your test for the code |
 | A hold a flow has to post or void in time | call the book with `use book` from the flow | ritsu E206, W206 |
+| A hold a request makes on submission, which has to outlast the longest its route can take | `use book` and `on submitted hold` in the `.ringi`, with `post` and `void` on its endings | ritsu E209, W209 |
+| Who a request's route says approves, and what the company's gate allows | `use gate` in the `.ringi`; the gate's resource takes `requester`, `approvers` and `self_approval` | ritsu E911, W911 |
+| What a ticket hands a workflow (`launch`, an agent's stage, a summary), and a workflow that opens tickets through the API of the requests | the `.ringi`'s `use flow` lines; in the flow, `use openapi` of the `requests/openapi.json` that `ritsu gen --target requests` writes | ritsu E210, W210 |
+| A rule's table a request routes by, or a list it chooses from | `use rule` in the `.ringi`, and the stage or the field that reads it (`authority.decider`, `choice from authority.kind`) | ringi E203, E201 |
 | What a running service does | a claim in a `.geas` | geas, by running it |
 | A requirement someone has to read again when a file changes | a link in a `.req` (`satisfied by`, `verified by`) with its `reviewed` record | yuen E302, E303 when an end changes |
 
@@ -115,7 +120,7 @@ asks the source what it can come to and holds that to what the line takes. Here 
 limit gives a record a value the record refuses:
 
 ```text
-error[ritsu E207]: refund.flow:9:1: `record Balance field left` takes money[USDc] >=0 <=10000000, and its source chobo "refunds.book" account remaining can be 10000001
+error[ritsu E207]: refund.flow:9:1: `record Balance field left` takes money[USDc] >=0USDc <=10_000_000USDc, and its source chobo "refunds.book" account remaining can be 10_000_001USDc
      9 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
   = The book takes it: an end with no `at least` or `at most` goes as far as chobo's limit (2⁶³ − 1).
 ```
@@ -143,8 +148,20 @@ expect allow clerks_approve_what_the_routing_rule_sends_them
 ```text
 error[sekisho E304]: refunds.gate:28:1: The expectation `clerks_approve_what_the_routing_rule_sends_them` does not hold: 1 of the 2 combinations it picks is denied
     28 | expect allow clerks_approve_what_the_routing_rule_sends_them
-  = For example: User holding clerk, Request (amount: 5,001JPY to 10,000JPY, state: waiting); denied: no permit applies.
+  = For example: User holding clerk, Request (amount: 5001JPY to 10_000JPY, state: waiting); denied: no permit applies.
   = Fix the policies, or the expectation if it says more than is meant.
+```
+
+A request's hold is the same relation with a route in place of a flow: the longest a ticket can stay
+open, counted on the calendar, against the book's expiry. Shorten the book's expiry and the request
+stops where it holds:
+
+```text
+error[ritsu E209]: purchase.ringi:22:22: The hold `budget.reserve` can expire before a ticket of `purchase` posts or voids it
+    22 |   on submitted  hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)
+  = The hold is made when a request is submitted and stays open until its round ends: 10 business days at the most, as ringi's check counts them (a round of 10).
+  = A request submitted on 2026-04-01 can stay open through 2026-04-15, 10 business days later in the calendar `office`: 15 days.
+  = The hold expires 7 days after it is made (`reserve` of "budget.book").
 ```
 
 Read the language's skill before you write a form you have not used ([which skill](SKILL.md#5-which-skill-to-read)).

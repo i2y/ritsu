@@ -1,0 +1,4 @@
+enums 文字列(string) v1
+description "いくつかの言語のクラスやモジュールと同じ名前の enums ファイル"
+
+enum 地域(zone) = 北(north) | 南(south)

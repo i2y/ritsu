@@ -91,7 +91,7 @@ mod common;
 
 use common::{
     Block, Page, code_from_files, commands_named, hosts_from_files, inline_code, kaname_hosts, lines_in_order, lines_of, link_targets, links, marked_files, page,
-    root, run_the_consoles, sh, shown_lines, trimmed,
+    root, run_the_consoles, same, sh, shown_lines, trimmed,
 };
 use ritsu_testkit::{Need, TempDir, ready};
 use std::collections::{BTreeMap, BTreeSet};
@@ -871,6 +871,7 @@ fn the_two_languages_have_the_same_pages_and_the_navs_list_them() {
     assert_eq!(listed, want, "the nav lists other pages than website/docs holds, leaving out {OFF_THE_NAV:?}");
     assert!(listed.contains("sekisho.md"), "the nav lists no page of sekisho");
     assert!(KANAME_PAGES.iter().all(|p| listed.contains(&format!("kaname/{p}"))), "the nav lists not every page of kaname");
+    assert!(RINGI_PAGES.iter().all(|p| listed.contains(&format!("ringi/{p}"))), "the nav lists not every page of ringi");
     for (index, nav) in [("website/docs/index.md", &nav_en), ("website/docs-ja/index.md", &nav_ja)] {
         let links: BTreeSet<String> = link_targets(&read(&root().join(index))).into_iter().map(|(_, t)| t.split('#').next().unwrap().to_string()).collect();
         for p in nav.iter().filter(|p| *p != "index.md") {
@@ -1052,15 +1053,30 @@ fn sides(b: &Block) -> (Vec<String>, Vec<String>) {
     (old, new)
 }
 
-/// A page of sekisho shows an edit of the example as a ```diff, and what `sekisho check` says of the
-/// gate so edited in the ```text block after it; every ```text block on it is one of those.
+/// The example of sekisho whose flow a page edits, from the root of the repository: its gate says
+/// what the workflow's flow holds of the resource.
+const SEKISHO_FLOW_EXAMPLE: &str = "crates/sekisho/examples/claims";
+
+/// A page of sekisho shows an edit of an example as a ```diff, and what the check says of the
+/// example so edited in the ```text block after it; every ```text block on it is one of those. An
+/// edit of a gate is one of `SEKISHO_EXAMPLE`, and the check is `sekisho check` of that gate. An
+/// edit of a flow is one of `SEKISHO_FLOW_EXAMPLE`, and the check is `ritsu check .`: what the gate
+/// allows the workflow where the flow calls is a border between the two languages, which ritsu
+/// reads.
 #[test]
-fn what_the_pages_of_sekisho_say_of_an_edit_is_what_sekisho_check_says() {
+fn what_the_pages_of_sekisho_say_of_an_edit_is_what_the_check_says() {
     let links = links();
-    let example = root().join(SEKISHO_EXAMPLE);
-    let gates: Vec<String> = fs::read_dir(&example).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.ends_with(".gate")).collect();
+    let names = |dir: &Path, ext: &str| -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.ends_with(ext)).collect();
+        names.sort();
+        names
+    };
+    // The files an edit can be of: each with its example, its name from there, and the check.
+    let (gates_of, flows_of) = (root().join(SEKISHO_EXAMPLE), root().join(SEKISHO_FLOW_EXAMPLE));
+    let mut files: Vec<(&Path, String, String)> = names(&gates_of, ".gate").into_iter().map(|g| (gates_of.as_path(), g.clone(), format!("sekisho check {g} --root ."))).collect();
+    files.extend(names(&flows_of.join("flows"), ".flow").into_iter().map(|f| (flows_of.as_path(), format!("flows/{f}"), "ritsu check .".to_string())));
     let mut wrong = Vec::new();
-    let mut edits = 0;
+    let (mut of_gates, mut of_flows) = (0, 0);
     for name in SEKISHO_PAGES {
         let p = page(name);
         let ja = japanese(name);
@@ -1071,30 +1087,35 @@ fn what_the_pages_of_sekisho_say_of_an_edit_is_what_sekisho_check_says() {
             if b.info != "diff" {
                 continue;
             }
-            edits += 1;
             let (old, new) = sides(b);
             let (old, new) = (old.join("\n") + "\n", new.join("\n") + "\n");
-            let hit: Vec<&String> = gates.iter().filter(|g| read(&example.join(g)).matches(&old).count() == 1).collect();
-            let [gate] = hit[..] else {
-                wrong.push(format!("{name}:{}: the lines the ```diff edits are once in {} gates of the example, not in one", b.at, hit.len()));
+            let hit: Vec<&(&Path, String, String)> = files.iter().filter(|(example, file, _)| read(&example.join(file)).matches(&old).count() == 1).collect();
+            let [(example, file, check)] = hit[..] else {
+                wrong.push(format!("{name}:{}: the lines the ```diff edits are once in {} files (the gates of {SEKISHO_EXAMPLE}, the flows of {SEKISHO_FLOW_EXAMPLE}), not in one", b.at, hit.len()));
                 continue;
             };
+            if file.ends_with(".gate") {
+                of_gates += 1;
+            } else {
+                of_flows += 1;
+            }
             let Some(said) = p.blocks.get(i + 1).filter(|n| n.info == "text") else {
                 wrong.push(format!("{name}:{}: no ```text block after the ```diff shows what the check says", b.at));
                 continue;
             };
             let t = TempDir::new("sekisho-pages-edit");
-            ritsu_testkit::tmp::copy_dir(&example, t.path());
-            fs::write(t.path().join(gate), read(&example.join(gate)).replacen(&old, &new, 1)).unwrap();
-            let cmd = format!("sekisho check {gate} --root .{}", if ja { " --lang ja" } else { "" });
+            ritsu_testkit::tmp::copy_dir(example, t.path());
+            fs::write(t.path().join(file), read(&example.join(file)).replacen(&old, &new, 1)).unwrap();
+            let cmd = format!("{check}{}", if ja { " --lang ja" } else { "" });
             let got = sh(links.path(), t.path(), &cmd);
             if lines_of(&said.lines.join("\n")) != lines_of(&got) {
-                wrong.push(format!("{name}:{}: after the edit, `{cmd}` prints\n{got}--- and the page shows\n{}", said.at, said.lines.join("\n")));
+                wrong.push(format!("{name}:{}: after the edit of {file}, `{cmd}` prints\n{got}--- and the page shows\n{}", said.at, said.lines.join("\n")));
             }
         }
     }
-    // the clerks' permit without the line on the rule's answer, on each of the two pages
-    assert!(edits >= 2, "{edits} edits shown on the pages: were the fences changed?");
+    // the clerks' permit without the line on the rule's answer, and the flow that pays a claim with
+    // its arms the other way round, on each of the two pages
+    assert!(of_gates >= 2 && of_flows >= 2, "{of_gates} edits of a gate and {of_flows} of a flow shown on the pages: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
@@ -1307,6 +1328,200 @@ fn the_readmes_of_kaname_link_to_its_pages() {
     }
 }
 
+/// The pages of ringi on ritsu's site, in English (website/docs/ringi) and in Japanese
+/// (website/docs-ja/ringi): what it is; how a request type is written and what the check
+/// guarantees, for the agent that writes one and the engineer who asks it to; how a person reads
+/// one; how it reads the other languages; and what is generated and what the server does.
+const RINGI_PAGES: [&str; 6] = ["index.md", "language.md", "checks.md", "reading.md", "together.md", "server.md"];
+
+/// ringi's examples, which every command on its pages is run on.
+const RINGI_EXAMPLES: &str = "crates/ringi/examples";
+
+/// The pages for people the pages of ringi show (website/docs*/ringi/doc/<name>.html): each the
+/// page `ritsu ringi doc <file> --format html --root .` draws of an example, the English one on the
+/// English site and the Japanese one, drawn with `--lang ja`, on the Japanese site. The contract
+/// review fails its check in the organization from 2027-04-01, where its general counsel is no
+/// longer there (crates/ringi/tests/examples.rs), and is drawn in the one in effect now (`--at`). A
+/// shared file has no Japanese version: its page is drawn in Japanese.
+const RINGI_DRAWN: [(&str, &str, &str); 8] = [
+    ("expense", "expense.ringi", "expense.ja.ringi"),
+    ("leave", "leave.ringi", "leave.ja.ringi"),
+    ("purchase", "purchase.ringi", "purchase.ja.ringi"),
+    ("contract", "contract.ringi --at 2026-11-16", "contract.ja.ringi --at 2026-11-16"),
+    ("account", "account.ringi", "account.ja.ringi"),
+    ("manager_approval", "shared/manager_approval.ringi", "shared/manager_approval.ringi"),
+    ("company", "shared/company.ringi", "shared/company.ringi"),
+    ("masters", "shared/masters.ringi", "shared/masters.ringi"),
+];
+
+fn ringi_pages(ja: bool) -> Vec<String> {
+    RINGI_PAGES.iter().map(|p| format!("website/{}/ringi/{p}", if ja { "docs-ja" } else { "docs" })).collect()
+}
+
+/// The code on the pages of ringi is the lines of its files, in order, every command a console
+/// shows prints what the console shows, run in the examples (a line `…` stands for the lines it
+/// leaves out), and every command the prose names is one.
+#[test]
+fn the_pages_of_ringi_show_the_files_and_what_the_commands_print() {
+    let pages: Vec<Page> = ringi_pages(false).iter().chain(ringi_pages(true).iter()).map(|n| page(n)).collect();
+    let (seen, wrong) = code_from_files(&pages);
+    // on each language's pages: the leave and its shared route; the head, the form, the purchase's
+    // route, the table, `who`, `every stage`, the ticket, the claims, a scenario, the organization,
+    // the lists and the other version of the leave
+    assert!(seen >= 2 * 14, "{seen} blocks of ringi on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (ran, wrong) = run_the_consoles(&pages);
+    // the check and a scenario of the leave, the contract now and in every version, two simulations,
+    // the diff across the versions of the organization, what `gen --target requests` writes, and the
+    // check of four requests with every file they read, on each language's pages
+    assert!(ran >= 2 * 9, "{ran} commands run: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (named, wrong) = commands_named(&pages);
+    assert!(named >= 2, "{named} commands named in the prose: were they changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The edits of a ```diff block, cut at a line `…`: each part's lines before and after it, as the
+/// text they are in a file (each line ended).
+fn hunks_of(b: &Block) -> Vec<(String, String)> {
+    let side = |part: &[String], drop: char| -> String { part.iter().filter(|l| !l.starts_with(drop)).map(|l| format!("{}\n", l.get(1..).unwrap_or(""))).collect() };
+    b.lines.split(|l| l.trim() == "…").map(|part| (side(part, '+'), side(part, '-'))).collect()
+}
+
+/// What a ```text block on the pages of ringi shows is what a command prints of the examples edited
+/// as the ```diff block before it shows: the edit is of the one file of the examples that has the
+/// lines each part of it takes out once, in a copy of them where the repository has them (so the
+/// paths a command says from the root are the repository's); the command is the last `ritsu …` the
+/// prose between the two blocks names, run in the examples' directory of the copy. A file the
+/// command names that the examples do not have (`leave.v2.ringi`) is the edited version, saved
+/// beside the file it is a version of, which stays as it is. Every ```text block follows a ```diff.
+#[test]
+fn what_the_pages_of_ringi_say_of_an_edit_is_what_the_command_prints() {
+    let links = links();
+    let examples = root().join(RINGI_EXAMPLES);
+    let every = files_under(&examples, &[""]);
+    let mut wrong = Vec::new();
+    let mut edits = 0;
+    for name in ringi_pages(false).iter().chain(ringi_pages(true).iter()) {
+        let p = page(name);
+        let lines: Vec<&str> = p.text.lines().collect();
+        for (i, b) in p.blocks.iter().enumerate() {
+            if b.info == "text" && i.checked_sub(1).is_none_or(|j| p.blocks[j].info != "diff") {
+                wrong.push(format!("{name}:{}: a ```text block after no ```diff: what edit does it show the command of?", b.at));
+            }
+            if b.info != "diff" {
+                continue;
+            }
+            let Some(said) = p.blocks.get(i + 1).filter(|n| n.info == "text") else {
+                wrong.push(format!("{name}:{}: no ```text block after the ```diff shows what a command says of it", b.at));
+                continue;
+            };
+            let hunks = hunks_of(b);
+            let hit: Vec<&PathBuf> = every.iter().filter(|f| fs::read_to_string(f).is_ok_and(|text| hunks.iter().all(|(old, _)| text.matches(old.as_str()).count() == 1))).collect();
+            let [file] = hit[..] else {
+                wrong.push(format!("{name}:{}: the lines the ```diff takes out are once in {} files of {RINGI_EXAMPLES}, not in one", b.at, hit.len()));
+                continue;
+            };
+            // the prose between the closing fence of the diff and the opening one of the text
+            let end = said.at.saturating_sub(1).min(lines.len());
+            let between = lines[(b.at + b.lines.len() + 1).min(end)..end].join("\n");
+            let Some(cmd) = inline_code(&between).into_iter().map(|(_, c)| c).filter(|c| c.starts_with("ritsu ")).next_back() else {
+                wrong.push(format!("{name}:{}: the prose between the ```diff and the ```text names no `ritsu …` to run", said.at));
+                continue;
+            };
+            let t = TempDir::new("ringi-pages-edit");
+            fs::create_dir(t.path().join(".git")).unwrap();
+            let dir = t.path().join(RINGI_EXAMPLES);
+            ritsu_testkit::tmp::copy_dir(&examples, &dir);
+            let rel = file.strip_prefix(&examples).unwrap();
+            let mut text = read(file);
+            for (old, new) in &hunks {
+                text = text.replacen(old.as_str(), new, 1);
+            }
+            let version = cmd.split_whitespace().skip(1).find(|w| !w.starts_with('-') && w.contains('.') && !dir.join(w).exists());
+            fs::write(dir.join(version.unwrap_or(&rel.display().to_string())), text).unwrap();
+            let got = sh(links.path(), &dir, &cmd);
+            if !same(&lines_of(&said.lines.join("\n")), &lines_of(&got)) {
+                wrong.push(format!("{name}:{}: after the edit of {}, `{cmd}` prints\n{got}--- and the page shows\n{}", said.at, rel.display(), said.lines.join("\n")));
+            }
+            edits += 1;
+        }
+    }
+    // the row of the route taken out, the claim of the agent's limit, the reminder after the deadline,
+    // the hold that expires sooner and the leave that asks the head sooner, on each language's pages
+    assert!(edits >= 2 * 5, "{edits} edits shown on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A page of ringi in English and the same page in Japanese show the same things, the Japanese one
+/// with the Japanese versions of the examples and in its own words: as many blocks of each kind, and
+/// as many tables.
+#[test]
+fn the_two_languages_of_the_pages_of_ringi_show_the_same_things() {
+    let shown = |name: &str| {
+        let p = page(name);
+        let mut kinds: Vec<String> = p.blocks.iter().map(|b| b.info.clone()).collect();
+        kinds.sort();
+        (kinds, tables(&p.text).len())
+    };
+    for (en, ja) in ringi_pages(false).iter().zip(ringi_pages(true).iter()) {
+        assert_eq!(shown(en), shown(ja), "{en} and {ja} show other kinds of blocks, or other numbers of blocks or tables");
+    }
+}
+
+/// The pages for people on the pages of ringi are what `ritsu ringi doc --format html` draws of the
+/// examples now ([`RINGI_DRAWN`]; `RITSU_BLESS=1` draws them again), the pages of the site link to
+/// each of them, and the site has no other.
+#[test]
+fn the_pages_of_ringi_show_the_pages_ringi_doc_draws_now() {
+    let links = links();
+    let examples = root().join(RINGI_EXAMPLES);
+    let mut drawn = BTreeSet::new();
+    for (name, en, ja) in RINGI_DRAWN {
+        for (docs, file, lang) in [("docs", en, None), ("docs-ja", ja, Some("ja"))] {
+            let mut c = Command::new(links.path().join("ritsu"));
+            c.args(["ringi", "doc"]).args(file.split(' ')).args(["--format", "html", "--root", "."]).current_dir(&examples);
+            if let Some(l) = lang {
+                c.args(["--lang", l]);
+            }
+            for var in common::LANG_VARS {
+                c.env_remove(var);
+            }
+            let o = c.output().unwrap();
+            assert!(o.status.success(), "ringi doc {file}{}: {}", lang.map_or(String::new(), |l| format!(" --lang {l}")), String::from_utf8_lossy(&o.stderr));
+            let at = website().join(docs).join("ringi/doc").join(format!("{name}.html"));
+            ritsu_testkit::golden::golden(&at, &String::from_utf8(o.stdout).unwrap());
+            drawn.insert(at);
+        }
+    }
+    for docs in ["docs", "docs-ja"] {
+        let dir = website().join(docs).join("ringi/doc");
+        for e in fs::read_dir(&dir).unwrap().flatten() {
+            assert!(drawn.contains(&e.path()), "website/{docs}/ringi/doc has {}, which is no example's page", e.file_name().to_string_lossy());
+        }
+        let linked: BTreeSet<String> = RINGI_PAGES.iter().flat_map(|p| link_targets(&read(&website().join(docs).join("ringi").join(p)))).map(|(_, t)| t).collect();
+        for (name, _, _) in RINGI_DRAWN {
+            assert!(linked.contains(&format!("doc/{name}.html")), "the pages of website/{docs}/ringi link to no doc/{name}.html");
+        }
+    }
+}
+
+/// ringi's READMEs and the READMEs at the root lead to the pages of ringi on the site, each to the
+/// pages in its own language.
+#[test]
+fn the_readmes_of_ringi_link_to_its_pages() {
+    for (readme, under, page) in [
+        ("crates/ringi/README.md", "", "docs/ringi/index.md"),
+        ("crates/ringi/README.ja.md", "ja/", "docs-ja/ringi/index.md"),
+        ("README.md", "", "docs/ringi/index.md"),
+        ("README.ja.md", "ja/", "docs-ja/ringi/index.md"),
+    ] {
+        let url = format!("{PUBLISHED}{under}ringi/");
+        assert!(read(&root().join(readme)).contains(&url), "{readme} does not link to {url}");
+        assert_eq!(source_of(&format!("/{under}ringi/"), &sites()), Some(website().join(page)), "{url} is no page of the site");
+    }
+}
+
 /// `from` copied to `to`, without what a build, Zensical's cache or the virtual environment left.
 fn copy_tree(from: &Path, to: &Path) {
     fs::create_dir_all(to).unwrap();
@@ -1323,12 +1538,12 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-/// The fences ritsu's site colours, each with its lexer: `kn` with website/tools/knlexer.py, `gate`
-/// with website/tools/gatelexer.py, Cedar's `cedar` and `cedarschema` with
-/// website/tools/cedarlexer.py, and `rule`, `flow` and `book` with the lexers of rulec's, dandori's
-/// and chobo's sites, which build.sh puts on PYTHONPATH and the two configurations name as Markdown
-/// extensions.
-const COLOURED: [&str; 7] = ["kn", "rule", "flow", "book", "gate", "cedar", "cedarschema"];
+/// The fences ritsu's site colours, each with its lexer: `kn` with website/tools/knlexer.py, `ringi`
+/// with website/tools/ringilexer.py, `gate` with website/tools/gatelexer.py, Cedar's `cedar` and
+/// `cedarschema` with website/tools/cedarlexer.py, and `rule`, `flow` and `book` with the lexers of
+/// rulec's, dandori's and chobo's sites, which build.sh puts on PYTHONPATH and the two
+/// configurations name as Markdown extensions.
+const COLOURED: [&str; 8] = ["kn", "ringi", "rule", "flow", "book", "gate", "cedar", "cedarschema"];
 
 /// The fences of ritsu's lexers that a language's site may show too, and colours with them: a gate
 /// and the Cedar it compiles to (chobo's site shows the gate that guards the operations of a book).
@@ -1448,6 +1663,22 @@ fn build_sh_builds_the_tree_that_is_published() {
         "ja/kaname/examples/index.html",
         "ja/kaname/checks/index.html",
         "ja/kaname/together/index.html",
+        "ringi/index.html",
+        "ringi/language/index.html",
+        "ringi/checks/index.html",
+        "ringi/reading/index.html",
+        "ringi/together/index.html",
+        "ringi/server/index.html",
+        "ringi/doc/expense.html",
+        "ringi/doc/manager_approval.html",
+        "ja/ringi/index.html",
+        "ja/ringi/language/index.html",
+        "ja/ringi/checks/index.html",
+        "ja/ringi/reading/index.html",
+        "ja/ringi/together/index.html",
+        "ja/ringi/server/index.html",
+        "ja/ringi/doc/expense.html",
+        "ja/ringi/doc/manager_approval.html",
         "ns/yuen/index.html",
         "ja/ns/yuen/index.html",
         "modules/index.html",
@@ -1576,6 +1807,39 @@ fn build_sh_builds_the_tree_that_is_published() {
         assert!(blocks >= 15, "the {lang} pages of kaname are built with {blocks} blocks of kn: were the fences changed?");
         for (kind, class, is) in kinds {
             assert!(tokens.iter().any(|(c, t)| c == class && is(t)), "the {lang} pages of kaname show {kind} in no span of the class `{class}`");
+        }
+    }
+    // The pages of ringi show each kind of word in its class, in each language: the ASCII name beside
+    // a name in another script, an event and a state of a scenario's table among them.
+    type RKind = (&'static str, &'static str, fn(&str) -> bool);
+    let ringi_kinds: [RKind; 9] = [
+        ("a keyword", "k", |t| t == "request"),
+        ("a type", "kt", |t| t == "money"),
+        ("a number with its unit", "m", |t| t.starts_with(|c: char| c.is_ascii_digit()) && !t.ends_with(|c: char| c.is_ascii_digit())),
+        ("a date", "m", is_date),
+        ("a string", "s2", |t| t.starts_with('"') && t.ends_with('"')),
+        ("an operator", "o", |t| t == ">="),
+        ("the ASCII name beside a name", "na", |t| t == "leave_ja"),
+        ("an event of a scenario", "nb", |t| t == "submit"),
+        ("a state of a scenario", "no", |t| t == "rejected"),
+    ];
+    for ja in [false, true] {
+        let mut tokens = Vec::new();
+        let mut blocks = 0;
+        for p in RINGI_PAGES {
+            let page = p.trim_end_matches(".md");
+            let file = format!("{}ringi/{}index.html", if ja { "ja/" } else { "" }, if page == "index" { String::new() } else { format!("{page}/") });
+            for (lang, t) in built_blocks(&read(&built.join(&file))) {
+                if lang == "ringi" {
+                    blocks += 1;
+                    tokens.extend(t);
+                }
+            }
+        }
+        let lang = if ja { "Japanese" } else { "English" };
+        assert!(blocks >= 14, "the {lang} pages of ringi are built with {blocks} blocks of ringi: were the fences changed?");
+        for (kind, class, is) in ringi_kinds {
+            assert!(tokens.iter().any(|(c, t)| c == class && is(t)), "the {lang} pages of ringi show {kind} in no span of the class `{class}`");
         }
     }
     // The pages of sekisho show each kind of word of a gate, of Cedar's policies and of a schema in
@@ -1751,7 +2015,7 @@ fn files_under(dir: &Path, exts: &[&str]) -> Vec<PathBuf> {
 const LEX: &str = r#"
 import sys
 sys.path.insert(0, sys.argv[1])
-import gatelexer, cedarlexer
+import gatelexer, cedarlexer, ringilexer
 from pygments.lexers import get_lexer_by_name
 from pygments.token import Error
 lexers = {}
@@ -1762,6 +2026,32 @@ for line in sys.stdin:
         text = f.read()
     print(f"{sum(1 for t, _ in lexer.get_tokens(text) if t in Error)}\t{path}")
 "#;
+
+/// The site's lexer of ringi reads every `.ringi` of the repository whole, as ringi's lexer does:
+/// every one but the mutants of E001, which ringi's lexer does not read either.
+#[test]
+fn the_lexer_of_ringi_reads_what_ringi_reads() {
+    let python = website().join(".venv/bin/python");
+    if !ready(Need::Python, || python.is_file(), "Pygments is not in website/.venv; install Zensical as website/README.md says, to colour the code") {
+        return;
+    }
+    let files: Vec<PathBuf> = files_under(&root().join("crates"), &[".ringi"])
+        .into_iter()
+        .chain(files_under(&website(), &[".ringi"]))
+        .filter(|f| !(f.file_name().is_some_and(|n| n.to_string_lossy().starts_with("E001_")) && f.parent().is_some_and(|d| d.ends_with("tests/mutants"))))
+        .collect();
+    let mut child = Command::new(&python).args(["-I", "-B", "-c", LEX]).arg(website().join("tools")).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().expect("could not run website/.venv/bin/python");
+    let input: String = files.iter().map(|f| format!("ringi\t{}\n", f.display())).collect();
+    child.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+    let o = child.wait_with_output().unwrap();
+    assert!(o.status.success(), "the lexer did not read the files:\n{}", String::from_utf8_lossy(&o.stderr));
+    let said = String::from_utf8(o.stdout).unwrap();
+    let unread: Vec<String> = said.lines().filter_map(|l| l.split_once('\t')).filter(|(n, _)| *n != "0").map(|(n, p)| format!("{p}: {n} tokens the lexer of ringi could not read")).collect();
+    assert_eq!(said.lines().count(), files.len(), "the lexer said nothing of some files:\n{said}");
+    assert!(unread.is_empty(), "{}", unread.join("\n"));
+    // the examples in two versions, the files of ringi's tests and fixtures, and the mutants
+    assert!(files.len() >= 300, "{} files of ringi: were they moved?", files.len());
+}
 
 /// The site's lexers of a gate and of Cedar read what the tools read, and mark what they do not.
 ///

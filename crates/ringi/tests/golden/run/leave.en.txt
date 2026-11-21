@@ -1,0 +1,28 @@
+2026-11-16 09:00  submit   by e1203  -> manager (e1101), due 2026-11-18 end of day; hold leave.take 8 day
+2026-11-16 17:00  approve  by e1101  -> head (e3101), due 2026-11-18 end of day
+2026-11-17 09:00  remind             -> head (e3101), due 2026-11-18 end of day; reminded e3101
+2026-11-19 00:00  late               -> head (e0101), due 2026-11-23 end of day; head went up to e0101
+2026-11-19 10:00  approve  by e0101  -> approved; post leave.take
+the book `leave` at the end: leave_left(e1203) 12 day, granted -20 day, taken 8 day
+  the hold `take` (T-1, attempt-1): posted
+scenario `a_long_paid_leave`: as written (5 rows)
+
+2026-11-16 09:00  submit                             by e1203  -> manager (e1101), due 2026-11-18 end of day; hold leave.take 3 day
+2026-11-16 11:00  comment                            by e1101  -> manager (e1101), due 2026-11-18 end of day; comment "Who covers for you while you are away?"
+2026-11-16 13:00  comment                            by e1203  -> manager (e1101), due 2026-11-18 end of day; comment "e1201 does"
+2026-11-16 17:00  send back                          by e1101  -> with requester, resubmit by 2026-11-23 end of day; comment "Write e1201 as the cover, please"; void leave.take
+2026-11-16 17:30  comment                            by e1203  -> with requester, resubmit by 2026-11-23 end of day; comment "Where do I write the cover?"
+2026-11-16 17:45  comment                            by e1101  -> with requester, resubmit by 2026-11-23 end of day; comment "In the cover field of the form"
+2026-11-17 09:00  resubmit (cover = person "e1201")  by e1203  -> manager (e1101), due 2026-11-19 end of day; comment "e1201 is written as the cover"; hold leave.take 3 day
+2026-11-17 10:00  approve                            by e1101  -> approved; comment "Have a good trip"; post leave.take
+the book `leave` at the end: leave_left(e1203) 17 day, granted -20 day, taken 3 day
+  the hold `take` (T-1, attempt-1): voided
+  the hold `take` (T-1, attempt-2): posted
+scenario `a_leave_sent_back_with_a_comment`: as written (8 rows)
+
+2026-11-16 09:00  submit   by e1203  -> manager (e1101), due 2026-11-18 end of day; hold leave.take 8 day
+2026-11-16 17:00  approve  by e1101  -> head (e3101), due 2026-11-18 end of day
+2026-11-16 18:00  reject   by e3101  -> rejected; comment "The week before the year end is our busiest"; void leave.take
+the book `leave` at the end: leave_left(e1203) 20 day, granted -20 day, taken 0 day
+  the hold `take` (T-1, attempt-1): voided
+scenario `a_leave_rejected_with_a_reason`: as written (3 rows)

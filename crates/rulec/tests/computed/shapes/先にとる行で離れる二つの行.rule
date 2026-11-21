@@ -1,0 +1,27 @@
+rule 先にとる行で離れる二つの行(first_band_rows_apart) v1
+description "二つの行は、100 円未満の物品が中になる所でだけ重なる。上の表の一行目が 100 円未満の物品を先にとるので、そこは起きない。100 円未満の物品は小、100 円以上の物品は中、それ以外は中になる"
+
+enum 選択(choice) = 一(one) | 二(two)
+enum 注文の種類(order_kind) = 物品(goods) | 役務(service)
+enum 大きさ(size) = 小(small) | 中(medium)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=200円
+  種類(kind)   : 注文の種類
+
+outputs
+  答え(x) : 選択
+
+table 区分の表(band_of)
+policy first
+| 金額    | 種類 | -> 区分(band) : 大きさ |
+| <100円  | 物品 | 小                     |
+| >=100円 | 物品 | 中                     |
+| -       | -    | 中                     |
+
+table 選ぶ(pick)
+| 金額    | 種類 | 区分 | -> 答え |
+| <100円  | 物品 | 小   | 一      |
+| -       | 物品 | 中   | 二      |
+| >=100円 | 役務 | 中   | 一      |
+| <100円  | -    | 中   | 二      |

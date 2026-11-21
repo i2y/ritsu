@@ -1,0 +1,18 @@
+rule mapping v1
+description "A rule named like a name the service of Connect imports where the rule reads an enum"
+
+enum plan = basic | plus
+
+inputs
+  member : plan
+  qty    : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_member
+policy unique
+| member | qty | -> fee |
+| basic  | <=5 | 3USD   |
+| basic  | >5  | 2USD   |
+| plus   | -   | 1USD   |

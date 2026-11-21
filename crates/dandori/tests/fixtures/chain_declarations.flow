@@ -1,0 +1,33 @@
+workflow chain_declarations v1
+description "Declarations with an error, and the lines that use what they declare"
+
+record Quote
+  total : int
+
+inputs
+  id   : strng
+  kind : string
+
+outputs
+  total : int
+  label : Labl
+
+# the type of the answer written wrong: the task is not there
+task fetch(id: string) -> Qoute
+
+# the type of a parameter written wrong: the task has no such parameter
+task ask(id: string, role: rol)
+
+# two errors of one status: the second is not the task's
+task cancel(id: string)
+  http POST "https://example.com/cancel"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/example/1"
+  errors gone = 410, late = 410
+  idempotent
+
+flow
+  let q = fetch(id: kind)
+  ask(id: kind, role: kind)
+  cancel(id: id)
+    on late => pass
+  succeed total = q.total, label = kind

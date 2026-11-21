@@ -1,0 +1,43 @@
+rule taken_tiers v1
+description "Two folds that take a tier: one the walk table works out, and one their own verdict in the arm for gold. Read through two applies whose rows take values the folds never answer (fictional)"
+
+enum tier = basic < silver < gold < platinum
+enum mark = skip | pick
+
+elements lines
+  flagged : bool
+
+outputs
+  chosen_credit : money[USD]  round down(1USD)
+  own_credit : money[USD]  round down(1USD)
+
+# A flagged line is gold and picked, any other silver and skipped
+table grade_by_flag
+policy unique
+| flagged | -> grade : tier | verdict : mark |
+| true    | gold            | pick           |
+| false   | silver          | skip           |
+
+# The grade of the first line picked, or else silver: never basic
+fold verdict over lines -> chosen : tier
+  pick      -> take_first grade
+  skip      -> next
+  empty     -> silver
+  exhausted -> held
+
+# The grade itself in the arm for gold, or else basic: never silver
+fold grade over lines -> own : tier
+  basic     -> next
+  silver    -> next
+  gold      -> take_first grade
+  platinum  -> next
+  empty     -> basic
+  exhausted -> held
+
+apply by_chosen = "tier_first.rule" meaning:4c5a5a77c8f14e12
+  tier = chosen
+  credit -> chosen_credit
+
+apply by_own = "tier_first.rule" meaning:4c5a5a77c8f14e12
+  tier = own
+  credit -> own_credit

@@ -15,3 +15,9 @@ strip = true
 # koyomi's tests walk every day of 1900-2100 several times over; unoptimized, that alone takes minutes.
 [profile.test.package.koyomi]
 opt-level = 2
+
+# The tests of `ritsu gen` on requests have kaname check the module of each request and the machine
+# of the tickets, the ranges of every function read through its calls; unoptimized, the requests of
+# ringi's tests take half an hour.
+[profile.test.package.kaname]
+opt-level = 2

@@ -115,10 +115,10 @@ body.sheet-open { overflow: hidden; }
 <p>このモジュールの判断は、どれも表にあります。</p>
 <h2 id="examples">例</h2>
 <p><code>kaname check</code> は、<code>examples</code> の行ごとに、ホストが呼ぶときと同じように関数を参照インタプリタで流し、書いてある答えと比べます。参照インタプリタの答えは次のとおりです。</p>
-<pre><code class="language-kn">精算する(支払い: 支払い { 番号: &quot;pay_1&quot;, 売り手: &quot;s_1&quot;, 金額: 10000USDc, 海外: false })
-  = 精算 { 入金: 台帳.入金.do(支払い: &quot;pay_1&quot;, 売り手: &quot;s_1&quot;, 金額: 10000USDc), 手数料: 台帳.決済手数料.do(支払い: &quot;pay_1&quot;, 売り手: &quot;s_1&quot;, 手数料: 398USDc) }
-精算する(支払い: 支払い { 番号: &quot;pay_2&quot;, 売り手: &quot;s_1&quot;, 金額: 10000USDc, 海外: true })
-  = 精算 { 入金: 台帳.入金.do(支払い: &quot;pay_2&quot;, 売り手: &quot;s_1&quot;, 金額: 10000USDc), 手数料: 台帳.決済手数料.do(支払い: &quot;pay_2&quot;, 売り手: &quot;s_1&quot;, 手数料: 548USDc) }</code></pre>
+<pre><code class="language-kn">精算する(支払い: 支払い { 番号: &quot;pay_1&quot;, 売り手: &quot;s_1&quot;, 金額: 10_000USDc, 海外: false })
+  = 精算 { 入金: 台帳.入金.do(支払い: &quot;pay_1&quot;, 売り手: &quot;s_1&quot;, 金額: 10_000USDc), 手数料: 台帳.決済手数料.do(支払い: &quot;pay_1&quot;, 売り手: &quot;s_1&quot;, 手数料: 398USDc) }
+精算する(支払い: 支払い { 番号: &quot;pay_2&quot;, 売り手: &quot;s_1&quot;, 金額: 10_000USDc, 海外: true })
+  = 精算 { 入金: 台帳.入金.do(支払い: &quot;pay_2&quot;, 売り手: &quot;s_1&quot;, 金額: 10_000USDc), 手数料: 台帳.決済手数料.do(支払い: &quot;pay_2&quot;, 売り手: &quot;s_1&quot;, 手数料: 548USDc) }</code></pre>
 <div class="sheet" id="kn-sheet" role="dialog" aria-modal="true" aria-label="doc" hidden><div class="bar"><span class="what"></span><button class="close" type="button" title="閉じる" aria-label="閉じる">×</button></div><iframe sandbox="allow-scripts" title="doc"></iframe></div>
 <script type="application/json" id="kn-pages">[the pages]</script>
 <script>

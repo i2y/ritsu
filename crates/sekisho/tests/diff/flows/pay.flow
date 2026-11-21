@@ -1,0 +1,27 @@
+workflow pay v1
+description "Pays a claim. Written for sekisho's diff tests: the gates beside it say what the flow holds of the claim it pays"
+
+use openapi desk from "../../../examples/claims/api/desk.json"
+
+record Paid
+  paid : bool
+
+inputs
+  claim_id : string
+  amount   : money[JPY]  range >=1JPY <=10_000JPY
+  asked    : money[JPY]  range >=1JPY <=10_000JPY
+  checked  : bool
+  rush     : bool
+
+outputs
+  paid : bool
+
+task pay_claim(claimId: string) -> Paid
+  http POST desk "/claims/{claimId}/payments"
+  errors denied = 403
+  key
+
+flow
+  let p = pay_claim(claimId: claim_id)
+    on denied => fail Denied "The gate did not let the workflow pay this claim"
+  succeed paid = p.paid

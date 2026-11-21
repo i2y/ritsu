@@ -1,5 +1,5 @@
 workflow 普通の名前 v1
-description "生成するコードが自分のものにしない名前です。Go のパッケージが持ちそうな名詞と、コードが読まない Python の組み込みと JavaScript のグローバルを、型と変数に使います。どのプラットフォームでも動きます"
+description "生成するコードが自分のものにしない名前です。Go のパッケージが持ちそうな名詞、コードが読まない Python の組み込みと JavaScript のグローバル、コードが別の名前で読む Python の typing の名前を、型と変数に使います。どのプラットフォームでも動きます"
 
 # Go のパッケージが持ってもおかしくない、業務の名詞
 enum Outcome = 勝ち | 負け
@@ -25,6 +25,7 @@ enum reversed = 甲 | 乙
 enum setattr = 甲 | 乙
 enum sum = 甲 | 乙
 enum vars = 甲 | 乙
+enum TypeError = 甲 | 乙
 
 record format
   幅 : int
@@ -34,6 +35,10 @@ record hash
 
 record slice
   始め : int
+
+# コードが別の名前で読む、Python の typing の名前
+record TypeGuard
+  値 : int
 
 # コードの型が型として読まない JavaScript のグローバル
 enum Boolean = 甲 | 乙
@@ -80,6 +85,8 @@ record 全部
   sliceの欄 : slice
   sumの欄 : sum
   varsの欄 : vars
+  TypeErrorの欄 : TypeError
+  TypeGuardの欄 : TypeGuard
   booleanの欄 : Boolean
   dateの欄 : Date
   errorの欄 : Error
@@ -130,4 +137,6 @@ flow
   let slice = 書く(番号: 番号)
   let sum = 書く(番号: 番号)
   let vars = 書く(番号: 番号)
-  succeed 文 = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", 全部の値 = 全部の値
+  let TypeError = 書く(番号: 番号)
+  let TypeGuard = 書く(番号: 番号)
+  succeed 文 = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}{TypeError}{TypeGuard}", 全部の値 = 全部の値

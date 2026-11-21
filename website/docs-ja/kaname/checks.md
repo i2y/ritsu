@@ -72,7 +72,7 @@ $ cd crates/kaname
 $ ritsu kaname check tests/docs/unnarrowed.kn --lang ja
 エラー[E301]: tests/docs/unnarrowed.kn:15:44: `late` が、規則 `charges` の入力 `days_late` の範囲 >=1 <=1500 の外になることがあります
     15 |   charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate).interest
-  = たとえば `interest(invoice: Invoice { id: "a", invoiced: 2026-01-01, amount: 50000000GBPc }, paid_on: 2026-01-01, reference_rate: 0%)` のとき、-29 になります。
+  = たとえば `interest(invoice: Invoice { id: "a", invoiced: 2026-01-01, amount: 50_000_000GBPc }, paid_on: 2026-01-01, reference_rate: 0%)` のとき、-29 になります。
   = 渡す前に `if` でその範囲に狭めるか、渡す先の範囲を広げてください。
 ```
 
@@ -80,11 +80,11 @@ $ ritsu kaname check tests/docs/unnarrowed.kn --lang ja
 
 ## 生成したコードと参照インタプリタの答え
 
-モジュールの意味を決めるのは参照インタプリタです。`kaname run` はそれで関数を走らせ、`vectors` はそれに流す入力を選びます。`ritsu gen` が書く TypeScript、Python、Go、Rust のコードと、Rust から組んだ Wasm は、これと突き合わせています。例とテストの 52 のモジュールのすべてのベクタ（14,096 件）、引数の宣言のすぐ外の入力、自分を含む型の値を、ホストが渡せるいちばん深い 200 段と、それより一段深い 201 段まで入れ子にした値です。英語の版と日本語の版の両方で、TypeScript の 16,874 件、Python の 16,790 件、Go と Rust と Wasm のそれぞれ 16,770 件がすべて一致します（型の全体の外の入力は、その値を持てる言語で流します）。生成したコードは、`tsc --strict --erasableSyntaxOnly`、`mypy --strict`、gofmt、`go vet`、`cargo clippy -- -D warnings` を通ります。[Functional Core の四つの例](examples.md)のホストも、`output.txt` のとおりに出力します。
+モジュールの意味を決めるのは参照インタプリタです。`kaname run` はそれで関数を走らせ、`vectors` はそれに流す入力を選びます。`ritsu gen` が書く TypeScript、Python、Go、Rust のコードと、Rust から組んだ Wasm は、これと突き合わせています。例とテストの 60 のモジュールのすべてのベクタ（14,746 件）、引数の宣言のすぐ外の入力、自分を含む型の値を、ホストが渡せるいちばん深い 200 段と、それより一段深い 201 段まで入れ子にした値です。英語の版と日本語の版の両方で、TypeScript の 17,634 件、Python の 17,550 件、Go と Rust と Wasm のそれぞれ 17,510 件がすべて一致します（型の全体の外の入力は、その値を持てる言語で流します）。生成したコードは、`tsc --strict --erasableSyntaxOnly`、`mypy --strict`、gofmt、`go vet`、`cargo clippy -- -D warnings` を通ります。[Functional Core の四つの例](examples.md)のホストも、`output.txt` のとおりに出力します。
 
 ## 範囲の解析と、実際の値
 
-範囲の解析は、式ごとに、その値がとりうる範囲を言います。例とテストのモジュールのすべての関数を、ベクタと、引数の宣言から選んだ 200 件の入力で走らせると（139,754 回）、5,009 の式に来た 3,452,025 の値は、どれも解析の言う範囲に入ります。失敗した 1,617 回も、どれも関数のエフェクトが言う種類で失敗します。
+範囲の解析は、式ごとに、その値がとりうる範囲を言います。例とテストのモジュールのすべての関数を、ベクタと、引数の宣言から選んだ 200 件の入力で走らせると（153,902 回）、5,415 の式に来た 3,574,060 の値は、どれも解析の言う範囲に入ります。失敗した 1,627 回も、どれも関数のエフェクトが言う種類で失敗します。
 
 ## Lean
 

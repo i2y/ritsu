@@ -1,0 +1,5 @@
+error[E107]: example.ringi:6:3: The master `m.accounts` has no row to choose on 2026-07-01 to 2026-07-31
+     6 |   account : choice from m.accounts "Account code"
+  = The request is used from 2026-01-01 on, and the field `account` reads the master on each of those days.
+  = The row before: `accounts.csv`, line 2 (`5103`, from 2026-01-01 to 2026-06-30); making its `valid_to` 2026-07-31 fills it.
+  = The row after: `accounts.csv`, line 3 (`5110`, from 2026-08-01 with no end); making its `valid_from` 2026-07-01 fills it.

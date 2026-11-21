@@ -1,0 +1,30 @@
+gate 請求(claims_ja) v2
+description "請求をだれが支払ってよいか。窓口のワークフローは 500 円までの請求を支払う"
+namespace ClaimsJa
+
+use openapi 窓口 from "../../examples/claims/api/desk.json"
+
+workflow 支払い(pay) from "flows/支払い.flow"
+  description "請求を支払う"
+  resource 請求 from 請求番号
+    金額 = 求めた額
+    急ぎ = 急ぎ
+
+resource 請求(Claim)
+  description "請求"
+  attributes
+    金額(amount)      : money[JPY]  range >=1JPY <=10_000JPY
+    確認済み(checked) : bool
+    急ぎ(rush)        : bool
+
+action 請求を支払う(pay_claim)
+  description "請求を支払う"
+  guards 窓口 payClaim
+  principal Workflow
+  resource 請求 from claimId
+
+permit ワークフローは少額を支払う(the_workflow_pays_small_claims)
+  description "ワークフローは 500 円までの請求を支払える"
+  principal is workflow 支払い
+  action 請求を支払う
+  when resource.金額 <= 500JPY

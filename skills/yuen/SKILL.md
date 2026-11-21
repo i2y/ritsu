@@ -47,6 +47,11 @@ project: a `.req`, or a directory of them. In a project with the other languages
 
 When code changes, `ritsu yuen affected <path> --diff <file>` answers which requirements the diff
 touches and whom to ask (the owners), following the code through geas's records to the claims.
+A file that a linked file reads (a rule a rule applies, the calendar a dates file uses, the
+organization or the masters a request uses, and the data folders and tables their `data` lines
+name) reaches the requirements too, through every level, and the answer says the way it was read.
+A file no language's file names (a data file the code opens when it runs) is not followed: a
+change there reaches no requirement, so name the owners of what uses it yourself.
 
 ## 2. The language on one page
 

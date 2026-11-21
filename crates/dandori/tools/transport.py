@@ -4,9 +4,9 @@
 # over), which writes it down and gives the scenario's answer. The Python twin of
 # transport.mjs, shared by temporal-python/run.py and pydantic-graph/run.py.
 #
-# spec["http"]: [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders}; the
-#   decision tasks of one API send to one URL, and an error takes its status from the task that
-#   declares it)
+# spec["http"]: [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders}, which a
+#   call's URL fills, with the query of its arguments after it (DESIGN 43); the decision tasks of
+#   one API send to one URL, and an error takes its status from the task that declares it)
 # spec["aws"]:  [ { api: "<service>:<action>", errors: { <error>: <exception> }, keyParam } ]
 #
 # A callback task's submit hands on `callback_id` (in the Lambda payload, or in the SQS
@@ -35,7 +35,7 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
     http_tasks = []
     for t in spec.get("http", []):
         parts = re.split(r"\{[^}]*\}", t["url"])
-        http_tasks.append({**t, "re": re.compile("^" + "[^/?]*".join(re.escape(p) for p in parts) + "$")})
+        http_tasks.append({**t, "re": re.compile("^" + "[^/?]*".join(re.escape(p) for p in parts) + "([?&].*)?$")})
     aws_tasks = spec.get("aws", [])
 
     def error_name(kind: str) -> str:

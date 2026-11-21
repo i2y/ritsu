@@ -23,6 +23,8 @@ extern crate ritsu_base;
 
 pub mod api;
 pub mod ast;
+/// What a gate allows a workflow at one call of its flow (DESIGN 4.6, 8.3).
+pub mod at;
 pub mod borders;
 pub mod cedar;
 pub mod cedar_in;

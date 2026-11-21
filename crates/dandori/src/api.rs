@@ -24,7 +24,7 @@ fn range_json(m: &Model, ty: &Ty, rg: &Range) -> Json {
     while let Ty::Opt(x) | Ty::List(x) = inner {
         inner = x;
     }
-    let text = Json::str(m.range_text(ty, rg));
+    let text = Json::str(m.range_wire(ty, rg));
     match (inner, ty.enum_inside()) {
         (_, Some(e)) => {
             let values = m.values_in(e, Some(*rg));
@@ -80,12 +80,29 @@ fn with_fed(m: &Model, shown: &str, mut one: Vec<(&'static str, Json)>) -> Vec<(
     one
 }
 
+/// A place the workflow declares: an input or an output, with its type, the range and the secret
+/// mark written on it, and its line (0 where the flow does not say).
+pub(crate) struct Declared<'m> {
+    pub name: &'m str,
+    pub ty: &'m Ty,
+    pub range: Option<&'m Range>,
+    pub secret: Option<&'m SecretMark>,
+    pub line: usize,
+}
+
+/// The inputs and the outputs the workflow declares, in the order written. `dandori api` writes
+/// them from here, and the port `Flows::declared` answers from here ([`crate::ports`]), so the
+/// two say the same of a flow.
+pub(crate) fn declared(m: &Model) -> (Vec<Declared<'_>>, Vec<Declared<'_>>) {
+    let inputs = m.inputs.iter().map(|(n, t)| Declared { name: n, ty: t, range: m.input_ranges.get(n), secret: m.input_secrets.get(n), line: m.input_lines.get(n).copied().unwrap_or(0) }).collect();
+    let outputs = m.outputs.iter().map(|(n, t)| Declared { name: n, ty: t, range: m.output_ranges.get(n), secret: m.output_secrets.get(n), line: m.output_lines.get(n).copied().unwrap_or(0) }).collect();
+    (inputs, outputs)
+}
+
 fn io(m: &Model) -> (Json, Json) {
-    let side = |xs: &[(String, Ty)], ranges: &std::collections::BTreeMap<String, Range>, secrets: &std::collections::BTreeMap<String, SecretMark>, lines: &std::collections::BTreeMap<String, usize>| {
-        Json::arr(xs.iter().map(|(n, t)| Json::obj(place(m, n, t, ranges.get(n), secrets.get(n), lines.get(n).copied().unwrap_or(0)))))
-    };
-    let inputs = Json::arr(m.inputs.iter().map(|(n, t)| Json::obj(with_fed(m, n, place(m, n, t, m.input_ranges.get(n), m.input_secrets.get(n), m.input_lines.get(n).copied().unwrap_or(0))))));
-    (inputs, side(&m.outputs, &m.output_ranges, &m.output_secrets, &m.output_lines))
+    let (inputs, outputs) = declared(m);
+    let one = |d: &Declared| place(m, d.name, d.ty, d.range, d.secret, d.line);
+    (Json::arr(inputs.iter().map(|d| Json::obj(with_fed(m, d.name, one(d))))), Json::arr(outputs.iter().map(|d| Json::obj(one(d)))))
 }
 
 fn column_json(c: &Column) -> Json {
@@ -152,8 +169,19 @@ fn uses_json(m: &Model) -> Json {
     }))
 }
 
+/// Each enum of the flow, with the other names of the flow that are the same type (`same_as`,
+/// DESIGN 28): `sh.category`, `r1.category` and `category` when the rules and the flow read
+/// `category` of one `enums` file.
 fn enums_json(m: &Model) -> Json {
-    Json::arr(m.enums.iter().map(|e| Json::obj([("name", Json::str(e.name.clone())), ("values", Json::arr(e.values.iter().cloned().map(Json::str))), ("ordered", Json::Bool(e.ordered)), ("from", opt(e.from.as_ref().map(|(file, name)| Json::obj([("file", Json::str(file.clone())), ("enum", Json::str(name.clone()))]))))])))
+    Json::arr(m.enums.iter().enumerate().map(|(i, e)| {
+        Json::obj([
+            ("name", Json::str(e.name.clone())),
+            ("values", Json::arr(e.values.iter().cloned().map(Json::str))),
+            ("ordered", Json::Bool(e.ordered)),
+            ("from", opt(e.from.as_ref().map(|(file, name)| Json::obj([("file", Json::str(file.clone())), ("enum", Json::str(name.clone()))])))),
+            ("same_as", Json::arr(m.other_names(i).into_iter().map(|n| Json::str(n.to_string())))),
+        ])
+    }))
 }
 
 fn records_json(m: &Model) -> Json {
@@ -321,8 +349,9 @@ fn endings(m: &Model) -> (Json, Json) {
                 ("in", Json::str(name)),
                 ("line", line(s.line)),
             ])),
+            // an output as written: a number written with a unit with its unit (DESIGN 40)
             TK::Succeed { fields } => succeeds.push(Json::obj([
-                ("outputs", Json::Obj(fields.iter().map(|(n, e)| (n.clone(), Json::str(show(e)))).collect())),
+                ("outputs", Json::Obj(fields.iter().map(|(n, e)| (n.clone(), Json::str(if matches!(e, TExpr::Str(_)) { show(e) } else { m.shown_at(s.site, n, e) }))).collect())),
                 ("in", Json::str(name)),
                 ("line", line(s.line)),
             ])),

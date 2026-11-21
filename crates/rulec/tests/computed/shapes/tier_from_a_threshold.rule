@@ -1,0 +1,23 @@
+rule tier_from_a_threshold v1
+description "A tier decided by whether the amount passes 33 yen, read beside the amount: a small amount never comes with the paid tier, and the check reads the truth of the comparison on the amounts of each row"
+
+enum choice = one | two
+enum tier = free | paid
+
+inputs
+  amount : money[JPY]  range >=1JPY <=61JPY
+
+define large : bool = amount > 33JPY
+
+outputs
+  x : choice
+
+table tier_of
+| large | -> tier : tier |
+| false | free           |
+| true  | paid           |
+
+table pick
+| amount  | tier | -> x |
+| <=33JPY | free | one  |
+| >33JPY  | paid | two  |

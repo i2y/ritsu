@@ -1,0 +1,24 @@
+rule fold_arm_never v1
+description "A fold with an arm for a verdict the table never writes, before the arms it does (fictional)"
+
+enum verdict_kind = skip | halt | take
+
+elements lines
+  amt : money[JPY]  range >=0JPY <=1000JPY
+
+outputs
+  fee : money[JPY]  round down(1JPY)
+
+# Each line is taken or halts the fold, never skipped
+table decide
+policy unique
+| amt      | -> verdict : verdict_kind |
+| >=500JPY | take                      |
+| <500JPY  | halt                      |
+
+fold verdict over lines -> fee
+  skip -> next
+  halt -> stop with 0JPY
+  take -> take_first amt
+  empty -> 0JPY
+  exhausted -> held

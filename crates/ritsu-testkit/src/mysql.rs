@@ -21,6 +21,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+/// How long the client may take with one statement before it is stopped: the statements of a test
+/// take a second or two, and a server that does not answer is not waited for without end.
+const SQL_LIMIT: Duration = Duration::from_secs(5 * 60);
+
 pub struct MySql {
     /// What it is, for a line of the test's output: `MySQL 8.4.11`, `TiDB v8.5.8`.
     pub label: String,
@@ -286,8 +290,11 @@ impl MySql {
     /// Run SQL on a database of the server and answer what it prints, a row a line, its columns
     /// separated by tabs.
     pub fn sql(&self, db: &str, sql: &str) -> Result<String, String> {
-        let out = self.mysql(db).args(["-e", sql]).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
-        if out.status.success() { Ok(String::from_utf8_lossy(&out.stdout).to_string()) } else { Err(String::from_utf8_lossy(&out.stderr).to_string()) }
+        let out = crate::run::run(self.mysql(db).args(["-e", sql]), SQL_LIMIT);
+        if out.timed_out {
+            return Err(format!("mysql did not answer within {} seconds, and was stopped: {sql}", SQL_LIMIT.as_secs()));
+        }
+        if out.ok { Ok(out.stdout) } else { Err(out.stderr) }
     }
 
     /// A new database of the server, named after the test process: on a server of the
@@ -355,7 +362,16 @@ fn errors(text: &str) -> String {
 impl Drop for MySql {
     fn drop(&mut self) {
         for db in self.made.lock().unwrap().drain(..) {
-            let _ = self.mysql("").args(["-e", &format!("drop database if exists `{db}`")]).stdin(Stdio::null()).output();
+            // a server that does not answer is not waited for past a minute
+            let dropping = self.mysql("").args(["-e", &format!("drop database if exists `{db}`")]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+            if let Ok(mut c) = dropping {
+                let started = Instant::now();
+                while c.try_wait().ok().flatten().is_none() && started.elapsed() < Duration::from_secs(60) {
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+                let _ = c.kill();
+                let _ = c.wait();
+            }
         }
         let vitess = self.keyspace.is_some();
         if let Some((child, _)) = &mut self.server {

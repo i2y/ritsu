@@ -2,6 +2,7 @@
 //! TigerBeetle and on the MySQL family are matched against it, operation by operation.
 
 use crate::model::*;
+use ritsu_base::text::Text;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -235,18 +236,19 @@ impl Call {
 
 /// Is the call well formed for the book: the operation fits the kind, every argument it
 /// needs is there with the right type, and the amounts are in range. An answer of Err is a
-/// mistake in the scenario, not a refusal.
-pub fn validate(book: &Book, c: &Call) -> Result<(), String> {
-    let t = book.transfers.get(c.kind).ok_or("no such transfer kind")?;
+/// mistake in the scenario, not a refusal, said in both languages.
+pub fn validate(book: &Book, c: &Call) -> Result<(), Text> {
+    let t = book.transfers.get(c.kind).ok_or_else(|| tr!("その種類の振替はありません", "no such transfer kind"))?;
     let fits = match c.op {
         Op::Do => !t.is_pending(),
         Op::Hold | Op::Post | Op::Void => t.is_pending(),
     };
     if !fits {
-        return Err(format!("`{}` takes {}, not {}", t.name, t.ops().join(", "), c.op.name()));
+        let (ops, op) = (t.ops(), c.op.name());
+        return Err(tr!("`{}` が取る操作は {} で、{} は取りません", "`{}` takes {}, not {}", t.name, ops.join("、"), op; t.name, ops.join(", "), op));
     }
     if c.args.len() != t.params.len() {
-        return Err("the arguments do not match the parameters".into());
+        return Err(tr!("引数が振替の宣言と合いません", "the arguments do not match the parameters"));
     }
     let needed: Vec<usize> = match c.op {
         Op::Do | Op::Hold => (0..t.params.len()).collect(),
@@ -256,30 +258,30 @@ pub fn validate(book: &Book, c: &Call) -> Result<(), String> {
         let want = needed.contains(&i);
         match (&c.args[i], want, p.ty) {
             (None, false, _) => {}
-            (None, true, _) => return Err(format!("`{}` needs the argument `{}`", t.name, p.name)),
-            (Some(_), false, _) => return Err(format!("`{}.{}` takes only the key; `{}` is not in it", t.name, c.op.name(), p.name)),
+            (None, true, _) => return Err(tr!("`{}` には引数 `{}` が要ります", "`{}` needs the argument `{}`", t.name, p.name)),
+            (Some(_), false, _) => return Err(tr!("`{}.{}` が取るのはキーだけです。`{}` はキーに入っていません", "`{}.{}` takes only the key; `{}` is not in it", t.name, c.op.name(), p.name)),
             (Some(Val::Str(_)), true, Ty::Str) => {}
             (Some(Val::Amt(v)), true, Ty::Amount(_)) => {
                 if !(0..=MAX).contains(v) {
-                    return Err(format!("`{}` is {v}; an amount is from 0 to 2^63 - 1", p.name));
+                    return Err(tr!("`{}` が {v} です。額は 0 から 2^63 - 1 までです", "`{}` is {v}; an amount is from 0 to 2^63 - 1", p.name));
                 }
             }
-            (Some(_), true, Ty::Str) => return Err(format!("`{}` is a string", p.name)),
-            (Some(_), true, Ty::Amount(_)) => return Err(format!("`{}` is an amount, a whole number", p.name)),
+            (Some(_), true, Ty::Str) => return Err(tr!("`{}` は文字列です", "`{}` is a string", p.name)),
+            (Some(_), true, Ty::Amount(_)) => return Err(tr!("`{}` は額（整数）です", "`{}` is an amount, a whole number", p.name)),
         }
     }
     if let Some(a) = &c.amounts {
         if c.op != Op::Post {
-            return Err("only `post` takes amounts".into());
+            return Err(tr!("額を取るのは `post` だけです", "only `post` takes amounts"));
         }
         let ap = t.amount_params();
         if a.len() != ap.len() || !ap.iter().all(|i| a.contains_key(i)) {
             let names: Vec<&str> = ap.iter().map(|i| t.params[*i].name.as_str()).collect();
-            return Err(format!("`{}.post` takes every amount ({}) or none", t.name, names.join(", ")));
+            return Err(tr!("`{}.post` に渡す額は、全部（{}）か、一つも無いかのどちらかです", "`{}.post` takes every amount ({}) or none", t.name, names.join("、"); t.name, names.join(", ")));
         }
         for (i, v) in a {
             if !(0..=MAX).contains(v) {
-                return Err(format!("`{}` is {v}; an amount is from 0 to 2^63 - 1", t.params[*i].name));
+                return Err(tr!("`{}` が {v} です。額は 0 から 2^63 - 1 までです", "`{}` is {v}; an amount is from 0 to 2^63 - 1", t.params[*i].name));
             }
         }
     }
@@ -302,7 +304,7 @@ impl State {
 
     /// Carry out one call. Err is a mistake in the call (DESIGN 1.5: a failure, not a
     /// refusal), and then nothing has changed.
-    pub fn apply(&mut self, book: &Book, c: &Call) -> Result<Outcome, String> {
+    pub fn apply(&mut self, book: &Book, c: &Call) -> Result<Outcome, Text> {
         validate(book, c)?;
         match c.op {
             Op::Do | Op::Hold => self.move_or_hold(book, c),
@@ -311,7 +313,7 @@ impl State {
         }
     }
 
-    fn move_or_hold(&mut self, book: &Book, c: &Call) -> Result<Outcome, String> {
+    fn move_or_hold(&mut self, book: &Book, c: &Call) -> Result<Outcome, Text> {
         let t = &book.transfers[c.kind];
         let moves: Vec<HeldMove> = t.moves.iter().map(|m| HeldMove { from: c.account(&m.from), to: c.account(&m.to), amount: c.amount(m) }).collect();
         // an account cannot be moved to itself; this is the call's own mistake, and costs no key
@@ -369,7 +371,7 @@ impl State {
             }
         }
         if let Some((id, _)) = scratch.iter().find(|(_, b)| !in_range(b)) {
-            return Err(format!("the balance of {} would leave the range of a 64-bit integer", id.text(book)));
+            return Err(tr!("{} の残高が 64 ビットの整数の範囲を超えます", "the balance of {} would leave the range of a 64-bit integer", id.text(book)));
         }
         self.accounts.extend(scratch);
         if c.op == Op::Hold {
@@ -399,7 +401,7 @@ impl State {
         }
     }
 
-    fn post(&mut self, book: &Book, c: &Call) -> Result<Outcome, String> {
+    fn post(&mut self, book: &Book, c: &Call) -> Result<Outcome, Text> {
         let t = &book.transfers[c.kind];
         let hk = (c.kind, c.key(t));
         let Some(hold) = self.holds.get(&hk) else {
@@ -434,7 +436,7 @@ impl State {
         }
     }
 
-    fn void(&mut self, book: &Book, c: &Call) -> Result<Outcome, String> {
+    fn void(&mut self, book: &Book, c: &Call) -> Result<Outcome, Text> {
         let t = &book.transfers[c.kind];
         let hk = (c.kind, c.key(t));
         let Some(hold) = self.holds.get(&hk) else {

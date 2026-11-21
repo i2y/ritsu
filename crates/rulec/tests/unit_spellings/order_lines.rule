@@ -1,0 +1,12 @@
+rule order_lines v1
+description "The lines of an order in JPY, counted by a rule that writes 円 (fictional)"
+
+elements items
+  price : money[JPY]  range >=0JPY <=10_000JPY
+
+outputs
+  big_lines : number  round down(1)
+
+apply counted = "shared/big_lines.rule" meaning:3655253ecceb7690
+  lines = items
+  big_lines -> big_lines

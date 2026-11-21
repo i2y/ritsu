@@ -1,0 +1,11 @@
+diff: tests/fixtures/contributions/changes/fee.diff
+files that requirements name, that the diff touches:
+  rulec "rules/fee.rule": met by fee_by_way
+files read by the files that requirements name, that the diff touches:
+  tests/fixtures/contributions/rules/fee.rule
+    rulec "rules/extra/courier.rule" line 3 (to): met by courier_fee
+changes no requirement reaches: none
+requirements touched:
+  fee_by_way (tests/fixtures/contributions/fees.req:6): owner finance; decided 2026-11-02 by finance: "Written for this test"
+  courier_fee (tests/fixtures/contributions/fees.req:15): owner finance; decided 2026-11-02 by finance: "Written for this test"
+2 requirements touched; ask finance

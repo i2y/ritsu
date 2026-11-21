@@ -3,11 +3,11 @@
   "owner": {
     "name": "i2y"
   },
-  "description": "The Agent Skills of ritsu, one plugin with a skill for ritsu and one for each of its nine languages.",
+  "description": "The Agent Skills of ritsu, one plugin with a skill for ritsu and one for each of its ten languages.",
   "plugins": [
     {
       "name": "ritsu",
-      "description": "Agent Skills for ritsu and its nine small languages: business rules (rulec), workflows (dandori), dates (koyomi), ledgers (chobo), claims about code (geas), where requirements come from (yuen), maps of bounded contexts (sakai), who may do what (sekisho) and functional cores with no input or output, around rules, dates and ledgers too (kaname). The skills run the ritsu binary, which has to be on PATH.",
+      "description": "Agent Skills for ritsu and its ten small languages: business rules (rulec), workflows (dandori), dates (koyomi), ledgers (chobo), claims about code (geas), where requirements come from (yuen), maps of bounded contexts (sakai), who may do what (sekisho), functional cores with no input or output, around rules, dates and ledgers too (kaname) and the requests a company's departments make and approve (ringi). The skills run the ritsu binary, which has to be on PATH.",
       "version": "0.55.2",
       "author": {
         "name": "i2y"
@@ -15,7 +15,7 @@
       "homepage": "https://i2y.github.io/ritsu/",
       "repository": "https://github.com/i2y/ritsu",
       "license": "MIT OR Apache-2.0",
-      "keywords": ["ritsu", "rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname", "agent-skills"],
+      "keywords": ["ritsu", "rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname", "ringi", "agent-skills"],
       "source": {
         "source": "git-subdir",
         "url": "https://github.com/i2y/ritsu.git",

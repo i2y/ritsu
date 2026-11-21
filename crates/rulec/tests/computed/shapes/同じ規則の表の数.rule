@@ -1,0 +1,20 @@
+rule 同じ規則の表の数(same_rule_number) v1
+description "同じ規則の表が書く数を、それを決める金額と一緒に読む"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+outputs
+  答え(x) : 選択
+
+table 手数料の表(fee_of)
+| 金額        | -> 手数料(fee) : money[円] |
+| <=100_000円 | 100円                      |
+| >100_000円  | 900円                      |
+
+table 選ぶ(pick)
+| 金額        | 手数料 | -> 答え |
+| <=100_000円 | 100円  | 一      |
+| >100_000円  | 900円  | 二      |

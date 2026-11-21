@@ -1,0 +1,13 @@
+enums 尺度(measures) v1
+description "Swift のコードが読む型と同じ名前の、enums ファイルの列挙"
+
+enum 書体(string) = 普通(plain) | 太字(bold) | 斜体(italic)
+enum 旗(bool) = 上げ(up) | 下げ(down)
+enum 個数の種類(int) = 少し(few) | 多く(many)
+enum 幅(int64) = 狭い(narrow) | 広い(wide)
+enum 比(double) = 半分(half) | 全部(whole)
+
+prerequisites 書き方(styling) over 書体
+  start 普通
+  太字  requires 普通
+  斜体  requires 普通

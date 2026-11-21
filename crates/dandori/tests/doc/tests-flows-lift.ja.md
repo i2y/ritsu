@@ -70,7 +70,7 @@ Shipping by membership tier: gold and above ship free, and a campaign lifts a me
 |---|---|---|---|
 | member | tier（4 値） |  | the member's own tier |
 | campaign | tier（4 値） | basic 〜 gold | a campaign lifts a member as far as gold |
-| subtotal | money[USD] | 0USD 〜 10万USD |  |
+| subtotal | money[USD] | 0USD 〜 100_000USD |  |
 
 ## 出力
 

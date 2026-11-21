@@ -1,0 +1,17 @@
+rule part v1
+description "A share of an amount, taken or given back: the amount times the share, rounded down to the yen"
+
+inputs
+  share  : rate[step 1%]  range >=-100% <=100%
+  amount : money[JPY]     range >=0JPY <=1_000_000JPY
+
+outputs
+  part : money[JPY]  round down(1JPY)
+
+result part = amount × share
+
+examples
+| share | amount  | -> part  |
+| 10%   | 1000JPY | 100JPY   |
+| -10%  | 1000JPY | -100JPY  |
+| 0%    | 1000JPY | 0JPY     |

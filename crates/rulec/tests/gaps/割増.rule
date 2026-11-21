@@ -1,0 +1,20 @@
+rule 割増(surcharge) v1
+description "重さで決める割増。割れ物は二つ目の表が優先する。二つを合わせても、割れ物でない重い荷物の行が無い"
+
+inputs
+  重さ(weight)    : mass[kg]  range >=1kg <=50kg
+  割れ物(fragile) : bool
+
+outputs
+  割増(surcharge) : money[JPY]  round down(1JPY)
+
+table 本則(base)
+policy unique
+| 重さ   | -> 割増 |
+| <=20kg | 0JPY    |
+
+table 割れ物の表(fragile_goods)
+policy unique
+overrides 本則
+| 割れ物 | 重さ | -> 割増 |
+| true   | -    | 500JPY  |

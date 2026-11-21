@@ -1,0 +1,27 @@
+gate seat_select v1
+description "go_package.gate with the file renamed seat_select, as its note says"
+namespace Air
+
+role agent
+  description "Works at the gate of a flight"
+  can pick_seat
+
+principal Agent
+  description "The one who asks"
+  roles agent
+
+resource Seat
+  description "A seat of a flight"
+  attributes
+    vacant : bool
+
+action pick_seat
+  description "Pick a seat for a passenger"
+  principal Agent
+  resource Seat
+
+permit agents_pick_vacant_seats
+  description "An agent can: Pick a seat for a passenger"
+  principal in agent
+  action pick_seat
+  when resource.vacant

@@ -50,10 +50,12 @@ fn text(o: &Outcome) -> String {
     o.diags.iter().map(|d| d.render(Lang::En)).collect()
 }
 
-/// The codes the module `body` says, with a head that reads every file of [`project`].
+/// The head of a module that reads every file of [`project`].
+const HEAD: &str = "module m v1\n\nuse rule card_fee from \"rules/card_fee.rule\"\nuse rule charges from \"rules/charges.rule\"\nuse rule media_mail from \"rules/media_mail.rule\"\nuse rule shares from \"rules/discount_share.rule\"\nuse dates terms from \"dates/terms.cal\"\nuse book ledger from \"books/ledger.book\"\nuse book stock from \"books/inventory.book\"\n\n";
+
+/// The codes the module `body` says, with [`HEAD`].
 fn codes(t: &TempDir, body: &str) -> Vec<&'static str> {
-    let head = "module m v1\n\nuse rule card_fee from \"rules/card_fee.rule\"\nuse rule charges from \"rules/charges.rule\"\nuse rule media_mail from \"rules/media_mail.rule\"\nuse rule shares from \"rules/discount_share.rule\"\nuse dates terms from \"dates/terms.cal\"\nuse book ledger from \"books/ledger.book\"\nuse book stock from \"books/inventory.book\"\n\n";
-    let o = check_in(t, &format!("{head}{body}"));
+    let o = check_in(t, &format!("{HEAD}{body}"));
     if !o.diags.is_empty() {
         eprintln!("{}", text(&o));
     }
@@ -127,6 +129,52 @@ fn amounts_rates_and_rounding() {
     assert_eq!(codes(&t, "fn f(r: rate[step 1%] range >=0% <=10%) -> rate[step 0.01%]\n  r + 8%\n"), none());
     // a number times a rate is a rate (rulec's)
     assert_eq!(codes(&t, "fn f(n: number range >=0 <=9) -> number\n  n * 50%\n"), ["E102"]);
+}
+
+/// A rate a rule rounds to a step coarser than its type's (`rate[step 0.25%]  round down(0.5%)`) is a
+/// rate on the step it is rounded to (DESIGN 6.1): it goes as it is to a place of that step, and a
+/// place of a coarser step still asks for a rounding (E103), whose head says the step the value is
+/// on. In English and in Japanese.
+#[test]
+fn a_rate_a_rule_rounds_coarser_than_its_type_is_on_the_step_it_is_rounded_to() {
+    let t = TempDir::new("kaname-types-coarse");
+    t.write("rules/coarse.rule", "rule coarse v1\ndescription \"A share in steps of a quarter percent, rounded down to half a percent\"\n\ninputs\n  share : rate[step 0.25%]  range >=0% <=50%\n\ndefine kept : rate[step 0.25%] = share\n\noutputs\n  kept : rate[step 0.25%]  round down(0.5%)\n\nexamples\n| share | -> kept |\n| 1%    | 1%      |\n");
+    t.write("rules/粗い率.rule", "rule 粗い率(coarse) v1\ndescription \"四分の一パーセント刻みの割合を、半パーセント刻みに切り捨てた率\"\n\ninputs\n  割合(share) : rate[step 0.25%]  range >=0% <=50%\n\ndefine 残す率 : rate[step 0.25%] = 割合\n\noutputs\n  残す率(kept) : rate[step 0.25%]  round down(0.5%)\n\nexamples\n| 割合 | -> 残す率 |\n| 1%   | 1%        |\n");
+    let en = "module m v1\n\nuse rule coarse from \"rules/coarse.rule\"\n\nfn half_steps(s: rate[step 0.25%] range >=0% <=50%) -> rate[step 0.5%] total\n  let got = coarse(share: s)\n  got.kept\n";
+    let ja = "module 試し(probe) v1\n\nuse rule 粗い率 from \"rules/粗い率.rule\"\n\nfn 半分の刻み(half_steps)(割合(s): rate[step 0.25%] range >=0% <=50%) -> rate[step 0.5%] total\n  let 得た = 粗い率(割合: 割合)\n  得た.残す率\n";
+    for (src, lang) in [(en, Lang::En), (ja, Lang::Ja)] {
+        let o = check_in(&t, src);
+        assert!(o.diags.is_empty(), "{}", text(&o));
+        // a whole percent is coarser than the half the rule rounds to
+        let whole = if lang == Lang::En {
+            format!("{src}\nfn whole_steps(s: rate[step 0.25%] range >=0% <=50%) -> rate[step 1%] total\n  coarse(share: s).kept\n")
+        } else {
+            format!("{src}\nfn 一の刻み(whole_steps)(割合(s): rate[step 0.25%] range >=0% <=50%) -> rate[step 1%] total\n  粗い率(割合: 割合).残す率\n")
+        };
+        let o = check_in(&t, &whole);
+        assert_eq!(o.diags.iter().map(|d| d.code).collect::<Vec<_>>(), ["E103"], "{}", text(&o));
+        let head = o.diags[0].render(lang);
+        let said = if lang == Lang::En { "a rate on the step 0.5%" } else { "刻み 0.5% の率" };
+        assert!(head.contains(said), "{head}");
+    }
+}
+
+/// A rate given to a type parameter is the rate given (DESIGN 26.2): one wider than 0% to 100% keeps
+/// its range through the generic function, two on two steps take the finer where one step is a whole
+/// number of the other, and E112 says the two steps where neither is.
+#[test]
+fn rates_given_to_a_type_parameter() {
+    let t = TempDir::new("kaname-types-generic-rates");
+    let o = check_in(&t, "module m v1\n\nfn kept[T](v: T?, keep: bool) -> T? total\n  match keep\n    true => v\n    false => none\n\nfn wide(r: rate[step 0.25%] range >=-10% <=150%) -> rate[step 0.25%]? range >=-10% <=150% total\n  kept(v: r, keep: true)\n");
+    assert!(o.diags.is_empty(), "{}", text(&o));
+    let pair = "module m v1\n\nfn pair[T](a: T, b: T) -> list[T] total\n  [a, b]\n\n";
+    let o = check_in(&t, &format!("{pair}fn mixed(x: rate[step 0.5%] range >=0% <=10%, y: rate[step 0.25%] range >=0% <=10%) -> list[rate[step 0.25%]] total\n  pair(a: x, b: y)\n"));
+    assert!(o.diags.is_empty(), "{}", text(&o));
+    let o = check_in(&t, &format!("{pair}fn odd(x: rate[step 0.1%] range >=0% <=10%, y: rate[step 0.25%] range >=0% <=10%) -> list[rate[step 0.05%]] total\n  pair(a: x, b: y)\n"));
+    assert_eq!(o.diags.iter().map(|d| d.code).collect::<Vec<_>>(), ["E112"], "{}", text(&o));
+    let (en, ja) = (o.diags[0].render(Lang::En), o.diags[0].render(Lang::Ja));
+    assert!(en.contains("is given two types, rate[step 0.1%] and rate[step 0.25%]") && en.contains("round one to the other's step (as `down(x, 0.25%)` does)"), "{en}");
+    assert!(ja.contains("二つの型 rate[step 0.1%] と rate[step 0.25%] が渡されています") && ja.contains("一方を他方の刻みに丸めてそろえてください"), "{ja}");
 }
 
 #[test]
@@ -220,6 +268,21 @@ fn operations_a_type_does_not_have() {
     assert_eq!(codes(&t, "fn f(a: bool, b: bool) -> bool\n  not a or (b and a != b)\n"), none());
 }
 
+/// An English sentence starts with a word, not with a name, whose first letter it would put in upper
+/// case: two values that are not compared, and a type that is no record. Before, the first said
+/// `Tier and kind cannot be compared` of the enums `tier` and `kind`.
+#[test]
+fn a_sentence_starts_with_a_word_not_with_a_name() {
+    let t = project();
+    for (body, said) in [
+        ("enum tier = gold | silver\nenum kind = x | y\nfn f(a: tier, b: kind) -> bool\n  a = b\n", "Values of tier and of kind cannot be compared"),
+        ("enum tier = gold | silver\nfn g() -> tier\n  tier { a: 1 }\n", "The type tier is no record, which `{ … }` builds"),
+    ] {
+        let shown = text(&check_in(&t, &format!("{HEAD}{body}")));
+        assert!(shown.contains(&format!(": {said}\n")), "{body}\n{shown}");
+    }
+}
+
 #[test]
 fn matches_cover_every_value() {
     let t = project();
@@ -268,7 +331,9 @@ fn values_with_fields_and_their_types() {
     assert_eq!(codes(&t, "enum Order\n  draft\n  placed\n    on : date  range >=2026-01-01 <=2026-12-31\n  default draft\n"), ["E003"]);
     // the names the generated code gives the values' types, and the field it tells them apart by
     assert_eq!(codes(&t, &format!("{order}record OrderPlaced\n  x : number  range >=0 <=9\n")), ["E006"]);
-    assert_eq!(codes(&t, "enum Order\n  draft\n    kind : number  range >=0 <=9\n  cancelled\n"), ["E007"]);
+    // the field TypeScript tells the values apart by: TypeScript alone cannot write it, so it is a
+    // warning, and the generation of TypeScript stops there (E008)
+    assert_eq!(codes(&t, "enum Order\n  draft\n    kind : number  range >=0 <=9\n  cancelled\n"), ["W001"]);
     // a value that holds the enum it is a value of, with no way to stop
     assert_eq!(codes(&t, "enum Tree\n  node\n    left : Tree\n"), ["E108"]);
     // a record and a value of the same name, where the place wants the enum
@@ -384,7 +449,9 @@ fn calls_of_functions_rules_and_dates() {
     assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double()\n")), ["E107"]);
     assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double(2)\n")), ["E107"]);
     assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double(n: 1, n: 2)\n")), ["E107"]);
-    assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double(m: 2)\n")), ["E107", "E107"]);
+    // a parameter it does not take, written where the one it takes goes: the one it does not take is
+    // said, and the one left out is not said again (DESIGN 12)
+    assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double(m: 2)\n")), ["E107"]);
     // a function written where its value cannot go: a function's answer (DESIGN 27.1)
     assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double\n")), ["E113"]);
     assert_eq!(codes(&t, "fn f() -> number\n  nothing(n: 2)\n"), ["E101"]);
@@ -664,7 +731,7 @@ fn examples_are_calls_with_answers_of_their_type() {
     let double = "fn double(n: number range >=0 <=9) -> number range >=0 <=20\n  n * 2\n";
     assert_eq!(codes(&t, &format!("{double}examples\n  double(n: 2) = true\n")), ["E602"]);
     assert_eq!(codes(&t, &format!("{double}examples\n  card_fee(amount: 1USDc, international: true) = 1\n")), ["E602"]);
-    assert_eq!(codes(&t, &format!("{double}examples\n  double(m: 2) = 4\n")), ["E107", "E107"]);
+    assert_eq!(codes(&t, &format!("{double}examples\n  double(m: 2) = 4\n")), ["E107"]);
 }
 
 /// A rule that walks a list (rulec's `elements`): the list is given as a list of its elements'
@@ -709,6 +776,62 @@ fn the_enums_of_rules() {
     // two enums of their own rules are two types, whatever their values
     let o = check_in(&t, "module m v1\n\nuse rule ship from \"rules/member_tier_shipping.rule\"\nuse rule due from \"rules/earliest.rule\"\n\nfn f(a: ship.tier, b: due.urgency) -> bool\n  a = b\n");
     assert_eq!(common::codes(&o), ["E102"]);
+}
+
+/// A rule that declares an enum of its own with the values of the catalog's `category`.
+const OWN_CATEGORY: &str = "rule own_category v1\ndescription \"Whether goods of a category are packed by hand, by an enum of its own\"\n\nenum category = food | apparel | electronics | furniture\n\ninputs\n  goods : category\n\noutputs\n  by_hand : bool\n\ntable packing\npolicy unique\n| goods                  | -> by_hand |\n| electronics, furniture | true       |\n| food, apparel          | false      |\n\nexamples\n| goods | -> by_hand |\n| food  | false      |\n";
+
+/// The same, in Japanese, with the values of `shared/品目.rule`'s `種類`.
+const OWN_CATEGORY_JA: &str = "rule 自分の種類(own_category_ja) v1\ndescription \"品目を手で梱包するか。自分で宣言した列挙で決める\"\n\nenum 種類(category) = 食品(food) | 衣料(apparel) | 電子機器(electronics) | 家具(furniture)\n\ninputs\n  品目(goods) : 種類\n\noutputs\n  手で梱包(by_hand) : bool\n\ntable 梱包(packing)\npolicy unique\n| 品目           | -> 手で梱包 |\n| 電子機器, 家具 | true        |\n| 食品, 衣料     | false       |\n\nexamples\n| 品目 | -> 手で梱包 |\n| 食品 | false       |\n";
+
+/// An enum of an `enums` file is one type by every name a module reads it by (DESIGN 3.5): the name of
+/// the file read as a rule, and the name of each rule that reads the enum whole, in a value given to a
+/// rule, a comparison of an ordered enum, a list, and a function given where a function type goes.
+/// `doc` and `api` say the names of one enum. Two enums declared at two places are two types: E102
+/// says where each is declared and, as their values are the same, how to make them one.
+#[test]
+fn an_enum_of_an_enums_file_is_one_type_by_every_name() {
+    let t = project();
+    let corpus = Path::new("../rulec/tests/corpus");
+    for f in ["catalog_shipping.rule", "catalog_returns.rule", "shared/catalog.rule", "品目の送料.rule", "品目の返品.rule", "shared/品目.rule"] {
+        t.write(&format!("rules/{f}"), std::fs::read(corpus.join(f)).unwrap());
+    }
+    t.write("rules/own_category.rule", OWN_CATEGORY);
+    t.write("rules/自分の種類.rule", OWN_CATEGORY_JA);
+    let en = "module m v1\n\nuse rule catalog from \"rules/shared/catalog.rule\"\nuse rule shipping from \"rules/catalog_shipping.rule\"\nuse rule returns from \"rules/catalog_returns.rule\"\n\nfn fee(goods: catalog.category, to: catalog.zone) -> money[USD]\n  shipping(goods: goods, destination: to, weight: 2kg).fee\n\nfn free_return(goods: shipping.category, to: shipping.zone) -> bool\n  returns(goods: goods, destination: to, opened: false).free_return\n\nfn same(a: catalog.category, b: shipping.category, c: returns.category) -> bool\n  a = b and b = c\n\nfn nearer(a: catalog.zone, b: returns.zone) -> bool\n  a < b\n\nfn goods_of(a: catalog.category, b: shipping.category) -> list[returns.category]\n  [a, b]\n\nfn is_food(c: catalog.category) -> bool\n  c = catalog.category.food\n\nfn holds(f: (shipping.category) -> bool, c: shipping.category) -> bool\n  f(c)\n\nfn food(c: returns.category) -> bool\n  holds(f: is_food, c: c)\n";
+    let ja = "module 試し(probe) v1\n\nuse rule 品目表 from \"rules/shared/品目.rule\"\nuse rule 送料 from \"rules/品目の送料.rule\"\nuse rule 返品 from \"rules/品目の返品.rule\"\n\nfn 配送料(fee)(品(goods): 品目表.種類, 先(to): 品目表.地域) -> money[USD]\n  送料(品目: 品, 届け先: 先, 重さ: 2kg).配送料\n\nfn 返送無料(free_return)(品(goods): 送料.種類, 先(to): 送料.地域) -> bool\n  返品(品目: 品, 届け先: 先, 開封済み: false).返送無料\n\nfn 同じ(same)(甲(a): 品目表.種類, 乙(b): 送料.種類, 丙(c): 返品.種類) -> bool\n  甲 = 乙 and 乙 = 丙\n\nfn より近い(nearer)(甲(a): 品目表.地域, 乙(b): 返品.地域) -> bool\n  甲 < 乙\n\nfn 品目の一覧(goods_of)(甲(a): 品目表.種類, 乙(b): 送料.種類) -> list[返品.種類]\n  [甲, 乙]\n";
+    for (src, lang) in [(en, Lang::En), (ja, Lang::Ja)] {
+        let o = check_in(&t, src);
+        assert!(common::codes_before_analysis(&o).is_empty(), "{lang:?}: {}", text(&o));
+        // the page and the JSON say the three names of each of the two enums
+        let c = o.analysed.clone().unwrap();
+        let json = kaname::api::json(&c, t.path()).to_string();
+        let names = if lang == Lang::En { r#""names":["catalog.category","shipping.category","returns.category"],"file":"rules/shared/catalog.rule","name":"category""# } else { r#""names":["品目表.種類","送料.種類","返品.種類"],"file":"rules/shared/品目.rule","name":"種類""# };
+        assert!(json.contains(names), "{lang:?}: {json}");
+        let page = kaname::doc::page(&o, &common::joined(), t.path(), lang, kaname::doc::Format::Markdown).unwrap();
+        let md = kaname::doc::write(&page, kaname::doc::Format::Markdown);
+        let row = if lang == Lang::En { "| `catalog.category`, `shipping.category`, `returns.category` | `rules/shared/catalog.rule` | `category` | `food`, `apparel`, `electronics`, `furniture` |" } else { "| `品目表.種類`、`送料.種類`、`返品.種類` | `rules/shared/品目.rule` | `種類` | `食品`、`衣料`、`電子機器`、`家具` |" };
+        assert!(md.contains(row), "{lang:?}: {md}");
+    }
+    // a module that reads each enum by one name: neither the key nor the section
+    let o = check_in(&t, "module m v1\n\nuse rule shipping from \"rules/catalog_shipping.rule\"\n\nfn fee(goods: shipping.category, to: shipping.zone) -> money[USD]\n  shipping(goods: goods, destination: to, weight: 2kg).fee\n");
+    let c = o.analysed.clone().unwrap();
+    assert!(!kaname::api::json(&c, t.path()).to_string().contains("names_of_one_enum"));
+    let page = kaname::doc::page(&o, &common::joined(), t.path(), Lang::En, kaname::doc::Format::Markdown).unwrap();
+    assert!(!kaname::doc::write(&page, kaname::doc::Format::Markdown).contains("Names of one enum"));
+    // declared at two places: the file's enum and a rule's own, and the module's own and a rule's own
+    let prefix = format!("{}/", t.path().display());
+    let mut said = Vec::new();
+    for (src, lang) in [
+        ("module m v1\n\nuse rule catalog from \"rules/shared/catalog.rule\"\nuse rule own from \"rules/own_category.rule\"\n\nenum category = food | apparel | electronics | furniture\n\nfn by_hand(c: catalog.category) -> bool\n  own(goods: c).by_hand\n\nfn by_hand_too(c: category) -> bool\n  own(goods: c).by_hand\n", Lang::En),
+        ("module 試し(probe) v1\n\nuse rule 品目表 from \"rules/shared/品目.rule\"\nuse rule 手作業 from \"rules/自分の種類.rule\"\n\nenum 種類(category) = 食品(food) | 衣料(apparel) | 電子機器(electronics) | 家具(furniture)\n\nfn 手で梱包するか(by_hand)(品(c): 品目表.種類) -> bool\n  手作業(品目: 品).手で梱包\n\nfn これも手で梱包するか(by_hand_too)(品(c): 種類) -> bool\n  手作業(品目: 品).手で梱包\n", Lang::Ja),
+    ] {
+        let o = check_in(&t, src);
+        assert_eq!(common::codes(&o), ["E102", "E102"], "{lang:?}: {}", text(&o));
+        said.push(o.diags.iter().map(|d| d.render(lang)).collect::<String>().replace(&prefix, ""));
+    }
+    ritsu_testkit::golden("tests/golden/codes/two_places.en.txt", &said[0]);
+    ritsu_testkit::golden("tests/golden/codes/two_places.ja.txt", &said[1]);
 }
 
 /// An optional of an optional is one optional (DESIGN 3.6): `first` over a list of values that may be
@@ -924,4 +1047,62 @@ fn function_values_and_what_is_private() {
     ] {
         assert_eq!(codes(&t, &format!("{decls}{body}")), [code], "{body}");
     }
+}
+
+/// A function a host calls takes no value another language works out (E116, DESIGN 4.4): a rule's
+/// outputs and a transfer, as a parameter, in a field of a record or of a value of a sum, an element
+/// of a list, a dict's value, a result's value, and inside the records the built-in functions answer.
+/// Its answer, and a function no host calls (`private`, generic), may hold one; an element of a list
+/// a rule walks is a value a host makes, and passes.
+#[test]
+fn a_function_a_host_calls_takes_no_value_another_language_makes() {
+    let t = project();
+    let held = "record Held\n  o : card_fee.outputs\n\n";
+    let got = "enum Got\n  none_yet\n  got\n    t : ledger.capture.do\n\n";
+    for body in [
+        // as the parameter
+        "fn f(o: card_fee.outputs) -> bool\n  true\n".to_string(),
+        "fn f(t: ledger.capture.do) -> bool\n  true\n".into(),
+        "fn f(o: card_fee.outputs?) -> bool\n  true\n".into(),
+        // in a field of a record and of a value of a sum, an element of a list, a dict's value, a
+        // result's value
+        format!("{held}fn f(h: Held) -> bool\n  true\n"),
+        format!("{got}fn f(g: Got) -> bool\n  true\n"),
+        "fn f(os: list[card_fee.outputs] count <=3) -> bool\n  true\n".into(),
+        "fn f(m: dict[string, ledger.capture.do] count <=3) -> bool\n  true\n".into(),
+        "fn f(r: result[number, card_fee.outputs]) -> bool\n  true\n".into(),
+        // inside the records the built-in functions answer
+        "fn f(x: indexed[card_fee.outputs]) -> bool\n  true\n".into(),
+        "fn f(e: entry[string, ledger.capture.do]) -> bool\n  true\n".into(),
+        "fn f(r: running[card_fee.outputs, number]) -> bool\n  true\n".into(),
+    ] {
+        assert_eq!(codes(&t, &body), ["E116"], "{body}");
+    }
+    for body in [
+        // the answer
+        "fn f(a: money[USDc] range >=1USDc <=9USDc) -> card_fee.outputs\n  card_fee(amount: a, international: false)\n".to_string(),
+        "fn f(a: money[USDc] range >=1USDc <=9USDc) -> list[ledger.capture.do]\n  [ledger.capture.do(payment: \"p\", seller: \"s\", amount: a)]\n".into(),
+        // a function no host calls
+        "private fn f(o: card_fee.outputs) -> bool\n  true\n".into(),
+        format!("{held}private fn f(h: Held) -> bool\n  true\n"),
+        "fn f[T](x: T, t: ledger.capture.do) -> T\n  x\n".into(),
+    ] {
+        assert_eq!(codes(&t, &body), none(), "{body}");
+    }
+    // an element of a list a rule walks: a value a host makes
+    let o = check_in(&t, "module m v1\n\nuse rule earliest from \"rules/earliest.rule\"\n\nfn f(t: earliest.作業, ts: list[earliest.作業] count <=3) -> bool\n  true\n");
+    assert_eq!(common::codes_before_analysis(&o), none(), "{}", text(&o));
+    // what it says: the parameter, the function, the value and where the parameter holds it, why, and
+    // the three ways out
+    let o = check_in(&t, &format!("{HEAD}{held}fn f(h: Held) -> bool\n  true\n"));
+    let d = o.diags.iter().find(|d| d.code == "E116").expect("E116");
+    let en = d.render(Lang::En);
+    assert!(en.contains("The parameter `h` of `f`, a function a host calls, holds a value the rule `card_fee` works out (card_fee.outputs) at `h.o`"), "{en}");
+    assert!(en.contains("= Call the rule inside the function; or take what the host gives in a record of your own with its ranges written; or, if no host calls the function, make it `private`."), "{en}");
+    let ja = d.render(Lang::Ja);
+    assert!(ja.contains("ホストが呼ぶ関数 `f` の引数 `h` が、`h.o` に規則 `card_fee` が計算する値（card_fee.outputs）を持ちます"), "{ja}");
+    assert!(ja.contains("= 規則は関数の中で呼んでください。ホストから受けるなら、範囲を書いた自分のレコードで受けてください。ホストが呼ばない関数なら、`private` にしてください。"), "{ja}");
+    let o = check_in(&t, &format!("{HEAD}fn f(t: ledger.capture.do) -> bool\n  true\n"));
+    let en: String = o.diags.iter().filter(|d| d.code == "E116").map(|d| d.render(Lang::En)).collect();
+    assert!(en.contains("The parameter `t` of `f`, a function a host calls, takes a transfer of a book (ledger.capture.do)"), "{en}");
 }

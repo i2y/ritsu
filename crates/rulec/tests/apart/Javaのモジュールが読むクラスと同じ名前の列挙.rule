@@ -1,0 +1,28 @@
+rule 小包の料金(parcel_fee) v1
+description "Java のモジュールが読む JDK のクラスと同じ名前の列挙。どれも規則のクラスの中の型になる"
+
+enum 紐(string) = 平紐(plain) | 編み紐(braided)
+enum 距離(long) = 近距離(short_haul) | 遠距離(long_haul)
+enum 計算(math) = 定額(flat) | 段階(stepped)
+enum 梱包(integer) = 一つ(whole) | 分割(split)
+
+inputs
+  紐の種類(cord)   : 紐
+  運ぶ距離(distance) : 距離
+  料金の決め方(pricing) : 計算
+  梱包の仕方(packing) : 梱包
+  重さ(weight)     : number  range >=0 <=100
+
+outputs
+  料金(fee)  : money[USD]  round down(1USD)
+  区分(band) : 計算
+
+table 小包ごとの料金(fee_by_parcel)
+policy unique
+| 紐の種類 | 運ぶ距離 | 料金の決め方 | 梱包の仕方 | 重さ | -> 料金 | 区分 |
+| 平紐     | 近距離   | 定額         | -          | -    | 3USD    | 定額 |
+| 平紐     | 近距離   | 段階         | 一つ       | <=50 | 4USD    | 段階 |
+| 平紐     | 近距離   | 段階         | 一つ       | >50  | 6USD    | 段階 |
+| 平紐     | 近距離   | 段階         | 分割       | -    | 7USD    | 段階 |
+| 平紐     | 遠距離   | -            | -          | -    | 9USD    | 定額 |
+| 編み紐   | -        | -            | -          | -    | 12USD   | 段階 |

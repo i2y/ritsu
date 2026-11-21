@@ -1,0 +1,4 @@
+エラー[E309]: tests/mutants/E309_the_route_reads_a_field_of_text.ringi:9:24: 経路は `text` のフィールド `place` を読めません
+     9 |   audit  board    when place is "Osaka"
+  = 経路の条件が読めるのは、表に値を書けるフォームのフィールド（自分の値か規則の値から選ぶ選択、数、金額、日付、真偽）、申請が使う規則の出力、共有の経路の入力です。経路は、それらを列にした表に下ろして、rulec が確かめます。
+  = これで分けるなら、経路が分ける値を並べた `choice` にしてください。

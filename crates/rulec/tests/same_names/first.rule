@@ -1,0 +1,22 @@
+rule first v1
+description "Who looks at an order first: the rule declares an enum named like one the choices declare (fictional)"
+
+import enum kind from "shapes.rule"
+
+enum first_by = boss | staff
+
+inputs
+  what : kind
+
+outputs
+  first : first_by
+
+table first
+| what  | -> first |
+| goods | staff    |
+| capex | boss     |
+
+examples
+| what  | -> first |
+| goods | staff    |
+| capex | boss     |

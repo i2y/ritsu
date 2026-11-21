@@ -19,6 +19,10 @@ mod contrib;
 /// `rule` is header-only, so it is not included.
 pub const KEYWORDS: &[&str] = crate::kw::LINE_HEAD;
 
+/// The words of [`crate::kw::LINE_HEAD`] that start a line under a heading, and no line of their
+/// own: `policy` and `overrides` belong to the table or clause above them.
+const UNDER_A_HEADING: [&str; 2] = [crate::kw::POLICY, crate::kw::OVERRIDES];
+
 pub struct Parsed {
     pub file: Option<RuleFile>,
     pub diags: Vec<Diag>,
@@ -189,6 +193,8 @@ enum Tail {
     Field,
     Output,
     Derive,
+    /// A `define` line (§15.313).
+    Define,
     /// A `count`, `sum`, `max` or `min` line.
     Walk,
     Shape,
@@ -203,7 +209,7 @@ impl Tail {
             Tail::Input => &[crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM],
             Tail::Field => &[crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::UNIQUE],
             Tail::Output => &[crate::kw::RANGE, crate::kw::ROUND],
-            Tail::Derive | Tail::Walk => &[crate::kw::RANGE],
+            Tail::Derive | Tail::Define | Tail::Walk => &[crate::kw::RANGE],
             Tail::Shape | Tail::From => &[],
         }
     }
@@ -226,6 +232,7 @@ impl Tail {
             Tail::Field => tr!("要素のフィールドの行に置けるのは `{r}`、`{c}`、`{u}` だけです。", "A field of an element holds `{r}`, `{c}` and `{u}`, and nothing else."),
             Tail::Output => tr!("出力の行に置けるのは `{r}` と `{o}` だけです。", "An output's line holds `{r}` and `{o}`, and nothing else."),
             Tail::Derive => tr!("`derive` の行に置けるのは `{r}` だけです。", "A `derive` line holds `{r}`, and nothing else."),
+            Tail::Define => tr!("`define` の行の式の後ろに置けるのは `{r}` だけです。", "A `define` line holds `{r}` after its expression, and nothing else."),
             Tail::Walk => tr!("`count`、`sum`、`max`、`min` の行に置けるのは `{r}` だけです。", "A `count`, `sum`, `max` or `min` line holds `{r}`, and nothing else."),
             Tail::Shape => tr!("`shape` の行には、宣言の後ろに何も置けません。", "A `shape` line holds nothing after its declaration."),
             Tail::From => tr!(
@@ -365,7 +372,18 @@ impl P {
             self.i += 1;
         }
     }
+    /// Takes a diagnostic. One made without a place is given the place of its first mark, the
+    /// way the others say theirs — `file:line`, and the table it is in — so that every syntax
+    /// error names the file it is in: checked two files at a time, a frame with a line number
+    /// and no file left which of them to fix unsaid.
     fn err(&mut self, d: Diag) {
+        let d = match d.marks.first().map(|m| m.span.line) {
+            Some(line) if d.where_.is_empty() => {
+                let at = self.at(line);
+                d.at(at)
+            }
+            _ => d,
+        };
         self.diags.push(d);
     }
 
@@ -380,7 +398,20 @@ impl P {
 
     fn rule_file(&mut self) -> Option<RuleFile> {
         self.skip_blank();
-        let head = self.cur()?.clone();
+        // A file with no line but comments and blank ones is no rule with nothing in it: it says what
+        // it has to start with, at its first line, as a file with another first line does.
+        let Some(head) = self.cur().cloned() else {
+            self.err(
+                Diag::error("E003", tr!("ファイルは `{}` の行で始まらなければなりません", "The file must start with a `{}` line", crate::kw::RULE))
+                    .mark(span_of(&[]), tr!("ここに `{} <名前>(<ascii>) v<版>` が要ります", "expected `{} <name>(<ascii>) v<version>` here", crate::kw::RULE))
+                    .note(tr!(
+                        "列挙だけを置くファイルは `{} <名前>(<ascii>) v<版>` で始めます。",
+                        "A file that holds only enums starts with `{} <name>(<ascii>) v<version>`.",
+                        crate::kw::ENUMS
+                    )),
+            );
+            return None;
+        };
         // Two headings: a rule, and a file of enums for rules to read (§15.212).
         let kind = match head.first().and_then(|t| t.ident()) {
             Some(crate::kw::RULE) => FileKind::Rule,
@@ -921,18 +952,52 @@ impl P {
                     }
                 }
                 other => {
+                    // The lines up to the next word a line may start with are under this one: a
+                    // heading that is not read takes them with it, and they are not said one by
+                    // one (§15.321).
+                    // Right under a table's or a clause's heading (or its `policy` or `overrides`
+                    // line), `policy` and `overrides` are words of this position too.
+                    let under_a_heading = self.i.checked_sub(1).and_then(|k| self.lines.get(k)).and_then(|l| l.first()).and_then(|t| t.ident()).is_some_and(|w| {
+                        [crate::kw::TABLE, crate::kw::CLAUSE].contains(&w) || UNDER_A_HEADING.contains(&w)
+                    });
+                    let heads: Vec<&str> = crate::kw::LINE_HEAD.iter().copied().filter(|w| under_a_heading || !UNDER_A_HEADING.contains(w)).collect();
+                    let mut next = self.i + 1;
+                    let mut under = 0;
+                    while let Some(l) = self.lines.get(next) {
+                        if l.first().and_then(|t| t.ident()).is_some_and(|w| heads.contains(&w)) {
+                            break;
+                        }
+                        under += usize::from(!l.is_empty());
+                        next += 1;
+                    }
+                    let limit = if other.chars().count() <= 4 { 1 } else { 2 };
+                    let near = heads
+                        .iter()
+                        .map(|w| (crate::prelude::distance(other, w), *w))
+                        .filter(|(d, _)| (1..=limit).contains(d))
+                        .min_by_key(|(d, _)| *d)
+                        .map(|(_, w)| tr!("`{w}` のことですか。", "Did you mean `{w}`?"));
                     self.err(
                         Diag::error("E005", tr!("`{other}` はこの位置に書けません", "`{other}` cannot appear at this position"))
                             .mark(line[0].span.clone(), "")
-                            .note(tr!("書けるのは {} です", "The words allowed at this position are {}", crate::kw::line_heads())),
+                            .maybe_note(near)
+                            .note(tr!("書けるのは {} です", "The words allowed at this position are {}", heads.join(" / ")))
+                            .maybe_note((under > 0).then(|| {
+                                let lines = if under == 1 { "The line under it is".to_string() } else { format!("The {under} lines under it are") };
+                                tr!("この行の下の {under} 行も読んでいません。", "{lines} not read either.")
+                            })),
                     );
-                    self.i += 1;
+                    self.i = next;
                 }
             }
             if self.i == start {
                 self.i += 1;
             }
-            if DECLARING.contains(&word.as_str()) && (self.diags.len(), declared(&f)) == before {
+            // A heading whose first line under it starts with a word no line starts with is not
+            // said to be unreadable: that line's E005 is the mistake, and says it (§15.321).
+            let lost_to_the_line_under = matches!(word.as_str(), crate::kw::TABLE | crate::kw::CLAUSE)
+                && self.cur().and_then(|l| l.first()).and_then(|t| t.ident()).is_some_and(|w| !crate::kw::LINE_HEAD.contains(&w));
+            if DECLARING.contains(&word.as_str()) && (self.diags.len(), declared(&f)) == before && !lost_to_the_line_under {
                 let at = self.at(span_of(&line).line);
                 // A heading with lines under it (a table, a clause, a machine, an apply) is
                 // lost when those lines are: one that did not lex leaves the heading alone.
@@ -1162,21 +1227,32 @@ impl P {
             self.err(shape());
             return None;
         };
+        let mut end = 4;
         let source = match line.get(3).map(|t| t.kind.clone()) {
             Some(Kind::Str(s)) => s,
             _ => match line.get(3).and_then(|t| t.ident()).map(|s| s.to_string()) {
-                Some(s) => s,
+                Some(mut s) => {
+                    // An enum nested in a message is named after it, `Order.Status`, and with the
+                    // file's package before that or not, as a `shape` line names a message.
+                    while line.get(end).is_some_and(|t| t.is(&Kind::Dot)) {
+                        let Some(w) = line.get(end + 1).and_then(|t| t.ident()) else { break };
+                        s.push('.');
+                        s.push_str(w);
+                        end += 2;
+                    }
+                    s
+                }
                 None => {
                     self.err(shape());
                     return None;
                 }
             },
         };
-        if !line.get(4).is_some_and(|t| t.is(&Kind::Arrow)) {
+        if !line.get(end).is_some_and(|t| t.is(&Kind::Arrow)) {
             self.err(shape());
             return None;
         }
-        let Some((target, _)) = self.name_at(line, 5) else {
+        let Some((target, _)) = self.name_at(line, end + 1) else {
             self.err(shape());
             return None;
         };
@@ -1809,8 +1885,28 @@ impl P {
         k += 1;
         let mut args = Vec::new();
         if ts.get(k).is_some_and(|t| t.is(&Kind::LBracket)) {
+            // Where the brackets end: their `]`, or, when none comes before what the line holds
+            // after a type, there (E058). An unclosed `[` read the rest of the line as the type's,
+            // and its range as a tax (§15.321).
+            let after_type = |t: &Token| {
+                matches!(t.kind, Kind::Eq | Kind::Pipe | Kind::Arrow | Kind::Question)
+                    || t.ident().is_some_and(|w| [crate::kw::RANGE, crate::kw::ROUND, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM, crate::kw::UNIQUE, crate::kw::FROM].contains(&w))
+            };
+            let open = ts[k].span.clone();
+            let end = ts[k + 1..].iter().position(|t| t.is(&Kind::RBracket) || after_type(t)).map_or(ts.len(), |p| k + 1 + p);
+            if !ts.get(end).is_some_and(|t| t.is(&Kind::RBracket)) {
+                self.err(
+                    Diag::error("E058", tr!("型の `[` が閉じていません", "The `[` of a type is never closed"))
+                        .at(self.at(open.line))
+                        .mark(open, tr!("この `[` を閉じる `]` がありません", "no `]` closes this `[`"))
+                        .note(tr!(
+                            "型のかっこは `]` で閉じます（`money[円]`、`rate[step 1%]`）。この行は、`]` のあるはずの所で型が終わったものとして読みました。",
+                            "The brackets of a type close with `]` (`money[USD]`, `rate[step 1%]`). The rest of this line was read as if the type ended where the `]` belongs."
+                        )),
+                );
+            }
             k += 1;
-            while k < ts.len() && !ts[k].is(&Kind::RBracket) {
+            while k < end {
                 match &ts[k].kind {
                     Kind::Comma => k += 1,
                     Kind::Ident(w) => {
@@ -1826,7 +1922,9 @@ impl P {
                     _ => k += 1,
                 }
             }
-            k += 1; // ]
+            if ts.get(k).is_some_and(|t| t.is(&Kind::RBracket)) {
+                k += 1;
+            }
         }
         let optional = ts.get(k).is_some_and(|t| t.is(&Kind::Question));
         if optional {
@@ -1850,11 +1948,21 @@ impl P {
     /// but an input (§15.268). E047 stops at the first such token. A citation ends the tail, so
     /// `@…` is where the scan gives up.
     fn tail_junk(&mut self, ts: &[Token], mut k: usize, kind: Tail) {
+        // Each clause word the tail holds is read once: the second `round` used to lose to the
+        // first, the second `range` to win over it, and `policy unique first` to drop `first` —
+        // each in silence (§15.348).
+        let mut seen: Vec<&str> = Vec::new();
         while k < ts.len() {
             if ts[k].is(&Kind::At) {
                 return;
             }
             let w = ts[k].ident();
+            if let Some(w) = w.filter(|w| [crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM, crate::kw::ROUND, crate::kw::UNIQUE].contains(w)) {
+                if seen.contains(&w) {
+                    self.twice(ts[k].span.clone(), w);
+                }
+                seen.push(w);
+            }
             if let Some(w) = w.filter(|w| [crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM, crate::kw::ROUND, crate::kw::UNIQUE].contains(w))
                 && !kind.takes().contains(&w)
                 && !kind.elsewhere().contains(&w)
@@ -1904,10 +2012,17 @@ impl P {
     /// E047 at a word the tail of a line of this kind does not read.
     fn junk(&mut self, sp: Span, kind: Tail) {
         let holds = kind.holds();
+        // A `define` line never stepped over a word: what followed its expression was read as part
+        // of it, and did not pass (E059).
+        let said = if matches!(kind, Tail::Define) {
+            holds
+        } else {
+            tr!("{holds}ほかの語はいままで黙って捨てられていました。", "{holds} Anything else used to be dropped in silence.")
+        };
         let mut d = Diag::error("E047", tr!("宣言の後ろに余分な語があります", "Extra token after the declaration"))
             .at(self.at(sp.line))
             .mark(sp, tr!("この語は宣言の一部として読まれません", "this is not read as part of the declaration"))
-            .note(tr!("{holds}ほかの語はいままで黙って捨てられていました。", "{holds} Anything else used to be dropped in silence."));
+            .note(said);
         if kind.takes().contains(&crate::kw::RANGE) {
             d = d.note(tr!(
                 "範囲は `{} >=<値> <=<値>` の形で、比較の記号と値の対だけが読まれます。単位の綴りが違っていると対として読めなくなり、余った分がここに出ます。",
@@ -1916,6 +2031,19 @@ impl P {
             ));
         }
         self.err(d);
+    }
+
+    /// E155 at a clause word written a second time (§15.348).
+    fn twice(&mut self, sp: Span, word: &str) {
+        self.err(
+            Diag::error("E155", tr!("同じ句を二度書いています", "The same clause is written twice"))
+                .at(self.at(sp.line))
+                .mark(sp, tr!("`{word}` は二度目です", "`{word}` is the second one"))
+                .note(tr!(
+                    "いままでは黙ってどちらか一方だけが効いていました。読み違いの無いよう、片方を消してください。",
+                    "Only one of the two used to take effect, without a word. Take one off so the line says what it does."
+                )),
+        );
     }
 
     /// `range >=1g <=40kg` and the `contract_only` marker (§11 W111).
@@ -2194,8 +2322,13 @@ impl P {
         let (name, k) = self.decl_name(line, crate::kw::DEFINE)?;
         let (ty, k) = self.decl_type(line, k, &name, crate::kw::DEFINE)?;
         let eq = self.decl_eq(line, k, crate::kw::DEFINE)?;
-        let expr = self.expr_of(line, eq, &line[eq + 1..])?;
-        Some(DefineDecl { cite: None, name, ty, expr, span: span_of(line) })
+        // The expression runs to `range` on the same line, if there is one: the values the rule
+        // accepts for it (§15.313). Only the same line, as an input's and a `sum`'s range.
+        let stop = line[eq + 1..].iter().position(|t| t.ident() == Some(crate::kw::RANGE)).map(|p| eq + 1 + p).unwrap_or(line.len());
+        let expr = self.expr_of(line, eq, &line[eq + 1..stop])?;
+        let range = if stop < line.len() { self.tail_range(line, stop).0 } else { None };
+        self.tail_junk(line, stop, Tail::Define);
+        Some(DefineDecl { cite: None, name, ty, expr, range, span: span_of(line) })
     }
 
     /// ```text
@@ -2899,7 +3032,19 @@ impl P {
             Some(out)
         };
         let (Some(left), Some(right)) = (names_of(&line[1..p]), names_of(&line[p + 1..])) else {
-            return bad(self, tr!("両側に入力の名前を書いてください（片側だけは `+` で足せます）", "the name of an input is expected on each side (one side may add several up with `+`)"));
+            // A number, a product or a quotient on a side bounds a value worked out from the
+            // inputs, which is the range of a `define` that works it out (§15.313).
+            let worked = line[1..].iter().any(|t| matches!(t.kind, Kind::Num(_) | Kind::Star | Kind::Slash | Kind::Minus | Kind::LParen));
+            bad(self, tr!("両側に入力の名前を書いてください（片側だけは `+` で足せます）", "the name of an input is expected on each side (one side may add several up with `+`)"));
+            if worked {
+                if let Some(d) = self.diags.last_mut().filter(|d| d.code == "E017") {
+                    *d = d.clone().note(tr!(
+                        "入力から計算した値（積、商、定数を含む式）の上限と下限は、入力どうしの関係ではありません。その値を計算する `define` に、受け付ける範囲として書いてください（`define 小計 : money[円] = 数量 * 単価  range <=10_000_000円`）。",
+                        "A bound on a value worked out from the inputs — a product, a quotient, a constant — is no relation between inputs: write it as the range a `define` that works the value out accepts (`define subtotal : money[JPY] = quantity * price  range <=10_000_000JPY`)."
+                    ));
+                }
+            }
+            return None;
         };
         if left.len() > 1 && right.len() > 1 {
             return bad(self, tr!("和は片側にだけ書けます", "only one side can be a sum"));
@@ -3336,11 +3481,17 @@ impl P {
         self.i += 1;
         let mut policy = Policy::Unique; // §4: the default is unique.
         let mut overrides: Vec<OverrideRef> = Vec::new();
-        // `policy` and `overrides` may follow the `table` line, in either order, once each.
-        for _ in 0..2 {
+        // `policy` and `overrides` may follow the `table` line, in either order, once each: a
+        // second of either is the same clause written twice (§15.348).
+        let mut seen: Vec<&'static str> = Vec::new();
+        loop {
             let Some(l) = self.cur().cloned() else { break };
             match l.first().and_then(|t| t.ident()) {
                 Some(crate::kw::POLICY) => {
+                    if seen.contains(&crate::kw::POLICY) {
+                        self.twice(span_of(&l), crate::kw::POLICY);
+                    }
+                    seen.push(crate::kw::POLICY);
                     match l.get(1).and_then(|t| t.ident()) {
                         Some(crate::kw::UNIQUE) => policy = Policy::Unique,
                         Some(crate::kw::FIRST) => policy = Policy::TopDown,
@@ -3351,9 +3502,16 @@ impl P {
                                 .note(tr!("書けるのは {} です", "The policy must be {}", crate::kw::policies())),
                         ),
                     }
+                    if l.len() > 2 && !l[2].is(&Kind::At) {
+                        self.twice(span_of(&l[2..]), l[2].ident().unwrap_or(crate::kw::POLICY));
+                    }
                     self.i += 1;
                 }
                 Some(crate::kw::OVERRIDES) => {
+                    if seen.contains(&crate::kw::OVERRIDES) {
+                        self.twice(span_of(&l), crate::kw::OVERRIDES);
+                    }
+                    seen.push(crate::kw::OVERRIDES);
                     overrides = self.override_refs(&l);
                     self.i += 1;
                 }
@@ -3408,6 +3566,7 @@ impl P {
         let mut when: Option<Vec<Token>> = None;
         let mut then: Option<Vec<Token>> = None;
         let mut overrides: Vec<OverrideRef> = Vec::new();
+        let mut overrides_seen = false;
         let mut twice: Vec<Vec<Token>> = Vec::new();
         loop {
             let Some(l) = self.cur().cloned() else { break };
@@ -3429,6 +3588,10 @@ impl P {
                     self.i += 1;
                 }
                 Some(crate::kw::OVERRIDES) => {
+                    if overrides_seen {
+                        self.twice(span_of(&l), crate::kw::OVERRIDES);
+                    }
+                    overrides_seen = true;
                     overrides = self.override_refs(&l);
                     self.i += 1;
                 }

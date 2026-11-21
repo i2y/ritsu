@@ -1,0 +1,22 @@
+warning[W121]: `string` is a keyword as written in PHP, so the generated code there writes it with `_` after it
+  --> tests/own_names/enums_files/enums_file_named_string.rule:1
+  |
+1 | enums string v1
+  |       ^^^^^^ the enums file's name
+  |
+ PHP: the enums file's namespace is `String_`, the name a caller reads it by, as do the rules that read from the file.
+ The code builds as it is. For a name with no `_` in any language, give it an alias (`string(<alias>)`).
+
+warning[W121]: `string` takes a name the code generated for Python, Ruby, Go, Java and Connect uses itself
+  --> tests/own_names/enums_files/enums_file_named_string.rule:1
+  |
+1 | enums string v1
+  |       ^^^^^^ the enums file's name
+  |
+ Python and Connect: the standard library has a module `string`, and the rule's module imports the enums file's module by the same name (`from string import …`), so the two cannot be told apart: where the library's is loaded first, the rule's module does not load.
+ Ruby: the language has `String` built in, and the enums file's module is a constant of the same name (`module String`), which opens it again: a class is no module, and the generated module does not load; a module takes the enums' types into the language's own.
+ Go: the language has `string` built in, and the rule's package imports the enums file's package by that name, which hides it in the rule's file: the code does not build.
+ Java: the enums file's class `String` hides `java.lang`'s `String` in the whole package, which the rules' code and the rounding test read by its simple name: the code does not build, or answers otherwise.
+ For a target you do not generate, leave it. For one you do, give it an alias (`string(<alias>)`).
+
+ok tests/own_names/enums_files/enums_file_named_string.rule

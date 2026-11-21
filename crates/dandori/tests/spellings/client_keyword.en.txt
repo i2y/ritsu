@@ -1,0 +1,9 @@
+warning[W105]: tests/spellings/client_keyword.flow:1:39: The service's method `Delete` cannot keep its name in the code of TypeScript
+     1 | workflow client_keyword v1 implements svc.Svc
+  = TypeScript (`--target temporal-typescript`): `delete` is a reserved word of TypeScript or a name its strict mode keeps: `client.ts` cannot declare a function by it.
+  = For a target you do not build, leave it as it is. For one you do, rename the method or the message in the `.proto`. A method's name is also its path on Connect, so change the callers with it.
+warning[W105]: tests/spellings/client_keyword.flow:1:39: The service's message `client_keyword.v1.number` cannot keep its name in the code of TypeScript
+     1 | workflow client_keyword v1 implements svc.Svc
+  = TypeScript (`--target temporal-typescript`): `number` is a word of TypeScript, which `client.ts` cannot name a type.
+  = For a target you do not build, leave it as it is. For one you do, rename the method or the message in the `.proto`. A method's name is also its path on Connect, so change the callers with it.
+tests/spellings/client_keyword.flow: ok (2 warning(s))

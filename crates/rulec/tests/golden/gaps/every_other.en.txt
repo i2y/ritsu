@@ -1,0 +1,28 @@
+error[E101]: Completeness gap: some input matches no row
+  --> tests/gaps/every_other.rule:10 table evens
+   |
+10 | table evens
+   |       ^^^^^ the input space is not fully covered
+   |
+ No row matches these 10 parts of the input:
+   units = 1
+   units = 3
+   units = 5
+   units = 7
+   units = 9
+   units = 11
+   units = 13
+   units = 15
+   and 2 more
+ An input that matches no row: units = 1
+ hint: add these rows, with what each answers written in place of `?`:
+   | 1 | ? |
+   | 3 | ? |
+   | 5 | ? |
+   | 7 | ? |
+   | 9 | ? |
+   | 11 | ? |
+   | 13 | ? |
+   | 15 | ? |
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen. The rows listed close the parts listed, and the next run names what is left. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.
+

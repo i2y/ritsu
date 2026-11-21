@@ -1,0 +1,22 @@
+rule computed_binding v1
+description "A rule applied with a value worked out from the input the table reads: the linear `define` it is passed ties the applied table's rows to that input"
+
+enum choice = one | two | three
+
+inputs
+  gross : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define net : money[JPY] = gross - 0JPY
+
+apply t = "shared/tier.rule" meaning:8c5e54b1fadce0b7
+  amount = net
+  band -> t_band
+
+outputs
+  x : choice
+
+table pick
+| gross                   | t_band | -> x  |
+| <=10_000JPY             | small  | one   |
+| >10_000JPY <=100_000JPY | medium | two   |
+| >100_000JPY             | large  | three |

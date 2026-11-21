@@ -26,6 +26,11 @@ pub struct Suite {
     pub rules: Option<Rc<dyn Rules>>,
     pub dates: Option<Rc<dyn Dates>>,
     pub claims: Option<Rc<dyn Claims>>,
+    /// What whoever joins the languages does once `affected` knows the root, before it follows
+    /// what the files read (DESIGN 8): `ritsu yuen` gives rulec the rule files of the root's
+    /// project, so that a rule reads the contributions merged into it, as `ritsu check` merges
+    /// them. None does nothing.
+    pub at_root: Option<Rc<dyn Fn(&Path)>>,
     asked: Rc<Asked>,
 }
 
@@ -39,7 +44,7 @@ struct Asked {
 
 impl Suite {
     /// The languages whose things yuen reads through the index, by their tool words.
-    pub const READ: [Tool; 8] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Dandori, Tool::Sekisho, Tool::Sakai, Tool::Kaname];
+    pub const READ: [Tool; 9] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Dandori, Tool::Sekisho, Tool::Sakai, Tool::Kaname, Tool::Ringi];
 
     /// Whether yuen is handed what it needs to read the files of `tool`.
     pub fn reads(&self, tool: Tool) -> bool {

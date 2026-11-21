@@ -3,6 +3,8 @@ description "Types named as what the package of Go declares for a flow that runs
 
 use book stock from "books/stock.book"
 
+# BookCall and BookResult are names a caller reads, so they stop Go. The package declares
+# BookTransport for itself alone, and gives its own another name where the flow takes it.
 record BookCall
   note : string
 

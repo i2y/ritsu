@@ -1,0 +1,43 @@
+rule 取った段階(taken_tiers) v1
+description "段階を取る二つの畳み込み。一つは歩きの表が決める等級を、もう一つはゴールドの腕で自分の判定そのものを取る。それを読む二つの準用の行は、畳み込みが答えない値をとる（架空）"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+enum 印(mark) = 飛ばす(skip) | 選ぶ(pick)
+
+elements 明細(lines)
+  目印(flagged) : bool
+
+outputs
+  選んだ値引き(chosen_credit) : money[USD]  round down(1USD)
+  自分の値引き(own_credit) : money[USD]  round down(1USD)
+
+# 目印のある明細はゴールドで選び、ほかはシルバーで飛ばす
+table 目印で決める(grade_by_flag)
+policy unique
+| 目印  | -> 等級(grade) : 段階 | 判定(verdict) : 印 |
+| true  | ゴールド              | 選ぶ               |
+| false | シルバー              | 飛ばす             |
+
+# 最初に選んだ明細の等級、無ければシルバー。一般にはならない
+fold 判定 over 明細 -> 選んだ段階(chosen) : 段階
+  選ぶ -> take_first 等級
+  飛ばす -> next
+  empty -> シルバー
+  exhausted -> held
+
+# ゴールドの腕で等級そのもの、無ければ一般。シルバーにはならない
+fold 等級 over 明細 -> 自分の段階(own) : 段階
+  一般 -> next
+  シルバー -> next
+  ゴールド -> take_first 等級
+  プラチナ -> next
+  empty -> 一般
+  exhausted -> held
+
+apply 選んだ段階から(by_chosen) = "一般から読む値引き.rule" meaning:32fe498486d05d88
+  段階 = 選んだ段階
+  値引き -> 選んだ値引き
+
+apply 自分の段階から(by_own) = "一般から読む値引き.rule" meaning:32fe498486d05d88
+  段階 = 自分の段階
+  値引き -> 自分の値引き

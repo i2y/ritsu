@@ -64,8 +64,9 @@ including the rules transcribed from Japanese terms and statutes; the originals,
 in Japanese, are beside them in the repository and on the
 [Japanese page](https://i2y.github.io/ritsu/rulec/ja/examples/).
 
-Transcribe a tariff, leave one of its bands out, and the gap comes back with the input that
-falls through it:
+Transcribe a tariff, leave one of its bands out, and the gap comes back whole: the part of the
+input no row takes, an input that falls through it, and the row that closes it, with the answer
+left for whoever knows the tariff:
 
 ```
 error[E101]: Completeness gap: some input matches no row
@@ -74,10 +75,11 @@ error[E101]: Completeness gap: some input matches no row
 30 | table base_rate
    |       ^^^^^^^^^ the input space is not fully covered
    |
+ No row matches: dest = overseas, size = small
  An input that matches no row: dest = overseas, size = small, weight = 1lb
- An input producing this example: dest = overseas, girth = 23, signature = true, weight = 1
- hint: add a row that matches this input.
- The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
+ An input producing this example: dest = overseas, girth = 23in, signature = true, weight = 1lb
+ hint: add this row, with what it answers written in place of `?`: `| overseas | small | - | ? |`
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.
 ```
 
 Once the rule passes, out of `rulec gen --target python`:
@@ -334,7 +336,8 @@ $ rulec mcp                                        # the same commands as MCP to
 rule. With `--format json` a finding is data — `where`, `witness`, `rows`, `fix` — with the
 keys fixed in English whatever language `--lang` puts the prose in. Every diagnostic is defined
 once, in `src/codes.rs`, and [`docs/codes.md`](docs/codes.md) is literally the
-`rulec explain --all` output.
+`rulec explain --all` output. `rulec explain` takes any number of codes and explains them in the
+order given; for two or more it writes what `--all` writes, with only those codes.
 
 ## In CI
 
@@ -354,7 +357,8 @@ through them; `gen --check` compares what those same flags write.
 
 Those logs are read by machines and developers, so they stay in the default English. What goes
 to a person — `rulec diff` on a pull request, `rulec doc` for the people who read it — is built
-in the same job with `RULEC_LANG` set to their language. The job that puts the diff on the pull
+in the same job in their language: `--lang ja` on the line (for `diff`, which prints its report,
+`RULEC_LANG=ja` does as well; what `doc` writes follows `--lang` alone). The job that puts the diff on the pull
 request is on the [install page](https://i2y.github.io/ritsu/rulec/install/#in-ci).
 
 ## What is in this repository
@@ -372,14 +376,14 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 ../../proofs/     the Lean 4 development, RulecCert in ritsu's one Lean package: what a table
                   means, the checks a certificate has to pass, the theorems that each check
                   settles its claim, and the re-checker
-src/              63 modules, and 12 more under codegen/
-tests/corpus/     159 rules, and the copies of the documents they cite
-tests/mutants/    252 files, each with one mistake planted in it
-tests/golden/     the diagnostic prose snapshot by snapshot: 111 in Japanese, 100 in English
+src/              65 modules, and 14 more under codegen/
+tests/corpus/     171 rules, and the copies of the documents they cite
+tests/mutants/    282 files, each with one mistake planted in it
+tests/golden/     the diagnostic prose snapshot by snapshot: 118 in Japanese, 107 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
-159 rules — 40 transcribed from a published source, 119 written to reach the rest of the language — are checked, generated and run on every commit, and all 151 diagnostics are implemented.
+171 rules — 40 transcribed from a published source, 131 written to reach the rest of the language — are checked, generated and run on every commit, and all 157 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as
@@ -387,7 +391,7 @@ e-Gov publishes them, the premium tables of Kyokai Kenpo and the Japan Pension S
 income tax and stamp duty rates, the IRS rate tables, three sections of the US Code of Federal
 Regulations as the eCFR publishes them, PayPal's own merchant fees, and the lifecycle of a
 PaymentIntent as Stripe's documentation describes it — or are sketches written to reach the
-corners of the language. 146 of the 159 are 73 pairs, each a rule written with Japanese names and the
+corners of the language. 158 of the 171 are 79 pairs, each a rule written with Japanese names and the
 same rule written with English ones, which a test holds to the same findings, the same answers and
 the same claims. None of it is private data.
 

@@ -1,0 +1,31 @@
+rule tier_and_fee_point_by_point v1
+description "A fee a policy first table writes from the amount, and a tier written from the amount, read with both and the amount: the fee is 150 yen only up to 3 yen, and the tier is t3 only from 23 yen to 55 yen. So under 19 yen no row is asked for tier t3, and from 19 yen none for a fee of 150 yen. Some amounts are ruled out one by one, and the certificate states the fact each of them rests on"
+
+enum choice = one | two
+enum level = t1 | t3
+
+inputs
+  amount : money[JPY]  range >=1JPY <=85JPY
+
+outputs
+  x : choice
+
+table fee_of
+policy first
+| amount | -> fee : money[JPY] |
+| <=3JPY | 150JPY              |
+| -      | 20JPY               |
+
+table tier_of
+| fee | amount         | -> tier : level |
+| -   | <23JPY         | t1              |
+| -   | >22JPY <=42JPY | t3              |
+| -   | >42JPY <=55JPY | t3              |
+| -   | >55JPY         | t1              |
+
+table pick
+| amount | fee    | tier | -> x |
+| <19JPY | 20JPY  | t1   | one  |
+| <19JPY | 150JPY | t1   | two  |
+| >18JPY | 20JPY  | t1   | one  |
+| >18JPY | 20JPY  | t3   | two  |

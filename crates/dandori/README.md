@@ -59,7 +59,7 @@ rulec state machine. The workflow says which events happen on their own
 (`external authenticate, settle, expire`), and the checker follows them too: waiting until
 check-out, the authorization can expire, and then the capture is refused. Every diagnostic comes
 with a run that gets there; [Diagnostics](https://i2y.github.io/ritsu/dandori/reference/codes/) lists
-all 38 codes.
+all 40 codes.
 
 ## A workflow
 
@@ -129,7 +129,7 @@ dandori scenarios <file.flow> [--out <dir>]
 dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
 dandori api <file.flow>
-dandori explain <CODE> | --all [--format markdown|json]
+dandori explain <CODE>... | --all [--format markdown|json]
 dandori <command> --help
 dandori --version
 ```
@@ -137,17 +137,20 @@ dandori --version
 For a workflow that uses rules, dates files or books, run each as `ritsu dandori <command>`; then
 `gen`, `run`, `scenarios` and `doc` also check, when the workflow runs, a rule's precondition that
 `ritsu check` cannot decide where the flow calls the rule (its W201): as soon as the values are
-made, a run whose values break it fails with `Dandori.BrokenPrecondition`. `dandori <command> --help`
+made, a run whose values break it fails with `Dandori.BrokenPrecondition`, as it does under
+`ritsu run`. `dandori <command> --help`
 prints what one command takes, and what its exit codes mean; `dandori explain E014` says when a
-diagnostic comes, how to fix it, and the smallest `.flow` that gets it. `--lang ja`
-prints the messages in Japanese (else `DANDORI_LANG`, then `RITSU_LANG`). `gen` writes the code of
+diagnostic comes, how to fix it, and the smallest `.flow` that gets it; it takes any number of
+codes, in the order given, and for two or more writes what `--all` writes, with only those codes.
+`--lang ja` prints the messages in Japanese (else `DANDORI_LANG`, then `RITSU_LANG`), and writes
+the page of `doc` in Japanese (the variables do not change the page). `gen` writes the code of
 each platform its `--target` names (one or more) into `<out>/<target>/` (`generated/` by default), and
 writes nothing when one of them cannot take the workflow: what its platform cannot do (E050), or a
 run that can outgrow the platform (E040). `gen --check` writes nothing, and exits 1 when a file the
 same `--target` write is missing or differs. `doc` draws the workflow for the
 person who reviews it: Mermaid charts that GitHub draws in a pull request, with tables of every
-call and every way the workflow can end, or one HTML page on which each scenario lights up the way
-its run goes ([the hotel booking, drawn](https://i2y.github.io/ritsu/dandori/doc/hotel.html)). The rules
+call and every way the workflow can end, or one HTML page on which each scenario `scenarios` writes
+lights up the way its run goes, as `ritsu run` runs it ([the hotel booking, drawn](https://i2y.github.io/ritsu/dandori/doc/hotel.html)). The rules
 it calls come with it, each as the page for people that `rulec doc` renders.
 
 | Target | What `gen` writes |
@@ -174,7 +177,9 @@ When a sekisho gate names the workflow (`workflow returns from "flows/returns.fl
 holds each operation the workflow calls, by an `http` task of a `use openapi` or a `connect` task, to
 what the gate allows the workflow: a call the gate allows in no combination is an error (E908), and
 one it allows only in some needs the task to declare the error of a denial, `errors denied = 403` or
-`errors denied = permission_denied` (W909).
+`errors denied = permission_denied` (W909). A number the call gives has to be counted as the gate's
+`input` of that name counts it: a task's `fee: rate[step 0.1%]` read by a gate's `fee : rate[step 1%]`
+is an error (E909), since the gate reads the flow's 0.5% as 5%.
 
 ### Secrets and keys
 

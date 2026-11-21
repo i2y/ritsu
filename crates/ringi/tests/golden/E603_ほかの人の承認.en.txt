@@ -1,0 +1,3 @@
+error[E603]: tests/mutants/E603_ほかの人の承認.ringi:24:22: The ticket does not take the `approve` of this row: e02 (Head of Sales) is not an approver of the stage `確かめ`, nor a proxy of one
+    24 | | 2026-06-01 10:00 | approve | e02 | 決裁     | in progress |
+  = The ticket is at `確かめ`, and is `in progress`. No clock is set.

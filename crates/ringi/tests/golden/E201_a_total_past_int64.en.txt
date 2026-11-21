@@ -1,0 +1,6 @@
+error[E201]: tests/mutants/E201_a_total_past_int64.ringi:6:1: What the computation of the field `total` is lowered to does not pass rulec's check: Cannot prove that total fits in int64
+     6 |   total    : money[JPY] "Total" = price * quantity
+  = From rulec: E108 at line 8 of the lowered `form.rule`
+  = The reachable interval is 1JPY to 90_000_000_000_000_000_000JPY and the step is 1/1, so the stored integer reaches 90_000_000_000_000_000_000.
+  = Hint: narrow the input ranges, or insert one rounding step along the way.
+  = Where to round is a business decision that moves yen, so the tool does not decide it on its own.

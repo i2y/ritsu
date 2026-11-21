@@ -1,0 +1,10 @@
+route 上長の確認(manager_check) v1 "上長の確認"
+description "ステップが一つの共有の経路（架空）。申請者の上長が申請を確かめる。ほかの言語の題は書かない"
+
+use organization 組織(org) from "小さい会社.ringi"
+
+route
+  確認(check)  上長
+
+who
+  上長(manager) = manager of requester

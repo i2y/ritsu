@@ -1,0 +1,9 @@
+warning[W105]: tests/spellings/ts_word.flow:4:8: The type `object` cannot keep its name in the code of TypeScript
+     4 | record object
+  = TypeScript (`--target temporal-typescript`, `--target durable`): `object` is a word of TypeScript, which a type cannot be named.
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+warning[W105]: tests/spellings/ts_word.flow:7:6: The type `keyof` cannot keep its name in the code of TypeScript
+     7 | enum keyof = early | late
+  = TypeScript (`--target temporal-typescript`, `--target durable`): `keyof` is a word of TypeScript, which a type cannot be named.
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/ts_word.flow: ok (2 warning(s))

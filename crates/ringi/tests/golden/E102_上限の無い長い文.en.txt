@@ -1,0 +1,4 @@
+error[E102]: tests/mutants/E102_上限の無い長い文.ringi:4:3: `目的` has no upper limit on its length
+     4 |   目的(purpose) : long text "目的"
+  = Write the most characters it takes, as in `count <=100`: with no limit, a text of any length is taken.
+  = The line, fixed: 目的(purpose) : long text "目的"  count <=100

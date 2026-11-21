@@ -1,0 +1,14 @@
+package {{package}}
+
+// ritsu writes go/ (the Go package of the project: its kinds of request, their rules and dates, and
+// the gate) and requests/ (what the server reads: openapi.json, types/, a2ui/ and mcp/, and the
+// vectors the tests run) from the files of project/. Run it again after changing them:
+//
+//	go generate ./...
+//
+// The same line with --check writes nothing, and fails when go/ or requests/ is not what project/
+// makes, for CI. --lang is the language of the sentences the generated code says, which the line
+// keeps the same whoever runs it. The catalog's ID is a name for the catalog of the project's
+// screens: write it as a URL you own, and keep it the same in every environment.
+//
+//go:generate ritsu gen project --root project --target go --target requests --catalog {{catalog}} --module {{module}}/go --out . --lang {{lang}}

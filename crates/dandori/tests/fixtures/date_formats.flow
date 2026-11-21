@@ -1,0 +1,68 @@
+workflow date_formats v1
+description "Days and moments crossed with an API's description (DESIGN 39): a time where it says a day, an enum and a number where it says a day, a day and a string where it says a moment, a day where it lists the days it takes, two days held to ranges there, one of them with a day it does not list, and a string there; and the answers read the other way round, a listed day outside the range of what reads it, and a listed day read as a time"
+
+use openapi leave from "../flows/apis/leave.json"
+
+enum Kind = working | holiday
+
+record Period
+  first_day : timestamp
+  last_day  : date
+
+# each field read as another type than the description says
+record Leave
+  id        : date
+  first_day : timestamp
+  booked_at : date
+
+record Moved
+  id        : string
+  first_day : date
+  booked_at : timestamp
+
+record Day
+  day     : Kind
+  kind    : Kind
+  closing : date  range >=2026-12-01 <=2026-12-28
+
+record Closing
+  day : timestamp
+
+record Closed
+  day : date
+
+# a period whose first day is a time, where the description says a day
+task book(employee: string, period: Period) -> Leave
+  http POST leave "/leaves"
+
+# a time where it says a day, and a day where it says a moment; a string where it says a day goes
+task move(id: string, first_day: timestamp, previous: string, asked_at: date) -> Moved
+  http POST leave "/leaves/{id}/move"
+
+# a string where it says a moment
+task move_by_text(id: string, first_day: date, asked_at: string) -> Moved
+  http POST leave "/leaves/{id}/move"
+
+# an enum in the path and a number in the query, where it says a day; the answer's day read as
+# the enum, and a day it lists outside the range of the field that reads it
+task day_off(day: Kind, until: int) -> Day
+  http GET leave "/days/{day}"
+
+# a day where it lists the two days it takes; one of them read as a time
+task close_year(day: date) -> Closing
+  http POST leave "/closings"
+
+# days held to ranges where it lists the two days it takes: the first range is those two days, and
+# the second has one more
+task close_on(day: date  range >=2026-12-28 <=2026-12-29) -> Closed
+  http POST leave "/closings"
+
+task close_by(day: date  range >=2026-12-28 <=2026-12-30) -> Closed
+  http POST leave "/closings"
+
+# a string where it lists the days it takes
+task close_by_text(day: string) -> Closed
+  http POST leave "/closings"
+
+flow
+  pass

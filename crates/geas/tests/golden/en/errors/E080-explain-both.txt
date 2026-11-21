@@ -1,1 +1,2 @@
-error[E080]: give `geas explain` codes or `--all`, not both
+error[E080]: `geas explain` takes <code>... | --all
+  = usage: geas explain <code>... | --all [--json]

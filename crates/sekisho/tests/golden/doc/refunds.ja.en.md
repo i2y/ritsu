@@ -65,7 +65,7 @@ For each action, the combinations `sekisho check` walked, put together where Ced
 
 - It guards `openapi "api/orders.json" operation refundOrder`.
 - Principals: `職員`, `Workflow`. Resources: `注文`, the id read from the operation's argument `orderId`.
-- Input `金額` (`amount`): `money[GBP, incl_tax]`, 1GBP to 10,000GBP.
+- Input `金額` (`amount`): `money[GBP, incl_tax]`, 1GBP to 10_000GBP.
 - Computed: `返金の区分`, `期間内`, `営業日` (under Computed values below).
 - 1,056 combinations, 88 of them allowed.
 
@@ -545,11 +545,15 @@ A workflow calls the operations as itself: in Cedar, the principal `Workflow::"<
 
 #### What the flow calls
 
-Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action: what `ritsu check` holds across the languages.
+Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action at the call: over the combinations the runs that reach the call can come to (what the call gives, and what the arms of each `match` on the way leave). It is what `ritsu check` holds across the languages.
 
 | Line | Task | Operation | Guarded by | Allowed | Error on a denial |
 |---|---|---|---|---|---|
 | 22 | `refund_order` | `openapi "api/orders.json" operation refundOrder` | `返金する` (`refund_order`) | sometimes | `denied` |
+
+What the runs that reach a call hold there:
+
+- Line 22: `金額` (what the call gives, `amount`) is 1GBP to 50GBP.
 
 ## Operations guarded
 

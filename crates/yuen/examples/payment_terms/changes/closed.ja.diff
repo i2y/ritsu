@@ -1,0 +1,5 @@
+--- a/calendars/東京の営業日.cal
++++ b/calendars/東京の営業日.cal
+@@ -11 +11,2 @@
+ closed every 12-29..01-03 "年末年始"
++closed every 08-13..08-15 "夏季休暇"

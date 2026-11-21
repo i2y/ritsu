@@ -1,7 +1,8 @@
 //! The examples pass `check`; the fixtures print exactly the diagnostics in their golden
 //! files; every place of an input held to a range has a scenario of its own whose input is just
 //! outside it, and one at each end of it for a date or a time; a workflow that runs in a period
-//! has runs whose clock is outside it; and on every scenario `scenarios` finds, the generated
+//! has runs whose clock is outside it; each check of a rule's precondition comes out in every
+//! scenario as the scenario says; and on every scenario `scenarios` finds, the generated
 //! state machine, run by tools/asl-run.mjs with JSONata 2.0.6, does exactly what the reference
 //! interpreter does.
 //!
@@ -15,7 +16,7 @@
 
 use dandori::diag::Lang;
 use dandori::interp::CallInfo;
-use dandori::model::{Callee, DecisionApi, Model, Platform, Via, TK};
+use dandori::model::{Callee, DecisionApi, Model, Platform, Ty, Via, TK};
 use dandori::render::View;
 use serde_json::{json, Value};
 use ritsu_testkit::{need, ready, skip, Need, TempDir};
@@ -51,7 +52,7 @@ struct EveryUndecided(std::rc::Rc<dyn ritsu_ports::Rules>);
 impl ritsu_ports::Undecided for EveryUndecided {
     fn preconditions(&self, file: &Path) -> Vec<ritsu_ports::UndecidedPrecondition> {
         use ritsu_ports::Flows;
-        let Ok(calls) = dandori::ports::Engine.rule_calls(file, self.0.clone()) else { return vec![] };
+        let Ok(calls) = dandori::ports::Engine::default().rule_calls(file, self.0.clone()) else { return vec![] };
         let mut out = Vec::new();
         for c in calls {
             for p in self.0.facts(&c.rule).map(|f| f.preconditions).unwrap_or_default() {
@@ -64,7 +65,7 @@ impl ritsu_ports::Undecided for EveryUndecided {
 
 /// `dandori::check::built`, with the rules read through rulec: the checked flow, with the checks of
 /// the preconditions ritsu could not decide in it, as `build`, `run` and `scenarios` read it.
-fn check_file(f: &Path) -> Result<(String, dandori::check::Checked), String> {
+fn check_file(f: &Path) -> Result<(String, dandori::check::Checked), dandori::diag::Text> {
     with_rules(|| dandori::check::built(f))
 }
 
@@ -74,10 +75,14 @@ fn with_days<R>(f: impl FnOnce() -> R) -> R {
 }
 
 /// What `rulec gen <rule> --target typescript --target python --target go --out <out>` writes, by
-/// rulec's library: the three libraries the code dandori writes reads.
-fn rulec_gen(rule: &Path, out: &Path) {
+/// rulec's library: the three libraries the code dandori writes reads. With `package`, the Python
+/// modules go inside a package (`--python-package`), as the comment of rules.py says for the modules
+/// in a workflow's package; without it, they are read at the top of their directory, as the Lambda
+/// function's handler reads them.
+fn rulec_gen(rule: &Path, out: &Path, package: bool) {
     let (mut said, mut err) = (Vec::new(), Vec::new());
     let asked = rulec::targets::Asked::new(&["typescript", "python", "go"], &[]).unwrap();
+    let asked = if package { asked.in_python_package().unwrap() } else { asked };
     let code = with_days(|| rulec::codegen::generate(&[rule.to_str().unwrap()], out.to_str().unwrap(), &asked, false, false, &mut said, &mut err));
     assert_eq!(code, 0, "rulec gen failed: {}{}", String::from_utf8_lossy(&said), String::from_utf8_lossy(&err));
 }
@@ -215,6 +220,12 @@ fn runnable() -> Vec<PathBuf> {
         out.retain(|f| rel(f).contains(&part));
     }
     out
+}
+
+/// Whether DANDORI_FLOW picks some of the flows: a test that counts what it checked then counts
+/// fewer than every flow gives.
+fn picked() -> bool {
+    std::env::var_os("DANDORI_FLOW").is_some()
 }
 
 /// The platforms a version of an example is written for, from its directory: `temporal/`,
@@ -561,6 +572,45 @@ fn a_workflow_that_runs_in_a_period_is_tried_outside_it() {
     eprintln!("compared: {flows} run(s) that start outside the period and {later} whose clock leaves it after the start, in {flows} flow(s) with a period");
 }
 
+/// Each check of a rule's precondition (dandori's DESIGN 1.17) comes out in every scenario as the
+/// scenario says: a run that says a check breaks ends there with `Dandori.BrokenPrecondition`, and
+/// a run that says none does goes past them all; either way the reference reads every answer the
+/// scenario gives. The walk chooses a truth value or an enum's value a check reads before it decides
+/// whether the check holds, as the run reads it there: a value not chosen yet is no value that keeps
+/// a `never` line.
+#[test]
+fn every_check_of_a_precondition_comes_out_as_the_scenario_says() {
+    let (mut flows, mut runs, mut broken) = (0, 0, 0);
+    for f in runnable() {
+        let (_, checked) = check_file(&f).unwrap();
+        let m = checked.model.expect("the flows the platforms run pass check");
+        let sites: Vec<usize> = m.all_stmts().iter().filter(|s| matches!(s.kind, TK::Check(_))).map(|s| s.site).collect();
+        if sites.is_empty() {
+            continue;
+        }
+        flows += 1;
+        for sc in dandori::scenarios::generate(&m) {
+            let says = |way: &str| sites.iter().any(|s| sc["covers"].as_array().unwrap().iter().any(|c| *c == json!(format!("{s}:{way}"))));
+            let (trace, _) = dandori::interp::run_traced(&m, &sc, View::Temporal).unwrap();
+            let read = trace["steps"].as_array().unwrap().iter().filter(|s| s.get("call").is_some()).count();
+            let breaks = trace["end"]["fail"]["error"] == "Dandori.BrokenPrecondition";
+            assert!(
+                breaks == says("breaks") && read == sc["answers"].as_array().unwrap().len(),
+                "{} {}: the scenario says {:?}, and the reference reads {read} of its {} answers and ends {}",
+                rel(&f),
+                sc["name"],
+                sc["covers"],
+                sc["answers"].as_array().unwrap().len(),
+                trace["end"]
+            );
+            runs += 1;
+            broken += usize::from(breaks);
+        }
+    }
+    assert!(flows >= 4 && broken >= 4, "only {broken} run(s) that break a precondition, in {flows} flow(s) that check one");
+    eprintln!("compared: {runs} run(s) of {flows} flow(s) that check a precondition, {broken} of them breaking one");
+}
+
 /// One statement reads one moment, on every platform (dandori's DESIGN 20). The runners cannot
 /// show it, since they set each platform's clock to a run's moments, so the code is read. No try of
 /// a call reads the clock: a try runs the call's arguments again, after a timer that has moved the
@@ -643,12 +693,14 @@ fn a_statement_reads_the_clock_once() {
             }
         }
     }
-    assert!(flows >= 8 && tries > 0, "only {flows} flow(s) read `now`, with {tries} tries");
+    assert!(picked() || (flows >= 8 && tries > 0), "only {flows} flow(s) read `now`, with {tries} tries");
     eprintln!("compared: {reads} read(s) of the clock in the code of {flows} flow(s) that read `now`: none in {tries} tries, and at most one in a node or a template");
 }
 
 #[test]
 fn diagnostics_match_the_golden_files() {
+    // the files the notes name, from the crate's directory, as a run there writes them
+    let _run = ritsu_base::paths::run_from(".");
     let mut failures = Vec::new();
     for f in flows(&root().join("tests/fixtures")) {
         let (src, checked) = check_file(&f).unwrap();
@@ -834,8 +886,8 @@ fn on_localstack(dir: &Path, name: &str, flows: &[Value]) -> Vec<Value> {
     let spec = dir.join(format!("{name}.json"));
     let results = dir.join(format!("{name}-results.json"));
     std::fs::write(&spec, serde_json::to_string(&json!({ "image": LOCALSTACK_IMAGE, "flows": flows })).unwrap()).unwrap();
-    let out = Command::new("node").arg(root().join("tools/localstack/run.mjs")).arg(&spec).arg(&results).output().unwrap();
-    assert!(out.status.success(), "the LocalStack runner failed:\n{}", String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(Command::new("node").arg(root().join("tools/localstack/run.mjs")).arg(&spec).arg(&results), LONG_LIMIT, &format!("every flow on LocalStack ({name})"));
+    assert!(out.ok, "the LocalStack runner failed:\n{}", out.stderr);
     let got: Value = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
     got["flows"].as_array().unwrap().clone()
 }
@@ -1164,11 +1216,19 @@ fn go_runner() -> Option<&'static GoRunner> {
             }
             let package = out.join(dandori::temporal_go::package(m));
             let callbacks: Vec<String> = m.tasks.iter().filter(|t| t.callback && !t.is_child(Platform::Temporal)).map(|t| dandori::temporal_go::task_function(&t.name)).collect();
-            entries.push(json!({ "key": key, "dir": package, "patch": patch, "callbacks": callbacks }));
+            entries.push(json!({ "key": key, "dir": package, "patch": patch, "callbacks": callbacks, "names": dandori::temporal_go::renamed(m) }));
             keys.insert(what, key);
         };
-        // every flow, the versions for the other platforms too, whose default Transport the checks send through
-        for f in runnable() {
+        // every flow, the versions for the other platforms too, whose default Transport the checks
+        // send through, and the flows whose Go a test names, which DANDORI_FLOW may leave out
+        let mut flows = runnable();
+        for f in ["tests/flows/connect_rules.flow", "tests/flows/events.flow"].into_iter().chain(RECORDED) {
+            let f = root().join(f);
+            if !flows.contains(&f) {
+                flows.push(f);
+            }
+        }
+        for f in flows {
             let (_, checked) = check_file(&f).unwrap();
             add(rel(&f), &checked.model.expect("the examples pass check"), "full", &mut entries);
         }
@@ -1301,6 +1361,20 @@ fn some_at_a_time<T: Sync>(items: &[T], n: usize, each: impl Fn(&T) + Sync) {
     });
 }
 
+/// How long a runner that talks to a server or to another program — a platform's, the other
+/// language's activities, a database — is waited for (`ritsu_testkit::run::finish`: past it, the
+/// runner is killed with every process it started, and the test fails with what it printed). A
+/// runner that waited without end left the nightly job to run out of its time, without a word of
+/// why. One flow's runner takes from a few seconds to about a minute in the nightly runs, a few
+/// minutes for the limits that wait for a callback's 60 seconds (`CALLBACK_HAND_ON_SECONDS`) at
+/// each try; fifteen minutes is past any of them on a loaded runner, and a stage that a stopped
+/// runner fails can still be run once more inside the job's limit (ritsu's DESIGN 10.6).
+const RUNNER_LIMIT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
+/// The same for a runner that plays every flow in one container (LocalStack's), or asks a model on
+/// the machine (Ollama), which may take a minute an answer.
+const LONG_LIMIT: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
 /// One flow on Temporal, its workflow in `wf`; with `acts`, its activities in that other language,
 /// served by that language's runner.
 fn temporal_one(f: &Path, wf: Sdk, acts: Option<Sdk>) {
@@ -1377,16 +1451,16 @@ fn temporal_one(f: &Path, wf: Sdk, acts: Option<Sdk>) {
         serve.push(runs_file.display().to_string());
         run.env("DANDORI_ACTIVITIES_BY", serde_json::to_string(&serve).unwrap());
     }
-    let out = run.output().unwrap();
     let what = match acts {
         None if wf == Sdk::Ts => "the Temporal workflow".to_string(),
         None => format!("the Temporal workflow in {}", wf.name()),
         Some(a) if wf == Sdk::Ts => format!("the Temporal workflow with its activities in {}", a.name()),
         Some(a) => format!("the Temporal workflow in {} with its activities in {}", wf.name(), a.name()),
     };
-    assert!(out.status.success(), "{}: the runner of {what} failed:\n{}", rel(f), String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(&mut run, RUNNER_LIMIT, &format!("{}: {what}", rel(f)));
+    assert!(out.ok, "{}: the runner of {what} failed:\n{}", rel(f), out.stderr);
     // a query at the end that no worker took in time, which the Go runner asked again (its `status`)
-    for line in String::from_utf8_lossy(&out.stderr).lines().filter(|l| l.contains("asking it again")) {
+    for line in out.stderr.lines().filter(|l| l.contains("asking it again")) {
         eprintln!("{}: {line}", rel(f));
     }
     let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
@@ -1401,6 +1475,12 @@ fn temporal_one(f: &Path, wf: Sdk, acts: Option<Sdk>) {
         })
         .collect();
     compare(&what, f, &references, &got);
+    // the result keeps the order of the outputs (and in Go, of every record's fields): Python's SDK
+    // writes JSON with its keys in the order of their names (DESIGN 4.2)
+    if wf != Sdk::Py {
+        let wrong = results_out_of_order(&m, &histories, wf == Sdk::Go);
+        assert!(wrong.is_empty(), "{}: the result of {what} is not in the order of the declaration:\n{}", rel(f), wrong.join("\n"));
+    }
     for (i, ((cases, shown, asked), (sc, _))) in said.iter().zip(&references).enumerate() {
         // the query that said otherwise than the search attribute, and was asked again (see the runners)
         for again in asked {
@@ -1457,6 +1537,70 @@ fn temporal_one(f: &Path, wf: Sdk, acts: Option<Sdk>) {
         }
         std::fs::copy(histories.join("spec.json"), keep.join("spec.json")).unwrap();
     }
+}
+
+/// The results of the runs in `histories` whose keys are not in the order the flow declares its
+/// outputs (and, `deep`, a record its fields), as the history keeps the result's payload.
+fn results_out_of_order(m: &Model, histories: &Path, deep: bool) -> Vec<String> {
+    use ritsu_testkit::registry::base64_decode;
+    let mut wrong = Vec::new();
+    let mut files: Vec<PathBuf> = std::fs::read_dir(histories).unwrap().map(|e| e.unwrap().path()).filter(|p| p.file_name().unwrap() != "spec.json").collect();
+    files.sort();
+    for path in files {
+        let h: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        for ev in h["events"].as_array().unwrap() {
+            let Some(p) = ev["workflowExecutionCompletedEventAttributes"]["result"]["payloads"].get(0) else { continue };
+            // a history that says `history encrypted` keeps what the codec made of it
+            if p["metadata"]["encoding"].as_str().and_then(base64_decode).as_deref() != Some(b"json/plain".as_slice()) {
+                continue;
+            }
+            let data = base64_decode(p["data"].as_str().unwrap()).unwrap();
+            let v: Value = serde_json::from_slice(&data).unwrap();
+            if let Some(why) = out_of_order(m, &v, &m.outputs, deep) {
+                wrong.push(format!("{}: {why} in {}", path.file_name().unwrap().to_string_lossy(), String::from_utf8_lossy(&data)));
+            }
+        }
+    }
+    wrong
+}
+
+/// Where the keys of `v` are not in the order of `fields` (the declared ones first, in their order).
+fn out_of_order(m: &Model, v: &Value, fields: &[(String, Ty)], deep: bool) -> Option<String> {
+    let o = v.as_object()?;
+    let keys: Vec<&str> = o.keys().map(String::as_str).collect();
+    let want: Vec<&str> = fields.iter().map(|(f, _)| f.as_str()).filter(|f| o.contains_key(*f)).collect();
+    if keys.len() < want.len() || keys[..want.len()] != want[..] {
+        return Some(format!("the keys {keys:?}, where the declaration has {want:?}"));
+    }
+    if !deep {
+        return None;
+    }
+    fn inner<'a>(m: &'a Model, t: &'a Ty) -> Option<&'a [(String, Ty)]> {
+        match t {
+            Ty::Record(r) => Some(&m.records[*r].fields),
+            _ => None,
+        }
+    }
+    for (f, t) in fields {
+        let Some(x) = o.get(f) else { continue };
+        let (t, many) = match t {
+            Ty::Opt(t) => (&**t, false),
+            t => (t, false),
+        };
+        let (t, many) = match t {
+            Ty::List(t) => (&**t, true),
+            t => (t, many),
+        };
+        let t = if let Ty::Opt(t) = t { &**t } else { t };
+        let Some(fs) = inner(m, t) else { continue };
+        let items: Vec<&Value> = if many { x.as_array().map(|a| a.iter().collect()).unwrap_or_default() } else { vec![x] };
+        for item in items {
+            if let Some(why) = out_of_order(m, item, fs, deep) {
+                return Some(format!("`{f}`: {why}"));
+            }
+        }
+    }
+    None
 }
 
 /// A kept history is made neutral of the machine it was recorded on: the workers' identities and
@@ -1531,16 +1675,19 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
         assert_eq!(built[0].1, built[2].1, "the same code has two build ids");
         assert_ne!(built[0].1, built[1].1, "two builds of different code have one build id");
         let results = dir.join(format!("{}-results.json", lang.short()));
-        let out = match lang {
-            Sdk::Py => Command::new(python.as_ref().unwrap()).arg(root().join("tools/temporal-python/versions.py")).arg(&built[0].0).arg(&built[1].0).arg(&results).output().unwrap(),
-            Sdk::Ts => Command::new("node").arg(root().join("tools/temporal/versions.mjs")).arg(&built[0].0).arg(&built[1].0).arg(&results).output().unwrap(),
-            Sdk::Go => {
-                let go = go.unwrap();
-                Command::new(&go.bin).arg("--versions").arg(go.key("versions/a")).arg(go.key("versions/b")).arg(&results).output().unwrap()
-            }
+        let mut cmd = match lang {
+            Sdk::Py => Command::new(python.as_ref().unwrap()),
+            Sdk::Ts => Command::new("node"),
+            Sdk::Go => Command::new(&go.unwrap().bin),
+        };
+        match lang {
+            Sdk::Py => cmd.arg(root().join("tools/temporal-python/versions.py")).arg(&built[0].0).arg(&built[1].0),
+            Sdk::Ts => cmd.arg(root().join("tools/temporal/versions.mjs")).arg(&built[0].0).arg(&built[1].0),
+            Sdk::Go => cmd.arg("--versions").arg(go.unwrap().key("versions/a")).arg(go.unwrap().key("versions/b")),
         };
         let lang = lang.name();
-        assert!(out.status.success(), "the Worker Deployment Versioning run in {lang} failed:\n{}", String::from_utf8_lossy(&out.stderr));
+        let out = ritsu_testkit::run::finish(cmd.arg(&results), RUNNER_LIMIT, &format!("the Worker Deployment Versioning run in {lang}"));
+        assert!(out.ok, "the Worker Deployment Versioning run in {lang} failed:\n{}", out.stderr);
         let got: Value = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
         let a_says = json!(["a さんが申込 申込-1 を承認しました", "a さんが申込 申込-1 を承認しました"]);
         let b_says = json!(["b さんが申込 申込-1 を承認しました（新しいビルド）", "b さんが申込 申込-1 を承認しました（新しいビルド）"]);
@@ -1675,8 +1822,8 @@ fn temporal_runs_a_flow_as_its_child() {
             };
             cmd.env("DANDORI_CHILD_BY", serde_json::to_string(&serve).unwrap());
         }
-        let out = cmd.output().unwrap();
-        assert!(out.status.success(), "the parent in {} with the child in {} failed:\n{}", lang(parent), lang(child), String::from_utf8_lossy(&out.stderr));
+        let out = ritsu_testkit::run::finish(&mut cmd, RUNNER_LIMIT, &format!("the parent in {} with the child in {}", lang(parent), lang(child)));
+        assert!(out.ok, "the parent in {} with the child in {} failed:\n{}", lang(parent), lang(child), out.stderr);
         let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
         assert_eq!(got.len(), references.len());
         for (i, (g, r)) in got.iter().zip(&references).enumerate() {
@@ -1711,7 +1858,8 @@ fn recorded_dir(m: &Model, lang: Sdk) -> PathBuf {
     root().join("tests/histories").join(dir).join(dandori::render::ident(&m.name))
 }
 
-/// Whether an HTTP task's URL, with its `{placeholders}`, is the URL of a call.
+/// Whether an HTTP task's URL, with its `{placeholders}`, is the URL of a call, which has the query of
+/// its arguments after it (DESIGN 43).
 fn url_matches(pattern: &str, url: &str) -> bool {
     // the literal parts between the placeholders
     let mut lits = Vec::new();
@@ -1734,22 +1882,123 @@ fn url_matches(pattern: &str, url: &str) -> bool {
             _ => return false,
         }
     }
-    u.is_empty()
+    u.is_empty() || u.starts_with('?') || u.starts_with('&')
 }
 
-/// A value's pairs in a URL-encoded body or query, as the Transports write them: `a[b]=c`, and
-/// nothing for none.
-fn form_pairs(v: &Value, prefix: &str, out: &mut Vec<Value>) {
-    match v {
-        Value::Object(o) => {
-            for (k, x) in o {
-                let key = if prefix.is_empty() { k.clone() } else { format!("{prefix}[{k}]") };
-                form_pairs(x, &key, out);
+/// The pairs of a URL-encoded body, as the Transports write them from the object they are handed:
+/// each name with its value, each item of a list under the name, and no pair for a value that is
+/// not there (DESIGN 43).
+fn form_pairs(v: &Value) -> Vec<Value> {
+    let mut out = Vec::new();
+    for (k, x) in v.as_object().into_iter().flatten() {
+        let items = match x {
+            Value::Array(a) => a.clone(),
+            other => vec![other.clone()],
+        };
+        for i in items {
+            match i {
+                Value::Null => {}
+                Value::String(s) => out.push(json!([k, s])),
+                other => out.push(json!([k, other.to_string()])),
             }
         }
-        Value::Null => out.push(json!([prefix, ""])),
-        Value::String(s) => out.push(json!([prefix, s])),
-        other => out.push(json!([prefix, other.to_string()])),
+    }
+    out
+}
+
+/// The query a default Transport sends for a call's URL, as fetch writes it: what is not ASCII as
+/// its UTF-8 percent-encoded, and a `'` as `%27`; "" when the URL has none.
+fn query_sent(url: &str) -> String {
+    url.find('?').map(|i| url[i..].bytes().map(|b| if b == b'\'' { "%27".to_string() } else if b.is_ascii() { (b as char).to_string() } else { format!("%{b:02X}") }).collect()).unwrap_or_default()
+}
+
+/// The cookies that arrive for a call's `Cookie` header, with the one the options of the wire check
+/// add, which takes the place of a cookie of its name (DESIGN 43).
+fn with_wire_cookie(request: Option<&str>) -> String {
+    let mut pairs: Vec<&str> = request.unwrap_or_default().split(';').map(str::trim).filter(|p| !p.is_empty() && p.split('=').next() != Some("wire_session")).collect();
+    pairs.push("wire_session=1");
+    pairs.join("; ")
+}
+
+/// The headers of a call that arrive, by their names in lower case: the call's, with those of the
+/// options of the wire check: for the library of `tests/flows/http_places.flow`, the header that
+/// takes the place of the call's of its name, and the cookie with the call's cookies (DESIGN 43).
+fn headers_sent(req: &Value) -> Vec<(String, Value)> {
+    let mut out = Vec::new();
+    let mut cookie = None;
+    for (k, v) in req["headers"].as_object().into_iter().flatten() {
+        if k.eq_ignore_ascii_case("Cookie") {
+            cookie = v.as_str();
+        } else {
+            out.push((k.to_lowercase(), v.clone()));
+        }
+    }
+    if req["url"].as_str().is_some_and(|u| u.starts_with("https://library.example.com/")) {
+        out.retain(|(k, _)| k != "x-library-key");
+        out.push(("x-library-key".to_string(), json!("wire-key")));
+    }
+    out.push(("cookie".to_string(), json!(with_wire_cookie(cookie))));
+    out
+}
+
+/// The calls of `tests/flows/http_places.flow` and its Japanese version, as the reference
+/// interpreter writes them, against what the library's description says of each parameter (DESIGN
+/// 41): the place it goes to, by the description's name, and the style and explode it is written
+/// in, with OpenAPI's defaults where the description says none and for the calls no description
+/// holds. The other tests hold the code of every platform and the default Transports to the
+/// reference; this one holds the reference to the description, so a parameter put in another place
+/// or written in another style is caught even where every platform does the same.
+#[test]
+fn a_call_goes_where_the_description_says_in_its_style() {
+    let calls = |flow: &str, input: Value, answers: Value| -> Vec<Value> {
+        let (_, got) = check_file(&root().join(flow)).unwrap();
+        let m = got.model.unwrap_or_else(|| panic!("{flow} passes check"));
+        let sc = json!({ "name": "places", "input": input, "answers": answers });
+        let run = dandori::interp::run(&m, &sc, View::Temporal).unwrap();
+        assert!(run["end"].get("succeed").is_some(), "{flow}: the run ends with {}", run["end"]);
+        run["steps"].as_array().unwrap().iter().filter_map(|s| s.get("call").cloned()).collect()
+    };
+    let answers = json!([{"ok": {"count": 1}}, {"ok": {"shelf": "S"}}, {"ok": {"id": "L"}}, {"ok": {"id": "N"}}, {"ok": {"count": 2}}, {"ok": {"id": "M"}}]);
+    let form = json!({"Content-Type": "application/x-www-form-urlencoded"});
+    // the note, the trace and the memo not there, and there
+    for (note, trace, memo) in [(json!(null), json!(null), json!(null)), (json!("first edition"), json!("t-1"), json!("fragile spine"))] {
+        let got = calls("tests/flows/http_places.flow", json!({"shelf": "S-1", "reader": "R-1", "due": "2026-12-01", "note": note, "trace": trace, "memo": memo}), answers.clone());
+        let mut headers = json!({"X-Library-Key": "key-1", "X-Shelves": "東,west", "X-Spot": "row=3,col=12", "Cookie": "session-id=s%201%3B2; prefs=dark,large"});
+        let (mut notes, mut marks) = (
+            json!({"text": "torn page", "tags": ["repair", "soon"], "room": "east", "shelf": "3", "marks[page]": "12", "marks[line]": "4", "words": "glue|tape"}),
+            json!({"tags": ["repair", "soon"], "room": "east", "shelf": "3"}),
+        );
+        let mut query = "?tags=old&tags=rare%20map&authors=Ito,O'Neil&first=1901&last=1950&sort%5Bby%5D=title&words=sea%20salt%20%26%20pepper&codes=A%7C1%7CB&lost=false".to_string();
+        if !note.is_null() {
+            query.push_str("&note=first%20edition");
+            headers["X-Trace-Id"] = trace.clone();
+            notes["memo"] = memo.clone();
+            marks["memo"] = memo.clone();
+        }
+        let want = vec![
+            json!({"http": "GET", "url": format!("https://library.example.com/books/b-1,b%2F2{query}")}),
+            json!({"http": "GET", "url": "https://library.example.com/shelves/S-1/spots;row=3;col=12/labels/.red.blue", "headers": headers}),
+            json!({"http": "POST", "url": "https://library.example.com/books/b-1/loans?due=2026-12-01", "body": {"reader": "R-1"}}),
+            json!({"http": "POST", "url": "https://library.example.com/books/b-1/notes", "headers": form, "body": notes}),
+            json!({"http": "GET", "url": "https://search.example.com/v1/rooms/east,west%202/books?words=sea&words=salt&first=1901&last=1950"}),
+            json!({"http": "POST", "url": "https://search.example.com/v1/books/b%2F1/marks", "headers": form, "body": marks}),
+        ];
+        assert_eq!(got.len(), want.len(), "the calls of http_places.flow: {got:#?}");
+        for (g, w) in got.iter().zip(&want) {
+            assert_eq!(g, w, "http_places.flow, with the note {note}");
+        }
+    }
+    // the Japanese version: text that is not ASCII in the values, and in the names of the calls no
+    // description holds
+    let got = calls("tests/flows/http_places.ja.flow", json!({"棚": "棚-1", "借りる人": "人-1", "返す日": "2026-12-01", "メモ": null, "トレース": null, "備考": null}), answers);
+    let want = [
+        (0, json!({"http": "GET", "url": "https://library.example.com/books/b-1,b%2F2?tags=old&tags=rare%20map&authors=%E4%BC%8A%E8%97%A4,O'Neil&first=1901&last=1950&sort%5Bby%5D=title&words=%E6%B5%B7%20%E5%A1%A9%20%26%20%E8%83%A1%E6%A4%92&codes=A%7C1%7CB&lost=false"})),
+        (1, json!({"http": "GET", "url": "https://library.example.com/shelves/%E6%A3%9A-1/spots;row=3;col=12/labels/.%E8%B5%A4.%E9%9D%92", "headers": {"X-Library-Key": "key-1", "X-Shelves": "東,西", "X-Spot": "row=3,col=12", "Cookie": "session-id=s%201%3B2; prefs=dark,large"}})),
+        (4, json!({"http": "GET", "url": "https://search.example.com/v1/rooms/%E6%9D%B1,%E8%A5%BF%202/books?%E8%AA%9E=%E6%B5%B7&%E8%AA%9E=%E5%A1%A9&%E6%9C%80%E5%88%9D=1901&%E6%9C%80%E5%BE%8C=1950"})),
+        (5, json!({"http": "POST", "url": "https://search.example.com/v1/books/b%2F1/marks", "headers": form, "body": {"タグ": ["修理", "急ぎ"], "部屋": "東", "棚": "3"}})),
+    ];
+    for (i, w) in want {
+        assert_eq!(got[i], w, "http_places.ja.flow, call {}", i + 1);
     }
 }
 
@@ -1817,6 +2066,35 @@ fn wire_cases(m: &Model) -> Vec<Value> {
                 let task = m.tasks.iter().find(|t| t.via(p) == Some(Via::Aws { service, action })).unwrap();
                 let mut input = call["args"].clone();
                 let name_of = |arn_or_url: &str| arn_or_url.rsplit([':', '/']).next().unwrap().to_string();
+                if api == "lambda:createEventSourceMapping" {
+                    // moto as the call needs it: the function, with a role Lambda can take, and the
+                    // stream it reads; the answer is moto's, and moto gives none of the errors
+                    if kind.is_some() {
+                        continue;
+                    }
+                    let setup = vec![
+                        moto_request("iam", "us-east-1", "/", "application/x-www-form-urlencoded; charset=utf-8", None, "Action=CreateRole&Version=2010-05-08&RoleName=wire&AssumeRolePolicyDocument=%7B%7D".into()),
+                        moto_request(
+                            "lambda",
+                            "ap-northeast-1",
+                            "/2015-03-31/functions",
+                            "application/json",
+                            None,
+                            json!({ "FunctionName": input["FunctionName"], "Runtime": "python3.13", "Role": "arn:aws:iam::123456789012:role/wire", "Handler": "index.handler", "Code": { "ZipFile": "UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==" } }).to_string(),
+                        ),
+                        moto_request("kinesis", "ap-northeast-1", "/", "application/x-amz-json-1.1", Some("Kinesis_20131202.CreateStream"), json!({ "StreamName": name_of(input["EventSourceArn"].as_str().unwrap()), "ShardCount": 1 }).to_string()),
+                    ];
+                    // the timestamps the task sends, in the forms of the API's model, and the ones of the answer the flow reads
+                    let reads: Vec<&str> = match &task.result {
+                        Some(Ty::Record(r)) => m.records[*r].fields.iter().filter(|(_, t)| matches!(t, Ty::Timestamp) || *t == Ty::Opt(Box::new(Ty::Timestamp))).map(|(f, _)| f.as_str()).collect(),
+                        _ => vec![],
+                    };
+                    let case = json!({ "kind": "aws", "service": service, "action": action, "input": input, "topics": [], "queues": [], "listen": null, "setup": setup, "timestamps": task.timestamps, "reads": reads });
+                    if seen.insert(case.to_string()) {
+                        cases.push(case);
+                    }
+                    continue;
+                }
                 let (target, is_topic) = match api {
                     "sns:publish" => (name_of(input["TopicArn"].as_str().unwrap()), true),
                     "sqs:sendMessage" => (name_of(input["QueueUrl"].as_str().unwrap()), false),
@@ -1851,15 +2129,110 @@ fn wire_cases(m: &Model) -> Vec<Value> {
     cases
 }
 
+/// A request that sets moto up for a case, which tools/wire sends to moto before the call: moto
+/// takes it unsigned, and knows the service by the scope of the credential it names.
+fn moto_request(service: &str, region: &str, path: &str, content_type: &str, target: Option<&str>, body: String) -> Value {
+    let mut headers = json!({
+        "Content-Type": content_type,
+        "Authorization": format!("AWS4-HMAC-SHA256 Credential=wire/20260101/{region}/{service}/aws4_request, SignedHeaders=host, Signature=wire"),
+    });
+    if let Some(t) = target {
+        headers["X-Amz-Target"] = json!(t);
+    }
+    json!({ "method": "POST", "path": path, "headers": headers, "body": body })
+}
+
+/// The milliseconds since 1970-01-01T00:00:00Z of a timestamp's text: RFC 3339 in UTC
+/// (`date-time`), or IMF-fixdate (`http-date`, `Mon, 16 Nov 2026 09:00:00 GMT`).
+fn millis_of(text: &str) -> Option<i64> {
+    if let Some(s) = dandori::model::moment_of(text) {
+        let fraction = text.get(19..)?.trim_start_matches('.').trim_end_matches('Z');
+        let ms: i64 = format!("{:0<3}", &fraction[..fraction.len().min(3)]).parse().ok()?;
+        return Some(s * 1000 + ms);
+    }
+    let parts: Vec<&str> = text.split_whitespace().collect();
+    let [_, day, month, year, time, "GMT"] = parts[..] else { return None };
+    let month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].iter().position(|m| *m == month)? + 1;
+    dandori::model::moment_of(&format!("{year}-{month:02}-{day:0>2}T{time}Z")).map(|s| s * 1000)
+}
+
+/// The text a default Transport gives back for the moment `ms` milliseconds after 1970: RFC 3339
+/// in UTC, with no zeros at the end of its fraction of a second.
+fn moment_text_ms(ms: i64) -> String {
+    let (s, f) = (ms.div_euclid(1000), ms.rem_euclid(1000));
+    let head = dandori::model::moment_head(s);
+    if f == 0 {
+        format!("{head}Z")
+    } else {
+        format!("{head}.{}Z", format!("{f:03}").trim_end_matches('0'))
+    }
+}
+
+/// An AWS call that moto answers itself (a case with `timestamps`): the request that went to moto
+/// has each timestamp of the input in the form the API's model says for where it goes, which the
+/// case's `timestamps` holds (`apis::Op::timestamps`); and each timestamp of moto's answer that
+/// the flow reads (`reads`) comes back from the Transport as the same moment, in RFC 3339 text in UTC.
+fn timestamps_on_the_wire(c: &Value, r: &Value, at: &str) {
+    let last = r["moto"].as_array().and_then(|calls| calls.last()).unwrap_or_else(|| panic!("{at}: nothing went to moto"));
+    let sent: Value = serde_json::from_str(last["body"].as_str().unwrap()).unwrap_or_else(|e| panic!("{at}: what went to moto is not JSON ({e}): {}", last["body"]));
+    fn held(want: &Value, input: &Value, sent: &Value, place: &str, at: &str) {
+        if input.is_null() {
+            assert!(sent.is_null(), "{at}: {place} has no value, and went as {sent}");
+            return;
+        }
+        match want {
+            Value::String(form) => {
+                let ms = millis_of(input.as_str().unwrap()).unwrap_or_else(|| panic!("{at}: {place} is not a timestamp: {input}"));
+                let ok = match form.as_str() {
+                    "epoch-seconds" => sent.as_f64().is_some_and(|x| (x * 1000.0).round() as i64 == ms),
+                    "date-time" | "http-date" => sent.as_str().and_then(millis_of) == Some(ms),
+                    _ => false,
+                };
+                assert!(ok, "{at}: {place} ({input}) went as {sent}, not as {form}");
+            }
+            Value::Object(by) => match (input, by.get("*")) {
+                (Value::Array(items), Some(each)) => {
+                    for (i, x) in items.iter().enumerate() {
+                        held(each, x, &sent[i], &format!("{place}[{i}]"), at);
+                    }
+                }
+                _ => {
+                    for (k, x) in input.as_object().into_iter().flatten() {
+                        if let Some(w) = by.get(k).or(by.get("*")) {
+                            held(w, x, &sent[k], &format!("{place}.{k}"), at);
+                        }
+                    }
+                }
+            },
+            _ => panic!("{at}: {place} has no form: {want}"),
+        }
+    }
+    held(&c["timestamps"], &c["input"], &sent, "the input", at);
+    let answered: Value = serde_json::from_str(last["answer"].as_str().unwrap()).unwrap_or_else(|e| panic!("{at}: moto's answer is not JSON ({e}): {}", last["answer"]));
+    for f in c["reads"].as_array().into_iter().flatten().filter_map(|f| f.as_str()) {
+        let want = match &answered[f] {
+            Value::Number(n) => moment_text_ms((n.as_f64().unwrap() * 1000.0).round() as i64),
+            Value::String(s) => moment_text_ms(millis_of(s).unwrap_or_else(|| panic!("{at}: moto answered {f} as {s}"))),
+            other => panic!("{at}: moto answered {f} as {other}"),
+        };
+        assert_eq!(r["returned"]["ok"][f], json!(want), "{at}: moto answered {f} as {}", answered[f]);
+    }
+}
+
 /// The default Transports — TypeScript's (fetch, the AWS SDK for JavaScript), Python's (the
 /// standard library, boto3) and Go's (net/http, the AWS SDK for Go v2, through the Go runner's
 /// --wire) — send the calls of every scenario to stand-ins on this machine
-/// (tools/wire): an HTTP request arrives with the method, the path, the query, the headers and
-/// the body the call has, JSON or URL-encoded; a Lambda invoke with the function and the
+/// (tools/wire): an HTTP request arrives with the method, the path, the query (the URL's text, as
+/// fetch sends it), the headers (each value's UTF-8) and the body the call has, JSON or URL-encoded
+/// (each item of a list under its name, and no pair for a value that is not there, DESIGN 43), and
+/// the cookie the options add joins the call's; a Lambda invoke with the function and the
 /// payload; an SNS message or an SQS message on moto, the AWS APIs' stand-in; and each gives
 /// back what the runners' stand-in Transport gives for the scenario's answer, an AWS error by
-/// the name the task declares. TypeScript and Python send the same text; Go's maps keep no order,
-/// so Go's JSON, query and form are held to theirs as values and as pairs. Nothing leaves the machine.
+/// the name the task declares. An AWS API that moto answers itself gets each timestamp in the
+/// form the API's Smithy model says (DESIGN 42), and the timestamps of moto's answer come back
+/// as RFC 3339 text in UTC. The three send the same query, and TypeScript and Python the same
+/// body; Go's maps keep no order, so Go's JSON and form are held to theirs as values and as pairs.
+/// Nothing leaves the machine.
 #[test]
 fn default_transports_send_what_the_calls_say() {
     need_node!();
@@ -1901,10 +2274,10 @@ fn default_transports_send_what_the_calls_say() {
             std::fs::write(&cases_file, serde_json::to_string(&cases).unwrap()).unwrap();
             let mut by_lang = Vec::new();
             for (lang, out) in [
-                ("TypeScript", Command::new("node").arg(wire.join("check.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&cases_file).arg(dir.join("ts.json")).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").env("OPENAI_API_KEY", "wire-openai-key").output().unwrap()),
-                ("Python", Command::new(&python).arg(wire.join("check.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&cases_file).arg(dir.join("py.json")).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").env("OPENAI_API_KEY", "wire-openai-key").output().unwrap()),
+                ("TypeScript", ritsu_testkit::run::finish(Command::new("node").arg(wire.join("check.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&cases_file).arg(dir.join("ts.json")).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").env("OPENAI_API_KEY", "wire-openai-key"), RUNNER_LIMIT, &format!("{}: the TypeScript check of the default Transport", rel(&f)))),
+                ("Python", ritsu_testkit::run::finish(Command::new(&python).arg(wire.join("check.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&cases_file).arg(dir.join("py.json")).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").env("OPENAI_API_KEY", "wire-openai-key"), RUNNER_LIMIT, &format!("{}: the Python check of the default Transport", rel(&f)))),
             ] {
-                assert!(out.status.success(), "{}: the {lang} check failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+                assert!(out.ok, "{}: the {lang} check failed:\n{}", rel(&f), out.stderr);
                 let results: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join(if lang == "Python" { "py.json" } else { "ts.json" })).unwrap()).unwrap();
                 for (c, r) in cases.iter().zip(&results) {
                     let at = || format!("{} ({lang}): {}", rel(&f), serde_json::to_string(c).unwrap());
@@ -1921,13 +2294,9 @@ fn default_transports_send_what_the_calls_say() {
                             let arrived = got["path"].as_str().unwrap();
                             let sent: String = path.bytes().map(|b| if b.is_ascii() { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
                             assert_eq!(arrived, sent, "{}: the path", at());
-                            let mut want_query = Vec::new();
-                            if !req["query"].is_null() {
-                                form_pairs(&req["query"], "", &mut want_query);
-                            }
-                            assert_eq!(got["query"], Value::Array(want_query), "{}: the query", at());
-                            for (k, v) in req["headers"].as_object().into_iter().flatten() {
-                                assert_eq!(got["headers"][k.to_lowercase()], *v, "{}: the header {k}", at());
+                            assert_eq!(got["rawQuery"], json!(query_sent(url)), "{}: the query", at());
+                            for (k, v) in headers_sent(req) {
+                                assert_eq!(got["headers"][&k], v, "{}: the header {k}", at());
                             }
                             assert_eq!(got["headers"]["x-dandori-check"], json!("wire"), "{}: the headers the options add", at());
                             // Jev's call carries TypeSafe's key, from TYPESAFE_API_KEY, and the Decisions API's
@@ -1944,9 +2313,7 @@ fn default_transports_send_what_the_calls_say() {
                             let want_body = if req["body"].is_null() {
                                 Value::Null
                             } else if req["form"] == json!(true) {
-                                let mut p = Vec::new();
-                                form_pairs(&req["body"], "", &mut p);
-                                Value::Array(p)
+                                Value::Array(form_pairs(&req["body"]))
                             } else {
                                 assert_eq!(got["headers"]["content-type"], json!("application/json"), "{}: the body's type", at());
                                 req["body"].clone()
@@ -1960,6 +2327,8 @@ fn default_transports_send_what_the_calls_say() {
                             assert!(r["received"]["invocationType"].is_null() || r["received"]["invocationType"] == json!("RequestResponse"), "{}: the invocation's type", at());
                             assert_eq!(r["returned"], c["reply"], "{}: what the Transport gave back", at());
                         }
+                        // an AWS call that moto answers itself: the timestamps that went, and those that came back
+                        _ if c.get("timestamps").is_some() => timestamps_on_the_wire(c, r, &at()),
                         _ => match c.get("error") {
                             Some(e) => assert_eq!(r["returned"]["error"], *e, "{}: the error's name ({})", at(), r["returned"]),
                             None => {
@@ -1994,12 +2363,12 @@ fn default_transports_send_what_the_calls_say() {
                     assert_eq!(keys(ts), keys(py), "{}: the fields of moto's answer differ between the languages: {case}", rel(&f));
                 }
             }
-            // the default Transport in Go: the same calls, and the same JSON; Go's maps keep no order, so it
-            // writes an object's keys, and a query's and a form's pairs, in the order of their names
+            // the default Transport in Go: the same calls, the same query, and the same JSON; Go's maps keep no
+            // order, so it writes an object's keys, and a form's pairs, in the order of their names
             if let Some(go) = go_runner() {
                 let results_file = dir.join("go.json");
-                let out = Command::new(&go.bin).arg("--wire").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results_file).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").env("OPENAI_API_KEY", "wire-openai-key").output().unwrap();
-                assert!(out.status.success(), "{}: the Go check failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+                let out = ritsu_testkit::run::finish(Command::new(&go.bin).arg("--wire").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results_file).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").env("OPENAI_API_KEY", "wire-openai-key"), RUNNER_LIMIT, &format!("{}: the Go check of the default Transport", rel(&f)));
+                assert!(out.ok, "{}: the Go check failed:\n{}", rel(&f), out.stderr);
                 let results: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
                 let sorted = |v: &Value| -> Value {
                     let mut a = v.as_array().cloned().unwrap_or_default();
@@ -2014,9 +2383,9 @@ fn default_transports_send_what_the_calls_say() {
                             let (got, want) = (&r["received"], &ts["received"]);
                             assert_eq!(got["method"], want["method"], "{}: the method", at());
                             assert_eq!(got["path"], want["path"], "{}: the path", at());
-                            assert_eq!(sorted(&got["query"]), sorted(&want["query"]), "{}: the query", at());
-                            for (k, v) in c["request"]["headers"].as_object().into_iter().flatten() {
-                                assert_eq!(got["headers"][k.to_lowercase()], *v, "{}: the header {k}", at());
+                            assert_eq!(got["rawQuery"], want["rawQuery"], "{}: the query", at());
+                            for (k, v) in headers_sent(&c["request"]) {
+                                assert_eq!(got["headers"][&k], v, "{}: the header {k}", at());
                             }
                             assert_eq!(got["headers"]["x-dandori-check"], json!("wire"), "{}: the headers the options add", at());
                             if c["request"]["typesafe"] == json!(true) {
@@ -2046,6 +2415,7 @@ fn default_transports_send_what_the_calls_say() {
                         }
                         _ => {
                             match c.get("error") {
+                                _ if c.get("timestamps").is_some() => timestamps_on_the_wire(c, r, &at()),
                                 Some(e) => assert_eq!(r["returned"]["error"], *e, "{}: the error's name ({})", at(), r["returned"]),
                                 None => assert!(r["returned"]["ok"]["MessageId"].is_string(), "{}: no message id in {}", at(), r["returned"]),
                             }
@@ -2081,7 +2451,7 @@ fn default_transports_send_what_the_calls_say() {
     if let Err(e) = outcome {
         std::panic::resume_unwind(e);
     }
-    assert!(checked > 0, "no call went through a Transport");
+    assert!(picked() || checked > 0, "no call went through a Transport");
 }
 
 /// What a flow's runs ask of its books, for books_run_on_postgres_tigerbeetle_and_mysql: the operations
@@ -2347,11 +2717,11 @@ fn books_run_on_postgres_tigerbeetle_and_mysql() {
     let run = |mut cmd: Command, input: &Value, name: &str| -> Result<Value, String> {
         let file = work.join(format!("{name}.json"));
         std::fs::write(&file, serde_json::to_string(input).unwrap()).unwrap();
-        let out = cmd.arg(&file).output().map_err(|e| e.to_string())?;
-        if !out.status.success() {
-            return Err(format!("{name}: the runner failed:\n{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
+        let out = ritsu_testkit::run::finish(cmd.arg(&file), RUNNER_LIMIT, &format!("{name}: the client of the books"));
+        if !out.ok {
+            return Err(format!("{name}: the runner failed:\n{}{}", out.stdout, out.stderr));
         }
-        serde_json::from_slice(&out.stdout).map_err(|e| format!("{name}: the runner's output is not JSON ({e}):\n{}", String::from_utf8_lossy(&out.stderr)))
+        serde_json::from_str(&out.stdout).map_err(|e| format!("{name}: the runner's output is not JSON ({e}):\n{}", out.stderr))
     };
 
     // TypeScript: beside chobo's tools/runner/node_modules, as chobo's runner is
@@ -2461,8 +2831,8 @@ fn books_run_on_postgres_tigerbeetle_and_mysql() {
                 // the SQL of every book, in the database the clients call
                 for name in books.keys() {
                     let sql = client(name, chobo::target::Target::Postgres, &work.join("sql"));
-                    let out = pg.psql("postgres").arg("-f").arg(&sql).output().unwrap();
-                    assert!(out.status.success(), "{name}: the SQL does not load:\n{}", String::from_utf8_lossy(&out.stderr));
+                    let out = ritsu_testkit::run::finish(pg.psql("postgres").arg("-f").arg(&sql), RUNNER_LIMIT, &format!("{name}: loading the SQL on PostgreSQL"));
+                    assert!(out.ok, "{name}: the SQL does not load:\n{}", out.stderr);
                 }
                 json!({ "host": pg.socket.to_str().unwrap(), "port": pg.port, "database": "postgres", "user": pg.user })
             }
@@ -2472,8 +2842,8 @@ fn books_run_on_postgres_tigerbeetle_and_mysql() {
                 let db = my.database("books").unwrap();
                 for name in books.keys() {
                     let sql = client(name, chobo::target::Target::MySql, &work.join("mysql"));
-                    let out = my.mysql(&db).stdin(std::fs::File::open(&sql).unwrap()).output().unwrap();
-                    assert!(out.status.success(), "{name}: the tables do not load on {}:\n{}", my.label, String::from_utf8_lossy(&out.stderr));
+                    let out = ritsu_testkit::run::finish_with_input(&mut my.mysql(&db), Some(&std::fs::read(&sql).unwrap()), RUNNER_LIMIT, &format!("{name}: loading the tables on {}", my.label));
+                    assert!(out.ok, "{name}: the tables do not load on {}:\n{}", my.label, out.stderr);
                 }
                 json!({ "host": my.host, "port": my.port, "database": db, "user": my.user })
             }
@@ -2703,12 +3073,18 @@ fn temporal_replays_the_recorded_histories() {
                 }
             }
             let results = dir.join("replayed.json");
-            let out = match lang {
-                Sdk::Py => Command::new(python.as_ref().unwrap()).arg(root().join("tools/temporal-python/run.py")).arg("--replay").arg(dir.join(lang.package(&m))).arg(&kept).arg(&results).output().unwrap(),
-                Sdk::Ts => Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg("--replay").arg(dir.join(lang.package(&m))).arg(&kept).arg(&results).output().unwrap(),
-                Sdk::Go => Command::new(&go.unwrap().bin).arg("--replay").arg(go.unwrap().key(r)).arg(&kept).arg(&results).output().unwrap(),
+            let mut cmd = match lang {
+                Sdk::Py => Command::new(python.as_ref().unwrap()),
+                Sdk::Ts => Command::new("node"),
+                Sdk::Go => Command::new(&go.unwrap().bin),
             };
-            assert!(out.status.success(), "{r}: the replay failed:\n{}", String::from_utf8_lossy(&out.stderr));
+            match lang {
+                Sdk::Py => cmd.arg(root().join("tools/temporal-python/run.py")).arg("--replay").arg(dir.join(lang.package(&m))),
+                Sdk::Ts => cmd.arg(root().join("tools/temporal/run.mjs")).arg("--replay").arg(dir.join(lang.package(&m))),
+                Sdk::Go => cmd.arg("--replay").arg(go.unwrap().key(r)),
+            };
+            let out = ritsu_testkit::run::finish(cmd.arg(&kept).arg(&results), RUNNER_LIMIT, &format!("{r}: the replay in {}", lang.name()));
+            assert!(out.ok, "{r}: the replay failed:\n{}", out.stderr);
             let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
             for g in &got {
                 assert!(g["error"].is_null(), "{r}: the kept history {} does not replay with the code dandori writes now ({}): {}", g["file"], lang.name(), g["error"]);
@@ -2766,7 +3142,7 @@ fn generated_typescript_type_checks() {
                     if m.rules[*r].date().is_some() {
                         koyomi_gen(&m.rules[*r].info.path, &code.join("koyomi"), koyomi::naming::Target::TypeScript);
                     } else {
-                        rulec_gen(&m.rules[*r].info.path, &code.join("rulec"));
+                        rulec_gen(&m.rules[*r].info.path, &code.join("rulec"), false);
                     }
                 }
             }
@@ -2774,20 +3150,124 @@ fn generated_typescript_type_checks() {
             let _ = std::fs::remove_file(&link);
             std::os::unix::fs::symlink(root().join(modules), &link).unwrap();
             std::fs::write(code.join("shims.d.ts"), shims).unwrap();
+            // a rule's module imports the module of the enums file it reads enums from by its `.ts`
+            // name: rules.ts says how tsc compiles them then (DESIGN 28.8), and Argo's caller, which
+            // Node runs as it is, has its imports by their `.ts` names too
+            let rules_ts = files.iter().find(|(n, _)| n.ends_with("/rules.ts")).map(|(_, t)| t.as_str()).unwrap_or_default();
+            let rewrite = rules_ts.contains("`rewriteRelativeImportExtensions`");
+            let reads_enums = target == "temporal-typescript" && called.iter().any(|r| !m.rules[*r].enums_modules.is_empty());
+            assert_eq!(rewrite, reads_enums, "{}: rules.ts for {target} should say how tsc compiles a rule's module that imports an enums file's exactly when a rule reads one:\n{rules_ts}", rel(&f));
             let tsconfig = json!({
                 "compilerOptions": {
                     "strict": true, "noEmit": true, "module": "nodenext", "moduleResolution": "nodenext", "target": "es2022",
-                    "skipLibCheck": true, "types": ["node"], "typeRoots": [types], "allowImportingTsExtensions": argo
+                    "skipLibCheck": true, "types": ["node"], "typeRoots": [types], "allowImportingTsExtensions": argo,
+                    "rewriteRelativeImportExtensions": rewrite
                 },
                 "include": ["*.ts"]
             });
             std::fs::write(code.join("tsconfig.json"), serde_json::to_string_pretty(&tsconfig).unwrap()).unwrap();
             let out = Command::new(&tsc).arg("-p").arg(code.join("tsconfig.json")).output().unwrap();
             assert!(out.status.success(), "{}: the TypeScript for {target} does not type-check:\n{}{}", rel(&f), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            if rewrite {
+                // compiled as rules.ts says, the rules and the modules they import load under Node
+                let mut emit = tsconfig.clone();
+                emit["compilerOptions"]["noEmit"] = json!(false);
+                emit["compilerOptions"]["outDir"] = json!("compiled");
+                std::fs::write(code.join("tsconfig.emit.json"), serde_json::to_string_pretty(&emit).unwrap()).unwrap();
+                let out = Command::new(&tsc).arg("-p").arg(code.join("tsconfig.emit.json")).output().unwrap();
+                assert!(out.status.success(), "{}: tsc does not compile the TypeScript for {target}:\n{}{}", rel(&f), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+                let out = Command::new("node").arg("-e").arg("require('./compiled/rules.js')").current_dir(&code).output().unwrap();
+                assert!(out.status.success(), "{}: the JavaScript tsc compiles from rules.ts for {target} does not load:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            }
             checked += 1;
         }
     }
     eprintln!("type-checked the TypeScript of {checked} build(s) with tsc --strict");
+}
+
+/// The Python dandori writes — for Temporal and for pydantic-graph — passes `mypy --strict`
+/// (DANDORI_MYPY, or the mypy on PATH), with rulec's and koyomi's Python for the rules and the
+/// dates it calls, against the packages of each platform in its tools' `.venv` (DESIGN 34). No
+/// line is let off but the two kinds pydantic-graph's type variables need, which say why.
+#[test]
+fn generated_python_type_checks() {
+    let mypy = std::env::var_os("DANDORI_MYPY").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("mypy"));
+    let pythons = [("temporal-python", root().join("tools/temporal-python/.venv/bin/python")), ("pydantic-graph", root().join("tools/pydantic-graph/.venv/bin/python"))];
+    let has = || pythons.iter().all(|(_, p)| p.exists()) && Command::new(&mypy).arg("--version").output().is_ok_and(|o| o.status.success());
+    if !ready(Need::Python, has, "mypy (on PATH, or DANDORI_MYPY), tools/temporal-python/.venv or tools/pydantic-graph/.venv is missing") {
+        return;
+    }
+    // one cache a platform, which keeps what mypy read of the SDK from one package to the next
+    let cache = scratch("mypy-cache");
+    let readable = readable_pydantic_graph(&pythons[1].1);
+    let mut checked = 0;
+    for f in runnable() {
+        let (_, c) = check_file(&f).unwrap();
+        let m = c.model.expect("the flows pass check");
+        for (target, python) in &pythons {
+            let built = if *target == "temporal-python" { dandori::temporal_py::build(&m) } else { dandori::pydantic_graph::build(&m) };
+            let files = match built {
+                Ok(files) => files,
+                Err(d) if d.iter().all(|x| x.code == "E050") => continue,
+                Err(d) => panic!("{} does not build for {target}: {}", rel(&f), d[0].en),
+            };
+            let dir = scratch(&format!("mypy-{target}-{}", key(&f)));
+            for (name, text) in &files {
+                let p = dir.join(name);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(&p, text).unwrap();
+            }
+            let package = dandori::render::ident(&m.name);
+            let code = dir.join(&package);
+            // the rules whose code goes with the workflow: rulec's Python, put inside the package as
+            // rules.py says, and koyomi's for a date
+            let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
+            for r in &called {
+                if m.rules[*r].date().is_some() {
+                    koyomi_gen(&m.rules[*r].info.path, &code.join("koyomi"), koyomi::naming::Target::Python);
+                } else {
+                    rulec_gen(&m.rules[*r].info.path, &code.join("rulec"), true);
+                }
+            }
+            let out = Command::new(&mypy).current_dir(&dir).args(["--strict", "--no-color-output", "--cache-dir"]).arg(cache.join(target)).arg("--python-executable").arg(python).args(["-p", &package]).output().unwrap();
+            let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            assert!(out.status.success() && text.contains("source file"), "{}: mypy --strict finds fault with the Python for {target}:\n{text}", rel(&f));
+            if *target == "pydantic-graph" {
+                // and as a mypy that reads pydantic-graph's type variables reads it (DESIGN 38)
+                let out = Command::new(&mypy).current_dir(&dir).env("MYPYPATH", &readable).arg("--config-file").arg(readable.join("mypy.ini")).args(["--no-color-output", "--cache-dir"]).arg(cache.join("pydantic-graph-readable")).arg("--python-executable").arg(python).args(["-p", &package]).output().unwrap();
+                let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+                assert!(out.status.success() && text.contains("source file"), "{}: mypy --strict, reading pydantic-graph's type variables, finds fault with the Python for {target}:\n{text}", rel(&f));
+            }
+            checked += 1;
+        }
+    }
+    assert!(picked() || checked > 100, "only {checked} package(s) type-checked");
+    eprintln!("type-checked the Python of {checked} build(s) with mypy --strict");
+}
+
+/// pydantic-graph as a mypy that reads its type variables would read it: a copy of the package of
+/// `python` whose `TypeVar(…, infer_variance=True)` are type variables mypy reads (mypy 2.4.0 does
+/// not read the argument, and takes the classes for ones without type parameters), with a
+/// `mypy.ini` that is `--strict` and leaves the copy's own lines alone. The generated Python passes
+/// both readings: the lines that give the classes type parameters say why they are quiet.
+fn readable_pydantic_graph(python: &Path) -> PathBuf {
+    let out = Command::new(python).args(["-c", "import os, pydantic_graph; print(os.path.dirname(pydantic_graph.__file__))"]).output().unwrap();
+    let from = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
+    let dir = scratch("mypy-readable");
+    let copy = dir.join("pydantic_graph");
+    std::fs::create_dir_all(&copy).unwrap();
+    let mut variables = 0;
+    for e in std::fs::read_dir(&from).unwrap().flatten() {
+        let p = e.path();
+        if p.extension().is_some_and(|x| x == "py" || x == "typed") {
+            let text = std::fs::read_to_string(&p).unwrap();
+            variables += text.matches("infer_variance=True").count();
+            std::fs::write(copy.join(e.file_name()), text.replace(", infer_variance=True", "")).unwrap();
+        }
+    }
+    assert!(variables > 0, "{}: no TypeVar(…, infer_variance=True) to read", from.display());
+    std::fs::write(dir.join("mypy.ini"), "[mypy]\nstrict = True\n\n[mypy-pydantic_graph.*]\nignore_errors = True\n").unwrap();
+    dir
 }
 
 /// A Go module of the Go that dandori writes for flows, with the rules as rulec generates them: the
@@ -2821,7 +3301,11 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
             Some(d) => format!("koyomi/go/{}", ritsu_emit::ident::go_package(&d.file_alias)),
             None => m.rules[r].info.go.module.clone(),
         };
-        let rules: Vec<(String, PathBuf)> = called.iter().map(|r| (import_of(*r), m.rules[*r].info.path.clone())).collect();
+        let mut rules: Vec<(String, PathBuf)> = called.iter().map(|r| (import_of(*r), m.rules[*r].info.path.clone())).collect();
+        // the packages of the `enums` files the rules read enums from, which go.mod requires and
+        // replaces too, as rules.go says (DESIGN 28.8)
+        let enums: std::collections::BTreeMap<String, PathBuf> = called.iter().flat_map(|r| m.rules[*r].enums_modules.iter().map(|e| (e.go.clone(), e.file.clone()))).collect();
+        rules.extend(enums.iter().map(|(p, f)| (p.clone(), f.clone())));
         // the first module whose rules of these names are these rules
         let at = modules.iter().position(|(_, by)| rules.iter().all(|(p, path)| by.get(p).is_none_or(|x| x == path))).unwrap_or_else(|| {
             let dir = scratch(&format!("go-{name}-{}", modules.len()));
@@ -2866,7 +3350,7 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
             }
             let p = ru.info.go.module.clone();
             if !by.contains_key(&p) {
-                rulec_gen(&ru.info.path, &module.dir.join("rulec"));
+                rulec_gen(&ru.info.path, &module.dir.join("rulec"), false);
                 let mut gomod = std::fs::read_to_string(module.dir.join("go.mod")).unwrap();
                 gomod.push_str(&format!("\nrequire {p} v0.0.0\n\nreplace {p} => ./rulec/go/{p}\n"));
                 std::fs::write(module.dir.join("go.mod"), gomod).unwrap();
@@ -2875,6 +3359,24 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
             let file = module.dir.join(format!("vectors-{k}-{}.jsonl", dandori::render::ident(&ru.name)));
             std::fs::write(&file, rulec_vectors(&ru.info.path)).unwrap();
             vectors.push((dandori::render::rule_activity(&ru.name), file));
+        }
+        // what else rules.go says go.mod requires and replaces: the package of each `enums` file the
+        // rules read enums from, which `rulec gen` wrote beside theirs
+        let rules_go = files.iter().find(|(n, _)| n.ends_with("rules.go")).map(|(_, t)| t.as_str()).unwrap_or_default();
+        let said: Vec<&str> = rules_go.lines().filter_map(|l| l.strip_prefix("//\trequire ")?.strip_suffix(" v0.0.0")).filter(|p| !p.starts_with("koyomi/")).collect();
+        for p in enums.keys() {
+            assert!(said.contains(&p.as_str()), "{}: rules.go does not say to require the package {p}, which a rule's package imports:\n{rules_go}", rel(f));
+        }
+        for p in said {
+            if by.contains_key(p) {
+                continue;
+            }
+            let file = enums.get(p).unwrap_or_else(|| panic!("{}: rules.go says to require {p}, which is no rule's package and no enums file's", rel(f)));
+            assert!(module.dir.join("rulec/go").join(p).join("go.mod").is_file(), "{}: rulec gen did not write the package {p} rules.go names", rel(f));
+            let mut gomod = std::fs::read_to_string(module.dir.join("go.mod")).unwrap();
+            gomod.push_str(&format!("\nrequire {p} v0.0.0\n\nreplace {p} => ./rulec/go/{p}\n"));
+            std::fs::write(module.dir.join("go.mod"), gomod).unwrap();
+            by.insert(p.to_string(), file.clone());
         }
         let import = format!("gocheck/flows/{k}/{}", dandori::temporal_go::package(&m));
         module.packages.push(GoPackage { flow: rel(f), import, vectors });
@@ -2947,7 +3449,8 @@ fn rule_glue_answers_the_rulec_vectors() {
                     koyomi_gen(&m.rules[*other].info.path, &dir.join("koyomi"), koyomi::naming::Target::TypeScript);
                     koyomi_gen(&m.rules[*other].info.path, &dir.join("koyomi"), koyomi::naming::Target::Python);
                 } else {
-                    rulec_gen(&m.rules[*other].info.path, &dir.join("rulec"));
+                    // the Python at the top of its directory, as the Lambda function's handler says
+                    rulec_gen(&m.rules[*other].info.path, &dir.join("rulec"), false);
                 }
             }
             let vectors = glue_vectors(&m, ri);
@@ -3309,17 +3812,17 @@ fn an_update_id_is_made_alike_by_the_reference_typescript_python_and_go() {
         sha256(&canonical(&fffd(&read)))
     };
 
-    let ts = Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg("--update-ids").arg(&packages[0]).arg(dir.join("cases.json")).arg(dir.join("ts.json")).output().unwrap();
-    assert!(ts.status.success(), "tools/temporal/run.mjs --update-ids failed:\n{}", String::from_utf8_lossy(&ts.stderr));
-    let py = Command::new(python.as_ref().unwrap()).arg(root().join("tools/temporal-python/run.py")).arg("--update-ids").arg(&packages[1]).arg(dir.join("cases.json")).arg(dir.join("py.json")).output().unwrap();
-    assert!(py.status.success(), "tools/temporal-python/run.py --update-ids failed:\n{}", String::from_utf8_lossy(&py.stderr));
+    let ts = ritsu_testkit::run::finish(Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg("--update-ids").arg(&packages[0]).arg(dir.join("cases.json")).arg(dir.join("ts.json")), RUNNER_LIMIT, "the update ids in TypeScript");
+    assert!(ts.ok, "tools/temporal/run.mjs --update-ids failed:\n{}", ts.stderr);
+    let py = ritsu_testkit::run::finish(Command::new(python.as_ref().unwrap()).arg(root().join("tools/temporal-python/run.py")).arg("--update-ids").arg(&packages[1]).arg(dir.join("cases.json")).arg(dir.join("py.json")), RUNNER_LIMIT, "the update ids in Python");
+    assert!(py.ok, "tools/temporal-python/run.py --update-ids failed:\n{}", py.stderr);
     let mut made: Vec<(&str, Vec<Value>)> = Vec::new();
     for (lang, file) in [("TypeScript", "ts.json"), ("Python", "py.json")] {
         made.push((lang, serde_json::from_str(&std::fs::read_to_string(dir.join(file)).unwrap()).unwrap()));
     }
     if let Some(go) = go_runner() {
-        let out = Command::new(&go.bin).arg("--update-ids").arg(go.key(f)).arg(dir.join("cases.json")).arg(dir.join("go.json")).output().unwrap();
-        assert!(out.status.success(), "the Go runner's --update-ids failed:\n{}", String::from_utf8_lossy(&out.stderr));
+        let out = ritsu_testkit::run::finish(Command::new(&go.bin).arg("--update-ids").arg(go.key(f)).arg(dir.join("cases.json")).arg(dir.join("go.json")), RUNNER_LIMIT, "the update ids in Go");
+        assert!(out.ok, "the Go runner's --update-ids failed:\n{}", out.stderr);
         made.push(("Go", serde_json::from_str(&std::fs::read_to_string(dir.join("go.json")).unwrap()).unwrap()));
     }
     let mut wrong = Vec::new();
@@ -3415,14 +3918,12 @@ fn pydantic_graph_runs_as_the_reference_says() {
         let results_file = dir.join("results.json");
         let spec = json!({ "own": own, "rules": rules, "http": http, "aws": aws, "runs": runs });
         std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
-        let out = Command::new(&python)
-            .arg(root().join("tools/pydantic-graph/run.py"))
-            .arg(dir.join(dandori::pydantic_graph::package(&m)))
-            .arg(&runs_file)
-            .arg(&results_file)
-            .output()
-            .unwrap();
-        assert!(out.status.success(), "{}: the pydantic-graph runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+        let out = ritsu_testkit::run::finish(
+            Command::new(&python).arg(root().join("tools/pydantic-graph/run.py")).arg(dir.join(dandori::pydantic_graph::package(&m))).arg(&runs_file).arg(&results_file),
+            RUNNER_LIMIT,
+            &format!("{}: pydantic-graph", rel(&f)),
+        );
+        assert!(out.ok, "{}: the pydantic-graph runner failed:\n{}", rel(&f), out.stderr);
         let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
         compare("the pydantic-graph graph", &f, &references, &got);
         eprintln!("{}: compared {} run(s) on pydantic-graph; left out {left_out} with a task's timeout", rel(&f), references.len());
@@ -3587,8 +4088,8 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
             let io_file = dir.join("io.ts");
             std::fs::write(&io_file, &io.1).unwrap();
             let results = dir.join("results-ts.json");
-            let out = Command::new("node").arg("--no-warnings").arg(root().join("tools/agents/check.mjs")).arg(&io_file).arg(&cases_file).arg(&results).output().unwrap();
-            assert!(out.status.success(), "{}: tools/agents/check.mjs failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            let out = ritsu_testkit::run::finish(Command::new("node").arg("--no-warnings").arg(root().join("tools/agents/check.mjs")).arg(&io_file).arg(&cases_file).arg(&results), RUNNER_LIMIT, &format!("{}: the agents' default Transport in TypeScript", rel(&f)));
+            assert!(out.ok, "{}: tools/agents/check.mjs failed:\n{}", rel(&f), out.stderr);
             check("the default Transport in TypeScript", read(&results), &expected);
             eprintln!("{}: the default Transport in TypeScript asked what Step Functions asks in {} case(s)", rel(&f), cases.len());
         }
@@ -3598,15 +4099,15 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
             let io_file = dir.join("io.py");
             std::fs::write(&io_file, &io.1).unwrap();
             let results = dir.join("results-py.json");
-            let out = Command::new(&python).arg(root().join("tools/agents/check.py")).arg(&io_file).arg(&cases_file).arg(&results).output().unwrap();
-            assert!(out.status.success(), "{}: tools/agents/check.py failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            let out = ritsu_testkit::run::finish(Command::new(&python).arg(root().join("tools/agents/check.py")).arg(&io_file).arg(&cases_file).arg(&results), RUNNER_LIMIT, &format!("{}: the agents' default Transport in Python", rel(&f)));
+            assert!(out.ok, "{}: tools/agents/check.py failed:\n{}", rel(&f), out.stderr);
             check("the default Transport in Python", read(&results), &expected);
             eprintln!("{}: the default Transport in Python asked what Step Functions asks in {} case(s)", rel(&f), cases.len());
         }
         if let Some(go) = go_runner() {
             let results = dir.join("results-go.json");
-            let out = Command::new(&go.bin).arg("--agents").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results).output().unwrap();
-            assert!(out.status.success(), "{}: the Go check of the agents failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            let out = ritsu_testkit::run::finish(Command::new(&go.bin).arg("--agents").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results), RUNNER_LIMIT, &format!("{}: the agents' default Transport in Go", rel(&f)));
+            assert!(out.ok, "{}: the Go check of the agents failed:\n{}", rel(&f), out.stderr);
             // Go's maps keep no order, so Go writes the input's JSON text with its keys in the order of their
             // names: the text the model reads is compared as the JSON it is
             fn as_json(v: &Value) -> Value {
@@ -3726,8 +4227,8 @@ fn open_responses_agents_answer_on_ollama() {
             let io_file = dir.join("io.ts");
             std::fs::write(&io_file, &files.iter().find(|(n, _)| n.ends_with("/io.ts")).unwrap().1).unwrap();
             let results = dir.join("results-ts.json");
-            let out = Command::new("node").arg("--no-warnings").arg(root().join("tools/agents/check.mjs")).arg(&io_file).arg(&cases_file).arg(&results).output().unwrap();
-            assert!(out.status.success(), "{}: tools/agents/check.mjs failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            let out = ritsu_testkit::run::finish(Command::new("node").arg("--no-warnings").arg(root().join("tools/agents/check.mjs")).arg(&io_file).arg(&cases_file).arg(&results), LONG_LIMIT, &format!("{}: the agents' default Transport in TypeScript (Ollama)", rel(&f)));
+            assert!(out.ok, "{}: tools/agents/check.mjs failed:\n{}", rel(&f), out.stderr);
             check("TypeScript", &results);
             sent += cases.len();
         }
@@ -3736,15 +4237,15 @@ fn open_responses_agents_answer_on_ollama() {
             let io_file = dir.join("io.py");
             std::fs::write(&io_file, &files.iter().find(|(n, _)| n.ends_with("/io.py")).unwrap().1).unwrap();
             let results = dir.join("results-py.json");
-            let out = Command::new(&python).arg(root().join("tools/agents/check.py")).arg(&io_file).arg(&cases_file).arg(&results).output().unwrap();
-            assert!(out.status.success(), "{}: tools/agents/check.py failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            let out = ritsu_testkit::run::finish(Command::new(&python).arg(root().join("tools/agents/check.py")).arg(&io_file).arg(&cases_file).arg(&results), LONG_LIMIT, &format!("{}: the agents' default Transport in Python (Ollama)", rel(&f)));
+            assert!(out.ok, "{}: tools/agents/check.py failed:\n{}", rel(&f), out.stderr);
             check("Python", &results);
             sent += cases.len();
         }
         if let Some(go) = go_runner() {
             let results = dir.join("results-go.json");
-            let out = Command::new(&go.bin).arg("--agents").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results).output().unwrap();
-            assert!(out.status.success(), "{}: the Go check of the agents failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            let out = ritsu_testkit::run::finish(Command::new(&go.bin).arg("--agents").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results), LONG_LIMIT, &format!("{}: the agents' default Transport in Go (Ollama)", rel(&f)));
+            assert!(out.ok, "{}: the Go check of the agents failed:\n{}", rel(&f), out.stderr);
             check("Go", &results);
             sent += cases.len();
         }
@@ -3954,8 +4455,8 @@ fn decisions_for_real(r: &RealDecisions) -> usize {
         let io_ts = dir.join("io.ts");
         std::fs::write(&io_ts, &ts.iter().find(|(n, _)| n.ends_with("/io.ts")).unwrap().1).unwrap();
         let results = dir.join("results-ts.json");
-        let out = Command::new("node").arg("--no-warnings").arg(root().join("tools/jev/check.mjs")).arg(&io_ts).arg(&cases_file).arg(&results).output().unwrap();
-        assert!(out.status.success(), "{}: tools/jev/check.mjs failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+        let out = ritsu_testkit::run::finish(Command::new("node").arg("--no-warnings").arg(root().join("tools/jev/check.mjs")).arg(&io_ts).arg(&cases_file).arg(&results), RUNNER_LIMIT, &format!("{}: the decision tasks in TypeScript", rel(&f)));
+        assert!(out.ok, "{}: tools/jev/check.mjs failed:\n{}", rel(&f), out.stderr);
         check("TypeScript", &results);
         sent += cases.len();
         if python {
@@ -3963,8 +4464,8 @@ fn decisions_for_real(r: &RealDecisions) -> usize {
             let io_py = dir.join("io.py");
             std::fs::write(&io_py, &py.iter().find(|(n, _)| n.ends_with("/io.py")).unwrap().1).unwrap();
             let results = dir.join("results-py.json");
-            let out = Command::new("python3").arg(root().join("tools/jev/check.py")).arg(&io_py).arg(&cases_file).arg(&results).output().unwrap();
-            assert!(out.status.success(), "{}: tools/jev/check.py failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            let out = ritsu_testkit::run::finish(Command::new("python3").arg(root().join("tools/jev/check.py")).arg(&io_py).arg(&cases_file).arg(&results), RUNNER_LIMIT, &format!("{}: the decision tasks in Python", rel(&f)));
+            assert!(out.ok, "{}: tools/jev/check.py failed:\n{}", rel(&f), out.stderr);
             check("Python", &results);
             sent += cases.len();
         } else {
@@ -3972,8 +4473,8 @@ fn decisions_for_real(r: &RealDecisions) -> usize {
         }
         if let Some(go) = go_runner() {
             let results = dir.join("results-go.json");
-            let out = Command::new(&go.bin).arg("--jev").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results).output().unwrap();
-            assert!(out.status.success(), "{}: the Go check of the decision tasks failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            let out = ritsu_testkit::run::finish(Command::new(&go.bin).arg("--jev").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results), RUNNER_LIMIT, &format!("{}: the decision tasks in Go", rel(&f)));
+            assert!(out.ok, "{}: the Go check of the decision tasks failed:\n{}", rel(&f), out.stderr);
             check("Go", &results);
             sent += cases.len();
         }
@@ -4022,7 +4523,8 @@ fn python_rules_answer_the_rulec_vectors() {
                 if m.rules[*r].date().is_some() {
                     koyomi_gen(&m.rules[*r].info.path, &pkg.join("koyomi"), koyomi::naming::Target::Python);
                 } else {
-                    rulec_gen(&m.rules[*r].info.path, &pkg.join("rulec"));
+                    // inside the package, as rules.py says
+                    rulec_gen(&m.rules[*r].info.path, &pkg.join("rulec"), true);
                 }
             }
             for r in &called {
@@ -4105,14 +4607,12 @@ fn durable_one(f: &Path) {
         let results_file = dir.join("results.json");
         let spec = json!({ "own": own, "children": children, "http": http, "aws": aws, "runs": runs });
         std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
-        let out = Command::new("node")
-            .arg(root().join("tools/durable/run.mjs"))
-            .arg(dir.join(dandori::render::ident(&m.name)))
-            .arg(&runs_file)
-            .arg(&results_file)
-            .output()
-            .unwrap();
-        assert!(out.status.success(), "{}: the durable runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+        let out = ritsu_testkit::run::finish(
+            Command::new("node").arg(root().join("tools/durable/run.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&runs_file).arg(&results_file),
+            RUNNER_LIMIT,
+            &format!("{}: durable functions", rel(&f)),
+        );
+        assert!(out.ok, "{}: the durable runner failed:\n{}", rel(&f), out.stderr);
         let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
         compare("the durable handler", &f, &references, &got);
         eprintln!("{}: compared {} run(s) on Lambda durable functions; left out {left_out} with a timeout", rel(&f), references.len());
@@ -4124,7 +4624,8 @@ fn argo_ready() -> Result<(), String> {
     if !Command::new(&argo).arg("version").output().map(|o| o.status.success()).unwrap_or(false) {
         return Err("the argo command is missing; put it on the PATH or in DANDORI_ARGO".into());
     }
-    let mock = Command::new("kubectl").args(["--context", "kind-dandori", "-n", "argo", "get", "deploy", "dandori-mock"]).output();
+    // a cluster that does not answer is not set up either (kubectl waits without end by default)
+    let mock = Command::new("kubectl").args(["--context", "kind-dandori", "--request-timeout=60s", "-n", "argo", "get", "deploy", "dandori-mock"]).output();
     if !mock.map(|o| o.status.success()).unwrap_or(false) {
         return Err("the kind cluster dandori is not set up; run tools/argo/setup.sh".into());
     }
@@ -4143,7 +4644,7 @@ struct ArgoFlow {
     bound: u64,
     results: PathBuf,
     /// what the runner said when it ended
-    runner: std::process::Output,
+    runner: ritsu_testkit::run::Ran,
 }
 
 /// How many flows' runners go at once on Argo: as many as the machine has cores (`DANDORI_AT_ONCE`
@@ -4229,7 +4730,7 @@ fn ready_on_argo_as(f: PathBuf, late: bool) -> Option<ArgoFlow> {
         if late {
             c.env("DANDORI_ARGO_LATE_OUTPUTS", "1");
         }
-        c.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped()).output().unwrap()
+        ritsu_testkit::run::finish(&mut c, RUNNER_LIMIT, &format!("{}: Argo", rel(&f)))
     });
     Some(ArgoFlow { f, references, left_out, real, bound: dandori::check::bound(&m, &dandori::check::ARGO_COST), results, runner })
 }
@@ -4254,7 +4755,7 @@ fn argo_runs_as_the_reference_says() {
     for flow in going {
         let f = &flow.f;
         let out = &flow.runner;
-        assert!(out.status.success(), "{}: the Argo runner failed:\n{}", rel(f), String::from_utf8_lossy(&out.stderr));
+        assert!(out.ok, "{}: the Argo runner failed:\n{}", rel(f), out.stderr);
         let got: Value = serde_json::from_str(&std::fs::read_to_string(&flow.results).unwrap()).unwrap();
         // the nodes each run made, against what E040 reckons with, and how long the longest took
         let mut most = 0;
@@ -4309,7 +4810,7 @@ fn argo_runs_on_when_a_failed_calls_outputs_come_late() {
     }
     let f = root().join("tests/flows/agents.flow");
     let flow = ready_on_argo_as(f.clone(), true).expect("the flow is for Argo");
-    assert!(flow.runner.status.success(), "{}: the Argo runner failed:\n{}", rel(&f), String::from_utf8_lossy(&flow.runner.stderr));
+    assert!(flow.runner.ok, "{}: the Argo runner failed:\n{}", rel(&f), flow.runner.stderr);
     let got: Value = serde_json::from_str(&std::fs::read_to_string(&flow.results).unwrap()).unwrap();
     let mut lost = 0;
     let runs: Vec<Value> = got["runs"]
@@ -4564,7 +5065,7 @@ fn go_limits_runner() -> Option<&'static PathBuf> {
                 std::fs::write(&p, text).unwrap();
             }
             let callbacks: Vec<String> = m.tasks.iter().filter(|t| t.callback).map(|t| dandori::temporal_go::task_function(&t.name)).collect();
-            entries.push(json!({ "key": key, "dir": out.join(dandori::temporal_go::package(&m)), "patch": "limits", "callbacks": callbacks }));
+            entries.push(json!({ "key": key, "dir": out.join(dandori::temporal_go::package(&m)), "patch": "limits", "callbacks": callbacks, "names": dandori::temporal_go::renamed(&m) }));
         }
         let manifest = dir.join("manifest.json");
         std::fs::write(&manifest, serde_json::to_string_pretty(&entries).unwrap()).unwrap();
@@ -4622,9 +5123,9 @@ fn temporal_limits(wf: Sdk, name: &str) {
             c
         }
     };
-    let out = run.arg(&runs_file).arg(&results_file).arg(&histories).env("DANDORI_LIMITS", "1").output().unwrap();
     let what = format!("the Temporal workflow in {}", wf.name());
-    assert!(out.status.success(), "{}: the runner of {what} failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(run.arg(&runs_file).arg(&results_file).arg(&histories).env("DANDORI_LIMITS", "1"), RUNNER_LIMIT, &format!("{}: the limits on {what}", rel(&f)));
+    assert!(out.ok, "{}: the runner of {what} failed:\n{}", rel(&f), out.stderr);
     let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     for g in &mut got {
         let o = g.as_object_mut().unwrap();
@@ -4696,8 +5197,8 @@ fn rule_limits_hold_on_localstack() {
     let results_file = dir.join("results.json");
     let plain: Vec<Value> = runs.iter().map(|r| json!({ "id": r["id"], "input": r["input"] })).collect();
     std::fs::write(&spec_file, serde_json::to_string(&json!({ "image": LOCALSTACK_IMAGE, "definition": definition, "functions": functions, "runs": plain })).unwrap()).unwrap();
-    let out = Command::new("node").arg(root().join("tools/localstack/limits.mjs")).arg(&spec_file).arg(&results_file).output().unwrap();
-    assert!(out.status.success(), "{}: the LocalStack runner of the limits failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(Command::new("node").arg(root().join("tools/localstack/limits.mjs")).arg(&spec_file).arg(&results_file), RUNNER_LIMIT, &format!("{}: the limits on LocalStack", rel(&f)));
+    assert!(out.ok, "{}: the LocalStack runner of the limits failed:\n{}", rel(&f), out.stderr);
     let got: Value = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     let (limit, _) = limit();
     let mut played = Vec::new();
@@ -4744,15 +5245,12 @@ fn rule_limits_hold_on_durable() {
     let runs_file = dir.join("runs.json");
     let results_file = dir.join("results.json");
     std::fs::write(&runs_file, serde_json::to_string(&json!({ "own": [], "children": [], "http": http, "aws": aws, "runs": runs })).unwrap()).unwrap();
-    let out = Command::new("node")
-        .arg(root().join("tools/durable/run.mjs"))
-        .arg(dir.join(dandori::render::ident(&m.name)))
-        .arg(&runs_file)
-        .arg(&results_file)
-        .env("DANDORI_LIMITS", "1")
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}: the durable runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(
+        Command::new("node").arg(root().join("tools/durable/run.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&runs_file).arg(&results_file).env("DANDORI_LIMITS", "1"),
+        RUNNER_LIMIT,
+        &format!("{}: the limits on durable functions", rel(&f)),
+    );
+    assert!(out.ok, "{}: the durable runner failed:\n{}", rel(&f), out.stderr);
     let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     for (i, g) in got.iter_mut().enumerate() {
         let saw = limit_times(&format!("{} run {} on Lambda durable functions", rel(&f), i + 1), g, &limit(), 2.0);
@@ -4785,15 +5283,12 @@ fn rule_limits_hold_on_pydantic_graph() {
     let runs_file = dir.join("runs.json");
     let results_file = dir.join("results.json");
     std::fs::write(&runs_file, serde_json::to_string(&json!({ "own": [], "rules": rules, "http": http, "aws": aws, "runs": runs })).unwrap()).unwrap();
-    let out = Command::new(&python)
-        .arg(root().join("tools/pydantic-graph/run.py"))
-        .arg(dir.join(dandori::pydantic_graph::package(&m)))
-        .arg(&runs_file)
-        .arg(&results_file)
-        .env("DANDORI_LIMITS", "1")
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}: the pydantic-graph runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(
+        Command::new(&python).arg(root().join("tools/pydantic-graph/run.py")).arg(dir.join(dandori::pydantic_graph::package(&m))).arg(&runs_file).arg(&results_file).env("DANDORI_LIMITS", "1"),
+        RUNNER_LIMIT,
+        &format!("{}: the limits on pydantic-graph", rel(&f)),
+    );
+    assert!(out.ok, "{}: the pydantic-graph runner failed:\n{}", rel(&f), out.stderr);
     let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     for g in &mut got {
         let saw = limit_times(&format!("{} on pydantic-graph", rel(&f)), g, &limit(), 2.0);
@@ -4833,17 +5328,12 @@ fn rule_limits_hold_on_argo() {
     let results_file = dir.join("results.json");
     let spec = json!({ "template": dandori::argo::document(&m).unwrap(), "own": [], "children": [], "connectRules": connect_rules, "http": http, "aws": aws, "runs": runs, "real": [] });
     std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
-    let out = Command::new("node")
-        .arg(root().join("tools/argo/run.mjs"))
-        .arg(&dir)
-        .arg(&runs_file)
-        .arg(&results_file)
-        .env("DANDORI_LIMITS", "1")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}: the Argo runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(
+        Command::new("node").arg(root().join("tools/argo/run.mjs")).arg(&dir).arg(&runs_file).arg(&results_file).env("DANDORI_LIMITS", "1"),
+        RUNNER_LIMIT,
+        &format!("{}: the limits on Argo", rel(&f)),
+    );
+    assert!(out.ok, "{}: the Argo runner failed:\n{}", rel(&f), out.stderr);
     let got: Value = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     let mut runs_got = Vec::new();
     for g in got["runs"].as_array().unwrap() {
@@ -4893,8 +5383,8 @@ fn callback_limits_hold_on_localstack() {
     let results_file = dir.join("results.json");
     let plain: Vec<Value> = runs.iter().map(|r| json!({ "id": r["id"], "input": r["input"] })).collect();
     std::fs::write(&spec_file, serde_json::to_string(&json!({ "image": LOCALSTACK_IMAGE, "definition": definition, "functions": [function], "waits": 45, "runs": plain })).unwrap()).unwrap();
-    let out = Command::new("node").arg(root().join("tools/localstack/limits.mjs")).arg(&spec_file).arg(&results_file).output().unwrap();
-    assert!(out.status.success(), "{}: the LocalStack runner of the limits failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(Command::new("node").arg(root().join("tools/localstack/limits.mjs")).arg(&spec_file).arg(&results_file), RUNNER_LIMIT, &format!("{}: the limits on LocalStack", rel(&f)));
+    assert!(out.ok, "{}: the LocalStack runner of the limits failed:\n{}", rel(&f), out.stderr);
     let got: Value = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     let mut played = Vec::new();
     for ((_, reference), g) in references.iter().zip(got["runs"].as_array().unwrap()) {
@@ -4941,15 +5431,12 @@ fn callback_limits_hold_on_durable() {
     let runs_file = dir.join("runs.json");
     let results_file = dir.join("results.json");
     std::fs::write(&runs_file, serde_json::to_string(&json!({ "own": [], "children": [], "http": http, "aws": aws, "runs": runs })).unwrap()).unwrap();
-    let out = Command::new("node")
-        .arg(root().join("tools/durable/run.mjs"))
-        .arg(dir.join(dandori::render::ident(&m.name)))
-        .arg(&runs_file)
-        .arg(&results_file)
-        .env("DANDORI_LIMITS", "1")
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}: the durable runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(
+        Command::new("node").arg(root().join("tools/durable/run.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&runs_file).arg(&results_file).env("DANDORI_LIMITS", "1"),
+        RUNNER_LIMIT,
+        &format!("{}: the limits on durable functions", rel(&f)),
+    );
+    assert!(out.ok, "{}: the durable runner failed:\n{}", rel(&f), out.stderr);
     let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     for g in &mut got {
         let saw = limit_times(&format!("{} on Lambda durable functions", rel(&f)), g, &hand_on_limit(&m), 2.0);
@@ -4981,15 +5468,12 @@ fn callback_limits_hold_on_pydantic_graph() {
     let runs_file = dir.join("runs.json");
     let results_file = dir.join("results.json");
     std::fs::write(&runs_file, serde_json::to_string(&json!({ "own": [], "rules": [], "http": http, "aws": aws, "runs": runs })).unwrap()).unwrap();
-    let out = Command::new(&python)
-        .arg(root().join("tools/pydantic-graph/run.py"))
-        .arg(dir.join(dandori::pydantic_graph::package(&m)))
-        .arg(&runs_file)
-        .arg(&results_file)
-        .env("DANDORI_LIMITS", "1")
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}: the pydantic-graph runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(
+        Command::new(&python).arg(root().join("tools/pydantic-graph/run.py")).arg(dir.join(dandori::pydantic_graph::package(&m))).arg(&runs_file).arg(&results_file).env("DANDORI_LIMITS", "1"),
+        RUNNER_LIMIT,
+        &format!("{}: the limits on pydantic-graph", rel(&f)),
+    );
+    assert!(out.ok, "{}: the pydantic-graph runner failed:\n{}", rel(&f), out.stderr);
     let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     for g in &mut got {
         let saw = limit_times(&format!("{} on pydantic-graph", rel(&f)), g, &hand_on_limit(&m), 2.0);
@@ -5033,18 +5517,12 @@ fn callback_limits_hold_on_argo() {
     let _ = std::fs::remove_dir_all(&pods);
     let spec = json!({ "template": dandori::argo::document(&m).unwrap(), "own": own, "children": [], "connectRules": [], "http": http, "aws": aws, "runs": runs, "real": [1] });
     std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
-    let out = Command::new("node")
-        .arg(root().join("tools/argo/run.mjs"))
-        .arg(&dir)
-        .arg(&runs_file)
-        .arg(&results_file)
-        .env("DANDORI_LIMITS", "1")
-        .env("DANDORI_ARGO_DUMP", &pods)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}: the Argo runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let out = ritsu_testkit::run::finish(
+        Command::new("node").arg(root().join("tools/argo/run.mjs")).arg(&dir).arg(&runs_file).arg(&results_file).env("DANDORI_LIMITS", "1").env("DANDORI_ARGO_DUMP", &pods),
+        RUNNER_LIMIT,
+        &format!("{}: the callbacks' limits on Argo", rel(&f)),
+    );
+    assert!(out.ok, "{}: the Argo runner failed:\n{}", rel(&f), out.stderr);
     let got: Value = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     let hand_on = (dandori::check::CALLBACK_HAND_ON_SECONDS as f64, Vec::new());
     let strip = |g: &mut Value| {

@@ -1,0 +1,4 @@
+error[E202]: tests/mutants/E202_壊れた組織.ringi:3:31: `shared/壊れた会社.ringi` does not pass ringi's check
+     3 | use organization 組織(org) from "shared/壊れた会社.ringi"
+  = E001: A file of the kind `organization` needs `positions` (tests/mutants/shared/壊れた会社.ringi:1:1)
+  = Correct that file until its check passes.

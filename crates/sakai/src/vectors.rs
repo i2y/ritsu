@@ -1,7 +1,7 @@
 //! `sakai vectors` (DESIGN 11.4): what the mappings of the anticorruption layers say, one line for
 //! each value of each upstream enum a map maps, as JSON Lines. sakai does not read the code of a
 //! layer (DESIGN 1.7); it gives the code's tests the values to hold it to, in the form the vectors
-//! of rulec, koyomi, sekisho and kaname are in: the test reads a line, gives the code the upstream
+//! of rulec, koyomi, sekisho, kaname and ringi are in: the test reads a line, gives the code the upstream
 //! value (and its number, for a `.proto`), and holds what the code answers to `to` or `refuse`.
 //!
 //! A value the map says nothing of is a line too, with `unmapped`: the value that says nothing is

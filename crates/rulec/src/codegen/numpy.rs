@@ -58,6 +58,13 @@ fn kind_of(ty: &Ty) -> &'static str {
 }
 
 impl<'a> Gen<'a> {
+    /// Whether output `oi` may answer that there is no value (§15.249): an optional output the
+    /// tables decide, as `opt_out` says, and a `result` that names an optional value too.
+    /// The columns carry where a value is absent beside it, and the output is `None` there.
+    fn np_opt(&self, oi: usize) -> bool {
+        self.f.outputs.get(oi).is_some_and(|od| matches!(self.ty_of(&od.name.text), Ty::Opt(_)))
+    }
+
     /// One expression as a tree, with the scale its value is held at. Mirrors `Gen::expr`
     /// case for case; where that one concatenates text, this one nests objects.
     fn np_expr(&self, e: &Expr) -> (String, i128) {
@@ -519,7 +526,20 @@ impl<'a> Gen<'a> {
                 }
                 Item::Define(d) => {
                     let (e, _) = self.np_expr(&d.expr);
-                    steps.push(Obj::new().str("op", "define").str("name", &d.name.text).raw("expr", e).finish());
+                    let mut o = Obj::new().str("op", "define").str("name", &d.name.text).raw("expr", e);
+                    // The range the rule accepts for it, held where it is worked out (§15.313): the
+                    // ends a value can pass, and the sentence the other languages refuse it with.
+                    if let Some((lo, hi)) = self.accepted_ends(d) {
+                        let mut a = Obj::new();
+                        if let Some(l) = lo {
+                            a = a.int("min", l);
+                        }
+                        if let Some(h) = hi {
+                            a = a.int("max", h);
+                        }
+                        o = o.raw("accept", a.str("what", &crate::door::out_of_range(&d.name.text)).finish());
+                    }
+                    steps.push(o.finish());
                 }
                 Item::Agg(_) | Item::Fold(_) => {}
             }
@@ -540,7 +560,7 @@ impl<'a> Gen<'a> {
             let (expr, scale) = (rescale_node(&expr, scale, to), to);
             let mut o = Obj::new().str("name", name).str("kind", kind_of(&ty)).raw("expr", expr);
             // An optional output answers `None` where its column has no value (§15.249).
-            if self.opt_out(oi) {
+            if self.np_opt(oi) {
                 o = o.bool("optional", true);
             }
             if let Some(rd) = &od.rounding {
@@ -690,7 +710,7 @@ impl<'a> Gen<'a> {
     /// plain form.
     fn np_wire(&self) -> (String, String) {
         let dates = self.f.outputs.iter().any(|od| matches!(self.ty_of(&od.name.text).present(), Ty::Date));
-        let opt = (0..self.f.outputs.len()).any(|oi| self.opt_out(oi));
+        let opt = (0..self.f.outputs.len()).any(|oi| self.np_opt(oi));
         let mut w = String::new();
         if dates {
             w.push_str("_DATES = {o[\"name\"] for o in rule.plan[\"outputs\"] if o[\"kind\"] == \"date\"}\n\n\n");
@@ -780,6 +800,32 @@ except (rulec_np.RuleInputError, rulec_np.RuleContradictionError):
         _print([r], out, fired)
 "#
         );
+        // A rule that reads no input has no column to read off the lines, and the plan answers it
+        // one row: it is decided once, and every line gets that answer as its record (§15.330).
+        let body = match (self.f.inputs.is_empty(), body.find("\n\ndef _columns(rows):\n")) {
+            (true, Some(at)) => format!(
+                "{}{}",
+                &body[..at],
+                r#"
+
+
+# A rule that reads no input answers every case alike: it is decided once, and every line gets
+# that answer as its record, or the refusal in its place (§15.330).
+try:
+    answer = rule.traced()
+except rulec_np.RuleInputError as e:
+    answer = json.dumps({"refused": "input", "error": e.what}, ensure_ascii=False, separators=(",", ":"))
+except rulec_np.RuleContradictionError as e:
+    answer = json.dumps({"refused": "contradiction", "error": e.what}, ensure_ascii=False, separators=(",", ":"))
+for r in rows:
+    if isinstance(answer, str):
+        print(answer)
+    else:
+        _print([r], *answer)
+"#
+            ),
+            _ => body,
+        };
         format!("{}{body}", self.header("#"))
     }
 
@@ -812,7 +858,7 @@ except (rulec_np.RuleInputError, rulec_np.RuleContradictionError):
                 let ty = self.ty_of(&od.name.text);
                 // An optional output is an array of objects, `None` where there is no value
                 // (§15.249).
-                let np = if self.opt_out(oi) { "ndarray[object]" } else { np_ty(&ty) };
+                let np = if self.np_opt(oi) { "ndarray[object]" } else { np_ty(&ty) };
                 let v = self.value_json(&od.name.text, &od.name.text, np, &ty);
                 match self.rounding_json(od) {
                     Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
@@ -835,7 +881,7 @@ except (rulec_np.RuleInputError, rulec_np.RuleContradictionError):
                         "One equal-length sequence per column. The values are the wire format the generated code takes: an integer in the declared unit, a rate as the count of steps, a date as YYYY-MM-DD, an enum as its name."
                     ),
                     // Said only where there is one, so a rule without stays as it was.
-                    if (0..self.f.outputs.len()).any(|oi| self.opt_out(oi)) {
+                    if (0..self.f.outputs.len()).any(|oi| self.np_opt(oi)) {
                         tr!(
                             "optional の出力は、値が無いところが None の、オブジェクトの配列で返る。",
                             " An optional output comes back as an array of objects, None where there is no value."

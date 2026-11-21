@@ -1,0 +1,22 @@
+requirements 手数料 v1
+description "返金にかかる手数料。寄与と、それが足される規則とを行き来して辿る yuen affected の試験のために書いた"
+
+role 経理 "返金にかかる手数料を決める"
+
+requirement 戻し方ごとの手数料(fee_by_way)
+  text "郵送の返金は 5、窓口の返金は無料"
+  owner 経理
+  decided 2026-11-02 by 経理 "この試験のために書いた"
+  satisfied by rulec "rules/fee.ja.rule" table 手数料
+    reviewed 2026-11-02 by 経理 sha256:c0fa6d3c0f73bd5d -> sha256:f99908885811995e
+  not verified "affected の試験は主張を読まない"
+    approved 2026-11-02 by 経理 sha256:c0fa6d3c0f73bd5d
+
+requirement 集荷の手数料(courier_fee)
+  text "集荷で受け取る返金は 8"
+  owner 経理
+  decided 2026-11-02 by 経理 "この試験のために書いた"
+  satisfied by rulec "rules/extra/courier.ja.rule" clause 集荷の手数料
+    reviewed 2026-11-02 by 経理 sha256:dadbf71d36148a82 -> sha256:3b569d0c6276168f
+  not verified "affected の試験は主張を読まない"
+    approved 2026-11-02 by 経理 sha256:dadbf71d36148a82

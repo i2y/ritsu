@@ -157,6 +157,12 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E147](#e147) | error | With each value of a `unique` field once, a `sum` can pass the top of its range |
 | [E148](#e148) | error | Only a field of `elements` that is always there can be `unique` |
 | [E149](#e149) | error | `range` writes no end |
+| [E150](#e150) | error | The range of the definition does not meet the values it can reach |
+| [E151](#e151) | error | An output is decided by nothing, or read before it is decided |
+| [E152](#e152) | error | A table has no output column |
+| [E153](#e153) | error | The generated code cannot take a name as it stands |
+| [E154](#e154) | error | No such rounding mode |
+| [E155](#e155) | error | The same clause is written twice |
 
 ## E001
 
@@ -198,7 +204,7 @@ Related codes: [E001](#e001), [E009](#e009)
 
 `error` — **The file does not start with a `rule` line**
 
-**When.** One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it, or the `rule` line has no name — a file whose `rule` line had none used to pass the check as a rule with nothing in it.
+**When.** One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it, the `rule` line has no name, or there is no such line at all (an empty file, or one of comments and blank lines; said at line 1).
 
 **Fix.** Add `rule <name>(<alias>) v1` as the first line.
 
@@ -233,7 +239,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 `error` — **A word that cannot appear at this position**
 
-**When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each.
+**When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each. When a word is close, the note gives it (right under a table's heading, `policy` and `overrides` too). The lines after it, up to the next that starts with a word a line may start with, are taken as its own: they are not read, nor said one by one, and the note says how many there are.
 
 **Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never / possible`. Business words belong in names and cells, not at the head of a line.
 
@@ -412,9 +418,9 @@ Related codes: [E009](#e009), [E012](#e012)
 
 `error` — **The name is not declared**
 
-**When.** A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. It appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia), and when what follows `->` on an `import proto` or `import jsonschema` line is no enum of this file. `none` is not one of these: under an optional column it is the absent value, and under any other column it is E103.
+**When.** A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. It appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia), and when what follows `->` on an `import proto` or `import jsonschema` line is no enum of this file. `none` is not one of these: under an optional column it is the absent value, and under any other column it is E103. A type a declaration writes (an input, an output, a definition and the like) that is neither a type of rulec nor an enum this file declares or reads is said on the declaration's line: the note lists the types and the enums of this file, and the lines that read the declaration (its column and cells, its range, the definitions, a `constraint`, a `count`, `sum`, `max` or `min` over it, the examples) say nothing. A name written in several places is said once, where it is first written, and the note gives the lines of the others.
 
-**Fix.** Match the spelling to the declaration, or declare the input, derived value or definition above. For a spelling two countries share, write the value's name (`Washington` or `Western_Australia`).
+**Fix.** Match the spelling to the declaration, or declare the input, derived value or definition above. A type is one of the types, or an enum of this file. For a spelling two countries share, write the value's name (`Washington` or `Western_Australia`).
 
 **Smallest reproduction**:
 
@@ -439,9 +445,9 @@ Related codes: [E011](#e011), [E013](#e013)
 
 `error` — **No such import**
 
-**When.** Something the rule reads from outside is not there, or cannot be read. Six lines read from outside: an `import` of a built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese); `import proto "<file>" <Enum> -> <enum of this rule>`, an enum of a `.proto`; `import jsonschema "<file>" "<pointer>" -> <enum of this rule>`, an enum of a JSON Schema, OpenAPI included; `import enum <enum> from "<file>"`, an enum of an `enums` file; `shape <name> = proto "<file>" <Message>` (or `jsonschema "<file>" "<pointer>"`), the contract an input's `from` reads; and `implements proto "<file>" <Service>`, the contract's service the rule is served as. For a line that reads a file it appears when the file cannot be read, when the enum, message or service it names is not in the file, or when the line is not that shape; and when there are two `implements` lines. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`).
+**When.** Something the rule reads from outside is not there, or cannot be read. Six lines read from outside: an `import` of a built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese); `import proto "<file>" <Enum> -> <enum of this rule>`, an enum of a `.proto`; `import jsonschema "<file>" "<pointer>" -> <enum of this rule>`, an enum of a JSON Schema, OpenAPI included; `import enum <enum> from "<file>"`, an enum of an `enums` file; `shape <name> = proto "<file>" <Message>` (or `jsonschema "<file>" "<pointer>"`), the contract an input's `from` reads; and `implements proto "<file>" <Service>`, the contract's service the rule is served as. For a line that reads a file it appears when the file cannot be read, when the enum, message or service it names is not in the file, or when the line is not that shape; when two messages each nest an enum or a message of the name the line writes, and it writes that name alone; and when there are two `implements` lines. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`).
 
-**Fix.** Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. For a line that reads a file, the path is followed from the directory of the rule file, so write it relative to that. An enum, a message or a service that is not found comes back with the ones the file has, and a message or a service is named by its name or by its name with the file's package. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there. A rule has one `implements` line.
+**Fix.** Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. For a line that reads a file, the path is followed from the directory of the rule file, so write it relative to that. An enum, a message or a service that is not found comes back with the ones the file has. An enum or a message is named by its name or by its name after the messages it is nested in (`Order.Status`), and a service by its name; the file's package may go in front of any of them. A name two messages nest comes back with both, named after their messages. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there. A rule has one `implements` line.
 
 **Smallest reproduction**:
 
@@ -548,7 +554,7 @@ Related codes: [E015](#e015)
 
 **When.** A `constraint` line is not `input comparison input`: there is no comparison, a side is neither one name nor names added up with `+`, or both sides are sums.
 
-**Fix.** Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. One side may add inputs up (`constraint discount + points <= subtotal`); a coefficient or a constant cannot be written. For `A = B`, write the two lines `A <= B` and `A >= B`.
+**Fix.** Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. One side may add inputs up (`constraint discount + points <= subtotal`); a coefficient or a constant cannot be written. For `A = B`, write the two lines `A <= B` and `A >= B`. A bound on a value worked out (`quantity * price <= 10_000_000JPY`) is not a `constraint`: make the value a `define` and write the `range` on it (`define subtotal : money[JPY] = quantity * price  range <=10_000_000JPY`).
 
 **Smallest reproduction**:
 
@@ -570,7 +576,7 @@ policy unique
 | - | true           |
 ```
 
-Related codes: [E018](#e018)
+Related codes: [E018](#e018), [E150](#e150)
 
 ## E018
 
@@ -605,7 +611,7 @@ Related codes: [E017](#e017), [W111](#w111)
 
 `error` — **An example is an input the generated code refuses at its door**
 
-**When.** An example's inputs do not satisfy a `constraint` or fall under a `never` line, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. So is an example whose sequence has more elements than the top of a `count` over it, and one the generated code refuses on its walk — weights of a pick by weight whose total passes int64, a `sum` past its declared range, a drawn value not below the total of the weights — each with the sentence the code refuses it with. An example outside the range, and one that breaks a `constraint` between two dates, used to pass the check, and the vector made from it was then refused by the generated code.
+**When.** An example's inputs do not satisfy a `constraint` or fall under a `never` line, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. So is an example whose sequence has more elements than the top of a `count` over it, and one the generated code refuses on its walk — weights of a pick by weight whose total passes int64, a `sum` or a `count` that ends outside its declared range (past the top, or under the bottom), a drawn value not below the total of the weights — each with the sentence the code refuses it with. An example outside the range, and one that breaks a `constraint` between two dates, used to pass the check, and the vector made from it was then refused by the generated code.
 
 **Fix.** Correct the example's values — or, if that value or combination really does arrive, widen the range or drop the constraint or `never` line.
 
@@ -1008,7 +1014,7 @@ Related codes: [E028](#e028), [E012](#e012)
 
 **When.** The `count` line has no `range >=0 <=<max>`, or no upper bound, or a negative lower one. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence**.
 
-**Fix.** Write it as `range >=0 <=100`. The generated code refuses a longer sequence at the door, the way it refuses a number outside its range.
+**Fix.** Write it as `range >=0 <=100`. The generated code refuses a longer sequence at the door, the way it refuses a number outside its range. With a lower bound of 1 or more (`range >=1 <=100`) it refuses a call whose count comes in under it as well: a sequence with no element that counts, an empty one.
 
 **Smallest reproduction**:
 
@@ -1091,9 +1097,9 @@ Related codes: [E021](#e021), [E029](#e029), [E020](#e020)
 
 `error` — **The declared enum and the imported one disagree**
 
-**When.** The values of the enum named by `import proto` or `import jsonschema` and the values of the rule's `enum` (their ASCII aliases, where they have them) are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule**.
+**When.** The values of the enum named by `import proto` or `import jsonschema` and the values of the rule's `enum` (their ASCII aliases, where they have them) are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule**. A `.proto`'s value names are read with the enum's own name taken off the front and the rest in lower case (`MEMBER_TIER_GOLD` is `gold`), whatever the case of that name and wherever its `_`s are; a name the enum's name runs on into (`STATUSBAR_HIDDEN` of the enum `Status`), one that would begin with a digit, and one that would be spelt as a value of another number keep it. The names of one number (`allow_alias`) are one value, which the rule writes by one of them; writing two of them is E032 too. The notes say how each name of the contract was read.
 
-**Fix.** Add the new value to the rule's `enum`; where the enum gives its values names with aliases, the name is yours to choose. A value the contract dropped goes from the rule too. Once it is added, the table asks whether it needs a row (E033).
+**Fix.** Add the new value to the rule's `enum`; where the enum gives its values names with aliases, the name is yours to choose. A value the contract dropped goes from the rule too. Where a value of the rule is the whole name of one of the contract's (`category_food`), write the spelling the note gives (`food`); the value proto3 reads as not set (`CATEGORY_UNSPECIFIED`) has no place in the rule. Once it is added, the table asks whether it needs a row (E033).
 
 **Smallest reproduction**:
 
@@ -1906,7 +1912,7 @@ Related codes: [E008](#e008), [E035](#e035), [E045](#e045)
 
 `error` — **Extra token after the declaration**
 
-**When.** A declaration line holds a word the line does not read. Each kind of line reads its own words: an input's `range`, `contract_only` and `random`; a field of an element's `range` and `contract_only`; an output's `range` and `round`; a `derive` and a `count`, `sum`, `max` or `min` line `range` alone. A `shape` line holds nothing after its declaration, and an input's `from` nothing after its path but `where` and `empty`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, what is left of a bound whose unit did not lex as one, a `round` on a `derive`, a `range` after a `from`. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered "complete" with one side missing.
+**When.** A declaration line holds a word the line does not read. Each kind of line reads its own words: an input's `range`, `contract_only` and `random`; a field of an element's `range` and `contract_only`; an output's `range` and `round`; a `derive`, a `define` and a `count`, `sum`, `max` or `min` line `range` alone. A `shape` line holds nothing after its declaration, and an input's `from` nothing after its path but `where` and `empty`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, what is left of a bound whose unit did not lex as one, a `round` on a `derive`, a `range` after a `from`. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered "complete" with one side missing.
 
 **Fix.** Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[JPY, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`. An input's range and marks go before its `from`; a derived value is rounded inside its expression, as `down(<expression>, 1JPY)`.
 
@@ -2299,9 +2305,9 @@ Related codes: [E011](#e011), [E047](#e047), [E012](#e012)
 
 `error` — **A declaration line cannot be read**
 
-**When.** A line that starts with a declaring word — `define`, `derive`, `result`, `enum`, `group`, `table` and the like — cannot be read as that declaration: it has no name, something stands before its `=`, and so on. Such a line used to be dropped with nothing said, and a `derive` line was not even dropped: the check never finished.
+**When.** A line that starts with a declaring word — `define`, `derive`, `result`, `enum`, `group`, `table` and the like — cannot be read as that declaration: it has no name, something stands before its `=`, and so on. Such a line used to be dropped with nothing said, and a `derive` line was not even dropped: the check never finished. It also appears when the `[` of a type is never closed: the rest of the line was read as in the brackets, and the range said to be a tax (an input, a definition), or the `|` taken to close them and the rule passed (a table's heading).
 
-**Fix.** Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30_000JPY`). Every declaration's shape is in docs/reference.md.
+**Fix.** Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30_000JPY`). Every declaration's shape is in docs/reference.md. Close the brackets of a type with `]` (`money[USD]`, `rate[step 1%]`).
 
 **Smallest reproduction**:
 
@@ -2380,7 +2386,7 @@ Related codes: [E104](#e104), [E114](#e114), [E106](#e106)
 
 `error` — **The range is empty**
 
-**When.** No value lies in a `range`: the lower end is past the upper one (`range >=10JPY <=0JPY`), or the two are equal and one of them is `>` or `<`. Such a range used to pass with nothing said: the completeness proof answered "complete" over nothing, and the generated code's entry refused every call.
+**When.** No value lies in a `range`: the lower end is past the upper one (`range >=10JPY <=0JPY`), the two are equal and one of them is `>` or `<`, or no value on the step lies between two ends written with `>` or `<` (`range >0JPY <1JPY`: no amount in whole yen is above 0 yen and below 1 yen). `>` and `<` leave out the value they write, and are read on the step of the value: one unit of an amount or a quantity, the step a rate declares, one day of a date. Such a range used to pass with nothing said: the completeness proof answered "complete" over nothing, and the generated code's entry refused every call.
 
 **Fix.** Correct the end that was mistyped (`range >=0JPY <=10JPY`).
 
@@ -3115,9 +3121,9 @@ Related codes: [E013](#e013), [E032](#e032), [E033](#e033)
 
 `error` — **Completeness gap: some input matches no row**
 
-**When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it; on the column of a boolean `define` of one comparison, at the truth value it never takes over the inputs' ranges (`made <= 2027-03-31` with `made` declared only up to that day is never false). An optional input (`T?`) takes the absent value too, and a row is asked for it; an optional number, date or truth value is asked for the whole of its declared range besides. An optional column a table above decides takes the absent value where a row above writes `none` or passes on a name that may have none, and a row is asked for it there.
+**When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. An example is always attached. Every part of the input no row takes is named with it, in words and as the row that takes it: the row is cut at the boundaries the table already writes and at the ends of the declared ranges, and its output cells are left as `?`. On a column of numbers or dates a table above decides, a cut in which the table above writes a few values only is written as those values, a row for each (a table with rows for 1 August and 10 August that reads a day the table above writes as 4 August or 6 August is given `| 2026-08-04 | ? |` and `| 2026-08-06 | ? |`): the column takes no other value there, so the rows still close the whole gap. Where a row above writes a name or an expression, any value may come, and the cut stays as it is. Both say only the values an input reaches in that part: a value a `constraint` or a computed column leaves no input at is not said. Up to eight parts are written out, and the rest are counted. An example made of the columns the table reads alone is an input as it stands. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example is an input the reference evaluator has run, with the values it gives those columns, and where the input holds inputs the table does not read, an "An input producing this example" line gives it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384, and failing that, built inside each part of the gap in turn, and last, where the inputs the columns are worked out from have no more than 16,384 combinations, all of them are run through the reference evaluator. Where no input is found, the headline and the example speak of a combination, it is not called an input, and the JSON `witness` has no `inputs`; the notes then say that running every input found none that matches no row, where that run was made (the finding stays, since the check decides only by what its certificate carries for a re-checker to confirm), and otherwise that no input giving it was found and none could be shown not to exist. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); where a table reads a `define` together with the inputs its expression reads, past what the expression comes to over the values each cell gives those inputs (`down(amount * 3%, 1JPY)` does not pass 900 yen in a cell of `amount` up to 30,000 yen) and inside the range the rule accepts for a `define` that has one, the expression read too as each of those inputs times a number, added up (`max(amount, 30JPY) - amount` is 0 yen in a cell of `amount` from 30 yen), worked out again over pieces of those values where that does not settle it (up to 64 for one value, and 4,096 times for the table), and over pieces of the ranges of the inputs it reads where the table reads none of them, and a `define` that only adds, subtracts and multiplies by constants read by its equation too, which is read over fractions, and over the values of the cell for what only whole numbers leave out (with fewer than two items and a limit of one or more, `items - limit` is never above 0); on the column of a `define` that computes a number, between the values of the grid its expression puts them on (`up(amount * 10%, 10JPY)` comes to multiples of 10 yen alone, and no row is asked for 11 to 19 yen; an input sits on its own step, and a part a cell holds to one value is that value, so `down(amount * 1%, 1JPY) + boxes * 37JPY` comes to multiples of 37 yen in a cell of `amount` under 100 yen); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it, the table above being one of the same rule or one of a rule brought in with `apply`, followed through `with` and through the rules that rule applies in turn, a row of a `policy first` table above read one input at a time without the inputs the rows before it take first, at a number or a date no row of a table above that writes them writes (a table that reads a date written only as 1 July and 3 July needs no row for 2 July), and at a value whose rows above ask a value the rule works out for what it never comes to over the cell's inputs; on the column of a boolean `define` of one comparison, at the truth value it never takes over the inputs' ranges (`made <= 2027-03-31` with `made` declared only up to that day is never false), or over the values each cell gives them. An input `fed by` another rule's output is read free of the other inputs, since the line does not say what that rule was given; where one takes part in a gap, a note says so and points to `apply`. An optional input (`T?`) takes the absent value too, and a row is asked for it; an optional number, date or truth value is asked for the whole of its declared range besides. An optional column a table above decides takes the absent value where a row above writes `none` or passes on a name that may have none, and a row is asked for it there.
 
-**Fix.** If the combination does not happen, take it out of the tables with a `never` line rather than a row (a note shows the line, where the definitions show it). If it does, add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration.
+**Fix.** If the combination does not happen, take it out of the tables with a `never` line rather than a row (a note shows the lines, where the definitions show them). If it does, add the rows the hint gives and write what each answers in place of `?`: the rows close the whole gap as they are, and a row left with its `?` does not pass (E063). Split a row where the answer changes inside it. Where no cell takes a part exactly (the strings under none of the prefixes a table writes, for one), the row is one written last in a `policy first` table, and the hint gives it. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration.
 
 **Smallest reproduction**:
 
@@ -3145,7 +3151,7 @@ Related codes: [E102](#e102), [E105](#e105), [W111](#w111), [W133](#w133), [E142
 
 `error` — **Unreachable row: the row never matches**
 
-**When.** No input matches the row. There are three forms, told apart in the wording. In the first, every input the row would take is already taken by an earlier row, or by a row that takes precedence through `overrides`. In the second, the row names a value that the upstream table never produces. In the third, the row asks a derived column, or the column of a `define` that computes a number, only for values outside what it can actually reach, the part inside (if any) being taken first by earlier rows; so does a row that asks a column a table above decides and a derived column for values the derive never comes to while the rows that write that value fire, and a row that asks a boolean `define` of one comparison for the truth value it never takes over the inputs' ranges. What a value can reach is its expression computed over the inputs' ranges and the values the tables above produce (for a derive, over the `constraint` lines too), not the `range` written on it.
+**When.** No input matches the row. There are three forms, told apart in the wording. In the first, every input the row would take is already taken by an earlier row, or by a row that takes precedence through `overrides`. In the second, the row names a value that the upstream table never produces, or one it produces only where the row's other columns are not what the row asks for or where the earlier rows take the input first (a note then says so); the upstream table may be one of the same rule or one of a rule brought in with `apply`, followed through `with` and through the rules that rule applies in turn. In the third, the row asks a derived column, or the column of a `define` that computes a number, only for values outside what it can actually reach, the part inside (if any) being taken first by earlier rows; so does a row that asks a column a table above decides and a derived column for values the derive never comes to while the rows that write that value fire, and a row that asks a boolean `define` of one comparison for the truth value it never takes over the inputs' ranges. What a value can reach is its expression computed over the inputs' ranges and the values the tables above produce (for a derive, over the `constraint` lines too), not the `range` written on it. Where a table reads a `define` together with the inputs its expression reads, the expression is computed again over the values the row gives those inputs (`down(amount * 3%, 1JPY)` does not pass 900 yen in a row of `amount` up to 30,000 yen; a `define` that only adds, subtracts and multiplies by constants is read by its equation as well, and over those values for what only whole numbers leave out). The expression is also read as each of those inputs times a number, added up, so `max(amount, 30JPY) - amount` is 0 yen in a row of `amount` from 30 yen; where that does not settle it, it is worked out again over pieces of those values. A row that asks a `define` of numbers only for values between the points of the grid its expression puts them on is of this form too (15 yen of `up(amount * 10%, 10JPY)`, and, an input sitting on its own step, 3 of `gifts * 2`). So is a row over whose values a `define` with a `range` comes only to values outside it: every such call is turned away. A row that asks for a value a table above decides from a value the rule works out is read with that value worked out again over the row's inputs, and where the rows above that write it ask only for what it never comes to there, no input reaches the row. A row that asks only for values outside the range of an input, of a `count` or a `sum`, or of what a walk answers (`max`, `min`, a fold's answer) has no input either: a call that falls outside a range is refused.
 
 **Fix.** If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row. If it asks a derive or a `define` for values it never reaches, rewrite the condition within the values it can come to, or delete the row; widening a derive's `range` does not change those values. If it asks a boolean `define` for the truth value it never takes, rewrite the condition to the value it always takes, or delete the row.
 
@@ -3240,6 +3246,27 @@ policy unique
 | large | -       | true           |
 ```
 
+**Smallest reproduction of the third form (a row asking a `define` for values it never comes to over the values the row gives the input it reads)**:
+
+```rule
+rule t(t) v1
+
+inputs
+  amount(a) : money[JPY]  range >=1JPY <=1000000JPY
+
+outputs
+  r(r) : bool
+
+define fee(f) : money[JPY] = down(amount * 3%, 1JPY)
+
+table j(j)
+policy unique
+| fee      | amount     | -> r(r) : bool |
+| >900JPY  | <=30000JPY | true           |
+| >900JPY  | >30000JPY  | false          |
+| <=900JPY | -          | false          |
+```
+
 **Smallest reproduction of the third form (a row asking a boolean `define` for the truth value it never takes)**:
 
 ```rule
@@ -3266,7 +3293,7 @@ Related codes: [E101](#e101), [W105](#w105), [W110](#w110), [E112](#e112)
 
 `error` — **Unit mismatch: values of different types are being mixed**
 
-**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in. And it is `none`, or a name that may have no value, written under a column that is not optional: an output, a column a table decides, an expected value. And it is a name that may have no value worked with in an expression (`quoted * 2`): such a value is tested in a table's cells, or handed on to an optional column as it is, and nothing else. And it is what the brackets of a type cannot hold: a unit the table of units does not have (`money[RUB]`, `money[JPYc]`), a unit of another dimension (`mass[cm]`), no unit on `money` or `mass`, a word after what the type reads (`mass[g, kg]`), and anything on a type with no brackets (`number[kg]`). It comes with no literal written in the unit anywhere.
+**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in. And it is `none`, or a name that may have no value, written under a column that is not optional: an output, a column a table decides, an expected value. And it is a name that may have no value worked with in an expression (`quoted * 2`): such a value is tested in a table's cells, or handed on to an optional column as it is, and nothing else. And it is what the brackets of a type cannot hold: a unit the table of units does not have (`money[RUB]`, `money[JPYc]`), a unit of another dimension (`mass[cm]`), no unit on `money` or `mass`, a word after what the type reads (`mass[g, kg]`), and anything on a type with no brackets (`number[kg]`). It comes with no literal written in the unit anywhere. A type whose tax or brackets hold such a mistake is said where it is first written, once however many lines write it (an output's type, and again in a table's heading), and the note gives the other lines. The values written in a type of no unit (its range, its rounding grid, the cells, the examples) and the lines that read it (a `constraint`, a `count`, `sum`, `max` or `min` over it) say nothing.
 
 **Fix.** Move one side into a table. "A surcharge that depends on weight" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives). Where a heading's type is not its name's, decide which is right and correct the other; a heading may also go without a type, and is then read in the name's. Where a column is to answer that there is no value, make its type `T?`: the declaration under `outputs` for an output, the heading for a column a table decides; otherwise write a value in the place of `none`. A unit is one the table has (`money[USD]`, `money[銭]`, `mass[g]`), and an amount in a currency it does not have is a `number`.
 
@@ -3378,7 +3405,7 @@ Related codes: [E106](#e106), [E103](#e103)
 
 `error` — **Overlapping rows: the same input matches two or more rows**
 
-**When.** In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead. A pair that meets only on a combination the tables above never produce together, or only where no input reaches — past what a `define` comes to, at the truth value a boolean `define` never takes, where the rows of a table above leave a derive no values — is not reported: the completeness check asks no row there, and E102 calls a row that asks only for such points dead. On an optional column a comparison, a literal and a set of values match only a value that is there, while `-` and `not:` match the absent value too; so a `none` row meets a `-` row, and a `not: 5` row, on the absent value.
+**When.** In a `policy unique` table, two rows take a common input. An example both match is given, and all of what the cells of the two rows share is said beside it: that they take the same inputs, that one takes everything the other does, or the inputs both take, column by column. Where the table reads a value the rule computes, the example is an input the reference evaluator has run, with the values it gives those columns (an "An input producing this example" line gives the input where it holds inputs the table does not read). The input is built at the points of the overlap in turn, and last, where the inputs the columns are worked out from have no more than 16,384 combinations, all of them are run through the reference evaluator. An overlap on a derive or a `define` for which no such input is found falls to W114 instead. Where none is found on the columns a table above decides, the headline and the example speak of a combination, it is not called an input, and the JSON `witness` has no `inputs`; the notes then say that running every input found none that matches both rows, where that run was made (the finding stays), and otherwise that no input was found and none could be shown not to exist. A pair that meets only on a combination the tables above never produce together, or only where no input reaches — past what a `define` comes to, at the truth value a boolean `define` never takes, where the rows of a table above leave a derive no values — is not reported: the completeness check asks no row there, and E102 calls a row that asks only for such points dead. On an optional column a comparison, a literal and a set of values match only a value that is there, while `-` and `not:` match the absent value too; so a `none` row meets a `-` row, and a `not: 5` row, on the absent value.
 
 **Fix.** If the outputs differ, decide which is right and fix the rows; to let the order decide, declare `policy first`. If even the outputs agree, delete one of the rows. Where two tables or clauses that define one output overlap, write `overrides <the other>` on the one that wins: after `policy` on a table, as a line under a clause. The overlap is refused even when the two answer the same, since an edit tomorrow may change one of them and not the other.
 
@@ -3639,9 +3666,9 @@ Related codes: [E107](#e107)
 
 `error` — **The range of a derived value does not contain the values it can reach**
 
-**When.** The interval computed from the input ranges falls outside the `range` declared on the derived value. An end an input's range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way; one that can pass int64 from there is E108 alone). With too narrow a range, the completeness check answers "complete" without ever looking at values that really occur. So does a `range` written on a `max` or a `min` that leaves out part of its column's range or its `empty` value, since it answers one of those.
+**When.** The interval computed from the input ranges falls outside the `range` declared on the derived value. An end an input's range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way; one that can pass int64 from there is E108 alone). With too narrow a range, the completeness check answers "complete" without ever looking at values that really occur. So does a `range` written on a `max` or a `min` that leaves out part of its column's range or its `empty` value, since it answers one of those. An end written with `>` or `<` leaves out the value it writes: `range >0JPY <200JPY` is this where the value can come to 0 yen or to 200 yen.
 
-**Fix.** Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-1_100_000JPY <=1_000_000JPY`). Widening past what is reachable costs nothing: the check sifts the infeasible part out. Where an end of that interval comes from an end an input's range does not write, a note names the input: widen the range, or write that end on the input's range.
+**Fix.** Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-1_100_000JPY <=1_000_000JPY`). Widening past what is reachable costs nothing: the check sifts the infeasible part out. Where an end of that interval comes from an end an input's range does not write, a note names the input: widen the range, or write that end on the input's range. Where the range is meant as the values the rule accepts, a call whose value falls outside being refused, write the value as a `define` with that `range` instead of a `derive`.
 
 **Smallest reproduction**:
 
@@ -3664,7 +3691,7 @@ policy unique
 | >0JPY  | true           |
 ```
 
-Related codes: [E108](#e108), [E101](#e101)
+Related codes: [E108](#e108), [E101](#e101), [E150](#e150)
 
 ## E113
 
@@ -3701,9 +3728,9 @@ Related codes: [E112](#e112), [E103](#e103)
 
 `error` — **A value does not sit on the declared step**
 
-**When.** A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step, so this one has no representation. The same holds for the rounding grid of a rate output that is not a whole number of the step the output declares (`rate[step 1%]` with `round down(0.5%)`): every answer sits on the grid and is handed over as a whole number of the step, so some answers could not be written.
+**When.** A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step, so this one has no representation. So does a rate the rule does not answer with its step written on a table's heading (`-> markup : rate[step 1%]`): its cells, and the values a name in one of them takes, sit on the step. A `derive` or a `define` of a rate typed with a step is stopped where its expression can come to a value off it (`markup / 2` typed `rate[step 1%]`); the values are read off the expression, and of one they are not read off, nothing is said. The same holds for the rounding grid of a rate output that is not a whole number of the step the output declares (`rate[step 1%]` with `round down(0.5%)`): every answer sits on the grid and is handed over as a whole number of the step, so some answers could not be written.
 
-**Fix.** Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code. For a rounding grid, declare the step the rounding needs, or round to a whole number of the step.
+**Fix.** Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code. For a rounding grid, declare the step the rounding needs, or round to a whole number of the step. For the expression of a `derive` or a `define`, round it to the step (`half_up(…, 1%)`), or declare the step its values take.
 
 **Smallest reproduction**:
 
@@ -3721,6 +3748,54 @@ policy first
 | r      | -> o(o) : bool |
 | <=0.5% | true           |
 | -      | false          |
+```
+
+**A cell under a heading that writes a step on a rate the rule does not answer**:
+
+```rule
+rule price v1
+
+enum kind = books | music
+
+inputs
+  item_kind  : kind
+  list_price : money[JPY]  range >=0JPY <=100000JPY
+
+outputs
+  price : money[JPY]  round half_up(1JPY)
+
+table markup_of
+policy unique
+| item_kind | -> markup : rate[step 1%] |
+| books     | 0.5%                      |
+| music     | 10%                       |
+
+define price : money[JPY] = list_price + list_price * markup
+```
+
+**A definition typed with a step whose expression comes off it**:
+
+```rule
+rule sale_price v1
+
+enum kind = books | music
+
+inputs
+  item_kind  : kind
+  list_price : money[JPY]  range >=0JPY <=100000JPY
+
+outputs
+  price : money[JPY]  round half_up(1JPY)
+
+table markup_of
+policy unique
+| item_kind | -> markup : rate[step 1%] |
+| books     | 5%                        |
+| music     | 10%                       |
+
+define sale_markup : rate[step 1%] = markup / 2
+
+define price : money[JPY] = list_price + list_price * sale_markup
 ```
 
 Related codes: [E103](#e103), [E106](#e106)
@@ -3837,7 +3912,7 @@ Related codes: [E115](#e115), [E108](#e108)
 
 `error` — **The call is not written correctly**
 
-**When.** A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)`, `mod(x, n)`, `isqrt(x)` and the five rounding modes (`down(x, 1JPY)` and the rest). A rounding grid that is not a constant is this too.
+**When.** A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)`, `mod(x, n)`, `isqrt(x)` and the five rounding modes (`down(x, 1JPY)` and the rest). A rounding grid that is not a constant is this too. Where a call exists whose name is near the misspelling, a note proposes it.
 
 **Fix.** Check the spelling and the count. A spare argument is dropped on the floor and a missing one leaves no answer — both used to pass unnoticed, and only the generator ran out of cases.
 
@@ -4044,9 +4119,9 @@ Related codes: [E121](#e121), [W111](#w111)
 
 `error` — **The contract lets through a value the rule refuses**
 
-**When.** A value read with `from` can pass the contract's validation and still be refused by the input's declaration. What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum` — held to the values inside its `range` when an ordered enum input has one), and JSON Schema's `required`. A `from sum` is held by how far its total reaches — the values of the field times how many elements there may be — and a `from max` or `from min` by the values of the field. A sequence taken with `elements … from` has each field of its elements held as an input is, its length held to the cap its `count`s put on it, and its totals to the upper end of each `sum` over it. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, "", no elements) with no rule applied; a date read from a `.proto` string is held to whether "" passes. A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field, and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken.
+**When.** A value read with `from` can pass the contract's validation and still be refused by the input's declaration. What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum` — held to the values inside its `range` when an ordered enum input has one), and JSON Schema's `required`. A `from sum` is held by how far its total reaches — the values of the field times how many elements there may be — and a `from max` or `from min` by the values of the field. A sequence taken with `elements … from` has each field of its elements held as an input is, its length held to the cap its `count`s put on it, and its totals to the upper end of each `sum` over it. Where the range of a `sum` or a `count` over it starts above zero, the bottom is held too: the least total, the fewest elements the contract lets through with each at its least, against the bottom of the `sum`; and the bottom of a `count` as something the contract does not promise, since which elements count is not read from a contract. A `unique` field is something the contract does not promise either, unless the collection holds one element at most: that the elements differ in one field is not read from a contract (JSON Schema's `uniqueItems` compares whole elements). The weights a `take_weighted` picks by are held to int64: the most elements the contract lets through, each weight at its largest, have to total within it. A `define` with a `range`, worked out from inputs or fields read from a contract, is held over what the contract lets them be: a request that takes the value outside the range is the example, and where the value is neither shown to stay inside nor found outside, that is said too. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, "", no elements) with no rule applied; a date read from a `.proto` string is held to whether "" passes. A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field, and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken.
 
-**Fix.** Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none.
+**Fix.** Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out, or a `unique` field; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none.
 
 **Smallest reproduction**:
 
@@ -4578,7 +4653,7 @@ Related codes: [E108](#e108), [E103](#e103)
 
 `error` — **An output's range does not hold the values it takes**
 
-**When.** The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result`, a line that walks a sequence — under the inputs' ranges and the `constraint` lines, with both ends rounded the way the output rounds. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way). A range written on an output that is no number cannot be checked, and is this too. An expression that can pass int64 from an input with an open end is E108 alone. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns.
+**When.** The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result`, a line that walks a sequence — under the inputs' ranges and the `constraint` lines, with both ends rounded the way the output rounds. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way). An end written with `>` or `<` leaves out the value it writes: `range >0JPY` is this where the output can come to 0 yen. A range written on an output that is no number cannot be checked, and is this too. An expression that can pass int64 from an input with an open end is E108 alone. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns.
 
 **Fix.** Widen the range to the values the message states (`fix.text` holds it, as `range >=0USDc <=1000USDc`). Where an end of those values comes from an end no range writes, read at the end of its type, there is no `fix.text`, and a note names whose: widen the range, or write that end on the name's range. On an output that is no number, take the range off. An output with none written has the range rulec works out, and the other languages read that.
 
@@ -4630,7 +4705,7 @@ policy unique
 | received |
 ```
 
-Related codes: [E112](#e112), [E061](#e061), [E103](#e103)
+Related codes: [E112](#e112), [E061](#e061), [E103](#e103), [E150](#e150)
 
 ## E134
 
@@ -4947,7 +5022,7 @@ Related codes: [W114](#w114), [E128](#e128), [E146](#e146)
 
 `warning` — **No input was found that reaches a row, and none was shown not to**
 
-**When.** A row that writes a cell on a computed column (a derive, a `define`): no input reaching it was found among the rule's examples, by the search the vectors are made with, among the combinations of the inputs' candidate values (up to 4,096), or as the input behind the gap the completeness check finds with the row taken out, and it could not be shown that no input does. The point of such a row is not an input, and whether one reaches it turns on how the expressions relate (a value only whole numbers reach, or one they never do). A row nothing decided is not passed in silence. A row of inputs and enums alone needs no search: its point is an input. A row shown to be left out with no computed value taking part (by a `constraint`, a `never`, koyomi's days or the tables above alone) is decided too: it gets no warning, and passes as such a row of inputs and enums does.
+**When.** A row that writes a cell on a computed column (a derive, a `define`, an output of a rule brought in with `apply` or of another table of this rule): no input reaching it was found among the rule's examples, by the search the vectors are made with, among the combinations of the inputs' candidate values (up to 4,096), as the input behind the gap the completeness check finds with the row taken out, or as an input built inside one of the row's boxes so that the computed columns land in the row's cells (up to eight boxes), and it could not be shown that no input does. Last, where the inputs the columns are worked out from have no more than 16,384 combinations, all of them are run through the reference evaluator, and a row one of them reaches is taken as decided. A row none of them reaches is named with the headline "No input reaches row N, but the check cannot show it": the check decides only by what its certificate carries for a re-checker to confirm, so the row is not made E102. The point of such a row is not an input, and whether one reaches it turns on how the expressions relate (a value only whole numbers reach, or one they never do). The check works each computed column out again over the row's cells — its interval, the inputs times numbers added up, the grid its values sit on, whole numbers — and a row that this leaves out is E102; what is left here is mostly a product of two inputs or a sum of squares (no two whole sides have squares that add up to 7). A row nothing decided is not passed in silence. A row of inputs and enums alone needs no search: its point is an input. A row shown to be left out with no computed value taking part is decided too, and gets no warning: one a `constraint`, a `never` or koyomi's days take part in leaving out passes, as such a row of inputs and enums does, and `rulec coverage` names it; one the rows before it and the tables above alone leave out is E102.
 
 **Fix.** Look at the expressions and the row's conditions together. If some input reaches the row, write it as an example and the warning goes; if none does, delete the row. If deleting it brings a completeness gap (E101), rulec cannot show that the combination never comes either, and the row can stay.
 
@@ -4958,16 +5033,17 @@ rule square_band v1
 
 inputs
   side : number  range >=0 <=10
+  second : number  range >=0 <=10
 
 outputs
   band : number  round down(1)
 
-define area : number = side * side
+define area : number = side * side + second * second
 
 table band_of
 policy first
 | area | -> band : number |
-| 2    | 1                |
+| 7    | 1                |
 | -    | 2                |
 ```
 
@@ -5011,7 +5087,7 @@ Related codes: [E136](#e136)
 
 `warning` — **Shadowing that needs review: an earlier row hides part of a later one**
 
-**When.** In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed. A pair that meets only where no input reaches is not reported, as under E105.
+**When.** In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed, each with an input both rows match and with all of what the cells of the two take, column by column. The example is given as under E105. A pair that meets only where no input reaches is not reported, as under E105.
 
 **Fix.** If it is intended, leave it: `check --diff-base` in CI reports only newly created pairs. To let the later row win, move it above the earlier one. `--show-shadow` lists every pair.
 
@@ -5073,7 +5149,7 @@ Related codes: [W105](#w105), [E105](#e105)
 
 `warning` — **A declaration is never used**
 
-**When.** An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way, nor is a value of an ordered enum when every name of that type is an input whose `range` leaves the value out: no call brings it. Nor is a value a cell that hands an input on (`| false | requested |`) answers with, when no table tests the enum in a column: no table could give it a row of its own.
+**When.** An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way, nor is a value of an ordered enum when every name of that type is an input whose `range` leaves the value out: no call brings it. Nor is a value a cell that hands an input on (`| false | requested |`) answers with, when no table tests the enum in a column: no table could give it a row of its own. A value of an enum is said by E101 alone where the rows E101 asks for, in a table that reads the enum, name it.
 
 **Fix.** If the input serves only as a range check at the entry, mark the declaration `contract_only`. If an enum value is meant to fall through to the default row, mark the value `default`. Otherwise either add the column to a table, or delete the declaration.
 
@@ -5308,9 +5384,9 @@ Related codes: [E035](#e035), [E105](#e105)
 
 `warning` — **An identifier collides, or cannot be used, in a target language**
 
-**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). And for a name with no alias that has a character some target takes in no name (the `²` of `差²`, the `㎡` of `面積㎡`, the `%` of `rate%`, a vowel sign Go does not take): the generated code of every language then writes that character as `_` (`差_`), with a number after it in the same way, a group's and a shape's name alike. A public name (an input, an output, a sequence, a field of an element) of the kind takes an ASCII alias, and stops the check with E011. It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), and the first 63 bytes of a name (PostgreSQL). And where a target cannot take an identifier: a language that reads a name starting with a capital as a constant, a `NamedTuple`, which takes no field starting with `_`, PostgreSQL, which cuts a column's name longer than 63 bytes, the languages in which a name of `_` alone is neither a variable nor a field, SQLite, which gives a column no name of `true` or `false`, and the `.proto`, which takes no name that is not in ASCII. And where a name the author wrote is one the generated code uses itself: the types of the rows that matched, of the answer and of one element, the errors, the helpers that round and the rest, its locals, the names the language has built in, the messages and the fields of the `.proto` (the `trace` of `DecideResponse`), the `<TYPE>_UNSPECIFIED` of an enum's values, the names the service of Connect imports, the package names a language's command keeps, and the name of the file a program starts in. The warning's notes say which targets. Two names every language spells as one (the types of two enums, say) stop the check with E034.
+**When.** A name the author wrote cannot be written as it is in the code of some target; the warning's notes say which targets, and what the name meets there. An ASCII alias is a keyword of one of the targets. An alias becomes a function, a parameter, a type or a member there; a value's alias is said only where it is a keyword, in the same case, of a language that writes names as they are (a language that writes a keyword apart, or a value as a variable, takes it). The rule's alias and an enum's are held to the keywords as each language spells them: an enum's type is in PascalCase, so `float` is Java's `Float`, which is no keyword, and `self` is `Self`, which is one where a language keeps it; the rule's Go package is the alias in lower case without its `_`, so `fall_through` is the keyword `fallthrough`. A value of an enum is said where the variant or the constant a language writes it as is a keyword (`Self`, `BEGIN`, `END`). Where a language writes the name with `_` after a keyword and its code builds (the rule's function, namespace or method, an `enums` file's namespace, an enum's class, a value's constant), the warning only says what that language writes, and names no target. The rule's alias also names a module or a package, and the standard library's own names are held against it there. An `enums` file's name is held to the same words, as the module, the class or the package each language writes the file as, which the rules that read from it import by that name. It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). And for a name with no alias that has a character some target takes in no name (the `²` of `差²`, the `㎡` of `面積㎡`, the `%` of `rate%`, a vowel sign Go does not take): the generated code of every language then writes that character as `_` (`差_`), with a number after it in the same way, a group's and a shape's name alike. A public name (an input, an output, a sequence, a field of an element) of the kind takes an ASCII alias, and stops the check with E011. And where a name the rule's module declares for the rule meets a name made of an enum, in a language that puts the two in one place (Go's `Tier` of a rule `tier` and of an enum `tier`): the generated code of that language alone writes the enum's type with a number after it (`Tier2`), and the names made of the type follow; the warning names the type in each such language and the two names that met. It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), the first 63 bytes of a name (PostgreSQL), and Go's constants of an enum's values, the type's name and the value's joined (an enum read with `import enum` among them). And where a name a caller uses is one a target cannot take: a `NamedTuple`, which takes no field starting with `_` (the outputs of a rule with two or more, the fields of an element), PostgreSQL, which cuts a column's name longer than 63 bytes, the languages in which a name of `_` alone is no field and no label (the outputs of a rule with two or more, the fields of an element, the inputs where they are the fields of a struct or the labels of the arguments), SQLite, which gives a column no name of `true` or `false` (the outputs), the `.proto`, which takes no name that is not in ASCII, and Go, whose command leaves a file whose name starts with `_` out of the package (the rule's name). And where a name the author wrote is one the generated code shows its callers: the types of the rows that matched, of the answer and of one element, the errors, the messages and the fields of the `.proto` (the `trace` of `DecideResponse`), the `<TYPE>_UNSPECIFIED` of an enum's values, the package names a language's command keeps, the name of the file a program starts in, and the name under which the rule's module hands on an enum it reads with `import enum`. A name the generated code keeps to itself (a helper, a local, a module it imports) is not said: where the two meet, the code of that language holds the rule's name under another. Nor is a builtin the code of a language reaches another way. The `swift` target builds the rule's module, its runner and the modules of the `enums` files it reads into one module, and it is raised where two of them declare one name — where the two declare the same enum (the enum of the same rule, with the same values in the same order), the enum is written once, in the file's module, and it is not raised. Two names every language spells as one (the types of two enums, say) stop the check with E034.
 
-**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword or a character a target takes in no name. Of two names that are one identifier in a target you generate, give one an alias; to an identifier a target cannot take, or a name its generated code uses itself, give an alias it takes (one that starts with neither a capital nor `_`, is 63 bytes or fewer, and is no name the generated code uses). For a target you do not generate, leave it.
+**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`. Of two names that are one identifier in a target you generate, give one an alias; to a name a target cannot take, or one its generated code shows its callers, give an alias it takes (one that does not start with `_`, is 63 bytes or fewer, and is no name the generated code shows). To keep an enum's type unnumbered, give the rule or the enum an alias. For a target you do not generate, leave it; while the warning names a target you ask for, `rulec gen` and `ritsu gen` write nothing (E153). One that names no target (a name some language writes with `_`, say) stops nothing.
 
 **Smallest reproduction**:
 
@@ -5393,27 +5469,27 @@ policy unique
 | >5  | the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended |
 ```
 
-**A name Ruby reads as a constant**:
+**An enum named like the rule**:
 
 ```rule
-rule base_fee v1
+rule tier v1
+
+enum tier = basic | gold
 
 inputs
-  qty : number  range >=0 <=10
+  member : tier
 
 outputs
   fee : money[USD]  round down(1USD)
 
-define Base : money[USD] = 3USD
-
-table fee_by_qty
+table fee_by_tier
 policy unique
-| qty | -> fee |
-| <=5 | Base   |
-| >5  | 2USD   |
+| member | -> fee |
+| basic  | 5USD   |
+| gold   | 0USD   |
 ```
 
-**A name the generated code uses itself**:
+**A name the generated code shows its callers**:
 
 ```rule
 rule fee_and_trace v1
@@ -5432,7 +5508,7 @@ policy unique
 | >5  | 2USD   | 2     |
 ```
 
-**A name of `_` alone**:
+**An output named `_` alone**:
 
 ```rule
 rule underscore_fee v1
@@ -5442,14 +5518,13 @@ inputs
 
 outputs
   fee : money[USD]  round down(1USD)
-
-define _ : money[USD] = 3USD
+  _   : number  round down(1)
 
 table fee_by_qty
 policy unique
-| qty | -> fee |
-| <=5 | _      |
-| >5  | 2USD   |
+| qty | -> fee | _ |
+| <=5 | 3USD   | 1 |
+| >5  | 2USD   | 2 |
 ```
 
 **A name with a character a target takes in no name**:
@@ -5473,7 +5548,7 @@ policy unique
 | >50     | 9USD   |
 ```
 
-Related codes: [E009](#e009), [E011](#e011), [E034](#e034)
+Related codes: [E009](#e009), [E011](#e011), [E034](#e034), [E153](#e153)
 
 ## W115
 
@@ -5514,7 +5589,7 @@ Related codes: [E024](#e024)
 
 `warning` — **Unconfirmed overlap: an input may match both rows**
 
-**When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input and the thresholds inside a boolean `define` no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `twice` above is always even and never exactly `5JPY`, but `2.5JPY` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible. A pair that meets only where the rows of a table above leave a derive no values does not fall here either: the check reads that and drops it.
+**When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input and the thresholds inside a boolean `define` no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `twice` above is always even and never exactly `5JPY`, but `2.5JPY` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible. A pair that meets only where the rows of a table above leave a derive no values does not fall here either: the check reads that and drops it. Where the inputs the columns are worked out from have no more than 16,384 combinations, all of them are run through the reference evaluator: an input both rows match makes the pair E105, and with none, the headline says the two rows take a common combination and the notes say no input matches both. The check decides only by what its certificate carries for a re-checker to confirm, so the overlap stays unconfirmed, and the guard in the generated code stays.
 
 **Fix.** If an order satisfying both conditions can exist, fix the rows: the outputs differ, so a match is a contradiction. If none can exist, leave it — the generated code carries a guard that returns an error rather than silently picking the earlier row.
 
@@ -6328,3 +6403,308 @@ result average = per_unit
 ```
 
 Related codes: [E047](#e047), [E061](#e061), [E132](#e132)
+
+## E150
+
+`error` — **The range of the definition does not meet the values it can reach**
+
+**When.** The `range` on a `define` line meets none of the values the definition can reach. A `define`'s `range` is the range the rule accepts for the value: neither the generated code nor `rulec run` takes a call whose value falls outside it, which is refused where the value is worked out, so a range that meets none of the reachable values would refuse every call. A range wider than what the value reaches, or one that meets part of it, is not reported: narrowing what the value reaches is most often why it is written. The range of a `sum` or a `count` refuses a value outside it once the walk is over, so one no sequence comes to gets the same code. A sequence has at most as many elements as the least top of the `count`s over it, and at least as many as the greatest bottom of them; where a field of an enum or a truth value is `unique`, no two elements share a value of it, so it has at most as many as the field has values. Counted from those and from the ends of the summed column's range, it appears when the bottom of a sum is never reached (the most elements times the top of one element is under it), when the top of a sum is always passed (the fewest elements times the bottom of one element is over it), and when the bottom of a `count` is above the most elements the sequence can have. So does a range that meets what the value reaches and holds none of the points it takes, where it takes only points on a step: `gifts * 2 + 1` is odd, and `range >=2 <=2` holds no odd number. The points are read off the expression (a literal, a name, a sum, a difference, a product, a quotient by a whole constant, `min`, `max`, a rounding to a grid written as a literal, `mod` by a constant, `allocate`, `isqrt`); of an expression they are not read off, nothing is said.
+
+**Fix.** Write ends that meet the reachable values, which the mark on the error gives. Without the range, the value takes every value it reaches. A relation between inputs is a `constraint`. For a `sum` and a `count`, the note writes the product of the number of elements and the end of one element: move an end of the range, of the `count`, or of the summed column until a sequence reaches it. For a value that takes only points on a step, the mark says which points, and the hint the ones nearest the range.
+
+**Smallest reproduction**:
+
+```rule
+rule card_fee v1
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1000000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=40000JPY
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+
+result charged = fee
+```
+
+**The bottom of a sum that the most elements, each at its top, come short of**:
+
+```rule
+rule gift_basket v1
+
+elements lines
+  price   : money[JPY]  range >=0JPY <=50000JPY
+  wrapped : bool
+
+count wrapped_items over lines where wrapped  range >=0 <=5
+sum amount over lines of price  range >=300000JPY <=1000000JPY
+
+outputs
+  free_shipping : bool
+  card          : bool
+
+table shipping
+policy unique
+| amount      | -> free_shipping |
+| <500000JPY  | false            |
+| >=500000JPY | true             |
+
+table card_of
+policy unique
+| wrapped_items | -> card |
+| <2            | false   |
+| >=2           | true    |
+```
+
+**The top of a sum that the fewest elements, each at its bottom, come past**:
+
+```rule
+rule gift_basket v1
+
+elements lines
+  price   : money[JPY]  range >=1000JPY <=50000JPY
+  wrapped : bool
+
+count wrapped_items over lines where wrapped  range >=3 <=5
+sum amount over lines of price  range >=0JPY <=2000JPY
+
+outputs
+  free_shipping : bool
+  card          : bool
+
+table shipping
+policy unique
+| amount    | -> free_shipping |
+| <1000JPY  | false            |
+| >=1000JPY | true             |
+
+table card_of
+policy unique
+| wrapped_items | -> card |
+| 3             | false   |
+| >=4           | true    |
+```
+
+**The bottom of a `count` above the most elements the sequence can have**:
+
+```rule
+rule gift_basket v1
+
+elements lines
+  wrapped : bool
+  fragile : bool
+
+count wrapped_items over lines where wrapped  range >=6 <=10
+count fragile_items over lines where fragile  range >=0 <=5
+
+outputs
+  card : bool
+
+table card_of
+policy unique
+| wrapped_items | fragile_items | -> card |
+| <8            | -             | false   |
+| >=8           | -             | true    |
+```
+
+**A range that holds none of the points the value takes**:
+
+```rule
+rule wrapping v1
+
+inputs
+  gifts : number  range >=0 <=5
+
+define sheets : number = gifts * 2 + 1  range >=2 <=2
+
+outputs
+  large_roll : bool
+
+table roll_of
+policy unique
+| sheets | -> large_roll |
+| -      | true          |
+```
+
+Related codes: [E112](#e112), [E140](#e140), [E103](#e103), [E017](#e017), [E030](#e030), [E061](#e061)
+
+## E151
+
+`error` — **An output is decided by nothing, or read before it is decided**
+
+**When.** A declared output has nothing that decides it: a table's column after `->`, a `define` or a `derive` of the same name, a `sum`, `count`, `max`, `min` or `fold` that answers it, an output an `apply` brings in, or, for the first output, the `result` line. An output that may have no value (`?`) is held to the same. Or a table or a definition reads an output above what decides it: the tables and definitions are worked out in the order written (the tables that decide one output together, at the last of them), and `result` decides the first output after all of them, so there is no value yet where it is read. So does the expression of an output's `define` that reads that output. Such a rule used to pass the check: `rulec run` answered the output with no value, a table that read it matched no row, and the generated code read a name it had never set.
+
+**Fix.** Write the table or the definition that decides the output, or take it out of `outputs` if the rule does not answer it. Where it is read above what decides it, move the line that reads it below. To read the first output that only `result` decides, write a `define` of it above what reads it in place of the `result` line. Write the expression of an output's `define` from the inputs and from what the lines above it decide.
+
+**Smallest reproduction**:
+
+```rule
+rule card_fee v1
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+  review  : bool
+
+table review_of
+| fee         | -> review |
+| <10_000JPY  | false     |
+| >=10_000JPY | true      |
+```
+
+**An output read above the definition that decides it**:
+
+```rule
+rule card_fee v1
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+  review  : bool
+
+table review_of
+| charged     | -> review |
+| <10_000JPY  | false     |
+| >=10_000JPY | true      |
+
+define charged : money[JPY] = down(amount * 3%, 1JPY)
+```
+
+**An output read in the expression of the definition that decides it**:
+
+```rule
+rule card_fee v1
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+
+define charged : money[JPY] = charged + down(amount * 3%, 1JPY)
+```
+
+Related codes: [E009](#e009), [E152](#e152), [E016](#e016), [E107](#e107)
+
+## E152
+
+`error` — **A table has no output column**
+
+**When.** A table's heading has no `->`. A table answers in the columns after `->`; in a heading with none, every column is read as a condition. No row of such a table decides anything, and a column that names an output reads, as a condition, an output nothing has decided. Such a table used to pass the check, the output it was meant to decide came back with no value, and the completeness check asked for a row for every value that output can take. No table is right with no output column: the headings of `chances`, `examples`, `scenario` and `sequence` are read by rules of their own.
+
+**Fix.** Write `->` before the first column the rows answer. Where the columns at the end of the heading name outputs, the error names the first of them and shows the heading with the `->` in place.
+
+**Smallest reproduction**:
+
+```rule
+rule card_fee v1
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+define fee : money[JPY] = down(amount * 3%, 1JPY)
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+  review  : bool
+
+table review_of
+| fee         | review |
+| <10_000JPY  | false  |
+| >=10_000JPY | true   |
+
+result charged = fee
+```
+
+Related codes: [E151](#e151), [E070](#e070), [E111](#e111), [E026](#e026)
+
+## E153
+
+`error` — **The generated code cannot take a name as it stands**
+
+**When.** A target named to `rulec gen` or `ritsu gen` (`--target`, `--extra connect`) writes code that cannot take a name as it stands, as a W121 says: W121 is the warning that says, target by target, where a name keeps the generated code from building or loading, or makes it answer under another name. Named such a target, gen says the W121 as an error of this code and exits 1, writing the targets the warnings do not name (`ritsu gen` writes nothing of the package). A W121 that only says the generated code writes a name another way (a keyword with `_` after it, a name with a number after it, and the like) does not stop it, nor does the W121 of a target not named, and `rulec check` does not give this code: it says the W121. gen used to write the code all the same, and left code that did not build.
+
+**Fix.** Change the name or its alias as the notes of the W121 say. For a target you do not use, name only the ones you use with `--target`.
+
+**Smallest reproduction**:
+
+```rule
+rule parcel_flags v1
+
+inputs
+  weight : number  range >=1 <=100
+
+outputs
+  heavy : bool
+  _tell : bool
+
+table flags_of
+| weight | -> heavy | _tell |
+| <=10   | false    | false |
+| >10    | true     | true  |
+```
+
+Related codes: [W121](#w121), [E034](#e034)
+
+## E154
+
+`error` — **No such rounding mode**
+
+**When.** The word after an output's `round` is none of the five rounding modes (`down`, `up`, `half_up`, `half_down`, `half_even`). The error names the word and the five, and the mode the word is nearest in spelling, or a common name of, where there is one (`half_up` for `half`, `down` for `DOWN` or `truncate`). It used to pass the check without a word: the checks that read the grid (E106 on a value off the grid, among others) read the output as one with no rounding, the generated code rounded down in most languages, and NumPy's failed when run.
+
+**Fix.** Write one of the five. A source that rounds half up takes `half_up`, one that cuts the fraction off takes `down`, and one that rounds any fraction away takes `up`.
+
+**Smallest reproduction**:
+
+```rule
+rule shipping_fee v1
+
+inputs
+  qty : number  range >=1 <=10
+
+outputs
+  fee : money[USD]  round half(1USD)
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | 6USD   |
+| >5  | 12USD  |
+```
+
+Related codes: [E104](#e104), [E103](#e103), [E106](#e106), [E118](#e118)
+
+## E155
+
+`error` — **The same clause is written twice**
+
+**When.** A clause of a declaration's tail (`range`, `round`, `contract_only`, `random`, `unique`), or a `policy` or `overrides` line under a table, written a second time. Only one of the two used to take effect, without a word: the first `round` won over the second on an output, the last `range` over the earlier on an input, and `policy unique first` dropped `first`. A clause written twice is most often a line left half written or pasted wrong, and which of the two counts cannot be told from the line.
+
+**Fix.** Take one of the two off. Only one ever took effect.
+
+**Smallest reproduction**:
+
+```rule
+rule shipping_fee v1
+
+inputs
+  qty : number  range >=1 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)  round up(1USD)
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | 6USD   |
+| >5  | 12USD  |
+```
+
+Related codes: [E047](#e047), [E007](#e007), [E034](#e034)

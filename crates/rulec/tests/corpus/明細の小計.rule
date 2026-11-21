@@ -1,0 +1,41 @@
+rule 明細の小計(line_subtotals) v1
+description "注文の金額と、送料が無料になるか。明細の小計は数量かける単価で、一件の明細は 1000 万円まで受け付ける。それを超える明細は、小計を計算したところで受け付けない。要素ごとに計算する値に範囲を付ける例"
+
+# 一件ぶんの明細。呼び出し側は何件でも渡す
+elements 明細(lines)
+  数量(quantity) : number  range >=1 <=10000
+  単価(price)    : money[円]  range >=1円 <=50000000円
+
+# この範囲は規則が明細の小計として受け付ける値で、小計がとりうる値ではない。
+# 10000 個の 5000 万円は 5000 億円になる。
+define 小計(subtotal) : money[円] = 数量 * 単価  range >=1円 <=10000000円
+
+sum 金額(amount) over 明細 of 小計  range >=0円 <=100000000円
+
+outputs
+  金額(amount)            : money[円]  round down(1円)
+  送料無料(free_shipping) : bool
+
+table 送料(shipping)
+policy unique
+| 金額      | -> 送料無料 |
+| <10000円  | false       |
+| >=10000円 | true        |
+
+examples
+| 明細     | -> 金額    | 送料無料 |
+| 二件     | 7000円     | false    |
+| 大口一件 | 10000000円 | true     |
+| 空       | 0円        | false    |
+
+sequence 二件(two_lines)
+| 数量 | 単価   |
+| 2    | 1500円 |
+| 1    | 4000円 |
+
+sequence 大口一件(one_large)
+| 数量 | 単価     |
+| 100  | 100000円 |
+
+sequence 空(no_lines)
+| 数量 | 単価 |

@@ -29,6 +29,9 @@ fn code_of(reason: &str) -> Option<&'static str> {
         | "one child at most (value)"
         | "one child at most (field)"
         | "cedar has no nested kinds"
+        | "a kind without a name (who)"
+        | "ringi has no nested kinds"
+        | "unknown kind for ringi"
         | "attribute only right after principal or resource"
         | "nothing under policy"
         | "only input or context under action" => Some("E012"),
@@ -77,7 +80,7 @@ fn every_line_of_the_shared_table() {
             }
         }
     }
-    assert!(ok == 58 && errors == 34, "{ok} lines of JSON and {errors} of errors");
+    assert!(ok == 64 && errors == 37, "{ok} lines of JSON and {errors} of errors");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

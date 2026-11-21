@@ -146,7 +146,7 @@ and Go, and [Writing kaname](language.md) what they are written with.
 - An error comes with an input that shows it. A place the check can neither show nor break is a
   warning, and the generated code checks it there.
 - The code generated in TypeScript, Python, Go and Rust, and the package's Wasm, answers what the
-  reference interpreter answers, on every vector of 52 modules of the examples and the tests, in
+  reference interpreter answers, on every vector of 60 modules of the examples and the tests, in
   English and in Japanese.
 - The evaluation and the analysis of ranges are written again in Lean, with proofs that the analysis
   is sound and that a function it finds total does not fail.

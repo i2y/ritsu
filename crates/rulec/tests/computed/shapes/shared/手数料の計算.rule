@@ -1,0 +1,10 @@
+rule 手数料の計算(calc) v1
+description "金額の 3%（円未満は切り捨て）の手数料。define が計算する出力"
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+define 手数料(fee) : money[円] = down(金額 * 3%, 1円)
+
+outputs
+  手数料(fee) : money[円]  round down(1円)

@@ -1,0 +1,14 @@
+warning[W121]: `_` is a name the code generated for Python, Rust, Go, Swift, Java, Wasm and Connect cannot take
+  --> tests/own_names/output_named_underscore.rule:9
+  |
+9 |   _   : number  round down(1)
+  |   ^ the output's name
+  |
+ Python: the outputs of a rule with two or more are the fields of `Output`, a `NamedTuple`, and a `NamedTuple` takes no field whose name starts with `_`, so the generated Python file does not load.
+ Rust, Swift and Wasm: the outputs of a rule with two or more are the fields of the `Output` struct, and `_` is the pattern that binds nothing: it names no field.
+ Go: the outputs of a rule with two or more are the fields of the `Output` struct, and `_` is the blank identifier: a field of that name can be neither written nor read.
+ Java: the outputs of a rule with two or more are the components of the `Output` record, and `_` is a keyword.
+ Connect: the service runs the Python module, which does not load.
+ For a target you do not generate, leave it. For one you do, give it an alias (`_(<alias>)`).
+
+ok tests/own_names/output_named_underscore.rule

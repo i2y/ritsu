@@ -1,0 +1,4 @@
+エラー[E401]: tests/mutants/E401_a_requester_with_no_deadline.ringi:23:3: 主張 `ends_in_time` は、どのチケットも 30 営業日のうちに終わると言いますが、終わらないチケットがあります
+    23 |   ends_in_time : every ticket ends within 30 business days
+  = 20 行目: 戻ったチケットは、申請者が出し直すまで待ち続けます（`resubmit within …` の行がありません）。
+  = 終わらせるなら、`resubmit within …` を書いてください。待ってよいなら、主張を消してください。

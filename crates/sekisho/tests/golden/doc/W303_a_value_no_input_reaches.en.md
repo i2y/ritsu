@@ -35,7 +35,7 @@ Look at an order
 - 4 combinations, 2 of them allowed.
 
 > [!NOTE]
-> Some combinations of this action rest on a value another language could not say can happen, and are counted in case it can; the tables below hold them too (see What check warns of).
+> Some combinations of this action rest on a value another language could not say can happen, and are counted in case it can; the tables below hold them too. The answers that could not be decided for it are under What check warns of below.
 
 #### Allowed
 

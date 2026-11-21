@@ -1,0 +1,33 @@
+rule 年齢の区分(band) v1
+description "書かなくてもよい年齢の区分。書かないときだけの値があり、年齢を渡す呼び出しはその値にならない"
+
+enum 区分(band) = 不明(unknown) | 子ども(child) | 大人(adult)
+enum 席(seat) = 立ち見(standing) | 座席(seated)
+
+inputs
+  年齢(age) : number?  range >=1 <=100
+  席(seat)  : 席?
+
+outputs
+  区分(band)  : 区分
+  場所(place) : 区分
+
+table 年齢から(band_of)
+policy unique
+| 年齢 | -> 区分 |
+| none | 不明    |
+| <13  | 子ども  |
+| >=13 | 大人    |
+
+table 席から(place_of)
+policy unique
+| 席     | -> 場所 |
+| none   | 不明    |
+| 立ち見 | 子ども  |
+| 座席   | 大人    |
+
+examples
+| 年齢 | 席     | -> 区分 | 場所   |
+| none | none   | 不明    | 不明   |
+| 6    | 立ち見 | 子ども  | 子ども |
+| 30   | 座席   | 大人    | 大人   |

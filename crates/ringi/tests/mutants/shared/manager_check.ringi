@@ -1,0 +1,10 @@
+route manager_check v1 "A check by the manager"
+description "A shared route of one stage (fictional): the requester's manager checks the request. It titles nothing in another language"
+
+use organization org from "small.ringi"
+
+route
+  check  manager
+
+who
+  manager = manager of requester

@@ -1,0 +1,8 @@
+ok order_lines.rule
+ok order.kn: 関数 1 個、fails rule
+警告[ritsu W201]: order.kn:11:3: 規則 order_lines を呼ぶところで、前提 `5 <= amount <= 100_000_000` が保たれるかを決められません
+    11 |   order_lines(lines: map(lines, l => order_lines.lines { quantity: l.quantity, price: l.price })).amount
+  = 並び `lines` に渡すリストは 1 件のことがあります。その長さと要素の範囲の端では `5 <= amount <= 100_000_000` が成り立ちませんが、関数のベクタに、そういうリストを渡す入力はありませんでした。
+  = kaname の生成したコードが、走らせたときにその場所で確かめます。規則から生成したコードが入口で受け付けなければ、関数はそこで `rule` で失敗します。
+  = 呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡すと、示せるようになります。
+ritsu check: ファイル 2 個（rulec 1、kaname 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 2 か所、決められない 1 か所

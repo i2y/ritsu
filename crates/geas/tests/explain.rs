@@ -21,12 +21,14 @@ fn the_whole_table_in_both_languages() {
     assert!(all.contains(&one), "{one}");
 }
 
-/// The codes the table has, with their repros, from `geas explain --all --json`.
+/// The codes the table has, with their repros, from `geas explain --all --json`: one indented
+/// array.
 fn table() -> Vec<Json> {
     let s = Scratch::new("explain-json");
     let (out, err, code) = run(s.path(), &["explain", "--all", "--json"], &[]);
     assert_eq!((err.as_str(), code), ("", 0));
-    out.lines().map(json).collect()
+    assert!(out.starts_with("[\n  {\n"), "not one indented array: {out}");
+    json(&out).arr().to_vec()
 }
 
 #[test]

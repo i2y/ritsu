@@ -74,8 +74,8 @@ pub fn ledger() -> Ledger {
             "E002",
             tr!("この位置に書けない語があります", "A word is written where it does not belong"),
             tr!(
-                "行の中で、構文がその語を受け付けないとき。知らない操作、`else` のあとの知らない扱い、`roll` のあとの知らない慣行など。",
-                "The syntax does not take the word there: an operation that does not exist, an unknown way after `else`, an unknown convention after `roll`, and the like."
+                "行の中で、構文がその語を受け付けないとき。知らない操作、`else` のあとの知らない扱い、`roll` のあとの知らない慣行など。行の初めに書けないもので始まる行は、その行で一度だけ出て、その下の字下げした行と表の行は何も言いません（字下げを忘れた日付の操作なら、注が字下げを言います）。",
+                "The syntax does not take the word there: an operation that does not exist, an unknown way after `else`, an unknown convention after `roll`, and the like. A line that starts with what no line starts with is said once: the indented lines and the rows under it say nothing (for an operation of a date with no indent, the note says to indent it)."
             ),
             tr!("注に挙がる書き方のどれかにしてください。", "Use one of the forms the note lists."),
             "dates t v1\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  next month\n",
@@ -144,8 +144,8 @@ pub fn ledger() -> Ledger {
             "E008",
             tr!("宣言されていない名前です", "A name is not declared"),
             tr!(
-                "日付の始まり、操作の数、条件、例の列、`closed` の表に、宣言の無い名前を書いたとき。",
-                "The start of a date, a number in an operation, a claim, an example column or a `closed` table names something not declared."
+                "日付の始まり、操作の数、条件、例の列、`closed` の表に、宣言の無い名前を書いたとき。同じ名前を何か所にも書いたときは、最初に書いた所で一度だけ出て、ほかの行の番号を注に挙げます。",
+                "The start of a date, a number in an operation, a claim, an example column or a `closed` table names something not declared. A name written in several places is said once, where it is first written, and the note gives the lines of the others."
             ),
             tr!("名前の書き違いを直すか、宣言を足してください。", "Correct the spelling, or declare it."),
             "dates t v1\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = e\n  + 1 day\n",
@@ -223,8 +223,8 @@ pub fn ledger() -> Ledger {
             "E015",
             tr!("`use calendar` の先が使えません", "The calendar of `use calendar` cannot be used"),
             tr!(
-                "読めないとき、calendar のファイルでないとき、読んでいくと元のファイルに戻るとき、オフセットが食い違うとき。",
-                "It cannot be read, it is not a calendar file, reading it leads back to the file, or its offset differs."
+                "読めないとき、calendar のファイルでないとき、koyomi の検査を通らないとき、読んでいくと元のファイルに戻るとき、オフセットが食い違うとき。検査を通らないカレンダーは、注にそのエラーを三つまで挙げます。カレンダー自身の診断は、カレンダーを検査したところで一度だけ出ます。",
+                "It cannot be read, it is not a calendar file, it does not pass koyomi's check, reading it leads back to the file, or its offset differs. For a calendar that does not pass, the notes give up to three of its errors; the calendar's own diagnostics are said once, where it is checked."
             ),
             tr!("パス（この .cal のあるディレクトリからの相対パス）か、読む先のファイルを直してください。", "Correct the path (from this .cal's directory) or the file it names."),
             "dates t v1\nuse calendar \"nowhere.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n",
@@ -507,7 +507,7 @@ pub fn ledger() -> Ledger {
         e(
             "E304",
             tr!("例に入力か日付の列が足りません", "The examples lack a column for an input or a date"),
-            tr!("`examples` の表に、入力か日付の列が無いとき。人が書いた値だけが、参照インタプリタと生成したコードに共通の誤りを見つけられます。", "The `examples` table has no column for an input or a date. Only values a person wrote can catch a mistake the reference interpreter and the generated code share."),
+            tr!("`examples` の表に、入力か日付の列が無いとき。人が書いた値だけが、参照インタプリタと生成したコードに共通の誤りを見つけられます。表に、宣言の無い名前の列があるときは出ません。その名前は E008 が言うので、宣言の名前を誤ったときに、同じ誤りを二度言いません。", "The `examples` table has no column for an input or a date. Only values a person wrote can catch a mistake the reference interpreter and the generated code share. It is not said when the table has a column for a name that is not declared: E008 says that name, and a name written wrong where it is declared is not said twice."),
             tr!("足りない列を足してください（日付の列は `-> <名前>`）。", "Add the columns missing (a date's is `-> <name>`)."),
             "dates t v1\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  + 1 day\n\nexamples\n| d          |\n| 2026-01-01 |\n",
             &["E303"],

@@ -1,0 +1,21 @@
+rule 先に当たる行で決まる手数料(first_fee_above) v1
+description "policy first の表が書く手数料を、それを決める金額と一緒に読む。50 円になるのは 38 円未満のときだけで、38 円からは上の表の初めの行が金額をとるので、38 円からで 50 円の手数料の行は求められない"
+
+enum 選択(choice) = 一(one) | 二(two)
+
+inputs
+  金額(amount) : money[円]  range >=0円 <=130円
+
+outputs
+  答え(x) : 選択
+
+table 手数料の表(fee_of)
+policy first
+| 金額   | -> 手数料(fee) : money[円] |
+| >=38円 | 260円                      |
+| -      | 50円                       |
+
+table 選ぶ(pick)
+| 金額   | 手数料 | -> 答え |
+| <38円  | 50円   | 一      |
+| >=38円 | 260円  | 二      |

@@ -44,21 +44,24 @@ pub fn format_duration(secs: u64) -> String {
     format!("{secs} {}", if secs == 1 { "second" } else { "seconds" })
 }
 
-pub fn call_from_json(book: &Book, v: &Value) -> Result<Call, String> {
-    let op_name = v["op"].as_str().ok_or("a step needs `op`")?;
-    let op = Op::parse(op_name).ok_or_else(|| format!("unknown op `{op_name}`"))?;
-    let kind_name = v["kind"].as_str().ok_or("a step needs `kind`")?;
-    let kind = book.transfer(kind_name).ok_or_else(|| format!("the book has no transfer `{kind_name}`"))?;
+/// One step of a scenario as JSON, as a call of the book; Err says what is wrong with it, in both
+/// languages.
+pub fn call_from_json(book: &Book, v: &Value) -> Result<Call, Text> {
+    let op_name = v["op"].as_str().ok_or_else(|| tr!("ステップには `op` が要ります", "a step needs `op`"))?;
+    let op = Op::parse(op_name).ok_or_else(|| tr!("`{op_name}` という操作はありません", "unknown op `{op_name}`"))?;
+    let kind_name = v["kind"].as_str().ok_or_else(|| tr!("ステップには `kind` が要ります", "a step needs `kind`"))?;
+    let kind = book.transfer(kind_name).ok_or_else(|| tr!("帳簿に振替 `{kind_name}` はありません", "the book has no transfer `{kind_name}`"))?;
     let t = &book.transfers[kind];
     let mut args: Vec<Option<Val>> = vec![None; t.params.len()];
-    let given = v["args"].as_object().ok_or("a step needs `args`")?;
+    let given = v["args"].as_object().ok_or_else(|| tr!("ステップには `args` が要ります", "a step needs `args`"))?;
+    let no_param = |name: &str| tr!("振替 `{kind_name}` に引数 `{name}` はありません", "`{kind_name}` has no parameter `{name}`");
     for (name, x) in given {
-        let i = t.params.iter().position(|p| &p.name == name).ok_or_else(|| format!("`{kind_name}` has no parameter `{name}`"))?;
+        let i = t.params.iter().position(|p| &p.name == name).ok_or_else(|| no_param(name))?;
         args[i] = Some(match (&t.params[i].ty, x) {
             (Ty::Str, Value::String(s)) => Val::Str(s.clone()),
-            (Ty::Amount(_), Value::Number(n)) => Val::Amt(n.as_i64().map(|v| v as i128).ok_or_else(|| format!("`{name}` is not a whole number in range"))?),
-            (Ty::Str, _) => return Err(format!("`{name}` is a string")),
-            (Ty::Amount(_), _) => return Err(format!("`{name}` is an amount, a whole number")),
+            (Ty::Amount(_), Value::Number(n)) => Val::Amt(n.as_i64().map(|v| v as i128).ok_or_else(|| tr!("`{name}` は範囲に収まる整数ではありません", "`{name}` is not a whole number in range"))?),
+            (Ty::Str, _) => return Err(tr!("`{name}` は文字列です", "`{name}` is a string")),
+            (Ty::Amount(_), _) => return Err(tr!("`{name}` は額（整数）です", "`{name}` is an amount, a whole number")),
         });
     }
     let amounts = match v.get("amounts") {
@@ -66,13 +69,13 @@ pub fn call_from_json(book: &Book, v: &Value) -> Result<Call, String> {
         Some(Value::Object(m)) => {
             let mut a = BTreeMap::new();
             for (name, x) in m {
-                let i = t.params.iter().position(|p| &p.name == name).ok_or_else(|| format!("`{kind_name}` has no parameter `{name}`"))?;
-                let n = x.as_i64().ok_or_else(|| format!("`{name}` is an amount, a whole number"))?;
+                let i = t.params.iter().position(|p| &p.name == name).ok_or_else(|| no_param(name))?;
+                let n = x.as_i64().ok_or_else(|| tr!("`{name}` は額（整数）です", "`{name}` is an amount, a whole number"))?;
                 a.insert(i, n as i128);
             }
             Some(a)
         }
-        Some(_) => return Err("`amounts` is an object".into()),
+        Some(_) => return Err(tr!("`amounts` はオブジェクトです", "`amounts` is an object")),
     };
     let c = Call { op, kind, args, amounts };
     crate::interp::validate(book, &c)?;
@@ -104,32 +107,39 @@ pub fn call_to_json(book: &Book, c: &Call) -> Value {
     Value::Object(o)
 }
 
-pub fn from_json(book: &Book, v: &Value) -> Result<Scenario, String> {
+/// What is wrong at a step of a scenario: its number, then what.
+fn at_step(i: usize, e: Text) -> Text {
+    let n = i + 1;
+    tr!("ステップ {n}: {}", "step {n}: {}", e.ja; e.en)
+}
+
+/// A scenario as JSON; Err says what is wrong with it, in both languages.
+pub fn from_json(book: &Book, v: &Value) -> Result<Scenario, Text> {
     if let Some(b) = v.get("book").and_then(|b| b.as_str()) {
         if b != book.name {
-            return Err(format!("the scenario is for the book `{b}`, not `{}`", book.name));
+            return Err(tr!("このシナリオは帳簿 `{b}` のもので、`{}` のものではありません", "the scenario is for the book `{b}`, not `{}`", book.name));
         }
     }
     let name = v["name"].as_str().unwrap_or("").to_string();
     let mut steps = Vec::new();
-    for (i, s) in v["steps"].as_array().ok_or("a scenario needs `steps`")?.iter().enumerate() {
-        let at = |e: String| format!("step {}: {e}", i + 1);
+    for (i, s) in v["steps"].as_array().ok_or_else(|| tr!("シナリオには `steps` が要ります", "a scenario needs `steps`"))?.iter().enumerate() {
+        let at = |e: Text| at_step(i, e);
         match s["op"].as_str() {
             Some("pass") => {
-                let d = s["duration"].as_str().ok_or_else(|| at("`pass` needs `duration`".into()))?;
-                let secs = parse_duration(d).ok_or_else(|| at(format!("`{d}` is not a duration like `31 minutes`")))?;
+                let d = s["duration"].as_str().ok_or_else(|| at(tr!("`pass` には `duration` が要ります", "`pass` needs `duration`")))?;
+                let secs = parse_duration(d).ok_or_else(|| at(tr!("`{d}` は `31 minutes` のような時間の長さではありません", "`{d}` is not a duration like `31 minutes`")))?;
                 steps.push(Step::Pass(secs, d.to_string()));
             }
             Some("together") => {
-                let callers = s["callers"].as_array().ok_or_else(|| at("`together` needs `callers`".into()))?;
+                let callers = s["callers"].as_array().ok_or_else(|| at(tr!("`together` には `callers` が要ります", "`together` needs `callers`")))?;
                 let mut cs = Vec::new();
                 let mut total = 0;
                 for c in callers {
-                    let ops = c.as_array().ok_or_else(|| at("each caller is a list of operations".into()))?;
+                    let ops = c.as_array().ok_or_else(|| at(tr!("`callers` の一つずつは、操作の並びです", "each caller is a list of operations")))?;
                     let mut list = Vec::new();
                     for o in ops {
                         if matches!(o["op"].as_str(), Some("pass") | Some("together")) {
-                            return Err(at("`pass` and `together` cannot be inside `together`".into()));
+                            return Err(at(tr!("`together` の中に `pass` と `together` は書けません", "`pass` and `together` cannot be inside `together`")));
                         }
                         list.push(call_from_json(book, o).map_err(at)?);
                     }
@@ -137,7 +147,10 @@ pub fn from_json(book: &Book, v: &Value) -> Result<Scenario, String> {
                     cs.push(list);
                 }
                 if total > MAX_TOGETHER {
-                    return Err(at(format!("`together` holds {total} operations; at most {MAX_TOGETHER} can be tried in every order")));
+                    return Err(at(tr!(
+                        "`together` に操作が {total} 個あります。全部の順で試せるのは {MAX_TOGETHER} 個までです",
+                        "`together` holds {total} operations; at most {MAX_TOGETHER} can be tried in every order"
+                    )));
                 }
                 steps.push(Step::Together(cs));
             }
@@ -204,10 +217,10 @@ pub fn interleavings(lens: &[usize]) -> Vec<Vec<usize>> {
 
 /// Run a scenario from an empty book. Without `together` there is one run; with it, one
 /// for each distinct way it can come out.
-pub fn run(book: &Book, s: &Scenario) -> Result<Vec<Run>, String> {
+pub fn run(book: &Book, s: &Scenario) -> Result<Vec<Run>, Text> {
     let mut runs = vec![Run { steps: vec![], state: State::default() }];
     for (i, st) in s.steps.iter().enumerate() {
-        let at = |e: String| format!("step {}: {e}", i + 1);
+        let at = |e: Text| at_step(i, e);
         let mut next: Vec<Run> = Vec::new();
         for r in runs {
             match st {
@@ -326,7 +339,7 @@ pub fn result_json(book: &Book, s: &Scenario, r: &Run) -> Value {
 
 /// The result of a scenario as PLAN 0.3 writes it: one result, or with `together`, every
 /// distinct one, in the order of their text.
-pub fn run_json(book: &Book, s: &Scenario) -> Result<Value, String> {
+pub fn run_json(book: &Book, s: &Scenario) -> Result<Value, Text> {
     let runs = run(book, s)?;
     if !has_together(s) {
         return Ok(result_json(book, s, &runs[0]));
@@ -498,10 +511,10 @@ impl Trace {
 
 /// Every distinct way a scenario can come out, as `run` finds them, each with the state after
 /// every step, in the order `chobo run` prints them (that of their results' text).
-pub fn trace(book: &Book, s: &Scenario) -> Result<Vec<Trace>, String> {
+pub fn trace(book: &Book, s: &Scenario) -> Result<Vec<Trace>, Text> {
     let mut traces = vec![Trace { steps: vec![], states: vec![] }];
     for (i, st) in s.steps.iter().enumerate() {
-        let at = |e: String| format!("step {}: {e}", i + 1);
+        let at = |e: Text| at_step(i, e);
         let mut next: Vec<Trace> = Vec::new();
         for t in &traces {
             let before = t.states.last().cloned().unwrap_or_default();

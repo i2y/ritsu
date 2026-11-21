@@ -669,6 +669,9 @@ enum Sub {
     Attributes,
     Input,
     Context,
+    /// Under a workflow's `resource … from …`: what the flow holds of the resource. It may have
+    /// no lines.
+    Holds,
 }
 
 impl Block {
@@ -677,7 +680,7 @@ impl Block {
         match self {
             Block::Role(_) => (kw::ROLE, &[kw::DESCRIPTION, kw::INCLUDES, kw::CAN]),
             Block::Principal(_) => (kw::PRINCIPAL, &[kw::DESCRIPTION, kw::ROLES, kw::ATTRIBUTES]),
-            Block::Workflow(_) => (kw::WORKFLOW, &[kw::DESCRIPTION]),
+            Block::Workflow(_) => (kw::WORKFLOW, &[kw::DESCRIPTION, kw::RESOURCE]),
             Block::Resource(_) => (kw::RESOURCE, &[kw::DESCRIPTION, kw::ATTRIBUTES]),
             Block::Action(_) => (kw::ACTION, &[kw::DESCRIPTION, kw::GUARDS, kw::PRINCIPAL, kw::RESOURCE, kw::NOBODY, kw::INPUT, kw::CONTEXT]),
             Block::Policy(_) => ("permit", &[kw::DESCRIPTION, kw::PRINCIPAL, kw::ACTION, kw::WHEN]),
@@ -936,8 +939,8 @@ impl<'a> Parser<'a> {
             Block::Skip => return,
             Block::None => {
                 self.err("E004", line.no, line.indent + 1, tr!("この行は字下げされていますが、上の行は字下げした行を取りません", "This line is indented, but the line above takes no indented lines")).notes.push(tr!(
-                    "字下げした行を取るのは、`role`、`principal`、`workflow`、`resource`、`action`、`permit`、`forbid`、`expect`、`separate` と、その中の `attributes`、`input`、`context` です。",
-                    "The lines that take indented lines are `role`, `principal`, `workflow`, `resource`, `action`, `permit`, `forbid`, `expect` and `separate`, and inside them `attributes`, `input` and `context`."
+                    "字下げした行を取るのは、`role`、`principal`、`workflow`、`resource`、`action`、`permit`、`forbid`、`expect`、`separate` と、その中の `attributes`、`input`、`context`、`workflow` の中の `resource` です。",
+                    "The lines that take indented lines are `role`, `principal`, `workflow`, `resource`, `action`, `permit`, `forbid`, `expect` and `separate`, and inside them `attributes`, `input`, `context` and a workflow's `resource`."
                 ));
                 return;
             }
@@ -958,6 +961,7 @@ impl<'a> Parser<'a> {
                         let w = match sub {
                             Sub::Attributes => kw::ATTRIBUTES,
                             Sub::Input => kw::INPUT,
+                            Sub::Holds => kw::RESOURCE,
                             _ => kw::CONTEXT,
                         };
                         open.sub_head = Some((line.no, line.tokens[0].col, w));
@@ -965,7 +969,7 @@ impl<'a> Parser<'a> {
                 }
                 Err(b) => {
                     self.bad(line.no, b);
-                    if [kw::ATTRIBUTES, kw::INPUT, kw::CONTEXT].contains(&first.as_str()) {
+                    if [kw::ATTRIBUTES, kw::INPUT, kw::CONTEXT].contains(&first.as_str()) || (first == kw::RESOURCE && matches!(open.block, Block::Workflow(_))) {
                         open.sub = Sub::Skip;
                     }
                 }
@@ -993,8 +997,8 @@ impl<'a> Parser<'a> {
         }
         let msg = if line.indent > bi {
             tr!(
-                "字下げが上の行とそろっていません（ブロックの行は {bi} 文字、この行は {} 文字）。もう一段の字下げを取るのは `attributes`、`input`、`context` だけです",
-                "The indentation does not line up ({bi} spaces for the lines of the block, {} here); only `attributes`, `input` and `context` take lines indented further",
+                "字下げが上の行とそろっていません（ブロックの行は {bi} 文字、この行は {} 文字）。もう一段の字下げを取るのは `attributes`、`input`、`context` と、`workflow` の中の `resource` だけです",
+                "The indentation does not line up ({bi} spaces for the lines of the block, {} here); only `attributes`, `input`, `context` and a workflow's `resource` take lines indented further",
                 line.indent
             )
         } else {
@@ -1003,9 +1007,10 @@ impl<'a> Parser<'a> {
         self.err("E004", line.no, line.indent + 1, msg);
     }
 
-    /// The end of the block under a line: it has at least one line.
+    /// The end of the block under a line: it has at least one line, but for a workflow's
+    /// `resource`, which may say the id alone.
     fn close_sub(&mut self, open: &mut Open) {
-        if let (Some((line, col, w)), 0) = (open.sub_head, open.sub_count) {
+        if let (Some((line, col, w)), 0, true) = (open.sub_head, open.sub_count, open.sub != Sub::Holds) {
             let example = match w {
                 kw::ATTRIBUTES => tr!("`    suspended : bool`", "`    suspended : bool`"),
                 kw::INPUT => tr!("`    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP`", "`    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP`"),
@@ -1206,7 +1211,7 @@ impl<'a> Parser<'a> {
                 c.want_word(kw::FROM)?;
                 let flow = c.string(&tr!("dandori のフロー（`.flow`）", "the dandori flow (`.flow`)"))?;
                 c.done()?;
-                f.workflows.push(WorkflowDecl { name, span, lines, flow, description: None });
+                f.workflows.push(WorkflowDecl { name, span, lines, flow, description: None, holds: vec![] });
                 Ok(Block::Workflow(f.workflows.len() - 1))
             }
             kw::ACTION => {
@@ -1278,7 +1283,7 @@ impl<'a> Parser<'a> {
             };
             return Err(form(t0.col, msg).note(open.block.order(head)));
         };
-        let repeats = [kw::GUARDS, kw::WHEN, kw::UNLESS].contains(&w);
+        let repeats = [kw::GUARDS, kw::WHEN, kw::UNLESS].contains(&w) || (w == kw::RESOURCE && matches!(open.block, Block::Workflow(_)));
         let word: &'static str = open.block.words().1[rank];
         let word = if w == kw::UNLESS { kw::UNLESS } else { word };
         if !repeats && open.seen.contains(&word) {
@@ -1325,6 +1330,21 @@ impl<'a> Parser<'a> {
             (Block::Principal(_) | Block::Resource(_), kw::ATTRIBUTES) => {
                 c.done()?;
                 return Ok(Sub::Attributes);
+            }
+            (Block::Workflow(i), kw::RESOURCE) => {
+                let form_note = tr!(
+                    "`resource Order from order.id` のように、resource の型と、その ID になるフローの値（入力、変数、そのフィールド）を書きます。下に一段深く字下げして、`amount = order.total` のように、属性とそれに当たるフローの値を並べます。",
+                    "Write the resource type and the value of the flow that is its id (an input, a variable, or a field of one), like `resource Order from order.id`; under it, indented one step further, each attribute with the value of the flow it is, like `amount = order.total`."
+                );
+                let resource = c.reference(&tr!("resource の型", "the resource type"))?;
+                if !c.eat_word(kw::FROM) {
+                    let fd = c.found();
+                    return Err(form(c.col(), tr!("resource の型のあとに `from` と、その ID になるフローの値を書いてください（{}）", "the resource type is followed by `from` and the value of the flow that is its id ({})", fd.ja; fd.en)).note(form_note.clone()));
+                }
+                let id = flow_value(&mut c).map_err(|b| b.note(form_note))?;
+                c.done()?;
+                f.workflows[i].holds.push(Holds { resource, id, span, lines: vec![] });
+                return Ok(Sub::Holds);
             }
             (Block::Action(i), kw::GUARDS) => {
                 let api = c.reference(&tr!("契約か帳簿（`use openapi`、`use proto`、`use asyncapi`、`use book` の名前）", "the contract or the book (the name of a `use openapi`, `use proto`, `use asyncapi` or `use book`)"))?;
@@ -1491,6 +1511,20 @@ impl<'a> Parser<'a> {
                 fd.fed = fed_on(line)?;
                 f.actions[i].input.push(fd);
             }
+            (Block::Workflow(i), Sub::Holds) => {
+                let span = c.span();
+                let attribute = c.reference(&tr!("resource の属性", "the attribute of the resource"))?;
+                if !c.eat(&Tok::Eq) {
+                    let fd = c.found();
+                    return Err(form(c.col(), tr!("属性の名前のあとに `=` と、それに当たるフローの値を書いてください（{}）", "the attribute's name is followed by `=` and the value of the flow it is ({})", fd.ja; fd.en))
+                        .note(tr!("`amount = order.total` のように書きます。", "Write it like `amount = order.total`.")));
+                }
+                let value = flow_value(&mut c)?;
+                c.done()?;
+                if let Some(h) = f.workflows[i].holds.last_mut() {
+                    h.lines.push(HoldsLine { attribute, value, span });
+                }
+            }
             (Block::Action(i), Sub::Context) => {
                 let span = c.span();
                 let name = c.declared(&tr!("計算した値", "the computed value"))?;
@@ -1511,6 +1545,19 @@ impl<'a> Parser<'a> {
         }
         Ok(())
     }
+}
+
+/// A value of a flow, as a workflow's `resource` line names it: an input or a variable, and the
+/// fields read from it (`request_id`, `order.total`).
+fn flow_value(c: &mut Cur) -> Result<(String, Span), Bad> {
+    let what = tr!("フローの値（入力、変数、そのフィールド）", "the value of the flow (an input, a variable, or a field of one)");
+    let (mut path, span) = c.name(&what)?;
+    while c.eat(&Tok::Dot) {
+        let (field, _) = c.name(&tr!("フィールド", "the field"))?;
+        path.push('.');
+        path.push_str(&field);
+    }
+    Ok((path, span))
 }
 
 /// A body before its lines are read; a policy without an `action` line is said (E003) and dropped.

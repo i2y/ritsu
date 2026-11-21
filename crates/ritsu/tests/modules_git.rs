@@ -21,17 +21,19 @@
 //! - `vendor`, `clean` (the lines of the git index too), `where` and `list`; `diff <name>@<version>`,
 //!   `report`, `fetch --rev`; `push`, which refuses a module that requires one from git.
 
+mod common;
+
 use ritsu_base::modules::store;
 use ritsu_testkit::git::{GitServer, Options, Repo};
 use ritsu_testkit::{TempDir, skip};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Command;
 
 fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-const LANG_VARS: [&str; 10] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"];
+const LANG_VARS: [&str; 11] = common::LANG_VARS;
 
 /// The variables of git a run of the test would pass on from the machine: those that point git at
 /// a repository, and those that choose how it asks.
@@ -80,8 +82,16 @@ fn executable(path: &Path) {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
 
-fn said(o: Output) -> (i32, String, String) {
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+/// How long ritsu or git may take with the test's git server: seconds each. Past it, the test
+/// fails with what the program printed, not at the limit of the job with nothing said.
+const LIMIT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+/// A program that talks to the test's git server, run to its end for no longer than [`LIMIT`]
+/// (ritsu-testkit's `finish`, which fails the test past it, saying `what` it was): its exit code
+/// (-1 for a signal), and what it printed on each output.
+fn finished(c: &mut Command, what: &str) -> (i32, String, String) {
+    let r = ritsu_testkit::run::finish(c, LIMIT, what);
+    (r.code.unwrap_or(-1), r.stdout, r.stderr)
 }
 
 fn json(out: &str) -> serde_json::Value {
@@ -218,7 +228,7 @@ impl World {
     }
 
     fn run_env(&self, dir: &str, args: &[&str], env: &[(&str, &str)]) -> (i32, String, String) {
-        said(self.command(dir, args, env).output().expect("could not run ritsu"))
+        finished(&mut self.command(dir, args, env), &format!("ritsu {args:?} in {dir}, with the test's git server"))
     }
 
     fn run(&self, dir: &str, args: &[&str]) -> (i32, String, String) {
@@ -564,8 +574,8 @@ fn servers_without_a_filter_and_of_protocol_version_0() {
         // tax from this server too: the module at hand decides where a module comes from
         w.ok(&dir, &["mod", "add", "tax", &format!("{}@1.0.0", s.url_of("acme/tax"))]);
         let store = w.path(&format!("store-{k}"));
-        let o = w.command(&dir, &["mod", "add", "pricing", &format!("{}@1.1.0", s.url_of("acme/pricing"))], &[(store::VARIABLE, store.to_str().unwrap())]).output().unwrap();
-        let (code, out, err) = said(o);
+        let add = [(store::VARIABLE, store.to_str().unwrap())];
+        let (code, out, err) = finished(&mut w.command(&dir, &["mod", "add", "pricing", &format!("{}@1.1.0", s.url_of("acme/pricing"))], &add), &format!("ritsu mod add pricing in {dir}, with a git server of {options:?}"));
         assert_eq!(code, 0, "{options:?}: {out}{err}");
         assert_eq!(pins(&w.t.read(&format!("{dir}/ritsu.lock"))), want, "{options:?}");
         let (code, out, err) = w.run_env(&dir, &["check"], &[(store::VARIABLE, store.to_str().unwrap())]);
@@ -813,14 +823,11 @@ fn hooks_and_filters_do_not_run() {
     executable(&mark);
     w.t.write("gitconfig", format!("[core]\n\thooksPath = {}\n[filter \"mark\"]\n\tsmudge = {} smudge\n\tclean = {} clean\n", hooks.display(), mark.display(), mark.display()));
     // git runs both, with this configuration
-    let o = Command::new("git")
-        .args(["clone", "--quiet", "--branch", "v1.0.1", &w.url("acme/tax")])
-        .arg(w.path("checkout"))
-        .env("GIT_CONFIG_GLOBAL", w.path("gitconfig"))
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .output()
-        .unwrap();
-    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let (code, _, err) = finished(
+        Command::new("git").args(["clone", "--quiet", "--branch", "v1.0.1", &w.url("acme/tax")]).arg(w.path("checkout")).env("GIT_CONFIG_GLOBAL", w.path("gitconfig")).env("GIT_CONFIG_NOSYSTEM", "1"),
+        "git clone of acme/tax from the test's git server",
+    );
+    assert_eq!(code, 0, "{err}");
     let said = std::fs::read_to_string(&ran).unwrap_or_default();
     assert!(said.contains("reference-transaction") && said.contains("filter smudge"), "{said}");
     std::fs::remove_file(&ran).unwrap();

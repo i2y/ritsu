@@ -30,6 +30,17 @@ pub struct Lowerer<'a> {
     record_ix: BTreeMap<String, RecordId>,
     /// the enums made from a `.proto`: a case's state may be one
     made_enums: BTreeSet<EnumId>,
+    /// the names the flow sets (a `let`, a `for`'s variable and its result, a `match`'s `some`), and
+    /// the lines of what sets each: a name here is a variable, whether its type is known or not
+    set_lines: BTreeMap<String, BTreeSet<usize>>,
+    /// what a declaration whose line has an error leaves out (DESIGN 30), and the line: an input
+    /// or a case by its name, an output, a task, a parameter (`<task>.<parameter>`), an error of a
+    /// task (`<task>!<error>`)
+    left_out: BTreeMap<String, BTreeSet<usize>>,
+    /// what a line would say that follows from an error said at another line (DESIGN 30): the
+    /// diagnostic, and the lines whose error says it already. Said only when none of those lines has
+    /// an error (`followers`).
+    followers: Vec<(Diag, BTreeSet<usize>)>,
     /// where a type made from a `.proto` was first named, by its name in the flow
     made_at: BTreeMap<String, Span>,
     /// the fields of made records whose type no file read has (an import was not read): the record,
@@ -59,10 +70,119 @@ pub struct Lowerer<'a> {
     in_on_cancel: bool,
     /// a variable's type grew to take `none` in this pass over the names
     widened: bool,
+    /// the whole numbers written where a rate counts steps other than 1%, by where each is written,
+    /// with the rate's unit: W106 says them once their statement is lowered (`numbers`)
+    stepped: BTreeMap<(usize, usize), ritsu_units::Unit>,
 }
 
 fn e(code: &'static str, sp: Span, message: Text) -> Diag {
     Diag::error(code, sp.line, sp.col, message)
+}
+
+/// Why a number written with a unit does not count in the unit of a type.
+enum Miscount {
+    /// a unit of another dimension or currency, or a rate written in another sign than `%`
+    Other,
+    /// one that counts, but not to a whole number of the type's unit
+    Fraction,
+    /// one that counts to a whole number past 64 bits
+    Large,
+}
+
+/// A number written with a unit (`value` of `unit`), counted in the unit `to` as rulec counts one
+/// (ritsu-units: `1kg` is 1000 in `mass[g]`, `5%` is 50 steps of `rate[step 0.1%]`, an amount in yen
+/// is the same in `money[円, incl_tax]` and in `money[JPY, excl_tax]`): the whole number that goes on
+/// the wire. A bound of a range and a value written where its type is known count alike (DESIGN 1.3,
+/// 40).
+fn counted(to: &ritsu_units::Unit, value: ritsu_units::Rat, unit: &str) -> Result<i64, Miscount> {
+    let counted = match &to.dim {
+        // a rate in percent, counted in its steps
+        ritsu_units::Dim::Rate if unit == "%" => to.step.and_then(|step| value.checked_div(ritsu_units::Rat::int(100))?.checked_div(step)),
+        ritsu_units::Dim::Money(_) => ritsu_units::Unit::money(unit, to.tax).and_then(|from| from.convert(value, to)),
+        d => ritsu_units::Unit::quantity(d.word(), unit).and_then(|from| from.convert(value, to)),
+    };
+    let counted = counted.ok_or(Miscount::Other)?;
+    if !counted.is_int() {
+        return Err(Miscount::Fraction);
+    }
+    i64::try_from(counted.num).map_err(|_| Miscount::Large)
+}
+
+/// What a number of a statement is written for, as W106 says it and writes the number with its unit.
+enum Place {
+    /// an argument of a call, or a field of a record: `fee: 0.5%`
+    Field(String),
+    /// an output of `succeed`: `fee = 0.5%`
+    Output(String),
+    /// the value of a `let`
+    Let(String),
+    /// an item of a list, or what a `yield` adds to the list a `for` makes, by the list's place
+    Item(String),
+    /// an item of the list a `for` goes through, by the loop's variable
+    Over(String),
+}
+
+impl Place {
+    /// The place an item of a list written here is.
+    fn item(&self) -> Place {
+        match self {
+            Place::Over(v) => Place::Over(v.clone()),
+            Place::Field(n) | Place::Output(n) | Place::Let(n) | Place::Item(n) => Place::Item(n.clone()),
+        }
+    }
+}
+
+/// A whole number on a rate counted in steps other than 1%, as W106 says it: one step and the rate
+/// the number is, as the checks write a rate (`0.1%`, `0.5%`).
+struct InSteps {
+    step: String,
+    value: String,
+}
+
+/// What a whole number `n` written for a value of the unit `u` counts, when `u` is a rate counted in
+/// steps other than 1% (W106): `5` of `rate[step 0.1%]` is 0.5%. None for a rate in steps of 1%,
+/// where the number is the percentage, for money and a quantity, whose type names the unit the
+/// number counts (`money[USDc]`, `mass[g]`), and for 0, which is 0% whatever it counts.
+fn in_steps(u: &ritsu_units::Unit, n: i64) -> Option<InSteps> {
+    let step = u.step?;
+    if u.dim != ritsu_units::Dim::Rate || step == ritsu_units::Rat::new(1, 100) || n == 0 {
+        return None;
+    }
+    Some(InSteps { step: ritsu_units::written::value(1, Some(u)), value: ritsu_units::written::value(i128::from(n), Some(u)) })
+}
+
+/// A value of a machine's table on an axis of numbers, as rulec writes one (`0.5%`, `300JPY`, `3`),
+/// counted in the unit of the input's type `t` as a number written in a `.flow` is ([`counted`]):
+/// what a number `held` names is found by (DESIGN 40). None for a value that is no number of `t`.
+fn coord_number(x: &str, t: &Ty) -> Option<i64> {
+    let (value, unit) = syntax::number_text(x)?;
+    match t {
+        Ty::Num(to) if !unit.is_empty() => counted(to, value, &unit).ok(),
+        Ty::Int if unit.is_empty() && value.is_int() => i64::try_from(value.num).ok(),
+        _ => None,
+    }
+}
+
+/// Whether `n`, a number of the type `t` counted in its unit, is between the ends of a coordinate
+/// (each written as rulec writes a value, None where the input's range leaves it open). An end that
+/// is no number of `t` takes nothing.
+fn held_between((lo, hi): &(Option<String>, Option<String>), n: i64, t: &Ty) -> bool {
+    let end = |x: &Option<String>| x.as_ref().map(|x| coord_number(x, t));
+    end(lo).is_none_or(|lo| lo.is_some_and(|lo| lo <= n)) && end(hi).is_none_or(|hi| hi.is_some_and(|hi| n <= hi))
+}
+
+/// What E003 says of a value `held` gives the input `inp` that is none of the axis's: for an axis of
+/// numbers, the values its sets run over; else the values the table names.
+fn not_held(text: &str, inp: &str, axis: &crate::rulec::Axis) -> Text {
+    let sets: Vec<&(Option<String>, Option<String>)> = axis.ends.iter().flatten().collect();
+    let (lo, hi) = (sets.first().and_then(|e| e.0.clone()), sets.last().and_then(|e| e.1.clone()));
+    match (sets.is_empty(), lo, hi) {
+        (true, _, _) => tr!("`{text}` は `{inp}` の値ではありません（値は {}）", "`{text}` is not a value of `{inp}` ({})", axis.coords.join("・"); axis.coords.join(", ")),
+        (false, Some(lo), Some(hi)) => tr!("`{text}` は `{inp}` の値ではありません（値は {lo} から {hi} まで）", "`{text}` is not a value of `{inp}` (its values run from {lo} to {hi})"),
+        (false, Some(lo), None) => tr!("`{text}` は `{inp}` の値ではありません（値は {lo} 以上）", "`{text}` is not a value of `{inp}` (its values are {lo} or more)"),
+        (false, None, Some(hi)) => tr!("`{text}` は `{inp}` の値ではありません（値は {hi} 以下）", "`{text}` is not a value of `{inp}` (its values are {hi} or less)"),
+        (false, None, None) => tr!("`{text}` は `{inp}` の値ではありません", "`{text}` is not a value of `{inp}`"),
+    }
 }
 
 /// `d`, with the note for a path that starts with `@` where no module of ritsu's is above the
@@ -174,6 +294,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
             moment_texts: vec![],
             source_reached: file.to_string_lossy().to_string(),
             spellings: Vec::new(),
+            written: BTreeMap::new(),
             uses: {
                 let mut uses: Vec<crate::model::UseLine> = Vec::new();
                 for u in &prog.uses {
@@ -195,6 +316,9 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         enum_ix: BTreeMap::new(),
         record_ix: BTreeMap::new(),
         made_enums: BTreeSet::new(),
+        set_lines: BTreeMap::new(),
+        left_out: BTreeMap::new(),
+        followers: Vec::new(),
         made_at: BTreeMap::new(),
         made_unread: Vec::new(),
         use_spans: BTreeMap::new(),
@@ -212,6 +336,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         in_on_failure: false,
         in_on_cancel: false,
         widened: false,
+        stepped: BTreeMap::new(),
     };
     let base = file.parent().unwrap_or(Path::new("."));
     lw.rules(base);
@@ -226,6 +351,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     lw.plaintexts();
     lw.service();
     lw.cases();
+    lw.left_out_of_declarations();
     lw.variables();
     if let Some((b, _)) = &prog.flow {
         lw.m.flow = lw.block(b);
@@ -247,11 +373,19 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     }
     lw.recursive_records();
     lw.unread_types();
-    lw.same_generated_names();
     lw.names_around_rules();
     lw.made_enums_named_none();
     lw.parallel_scopes();
     lw.m.vars = lw.var_ty.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    // what follows from an error said at another line in the file is not said again (DESIGN 30)
+    lw.followers_said();
+    // what a `use` that could not be read leaves unsaid (DESIGN 27): its E005 or E016 is said once, at its
+    // line, and no line that writes what it would have given says that it is not there
+    let unread = lw.unread_names();
+    if !unread.is_empty() {
+        let quiet = unread_lines(prog, &unread, &lw.m, &lw.var_ty);
+        lw.diags.retain(|d| !quiet.contains(&d.line));
+    }
     let ok = !crate::diag::has_errors(&lw.diags);
     if ok {
         crate::periods::insert(&mut lw.m);
@@ -264,6 +398,58 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
 impl<'a> Lowerer<'a> {
     fn push(&mut self, d: Diag) {
         self.diags.push(d);
+    }
+
+    /// The fields of a record by name, for the list E002 gives of the fields there are. A record of
+    /// the `.flow`'s own is listed as it is written: a field whose type could not be read (a name
+    /// from a `use` that could not be read, DESIGN 27, or a type that is not there) is there all the
+    /// same.
+    fn field_names(&self, rec: usize) -> Vec<String> {
+        match self.written_record(rec) {
+            Some(w) => {
+                let mut out: Vec<String> = Vec::new();
+                for f in &w.fields {
+                    if !out.contains(&f.name.0) {
+                        out.push(f.name.0.clone());
+                    }
+                }
+                out
+            }
+            None => self.m.records[rec].fields.iter().map(|(n, _)| n.clone()).collect(),
+        }
+    }
+
+    /// Whether `field` is written in a record of the `.flow`'s own, though the record has no field
+    /// of that name: its type could not be read. What is wrong is said at the line of the field (or
+    /// of the `use` that could not be read), and a line that writes the field says nothing more.
+    fn unread_field(&self, rec: usize, field: &str) -> bool {
+        self.written_record(rec).is_some_and(|w| w.fields.iter().any(|f| f.name.0 == field))
+    }
+
+    /// The record of the `.flow`'s own as it is written, for a record of the model.
+    fn written_record(&self, rec: usize) -> Option<&'a syntax::RecordDecl> {
+        let r = &self.m.records[rec];
+        match r.origin {
+            RecordOrigin::Local => self.prog.records.iter().find(|x| x.name.0 == r.name),
+            _ => None,
+        }
+    }
+
+    /// The names a `use` or an `import enum` gives that could not be read: a rule, a dates file, a
+    /// book, an enum (E005), a `.proto` or an OpenAPI document (E016). A name another `use` gives
+    /// all the same (one given twice, E006) is read: what is written with it is checked as that one.
+    fn unread_names(&self) -> BTreeSet<String> {
+        let read = |n: &str| self.rule_ix.contains_key(n) || self.date_files.contains_key(n) || self.book_ix.contains_key(n) || self.apis.contains_key(n);
+        let mut out = BTreeSet::new();
+        let used = self.prog.uses.iter().map(|u| &u.name).chain(self.prog.dates.iter().map(|u| &u.name)).chain(self.prog.books.iter().map(|u| &u.name)).chain(self.prog.apis.iter().map(|u| &u.name));
+        out.extend(used.filter(|n| !read(&n.0)).map(|n| n.0.clone()));
+        for im in &self.prog.imports {
+            let name = im.rename.as_ref().map_or(&im.enum_name.0, |r| &r.0);
+            if !self.enum_ix.contains_key(name) && !read(name) {
+                out.insert(name.clone());
+            }
+        }
+        out
     }
 
     /// The file a line of the `.flow` names, from the directory `base` of the `.flow` (ritsu's
@@ -313,7 +499,7 @@ impl<'a> Lowerer<'a> {
                 Ok(doc) => {
                     self.apis.insert(name.clone(), (u.kind, crate::apis::Api { name: name.clone(), doc, url: u.url.clone() }));
                 }
-                Err(msg) => self.push(outside(e("E016", *sp, tr!("API `{}` を読めませんでした", "could not read the API `{}`", u.path)).note(Text::same(msg)), base, &u.path, &path)),
+                Err(why) => self.push(outside(e("E016", *sp, tr!("API `{}` を読めませんでした", "could not read the API `{}`", u.path)).note(why), base, &u.path, &path)),
             }
         }
     }
@@ -380,7 +566,8 @@ impl<'a> Lowerer<'a> {
             }
             self.enum_ix.insert(name.clone(), self.m.enums.len());
             self.made_at.entry(name.clone()).or_insert(sp);
-            self.m.enums.push(EnumDef { name, values: values.clone(), ordered: info.ordered.contains(en), from: Some((im.path.clone(), en.clone())) });
+            let declared = Some(self.declared(&path, en, None));
+            self.m.enums.push(EnumDef { name, values: values.clone(), ordered: info.ordered.contains(en), from: Some((im.path.clone(), en.clone())), declared });
         }
     }
 
@@ -425,8 +612,14 @@ impl<'a> Lowerer<'a> {
             let ix = self.m.rules.len();
             for (en, values) in &info.enums {
                 let q = format!("{name}.{en}");
+                // an enum the rule reads whole from an `enums` file is that file's; one it declares
+                // itself is its own file's (an `enums` file used as a rule declares its own)
+                let declared = match info.origins.get(en) {
+                    Some((file, there)) => self.declared(file, there, None),
+                    None => self.declared(&path, en, (!info.outputs.is_empty()).then(|| name.clone())),
+                };
                 self.enum_ix.insert(q.clone(), self.m.enums.len());
-                self.m.enums.push(EnumDef { name: q, values: values.clone(), ordered: info.ordered.contains(en), from: None });
+                self.m.enums.push(EnumDef { name: q, values: values.clone(), ordered: info.ordered.contains(en), from: None, declared: Some(declared) });
             }
             let fields: Vec<(String, Ty)> = info.outputs.iter().map(|c| (c.name.clone(), self.rty(name, &c.ty))).collect();
             let ranges = info.outputs.iter().filter_map(|c| Some((c.name.clone(), c.range()?))).collect();
@@ -434,6 +627,18 @@ impl<'a> Lowerer<'a> {
             self.m.records.push(RecordDef { name: format!("{name}.outputs"), fields, ranges, secrets: BTreeMap::new(), origin: RecordOrigin::RuleOutputs(ix) });
             self.rule_ix.insert(name.clone(), ix);
             let connect = self.rule_connect(u, &info);
+            // the `enums` files the rule reads enums from, by the modules rulec generates for each,
+            // asked of the port as a rule is (DESIGN 28.8)
+            let mut enums_modules: Vec<rulec::EnumsModule> = Vec::new();
+            for (file, _) in info.origins.values() {
+                if let Ok(owner) = rulec::load(file) {
+                    // one file reached by two spellings of its path is one module
+                    if !enums_modules.iter().any(|m| m.python == owner.python.module && m.go == owner.go.module) {
+                        enums_modules.push(rulec::EnumsModule { python: owner.python.module.clone(), go: owner.go.module.clone(), file: file.clone() });
+                    }
+                }
+            }
+            enums_modules.sort();
             self.m.rules.push(RuleUse {
                 name: name.clone(),
                 info,
@@ -444,6 +649,7 @@ impl<'a> Lowerer<'a> {
                 outputs: rec,
                 line: sp.line,
                 kind: RuleKind::Rule,
+                enums_modules,
             });
         }
     }
@@ -472,7 +678,7 @@ impl<'a> Lowerer<'a> {
                 Ok(f) => f,
                 Err(said) => {
                     let d = e("E005", *sp, tr!("日付のファイル `{}` を読めませんでした", "could not read the dates file `{}`", u.path));
-                    self.push(outside(crate::sources::said_notes_from(&said, base).into_iter().fold(d, Diag::note), base, &u.path, &path));
+                    self.push(outside(crate::sources::said_notes(&said).into_iter().fold(d, Diag::note), base, &u.path, &path));
                     continue;
                 }
             };
@@ -522,6 +728,7 @@ impl<'a> Lowerer<'a> {
                     outputs: vec![],
                     enums: vec![],
                     ordered: vec![],
+                    origins: BTreeMap::new(),
                     machine: None,
                     preconditions: vec![],
                     connect: None,
@@ -548,8 +755,10 @@ impl<'a> Lowerer<'a> {
                         alias: f.alias.clone(),
                         params: params.clone(),
                         at: f.at.is_some(),
+                        minutes: f.at,
                         offset: facts.calendar.as_ref().and_then(|c| c.offset),
                     }),
+                    enums_modules: vec![],
                 });
             }
             self.date_files.insert(name.clone(), facts);
@@ -571,7 +780,7 @@ impl<'a> Lowerer<'a> {
                 Ok(f) => f,
                 Err(said) => {
                     let d = e("E005", *sp, tr!("帳簿 `{}` を読めませんでした", "could not read the book `{}`", u.path));
-                    self.push(outside(crate::sources::said_notes_from(&said, base).into_iter().fold(d, Diag::note), base, &u.path, &path));
+                    self.push(outside(crate::sources::said_notes(&said).into_iter().fold(d, Diag::note), base, &u.path, &path));
                     continue;
                 }
             };
@@ -582,7 +791,7 @@ impl<'a> Lowerer<'a> {
                 let rname = format!("{name}.{}", t.name);
                 let state = self.m.enums.len();
                 self.enum_ix.insert(format!("{rname}.{}", mc.state_enum), state);
-                self.m.enums.push(EnumDef { name: format!("{rname}.{}", mc.state_enum), values: mc.states.clone(), ordered: false, from: None });
+                self.m.enums.push(EnumDef { name: format!("{rname}.{}", mc.state_enum), values: mc.states.clone(), ordered: false, from: None, declared: None });
                 // the key's parameters, in the order the transfer declares them: what a post and a void take
                 let mut fields: Vec<(String, Ty)> = t.params.iter().filter(|p| t.key.contains(&p.name)).map(|p| (p.name.clone(), Ty::Str)).collect();
                 fields.push(("state".to_string(), Ty::Enum(state)));
@@ -600,6 +809,7 @@ impl<'a> Lowerer<'a> {
                     outputs: vec![],
                     enums: vec![(mc.state_enum.clone(), mc.states.clone())],
                     ordered: vec![],
+                    origins: BTreeMap::new(),
                     machine: Some(rulec::machine(mc.clone())),
                     preconditions: vec![],
                     connect: None,
@@ -610,7 +820,7 @@ impl<'a> Lowerer<'a> {
                     optional: vec![],
                 };
                 self.hold_ix.insert((name.clone(), t.name.clone()), ix);
-                self.m.rules.push(RuleUse { name: rname, info, lambda: None, local: false, connect: None, connection: None, outputs: rec, line: sp.line, kind: RuleKind::Hold { book: bix, transfer: t.name.clone() } });
+                self.m.rules.push(RuleUse { name: rname, info, lambda: None, local: false, connect: None, connection: None, outputs: rec, line: sp.line, kind: RuleKind::Hold { book: bix, transfer: t.name.clone() }, enums_modules: vec![] });
             }
             self.book_ix.insert(name.clone(), bix);
             self.m.books.push(BookUse { name: name.clone(), path, facts, lambda: u.lambda.as_ref().map(|(f, _)| f.clone()), line: sp.line });
@@ -706,7 +916,7 @@ impl<'a> Lowerer<'a> {
                 }
             }
             self.enum_ix.insert(name.clone(), self.m.enums.len());
-            self.m.enums.push(EnumDef { name: name.clone(), values, ordered: false, from: None });
+            self.m.enums.push(EnumDef { name: name.clone(), values, ordered: false, from: None, declared: None });
         }
         // records: names first, so that a field can have a record type declared further down
         for r in &self.prog.records {
@@ -770,18 +980,18 @@ impl<'a> Lowerer<'a> {
                 Ok(unit) if !matches!(unit.dim, ritsu_units::Dim::Number | ritsu_units::Dim::Count(_)) => Some(Ty::Num(unit)),
                 // `rate[%]`: a rate's brackets hold its step, not a unit
                 Err(ritsu_units::Problem::Shape(_)) if u.starts_with("rate[") => {
-                    self.push(e("E002", *sp, tr!("型 `{u}` はありません", "there is no type `{u}`")).note(tr!(
+                    self.push(e("E002", *sp, tr!("型 `{u}` はありません", "there is no type `{u}`")).same_in("type", u.clone()).note(tr!(
                         "率の型には、`rate[step 1%]` のように刻みを書いてください",
                         "the type of a rate writes its step, as in `rate[step 1%]`"
                     )));
                     None
                 }
                 Ok(_) | Err(ritsu_units::Problem::Shape(_)) | Err(ritsu_units::Problem::Dimension(_)) => {
-                    self.push(e("E002", *sp, tr!("型 `{u}` はありません", "there is no type `{u}`")).note(type_hint()));
+                    self.push(e("E002", *sp, tr!("型 `{u}` はありません", "there is no type `{u}`")).same_in("type", u.clone()).note(type_hint()));
                     None
                 }
                 Err(why) => {
-                    self.push(e("E002", *sp, tr!("型 `{u}` はありません", "there is no type `{u}`")).note(why.text()));
+                    self.push(e("E002", *sp, tr!("型 `{u}` はありません", "there is no type `{u}`")).same_in("type", u.clone()).note(why.text()));
                     None
                 }
             },
@@ -809,7 +1019,7 @@ impl<'a> Lowerer<'a> {
                                     ApiKind::OpenApi => tr!("スキーマ", "schemas"),
                                     _ => Text::new("shape", "shapes"),
                                 };
-                                self.push(e("E002", sp, tr!("型 `{text}` はありません", "there is no type `{text}`")).note(
+                                self.push(e("E002", sp, tr!("型 `{text}` はありません", "there is no type `{text}`")).same_in("type", text.clone()).note(
                                     tr!("型を作れるのは、`use proto` で読んだ `.proto` からだけです。`{api}` は {what_ja}で、dandori はその{shapes_ja}から型を作りません", "types are made from a `.proto` read by `use proto`; `{api}` is {what_en}, and its {shapes_en} are not made into types"),
                                 ));
                                 None
@@ -824,7 +1034,7 @@ impl<'a> Lowerer<'a> {
                 } else {
                     type_hint()
                 };
-                self.push(e("E002", sp, tr!("型 `{text}` はありません", "there is no type `{text}`")).note(hint));
+                self.push(e("E002", sp, tr!("型 `{text}` はありません", "there is no type `{text}`")).same_in("type", text.clone()).note(hint));
                 None
             }
         }
@@ -876,7 +1086,7 @@ impl<'a> Lowerer<'a> {
             if more > 0 {
                 list = list.then(&tr!("…ほか {more} 個", ", and {more} more"));
             }
-            let mut d = e("E002", sp, tr!("型 `{text}` はありません", "there is no type `{text}`")).note(tr!("`{api}` のメッセージと列挙は {} です", "the messages and enums of `{api}` are {}", list.ja; list.en));
+            let mut d = e("E002", sp, tr!("型 `{text}` はありません", "there is no type `{text}`")).same_in("type", text.to_string()).note(tr!("`{api}` のメッセージと列挙は {} です", "the messages and enums of `{api}` are {}", list.ja; list.en));
             // a file it may be in was not read
             if let Some(note) = crate::apis::unread_note(&pf) {
                 d = d.note(note);
@@ -895,6 +1105,7 @@ impl<'a> Lowerer<'a> {
             MadeTy::Str => Ty::Str,
             MadeTy::Bool => Ty::Bool,
             MadeTy::Timestamp => Ty::Timestamp,
+            MadeTy::Date => Ty::Date,
             MadeTy::Json => Ty::Json,
             MadeTy::Message(full) => Ty::Record(self.made_record(api, pf, full, sp)),
             MadeTy::Enum(full) => Ty::Enum(self.made_enum(api, pf, full, sp)),
@@ -924,7 +1135,7 @@ impl<'a> Lowerer<'a> {
         self.enum_ix.insert(name.clone(), ix);
         self.made_enums.insert(ix);
         self.made_at.entry(name.clone()).or_insert(sp);
-        self.m.enums.push(EnumDef { name, values, ordered: false, from: None });
+        self.m.enums.push(EnumDef { name, values, ordered: false, from: None, declared: None });
         ix
     }
 
@@ -997,6 +1208,55 @@ impl<'a> Lowerer<'a> {
     /// A path dandori reaches, as a message says it: from the `.flow`'s directory, where it is under it.
     fn shown_path(&self, p: &Path) -> String {
         p.strip_prefix(&self.dir).unwrap_or(p).to_string_lossy().to_string()
+    }
+
+    /// When two types that are not one hold two enums: a note that says where each enum is
+    /// declared, and, when the two have the same values, how to make them one type (DESIGN 28).
+    /// None when they are no enums, or one is.
+    fn enums_apart(&self, a: &Ty, b: &Ty) -> Option<Text> {
+        let (x, y) = (a.enum_inside()?, b.enum_inside()?);
+        if self.m.same_enum(x, y) {
+            return None;
+        }
+        let whence = |ix: EnumId| -> Option<Text> {
+            let en = &self.m.enums[ix];
+            let n = &en.name;
+            Some(match &en.declared {
+                Some(Declared { shown, name, rule: Some(r), .. }) => tr!("`{n}` は、規則 `{r}`（`{shown}`）が自分で宣言した列挙 `{name}` です", "`{n}` is the enum `{name}` that the rule `{r}` (`{shown}`) declares itself"),
+                Some(Declared { shown, name, rule: None, .. }) => tr!("`{n}` は、`enums` ファイル `{shown}` の列挙 `{name}` です", "`{n}` is the enum `{name}` of the `enums` file `{shown}`"),
+                None if self.prog.enums.iter().any(|d| d.name.0 == *n) => tr!("`{n}` は、このフローが宣言した列挙です", "`{n}` is an enum this flow declares"),
+                None => return None,
+            })
+        };
+        let (wx, wy) = (whence(x)?, whence(y)?);
+        let same = {
+            let (mut p, mut q) = (self.m.enums[x].values.clone(), self.m.enums[y].values.clone());
+            p.sort();
+            q.sort();
+            p == q
+        };
+        let advice = if same {
+            tr!(
+                "別の場所で宣言した列挙は、値が同じでも別の型です。一つの型にするには、列挙を `enums` ファイルに置き、規則とフローのそれぞれで `import enum` で読んでください。",
+                "Enums declared at two places are two types, even with the same values; to make them one, put the enum in an `enums` file and read it with `import enum` in each rule and in the flow."
+            )
+        } else {
+            Text::same(String::new())
+        };
+        let ja = format!("{}。{}。{}", wx.ja, wy.ja, advice.ja);
+        let en = format!("{}; {}. {}", wx.en, wy.en, advice.en);
+        Some(Text::new(ja.trim_end(), en.trim_end()))
+    }
+
+    /// Where an enum of a file dandori reads is declared (`EnumDef::declared`): the file made
+    /// canonical, the file from the `.flow`'s directory, and the enum's name there.
+    fn declared(&self, file: &Path, name: &str, rule: Option<String>) -> Declared {
+        Declared {
+            file: ritsu_base::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf()),
+            shown: ritsu_base::paths::seen_from(Path::new(&self.m.source_reached), file),
+            name: name.to_string(),
+            rule,
+        }
     }
 
     /// The mark of a property of an OpenAPI document (DESIGN 1.18): its line, read from the document
@@ -1116,47 +1376,6 @@ impl<'a> Lowerer<'a> {
                     tr!("`{name}` は、フィールド `{through}` を通して自分自身を含んでいます。レコードは自分自身を含められないので、自分を含むフィールドの型は `json` にしてください", "`{name}` contains itself, through `{through}`; a record cannot, so give the field that holds itself the type `json`"),
                 ));
             }
-        }
-    }
-
-    /// E006 for two types that have one name in the code dandori writes: a type's name there is
-    /// its name here with the dots turned to underscores, so `warehouse.Stock` and a `record
-    /// warehouse_Stock` are one, in TypeScript and in Python alike.
-    fn same_generated_names(&mut self) {
-        let mut seen: BTreeMap<(bool, String), String> = BTreeMap::new();
-        let mut clashes: Vec<(String, String, String)> = Vec::new();
-        let names: Vec<String> = self.m.enums.iter().map(|x| x.name.clone()).chain(self.m.records.iter().map(|x| x.name.clone())).collect();
-        for n in names {
-            for (python, generated) in [(false, crate::temporal::type_name(&n)), (true, crate::temporal_py::type_name(&n))] {
-                match seen.get(&(python, generated.clone())) {
-                    Some(first) if *first != n => {
-                        if !clashes.iter().any(|(a, b, _)| *a == *first && *b == n) {
-                            clashes.push((first.clone(), n.clone(), generated));
-                        }
-                    }
-                    Some(_) => {}
-                    None => {
-                        seen.insert((python, generated), n.clone());
-                    }
-                }
-            }
-        }
-        for (a, b, generated) in clashes {
-            // the one to rename is the one this file declares, else the one named later
-            let declared = |x: &str| self.prog.enums.iter().map(|d| &d.name).chain(self.prog.records.iter().map(|d| &d.name)).find(|(n, _)| n == x).map(|(_, sp)| *sp);
-            let (rename, at) = match (declared(&a), declared(&b)) {
-                (_, Some(sp)) => (b.clone(), sp),
-                (Some(sp), None) => (a.clone(), sp),
-                (None, None) => {
-                    let sp = self.made_at.get(&b).or_else(|| self.made_at.get(&a)).or_else(|| self.use_spans.get(b.split('.').next().unwrap_or(&b))).copied().unwrap_or(Span { line: 1, col: 1 });
-                    (b.clone(), sp)
-                }
-            };
-            self.push(e(
-                "E006",
-                at,
-                tr!("`{a}` と `{b}` は、生成するコードで同じ名前（`{generated}`）になります。`{rename}` の名前を変えてください", "`{a}` and `{b}` would have one name in the code dandori writes, `{generated}`; rename `{rename}`"),
-            ));
         }
     }
 
@@ -1328,17 +1547,18 @@ impl<'a> Lowerer<'a> {
             _ => {}
         }
         let lo = match &r.lo {
-            Some(b) => Some(self.bound(inner, b)?),
+            Some(b) => Some(self.bound(inner, b, ">=")?),
             None => None,
         };
         let hi = match &r.hi {
-            Some(b) => Some(self.bound(inner, b)?),
+            Some(b) => Some(self.bound(inner, b, "<=")?),
             None => None,
         };
         let rg = Range { lo, hi };
         if let (Some(lo), Some(hi)) = (rg.lo, rg.hi) {
             if lo > hi {
-                self.push(e("E003", r.span, tr!("`{}` に入る数はありません", "no number is in `{}`", rg.show())));
+                let said = number_range_text(inner, &rg).unwrap_or_else(|| rg.show());
+                self.push(e("E003", r.span, tr!("`{said}` に入る数はありません", "no number is in `{said}`")));
                 return None;
             }
         }
@@ -1366,7 +1586,7 @@ impl<'a> Lowerer<'a> {
                     Some(i) => return Some(i),
                     None => (name.clone(), *span),
                 },
-                syntax::Bound::Int(k) => (k.to_string(), r.span),
+                syntax::Bound::Int(k, _) => (k.to_string(), r.span),
                 syntax::Bound::Quantity { raw, span, .. } => (raw.clone(), *span),
                 syntax::Bound::Date { text, span } => (text.clone(), *span),
             };
@@ -1390,13 +1610,30 @@ impl<'a> Lowerer<'a> {
     }
 
     /// One end of a range, counted in the unit of the number `ty`: a whole number as it is; a number
-    /// with a unit, as rulec counts one (ritsu-units: `1kg` is 1000 in `mass[g]`, `5%` is 50 steps of
-    /// `rate[step 0.1%]`, an amount in yen is the same in `money[円, incl_tax]` and in
-    /// `money[JPY, excl_tax]`). E003 for a unit of another dimension, a unit on `int`, and an end that
-    /// does not come to a whole number in the type's unit, which is what goes on the wire.
-    fn bound(&mut self, ty: &Ty, b: &syntax::Bound) -> Option<i64> {
+    /// with a unit, as rulec counts one ([`counted`]). E003 for a unit of another dimension, a unit
+    /// on `int`, and an end that does not come to a whole number in the type's unit, which is what
+    /// goes on the wire. W106 for a whole number on a rate counted in steps other than 1%: `<=500`
+    /// of `rate[step 0.1%]` is 50%, and `<=50%` says so (`op`, the end's `>=` or `<=`, writes it).
+    fn bound(&mut self, ty: &Ty, b: &syntax::Bound, op: &str) -> Option<i64> {
         let (value, unit, raw, sp) = match b {
-            syntax::Bound::Int(n) => return Some(*n),
+            syntax::Bound::Int(n, sp) => {
+                if let Ty::Num(u) = ty {
+                    if let Some(rate) = in_steps(u, *n) {
+                        let d = Diag::warning("W106", sp.line, sp.col, tr!(
+                            "範囲の端に書いた `{n}` は、{} の刻みの数として読みます。{} です",
+                            "`{n}`, written as an end of the range, counts steps of {}: it is {}",
+                            rate.step, rate.value; rate.step, rate.value
+                        ))
+                        .note(tr!(
+                            "読む人に率が分かるよう、`{op}{}` と書いてください。範囲は変わりません",
+                            "Write it `{op}{}`, so that a reader sees the rate; the range is the same",
+                            rate.value; rate.value
+                        ));
+                        self.push(d);
+                    }
+                }
+                return Some(*n);
+            }
             syntax::Bound::Quantity { value, unit, raw, span } => (*value, unit.as_str(), raw.as_str(), *span),
             // a value of an enum, or a day, where a number goes
             syntax::Bound::Value { name, span } | syntax::Bound::Date { text: name, span } => {
@@ -1411,25 +1648,81 @@ impl<'a> Lowerer<'a> {
             self.push(e("E003", sp, not_of).note(tr!("`int` の端は、単位を付けずに書いてください", "a bound of `int` is written without a unit")));
             return None;
         };
-        let counted = match &to.dim {
-            // a rate's end in percent, counted in its steps
-            ritsu_units::Dim::Rate if unit == "%" => to.step.and_then(|step| value.checked_div(ritsu_units::Rat::int(100))?.checked_div(step)),
-            ritsu_units::Dim::Money(_) => ritsu_units::Unit::money(unit, to.tax).and_then(|from| from.convert(value, to)),
-            d => ritsu_units::Unit::quantity(d.word(), unit).and_then(|from| from.convert(value, to)),
-        };
-        let Some(counted) = counted else {
-            self.push(e("E003", sp, not_of));
-            return None;
-        };
-        match Some(counted).filter(|r| r.is_int()).and_then(|r| i64::try_from(r.num).ok()) {
-            Some(n) => Some(n),
-            None => {
+        match counted(to, value, unit) {
+            Ok(n) => Some(n),
+            Err(Miscount::Other) => {
+                self.push(e("E003", sp, not_of));
+                None
+            }
+            Err(Miscount::Fraction) => {
                 self.push(
                     e("E003", sp, tr!("範囲の端 `{raw}` を `{tn}` で数えると、整数になりません", "the bound `{raw}`, counted in `{tn}`, is not a whole number")).note(tr!(
                         "値は型の単位で数えた整数として受け渡すので、範囲の端も、その単位に換算して整数にならなければなりません",
                         "a value travels as a whole number in the unit of its type, so a bound must come to one too"
                     )),
                 );
+                None
+            }
+            Err(Miscount::Large) => {
+                self.push(e("E003", sp, tr!("範囲の端 `{raw}` を `{tn}` で数えると、64 ビットの整数に収まりません", "the bound `{raw}`, counted in `{tn}`, does not fit a whole number of 64 bits")));
+                None
+            }
+        }
+    }
+
+    /// A number with a unit written as a value (`fee: 0.5%`, DESIGN 40), counted in the unit of the
+    /// place's type, `expected`, as a bound of a range is ([`counted`]): the whole number that goes on
+    /// the wire, as if the `.flow` wrote it. E003 where the type is not known (a `let` that writes no
+    /// type, a `match`, a value of `json`), for a type that is no number with a unit (`int`, `string`
+    /// …), for a unit of another dimension or currency, and for a number that does not come to a
+    /// whole number of the type's unit.
+    fn quantity(&mut self, value: ritsu_units::Rat, unit: &str, raw: &str, sp: Span, expected: Option<&Ty>) -> Option<i64> {
+        let Some(place) = expected.map(Ty::inner) else {
+            self.push(
+                e(
+                    "E003",
+                    sp,
+                    tr!(
+                        "単位の付いた数 `{raw}` は、型の分かる所（呼び出しの引数、`succeed` の出力、型の分かるフィールド・要素・変数）に書いてください",
+                        "a number with a unit, `{raw}`, goes where its type is known: an argument of a call, an output of `succeed`, or a field, an item or a variable whose type is known"
+                    ),
+                )
+                .note(tr!(
+                    "値は型の単位で数えた整数として受け渡すので、型が分からないと、`{raw}` をどの整数として渡すかが決まりません",
+                    "a value travels as a whole number in the unit of its type, so where the type is not known, nothing says what whole number `{raw}` is"
+                )),
+            );
+            return None;
+        };
+        let tn = self.m.ty_name(place);
+        let not_of = tr!("`{raw}` は `{tn}` の値ではありません", "`{raw}` is not a value of `{tn}`");
+        let Ty::Num(to) = place else {
+            let d = e("E003", sp, not_of);
+            self.push(match place {
+                Ty::Int => d.note(tr!("`int` の値は、単位を付けずに書いてください", "a value of `int` is written without a unit")),
+                Ty::Json => d.note(tr!(
+                    "`json` の値には単位が無いので、`{raw}` をどの整数として渡すかが決まりません。受け渡す整数を書いてください",
+                    "a value of `json` has no unit, so nothing says what whole number `{raw}` is; write the whole number that is passed"
+                )),
+                _ => d,
+            });
+            return None;
+        };
+        match counted(to, value, unit) {
+            Ok(n) => Some(n),
+            Err(Miscount::Other) => {
+                self.push(e("E003", sp, not_of));
+                None
+            }
+            Err(Miscount::Fraction) => {
+                self.push(e("E003", sp, tr!("`{raw}` を `{tn}` で数えると、整数になりません", "`{raw}`, counted in `{tn}`, is not a whole number")).note(tr!(
+                    "値は型の単位で数えた整数として受け渡すので、単位を付けて書いた数も、その単位に換算して整数にならなければなりません",
+                    "a value travels as a whole number in the unit of its type, so a number written with a unit must come to one too"
+                )));
+                None
+            }
+            Err(Miscount::Large) => {
+                self.push(e("E003", sp, tr!("`{raw}` を `{tn}` で数えると、64 ビットの整数に収まりません", "`{raw}`, counted in `{tn}`, does not fit a whole number of 64 bits")));
                 None
             }
         }
@@ -1468,7 +1761,7 @@ impl<'a> Lowerer<'a> {
                     return None;
                 }
             },
-            syntax::Bound::Int(n) => (n.to_string(), at),
+            syntax::Bound::Int(n, _) => (n.to_string(), at),
             syntax::Bound::Quantity { raw, span, .. } => (raw.clone(), *span),
             syntax::Bound::Value { name, span } => (name.clone(), *span),
         };
@@ -1850,9 +2143,10 @@ impl<'a> Lowerer<'a> {
                 // and that no retry takes, as it does not take the task's own
                 errors.push(ErrDef { name: REFUSED.to_string(), status: None, exception: None });
             }
-            if let Some((syntax::Binding::Http { url, .. }, bsp)) = t.binding.as_ref().map(|(b, s)| (b, s)) {
+            if let Some((syntax::Binding::Http { url, api, .. }, bsp)) = t.binding.as_ref().map(|(b, s)| (b, s)) {
                 for ph in placeholders(url) {
-                    if !params.iter().any(|(n, _)| *n == ph) {
+                    // a description's `{item-id}` takes the parameter `item_id` (DESIGN 43)
+                    if !params.iter().any(|(n, _)| *n == ph || (api.is_some() && crate::apis::same_name(crate::model::Place::Path, &ph, n))) {
                         self.push(e("E007", *bsp, tr!("URL に `{{{ph}}}` がありますが、タスクに引数 `{ph}` がありません", "the URL has `{{{ph}}}` but the task has no parameter `{ph}`")));
                     }
                 }
@@ -2042,6 +2336,12 @@ impl<'a> Lowerer<'a> {
                 _ => None,
             };
             self.plaintext_task(t);
+            // where the arguments of an `http` task go, as OpenAPI's defaults say; a task of an
+            // operation of a description takes the description's below (DESIGN 43)
+            let wire = match &binding {
+                Some(Binding::Http { method, url, .. }) => crate::wire::defaults(method, url, &params),
+                _ => vec![],
+            };
             self.task_ix.insert(name.clone(), self.m.tasks.len());
             self.m.tasks.push(TaskDef {
                 name: name.clone(),
@@ -2071,16 +2371,38 @@ impl<'a> Lowerer<'a> {
                 event: t.event.is_some(),
                 flow,
                 connect,
+                request_days: None,
                 answer_zeros: None,
+                timestamps: None,
                 param_secrets,
                 result_secrets: std::mem::take(&mut result_secrets),
                 discloses,
                 api_file,
+                wire,
                 line: sp.line,
             });
             let task = self.m.tasks.last().expect("just pushed");
             let held = task.flow.as_ref().map(|c| crate::contract::check(&self.m, task, &c.model)).unwrap_or_default();
             self.diags.extend(held);
+            // an `http` task no description holds: each argument written where it goes, as OpenAPI's
+            // defaults write it (DESIGN 43)
+            if let Some((syntax::Binding::Http { api: None, form, .. }, bsp)) = &t.binding {
+                let task = self.m.tasks.last().expect("just pushed");
+                let mut found = Vec::new();
+                for w in &task.wire {
+                    if let Some((_, pt)) = task.params.iter().find(|(p, _)| *p == w.param) {
+                        if let Some(Text { ja, en }) = crate::wire::unwritable(&self.m, w, pt, *form) {
+                            found.push(tr!("引数 `{}` を送れません。{ja}", "the parameter `{}` cannot be sent: {en}", w.param));
+                        }
+                    }
+                }
+                if let Some(c) = crate::wire::clash(&self.m, task, *form) {
+                    found.push(crate::wire::clash_words(&c));
+                }
+                for w in found {
+                    self.push(e("E003", *bsp, w));
+                }
+            }
             // the operation of the API's description the task calls: what it takes, answers and fails with
             if let Some((api, b)) = &described {
                 let op = match b {
@@ -2092,6 +2414,20 @@ impl<'a> Lowerer<'a> {
                 let bsp = t.binding.as_ref().map(|(_, s)| *s).unwrap_or(*sp);
                 match op {
                     Ok(op) => {
+                        // where each argument goes, as the description says (DESIGN 43)
+                        if let syntax::Binding::Http { url, .. } = b {
+                            let task = self.m.tasks.last().expect("just pushed");
+                            let (wire, mut found) = op.placement(&self.m, task, &placeholders(url));
+                            let task = self.m.tasks.last_mut().expect("just pushed");
+                            task.wire = wire;
+                            let task = self.m.tasks.last().expect("just pushed");
+                            if let Some(c) = crate::wire::clash(&self.m, task, op.form) {
+                                found.push(crate::wire::clash_words(&c));
+                            }
+                            for w in found {
+                                self.push(e("E016", Span { line: sp.line, col: 1 }, w));
+                            }
+                        }
                         // the properties of the operation that mark what the task gives it and reads from it secret
                         if let syntax::Binding::Http { method, url, .. } = b {
                             let task = self.m.tasks.last().expect("just pushed");
@@ -2117,12 +2453,19 @@ impl<'a> Lowerer<'a> {
                             }
                             task.result_secrets.extend(answer);
                         }
+                        // where a `connect` task's request holds a `google.type.Date`, which its `date` goes to as `{year, month, day}`
+                        if let syntax::Binding::Connect { .. } = b {
+                            let task = self.m.tasks.last_mut().expect("just pushed");
+                            task.request_days = op.request_days();
+                        }
+                        // the timestamps of what an `aws` task sends, with the forms the model sends them in
+                        if let syntax::Binding::Aws { .. } = b {
+                            let task = self.m.tasks.last_mut().expect("just pushed");
+                            let params: Vec<String> = task.params.iter().map(|(p, _)| p.clone()).collect();
+                            task.timestamps = op.timestamps(&params);
+                        }
                         let task = self.m.tasks.last().expect("just pushed");
-                        let path_params = match b {
-                            syntax::Binding::Http { url, .. } => placeholders(url),
-                            _ => vec![],
-                        };
-                        let found = op.check(&self.m, task, &path_params);
+                        let found = op.check(&self.m, task);
                         for w in found {
                             let mut d = e("E016", Span { line: sp.line, col: 1 }, w);
                             // what the task is held to may name a type of a file that was not read
@@ -2307,7 +2650,7 @@ impl<'a> Lowerer<'a> {
                     ok = false;
                     self.push(e("E016", line, tr!("`{tn}.{opn}` は `{}` を受け取ります。タスクの引数に書いてください", "`{tn}.{opn}` takes `{}`; give the task that parameter", p.name)));
                 }
-                Some((_, got)) if *got != want => {
+                Some((_, got)) if !self.m.same_ty(got, &want) => {
                     ok = false;
                     let (g, w) = (self.m.ty_name(got), self.m.ty_name(&want));
                     self.push(e("E016", line, tr!("帳簿は `{}` を `{w}` で受け取りますが、タスクの引数は `{g}` です", "the book takes `{}` as `{w}`, but the task's parameter is `{g}`", p.name)));
@@ -2848,7 +3191,7 @@ impl<'a> Lowerer<'a> {
                         self.push(e("E007", *vsp, tr!("`{v}` は範囲 `{w}` の外の値なので、Jev には尋ねません。この意味は外してください", "`{v}` is outside the range `{w}`, so Jev is not asked about it; leave its meaning out")));
                         return None;
                     }
-                    def = EnumDef { name: format!("{} range {w}", def.name), values: takes, ordered: def.ordered, from: None };
+                    def = EnumDef { name: format!("{} range {w}", def.name), values: takes, ordered: def.ordered, from: None, declared: None };
                 }
                 if let Some(ssp) = ask.score {
                     // the levels are the values, each with what it means, from the lowest; TypeSafe's
@@ -3059,7 +3402,8 @@ impl<'a> Lowerer<'a> {
             };
             let mut held = Vec::new();
             let mut held_values = Vec::new();
-            for ((inp, isp), (val, vsp)) in &c.held {
+            let rule_name = self.m.rules[rule].name.clone();
+            for ((inp, isp), val) in &c.held {
                 if !mc.held.contains(inp) {
                     self.push(e(
                         "E008",
@@ -3068,16 +3412,55 @@ impl<'a> Lowerer<'a> {
                     ));
                     continue;
                 }
+                // the input's type, as the rule declares it: a number held to it counts in its unit,
+                // as a value of a call does (DESIGN 40)
+                let ty = self.m.rules[rule].info.inputs.iter().find(|col| col.name == *inp).map(|col| self.rty(&rule_name, &col.ty));
+                let number = match val {
+                    syntax::Held::Word(..) => None,
+                    syntax::Held::Int(n, sp) => {
+                        // a whole number where a rate counts steps other than 1% (W106)
+                        if let Some(rate) = ty.as_ref().and_then(|t| match t.inner() {
+                            Ty::Num(u) => in_steps(u, *n),
+                            _ => None,
+                        }) {
+                            let (step, value) = (&rate.step, &rate.value);
+                            let d = Diag::warning("W106", sp.line, sp.col, tr!(
+                                "`{inp}` に書いた `{n}` は、{step} の刻みの数として読みます。{value} です",
+                                "`{n}`, written for `{inp}`, counts steps of {step}: it is {value}"
+                            ))
+                            .note(tr!(
+                                "読む人に率が分かるよう、`held {inp} = {value}` と書いてください。案件が持つ値は変わりません",
+                                "Write it `held {inp} = {value}`, so that a reader sees the rate; the case holds the same value"
+                            ));
+                            self.push(d);
+                        }
+                        Some(*n)
+                    }
+                    syntax::Held::Quantity { value, unit, raw, span } => match self.quantity(*value, unit, raw, *span, ty.as_ref()) {
+                        Some(n) => Some(n),
+                        None => continue,
+                    },
+                };
+                let text = val.text();
                 if let Some(a) = mc.axis_of(inp) {
-                    match mc.axes[a].coords.iter().position(|x| x == val) {
+                    let axis = &mc.axes[a];
+                    // a number is the value of the table that is the same number of the input's unit
+                    // (`0.5%` and `5` of `rate[step 0.1%]` are the table's `0.5%`), or one of the set a
+                    // coordinate stands for, between its ends (`0.3%` is the table's `0.1%` where that
+                    // stands for 0.1% to 0.4%); a word is the value written alike
+                    let at = match (number, ty.as_ref().map(Ty::inner)) {
+                        (Some(n), Some(t @ (Ty::Num(_) | Ty::Int))) => axis.coords.iter().position(|x| coord_number(x, t) == Some(n)).or_else(|| axis.ends.iter().position(|ends| ends.as_ref().is_some_and(|ends| held_between(ends, n, t)))),
+                        _ => axis.coords.iter().position(|x| *x == text),
+                    };
+                    match at {
                         Some(ci) => held.push((a, ci)),
                         None => {
-                            self.push(e("E003", *vsp, tr!("`{val}` は `{inp}` の値ではありません（値は {}）", "`{val}` is not a value of `{inp}` ({})", mc.axes[a].coords.join("・"); mc.axes[a].coords.join(", "))));
+                            self.push(e("E003", val.span(), not_held(&text, inp, axis)));
                             continue;
                         }
                     }
                 }
-                held_values.push((inp.clone(), val.clone()));
+                held_values.push((inp.clone(), text));
             }
             let hold = matches!(self.m.rules[rule].kind, RuleKind::Hold { .. });
             let mut external = Vec::new();
@@ -3132,6 +3515,9 @@ impl<'a> Lowerer<'a> {
             }
             self.var_ty.insert(c.name.clone(), Ty::Record(c.record));
         }
+        for (b, _) in [&self.prog.flow, &self.prog.on_failure, &self.prog.on_cancel].into_iter().flatten() {
+            set_lines(b, &mut self.set_lines);
+        }
         let mut problems: BTreeMap<(usize, usize), Diag> = BTreeMap::new();
         loop {
             let before = self.var_ty.len();
@@ -3146,39 +3532,6 @@ impl<'a> Lowerer<'a> {
             problems.clear();
         }
         for (_, d) in problems {
-            self.push(d);
-        }
-        self.variables_the_code_keeps_apart();
-    }
-
-    /// E006 for a variable the code a target writes cannot keep apart: one named as the code's own
-    /// (every generator's variables, and the interpreter's, start with `dd_`), and two that are
-    /// one name there (`_x` and `v_x` everywhere, by `render::ident`; `if` and `if_` in Python;
-    /// `type` and `type_` in Go). No caller reads a variable, so the flow can rename it; an input
-    /// is the same variable in the code, under the key a caller gives it (DESIGN 22.3).
-    fn variables_the_code_keeps_apart(&mut self) {
-        let mut names: Vec<(usize, usize, String)> = self.var_at.iter().map(|(n, s)| (s.line, s.col, n.clone())).collect();
-        names.extend(self.prog.inputs.iter().map(|f| (f.name.1.line, f.name.1.col, f.name.0.clone())));
-        names.extend(self.m.cases.iter().map(|c| (c.line, 1, c.name.clone())));
-        names.sort();
-        let spellings: [fn(&str) -> String; 4] = [
-            crate::render::ident,
-            crate::temporal_py::py_name,
-            crate::temporal_go::go_name,
-            crate::render::asl_var,
-        ];
-        let mut found = Vec::new();
-        for (i, (line, col, n)) in names.iter().enumerate() {
-            if n.starts_with("dd_") {
-                found.push(Diag::error("E006", *line, *col, tr!("`{n}` は、`dd_` で始まるので、dandori が生成するコードの変数と同じ名前になることがあります。別の名前を付けてください", "`{n}` starts with `dd_`, as the variables of the code dandori writes do, and can be one of them; give it another name")));
-                continue;
-            }
-            let earlier = names[..i].iter().find_map(|(_, _, m)| spellings.iter().find(|f| f(m) == f(n)).map(|f| (m, f(n))));
-            if let Some((m, id)) = earlier {
-                found.push(Diag::error("E006", *line, *col, tr!("変数 `{m}` と `{n}` は、生成するコードで同じ名前 `{id}` になります。どちらかの名前を変えてください", "the variables `{m}` and `{n}` are one name, `{id}`, in the code dandori writes; rename one of them")));
-            }
-        }
-        for d in found {
             self.push(d);
         }
     }
@@ -3198,17 +3551,15 @@ impl<'a> Lowerer<'a> {
         self.var_at.entry(n.to_string()).or_insert(sp);
         match self.var_ty.get(n).cloned() {
             // a value that fits the name's type is set to it; a name set to both `T` and `T?` is `T?`
-            Some(prev) if t.fits(&prev) => {}
-            Some(prev) if prev.fits(&t) && matches!(t, Ty::Opt(_)) => {
+            Some(prev) if self.m.fits(&t, &prev) => {}
+            Some(prev) if self.m.fits(&prev, &t) && matches!(t, Ty::Opt(_)) => {
                 self.var_ty.insert(n.to_string(), t);
                 self.widened = true;
             }
-            Some(prev) if prev != t => {
+            Some(prev) if !self.m.same_ty(&prev, &t) => {
                 let (a, b) = (self.m.ty_name(&prev), self.m.ty_name(&t));
-                problems.insert(
-                    (sp.line, sp.col),
-                    e("E003", sp, tr!("`{n}` は、ほかの場所では `{a}`、ここでは `{b}` です。一つの名前に型は一つだけです", "`{n}` was `{a}` elsewhere and is `{b}` here; a name keeps one type")),
-                );
+                let d = e("E003", sp, tr!("`{n}` は、ほかの場所では `{a}`、ここでは `{b}` です。一つの名前に型は一つだけです", "`{n}` was `{a}` elsewhere and is `{b}` here; a name keeps one type"));
+                problems.insert((sp.line, sp.col), self.enums_apart(&prev, &t).into_iter().fold(d, Diag::note));
             }
             Some(_) => {}
             None => {
@@ -3219,10 +3570,169 @@ impl<'a> Lowerer<'a> {
 
     /// Run `f` for its answer only: what it would say is dropped.
     fn quiet<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let n = self.diags.len();
+        let (n, k) = (self.diags.len(), self.followers.len());
         let out = f(self);
         self.diags.truncate(n);
+        self.followers.truncate(k);
         out
+    }
+
+    /// Hold back what a line would say that follows from an error at one of `lines` (DESIGN 30).
+    /// What a declaration with an error leaves out of the model (DESIGN 30), each with the lines
+    /// of its declaration: an input (`input:<name>`), an output, a task, a parameter
+    /// (`param:<task>.<name>`), an error of a task (`error:<task>!<name>`) and a case.
+    fn left_out_of_declarations(&mut self) {
+        let mut out: BTreeMap<String, BTreeSet<usize>> = BTreeMap::new();
+        for (kind, fields, have) in [("input", &self.prog.inputs, &self.m.inputs), ("output", &self.prog.outputs, &self.m.outputs)] {
+            for f in fields.iter().filter(|f| !have.iter().any(|(n, _)| *n == f.name.0)) {
+                out.insert(format!("{kind}:{}", f.name.0), BTreeSet::from([f.name.1.line]));
+            }
+        }
+        for t in &self.prog.tasks {
+            let Some(&ti) = self.task_ix.get(&t.name.0) else {
+                if !self.rule_ix.contains_key(&t.name.0) {
+                    out.insert(format!("task:{}", t.name.0), task_lines(t));
+                }
+                continue;
+            };
+            let task = &self.m.tasks[ti];
+            for p in t.params.iter().filter(|p| !task.params.iter().any(|(n, _)| *n == p.name.0)) {
+                out.insert(format!("param:{}.{}", t.name.0, p.name.0), BTreeSet::from([p.name.1.line]));
+            }
+            for er in t.errors.iter().filter(|er| !matches!(er.name.0.as_str(), "timeout" | "failure") && !task.errors.iter().any(|x| x.name == er.name.0)) {
+                out.insert(format!("error:{}!{}", t.name.0, er.name.0), BTreeSet::from([er.name.1.line]));
+            }
+        }
+        for c in self.prog.cases.iter().filter(|c| !self.m.cases.iter().any(|x| x.name == c.name.0)) {
+            let mut lines = BTreeSet::from([c.name.1.line, c.record.span().line]);
+            lines.extend(c.machine.iter().chain(&c.external).chain(c.state_field.iter()).map(|n| n.1.line));
+            lines.extend(c.held.iter().flat_map(|(a, b)| [a.1.line, b.span().line]));
+            out.insert(format!("case:{}", c.name.0), lines);
+        }
+        self.left_out = out;
+    }
+
+    /// Whether a name is a word for a value rather than a variable: no variable, input or case has
+    /// it, whether its type is known or not.
+    fn bare_word(&self, n: &str) -> bool {
+        n != "none" && !self.var_ty.contains_key(n) && !self.set_lines.contains_key(n) && !["input", "case"].iter().any(|k| self.left_out.contains_key(&format!("{k}:{n}")))
+    }
+
+    /// The enum that bare words are values of where nothing says which (DESIGN 29): the one enum of
+    /// those the flow sees, two names of one enum counted once (DESIGN 28), that has every word read
+    /// together (one word, or the words of a list). It goes by a name the flow declares or imports,
+    /// else by the first of its names. Else what E002 says, and where: a word no enum has, at that
+    /// word; words no one enum has all of; words two enums or more have, with how to say which.
+    fn enum_of(&self, words: &[&str], list: bool) -> Result<EnumId, NoEnum> {
+        let has = |e: EnumId, w: &str| self.m.enums[e].values.iter().any(|v| v == w);
+        let types: Vec<EnumId> = (0..self.m.enums.len()).filter(|e| self.m.enum_class(*e) == *e).collect();
+        let named = |c: EnumId| (0..self.m.enums.len()).filter(|x| self.m.enum_class(*x) == c).find(|x| !self.m.enums[*x].name.contains('.')).unwrap_or(c);
+        let found: Vec<EnumId> = types.iter().copied().filter(|e| words.iter().all(|w| has(*e, w))).collect();
+        let code = |xs: &[&str]| xs.iter().map(|w| format!("`{w}`")).collect::<Vec<_>>();
+        match found.as_slice() {
+            [one] => Ok(named(*one)),
+            [] => {
+                if let Some(at) = words.iter().position(|w| !types.iter().any(|e| has(*e, w))) {
+                    // a word no enum has, said where it is written; in a list, the values of the
+                    // enums the other words are values of, to show the one meant
+                    let w = words[at];
+                    let mut note = if list {
+                        tr!("このフローから見える列挙に、値 `{w}` はありません", "no enum this flow sees has the value `{w}`")
+                    } else {
+                        tr!(
+                            "値は、変数・そのフィールド・文字列・数・true・false・列挙の値のどれかです。このフローから見える列挙に、値 `{w}` はありません",
+                            "a value is a variable, a field of one, a string, a number, true, false or a value of an enum, and no enum this flow sees has the value `{w}`"
+                        )
+                    };
+                    let others: Vec<&str> = words.iter().copied().filter(|x| *x != w).collect();
+                    if list && !others.is_empty() {
+                        for e in types.iter().copied().filter(|e| others.iter().all(|x| has(*e, x))) {
+                            let d = &self.m.enums[named(e)];
+                            note.ja.push_str(&format!("。`{}` の値は {} です", d.name, d.values.join("・")));
+                            note.en.push_str(&format!("; the values of `{}` are {}", d.name, d.values.join(", ")));
+                        }
+                    }
+                    return Err(NoEnum { at, says: tr!("変数や値 `{w}` はありません", "there is no variable or value `{w}`"), note });
+                }
+                // every word is a value of an enum, and no one enum has them all
+                let all = code(words);
+                let (ja_all, en_all) = (all.join("・"), all.join(", "));
+                let mut note = tr!("並びの値は、一つの型の値です", "the values of a list are of one type");
+                for e in types.iter().copied().filter(|e| words.iter().any(|w| has(*e, w))) {
+                    let n = &self.m.enums[named(e)].name;
+                    let (got, lack): (Vec<&str>, Vec<&str>) = words.iter().copied().partition(|w| has(e, w));
+                    let (got, lack) = (code(&got), code(&lack));
+                    note.ja.push_str(&format!("。`{n}` には {} がありますが、{} はありません", got.join("・"), lack.join("・")));
+                    note.en.push_str(&format!("; `{n}` has {} but not {}", got.join(", "), lack.join(", ")));
+                }
+                Err(NoEnum { at: 0, says: tr!("このフローから見える列挙に、{ja_all} のすべてを値に持つものはありません", "no enum this flow sees has all of {en_all} as values"), note })
+            }
+            several => {
+                let names: Vec<String> = several.iter().map(|e| format!("`{}`", self.m.enums[named(*e)].name)).collect();
+                let first = &self.m.enums[named(several[0])].name;
+                let (ja_names, en_names) = (
+                    match names.split_last() {
+                        Some((last, rest)) if rest.len() == 1 => format!("{} と {last}", rest[0]),
+                        _ => names.join("・"),
+                    },
+                    match names.split_last() {
+                        Some((last, rest)) if !rest.is_empty() => format!("{} and of {last}", rest.join(", of ")),
+                        _ => names.join(""),
+                    },
+                );
+                let all = words.join(", ");
+                let which = if several.len() == 2 { "どちら" } else { "どれ" };
+                let ws = code(words);
+                let (ja_ws, en_ws) = (ws.join("・"), ws.join(", "));
+                let (is, a_value, are) = if words.len() == 1 { ("is", "a value", "is a value") } else { ("are", "values", "are values") };
+                let (example, ja_where, en_where) = if list {
+                    (format!("let xs : list[{first}] = [{all}]"), "並びに型を書いてください", "write the type of the list")
+                } else {
+                    (format!("let x : {first} = {all}"), "値を入れるところに型を書いてください", "write the type where the value goes")
+                };
+                Err(NoEnum {
+                    at: 0,
+                    says: tr!("{ja_ws} がどの列挙の値か、ここでは決まりません", "which enum {en_ws} {are} of is not known here"),
+                    note: tr!("{ja_ws} は {ja_names} の{which}の値でもあります。{ja_where}（`{example}`）", "{en_ws} {is} {a_value} of {en_names} alike; {en_where} (`{example}`)"),
+                })
+            }
+        }
+    }
+
+    /// Say `d`, unless it follows from what a declaration with an error left out (`key` in
+    /// `left_out`): then it is held back, to be said only when that declaration says nothing.
+    fn say_unless_left_out(&mut self, d: Diag, key: &str) {
+        match self.left_out.get(key).cloned() {
+            Some(lines) => self.hold_back(d, lines),
+            None => self.push(d),
+        }
+    }
+
+    fn hold_back(&mut self, d: Diag, lines: BTreeSet<usize>) {
+        self.followers.push((d, lines));
+    }
+
+    /// Say what follows from an error at another line only when that line says none: a follower is
+    /// said already when one of its lines has an error, or holds a follower that is said already.
+    /// What is left is said as it is, so that a file never passes for what was held back.
+    fn followers_said(&mut self) {
+        let mut said: BTreeSet<usize> = self.diags.iter().filter(|d| d.severity == crate::diag::Severity::Error).map(|d| d.line).collect();
+        let mut left = std::mem::take(&mut self.followers);
+        loop {
+            let before = left.len();
+            left.retain(|(d, lines)| {
+                if lines.iter().any(|l| said.contains(l)) {
+                    said.insert(d.line);
+                    false
+                } else {
+                    true
+                }
+            });
+            if left.len() == before {
+                break;
+            }
+        }
+        self.diags.extend(left.into_iter().map(|(d, _)| d));
     }
 
     fn quiet_ty(&mut self, te: &TypeExpr) -> Option<Ty> {
@@ -3338,9 +3848,11 @@ impl<'a> Lowerer<'a> {
                 };
                 if let Some(te) = ty {
                     let want = self.ty(te)?;
-                    if !result.fits(&want) {
+                    if !self.m.fits(&result, &want) {
                         let (a, b) = (self.m.ty_name(&result), self.m.ty_name(&want));
-                        self.push(e("E003", call.callee.1, tr!("`{}` が返すのは `{a}` で、`{b}` ではありません", "`{}` answers `{a}`, which is not `{b}`", call.callee.0)));
+                        let d = e("E003", call.callee.1, tr!("`{}` が返すのは `{a}` で、`{b}` ではありません", "`{}` answers `{a}`, which is not `{b}`", call.callee.0));
+                        let d = self.enums_apart(&result, &want).into_iter().fold(d, Diag::note);
+                        self.push(d);
                         return None;
                     }
                 }
@@ -3380,7 +3892,8 @@ impl<'a> Lowerer<'a> {
                 let ci = match self.m.case_index(&case.0) {
                     Some(c) => c,
                     None => {
-                        self.push(e("E002", case.1, tr!("案件 `{}` はありません", "there is no case `{}`", case.0)));
+                        let d = e("E002", case.1, tr!("案件 `{}` はありません", "there is no case `{}`", case.0));
+                        self.say_unless_left_out(d, &format!("case:{}", case.0));
                         return None;
                     }
                 };
@@ -3546,7 +4059,8 @@ impl<'a> Lowerer<'a> {
                     let oty = match self.m.outputs.iter().find(|(o, _)| o == n) {
                         Some((_, t)) => t.clone(),
                         None => {
-                            self.push(e("E002", *nsp, tr!("出力 `{n}` はありません", "there is no output `{n}`")));
+                            let d = e("E002", *nsp, tr!("出力 `{n}` はありません", "there is no output `{n}`"));
+                            self.say_unless_left_out(d, &format!("output:{n}"));
                             continue;
                         }
                     };
@@ -3575,7 +4089,10 @@ impl<'a> Lowerer<'a> {
                 for (l, lsp) in leaving {
                     match self.m.case_index(l) {
                         Some(c) => left.push(c),
-                        None => self.push(e("E002", *lsp, tr!("案件 `{l}` はありません", "there is no case `{l}`"))),
+                        None => {
+                            let d = e("E002", *lsp, tr!("案件 `{l}` はありません", "there is no case `{l}`"));
+                            self.say_unless_left_out(d, &format!("case:{l}"));
+                        }
                     }
                 }
                 let cause = match cause {
@@ -3585,7 +4102,82 @@ impl<'a> Lowerer<'a> {
                 TK::Fail { error: error.0.clone(), cause, leaving: left }
             }
         };
+        self.numbers(s, site);
         Some(TStmt { kind, line, site })
+    }
+
+    /// What the numbers of a lowered statement say beyond their values (DESIGN 40): a number written
+    /// with a unit is kept as it is written, by its place in the statement (`Model::written`), for
+    /// what the checks and the pages quote of it; a whole number written where a rate counts steps
+    /// other than 1% is said, with the place it is written for (W106).
+    fn numbers(&mut self, s: &syntax::Stmt, site: usize) {
+        let mut places: Vec<(String, Place, &Expr)> = Vec::new();
+        match &s.kind {
+            StmtKind::Let { call, .. } | StmtKind::Call { call, .. } | StmtKind::CaseCall { call, .. } => {
+                places.extend(call.args.iter().map(|((a, _), x)| (a.clone(), Place::Field(a.clone()), x)));
+            }
+            StmtKind::Succeed { fields } => places.extend(fields.iter().map(|((f, _), x)| (f.clone(), Place::Output(f.clone()), x))),
+            StmtKind::Assign { name, expr, .. } => places.push((String::new(), Place::Let(name.0.clone()), expr)),
+            StmtKind::For { var, list, result, body, .. } => {
+                places.push(("in".to_string(), Place::Over(var.0.clone()), list));
+                if let (Some((r, _)), Some(StmtKind::Yield { expr })) = (result, body.last().map(|x| &x.kind)) {
+                    places.push((String::new(), Place::Item(r.0.clone()), expr));
+                }
+            }
+            _ => {}
+        }
+        for (path, place, x) in places {
+            self.number_at(site, &path, &place, x);
+        }
+    }
+
+    /// [`Lowerer::numbers`], of the value `x` at the place `path` of the statement `site`.
+    fn number_at(&mut self, site: usize, path: &str, place: &Place, x: &Expr) {
+        match x {
+            Expr::Quantity { raw, .. } => {
+                self.m.written.insert((site, path.to_string()), raw.clone());
+            }
+            Expr::Int(n, sp) => {
+                let Some(rate) = self.stepped.get(&(sp.line, sp.col)).and_then(|u| in_steps(u, *n)) else { return };
+                let (step, value) = (&rate.step, &rate.value);
+                let said = match place {
+                    Place::Item(name) => tr!(
+                        "`{name}` の要素に書いた `{n}` は、{step} の刻みの数として読みます。{value} です",
+                        "`{n}`, written as an item of `{name}`, counts steps of {step}: it is {value}"
+                    ),
+                    Place::Over(var) => tr!(
+                        "`for {var}` が回るリストに書いた `{n}` は、{step} の刻みの数として読みます。{value} です",
+                        "`{n}`, written in the list `for {var}` goes through, counts steps of {step}: it is {value}"
+                    ),
+                    Place::Field(name) | Place::Output(name) | Place::Let(name) => tr!(
+                        "`{name}` に書いた `{n}` は、{step} の刻みの数として読みます。{value} です",
+                        "`{n}`, written for `{name}`, counts steps of {step}: it is {value}"
+                    ),
+                };
+                let form = match place {
+                    Place::Field(name) => format!("{name}: {value}"),
+                    Place::Output(name) => format!("{name} = {value}"),
+                    Place::Let(_) | Place::Item(_) | Place::Over(_) => value.clone(),
+                };
+                let d = Diag::warning("W106", sp.line, sp.col, said).note(tr!(
+                    "読む人に率が分かるよう、`{form}` と書いてください。生成するコードが渡す数（{n}）は変わりません",
+                    "Write it `{form}`, so that a reader sees the rate; the generated code passes the same {n}"
+                ));
+                self.push(d);
+            }
+            Expr::Record(fields, _) => {
+                for ((f, _), v) in fields {
+                    self.number_at(site, &field_place(path, f), &Place::Field(f.clone()), v);
+                }
+            }
+            Expr::List(items, _) => {
+                let item = place.item();
+                for (i, v) in items.iter().enumerate() {
+                    self.number_at(site, &item_place(path, i), &item, v);
+                }
+            }
+            _ => {}
+        }
     }
 
     fn lower_match(&mut self, expr: &Expr, arms: &[syntax::Arm]) -> Option<TK> {
@@ -3696,7 +4288,12 @@ impl<'a> Lowerer<'a> {
                     _ if declared.contains(n) => errs.push(HErr::Declared(n.clone())),
                     _ => {
                         let list = if declared.is_empty() { "timeout, failure".to_string() } else { format!("{}, timeout, failure", declared.join(", ")) };
-                        self.push(e("E002", *sp, tr!("`{n}` はこの呼び出しが投げるエラーではありません（投げるのは {list}）", "`{n}` is not an error this call can raise ({list})")));
+                        let d = e("E002", *sp, tr!("`{n}` はこの呼び出しが投げるエラーではありません（投げるのは {list}）", "`{n}` is not an error this call can raise ({list})"));
+                        let key = match callee {
+                            Callee::Task(t) => format!("error:{}!{n}", self.m.tasks[*t].name),
+                            Callee::Rule(_) => String::new(),
+                        };
+                        self.say_unless_left_out(d, &key);
                     }
                 }
             }
@@ -3744,10 +4341,15 @@ impl<'a> Lowerer<'a> {
             // a date that the dates file does not have: say which it has
             let date = &name[file.len() + 1..];
             let names: Vec<&str> = facts.functions.iter().map(|f| f.name.as_str()).collect();
-            self.push(e("E002", *sp, tr!("日付のファイル `{file}` に日付 `{date}` はありません（あるのは {}）", "the dates file `{file}` has no date `{date}` ({})", names.join("・"); names.join(", "))));
+            self.push(e("E002", *sp, tr!("日付のファイル `{file}` に日付 `{date}` はありません（あるのは {}）", "the dates file `{file}` has no date `{date}` ({})", names.join("・"); names.join(", "))).same_in("task", name.clone()));
             return None;
         } else {
-            self.push(e("E002", *sp, tr!("タスクか規則 `{name}` はありません", "there is no task or rule `{name}`")));
+            let d = e("E002", *sp, tr!("タスクか規則 `{name}` はありません", "there is no task or rule `{name}`")).same_in("task", name.clone());
+            // a task whose declaration has an error says it there (DESIGN 30)
+            match self.left_out.get(&format!("task:{name}")).cloned() {
+                Some(lines) => self.hold_back(d, lines),
+                None => self.push(d),
+            }
             return None;
         };
         let mut args = Vec::new();
@@ -3757,7 +4359,12 @@ impl<'a> Lowerer<'a> {
                 Some((_, t)) => t.clone(),
                 None => {
                     let list: Vec<&str> = params.iter().map(|(p, _)| p.as_str()).collect();
-                    self.push(e("E004", *asp, tr!("`{name}` に引数 `{an}` はありません（あるのは {}）", "`{name}` has no parameter `{an}` ({})", list.join("・"); list.join(", "))));
+                    let d = e("E004", *asp, tr!("`{name}` に引数 `{an}` はありません（あるのは {}）", "`{name}` has no parameter `{an}` ({})", list.join("・"); list.join(", ")));
+                    // a parameter whose line has an error says it there (DESIGN 30)
+                    match self.left_out.get(&format!("param:{name}.{an}")).cloned() {
+                        Some(lines) => self.hold_back(d, lines),
+                        None => self.push(d),
+                    }
                     ok = false;
                     continue;
                 }
@@ -3818,7 +4425,17 @@ impl<'a> Lowerer<'a> {
         let te = match ex {
             Expr::Now(_) => TExpr::Now,
             Expr::Str(s, _) => TExpr::Str(s.clone()),
-            Expr::Int(n, _) => TExpr::Int(*n),
+            Expr::Int(n, sp) => {
+                // a whole number where a rate counts steps other than 1%: W106 says it with the
+                // place's name, once the statement is lowered (`numbers`)
+                if let Some(Ty::Num(u)) = expected.map(Ty::inner) {
+                    if in_steps(u, *n).is_some() {
+                        self.stepped.insert((sp.line, sp.col), u.clone());
+                    }
+                }
+                TExpr::Int(*n)
+            }
+            Expr::Quantity { value, unit, raw, span } => TExpr::Int(self.quantity(*value, unit, raw, *span, expected)?),
             Expr::Bool(b, _) => TExpr::Bool(*b),
             Expr::Interp(parts, sp) => {
                 let mut out = Vec::new();
@@ -3826,6 +4443,17 @@ impl<'a> Lowerer<'a> {
                     match p {
                         Part::Lit(s) => out.push(IPart::Lit(s.clone())),
                         Part::Hole(path) if path.len() == 1 && path[0].0 == "now" => out.push(IPart::Hole(TExpr::Now)),
+                        // `{…}` puts a variable in, or a field of one; a word that is always the same
+                        // is written in the string itself, so a word here is never a value of an
+                        // enum (DESIGN 29)
+                        Part::Hole(path) if path.len() == 1 && self.bare_word(&path[0].0) => {
+                            let w = &path[0].0;
+                            self.push(e("E002", path[0].1, tr!("変数 `{w}` はありません", "there is no variable `{w}`")).note(tr!(
+                                "文字列の `{{…}}` に入れられるのは、変数かそのフィールドです。決まった語は、文字列にそのまま書いてください",
+                                "`{{…}}` in a string puts in a variable or a field of one; a word that is always the same is written in the string as it is"
+                            )));
+                            return None;
+                        }
                         Part::Hole(path) => {
                             let x = self.path(path, None)?;
                             let t = x.ty();
@@ -3852,11 +4480,17 @@ impl<'a> Lowerer<'a> {
                         let decl = self.m.records[r].fields.clone();
                         let rn = self.m.records[r].name.clone();
                         let mut out: Vec<(String, TExpr)> = Vec::new();
+                        // a field whose type could not be read says nothing, and the rest is checked
+                        let mut unread = false;
                         for ((fname, fsp), fe) in fields {
                             let fty = match decl.iter().find(|(n, _)| n == fname) {
                                 Some((_, t)) => t.clone(),
                                 None => {
-                                    let list: Vec<String> = decl.iter().map(|(n, _)| n.clone()).collect();
+                                    if self.unread_field(r, fname) {
+                                        unread = true;
+                                        continue;
+                                    }
+                                    let list = self.field_names(r);
                                     self.push(e("E002", *fsp, tr!("`{rn}` にフィールド `{fname}` はありません（あるのは {}）", "`{rn}` has no field `{fname}` ({})", list.join("・"); list.join(", "))));
                                     return None;
                                 }
@@ -3871,6 +4505,9 @@ impl<'a> Lowerer<'a> {
                         let missing: Vec<String> = decl.iter().filter(|(n, t)| !matches!(t, Ty::Opt(_)) && !out.iter().any(|(g, _)| g == n)).map(|(n, _)| n.clone()).collect();
                         if !missing.is_empty() {
                             self.push(e("E004", *sp, tr!("この `{rn}` に {} がありません", "this `{rn}` does not give {}", missing.join("・"); missing.join(", "))));
+                            return None;
+                        }
+                        if unread {
                             return None;
                         }
                         out.sort_by_key(|(n, _)| decl.iter().position(|(d, _)| d == n).unwrap_or(usize::MAX));
@@ -3905,6 +4542,45 @@ impl<'a> Lowerer<'a> {
                     _ => None,
                 };
                 let mut elem = want_elem;
+                // a list that starts with a bare word, where nothing says its type: the first item
+                // that is no bare word says it, as a first item does; else its words are values of
+                // the one enum that has them all (DESIGN 29)
+                if let (None, Some(Expr::Path(p))) = (&elem, items.first()) {
+                    if p.len() == 1 && self.bare_word(&p[0].0) {
+                        let is_bare = |x: &Expr| matches!(x, Expr::Path(q) if q.len() == 1 && self.bare_word(&q[0].0));
+                        let bare: Vec<(&str, Span)> = items.iter().filter_map(|x| match x {
+                            Expr::Path(q) if is_bare(x) => Some((q[0].0.as_str(), q[0].1)),
+                            _ => None,
+                        }).collect();
+                        let others: Vec<&Expr> = items.iter().filter(|x| !is_bare(x)).collect();
+                        if let Some(first) = others.first().copied() {
+                            match others.iter().find_map(|x| self.quiet_expr(x, None)) {
+                                Some(t) => elem = Some(t),
+                                // no item that is no bare word has a type: what is wrong with the
+                                // first is said, and the words wait for it
+                                None => {
+                                    self.expr(first, None);
+                                    return None;
+                                }
+                            }
+                        } else {
+                            let words: Vec<&str> = bare.iter().map(|(w, _)| *w).collect();
+                            match self.enum_of(&words, true) {
+                                Ok(id) => elem = Some(Ty::Enum(id)),
+                                Err(no) => {
+                                    self.push(e("E002", bare[no.at].1, no.says).note(no.note));
+                                    return None;
+                                }
+                            }
+                        }
+                    }
+                }
+                // a list whose type the place does not say takes it from an item, and a number with a
+                // unit says no type of its own: it is read in the type the other items say
+                // (`[fee, 0.5%]`), and where none says one, its type is not known (DESIGN 40)
+                if elem.is_none() && matches!(items.first(), Some(Expr::Quantity { .. })) {
+                    elem = items.iter().filter(|x| !matches!(x, Expr::Quantity { .. })).find_map(|x| self.quiet_expr(x, None));
+                }
                 let mut out = Vec::new();
                 for it in items {
                     let x = self.expr(it, elem.as_ref())?;
@@ -3942,15 +4618,16 @@ impl<'a> Lowerer<'a> {
         };
         if let Some(want) = expected {
             let got = te.ty();
-            let fits = got.fits(want) || (matches!(te, TExpr::Int(_)) && matches!(want.inner(), Ty::Num(_)));
+            let fits = self.m.fits(&got, want) || (matches!(te, TExpr::Int(_)) && matches!(want.inner(), Ty::Num(_)));
             if !fits {
                 let (a, b) = (self.m.ty_name(want), self.m.ty_name(&got));
-                let message = if matches!(got, Ty::Opt(_)) && got.inner().fits(want) {
+                let message = if matches!(got, Ty::Opt(_)) && self.m.fits(got.inner(), want) {
                     tr!("ここには `{a}` が要りますが、これは `none` になりうる `{b}` です。先に `none` と `some <名前>` で `match` してください", "expected `{a}` here, but this is `{b}`, which may be absent; `match` it with `none` and `some <name>` first")
                 } else {
                     tr!("ここには `{a}` が要りますが、これは `{b}` です", "expected `{a}` here, but this is `{b}`")
                 };
-                self.push(e("E003", ex.span(), message));
+                let d = self.enums_apart(want, &got).into_iter().fold(e("E003", ex.span(), message), Diag::note);
+                self.push(d);
                 return None;
             }
         }
@@ -3998,8 +4675,11 @@ impl<'a> Lowerer<'a> {
                                     return None;
                                 }
                             }
+                            if self.unread_field(rec, f) {
+                                return None;
+                            }
                             let rn = self.m.records[rec].name.clone();
-                            let list: Vec<String> = self.m.records[rec].fields.iter().map(|(n, _)| n.clone()).collect();
+                            let list = self.field_names(rec);
                             self.push(e("E002", *fsp2, tr!("`{rn}` にフィールド `{f}` はありません（あるのは {}）", "`{rn}` has no field `{f}` ({})", list.join("・"); list.join(", "))));
                             return None;
                         }
@@ -4015,11 +4695,36 @@ impl<'a> Lowerer<'a> {
                         }
                     }
                 }
+                // a name the file declares or sets, whose type is not known: what is wrong is said at
+                // the line that declares or sets it, and here only when that line says nothing
+                // (DESIGN 30)
+                if let Some(lines) = ["input", "case"].iter().find_map(|k| self.left_out.get(&format!("{k}:{first}")).cloned()) {
+                    let d = e("E003", *fsp, tr!("`{first}` の型が、ここでは分かりません", "the type of `{first}` is not known here"));
+                    self.hold_back(d, lines);
+                    return None;
+                }
+                if let Some(lines) = self.set_lines.get(first).cloned() {
+                    let at = lines.iter().next().copied().unwrap_or(fsp.line);
+                    let d = e("E003", *fsp, tr!("変数 `{first}` の型が、ここでは分かりません", "the type of the variable `{first}` is not known here"))
+                        .note(tr!("変数の型は、値を入れるところ（{at} 行）で決まります", "a variable takes its type from what is set to it (line {at})"));
+                    self.hold_back(d, lines);
+                    return None;
+                }
+                // a bare word where nothing says which enum: a value of the one enum that has it (DESIGN 29)
+                if parts.len() == 1 && matches!(expected.map(|t| t.inner()), None | Some(Ty::Json)) {
+                    return match self.enum_of(&[first.as_str()], false) {
+                        Ok(id) => Some(TExpr::Enum(first.clone(), id)),
+                        Err(no) => {
+                            self.push(e("E002", *fsp, no.says).same_in("value", first.clone()).note(no.note));
+                            None
+                        }
+                    };
+                }
                 let Text { en: hen, ja: hja } = match expected.map(|t| t.inner()) {
                     Some(Ty::Enum(id)) => tr!("`{}` の値は {} です", "the values of `{}` are {}", self.m.enums[*id].name, self.m.enums[*id].values.join("・"); self.m.enums[*id].name, self.m.enums[*id].values.join(", ")),
                     _ => tr!("値は変数・そのフィールド・文字列・数・true・false のどれかです", "a value is a variable, a field of one, a string, a number, true or false"),
                 };
-                self.push(e("E002", *fsp, tr!("変数や値 `{first}` はありません", "there is no variable or value `{first}`")).note(Text::new(hja, hen)));
+                self.push(e("E002", *fsp, tr!("変数や値 `{first}` はありません", "there is no variable or value `{first}`")).same_in("value", first.clone()).note(Text::new(hja, hen)));
                 None
             }
         }
@@ -4199,4 +4904,404 @@ fn offset_minutes(raw: &str) -> Option<i32> {
         return None;
     }
     Some(if b[0] == b'-' { -(h * 60 + m) } else { h * 60 + m })
+}
+
+/// The names a block sets, each with the lines of what sets it (DESIGN 30): a `let` or an
+/// assignment, a `for`'s variable (its line and its list) and its result (its line and what its
+/// rounds yield), the name a `match` arm gives the value (`some x`, the `match` line and its value).
+fn set_lines(b: &Block, out: &mut BTreeMap<String, BTreeSet<usize>>) {
+    for s in b {
+        let line = s.span.line;
+        let mut put = |n: &str, lines: BTreeSet<usize>| out.entry(n.to_string()).or_default().extend(lines.into_iter().chain([line]));
+        match &s.kind {
+            StmtKind::Let { name, call, handlers, .. } => {
+                put(&name.0, call_lines(call));
+                for h in handlers {
+                    set_lines(&h.body, out);
+                }
+            }
+            StmtKind::Assign { name, expr, .. } => put(&name.0, expr_lines(expr)),
+            StmtKind::Call { handlers, .. } | StmtKind::CaseCall { handlers, .. } => {
+                for h in handlers {
+                    set_lines(&h.body, out);
+                }
+            }
+            StmtKind::Match { expr, arms } => {
+                let lines = expr_lines(expr);
+                for a in arms {
+                    if let Some((v, vsp)) = &a.some {
+                        out.entry(v.clone()).or_default().extend(lines.iter().copied().chain([line, vsp.line]));
+                    }
+                    set_lines(&a.body, out);
+                }
+            }
+            StmtKind::Repeat { body, .. } => set_lines(body, out),
+            StmtKind::For { var, list, body, result, .. } => {
+                put(&var.0, expr_lines(list));
+                if let Some((r, _)) = result {
+                    let mut lines = BTreeSet::new();
+                    yield_lines(body, &mut lines);
+                    out.entry(r.0.clone()).or_default().extend(lines.into_iter().chain([line]));
+                }
+                set_lines(body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The lines of a task's declaration: from its name to the last line that says something of it.
+fn task_lines(t: &syntax::TaskDecl) -> BTreeSet<usize> {
+    let mut last = t.name.1.line;
+    let mut see = |sp: Span| last = last.max(sp.line);
+    t.params.iter().for_each(|p| see(p.name.1));
+    t.result.iter().for_each(|r| see(r.span()));
+    t.errors.iter().for_each(|er| see(er.name.1));
+    for sp in [t.binding.as_ref().map(|b| b.1), t.machine.as_ref().map(|m| m.1), t.flow.as_ref().map(|f| f.1), t.model.as_ref().map(|x| x.1), t.url.as_ref().map(|x| x.1), t.effort.as_ref().map(|x| x.1), t.workflow.as_ref().map(|x| x.1), t.state_machine.as_ref().map(|x| x.1), t.durable_function.as_ref().map(|x| x.1), t.image.as_ref().map(|x| x.1), t.argo_template.as_ref().map(|x| x.1), t.plaintext.as_ref().map(|x| x.1), t.key, t.callback, t.event].into_iter().flatten() {
+        see(sp);
+    }
+    for n in [&t.deadline, &t.key_param, &t.refused_as].into_iter().flatten() {
+        see(n.1);
+    }
+    (t.name.1.line..=last).collect()
+}
+
+/// The lines of what the rounds of a `for` yield, but for the `for`s inside it, which yield their own.
+fn yield_lines(b: &Block, out: &mut BTreeSet<usize>) {
+    for s in b {
+        match &s.kind {
+            StmtKind::Yield { expr } => out.extend(expr_lines(expr).into_iter().chain([s.span.line])),
+            StmtKind::Match { arms, .. } => arms.iter().for_each(|a| yield_lines(&a.body, out)),
+            StmtKind::Let { handlers, .. } | StmtKind::Call { handlers, .. } | StmtKind::CaseCall { handlers, .. } => handlers.iter().for_each(|h| yield_lines(&h.body, out)),
+            StmtKind::Repeat { body, .. } => yield_lines(body, out),
+            _ => {}
+        }
+    }
+}
+
+/// The lines a value is written on.
+fn expr_lines(e: &Expr) -> BTreeSet<usize> {
+    let mut out = BTreeSet::new();
+    match e {
+        Expr::Path(p) => out.extend(p.iter().map(|n| n.1.line)),
+        Expr::Str(_, sp) | Expr::Int(_, sp) | Expr::Bool(_, sp) | Expr::Now(sp) | Expr::Quantity { span: sp, .. } => {
+            out.insert(sp.line);
+        }
+        Expr::Interp(parts, sp) => {
+            out.insert(sp.line);
+            for p in parts {
+                if let Part::Hole(names) = p {
+                    out.extend(names.iter().map(|n| n.1.line));
+                }
+            }
+        }
+        Expr::Record(fields, sp) => {
+            out.insert(sp.line);
+            for (n, v) in fields {
+                out.insert(n.1.line);
+                out.extend(expr_lines(v));
+            }
+        }
+        Expr::List(items, sp) => {
+            out.insert(sp.line);
+            for v in items {
+                out.extend(expr_lines(v));
+            }
+        }
+    }
+    out
+}
+
+/// The lines a call is written on.
+fn call_lines(c: &Call) -> BTreeSet<usize> {
+    let mut out = BTreeSet::from([c.callee.1.line]);
+    for (n, v) in &c.args {
+        out.insert(n.1.line);
+        out.extend(expr_lines(v));
+    }
+    out
+}
+
+/// The lines that say nothing because a `use` could not be read (DESIGN 27). What is wrong is said
+/// once, at the line of the `use` (E005, E016); the names it would have given are in the file all
+/// the same, and are not said to be missing wherever they are written. A line is quiet when it
+/// writes one of `unread` (a rule, a dates file, a book, an enum of an `import enum`, a `.proto` or
+/// an OpenAPI document) or a name made from one: a variable set from it (but for one whose type is
+/// written, and read: what is written with it is checked against that type), and every other line
+/// that sets such a variable, an input or an output of its type, a task with a parameter or an
+/// answer of it or that runs an operation of its book or its service, a field of its type read as
+/// the field of a value (`parcel.zone`; in a record written out, that field says nothing and the
+/// rest is checked), a case of its record or its machine. So are the values of a `match` on one, the
+/// errors a call of one is handled for, the `starts` line of a task that starts its machine, and what
+/// a `jev` task asks of an answer or a field of an answer of its type. Everything else of the file is
+/// checked as it is, the bodies of those `match`es and handlers too.
+fn unread_lines(prog: &Program, unread: &BTreeSet<String>, m: &Model, known: &BTreeMap<String, Ty>) -> BTreeSet<usize> {
+    let mut u = Unread { names: unread.clone(), fields: BTreeSet::new(), m, known };
+    let mut lines: BTreeSet<usize> = BTreeSet::new();
+    // a name made from one leads to more, each read before or after it is set
+    loop {
+        let before = (u.names.len(), u.fields.len());
+        for r in &prog.records {
+            for f in &r.fields {
+                if u.ty(&f.ty) {
+                    lines.insert(f.name.1.line);
+                    u.fields.insert((r.name.0.clone(), f.name.0.clone()));
+                }
+            }
+        }
+        for f in prog.inputs.iter().chain(&prog.outputs) {
+            if u.ty(&f.ty) {
+                lines.insert(f.name.1.line);
+                u.names.insert(f.name.0.clone());
+            }
+        }
+        for t in &prog.tasks {
+            let mut quiet: Vec<usize> = t.params.iter().filter(|p| u.ty(&p.ty)).map(|p| p.name.1.line).collect();
+            quiet.extend(t.result.iter().filter(|r| u.ty(r)).map(|r| r.span().line));
+            // an operation of a book, or of a `.proto` or an OpenAPI document, that could not be read
+            let operation_of = match &t.binding {
+                Some((syntax::Binding::Book { book: n, .. } | syntax::Binding::Connect { api: n, .. } | syntax::Binding::Http { api: Some(n), .. }, sp)) => Some((n, sp)),
+                _ => None,
+            };
+            if let Some((_, sp)) = operation_of.filter(|(n, _)| u.names.contains(&n.0)) {
+                quiet.push(sp.line);
+            }
+            // the machine of a rule that could not be read (`starts payment_intent.payment`): the
+            // line says nothing, and the rest of the task is checked
+            if let Some((syntax::MachineUse::Starts { machine, .. }, sp)) = &t.machine {
+                if machine.first().is_some_and(|n| u.names.contains(&n.0)) {
+                    lines.insert(sp.line);
+                }
+            }
+            // what Jev is asked of an answer whose type could not be read, or of a field of it whose
+            // type could not be read: the question, its values, how sure it is of it, and the `jev`
+            // line, which holds the answer to what it asks
+            if let Some((syntax::Binding::Jev(j), sp)) = &t.binding {
+                let whole = t.result.as_ref().is_some_and(|r| u.ty(r));
+                let rec = match &t.result {
+                    Some(TypeExpr::Named(parts)) if parts.len() == 1 => Some(parts[0].0.clone()),
+                    _ => None,
+                };
+                let unread_field = |n: &str| whole || rec.as_ref().is_some_and(|r| u.fields.contains(&(r.clone(), n.to_string())));
+                let ask_lines = |a: &syntax::JevAsk| std::iter::once(a.span.line).chain(a.criteria.iter().map(|(v, _)| v.1.line)).collect::<Vec<_>>();
+                let mut asked: Vec<usize> = Vec::new();
+                if let Some(a) = j.ask.as_ref().filter(|_| whole) {
+                    asked.extend(ask_lines(a));
+                }
+                for (n, f) in &j.fields {
+                    match f {
+                        syntax::JevField::Ask(a) if unread_field(&n.0) => {
+                            asked.push(n.1.line);
+                            asked.extend(ask_lines(a));
+                        }
+                        syntax::JevField::Confidence(of) if unread_field(&of.0) => {
+                            asked.push(n.1.line);
+                            asked.push(of.1.line);
+                        }
+                        _ => {}
+                    }
+                }
+                if !asked.is_empty() {
+                    lines.extend(asked);
+                    lines.insert(sp.line);
+                }
+            }
+            if !quiet.is_empty() {
+                lines.extend(quiet);
+                lines.insert(t.name.1.line);
+                u.names.insert(t.name.0.clone());
+            }
+        }
+        for c in &prog.cases {
+            let named = |n: &syntax::Name| u.names.contains(&n.0);
+            if u.ty(&c.record) || c.machine.first().is_some_and(named) || c.held.iter().any(|(a, _)| named(a)) {
+                lines.insert(c.name.1.line);
+                u.names.insert(c.name.0.clone());
+            }
+        }
+        for (b, _) in prog.flow.iter().chain(&prog.on_failure).chain(&prog.on_cancel) {
+            u.block(b, &mut lines);
+        }
+        if (u.names.len(), u.fields.len()) == before {
+            break;
+        }
+    }
+    lines
+}
+
+/// Why bare words read where nothing says their type are no value of one enum
+/// (`Lowerer::enum_of`): the word to say it at, by its place among the words, what E002 says, and
+/// its note.
+struct NoEnum {
+    at: usize,
+    says: Text,
+    note: Text,
+}
+
+/// What [`unread_lines`] has found of the names that could not be read: the names (the ones the
+/// `use` lines give, and each variable, input, output, task and case made from one), and the fields
+/// of the records whose type is one, by record.
+struct Unread<'a> {
+    names: BTreeSet<String>,
+    fields: BTreeSet<(String, String)>,
+    /// the records of the model, which a field of a value whose type is read is followed through
+    m: &'a Model,
+    /// the inputs, the cases and the variables whose type is read
+    known: &'a BTreeMap<String, Ty>,
+}
+
+impl Unread<'_> {
+    /// The statements of a block: the lines that write one, and the names they set.
+    fn block(&mut self, b: &Block, lines: &mut BTreeSet<usize>) {
+        for s in b {
+            let line = s.span.line;
+            match &s.kind {
+                // a variable whose type is written, and read, is not made from one: what is written
+                // with it is checked against that type. One whose type is not written, and that
+                // another line sets from one, has no type to check this line's value against
+                StmtKind::Let { name, ty, call, handlers } => {
+                    let unread_ty = ty.as_ref().map(|t| self.ty(t));
+                    if unread_ty == Some(true) || self.call(call) || (unread_ty.is_none() && self.made(&name.0)) {
+                        lines.insert(line);
+                        lines.extend(handlers.iter().map(|h| h.span.line));
+                        if unread_ty != Some(false) {
+                            self.names.insert(name.0.clone());
+                        }
+                    }
+                    for h in handlers {
+                        self.block(&h.body, lines);
+                    }
+                }
+                StmtKind::Assign { name, ty, expr } => {
+                    let unread_ty = ty.as_ref().map(|t| self.ty(t));
+                    if unread_ty == Some(true) || self.expr(expr) || (unread_ty.is_none() && self.made(&name.0)) {
+                        lines.insert(line);
+                        if unread_ty != Some(false) {
+                            self.names.insert(name.0.clone());
+                        }
+                    }
+                }
+                StmtKind::Call { call, handlers } | StmtKind::CaseCall { call, handlers, .. } => {
+                    let case = match &s.kind {
+                        StmtKind::CaseCall { case, .. } => self.names.contains(&case.0),
+                        _ => false,
+                    };
+                    if case || self.call(call) {
+                        lines.insert(line);
+                        lines.extend(handlers.iter().map(|h| h.span.line));
+                    }
+                    for h in handlers {
+                        self.block(&h.body, lines);
+                    }
+                }
+                StmtKind::Match { expr, arms } => {
+                    let quiet = self.expr(expr);
+                    if quiet {
+                        lines.insert(line);
+                    }
+                    for a in arms {
+                        if quiet {
+                            lines.insert(a.span.line);
+                            self.names.extend(a.some.iter().map(|v| v.0.clone()));
+                        }
+                        self.block(&a.body, lines);
+                    }
+                }
+                StmtKind::WaitUntil { at } | StmtKind::Yield { expr: at } => {
+                    if self.expr(at) {
+                        lines.insert(line);
+                    }
+                }
+                StmtKind::Repeat { body, .. } => self.block(body, lines),
+                StmtKind::For { var, list, body, result, .. } => {
+                    let quiet = self.expr(list);
+                    if quiet {
+                        lines.insert(line);
+                        self.names.insert(var.0.clone());
+                    }
+                    self.block(body, lines);
+                    if let Some((r, rty)) = result {
+                        let yields = body.iter().any(|x| matches!(&x.kind, StmtKind::Yield { expr } if self.expr(expr)));
+                        let unread_ty = rty.as_ref().map(|t| self.ty(t));
+                        if quiet || yields || unread_ty == Some(true) {
+                            lines.insert(line);
+                            if unread_ty != Some(false) {
+                                self.names.insert(r.0.clone());
+                            }
+                        }
+                    }
+                }
+                StmtKind::Succeed { fields } => {
+                    if fields.iter().any(|(n, v)| self.names.contains(&n.0) || self.expr(v)) {
+                        lines.insert(line);
+                    }
+                }
+                StmtKind::Fail { cause, leaving, .. } => {
+                    if cause.as_ref().is_some_and(|c| self.expr(c)) || leaving.iter().any(|n| self.names.contains(&n.0)) {
+                        lines.insert(line);
+                    }
+                }
+                StmtKind::Wait { .. } | StmtKind::Break | StmtKind::Pass => {}
+            }
+        }
+    }
+
+    /// Whether a variable is made from one, and has no type that is read: a line sets it from one
+    /// (`let s = r.next_stage`), so a value another line sets it to (`let s = received`) has no type
+    /// to be checked against.
+    fn made(&self, name: &str) -> bool {
+        self.names.contains(name) && !self.known.contains_key(name)
+    }
+
+    /// Whether a type names one: `terms`, `refund_limit.band`, `list[zone]`.
+    fn ty(&self, t: &TypeExpr) -> bool {
+        match t {
+            TypeExpr::Named(parts) => self.names.contains(&parts[0].0) || self.names.contains(&parts.iter().map(|p| p.0.as_str()).collect::<Vec<_>>().join(".")),
+            TypeExpr::List(inner, _) | TypeExpr::Opt(inner, _) => self.ty(inner),
+            _ => false,
+        }
+    }
+
+    /// Whether a path names one: by its first word, or by a field of one after it. Of a value whose
+    /// type is read, the fields are followed through its records: `order.item` is one only when the
+    /// record of `order` has `item` of a type that is one. Of any other name, nothing: a variable
+    /// whose type is not known for an error at the line that sets it says nothing where it is read
+    /// all the same (`Lowerer::followers`, DESIGN 30), and a name nothing sets is not there.
+    fn path(&self, p: &[syntax::Name]) -> bool {
+        let Some(first) = p.first() else { return false };
+        if self.names.contains(&first.0) {
+            return true;
+        }
+        let Some(mut t) = self.known.get(&first.0) else {
+            return false;
+        };
+        for n in &p[1..] {
+            let Ty::Record(r) = t.inner() else { return false };
+            let rec = &self.m.records[*r];
+            match rec.fields.iter().find(|(f, _)| *f == n.0) {
+                Some((_, ft)) => t = ft,
+                None => return self.fields.contains(&(rec.name.clone(), n.0.clone())),
+            }
+        }
+        false
+    }
+
+    /// Whether a value names one, in a string's `{…}` too. A record written out with a field whose
+    /// type is one is not: that field says nothing (`Lowerer::unread_field`), and the rest is
+    /// checked.
+    fn expr(&self, e: &Expr) -> bool {
+        match e {
+            Expr::Path(p) => self.path(p),
+            Expr::Interp(parts, _) => parts.iter().any(|x| matches!(x, Part::Hole(p) if self.path(p))),
+            Expr::Record(fs, _) => fs.iter().any(|(_, v)| self.expr(v)),
+            Expr::List(xs, _) => xs.iter().any(|x| self.expr(x)),
+            Expr::Str(..) | Expr::Int(..) | Expr::Bool(..) | Expr::Now(_) | Expr::Quantity { .. } => false,
+        }
+    }
+
+    /// Whether a call names one: what it calls (`terms.due`, a task), or a value it passes.
+    fn call(&self, c: &Call) -> bool {
+        let callee = &c.callee.0;
+        self.names.contains(callee) || callee.split('.').next().is_some_and(|f| self.names.contains(f)) || c.args.iter().any(|(_, v)| self.expr(v))
+    }
 }

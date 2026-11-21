@@ -1,0 +1,25 @@
+rule read_above v1
+description "The table that reads the grade written above the one that decides it"
+
+enum level = low "Low" | high "High"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+  member : bool
+
+outputs
+  grade  : level
+  review : bool
+
+table review_of
+policy unique
+| grade | member | -> review |
+| low   | -      | false     |
+| high  | true   | false     |
+| high  | false  | true      |
+
+table grade_of
+policy unique
+| amount      | -> grade |
+| <10_000JPY  | low      |
+| >=10_000JPY | high     |

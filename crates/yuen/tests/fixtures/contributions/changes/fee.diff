@@ -1,0 +1,17 @@
+diff --git a/rules/fee.rule b/rules/fee.rule
+index 6f9d904..d5768d3 100644
+--- a/rules/fee.rule
++++ b/rules/fee.rule
+@@ -12,10 +12,10 @@ outputs
+ table fee open
+ policy unique
+ | way     | -> fee : number |
+-| post    | 5               |
++| post    | 6               |
+ | counter | 0               |
+ 
+ examples
+ | way     | -> fee |
+-| post    | 5      |
++| post    | 6      |
+ | counter | 0      |

@@ -1,0 +1,6 @@
+gen --target asl:
+エラー[E050]: tests/fixtures/settling_handed_over.flow:20:1: `approve` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります
+    20 | task approve(order: string)
+gen --target argo:
+エラー[E050]: tests/fixtures/settling_handed_over.flow:20:1: `approve` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります
+    20 | task approve(order: string)

@@ -1,0 +1,2 @@
+error[E002]: tests/mutants/E002_a_field_named_ticket.ringi:4:3: `ticket` is what an expression reads (`ticket.…`), and cannot be a field's name
+     4 |   ticket : text "Ticket number"  count <=20

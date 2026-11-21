@@ -2,7 +2,10 @@
 //! language's own `check`, in the order the languages are checked, the text with the tool's word in
 //! each headline, the JSON one object, and the exit code. What it says of each file is what the
 //! language's command says of it, word for word, which the test holds it to by running each
-//! language's command on the same files.
+//! language's command on the same files, but for the lines that read a file that does not pass:
+//! those are said once, under that file, after the rest (DESIGN 8.3).
+
+mod common;
 
 use ritsu_testkit::TempDir;
 use std::path::{Path, PathBuf};
@@ -16,14 +19,14 @@ fn here() -> PathBuf {
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
-const TOOLS: [&str; 10] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname", "ritsu"];
+const TOOLS: [&str; 11] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname", "ringi", "ritsu"];
 
 /// The text without the tools' words in the headlines: `[rulec E032]` is `[E032]` again.
 fn without_tools(s: &str) -> String {
@@ -46,12 +49,110 @@ fn without_summary(s: &str) -> &str {
     }
 }
 
+/// The text without its blocks of the lines that wait for a file that does not pass (DESIGN 8.3),
+/// and those lines: a block is a line that names the files waited for, then the lines, indented.
+fn without_waiting(s: &str) -> (String, Vec<&str>) {
+    let mut kept = String::new();
+    let mut waiting = Vec::new();
+    let mut inside = false;
+    for l in s.split_inclusive('\n') {
+        let t = l.trim_end_matches('\n');
+        if (t.starts_with("waiting for ") && t.ends_with(" to pass:")) || t.ends_with("が通るのを待っています:") {
+            inside = true;
+        } else if inside && t.starts_with("  ") {
+            waiting.push(t.trim_start());
+        } else {
+            inside = false;
+            kept.push_str(l);
+        }
+    }
+    (kept, waiting)
+}
+
+/// A line that waits for a file that does not pass, as the JSON of `ritsu check` gives it: the
+/// tool, the file from the root, the line and the code.
+struct Waits {
+    tool: String,
+    file: String,
+    line: u64,
+    code: String,
+}
+
+/// What a language's command printed, without the diagnostics `waits` names: each from its
+/// headline (rulec's, with the line under it that gives the place) to the end of what goes with
+/// it (the indented lines after it; for rulec, its empty line). yuen's line after its findings
+/// counts the errors and warnings left, and goes when no error is left, as `ritsu check` writes it.
+fn without_waits(out: &str, tool: &str, waits: &[&Waits], path: &str) -> String {
+    if waits.is_empty() {
+        return out.to_string();
+    }
+    let lines: Vec<&str> = out.split_inclusive('\n').collect();
+    let at = |i: usize, w: &Waits| {
+        let shown = if path == "." { w.file.clone() } else { format!("{path}/{}", w.file) };
+        let head = ["error[", "エラー["].iter().any(|h| lines[i].starts_with(&format!("{h}{}]: ", w.code)));
+        if tool == "rulec" {
+            let place = format!("--> {shown}:{}", w.line);
+            head && lines.get(i + 1).is_some_and(|n| n.trim() == place || n.trim().starts_with(&format!("{place} ")))
+        } else {
+            head && lines[i].contains(&format!("]: {shown}:{}:", w.line))
+        }
+    };
+    let mut kept: Vec<&str> = Vec::new();
+    let (mut i, mut gone) = (0, 0);
+    while i < lines.len() {
+        if !waits.iter().any(|w| at(i, w)) {
+            kept.push(lines[i]);
+            i += 1;
+            continue;
+        }
+        gone += 1;
+        i += 1;
+        if tool == "rulec" {
+            while i < lines.len() && lines[i] != "\n" {
+                i += 1;
+            }
+            i += 1;
+        } else {
+            while i < lines.len() && lines[i].starts_with(' ') {
+                i += 1;
+            }
+        }
+    }
+    if tool == "yuen" && gone > 0 {
+        let last = kept.pop().unwrap_or_default();
+        let label = last.split(": ").next().unwrap_or_default();
+        let count = |heads: [&str; 2]| kept.iter().filter(|l| heads.iter().any(|h| l.starts_with(h))).count();
+        let (e, w) = (count(["error[", "エラー["]), count(["warning[", "警告["]));
+        let ja = last.contains(": エラー ");
+        let line = match (e, w, ja) {
+            (0, _, _) => String::new(),
+            (e, 0, true) => format!("{label}: エラー {e} 件\n"),
+            (e, w, true) => format!("{label}: エラー {e} 件、警告 {w} 件\n"),
+            (e, w, false) => {
+                let n = |k: usize, one: &str| if k == 1 { format!("1 {one}") } else { format!("{k} {one}s") };
+                if w == 0 { format!("{label}: {}\n", n(e, "error")) } else { format!("{label}: {}, {}\n", n(e, "error"), n(w, "warning")) }
+            }
+        };
+        return kept.concat() + &line;
+    }
+    kept.concat()
+}
+
 /// What each language's own command prints for the project, unit by unit, in the order `ritsu
 /// check` checks them: `ritsu <language> check` on each file, and on the path given for yuen and
-/// sakai, which check the project as one. The order is the one the JSON lists the files in.
-fn languages_say(dir: &Path, path: &str, lang: &str) -> String {
+/// sakai, which check the project as one. The order is the one the JSON lists the files in. The
+/// diagnostics `ritsu check` says are lines that wait for a file that does not pass are left out
+/// ([`without_waits`]); how many there are comes second.
+fn languages_say(dir: &Path, path: &str, lang: &str) -> (String, usize) {
     let (_, out, err) = ritsu_in(dir, &["check", path, "--root", path, "--format", "json", "--lang", lang]);
     let v: serde_json::Value = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}{err}"));
+    let waits: Vec<Waits> = v["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d.get("waits_for").is_some())
+        .map(|d| Waits { tool: d["tool"].as_str().unwrap().into(), file: d["file"].as_str().unwrap().into(), line: d["line"].as_u64().unwrap(), code: d["code"].as_str().unwrap().into() })
+        .collect();
     let mut said = String::new();
     let mut whole_done = Vec::new();
     for f in v["files"].as_array().unwrap() {
@@ -67,20 +168,25 @@ fn languages_say(dir: &Path, path: &str, lang: &str) -> String {
             t => vec![t, "check", &shown, "--lang", lang],
         };
         let (_, out, err) = ritsu_in(dir, &args);
-        said.push_str(&out);
-        said.push_str(&err);
+        // dandori writes its diagnostics to stderr, the others to stdout
+        let theirs: Vec<&Waits> = waits.iter().filter(|w| w.tool == tool && (matches!(tool, "yuen" | "sakai") || w.file == rel)).collect();
+        said.push_str(&without_waits(&format!("{out}{err}"), tool, &theirs, path));
     }
-    said
+    (said, waits.len())
 }
 
 /// Hold `ritsu check <path> --root <path>` to what the languages say, file by file: the same
-/// text but for the tools' words, every headline with its tool's word, and the summary last.
+/// text but for the tools' words and the lines that wait for a file that does not pass, which are
+/// said once each, after the rest; every headline with its tool's word, and the summary last.
 fn holds_to_the_languages(dir: &Path, path: &str, lang: &str) -> String {
     let (code, out, err) = ritsu_in(dir, &["check", path, "--root", path, "--lang", lang]);
     assert!(err.is_empty(), "{err}");
     assert!(code < 2, "{out}");
     let body = without_summary(&out);
-    assert_eq!(without_tools(body), languages_say(dir, path, lang), "ritsu check of {path} ({lang}) says what the languages say");
+    let (said, waiting) = without_waiting(body);
+    let (theirs, waits) = languages_say(dir, path, lang);
+    assert_eq!(waiting.len(), waits, "ritsu check of {path} ({lang}) says each line that waits once:\n{out}");
+    assert_eq!(without_tools(&said), theirs, "ritsu check of {path} ({lang}) says what the languages say");
     for l in body.lines() {
         for head in ["error[", "warning[", "note[", "エラー[", "警告[", "備考["] {
             if let Some(rest) = l.trim_start().strip_prefix(head)
@@ -163,8 +269,9 @@ fn the_shop_project() {
 }
 
 /// A copy of the project where ordering adds a value to the order status that billing's rule
-/// takes in: rulec says the rule's enum does not agree with the contract, and sakai that the rule
-/// does not pass rulec's check. Each headline carries its tool; the exit is 1.
+/// takes in: rulec says the rule's enum does not agree with the contract, and sakai's line that
+/// the rule does not pass rulec's check waits for it, said under the rule after the rest (DESIGN
+/// 8.3). The headline carries its tool; the exit is 1.
 #[test]
 fn a_project_with_errors() {
     let t = TempDir::new("returned");
@@ -177,7 +284,8 @@ fn a_project_with_errors() {
         let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--lang", lang]);
         assert_eq!(code, 1, "{out}{err}");
         let head = if lang == "ja" { "エラー[rulec E032]: " } else { "error[rulec E032]: " };
-        assert!(out.contains(head) && out.contains("[sakai E105]: billing/rules/請求の要否.rule:5:1: "), "{out}");
+        assert!(out.contains(head) && out.contains("\n  billing/rules/請求の要否.rule:5: [sakai E105] enum "), "{out}");
+        assert!(!out.contains("[sakai E105]: "), "{out}");
         golden(&format!("tests/golden/check/通販-returned.{lang}.txt"), &out, &mut failures);
     }
     let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
@@ -191,6 +299,9 @@ fn a_project_with_errors() {
     assert_eq!(d[0].as_object().unwrap().keys().take(3).collect::<Vec<_>>(), ["tool", "v", "severity"]);
     assert_eq!((d[0]["tool"].as_str(), d[0]["code"].as_str(), d[0]["file"].as_str()), (Some("rulec"), Some("E032"), Some("billing/rules/請求の要否.rule")));
     assert_eq!((d[1]["tool"].as_str(), d[1]["code"].as_str(), d[1]["file"].as_str()), (Some("sakai"), Some("E105"), Some("billing/rules/請求の要否.rule")));
+    // sakai's line reads the rule and waits for it; rulec's is no line that waits
+    assert_eq!((d[1]["reads"].as_str(), &d[1]["waits_for"]), (Some("billing/rules/請求の要否.rule"), &serde_json::json!(["billing/rules/請求の要否.rule"])));
+    assert!(d[0].get("reads").is_none() && d[0].get("waits_for").is_none(), "{d}");
     assert_eq!(v["ok"], false);
     let bad: Vec<&str> = v["files"].as_array().unwrap().iter().filter(|f| f["ok"] == false).map(|f| f["file"].as_str().unwrap()).collect();
     assert_eq!(bad, ["billing/rules/請求の要否.rule"]);
@@ -275,8 +386,31 @@ fn what_stops_ritsu_check() {
     std::fs::write(t.path().join("ok.cal"), "dates ok v1\n").unwrap();
     let (code, out, _) = ritsu_in(t.path(), &["check", "."]);
     assert_eq!(code, 2, "{out}");
-    assert!(out.starts_with("error: cannot read `bad.rule`\n"), "{out}");
+    assert!(out.starts_with("error: `bad.rule` is not UTF-8\n"), "{out}");
     assert!(out.contains("1 not checked"), "{out}");
+}
+
+/// A directory with no `.cal` file (DESIGN 6.2, item 10): `koyomi check` and `gen` given it stop
+/// with exit 2 and say so, through `ritsu koyomi` as well, while `ritsu check`, which reads the
+/// files of every language under it, checks the rule there and passes.
+#[test]
+fn a_directory_without_a_cal_file_stops_koyomi_and_passes_ritsu_check() {
+    let t = TempDir::new("no-cal");
+    std::fs::create_dir_all(t.path().join("rules")).unwrap();
+    let rule = "rule refund_limit v1\n\ninputs\n  left : money[USDc]  range >=0USDc <=10000000USDc\n\noutputs\n  band : number  round down(1)\n\ntable band_of\npolicy unique\n| left       | -> band : number |\n| <=1000USDc | 0                |\n| >1000USDc  | 2                |\n";
+    std::fs::write(t.path().join("rules/refund_limit.rule"), rule).unwrap();
+    let (code, out, err) = ritsu_in(t.path(), &["check", "rules"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.starts_with("ok rules/refund_limit.rule\n"), "{out}");
+    for args in [&["koyomi", "check", "rules"][..], &["koyomi", "gen", "rules", "--target", "go", "--out", "out"][..]] {
+        for (lang, said) in [("en", "error: there is no .cal file under `rules`\n"), ("ja", "エラー: `rules` の下に .cal のファイルがありません\n")] {
+            let mut with_lang = args.to_vec();
+            with_lang.extend(["--lang", lang]);
+            let (code, out, err) = ritsu_in(t.path(), &with_lang);
+            assert_eq!((code, out.as_str(), err.as_str()), (2, "", said), "{with_lang:?}");
+        }
+    }
+    assert!(!t.path().join("out").exists());
 }
 
 /// `--lean` with no Lean to run (kaname's DESIGN 38.3): `lake` neither on the `PATH` nor in
@@ -391,7 +525,8 @@ fn the_shop_project_in_english() {
 }
 
 /// The twin of `a_project_with_errors`: ordering adds a value to the order status that billing's
-/// rule takes in; rulec and sakai say so, each headline with its tool, and the exit is 1.
+/// rule takes in; rulec says so with its tool in the headline, sakai's line waits for the rule,
+/// and the exit is 1.
 #[test]
 fn a_project_with_errors_in_english() {
     let t = TempDir::new("returned-en");
@@ -404,7 +539,8 @@ fn a_project_with_errors_in_english() {
         let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--lang", lang]);
         assert_eq!(code, 1, "{out}{err}");
         let head = if lang == "ja" { "エラー[rulec E032]: " } else { "error[rulec E032]: " };
-        assert!(out.contains(head) && out.contains("[sakai E105]: billing/rules/billing_need.rule:5:1: "), "{out}");
+        assert!(out.contains(head) && out.contains("\n  billing/rules/billing_need.rule:5: [sakai E105] enum "), "{out}");
+        assert!(!out.contains("[sakai E105]: "), "{out}");
         golden(&format!("tests/golden/check/shop-returned.{lang}.txt"), &out, &mut failures);
     }
     let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
@@ -417,6 +553,7 @@ fn a_project_with_errors_in_english() {
     assert_eq!(d[0].as_object().unwrap().keys().take(3).collect::<Vec<_>>(), ["tool", "v", "severity"]);
     assert_eq!((d[0]["tool"].as_str(), d[0]["code"].as_str(), d[0]["file"].as_str()), (Some("rulec"), Some("E032"), Some("billing/rules/billing_need.rule")));
     assert_eq!((d[1]["tool"].as_str(), d[1]["code"].as_str(), d[1]["file"].as_str()), (Some("sakai"), Some("E105"), Some("billing/rules/billing_need.rule")));
+    assert_eq!((d[1]["reads"].as_str(), &d[1]["waits_for"]), (Some("billing/rules/billing_need.rule"), &serde_json::json!(["billing/rules/billing_need.rule"])));
     assert_eq!(v["ok"], false);
     let bad: Vec<&str> = v["files"].as_array().unwrap().iter().filter(|f| f["ok"] == false).map(|f| f["file"].as_str().unwrap()).collect();
     assert_eq!(bad, ["billing/rules/billing_need.rule"]);
@@ -440,8 +577,8 @@ fn each_file_as_its_language_says_it_in_english() {
 /// merges the project's contributions into the rules they reach, which is what rulec says of the
 /// project's rule files given to it in one run, and the flow is checked against the rule merged.
 /// Without the file that gives the new kind of product its markup, the open table of the price has
-/// no row for it, the error says which contribution added the kind, and the flow cannot read the
-/// rule.
+/// no row for it, the error says which contribution added the kind, and the flow's line that reads
+/// the rule waits for it (DESIGN 8.3).
 #[test]
 fn a_projects_contributions_are_merged_into_the_rules_they_reach() {
     let dir = here().join("tests/projects/product_line");
@@ -461,9 +598,12 @@ fn a_projects_contributions_are_merged_into_the_rules_they_reach() {
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("error[rulec E101]: Completeness gap: some input matches no row\n  --> rules/product_price.rule:13 table markup_of"), "{out}");
     assert!(out.contains("garden is a value garden_kind adds (rules/contrib/garden_kind.rule)."), "{out}");
-    assert!(out.contains("error[dandori E005]: pricing.flow:7:10: could not read the rule `rules/product_price.rule`"), "{out}");
+    assert!(out.contains("\nwaiting for rules/product_price.rule (rulec E101 at line 13) to pass:\n  pricing.flow:7: [dandori E005] use rule price from \"rules/product_price.rule\"\n"), "{out}");
+    assert!(out.ends_with(": 1 fail (1 error), 1 waiting; borders between the languages: 0 checked, 0 undecided\n"), "{out}");
     // A markup written for toys rather than for the new kind: the overlap, the gap and the
-    // contribution's example are said once, for the contribution, and the rule says they were.
+    // contribution's example are said once, for the contribution, and the rule says they were. The
+    // flow waits for the rule, named with the error at its line, though rulec says it for the
+    // contribution (the gap is at the rule's line 13).
     let t = TempDir::new("product-line-toys");
     ritsu_testkit::tmp::copy_dir(&dir, t.path());
     let f = t.path().join("rules/contrib/garden_price.rule");
@@ -474,6 +614,199 @@ fn a_projects_contributions_are_merged_into_the_rules_they_reach() {
     assert!(without_tools(&out).starts_with(&said), "ritsu check says what rulec says of the files in one run:\n{out}\n---\n{said}");
     assert!(said.contains("note rules/product_price.rule: its errors are said above\n"), "{said}");
     assert_eq!(said.matches("error[E105]").count(), 1, "{said}");
+    assert!(
+        out.ends_with(
+            "waiting for rules/product_price.rule (rulec E101 at line 13) to pass:\n  pricing.flow:7: [dandori E005] use rule price from \"rules/product_price.rule\"\nritsu check: 5 files (rulec 4, dandori 1): 2 fail (3 errors), 1 waiting; borders between the languages: 0 checked, 0 undecided\n"
+        ),
+        "{out}"
+    );
+}
+
+/// The `file` and the `line` of a finding are of one file (DESIGN 8.3, rulec's §15.318). rulec
+/// checks a contribution merged into the rule it adds to, and what it then finds at a line of the
+/// rule — here the gap of the rule's table, at its line 13 — was written with the contribution as
+/// its `file`, the rule's line as its `line`, and the rule in `where`. In a module the finding was
+/// filed under the file its line is in; a project that is not a module files it the same way. The
+/// text names the file of the line it cites too: the overlap is placed at the rule's row, line 18
+/// of the rule, and was said with the contribution's path.
+#[test]
+fn a_finding_is_filed_under_the_file_its_line_is_in() {
+    let dir = here().join("tests/projects/product_line");
+    let t = TempDir::new("product-line-places");
+    ritsu_testkit::tmp::copy_dir(&dir, t.path());
+    let f = t.path().join("rules/contrib/garden_price.rule");
+    std::fs::write(&f, std::fs::read_to_string(&f).unwrap().replace("  when item_kind garden", "  when item_kind toys")).unwrap();
+    for lang in ["en", "ja"] {
+        let (code, out, err) = ritsu_in(t.path(), &["check", "--format", "json", "--lang", lang]);
+        assert_eq!(code, 1, "{out}{err}");
+        let v = ritsu_base::json::parse(&out).unwrap_or_else(|e| panic!("{e:?}\n{out}"));
+        let s = |j: &ritsu_base::json::Json, k: &str| j.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let n = |j: &ritsu_base::json::Json, k: &str| j.get(k).and_then(|x| x.as_int()).unwrap_or(-1);
+        let of_rulec: Vec<&ritsu_base::json::Json> = v.get("diagnostics").and_then(|d| d.as_arr()).unwrap().iter().filter(|d| s(d, "tool") == "rulec").collect();
+        let at: Vec<(String, String, i128)> = of_rulec.iter().map(|d| (s(d, "code"), s(d, "file"), n(d, "line"))).collect();
+        assert_eq!(
+            at,
+            [
+                ("E105".to_string(), "rules/contrib/garden_price.rule".to_string(), 7),
+                ("E101".to_string(), "rules/product_price.rule".to_string(), 13),
+                ("E107".to_string(), "rules/contrib/garden_price.rule".to_string(), 12),
+            ],
+            "{out}"
+        );
+        for d in &of_rulec {
+            let w = d.get("where").unwrap();
+            assert_eq!((s(d, "file"), n(d, "line"), n(d, "column")), (s(w, "file"), n(w, "line"), n(w, "column")), "{out}");
+        }
+        // the files that do not pass are the two they were, and the flow waits for the rule
+        let files: Vec<(String, bool)> = v.get("files").and_then(|d| d.as_arr()).unwrap().iter().map(|f| (s(f, "file"), f.get("ok").and_then(|x| x.as_bool()).unwrap())).collect();
+        assert_eq!(
+            files,
+            [
+                ("rules/contrib/garden_kind.rule".to_string(), true),
+                ("rules/contrib/garden_price.rule".to_string(), false),
+                ("rules/product_price.rule".to_string(), false),
+                ("rules/shared/product_kinds.rule".to_string(), true),
+                ("pricing.flow".to_string(), false),
+            ],
+            "{out}"
+        );
+    }
+    let (code, out, _) = ritsu_in(t.path(), &["check", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("error[rulec E105]: Overlapping rows: the same input matches clause garden_price:garden_markup and table markup_of row 3\n  --> rules/product_price.rule:18 table markup_of\n"), "{out}");
+    assert!(out.contains("error[rulec E101]: Completeness gap: some input matches no row\n  --> rules/product_price.rule:13 table markup_of\n"), "{out}");
+    assert!(out.contains("error[rulec E107]: Example does not hold: price should be 23USD but no value came out\n  --> rules/contrib/garden_price.rule:12 examples\n"), "{out}");
+    assert!(
+        out.ends_with(
+            "waiting for rules/product_price.rule (rulec E101 at line 13) to pass:\n  pricing.flow:7: [dandori E005] use rule price from \"rules/product_price.rule\"\nritsu check: 5 files (rulec 4, dandori 1): 2 fail (3 errors), 1 waiting; borders between the languages: 0 checked, 0 undecided\n"
+        ),
+        "{out}"
+    );
+    let (code, out, _) = ritsu_in(t.path(), &["check", "--lang", "ja"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("\n  --> rules/product_price.rule:18 表 markup_of\n"), "{out}");
+}
+
+/// A contribution that does not pass (DESIGN 8.3): rulec says what is wrong with it once, at the
+/// contribution, and every file that fails for it waits for it. The rule it adds to, whose check
+/// fails only for the contribution's error, which rulec says for the contribution ("its errors are
+/// said above"), waits for it with no line of its own, and so does each line that reads that rule:
+/// the price rule's `import enum`, the other contribution's `to`, the flow's `use rule`. A
+/// contribution that cannot be read says it once too, and the rule it adds to waits for it at its
+/// first line, where rulec says it cannot read the contribution (E067).
+#[test]
+fn a_contribution_that_does_not_pass_is_what_the_rest_waits_for() {
+    let dir = here().join("tests/projects/product_line");
+    let t = TempDir::new("product-line-kinds");
+    ritsu_testkit::tmp::copy_dir(&dir, t.path());
+    let f = t.path().join("rules/contrib/garden_kind.rule");
+    let kind = std::fs::read_to_string(&f).unwrap();
+    std::fs::write(&f, kind.replace("extend kind with garden", "extend kinds with garden")).unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    let errors: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).collect();
+    assert_eq!(errors, ["error[rulec E067]: The file it adds to has no enum kinds"], "{out}");
+    let waiting = "\
+note rules/shared/product_kinds.rule: its errors are said above
+waiting for rules/contrib/garden_kind.rule (rulec E067 at line 5) to pass:
+  rules/contrib/garden_price.rule:3: [rulec E067] to \"../product_price.rule\" signature:d5379dca48aa13d2
+  rules/product_price.rule:4: [rulec E066] import enum kind from \"shared/product_kinds.rule\"
+  pricing.flow:7: [dandori E005] use rule price from \"rules/product_price.rule\"
+ritsu check: 5 files (rulec 4, dandori 1): 1 fail (1 error), 4 waiting; borders between the languages: 0 checked, 0 undecided
+";
+    assert!(out.ends_with(waiting), "{out}");
+    let (_, out, _) = ritsu_in(t.path(), &["check", "--lang", "ja"]);
+    assert!(out.contains("\nrules/contrib/garden_kind.rule（rulec E067、5 行目）が通るのを待っています:\n"), "{out}");
+    assert!(out.ends_with("検査を通らないもの 1 個（エラー 1 件）、待っているもの 4 個。言語の境目: 確かめた 0 か所、決められない 0 か所\n"), "{out}");
+    let (_, json, _) = ritsu_in(t.path(), &["check", "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let none = serde_json::Value::Null;
+    let files: Vec<(&str, bool, &serde_json::Value)> = v["files"].as_array().unwrap().iter().map(|f| (f["file"].as_str().unwrap(), f["ok"].as_bool().unwrap(), f.get("waits_for").unwrap_or(&none))).collect();
+    let kinds = serde_json::json!(["rules/contrib/garden_kind.rule"]);
+    assert_eq!(
+        files,
+        [
+            ("rules/contrib/garden_kind.rule", false, &none),
+            ("rules/contrib/garden_price.rule", false, &kinds),
+            ("rules/product_price.rule", false, &kinds),
+            ("rules/shared/product_kinds.rule", false, &kinds),
+            ("pricing.flow", false, &kinds),
+        ]
+    );
+
+    // a contribution that cannot be read
+    std::fs::write(&f, format!("{kind}\n@@@ broken @@@\n")).unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    let errors: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).collect();
+    assert_eq!(errors, ["error[rulec E004]: The line does not start with a word"], "{out}");
+    let waiting = "\
+waiting for rules/contrib/garden_kind.rule (rulec E004 at line 7) to pass:
+  rules/contrib/garden_price.rule:3: [rulec E067] to \"../product_price.rule\" signature:d5379dca48aa13d2
+  rules/product_price.rule:4: [rulec E066] import enum kind from \"shared/product_kinds.rule\"
+  rules/shared/product_kinds.rule:1: [rulec E067] enums product_kinds(product_kinds) v1
+  pricing.flow:7: [dandori E005] use rule price from \"rules/product_price.rule\"
+ritsu check: 5 files (rulec 4, dandori 1): 1 fail (1 error), 4 waiting; borders between the languages: 0 checked, 0 undecided
+";
+    assert!(out.ends_with(waiting), "{out}");
+}
+
+/// A `.proto` that cannot be read (DESIGN 8.3): every language reads it with ritsu's one reader,
+/// and ritsu says it once (E101). Each line that reads it waits for it: the rule's `import proto`
+/// (rulec E013), the flow's `use proto` (dandori E016), and sakai's lines of the file and of the
+/// rule (E106, E105); nothing is said of the lines that use the types and the API the file gives.
+/// A `.proto` is read with the ones it imports: when one of those cannot be read, the flow's `use
+/// proto` of the file that imports it waits for it too, as does the `use proto` of the file itself,
+/// and the JSON says each reads the file that cannot be read.
+#[test]
+fn a_proto_that_cannot_be_read_is_waited_for() {
+    let t = TempDir::new("shop-proto-waiting");
+    ritsu_testkit::tmp::copy_dir(&here().join(SHOP_EN), t.path());
+    let order = t.path().join("proto/shop/ordering/v1/order.proto");
+    let kept = std::fs::read_to_string(&order).unwrap();
+    std::fs::write(&order, kept.replacen("enum OrderStatus {", "enum OrderStatus {{", 1)).unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    let errors: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).collect();
+    assert_eq!(errors, ["error[ritsu E101]: proto/shop/ordering/v1/order.proto:14:19: proto/shop/ordering/v1/order.proto does not read as a .proto: a value is expected where `{` is"], "{out}");
+    let waiting = "\
+waiting for proto/shop/ordering/v1/order.proto (ritsu E101 at line 14) to pass:
+  billing/rules/billing_need.rule:4: [rulec E013] import proto \"../../proto/shop/ordering/v1/order.proto\" OrderStatus -> order_status
+  ordering/fulfillment.flow:11: [dandori E016] use proto orders from \"../proto/shop/ordering/v1/order.proto\"
+  proto/shop/ordering/v1/order.proto:14: [sakai E106] enum OrderStatus {{
+  billing/rules/billing_need.rule:4: [sakai E105] import proto \"../../proto/shop/ordering/v1/order.proto\" OrderStatus -> order_status
+ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): 1 fail (1 error), 2 waiting; borders between the languages: 0 checked, 0 undecided
+";
+    assert!(out.ends_with(waiting), "{out}");
+
+    std::fs::write(&order, kept).unwrap();
+    let stock = t.path().join("proto/warehouse/v1/stock.proto");
+    let s = std::fs::read_to_string(&stock).unwrap();
+    std::fs::write(&stock, s.replacen("message ReserveRequest {", "message ReserveRequest {{", 1)).unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    let errors: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).collect();
+    assert_eq!(errors, ["error[ritsu E101]: proto/warehouse/v1/stock.proto:18:25: proto/warehouse/v1/stock.proto does not read as a .proto: a field is expected where `{` is"], "{out}");
+    let waiting = "\
+waiting for proto/warehouse/v1/stock.proto (ritsu E101 at line 18) to pass:
+  ordering/fulfillment.flow:8: [dandori E016] use proto shop from \"../proto/shop/ordering/v1/fulfillment.proto\"
+  ordering/fulfillment.flow:9: [dandori E016] use proto warehouse from \"../proto/warehouse/v1/stock.proto\"
+  proto/warehouse/v1/stock.proto:18: [sakai E106] message ReserveRequest {{
+ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): 1 fail (1 error), 1 waiting; borders between the languages: 0 checked, 0 undecided
+";
+    assert!(out.ends_with(waiting), "{out}");
+    let (_, json, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let reads: Vec<(&str, u64, &str)> = v["diagnostics"].as_array().unwrap().iter().filter(|d| d.get("waits_for").is_some()).map(|d| (d["file"].as_str().unwrap(), d["line"].as_u64().unwrap(), d["reads"].as_str().unwrap())).collect();
+    assert_eq!(
+        reads,
+        [
+            ("ordering/fulfillment.flow", 8, "proto/warehouse/v1/stock.proto"),
+            ("ordering/fulfillment.flow", 9, "proto/warehouse/v1/stock.proto"),
+            ("proto/warehouse/v1/stock.proto", 18, "proto/warehouse/v1/stock.proto"),
+        ],
+        "{json}"
+    );
 }
 
 /// The last line counts each finding with the files that came out as the file it is about did
@@ -642,4 +975,277 @@ fn no_claims_reads_the_claim_files_and_runs_nothing() {
     let (code, out, _) = ritsu_in(t.path(), &["check", "."]);
     assert_eq!(code, 0, "{out}");
     assert!(mark.exists(), "the claim did not run:\n{out}");
+}
+
+/// The test project of an expense request's approvals: a dates file of the deadline of a stage,
+/// three flows that read it, one directly and two through the flows they run (`flow "…"`), a gate
+/// that reads the flow at the top, and requirements whose links point at the dates file. Every
+/// file passes.
+const APPROVALS: &str = "tests/projects/approvals";
+
+/// A copy of [`APPROVALS`] in `t`, with each of `edits` made: in `file`, the first `name` changed
+/// into `into`.
+fn approvals_with(t: &TempDir, edits: &[(&str, &str, &str)]) {
+    ritsu_testkit::tmp::copy_dir(&here().join(APPROVALS), t.path());
+    for (file, name, into) in edits {
+        let f = t.path().join(file);
+        let s = std::fs::read_to_string(&f).unwrap();
+        assert!(s.contains(name), "{file} has no {name}");
+        std::fs::write(&f, s.replacen(name, into, 1)).unwrap();
+    }
+}
+
+/// One claim of the dates file failing: the deadline allows at most 10 days, and the third business
+/// day after a request that comes on Christmas Eve is 11 days on (DESIGN 8.3). koyomi's error is
+/// said once, in its place. Each line that reads a file that does not pass because of it — the
+/// flow's `use dates`, the flows' `flow "…"`, the gate's `workflow … from` and the requirements'
+/// links to the dates file — is said once, under the dates file, after the rest, and nothing is
+/// said of the lines that would use what they read (no E002 for the names of the dates file). The
+/// summary counts the file that fails and the five that wait apart; the exit is 1. The JSON keeps
+/// each diagnostic as its language writes it, with the file each line that waits reads and the
+/// files it waits for, and gives each file that waits the files it waits for.
+#[test]
+fn one_mistake_is_said_once_and_what_waits_for_it_after() {
+    let (code, out, _) = ritsu_in(&here().join(APPROVALS), &["check", ".", "--root", ".", "--lang", "en"]);
+    assert_eq!(code, 0, "{out}");
+    let t = TempDir::new("approvals-waiting");
+    approvals_with(&t, &[("dates/approval_terms.cal", "due <= received + 11 days", "due <= received + 10 days")]);
+    let mut failures = Vec::new();
+    for lang in ["en", "ja"] {
+        let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", lang]);
+        assert_eq!((code, err.as_str()), (1, ""), "{out}");
+        golden(&format!("tests/golden/check/approvals-waiting.{lang}.txt"), &out, &mut failures);
+    }
+    let (code, json, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--format", "json"]);
+    assert_eq!(code, 1, "{json}");
+    golden("tests/golden/check/approvals-waiting.json", &json, &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+
+    let (_, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "en"]);
+    let errors: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).collect();
+    assert_eq!(errors, ["error[koyomi E301]: dates/approval_terms.cal:19:3: The claim due_within_eleven_days fails for 3 of the 730 days of received"], "{out}");
+    let waiting = "\
+waiting for dates/approval_terms.cal (koyomi E301 at line 19) to pass:
+  flows/approvals.flow:24: [dandori E015] flow \"joint.flow\"
+  flows/approvals.flow:29: [dandori E015] flow \"stage.flow\"
+  flows/joint.flow:20: [dandori E015] flow \"stage.flow\"
+  flows/stage.flow:5: [dandori E005] use dates terms from \"../dates/approval_terms.cal\"
+  gates/expense.gate:14: [sekisho E208] workflow approvals from \"../flows/approvals.flow\"
+  requirements/expense.req:13: [yuen E203] satisfied by koyomi \"../dates/approval_terms.cal\" date due
+  requirements/expense.req:19: [yuen E203] verified by koyomi \"../dates/approval_terms.cal\" claim due_is_open
+ritsu check: 7 files (koyomi 2, dandori 3, sekisho 1, yuen 1): 1 fail (1 error), 5 waiting; borders between the languages: 0 checked, 0 undecided
+";
+    assert!(out.ends_with(waiting), "{out}");
+    // yuen's line of the errors goes with them: the requirements have none of their own
+    assert!(!out.contains("requirements/expense.req: "), "{out}");
+
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    type Diag<'a> = (&'a str, &'a str, &'a str, u64, Option<&'a str>, &'a serde_json::Value);
+    let said: Vec<Diag<'_>> = v["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| (d["tool"].as_str().unwrap(), d["code"].as_str().unwrap(), d["file"].as_str().unwrap(), d["line"].as_u64().unwrap(), d["reads"].as_str(), d.get("waits_for").unwrap_or(&serde_json::Value::Null)))
+        .collect();
+    let terms = serde_json::json!(["dates/approval_terms.cal"]);
+    let none = serde_json::Value::Null;
+    assert_eq!(
+        said,
+        [
+            ("koyomi", "E301", "dates/approval_terms.cal", 19, None, &none),
+            ("dandori", "E015", "flows/approvals.flow", 24, Some("flows/joint.flow"), &terms),
+            ("dandori", "E015", "flows/approvals.flow", 29, Some("flows/stage.flow"), &terms),
+            ("dandori", "E015", "flows/joint.flow", 20, Some("flows/stage.flow"), &terms),
+            ("dandori", "E005", "flows/stage.flow", 5, Some("dates/approval_terms.cal"), &terms),
+            ("sekisho", "E208", "gates/expense.gate", 14, Some("flows/approvals.flow"), &terms),
+            ("yuen", "E203", "requirements/expense.req", 13, Some("dates/approval_terms.cal"), &terms),
+            ("yuen", "E203", "requirements/expense.req", 19, Some("dates/approval_terms.cal"), &terms),
+        ]
+    );
+    // every line that waits is still its language's error
+    assert!(v["diagnostics"].as_array().unwrap().iter().all(|d| d["severity"] == "error"), "{json}");
+    let files: Vec<(&str, bool, &serde_json::Value)> = v["files"].as_array().unwrap().iter().map(|f| (f["file"].as_str().unwrap(), f["ok"].as_bool().unwrap(), f.get("waits_for").unwrap_or(&none))).collect();
+    assert_eq!(
+        files,
+        [
+            ("calendars/office.cal", true, &none),
+            ("dates/approval_terms.cal", false, &none),
+            ("flows/approvals.flow", false, &terms),
+            ("flows/joint.flow", false, &terms),
+            ("flows/stage.flow", false, &terms),
+            ("gates/expense.gate", false, &terms),
+            ("requirements/expense.req", false, &terms),
+        ]
+    );
+    assert_eq!(v["ok"], false);
+
+    // what each file's language says of it, but for the lines that wait
+    holds_to_the_languages(t.path(), ".", "en");
+    holds_to_the_languages(t.path(), ".", "ja");
+}
+
+/// A mistake that has nothing to do with the file a line waits for is said in its place, in a file
+/// that waits too (DESIGN 8.3): the flow that runs the stages side by side writes a field its record
+/// does not have. That flow fails; its line that reads the stage's flow still waits for the dates
+/// file; and the line of the flow at the top that reads it waits for both, as does the gate.
+#[test]
+fn a_mistake_in_a_file_that_waits_is_said() {
+    let t = TempDir::new("approvals-beside");
+    approvals_with(
+        &t,
+        &[("dates/approval_terms.cal", "due <= received + 11 days", "due <= received + 10 days"), ("flows/joint.flow", "\"{s.approver} sent it back\"", "\"{s.approvr} sent it back\"")],
+    );
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    let errors: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).collect();
+    assert_eq!(
+        errors,
+        [
+            "error[koyomi E301]: dates/approval_terms.cal:19:3: The claim due_within_eleven_days fails for 3 of the 730 days of received",
+            "error[dandori E002]: flows/joint.flow:30:34: `StageAnswer` has no field `approvr` (verdict, approver)",
+        ],
+        "{out}"
+    );
+    let waiting = "\
+waiting for dates/approval_terms.cal (koyomi E301 at line 19) to pass:
+  flows/approvals.flow:29: [dandori E015] flow \"stage.flow\"
+  flows/joint.flow:20: [dandori E015] flow \"stage.flow\"
+  flows/stage.flow:5: [dandori E005] use dates terms from \"../dates/approval_terms.cal\"
+  requirements/expense.req:13: [yuen E203] satisfied by koyomi \"../dates/approval_terms.cal\" date due
+  requirements/expense.req:19: [yuen E203] verified by koyomi \"../dates/approval_terms.cal\" claim due_is_open
+waiting for dates/approval_terms.cal (koyomi E301 at line 19) and flows/joint.flow (dandori E002 at line 30) to pass:
+  flows/approvals.flow:24: [dandori E015] flow \"joint.flow\"
+  gates/expense.gate:14: [sekisho E208] workflow approvals from \"../flows/approvals.flow\"
+ritsu check: 7 files (koyomi 2, dandori 3, sekisho 1, yuen 1): 2 fail (2 errors), 4 waiting; borders between the languages: 0 checked, 0 undecided
+";
+    assert!(out.ends_with(waiting), "{out}");
+    let (_, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "ja"]);
+    assert!(out.contains("\ndates/approval_terms.cal（koyomi E301、19 行目）と flows/joint.flow（dandori E002、30 行目）が通るのを待っています:\n"), "{out}");
+    assert!(out.ends_with("検査を通らないもの 2 個（エラー 2 件）、待っているもの 4 個。言語の境目: 確かめた 0 か所、決められない 0 か所\n"), "{out}");
+    let (_, json, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let gate = v["files"].as_array().unwrap().iter().find(|f| f["file"] == "gates/expense.gate").unwrap();
+    assert_eq!(gate["waits_for"], serde_json::json!(["dates/approval_terms.cal", "flows/joint.flow"]), "{json}");
+    let joint = v["files"].as_array().unwrap().iter().find(|f| f["file"] == "flows/joint.flow").unwrap();
+    assert!(joint.get("waits_for").is_none() && joint["ok"] == false, "{joint}");
+    holds_to_the_languages(t.path(), ".", "en");
+}
+
+/// Every pair of languages waits the same way (DESIGN 8.3). A rule that does not pass (two rows of
+/// its table overlap), read by a flow, a gate and a module of kaname: rulec's error once, and the
+/// three `use rule` lines under it. A calendar that does not pass, read by a dates file that a flow
+/// reads, and a book that does not pass, read by the same flow: the dates file's `use calendar` and
+/// the flow's `use dates` wait for the calendar, and the flow's `use book` for the book.
+#[test]
+fn every_pair_of_languages_waits_the_same_way() {
+    let t = TempDir::new("cold-chain-waiting");
+    ritsu_testkit::tmp::copy_dir(&here().join("tests/projects/cold_chain"), t.path());
+    let rule = t.path().join("rules/cold_chain_departure.rule");
+    let s = std::fs::read_to_string(&rule).unwrap();
+    std::fs::write(&rule, s.replacen("| controlled_ambient | >25℃       | -        | false         |", "| controlled_ambient | >=25℃      | -        | false         |", 1)).unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    let errors: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).collect();
+    assert_eq!(errors, ["error[rulec E105]: Overlapping rows: the same input matches row 6 and row 7"], "{out}");
+    let waiting = "\
+waiting for rules/cold_chain_departure.rule (rulec E105 at line 22) to pass:
+  departure.kn:6: [kaname E201] use rule cold_chain_departure from \"rules/cold_chain_departure.rule\"
+  cold_chain.flow:4: [dandori E005] use rule departure from \"rules/cold_chain_departure.rule\"
+  cold_chain.gate:5: [sekisho E201] use rule cold_chain_departure from \"rules/cold_chain_departure.rule\"
+ritsu check: 8 files (rulec 2, kaname 2, dandori 2, sekisho 2): 1 fail (1 error), 3 waiting; borders between the languages: 0 checked, 0 undecided
+";
+    assert!(out.ends_with(waiting), "{out}");
+    holds_to_the_languages(t.path(), ".", "en");
+    holds_to_the_languages(t.path(), ".", "ja");
+
+    let t = TempDir::new("invoice-waiting");
+    ritsu_testkit::tmp::copy_dir(&here().join("tests/projects/invoice"), t.path());
+    let calendar = t.path().join("calendars/weekdays.cal");
+    std::fs::write(&calendar, std::fs::read_to_string(&calendar).unwrap().replacen("closed weekly sat, sun\n", "closed weekly sat, sunday\n", 1)).unwrap();
+    let book = t.path().join("books/stock.book");
+    std::fs::write(&book, std::fs::read_to_string(&book).unwrap().replacen("  at least 0 refused as out_of_stock\n", "", 1)).unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    let errors: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).map(|l| l.split(": ").next().unwrap()).collect();
+    assert_eq!(errors, ["error[koyomi E002]", "error[chobo E020]"], "{out}");
+    let waiting = "\
+waiting for calendars/weekdays.cal (koyomi E002 at line 5) to pass:
+  dates/payment_terms.cal:3: [koyomi E015] use calendar \"../calendars/weekdays.cal\"
+  invoice.flow:11: [dandori E005] use dates terms from \"dates/payment_terms.cal\"
+waiting for books/stock.book (chobo E020 at line 8) to pass:
+  invoice.flow:12: [dandori E005] use book stock from \"books/stock.book\"
+ritsu check: 10 files (rulec 2, koyomi 4, chobo 2, dandori 2): 2 fail (2 errors), 2 waiting, 6 pass (6 warnings); borders between the languages: 6 checked, 6 undecided
+";
+    assert!(out.ends_with(waiting), "{out}");
+}
+
+/// A request waits for what it reads as every other language does (ringi's DESIGN 6.5): the test
+/// project of two requests, one that reads a rule and a calendar, one that uses a shared route that
+/// reads the same calendar, every file passing as it is. A rule whose rows overlap, a calendar that
+/// does not read and a shared route that names an approver it does not declare: each language's
+/// error once, in its place, and under it each `use` line that reads it (ringi's E202); the request
+/// that uses the shared route waits for the calendar too, through the route.
+#[test]
+fn a_request_waits_for_what_it_reads() {
+    let (code, out, _) = ritsu_in(&here().join("tests/projects/requests"), &["check", ".", "--root", ".", "--lang", "en"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.ends_with("ritsu check: 5 files (rulec 1, koyomi 1, ringi 3): all pass; borders between the languages: 0 checked, 0 undecided\n"), "{out}");
+    let t = TempDir::new("requests-waiting");
+    ritsu_testkit::tmp::copy_dir(&here().join("tests/projects/requests"), t.path());
+    for (file, name, into) in [
+        ("rules/authority.rule", "| goods    | >1_000_000JPY  |", "| goods    | >=1_000_000JPY |"),
+        ("calendars/office.cal", "closed weekly sat, sun\n", "closed weekly sat, sunday\n"),
+        ("routes/standard.ringi", "  head  heads  when long", "  head  head_of_team  when long"),
+    ] {
+        let f = t.path().join(file);
+        let s = std::fs::read_to_string(&f).unwrap();
+        assert!(s.contains(name), "{file} has no {name}");
+        std::fs::write(&f, s.replacen(name, into, 1)).unwrap();
+    }
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    let errors: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).map(|l| l.split(": ").next().unwrap()).collect();
+    assert_eq!(errors, ["error[rulec E105]", "error[koyomi E002]", "error[ringi E004]"], "{out}");
+    let waiting = "\
+waiting for rules/authority.rule (rulec E105 at line 17) to pass:
+  purchase.ringi:5: [ringi E202] use rule authority from \"rules/authority.rule\"
+waiting for calendars/office.cal (koyomi E002 at line 5) to pass:
+  leave.ringi:4: [ringi E202] use calendar office from \"calendars/office.cal\"
+  purchase.ringi:4: [ringi E202] use calendar office from \"calendars/office.cal\"
+  routes/standard.ringi:4: [ringi E202] use calendar office from \"../calendars/office.cal\"
+waiting for calendars/office.cal (koyomi E002 at line 5) and routes/standard.ringi (ringi E004 at line 11) to pass:
+  leave.ringi:5: [ringi E202] use route standard from \"routes/standard.ringi\"
+ritsu check: 5 files (rulec 1, koyomi 1, ringi 3): 3 fail (3 errors), 2 waiting; borders between the languages: 0 checked, 0 undecided
+";
+    assert!(out.ends_with(waiting), "{out}");
+    holds_to_the_languages(t.path(), ".", "en");
+    holds_to_the_languages(t.path(), ".", "ja");
+}
+
+/// `ritsu check --through <day>` holds every request of ringi's to being usable through that day,
+/// as `ritsu ringi check --through` does (ringi's DESIGN 9.6, 16.1): the test project of a request
+/// that reads an organization and masters, with the rows of its account codes ending. Without the
+/// day the end is a fact under the request's `ok`; through a later day it is ringi's E107.
+#[test]
+fn ritsu_check_holds_the_requests_to_a_day() {
+    let t = TempDir::new("requests-through");
+    ritsu_testkit::tmp::copy_dir(&here().join("tests/projects/requests-org"), t.path());
+    std::fs::write(t.path().join("masters/accounts.csv"), "code,label,valid_from,valid_to\n5101,Travel,2026-01-01,2027-03-31\n5103,Supplies,2026-01-01,2027-03-31\n").unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "en"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("\n  used through 2027-03-31: the rows of the master `m.accounts` end on 2027-03-31 (`masters/accounts.csv`, line 2)\n"), "{out}");
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "en", "--through", "2027-03-31"]);
+    assert_eq!(code, 0, "{out}");
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "en", "--through", "2028-03-31"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("error[ringi E107]: expense.ringi:9:3: The request cannot be used through 2028-03-31 (`--through`): it can be used through 2027-03-31\n"), "{out}");
+    // the warning is W506; the president's `check` skipped at the top is what the shape of the
+    // organization does, counted under the line of `ok` when the file passes
+    assert!(out.ends_with("ritsu check: 3 files (ringi 3): 1 fail (1 error, 1 warning); borders between the languages: 0 checked, 0 undecided\n"), "{out}");
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--lang", "ja", "--through", "2028-03-31"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("expense.ringi:9:3: 2028-03-31（`--through`）まで使えません。使える最後の日は 2027-03-31 です\n"), "{out}");
+    let (code, _, err) = ritsu_in(t.path(), &["check", ".", "--through", "soon"]);
+    // the words of `ritsu ringi check --through` (the same example of a date)
+    assert_eq!((code, err.as_str()), (2, "error: `--through soon` is not a date such as 2027-04-01\n"));
 }

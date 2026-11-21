@@ -1,0 +1,61 @@
+警告[W904]: tests/fixtures/reached_values.flow:13:1: 入力 `token` は秘密の値で、ワークフローの履歴に残ります
+    13 |   token   : string  secret
+  = 印は reached_values.flow:13 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/reached_values.flow:33:1: 秘密の値 `token` が、`greet` の引数 `text` として、ワークフローの履歴に残ります
+    33 |   greet(text: text)
+  = 印は reached_values.flow:13 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/reached_values.flow:37:1: 秘密の値 `token` が、`greet` の引数 `text` として、ワークフローの履歴に残ります
+    37 |     greet(text: note)
+  = 印は reached_values.flow:13 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+エラー[E011]: tests/fixtures/reached_values.flow:63:1: 分岐 `gold` は通りません。ここで `t` がとりうる値は basic・silver だけです
+    63 |         gold => pass
+  そうなる例:
+      27  text = name
+      32  match private: false
+      35  note = name
+      36  repeat（3 回まで）
+      38  note = token
+      39  r = greet(…)
+      42  match r.done: false
+      44  memo = name
+      45  repeat（3 回まで）
+      47  m = greet(…)
+      52  match m.done: false
+      54  t = narrow
+      59  match private: false
+エラー[E010]: tests/fixtures/reached_values.flow:80:1: `match` に gold・platinum の分岐がありません。ここで `u` はその値を取りえます
+    80 |     match u
+  そうなる例:
+      27  text = name
+      32  match private: false
+      35  note = name
+      36  repeat（3 回まで）
+      38  note = token
+      39  r = greet(…)
+      42  match r.done: false
+      44  memo = name
+      45  repeat（3 回まで）
+      47  m = greet(…)
+      52  match m.done: false
+      54  t = narrow
+      59  match private: false
+      61  match t: basic
+      66  v = narrow
+      67  repeat（3 回まで）
+      69  match v: basic
+      71  v = narrow
+      72  q = greet(…)
+      75  match q.done: false
+      76  v = wide
+      78  u = narrow
+      79  repeat（3 回まで）
+      81  match u: basic
+      83  u = wide
+      84  s = greet(…)
+      87  match s.done: false

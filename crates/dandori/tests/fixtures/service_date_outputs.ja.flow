@@ -1,0 +1,19 @@
+workflow 予約の日付の出力 v1 implements dates.BookingServiceJa
+description "E017：実行の出力が、google.type.Date、そのリスト、それを中に持つメッセージへ行く。実行は日付を protobuf の JSON の形では書かない（DESIGN 44）。リクエストの日付は、date と文字列で読む"
+
+use proto dates from "services/dates.proto"
+
+inputs
+  id     : string
+  since  : date
+  closed : list[string]
+  extra  : json
+
+outputs
+  bookedOn : date
+  span     : json
+  days     : list[string]
+  note     : string
+
+flow
+  succeed bookedOn = since, span = extra, days = closed, note = id

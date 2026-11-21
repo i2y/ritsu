@@ -1,0 +1,19 @@
+rule wrapped_lines v1
+description "The same over the lines of an order: each line wrapped as a gift takes two sheets, and one more sheet goes round the card, so the sheets are odd. Six sheets or more take the large roll"
+
+# A line of the order
+elements lines
+  gift : bool
+
+count gifts over lines where gift  range >=0 <=5
+
+define sheets : number = gifts * 2 + 1
+
+outputs
+  large_roll : bool
+
+table roll_of
+policy unique
+| sheets | -> large_roll |
+| <6     | false         |
+| >=6    | true          |

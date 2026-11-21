@@ -230,7 +230,8 @@
       "alias": "returns",
       "line": 39,
       "entity": "ShopJa::Workflow::\"returns\"",
-      "flow": "flows/returns.flow"
+      "flow": "flows/returns.flow",
+      "assumes": []
     }
   ],
   "actions": [

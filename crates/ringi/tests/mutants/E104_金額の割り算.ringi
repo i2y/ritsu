@@ -1,0 +1,15 @@
+request 例(example) v1 "例"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+  日数(days)       : number "日数"  range >=1 <=20
+  一日あたり(per_day) : money[円] "一日あたり" = 金額 / 日数
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

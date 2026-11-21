@@ -1,0 +1,45 @@
+rule season_ticket v1
+description "What a season ticket comes with. Every range is written with ends that do not take the value they write: a price above 0 yen and below 100,000 yen, a discount above 0% and below 50%, a day after the season opens and before it closes, an age that may be left out, and a seat above standing. An end written with `>` or `<` is read one step in, on the step the value is kept in"
+
+enum seat = standing < reserved < premium
+enum fare = child | adult
+
+inputs
+  price    : money[JPY]     range >0JPY <100_000JPY
+  discount : rate[step 1%]  range >0% <50%
+  day      : date           range >2026-03-31 <2026-10-01
+  age      : number?        range >5 <120
+  seat     : seat           range >standing
+
+outputs
+  charged : money[JPY]  round down(1JPY)
+  early   : bool
+  fare    : fare
+  lounge  : bool
+
+result charged = price - down(price * discount, 1JPY)
+
+table early_of
+policy unique
+| day          | -> early |
+| <2026-07-01  | true     |
+| >=2026-07-01 | false    |
+
+table fare_of
+policy unique
+| age  | -> fare |
+| none | adult   |
+| <13  | child   |
+| >=13 | adult   |
+
+table lounge_of
+policy unique
+| seat     | -> lounge |
+| reserved | false     |
+| premium  | true      |
+
+examples
+| price     | discount | day        | age  | seat     | -> charged | early | fare  | lounge |
+| 1JPY      | 1%       | 2026-04-01 | none | reserved | 1JPY       | true  | adult | false  |
+| 99_999JPY | 49%      | 2026-09-30 | 119  | premium  | 51_000JPY  | false | adult | true   |
+| 2_000JPY  | 10%      | 2026-07-01 | 6    | reserved | 1_800JPY   | false | child | false  |

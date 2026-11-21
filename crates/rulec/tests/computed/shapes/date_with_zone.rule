@@ -1,0 +1,20 @@
+rule date_with_zone v1
+description "A date an applied table writes, read with the zone it is decided from: each row asks for the day of its own zone, and the day between belongs to neither"
+
+enum zone = local | national
+enum timing = early | late
+
+inputs
+  zone : zone
+
+apply s = "shared/ship_day.rule" meaning:ba324522b221da9e
+  zone = zone
+  ships -> s_ships
+
+outputs
+  x : timing
+
+table pick
+| zone     | s_ships      | -> x  |
+| local    | <=2026-07-02 | early |
+| national | >=2026-07-02 | late  |

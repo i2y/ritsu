@@ -1,0 +1,9 @@
+// The message tests/spellings/proto_type_name.flow reads: the code of TypeScript and of Python names
+// it `shop_Line`, as it names the record of the flow, and in Go the two are one name as well.
+syntax = "proto3";
+
+package shop.v1;
+
+message Line {
+  string sku = 1;
+}

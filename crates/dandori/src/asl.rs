@@ -13,7 +13,8 @@
 
 use crate::diag::{Diag, Text};
 use crate::model::*;
-use crate::render::{self, asl_var, jsonata_check, jsonata_expr, jsonata_list, jsonata_path, jsonata_string};
+use crate::render::{self, jsonata_check, jsonata_expr, jsonata_list, jsonata_path, jsonata_string};
+use crate::wire;
 use serde_json::{json, Map, Value};
 use std::collections::BTreeSet;
 
@@ -76,6 +77,8 @@ struct Gen<'a> {
     in_on_failure: bool,
     /// inside a parallel round: the state that ends the round with the failure it is given
     round_failed: Option<String>,
+    /// the names of the flow's variables in the machine
+    vars: render::Vars,
 }
 
 pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
@@ -216,7 +219,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         return Err(errs);
     }
 
-    let mut g = Gen { m, states: Map::new(), used: BTreeSet::new(), loops: vec![], failure_entry: None, in_on_failure: false, round_failed: None };
+    let mut g = Gen { m, states: Map::new(), used: BTreeSet::new(), loops: vec![], failure_entry: None, in_on_failure: false, round_failed: None, vars: render::Vars::new(m, render::asl_spell, None) };
     // the end states first, so that everything can point at them
     let done = g.name("done");
     g.states.insert(done.clone(), json!({ "Type": "Succeed", "Output": no_output(m) }));
@@ -245,9 +248,9 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         }
         if m.inputs.iter().any(|(i, _)| i == v) {
             let x = format!("$states.input.{}", render::jsonata_field(v));
-            assign.insert(asl_var(v), json!(format!("{{% $exists({x}) ? {x} : null %}}")));
+            assign.insert(g.vars.get(v), json!(format!("{{% $exists({x}) ? {x} : null %}}")));
         } else {
-            assign.insert(asl_var(v), Value::Null);
+            assign.insert(g.vars.get(v), Value::Null);
         }
     }
     if m.on_failure.is_some() {
@@ -370,8 +373,8 @@ fn answered(task: &TaskDef) -> String {
 /// 20): the runners of the tests find it by this name, to give it the moment a run starts at.
 pub const PERIOD_AT_START: &str = "period at the start";
 
-fn arg_value(e: &TExpr) -> Value {
-    render::literal(e).unwrap_or_else(|| json!(format!("{{% {} %}}", jsonata_expr(e))))
+fn arg_value(vars: &render::Vars, e: &TExpr) -> Value {
+    render::literal(e).unwrap_or_else(|| json!(format!("{{% {} %}}", jsonata_expr(vars, e))))
 }
 
 /// A value of the ASL (a literal, or a `{% … %}` string) as a JSONata expression.
@@ -457,7 +460,35 @@ impl<'a> Gen<'a> {
         n
     }
 
+    /// Before `entry`, the check that the variables `es` read have values where they must (DESIGN
+    /// 38): a Choice that goes on to `entry`, and for each variable, in the order the code reads
+    /// them, the end the run takes where it has none, a Fail with Dandori.UnexpectedValue, or in a
+    /// parallel round the round's end with that failure. Without such a variable, `entry` itself.
+    fn have(&mut self, es: &[&TExpr], line: usize, entry: String, yields: bool) -> String {
+        let names = crate::model::must_haves(self.m, es);
+        if names.is_empty() {
+            return entry;
+        }
+        let mut choices = Vec::new();
+        for n in &names {
+            let end = self.failing(&format!("{line} {n} has no value"), None, json!("Dandori.UnexpectedValue"), Some(json!(format!("line {line}: {n} has no value"))), false);
+            let v = format!("${}", self.vars.get(n));
+            choices.push(json!({ "Condition": format!("{{% $not($exists({v})) or {v} = null %}}"), "Next": end }));
+        }
+        let has = if names.len() == 1 { "has a value" } else { "have values" };
+        let comment = format!("line {line}: {} {has}{}", names.join(", "), if yields { ", for the round's yield" } else { "" });
+        let n = self.name(&format!("{line} have {}{}", names.join(" "), if yields { " to yield" } else { "" }));
+        self.states.insert(n.clone(), json!({ "Type": "Choice", "Comment": comment, "Choices": choices, "Default": entry }));
+        n
+    }
+
     fn stmt(&mut self, s: &TStmt, cont: &str) -> String {
+        let entry = self.statement(s, cont);
+        // a variable it reads that must have a value, and has none, ends the run here (DESIGN 38)
+        self.have(&s.kind.reads_first(self.m), s.line, entry, false)
+    }
+
+    fn statement(&mut self, s: &TStmt, cont: &str) -> String {
         match &s.kind {
             TK::Pass => cont.to_string(),
             TK::Break => self.loops.last().map(|(_, exit)| exit.clone()).unwrap_or_else(|| cont.to_string()),
@@ -468,12 +499,12 @@ impl<'a> Gen<'a> {
             }
             TK::WaitUntil { at } => {
                 let n = self.name(&format!("{} wait until {}", s.line, at.show()));
-                self.states.insert(n.clone(), json!({ "Type": "Wait", "Comment": format!("line {}", s.line), "Timestamp": format!("{{% {} %}}", jsonata_expr(at)), "Next": cont }));
+                self.states.insert(n.clone(), json!({ "Type": "Wait", "Comment": format!("line {}", s.line), "Timestamp": format!("{{% {} %}}", jsonata_expr(&self.vars, at)), "Next": cont }));
                 n
             }
             TK::Assign { name, expr } => {
                 let n = self.name(&format!("{} let {name}", s.line));
-                self.states.insert(n.clone(), json!({ "Type": "Pass", "Comment": format!("line {}", s.line), "Assign": { asl_var(name): arg_value(expr) }, "Next": cont }));
+                self.states.insert(n.clone(), json!({ "Type": "Pass", "Comment": format!("line {}", s.line), "Assign": { self.vars.get(name): arg_value(&self.vars, expr) }, "Next": cont }));
                 n
             }
             TK::Succeed { fields } => {
@@ -486,7 +517,7 @@ impl<'a> Gen<'a> {
                 } else {
                     let mut out = Map::new();
                     for (f, e) in fields {
-                        out.insert(f.clone(), arg_value(e));
+                        out.insert(f.clone(), arg_value(&self.vars, e));
                     }
                     st.insert("Output".into(), Value::Object(out));
                 }
@@ -494,7 +525,7 @@ impl<'a> Gen<'a> {
                 n
             }
             TK::Fail { error, cause, .. } => {
-                let c = cause.as_ref().map(arg_value);
+                let c = cause.as_ref().map(|e| arg_value(&self.vars, e));
                 self.failing(&format!("{} fail {error}", s.line), Some(format!("line {}", s.line)), json!(error), c, false)
             }
             // the period the workflow runs in (DESIGN 20): a Pass that reads the clock once, as the
@@ -525,8 +556,8 @@ impl<'a> Gen<'a> {
                 let fail = self.failing(&format!("{} broken precondition", c.call_line), Some(format!("line {}: {text}", c.call_line)), json!(crate::prechecks::ERROR), Some(json!(c.cause(self.m))), false);
                 let n = self.name(&format!("{} precondition {text}", c.call_line));
                 let holds = match &c.test {
-                    PreTest::Relation { left, op, right } => format!("{} {op} {}", side_code(left, &jsonata_expr), side_code(right, &jsonata_expr)),
-                    PreTest::Days { value, days, .. } => format!("{} in [{}]", jsonata_expr(value), days.iter().map(|d| json!(d).to_string()).collect::<Vec<_>>().join(", ")),
+                    PreTest::Relation { left, op, right } => format!("{} {op} {}", side_code(left, &|e| jsonata_expr(&self.vars, e)), side_code(right, &|e| jsonata_expr(&self.vars, e))),
+                    PreTest::Days { value, days, .. } => format!("{} in [{}]", jsonata_expr(&self.vars, value), days.iter().map(|d| json!(d).to_string()).collect::<Vec<_>>().join(", ")),
                     PreTest::Never { conds, .. } => {
                         let lit = |v: &ritsu_ports::Value| match v {
                             ritsu_ports::Value::Bool(b) => b.to_string(),
@@ -535,7 +566,7 @@ impl<'a> Gen<'a> {
                             _ => "null".to_string(),
                         };
                         crate::model::never_code(conds, &crate::model::NeverCode {
-                            expr: &jsonata_expr,
+                            expr: &|e| jsonata_expr(&self.vars, e),
                             lit: &lit,
                             among: &|v, ls| format!("{v} in [{}]", ls.join(", ")),
                             not: &|c| format!("$not({c})"),
@@ -576,16 +607,21 @@ impl<'a> Gen<'a> {
                 let after = match result {
                     Some((r, _)) => {
                         let a = self.name(&format!("{} for {var} done", s.line));
-                        self.states.insert(a.clone(), json!({ "Type": "Pass", "Assign": { asl_var(r): format!("{{% ${out} %}}") }, "Next": cont }));
+                        self.states.insert(a.clone(), json!({ "Type": "Pass", "Assign": { self.vars.get(r): format!("{{% ${out} %}}") }, "Next": cont }));
                         a
                     }
                     None => cont.to_string(),
                 };
+                // a round that ends as it goes yields: what it yields is read there, at the line of the `for`
+                let round_end = match result {
+                    Some((_, y)) => self.have(&[y], s.line, next.clone(), true),
+                    None => next.clone(),
+                };
                 self.loops.push((site, after.clone()));
-                let entry = self.block(body, &next);
+                let entry = self.block(body, &round_end);
                 self.loops.pop();
                 let mut start = Map::new();
-                start.insert(items.clone(), arg_value(list));
+                start.insert(items.clone(), arg_value(&self.vars, list));
                 start.insert(counter.clone(), json!(0));
                 if result.is_some() {
                     start.insert(out.clone(), json!([]));
@@ -600,11 +636,11 @@ impl<'a> Gen<'a> {
                 );
                 self.states.insert(bound.clone(), json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% $count(${items}) > {max} %}}"), "Next": too_many } ], "Default": head }));
                 self.states.insert(head.clone(), json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% ${counter} < $count(${items}) %}}"), "Next": take } ], "Default": after }));
-                self.states.insert(take.clone(), json!({ "Type": "Pass", "Assign": { asl_var(var): format!("{{% ${items}[${counter}] %}}") }, "Next": entry }));
+                self.states.insert(take.clone(), json!({ "Type": "Pass", "Assign": { self.vars.get(var): format!("{{% ${items}[${counter}] %}}") }, "Next": entry }));
                 let mut step = Map::new();
                 step.insert(counter.clone(), json!(format!("{{% ${counter} + 1 %}}")));
                 if let Some((_, y)) = result {
-                    step.insert(out.clone(), json!(format!("{{% $append(${out}, {}) %}}", render::jsonata_one(&jsonata_expr(y), &y.ty()))));
+                    step.insert(out.clone(), json!(format!("{{% $append(${out}, {}) %}}", render::jsonata_one(&jsonata_expr(&self.vars, y), &y.ty()))));
                 }
                 self.states.insert(next.clone(), json!({ "Type": "Pass", "Assign": step, "Next": head }));
                 init
@@ -612,21 +648,21 @@ impl<'a> Gen<'a> {
             TK::For { var, list, max, parallel: Some(k), body, result, locals } => self.map(s, var, list, *max, *k, body, result.as_ref(), locals, cont),
             TK::Match { expr, arms } => {
                 let n = self.name(&format!("{} match {}", s.line, expr.show()));
-                let x = jsonata_expr(expr);
+                let x = jsonata_expr(&self.vars, expr);
                 let mut choices = Vec::new();
                 for a in arms {
                     let mut entry = self.block(&a.body, cont);
                     let mut parts = Vec::new();
                     if a.none {
                         match expr {
-                            TExpr::Var { name, fields, .. } if m_is_case_state(self.m, name, fields) => parts.push(format!("${} = null", asl_var(name))),
+                            TExpr::Var { name, fields, .. } if m_is_case_state(self.m, name, fields) => parts.push(format!("${} = null", self.vars.get(name))),
                             _ => parts.push(format!("({x}) = null")),
                         }
                     }
                     if let Some(v) = &a.some {
                         parts.push(format!("({x}) != null"));
                         let bind = self.name(&format!("{} some {v}", a.line));
-                        self.states.insert(bind.clone(), json!({ "Type": "Pass", "Assign": { asl_var(v): format!("{{% {x} %}}") }, "Next": entry }));
+                        self.states.insert(bind.clone(), json!({ "Type": "Pass", "Assign": { self.vars.get(v): format!("{{% {x} %}}") }, "Next": entry }));
                         entry = bind;
                     }
                     if !a.values.is_empty() {
@@ -673,20 +709,26 @@ impl<'a> Gen<'a> {
         let finished = self.name(&format!("{} round done", s.line));
         self.states.insert(failed.clone(), json!({ "Type": "Succeed", "Comment": "the round ends with its failure" }));
         let ok = match result {
-            Some((_, y)) => format!("{{% {{\"ok\": {}}} %}}", jsonata_expr(y)),
+            Some((_, y)) => format!("{{% {{\"ok\": {}}} %}}", jsonata_expr(&self.vars, y)),
             None => "{% {\"ok\": null} %}".to_string(),
         };
         self.states.insert(finished.clone(), json!({ "Type": "Succeed", "Output": ok }));
         self.round_failed = Some(failed);
-        self.loops = vec![(site, finished.clone())];
-        let entry = self.block(body, &finished);
+        // what the round yields is read as it ends, at the line of the `for`, and a variable with no
+        // value there fails the round, as a failure in its body does
+        let round_end = match result {
+            Some((_, y)) => self.have(&[y], s.line, finished.clone(), true),
+            None => finished.clone(),
+        };
+        self.loops = vec![(site, round_end.clone())];
+        let entry = self.block(body, &round_end);
         let begin = self.name(&format!("{} round of {var}", s.line));
         let mut start = Map::new();
-        start.insert(asl_var(var), json!("{% $states.input.item %}"));
+        start.insert(self.vars.get(var), json!("{% $states.input.item %}"));
         start.insert(format!("dd_loop_{site}"), json!("{% $states.input.index %}"));
         for l in locals {
             if l != var {
-                start.insert(asl_var(l), Value::Null);
+                start.insert(self.vars.get(l), Value::Null);
             }
         }
         self.states.insert(begin.clone(), json!({ "Type": "Pass", "Comment": "the round's own variables", "Assign": start, "Next": entry }));
@@ -708,7 +750,7 @@ impl<'a> Gen<'a> {
                 } else {
                     format!("{{% $append([], ${rounds}.ok) %}}")
                 };
-                self.states.insert(c.clone(), json!({ "Type": "Pass", "Assign": { asl_var(r): all }, "Next": cont }));
+                self.states.insert(c.clone(), json!({ "Type": "Pass", "Assign": { self.vars.get(r): all }, "Next": cont }));
                 c
             }
             None => cont.to_string(),
@@ -722,7 +764,7 @@ impl<'a> Gen<'a> {
         let mut st = Map::new();
         st.insert("Type".into(), json!("Map"));
         st.insert("Comment".into(), json!(format!("line {}: every round runs to its end", s.line)));
-        st.insert("Items".into(), arg_value(list));
+        st.insert("Items".into(), arg_value(&self.vars, list));
         st.insert("ItemSelector".into(), json!({ "item": "{% $states.context.Map.Item.Value %}", "index": "{% $states.context.Map.Item.Index %}" }));
         st.insert("MaxConcurrency".into(), json!(k));
         st.insert("ItemProcessor".into(), json!({ "ProcessorConfig": { "Mode": "INLINE" }, "StartAt": begin, "States": Value::Object(inner) }));
@@ -730,7 +772,7 @@ impl<'a> Gen<'a> {
         st.insert("Next".into(), json!(check));
         self.states.insert(name.clone(), Value::Object(st));
         let too_many = self.failing(&format!("{} too many items", s.line), None, json!("Dandori.TooManyItems"), Some(json!(format!("line {}: the list has more than {max} items", s.line))), false);
-        self.states.insert(bound.clone(), json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% $count({}) > {max} %}}", jsonata_expr(list)) , "Next": too_many } ], "Default": name }));
+        self.states.insert(bound.clone(), json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% $count({}) > {max} %}}", jsonata_expr(&self.vars, list)) , "Next": too_many } ], "Default": name }));
         bound
     }
 
@@ -776,7 +818,7 @@ impl<'a> Gen<'a> {
         // the request
         let mut payload = Map::new();
         for (a, e) in args {
-            payload.insert(a.clone(), arg_value(e));
+            payload.insert(a.clone(), arg_value(&self.vars, e));
         }
         let (resource, arguments, result, timeout, retry) = match callee {
             Callee::Rule(r) => {
@@ -790,7 +832,7 @@ impl<'a> Gen<'a> {
                         w.insert("Method".into(), json!("POST"));
                         w.insert("InvocationConfig".into(), json!({ "ConnectionArn": ru.connection.clone().unwrap_or_default() }));
                         w.insert("Headers".into(), json!({ "Connect-Protocol-Version": "1" }));
-                        w.insert("RequestBody".into(), render::jsonata_rule_request(c, args));
+                        w.insert("RequestBody".into(), render::jsonata_rule_request(&self.vars, c, args));
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), render::jsonata_rule_read(c, "$states.result.ResponseBody"), Some(crate::check::RULE_SECONDS), Some(retry))
                     }
                     None => {
@@ -820,7 +862,7 @@ impl<'a> Gen<'a> {
                         }
                         if task.callback {
                             // the token goes in the message; whoever reads it answers with SendTaskSuccess
-                            let body = args.iter().find(|(a, _)| a == "MessageBody").map(|(_, e)| jsonata_expr(e)).unwrap_or_else(|| "{}".into());
+                            let body = args.iter().find(|(a, _)| a == "MessageBody").map(|(_, e)| jsonata_expr(&self.vars, e)).unwrap_or_else(|| "{}".into());
                             payload.insert("MessageBody".into(), json!(format!("{{% $merge([{body}, {{\"task_token\": $states.context.Task.Token}}]) %}}")));
                             (format!("arn:aws:states:::{service}:{action}.waitForTaskToken"), Value::Object(payload), answered(task), task.timeout, retry)
                         } else {
@@ -831,15 +873,11 @@ impl<'a> Gen<'a> {
                         ("arn:aws:states:::states:startExecution.sync:2".to_string(), json!({ "StateMachineArn": arn, "Input": payload }), "$states.result.Output".to_string(), task.timeout, retry)
                     }
                     Via::Http { method, url, form } => {
-                        let used = crate::lower::placeholders(url);
-                        let mut rest = Map::new();
-                        for (a, e) in args {
-                            if !used.contains(a) {
-                                rest.insert(a.clone(), arg_value(e));
-                            }
-                        }
+                        // where each argument goes (DESIGN 43): the path's and the query in the URL,
+                        // which JSONata puts together as the other targets write it, the headers and
+                        // the cookies, and the body
                         let mut w = Map::new();
-                        w.insert("ApiEndpoint".into(), url_value(url, args));
+                        w.insert("ApiEndpoint".into(), url_value(&self.vars, m, task, url, args));
                         w.insert("Method".into(), json!(method));
                         w.insert("InvocationConfig".into(), json!({ "ConnectionArn": task.connection.clone().unwrap_or_default() }));
                         let mut headers = Map::new();
@@ -852,15 +890,45 @@ impl<'a> Gen<'a> {
                         if task.key {
                             headers.insert("Idempotency-Key".into(), json!(self.key_expr(s.site)));
                         }
-                        if !headers.is_empty() {
+                        let (hs, cs) = (wire::at(m, task, Place::Header), wire::at(m, task, Place::Cookie));
+                        if !hs.is_empty() || !cs.is_empty() {
+                            let own = format!("{{{}}}", headers.iter().map(|(k, v)| format!("{}: {}", jsonata_string(k), as_jsonata(v))).collect::<Vec<_>>().join(", "));
+                            let hs: Vec<String> = hs.iter().map(|(p, k, t)| wire::jsonata_header(m, p, k, t, &arg_jsonata(&self.vars, args, &p.param))).collect();
+                            let cs: Vec<String> = cs.iter().map(|(p, k, t)| wire::jsonata_cookie(m, p, k, t, &arg_jsonata(&self.vars, args, &p.param))).collect();
+                            w.insert("Headers".into(), json!(format!("{{% {} %}}", wire::jsonata_headers(&own, &hs, &cs))));
+                        } else if !headers.is_empty() {
                             w.insert("Headers".into(), Value::Object(headers));
                         }
-                        if !rest.is_empty() {
-                            let place = if method == "GET" || method == "DELETE" { "QueryParameters" } else { "RequestBody" };
-                            w.insert(place.into(), Value::Object(rest));
+                        let body: Vec<&WireParam> = task.wire.iter().filter(|p| p.place == Place::Body).collect();
+                        if form && !body.is_empty() && !wire::plain_form(m, task) {
+                            // a URL-encoded body put together as the other targets put it, without the values that are not there
+                            let parts: Vec<String> = wire::at(m, task, Place::Body).iter().map(|(p, k, t)| wire::jsonata_form(m, p, k, t, &arg_jsonata(&self.vars, args, &p.param))).collect();
+                            w.insert("RequestBody".into(), json!(format!("{{% $merge([{}]) %}}", parts.join(", "))));
+                        } else if !body.is_empty() {
+                            // a JSON body by the parameters' names; a URL-encoded one of values that are always there by the names it takes
+                            let mut fields = Map::new();
+                            for p in &body {
+                                let v = args.iter().find(|(a, _)| *a == p.param).map(|(_, e)| arg_value(&self.vars, e)).unwrap_or(Value::Null);
+                                fields.insert(if form { p.name.clone() } else { p.param.clone() }, v);
+                            }
+                            let value = match &task.request_days {
+                                // a `connect` task's dates, as protobuf's JSON writes a `google.type.Date` (DESIGN 44)
+                                Some(t) => {
+                                    let fields: Vec<String> = fields.iter().map(|(k, v)| format!("{}: {}", jsonata_string(k), as_jsonata(v))).collect();
+                                    json!(format!("{{% {} %}}", render::jsonata_wire(&format!("{{{}}}", fields.join(", ")), t)))
+                                }
+                                None => Value::Object(fields),
+                            };
+                            w.insert("RequestBody".into(), value);
                         }
                         if form {
-                            w.insert("Transform".into(), json!({ "RequestBodyEncoding": "URL_ENCODED" }));
+                            // a list `form` writes with `explode` goes as its items, each under the name
+                            let repeat = wire::at(m, task, Place::Body).iter().any(|(p, k, _)| *k == wire::Kind::List && p.style == Style::Form && p.explode);
+                            if repeat {
+                                w.insert("Transform".into(), json!({ "RequestBodyEncoding": "URL_ENCODED", "RequestEncodingOptions": { "ArrayFormat": "REPEAT" } }));
+                            } else {
+                                w.insert("Transform".into(), json!({ "RequestBodyEncoding": "URL_ENCODED" }));
+                            }
                         }
                         // a Connect answer's JSON leaves out the zero values, which protobuf reads as there
                         let result = match &task.connect {
@@ -874,7 +942,7 @@ impl<'a> Gen<'a> {
                         let input: Vec<String> = task
                             .params
                             .iter()
-                            .filter_map(|(p, _)| args.iter().find(|(a, _)| a == p).map(|(_, e)| format!("{}: {}", jsonata_string(p), jsonata_expr(e))))
+                            .filter_map(|(p, _)| args.iter().find(|(a, _)| a == p).map(|(_, e)| format!("{}: {}", jsonata_string(p), jsonata_expr(&self.vars, e))))
                             .collect();
                         let ty = task.result.as_ref().expect("the checker gives an agent an answer");
                         let schema = render::agent_schema(m, task).expect("the checker gives an agent an answer with a schema");
@@ -901,7 +969,7 @@ impl<'a> Gen<'a> {
                                 let mut state = Map::new();
                                 for (p, _) in &task.params {
                                     if let Some((_, e)) = args.iter().find(|(a, _)| a == p) {
-                                        state.insert(p.clone(), arg_value(e));
+                                        state.insert(p.clone(), arg_value(&self.vars, e));
                                     }
                                 }
                                 render::jev_request(j, Value::Object(state))
@@ -910,7 +978,7 @@ impl<'a> Gen<'a> {
                                 let input: Vec<String> = task
                                     .params
                                     .iter()
-                                    .filter_map(|(p, _)| args.iter().find(|(a, _)| a == p).map(|(_, e)| format!("{}: {}", jsonata_string(p), jsonata_expr(e))))
+                                    .filter_map(|(p, _)| args.iter().find(|(a, _)| a == p).map(|(_, e)| format!("{}: {}", jsonata_string(p), jsonata_expr(&self.vars, e))))
                                     .collect();
                                 json!({ "model": j.model, "input": format!("{{% $string({{{}}}) %}}", input.join(", ")), "questions": render::jev_questions(j) })
                             }
@@ -930,9 +998,9 @@ impl<'a> Gen<'a> {
                         for (p, _) in &task.params {
                             if let Some((_, e)) = args.iter().find(|(x, _)| x == p) {
                                 if b.op == "post" && amounts.contains(p) {
-                                    am.insert(p.clone(), arg_value(e));
+                                    am.insert(p.clone(), arg_value(&self.vars, e));
                                 } else {
-                                    a.insert(p.clone(), arg_value(e));
+                                    a.insert(p.clone(), arg_value(&self.vars, e));
                                 }
                             }
                         }
@@ -949,7 +1017,7 @@ impl<'a> Gen<'a> {
                         };
                         let keys: Vec<String> = m.books[b.book]
                             .transfer(&b.transfer)
-                            .map(|t| t.params.iter().filter(|p| t.key.contains(&p.name)).filter_map(|p| args.iter().find(|(x, _)| *x == p.name).map(|(_, e)| format!("{}: {}", jsonata_string(&p.name), jsonata_expr(e)))).collect())
+                            .map(|t| t.params.iter().filter(|p| t.key.contains(&p.name)).filter_map(|p| args.iter().find(|(x, _)| *x == p.name).map(|(_, e)| format!("{}: {}", jsonata_string(&p.name), jsonata_expr(&self.vars, e)))).collect())
                             .unwrap_or_default();
                         let hold = format!("{{{}, \"state\": {}}}", keys.join(", "), jsonata_string(state));
                         ("arn:aws:states:::lambda:invoke".to_string(), json!({ "FunctionName": f, "Payload": call }), hold, task.timeout, retry)
@@ -972,7 +1040,7 @@ impl<'a> Gen<'a> {
             // Jev's answer, read, goes on to the check: the variable takes it only when it passes
             st.insert("Output".into(), json!(format!("{{% {result} %}}")));
         } else if !var.is_empty() {
-            st.insert("Assign".into(), json!({ asl_var(&var): format!("{{% {result} %}}") }));
+            st.insert("Assign".into(), json!({ self.vars.get(&var): format!("{{% {result} %}}") }));
         } else if matches!(callee, Callee::Task(t) if matches!(m.tasks[*t].via(Platform::StepFunctions), Some(Via::Agent { .. }))) {
             // an agent's answer is read even when the flow does not keep it, so that a refusal fails the call
             st.insert("Output".into(), json!(format!("{{% {result} %}}")));
@@ -984,7 +1052,7 @@ impl<'a> Gen<'a> {
             Callee::Rule(_) => None,
         };
         if let Some((_, at)) = deadline {
-            st.insert("TimeoutSeconds".into(), json!(format!("{{% {} %}}", deadline_seconds(&jsonata_expr(at)))));
+            st.insert("TimeoutSeconds".into(), json!(format!("{{% {} %}}", deadline_seconds(&jsonata_expr(&self.vars, at)))));
         } else if let Some(t) = timeout {
             st.insert("TimeoutSeconds".into(), json!(t));
         }
@@ -1048,12 +1116,12 @@ impl<'a> Gen<'a> {
         };
         st.insert("Next".into(), json!(check.clone()));
         self.states.insert(task_name.clone(), Value::Object(st));
-        let x = format!("${}", asl_var(&var));
+        let x = format!("${}", self.vars.get(&var));
         let typed = jsonata_check(m, &x, &ty, m.answer_range(callee), 0);
         let mut choices = Vec::new();
         match (target, m.monitors.get(&s.site)) {
             (Some(Target::Case(c)), Some((_, allowed))) => {
-                let field = jsonata_path(&var, &[m.cases[*c].state_field.clone()]);
+                let field = jsonata_path(&self.vars, &var, &[m.cases[*c].state_field.clone()]);
                 choices.push(json!({ "Condition": format!("{{% {typed} and {field} in {} %}}", jsonata_list(allowed)), "Next": cont }));
                 let unexpected = self.failing(
                     &format!("{} unexpected state from {}", s.line, cname),
@@ -1127,7 +1195,7 @@ impl<'a> Gen<'a> {
         let ty = task.result.clone().expect("the checker gives Jev an answer");
         let typed = jsonata_check(m, "$states.input.answer", &ty, task.result_range, 0);
         let keep = self.name(&format!("{} keep {}", s.line, cname));
-        self.states.insert(keep.clone(), json!({ "Type": "Pass", "Comment": format!("line {}: {} answered", s.line, cname), "Assign": { asl_var(var): "{% $states.input.answer %}" }, "Next": cont }));
+        self.states.insert(keep.clone(), json!({ "Type": "Pass", "Comment": format!("line {}: {} answered", s.line, cname), "Assign": { self.vars.get(var): "{% $states.input.answer %}" }, "Next": cont }));
         match &low_to {
             Some(to) => {
                 choices.push(json!({ "Condition": format!("{{% {typed} and $not($states.input.low) %}}"), "Next": keep }));
@@ -1271,10 +1339,17 @@ pub fn retriers(m: &Model, callee: &Callee, task: &TaskDef, r: &Retry) -> Value 
     Value::Array(out)
 }
 
-/// The URL with its `{placeholders}` put in, escaped, as a JSONata string when it has any.
-fn url_value(url: &str, args: &[(String, TExpr)]) -> Value {
-    let used = crate::lower::placeholders(url);
-    if used.is_empty() {
+/// An argument of a call, by its parameter's name, as a JSONata expression: `null` when the call
+/// does not give it.
+fn arg_jsonata(vars: &render::Vars, args: &[(String, TExpr)], p: &str) -> String {
+    args.iter().find(|(a, _)| a == p).map(|(_, e)| as_jsonata(&arg_value(vars, e))).unwrap_or_else(|| "null".to_string())
+}
+
+/// The URL of an `http` task's call: its `{placeholders}` put in as their styles write them, escaped,
+/// and the query after it (DESIGN 43), as a JSONata string when it has any of them.
+fn url_value(vars: &render::Vars, m: &Model, task: &TaskDef, url: &str, args: &[(String, TExpr)]) -> Value {
+    let query: Vec<String> = wire::at(m, task, Place::Query).iter().map(|(p, k, t)| wire::jsonata_query(m, p, k, t, &arg_jsonata(vars, args, &p.param))).collect();
+    if crate::lower::placeholders(url).is_empty() && query.is_empty() {
         return json!(url);
     }
     let mut parts: Vec<String> = Vec::new();
@@ -1287,15 +1362,19 @@ fn url_value(url: &str, args: &[(String, TExpr)]) -> Value {
         if i > 0 {
             parts.push(jsonata_string(&rest[..i]));
         }
-        let p = &rest[i + 1..j];
-        match args.iter().find(|(a, _)| a == p) {
-            Some((_, e)) => parts.push(render::jsonata_segment(e)),
-            None => parts.push(jsonata_string("")),
-        }
+        let ph = &rest[i + 1..j];
+        parts.push(match wire::path_param(m, task, ph) {
+            Some((p, k, t)) if !wire::plain_segment(p, &k) => wire::jsonata_path(m, p, &k, t, &arg_jsonata(vars, args, &p.param)),
+            Some((p, _, _)) => args.iter().find(|(a, _)| *a == p.param).map(|(_, e)| render::jsonata_segment(vars, e)).unwrap_or_else(|| jsonata_string("")),
+            None => args.iter().find(|(a, _)| a == ph).map(|(_, e)| render::jsonata_segment(vars, e)).unwrap_or_else(|| jsonata_string("")),
+        });
         rest = &rest[j + 1..];
     }
     if !rest.is_empty() {
         parts.push(jsonata_string(rest));
+    }
+    if !query.is_empty() {
+        parts.push(wire::jsonata_query_text(if url.contains('?') { "&" } else { "?" }, &query));
     }
     json!(format!("{{% {} %}}", parts.join(" & ")))
 }
@@ -1359,7 +1438,16 @@ pub fn lambda_handler(m: &Model, r: usize) -> (String, String) {
     let mut text = String::new();
     text.push_str(&m.head("#"));
     text.push_str(&format!("# The Lambda function the state machine calls for the rule {} v{} (sha256:{sha}).\n", ru.info.rule, ru.info.version));
-    text.push_str(&format!("# Deploy it together with {module}.py, which `rulec gen --target python` writes for the rule.\n\n"));
+    // the rule's module imports the module of each `enums` file it reads, beside it (DESIGN 28.8)
+    if ru.enums_modules.is_empty() {
+        text.push_str(&format!("# Deploy it together with {module}.py, which `rulec gen --target python` writes for the rule.\n\n"));
+    } else {
+        let mut files: Vec<String> = vec![format!("{module}.py")];
+        files.extend(ru.enums_modules.iter().map(|e| format!("{}.py", e.python)));
+        let last = files.pop().unwrap_or_default();
+        let read = if ru.enums_modules.len() == 1 { "the enums file it reads" } else { "the enums files it reads" };
+        text.push_str(&format!("# Deploy it together with {} and {last}, which `rulec gen --target python` writes for the rule and {read}.\n\n", files.join(", ")));
+    }
     if ru.info.inputs.iter().chain(&ru.info.outputs).any(|c| c.ty == crate::rulec::RType::Date) {
         text.push_str("import datetime\n\n");
     }

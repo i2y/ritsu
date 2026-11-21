@@ -3,7 +3,7 @@
 //!
 //! - [`tmp`]: a directory that removes itself, and the directories of test processes that
 //!   ended without removing theirs (and the servers they left running); the TMPDIR to hand a
-//!   program a test runs, under one.
+//!   program a test runs, under one; the ways the path of a file in it may be written.
 //! - [`tools`]: finding a program: `RITSU_<TOOL>`, the crate's own variable, a place in the
 //!   crate, the PATH.
 //! - [`run`]: running a program with a time limit (macOS has no `timeout`).

@@ -58,19 +58,19 @@ pub enum Carried {
 
 impl Carried {
     /// What a rule's input, output or field holds, as the rule's facts say it: an enum's values,
-    /// those its range lets in. A date has its range from [`crate::Rules::date_range`]: the facts do
-    /// not say it.
+    /// those its range lets in, and a date's range. The days of a koyomi date an input's range is
+    /// (`range from koyomi`) the facts do not say.
     pub fn of_column(facts: &RuleFacts, ty: &ColumnType) -> Carried {
         match ty {
             ColumnType::Bool => Carried::Bool,
             ColumnType::Str => Carried::Str,
-            ColumnType::Date => Carried::Date { min: None, max: None },
+            ColumnType::Date { min, max } => Carried::Date { min: *min, max: *max },
             ColumnType::Enum { name, range } => {
                 let values = facts.enums.iter().find(|e| &e.name == name).map(|e| &e.values[..]).unwrap_or(&[]);
                 let taken = values.iter().filter(|v| range.as_ref().is_none_or(|r| r.contains(&v.name)));
                 Carried::Enum { name: name.clone(), values: taken.map(|v| Spelled { written: v.name.clone(), public: v.public.clone() }).collect() }
             }
-            ColumnType::Num { written, unit, min, max } => Carried::Num { written: written.clone(), unit: unit.clone(), min: *min, max: *max },
+            ColumnType::Num { written, unit, min, max, .. } => Carried::Num { written: written.clone(), unit: unit.clone(), min: *min, max: *max },
             ColumnType::Opt(t) => Carried::Opt(Box::new(Carried::of_column(facts, t))),
         }
     }

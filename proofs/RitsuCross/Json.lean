@@ -121,6 +121,7 @@ def x2Line (j : Json) : Except String Json := do
   let pre ← match kind with
     | "relation" => pure (Pre.relation (← readOp (← (← jfield j "op").getStr?)) "left" "right")
     | "sum" => pure Pre.sum
+    | "count" => pure Pre.count
     | "length" => pure Pre.length
     | "unique" => pure Pre.unique
     | "days" => pure (Pre.days "input" (← ints (← jfield j "days")))

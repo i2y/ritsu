@@ -45,9 +45,7 @@ declare `inputs` and `outputs` with their units, write one `table` per decision,
 
 Two declarations are mandatory and are where most first drafts fail:
 
-- **`range` on every numeric input and every `derive`.** It is the universe the completeness
-  proof quantifies over, and the entry guard of the generated code. A rate may leave it out
-  and is then 0% to 100%, guard included; a rate that can go above 100% declares its range.
+- **`range` on every numeric input and every `derive`.** It is the universe the completeness proof quantifies over, and the entry guard of the generated code. `>=` and `<=` take the value they write, `>` and `<` leave it out, for the proof and the guard alike: `range >0JPY <100JPY` is 1 yen to 99 yen (§4 of the grammar). A rate may leave it out and is then 0% to 100%, guard included; a rate that can go above 100% declares its range.
 - **`round` on every numeric output**, an optional one (`money[JPY]?`) too. Without it the
   generated code would settle fractions silently.
 
@@ -65,6 +63,7 @@ A few shapes are worth knowing before the first draft:
   relation the caller guarantees. Completeness then demands no row for what it excludes, every
   witness becomes a case somebody could really send, and the generated code refuses a
   violating input at the door (§6.1 of the grammar).
+- **A `define` of a number may write the range the rule accepts for it.** `define subtotal : money[JPY] = quantity * price  range >=1JPY <=10_000_000JPY` refuses a call whose subtotal falls outside, where it is worked out, and what reads `subtotal` reads only the values inside (§6 of the grammar). It is the cap a `constraint` cannot write (a product, a rate of an amount: E017). A `derive`'s or an output's `range` is the other kind, what the value can come to, which `check` verifies; a `define`'s range that meets nothing the value reaches is E150.
 - **A combination that is not a comparison is written out.** `never has_tool = true, all_parts =
   true` says no call has all of these at once, each condition holding what a cell would, with `|`
   between the members of a set. It does what a `constraint` does. Over inputs read with `from`, or
@@ -87,11 +86,13 @@ A few shapes are worth knowing before the first draft:
   <column> = <value>` ends the walk with a number rather than with the answer, and the rule
   goes on as usual — so what turns "how many matched" into a class is an ordinary table, and
   its boundaries are checked like any other (§6.3). The `range` is required: it is the
-  universe the completeness check quantifies over **and** the cap on the sequence. `sum
-  <name>(<alias>) over <sequence> of <column>` ends it with a total instead, over a column
-  that cannot go negative, and `max`/`min` with the largest or the smallest. An average divides
-  inside a rounding: `half_up(total / max(n, 1), 1JPY)`. Folds and these mix freely, over any
-  number of sequences; one item reading the elements of two sequences is E031.
+  universe the completeness check quantifies over **and** the cap on the sequence. Its bottom is
+  held too: `range >=1 <=100` refuses a call in which nothing counts, an empty sequence among
+  them, and a `sum` that starts above zero refuses a total under it. Start at 0 unless the rule
+  really takes no such call (a range no sequence the rule takes comes to is E150). `sum <name>(<alias>) over <sequence> of <column>` ends it with a
+  total instead, over a column that cannot go negative, and `max`/`min` with the largest or the
+  smallest. An average divides inside a rounding: `half_up(total / max(n, 1), 1JPY)`. Folds and
+  these mix freely, over any number of sequences; one item reading two sequences' elements is E031.
 - **A field no two elements share.** `building : building  unique` at the end of a field of
   `elements`: the door refuses a sequence with two elements of one value of it, in every
   language. On an enum or a truth value it also caps a `sum` over the sequence at what each value
@@ -139,14 +140,14 @@ A few shapes are worth knowing before the first draft:
   `with term_end -> retirement_age`), definitions left out with `except reduction`, and outputs taken under a
   name (`allowance -> part_time_allowance`). The callee is expanded into the rule under `retirement:…`, held to
   its meaning, comments aside (E040, `rulec source pin` writes it), and what is passed has to stay inside its
-  ranges (E043). `check` and `doc` show the applied tables as the callee wrote them.
+  ranges (E043). `check` and `doc` show the applied tables as the callee wrote them. A table that reads an output of the callee beside the inputs passed to it is asked for rows only where the two come together.
 - **An input may say where the caller's object holds it.** `shape order = jsonschema
   "order.json" "#/$defs/Order"` borrows the contract the object is already described by, and
   `from` says where the value stands in it: `from order.shipping.zone`, `from any order.lines
   where chilled = true` (or `all`, `count`), `from sum order.lines of amount_usd`, `from max
   order.lines of amount_usd empty 0USD`; `elements lines from order.lines` takes a whole sequence.
   **It changes no check of the table**; what it buys is the glue generated, a renamed field
-  caught as E121, and a value the contract's validation lets through but the input refuses caught as E122 (§3.3 of the grammar).
+  caught as E121, and a value the contract's validation lets through but the input refuses caught as E122 — a `unique` field of a sequence taken from a contract among them, which no contract promises (§3.3 of the grammar).
 - **An input may be drawn.** `roll : number range >=0 <=99 random` says the caller draws it
   uniformly, and a `chances` table claims how likely each answer is (`1/1000`, `5%`, `<=1/100`);
   `check` counts it exactly and E133 says where a claim fails. `take_weighted <value> by <weight>`
@@ -165,9 +166,8 @@ A few shapes are worth knowing before the first draft:
 - **Enums can be ordered, labelled, shared and given prerequisites.** `enum tier = basic < silver`
   takes `>=silver`, `max` and `range`; `national "Rest of the country"` labels a value; an `enums`
   file holds enums rules `import enum … from`; `prerequisites <name> over <enum>` lists `start` and
-  a `requires` line per value, refusing cycles, unreachable values and a broken `ordered by`
-  (E136-E138).
-- **An input can say where hand-written code takes its value from.** `food : number  range >=0 <=60  fed by rulec "province_income.rule" output food` at the end of an input's line or of a field of `elements`, after a plain `from` if it has one; also a `chobo` account, a `koyomi` date, a `proto` field, an `openapi` or `jsonschema` property, a `dandori` output or record field, a `kaname` record field, or a place that took the value first (an `input` of a rule, a dates file or a workflow, a gate's `attribute` or `action … input`). `ritsu check` holds what the source can come to against what the input takes (E207, W207, E208); `rulec check` says only whether the form reads (E144). The hand-written code that carries the value is not checked, and generated code does not change.
+  a `requires` line per value, refusing cycles, unreachable values and a broken `ordered by` (E136-E138).
+- **An input can say where hand-written code takes its value from.** `food : number  range >=0 <=60  fed by rulec "province_income.rule" output food` at the end of an input's line or of a field of `elements`, after a plain `from` if it has one; also a `chobo` account, a `koyomi` date, a `proto` field, an `openapi` or `jsonschema` property, a `dandori` output or record field, a `kaname` record field, or a place that took the value first (an `input` of a rule, a dates file or a workflow, a gate's `attribute` or `action … input`). `ritsu check` holds what the source can come to against what the input takes (E207, W207, E208); `rulec check` says only whether the form reads (E144). The hand-written code that carries the value is not checked, and generated code does not change. Completeness reads such an input as free of the other inputs, since the line does not say what the source rule was given; an E101 that turns on one says so and points to `apply`.
 - **A date input can range over koyomi's days.** `range from koyomi "<file.cal>" date <name>`, checked by
   `ritsu rulec check`; `ritsu check` then holds a workflow's calls to the rule's `constraint`s (ritsu's E201).
 
@@ -178,7 +178,7 @@ column the output, the values an enum or a range, and each guess is marked `# gu
 correct: a numeric column is copied as equalities and is usually meant as thresholds, and no range,
 rounding or unit in it is decided. A date, a percentage and a unit from the cell's number format are
 read back out of it; a word that cannot be a name, or that a target language cannot take, is named
-for now (`c2`, `v1`, `Zone(zone)`), the word kept in its note. It saves the typing, not the reading.
+for now (`c2`, `v1`, `type(type_)`), the word kept in its note. It saves the typing, not the reading.
 
 Two habits pay for themselves once the claims are written:
 
@@ -216,7 +216,7 @@ The centre of the loop. One JSON object per finding
 |---|---|
 | `code` | decides the fix. `rulec explain <code>` if you do not recognise it |
 | `where.table`, `where.row` | which table and row, without parsing the sentence |
-| `witness.inputs` | a concrete input that exhibits the problem. **This is the thing to reason about** |
+| `witness.inputs` | a concrete input that exhibits the problem. **This is the thing to reason about**. On a value the rule computes it is absent where no input was found, and the notes give the combination |
 | `rows` | every row that takes part |
 | `fix.kind`, `fix.text` | the rewritten form, ready to paste — see the warning in §3 |
 | `notes` | prose, including the caveats that `fix.text` cannot carry |
@@ -231,15 +231,15 @@ the exit code — not whether the output looks empty.
 Every code is in `rulec explain --all` ([docs/codes.md](docs/codes.md)). The ones you will
 meet while transcribing:
 
-- **E101 completeness gap** — some input matches no row, and the witness names it. Add a row
-  that covers it, or mark the value `default` in the enum to let it fall through to a
-  catch-all. One row per run; run again for the next gap. A combination that cannot happen gets a
-  `never` line instead of a row with a made-up amount.
+- **E101 completeness gap** — some input matches no row. The notes name every part no row takes,
+  and `fix.text` holds the rows that take them, a `?` where each answers. Paste them and write
+  the answers from the source: one run closes the gap. Or mark the value `default` in the enum
+  to fall through to a catch-all. What cannot happen gets a `never` line, not a made-up row.
 - **E105 overlap** / **W105 shadowing** — two rows match the same input. Under `policy
   unique` that is an error; under `policy first` the earlier row wins and you are being asked
   whether that is intended.
 - **E102 unreachable row** — a row nothing can reach: earlier rows cover it, the upstream table
-  never produces its value, or a derive or a `define` (a boolean one too) never takes what it asks.
+  never produces its value (or only for inputs earlier rows take first), or a derive or a `define` (a boolean one too) never takes what it asks — off the grid a rounding puts it on, or over the inputs the row takes, where it reads them too.
 - **E103 unit mismatch** — you are adding or comparing values of different units, currencies
   or tax flags, or a heading's type is not its name's. The fix is a table, not a cast.
 - **E104 no rounding** / **E106 off the grid** — see §3.
@@ -253,7 +253,12 @@ meet while transcribing:
   digit raises the first two; `Under 18` transcribed as `<=18` raises the third, and nothing
   else catches that one. A value from elsewhere loses its citation and gains a comment saying so.
 - **E114 value off the column’s step** — `0.5%` in a `rate[step 1%]` column has no runtime
-  representation. Write a value on the step, or declare a finer step (`rate[step 0.1%]`).
+  representation. Write a value on the step, or declare a finer step (`rate[step 0.1%]`). A step
+  on a heading or a `define` holds its cells and values too: round, or declare the step taken.
+- **E151 an output nothing decides, or one read before it is decided** — decide every output (a
+  `->` column; a `define`, `derive`, `sum`, `count`, `max`, `min` or `fold` of its name; `result`)
+  above whatever reads it, and not from itself. **E152** is a heading with no `->`: the message
+  shows where the `->` goes.
 - **E022 / E023 / E024 a fold with a hole** — `empty` and `exhausted` are both required, and
   every verdict the table can produce needs an arm. The three are the completeness argument,
   applied to the walk.
@@ -326,15 +331,6 @@ out by a `constraint`, or naming a value the enum does not have is refused for t
 door gives, and is exit 0 with `refused` and `error` (an answer with `answer`). The inputs are the
 `in` of a vector, so a line of `rulec vectors` can be given as it is ([docs/formats.md](docs/formats.md)).
 
-### `rulec certificate <file.rule>`
-
-The evidence behind all five proofs, as one JSON object something other than rulec can re-check:
-the tree tiling the input space, the axis each pair of rows of a `unique` table parts on, a
-point reaching each row with its values, every computed value's interval and type, each output's
-range once rounded, and where each cell stands in the file. `tools/recheck.py` re-checks it with
-no dependencies; `proofs/` proves in Lean 4 that those checks imply the claims and runs them.
-`--rule <file>` ties it to that text, cell by cell ([docs/formats.md](docs/formats.md)).
-
 ### `rulec test generated/ --format json`
 
 Runs every language generated there over the vectors and compares them with the reference
@@ -385,6 +381,10 @@ it was not earned. Run it first: the region is what the whole rule does with the
 what the changed row says (a base fee a later table multiplies by 0% moves nobody). **With
 `--fixtures`** it answers how many of your records move and by how much, read as the old version
 reads them; inputs the new one does not take are listed apart. Run `fixtures lint` first, always.
+What a version **accepts** is listed above the region where it changed, and is a finding of its
+own (exit 1) even when every input both versions take gets the same answer: the range of an
+input, of a `sum`, a `count` or a `define`, and the range, the type or the `unique` of a field of
+an element (`lots[].fee  0..100 → 0..50`).
 
 A version is a file, a git tag (`parcel@v3` is `rules/parcel/v3`, else the revision `v3`), a path at a revision (on a
 PR, `rules/parcel.rule@origin/main`), or a dependency's rule: `@tax/vat.rule` at the lock's version, `@tax@1.0.0/vat.rule` from the
@@ -399,6 +399,15 @@ matter, and tell a person about the ones you cannot decide, since a row you cann
 `--at-most <n>` makes it a gate. `--claims-only` asks how far the claims alone go, and `--other <path>`
 writes a different table that keeps everything the file says, to compare with `rulec diff`.
 `--format json` is in [formats.md](docs/formats.md#strength).
+
+### For a checker other than rulec: `rulec certificate <file.rule>`
+
+The evidence behind all five proofs, as one JSON object something other than rulec can re-check:
+the tree tiling the input space, the axis each pair of rows of a `unique` table parts on, a
+point reaching each row with its values, every computed value's interval and type, each output's
+range once rounded, and where each cell stands in the file. `tools/recheck.py` re-checks it with
+no dependencies; `proofs/` proves in Lean 4 that those checks imply the claims and runs them.
+`--rule <file>` ties it to that text, cell by cell ([docs/formats.md](docs/formats.md)).
 
 ### For people: `rulec doc`
 
@@ -424,8 +433,11 @@ on every change; like the page for people, it is a product of the file, never a 
 
 ## 2. Language
 
-Output is English by default. `--lang ja` (or `RULEC_LANG=ja`) switches every surface —
-diagnostics, reports, the rendered document, the prose inside generated code — to Japanese.
+Output is English by default. `--lang ja` switches every surface — diagnostics, reports, the
+rendered document, the prose inside generated code — to Japanese. `RULEC_LANG=ja` (or
+`RITSU_LANG=ja`) switches what rulec prints, not what `gen`, `doc`, `api`, `vectors`, `schema` and
+`adapter` write: those follow `--lang` alone, so that one input writes the same files on every
+machine.
 Names and cell values come from the rule and are unchanged either way.
 
 Use the default for yourself. Use `--lang ja` for anything a Japanese-reading person will
@@ -457,9 +469,9 @@ intentionally has no row of its own"; `contract_only` on an input declares "this
 guards a range". Both are statements about the business. Using either because a warning was
 in the way makes the next reader believe something untrue.
 
-**Do not add a row with a made-up amount.** `fix.text` for E101 gives you the row's *shape*,
-with output values copied from the first row so that it parses. The amount has to come from
-the source. If you do not have it, that is a question for a person (§6), not a value to invent.
+**Do not add a row with a made-up amount.** `fix.text` for E101 gives the rows that close the
+gap with `?` where each answers, and a `?` left there does not pass (E063). The answer comes
+from the source; if you do not have it, that is a question for a person (§6).
 
 **Do not paper over E107 by changing the expected value.** Half the time the table is wrong.
 Decide from the source which side is.
@@ -490,7 +502,7 @@ A worked example. Ask for JSON, act on the fields, never on the sentence:
 
 ```console
 $ rulec check rules/parcel.rule --format json | jq -c 'select(.code=="E101") | {table:.where.table, witness:.witness.inputs, fix:.fix}'
-{"table":"base_rate","witness":{"dest":"overseas","size":"small","weight":1},"fix":{"kind":"add_row","text":"| overseas | small | 1lb | 6USD |"}}
+{"table":"base_rate","witness":{"dest":"overseas","size":"small","weight":1},"fix":{"kind":"add_row","text":"| overseas | small | - | ? |"}}
 ```
 
 The prose in `title` and `notes` is allowed to improve between versions; the codes and the
@@ -506,7 +518,7 @@ person can answer in a sentence. Convert the structured finding, not the prose.
 
 | what you have | what to ask |
 |---|---|
-| E101, `witness.inputs = {dest: overseas, size: small}` | "What is the fee for an overseas parcel of the small size?" |
+| E101, `fix.text` is `\| overseas \| small \| - \| ? \|` | "What is the fee for an overseas parcel of the small size? Is it the same whatever the weight?" |
 | E104 on output `fee`, notes saying the spread is 9 yen | "Which way should the fee be rounded? Rounding up or down changes it by up to 9 yen. Do the terms say?" |
 | E105 between rows 3 and 7 with different outputs | "Is this input 1,200 yen or 800 yen? It meets the conditions of both." |
 | W114 | "Can an order that meets both of these conditions at once exist?" |

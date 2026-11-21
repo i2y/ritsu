@@ -5,13 +5,19 @@
 //! re-checkers (tests/cert.rs, tests/lean.rs), the mutants' codes (tests/m0.rs) and the goldens —
 //! is not repeated here. These are the rest: the words the block reads by place, the shapes E071
 //! stops, the formatter, an `enums` file whose module holds the functions, a rule whose block is
-//! over an enum it reads from one, what `rulec gen` and `rulec api` say of the targets that have no
-//! room for the functions, a certificate that lies, and the pages.
+//! over an enum it reads from one, a block over an enum of one value, what `rulec gen` and `rulec api`
+//! say of the targets that have no room for the functions, a certificate that lies, and the pages.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::tmp::tmpdir_in;
 use ritsu_testkit::{Need, TempDir, ready, skip};
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -260,14 +266,9 @@ fn every_language_answers_a_block_in_an_enums_file_and_over_an_enum_read_from_on
     for f in ["python/certifications_runner.py", "go/certificationsrunner/main.go", "java/CertificationsRunner.java", "vectors/certifications.prereq.tsv"] {
         assert!(generated.join(f).exists(), "no {f}");
     }
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
-        .env("TMPDIR", tmpdir_in(&generated))
-        .args(["test", generated.to_str().unwrap()])
-        .output()
-        .expect("cannot start rulec test");
-    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-    assert!(o.status.success(), "{said}");
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&generated)).args(["test", generated.to_str().unwrap()]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
     for (rule, cases) in [("tech_tree", 0), ("certifications", 29)] {
         let langs: Vec<&str> = said.lines().filter(|l| l.starts_with(&format!("ok    {rule} (")) && l.contains(", prerequisites)")).collect();
         assert!(!langs.is_empty(), "{rule}: no language answered the prerequisites:\n{said}");
@@ -276,6 +277,30 @@ fn every_language_answers_a_block_in_an_enums_file_and_over_an_enum_read_from_on
         }
     }
     assert!(said.contains("note: SQL: tech_tree's prerequisites have no functions in this target, which has one entry, so none were compared"), "{said}");
+    for l in said.lines().filter(|l| l.starts_with("warning")) {
+        skip(l);
+    }
+}
+
+/// A block over an enum of one value: every language answers it as the reference does, without
+/// asking which value it is given. Ruby wrote a `case` with no `when`, which it cannot load.
+#[test]
+fn every_language_answers_a_block_over_an_enum_of_one_value() {
+    if !ready(Need::Python, || have("python3"), "no python3, so nothing was run") {
+        return;
+    }
+    let t = TempDir::new("prereq-one");
+    let generated = t.path().join("gen");
+    let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", "tests/one_value_block/single_course.rule", "--out", generated.to_str().unwrap()]));
+    assert_eq!(c, 0, "{e}");
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&generated)).args(["test", generated.to_str().unwrap()]), RULEC_LIMIT, "rulec test running the generated code");
+    let said = o.stdout.clone() + &o.stderr;
+    assert!(o.ok, "{said}");
+    let answered = said.lines().filter(|l| l.starts_with("ok    single_course (") && l.ends_with(", prerequisites) 2 prerequisite cases")).count();
+    assert!(answered > 0, "no language answered the prerequisites:\n{said}");
+    if have("ruby") {
+        assert!(said.contains("ok    single_course (Ruby, prerequisites) 2 prerequisite cases"), "{said}");
+    }
     for l in said.lines().filter(|l| l.starts_with("warning")) {
         skip(l);
     }

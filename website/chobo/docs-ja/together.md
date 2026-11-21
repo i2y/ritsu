@@ -105,7 +105,7 @@ Python の決済のコードは mypy が同じように止め（`Argument "to_sh
 エラー[ritsu E203]: booking.flow:18:1: タスク `give_seats` が `count` に渡す額が -20 になることがあり、chobo はその額を受け取りません
     18 |   give_seats(event: event, count: need.needed)
   = `need.needed` は規則 "seats.rule" の出力 `needed` で、event_kind = handback のとき -20 になります
-  = chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 9223372036854775807 までです。それ以外の額の呼び出しは、拒否されるのではなく失敗します。
+  = chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 2⁶³ − 1 までです。それ以外の額の呼び出しは、拒否されるのではなく失敗します。
   = 規則の返す額を 0 以上にしてください（負の額は、向きの違う振替に分けてください）。または、振替の前に `kind` を `match` で分け、`handback` の分岐では出力を振替に渡さないでください。
 ```
 

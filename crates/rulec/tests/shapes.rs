@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need, ready};
 use ritsu_testkit::tmp::tmpdir_in;
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -34,27 +35,39 @@ fn run(args: &[&str]) -> (i32, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 /// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
 /// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
 /// with that.
 fn run_tmp(tmp: &Path, args: &[&str]) -> (i32, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "ja")
-        .env("TMPDIR", tmp)
-        .current_dir(root())
-        .args(args)
-        .output()
-        .expect("rulec を起動できない");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout)
 }
 
 /// Write the rule, generate, and give back the output directory.
 fn generate(tag: &str, rule: &str) -> (TempDir, PathBuf) {
+    generate_but(tag, &[], rule)
+}
+
+/// [`generate`] for every target and extra but `but`: the targets a name of the rule cannot be
+/// written in, where W121 names it and E153 stops `gen` from writing anything (§15.335), and the
+/// extras only they have (`proof` is Rust's).
+fn generate_but(tag: &str, but: &[&str], rule: &str) -> (TempDir, PathBuf) {
     let t = TempDir::new(&format!("shapes-{tag}"));
     let dir = t.path().to_path_buf();
     let src = dir.join("r.rule");
     std::fs::write(&src, rule).unwrap();
-    let (c, out) = run(&rulec::targets::up_to_0_40(&["gen", &src.to_string_lossy(), "--out", &dir.to_string_lossy()]));
+    let mut args = vec!["gen".to_string(), src.to_string_lossy().into_owned(), "--out".to_string(), dir.to_string_lossy().into_owned()];
+    for pair in rulec::targets::UP_TO_0_40.chunks(2) {
+        if !but.contains(&pair[1]) {
+            args.extend(pair.iter().map(|x| x.to_string()));
+        }
+    }
+    let (c, out) = run(&args.iter().map(String::as_str).collect::<Vec<_>>());
     assert_eq!(c, 0, "{tag}: 生成できない:\n{out}");
     (t, dir)
 }
@@ -395,12 +408,13 @@ result 結果 = 中間
 /// that has to write such a name in backticks, and the rule is not the same at a call site
 /// — a keyword is taken there as it stands, and backticks around it are a warning.
 ///
-/// **Rust does not survive this shape today**, which is why it is not checked here: an alias
-/// of `where` reaches `pub fn keyword_demo(where: Gram, …)` and `rustc` refuses it. Raw
-/// identifiers (`r#where`) are the fix, and it is a separate change from this one.
+/// **Rust does not take this shape**, which is why it is not generated here: an alias of `where`
+/// would reach `pub fn keyword_demo(where: Gram, …)`, which `rustc` refuses. W121 names the alias
+/// for Rust and Wasm, and E153 stops `gen` from writing them while they are asked for
+/// (§15.335), so this asks for the other targets, and for the extras but Rust's `proof`.
 #[test]
 fn swiftの予約語に当たる別名でも生成物はコンパイルできる() {
-    let (_tmp, dir) = generate("keyword", "\
+    let (_tmp, dir) = generate_but("keyword", &["rust", "wasm", "proof"], "\
 rule 予約語(keyword_demo) v1
 description \"Swift の予約語に当たる別名を、入力・出力・列挙・グループ・表に書く\"
 
@@ -778,3 +792,190 @@ fn js_runs(dir: &Path, module: &str) {
         String::from_utf8_lossy(&o.stderr)
     );
 }
+
+/// A rule that reads no input: a table of one row with no input column, whose answer is always
+/// the same (a route that always goes to the requester's manager is lowered to one).
+const NO_INPUT: &str = "\
+rule fixed_route v1
+description \"Reads no input: the one row always answers\"
+
+enum way = manager \"manager\"
+
+outputs
+  decide : way
+
+table decide
+| -> decide |
+| manager   |
+";
+
+/// A runner given one record of no inputs, and what it writes back.
+fn answers(cmd: &mut Command, what: &str) -> String {
+    answers_to(cmd, what, 1)
+}
+
+/// A runner given `records` records of no inputs, and what it writes back.
+fn answers_to(cmd: &mut Command, what: &str, records: usize) -> String {
+    use std::io::Write;
+    let mut child = cmd
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap_or_else(|e| panic!("{what} を起動できない: {e}"));
+    child.stdin.take().unwrap().write_all("{\"in\":{}}\n".repeat(records).as_bytes()).unwrap();
+    let o = child.wait_with_output().unwrap();
+    assert!(o.status.success(), "{what} のランナーが走らない:\n{}", String::from_utf8_lossy(&o.stderr));
+    String::from_utf8_lossy(&o.stdout).into_owned()
+}
+
+/// The record function of a rule that reads no input takes the output, the trace and the tag
+/// alone, in TypeScript, Python and Rust, whose generated code `ritsu gen` puts in a package (and
+/// Go, whose takes an input struct of no fields), and the runners answer a record of no inputs.
+/// The three began the parameters with `, ` (`fixed_route_record(, out: Way, …)`), and so did the call
+/// of the Rust runner, which none of them reads; Rust could not tell the type of the empty list of
+/// the inputs, nor could mypy --strict.
+///
+/// Every other language and every extra is built and run too, and held to the reference evaluator by
+/// `rulec test` (§15.330). Swift, Java, PHP and Ruby (its `.rbs` too) began the record function and
+/// its call with the same `, `, the Go runner did not build for the record it never read (and the
+/// Rust and Ruby runners warned of it), the Python MCP server declared `tuple[]`, the SQLite runner's
+/// table and the PostgreSQL function's row of inputs ended in `, `, and NumPy answered no row at
+/// all (its runner now decides once and answers each record a log holds). `rulec api` said the
+/// record function of JavaScript, Ruby, PHP, Swift and Java with the `, `, and the `.proto` service
+/// and the adapter templates closed a sentence on the empty list of the inputs (`// Decides decide
+/// from .`, `# inputs: `), as the `.proto` of a rule that walks a sequence alone did (`// Decides
+/// ans from .`).
+#[test]
+fn 入力の無い規則も生成物はコンパイルできる() {
+    let (_tmp, dir) = generate("noinput", NO_INPUT);
+    let read = |p: &[&str]| std::fs::read_to_string(p.iter().fold(dir.clone(), |d, s| d.join(s))).unwrap();
+    let py = read(&["python", "fixed_route.py"]);
+    assert!(py.contains("def fixed_route_record(out: Way, trace: _Trace, tag: str = \"\") -> str:"), "{py}");
+    let ts = read(&["typescript", "fixed_route.ts"]);
+    assert!(ts.contains("export function fixed_route_record(out: Way, trace: Fired[], tag = \"\"): string {"), "{ts}");
+    let rs = read(&["rust", "fixed_route.rs"]);
+    assert!(rs.contains("pub fn fixed_route_record(out: Way, trace: &[Fired], tag: &str) -> String {"), "{rs}");
+    // the list of no inputs, of a type the checkers can tell
+    assert!(py.contains("    ins: list[str] = []\n"), "{py}");
+    assert!(rs.contains("    let ins = String::new();\n"), "{rs}");
+    // the SQL: the SQLite runner's table of no inputs, and the PostgreSQL function's row of them
+    let sqlite = read(&["sql", "fixed_route_runner.py"]);
+    assert!(sqlite.contains("db.execute('CREATE TABLE \"%s\" (\"_id\" INTEGER PRIMARY KEY)' % INPUT)"), "{sqlite}");
+    let function = read(&["sql", "fixed_route_function.sql"]);
+    assert!(function.contains("  SELECT 0 AS \"_id\"\n"), "{function}");
+    let want = "{\"in\":{},\"observed\":{\"decide\":\"manager\"},\"trace\":[{\"table\":\"decide\",\"row\":1}]}\n";
+    if ready(Need::Python, || have("python3"), "python3 が無いので Python 側を飛ばした") {
+        let got = answers(Command::new("python3").current_dir(dir.join("python")).arg("fixed_route_runner.py"), "Python");
+        assert_eq!(got, want);
+    }
+    // NumPy decides a rule that reads no input once, and answers every record with that answer
+    let numpy = || Command::new("python3").args(["-c", "import numpy"]).output().is_ok_and(|o| o.status.success());
+    if ready(Need::Python, numpy, "python3 に numpy が無いので NumPy 側を飛ばした") {
+        let got = answers_to(Command::new("python3").current_dir(dir.join("numpy")).arg("fixed_route_runner.py"), "NumPy", 2);
+        assert_eq!(got, want.repeat(2));
+    }
+    if ready(Need::Node, || have("node"), "node が無いので TypeScript 側を飛ばした") {
+        let got = answers(Command::new("node").current_dir(dir.join("typescript")).args(["--no-warnings", "fixed_route_runner.ts"]), "TypeScript");
+        assert_eq!(got, want);
+    }
+    if ready(Need::Rustc, || have("rustc"), "rustc が無いので Rust 側を飛ばした") {
+        let bin = dir.join("rust").join("fixed_route_runner.bin");
+        let o = Command::new("rustc")
+            .current_dir(dir.join("rust"))
+            .args(["--edition", "2021", "fixed_route_runner.rs", "-o"])
+            .arg(&bin)
+            .output()
+            .expect("rustc を起動できない");
+        let said = String::from_utf8_lossy(&o.stderr);
+        assert!(o.status.success(), "生成した Rust が通らない:\n{said}");
+        assert!(!said.contains("unused variable"), "Rust の runner が読まない値を名前に置いている:\n{said}");
+        let got = answers(&mut Command::new(&bin), "Rust");
+        assert_eq!(got, want);
+    }
+    if ready(Need::Ruby, || have("ruby"), "ruby が無いので Ruby の警告を見なかった") {
+        for f in ["fixed_route.rb", "fixed_route_runner.rb"] {
+            let o = Command::new("ruby").current_dir(dir.join("ruby")).args(["-wc", f]).output().expect("ruby を起動できない");
+            let said = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+            assert!(o.status.success() && said.trim() == "Syntax OK", "{f} を ruby -wc が通さないか、警告する:\n{said}");
+        }
+        if ready(Need::Ruby, || have("rbs"), "rbs が無いので Ruby の型の宣言を読まなかった") {
+            let o = Command::new("rbs").current_dir(dir.join("ruby")).args(["parse", "sig/fixed_route.rbs"]).output().expect("rbs を起動できない");
+            assert!(o.status.success(), "生成した .rbs を rbs が読めない:\n{}", String::from_utf8_lossy(&o.stderr));
+        }
+    }
+    go_builds(&dir, "fixedroute");
+    go_builds(&dir, "fixedrouterunner");
+    // what `rulec api` says each language's record function takes
+    let (c, api) = run(&["api", &dir.join("r.rule").to_string_lossy()]);
+    assert_eq!(c, 0, "{api}");
+    let api = rulec::json::parse(api.trim()).unwrap_or_else(|e| panic!("rulec api が JSON を書かない: {e}\n{api}"));
+    for (lang, want) in [
+        ("python", "def fixed_route_record(out: Way, trace: _Trace, tag: str = \"\") -> str:"),
+        ("typescript", "export function fixed_route_record(out: Way, trace: Fired[], tag = \"\"): string"),
+        ("javascript", "export function fixed_route_record(out, trace, tag = \"\")"),
+        ("rust", "pub fn fixed_route_record(out: Way, trace: &[Fired], tag: &str) -> String"),
+        ("ruby", "FixedRoute.fixed_route_record(out, trace, tag = \"\")"),
+        ("php", "function fixed_route_record(Way $out, array $trace, string $tag = ''): string"),
+        ("go", "func FixedRouteRecord(in Input, out Way, trace []Fired, tag string) string"),
+        ("swift", "func fixedRouteRecord(out: Way, trace: [Fired], tag: String = \"\") -> String"),
+        ("java", "public static String fixedRouteRecord(Way out, List<Fired> trace, String tag)"),
+    ] {
+        let got = api.get(lang).and_then(|l| l.get("record_signature")).and_then(rulec::json::Json::as_str);
+        assert_eq!(got, Some(want), "{lang} の記録の関数を rulec api がこう言わない");
+    }
+    // the `.proto` service and the adapter templates say the rule reads no input
+    let proto = read(&["proto", "rulec", "fixed_route", "v1", "fixed_route.proto"]);
+    assert!(proto.contains("  // Decides decide without reading an input.\n"), "{proto}");
+    for (template, said) in [
+        ("python", "  # inputs: none\n"),
+        ("go", "// Call the legacy implementation here. Inputs: none.\n"),
+        ("connect-python", "  # inputs: none. An integer in the declared unit"),
+    ] {
+        let (c, out) = run(&["adapter", &dir.join("r.rule").to_string_lossy(), "--template", template]);
+        assert_eq!(c, 0, "{template}: {out}");
+        assert!(out.contains(said), "{template} のテンプレートが入力の無いことをこう言わない:\n{out}");
+    }
+    // the MCP server reads the arguments as an object that holds none, and keeps no name for them
+    let mcp = TempDir::new("shapes-mcp");
+    let (c, out) = run(&["gen", &dir.join("r.rule").to_string_lossy(), "--target", "python", "--extra", "mcp", "--out", &mcp.path().to_string_lossy()]);
+    assert_eq!(c, 0, "{out}");
+    let server = std::fs::read_to_string(mcp.path().join("python/fixed_route_mcp.py")).unwrap();
+    assert!(server.contains("    _object(d, ())\n    return ()\n") && !server.contains("o = _object(d, ())"), "{server}");
+    // a rule that walks a sequence and reads no other input decides from the sequence
+    let walks = TempDir::new("shapes-walks");
+    let w = walks.path().join("w.rule");
+    std::fs::write(&w, WALKS_ONLY).unwrap();
+    let (c, out) = run(&["gen", &w.to_string_lossy(), "--target", "proto", "--out", &walks.path().to_string_lossy()]);
+    assert_eq!(c, 0, "{out}");
+    let proto = std::fs::read_to_string(walks.path().join("proto/rulec/walk_only/v1/walk_only.proto")).unwrap();
+    assert!(proto.contains("  // Decides ans from lines.\n"), "{proto}");
+    // every language and every extra, held to the reference evaluator
+    agrees_everywhere("noinput", &dir);
+}
+
+/// A rule that reads one sequence and no other input.
+const WALKS_ONLY: &str = "\
+rule walk_only v1
+description \"Reads one sequence and no other input\"
+
+enum verdict_kind = take | skip
+
+elements lines
+  amt : money[JPY]  range >=0JPY <=1000JPY
+
+outputs
+  ans : money[JPY]  round down(1JPY)
+
+table decide
+policy unique
+| amt       | -> verdict : verdict_kind |
+| >=500JPY  | take                      |
+| <500JPY   | skip                      |
+
+fold verdict over lines
+  take -> stop with amt
+  skip -> next
+  empty -> 0JPY
+  exhausted -> 0JPY
+";

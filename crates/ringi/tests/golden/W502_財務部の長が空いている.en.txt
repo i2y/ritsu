@@ -1,0 +1,12 @@
+warning[W502]: tests/mutants/W502_財務部の長が空いている.ringi:9:15: In the organization from 2026-04-01, the stage `確かめ` goes elsewhere or is skipped for lack of an approver
+     9 |   確かめ(check)  部長
+  = `部長` comes to the team finance (Finance), whose head is empty.
+  = The stage is `when empty escalate`, and it goes up.
+  = It goes up to e01 (President (fictional)) for 1 requester: e04 (Head of Finance).
+  = Correct the data of the version, or make sure this is meant.
+ok tests/mutants/W502_財務部の長が空いている.ringi: a request, 1 field, 1 stage
+  used from 2026-04-01: the first version of the organization `shared/空席のある会社.ringi` (data `org-vacant`)
+  used with no end: no data it reads ends
+  may never end: the stage `確かめ` has no deadline (`due in …`), and waits until it is answered
+  requesters whose stages (`確かめ`) go elsewhere or are skipped by the shape of the organization: 1 of 4 in the organization from 2026-04-01
+  who they are, and where their stages go: `ringi simulate tests/mutants/W502_財務部の長が空いている.ringi --every-requester`

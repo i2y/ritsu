@@ -1,0 +1,4 @@
+error[E405]: tests/mutants/E405_a_void_on_a_condition.ringi:17:23: The hold `budget.reserve` is left neither posted nor voided when the ticket is `rejected`
+    17 |   on submitted   hold budget.reserve(request: ticket.id, attempt: ticket.attempt, dept: dept, amount: amount)
+  = The `void` on line 19 is done on `rejected` only `when amount > 10_000JPY`, and the hold is made whatever the form holds.
+  = Add a `post` or a `void` line for it, as in `on rejected  void budget.reserve(…)`.

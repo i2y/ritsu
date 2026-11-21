@@ -1,0 +1,88 @@
+workflow 入れ直した変数の範囲 v1
+description "二か所以上で値を入れる変数は、渡すところでは、そこに届く実行が最後に入れた値である。別の来かたで入れた値は、そこでは数えない"
+
+use rule 送料 from "rules/会員段階の送料.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:member-tier-shipping"
+
+inputs
+  速達     : bool
+  少し     : int   range >=1 <=10
+  たくさん : int   range >=1 <=100
+  範囲なし : int
+  前半     : date  range >=2026-01-01 <=2026-06-30
+  後半     : date  range >=2026-07-01 <=2026-12-31
+  広い     : 送料.段階
+  狭い     : 送料.段階  range >=一般 <=シルバー
+  ほかの数 : list[int]
+
+outputs
+  済み : bool
+
+task 詰める(個数: int  range >=1 <=10)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:pack"
+  idempotent
+
+task 出荷する(日: date  range >=2026-01-01 <=2026-06-30)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:ship"
+  idempotent
+
+task 札を貼る(段階: 送料.段階  range >=一般 <=シルバー)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:label"
+  idempotent
+
+task 数える() -> int
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:count"
+  idempotent
+
+flow
+  # もう一方の分岐が `n` に広い数を入れる。この分岐では、まだ最初の数である
+  let n = 少し
+  match 速達
+    true => 詰める(個数: n)
+    false =>
+      let n = たくさん
+      # ここでは広いほうの数である
+      詰める(個数: n)
+  # 分岐を出ると、どちらにもなる
+  詰める(個数: n)
+  # 片方の来かたでだけ範囲の無い数：もう片方では、分からないことは無い
+  let m = 少し
+  match 速達
+    true =>
+      let m = 範囲なし
+      詰める(個数: m)
+    false => 詰める(個数: m)
+  # 別の変数を入れた変数は、そこでのその変数の値である
+  let k = たくさん
+  match 速達
+    true =>
+      let k = 少し
+      let 写し = k
+      詰める(個数: 写し)
+    false => pass
+  # 日付も同じ
+  let d = 前半
+  match 速達
+    true => 出荷する(日: d)
+    false =>
+      let d = 後半
+      出荷する(日: d)
+  # 列挙の値も同じ
+  let s = 狭い
+  match 速達
+    true => 札を貼る(段階: s)
+    false =>
+      let s = 広い
+      札を貼る(段階: s)
+  # タスクの結果を入れた変数：そこからは、タスクが返す値である
+  let c = 少し
+  詰める(個数: c)
+  let c = 数える()
+  詰める(個数: c)
+  # ループの回が値を入れる変数は、ループの中でもあとでも追わない
+  let t = 少し
+  for ほか in ほかの数 at most 5
+    詰める(個数: t)
+    let t = ほか
+  詰める(個数: t)
+  succeed 済み = true

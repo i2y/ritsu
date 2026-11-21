@@ -1,0 +1,3 @@
+error[E001]: tests/mutants/E001_a_request_with_no_ticket.ringi:1:1: A file of the kind `request` needs `ticket`
+     1 | request example v1 "Example"
+  = A request's file holds `description`, `owner`, `effective from`, `use`, `form`, `route`, `who`, `every stage`, `table`, `ticket`, `claims`, `examples`, `scenario` and `labels`, in this order (the first three in any order).

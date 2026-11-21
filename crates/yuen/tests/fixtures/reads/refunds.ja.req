@@ -1,0 +1,58 @@
+requirements 返金 v1
+description "返金の窓口が答えること。リンクが指すファイルが読むファイルまで辿る yuen affected の試験のために書いた"
+
+role 経理 "誰が何を返金するかを決める"
+
+requirement 返金の区分(bands_of_a_refund)
+  text "20 点までの返金は少数、それより多いものは多数"
+  owner 経理
+  decided 2026-11-02 by 経理 "この試験のために書いた"
+  satisfied by rulec "rules/refund_band.ja.rule" table 区分を決める
+    reviewed 2026-11-02 by 経理 sha256:248c88cddbf48e02 -> sha256:ce7cab4132fa9d11
+  not verified "affected の試験は主張を読まない"
+    approved 2026-11-02 by 経理 sha256:248c88cddbf48e02
+
+requirement 返金できる人(who_refunds)
+  text "係は期間内に少数を返金できる"
+  owner 経理
+  decided 2026-11-02 by 経理 "この試験のために書いた"
+  satisfied by sekisho "gates/refunds.ja.gate" policy 係は期間内に少数を返金できる
+    reviewed 2026-11-02 by 経理 sha256:6ac47cf40491b6c6 -> sha256:a663caa5787ab52e
+  not verified "affected の試験は主張を読まない"
+    approved 2026-11-02 by 経理 sha256:6ac47cf40491b6c6
+
+requirement 返金の期間(refund_period)
+  text "返金は、支払いから 30 日のうちか、そのあと事務所が開く最初の日までに申し出る"
+  owner 経理
+  decided 2026-11-02 by 経理 "この試験のために書いた"
+  satisfied by koyomi "dates/refund_terms.ja.cal" date 最終日
+    reviewed 2026-11-02 by 経理 sha256:5b2f459a5763adcf -> sha256:ccb62bee039469da
+  not verified "affected の試験は主張を読まない"
+    approved 2026-11-02 by 経理 sha256:5b2f459a5763adcf
+
+requirement 返金の申し出(refund_api)
+  text "返金は、注文と点数を添えて申し出る"
+  owner 経理
+  decided 2026-11-02 by 経理 "この試験のために書いた"
+  satisfied by openapi "api/refunds.yaml" operation refundOrder
+    reviewed 2026-11-02 by 経理 sha256:04ccd3527e6d4d6a -> sha256:35921eff5d5ce67d
+  not verified "affected の試験は主張を読まない"
+    approved 2026-11-02 by 経理 sha256:04ccd3527e6d4d6a
+
+requirement 返金のメッセージ(refund_messages)
+  text "返金のサービスは金額をお金の型で受ける"
+  owner 経理
+  decided 2026-11-02 by 経理 "この試験のために書いた"
+  satisfied by proto "proto/refunds.proto" service RefundService
+    reviewed 2026-11-02 by 経理 sha256:3c5ff3c86f00be2b -> sha256:295a59522a8c12d7
+  not verified "affected の試験は主張を読まない"
+    approved 2026-11-02 by 経理 sha256:3c5ff3c86f00be2b
+
+requirement 返金の言葉(refund_words)
+  text "窓口は、返品の点数で返金を少数か多数と呼ぶ"
+  owner 経理
+  decided 2026-11-02 by 経理 "この試験のために書いた"
+  satisfied by sakai "contexts/desk.ja.ctx" term 区分
+    reviewed 2026-11-02 by 経理 sha256:8531736dee5637a7 -> sha256:1a729804d5732770
+  not verified "affected の試験は主張を読まない"
+    approved 2026-11-02 by 経理 sha256:8531736dee5637a7

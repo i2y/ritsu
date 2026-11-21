@@ -1,0 +1,37 @@
+エラー[E012]: `numbr` という型はありません
+  --> chain_reads.rule:8
+  |
+8 |   limit(limit) : numbr  range >=0 <=10
+  |                  ^^^^^
+  |
+ `number` のことですか。
+ 型は `number`・`rate`・`bool`・`string`・`date`・単位の型（`money[円]`・`mass[kg]` など）か、このファイルの列挙です。このファイルの列挙は `size` です。
+ `numbr` は 14 行目にも書かれています。
+
+エラー[E103]: `UDS` は money の単位ではありません
+  --> chain_reads.rule:26
+   |
+26 |   fee(fee) : money[UDS]  round up(1USD)  range >=0USD <=100USD
+   |              ^^^^^^^^^^
+   |
+ 金額の単位は 円（JPY と同じ） 銭（円の 1/100）、または ISO 4217 のコード USD EUR GBP CHF CAD AUD NZD CNY HKD SGD KRW INR TWD THB SEK NOK DKK PLN CZK HUF TRY BRL MXN ZAR AED SAR ILS PHP IDR MYR VND（その 1/100 はコードに c を付ける。USD と USDc） です。
+ `money[UDS]` は 30 行目にも書かれています。
+
+エラー[E012]: `sizee` という型はありません
+  --> chain_reads.rule:13
+   |
+13 |   kind(kind) : sizee
+   |                ^^^^^
+   |
+ `size` のことですか。
+ 型は `number`・`rate`・`bool`・`string`・`date`・単位の型（`money[円]`・`mass[kg]` など）か、このファイルの列挙です。このファイルの列挙は `size` です。
+
+エラー[E012]: `mas` という型はありません
+  --> chain_reads.rule:15
+   |
+15 |   weight(weight) : mas[g]  range >0g <30001g
+   |                    ^^^
+   |
+ `mass` のことですか。
+ 型は `number`・`rate`・`bool`・`string`・`date`・単位の型（`money[円]`・`mass[kg]` など）か、このファイルの列挙です。このファイルの列挙は `size` です。
+

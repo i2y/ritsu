@@ -1,0 +1,16 @@
+rule 品番(sku) v1
+description "品番の頭で決める便。どの前置きでも始まらない品番の行が無く、それを指すセルは書けない"
+
+enum 便(lane) = 冷凍(frozen) | 冷蔵(chilled) | 常温(dry)
+
+inputs
+  品番(code) : string
+
+outputs
+  便(lane) : 便
+
+table 便の表(lanes)
+policy first
+| 品番                     | -> 便 |
+| starts_with "FZ-"        | 冷凍  |
+| starts_with "CH-", "CL-" | 冷蔵  |

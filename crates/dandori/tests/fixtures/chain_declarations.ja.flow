@@ -1,0 +1,33 @@
+workflow 宣言の誤り v1
+description "誤りのある宣言と、宣言したものを使う行。chain_declarations.flow の日本語の版"
+
+record 見積
+  合計 : int
+
+inputs
+  ID   : strng
+  種類 : string
+
+outputs
+  合計 : int
+  札   : 札の種類
+
+# 答えの型を書き誤ったので、タスクは無いことになる
+task 取得(ID: string) -> 見積り
+
+# 引数の型を書き誤ったので、タスクにその引数は無い
+task 尋ねる(ID: string, 役: 役割)
+
+# 同じステータスのエラーが二つあり、二つ目はタスクのエラーにならない
+task 取り消す(ID: string)
+  http POST "https://example.com/cancel"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/example/1"
+  errors 無い = 410, 遅い = 410
+  idempotent
+
+flow
+  let 見 = 取得(ID: 種類)
+  尋ねる(ID: 種類, 役: 種類)
+  取り消す(ID: ID)
+    on 遅い => pass
+  succeed 合計 = 見.合計, 札 = 種類

@@ -58,7 +58,7 @@ pub(crate) const ROWS: usize = 50;
 /// `ritsu mod report`: the exit code. `--base` is required, and this function is the one to say so.
 pub fn report(ctx: &Ctx, a: &Args) -> u8 {
     let Some(base) = a.get("--base") else {
-        return ctx.refuse(tr!("`--base <git の版>`（比べる前の版）を付けてください", "`--base <revision>` is required: the revision to compare with"));
+        return ctx.refuse(super::cli::table().needs_of("report", "--base <revision>"));
     };
     let budget = match diff::budget_of(a) {
         Ok(b) => b,
@@ -422,8 +422,9 @@ pub(crate) fn check_ran(files: Option<Rc<dyn Files>>, root: &Path, lang: Lang, r
     }
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let code = diff::within(files, || run(&mut out, &mut err));
-    let head = if lang == Lang::Ja { "エラー: " } else { "error: " };
-    let mut said: Vec<Text> = String::from_utf8_lossy(&err).lines().filter(|l| !l.trim().is_empty()).map(|l| Text::same(l.strip_prefix(head).unwrap_or(l))).collect();
+    // the head every refusal of ritsu's starts with (ritsu-base's `cli::refusal`), taken off
+    let head = format!("{}: ", ritsu_base::diag::Severity::Error.word(lang));
+    let mut said: Vec<Text> = String::from_utf8_lossy(&err).lines().filter(|l| !l.trim().is_empty()).map(|l| Text::same(l.strip_prefix(head.as_str()).unwrap_or(l))).collect();
     if said.is_empty() && code > 1 {
         said.push(tr!("`ritsu check` がモジュールを検査できませんでした", "`ritsu check` could not check the module"));
     }

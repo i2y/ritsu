@@ -253,6 +253,10 @@ awk '{ sub(/^  注文日\(order_date\) : date/, "  range(order_date) : date"); p
 awk '{ print } /^  注文日\(order_date\)/ { print ""; print "derive 差(gap) : date = 注文日 - 注文日  range >=2026-01-01 <=2026-12-31" }' "$k" > "$M/m_e048.rule"
 # A word after the range that belongs to no modifier. It used to be dropped in silence.
 awk '{ sub(/range >=1cm <=170cm/, "range >=1cm <=170cm incl_tax"); print }'         "$y" > "$M/m_e047.rule"
+# `round` written twice on the output: the first used to win in silence (§15.348). In English
+# and in Japanese.
+awk '{ sub(/round down\(1JPY\)/, "round down(1JPY)  round up(1JPY)"); print }'   "$C/single_coupon.rule" > "$M/m_e155.rule"
+awk '{ sub(/round up\(10円\)/, "round up(10円)  round down(10円)"); print }'         "$y" > "$M/m_e155ja.rule"
 # A threshold copied the way the document prints it, with a thousands separator. `,` separates
 # the members of a set, so it used to read as two values and pass (§15.143).
 awk '{ sub(/\| 遠隔地      \| <=2000g \|/, "| 遠隔地      | <=2,000g |"); print }'        "$C/送料.rule" > "$M/m_e049.rule"
@@ -333,16 +337,19 @@ awk '{ sub(/down\(min\(素割引, 上限額\), 1円\)/, "down(min(素割引), 1�
 # generated Rust reads `pub fn … (type: i64, …)` — measured, it does not compile (§15.103).
 awk '{ sub(/^  区分\(kind\)/, "  区分(type)"); print }' "$C/ポイント付与.rule" > "$M/m_w121.rule"
 # A rule named like an enum it declares (§15.239): Go puts the rule's function `Tier` and the enum's
-# type `Tier` in one package, and Java nests the enum `Tier` in the class `Tier`. The English rule,
-# and its Japanese version beside it.
+# type in one package, and Java nests the enum in the class `Tier`, so both write the enum's type as
+# `Tier2`, which W121 says (§15.326, §15.337). The English rule, and its Japanese version beside it.
 awk '/^rule member_tier_shipping v1$/ { $0 = "rule tier v1" } { print }' "$C/member_tier_shipping.rule" > "$M/m_w121rule.rule"
 awk '/^rule 会員段階の送料\(tier_shipping\) v1$/ { sub(/\(tier_shipping\)/, "(tier)") } { print }' "$C/会員段階の送料.rule" > "$M/m_w121ruleja.rule"
 
 # --- Two names some language spells as one identifier, and a name a language cannot take
 # (§15.263): the margin given an alias Swift and Java spell as they spell `rate_off`, one SQLite reads
-# as its column, the two given long aliases PostgreSQL cuts to one, and the margin given an alias
-# Ruby reads as a constant. And a kind of coupon given an alias every language writes as the member
-# of another kind (E034). The English rule, and its Japanese version beside it.
+# as its column, the two given long aliases PostgreSQL cuts to one, and the rule given an alias that
+# names Go's file of it with `_` first, which the go command leaves out of the package (§15.336).
+# And a kind of coupon given an alias every language writes as the member of another kind (E034),
+# and the kind `free_ship` spelled `self`, which Rust writes as the variant `Self`, the keyword for
+# the type itself (the Japanese version gives the kind the alias `self`, a keyword of Rust's, which
+# the W121 of an alias says). The English rule, and its Japanese version beside it.
 sc="$C/single_coupon.rule"
 scj="$C/クーポン一枚.rule"
 long="the_part_of_the_order_left_once_the_discounts_already_taken_are_off"
@@ -352,20 +359,25 @@ awk '{ sub(/^derive margin :/, "derive margin(rate_OFF) :"); print }'           
 awk '{ sub(/^derive 残余\(margin\)/, "derive 残余(rate_OFF)"); print }'                               "$scj" > "$M/m_w121caseja.rule"
 awk -v l="$long" '{ sub(/^derive margin :/, "derive margin(" l "_margin) :"); sub(/^define rate_off :/, "define rate_off(" l "_rate) :"); print }' "$sc" > "$M/m_w121long.rule"
 awk -v l="$long" '{ sub(/^derive 残余\(margin\)/, "derive 残余(" l "_margin)"); sub(/^define 率割引\(rate_off\)/, "define 率割引(" l "_rate)"); print }' "$scj" > "$M/m_w121longja.rule"
-awk '{ sub(/^derive margin :/, "derive margin(Margin) :"); print }'                                  "$sc"  > "$M/m_w121ruby.rule"
-awk '{ sub(/^derive 残余\(margin\)/, "derive 残余(Margin)"); print }'                                 "$scj" > "$M/m_w121rubyja.rule"
+awk '/^rule single_coupon v1$/ { $0 = "rule single_coupon(_single_coupon) v1" } { print }'         "$sc"  > "$M/m_w121gofile.rule"
+awk '/^rule クーポン一枚\(coupon_step\) v1$/ { sub(/\(coupon_step\)/, "(_coupon_step)") } { print }'  "$scj" > "$M/m_w121gofileja.rule"
 awk '/^enum coupon_kind = / { sub(/ fixed /, " fixed(Percent) ") } { print }'                       "$sc"  > "$M/m_e034member.rule"
 awk '/^enum クーポン種別\(coupon_kind\) = / { sub(/額引き\(fixed\)/, "額引き(Percent)") } { print }' "$scj" > "$M/m_e034memberja.rule"
+awk '/^enum coupon_kind = / { sub(/ free_ship$/, " self") } /^\|/ { gsub(/free_ship/, "self     ") } { print }' "$sc" > "$M/m_w121self.rule"
+awk '/^enum クーポン種別\(coupon_kind\) = / { sub(/送料無料\(free_ship\)/, "送料無料(self)") } { print }' "$scj" > "$M/m_w121selfja.rule"
 
-# --- A name the generated code of some language uses itself (§15.265): the kind of coupon given an
-# alias nine languages and the `.proto` declare the answer of a rule of two outputs as (`Output`),
-# and the raw discount given the alias of the field the `.proto`'s answer carries the rows that
-# matched in (`trace`). And a sequence, and a field of one element, whose alias fell off (E011). The
+# --- A name the generated code of some language shows its callers (§15.265): the kind of coupon
+# given an alias nine languages and the `.proto` declare the answer of a rule of two outputs as
+# (`Output`), and the raw discount given the alias of the field the `.proto`'s answer carries the
+# rows that matched in (`trace`), and the alias `_`, which no struct or record of the answer takes
+# as a field (§15.336). And a sequence, and a field of one element, whose alias fell off (E011). The
 # English rule, and its Japanese version beside it.
 awk '{ sub(/^enum coupon_kind =/, "enum coupon_kind(output) ="); print }'                            "$sc"  > "$M/m_w121own.rule"
 awk '{ sub(/^enum クーポン種別\(coupon_kind\) =/, "enum クーポン種別(output) ="); print }'          "$scj" > "$M/m_w121ownja.rule"
 awk '{ sub(/^  raw : /, "  raw(trace) : "); print }'                                                "$sc"  > "$M/m_w121owntrace.rule"
 awk '{ gsub(/素割引\(raw\)/, "素割引(trace)"); print }'                                         "$scj" > "$M/m_w121owntraceja.rule"
+awk '{ sub(/^  raw : /, "  raw(_) : "); print }'                                                    "$sc"  > "$M/m_w121blank.rule"
+awk '{ gsub(/素割引\(raw\)/, "素割引(_)"); print }'                                             "$scj" > "$M/m_w121blankja.rule"
 awk '{ sub(/^elements 明細\(lines\)$/, "elements 明細"); print }'                                   "$C/買物かごの送料.rule" > "$M/m_e011seq.rule"
 awk '{ sub(/^  金額\(amount\) :/, "  金額 :"); print }'                                             "$C/買物かごの送料.rule" > "$M/m_e011seqfield.rule"
 
@@ -405,6 +417,32 @@ awk '{ sub(/max\(個数, 1\)/, "個数"); print }'         "$C/平均単価.rule
 # It read as no range at all, and the divisor that reads it was said to reach zero.
 awk '{ sub(/range >=0 <=1000$/, "range"); print }'    "$C/average_unit_price.rule" > "$M/m_e149.rule"
 awk '{ sub(/range >=0 <=1000$/, "range"); print }'    "$C/平均単価.rule"           > "$M/m_e149ja.rule"
+# --- The range a rule accepts for a value it works out (§15.313). The English rule first, its
+# Japanese version beside it.
+# A range that meets nothing the fee reaches: 3% of at most 1,000,000 yen is never 40,000 yen.
+awk '{ sub(/range >=0JPY <=20_000JPY$/, "range >=40_000JPY"); print }'      "$C/card_fee.rule"     > "$M/m_e150.rule"
+awk '{ sub(/range >=0円 <=20000円$/, "range >=40000円"); print }'            "$C/カード手数料.rule" > "$M/m_e150ja.rule"
+# The same of a `sum` (§15.314). A bottom no basket comes to: five lines of 50,000 yen at most are
+# 250,000 yen, under 300,000 yen.
+awk '{ sub(/range >=500JPY <=100_000JPY$/, "range >=300_000JPY <=1_000_000JPY"); print }' "$C/gift_basket.rule"   > "$M/m_e150sum.rule"
+awk '{ sub(/range >=500円 <=100000円$/, "range >=300000円 <=1000000円"); print }'          "$C/贈り物のかご.rule" > "$M/m_e150sumja.rule"
+# A top every basket is past: a line of 200,000 yen at least, and a basket has one line at least.
+awk '{ sub(/range >=0JPY <=50_000JPY$/, "range >=200_000JPY <=500_000JPY"); print }'      "$C/gift_basket.rule"   > "$M/m_e150top.rule"
+awk '{ sub(/range >=0円 <=50000円$/, "range >=200000円 <=500000円"); print }'              "$C/贈り物のかご.rule" > "$M/m_e150topja.rule"
+# The top end moved down by one yen: the example at 666,699 yen works out a fee of 20,000 yen,
+# which the rule no longer takes.
+awk '{ sub(/range >=0JPY <=20_000JPY$/, "range >=0JPY <=19_999JPY"); print }' "$C/card_fee.rule"     > "$M/m_e019define.rule"
+awk '{ sub(/range >=0円 <=20000円$/, "range >=0円 <=19999円"); print }'       "$C/カード手数料.rule" > "$M/m_e019defineja.rule"
+# The range written in plain numbers on a fee of yen.
+awk '{ sub(/range >=0JPY <=20_000JPY$/, "range >=0 <=20_000"); print }'      "$C/card_fee.rule"     > "$M/m_e103define.rule"
+awk '{ sub(/range >=0円 <=20000円$/, "range >=0 <=20000"); print }'          "$C/カード手数料.rule" > "$M/m_e103defineja.rule"
+# A row for a fee past 20,000 yen, which no call the rule takes comes to.
+awk '{ print } /^\| >=10_000JPY \| true      \|$/ { print "| >20_000JPY  | true      |" }' "$C/card_fee.rule"     > "$M/m_e102define.rule"
+awk '{ print } /^\| >=10000円 \| true    \|$/ { print "| >20000円  | true    |" }'       "$C/カード手数料.rule" > "$M/m_e102defineja.rule"
+# The range taken off the total of the two dice: the rolls of 11 and 12 are answered, and the
+# chances written for the 33 rolls the rule took no longer hold.
+awk '{ sub(/  range <=10$/, ""); print }'                                    "$C/dice_total.rule"   > "$M/m_e133define.rule"
+awk '{ sub(/  range <=10$/, ""); print }'                                    "$C/さいころの合計.rule" > "$M/m_e133defineja.rule"
 # The argument of `isqrt` let go below zero: the yearly demand taken off what is under the root.
 awk '{ sub(/isqrt\(quantity_squared\)/, "isqrt(quantity_squared - yearly_demand)"); print }' "$C/economic_order_quantity.rule" > "$M/m_e139.rule"
 awk '{ sub(/isqrt\(発注量の二乗\)/, "isqrt(発注量の二乗 - 年間の需要)"); print }'          "$C/経済的発注量.rule"            > "$M/m_e139ja.rule"
@@ -544,6 +582,21 @@ awk '{ print } /^  once    返金額 >0円$/ { print "  possible 配達済" }'  
 # Outside the machine: one call that has both, and the table never gives it
 awk '{ print } /^possible fee > 100USD, tier = basic$/ { print "possible tier = basic, approved = true" }' "$C/repair_quote.rule"   > "$M/m_e146_call.rule"
 awk '{ print } /^possible 料金 > 100USD, 区分 = 普通$/ { print "possible 区分 = 普通, 承認 = true" }'        "$C/修理の見積り.rule" > "$M/m_e146_callja.rule"
+# --- What decides each output (§15.323). The English rule first, its Japanese version beside it.
+# The `result` line of the charged amount taken out: nothing decides it.
+awk '!/^result charged = fee$/'                                                     "$C/card_fee.rule"     > "$M/m_e151.rule"
+awk '!/^result 請求額 = 手数料$/'                                                    "$C/カード手数料.rule" > "$M/m_e151ja.rule"
+# The review read from the charged amount, which only the `result` line below decides.
+awk '{ sub(/^\| fee +\| -> review +\|$/, "| charged | -> review |"); print }'       "$C/card_fee.rule"     > "$M/m_e151result.rule"
+awk '{ sub(/^\| 手数料 +\| -> 確認 +\|$/, "| 請求額 | -> 確認 |"); print }'           "$C/カード手数料.rule" > "$M/m_e151resultja.rule"
+# The `->` of the review table left out: the review is read as a condition, and nothing decides it.
+awk '{ sub(/^\| fee +\| -> review +\|$/, "| fee | review |"); print }'             "$C/card_fee.rule"     > "$M/m_e152.rule"
+awk '{ sub(/^\| 手数料 +\| -> 確認 +\|$/, "| 手数料 | 確認 |"); print }'               "$C/カード手数料.rule" > "$M/m_e152ja.rule"
+# --- A rounding mode that is none of the five (§15.341): the raw discount rounded `half`, and in the
+# Japanese version `切り捨て`, the common name of `down`. The English rule first, its Japanese
+# version beside it.
+awk '{ sub(/^  raw : money\[JPY, incl_tax\]  round down\(1JPY\)$/, "  raw : money[JPY, incl_tax]  round half(1JPY)"); print }'   "$C/single_coupon.rule" > "$M/m_e154.rule"
+awk '{ sub(/^  素割引\(raw\) : money\[円, incl_tax\]  round down\(1円\)$/, "  素割引(raw) : money[円, incl_tax]  round 切り捨て(1円)"); print }' "$C/クーポン一枚.rule" > "$M/m_e154ja.rule"
 
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 

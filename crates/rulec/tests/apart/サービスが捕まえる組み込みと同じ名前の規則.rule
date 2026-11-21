@@ -1,0 +1,14 @@
+rule 期日の手数料(value_error) v1
+description "規則が日付を読むときに Connect のサービスが捕まえる組み込みと同じ名前の規則"
+
+inputs
+  期日(due) : date  range >=2020-01-01 <=2030-12-31
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 期日ごとの手数料(fee_by_due)
+policy unique
+| 期日          | -> 手数料 |
+| <2025-01-01   | 3USD      |
+| >=2025-01-01  | 1USD      |

@@ -1,0 +1,33 @@
+workflow variable_names v1
+description "Variables that the code of a target would write as one name, and variables named as the code's own: class and class_, _x and v_x, type and type_, and names that begin with dd_. The code of each target keeps them apart, and the flow runs on every platform"
+
+inputs
+  id : string
+  _x : int
+
+outputs
+  text   : string
+  counts : string
+
+task note(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task count(n: int) -> int
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:count"
+  idempotent
+
+flow
+  # Python writes `class` as `class_`, which the flow has too
+  let class = note(id: id)
+  let class_ = note(id: "{id} again")
+  # TypeScript and Python write `_x` as `v_x`, which the flow has too
+  let v_x = count(n: _x)
+  # Go writes `type` as `type_`, which the flow has too
+  let type = note(id: "{id} typed")
+  let type_ = note(id: "{id} typed again")
+  # the code's own begin with dd_
+  let dd_error = count(n: 1)
+  let dd_v = count(n: 2)
+  let dd_x = 3
+  succeed text = "{class} {class_} {type} {type_}", counts = "{_x} {v_x} {dd_error} {dd_v} {dd_x}"

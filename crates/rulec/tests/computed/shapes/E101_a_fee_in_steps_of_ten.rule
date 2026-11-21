@@ -1,0 +1,19 @@
+rule fee_in_steps_of_ten v1
+description "A fee of 45% of the amount rounded to 10 yen, read with the amount: the rows leave out the amounts from 227 yen, where the fee is 100 yen. They leave out a fee of 11 yen too, which no amount gives, and that needs no row"
+
+enum choice = one | two
+
+inputs
+  amount : money[JPY]  range >=1JPY <=229JPY
+
+define fee : money[JPY] = half_even(amount * 45%, 10JPY)
+
+outputs
+  x : choice
+
+table pick
+| amount           | fee            | -> x |
+| <=95JPY          | >-1JPY <=10JPY | one  |
+| <=95JPY          | >11JPY         | two  |
+| >95JPY <=121JPY  | >11JPY         | one  |
+| >121JPY <=226JPY | >11JPY         | two  |

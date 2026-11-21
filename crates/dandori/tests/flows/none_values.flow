@@ -1,0 +1,49 @@
+# Values a flow does not have, in an HTTP call (DESIGN 43). The end day and the note are inputs a run
+# may leave out. A value that is not there goes nowhere in the query and in a URL-encoded body (no
+# `until=`, no `note=`), and as null in a JSON body. Runs on every platform; the default Transports
+# send what each run has.
+workflow none_values v1
+description "Count a topic's posts up to a day, post a note on it and pin the post, where the day and the note may not be there"
+
+use openapi board from "apis/board.json"
+
+record Found
+  count : int  range >=0 <=1000
+
+record Post
+  id : string
+
+record Pin
+  id     : string
+  pinned : bool
+
+inputs
+  topic : string
+  until : date?
+  note  : string?
+
+outputs
+  count  : int  range >=0 <=1000
+  pinned : bool
+
+# The end day goes in the query.
+task count_posts(topic: string, until: date?) -> Found
+  http GET board "/posts"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/board/4e5f6a7b"
+  idempotent
+
+# The note goes in a URL-encoded body.
+task post(topic: string, note: string?) -> Post
+  http POST board "/posts"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/board/4e5f6a7b"
+
+# The note goes in a JSON body.
+task pin(id: string, note: string?) -> Pin
+  http POST board "/posts/{id}/pin"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/board/4e5f6a7b"
+
+flow
+  let found = count_posts(topic: topic, until: until)
+  let posted = post(topic: topic, note: note)
+  let pinned = pin(id: posted.id, note: note)
+  succeed count = found.count, pinned = pinned.pinned

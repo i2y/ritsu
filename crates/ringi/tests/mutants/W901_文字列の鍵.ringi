@@ -1,0 +1,14 @@
+request 例(example) v1 "例"
+description "事務所の地図は、検証用のサイトの API キーで読む: AIzaSyD-ritsu-fake-key-for-tests-000000"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

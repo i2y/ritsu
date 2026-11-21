@@ -1,0 +1,20 @@
+requirements expense v1
+description "Where the deadline of a stage of an expense request comes from: Article 13 of the office rules (a sketch for the tests), copied beside this file"
+
+role general_affairs "Owns the office rules and decides how they read"
+
+source art13 = file "regulations/article-13.md" sha256:7e205ca9c128a2c1
+
+requirement answer_in_three_business_days
+  text "Each stage is answered by the end of the third business day after the request reaches it"
+  owner general_affairs
+  from @art13
+    reviewed 2026-11-14 by general_affairs sha256:7e205ca9c128a2c1 -> sha256:b39a786deba6d549
+  satisfied by koyomi "../dates/approval_terms.cal" date due
+    reviewed 2026-11-14 by general_affairs sha256:b39a786deba6d549 -> sha256:1d53118f95cde3b0
+  satisfied by dandori "../flows/stage.flow"
+    reviewed 2026-11-14 by general_affairs sha256:b39a786deba6d549 -> sha256:183e9e9dd66466f3
+  satisfied by sekisho "../gates/expense.gate" policy approvers_answer
+    reviewed 2026-11-14 by general_affairs sha256:b39a786deba6d549 -> sha256:89dff2a49f5b57d9
+  verified by koyomi "../dates/approval_terms.cal" claim due_is_open
+    reviewed 2026-11-14 by general_affairs sha256:b39a786deba6d549 -> sha256:f6cbababdd0b6f15

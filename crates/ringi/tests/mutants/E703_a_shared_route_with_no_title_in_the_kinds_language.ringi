@@ -1,0 +1,11 @@
+request example v1 "Example"
+
+use route check from "shared/上長の確認.ringi"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route check()
+
+ticket
+  self approval  not allowed

@@ -8,6 +8,8 @@
 //! and `vendor --check`, and `clean` with `--dry-run` and `--keep`. A tree of paths needs no lock:
 //! `lock` writes none, and removes one that is there.
 
+mod common;
+
 use ritsu_base::modules::lock::{Lock, Locked};
 use ritsu_base::modules::store::{self, Store};
 use ritsu_testkit::TempDir;
@@ -23,7 +25,7 @@ fn here() -> PathBuf {
 fn ritsu_in(dir: &Path, store: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args).env(store::VARIABLE, store);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -109,7 +111,7 @@ fn ritsu_mod_has_a_table_of_its_own() {
 
 /// A flag no command takes stops each of the fifteen before it does anything (exit 2), in both
 /// languages; so does a command `ritsu mod` does not have, and a command given the wrong number of
-/// arguments (its usage line).
+/// arguments (what it takes, and its usage line).
 #[test]
 fn every_command_refuses_a_flag_it_does_not_know() {
     let t = TempDir::new("mod-flags");
@@ -120,7 +122,7 @@ fn every_command_refuses_a_flag_it_does_not_know() {
         assert_eq!((code, err), (2, format!("エラー: `--frob` というフラグはありません。`ritsu mod {c} --help` を読んでください\n")), "{c}");
     }
     assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "nope"]), (2, String::new(), "error: there is no command `nope`; run `ritsu mod --help`\n".into()));
-    assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "add", "pricing"]), (2, String::new(), "ritsu mod add <name> <source> [--dir <dir>] [--format text|json]\n".into()));
+    assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "add", "pricing"]), (2, String::new(), "error: `ritsu mod add` takes <name> <source>\nusage: ritsu mod add <name> <source> [--dir <dir>] [--format text|json]\n".into()));
     assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "lock", "extra"]).0, 2);
     assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "list", "--format", "yaml"]).0, 2);
 }

@@ -57,6 +57,9 @@ struct Renamer<'a> {
     input_enum: HashMap<String, String>,
     /// The callee's enums and what they are called here (§15.230).
     enum_names: Vec<(String, String)>,
+    /// A callee enum bound to one enum of this rule → its name here, for the type of a value the
+    /// callee computes (§15.346).
+    bound_enums: Vec<(String, String)>,
 }
 
 impl Renamer<'_> {
@@ -173,6 +176,15 @@ impl Renamer<'_> {
             None => t.clone(),
         }
     }
+    /// The type of a derived value or a definition the callee computes: an enum its inputs are
+    /// bound to one enum of this rule for is that enum, since the expression is already spelled
+    /// in this rule's words; anything else is [`Renamer::ty`]'s reading.
+    fn bound_ty(&self, t: &TypeRef) -> TypeRef {
+        match self.bound_enums.iter().find(|(c, _)| *c == t.base) {
+            Some((_, mine)) => TypeRef { base: mine.clone(), ..t.clone() },
+            None => self.ty(t),
+        }
+    }
     fn cite(&self, c: &Option<Cite>) -> Option<Cite> {
         c.as_ref().map(|c| Cite { source: self.text(&c.source), fragments: c.fragments.clone(), span: self.sp() })
     }
@@ -202,6 +214,22 @@ thread_local! {
     /// The rules being expanded on this thread, outermost first: a callee already among them is a
     /// ring of applies (§15.230).
     static EXPANDING: std::cell::RefCell<Vec<(std::path::PathBuf, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// The path another file a rule reads is checked and read by (a rule it applies, an `enums` file it
+/// imports, each at the path the rule's line leads to): the one the run writes it by
+/// (`paths::show`: `.` and `..` folded, from the directory the run is in), as a port asks of a rule
+/// (§15.320), so that the check of the file is one check however a rule writes its path
+/// (`../shared/fee.rule` from a directory beside it). What quotes the rule's line says the path as
+/// it is written there.
+pub(crate) fn checked_as(path: &str) -> String {
+    ritsu_base::paths::show_str(path)
+}
+
+/// Whether a rule is being expanded on this thread: a ring of applies said now may run through a
+/// rule outside the one checked.
+pub(crate) fn expanding() -> bool {
+    EXPANDING.with(|e| !e.borrow().is_empty())
 }
 
 fn canon(p: &Path) -> std::path::PathBuf {
@@ -281,7 +309,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 out.push(
                     e044(
                         tr!("`{}` を読めません", "`{}` cannot be read", a.path),
-                        tr!("パスは規則ファイルのある場所からたどります（探した先: {}）。", "The path is followed from the directory of the rule file (looked for: {}).", cpath.display()),
+                        tr!("パスは規則ファイルのある場所からたどります（探した先: {}）。", "The path is followed from the directory of the rule file (looked for: {}).", ritsu_base::paths::show(&cpath)),
                     )
                     .maybe_note(crate::vfs::outside_note(&dir, &a.path)),
                 );
@@ -362,8 +390,14 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         a.callee_path = cp.clone();
         // The callee has to pass the whole check — completeness and the rest, not the type
         // check alone — before its definitions are trusted here. It is checked as it is: the
-        // ranges `outputs_over` holds this rule's inputs to are not the callee's.
-        let (verdict, prepared) = crate::over::without(|| (crate::report(&src, &cp).diags, crate::prepare(&src, &cp)));
+        // ranges `outputs_over` holds this rule's inputs to are not the callee's, and its spans are
+        // in it, also where this rule is read for a contribution's scope (§15.227); what comes in
+        // from it is marked at the `apply` line. It is checked by the path the run writes it
+        // (`checked_as`), and only whether it passes and the codes of its errors are read, which a
+        // report in either language says (`crate::verdict`), so that its check is the one check of
+        // the file.
+        let read_as = checked_as(&cp);
+        let (verdict, prepared) = crate::over::without(|| crate::diag::in_main(|| (crate::verdict(&src, &read_as).diags, crate::prepare(&src, &read_as))));
         let (cf, cc) = match prepared {
             Ok(v) if !verdict.iter().any(|d| d.severity == Severity::Error) => v,
             _ => {
@@ -438,7 +472,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 match mine_el.fields.iter().find(|x| x.name.text == ours) {
                     Some(_) => {
                         field_subs.push((cfd.name.text.clone(), ours.clone()));
-                        field_pairs.push((ours, CalleeInput { name: cfd.name.text.clone(), ty: cc.ty_of(&cfd.name.text).unwrap_or(Ty::Unknown), range: cfd.range.clone(), enum_range: None }));
+                        field_pairs.push((ours, CalleeInput { name: cfd.name.text.clone(), ty: cc.ty_of(&cfd.name.text).unwrap_or(Ty::Unknown), range: cfd.range.clone(), ends: cc.declared.get(&cfd.name.text).copied(), enum_range: None }));
                     }
                     None => {
                         out.push(
@@ -540,6 +574,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         // callee spells them; one the callee reads from an `enums` file this rule reads too is that
         // one, with no copy.
         let mut enum_names: Vec<(String, String)> = Vec::new();
+        let mut bound_enums: Vec<(String, String)> = Vec::new();
         for e in &cf.enums {
             let shared = e.from.as_ref().and_then(|o| {
                 f.enums.iter().find(|m| m.from.as_ref().is_some_and(|mo| mo.path == o.path && mo.name.text == o.name.text)).map(|m| m.name.text.clone())
@@ -550,6 +585,26 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     let copy = format!("{an}:{}", e.name.text);
                     enum_names.push((e.name.text.clone(), copy));
                 }
+            }
+            // An enum whose every bound input is read as one enum of this rule is that enum for a
+            // value the callee computes of it (§15.230): a derived value's expression is already
+            // spelled in this rule's words after the binding's substitution, so declaring it
+            // `<apply>:<enum>` would type the expansion against itself (E103). The copy still
+            // answers for the callee's own spellings, which a table of the callee's may write.
+            let mut bound: Vec<String> = cf
+                .inputs
+                .iter()
+                .filter(|i| matches!(cc.ty_of(&i.name.text), Some(Ty::Enum(x)) if x == e.name.text))
+                .filter_map(|i| a.bindings.iter().find(|b| b.input == i.name.text))
+                .filter_map(|b| match &b.value {
+                    BindValue::Name(n) if declares(f, n) => caller_enum_name(f, n),
+                    _ => None,
+                })
+                .collect();
+            bound.sort();
+            bound.dedup();
+            if let [one] = bound.as_slice() {
+                bound_enums.push((e.name.text.clone(), one.clone()));
             }
         }
         if bad {
@@ -678,6 +733,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             own,
             input_enum,
             enum_names: enum_names.clone(),
+            bound_enums: bound_enums.clone(),
         };
 
         // The inlined items.
@@ -686,16 +742,20 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             match it {
                 Item::Derived(d) => items.push(Item::Derived(DerivedDecl {
                     name: rn.name(&d.name),
-                    ty: rn.ty(&d.ty),
+                    ty: rn.bound_ty(&d.ty),
                     expr: rn.expr(&d.expr),
                     range: d.range.clone(),
                     span: rn.sp(),
                     cite: rn.cite(&d.cite),
                 })),
+                // What the callee accepts for one of its values is what this rule accepts for it
+                // under the apply's name: the call is refused where the value is worked out here,
+                // as the callee refuses it (§15.313).
                 Item::Define(d) => items.push(Item::Define(DefineDecl {
                     name: rn.name(&d.name),
-                    ty: rn.ty(&d.ty),
+                    ty: rn.bound_ty(&d.ty),
                     expr: rn.expr(&d.expr),
+                    range: d.range.clone(),
                     span: rn.sp(),
                     cite: rn.cite(&d.cite),
                 })),
@@ -794,6 +854,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     name: rn.name(&od.name),
                     ty: rn.ty(&od.ty),
                     expr: rn.expr(&r.expr),
+                    range: None,
                     span: rn.sp(),
                     cite: None,
                 }));
@@ -944,6 +1005,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 name: Name { text: target.text.clone(), ascii, span: target.span.clone() },
                 ty: rn.ty(&od.ty),
                 expr,
+                range: None,
                 span: a.span.clone(),
                 cite: None,
             }));
@@ -1013,6 +1075,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     name: i.name.text.clone(),
                     ty: cc.ty_of(&i.name.text).unwrap_or(Ty::Unknown),
                     range: i.range.clone(),
+                    ends: cc.declared.get(&i.name.text).copied(),
                     enum_range: cc.enum_ranges.get(&i.name.text).cloned(),
                 })
                 .collect(),
@@ -1191,6 +1254,27 @@ fn caller_enum_values(f: &RuleFile, name: &str) -> Option<Vec<String>> {
         return Some(im.values());
     }
     f.enums.iter().find(|e| e.name.text == base).map(|e| e.values.iter().map(|v| v.text.clone()).collect())
+}
+
+/// The enum of this rule a bound name is of, when it is one (an input's or a table output's
+/// type; an `import enum` names the local name it is read as).
+fn caller_enum_name(f: &RuleFile, name: &str) -> Option<String> {
+    let base = f
+        .inputs
+        .iter()
+        .find(|i| i.name.text == name)
+        .map(|i| i.ty.base.clone())
+        .or_else(|| {
+            f.items.iter().find_map(|it| match it {
+                Item::Table(t) => t.outputs.iter().find(|o| o.name.text == name).and_then(|o| o.ty.as_ref().map(|t| t.base.clone())),
+                _ => None,
+            })
+        })?;
+    if crate::prelude::import_of(f, &base).is_some() || f.enums.iter().any(|e| e.name.text == base) {
+        Some(base)
+    } else {
+        None
+    }
 }
 
 /// One callee table (or clause), with the bound inputs substituted: a column bound to a
@@ -1477,7 +1561,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 }
                 continue;
             }
-            let Some((clo, chi)) = bounds_of(r, &cty) else { continue };
+            let Some((clo, chi)) = cin.ends else { continue };
             let reach = interval(b);
             let (lo, hi) = match reach {
                 Some((lo, hi)) => (lo, hi),
@@ -1504,10 +1588,16 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
             if below || above {
                 let witness = if below { lo } else { hi };
                 let w = witness.map(|v| fmt(v, &cty)).unwrap_or_else(|| tr!("上限なし", "unbounded"));
+                // What is passed is this rule's value, said in the unit this rule writes; the example
+                // beside the callee's range is said in the callee's (§15.332).
+                let passed = match &value {
+                    BindValue::Name(n) => c.ty_of(n).unwrap_or_else(|| cty.clone()),
+                    _ => cty.clone(),
+                };
                 out.push(
                     Diag::error("E043", tr!("`{}` に渡す値が、元の規則の範囲の外に出ます", "A value passed to `{}` leaves the callee's range", cin.name))
                         .at(at(b.span.line))
-                        .mark(b.span.clone(), tr!("渡す値の取りうる範囲: {}", "what is passed: {}", interval_text(lo, hi, &cty)))
+                        .mark(b.span.clone(), tr!("渡す値の取りうる範囲: {}", "what is passed: {}", interval_text(lo, hi, &passed)))
                         // The arguments follow the Japanese sentence (the input, the callee's file, the input again,
                         // its range), so the English one takes them by position: the range comes before the file.
                         .note(tr!("例: {} = {w} は、`{}` の `{}` の range {} の外です。", "For example {0} = {w} is outside range {3} of `{2}` in `{1}`.", cin.name, a.path, cin.name, range_text(r)))
@@ -1560,7 +1650,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 );
             }
             let Some(r) = &cin.range else { continue };
-            let Some((clo, chi)) = bounds_of(r, &cty) else { continue };
+            let Some((clo, chi)) = cin.ends else { continue };
             let (lo, hi) = c.ranges.get(ours).copied().unwrap_or((None, None));
             let below = match (lo, clo) {
                 (Some(l), Some(cl)) => l.cmp_to(cl) == std::cmp::Ordering::Less,
@@ -1576,7 +1666,8 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 out.push(
                     Diag::error("E043", tr!("フィールド `{ours}` の値が、元の規則の `{}` の範囲の外に出ます", "The field `{ours}` leaves the range of the callee's `{}`", cin.name))
                         .at(at(a.span.line))
-                        .mark(a.span.clone(), tr!("`{ours}` の範囲: {}", "the range of `{ours}`: {}", interval_text(lo, hi, &cty)))
+                        // This rule's field, in the unit this rule writes (§15.332).
+                        .mark(a.span.clone(), tr!("`{ours}` の範囲: {}", "the range of `{ours}`: {}", interval_text(lo, hi, &ty)))
                         .note(tr!("元の規則の `{}` は range {} の中で検査されています。", "The callee's `{}` was checked over range {}.", cin.name, range_text(r)))
                         .note(tr!(
                             "この規則のフィールドの範囲を、元の規則の範囲まで狭めてください。",
@@ -2089,23 +2180,6 @@ fn enum_outside(f: &RuleFile, c: &Checked, a: &ApplyDecl, cal: &Callee, b: &Bind
                 "Decide the value in a table that writes only values inside the range and pass that, or pass an input that declares the same range."
             )),
     )
-}
-
-fn bounds_of(r: &Range, ty: &Ty) -> Option<(Option<Rat>, Option<Rat>)> {
-    let mut lo = None;
-    let mut hi = None;
-    for (op, l) in &r.bounds {
-        let v = match l {
-            Lit::Num(n) => crate::types::lit_value_in_pub(n, ty)?,
-            Lit::Date(y, m, d) => crate::types::date_ord(*y, *m, *d),
-            _ => return None,
-        };
-        match op {
-            CmpOp::Ge | CmpOp::Gt => lo = Some(v),
-            CmpOp::Le | CmpOp::Lt => hi = Some(v),
-        }
-    }
-    Some((lo, hi))
 }
 
 fn range_text(r: &Range) -> String {

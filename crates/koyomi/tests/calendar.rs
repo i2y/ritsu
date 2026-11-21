@@ -195,6 +195,38 @@ fn a_calendar_read_with_use_calendar_in_english() {
     assert_eq!(codes(p, "calendar t v1\noffset +08:00\nuse calendar \"weekends.cal\"\n"), vec!["E015"]);
 }
 
+/// A calendar that does not pass, read by a dates file: its errors are its own, said once where the
+/// calendar is checked, and the dates file says one E015 at its `use calendar` line, with the
+/// calendar's errors in its notes, whichever of the two is checked first, and when it is checked
+/// alone.
+#[test]
+fn a_calendar_that_does_not_pass_is_said_once() {
+    use koyomi::calendar::Loader;
+    use koyomi::check::check_file;
+    use ritsu_base::text::Lang;
+    let dir = std::env::temp_dir().join(format!("koyomi-failing-calendar-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join("calendars")).unwrap();
+    std::fs::create_dir_all(dir.join("dates")).unwrap();
+    let cal = dir.join("calendars/office.cal");
+    let dates = dir.join("dates/terms.cal");
+    std::fs::write(&cal, "calendar office v1\noffset +09:00\n\nclosed weekly sat, funday\n").unwrap();
+    std::fs::write(&dates, "dates terms v1\nuse calendar \"../calendars/office.cal\"\n\ninputs\n  paid_on : date  range >=2026-01-01 <=2026-12-31\n\ndate last_day = paid_on\n  + 30 days\n  roll following\n").unwrap();
+    let (cal, dates) = (cal.to_str().unwrap(), dates.to_str().unwrap());
+    let said = |files: &[&str]| -> Vec<Vec<(&'static str, Option<usize>)>> {
+        let mut loader = Loader::default();
+        files.iter().map(|f| check_file(f, &Options::default(), &mut loader).unwrap().diags.iter().map(|d| (d.code, d.line)).collect()).collect()
+    };
+    assert_eq!(said(&[cal, dates]), vec![vec![("E002", Some(4))], vec![("E015", Some(2))]]);
+    assert_eq!(said(&[dates, cal]), vec![vec![("E015", Some(2))], vec![("E002", Some(4))]]);
+    let alone = check_file(dates, &Options::default(), &mut Loader::default()).unwrap();
+    let text = alone.diags.iter().map(|d| d.render(Lang::En)).collect::<String>();
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(alone.diags.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E015"]);
+    assert!(text.contains("The calendar ../calendars/office.cal does not pass koyomi's check, so it cannot be used"), "{text}");
+    assert!(text.contains("E002: A day of the week is `mon`, `tue`, `wed`, `thu`, `fri`, `sat` or `sun` (found `funday`)"), "{text}");
+    assert!(text.contains("office.cal:4)"), "{text}");
+}
+
 /// What `tokyo` shows of a table in Shift_JIS, on GOV.UK's table in English: the business days of
 /// a year, the longest run of closed days, the reasons a day is closed, and no answer past the
 /// table.

@@ -1,0 +1,18 @@
+rule dearest_line v1
+description "Whether an order holds a dear line. An order comes to 150 yen or more, and a line is 100 yen at most: the dearest line reaches the bottom only with other lines beside it, none of them dearer"
+
+# A line of the order
+elements lines
+  price : money[JPY]  range >=1JPY <=100JPY
+
+max dearest over lines of price empty 0JPY
+sum total over lines of price  range >=150JPY <=500JPY
+
+outputs
+  pricey : bool
+
+table pricey_of
+policy unique
+| dearest | -> pricey |
+| <50JPY  | false     |
+| >=50JPY | true      |

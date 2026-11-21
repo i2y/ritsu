@@ -40,7 +40,7 @@ use crate::suite::Suite;
 use crate::ty::*;
 use crate::types::Ref;
 use crate::ranges::{Boundary, Lin};
-use crate::value::{Program, TransferValue, Value, num_text};
+use crate::value::{Program, TransferValue, Value, num_shown};
 use ritsu_base::json::Json;
 use ritsu_base::text::{Lang, Text};
 use std::collections::{BTreeMap, BTreeSet};
@@ -757,7 +757,7 @@ impl Choose<'_> {
                     match h {
                         Hint::Lit(Value::Num(v), Ty::Num(lt)) => {
                             let Some(x) = convert_num(*v, &lt.unit, &n.unit) else { continue };
-                            let lit = num_text(*v, &lt.unit);
+                            let lit = num_shown(*v, &lt.unit);
                             push(x.sub(s), tr!("{lit} の一つ下", "a step below {lit}"));
                             push(x, tr!("{lit} と比べる", "compared with {lit}"));
                             push(x.add(s), tr!("{lit} の一つ上", "a step above {lit}"));
@@ -1272,7 +1272,9 @@ impl Choose<'_> {
             Ty::Opt(x) | Ty::List(x) | Ty::Set(x) => self.first_nested(x, seen),
             Ty::Dict(_, x) => self.first_nested(x, seen),
             Ty::Result(a, e) => self.first_nested(a, seen).or_else(|| self.first_nested(e, seen)),
-            Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. })) => {
+            // the records of a module and the values of a sum, and the records the built-in functions
+            // answer (`indexed`, `entry`, `running`), whose fields can hold one
+            Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. } | RecId::Indexed(_) | RecId::Entry(..) | RecId::Running(..))) => {
                 if seen.contains(t) {
                     return None;
                 }
@@ -1319,7 +1321,7 @@ impl Choose<'_> {
                 Some(v) => Some(Value::Variant("ok".into(), vec![("value".into(), v)])),
                 None => Some(Value::Variant("err".into(), vec![("error".into(), self.holding(e, target, inner, false, seen)?)])),
             },
-            Ty::Record(id @ RecId::Module { .. }) => {
+            Ty::Record(id @ (RecId::Module { .. } | RecId::Indexed(_) | RecId::Entry(..) | RecId::Running(..))) => {
                 if !own && seen.contains(t) {
                     return None;
                 }
@@ -1570,6 +1572,22 @@ pub fn reach(p: &Program, m: &Checked, f: usize, base: &[Value], lin: &Lin, targ
     out
 }
 
+/// A failure as a vector's `fails` writes it: its kind, module, line and message, and for the kind
+/// `input` the place of what is not taken (`path`, DESIGN 4.2), as the generated code's error holds
+/// them.
+pub fn fails_json(fl: &crate::interp::Failure, lang: Lang) -> Json {
+    let mut fs = vec![
+        ("kind", Json::str(fl.kind.word())),
+        ("module", Json::str(fl.module.clone())),
+        ("line", Json::int(fl.line as i128)),
+        ("message", Json::str(ritsu_base::text::spaced(&fl.message, lang))),
+    ];
+    if let Some(p) = &fl.path {
+        fs.push(("path", Json::str(p.clone())));
+    }
+    Json::obj(fs)
+}
+
 /// One vector run, as `vectors` writes it: the function, the input on the wire, its answer, its
 /// failure, or that it did not stop, why the input was chosen, and with `trace` the calls it made.
 pub fn line(p: &Program, suite: &Suite, m: &Checked, f: usize, v: &Vector, trace: bool, lang: Lang) -> Json {
@@ -1583,15 +1601,7 @@ pub fn line(p: &Program, suite: &Suite, m: &Checked, f: usize, v: &Vector, trace
     let mut fields: Vec<(String, Json)> = vec![("function".into(), Json::str(info.name.text.clone())), ("in".into(), input)];
     match outcome {
         Ok(x) => fields.push(("out".into(), p.to_json(&x, &info.ret.ty))),
-        Err(Stop::Failed(fl)) => fields.push((
-            "fails".into(),
-            Json::obj([
-                ("kind", Json::str(fl.kind.word())),
-                ("module", Json::str(fl.module.clone())),
-                ("line", Json::int(fl.line as i128)),
-                ("message", Json::str(ritsu_base::text::spaced(&fl.message, lang))),
-            ]),
-        )),
+        Err(Stop::Failed(fl)) => fields.push(("fails".into(), fails_json(&fl, lang))),
         Err(Stop::Diverged(d)) => fields.push(("diverged".into(), Json::obj([("module", Json::str(d.module.clone())), ("line", Json::int(d.line as i128)), ("depth", Json::int(d.depth as i128))]))),
     }
     if trace {

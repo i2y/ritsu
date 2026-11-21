@@ -1,0 +1,6 @@
+error[E502]: tests/mutants/E502_the_president_has_no_manager.ringi:9:10: In the organization from 2026-04-01, the stage `check` has no approver
+     9 |   check  manager
+  = `manager` finds no head above the requester.
+  = For 1 requester: e01 (President (fictional)).
+  = The stage is `when empty stay`: a ticket that comes to it waits there until an administrator adds an approver.
+  = Correct the data of the version, or change the way to choose the stage's approver or its `when empty`.

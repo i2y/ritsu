@@ -1,0 +1,39 @@
+rule expense_ja_route v1
+description "What ringi writes from the route of expense.ja.ringi: one optional output for each stage, whose value is the approver the stage names; a blank cell is none, the stage is not there"
+
+import enum category from "choices.rule"
+enum precheck_by = check "エージェント確認"
+enum first_by = manager "上長"
+enum second_by = dept_head "部長" | accounting "経理" | dept_head_and_accounting "部長 and 経理"
+enum decide_by = travel_agent "エージェント決裁" | manager "上長" | dept_head "部長" | division_head "本部長"
+
+inputs
+  category : category
+  amount   : money[円]  range >=1円 <=10_000_000円
+
+outputs
+  precheck : precheck_by?
+  first    : first_by?
+  second   : second_by?
+  decide   : decide_by
+
+table route
+| category | amount                 | -> precheck | first   | second                   | decide        |
+| travel   | <=30_000円              | none        | none    | none                     | travel_agent  |
+| travel   | >30_000円 <=100_000円    | none        | none    | none                     | manager       |
+| travel   | >100_000円              | none        | manager | none                     | dept_head     |
+| expense  | <=100_000円             | check       | none    | none                     | manager       |
+| expense  | >100_000円 <=1_000_000円 | check       | manager | none                     | dept_head     |
+| expense  | >1_000_000円            | none        | manager | dept_head                | division_head |
+| purchase | <=1_000_000円           | none        | manager | accounting               | dept_head     |
+| purchase | >1_000_000円            | none        | manager | dept_head_and_accounting | division_head |
+
+possible second = dept_head_and_accounting
+
+examples
+| category | amount     | -> precheck | first   | second                   | decide        |
+| travel   | 30_000円    | none        | none    | none                     | travel_agent  |
+| travel   | 30_001円    | none        | none    | none                     | manager       |
+| expense  | 100_000円   | check       | none    | none                     | manager       |
+| expense  | 100_001円   | check       | manager | none                     | dept_head     |
+| purchase | 1_000_001円 | none        | manager | dept_head_and_accounting | division_head |

@@ -1,6 +1,6 @@
 # plain_tasks v1
 
-Tasks you implement named as the builtins of Python the code never reads, each read into a variable of its name.
+Tasks you implement named as the builtins of Python the code never reads, and as a name of Python's typing it reads by another name, each read into a variable of its name.
 
 `tests/flows/plain_tasks.flow` を `dandori doc` で描いたものです。入力は `id: string`、出力は `text: string` です。
 
@@ -27,7 +27,9 @@ flowchart TD
     s16["slice = slice(…)<br>自分で書くタスク"]
     s17["sum = sum(…)<br>自分で書くタスク"]
     s18["vars = vars(…)<br>自分で書くタスク"]
-    s19(["succeed text = #quot;{bytes}{callable}{filter}{format}{froze…"])
+    s19["TypeError = TypeError(…)<br>自分で書くタスク"]
+    s20["TypeGuard = TypeGuard(…)<br>自分で書くタスク"]
+    s21(["succeed text = #quot;{bytes}{callable}{filter}{format}{froze…"])
     start --> s1
     s1 --> s2
     s2 --> s3
@@ -47,9 +49,11 @@ flowchart TD
     s16 --> s17
     s17 --> s18
     s18 --> s19
+    s19 --> s20
+    s20 --> s21
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s19 ok
+    class s21 ok
 ```
 
 四角はタスク、両脇に線のある四角は規則、斜めの四角は外から値が届くタスク（イベントやコールバックの応答）、六角形は `match`、角の丸い四角は待ち、ステップを囲む枠はループです。破線の矢印は、呼び出しがその場で処理するエラーです。
@@ -58,24 +62,26 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 30 | `bytes = bytes(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 31 | `callable = callable(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 32 | `filter = filter(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 33 | `format = format(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 34 | `frozenset = frozenset(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 35 | `hasattr = hasattr(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 36 | `hash = hash(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 37 | `iter = iter(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 38 | `map = map(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 39 | `object = object(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 40 | `open = open(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 41 | `print = print(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 42 | `repr = repr(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 43 | `reversed = reversed(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 44 | `setattr = setattr(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 45 | `slice = slice(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 46 | `sum = sum(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 47 | `vars = vars(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 32 | `bytes = bytes(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 33 | `callable = callable(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 34 | `filter = filter(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 35 | `format = format(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 36 | `frozenset = frozenset(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 37 | `hasattr = hasattr(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 38 | `hash = hash(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 39 | `iter = iter(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 40 | `map = map(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 41 | `object = object(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 42 | `open = open(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 43 | `print = print(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 44 | `repr = repr(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 45 | `reversed = reversed(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 46 | `setattr = setattr(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 47 | `slice = slice(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 48 | `sum = sum(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 49 | `vars = vars(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 50 | `TypeError = TypeError(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 51 | `TypeGuard = TypeGuard(…)` | 自分で書くタスク | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 
@@ -83,5 +89,5 @@ flowchart TD
 
 | 行 | 終わり方 |
 |---:|---|
-| 48 | `succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}"` |
+| 52 | `succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}{TypeError}{TypeGuard}"` |
 

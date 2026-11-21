@@ -1,0 +1,6 @@
+warning[W305]: tests/mutants/W305_a_policy_that_never_applies_to_an_action_it_names.gate:37:1: The forbid `suspended_staff_see_nothing_open` names the action `list_folder`, and applies to no combination of it
+    37 | forbid suspended_staff_see_nothing_open
+  = Of the 2 combinations its `principal` line takes, the lines are met: `when resource.open_to_all` on 0, `when principal.suspended` on 1. A line is met on none.
+  = On the other actions it names, it applies to 1 combination of `read_doc`.
+  = Remove `list_folder` from its `action` line, or correct its lines so that it applies to `list_folder` too.
+tests/mutants/W305_a_policy_that_never_applies_to_an_action_it_names.gate: ok — 2 actions, 2 policies (1 permit, 1 forbid), 0 expectations, 0 separations

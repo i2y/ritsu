@@ -1,0 +1,60 @@
+workflow TypeScriptの名前 v1
+description "TypeScript のグローバルな型の名前を、型に付けたフローです。types.ts が読む型（そのときは globalThis から読みます）と、コードのどのファイルも読まない型を使います。フローはどのプラットフォームでも動きます"
+
+# types.ts が言語の型として読む名前
+record Array
+  先頭 : string
+
+record Record
+  鍵 : string
+
+# コードのどのファイルも読まない言語の型
+enum Partial = 甲 | 乙
+enum Required = 甲 | 乙
+enum Readonly = 甲 | 乙
+enum Pick = 甲 | 乙
+enum Omit = 甲 | 乙
+enum Exclude = 甲 | 乙
+enum Extract = 甲 | 乙
+enum NonNullable = 甲 | 乙
+enum Parameters = 甲 | 乙
+enum ReturnType = 甲 | 乙
+enum Awaited = 甲 | 乙
+enum Iterable = 甲 | 乙
+enum AsyncIterable = 甲 | 乙
+enum PromiseLike = 甲 | 乙
+enum ReadonlyArray = 甲 | 乙
+
+record 全部
+  Arrayの値 : Array
+  Recordの値 : Record
+  Partialの値 : Partial
+  Requiredの値 : Required
+  Readonlyの値 : Readonly
+  Pickの値 : Pick
+  Omitの値 : Omit
+  Excludeの値 : Exclude
+  Extractの値 : Extract
+  NonNullableの値 : NonNullable
+  Parametersの値 : Parameters
+  ReturnTypeの値 : ReturnType
+  Awaitedの値 : Awaited
+  Iterableの値 : Iterable
+  AsyncIterableの値 : AsyncIterable
+  PromiseLikeの値 : PromiseLike
+  ReadonlyArrayの値 : ReadonlyArray
+  Arrayの並び : list[Array]
+
+inputs
+  番号 : string
+
+outputs
+  全部の値 : 全部
+
+task 集める(番号: string) -> 全部
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:gather"
+  idempotent
+
+flow
+  let 全部の値 = 集める(番号: 番号)
+  succeed 全部の値 = 全部の値

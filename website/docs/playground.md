@@ -18,8 +18,8 @@ its *Markdown*, the *problems* `ritsu check` finds, with how many there are, and
 code*. A finding is underlined where it is in the editor, and the tab of its file is marked. While
 the open file does not pass, the page for people last drawn of it stays, faded, with the first
 problem under it; press the problem to go to its line. The list holds a small shop where every
-language meets, the examples of rulec and dandori, sekisho's example, and an empty project to start
-from one file of your own. The tests hold what this page answers to what the `ritsu` binary prints
+language meets, the examples of rulec and dandori, sekisho's example, ringi's leave request, and an
+empty project to start from one file of your own. The tests hold what this page answers to what the `ritsu` binary prints
 and writes on the same files, word for word (`crates/ritsu/tests/playground.rs`).
 
 The same playground fills a whole window on [the full-screen page](play/): the code on the left,
@@ -39,8 +39,12 @@ billing's layer against ordering. One line in one file, and three languages say 
    `Enum order_status does not agree with OrderStatus in ../../proto/shop/v1/order.proto`, with the
    value the rule does not have. yuen: `rulec cannot answer for rulec "billing/rules/billing_need.rule"
    table decide`, the end of a requirement it can no longer hash. sakai: `The file
-   billing/rules/billing_need.rule does not pass rulec's check, or cannot be read`. Click where a
-   finding is, such as `billing/rules/billing_need.rule:5`, to go to that line. The shop's two
+   billing/rules/billing_need.rule does not pass rulec's check, or cannot be read`. These two wait
+   for the rule: the list puts them after rulec's error, marked *waiting*, and does not count them
+   as errors. After the rest, what `ritsu check` prints names the rule with rulec's error, then the
+   two lines that wait for it, and its last line counts one file that fails and one that waits. Put
+   the rule right, and they go with it. Click where a finding is, such as
+   `billing/rules/billing_need.rule:5`, to go to that line. The shop's two
    gates pass sekisho's check, and the last line counts ten borders between the languages checked:
    the five operations ordering and the warehouse open to the other contexts (the two of
    `OrderService` in the `.proto`, and the three of the warehouse's API in
@@ -164,6 +168,33 @@ it names it by.
 4. **Open the page for people**: each action's table of the combinations allowed and denied, each
    policy beside the Cedar it becomes, and the pages of the rule and the dates the conditions read.
 
+## Requests and their routes: ringi's example
+
+Under **ringi: a request type and the files it reads** is ringi's leave request: paid, sick or
+special leave, which the requester's manager approves, and the head of the department too for more
+than five business days. The request reads the route it shares with other requests
+(`shared/manager_approval.ringi`), the organization (`shared/company.ringi`) with its data in two
+versions (`org/2026-04-01/`, `org/2027-04-01/`), the office's calendar, the book of leave days and
+the company's gate, each at the path it names it by.
+
+1. **Read the check.** Every file passes, with one warning: in the organization from 2027-04-01 the
+   legal department has no head, so the head's stage of the two lawyers' long leave goes up a level
+   (`` In the organization from 2027-04-01, the stage `head` goes elsewhere or is skipped for lack
+   of an approver ``). Under `ok leave.ringi` are the lines the check works out from the data: the
+   day it can be used from, the longest a ticket can take (`ends within 40 business days at the
+   most`), and how many people may submit it.
+2. **Change the shared route.** In `shared/manager_approval.ringi`, change `remind after 1 business
+   day at 09:00` to `remind after 3 business days at 09:00`. The route still passes. The leave
+   request that takes it does not: its scenario has the head reminded on 2026-11-17, and no
+   reminder is set any more (`` No clock is set for `remind` ``).
+3. **See what it makes.** Open *generated code* on the request. The list above the code holds what
+   ringi's commands print or write of it: what the request type declares (`ringi api`), its
+   scenarios run (`ringi run`), the rules and dates files it is lowered to (`ringi extract`), and
+   the vectors a server is tested with (`ringi vectors`).
+4. **Open the page for people** of the request: the form, the route with who answers each stage,
+   the deadlines and what people may do with a ticket. Open `shared/manager_approval.ringi` for the
+   page of the route, which lists the request that takes it.
+
 ## Start from one file
 
 To try one rule or one flow of your own, pick **An empty project** in the list. It has no file yet,
@@ -189,6 +220,13 @@ names a target as 0.40.0 did (`target=temporal`, `target=tigerbeetle-go`) opens 
   `.geas` file here is read and its syntax checked, and then geas says it cannot start the program.
 - **Running.** `dandori run`, `chobo run`, the scenarios, `rulec verify` and `replay` need
   processes, servers and files of records. They are the [command](https://github.com/i2y/ritsu).
+  ringi's scenarios are the exception: its reference interpreter needs none of them, so `ringi run`
+  is here.
+- **ringi's questions of one day and of two versions.** `ringi simulate` says who answers one
+  requester on a day, and `ringi diff` compares two versions of a request type or of the
+  organization. The page has no place to ask for a requester, a day or a second version. The code of
+  the ticket is written by `ritsu gen`, into the package of every language at once, which the page
+  does not write.
 - **The network.** `source fetch` and `outdated` ask e-Gov, the eCFR and the URLs a source names.
 - **A Rust workspace in a map.** sakai asks Cargo for the crates of a map's `code rust "…"`, and a
   page cannot run Cargo.

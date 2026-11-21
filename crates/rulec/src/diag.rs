@@ -247,6 +247,12 @@ pub fn in_main<R>(f: impl FnOnce() -> R) -> R {
     out
 }
 
+/// The file every span made now is marked as in (`in_file`), by its path and the SHA-256 of its
+/// text; None while spans are in the file being checked.
+pub(crate) fn spans_in() -> Option<(String, String)> {
+    FILE.with(|c| c.borrow().as_ref().map(|f| (f.path.clone(), f.sha256.clone())))
+}
+
 impl Span {
     pub fn new(line: usize, col: usize, len: usize) -> Self {
         Span { line, col, len, file: FILE.with(|c| c.borrow().clone()) }
@@ -302,6 +308,24 @@ pub struct Diag {
     /// column in bytes as the JSON counts it: a key written in the file (W901), whose line holds
     /// the key and is not printed.
     pub place: Option<(usize, usize)>,
+    /// The name a finding says is declared nowhere (E012, E026): the findings of one file that
+    /// say so of one name are one, said where the name is first written, with the lines of the
+    /// others ([`once`]; §15.321). Never displayed.
+    pub same: Option<String>,
+    /// What the finding says of [`Diag::same`] where a name is not one declared nowhere: a mistake
+    /// the brackets of a type hold, said once of the type however many lines write it ([`once`]).
+    /// Empty for a name declared nowhere. Never displayed.
+    pub same_in: String,
+    /// The targets whose generated code does not build, or answers otherwise, for what the finding
+    /// says, by the names `--target` and `--extra` take (`python`, `proto`, `connect`): what
+    /// `rulec gen` and `ritsu gen` refuse to write (W121, §15.336). Empty for a finding that keeps no
+    /// target from being written. Never displayed.
+    pub targets: Vec<&'static str>,
+    /// Those of [`Diag::targets`] whose code meets what the finding says only where `rulec gen`
+    /// writes the rule's module beside the language's own, by a name of its own: a module, or a
+    /// package, of a name the language has, and Swift's `main.swift`. `ritsu gen`, which writes the
+    /// rule's module in a package of rules, writes them. Never displayed.
+    pub beside: Vec<&'static str>,
 }
 
 impl Diag {
@@ -321,6 +345,10 @@ impl Diag {
             marks: Vec::new(),
             notes: Vec::new(),
             place: None,
+            same: None,
+            same_in: String::new(),
+            targets: Vec::new(),
+            beside: Vec::new(),
         }
     }
 
@@ -372,6 +400,42 @@ impl Diag {
 
     pub fn key(mut self, k: impl Into<String>) -> Self {
         self.key = Some(k.into());
+        self
+    }
+
+    /// The finding says that `name` is declared nowhere ([`once`]).
+    pub fn same(mut self, name: impl Into<String>) -> Self {
+        self.same = Some(name.into());
+        self
+    }
+
+    /// The targets the finding keeps from being written ([`Diag::targets`]), each once, in the order
+    /// given.
+    pub fn targets(mut self, ts: &[&'static str]) -> Self {
+        for t in ts {
+            if !self.targets.contains(t) {
+                self.targets.push(t);
+            }
+        }
+        self
+    }
+
+    /// The targets of the finding whose code meets it only beside the language's own modules
+    /// ([`Diag::beside`]), each once, in the order given.
+    pub fn beside(mut self, ts: &[&'static str]) -> Self {
+        for t in ts {
+            if !self.beside.contains(t) {
+                self.beside.push(t);
+            }
+        }
+        self
+    }
+
+    /// The finding says `what` of `name`, which other lines of the file may write too: the
+    /// findings that say the same of the same name are one ([`once`]).
+    pub fn same_in(mut self, what: impl Into<String>, name: impl Into<String>) -> Self {
+        self.same_in = what.into();
+        self.same = Some(name.into());
         self
     }
 
@@ -496,7 +560,14 @@ pub fn render(d: &Diag, src_lines: &[String]) -> String {
     let maxline = d.marks.iter().map(|m| m.span.line).max().unwrap_or(0);
     let gw = maxline.to_string().len().max(1);
 
-    if !d.marks.is_empty() {
+    // A mark on a line the file does not have (the first line of an empty file) is no frame: its
+    // words are said under the heading, as a note is.
+    let shown = |m: &&Marked| m.span.file.as_ref().map(|f| f.lines.as_slice()).unwrap_or(src_lines).get(m.span.line.saturating_sub(1)).is_some();
+    if !d.marks.iter().any(|m| shown(&m)) {
+        for m in d.marks.iter().filter(|m| !m.label.is_empty()) {
+            let _ = writeln!(out, " {}", m.label);
+        }
+    } else {
         let _ = writeln!(out, "{:>w$} |", "", w = gw);
         for m in &d.marks {
             // A mark in a contribution merged into this rule (§15.227) is framed with that
@@ -711,4 +782,62 @@ pub fn key_written(f: &ritsu_base::secrets::Found, path: &str, line_text: &str) 
 pub fn keys(src: &str, path: &str) -> Vec<Diag> {
     let lines: Vec<&str> = src.lines().collect();
     ritsu_base::secrets::scan(src).iter().filter(|f| !f.test).map(|f| key_written(f, path, lines.get(f.line - 1).copied().unwrap_or(""))).collect()
+}
+
+/// One name declared nowhere is one finding (§15.321): of the findings that say so of
+/// one name in one file ([`Diag::same`]), the first in the file is said, with a note of the lines
+/// where the name is written too, and the others are not. The reader fixes the one declaration,
+/// or the lines the note names.
+pub fn once(diags: &mut Vec<Diag>) {
+    // where a finding is: its file (a merged file's finding says that file) and its line and column
+    let place = |d: &Diag| d.marks.first().map(|m| (m.span.file_path().map(str::to_string), m.span.line, m.span.col));
+    let mut firsts: Vec<(Option<String>, String, String, usize)> = Vec::new();
+    let mut others: Vec<Vec<usize>> = Vec::new();
+    let mut drop = vec![false; diags.len()];
+    // the order of the file: the first finding of a name is the one written first
+    let mut order: Vec<usize> = (0..diags.len()).collect();
+    order.sort_by_key(|&i| place(&diags[i]).map(|(_, l, c)| (l, c)).unwrap_or((usize::MAX, usize::MAX)));
+    for i in order {
+        let Some(name) = diags[i].same.clone() else { continue };
+        let file = place(&diags[i]).and_then(|(f, ..)| f);
+        let what = diags[i].same_in.clone();
+        match firsts.iter().position(|(f, w, n, _)| *f == file && *w == what && *n == name) {
+            Some(k) => {
+                drop[i] = true;
+                if let Some(l) = diags[i].line() {
+                    others[k].push(l);
+                }
+            }
+            None => {
+                firsts.push((file, what, name, i));
+                others.push(Vec::new());
+            }
+        }
+    }
+    for ((_, _, name, i), mut lines) in firsts.into_iter().zip(others) {
+        let own = diags[i].line();
+        lines.retain(|l| Some(*l) != own);
+        lines.sort_unstable();
+        lines.dedup();
+        if !lines.is_empty() {
+            let note = written_too(&name, &lines);
+            diags[i].notes.push(note);
+        }
+    }
+    let mut k = 0;
+    diags.retain(|_| {
+        k += 1;
+        !drop[k - 1]
+    });
+}
+
+/// `` `x` is written on line 12 too. `` / `` `x` is written on lines 12 and 15 too. ``
+pub fn written_too(name: &str, lines: &[usize]) -> String {
+    let ja = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("、");
+    let en = match lines {
+        [l] => format!("line {l}"),
+        [rest @ .., last] => format!("lines {} and {last}", rest.iter().map(|l| l.to_string()).collect::<Vec<_>>().join(", ")),
+        [] => String::new(),
+    };
+    crate::tr!("`{name}` は {ja} 行目にも書かれています。", "`{name}` is written on {en} too.")
 }

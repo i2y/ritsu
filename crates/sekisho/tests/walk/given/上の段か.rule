@@ -1,0 +1,23 @@
+rule 上の段か(top) v1
+description "段が上かどうか。書かなくてもよい列挙の入力で、gate は段が有るときだけ渡す"
+
+enum 段(tier) = 下(low) | 上(high)
+
+inputs
+  段(tier) : 段?
+
+outputs
+  上(top) : bool
+
+table 段から(top_of)
+policy unique
+| 段   | -> 上 |
+| none | false |
+| 下   | false |
+| 上   | true  |
+
+examples
+| 段   | -> 上 |
+| none | false |
+| 下   | false |
+| 上   | true  |

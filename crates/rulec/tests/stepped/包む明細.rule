@@ -1,0 +1,19 @@
+rule 包む明細(wrapped_lines_ja) v1
+description "同じことを注文の明細で。贈り物として包む明細一件に紙を二枚、カードを包むのにもう一枚使うので、枚数は奇数になる。六枚以上なら大きなロールを使う"
+
+# 注文の明細の一件ぶん
+elements 明細(lines)
+  贈り物(gift) : bool
+
+count 贈り物の数(gifts) over 明細 where 贈り物  range >=0 <=5
+
+define 枚数(sheets) : number = 贈り物の数 * 2 + 1
+
+outputs
+  大きなロール(large_roll) : bool
+
+table ロールの判定(roll_of)
+policy unique
+| 枚数 | -> 大きなロール |
+| <6   | false           |
+| >=6  | true            |

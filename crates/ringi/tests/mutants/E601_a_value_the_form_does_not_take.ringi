@@ -1,0 +1,21 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=1_000_000JPY
+  count  : number "Count"  range >=1 <=10
+
+route
+| amount       | -> decide |
+| <=100_000JPY | manager   |
+| >100_000JPY  | head      |
+
+who
+  manager = team managers
+  head    = team heads
+
+ticket
+  self approval  not allowed
+
+examples
+| amount    | count | -> decide |
+| 50_000JPY | 99    | manager   |

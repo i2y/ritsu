@@ -81,7 +81,7 @@ pub fn wit(modules: &[(Rc<Checked>, String, Place)], name: &str, version: Option
         if callable.len() == 1 {
             lines.push("モジュールは一つなので、\"module\" は省ける。".into());
         }
-        lines.push("返すのは、kaname vectors がその入力に書く行から why を除いたもの {\"function\":…,\"in\":…,\"out\":…} で、関数が失敗すれば out の代わりに \"fails\": {\"kind\",\"module\",\"line\",\"message\"} を持つ。入力が、ホストが呼ぶ関数の呼び出しとして読めなければ、拒否の行 {\"refused\":\"input\",\"error\":\"<文>\"} を返す。".into());
+        lines.push("返すのは、kaname vectors がその入力に書く行から why を除いたもの {\"function\":…,\"in\":…,\"out\":…} で、関数が失敗すれば out の代わりに \"fails\": {\"kind\",\"module\",\"line\",\"message\"} を持つ（種類が input なら、受け付けなかった引数の場所 \"path\" も）。入力が、ホストが呼ぶ関数の呼び出しとして読めなければ、拒否の行 {\"refused\":\"input\",\"error\":\"<文>\"} を返す（引数の値の誤りなら、その場所 \"path\" も）。".into());
         lines.push("引数の範囲と要素の数、関数がどう失敗しうるかは、モジュールごとの kaname api が言う。".into());
         if books {
             lines.push("関数が作る振替は、値 {\"book\",\"transfer\",\"op\",\"args\"} で答える。帳簿に当てる関数は、このモジュールに入らない。".into());
@@ -94,7 +94,7 @@ pub fn wit(modules: &[(Rc<Checked>, String, Place)], name: &str, version: Option
         if callable.len() == 1 {
             lines.push("With one module in the package, \"module\" may be left out.".into());
         }
-        lines.push("Back comes the line kaname vectors writes for that input, without its why, {\"function\":…,\"in\":…,\"out\":…}, with \"fails\": {\"kind\",\"module\",\"line\",\"message\"} in the place of out where the function fails; or a refusal, {\"refused\":\"input\",\"error\":\"<sentence>\"}, where the input is no call of a function a host calls.".into());
+        lines.push("Back comes the line kaname vectors writes for that input, without its why, {\"function\":…,\"in\":…,\"out\":…}, with \"fails\": {\"kind\",\"module\",\"line\",\"message\"} in the place of out where the function fails (and \"path\", the place in the arguments it did not take, where the kind is input); or a refusal, {\"refused\":\"input\",\"error\":\"<sentence>\"}, where the input is no call of a function a host calls (with \"path\" where an argument's value is wrong).".into());
         lines.push("The ranges and the counts of the parameters, and how each function can fail, are what kaname api says of each module.".into());
         if books {
             lines.push("A transfer a function builds comes back as a value, {\"book\",\"transfer\",\"op\",\"args\"}; the functions that make the transfers in the books are not in the module.".into());

@@ -81,7 +81,7 @@ fn a_module_in_english() {
     // a walk that starts outside every module does not enter one, and says so in a line each
     transcript(&mut t, "en", &[(&["check", "."], 1)]);
     for said in [
-        "note: `./app` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check ./app` to read it",
+        "note: `app` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check app` to read it",
         "the `@shop` of `@shop/rules/order_total.rule` is no dependency",
         "`../../lib/rules/order_total.rule` leads outside the module `example.com/acme/app`",
         "`../inner/rules/vat_rate.rule` leads into `inner`, a directory below with a `ritsu.mod` of its own, without an `@`",
@@ -115,7 +115,7 @@ fn a_module_in_japanese() {
     transcript(&mut t, "ja/外", &[(&["check", "--lang", "ja", "請求額.rule"], 1), (&["check", "--lang", "ja", "請求額.rule", "--format", "json"], 1)]);
     transcript(&mut t, "ja", &[(&["check", "--lang", "ja", "."], 1)]);
     for said in [
-        "備考: `./アプリ` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `rulec check ./アプリ` を実行してください",
+        "備考: `アプリ` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `rulec check アプリ` を実行してください",
         "`@shop/規則/注文の合計.rule` の `@shop` は依存ではありません",
         "`../../部品/規則/注文の合計.rule` は、モジュール `example.com/acme/app` の外を指します",
         "`../入れ子/規則/付加価値税率.rule` は、`ritsu.mod` を持つ下のディレクトリ `入れ子` の中を、`@` を通らずに指しています",
@@ -185,7 +185,7 @@ fn a_contract_of_the_module_imports_its_dependencys_contract() {
         let want = if lang == "en" {
             "error: `@lib/proto/acme/orders/v1/money.proto` and `proto/acme/orders/v1/money.proto` are two different files, and both would be `proto/acme/orders/v1/money.proto` of the module generated, imported as `acme/orders/v1/money.proto`; protoc reads one name as one file, so nothing is generated\n"
         } else {
-            "error: `@lib/proto/acme/orders/v1/money.proto` と `proto/acme/orders/v1/money.proto` は中身の違うファイルですが、どちらも生成するモジュールの `proto/acme/orders/v1/money.proto` になり、`acme/orders/v1/money.proto` として import されます。protoc は一つの名前を一つのファイルとして読むので、生成しません\n"
+            "エラー: `@lib/proto/acme/orders/v1/money.proto` と `proto/acme/orders/v1/money.proto` は中身の違うファイルですが、どちらも生成するモジュールの `proto/acme/orders/v1/money.proto` になり、`acme/orders/v1/money.proto` として import されます。protoc は一つの名前を一つのファイルとして読むので、生成しません\n"
         };
         assert_eq!(stderr, want);
     }
@@ -249,7 +249,7 @@ fn a_file_of_a_dependency_reached_by_two_names_stops_gen() {
         assert_eq!(code, 0, "{rule}: {out}{err}");
     }
     let en = "error: `@lib/proto/acme/orders/v1/money.proto` is imported by two names, `acme/orders/v1/money.proto` and `proto/acme/orders/v1/money.proto`, and would be both `proto/acme/orders/v1/money.proto` and `proto/proto/acme/orders/v1/money.proto` of the module generated; protoc reads the two as two files that declare the same types, so nothing is generated\n";
-    let ja = "error: `@lib/proto/acme/orders/v1/money.proto` は、`acme/orders/v1/money.proto` と `proto/acme/orders/v1/money.proto` の二つの名前で import され、生成するモジュールの `proto/acme/orders/v1/money.proto` と `proto/proto/acme/orders/v1/money.proto` の二つになります。protoc は二つを別のファイルとして読み、同じ型を二度宣言するので、生成しません\n";
+    let ja = "エラー: `@lib/proto/acme/orders/v1/money.proto` は、`acme/orders/v1/money.proto` と `proto/acme/orders/v1/money.proto` の二つの名前で import され、生成するモジュールの `proto/acme/orders/v1/money.proto` と `proto/proto/acme/orders/v1/money.proto` の二つになります。protoc は二つを別のファイルとして読み、同じ型を二度宣言するので、生成しません\n";
     for (lang, want) in [("en", en), ("ja", ja)] {
         let (code, out, err) = gen_in(&t, &["rules/billing_fee.rule"], lang, &format!("one-{lang}"));
         assert_eq!((code, out.as_str(), err.as_str()), (2, "", want), "one rule ({lang})");
@@ -327,19 +327,19 @@ fn the_four_errors_of_a_path_given_on_the_command_line() {
         let errors = [
             (format!("@shop/{rule}"), [
                 format!("error: the `@shop` of `@shop/{rule}` is no dependency: the `ritsu.mod` of the module `example.com/acme/app` has no `require shop …`\n"),
-                format!("error: `@shop/{rule}` の `@shop` は依存ではありません。モジュール `example.com/acme/app` の `ritsu.mod` に `require shop …` がありません\n"),
+                format!("エラー: `@shop/{rule}` の `@shop` は依存ではありません。モジュール `example.com/acme/app` の `ritsu.mod` に `require shop …` がありません\n"),
             ]),
             (format!("@lib/../../{lib}/{rule}"), [
                 format!("error: `@lib/../../{lib}/{rule}` leads outside the module `example.com/acme/app`; a file in a module names files under the module's root, and in a dependency by `@<name>/`\n"),
-                format!("error: `@lib/../../{lib}/{rule}` は、モジュール `example.com/acme/app` の外を指します。モジュールの中のファイルが指せるのは、モジュールのルートの下と、`@<名前>/` で入る依存の中です\n"),
+                format!("エラー: `@lib/../../{lib}/{rule}` は、モジュール `example.com/acme/app` の外を指します。モジュールの中のファイルが指せるのは、モジュールのルートの下と、`@<名前>/` で入る依存の中です\n"),
             ]),
             ("@lib/nested/fee.rule".to_string(), [
                 "error: `@lib/nested/fee.rule` leads into `@lib/nested`, a directory below with a `ritsu.mod` of its own, without an `@`; require that module, and name its files by `@<name>/`\n".to_string(),
-                "error: `@lib/nested/fee.rule` は、`ritsu.mod` を持つ下のディレクトリ `@lib/nested` の中を、`@` を通らずに指しています。そのモジュールを `require` に足し、`@<名前>/` で指してください\n".to_string(),
+                "エラー: `@lib/nested/fee.rule` は、`ritsu.mod` を持つ下のディレクトリ `@lib/nested` の中を、`@` を通らずに指しています。そのモジュールを `require` に足し、`@<名前>/` で指してください\n".to_string(),
             ]),
             ("@lib/fee.rule".to_string(), [
                 format!("error: the dependency `@lib` (`example.com/acme/lib`, `../{lib}`) has no `fee.rule`\n"),
-                format!("error: 依存 `@lib`（`example.com/acme/lib`、`../{lib}`）に `fee.rule` はありません\n"),
+                format!("エラー: 依存 `@lib`（`example.com/acme/lib`、`../{lib}`）に `fee.rule` はありません\n"),
             ]),
         ];
         for (path, [en, ja]) in &errors {
@@ -348,7 +348,7 @@ fn the_four_errors_of_a_path_given_on_the_command_line() {
         // the file that is there
         assert_eq!(said(&format!("@lib/{rule}")).0, 0);
         // outside every module, as before
-        assert_eq!(rulec_at(t.path(), ".", &["check", "@lib/fee.rule"]), (2, "error: cannot read `@lib/fee.rule`\n".to_string()));
+        assert_eq!(rulec_at(t.path(), ".", &["check", "@lib/fee.rule"]), (2, "error: `@lib/fee.rule` is not there\n".to_string()));
     }
 }
 

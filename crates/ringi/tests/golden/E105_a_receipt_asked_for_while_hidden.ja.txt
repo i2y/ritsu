@@ -1,0 +1,4 @@
+エラー[E105]: tests/mutants/E105_a_receipt_asked_for_while_hidden.ringi:8:80: フィールド receipt は、必須なのに見せていないことがあります
+     8 |   receipt : attachment "Receipt"  shown when category is travel  required when amount > 30_000JPY
+  = その申請: amount = 30_001JPY、category = expense
+  = 見せていないフィールドは入れられません。`required when` の条件が成り立つときは、`shown when` の条件も成り立つように直してください。

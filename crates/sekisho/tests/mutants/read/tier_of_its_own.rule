@@ -1,0 +1,18 @@
+rule tier_of_its_own v1
+description "The tier of an order by its size and its haste, with tiers the rule declares itself. A sketch written for the tests"
+
+enum tier = basic < silver < gold
+
+inputs
+  large : bool
+  rush  : bool
+
+outputs
+  tier : tier
+
+table tiers
+policy unique
+| large | rush  | -> tier |
+| false | false | basic   |
+| true  | false | silver  |
+| -     | true  | gold    |

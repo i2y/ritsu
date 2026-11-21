@@ -20,6 +20,7 @@ import os
 import shutil
 import sys
 import tempfile
+from collections.abc import Awaitable
 from typing import Any
 
 from temporalio.client import Client, WorkflowFailureError
@@ -54,6 +55,7 @@ async def main(parent: str, child: str | None, runs_file: str, out_file: str) ->
     child_by = json.loads(os.environ["DANDORI_CHILD_BY"]) if "DANDORI_CHILD_BY" in os.environ else None
     env = await WorkflowEnvironment.start_local(ui=False, dev_server_log_level="error")
     results: list[dict[str, Any]] = []
+    passed_on: asyncio.Future[None] | None = None
     try:
         elsewhere = None
         if child_by is not None:
@@ -63,6 +65,8 @@ async def main(parent: str, child: str | None, runs_file: str, out_file: str) ->
             while b"serving" not in await elsewhere.stdout.readline():
                 if elsewhere.returncode is not None:
                     raise RuntimeError(f"the child's runner exited with {elsewhere.returncode}")
+            # the rest of what it prints goes on to this runner's standard error, read as it comes
+            passed_on = asyncio.ensure_future(pass_on(elsewhere.stdout))
         start = importlib.import_module(f"{parent}.client").start
         workers = [worker(env.client, parent)] + ([worker(env.client, child)] if child is not None else [])
         for w in workers:
@@ -71,7 +75,7 @@ async def main(parent: str, child: str | None, runs_file: str, out_file: str) ->
             for r in runs:
                 handle = await start(env.client, r["id"], r["input"])
                 try:
-                    end: dict[str, Any] = {"succeed": await handle.result()}
+                    end: dict[str, Any] = {"succeed": await unless_gone(handle.result(), elsewhere)}
                 except WorkflowFailureError as e:
                     c = e.cause
                     end = {"fail": {"error": getattr(c, "type", None) or str(c), "cause": getattr(c, "message", None) or None}}
@@ -84,11 +88,36 @@ async def main(parent: str, child: str | None, runs_file: str, out_file: str) ->
             elsewhere.stdin.close()
             if await elsewhere.wait() != 0:
                 raise RuntimeError(f"the child's runner exited with {elsewhere.returncode}")
+            if passed_on is not None:
+                # the last of what it printed, for a few seconds at the most
+                await asyncio.wait({passed_on}, timeout=5)
     finally:
         await env.shutdown()
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
         f.write("\n")
+
+
+async def pass_on(stream: asyncio.StreamReader) -> None:
+    """What the other language's runner prints once it serves, on this runner's standard error, as it comes."""
+    while line := await stream.readline():
+        sys.stderr.write(line.decode(errors="replace"))
+        sys.stderr.flush()
+
+
+async def unless_gone(waiting: Awaitable[Any], elsewhere: asyncio.subprocess.Process | None) -> Any:
+    """What `waiting` comes to; or, when the other language's runner that serves the child ends first, an error: nothing
+    else serves the child, and the run would wait without end."""
+    if elsewhere is None:
+        return await waiting
+    result = asyncio.ensure_future(waiting)
+    gone = asyncio.ensure_future(elsewhere.wait())
+    await asyncio.wait({result, gone}, return_when=asyncio.FIRST_COMPLETED)
+    if not result.done():
+        result.cancel()
+        raise RuntimeError(f"the child's runner exited with {elsewhere.returncode} before the runs were over")
+    gone.cancel()
+    return result.result()
 
 
 def package(work: str, name: str, source: str) -> str:

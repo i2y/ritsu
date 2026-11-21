@@ -163,6 +163,10 @@ fn shape(f: &File) -> Vec<String> {
     }
     for w in &f.workflows {
         out.push(format!("workflow {}", w.name.ascii()));
+        for h in &w.holds {
+            out.push(format!("  resource {} from flow", found(f, &h.resource.word)));
+            out.extend(h.lines.iter().map(|l| format!("    {} = flow", found(f, &l.attribute.word))));
+        }
     }
     for a in &f.actions {
         out.push(format!("action {}", a.name.ascii()));
@@ -214,6 +218,48 @@ fn the_two_versions_are_one_tree_but_for_the_names() {
         assert_eq!(a, b, "line {i} of the shape");
     }
     assert_eq!(en.len(), ja.len());
+}
+
+/// The lines under a workflow that say what its flow holds of a resource (DESIGN 2.12): the
+/// resource type and the value of the flow that is its id, and under it each attribute with the
+/// value of the flow it is, a name or the fields read from one. The English example and the
+/// Japanese one are one tree but for the names (the values of the flow are the flow's own names).
+#[test]
+fn the_lines_under_a_workflow_say_what_its_flow_holds() {
+    let (en, ja) = (read("examples/claims/claims.gate"), read("examples/claims/claims.ja.gate"));
+    assert_eq!(shape(&en), shape(&ja));
+    let said = |f: &File| -> Vec<(String, String, Vec<(String, String)>)> {
+        f.workflows.iter().flat_map(|w| &w.holds).map(|h| (h.resource.word.clone(), h.id.0.clone(), h.lines.iter().map(|l| (l.attribute.word.clone(), l.value.0.clone())).collect())).collect()
+    };
+    assert_eq!(said(&en), [("Claim".to_string(), "claim_id".to_string(), vec![("amount".to_string(), "amount".to_string())])]);
+    assert_eq!(said(&ja), [("請求".to_string(), "請求番号".to_string(), vec![("金額".to_string(), "金額".to_string())])]);
+    // a field of a value, a `resource` line with nothing under it, and two of them
+    let src = "gate t v1\n\nworkflow returns from \"returns.flow\"\n  description \"Refunds\"\n  resource Order from order.id\n    total = order.lines.total\n    paid  = paid\n  resource Customer from customer\n\nresource Order\n  attributes\n    total : number  range >=0 <=9\n    paid  : bool\n\nresource Customer\n";
+    let p = parse("t.gate", src);
+    assert!(p.diags.is_empty(), "{:?}", p.diags.iter().map(|d| d.render(ritsu_base::text::Lang::En)).collect::<Vec<_>>());
+    assert_eq!(
+        said(&p.file.unwrap()),
+        [
+            ("Order".to_string(), "order.id".to_string(), vec![("total".to_string(), "order.lines.total".to_string()), ("paid".to_string(), "paid".to_string())]),
+            ("Customer".to_string(), "customer".to_string(), vec![]),
+        ]
+    );
+    // what is not of the form: no `from`, no `=`, a value that is no name, a line under a workflow
+    // that is none of its lines, and a line indented under `description`
+    for (line, code) in [
+        ("  resource Order order\n", "E005"),
+        ("  resource Order from\n", "E002"),
+        ("  resource Order from order\n    total order.total\n", "E005"),
+        ("  resource Order from order\n    total = 3\n", "E002"),
+        ("  resource Order from order.\n", "E002"),
+        ("  attributes\n", "E005"),
+        ("  description \"Refunds\"\n    total = order.total\n", "E004"),
+    ] {
+        let src = format!("gate t v1\n\nworkflow returns from \"returns.flow\"\n{line}\nresource Order\n  attributes\n    total : number  range >=0 <=9\n");
+        let p = parse("t.gate", &src);
+        let codes: Vec<&str> = p.diags.iter().map(|d| d.code).collect();
+        assert_eq!(codes, [code], "{line:?}: {:?}", p.diags.iter().map(|d| d.render(ritsu_base::text::Lang::En)).collect::<Vec<_>>());
+    }
 }
 
 /// The examples of a condition on another action's answer (DESIGN 2.11): each pair is one tree but

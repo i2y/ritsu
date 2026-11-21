@@ -1,0 +1,29 @@
+2026-11-16 10:00  submit                     by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  send back                  by e1101  -> with requester, resubmit by 2026-11-19 end of day
+2026-11-16 13:00  resubmit (kind = service)  by e1201  -> first (e1101), due 2026-11-19 end of day; now empty: vendor, contact
+2026-11-16 14:00  approve                    by e1101  -> approved
+scenario `a_kind_changed_on_resubmit`: as written (4 rows)
+
+2026-11-16 10:00  submit                  by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  send back               by e1101  -> with requester, resubmit by 2026-11-19 end of day
+2026-11-16 13:00  resubmit (note = none)  by e1201  -> first (e1101), due 2026-11-19 end of day; now empty: note
+2026-11-16 14:00  approve                 by e1101  -> approved
+scenario `a_note_made_empty`: as written (4 rows)
+
+2026-11-16 10:00  submit                                                 by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  send back                                              by e1101  -> with requester, resubmit by 2026-11-19 end of day
+2026-11-16 13:00  resubmit (kind = service, vendor = none, note = none)  by e1201  -> first (e1101), due 2026-11-19 end of day; now empty: vendor, contact
+2026-11-16 14:00  approve                                                by e1101  -> approved
+scenario `made_empty_where_it_is_hidden_or_empty`: as written (4 rows)
+
+2026-11-16 10:00  submit                                    by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  edit (label = "A-12", checked = "e1101")  by e1101  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 12:00  edit (kind = service, note = none)        by e1101  -> first (e1101), due 2026-11-19 end of day; now empty: vendor, contact, note, label
+2026-11-16 13:00  edit (checked = none)                     by e1101  -> first (e1101), due 2026-11-19 end of day; now empty: checked
+2026-11-16 14:00  approve                                   by e1101  -> approved
+scenario `edited_by_an_approver`: as written (5 rows)
+
+2026-11-16 10:00  submit                by e1201  -> first (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  edit (vendor = none)  by e1101  -> first (e1101), due 2026-11-19 end of day; now empty: vendor, contact
+2026-11-16 13:00  approve               by e1101  -> approved
+scenario `the_vendor_made_empty_by_an_approver`: as written (3 rows)

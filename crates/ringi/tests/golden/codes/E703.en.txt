@@ -1,0 +1,3 @@
+error[E703]: example.ringi:20:1: `labels ja` has no label for 1 thing the screens show: `stage check`
+    20 | labels ja
+  = Where it has none, a screen in this language would show the title as the file writes it.

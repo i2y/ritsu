@@ -14,6 +14,12 @@
 use std::path::PathBuf;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready};
+use ritsu_testkit::run::finish;
+
+/// How long a run of rulec may take: `rulec verify` talks to the adapter, and waits for its
+/// answers without a limit of its own. Past it, rulec is stopped with every process it started,
+/// and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -53,19 +59,8 @@ fn lay_out(dir: &std::path::Path, broken: bool) {
 }
 
 fn verify(dir: &std::path::Path) -> (i32, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .current_dir(root())
-        .env("RULEC_LANG", "en")
-        .args([
-            "verify",
-            "tests/corpus/ec261.rule",
-            "--adapter",
-            "python3",
-            dir.join("adapter.py").to_str().unwrap(),
-        ])
-        .output()
-        .expect("rulec を起動できない");
-    (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned())
+    let out = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(root()).env("RULEC_LANG", "en").args([ "verify", "tests/corpus/ec261.rule", "--adapter", "python3", dir.join("adapter.py").to_str().unwrap(), ]), RULEC_LIMIT, "rulec verify asking the adapter");
+    (out.code.unwrap_or(-1), out.stdout.clone())
 }
 
 fn tmp(name: &str) -> (TempDir, PathBuf) {
@@ -105,8 +100,8 @@ fn 閾値を一つ壊すとその入力ごと報告される() {
         "table band_of row 4",
         "table amount row 3",
         "table reduction row 7",
-        "delay=4, distance=3501, intra_eu=false",
-        "rule compensation=300 / legacy compensation=600",
+        "delay=4h, distance=3501km, intra_eu=false",
+        "rule compensation=300EUR / legacy compensation=600EUR",
     ] {
         assert!(out.contains(want), "文書が見せている「{want}」が出ていない:\n{out}");
     }

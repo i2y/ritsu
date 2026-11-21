@@ -1,0 +1,22 @@
+rule who_decides v1
+description "Who decides a purchase of goods, by its amount (fictional)"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000_000JPY
+
+apply authority = "shared/authority.rule" meaning:19261fb92723d78d
+  kind = goods
+  amount = amount
+  board -> by_board
+
+outputs
+  board_decides : bool
+
+table board_decides
+| -> board_decides |
+| by_board         |
+
+examples
+| amount        | -> board_decides |
+| 1_000_000JPY  | false            |
+| 20_000_000JPY | true             |

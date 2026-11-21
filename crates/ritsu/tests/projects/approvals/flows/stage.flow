@@ -1,0 +1,44 @@
+workflow approval_stage v1
+  now range >=2026-01-01 <=2027-12-31 offset +09:00
+description "One stage of an expense request: the approver is asked, reminded at 09:00 on the second business day, and the stage expires when the third business day ends with no answer"
+
+use dates terms from "../dates/approval_terms.cal"
+
+enum Verdict = approve | send_back | reject
+
+record Answer
+  verdict  : Verdict
+  approver : string
+
+inputs
+  request_id : string
+  role       : string
+  amount     : money[JPY]  range >=1JPY <=10_000_000JPY
+
+outputs
+  verdict  : Verdict
+  approver : string
+
+# The approvals service shows the request to the people who hold the role.
+task ask(request_id: string, role: string, amount: money[JPY], due: timestamp)
+  idempotent
+
+task remind(request_id: string, role: string, due: timestamp)
+  idempotent
+
+# Sent by the approvals service once the gate allows the person who answers.
+task answer(by: timestamp) -> Answer
+  event
+  timeout until by
+
+flow
+  let reminder = terms.reminder(received: now)
+  let due = terms.due(received: now)
+  ask(request_id: request_id, role: role, amount: amount, due: due.at)
+  let first = answer(by: reminder.at)
+    on timeout =>
+      remind(request_id: request_id, role: role, due: due.at)
+      let second = answer(by: due.at)
+        on timeout => fail Expired "No answer by the end of the third business day"
+      succeed verdict = second.verdict, approver = second.approver
+  succeed verdict = first.verdict, approver = first.approver

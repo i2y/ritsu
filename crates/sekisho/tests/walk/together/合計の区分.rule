@@ -1,0 +1,26 @@
+rule 合計の区分(sums) v1
+description "二つの数の合計から出す二つの出力。どちらも、片方の数だけを動かしても変わり目が決まらない"
+
+enum 水準(level) = 低(low) | 高(high)
+
+inputs
+  甲(a) : number  range >=0 <=100
+  乙(b) : number  range >=0 <=100
+
+outputs
+  前(x) : 水準
+  後(y) : 水準
+
+derive 合計(total) : number = 甲 + 乙  range >=0 <=200
+
+table 前の表(first)
+policy unique
+| 合計  | -> 前 |
+| <=100 | 低    |
+| >100  | 高    |
+
+table 後の表(second)
+policy unique
+| 合計  | -> 後 |
+| <=150 | 低    |
+| >150  | 高    |

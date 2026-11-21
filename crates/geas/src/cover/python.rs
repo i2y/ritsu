@@ -4,17 +4,19 @@
 use super::{FileLines, Report};
 use crate::json::{self, J};
 use crate::tree;
+use ritsu_base::text::Text;
 use std::path::Path;
 
 /// The files under `root` that one process reported. `root` is absolute and
-/// canonical, as the hook was given it.
-pub fn read(text: &str, root: &Path) -> Result<Report, String> {
+/// canonical, as the hook was given it. Err says what does not read, in both languages (what the
+/// JSON reader says, as it says it).
+pub fn read(text: &str, root: &Path) -> Result<Report, Text> {
     let v = json::parse(text)?;
     let J::Obj(top) = &v else {
-        return Err("not a JSON object".into());
+        return Err(tr!("JSON のオブジェクトではありません", "not a JSON object"));
     };
     let Some((_, J::Obj(files))) = top.iter().find(|(k, _)| k == "files") else {
-        return Err("no `files` object".into());
+        return Err(tr!("`files` のオブジェクトがありません", "no `files` object"));
     };
     let mut out = Report::new();
     for (path, entry) in files {
@@ -24,19 +26,19 @@ pub fn read(text: &str, root: &Path) -> Result<Report, String> {
         if !tree::is_source(&rel) {
             continue;
         }
-        let lines = |key: &str| -> Result<crate::lines::Lines, String> {
+        let lines = |key: &str| -> Result<crate::lines::Lines, Text> {
             let J::Obj(e) = entry else {
-                return Err(format!("the entry of {rel} is not an object"));
+                return Err(tr!("{rel} の項目がオブジェクトではありません", "the entry of {rel} is not an object"));
             };
             match e.iter().find(|(k, _)| k == key) {
                 Some((_, J::Arr(items))) => items
                     .iter()
                     .map(|i| match i {
                         J::Num(n) if *n >= 1.0 && n.fract() == 0.0 => Ok(*n as u32),
-                        _ => Err(format!("a line of {rel} is not a line number")),
+                        _ => Err(tr!("{rel} の行に、行番号でないものがあります", "a line of {rel} is not a line number")),
                     })
                     .collect(),
-                _ => Err(format!("the entry of {rel} has no `{key}` list")),
+                _ => Err(tr!("{rel} の項目に `{key}` の並びがありません", "the entry of {rel} has no `{key}` list")),
             }
         };
         let f = FileLines { code: lines("code")?, ran: lines("ran")? };

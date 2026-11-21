@@ -1,0 +1,14 @@
+rule f_fee v1
+description "An input Java writes like a local of the function that writes the record"
+
+inputs
+  F : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_qty
+policy unique
+| F | -> fee |
+| <=5 | 3USD |
+| >5  | 2USD |

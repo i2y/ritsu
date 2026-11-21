@@ -32,6 +32,14 @@ nav = [
     { "規則・日付・帳簿を呼ぶ" = "kaname/together.md" },
     { "性質と証明" = "kaname/properties.md" },
   ] },
+  { ringi = [
+    { ringi = "ringi/index.md" },
+    { "申請の種類の書き方" = "ringi/language.md" },
+    { "検査が保証すること" = "ringi/checks.md" },
+    { "申請の種類を読む" = "ringi/reading.md" },
+    { "ほかの言語と組む" = "ringi/together.md" },
+    { "生成する物とサーバー" = "ringi/server.md" },
+  ] },
   { "Node で使う" = "node.md" },
   { "モジュール" = "modules.md" },
   { "変更の行き先" = "impact.md" },
@@ -102,12 +110,13 @@ anchor_linenums = true
 line_spans = "__span"
 pygments_lang_class = true
 
-# Colour the code of the languages: ```kn with tools/knlexer.py, ```gate with tools/gatelexer.py,
-# Cedar's ```cedar and ```cedarschema with tools/cedarlexer.py, and ```rule, ```flow and ```book with
-# the lexers of rulec's, dandori's and chobo's sites. Naming a module here is how it gets imported,
+# Colour the code of the languages: ```kn with tools/knlexer.py, ```ringi with tools/ringilexer.py,
+# ```gate with tools/gatelexer.py, Cedar's ```cedar and ```cedarschema with tools/cedarlexer.py, and
+# ```rule, ```flow and ```book with the lexers of rulec's, dandori's and chobo's sites. Naming a module here is how it gets imported,
 # and importing it is what registers its lexers with Pygments; build.sh puts tools/ and the tools/ of
 # the three sites on PYTHONPATH.
 [project.markdown_extensions.knlexer]
+[project.markdown_extensions.ringilexer]
 [project.markdown_extensions.gatelexer]
 [project.markdown_extensions.cedarlexer]
 [project.markdown_extensions.rulelexer]

@@ -1,0 +1,26 @@
+rule 重さのある注文(weighed_order_ja) v1
+description "注文が大口か、重いか。注文は 20 kg 以上で、一件は 50 kg まで。軽い明細が一つか二つの注文は、重い明細と一緒でないと下の端に届かない"
+
+# 注文の明細の一件ぶん
+elements 明細(lines)
+  価格(price)  : money[円]  range >=1円 <=100円
+  重さ(weight) : mass[kg]  range >=1kg <=50kg
+
+sum 金額(total) over 明細 of 価格  range >=0円 <=1000円
+sum 総重量(load) over 明細 of 重さ  range >=20kg <=200kg
+
+outputs
+  大口(large) : bool
+  重い(heavy) : bool
+
+table 大口の判定(large_of)
+policy unique
+| 金額    | -> 大口 |
+| <150円  | false   |
+| >=150円 | true    |
+
+table 重さの判定(heavy_of)
+policy unique
+| 総重量  | -> 重い |
+| <100kg  | false   |
+| >=100kg | true    |

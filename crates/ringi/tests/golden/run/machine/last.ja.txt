@@ -1,0 +1,173 @@
+2026-11-16 10:00  submit   e1101  -> second（e3101）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve  e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+2026-11-16 12:00  approve  e0101  -> approved
+シナリオ `one_answer_at_the_later_of_two_stages`: 書いたとおり（3 行）
+
+2026-11-16 10:00  submit   e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve  e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+2026-11-16 13:00  approve  e0101  -> approved
+シナリオ `one_answer_after_the_stage_between`: 書いたとおり（4 行）
+
+2026-11-16 10:00  submit   e1101  -> second（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は decide の承認を待つ（e3101）; middle は decide の承認を待つ（e3101）
+2026-11-16 11:00  approve  e1002  -> decide（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e3101  -> approved; first は decide の承認で済んだ（e3101）; middle は decide の承認で済んだ（e3101）
+シナリオ `three_stages_one_answer_at_the_last`: 書いたとおり（3 行）
+
+2026-11-16 10:00  submit   e0101  -> middle（e0001、e0201、e0202、e0203、e0204 のうち 5 人）、期限は 2026-11-19 の終わり; first は decide の承認を待つ（e0001）
+2026-11-16 11:00  approve  e0001  -> middle（e0201、e0202、e0203、e0204 のうち 4 人）、期限は 2026-11-19 の終わり
+2026-11-16 11:10  approve  e0201  -> middle（e0202、e0203、e0204 のうち 3 人）、期限は 2026-11-19 の終わり
+2026-11-16 11:20  approve  e0202  -> middle（e0203、e0204 のうち 2 人）、期限は 2026-11-19 の終わり
+2026-11-16 11:30  approve  e0203  -> middle（e0204）、期限は 2026-11-19 の終わり
+2026-11-16 11:40  approve  e0204  -> decide（e0001）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e0001  -> approved; first は decide の承認で済んだ（e0001）
+シナリオ `a_stage_between_that_takes_their_answer_too`: 書いたとおり（7 行）
+
+2026-11-16 10:00  submit   e1101  -> first（accounting: e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve  e1002  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+シナリオ `one_part_of_a_joint_stage_waits`: 書いたとおり（3 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit   e1101  -> second（dept_head: e3101; accounting: e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve  e3101  -> second（accounting: e1001、e1002 のだれか）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e1001  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+シナリオ `waits_for_a_part_of_a_joint_stage`: 書いたとおり（3 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit             e1101  -> middle（flow precheck_agent）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）; flow precheck_agent に頼んだ
+2026-11-16 10:01  agent answered ok         -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve            e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+シナリオ `past_an_agent`: 書いたとおり（3 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit                             e1101  -> middle（flow precheck_agent）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）; flow precheck_agent に頼んだ
+2026-11-16 10:01  agent answered doubt "No receipt"         -> middle（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  approve                            e3101  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve                            e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+シナリオ `the_agent_doubts`: 書いたとおり（4 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit   e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve  e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  reject   e3101  -> rejected
+シナリオ `rejected_at_the_later_stage`: 書いたとおり（3 行）
+
+2026-11-16 10:00  submit     e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve    e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  send back  e3101  -> with requester、再申請は 2026-11-19 の終わりまで
+2026-11-17 10:00  resubmit   e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-20 の終わり; first は second の承認を待つ（e3101）
+2026-11-17 11:00  approve    e1001  -> second（e3101）、期限は 2026-11-20 の終わり
+2026-11-17 12:00  approve    e3101  -> decide（e0101）、期限は 2026-11-20 の終わり; first は second の承認で済んだ（e3101）
+シナリオ `made_again_after_the_later_stage_sent_it_back`: 書いたとおり（6 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-19 09:00（decide）、late 2026-11-21 00:00（decide）
+
+2026-11-16 10:00  submit              e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve             e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve             e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+2026-11-16 13:00  send back first へ  e0101  -> first（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 14:00  approve             e3101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり
+2026-11-16 15:00  approve             e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 16:00  approve             e3101  -> decide（e0101）、期限は 2026-11-19 の終わり
+シナリオ `sent_back_to_the_stage_that_waited`: 書いたとおり（7 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit               e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve              e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve              e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+2026-11-16 13:00  send back middle へ  e0101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり
+2026-11-16 15:00  approve              e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 16:00  approve              e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+シナリオ `sent_back_to_the_stage_between`: 書いたとおり（6 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit   e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve  e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+2026-11-16 13:00  retract  e3101  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 14:00  approve  e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+シナリオ `taken_back_with_the_stage_it_did`: 書いたとおり（5 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit   e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve  e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-17 10:00  pause    e3101  -> second（e3101）で保留、2026-11-24 の終わりまで
+2026-11-18 10:00  resume   e3101  -> second（e3101）、期限は 2026-11-20 の終わり
+2026-11-18 11:00  approve  e3101  -> decide（e0101）、期限は 2026-11-23 の終わり; first は second の承認で済んだ（e3101）
+シナリオ `paused_at_the_later_stage`: 書いたとおり（5 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-20 09:00（decide）、late 2026-11-24 00:00（decide）
+
+2026-11-16 10:00  submit    e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve   e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  withdraw  e1101  -> with requester、再申請は 2026-11-19 の終わりまで
+シナリオ `withdrawn_while_the_stage_waits`: 書いたとおり（3 行）。チケットは `with requester` のままです。置いてある時計: resubmit late 2026-11-20 00:00
+
+2026-11-16 10:00  submit   e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve  e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-18 09:00  remind          -> second（e3101）、期限は 2026-11-19 の終わり; e3101 に催促した
+2026-11-20 00:00  late            -> second（e0101）、期限は 2026-11-25 の終わり; second を e0101 へ上げた
+2026-11-20 10:00  approve  e0101  -> first（e3101）、期限は 2026-11-25 の終わり; first は second を待つのをやめて始めた（e3101。the stage it waited for was answered without e3101）
+2026-11-20 11:00  approve  e3101  -> decide（e0101）、期限は 2026-11-25 の終わり
+2026-11-20 12:00  approve  e0101  -> approved
+シナリオ `late_and_approved_where_it_went_up_to`: 書いたとおり（7 行）
+
+2026-11-16 10:00  submit                         e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve                        e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  hand over e3101 から e0102 へ         -> second（e0102）、期限は 2026-11-19 の終わり
+2026-11-16 13:00  approve                        e0102  -> first（e3101）、期限は 2026-11-19 の終わり; first は second を待つのをやめて始めた（e3101。the stage it waited for was answered without e3101）
+2026-11-16 14:00  approve                        e3101  -> decide（e0101）、期限は 2026-11-19 の終わり
+シナリオ `handed_over_at_the_later_stage`: 書いたとおり（5 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit              e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve             e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  add approver e0102         -> second（e3101、e0102 のだれか）、期限は 2026-11-19 の終わり
+2026-11-16 13:00  approve             e0102  -> first（e3101）、期限は 2026-11-19 の終わり; first は second を待つのをやめて始めた（e3101。the stage it waited for was answered without e3101）
+2026-11-16 14:00  approve             e3101  -> decide（e0101）、期限は 2026-11-19 の終わり
+シナリオ `an_added_approver_answers_the_later_stage`: 書いたとおり（5 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit              e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  approve             e1001  -> second（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  add approver e0102         -> second（e3101、e0102 のだれか）、期限は 2026-11-19 の終わり
+2026-11-16 13:00  approve             e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e3101）
+シナリオ `an_approver_is_added_and_the_one_who_waited_answers`: 書いたとおり（4 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit                 e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  edit（shape = short）  e1001  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve                e1001  -> first（e3101）、期限は 2026-11-19 の終わり; first は second を待つのをやめて始めた（e3101。the stage it waited for is not on the route）
+2026-11-16 13:00  approve                e3101  -> decide（e0101）、期限は 2026-11-19 の終わり
+シナリオ `the_later_stage_leaves_the_route`: 書いたとおり（4 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit                 e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  edit（system = wiki）  e1001  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve                e1001  -> first（e3101）、期限は 2026-11-19 の終わり; first は second を待つのをやめて始めた（e3101。the stage it waited for does not come to e3101 alone）
+2026-11-16 13:00  approve                e3101  -> second（e7001）、期限は 2026-11-19 の終わり
+2026-11-16 14:00  approve                e7001  -> decide（e0101）、期限は 2026-11-19 の終わり
+シナリオ `the_later_stage_comes_to_another`: 書いたとおり（5 行）。チケットは `in progress` のままです。置いてある時計: remind 2026-11-18 09:00（decide）、late 2026-11-20 00:00（decide）
+
+2026-11-16 10:00  submit   e1201  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e1101）; first は decide の承認を待つ（e3101）
+2026-11-16 11:00  approve  e1001  -> second（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e1101  -> decide（e3101）、期限は 2026-11-19 の終わり; first は second の承認で済んだ（e1101）
+2026-11-16 13:00  approve  e3101  -> approved; first は decide の承認で済んだ（e3101）
+シナリオ `two_ways_wait_for_two_stages`: 書いたとおり（4 行）
+
+2026-11-16 10:00  submit                         e1201  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e1101）; first は decide の承認を待つ（e3101）
+2026-11-16 11:00  approve                        e1001  -> second（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  hand over e1101 から e0102 へ         -> second（e0102）、期限は 2026-11-19 の終わり
+2026-11-16 13:00  approve                        e0102  -> first（manager: e1101）、期限は 2026-11-19 の終わり; first は second を待つのをやめて始めた（e1101。the stage it waited for was answered without e1101）
+2026-11-16 14:00  approve                        e1101  -> decide（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 15:00  approve                        e3101  -> approved; first は decide の承認で済んだ（e3101）
+シナリオ `one_of_two_ways_starts_and_the_other_waits_on`: 書いたとおり（6 行）
+
+2026-11-16 10:00  submit                 e1101  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり; first は second の承認を待つ（e3101）
+2026-11-16 11:00  edit（shape = twice）  e1001  -> middle（e1001、e1002 のだれか）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve                e1001  -> decide（e3101）、期限は 2026-11-19 の終わり; second は decide の承認を待つ（e3101）; first は decide の承認を待つ（e3101。the stage it waited for waits too）
+2026-11-16 13:00  approve                e3101  -> approved; first は decide の承認で済んだ（e3101）; second は decide の承認で済んだ（e3101）
+シナリオ `the_later_stage_waits_too`: 書いたとおり（4 行）
+
+2027-03-30 10:00  submit   e9002  -> middle（e1001、e1002 のだれか）、期限は 2027-04-02 の終わり; first は second の承認を待つ（e9001）
+2027-04-01 09:00  remind          -> middle（e1001、e1002 のだれか）、期限は 2027-04-02 の終わり; e1001、e1002 に催促した
+2027-04-01 11:00  approve  e1001  -> decide（e0102）、期限は 2027-04-06 の終わり; first は decide の承認を待つ（e0102。the stage it waited for does not come to e9001 alone）; second を e0102 へ上げた（the head of legal is empty）; second は decide の承認を待つ（e0102）
+2027-04-01 12:00  approve  e0102  -> approved; first は decide の承認で済んだ（e0102）; second は decide の承認で済んだ（e0102）
+シナリオ `the_organization_changes_while_a_stage_waits`: 書いたとおり（4 行）
+
+2026-12-28 10:00  submit   e1201  -> first（e1101）、期限は 2027-01-06 の終わり
+2026-12-28 11:00  approve  e1101  -> second（e1001、e1002 のだれか）、期限は 2027-01-06 の終わり; middle は decide の承認を待つ（e3101）
+2026-12-28 12:00  approve  e1002  -> decide（e3101）、期限は 2027-01-06 の終わり
+2026-12-28 13:00  approve  e1101  -> approved; e3101 の代理; middle は decide の承認で済んだ（e3101 の代理 e1101）
+シナリオ `a_proxy_answers_the_later_stage`: 書いたとおり（4 行）
+
+2026-12-28 10:00  submit   e1201  -> second（manager_too: e1101; chief: e3101）、期限は 2027-01-06 の終わり; first は second の承認を待つ（e1101）; middle は second の承認を待つ（e3101）
+2026-12-28 11:00  approve  e1101  -> second（chief: e3101）、期限は 2027-01-06 の終わり
+2026-12-28 12:00  approve  e1101  -> decide（e0101）、期限は 2027-01-06 の終わり; e3101 の代理; first は second の承認で済んだ（e1101）; middle は second の承認で済んだ（e3101 の代理 e1101）
+シナリオ `a_proxy_with_a_stage_of_their_own`: 書いたとおり（3 行）。チケットは `in progress` のままです。置いてある時計: remind 2027-01-05 09:00（decide）、late 2027-01-07 00:00（decide）

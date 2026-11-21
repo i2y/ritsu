@@ -1,0 +1,31 @@
+workflow account_provisioning v1
+  now range >=2026-01-01 <=2027-12-31 offset +09:00
+description "The account made after an account request is approved: the directory gives the person access to the system at the level the request asks for, until the day it ends, and the requester is told. ringi starts it when the ticket is approved"
+
+enum Level = read | write | admin
+
+inputs
+  request_id : string
+  person     : string
+  system     : string
+  level      : Level
+  until      : date  range >=2026-01-01 <=2028-12-31
+
+outputs
+  account : string
+
+record Account
+  account : string
+
+task grant_access(request_id: string, person: string, system: string, level: Level, until: date) -> Account
+  timeout 1 hour
+  retry 3 times every 5 minutes
+  idempotent
+
+task tell_requester(request_id: string, text: string)
+  idempotent
+
+flow
+  let a = grant_access(request_id: request_id, person: person, system: system, level: level, until: until)
+  tell_requester(request_id: request_id, text: "Access for request {request_id} is ready: {a.account}")
+  succeed account = a.account

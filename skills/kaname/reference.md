@@ -45,17 +45,25 @@ one): `fn 遅れの請求(claim)(請求書(invoice): 請求書, …)`. A declara
 or by its alias. The names of `let`, of a parameter of a function given to a builtin and of `some`
 need no alias.
 
-Thirteen words cannot be names (E002): `let` `if` `then` `else` `match` `some` `none` `true`
-`false` `and` `or` `not` `in`. The other keywords stand where nothing else can, so a field may be
-`total` and a parameter `description`. An alias that is a reserved word of the TypeScript, Python
-or Go it is generated in, or a name of kaname's helper module (`kaname`, `KanameError`, `Q`,
-`Date`, `Rat`, `glue`), is E007. A keyword of Rust is not: the generated Rust writes it as a raw
-identifier (`r#type`), or with `_` after it where no raw identifier writes it (`self_`). The one
-thing the generated Rust cannot take is a module named or aliased `crate`, `self`, `Self`, `mod` or
-`door`, which would name the module's file: no Rust module can take the first three, Rust reads
-`mod.rs` as a directory's own file, and `door.rs` is the package's door. The other targets take
-them, so `check` warns (W001), and only `ritsu gen --target rust` stops, with E008. One name
-or alias given twice in one space is E006: the names of a module's `use` lines and its
+Fourteen words cannot be names (E002): `let` `if` `then` `else` `match` `some` `none` `true`
+`false` `and` `or` `not` `in` `try`. The other keywords stand where nothing else can, so a field
+may be `total` and a parameter `description`. A name of kaname's helper module (`kaname`,
+`KanameError`, `Q`, `Date`, `Rat`, `glue`) is no name or alias in any target (E007). A name some
+targets cannot write as a host reads it is a warning of those targets (W001), and `ritsu gen` stops
+where it writes one of them (E008): a keyword of Python as a field, as a function a host calls, as
+its parameter or as a module; a word TypeScript takes as no name as a function a host calls
+(`delete`, `eval`); a module whose name with no `_` is a keyword of Go (`go_to`); a module named or
+aliased `crate`, `self`, `super`, `Self`, `mod` or `door`, which would name the module's Rust file
+(no Rust module can take the first four, Rust reads `mod.rs` as a directory's own file, and
+`door.rs` is the package's door); and a name Python or TypeScript makes something else (`__x`,
+`__x__`, `__proto__`, `kind` in a value of an enum whose values have fields). A name a target
+writes otherwise is free: TypeScript writes a field as a property, Go writes a type, a field and a
+function in Pascal case, the generated Rust writes a keyword as a raw identifier (`r#type`), or with
+`_` after it where no raw identifier writes it (`self_`), and the generator names the parameters,
+the type parameters and the inner functions itself. Two names some targets write alike
+(`total_weight` and `totalWeight` are both `TotalWeight` in Go) are W002, and stop those targets
+alike; two every target writes alike (two types) are E006. One name or alias given twice in one
+space is E006 too: the names of a module's `use` lines and its
 declarations, the fields of a record, the parameters of a function, the values of an enum, and the
 names inside a function, which also cannot be one a `use` line gives. A function cannot take the
 name of a builtin.
@@ -272,9 +280,15 @@ its range.
 order, which compares and takes `min` and `max`. A value may carry a label (`gold "Gold"`). rulec's
 `default` and `open` are E003: kaname has no table for them to mean anything in. An enum is the
 place it is declared: a module's `tier` and a rule's `charges.band` are two types even when their
-values are spelled alike, and a `match` maps one to the other. Two rules that read one enum of an
-`enums` file whole (rulec's `import enum … from`) give one type, and a rule's enum whose values are
-in an order compares. A word that reads two ways in one place, a name and a value, is E110.
+values are spelled alike, and a `match` maps one to the other. An enum of an `enums` file is one
+type by every name the module reads it by, when the values are the same in the same order: the
+file read with `use rule` (`catalog.category`), and each rule that reads the enum whole with rulec's
+`import enum … from` (`shipping.category`, `returns.category`). A value of one name goes where
+another is expected, and the two compare. An enum a rule declares itself is its own file's, so it
+is another type even with the same values, and E102 then says where each enum is declared and how
+to make them one: put the enum in an `enums` file, read it with `import enum` in each rule, and
+read that file in the module with `use rule`. A rule's enum whose values are in an order compares.
+A word that reads two ways in one place, a name and a value, is E110.
 
 An enum may also have its values under it, a line each, and a value written so may have fields
 under it, written as a record's. An enum with a value that has fields is a **sum**:
@@ -603,7 +617,11 @@ rate on the step its type says (`x => 1 / x` is E103; `x => half_up(1 / x, 1)` i
   given by its name or its alias; an optional input may be left out. A type or unit that does not
   fit is E102 (ritsu's X1, held by kaname), and a value outside the input's range is kaname's to
   find (E301, W301). A list a rule walks is given as a list of its elements,
-  `shipping(lines: map(xs, x => shipping.lines { amount: x.amount }), …)`. An output is read in
+  `shipping(lines: map(xs, x => shipping.lines { amount: x.amount }), …)`; a function a host calls
+  may take such an element, whose fields its entry checks against the rule's columns. It takes no
+  rule's outputs and no transfer, anywhere in a parameter, since another language works them out
+  (E116): call the rule inside the function, take a record of your own with its ranges written, or
+  make the function `private`. An output is read in
   the range rulec holds it to: the one written on its line, what the rows of its tables write, or
   what its `result` reaches. An output with none, one that reads an input with no range, is a value
   of the whole of its type, as the generated code returns it.
@@ -693,7 +711,7 @@ The statement of a property, from `Kaname/refund_split.lean`:
 ```lean
 abbrev shares_add_up : Prop :=
   ∀ (lines : List Line) (refund : Int),
-    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    1 ≤ List.length lines → List.length lines ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
     0 ≤ refund → refund ≤ 10000000 →
     ((List.map (fun (s : Share) => s.share) (split lines refund)).sum) = refund
 ```
@@ -931,7 +949,10 @@ pub fn claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> O
 
 The code checks the places the analysis did not show, where kaname's reference interpreter checks
 them, in the same order, and fails with `KanameError` of the same kind, line and message (in the
-language of `--lang`). A call of a rule or a date it did not show is wrapped, and what the rule's
+language of `--lang`). A failure of `input` also holds the place in the arguments it did not take,
+written as its message writes it (`lines[0].weight`): `path` in TypeScript, Python and Rust, `Path`
+in Go, and none for the other kinds (`undefined`, `None`, `""`, `None`), so a host can tie it to
+its own field without reading the message. A call of a rule or a date it did not show is wrapped, and what the rule's
 code throws becomes `rule` with the rule's error as its cause. The code is held to kaname's
 reference interpreter on every vector of every function, in English and in Japanese, and passes
 `tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt, `go vet`, and
@@ -1032,8 +1053,9 @@ for every function a host calls in every module of the package. The input is
 module writes it (a module of a dependency is `@pricing/fees`) and each value as `kaname vectors`
 writes it; with one module of such functions in the package, `module` may be left out, so a line of
 `kaname vectors` goes in as it is. The answer is that line without its `why`, with `fails` in the
-place of `out` where the function fails. An input that cannot be read as a call is answered
-`{"refused":"input","error":"…"}`. No input traps, but for a call the reference interpreter says
+place of `out` where the function fails (a failure of `input` with its `path`). An input that
+cannot be read as a call is answered `{"refused":"input","error":"…"}`, with `"path"` too where an
+argument's value is wrong. No input traps, but for a call the reference interpreter says
 does not stop, which may use up the module's stack. The `.wit` makes it a component (here the
 package of the example `late_payment`, with the built module and the `.wit` in one directory):
 
@@ -1111,11 +1133,11 @@ A contract often leaves a bound to the code, which checks it by hand and then gi
 
 - **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
 - **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
-- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date (a string, or a `.proto`'s `google.type.Date`) and lists no days.
 
 E208 says the source is not there: its file, or the name in it.
 
-Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. A string an OpenAPI document or a JSON Schema marks `format: date-time` is a moment, a day with a time of day: no date takes it, and a workflow's `timestamp` does, as it does another workflow's `timestamp` and a `.proto`'s `google.protobuf.Timestamp`. A `.proto`'s `google.type.Date` is a date, known by its name as dandori knows it. A field of a `.proto` that may be left unset (`optional`, in a `oneof`, or a message, unless a rule or proto2 marks it `required`) can come as no value, which a place that is not `T?` refuses. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
 
 **What is not checked.** Nothing checks that the hand-written code really carries that value. The
 page of `kaname doc` says so: Comes from `…` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). Nothing `ritsu gen` writes changes, and `kaname api` gives
@@ -1126,10 +1148,13 @@ the naming as the field's or the parameter's `fed_by`.
 `ritsu kaname doc <file.kn>` writes a page for the person who approves the decisions and the
 engineer who reads how far each function is checked: the head with the module's digest and what it
 reads; the decisions in tables, with the page rulec and koyomi draw of each rule and dates file it
-calls and each transfer it builds with the reasons it can be refused with; the functions in three
-parts, total, checked when they run (each place and why), and those that may not stop; the
-its properties, each with its `when` lines and last line and whether a proof file is beside the `.kn` (not their answers, which are `check`'s); the
-decisions written in code; and the examples with what they answer. The Markdown is for a pull
+calls and each transfer it builds with the reasons it can be refused with; for a module that reads
+an enum by two or more names through the rules it uses, the names of one enum, each with the file
+that declares it, its name there and its values; where the fields come from, for a module that
+writes `fed by`; the functions in three parts, total, checked when they run (each place and why),
+and those that may not stop; the properties, each with its `when` lines and last line and whether
+a proof file is beside the `.kn` (not their answers, which are `check`'s); the decisions written in
+code; and the examples with what they answer. The Markdown is for a pull
 request, the pages of the rules and the dates folded in it; the HTML is one file that reads nothing
 from outside, the pages opening over it.
 
@@ -1185,14 +1210,15 @@ $ ritsu check --lean examples/refund_split
   one; up to 2,000 a function.
 - `doc <file.kn> [--format markdown|html] [--root <dir>]`: the page for people.
 - `api <file.kn> [--root <dir>]`: JSON for other tools (below).
-- `explain <code> | --all [--format markdown|json]`: when a diagnostic is printed, how to fix it,
-  and the smallest module that prints it.
+- `explain <code>... | --all [--format markdown|json]`: when a diagnostic is printed, how to fix it,
+  and the smallest module that prints it; the codes in the order given.
 
 `run` and `vectors` take a module that passes check; `doc` and `api` one whose names and types pass,
 whatever else its check finds, since where it can fail is what they show. Else they print its
 diagnostics and exit 1. A recursion of more than 200 calls stops the reference interpreter: `run`
 says so and exits 1. Every command takes `--lang ja|en` (else `KANAME_LANG`, then `RITSU_LANG`,
-else English) and `--help`.
+else English) and `--help`. What `doc` and `vectors` write follows `--lang` alone, English without
+it, so that one module writes the same page on every machine.
 
 ### Exit codes
 
@@ -1201,6 +1227,11 @@ else English) and `--help`.
 | 0 | no errors (there may be warnings); run to its end; printed |
 | 1 | at least one error; a function of `run` that did not stop |
 | 2 | bad arguments, a file that cannot be read, an input that is not JSON, no such function, or a module that reads a rule, a dates file or a book run with kaname's own binary (E202) |
+
+With `--format json` anywhere on the line, a run that stops before its work (exit 2: a file
+that is not there or not UTF-8, a flag it does not take, an argument missing) writes the sentence
+it says on stderr in JSON on stdout as well, `{"error": {"code": 2, "message": "…"}}`, without
+its `error: ` head.
 
 ## JSON
 
@@ -1260,8 +1291,11 @@ transfer as `{"book", "transfer", "op", "args"}`. A failure is `"fails": {"kind"
 "message"}` in place of `out`, and a recursion cut short `"diverged"`. `why` says why the input was
 chosen.
 
-`api` prints `{"kaname", "file", "module", "generated", "wasm", "uses", "enums", "records",
-"functions", "properties", "transfers"}` (`properties` only for a module that writes some: each a
+`api` prints `{"kaname", "file", "module", "generated", "wasm", "uses", "enums",
+"names_of_one_enum", "records", "functions", "properties", "transfers"}` (`names_of_one_enum` only
+for a module that reads an enum by two or more names through the rules it uses: for each such
+enum, its `names` as the module writes them, the `file` that declares it, its `name` there and its
+`values`; `properties` only for a module that writes some: each a
 `name`, an `alias`, a `line`, a `description`, its `params` as a function's, and the number of its
 `when` lines): the module with its SHA-256, the files of its code, how the package's
 Wasm calls it (the exports, the keys of a call and the `module` that picks this module, the
@@ -1281,5 +1315,5 @@ is `private` `"private": true`.
 
 | Variable | What it does |
 |---|---|
-| `KANAME_LANG` | `ja` or `en`, the language of the text when `--lang` is not given (not read inside `ritsu check`) |
+| `KANAME_LANG` | `ja` or `en`, the language of the text kaname prints when `--lang` is not given (not what `doc` and `vectors` write, and not read inside `ritsu check`) |
 | `RITSU_LANG` | the same, for every language of ritsu, after `KANAME_LANG` |

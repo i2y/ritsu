@@ -1,0 +1,2 @@
+error: `size_label.rule` and `sizeLabel.rule` both declare the PHP namespace `SizeLabel` (out/php/size_label.php and out/php/sizeLabel.php), so loading the two declares the same classes twice; give one of them another alias
+エラー: `size_label.rule` と `sizeLabel.rule` が、同じ PHP の名前空間 `SizeLabel` を宣言します（out/php/size_label.php と out/php/sizeLabel.php）。二つを読み込むと同じクラスを二度宣言するので、どちらかの別名を変えてください

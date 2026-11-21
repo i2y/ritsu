@@ -11,7 +11,7 @@ Where each requirement came from, and what still satisfies it.
 ritsu gives each of those a small language of its own, in a file people can read. Each language
 checks what it says as far as it can be checked — over every input, every day, every path, not a
 sample — generates code where code is needed, and draws pages for whoever needs to understand
-it. Because the nine share one toolchain, a proof does not stop at a language's edge: a
+it. Because the ten share one toolchain, a proof does not stop at a language's edge: a
 workflow knows the preconditions of the rules it calls, a rule knows the days a calendar can
 come to, a ledger knows the amounts a rule can return.
 
@@ -21,7 +21,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 [Try it full screen](play/){ .md-button }
 [GitHub](https://github.com/i2y/ritsu){ .md-button }
 
-## The nine languages
+## The ten languages
 
 | | File | What it is for | Read more |
 |---|---|---|---|
@@ -34,6 +34,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | [sakai](languages/sakai.md) | `.ctx` | the map of bounded contexts | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.md) |
 | sekisho | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | [the sekisho page](sekisho.md) |
 | kaname | `.kn` | a small general-purpose language for a functional core: code with no input or output in ritsu's types, which calls rules, dates and books too | [the kaname pages](kaname/index.md) |
+| ringi | `.ringi` | the requests a company's departments make and approve: the form, the route and who answers each stage, the deadlines, what happens when a request ends | [the ringi pages](ringi/index.md) |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different
@@ -83,6 +84,18 @@ people.
   [what the check guarantees](kaname/checks.md),
   [how a module calls rules, dates and books](kaname/together.md) and
   [how a claim about every input is proved in Lean](kaname/properties.md).
+- **ringi** writes one kind of request a company's departments make and approve (an expense, leave,
+  a purchase, a contract, access to a system) as a `.ringi` file: its form, the route it takes and
+  who answers each stage as a relation in the organization, its deadlines, and what it holds in a
+  book or starts in a workflow when it ends. `ritsu ringi check` finds who answers each stage for
+  every person who may submit it, in every version of the organization's data, lowers its tables,
+  conditions and deadlines to rulec and koyomi to be checked, and runs its scenarios on the
+  reference interpreter; `ritsu gen` writes each request's ticket as TypeScript, Python, Go and
+  Rust, with the screens, the OpenAPI document and the vectors a server of requests is tested with.
+  [The ringi pages](ringi/index.md) show [how a request type is written](ringi/language.md),
+  [what the check guarantees](ringi/checks.md), [how a person reads one](ringi/reading.md),
+  [how it reads the other languages](ringi/together.md) and
+  [what is generated, and what the server does](ringi/server.md).
 
 ## Where the languages meet
 
@@ -149,8 +162,8 @@ ok refund_check.rule
 refund.flow: ok
 error[ritsu E201]: refund.flow:21:1: The call of the rule check can give it values that break its precondition `asked <= paid`
     21 |   let decision = check(paid: paid, asked: asked)
-  = `asked` is `>=0 <=10000` and `paid` is `>=0 <=10000`, and at asked = 10000, paid = 0 `asked <= paid` does not hold
-  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, gathered from every place the values come from.
+  = `asked` is `>=0 <=10_000` and `paid` is `>=0 <=10_000`, and at asked = 10_000, paid = 0 `asked <= paid` does not hold
+  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, from what the runs that reach this call last put in the values.
   = Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result).
 ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided
 ```
@@ -251,8 +264,11 @@ JSON. A check keeps its name, and a new one is added at the end.
 | `koyomi_date_input` | the day a call gives a koyomi date's input, against its range | E205 / W205 |
 | `secret_destination` | where a task sends a value its contract marks secret, by the map | E905 / W905 |
 | `operation_guard` | an operation a context opens, held to the action of a gate that guards it | E907 / W907 |
-| `workflow_permission` | an operation a workflow calls, against what its gate allows the workflow | E908 / W909 |
+| `workflow_permission` | an operation a workflow calls, against what its gate allows the workflow | E908 / E909 / W909 |
 | `fed_by` | a place with `fed by`, against what its source can come to | E207 (E208 for a source that is not there) / W207 |
+| `ticket_gate` | what a request's route decides (the operations of a ticket, the approvers of a stage, self approval), against the gate the request reads | E911 / W911 |
+| `ticket_hold` | a hold a request makes when it is submitted: its expiry against how long a round can take, and whether every requester has a value for its arguments | E209 / W209 |
+| `ticket_flow` | what a request gives a workflow it starts or asks, against the workflow's inputs, and what an agent's or a summary's workflow answers | E210 / W210 |
 
 ### Where a value comes from
 
@@ -289,11 +305,11 @@ A contract often leaves a bound to the code, which checks it by hand and then gi
 
 - **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
 - **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
-- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date (a string, or a `.proto`'s `google.type.Date`) and lists no days.
 
 E208 says the source is not there: its file, or the name in it.
 
-Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. A string an OpenAPI document or a JSON Schema marks `format: date-time` is a moment, a day with a time of day: no date takes it, and a workflow's `timestamp` does, as it does another workflow's `timestamp` and a `.proto`'s `google.protobuf.Timestamp`. A `.proto`'s `google.type.Date` is a date, known by its name as dandori knows it. A field of a `.proto` that may be left unset (`optional`, in a `oneof`, or a message, unless a rule or proto2 marks it `required`) can come as no value, which a place that is not `T?` refuses. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
 
 sakai counts a `fed by` as a reference, so one that crosses a boundary needs a relationship. Nothing
 generated changes, and neither does the `meaning` hash or a version yuen pins.
@@ -315,6 +331,8 @@ reviewing the code — so they can read what was written and check it against wh
 - `sekisho doc` — who may do what, action by action, beside the Cedar it compiles to;
 - `kaname doc` — a module: the decisions in its tables, its functions by their effects and where
   each can fail, and the decisions written in its code;
+- `ringi doc` — a request type: its form, who answers each stage and by when, and what a ticket
+  does; `ringi simulate` says who answers a given person's request;
 - `yuen trace` — a requirement back to its source and on to what satisfies it.
 
 ## Install
@@ -336,7 +354,8 @@ no native binary: [ritsu in Node](node.md).
 
 A project can require other modules, from a directory or from an OCI registry, and read their files
 by `@<name>/…` paths: [Modules](modules.md). `ritsu gen` writes a project's code as a package for
-each language. With `--library`, it writes a module as libraries that npm, PyPI and Go take, which
+each language. The comments of the code, and the text the code returns, are in the language of
+`--lang`, and in English without it; `RITSU_LANG` changes only the text the command prints. With `--library`, it writes a module as libraries that npm, PyPI and Go take, which
 import their dependencies' libraries by name: [Publishing libraries](libraries.md).
 
 `ritsu impact` says whether a change moved any answer and who it concerns, and a rule of your own
@@ -347,13 +366,13 @@ Japanese. ritsu is MIT OR Apache-2.0.
 
 ## For AI agents
 
-ritsu and its languages are made to be used by AI agents, and the repository holds ten
+ritsu and its languages are made to be used by AI agents, and the repository holds eleven
 [Agent Skills](https://agentskills.io) for them: [one for ritsu](https://github.com/i2y/ritsu/tree/main/skills/ritsu),
-for a project of more than one language, and one for each of the nine languages
+for a project of more than one language, and one for each of the ten languages
 ([skills/README.md](https://github.com/i2y/ritsu/blob/main/skills/README.md) lists them). There are
 four ways to install them:
 
-- **Claude Code**: this site publishes a plugin marketplace whose plugin `ritsu` holds the ten.
+- **Claude Code**: this site publishes a plugin marketplace whose plugin `ritsu` holds the eleven.
   Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then `/plugin install ritsu@ritsu`;
   Claude Code fetches the folder `skills/` alone, not the whole repository.
 - **Any agent, from the binary**: `ritsu skills install` writes them into the project's
@@ -362,5 +381,5 @@ four ways to install them:
   `ritsu skills list` lists them.
 - **By hand**: copy the folders you need from `skills/` into `~/.claude/skills/`, or into a
   project's `.claude/skills/`.
-- **From a release**: `ritsu-skills-v<version>.zip` holds the ten folders; unzip it where your
+- **From a release**: `ritsu-skills-v<version>.zip` holds the eleven folders; unzip it where your
   agent reads skills.

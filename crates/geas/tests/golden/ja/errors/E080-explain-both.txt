@@ -1,1 +1,2 @@
-エラー[E080]: `geas explain` に渡すのは、コードか `--all` のどちらかです
+エラー[E080]: `geas explain` に渡すのは <code>... | --all です
+  = 使い方: geas explain <code>... | --all [--json]

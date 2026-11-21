@@ -1,0 +1,11 @@
+warning[W506]: tests/mutants/W506_the_same_approver_with_a_stage_between.ringi:11:11: In the organization from 2026-04-01, one person answers two stages of a ticket
+    11 |   decide  head
+  = The stage `check` is `finance` and the stage `decide` is `head`, and both come to one person.
+  = For 4 requesters, e04 (Head of Finance) answers both: e01 (President (fictional)), e02 (Head of Sales), e03 (Sales staff) and 1 more.
+  = `same approver approves once` does not do `decide` with the approval of `check`: `sales` comes between them.
+  = With `same approver approves once, at the last stage`, they answer once: `check` waits for the approval of `decide`, after the stages between them.
+  = One person who checks twice is not two pairs of eyes: change the way to choose one of the stages, or make sure it is meant.
+ok tests/mutants/W506_the_same_approver_with_a_stage_between.ringi: a request, 1 field, 3 stages
+  used from 2026-04-01: the first version of the organization `shared/small.ringi` (data `org-small`)
+  used with no end: no data it reads ends
+  may never end: the stages `check`, `sales` and `decide` have no deadline (`due in …`), and wait until they are answered

@@ -155,6 +155,17 @@ pub trait Dates {
         None
     }
 
+    /// Every diagnostic `koyomi check` gives the file, in `lang`, each as `koyomi check --format
+    /// json` writes it (a claim that does not hold with the input it fails at and the steps that
+    /// lead there, an example that does not match) with its text, as `Rules::findings` hands over a
+    /// rule's (ringi's DESIGN 6.5). The finding's file is the file as the caller named it. Err when
+    /// the file cannot be read; the default decides nothing, for a port that does not check dates
+    /// files.
+    fn findings(&self, file: &Path, lang: ritsu_base::text::Lang) -> Result<Found<Vec<crate::Finding>>, Vec<Said>> {
+        let _ = (file, lang);
+        Ok(Found::Undecided(ritsu_base::tr!("この口は、日付のファイルの診断を渡しません", "this port does not hand over a dates file's diagnostics")))
+    }
+
     /// Whether koyomi is joined at all: false for the port the binary of a receiving language's own
     /// crate holds, which reads no dates file (DESIGN 2.3), so that the language can say so once,
     /// as with rules (`Rules::joined`).

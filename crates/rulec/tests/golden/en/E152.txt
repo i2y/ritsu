@@ -1,0 +1,8 @@
+error[E152]: Table review_of has no output column
+  --> tests/mutants/m_e152.rule:17 table review_of
+   |
+17 | | fee         | review |
+   |                 ^^^^^^ the column of the output `review`, read as a condition because no `->` stands before it
+   |
+ A table answers in the columns after `->`. With no `->` in its heading, no row decides anything, and a column that names an output is read as a condition.
+ hint: write `->` before `review`, the first column the rows answer: `| fee | -> review |`.

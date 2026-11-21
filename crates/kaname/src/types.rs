@@ -149,6 +149,7 @@ pub fn check(dc: Dc<'_>, decls: &Decls) -> (Typed, Vec<Diag>) {
         allow: false,
         answer_ok: false,
     };
+    ck.given_by_host();
     for (i, f) in ck.dc.module.fns.iter().enumerate() {
         ck.function(i, f);
     }
@@ -273,7 +274,8 @@ impl<'a> Ck<'a> {
             }
             RecId::Outputs(file) => {
                 let facts = self.dc.world.rules.get(file)?;
-                Some(facts.outputs.iter().map(|c| (Name { text: c.name.clone(), alias: Some((c.alias.clone(), Span::default())), span: Span::default() }, column_slot(c, file))).collect())
+                // an answer on the step its rounding puts it on (DESIGN 6.1)
+                Some(facts.outputs.iter().map(|c| (Name { text: c.name.clone(), alias: Some((c.alias.clone(), Span::default())), span: Span::default() }, names::output_slot(c, file))).collect())
             }
             RecId::Element(file, seq) => {
                 let facts = self.dc.world.rules.get(file)?;
@@ -302,6 +304,92 @@ impl<'a> Ck<'a> {
                 let named = |w: &str| Name { text: w.to_string(), alias: None, span: Span::default() };
                 Some(vec![(named("index"), Slot::of(Ty::Num(NumTy::number()))), (named("item"), Slot::of((**x).clone()))])
             }
+        }
+    }
+
+    /// E116: a function a host calls takes no value another language works out (DESIGN 4.4): a rule's
+    /// outputs and a transfer, as a parameter or anywhere in one (a field of a record or of a value of
+    /// a sum, an element of a list, the value of a result, inside `indexed`, `entry` and `running`).
+    /// The function's other parameters, its answer, and a function no host calls (21.3) are free to
+    /// hold one; a property is no function a host calls.
+    fn given_by_host(&mut self) {
+        let own = self.dc.module.fns.len() - self.dc.module.properties.len();
+        for f in 0..own.min(self.decls.fns.len()) {
+            let info = &self.decls.fns[f];
+            if info.inner() {
+                continue;
+            }
+            let fun = info.name.text.clone();
+            let found: Vec<(String, Span, Ty, String)> = info
+                .params
+                .iter()
+                .zip(&self.dc.module.fns[f].params)
+                .filter_map(|(prm, ast)| self.made_inside(&prm.slot.ty, &prm.name.text, &mut Vec::new()).map(|(t, at)| (prm.name.text.clone(), ast.ty.span, t, at)))
+                .collect();
+            for (prm, span, t, at) in found {
+                let shown = self.show(&t);
+                let (maker_ja, maker_en) = match &t {
+                    Ty::Record(RecId::Outputs(file)) => {
+                        let r = self.use_of(file).map(str::to_string).unwrap_or_else(|| self.dc.world.rules.get(file).map(|r| r.rule.clone()).unwrap_or_default());
+                        (format!("規則 `{r}` が計算する値"), format!("a value the rule `{r}` works out"))
+                    }
+                    _ => ("帳簿の振替".to_string(), "a transfer of a book".to_string()),
+                };
+                let head = if at == prm {
+                    tr!(
+                        "ホストが呼ぶ関数 `{fun}` の引数 `{prm}` が、{maker_ja}（{shown}）を取ります",
+                        "The parameter `{prm}` of `{fun}`, a function a host calls, takes {maker_en} ({shown})"
+                    )
+                } else {
+                    tr!(
+                        "ホストが呼ぶ関数 `{fun}` の引数 `{prm}` が、`{at}` に{maker_ja}（{shown}）を持ちます",
+                        "The parameter `{prm}` of `{fun}`, a function a host calls, holds {maker_en} ({shown}) at `{at}`"
+                    )
+                };
+                let d = self.err("E116", span, head);
+                d.notes.push(tr!(
+                    "この値は、ほかの言語が計算して作る値です。規則の答えは規則が示した範囲と丸めの刻みにあり、振替は作るときに確かめてあります。ホストが組んだ値では、関数の入口でその約束を作り直せません。",
+                    "The value is one another language works out and makes: a rule's answer keeps the ranges the rule shows and the steps it rounds to, and a transfer is checked as it is built. The entry of the function cannot make those promises again of a value a host puts together."
+                ));
+                d.notes.push(tr!(
+                    "規則は関数の中で呼んでください。ホストから受けるなら、範囲を書いた自分のレコードで受けてください。ホストが呼ばない関数なら、`private` にしてください。",
+                    "Call the rule inside the function; or take what the host gives in a record of your own with its ranges written; or, if no host calls the function, make it `private`."
+                ));
+            }
+        }
+    }
+
+    /// The first value another language works out that a value of `t` holds (a rule's outputs, a
+    /// transfer), and where, from the place `at` (`s.result`, `xs[i].result`).
+    fn made_inside(&self, t: &Ty, at: &str, seen: &mut Vec<Ty>) -> Option<(Ty, String)> {
+        match t {
+            Ty::Record(RecId::Outputs(_)) | Ty::Transfer(_) => Some((t.clone(), at.to_string())),
+            Ty::Opt(x) => self.made_inside(x, at, seen),
+            Ty::List(x) | Ty::Set(x) => self.made_inside(x, &format!("{at}[i]"), seen),
+            Ty::Dict(k, v) => self.made_inside(k, &format!("{at}[k]"), seen).or_else(|| self.made_inside(v, &format!("{at}[k]"), seen)),
+            Ty::Result(a, e) => self.made_inside(a, &format!("{at}.ok"), seen).or_else(|| self.made_inside(e, &format!("{at}.err"), seen)),
+            Ty::Record(id) => {
+                if seen.contains(t) {
+                    return None;
+                }
+                seen.push(t.clone());
+                let fields = self.fields(id)?;
+                fields.iter().find_map(|(n, s)| self.made_inside(&s.ty, &format!("{at}.{}", n.text), seen))
+            }
+            Ty::Enum(id) if self.is_sum(id) => {
+                if seen.contains(t) {
+                    return None;
+                }
+                seen.push(t.clone());
+                let e = self.enum_info(id)?;
+                let values: Vec<String> = e.values.iter().map(|v| v.text.clone()).collect();
+                values.iter().find_map(|v| {
+                    let r = Self::variant_of(id, v)?;
+                    let fields = self.fields(&r)?;
+                    fields.iter().find_map(|(n, s)| self.made_inside(&s.ty, &format!("{at}.{v}.{}", n.text), seen))
+                })
+            }
+            _ => None,
         }
     }
 
@@ -370,20 +458,113 @@ impl<'a> Ck<'a> {
         }
     }
 
-    /// Whether two enums are one type: the same declaration, or one enum of an `enums` file that two
-    /// rules read whole (DESIGN 3.5).
+    /// Whether two enums are one type (DESIGN 3.5): the same declaration, with its type parameters
+    /// taking types that are one; or two enums of rules declared at one place with the same values in
+    /// the same order (`names::rule_enums_same`). An enum of an `enums` file is one type by the name
+    /// of the file read as a rule and by the name of each rule that reads it whole.
     fn same_enum(&self, x: &EnumId, y: &EnumId) -> bool {
-        if x == y {
-            return true;
+        if x.same_decl(y) {
+            return x.args.len() == y.args.len() && x.args.iter().zip(&y.args).all(|(a, b)| self.same_type(a, b));
         }
-        let rule_enum = |id: &EnumId| match &id.owner {
-            Owner::Rule(file) => self.dc.world.rules.get(file).and_then(|f| f.enums.iter().find(|e| e.name == id.name)),
-            Owner::Module(_) => None,
-        };
-        match (rule_enum(x), rule_enum(y)) {
-            (Some(a), Some(b)) => names::rule_enums_same(a, b),
+        match (self.rule_enum(x), self.rule_enum(y)) {
+            (Some((fa, a)), Some((fb, b))) => names::rule_enums_same(fa, a, fb, b),
             _ => false,
         }
+    }
+
+    /// The enum of a rule a type names, with the rule's file; None for an enum of a module.
+    fn rule_enum<'b>(&'b self, id: &EnumId) -> Option<(&'b Path, &'b ritsu_ports::RuleEnum)> {
+        match &id.owner {
+            Owner::Rule(file) => self.dc.world.rules.get_key_value(file).and_then(|(f, facts)| facts.enums.iter().find(|e| e.name == id.name).map(|e| (f.as_path(), e))),
+            Owner::Module(_) => None,
+        }
+    }
+
+    /// Whether two types are one: `==`, with two names of one enum taken for one type wherever they are
+    /// in the types (`same_enum`).
+    fn same_type(&self, a: &Ty, b: &Ty) -> bool {
+        let all = |xs: &[Ty], ys: &[Ty]| xs.len() == ys.len() && xs.iter().zip(ys).all(|(x, y)| self.same_type(x, y));
+        match (a, b) {
+            (Ty::Enum(x), Ty::Enum(y)) => self.same_enum(x, y),
+            (Ty::Record(RecId::Module { file: f, name: n, args: p }), Ty::Record(RecId::Module { file: g, name: m, args: q })) => f == g && n == m && all(p, q),
+            (Ty::Record(RecId::Variant { file: f, name: n, value: v, args: p }), Ty::Record(RecId::Variant { file: g, name: m, value: w, args: q })) => f == g && n == m && v == w && all(p, q),
+            (Ty::Record(RecId::Running(x, y)), Ty::Record(RecId::Running(z, w))) | (Ty::Record(RecId::Entry(x, y)), Ty::Record(RecId::Entry(z, w))) => self.same_type(x, z) && self.same_type(y, w),
+            (Ty::Record(RecId::Indexed(x)), Ty::Record(RecId::Indexed(y))) | (Ty::List(x), Ty::List(y)) | (Ty::Set(x), Ty::Set(y)) | (Ty::Opt(x), Ty::Opt(y)) => self.same_type(x, y),
+            (Ty::Dict(k, v), Ty::Dict(l, w)) | (Ty::Result(k, v), Ty::Result(l, w)) => self.same_type(k, l) && self.same_type(v, w),
+            (Ty::Fn(p, r, e), Ty::Fn(q, s, f)) => all(p, q) && self.same_type(r, s) && e == f,
+            _ => a == b,
+        }
+    }
+
+    /// Whether two types are one, a constant's value aside: what a function type's parameters and
+    /// answer are held to (DESIGN 27.2). A type said wrong already is any type.
+    fn same_ty(&self, a: &Ty, b: &Ty) -> bool {
+        a.is_error() || b.is_error() || self.same_type(&plain(a.clone()), &plain(b.clone()))
+    }
+
+    /// A file as a `use` line of the module writes it: from the directory of the module's file.
+    fn from_module(&self, file: &Path) -> String {
+        let dir = self.dc.canon.parent().unwrap_or(Path::new(""));
+        ritsu_base::paths::relative(&dir.to_string_lossy(), &file.to_string_lossy())
+    }
+
+    /// When two types that are not one hold two enums, one of them a rule's: a note that says where
+    /// each is declared, and, when the two have the same values, how to make them one type (DESIGN
+    /// 3.5). None where they hold no two enums, the two are one type, or neither is a rule's.
+    fn enums_apart(&self, a: &Ty, b: &Ty) -> Option<Text> {
+        let (x, y) = (enum_inside(a)?, enum_inside(b)?);
+        if self.same_enum(x, y) || (self.rule_enum(x).is_none() && self.rule_enum(y).is_none()) {
+            return None;
+        }
+        let whence = |id: &EnumId| -> Text {
+            let n = self.named_by(&id.owner, &id.name);
+            match (&id.owner, self.rule_enum(id)) {
+                (_, Some((file, e))) => {
+                    let (at, there) = names::rule_enum_declared(file, e);
+                    let shown = self.from_module(&at);
+                    let facts = self.dc.world.rules.get(file);
+                    if e.origin.is_none() && facts.is_some_and(|f| !f.outputs.is_empty()) {
+                        let r = self.use_of(file).map(str::to_string).or_else(|| facts.map(|f| f.rule.clone())).unwrap_or_default();
+                        tr!("`{n}` は、規則 `{r}`（`{shown}`）が自分で宣言した列挙 `{there}` です", "`{n}` is the enum `{there}` that the rule `{r}` (`{shown}`) declares itself")
+                    } else {
+                        tr!("`{n}` は、`enums` ファイル `{shown}` の列挙 `{there}` です", "`{n}` is the enum `{there}` of the `enums` file `{shown}`")
+                    }
+                }
+                (Owner::Module(f), None) if f == self.dc.canon => tr!("`{n}` は、このモジュールが宣言した列挙です", "`{n}` is an enum this module declares"),
+                (Owner::Module(f) | Owner::Rule(f), None) => {
+                    let shown = self.from_module(f);
+                    tr!("`{n}` は、`{shown}` が宣言した列挙です", "`{n}` is an enum `{shown}` declares")
+                }
+            }
+        };
+        let (wx, wy) = (whence(x), whence(y));
+        let sorted = |id: &EnumId| {
+            let mut vs: Vec<String> = self.values(id).map(|(vs, _)| vs.into_iter().map(|v| v.text).collect()).unwrap_or_default();
+            vs.sort();
+            vs
+        };
+        let advice = if sorted(x) == sorted(y) {
+            tr!(
+                "別の場所で宣言した列挙は、値が同じでも別の型です。一つの型にするには、列挙を `enums` ファイルに置いて規則のそれぞれで `import enum` で読み、モジュールではそのファイルを `use rule` で読んでください。",
+                "Enums declared at two places are two types, even with the same values; to make them one, put the enum in an `enums` file, read it with `import enum` in each rule, and read that file in the module with `use rule`."
+            )
+        } else {
+            Text::same(String::new())
+        };
+        let ja = format!("{}。{}。{}", wx.ja, wy.ja, advice.ja);
+        let en = format!("{}; {}. {}", wx.en, wy.en, advice.en);
+        Some(Text::new(ja.trim_end(), en.trim_end()))
+    }
+
+    /// E102 where two types meet that are not one, with the note on two enums where they are two
+    /// (`enums_apart`).
+    fn apart(&mut self, at: Span, msg: Text, a: &Ty, b: &Ty) -> &mut Diag {
+        let note = self.enums_apart(a, b);
+        let d = self.err("E102", at, msg);
+        if let Some(n) = note {
+            d.notes.push(n);
+        }
+        d
     }
 
     // ── Locals ──────────────────────────────────────────────────────────────────
@@ -475,6 +656,13 @@ impl<'a> Ck<'a> {
                 "Each time the calls go round, the type argument grows one deeper (`list[list[T]]`, …), and the types it is called with never end; nor can the generated Go write them. In a ring of calls, give the type parameters as they are, or types that name none."
             ));
         }
+    }
+
+    /// Whether a word is the name a `use` gives to a file that could not be read: what is wrong is
+    /// said once, at the `use` line (E201), and a value or a call that names it is of no type that
+    /// can be told, said nothing of.
+    fn unread(&self, w: &str) -> bool {
+        !self.dc.uses.contains_key(w) && self.dc.module.uses.iter().any(|u| u.name == w)
     }
 
     /// The function of this module a word names, by its name or its alias: a property names none
@@ -631,6 +819,7 @@ impl<'a> Ck<'a> {
         let Some(fi) = found else {
             let shown = self.text(callee.span);
             self.err("E602", callee.span, tr!("例は、このモジュールの関数の呼び出しです。`{shown}` はそうではありません", "An example calls a function of this module, which `{shown}` is not"))
+                .same_mut(shown.clone())
                 .notes
                 .push(tr!(
                     "例は `<関数>(<引数>: <値>, …) = <答え>` と書き、`check` が参照インタプリタで流して答えを比べます。",
@@ -679,7 +868,7 @@ impl<'a> Ck<'a> {
                 Err(_) => Err(None),
             },
             (Ty::Fn(gp, gr, _), Ty::Fn(wp, wr, _)) => {
-                if gp.len() == wp.len() && gp.iter().zip(wp).all(|(g, w)| same_ty(g, w)) && same_ty(gr, wr) {
+                if gp.len() == wp.len() && gp.iter().zip(wp).all(|(g, w)| self.same_ty(g, w)) && self.same_ty(gr, wr) {
                     Ok(())
                 } else {
                     Err(Some(fn_types_note()))
@@ -688,7 +877,7 @@ impl<'a> Ck<'a> {
             (Ty::Enum(g), Ty::Enum(w)) if self.same_enum(g, w) => Ok(()),
             // a value of the type of a value of a sum goes where the sum goes (DESIGN 23.2)
             (Ty::Record(r), Ty::Enum(w)) if r.sum().as_ref() == Some(w) => Ok(()),
-            (g, w) if g == w => Ok(()),
+            (g, w) if self.same_type(g, w) => Ok(()),
             _ => Err(None),
         }
     }
@@ -801,7 +990,7 @@ impl<'a> Ck<'a> {
             _ => {
                 if let Err(n) = self.agrees(got, declared) {
                     let (gs, ds) = (self.show(got), self.show(declared));
-                    let d = self.err("E102", at, tr!("`let {name}` の型 {ds} に、{gs} の値を入れています", "The value given to `let {name}`, of type {ds}, is {gs}"));
+                    let d = self.apart(at, tr!("`let {name}` の型 {ds} に、{gs} の値を入れています", "The value given to `let {name}`, of type {ds}, is {gs}"), got, declared);
                     if let Some(n) = n {
                         d.notes.push(n);
                     }
@@ -993,10 +1182,10 @@ impl<'a> Ck<'a> {
             }
             (Ty::Enum(g), Ty::Enum(w)) if self.same_enum(g, w) => {}
             (Ty::Record(r), Ty::Enum(w)) if r.sum().as_ref() == Some(w) => {}
-            (g, w) if g == w => {}
+            (g, w) if self.same_type(g, w) => {}
             (g, w) => {
                 let (gs, ws) = (self.show(g), self.show(w));
-                let d = self.err("E102", at, tr!("{}は {ws} です。渡しているのは {gs} です", "{} is {ws}; this is {gs}", crate::diag::ja_before(&place.ja); place.en));
+                let d = self.apart(at, tr!("{}は {ws} です。渡しているのは {gs} です", "{} is {ws}; this is {gs}", crate::diag::ja_before(&place.ja); place.en), g, w);
                 // a value of a sum where the type of one of its values goes: split it first
                 if let (Ty::Enum(e), Ty::Record(r)) = (g, w)
                     && r.sum().as_ref() == Some(e)
@@ -1014,8 +1203,8 @@ impl<'a> Ck<'a> {
     /// the same types, and the same answer. E103 where the answer is the same but for its rounding.
     #[allow(clippy::too_many_arguments)]
     fn fn_fits(&mut self, got: &Ty, want: &Ty, g: (&[Ty], &Ty), w: (&[Ty], &Ty), at: Span, place: &Text) {
-        let params = g.0.len() == w.0.len() && g.0.iter().zip(w.0).all(|(a, b)| same_ty(a, b));
-        if params && same_ty(g.1, w.1) {
+        let params = g.0.len() == w.0.len() && g.0.iter().zip(w.0).all(|(a, b)| self.same_ty(a, b));
+        if params && self.same_ty(g.1, w.1) {
             return;
         }
         let (gs, ws) = (self.show(got), self.show(want));
@@ -1181,7 +1370,7 @@ impl<'a> Ck<'a> {
                             Some(j) => j,
                             None => {
                                 let (a, b) = (self.show(&o), self.show(&t));
-                                self.err("E102", x.span, tr!("リストの要素の型がそろっていません（{a} と {b}）", "The elements of the list are not of one type ({a} and {b})"));
+                                self.apart(x.span, tr!("リストの要素の型がそろっていません（{a} と {b}）", "The elements of the list are not of one type ({a} and {b})"), &o, &t);
                                 Ty::Error
                             }
                         },
@@ -1225,7 +1414,7 @@ impl<'a> Ck<'a> {
                     Some(j) => j,
                     None => {
                         let (x, y) = (self.show(&a), self.show(&b));
-                        self.err("E102", e.span, tr!("`if` の二つの答えの型が違います（{x} と {y}）", "The two answers of the `if` are of two types ({x} and {y})"));
+                        self.apart(e.span, tr!("`if` の二つの答えの型が違います（{x} と {y}）", "The two answers of the `if` are of two types ({x} and {y})"), &a, &b);
                         Ty::Error
                     }
                 }
@@ -1268,7 +1457,7 @@ impl<'a> Ck<'a> {
             let w = written.get(i).cloned().flatten().map(|t| self.dc.resolve(&t));
             let t = match (w, params.and_then(|v| v.get(i)).and_then(Option::as_ref)) {
                 (Some(w), Some(placed)) => {
-                    if !same_ty(&w, placed) {
+                    if !self.same_ty(&w, placed) {
                         let (ws, pls) = (self.show(&w), self.show(placed));
                         self.err("E102", *sp, tr!("ラムダの引数 `{p}` の型 {ws} は、置かれた場所の関数の型の {pls} と違います", "The parameter `{p}` of the lambda is of {ws}, and the function type of the place says {pls}"))
                             .notes
@@ -1380,6 +1569,9 @@ impl<'a> Ck<'a> {
                 Ty::Enum(id)
             }
             (None, None) => {
+                if self.unread(w) {
+                    return Ty::Error;
+                }
                 if let Some((_, t)) = self.dc.uses.get(w) {
                     let what = match t {
                         Target::Rule { .. } => tr!("規則で、入力を渡して `{w}(…)` と呼びます", "a rule, called with its inputs: `{w}(…)`"),
@@ -1409,7 +1601,7 @@ impl<'a> Ck<'a> {
                 // a value of an enum where no type says which: `tier.gold`
                 let owner = self.decls.enums.iter().find(|en| en.values.iter().any(|v| v.is(w))).map(|en| en.name.text.clone());
                 let note = Self::property_note(self.dc.module, w);
-                let d = self.err("E101", e.span, tr!("`{w}` という名前はありません", "There is no `{w}`"));
+                let d = self.err("E101", e.span, tr!("`{w}` という名前はありません", "There is no `{w}`")).same_mut(w.to_string());
                 d.notes.extend(note);
                 if let Some(o) = owner {
                     d.notes.push(tr!(
@@ -1455,7 +1647,7 @@ impl<'a> Ck<'a> {
                     let r = self.show(&bt);
                     let names: Vec<String> = self.fields(id).unwrap_or_default().iter().map(|(n, _)| format!("`{}`", n.text)).collect();
                     let note = fields_note(&r, &names);
-                    self.err("E101", at, tr!("{r} にフィールド `{f}` はありません", "There is no field `{f}` in {r}")).notes.push(note);
+                    self.err("E101", at, tr!("{r} にフィールド `{f}` はありません", "There is no field `{f}` in {r}")).same_in_mut(format!("field of {r}"), f).notes.push(note);
                     Ty::Error
                 }
             },
@@ -1604,7 +1796,7 @@ impl<'a> Ck<'a> {
                 let en = self.named_by(&id.owner, &id.name);
                 let all = values.iter().map(|x| format!("`{}`", x.text)).collect::<Vec<_>>().join(", ");
                 let at = path[path.len() - 1].1;
-                self.err("E101", at, tr!("列挙 `{en}` に値 `{v}` はありません", "The enum `{en}` has no value `{v}`")).notes.push(tr!("値は {all} です。", "Its values are {all}."));
+                self.err("E101", at, tr!("列挙 `{en}` に値 `{v}` はありません", "The enum `{en}` has no value `{v}`")).same_in_mut(format!("value of {en}"), v.to_string()).notes.push(tr!("値は {all} です。", "Its values are {all}."));
                 Some(Ty::Error)
             }
         }
@@ -1636,10 +1828,10 @@ impl<'a> Ck<'a> {
             }
             (Ty::Enum(x), Ty::Enum(y)) if self.same_enum(x, y) => Some(a.clone()),
             // two function values of one type (DESIGN 27.2): the effect written on both, else none
-            (Ty::Fn(ap, ar, ae), Ty::Fn(bp, br, be)) if ap.len() == bp.len() && ap.iter().zip(bp).all(|(x, y)| same_ty(x, y)) && same_ty(ar, br) => {
+            (Ty::Fn(ap, ar, ae), Ty::Fn(bp, br, be)) if ap.len() == bp.len() && ap.iter().zip(bp).all(|(x, y)| self.same_ty(x, y)) && self.same_ty(ar, br) => {
                 Some(Ty::Fn(ap.clone(), ar.clone(), if ae == be { ae.clone() } else { None }))
             }
-            (x, y) if x == y => Some(x.clone()),
+            (x, y) if self.same_type(x, y) => Some(x.clone()),
             // two values of one sum, of the types of its values or of the sum: the sum (DESIGN 23.2)
             (Ty::Record(r), Ty::Enum(y)) | (Ty::Enum(y), Ty::Record(r)) if r.sum().as_ref() == Some(y) => Some(Ty::Enum(y.clone())),
             (Ty::Record(r), Ty::Record(q)) if r.sum().is_some() && r.sum() == q.sum() => r.sum().map(Ty::Enum),
@@ -1741,7 +1933,7 @@ impl<'a> Ck<'a> {
             _ if !order => {
                 if self.join(ta, tb).is_none() {
                     let (x, y) = (self.show(ta), self.show(tb));
-                    self.err("E102", e.span, tr!("{x} と {y} は比べられません", "{x} and {y} cannot be compared"));
+                    self.apart(e.span, tr!("{x} と {y} は比べられません", "Values of {x} and of {y} cannot be compared"), ta, tb);
                 }
             }
             (Ty::Bool, Ty::Bool) => {
@@ -1755,10 +1947,10 @@ impl<'a> Ck<'a> {
             }
             _ => {
                 let (x, y) = (self.show(ta), self.show(tb));
-                if ta == tb {
+                if self.same_type(ta, tb) {
                     self.err("E105", e.span, tr!("{x} の値は `{o}` で比べられません", "Values of {x} are not compared with `{o}`"));
                 } else {
-                    self.err("E102", e.span, tr!("{x} と {y} は比べられません", "{x} and {y} cannot be compared"));
+                    self.apart(e.span, tr!("{x} と {y} は比べられません", "Values of {x} and of {y} cannot be compared"), ta, tb);
                 }
             }
         }
@@ -1999,7 +2191,17 @@ impl<'a> Ck<'a> {
                         }
                         None
                     }
-                    (_, Split::Error) => None,
+                    // a value of no type known, for what is said once where it comes from (a `use`
+                    // that could not be read, a name that is not there): the name an arm gives it is
+                    // a name all the same, of no type known, and nothing more is said of it
+                    (_, Split::Error) => {
+                        match p {
+                            Pattern::Some(x, sp) => bound = Some((x.clone(), *sp, Ty::Error)),
+                            Pattern::Value(_, Some((b, bsp)), _) => bound = Some((b.clone(), *bsp, Ty::Error)),
+                            _ => {}
+                        }
+                        None
+                    }
                     (Pattern::None(_), Split::Opt) => Some("none".into()),
                     (Pattern::Some(x, sp), Split::Opt) => {
                         let inner = match &st {
@@ -2079,7 +2281,9 @@ impl<'a> Ck<'a> {
                             _ => {
                                 let en = self.named_by(&id.owner, &id.name);
                                 let shown = path.iter().map(|(w, _)| w.as_str()).collect::<Vec<_>>().join(".");
-                                self.err("E101", *sp, tr!("`{shown}` は列挙 `{en}` の値ではありません", "`{shown}` is not a value of the enum `{en}`"));
+                                self.err("E101", *sp, tr!("`{shown}` は列挙 `{en}` の値ではありません", "`{shown}` is not a value of the enum `{en}`")).same_in_mut(format!("value of {en}"), v.clone());
+                                // the value it was written for is not said to be left out on top
+                                wrong = true;
                                 None
                             }
                         }
@@ -2116,7 +2320,7 @@ impl<'a> Ck<'a> {
                     Some(j) => j,
                     None => {
                         let (a, b) = (self.show(&o), self.show(&t));
-                        self.err("E102", arm.span, tr!("`match` の分岐の答えの型が違います（{a} と {b}）", "The arms of the `match` answer two types ({a} and {b})"));
+                        self.apart(arm.span, tr!("`match` の分岐の答えの型が違います（{a} と {b}）", "The arms of the `match` answer two types ({a} and {b})"), &o, &t);
                         Ty::Error
                     }
                 },
@@ -2140,7 +2344,7 @@ impl<'a> Ck<'a> {
                         _ => v.clone(),
                     })
                     .collect();
-                if !missing.is_empty() {
+                if !missing.is_empty() && !wrong {
                     let m = missing.iter().map(|v| format!("`{v}`")).collect::<Vec<_>>().join(", ");
                     self.err("E106", e.span, tr!("`match` が受けない値があります: {m}", "The `match` leaves values out: {m}"))
                         .notes
@@ -2229,14 +2433,14 @@ impl<'a> Ck<'a> {
                 self.err(
                     "E105",
                     path[0].1,
-                    tr!("{s} は、規則を呼んで受け取るレコードなので、`{{ … }}` では作れません", "{s} is what a rule answers when it is called, which `{{ … }}` does not build"),
+                    tr!("{s} は、規則を呼んで受け取るレコードなので、`{{ … }}` では作れません", "The record {s} is what a rule answers when it is called, which `{{ … }}` does not build"),
                 );
                 return Ty::Error;
             }
             other => {
                 let s = self.show(other);
                 let at = path[0].1;
-                self.err("E105", at, tr!("{s} はレコードではないので、`{{ … }}` で作れません", "{s} is no record, which `{{ … }}` builds"));
+                self.err("E105", at, tr!("{s} はレコードではないので、`{{ … }}` で作れません", "The type {s} is no record, which `{{ … }}` builds"));
                 return Ty::Error;
             }
         };
@@ -2254,7 +2458,7 @@ impl<'a> Ck<'a> {
         let shown = self.show(&t);
         // a value of a sum with no fields is written as it is
         if matches!(id, RecId::Variant { .. }) && fields.is_empty() {
-            self.err("E105", path[0].1, tr!("{shown} はフィールドの無い値なので、`{{ … }}` では作れません", "{shown} is a value with no fields, which `{{ … }}` does not build"))
+            self.err("E105", path[0].1, tr!("{shown} はフィールドの無い値なので、`{{ … }}` では作れません", "The value {shown} has no fields, so `{{ … }}` does not build it"))
                 .notes
                 .push(tr!("フィールドの無い値は、`{shown}` とだけ書きます。", "A value with no fields is written `{shown}` alone."));
             return Ty::Error;
@@ -2266,7 +2470,7 @@ impl<'a> Ck<'a> {
                 Some(t) => t.clone(),
                 None => self.expr(b, Some(&t)),
             };
-            if !bt.is_error() && bt != t {
+            if !bt.is_error() && !self.same_type(&bt, &t) {
                 let bs = self.show(&bt);
                 // a value of the enum itself, for a value of one of its values: the value the note names
                 let of_sum = match (&bt, id.sum(), &id) {
@@ -2283,6 +2487,7 @@ impl<'a> Ck<'a> {
             }
         }
         let mut given: BTreeMap<String, Span> = BTreeMap::new();
+        let mut strays = 0;
         for fi in inits {
             match fields.iter().find(|(n, _)| n.is(&fi.name)) {
                 Some((n, slot)) => {
@@ -2304,12 +2509,16 @@ impl<'a> Ck<'a> {
                     let f = &fi.name;
                     let names: Vec<String> = fields.iter().map(|(n, _)| format!("`{}`", n.text)).collect();
                     let note = fields_note(&shown, &names);
-                    self.err("E101", fi.span, tr!("{shown} にフィールド `{f}` はありません", "There is no field `{f}` in {shown}")).notes.push(note);
+                    self.err("E101", fi.span, tr!("{shown} にフィールド `{f}` はありません", "There is no field `{f}` in {shown}")).same_in_mut(format!("field of {shown}"), f.clone()).notes.push(note);
+                    strays += 1;
                 }
             }
         }
         let missing: Vec<String> = fields.iter().filter(|(n, s)| !given.contains_key(&n.text) && !matches!(s.ty, Ty::Opt(_))).map(|(n, _)| format!("`{}`", n.text)).collect();
-        if base.is_none() && !missing.is_empty() {
+        // a field written by a name the record does not have is the one left out, as often as not:
+        // the note of E101 lists the fields, and the field is not said to be missing on top
+        // (ritsu's DESIGN 8.3)
+        if base.is_none() && !missing.is_empty() && strays < missing.len() {
             let m = missing.join(", ");
             self.err("E107", e.span, tr!("{shown} を作るのに、フィールドが足りません: {m}", "Building {shown} leaves out fields: {m}")).notes.push(tr!(
                 "レコードはフィールドを全部書いて作ります。値が無いことがある（`T?` の）フィールドだけは省けて、省けば `none` です。",
@@ -2389,11 +2598,27 @@ impl<'a> Ck<'a> {
     /// parameter of keys that cannot be one (DESIGN 26.2).
     fn settle(&mut self, e: &Expr, shown: &Text, tps: &[names::TParamInfo], got: Vec<Option<Ty>>, clash: Option<(usize, Ty, Ty)>, unrounded: Option<(usize, Span)>) -> Option<Vec<Ty>> {
         if let Some((i, a, b)) = clash {
-            let (p, x, y) = (&tps[i].name.text, self.show(&a), self.show(&b));
-            self.err("E112", e.span, tr!("{} の型の引数 `{p}` に、二つの型 {x} と {y} が渡されています", "The type parameter `{p}` of {} is given two types, {x} and {y}", shown.ja; shown.en)).notes.push(tr!(
-                "一つの型の引数には、一つの型だけが当たります。単位の違うお金や量も違う型なので、`in` で換算してそろえてください。",
-                "A type parameter takes one type: amounts or quantities of two units are of two types too, and `in` converts one to the other."
-            ));
+            let (p, mut x, mut y) = (&tps[i].name.text, self.show(&a), self.show(&b));
+            // two rates on two steps, neither a whole number of the other: the steps tell them apart
+            let steps = match (&a, &b) {
+                (Ty::Num(m), Ty::Num(n)) if m.is_rate() && n.is_rate() => m.step.zip(n.step).filter(|(s, t)| s != t).map(|(s, t)| (names::step_text(s, &m.unit), names::step_text(t, &n.unit))),
+                _ => None,
+            };
+            if let Some((s, t)) = &steps {
+                x = format!("{x}[step {s}]");
+                y = format!("{y}[step {t}]");
+            }
+            let note = match &steps {
+                Some((s, t)) => tr!(
+                    "二つの刻みの率は、一方の刻みが他方の刻みの整数倍のときに、細かいほうの刻みの一つの型として当たります。{s} と {t} はそうではないので、一方を他方の刻みに丸めてそろえてください（`down(x, {t})` のように）。",
+                    "Rates on two steps take one type, the finer, where one step is a whole number of the other. {s} and {t} are not, so round one to the other's step (as `down(x, {t})` does)."
+                ),
+                None => tr!(
+                    "一つの型の引数には、一つの型だけが当たります。単位の違うお金や量も違う型なので、`in` で換算してそろえてください。",
+                    "A type parameter takes one type: amounts or quantities of two units are of two types too, and `in` converts one to the other."
+                ),
+            };
+            self.err("E112", e.span, tr!("{} の型の引数 `{p}` に、二つの型 {x} と {y} が渡されています", "The type parameter `{p}` of {} is given two types, {x} and {y}", shown.ja; shown.en)).notes.push(note);
             return None;
         }
         if let Some((i, at)) = unrounded {
@@ -2474,8 +2699,15 @@ impl<'a> Ck<'a> {
                 match &got[i] {
                     None => got[i] = Some(t),
                     Some(g) => {
+                        // a rate on a step that is a whole number of another's is on that one too:
+                        // the type parameter takes the finer (a rule's answer on 0.5% and a value on
+                        // 0.25%, DESIGN 26.2)
+                        if let Some(f) = finer_rate(g, &t) {
+                            got[i] = Some(f);
+                            return;
+                        }
                         // a constant in another unit of the one found goes there (DESIGN 3.2)
-                        let fits = *g == t || matches!(a, Ty::Num(x) if x.konst.is_some() && self.agrees(a, g).is_ok());
+                        let fits = self.same_type(g, &t) || matches!(a, Ty::Num(x) if x.konst.is_some() && self.agrees(a, g).is_ok());
                         if !fits && clash.is_none() {
                             *clash = Some((i, g.clone(), t));
                         }
@@ -2654,7 +2886,7 @@ impl<'a> Ck<'a> {
         // name in a function never is (E006)
         if let ExprKind::Field(base, f, fsp) = &callee.kind {
             let first = base.path().map(|p| p[0].0.clone());
-            let used = first.as_deref().is_some_and(|w| self.lookup(w).is_none() && self.dc.uses.contains_key(w));
+            let used = first.as_deref().is_some_and(|w| self.lookup(w).is_none() && (self.dc.uses.contains_key(w) || self.unread(w)));
             if !used {
                 return self.method(e, callee, base, f, *fsp, args, want);
             }
@@ -2669,6 +2901,14 @@ impl<'a> Ck<'a> {
             return self.call_value(e, callee, args);
         }
         let words: Vec<&str> = path.iter().map(|(w, _)| w.as_str()).collect();
+        // a call of what a file that could not be read gives: its arguments are checked, and its
+        // answer is of no type that can be told
+        if self.unread(words[0]) && self.lookup(words[0]).is_none() {
+            for a in args {
+                self.expr(a.expr(), None);
+            }
+            return Ty::Error;
+        }
         // a local that is no function value is never called, so a call names a function, a rule or a
         // builtin even where a local has the same name (`let count = count(lines)`)
         let callable = words.len() > 1 || self.own_fn(words[0]).is_some() || self.dc.uses.contains_key(words[0]) || crate::kw::is_builtin(words[0]);
@@ -2723,7 +2963,7 @@ impl<'a> Ck<'a> {
                     return self.builtin(e, b, None, args, want);
                 }
                 let note = Self::property_note(self.dc.module, w);
-                let d = self.err("E101", callee.span, tr!("`{w}` という関数はありません", "There is no function `{w}`"));
+                let d = self.err("E101", callee.span, tr!("`{w}` という関数はありません", "There is no function `{w}`")).same_mut(w.to_string());
                 d.notes.extend(note);
                 // a builtin written only after a value, written as a function (DESIGN 21.4)
                 if crate::kw::is_method(w) {
@@ -2773,7 +3013,7 @@ impl<'a> Ck<'a> {
                 }
                 _ => {
                     let shown = words.join(".");
-                    self.err("E101", callee.span, tr!("`{shown}` という関数はありません", "There is no function `{shown}`"));
+                    self.err("E101", callee.span, tr!("`{shown}` という関数はありません", "There is no function `{shown}`")).same_mut(shown.clone());
                     Ty::Error
                 }
             },
@@ -2781,13 +3021,13 @@ impl<'a> Ck<'a> {
                 Some(Target::Book { canon, facts, .. }) => self.transfer(e, b, &canon, &facts, t, op, &path, args),
                 _ => {
                     let shown = words.join(".");
-                    self.err("E101", callee.span, tr!("`{shown}` という関数はありません", "There is no function `{shown}`"));
+                    self.err("E101", callee.span, tr!("`{shown}` という関数はありません", "There is no function `{shown}`")).same_mut(shown.clone());
                     Ty::Error
                 }
             },
             _ => {
                 let shown = words.join(".");
-                self.err("E101", callee.span, tr!("`{shown}` という関数はありません", "There is no function `{shown}`"));
+                self.err("E101", callee.span, tr!("`{shown}` という関数はありません", "There is no function `{shown}`")).same_mut(shown.clone());
                 Ty::Error
             }
         }
@@ -2892,6 +3132,7 @@ impl<'a> Ck<'a> {
         let w = crate::diag::ja_before(&what.ja);
         let (one, many) = word;
         let mut positional = false;
+        let mut strays = 0;
         for a in args {
             match a {
                 Arg::Pos(x) => {
@@ -2928,7 +3169,8 @@ impl<'a> Ck<'a> {
                             self.expr(x, None);
                         }
                         let all = Text::list(&params.iter().map(|(p, _, _)| Text::same(format!("`{p}`"))).collect::<Vec<_>>());
-                        self.err(code, *sp, tr!("{w}は `{n}` を取りません", "{} takes no `{n}`", ; what.en)).notes.push(tr!("取るのは {} です。", "It takes {}.", all.ja; all.en));
+                        self.err(code, *sp, tr!("{w}は `{n}` を取りません", "{} takes no `{n}`", ; what.en)).same_in_mut(format!("argument of {}", what.en), n.clone()).notes.push(tr!("取るのは {} です。", "It takes {}.", all.ja; all.en));
+                        strays += 1;
                     }
                 },
             }
@@ -2937,7 +3179,10 @@ impl<'a> Ck<'a> {
             return;
         }
         let missing: Vec<String> = params.iter().filter(|(p, s, required)| *required && !given.contains(p) && !matches!(s.ty, Ty::Opt(_))).map(|(p, _, _)| format!("`{p}`")).collect();
-        if !missing.is_empty() {
+        // an argument given by a name the callee does not take is the one missing, as often as
+        // not: its note lists what the callee takes, and it is not said to be missing on top
+        // (ritsu's DESIGN 8.3)
+        if !missing.is_empty() && strays < missing.len() {
             let m = missing.join(", ");
             self.err(code, e.span, tr!("{w}の{}が足りません: {m}", "{} is missing {}: {m}", one.ja; what.en, many.en));
         }
@@ -3169,7 +3414,7 @@ impl<'a> Ck<'a> {
                         return r;
                     }
                     for (i, (p, f)) in params.iter().zip(fp).enumerate() {
-                        if !same_ty(p, f) {
+                        if !self.same_ty(p, f) {
                             let (ps_, fs) = (self.show(p), self.show(f));
                             let k = i + 1;
                             self.err("E102", x.span, tr!("`{name}` が関数の {k} 番目の引数に渡すのは {ps_} です。この関数の値が取るのは {fs} です", "`{name}` gives argument {k} of the function {ps_}, and the function value takes {fs}")).notes.push(fn_types_note());
@@ -3195,7 +3440,7 @@ impl<'a> Ck<'a> {
             for ((w, (p, sp)), t) in written.iter().zip(ps).zip(params) {
                 let Some(w) = w else { continue };
                 let wt = self.dc.resolve(w);
-                if !same_ty(&wt, t) {
+                if !self.same_ty(&wt, t) {
                     let (ws, ts) = (self.show(&wt), self.show(t));
                     self.err("E102", *sp, tr!("ラムダの引数 `{p}` の型 {ws} は、`{name}` が渡す {ts} と違います", "The parameter `{p}` of the lambda is of {ws}, and `{name}` gives it {ts}"));
                 }
@@ -3613,7 +3858,7 @@ impl<'a> Ck<'a> {
                             Some(j) if matches!(j, Ty::List(_) | Ty::Empty | Ty::Error) => j,
                             _ => {
                                 let (a, b) = (self.show(&acc), self.show(&t));
-                                self.err("E102", x.span, tr!("`concat` がつなぐリストの型が違います（{a} と {b}）", "The lists `concat` joins are of two types ({a} and {b})"));
+                                self.apart(x.span, tr!("`concat` がつなぐリストの型が違います（{a} と {b}）", "The lists `concat` joins are of two types ({a} and {b})"), &acc, &t);
                                 return Ty::Error;
                             }
                         };
@@ -3908,7 +4153,7 @@ impl<'a> Ck<'a> {
                     && self.join(t, &x).is_none()
                 {
                     let (a, b) = (self.show(t), self.show(&x));
-                    self.err("E102", xs[1].span, tr!("`contains` が探すのは {a} の値です。これは {b} です", "`contains` looks for a value of {a}; this is {b}"));
+                    self.apart(xs[1].span, tr!("`contains` が探すのは {a} の値です。これは {b} です", "`contains` looks for a value of {a}; this is {b}"), t, &x);
                 }
                 Ty::Bool
             }
@@ -4190,7 +4435,7 @@ fn param_note() -> Text {
 /// value of a sum with no fields, `Order.cancelled`).
 fn fields_note(shown: &str, names: &[String]) -> Text {
     if names.is_empty() {
-        return tr!("{shown} にはフィールドがありません。", "{shown} has no fields.");
+        return tr!("{shown} にはフィールドがありません。", "The value {shown} has no fields.");
     }
     let names = names.join(", ");
     tr!("{shown} のフィールドは {names} です。", "The fields of {shown} are {names}.")
@@ -4253,6 +4498,27 @@ fn konst_of(t: &Ty) -> bool {
     }
 }
 
+/// Of two rates of one unit, each on a step and one step a whole number of the other, the one on the
+/// finer step: what a type parameter both are given takes (DESIGN 26.2). None for any other two
+/// types, and for two on one step (one type).
+fn finer_rate(a: &Ty, b: &Ty) -> Option<Ty> {
+    let (Ty::Num(x), Ty::Num(y)) = (a, b) else { return None };
+    if !x.is_rate() || !y.is_rate() || x.konst.is_some() || y.konst.is_some() || x.ratio || y.ratio || !crate::ty::same_unit(&x.unit, &y.unit) {
+        return None;
+    }
+    let (s, t) = (x.step?, y.step?);
+    let whole = |big: Rat, small: Rat| small.num > 0 && big.num > 0 && big.checked_div(small).is_some_and(|q| q.is_int());
+    if s == t {
+        None
+    } else if whole(t, s) {
+        Some(a.clone())
+    } else if whole(s, t) {
+        Some(b.clone())
+    } else {
+        None
+    }
+}
+
 /// The type a type parameter takes from a value of `t` (DESIGN 26.2): the type as a place declares it
 /// (a number whole in its unit, a rate on its step, no constant). None where the value is unrounded,
 /// which no type parameter takes.
@@ -4288,12 +4554,6 @@ pub fn no_outputs_note(w: &str) -> Text {
     )
 }
 
-/// Whether two types are one, a constant's value aside: what a function type's parameters and answer
-/// are held to (DESIGN 27.2). A type said wrong already is any type.
-fn same_ty(a: &Ty, b: &Ty) -> bool {
-    a.is_error() || b.is_error() || plain(a.clone()) == plain(b.clone())
-}
-
 /// When two function types are one (E102, DESIGN 27.2).
 fn fn_types_note() -> Text {
     tr!(
@@ -4307,6 +4567,16 @@ fn opt(t: Ty) -> Ty {
     match t {
         Ty::Opt(_) | Ty::Error => t,
         other => Ty::Opt(Box::new(other)),
+    }
+}
+
+/// The enum a type holds, through optionals, lists and sets: what the note on two enums that are two
+/// types names (`Ck::enums_apart`).
+fn enum_inside(t: &Ty) -> Option<&EnumId> {
+    match t {
+        Ty::Enum(e) => Some(e),
+        Ty::Opt(x) | Ty::List(x) | Ty::Set(x) => enum_inside(x),
+        _ => None,
     }
 }
 

@@ -47,6 +47,34 @@ pub struct Reference {
     pub how: String,
 }
 
+/// One file a file reads (DESIGN 6.4): what it reads, how, and the line that names it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Read {
+    /// The line that names it, from 1; None for a file read without being named in the file (a
+    /// contribution that adds to a rule).
+    pub line: Option<usize>,
+    /// What it reads: the file, or a thing in it as its reference names it. A naming of a directory
+    /// reads every file under it.
+    pub target: Name,
+    /// How, in the words of the language that reads it (`use organization`, `apply`, `contribution`).
+    pub how: String,
+}
+
+impl Read {
+    /// A reference as a file read at the line that names it.
+    pub fn of(r: Reference) -> Read {
+        Read { line: Some(r.line), target: r.target, how: r.how }
+    }
+
+    /// What a file reads of what it names, before its language takes out or adds anything: all of
+    /// it, but for the places the values its hand-written code carries come from (`fed by`, read the
+    /// same way in every language, DESIGN 7.16). `ritsu check` compares their ranges with the
+    /// file's, and what the file answers is not made of them.
+    pub fn of_named(named: Vec<Reference>) -> Vec<Read> {
+        named.into_iter().filter(|r| r.how != "fed by").map(Read::of).collect()
+    }
+}
+
 /// What a file holds. `root` is the root of the project (DESIGN 6.2, item 3); `file` is the file,
 /// from the root.
 pub trait Items {
@@ -56,6 +84,18 @@ pub trait Items {
 /// What a file names outside itself, in the order written.
 pub trait References {
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>>;
+
+    /// The files the file reads (DESIGN 6.4), given what it names (`named`, what
+    /// [`References::references`] answered for it): the files its answers are made of, so that a
+    /// change of one can change what it answers with no byte of it changed. A copy it only pins, a
+    /// place it only puts things in or says it owns, a place a value comes from, is named and not
+    /// read. By default every file it names is read but for the places values come from
+    /// ([`Read::of_named`]); a language takes out what else it names without reading it, and adds
+    /// what it reads without naming it.
+    fn reads(&self, root: &Path, file: &str, named: Vec<Reference>) -> Vec<Read> {
+        let _ = (root, file);
+        Read::of_named(named)
+    }
 }
 
 /// What a run has asked of each file: by the tool, the root and the file from it (a naming's path
@@ -74,6 +114,7 @@ pub struct Index {
     references: BTreeMap<Tool, Rc<dyn References>>,
     asked_items: Asked<Item>,
     asked_refs: Asked<Reference>,
+    asked_reads: Asked<Read>,
 }
 
 /// What a naming comes to in an [`Index`].
@@ -141,6 +182,20 @@ impl Index {
         }
         let r = port.references(root, file);
         self.asked_refs.borrow_mut().insert(key, r.clone());
+        Some(r)
+    }
+
+    /// The files the file reads ([`References::reads`] of what it names), asked of its language
+    /// once in a run. None when the language of `tool` is not joined; what the language says when
+    /// it cannot answer what the file names.
+    pub fn reads(&self, tool: Tool, root: &Path, file: &str) -> Option<Result<Vec<Read>, Vec<Said>>> {
+        let port = self.references.get(&tool)?.clone();
+        let key = (tool, root.to_path_buf(), file.to_string());
+        if let Some(r) = self.asked_reads.borrow().get(&key) {
+            return Some(r.clone());
+        }
+        let r = self.references(tool, root, file)?.map(|named| port.reads(root, file, named));
+        self.asked_reads.borrow_mut().insert(key, r.clone());
         Some(r)
     }
 

@@ -67,18 +67,39 @@ async function serve(dir, address) {
   fs.rmSync(work, { recursive: true, force: true });
 }
 
-/** Start the other language's runner, serving the child; the function it gives back stops it. */
+/**
+ * Start the other language's runner, serving the child; the function it gives back stops it, and its `gone` fails when the
+ * runner ends before that: nothing else serves the child, and a run would wait without end.
+ */
 async function serveElsewhere(command, address) {
   const child = spawn(command[0], [...command.slice(1), address], { stdio: ["pipe", "pipe", "inherit"] });
+  let closing = false;
   const exited = new Promise((ok, fail) => child.on("exit", (code) => (code === 0 ? ok() : fail(new Error(`the child's runner exited with ${code}`)))));
+  const gone = new Promise((_, fail) => child.on("exit", (code, signal) => closing || fail(new Error(`the child's runner exited with ${code ?? signal} before the runs were over`))));
+  gone.catch(() => {});
+  // what it prints once it serves goes on to this runner's standard error
+  let serving = false;
   await new Promise((ok, fail) => {
-    child.stdout.on("data", (d) => String(d).includes("serving") && ok());
+    child.stdout.on("data", (d) => {
+      if (serving) process.stderr.write(d);
+      else if (String(d).includes("serving")) {
+        serving = true;
+        // what came after its "serving" line in the same piece
+        const s = String(d);
+        const rest = s.slice(s.indexOf("\n", s.indexOf("serving")) + 1 || s.length);
+        if (rest !== "") process.stderr.write(rest);
+        ok();
+      }
+    });
     exited.catch(fail);
   });
-  return async () => {
+  const stop = async () => {
+    closing = true;
     child.stdin.end();
     await exited;
   };
+  stop.gone = gone;
+  return stop;
 }
 
 async function main(parentDir, childDir, runsFile, outFile) {
@@ -97,7 +118,7 @@ async function main(parentDir, childDir, runsFile, outFile) {
         const handle = await start(env.client, r.id, r.input);
         let end;
         try {
-          end = { succeed: (await handle.result()) ?? null };
+          end = { succeed: (await (stop === null ? handle.result() : Promise.race([handle.result(), stop.gone]))) ?? null };
         } catch (e) {
           if (!(e instanceof WorkflowFailedError)) throw e;
           end = { fail: { error: e.cause?.type ?? String(e.cause), cause: e.cause?.message || null } };

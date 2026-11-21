@@ -1,0 +1,20 @@
+rule 値の無いことがある出力(optional_output) v1
+description "取り込んだ規則の、値の無いことがある真偽。いちばん小さい区分では値が無い。金額と一緒に読む"
+
+enum 選択(choice) = 一(one) | 二(two) | 三(three)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+apply 区分け(t) = "shared/金額の区分.rule" meaning:e7d6953fd795c588
+  金額 = 金額
+  印 -> 受けた印
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 金額                  | 受けた印 | -> 答え |
+| <=10_000円            | none     | 一      |
+| >10_000円 <=100_000円 | false    | 二      |
+| >100_000円            | true     | 三      |

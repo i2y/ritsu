@@ -32,7 +32,7 @@ mod read;
 pub mod validate;
 pub mod value;
 
-pub use load::{Clash, DANDORI_OPTIONS, Issue, Protoc, Protos, Resolved, Symbol, WELL_KNOWN, dependency_roots, import_candidates, is_known, known_package, load, load_from, protoc_roots, roots_for};
+pub use load::{Clash, DANDORI_OPTIONS, DATE, Issue, Protoc, Protos, Resolved, Symbol, WELL_KNOWN, dependency_roots, import_candidates, is_known, known_package, load, load_from, protoc_roots, resolve_name, roots_for};
 pub use model::{Enum, EnumValue, Extension, Field, Import, Label, Message, Method, Oneof, Opt, ProtoFile, Redaction, Service, Type, json_name};
 pub use read::{Problem, ReadError, SCALARS, read};
 pub use value::Value;

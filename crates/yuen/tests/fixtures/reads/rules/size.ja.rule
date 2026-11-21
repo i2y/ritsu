@@ -1,0 +1,21 @@
+rule 返品の多さ(refund_size) v1
+description "返品の点数が少ないか多いか。yuen affected の試験のために書いたもので、どの文書の転記でもない"
+
+enum 多さ(size) = 少ない(few) | 多い(many)
+
+inputs
+  点数(items) : number  range >=1 <=60
+
+outputs
+  多さ(size) : 多さ
+
+table 多さを決める
+policy unique
+| 点数 | -> 多さ : 多さ |
+| <=20 | 少ない         |
+| >20  | 多い           |
+
+examples
+| 点数 | -> 多さ |
+| 20   | 少ない  |
+| 21   | 多い    |

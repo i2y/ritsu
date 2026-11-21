@@ -45,3 +45,4 @@ pub mod syntax;
 pub mod temporal;
 pub mod temporal_go;
 pub mod temporal_py;
+pub mod wire;

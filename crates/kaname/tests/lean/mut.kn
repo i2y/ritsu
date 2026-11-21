@@ -1,0 +1,30 @@
+module mut v1
+description "`Arg` and `Val` hold each other in one `mutual` block; `Note`, which holds `Arg`, still derives Repr, DecidableEq and Inhabited"
+
+record Arg
+  name  : string  count <=8
+  value : Val
+
+enum Val
+  str
+    s : string  count <=8
+  rows
+    v : list[list[Arg]]  count <=2
+  nothing
+
+record Note
+  outputs : list[Arg]  count <=2
+
+fn pick(v: Val) -> string
+  match v
+    str x => x.s
+    rows x => "rows"
+    nothing => "none"
+
+fn first_name(n: Note) -> string
+  match n.outputs.first()
+    none => "empty"
+    some a => a.name
+
+fn same_note(a: Note, b: Note) -> bool
+  a = b

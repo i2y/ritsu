@@ -1,0 +1,12 @@
+# 宣言で名前を書き誤ったコンテキストと、その名前を書く行。名前は、それを書くファイルごとに、最初に書いた所で一度だけ言う。
+# names の日本語の版
+map 店(shop) v1
+description "注文を受け、在庫を押さえる"
+
+use context "ctx/受注.ctx"
+use context "ctx/在庫.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"

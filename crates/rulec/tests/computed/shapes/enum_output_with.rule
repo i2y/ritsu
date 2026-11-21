@@ -1,0 +1,21 @@
+rule enum_output_with v1
+description "The same output read in this rule's own values with `with`: the table that reads them over again is followed to the applied table"
+
+enum choice = one | two | three
+enum level = low | mid | high
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+apply t = "shared/tier.rule" meaning:8c5e54b1fadce0b7
+  amount = amount
+  band -> t_level with small -> low, medium -> mid, large -> high
+
+outputs
+  x : choice
+
+table pick
+| amount                  | t_level | -> x  |
+| <=10_000JPY             | low     | one   |
+| >10_000JPY <=100_000JPY | mid     | two   |
+| >100_000JPY             | high    | three |

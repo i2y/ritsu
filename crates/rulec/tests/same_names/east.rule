@@ -1,0 +1,20 @@
+rule east v1
+description "Whether a place is in the east: the one file the rule reads declares nothing the rule declares (fictional)"
+
+import enum region from "places.rule"
+
+inputs
+  place : region
+
+outputs
+  near : bool
+
+table near
+| place | -> near |
+| east  | true    |
+| west  | false   |
+
+examples
+| place | -> near |
+| east  | true    |
+| west  | false   |

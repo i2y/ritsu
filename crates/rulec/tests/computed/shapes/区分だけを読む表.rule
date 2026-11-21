@@ -1,0 +1,20 @@
+rule 区分だけを読む表(band_alone) v1
+description "取り込んだ規則が決める区分を読み、金額は読まない表。金額を 1 万円までに限ると、区分は小で答えは一"
+
+enum 選択(choice) = 一(one) | 二(two) | 三(three)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+apply 区分け(t) = "shared/金額の区分.rule" meaning:e7d6953fd795c588
+  金額 = 金額
+  区分 -> 受けた区分
+
+outputs
+  答え(x) : 選択
+
+table 選ぶ(pick)
+| 受けた区分 | -> 答え |
+| 小         | 一      |
+| 中         | 二      |
+| 大         | 三      |

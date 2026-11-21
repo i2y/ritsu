@@ -1,0 +1,21 @@
+rule 一つおきの数(every_other) v1
+description "2 から 20 までの数を一つおきに書いた表。あいだの奇数の 10 個はどの行にも当たらず、一度の報告が並べる数より多い"
+
+inputs
+  個数(units) : number  range >=1 <=20
+
+outputs
+  偶数(even) : bool
+
+table 偶数の表(evens)
+| 個数 | -> 偶数 |
+| 2    | true    |
+| 4    | true    |
+| 6    | true    |
+| 8    | true    |
+| 10   | true    |
+| 12   | true    |
+| 14   | true    |
+| 16   | true    |
+| 18   | true    |
+| 20   | true    |

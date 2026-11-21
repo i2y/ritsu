@@ -68,7 +68,7 @@ type Flow struct {
 	Histories func(ctx context.Context, c client.Client, query string) ([]History, error)
 
 	// SetNows gives the run of a workflow's id the moments `now` reads in it (the package's
-	// DDSetNows, which the build adds): the one it starts at, for the check of the period there,
+	// DDSetNows_, which the build adds): the one it starts at, for the check of the period there,
 	// and the one of every later read.
 	SetNows func(id string, nows [2]string)
 
@@ -100,13 +100,13 @@ type Outcome struct {
 	Message string
 }
 
-// HTTPRequest is a request as Step Functions' HTTP Task sends it.
+// HTTPRequest is a request as Step Functions' HTTP Task sends it: the query in the URL, the
+// cookies in the headers.
 type HTTPRequest struct {
 	Method   string            `json:"http"`
 	URL      string            `json:"url"`
 	Headers  map[string]string `json:"headers,omitempty"`
 	Body     any               `json:"body,omitempty"`
-	Query    any               `json:"query,omitempty"`
 	Form     bool              `json:"form,omitempty"`
 	TypeSafe bool              `json:"typesafe,omitempty"`
 	OpenAI   bool              `json:"openai,omitempty"`

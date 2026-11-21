@@ -1,0 +1,4 @@
+エラー[E405]: tests/mutants/E405_条件つきの取消.ringi:17:23: 仮押さえ `予算.reserve` が、チケットが `rejected` になるとき、確定も取消もされずに残ります
+    17 |   on submitted   hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: 部, amount: 金額)
+  = 19 行目の `void` は `rejected` のとき `when 金額 > 10_000JPY` でだけ行い、仮押さえは条件なしで押さえます。
+  = `on rejected  void 予算.reserve(…)` のように、その終わり方に `post` か `void` の行を足してください。

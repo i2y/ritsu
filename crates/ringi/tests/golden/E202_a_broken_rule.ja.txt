@@ -1,0 +1,4 @@
+エラー[E202]: tests/mutants/E202_a_broken_rule.ringi:3:25: `shared/broken_authority.rule` は rulec の検査を通りません
+     3 | use rule authority from "shared/broken_authority.rule"
+  = E101: 完全性の欠落: どの行にも当てはまらない入力があります（`tests/mutants/shared/broken_authority.rule:12`）
+  = そのファイルを、rulec の検査が通るように直してください。

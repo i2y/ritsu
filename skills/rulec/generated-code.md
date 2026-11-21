@@ -132,7 +132,41 @@ every parameter — `int`, `string`, `bool`, the enum itself — which is why th
 asks only about the range.
 `JPYInclTax` and `JPYExclTax` are different types, and mixing them fails to compile in Rust,
 Swift, Go and TypeScript, and fails type checking in Python. Every value is an integer in its declared unit; no floating point appears
-anywhere.
+anywhere. Python takes the type of a local from the first value it is given, so a table's column
+of money, a quantity or a rate whose first row hands on an input of the unit's type as it stands
+is declared `int` before its rows (`counted: int`): a later row of a whole number then passes
+`mypy --strict` as it does when it comes first. TypeScript declares every column before its rows
+(`let counted: bigint;`) (§15.329 of DESIGN.md).
+
+**The names a caller reads are the rule's.** The rule's function, its types, the fields of its
+answer and of its elements and the keys of the wire are the names the rule declares, its aliases
+where it has them, in every language; a keyword, or a character some language takes in no name, is
+respelled alike in all of them (W121 says how). A keyword of one language's alone, where that
+language writes the rule's function, a namespace, a class or a constant, takes `_` after it there
+alone, which W121 says too without stopping `gen` (§15.344 of DESIGN.md). The names the code keeps to itself — its helpers,
+the locals and the parameters of its functions, the names it imports, the builtins it reads, the
+columns of the query, the records of the runner — are written apart from the rule's where the two
+would meet, in that language alone: the code renames its own (`Str_` in Java's runner), calls the
+builtin by a name the rule's cannot hide (`\implode`), or binds the rule's value under another name
+inside the function (`_Zone` in Ruby, which reads a name that starts with a capital as a constant), and
+`rulec check` says nothing of it (§15.336 of DESIGN.md). Where a name of the rule's meets one a
+caller reads too, neither can give way: W121 names the languages, and `gen` asked for one of them
+writes nothing of it — the targets it does not name are written — and stops with E153.
+
+**Quiet under each language's strict checker.** The code passes `mypy --strict`, rustc and clippy
+with `-D warnings`, `go vet` and `gofmt -l`, `swiftc -warnings-as-errors`, `ruby -wc`,
+`javac -Xlint:all -Werror`, and `tsc --strict` with the flags of unused locals and parameters
+([TypeScript](#typescript)), so a project that builds it under its own settings hears nothing from
+it. A value the rule works out and never reads is still worked out, one line of the rule to one
+line of the code, and read once in the way each language says a value is left unused (`_ = x`,
+`let _ = x;`, `void x;`).
+
+Every file of Rust opens by allowing `dead_code` and clippy's lints (`#![allow(non_snake_case,
+uncommon_codepoints, unused_parens, dead_code, clippy::all)]`, and `unused_attributes` in the
+module): the module is not meant to be edited by hand, its helpers and tables keep the shape the
+proof reads rather than the one a lint would ask for, and a lint a newer clippy adds must not fail a
+caller's `-D warnings` build. What passes without that line at no cost is written so that it does
+(§15.340 of DESIGN.md).
 
 **Rounding is explicit and settled for negatives too.** Python's `//` rounds toward −∞ and
 Go's integer division toward zero, so neither language's division is used. Each side carries
@@ -240,6 +274,13 @@ a `tsc` build works just as well. The member spelling is the alias in upper case
 The two error classes are `RuleInputError` and `RuleContradictionError`, with the same
 meanings as in Python.
 
+**The module passes `tsc --strict` with `--noUnusedLocals` and `--noUnusedParameters` too**
+(§15.342 of DESIGN.md), which a project that compiles it with its own code may set. It carries
+only the helpers it calls, and a value the rule never reads is read with `void` where it is
+worked out. Where TypeScript has narrowed a value to what the lines above give it and a test asks
+for a value outside them — a row of a rule read through an `apply`, an arm of a fold no element
+reaches — the value is read there as its whole type: `if ((lift as Tier) === Tier.BASIC)`.
+
 ### JavaScript
 
 ```js
@@ -306,6 +347,28 @@ the caller, and `RuleError::Contradiction { what }` is the runtime guard describ
 about one), and `Display` puts them together — nothing is formatted on the refusing path,
 which is what lets a model checker walk it (below).
 
+```rust
+pub enum RuleError {
+    /// Outside the declared input domain: a contract violation by the caller.
+    Input { what: Said, value: Option<i64> },
+    /// A contradiction in the rule itself, not a mistake by the caller.
+    Contradiction { what: Said },
+}
+```
+
+The sentence is a `Said`: its words as `&'static str` pieces, and the index of the element it
+names, counted from 0 as in the input's array, as an integer (§15.324). The walk writes
+`Said::at("lines[", index, "].subtotal is out of range")`, a sentence that names no element is
+`Said::of("amount is out of range")`, and the two elements a `unique` field or a `take_unique`
+finds are `Said::two(…)`. A `Said` shows the sentence with the index in it
+(`what.to_string()` is `lines[1].subtotal is out of range`, as every language says it), it is
+equal to a string that is that sentence (`what == "lines[1].subtotal is out of range"`, and
+`assert_eq!` reads the same), and it hands the pieces around the indices and the indices
+themselves (`what.words()`, `what.places()`) to a caller who wants the element as a number.
+`Said::from("…")`, or `"…".into()`, is a sentence with no index. Every Rust module has the type,
+those of a rule with no sequence too, where each sentence is a `Said::of`. Up to 0.55.2, `what`
+was a `&'static str`; [compatibility.md](compatibility.md) says what a caller changes.
+
 It compiles with `rustc` alone — `rustc --edition 2021 -O single_coupon_runner.rs` builds both
 the rule and its runner (`--extra runner`) through a `#[path] mod`, with no project file and
 nothing to fetch.
@@ -316,7 +379,7 @@ Beside the module, `single_coupon_proof.rs` (`--extra proof`) holds proof harnes
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani single_coupon_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
-a flag because it is the one pass whose cost is noticeable: on the corpus of 159 rules it
+a flag because it is the one pass whose cost is noticeable: on the corpus of 171 rules it
 adds about 900 seconds to a run that otherwise takes seconds. `rulec api` names
 the file under `rust.proof` and every harness under `rust.harnesses`.
 
@@ -332,7 +395,13 @@ What it holds, over **every** input in the declared domain rather than the vecto
 The last one is separate because the overlap is *not* in the artifact: the if/else chain has
 already settled the priority, so the rows are counted beside it, from the same conditions.
 The harness assumes the declared domain — every `range`, every `constraint` and every `never`
-line that names an input — and calls the generated function unchanged.
+line that names an input — and calls the generated function unchanged. A call whose value a
+`define` works out falls outside the range the rule accepts for it is outside that domain too
+(§15.313): `<alias>_answers` assumes away the refusal the function gives for it and holds every
+other call to an answer, and `rows_<table>` assumes the value inside the range where it works it out.
+So is a call whose walk ends with a `sum` or a `count` outside its range (§15.314): the refusal is
+assumed away only where it names that total and the value it carries is past the top or under the
+bottom, so a function that refused a total inside the range would fail the harness.
 
 A rule that walks a sequence gets the first three; its per-element tables and the ones that
 read a count cannot be replayed outside the walk, so no `rows_` is written for them. Two
@@ -406,7 +475,10 @@ SingleCoupon\single_coupon($subtotal, $applied, $kind, $rate, $face, $dup);
 One file, in a namespace named after the rule, with free functions in it. `declare(strict_types=1)`
 is on, and every parameter has a declared type — `int`, `string`, `bool`, or the enum itself —
 so a float where an integer was asked for is a `TypeError` at the door rather than a value
-that quietly rounds.
+that quietly rounds. A name that is one of PHP's keywords, in any case, takes `_` after it where
+a caller reads it: the function `list_` in the namespace `List_`, the enum class `Array_`, the
+case `Kind::FINAL_`, the namespace of an `enums` file. `rulec check` says so with W121, which
+keeps no target from being written (§15.344 of DESIGN.md).
 
 **Every division is `intdiv`.** PHP's `/` returns a *float* as soon as the division is not
 exact, and a float is exact only to 2^53 where the overflow proof (E108) is about int64. That
@@ -549,7 +621,9 @@ SingleCoupon.singleCoupon(subtotal, applied, kind, rate, face, dup);
 
 One public class named after the rule, with everything nested inside it: the enums, the
 errors, `Fired`, `Output` and the static methods. Nested, not top-level, because two rules
-generated into the same directory would otherwise each want to be `RuleInputError.java`.
+generated into the same directory would otherwise each want to be `RuleInputError.java`. A rule
+named like one of Java's keywords is the method `for_` of the class `For`, which `rulec check`
+says with W121, keeping no target from being written (§15.344 of DESIGN.md).
 
 **`long` is the int64 the proof is about.** No widening, no `BigInteger`, no check at the
 door: what E108 proves about every intermediate is exactly what the machine word holds.
@@ -567,6 +641,17 @@ System.out.println(out.ok() + " " + out.raw());   // true 1000
 An enum is a Java enum whose constants are the aliases in upper case
 (`CouponKind.PERCENT`); `value()` gives the source name the wire carries, and
 `CouponKind.from(String)` reads one back, refusing an unknown value at the door.
+
+An enum the rule reads from an `enums` file is the enum nested in that file's class,
+`Catalog.Category`, and a caller names it so: Java has no alias of a type, so the rule's class
+has no `CatalogShipping.Category` the way the other languages' modules have the type under the
+rule's name ([below](#enums-several-rules-share-their-order-and-display-names)). Its values,
+`from(String)`, `label()` and its order are the enum's own, reached the same way. Its `from`
+refuses an unknown value with `IllegalArgumentException`, where the `from` of an enum the rule
+declares refuses one with the rule's `RuleInputError`, a subclass of it. A class under the
+rule's name that held the values and the parser would let `CatalogShipping.Category.from(v)`
+through and stop at `CatalogShipping.Category c = …` as incompatible types, so the rule's class
+declares none.
 
 With one output the method returns that value; with two or more it returns `Output`, a
 record. The traced twin returns `Traced`, a record of `value()` and `trace()` — Java has no
@@ -808,7 +893,7 @@ offer among some bids, comes out as:
     stopped = False
     kept: int | None = None
     best_: int | None = None
-    for elem in bids:
+    for index, elem in _enumerate(bids):
         ...
         offer = _max(elem.amount, opening)  # definition
         # table judge (policy unique)
@@ -833,6 +918,28 @@ the `empty` answer, in every language as in the reference evaluator. A `count` a
 written the same way, their totals started above the loop and read below it. What comes out
 goes through the same rounding and the same return the rule would have had without the loop.
 
+The first walk over a sequence holds each element to its ranges and its `unique` fields before it
+works anything out for the element. A fold that walks alone and stops leaves the loop at the `stop`
+only when there is nothing of the kind to hold the elements after it to; otherwise the `stop` sets
+`done`, and the loop goes on to hold each element after it and do nothing more with it (§15.328,
+`tests/corpus/nationwide_freight.rule`):
+
+```python
+        if not 0 <= elem.row_fee <= 100000:
+            raise RuleInputError(f"freight_rows[{index}].row_fee is out of range", _repr(elem.row_fee))
+        if done:
+            continue
+        # table row_of (policy unique)
+        ...
+        if verdict is Pick.HALT:  # halt
+            answer = 0
+            stopped = True
+            done = True
+```
+
+So an element past its range after the one the fold stops at is refused, as the reference
+evaluator refuses it, where a loop that ended at the `stop` would have answered.
+
 ### Two sequences and a second walk
 
 Each walk is one loop (§15.219). The summaries of one sequence found on one walk share its loop;
@@ -849,7 +956,7 @@ def order_settlement(lines: list[LinesElement], payments: list[PaymentsElement])
     subtotal = 0  # sum
     top_price = 0  # max
     top_price_set = False
-    for elem in lines:
+    for index, elem in _enumerate(lines):
         ...
         line_total = elem.quantity * elem.price  # definition
         subtotal += line_total  # subtotal
@@ -859,7 +966,7 @@ def order_settlement(lines: list[LinesElement], payments: list[PaymentsElement])
     if subtotal > 25000:
         raise RuleInputError("subtotal is out of range", _repr(subtotal))
     paid = 0  # sum
-    for elem2 in payments:
+    for index2, elem2 in _enumerate(payments):
         ...
         paid += elem2.amount  # paid
     if paid > 25000:
@@ -867,7 +974,7 @@ def order_settlement(lines: list[LinesElement], payments: list[PaymentsElement])
     answer: int = 0  # the answer for no elements
     stopped = False
     taken: int | None = None
-    for elem in lines:
+    for index, elem in _enumerate(lines):
         ...
         line_total = elem.quantity * elem.price  # definition
         gap = top_price - elem.price  # definition
@@ -958,26 +1065,107 @@ to read ([reference §3.1](reference.md#enums-several-rules-share)). The code th
 
 | language | the module an `enums` file becomes | how a rule's module reads it | the place of a value (ordered enums) | the display name |
 |---|---|---|---|---|
-| Python | `catalog.py` | `from catalog import Category, Zone`; `from .catalog import …` in a package of `ritsu gen` | `zone_rank(z)`, from 0 | `category_label(c)` |
-| TypeScript | `catalog.ts` | `import { Category, Zone } from "./catalog.ts"` and `export { Category, Zone }`; `"./catalog"` in a package | `zoneRank(z)` | `categoryLabel(c)` |
-| JavaScript | `catalog.mjs` | `import { … } from "./catalog.mjs"` | `zoneRank(z)` | `categoryLabel(c)` |
+| Python | `catalog.py` | `from catalog import Category as Category, Zone as Zone, zone_rank as zone_rank, category_label as category_label, zone_label as zone_label`; `from .catalog import …` with `--python-package` and in a package of `ritsu gen` | `zone_rank(z)`, from 0 | `category_label(c)` |
+| TypeScript | `catalog.ts` | `import { Category, Zone } from "./catalog.ts"`, `export { Category, Zone }` and `export { categoryLabel, zoneRank, zoneLabel } from "./catalog.ts"`, with a `parseCategory` and a `parseZone` of its own; `"./catalog"` in a package | `zoneRank(z)` | `categoryLabel(c)` |
+| JavaScript | `catalog.mjs` | the same, from `"./catalog.mjs"` | `zoneRank(z)` | `categoryLabel(c)` |
 | Rust | `catalog.rs` | `pub use crate::catalog::{Category, Zone};`, the module declared beside the rule's by the crate that builds them (the runner: `#[path = "catalog.rs"] mod catalog;`) | `z.rank()`; the enum derives `PartialOrd` and `Ord` in its order | `c.label()` |
-| Ruby | `catalog.rb`, `module Catalog`, with `sig/catalog.rbs` | `require_relative "catalog"` and `Category = Catalog::Category` (and the same aliases in the `.rbs`) | `Catalog.zone_rank(z)` | `Catalog.category_label(c)` |
-| PHP | `catalog.php`, namespace `Catalog` | `require_once __DIR__ . '/catalog.php';` and `use Catalog\Category;` | `\Catalog\zone_rank($z)` | `\Catalog\category_label($c)` |
-| Go | package `catalog` (`catalog/catalog.go` and its `go.mod`) | imports the package — in `rulec gen`'s output by `replace catalog => ../catalog` in the rule's `go.mod`, in a package of `ritsu gen` by the `--module` path — and declares `type Category = catalog.Category` with the constants and `ParseCategory` beside it | the constant itself: the values are declared in their order, so `z >= ZoneNational` compares places | `c.Label()` |
-| Swift | `catalog.swift` | the same module: built with the rule's file (`rulec test` adds it to the `swiftc` line from `vectors/<rule>.owners.json`) | `z.rank` | `c.label` |
+| Ruby | `catalog.rb`, `module Catalog`, with `sig/catalog.rbs` | `require_relative "catalog"`, `Category = Catalog::Category`, and `self.category_label(x)`, `self.zone_rank(x)` and `self.zone_label(x)` calling `Catalog`'s (the same in the `.rbs`) | `Catalog.zone_rank(z)` | `Catalog.category_label(c)` |
+| PHP | `catalog.php`, namespace `Catalog` | `require_once __DIR__ . '/catalog.php';`, `use Catalog\Category;`, a `class_alias` that makes `CatalogShipping\Category` the same enum, and `category_label`, `zone_rank` and `zone_label` in the rule's namespace calling `\Catalog\`'s | `\Catalog\zone_rank($z)` | `\Catalog\category_label($c)` |
+| Go | package `catalog` (`catalog/catalog.go` and its `go.mod`) | imports the package — in `rulec gen`'s output by `replace catalog => ../catalog` in the rule's `go.mod`, in a package of `ritsu gen` by the `--module` path — and declares `type Category = catalog.Category` with the constants and `ParseCategory` beside it. A module that builds the rule's package requires and replaces the `catalog` package too: Go reads the `replace` of the main module alone | the constant itself: the values are declared in their order, so `z >= ZoneNational` compares places | `c.Label()` |
+| Swift | `catalog.swift` | the same module: built with the rule's file (`rulec test` adds it to the `swiftc` line from `vectors/<rule>.owners.json`), unless that would declare a name twice (below) | `z.rank` | `c.label` |
 | Java | `Catalog.java`, the enums nested in `public final class Catalog` | the same package: `Catalog.Category` | `z.ordinal()`, and `compareTo` in the conditions | `c.label()` |
 | SQL | none: an enum is the text of its name | — | a `CASE` in the query | in the file that declares a function, one function per enum with display names, `"catalog_shipping_category_label"(v text)` |
 | NumPy | none: the plan carries the values | — | the plan's `rank` cells | the plan's `labels`, read by `rule.label(enum, value)` |
 | Wasm | none: the types are written into the rule's own crate | — | in the crate | none: the module answers over JSON, which carries values only |
 
+A rule's module has, for each enum it reads from an `enums` file, every name it has for an enum it
+declares itself (§15.319): code that imports the rule's module alone finds the type, its parser,
+and the functions of its order and its display names, and the type is the `enums` file's own, so
+one value goes to every rule that reads the file. The parser is the rule's, which refuses a value
+outside the enum with the rule's `RuleInputError`, as the parser of an enum it declares itself
+does. Where the table gives the order and the display name on the type itself (`c.label()`), the
+rule's module has them with the type it hands on. Java names the type by the class that owns it,
+`Catalog.Category`, for it has no alias of a type.
+
+The `enums` file's name is the name of its module in each language, which the rule's module reads
+it by, so `rulec check` holds it to each language's words, in the spelling that language writes it
+in (§15.265 of DESIGN.md). A keyword (`for`), a module or a package of the standard library
+(`time`), a class the language has built in (`string`), and a name the tools keep for themselves
+(`main`, `std`) are W121, which names the languages; `gen` asked for one of them writes nothing of
+it — the targets it does not name are written — and stops with E153. An alias on the file (`enums
+time(zones) v1`) names the module by the alias in
+every language.
+
+TypeScript reads the `enums` file's module by its `.ts` name, as Node runs TypeScript: tsc
+compiles the two with `rewriteRelativeImportExtensions` (TypeScript 5.7 and later), and a type
+check before a bundler reads them with `allowImportingTsExtensions` and `noEmit` (TypeScript 5.0
+and later). A rule that reads no `enums` file imports nothing beside it and wants neither. Either
+way the ECMAScript target is ES2020 or later, for the numbers are `bigint`s.
+
+The page of a rule that reads an `enums` file (`rulec doc --format html`, and `<alias>_page.html`
+[below](#the-answer-with-the-table-beside-it)) is still one file: the `enums` file's JavaScript
+module is put inside the page's script, which imports nothing beside it.
+
+`rulec gen --target python --python-package` writes the Python modules to be put inside a
+package — as a workflow package of dandori's puts them, in `rulec/python` — and a rule's module
+then reads the `enums` file's module by a relative import, `from .catalog import …`. Without the
+flag the modules are read from the top of the output directory, as an app beside them reads
+them. The runner and the MCP server written beside modules that go inside a package read their
+own directory as a package, `_rulec`, and the modules from it
+(`m = importlib.import_module("_rulec.catalog_shipping")`), so `rulec test` runs the modules a
+package puts in place. A rule that reads no `enums` file is written the same either way, its
+runner and MCP server too. The flag needs `--target python`, and does not go with
+`--extra connect`: the Connect service is read beside the protobuf modules buf writes at the top
+of the output directory and type-checked there, where a relative import cannot be followed. `gen`
+stops with exit code 2.
+
 A rule named like an enum it reads (`rule size` reading `enum size`) has a Go package that
 declares `func Size`, and a type of that name cannot be declared beside it: the package then
 names the type by the package that owns it, `sizes.Size`, as Java names it by its class, and
 declares no alias of it — the constants and `ParseSize` are there as for any other enum, and
-`rulec api` gives the type of the input's field as `sizes.Size` (§15.239). A rule named like an
-enum it declares itself cannot be written apart in Go, where the function and the type share the
-package, nor in Java, where the enum is nested in the rule's class: `rulec check` says so (W121).
+`rulec api` gives the type of the input's field as `sizes.Size` (§15.239).
+
+Any other name a rule's module declares for the rule can meet a name made from an enum, in a
+language that keeps the two in one place: the rule's function and the functions beside it (the
+traced one, the one that writes a record, the chances), and the enum's type, its parser, the
+functions of its order and of its display names, and the constants of its values. Where two
+meet, the enum's type takes a number in that language and only there, the first of `<Type>2`,
+`<Type>3`, … that meets neither the rule's names nor another enum's, and every name made from the
+type follows it (§15.326). The rule's function keeps its name, for it is the caller's way in, and
+a language where nothing meets writes the enum as before.
+
+So `rule band` with an enum `band` of its own declares `func Band` beside `type Band2 int`,
+`Band2Child` and `ParseBand2` in Go, and nests `enum Band2` in the class `Band` in Java.
+
+`rule band_label` keeps its function and writes the enum's display names as `band2_label` in
+Python, where the rule's function would otherwise hide them; `rule Tier` writes the type `Tier2`
+with `parseTier2` and `tier2Label` in TypeScript.
+
+An enum read from an `enums` file is read under its owner's name and handed on under the numbered
+one: `from shapes import Size as Size2, size_rank as size2_rank` in Python, and
+`export { sizeRank as size2Rank, sizeLabel as size2Label } from "./shapes.ts"` in TypeScript. The
+runner looks the numbered enum up in the rule's module.
+
+`rulec api` gives each language's names as that language's code has them, and a message at run
+time that names the type names it as that code does (`… is not a value of enum Tier2`). The
+`.proto` is one for every language and keeps the names: the Python Connect service writes the
+protobuf side by the `.proto`'s name and the module's side by the numbered one.
+
+`rulec check` says each enum whose type takes a number with W121: the languages, the type each
+writes, and the two names that met. The code builds, so the warning keeps no target from being
+written (§15.337 of DESIGN.md); an alias on the rule or on the enum keeps the type unnumbered in
+every language. An enum read with `import enum` whose type is one the rule's module declares
+itself (`Fired`, `Output`, an element's type, an error) would be declared twice there, since the
+module reads the enum in under its type: W121 says so with the file, and an alias given to the
+enum in that file sets the two apart (the name `->` gives it is the rule's own and leaves the type
+as it is).
+
+Swift builds a rule, its runner and the modules of the `enums` files it reads into one module.
+Where that would declare one name twice at the top (an enum the rule reads, and one under the same
+name that it brings in by `apply`, declares itself or reads from another file, or a name of its
+own such as `Fired`), the rule's Swift declares the enums it reads itself and is built without
+those files' modules: no `vectors/<rule>.owners.json` is written, and the names stay the ones the
+other languages give them.
 
 A value without a display name is shown by its declared name, by every one of these. `rulec
 gen` writes the module of each `enums` file a rule reads, whether or not the file is named on
@@ -1282,7 +1470,7 @@ def order_shipping_from(order: dict[str, Any]) -> Yen:
     """Reads the inputs out of the caller's object and calls this rule. …"""
     return order_shipping(
         _zone_of(_at(_at(order, "shipping", "注文"), "zone", "注文.shipping"), "注文.shipping.zone is not a value of enum 地域"),
-        _any([_bool_at(_e, "chilled", "注文.lines[]") for _e in _seq_at(order, "lines", "注文")]),
+        _any([_bool_at(_e, "chilled", f"注文.lines[{_i}]") for _i, _e in _enumerate(_seq_at(order, "lines", "注文"))]),
         _len(_seq_at(order, "lines", "注文")),
     )
 ```
@@ -1291,7 +1479,7 @@ def order_shipping_from(order: dict[str, Any]) -> Yen:
 export function order_shipping_from(order: _Obj): Yen {
   return order_shipping(
     (_enumOf(Object.values(Zone), _at(_at(order, "shipping", "注文"), "zone", "注文.shipping"), "注文.shipping.zone is not a value of enum 地域") as Zone),
-    (_seqAt(order, "lines", "注文").reduce((_a, _e) => (_boolAt(_e, "chilled", "注文.lines[]") === true) || _a, false) as boolean),
+    (_seqAt(order, "lines", "注文").reduce((_a, _e, _i) => (_boolAt(_e, "chilled", `注文.lines[${_i}]`) === true) || _a, false) as boolean),
     BigInt(_seqAt(order, "lines", "注文").length),
   );
 }
@@ -1309,11 +1497,15 @@ whole (`1500.0`, as at the door, §15.205); a truth value is JSON's `true` or `f
 string; a date is a `YYYY-MM-DD` string of a day the calendar has, read as its day number; a value
 of an enum is one of the enum's. A field a `where` tests is held to what the contract carries
 there. A value that is not is refused with the module's `RuleInputError`, the same sentence in all
-five, naming the value's path as the rule writes it — `order.lines[].amount_usd is not an
-integer`, with the value beside it where the language's error carries one (not in PHP, whose
-error holds an integer). A place on the way that is not an object (`order.lines[] is not an
-object`), a value that is not there or is `null` (`order.lines[].fragile is missing`), and a
-collection that is not an array (`order.lines is not a sequence`) are refused the same way. The
+five, naming the value's path as the rule writes it — `order.lines[1].amount_usd is not an
+integer` for the second line — with the value beside it where the language's error carries one
+(not in PHP, whose error holds an integer). A place on the way that is not an object
+(`order.lines[0] is not an object`), a value that is not there or is `null`
+(`order.lines[1].fragile is missing`), and a collection that is not an array
+(`order.lines is not a sequence`) are refused the same way. The index is the element's in the
+array, from 0: the one the rule's own door names the same element by, since `elements … from`
+takes every element of the collection, in its order — `lines[1].quantity is out of range` for a
+quantity of the right kind outside the field's range (§15.324 of DESIGN.md). The
 function reads in one order in every language: the inputs as the rule declares them, then the
 sequences; along a collection, element by element, the value the `where` tests and then, when the
 element passes, the value added up or compared; `any` and `all` test every element. So one
@@ -1346,9 +1538,9 @@ for each element of the collection. From `order_handling_fee` in the corpus, in 
 ```python
 def order_handling_fee_from(order: dict[str, Any]) -> USD:
     return order_handling_fee(
-        USD(_sum(_int_at(_e, "amount_usd", "order.lines[]") for _e in _seq_at(order, "lines", "order"))),
-        USD(_largest([_int_at(_e, "amount_usd", "order.lines[]") for _e in _seq_at(order, "lines", "order") if _bool_at(_e, "fragile", "order.lines[]")], 0)),
-        [Element(quantity=_int_at(_e, "quantity", "order.lines[]"), amount=USD(_int_at(_e, "amount_usd", "order.lines[]"))) for _e in _seq_at(order, "lines", "order")],
+        USD(_sum(_int_at(_e, "amount_usd", f"order.lines[{_i}]") for _i, _e in _enumerate(_seq_at(order, "lines", "order")))),
+        USD(_largest([_int_at(_e, "amount_usd", f"order.lines[{_i}]") for _i, _e in _enumerate(_seq_at(order, "lines", "order")) if _bool_at(_e, "fragile", f"order.lines[{_i}]")], 0)),
+        [Element(quantity=_int_at(_e, "quantity", f"order.lines[{_i}]"), amount=USD(_int_at(_e, "amount_usd", f"order.lines[{_i}]"))) for _i, _e in _enumerate(_seq_at(order, "lines", "order"))],
     )
 ```
 
@@ -1359,14 +1551,23 @@ its day number, as it is read everywhere. A sequence taken from the object is no
 parameter: the function takes the objects, the inputs no `from` reaches and the sequences no
 `from` takes, in that order.
 
+Where it reads the elements, the Python module numbers them for the paths its sentences name:
+`for _i, _e in _enumerate(…)`, `_enumerate` being the module's name for the builtin, as `_int` is
+`int`'s.
+
 TypeScript and JavaScript take the values of the elements that pass with `flatMap`, add the
 BigInts up with `reduce`, and make each element an object literal (`{ quantity: …, amount: … }`,
-of the element's interface in TypeScript).
+of the element's interface in TypeScript). The index is the parameter after the element of the
+function they hand to `map`, `flatMap`, `filter` and `reduce` (`(_e, _i) =>`, `(_a, _e, _i) =>`).
 
 Ruby takes them with `flat_map`, adds up with `sum` and writes `max || <empty>` and
-`min || <empty>` for the two helpers; PHP takes them with `array_map`, flattens with
-`array_merge` and adds up with `array_sum`. Ruby makes each element the element's `Struct` and
-PHP the element's class, both given the fields in the order they are declared.
+`min || <empty>` for the two helpers; PHP takes them with `array_map`, flattens with `array_merge`
+and adds up with `array_sum`. Ruby makes each element the element's `Struct` and PHP the
+element's class, both given the fields in the order they are declared. Ruby has the index from
+`each_with_index`. PHP has it from `array_map` over the elements and their keys, written where
+the elements are read (`(fn(array $xs) => array_map(fn($e, $i) => …, $xs, array_keys($xs)))(…)`)
+rather than as a helper whose name a rule's could meet, and a `count` with a `where` passes
+`ARRAY_FILTER_USE_BOTH` to `array_filter`.
 
 From a JSON Schema, an optional input (`T?`) reads its field so that a missing one — or a
 missing object on the way to it — is none: `_opt(order, ("coupon", "kind"), "order")` in the
@@ -1382,7 +1583,7 @@ starts, so that a place on the way that is not an object is refused by its path:
 
 ```python
 _region_of(_proto(shipment, (("destination", "destination"), ("region", "region")), "", "", "出荷"), "出荷.destination.region is not a value of enum 地域"),
-_any([_str_of(_pget(_e, "handling", "handling", "HANDLING_STANDARD", "出荷.parcels[]"), "出荷.parcels[].handling") == "HANDLING_FRAGILE" for _e in _seq_of(_proto(shipment, (("parcels", "parcels"),), [], [], "出荷"), "出荷.parcels")]),
+_any([_str_of(_pget(_e, "handling", "handling", "HANDLING_STANDARD", f"出荷.parcels[{_i}]"), f"出荷.parcels[{_i}].handling") == "HANDLING_FRAGILE" for _i, _e in _enumerate(_seq_of(_proto(shipment, (("parcels", "parcels"),), [], [], "出荷"), "出荷.parcels"))]),
 _len(_seq_of(_proto(shipment, (("parcels", "parcels"),), [], [], "出荷"), "出荷.parcels")),
 Yen(_int_pb(_proto(shipment, (("declaredValueJpy", "declared_value_jpy"),), 0, 0, "出荷"), "出荷.declared_value_jpy")),
 ```
@@ -1546,8 +1747,11 @@ Every runner reads the wire the way the module's door would hold it: an input th
 there, or `null` for one that is not optional, is `weight is missing`; a value of another kind
 is the sentence of its kind (`is not an integer`, `is not a date`, `is not a value of enum
 zone` — the enum by the name the rule declares it under — `is not a boolean`, `is not a
-string`), and the sequence a walk reads `is not a sequence` or has `an element of … that is not
-an object`. A string that holds a number is not one, a date the calendar does not have
+string`), and the sequence a walk reads `is not a sequence`. A field of an element is named
+with the element's place, its index from 0 in the array (`lines[1].amount is missing`,
+`lines[1].amount is not an integer`), and an element that is not an object by its place alone
+(`lines[1] is not an object`); where more than one element is at fault, the first is named
+(§15.324). A string that holds a number is not one, a date the calendar does not have
 (2026-02-30) is not a date, and 1000.5 is not a whole count of its unit, where `1000.0` and
 `1e3` are 1000 (§15.205). The sentence is the
 same in every language and is the one the reference evaluator says of the same input.
@@ -1626,6 +1830,60 @@ if not 0 <= subtotal <= 1000000:
     raise RuleInputError("subtotal is out of range", _repr(subtotal))
 ```
 
+These come after every argument has been read for its kind. A module whose arguments carry no
+type when it runs first holds each input, in the order the function takes them, to its kind and a
+whole number to what int64 holds, then each element of each sequence the same way, and only then
+each input to its range. Go holds the enum values of the inputs and of the elements there, and the
+other languages with types take the rest as typed arguments. A call with two things wrong is
+refused for the first in that order, as every way the rule is reached refuses it
+([reference](reference.md#an-input-with-two-things-wrong), §15.328). A string input or field is
+the one kind a module whose arguments carry no type when it runs does not hold: a value of
+another kind there is read as it comes, and the runner, the MCP servers and the Connect service
+refuse it where they read the wire.
+
+A `define` with a `range` (§15.313) is held where its value is worked out rather than at the top,
+since the value does not exist until the items before it have run. A call whose value falls
+outside is refused with the `define`'s name, the way a `sum` past its range is refused
+(`tests/corpus/card_fee.rule`):
+
+```python
+    fee = _round_down((amount * 3), 100) // 100  # definition
+    if fee > 20000:
+        raise RuleInputError("fee is out of range", _repr(fee))
+```
+
+Only an end that what the value reaches can pass is tested — `fee` is never below 0, so no lower
+end is written — and a `define` whose range holds all it reaches writes no line at all. A `sum`
+and a `count` are held the same way where the walk ends (§15.314): the top of a `sum`, and the
+bottom of either where it is above zero, since a total or a count cannot come in under 0
+(`tests/corpus/gift_basket.rule`):
+
+```python
+    if wrapped_items < 1:
+        raise RuleInputError("wrapped_items is out of range", _repr(wrapped_items))
+    if amount > 100000:
+        raise RuleInputError("amount is out of range", _repr(amount))
+    if amount < 500:
+        raise RuleInputError("amount is out of range", _repr(amount))
+```
+
+They are tested in the order the rule writes them, in every language, so a call that breaks two
+is refused for the same one everywhere. SQL puts the sentence in `_input_error` beside the
+others ([below](#sql)). One worked out for each element is held inside the walk, before it is
+added in, and the sentence names the element by its index
+(`tests/corpus/order_line_subtotals.rule`, §15.324):
+
+```python
+        subtotal = elem.quantity * elem.price  # definition
+        if subtotal > 10000000:
+            raise RuleInputError(f"lines[{index}].subtotal is out of range", _repr(subtotal))
+```
+
+The walk counts its elements where one of its sentences names one — `for index, elem in
+_enumerate(lines):` in Python, `for index, elem := range in.Lines {` in Go, whose sentence is
+`fmt.Sprintf("lines[%d].subtotal is out of range", index)` — and every language names the
+first element at fault.
+
 How a language writes the end of the type depends on its integers. Python, NumPy, TypeScript,
 JavaScript and Ruby have no end to theirs, so they test both: an `amount : money[JPY]` with no
 range is `if not -9223372036854775807 <= amount <= 9223372036854775807:`, and one with
@@ -1645,11 +1903,13 @@ The sentence and the value travel apart. The error carries both — `what` is th
 the message is what it always was and a caller can react to the value without parsing it
 back out of a string. The Rust error is a pair of struct variants for the same reason, and
 nothing on the refusing path formats anything, which is what lets a model checker walk it
-([the proofs](#the-proofs)). In Python `value` is a string, the `repr()` of what was
+([the proofs](#the-proofs)): the index of an element stays an integer in the `Said` until the
+sentence is shown. In Python `value` is a string, the `repr()` of what was
 refused (`None` when the refusal is about no one value); the message reads the same. The
 functions that hold the rule's names call the builtins under names the module gives them
-(`_isinstance = isinstance`, `_int = int`, `_repr = repr`, one line each, above the
-functions), so an input called `int` or `len` does not stand in their way.
+(`_isinstance = isinstance`, `_int = int`, `_repr = repr`, `_enumerate = enumerate`, one line
+each, above the functions), so an input called `int`, `len` or `enumerate` does not stand in
+their way.
 
 A number that is not an integer is refused before the range is looked at, in every language
 where a caller can pass one. A float sits inside any range: 18.3 for a rate declared in steps
@@ -1751,8 +2011,9 @@ of values are false of the absent value in every language, and `-` and `not:` ta
 value raised in some languages and was read as a value in others.
 
 The NumPy plan carries the same guard as data, in the language the code was generated in, and
-its evaluator checks a whole column at a time in the same order: each column's type, enum
-and range, then each constraint, then each `never` line, then the days. It refuses the first element that fails,
+its evaluator checks a whole column at a time in the same order: every column there and of its
+type — a value of its enum, a whole number int64 holds — then every column inside its range, then
+each constraint, then each `never` line, then the days. It refuses the first element that fails,
 with the sentence the other languages raise and the place of that element, so a caller
 can tell which one it was without parsing the text:
 
@@ -2021,7 +2282,7 @@ mistake it was:
 | what happened | code | HTTP |
 |---|---|---|
 | outside the declared domain — out of range, not an integer, not a member of the enum | `invalid_argument` | 400 |
-| an input the rule needs was left out — `member is missing`, `amount is missing (lines[2])` for a field of one element | `invalid_argument` | 400 |
+| an input the rule needs was left out — `member is missing`, `lines[2].amount is missing` for a field of one element | `invalid_argument` | 400 |
 | a field or an enum value the message does not have — a misspelt name | `invalid_argument` | 400 |
 | the runtime guard of a W114 pair fired (§8.1) | `internal` | 500 |
 

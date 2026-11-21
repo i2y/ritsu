@@ -1,0 +1,27 @@
+gate public_notices v1
+description "ts_module.gate with the file renamed public_notices, as its note says"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can post_notice
+
+principal Clerk
+  description "The one who asks"
+  roles clerk
+
+resource Notice
+  description "A notice on the board of the shop"
+  attributes
+    approved : bool
+
+action post_notice
+  description "Put a notice on the board"
+  principal Clerk
+  resource Notice
+
+permit clerks_post_approved_notices
+  description "A clerk can: Put a notice on the board"
+  principal in clerk
+  action post_notice
+  when resource.approved

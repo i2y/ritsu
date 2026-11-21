@@ -1,0 +1,33 @@
+workflow 変数の名前 v1
+description "出力先のコードが一つの名前に書いてしまう変数と、コードが自分で持つ名前の変数を持つフローです。class と class_、_x と v_x、type と type_、dd_ で始まる名前を使います。どの出力先のコードも別々の変数にし、フローはどのプラットフォームでも動きます"
+
+inputs
+  番号 : string
+  _x : int
+
+outputs
+  文   : string
+  数の並び : string
+
+task 書き留める(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task 数える(数: int) -> int
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:count"
+  idempotent
+
+flow
+  # Python は `class` を `class_` と書くが、フローはそれも持つ
+  let class = 書き留める(番号: 番号)
+  let class_ = 書き留める(番号: "{番号} もう一度")
+  # TypeScript と Python は `_x` を `v_x` と書くが、フローはそれも持つ
+  let v_x = 数える(数: _x)
+  # Go は `type` を `type_` と書くが、フローはそれも持つ
+  let type = 書き留める(番号: "{番号} 型")
+  let type_ = 書き留める(番号: "{番号} 型をもう一度")
+  # コードが自分で持つ名前は dd_ で始まる
+  let dd_error = 数える(数: 1)
+  let dd_v = 数える(数: 2)
+  let dd_x = 3
+  succeed 文 = "{class} {class_} {type} {type_}", 数の並び = "{_x} {v_x} {dd_error} {dd_v} {dd_x}"

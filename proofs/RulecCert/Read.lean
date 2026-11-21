@@ -64,9 +64,30 @@ def objPairs (j : Json) : List (String × Json) :=
 
 /-! ## Types -/
 
+/-- Two spellings of one unit (rulec's §15.332): ritsu's table of units gives the two the same
+    dimension, size and zero, and `check` compares them as one unit. A type is read here with the
+    first of each pair as the second. rulec's `tests/units.rs` holds this list to the table. -/
+def oneUnit : List (String × String) := [("JPY", "円"), ("mL", "cm3"), ("kL", "m3")]
+
+/-- A type as written, with the unit in its brackets read as the one spelling `oneUnit` names:
+    `money[JPY, 税込]` as `money[円, 税込]`, `volume[mL]?` as `volume[cm3]?`. Any other type as
+    it is. -/
+def spelledTy (s : String) : String :=
+  let cs := s.toList
+  match cs.idxOf? '[' with
+  | none => s
+  | some i =>
+    let rest := cs.drop (i + 1)
+    let unit := rest.takeWhile (fun c => c != ',' && c != ']')
+    match oneUnit.find? (fun p => p.1.toList == unit) with
+    | some (_, to) => String.ofList (cs.take (i + 1) ++ to.toList ++ rest.drop unit.length)
+    | none => s
+
 /-- `"money[円,税込]"`, `"qty[個]"`, `"rate"`, `"number"`. Anything else is unknown, and a
-    value whose type cannot be read is reported rather than checked. -/
+    value whose type cannot be read is reported rather than checked. Two spellings of one unit
+    are read as one type (`spelledTy`). -/
 def tyOfString (s : String) : Option Ty :=
+  let s := spelledTy s
   if s == "rate" then some .rate
   else if s == "number" then some .number
   else if s.startsWith "money[" && s.endsWith "]" then
@@ -293,6 +314,7 @@ partial def coverOfJson : Option Json → Option Cover
           || (field c "farkas").isSome || (field c "days_axis").isSome
           || (field c "define_axis").isSome || (field c "above_rows").isSome
           || (field c "truth_axis").isSome || (field c "never").isSome
+          || (field c "narrowed").isSome
         then some .impossible else none
 
 partial def kidsOfJson : List Json → Option Kids
@@ -311,15 +333,17 @@ structure SrcSpan where
   len : Nat
   text : String
 
-/-- What a row writes into a column of numbers (rulec's §15.196), as the cell check reads it back:
-    the column, the cell, what the certificate says the cell is — the literal as written or the
-    name — and, for a literal, the number it stands for. -/
+/-- What a row writes into a column of numbers (rulec's §15.196) or of dates (§15.325), as the cell
+    check reads it back: the column, the cell, what the certificate says the cell is — the literal
+    as written or the name; nothing for a date, which the certificate gives by its day — and, for a
+    literal, the number it stands for. -/
 structure WriteCell where
   column : String
   span : Option SrcSpan
   says : String
   value : Option Rat
   isName : Bool
+  isDate : Bool := false
 
 /-- One row, as the cell check reads it. -/
 structure ReadRow where
@@ -378,13 +402,17 @@ structure ReadTable where
   /-- Per axis: the prefix each coordinate stands for, on a string axis; empty elsewhere. -/
   prefixes : List (List (Option (List Char)))
   declared : List (Option Span2)
-  /-- Per axis: whether the column is an input the rule declares optional (`T?`). Its axis
-      starts with the absent value, `none`, which stands for no number (rulec's §15.201). -/
+  /-- Per axis: whether the column is an input the rule declares optional (`T?`), or a number or a
+      date a table above writes or the rule works out that may be absent (§15.325). Its axis starts
+      with the absent value, `none`, which stands for no number (rulec's §15.201). -/
   optional : List Bool := []
   /-- The cells of the rule's `never` lines this table reads, one for each axis (rulec's §15.282). -/
   neverCells : List (List CellTest) := []
   /-- Leaves the cover rests on an upstream table for. -/
   upstream : Bool
+  /-- Whether a column of this table comes from a table above through a `define` that names its
+      value, as an `apply` brings an output in (rulec's §15.322). -/
+  fromAbove : Bool := false
 
 /-- The words a cell names, with the members of any group among them — a cell may write
     the group's name, and the certificate carries what it stands for. -/
@@ -440,51 +468,436 @@ def deciderOf (all : Array Json) (column : String) : Option (Json × Nat) :=
     let ds := (fieldArr u "decides").toList.filterMap str
     (ds.findIdx? (· == column)).map (fun i => (u, i)))
 
-/-- The rows of the table above that write `value` into `column`, read on this table (rulec's
-    §15.195): for each, what its box says about the values this table numbers (`idx`, where the
-    value's axis here is a number or the value is a name of the model) and about this table's own
-    axes of words (`columns`, `labels`, `numeric`). `none` when no table decides the column, or a
-    row of it writes something that is not a word — the rows cannot then be counted. -/
-def aboveRowsOf (all : Array Json) (column value : String) (idx : String → Option Nat)
-    (columns : List String) (labels : List (List String)) (numeric : List Bool) : Option (List AboveRow) := do
-  let (u, oi) ← deciderOf all column
-  let uaxes := (fieldArr u "axes").toList
-  let rows := (fieldArr u "rows").toList
-  let outs ← rows.mapM (fun r => (fieldArr r "produces")[oi]? >>= str)
-  let writers := (rows.zip outs).filter (fun ro => ro.2 == value)
-  writers.mapM (fun (r, _) => do
-    let i ← fieldNat r "row"
-    let accepts : List (List Nat) := (fieldArr r "accepts").toList.map (fun xs => ((arr xs).getD #[]).toList.filterMap nat)
-    let nums ← ((List.range uaxes.length).filterMap (fun ua =>
-      let ax := (uaxes[ua]?).getD Json.null
-      let bs := fieldArr ax "bounds"
-      if !bs.any (fun b => !b.isNull) then none else
-      match idx (fieldStr ax "column") with
+/-- Where a column's value comes from (rulec's §15.322): the table that decides it, where the column
+    sits among that table's outputs, and the roundings on the way, the innermost first. That is the
+    table that decides the column, or — for a `define` that only names another value
+    (`define x = a:y`) or puts one on a grid (`define x = down(a:y, 1)`), as an `apply` brings an
+    output in — the table that decides that value. `none` for anything else, and past `fuel` steps. -/
+def sourceOfIn (all values : Array Json) (opens : List String) :
+    Nat → String → List (RoundMode × Rat) → Option (Json × Nat × List (RoundMode × Rat))
+  | 0, _, _ => none
+  | n + 1, name, rounds =>
+    match deciderOf all name with
+    | some (u, oi) => some (u, oi, rounds)
+    | none =>
+      if opens.contains name then none else
+      match values.find? (fun v => fieldStr v "name" == name) with
       | none => none
-      | some vi =>
-        let mine := (columns.idxOf? (fieldStr ax "column")).map (fun aj => (numeric[aj]?).getD false)
-        if mine == some false then none else
-        some ((((accepts[ua]?).getD []).mapM (fun x => bs[x]? >>= coordOfJson)).map (fun cs => (vi, cs))))).mapM id
-    let words := (List.range uaxes.length).filterMap (fun ua => do
-      let ax ← uaxes[ua]?
-      if (fieldArr ax "bounds").any (fun b => !b.isNull) then none else
-      let aj ← columns.idxOf? (fieldStr ax "column")
-      if (numeric[aj]?).getD true then none else
-      let ulabels := (fieldArr ax "coords").toList.filterMap str
-      let lets := ((accepts[ua]?).getD []).filterMap (fun x => ulabels[x]?)
-      let mineLabels := (labels[aj]?).getD []
-      some (aj, (List.range mineLabels.length).filter (fun c => match mineLabels[c]? with
-        | some l => lets.contains l
-        | none => false)))
-    some { index := i, nums := nums, words := words })
+      | some v =>
+        if fieldStr v "of" != "define" then none else
+        match field v "expr" with
+        | none => none
+        | some e =>
+          match field e "name" >>= str with
+          | some m => sourceOfIn all values opens n m rounds
+          | none =>
+            let args := fieldArr e "args"
+            match RoundMode.ofString (fieldStr e "call"), args[0]? >>= (fun a => field a "name" >>= str), args[1]? with
+            | some mode, some m, some g =>
+              if args.size != 2 || (field g "num").isNone then none else
+              match field g "value" >>= optRat with
+              | some gv => if 0 < gv then sourceOfIn all values opens n m ((mode, gv) :: rounds) else none
+              | none => none
+            | _, _, _ => none
+
+/-- `sourceOfIn` over a whole certificate: its tables, its values and its open values. -/
+def sourceOf (cert : Json) (column : String) : Option (Json × Nat × List (RoundMode × Rat)) :=
+  sourceOfIn (fieldArr cert "tables") (fieldArr cert "values")
+    ((fieldArr cert "opens").toList.map (fun o => fieldStr o "name")) 16 column []
+
+/-- What a row of a table above puts into a column (rulec's §15.322): the word it writes, a number
+    literal put through the roundings on the way or a date literal as its day number (§15.325), the
+    absent value of a column of numbers or dates, or something this program does not follow — a
+    name, an expression — which may stand anywhere. -/
+inductive Put where
+  | word : String → Put
+  | num : Rat → Put
+  | absent : Put
+  | any : Put
+  deriving Inhabited
+
+/-- Whether an expression of the certificate is a date written in the rule (rulec's §15.325). -/
+def isDateLit (e : Json) : Bool :=
+  fieldStr e "type" == "date" && (field e "lit").isSome
+
+/-- What row `row` puts into its output `oi`, read as a column of numbers or not (`numeric`). -/
+def putOf (row : Json) (oi : Nat) (rounds : List (RoundMode × Rat)) (numeric : Bool) : Put :=
+  let w := (fieldArr row "produces")[oi]? >>= str
+  if !numeric then (match w with | some x => .word x | none => .any) else
+  if w == some "none" then .absent else
+  match (fieldArr row "writes")[oi]? >>= (fun x => field x "expr") with
+  | some e =>
+    -- A date has no rounding; one said to go through a rounding is not followed.
+    if isDateLit e then
+      (if rounds.isEmpty then (match field e "value" >>= optRat with | some v => .num v | none => .any) else .any)
+    else
+    if (field e "num").isNone then .any else
+    match field e "value" >>= optRat with
+    | some v => .num (rounds.foldl (fun x mg => roundWith mg.1 mg.2 x) v)
+    | none => .any
+  | none => .any
+
+/-- Whether what a row puts can stand on coordinate `x` of an axis: the coordinate's word, a number
+    inside it (the one value of a point, strictly between the ends of an interval), the absent value
+    on the coordinate of none. What this program does not follow, and any value of a string axis,
+    stands anywhere. -/
+def putTakes (ax : Json) (x : Nat) : Put → Bool
+  | .any => true
+  | p =>
+    if !((field ax "prefixes").getD Json.null).isNull then true else
+    let bs := fieldArr ax "bounds"
+    if bs.any (fun b => !b.isNull) then
+      match p, bs[x]? with
+      | .absent, some b => b.isNull
+      | .num v, some b => match coordOfJson b with
+          | some c => coordHolds c v
+          | none => false
+      | _, _ => false
+    else match p with
+      | .word w => ((fieldArr ax "coords")[x]? >>= str) == some w
+      | _ => false
+
+/-- Every way row `row` of table `u` can fire (rulec's §15.322): the row, joined with each row of the
+    table a column of `u`'s comes from — a column this table (`here`) does not cut — that puts what
+    the row takes there, and so on above. Each way is the rows in order, each with its table, the
+    tables in the order their columns come. `none` past `fuel` tables. -/
+def waysIn (src : String → Option (Json × Nat × List (RoundMode × Rat))) (here : List String) :
+    Nat → Json → Json → Option (List (List (Json × Json)))
+  | 0, _, _ => none
+  | n + 1, u, row =>
+    let uaxes := (fieldArr u "axes").toList
+    let accepts : List (List Nat) := (fieldArr row "accepts").toList.map (fun xs => ((arr xs).getD #[]).toList.filterMap nat)
+    (List.range uaxes.length).foldlM (fun acc ua =>
+      match uaxes[ua]? with
+      | none => some acc
+      | some ax =>
+        let d := fieldStr ax "column"
+        if here.contains d then some acc else
+        match src d with
+        | none => some acc
+        | some (s, soi, rounds) =>
+          let numeric := (fieldArr ax "bounds").any (fun b => !b.isNull)
+          let mine := (accepts[ua]?).getD []
+          match (fieldArr s "rows").toList.foldlM (fun alts r2 =>
+              if mine.any (fun x => putTakes ax x (putOf r2 soi rounds numeric)) then
+                (waysIn src here n s r2).map (alts ++ ·)
+              else some alts) [] with
+          | none => none
+          | some alts => some (acc.flatMap (fun a => alts.map (a ++ ·)))) [[(u, row)]]
+
+/-- The ways of `waysIn` for row `row` of the table `u` that decides the value, joined besides
+    through each column of `u`'s that this table (`this`, cutting the columns `here`) cuts too and a
+    table other than these two decides: with a row of that table that puts what the row takes
+    there, one step and no further (rulec's §15.325). The box fixes such a column, and the row that
+    puts it carries what it takes of the other columns. -/
+def waysThrough (src : String → Option (Json × Nat × List (RoundMode × Rat))) (here : List String)
+    (this : String) : Nat → Json → Json → Option (List (List (Json × Json)))
+  | 0, _, _ => none
+  | n + 1, u, row =>
+    let uaxes := (fieldArr u "axes").toList
+    let accepts : List (List Nat) := (fieldArr row "accepts").toList.map (fun xs => ((arr xs).getD #[]).toList.filterMap nat)
+    (List.range uaxes.length).foldlM (fun acc ua =>
+      match uaxes[ua]? with
+      | none => some acc
+      | some ax =>
+        let d := fieldStr ax "column"
+        match src d with
+        | none => some acc
+        | some (s, soi, rounds) =>
+          let isHere := here.contains d
+          if isHere && (fieldStr s "table" == this || fieldStr s "table" == fieldStr u "table") then some acc else
+          let numeric := (fieldArr ax "bounds").any (fun b => !b.isNull)
+          let mine := (accepts[ua]?).getD []
+          match (fieldArr s "rows").toList.foldlM (fun alts r2 =>
+              if mine.any (fun x => putTakes ax x (putOf r2 soi rounds numeric)) then
+                (if isHere then some [[(s, r2)]] else waysIn src here n s r2).map (alts ++ ·)
+              else some alts) [] with
+          | none => none
+          | some alts => some (acc.flatMap (fun a => alts.map (a ++ ·)))) [[(u, row)]]
+
+/-- What one row of a table above says, read on this table: for each value this table numbers
+    (`idx`, where the value's axis here is a number or the value is a name of the model), the
+    coordinates the row takes on its axis there; for each axis of words both tables cut, the
+    coordinates of this table's axis the row lets in. -/
+def stepRead (u row : Json) (idx : String → Option Nat) (columns : List String) (labels : List (List String))
+    (numeric : List Bool) : Option (List (Nat × List Coord) × List (Nat × List Nat)) := do
+  let uaxes := (fieldArr u "axes").toList
+  let accepts : List (List Nat) := (fieldArr row "accepts").toList.map (fun xs => ((arr xs).getD #[]).toList.filterMap nat)
+  let nums ← ((List.range uaxes.length).filterMap (fun ua =>
+    let ax := (uaxes[ua]?).getD Json.null
+    let bs := fieldArr ax "bounds"
+    if !bs.any (fun b => !b.isNull) then none else
+    match idx (fieldStr ax "column") with
+    | none => none
+    | some vi =>
+      let mine := (columns.idxOf? (fieldStr ax "column")).map (fun aj => (numeric[aj]?).getD false)
+      if mine == some false then none else
+      some ((((accepts[ua]?).getD []).mapM (fun x => bs[x]? >>= coordOfJson)).map (fun cs => (vi, cs))))).mapM id
+  let words := (List.range uaxes.length).filterMap (fun ua => do
+    let ax ← uaxes[ua]?
+    if (fieldArr ax "bounds").any (fun b => !b.isNull) then none else
+    let aj ← columns.idxOf? (fieldStr ax "column")
+    if (numeric[aj]?).getD true then none else
+    let ulabels := (fieldArr ax "coords").toList.filterMap str
+    let lets := ((accepts[ua]?).getD []).filterMap (fun x => ulabels[x]?)
+    let mineLabels := (labels[aj]?).getD []
+    some (aj, (List.range mineLabels.length).filter (fun c => match mineLabels[c]? with
+      | some l => lets.contains l
+      | none => false)))
+  some (nums, words)
+
+/-- Every way the value of coordinate `ci` of this table's axis `tax` arrives (rulec's §15.195,
+    §15.322): a row of the table the column comes from that puts it there — a word, or a number
+    that lies in the coordinate once put through the roundings on the way — joined with the rows of
+    the tables above it (`waysIn`), all of it read on this table as one row that fires where every
+    row of the way does. Each comes with the number of the row that puts the value and the rows the
+    way joins, `(table, row)` each, which a reason names, and the way itself. With `through`, the
+    ways are joined besides through the columns both tables cut (`waysThrough`, rulec's §15.325).
+    `none` when no table decides the column, or a row of it writes something this program cannot
+    follow — the ways cannot then be counted. -/
+def aboveRowsOf (src : String → Option (Json × Nat × List (RoundMode × Rat))) (this : String) (through : Bool)
+    (tax : Json) (ci : Nat)
+    (idx : String → Option Nat) (columns : List String) (labels : List (List String)) (numeric : List Bool) :
+    Option (List (AboveRow × Nat × List (String × Nat) × List (Json × Json))) := do
+  let (u, oi, rounds) ← src (fieldStr tax "column")
+  let isNum := (fieldArr tax "bounds").any (fun b => !b.isNull)
+  let rows := (fieldArr u "rows").toList
+  let puts := rows.map (fun r => putOf r oi rounds isNum)
+  if puts.any (fun p => match p with | .any => true | _ => false) then none else
+  let writers := (rows.zip puts).filter (fun rp => putTakes tax ci rp.2)
+  let ways ← writers.foldlM (fun acc rp =>
+    (if through then waysThrough src columns this 32 u rp.1 else waysIn src columns 32 u rp.1).map (acc ++ ·)) []
+  ways.mapM (fun way => do
+    let (_, head) ← way.head?
+    let i ← fieldNat head "row"
+    let reads ← way.mapM (fun ur => stepRead ur.1 ur.2 idx columns labels numeric)
+    let via ← (way.drop 1).mapM (fun ur => (fieldNat ur.2 "row").map (fun n => (fieldStr ur.1 "table", n)))
+    some ({ index := i, nums := reads.flatMap (·.1), words := reads.flatMap (·.2) }, i, via, way))
+
+/-- A coordinate of a numeric axis as a closed interval on the axis's own grid, as rulec's
+    `coord_ends` reads it (rulec's §15.325): a point as itself, an interval without its ends, one
+    grid step in. `some none` for the absent value; `none` when the coordinate or the grid cannot be
+    read. -/
+def axisEnds (ax : Json) (x : Nat) : Option (Option (Option Rat × Option Rat)) := do
+  let b ← (fieldArr ax "bounds")[x]?
+  if b.isNull then return none
+  match ← coordOfJson b with
+  | .exactly a => return some (some a, some a)
+  | .between lo hi =>
+    let st ← field ax "step" >>= optRat
+    if st ≤ 0 then none else return some (lo.map (· + st), hi.map (· - st))
+
+/-- Whether two closed intervals meet; a missing end runs on. -/
+def endsMeet (x y : Option Rat × Option Rat) : Bool :=
+  !((match x.2, y.1 with
+     | some p, some q => decide (p < q)
+     | _, _ => false) ||
+    (match x.1, y.2 with
+     | some p, some q => decide (q < p)
+     | _, _ => false))
+
+/-- The coordinates of axis `ta` a value can stand on that stands on one of the coordinates `mine`
+    of axis `fa` — two tables cutting one column, as rulec's `carry` reads it (rulec's §15.325):
+    words by the word, numbers where their closed intervals meet, the absent value with the absent
+    value only. Every coordinate where either axis is of prefixes, or the two are not both numbers
+    or both words. `none` when a coordinate cannot be read. -/
+def carryAxis (fa : Json) (mine : List Nat) (ta : Json) : Option (List Bool) := do
+  let n := (fieldArr ta "coords").size
+  let isPre : Json → Bool := fun a => !((field a "prefixes").getD Json.null).isNull
+  let isNum : Json → Bool := fun a => (fieldArr a "bounds").any (fun b => !b.isNull)
+  if isPre fa || isPre ta || isNum fa != isNum ta then return List.replicate n true
+  if !isNum ta then
+    let fl := (fieldArr fa "coords").toList.map (fun c => (str c).getD "")
+    let tl := (fieldArr ta "coords").toList.map (fun c => (str c).getD "")
+    let words := mine.filterMap (fun c => fl[c]?)
+    return (List.range n).map (fun x => match tl[x]? with
+      | some w => words.contains w
+      | none => false)
+  let fends ← mine.mapM (axisEnds fa)
+  (List.range n).mapM (fun x => do
+    match ← axisEnds ta x with
+    | none => return fends.any (·.isNone)
+    | some t => return fends.any (fun f => match f with
+        | some f => endsMeet f t
+        | none => false))
+
+/-- Whether the boxes together take every point of `part`, a box and the part each the coordinates
+    it takes on every axis (rulec's §15.325): split on an axis where a box that meets the part takes
+    some of the part's coordinates and not all, until one box takes the whole piece or none meets
+    it. `none` past `fuel` splits deep. -/
+def boxesCover : Nat → List (List Nat) → List (List (List Nat)) → Option Bool
+  | 0, _, _ => none
+  | fuel + 1, part, boxes =>
+    if part.any (·.isEmpty) then some true else
+    let meet := boxes.filter (fun b => b.length == part.length && (part.zip b).all (fun pq => pq.1.any (pq.2.contains ·)))
+    if meet.isEmpty then some false
+    else if meet.any (fun b => (part.zip b).all (fun pq => pq.1.all (pq.2.contains ·))) then some true
+    else match meet.head? with
+      | none => some false
+      | some b =>
+        match (List.range part.length).find? (fun a => ((part[a]?).getD []).any (fun x => !((b[a]?).getD []).contains x)) with
+        | none => some true
+        | some a => do
+          let p := (part[a]?).getD []
+          let q := (b[a]?).getD []
+          let l ← boxesCover fuel (part.set a (p.filter (q.contains ·))) meet
+          if !l then return false
+          boxesCover fuel (part.set a (p.filter (fun x => !q.contains x))) meet
+
+/-- What row `r` of table `s` takes, on each axis of its table, where the box `bx` of this table
+    (its axes `axes`) lets a value stand: the box carried over a column both tables cut, every
+    coordinate on one the box does not cut (rulec's §15.325). -/
+def rowPart (axes : List Json) (bx : Box) (s r : Json) : Option (List (List Nat)) := do
+  let saxes := (fieldArr s "axes").toList
+  let cols := axes.map (fun a => fieldStr a "column")
+  let acc : List (List Nat) := (fieldArr r "accepts").toList.map (fun xs => ((arr xs).getD #[]).toList.filterMap nat)
+  (List.range saxes.length).mapM (fun ua => do
+    let ax ← saxes[ua]?
+    let lets ← match cols.idxOf? (fieldStr ax "column") with
+      | some aj => do
+        let fa ← axes[aj]?
+        let mine ← bx[aj]?
+        carryAxis fa mine ax
+      | none => some (List.replicate (fieldArr ax "coords").size true)
+    some (((acc[ua]?).getD []).filter (fun x => (lets[x]?).getD false)))
+
+/-- The row of a way a reason names by its place, `step` (rulec's §15.325). -/
+def stepAt (way : List (Json × Json)) (e : Json) : Option (Json × Json) := do
+  let si ← fieldNat e "step"
+  way[si]?
+
+/-- Whether a row of the way takes nothing of the box `bx`: on some axis of its table, no coordinate
+    it takes is one the box lets a value stand on (rulec's §15.325). -/
+def missesOk (axes : List Json) (bx : Box) (way : List (Json × Json)) (e : Json) : Bool :=
+  match stepAt way e >>= (fun sr => rowPart axes bx sr.1 sr.2) with
+  | some part => part.any (·.isEmpty)
+  | none => false
+
+/-- Whether a row of the way, in a `policy first` table, never decides in the box `bx`: the rows the
+    reason names, each above it and in order, take all of what it takes there (rulec's §15.325). -/
+def earlierOk (axes : List Json) (bx : Box) (way : List (Json × Json)) (e : Json) : Bool :=
+  match stepAt way e with
+  | none => false
+  | some (s, r) =>
+    if fieldStr s "policy" != "first" then false else
+    match (field e "rows" >>= arr).bind (fun xs => xs.toList.mapM nat), fieldNat r "row", rowPart axes bx s r with
+    | some named, some ri, some part =>
+      (named.zip (named.drop 1)).all (fun ab => decide (ab.1 < ab.2)) &&
+      match named.mapM (fun x => if x < ri then (fieldArr s "rows").toList.find? (fun q => fieldNat q "row" == some x) else none) with
+      | some found =>
+        let boxes := found.map (fun q => (fieldArr q "accepts").toList.map (fun xs => ((arr xs).getD #[]).toList.filterMap nat))
+        boxesCover (part.foldl (fun n p => n + p.length) 1) part boxes == some true
+      | none => false
+    | _, _, _ => false
+
+/-- Whether a row of the way, in the table that decides a column this table cuts too, writes a value
+    none of the coordinates the box `bx` takes there holds (rulec's §15.325): what the row puts, read
+    as the column reads it through the roundings on the way (`src`, `putOf`, `putTakes`). -/
+def writesOk (src : String → Option (Json × Nat × List (RoundMode × Rat))) (axes : List Json) (bx : Box)
+    (way : List (Json × Json)) (e : Json) : Bool :=
+  match stepAt way e, fieldNat e "axis" with
+  | some (s, r), some aj =>
+    match axes[aj]?, bx[aj]? with
+    | some ax, some xs =>
+      match src (fieldStr ax "column") with
+      | some (u, oi, rounds) =>
+        let p := putOf r oi rounds ((fieldArr ax "bounds").any (fun b => !b.isNull))
+        fieldStr u "table" == fieldStr s "table" && (match p with | .any => false | _ => true)
+          && !(xs.any (fun x => putTakes ax x p))
+      | none => false
+    | _, _ => false
+  | _, _ => false
+
+/-- Whether two rows of the way take no value of a column together (rulec's §15.325): the tables of
+    the two steps the reason names, in order, both cut the column on the two axes it names, and no
+    coordinate the later row takes there — of those the box `bx` lets a value stand on (`rowPart`) —
+    meets one the earlier row takes, carried onto the later table's axis (`carryAxis`). -/
+def disjointOk (axes : List Json) (bx : Box) (way : List (Json × Json)) (e : Json) : Bool :=
+  match (field e "steps" >>= arr).bind (fun xs => xs.toList.mapM nat),
+      (field e "axes" >>= arr).bind (fun xs => xs.toList.mapM nat) with
+  | some [i1, i2], some [a1, a2] =>
+    match way[i1]?, way[i2]? with
+    | some (s1, r1), some (s2, r2) =>
+      match (fieldArr s1 "axes")[a1]?, (fieldArr s2 "axes")[a2]?, rowPart axes bx s1 r1, rowPart axes bx s2 r2 with
+      | some ax1, some ax2, some p1, some p2 =>
+        match carryAxis ax1 ((p1[a1]?).getD []) ax2 with
+        | some lets =>
+          decide (i1 < i2) && fieldStr ax1 "column" == fieldStr ax2 "column"
+            && !(((p2[a2]?).getD []).any (fun y => (lets[y]?).getD false))
+        | none => false
+      | _, _, _, _ => false
+    | _, _ => false
+  | _, _ => false
+
+/-- Whether a row of the way cuts a value the rule works out at coordinates the value does not come
+    to in the box `bx` (rulec's §15.325): the reason names the step, the axis of that step's table,
+    the axes of this table held (`by`, each once), and where the span of one of them is cut into
+    pieces, that axis and where each piece after the first starts (`cuts`). `reachOut` is asked with
+    the value's name; each held axis with the coordinates the box takes on it and, where the step's
+    table cuts the same column, that axis with the coordinates the row takes on it there (`rowPart`),
+    and after them each axis of the step's table the reason holds (`row_by`: of numbers, a column
+    this table does not cut) with the coordinates the row takes on it; this table's axis of the value
+    with the box's coordinates on it, where it has one; the cut, by the held axis's place in `by`; and
+    the step's axis of the value with the coordinates the row takes on it where the box lets a value
+    stand. It works the value out the way a fact of `narrowed` is. -/
+def worksOutOk (reachOut : String → List (Json × List Nat × Option (Json × List Nat)) →
+      Option (Json × List Nat) → Option (Nat × List Rat) → Json → List Nat → Bool)
+    (axes : List Json) (bx : Box) (way : List (Json × Json)) (e : Json) : Bool :=
+  match stepAt way e, fieldNat e "axis", (field e "by" >>= arr).bind (fun xs => xs.toList.mapM nat) with
+  | some (s, r), some ua, some by_ =>
+    let saxes := (fieldArr s "axes").toList
+    match saxes[ua]?, rowPart axes bx s r with
+    | some sax, some part =>
+      let col := fieldStr sax "column"
+      let xs := (part[ua]?).getD []
+      let numeric : Json → Bool := fun a => (fieldArr a "bounds").any (fun q => !q.isNull)
+      -- What the row takes of a column on the step's table, where that table cuts it.
+      let rowOn : String → Option (Json × List Nat) := fun c =>
+        (saxes.zipIdx.find? (fun p => fieldStr p.1 "column" == c && numeric p.1)).map
+          (fun p => (p.1, (part[p.2]?).getD []))
+      let held := by_.mapM (fun j => do
+        let ax ← axes[j]?
+        let cs ← bx[j]?
+        some (ax, cs, rowOn (fieldStr ax "column")))
+      -- The axes of the row's own table it holds (`row_by`), each to what the row takes there: of
+      -- numbers, of a column this table does not cut.
+      let rowBy : Option (List Nat) := match field e "row_by" with
+        | none => some []
+        | some j => (arr j).bind (fun ys => ys.toList.mapM nat)
+      let rowHeld := rowBy.bind (fun ys => ys.mapM (fun uj => do
+        let ax ← saxes[uj]?
+        if !numeric ax || axes.any (fun a => fieldStr a "column" == fieldStr ax "column") then none
+        else some (ax, (part[uj]?).getD [], (none : Option (Json × List Nat)))))
+      let own : Option (Json × List Nat) :=
+        (axes.zipIdx.find? (fun p => fieldStr p.1 "column" == col && numeric p.1)).bind
+          (fun p => (bx[p.2]?).map (fun cs => (p.1, cs)))
+      let cuts : Option (Option (Nat × List Rat)) := match field e "cuts" with
+        | none => some none
+        | some cj => do
+          let j ← fieldNat cj "axis"
+          let k ← by_.idxOf? j
+          let ats ← (fieldArr cj "at").toList.mapM optRat
+          some (some (k, ats))
+      match held, rowHeld, cuts with
+      | some hs, some rs, some ct =>
+        !xs.isEmpty && (by_.zip (List.range by_.length)).all (fun p => !(by_.drop (p.2 + 1)).contains p.1)
+          && reachOut col (hs ++ rs) own ct sax xs
+      | _, _, _ => false
+    | _, _ => false
+  | _, _, _ => false
 
 def readTable (rangesOf : String → Option Span2) (groups : String → List String)
     (declaredOf : String → Option Span2)
     (factOf : Json → Option (List (String × Rat) × Rat × Bool))
-    (daysOf : String → Option (List Rat)) (all : Array Json)
+    (daysOf : String → Option (List Rat))
     (truthOf : String → Option (Cmp × Span2 × Span2) := fun _ => none)
     (optionalOf : String → Bool := fun _ => false)
-    (orderOf : String → List String := fun _ => []) (j : Json) : Option ReadTable := do
+    (orderOf : String → List String := fun _ => [])
+    (src : String → Option (Json × Nat × List (RoundMode × Rat)) := fun _ => none)
+    (narrowed : List (List (Nat × List Nat)) := [])
+    (reachOut : String → List (Json × List Nat × Option (Json × List Nat)) →
+      Option (Json × List Nat) → Option (Nat × List Rat) → Json → List Nat → Bool := fun _ _ _ _ _ _ => false)
+    (j : Json) : Option ReadTable := do
   let name := fieldStr j "table"
   let policy ← (if fieldStr j "policy" == "unique" then some Policy.unique
                 else if fieldStr j "policy" == "first" then some Policy.first else none)
@@ -560,71 +973,119 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
   let aboveLs := match field j "cover" with
     | some c => aboveLeaves c []
     | none => []
-  let aboveCols : List AboveCol := aboveLs.foldl (fun acc (path, a) =>
+  -- Whether a leaf's or a pair's reasons join the ways through the columns both tables cut
+  -- (rulec's §15.325).
+  let throughOf : Json → Bool := fun a => (field a "through" >>= boolOf) == some true
+  -- Each value with the ways it arrives, read as rows of this table, and the key each way's reason
+  -- is given under: the number of the row that puts the value, and the rows the way joins — with
+  -- the way itself, which an `earlier` or a `misses` is read against.
+  let aboveKeyed : List (AboveCol × List (Nat × List (String × Nat) × List (Json × Json))) := aboveLs.foldl (fun acc (path, a) =>
     match fieldNat a "axis" with
     | none => acc
     | some ai =>
       match path[ai]? with
       | none => acc
       | some ci =>
-        if acc.any (fun e => e.axis == ai && e.coord == ci) then acc else
-        match columns[ai]?, (labels[ai]?).bind (fun ls => ls[ci]?) with
-        | some col, some val =>
-          match aboveRowsOf all col val idx columns labels numeric with
-          | some rows => acc ++ [{ axis := ai, coord := ci, rows := rows }]
+        let th := throughOf a
+        if acc.any (fun e => e.1.axis == ai && e.1.coord == ci && e.1.through == th) then acc else
+        match axes[ai]? with
+        | some tax =>
+          match aboveRowsOf src name th tax ci idx columns labels numeric with
+          | some rows => acc ++ [({ axis := ai, coord := ci, rows := rows.map (·.1), through := th }, rows.map (·.2))]
           | none => acc
-        | _, _ => acc) []
+        | none => acc) []
   -- The pairs the rows of a table above part (rulec's §15.196): each value both rows take on the
   -- column that table decides, with the rows that write it read from that table, as for a leaf.
   let pairAbove := (fieldArr j "above_apart").toList
-  let aboveCols : List AboveCol := pairAbove.foldl (fun acc d =>
+  let aboveKeyed : List (AboveCol × List (Nat × List (String × Nat) × List (Json × Json))) := pairAbove.foldl (fun acc d =>
     match fieldNat d "axis" with
     | none => acc
     | some ai => (fieldArr d "at").toList.foldl (fun acc x =>
         match fieldNat x "coord" with
         | none => acc
         | some ci =>
-          if acc.any (fun e => e.axis == ai && e.coord == ci) then acc else
-          match columns[ai]?, (labels[ai]?).bind (fun ls => ls[ci]?) with
-          | some col, some val =>
-            match aboveRowsOf all col val idx columns labels numeric with
-            | some rows => acc ++ [{ axis := ai, coord := ci, rows := rows }]
+          let th := throughOf ((field x "above_rows").getD Json.null)
+          if acc.any (fun e => e.1.axis == ai && e.1.coord == ci && e.1.through == th) then acc else
+          match axes[ai]? with
+          | some tax =>
+            match aboveRowsOf src name th tax ci idx columns labels numeric with
+            | some rows => acc ++ [({ axis := ai, coord := ci, rows := rows.map (·.1), through := th }, rows.map (·.2))]
             | none => acc
-          | _, _ => acc) acc) aboveCols
-  -- The reasons a leaf or a pair gives, one for each row of the table above that writes the value,
-  -- in the order of those rows.
-  let reasonsOf : Json → AboveCol → Option (List RowOut) := fun a e => do
+          | none => acc) acc) aboveKeyed
+  -- The rows a way joins, as a reason names them (rulec's §15.322); none for a way of one row.
+  let viaOf : Json → List (String × Nat) := fun g => (fieldArr g "via").toList.filterMap (fun x => do
+    let v ← arr x
+    let n ← v[0]? >>= str
+    let r ← v[1]? >>= nat
+    some (n, r))
+  -- The reasons a leaf or a pair gives for its box `bx`, one for each way the value arrives, in the
+  -- order of those ways, each found by the row that puts the value and the rows the way joins. An
+  -- `earlier`, a `misses`, a `reach`, a `disjoint` or a `writes` is read only once this program has
+  -- found it holds of the way in the box (rulec's §15.325), and stands for that box among those the way
+  -- never decides in.
+  let axesL := axes.toList
+  let reasonsOf : Json → Box → AboveCol → Option (List RowOut) := fun a bx e => do
     let given := (fieldArr a "rows").toList
-    e.rows.mapM (fun r => do
-      let g ← given.find? (fun x => fieldNat x "row" == some r.index)
-      match fieldNat g "clash" with
-      | some aj => some (RowOut.clash aj)
-      | none => do
+    let keys ← (aboveKeyed.find? (fun k => k.1.axis == e.axis && k.1.coord == e.coord && k.1.through == e.through)).map (·.2)
+    keys.mapM (fun key => do
+      let g ← given.find? (fun x => fieldNat x "row" == some key.1 && viaOf x == key.2.1)
+      match fieldNat g "clash", field g "earlier", field g "misses", field g "reach", field g "disjoint",
+          field g "writes" with
+      | some aj, _, _, _, _, _ => some (RowOut.clash aj)
+      | none, some ej, _, _, _, _ => if earlierOk axesL bx key.2.2 ej then some RowOut.taken else none
+      | none, none, some mj, _, _, _ => if missesOk axesL bx key.2.2 mj then some RowOut.taken else none
+      | none, none, none, some rj, _, _ => if worksOutOk reachOut axesL bx key.2.2 rj then some RowOut.taken else none
+      | none, none, none, none, some dj, _ => if disjointOk axesL bx key.2.2 dj then some RowOut.taken else none
+      | none, none, none, none, none, some wj => if writesOk src axesL bx key.2.2 wj then some RowOut.taken else none
+      | none, none, none, none, none, none => do
         let refs ← (field g "farkas" >>= arr) >>= (fun xs => xs.toList.mapM (refOfJsonIn idx))
         some (RowOut.farkas refs))
-  let aboveApartL : List (Nat × Nat × (Nat × List (Nat × List RowOut))) := pairAbove.filterMap (fun d => do
+  -- Each leaf and each value of a pair, with its box and the column of the value it reads.
+  let leafBoxes : List (Point × Json × Nat × Nat × Box) := aboveLs.filterMap (fun (path, a) => do
+    let ai ← fieldNat a "axis"
+    let ci ← path[ai]?
+    some (path, a, ai, ci, pathBox arities path))
+  let pairBoxes : List (Nat × Nat × Nat × List (Nat × Json × Box)) := pairAbove.filterMap (fun d => do
     let a ← fieldNat d "a"
     let b ← fieldNat d "b"
     let ai ← fieldNat d "axis"
-    let outs ← (fieldArr d "at").toList.mapM (fun x => do
+    let ra ← rows.find? (fun r => r.index == a)
+    let rb ← rows.find? (fun r => r.index == b)
+    let at_ ← (fieldArr d "at").toList.mapM (fun x => do
       let ci ← fieldNat x "coord"
-      let e ← aboveCols.find? (fun e => e.axis == ai && e.coord == ci)
-      let rs ← reasonsOf ((field x "above_rows").getD Json.null) e
-      some (ci, rs))
+      some (ci, (field x "above_rows").getD Json.null, (pairBox ra.box rb.box).set ai [ci]))
+    some (a, b, ai, at_))
+  -- The boxes each way never decides in, read off every leaf and pair whose reason for it says so
+  -- and holds: `(axis, coordinate, through, the way's place, the box)`.
+  let colOf : Nat → Nat → Bool → AboveCol := fun ai ci th =>
+    ((aboveKeyed.find? (fun k => k.1.axis == ai && k.1.coord == ci && k.1.through == th)).map (·.1)).getD
+      { axis := ai, coord := ci, rows := [], through := th }
+  let takenIn : Nat → Nat → Json → Box → List (Nat × Nat × Bool × Nat × Box) := fun ai ci a bx =>
+    let th := throughOf a
+    match reasonsOf a bx (colOf ai ci th) with
+    | some outs => ((List.range outs.length).zip outs).filterMap (fun (k, o) => match o with
+        | .taken => some (ai, ci, th, k, bx)
+        | _ => none)
+    | none => []
+  let takenAll : List (Nat × Nat × Bool × Nat × Box) :=
+    leafBoxes.flatMap (fun (_, a, ai, ci, bx) => takenIn ai ci a bx) ++
+    pairBoxes.flatMap (fun (_, _, ai, at_) => at_.flatMap (fun (ci, x, bx) => takenIn ai ci x bx))
+  let aboveCols : List AboveCol := aboveKeyed.map (fun (e, _) =>
+    { e with rows := ((List.range e.rows.length).zip e.rows).map (fun (k, r) =>
+        { r with taken := takenAll.filterMap (fun t =>
+            if t.1 == e.axis && t.2.1 == e.coord && t.2.2.1 == e.through && t.2.2.2.1 == k then some t.2.2.2.2 else none) }) })
+  let aboveApartL : List (Nat × Nat × (Nat × List (Nat × Bool × List RowOut))) := pairBoxes.filterMap (fun (a, b, ai, at_) => do
+    let outs ← at_.mapM (fun (ci, x, bx) => do
+      let th := throughOf x
+      let e ← aboveCols.find? (fun e => e.axis == ai && e.coord == ci && e.through == th)
+      let rs ← reasonsOf x bx e
+      some (ci, th, rs))
     some (a, b, (ai, outs)))
-  let aboveAts : List (Point × (Nat × List RowOut)) := aboveLs.filterMap (fun (path, a) => do
-    let ai ← fieldNat a "axis"
-    let ci ← path[ai]?
-    let e ← aboveCols.find? (fun e => e.axis == ai && e.coord == ci)
-    let given := (fieldArr a "rows").toList
-    let outs ← e.rows.mapM (fun r => do
-      let g ← given.find? (fun x => fieldNat x "row" == some r.index)
-      match fieldNat g "clash" with
-      | some aj => some (RowOut.clash aj)
-      | none => do
-        let refs ← (field g "farkas" >>= arr) >>= (fun xs => xs.toList.mapM (refOfJsonIn idx))
-        some (RowOut.farkas refs))
-    some (path, (ai, outs)))
+  let aboveAts : List (Point × (Nat × Bool × List RowOut)) := leafBoxes.filterMap (fun (path, a, ai, ci, bx) => do
+    let th := throughOf a
+    let e ← aboveCols.find? (fun e => e.axis == ai && e.coord == ci && e.through == th)
+    let outs ← reasonsOf a bx e
+    some (path, (ai, th, outs)))
   let rowsRaw : List ReadRow := (fieldArr j "rows").toList.filterMap (fun r => do
     let i ← fieldNat r "row"
     let tests ← ((fieldArr r "tests").toList.zip columns).mapM (fun (x, col) => cellOfJson groups x (orderOf col))
@@ -634,7 +1095,8 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     let writes := ((fieldArr r "writes").toList.zip (List.range (fieldArr r "writes").size)).map (fun (w, oi) => do
       let e ← field w "expr"
       let isName := (field e "name").isSome
-      let says ← if isName then field e "name" >>= str else field e "num" >>= str
+      let isDate := !isName && (field e "num").isNone && isDateLit e
+      let says ← if isName then field e "name" >>= str else if isDate then some "" else field e "num" >>= str
       let sp : Option SrcSpan := match field w "source" with
         | some x => do
             let line ← fieldNat x "line"
@@ -643,7 +1105,7 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
             some { line := line, col := col, len := len, text := fieldStr x "text" }
         | none => none
       some { column := (decides[oi]?).getD "", span := sp, says := says
-             value := field e "value" >>= optRat, isName := isName })
+             value := field e "value" >>= optRat, isName := isName, isDate := isDate })
     let fileJ := field r "file"
     some { index := i, origin := fieldStr r "origin", line := (fieldNat r "line").getD 0
            file := (fileJ.map (fun x => fieldStr x "path")).getD ""
@@ -704,8 +1166,10 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
       | some ps => ps.toList.map (fun x => (str x).map String.toList)
       | none => [])
     declared := columns.map declaredOf
-    optional := axes.toList.map (fun a => fieldStr a "kind" == "input" && optionalOf (fieldStr a "column"))
+    optional := axes.toList.map (fun a =>
+      (fieldStr a "kind" == "input" || (fieldArr a "bounds").any (fun x => !x.isNull)) && optionalOf (fieldStr a "column"))
     upstream := leansAbove ((field j "cover").getD Json.null)
+    fromAbove := columns.any (fun c => (src c).isSome)
     cert := {
       arities := arities, rows := rows, policy := policy
       sieve := { coords := coords, cons := cons, reach := reach
@@ -729,7 +1193,9 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
                    let (op, L, R) ← truthOf ((columns[ai]?).getD "")
                    let ta ← ((labels[ai]?).getD []).idxOf? "true"
                    some { op := op, l := L, r := R, trueAt := ta })
-                 lines := neverLines }
+                 -- What a `define` comes to with the axes it reads held (rulec's §15.322): each
+                 -- fact the caller earned back from the define's expression, as a line.
+                 lines := neverLines ++ narrowed }
       cover := cover
       told := fun a b => (told.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
       witness := fun i => (wit.find? (fun w => w.1 == i)).map (fun w => (w.2.1, w.2.2))

@@ -27,6 +27,7 @@ use crate::diag::Diag;
 use crate::model::*;
 use crate::render::{self, ident};
 use crate::spellings::{Alias, Clash, ClientNames, Lang, Name, With};
+use crate::wire;
 use crate::diag::Text;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -42,10 +43,11 @@ const ANTHROPIC_SDK: &str = "github.com/anthropics/anthropic-sdk-go v1.78.0";
 const AWS_SERVICES: &[&str] = &["bedrockruntime", "dynamodb", "ecs", "eventbridge", "kinesis", "lambda", "s3", "secretsmanager", "sesv2", "sfn", "sns", "sqs", "ssm"];
 
 /// What a local name of the flow cannot be in the generated Go, with an `_` after it when it is
-/// (the keywords, the predeclared names, and the names the generated code uses), and the exported
-/// names every package has, which a record's, an enum's or a method's name cannot be (W105):
-/// ritsu-emit's copies of the tables that were kept here.
-use ritsu_emit::copies::dandori::{GO_EXPORTED, GO_RESERVED};
+/// (the keywords, the predeclared names, and the names the generated code uses); the exported names
+/// every package has that its callers read, which a record's, an enum's or a method's name cannot
+/// be (W105); and the ones every package has for its own use, which give way to the flow's (DESIGN
+/// 22): ritsu-emit's copies of the tables that were kept here.
+use ritsu_emit::copies::dandori::{GO_EXPORTED, GO_OWN, GO_RESERVED};
 
 /// A local name of the flow (a variable) as a Go identifier.
 pub fn go_name(name: &str) -> String {
@@ -88,6 +90,19 @@ pub fn package(m: &Model) -> String {
 }
 
 /// A Go string literal (JSON's is one).
+/// An argument of an `http` task where it goes, as io.go's `ddParam` without its type (DESIGN 43):
+/// the name it goes by there, its value, OpenAPI's style and explode, and what the value is (`"v"`
+/// one value, `"j"` a `json` one, `"l"` a list, `"r"` a record, with its fields in their order).
+fn param_go(w: &WireParam, k: &wire::Kind) -> String {
+    let (shape, fields) = match k {
+        wire::Kind::One => ("v", "nil".to_string()),
+        wire::Kind::Json => ("j", "nil".to_string()),
+        wire::Kind::List => ("l", "nil".to_string()),
+        wire::Kind::Record(fs) => ("r", format!("[]string{{{}}}", fs.iter().map(|f| q(f)).collect::<Vec<_>>().join(", "))),
+    };
+    format!("{{{}, args[{}], {}, {}, {}, {fields}}}", q(&w.name), q(&w.param), q(w.style.word()), w.explode, q(shape))
+}
+
 fn q(s: &str) -> String {
     serde_json::to_string(s).unwrap()
 }
@@ -105,8 +120,13 @@ pub fn task_function(task: &str) -> String {
 
 /// The names client.go declares when the workflow says `history encrypted` (DESIGN 1.18). A record's
 /// or an enum's type, and a method's function or a message's type of the service, cannot have one
-/// of these names, nor one every package has (`GO_EXPORTED`; 1.14; W105).
+/// that a caller reads (`EncryptedClient`, `Dial`), nor one every package has (`GO_EXPORTED`; 1.14;
+/// W105). The converters are the package's own ([`ENCRYPTED_OWN`]), which give way (DESIGN 22).
 pub const ENCRYPTED: &[&str] = &["EncryptedClient", "encryptedClient", "CodecDataConverter", "CodecFailureConverter", "Dial"];
+
+/// What client.go declares for an encrypted history for its own use: the converters that Dial and
+/// Replay give the SDK.
+const ENCRYPTED_OWN: &[&str] = &["CodecDataConverter", "CodecFailureConverter"];
 
 /// The Go type of `t`, for the structs of types.go.
 fn go_type(m: &Model, t: &Ty) -> String {
@@ -301,14 +321,15 @@ fn check_function(m: &Model, name: &str, fields: &[(String, Ty)], ranges: &BTree
 
 fn types_file(m: &Model, pkg: &str, header: &str) -> String {
     let (enums, recs) = crate::temporal::used_types(m);
+    let go_own = GoOwn::of(m);
     let mut t = header.to_string();
     t.push_str(&format!(
         "// The records and enums of {} v{}, as Go types for the code you write, and a check for each. The\n// workflow carries JSON values and checks them with the Is functions; Decode reads one into these types.\n\npackage {pkg}\n\nimport \"regexp\"\n\n",
         m.name, m.version
     ));
-    t.push_str(&format!("// TIMESTAMP is what a timestamp looks like: RFC 3339, in UTC.\nvar TIMESTAMP = regexp.MustCompile(`{}`)\n", render::TIMESTAMP_RE.replace("\\\\", "\\")));
+    t.push_str(&go_own.respell(&format!("// TIMESTAMP is what a timestamp looks like: RFC 3339, in UTC.\nvar TIMESTAMP = regexp.MustCompile(`{}`)\n", render::TIMESTAMP_RE.replace("\\\\", "\\"))));
     if m.uses_dates() {
-        t.push_str(&format!("\n// DATE is what a day of the calendar looks like: YYYY-MM-DD.\nvar DATE = regexp.MustCompile(`{}`)\n\n// ddIsDate says whether v is a day of the calendar.\nfunc ddIsDate(v any) bool {{\n\ts, ok := v.(string)\n\treturn ok && DATE.MatchString(s)\n}}\n", render::DATE_RE));
+        t.push_str(&go_own.respell(&format!("\n// DATE is what a day of the calendar looks like: YYYY-MM-DD.\nvar DATE = regexp.MustCompile(`{}`)\n\n// ddIsDate says whether v is a day of the calendar.\nfunc ddIsDate(v any) bool {{\n\ts, ok := v.(string)\n\treturn ok && DATE.MatchString(s)\n}}\n", render::DATE_RE)));
     }
     for e in &enums {
         let en = &m.enums[*e];
@@ -329,6 +350,41 @@ fn types_file(m: &Model, pkg: &str, header: &str) -> String {
     t
 }
 
+/// The record a value of `t` holds, as ddOrdered names it: `Item`, `[]Item` for a list of them, ""
+/// for none.
+fn held_record(m: &Model, t: &Ty) -> String {
+    match t {
+        Ty::Record(r) => m.records[*r].name.clone(),
+        Ty::List(inner) => {
+            let r = held_record(m, inner);
+            if r.is_empty() { r } else { format!("[]{r}") }
+        }
+        Ty::Opt(inner) => held_record(m, inner),
+        _ => String::new(),
+    }
+}
+
+/// ddResultFields: the outputs (under "*") and the fields of every record a value of them holds, in
+/// the order they are declared, which the run's result keeps.
+fn result_fields(m: &Model) -> String {
+    let row = |fields: &[(String, Ty)]| fields.iter().map(|(f, t)| format!("{{{}, {}}}", q(f), q(&held_record(m, t)))).collect::<Vec<_>>().join(", ");
+    let mut lines = vec![format!("\t\"*\": {{{}}},\n", row(&m.outputs))];
+    let mut seen: BTreeSet<usize> = BTreeSet::new();
+    let mut todo: Vec<Ty> = m.outputs.iter().map(|(_, t)| t.clone()).collect();
+    while let Some(t) = todo.pop() {
+        match t {
+            Ty::List(inner) | Ty::Opt(inner) => todo.push(*inner),
+            Ty::Record(r) if seen.insert(r) => {
+                let rd = &m.records[r];
+                lines.push(format!("\t{}: {{{}}},\n", q(&rd.name), row(&rd.fields)));
+                todo.extend(rd.fields.iter().map(|(_, t)| t.clone()));
+            }
+            _ => {}
+        }
+    }
+    format!("\n// ddResultFields are the outputs and the fields of the records they hold, in the order they are\n// declared: the order of the keys of the run's result.\nvar ddResultFields = map[string][]ddField{{\n{}}}\n", lines.concat())
+}
+
 /// values.go: how the code reads and writes JSON values.
 const VALUES: &str = r##"// Values as the workflow and its tasks carry them: JSON values (map[string]any, []any, float64,
 // string, bool, nil), as the Temporal SDK's JSON converter reads them. A number the workflow
@@ -341,6 +397,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"sort"
 )
 
 // Decode reads a JSON value (the arguments of one of your tasks, a record in them) into a Go
@@ -426,6 +483,88 @@ func ddWire(v any) any {
 		return json.RawMessage("null")
 	}
 	return v
+}
+
+// ddField is an output of the workflow, or a field of a record, and the record its value holds:
+// "Item", "[]Item" for a list of them, "" for none.
+type ddField struct {
+	name, record string
+}
+
+// ddInOrder is the result of a run that ends with outputs: their JSON, with the outputs in the
+// order the workflow declares them and the fields of each record in the order the record does
+// (fields has the outputs under "*" and each record's fields under its name), where a map's JSON
+// would have its keys in the order of their names.
+func ddInOrder(out any, err error, fields map[string][]ddField) (any, error) {
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := out.(map[string]any); !ok {
+		return out, nil
+	}
+	b, err := ddOrdered(out, "*", fields)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(b), nil
+}
+
+// ddOrdered is v as JSON, a value of the record named (or of a list of them, "[]Item"): the
+// record's fields in its order, and then any other keys in the order of their names.
+func ddOrdered(v any, record string, fields map[string][]ddField) ([]byte, error) {
+	if len(record) > 2 && record[:2] == "[]" {
+		l, ok := v.([]any)
+		if !ok {
+			return json.Marshal(v)
+		}
+		b := []byte{'['}
+		for i, x := range l {
+			if i > 0 {
+				b = append(b, ',')
+			}
+			e, err := ddOrdered(x, record[2:], fields)
+			if err != nil {
+				return nil, err
+			}
+			b = append(b, e...)
+		}
+		return append(b, ']'), nil
+	}
+	m, ok := v.(map[string]any)
+	declared, known := fields[record]
+	if !ok || !known {
+		return json.Marshal(v)
+	}
+	var keys, more []string
+	holds := map[string]string{}
+	for _, f := range declared {
+		if _, ok := m[f.name]; ok {
+			keys = append(keys, f.name)
+			holds[f.name] = f.record
+		}
+	}
+	for k := range m {
+		if _, ok := holds[k]; !ok {
+			more = append(more, k)
+		}
+	}
+	sort.Strings(more)
+	b := []byte{'{'}
+	for i, k := range append(keys, more...) {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		name, err := json.Marshal(k)
+		if err != nil {
+			return nil, err
+		}
+		x, err := ddOrdered(m[k], holds[k], fields)
+		if err != nil {
+			return nil, err
+		}
+		b = append(append(append(b, name...), ':'), x...)
+	}
+	return append(b, '}'), nil
 }
 
 func ddObject(v any) map[string]any {
@@ -579,6 +718,141 @@ func ddFill(v any, zeros any) any {
 	return out
 }
 "##;
+
+/// The line of `ddFill` that fills in the zero values, which the dates follow.
+const FILL_ZEROS_GO: &str = "\tfor k, x := range ddObject(z[\"f\"]) {\n\t\tif out[k] == nil {\n\t\t\tout[k] = x\n\t\t}\n\t}\n";
+
+/// What `ddFill` does with the `google.type.Date`s under zeros["d"] (DESIGN 44).
+const FILL_DAYS_GO: &str = "\tfor _, k := range ddList(z[\"d\"]) {\n\t\tkey := ddStr(k)\n\t\tif x, ok := out[key]; ok {\n\t\t\tif l, ok := x.([]any); ok {\n\t\t\t\tread := make([]any, len(l))\n\t\t\t\tfor i, y := range l {\n\t\t\t\t\tread[i] = ddReadDay(y)\n\t\t\t\t}\n\t\t\t\tout[key] = read\n\t\t\t} else {\n\t\t\t\tout[key] = ddReadDay(x)\n\t\t\t}\n\t\t}\n\t}\n";
+
+/// How the Go dandori writes reads a `google.type.Date` (DESIGN 44), as `apis::day_read` does.
+const READ_DAY_GO: &str = r##"
+// ddReadDay is a google.type.Date as protobuf's JSON writes it, {year, month, day}, as the date a
+// flow holds, 2026-11-16. A date short of its year, its month or its day (protobuf's JSON leaves a
+// 0 out), one with a field of another name, and one with a number that is not whole or not in its
+// range (a year from 1 to 9999, a month to 12, a day to 31) is left as it is, for the check of what
+// came to refuse.
+func ddReadDay(v any) any {
+	o, ok := v.(map[string]any)
+	if !ok {
+		return v
+	}
+	for k := range o {
+		if k != "year" && k != "month" && k != "day" {
+			return v
+		}
+	}
+	parts := [3]int{}
+	for i, f := range []struct {
+		key string
+		hi  float64
+	}{{"year", 9999}, {"month", 12}, {"day", 31}} {
+		n, ok := ddNumber(o[f.key])
+		if !ok || n < 1 || n > f.hi || n != math.Trunc(n) {
+			return v
+		}
+		parts[i] = int(n)
+	}
+	return ddDigits(parts[0], 4) + "-" + ddDigits(parts[1], 2) + "-" + ddDigits(parts[2], 2)
+}
+
+// ddDigits is n in width digits, with zeros ahead.
+func ddDigits(n int, width int) string {
+	b := make([]byte, width)
+	for i := width - 1; i >= 0; i-- {
+		b[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(b)
+}
+"##;
+
+/// How values.go writes the dates a `connect` task sends (DESIGN 44), as `apis::wire_days` does.
+const WIRE_DAYS_GO: &str = r##"
+// ddWireDays is a request with the dates where at says (at["d"]: its fields, at["m"]: the messages
+// inside it, at["l"]: the lists of messages) as protobuf's JSON writes a google.type.Date,
+// {year, month, day}. What is not four, two and two digits between hyphens is left as it is, for
+// the service to refuse.
+func ddWireDays(v map[string]any, at any) map[string]any {
+	t := ddObject(at)
+	out := make(map[string]any, len(v))
+	for k, x := range v {
+		out[k] = x
+	}
+	for _, k := range ddList(t["d"]) {
+		key := ddStr(k)
+		if x, ok := out[key]; ok {
+			if l, ok := x.([]any); ok {
+				wired := make([]any, len(l))
+				for i, y := range l {
+					wired[i] = ddWireDay(y)
+				}
+				out[key] = wired
+			} else {
+				out[key] = ddWireDay(x)
+			}
+		}
+	}
+	for k, s := range ddObject(t["m"]) {
+		if o, ok := out[k].(map[string]any); ok {
+			out[k] = ddWireDays(o, s)
+		}
+	}
+	for k, s := range ddObject(t["l"]) {
+		if l, ok := out[k].([]any); ok {
+			wired := make([]any, len(l))
+			for i, y := range l {
+				if o, ok := y.(map[string]any); ok {
+					wired[i] = ddWireDays(o, s)
+				} else {
+					wired[i] = y
+				}
+			}
+			out[k] = wired
+		}
+	}
+	return out
+}
+
+// ddWireDay is a date, 2026-11-16, as protobuf's JSON writes a google.type.Date; anything else as
+// it is.
+func ddWireDay(x any) any {
+	s, ok := x.(string)
+	if !ok || len(s) != 10 || s[4] != '-' || s[7] != '-' {
+		return x
+	}
+	n := [3]float64{}
+	for i, r := range [3][2]int{{0, 4}, {5, 7}, {8, 10}} {
+		for j := r[0]; j < r[1]; j++ {
+			if s[j] < '0' || s[j] > '9' {
+				return x
+			}
+			n[i] = n[i]*10 + float64(s[j]-'0')
+		}
+	}
+	return map[string]any{"year": n[0], "month": n[1], "day": n[2]}
+}
+"##;
+
+/// values.go of a flow that reads a `google.type.Date` (from a `connect` task's answer, or in what
+/// comes into a workflow that implements a service) or sends one (in a `connect` task's request),
+/// DESIGN 44: `ddFill` reads the dates under zeros["d"] as dates (`ddReadDay`), and `ddWireDays`
+/// writes a request's dates as protobuf's JSON writes them. A flow that has none keeps the text as
+/// it was.
+fn days_go(m: &Model, values: String) -> String {
+    use crate::temporal::put_once;
+    let (reads, writes) = crate::temporal::connect_days(m);
+    let mut values = values;
+    if reads || crate::temporal::service_days(m) {
+        values = put_once(values, "// messages under zeros[\"l\"].\nfunc ddFill(", "// messages under zeros[\"l\"]; and the google.type.Dates under zeros[\"d\"] read as dates\n// (ddReadDay).\nfunc ddFill(");
+        values = put_once(values, FILL_ZEROS_GO, &format!("{FILL_ZEROS_GO}{FILL_DAYS_GO}"));
+        values.push_str(READ_DAY_GO);
+    }
+    if writes {
+        values.push_str(WIRE_DAYS_GO);
+    }
+    values
+}
 
 /// runtime.go: what the workflow code shares.
 const RUNTIME: &str = r##"// What the generated workflow code shares. It runs inside the workflow, so it uses nothing but the
@@ -992,7 +1266,7 @@ func ddRounds(ctx workflow.Context, items []any, k int, round func(ctx workflow.
 				if i >= n {
 					return
 				}
-				v, err := round(ctx, items[i], i)
+				v, err := ddRound(ctx, round, items[i], i)
 				if err != nil {
 					failed[i] = err
 				} else {
@@ -1018,6 +1292,39 @@ func ddRounds(ctx workflow.Context, items []any, k int, round func(ctx workflow.
 // ddFail is a deliberate end of the workflow as failed.
 func ddFail(kind string, cause any) error {
 	return temporal.NewNonRetryableApplicationError(ddText(cause), kind, nil)
+}
+
+// ddUnexpected is a fault of the code that the .flow's check rules out, such as a variable read
+// where it has no value: the workflow fails with Dandori.UnexpectedValue, as the reference
+// interpreter's run does. ddHave panics with it; ddFlow, and each round of a loop in parallel, end
+// with it as their error (ddRecover), so that it is no task's error.
+type ddUnexpected struct{ err error }
+
+// ddHave is the value of a variable where the .flow's check says it has one: a variable holds nil
+// until it is set, and nil here is a fault of the code (ddUnexpected).
+func ddHave(v any, name string, line int) any {
+	if v == nil {
+		panic(ddUnexpected{ddFail("Dandori.UnexpectedValue", "line "+strconv.Itoa(line)+": "+name+" has no value")})
+	}
+	return v
+}
+
+// ddRecover ends the function it is deferred in with the error of a fault of the code
+// (ddUnexpected) that reached it; anything else panics on.
+func ddRecover(err *error) {
+	if r := recover(); r != nil {
+		u, ok := r.(ddUnexpected)
+		if !ok {
+			panic(r)
+		}
+		*err = u.err
+	}
+}
+
+// ddRound runs one round of a loop in parallel: a fault of the code in it is the round's error.
+func ddRound(ctx workflow.Context, round func(ctx workflow.Context, item any, index int) (any, error), item any, index int) (v any, err error) {
+	defer ddRecover(&err)
+	return round(ctx, item, index)
 }
 
 // ddEnd is how the workflow ends: a task's error that nothing handled ends it with the error's
@@ -1095,7 +1402,7 @@ fn io_file(n: &Needs, pkg: &str, header: &str) -> String {
     }
     t.push_str("\t\"go.temporal.io/sdk/activity\"\n\t\"go.temporal.io/sdk/temporal\"\n)\n\n");
     t.push_str("// TransportOptions are what the default Transport is made with.\ntype TransportOptions struct {\n");
-    t.push_str("\t// Headers to add to an HTTP request, such as the credentials the other side wants (a server of Open Responses too).\n\tHeaders func(url string) map[string]string\n");
+    t.push_str("\t// Headers to add to an HTTP request, such as the credentials the other side wants (a server of Open Responses too).\n\t// One takes the place of the request's of its name, in any case; a Cookie's cookies join the request's,\n\t// each in the place of the request's of its name.\n\tHeaders func(url string) map[string]string\n");
     t.push_str("\t// HTTPClient sends the HTTP requests, the agents' too; http.DefaultClient when it is nil.\n\tHTTPClient *http.Client\n");
     t.push_str("\t// TypeSafeAPIKey is TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY.\n\tTypeSafeAPIKey string\n");
     t.push_str("\t// OpenAIAPIKey is OpenAI's API key for the tasks of OpenAI's Decisions API (`jev openai`), in place of\n\t// OPENAI_API_KEY.\n\tOpenAIAPIKey string\n");
@@ -1125,15 +1432,15 @@ type CallOutcome struct {
 	Message string
 }
 
-// HTTPRequest is an HTTP request as Step Functions' HTTP Task sends it. Form asks for a URL-encoded
-// body, and TypeSafe and OpenAI say it is a call of TypeSafe's Jev or of OpenAI's Decisions API, to
-// which the default Transport adds that API's key.
+// HTTPRequest is an HTTP request as Step Functions' HTTP Task sends it. The URL has the query in it,
+// and Headers the cookies in one Cookie. Form asks for a URL-encoded body, of each name with its
+// value (a list's items one by one), and TypeSafe and OpenAI say it is a call of TypeSafe's Jev or of
+// OpenAI's Decisions API, to which the default Transport adds that API's key.
 type HTTPRequest struct {
 	Method   string            `json:"http"`
 	URL      string            `json:"url"`
 	Headers  map[string]string `json:"headers,omitempty"`
 	Body     any               `json:"body,omitempty"`
-	Query    any               `json:"query,omitempty"`
 	Form     bool              `json:"form,omitempty"`
 	TypeSafe bool              `json:"typesafe,omitempty"`
 	OpenAI   bool              `json:"openai,omitempty"`
@@ -1289,61 +1596,362 @@ func ddEscape(s string) string {
 	return b.String()
 }
 
-// ddEncode is a=1&b[c]=2, the way a URL-encoded body nests.
-func ddEncode(v any, prefix string) string {
-	var keys []string
-	values := map[string]any{}
-	switch x := v.(type) {
-	case map[string]any:
-		for k, y := range x {
-			keys = append(keys, k)
-			values[k] = y
-		}
-		sort.Strings(keys)
-	case []any:
-		for i, y := range x {
-			k := strconv.Itoa(i)
-			keys = append(keys, k)
-			values[k] = y
-		}
+// ddEncode is a=1&b=2&b=3: a URL-encoded body, each name with its value, and with each item of a list
+// for one (DESIGN 43), in the order of the names, both escaped as JavaScript's encodeURIComponent
+// escapes them; a value that is not there is left out.
+func ddEncode(v any) string {
+	o, _ := v.(map[string]any)
+	keys := make([]string, 0, len(o))
+	for k := range o {
+		keys = append(keys, k)
 	}
+	sort.Strings(keys)
 	var parts []string
 	for _, k := range keys {
-		key := k
-		if prefix != "" {
-			key = prefix + "[" + k + "]"
+		xs, ok := o[k].([]any)
+		if !ok {
+			xs = []any{o[k]}
 		}
-		switch y := values[k].(type) {
-		case map[string]any, []any:
-			if p := ddEncode(y, key); p != "" {
-				parts = append(parts, p)
+		for _, x := range xs {
+			if x == nil {
+				// not key=: an empty string is a value, and the call has none
+				continue
 			}
-		default:
-			parts = append(parts, ddEscape(key)+"="+ddEscape(ddText(y)))
+			parts = append(parts, ddEscape(k)+"="+ddEscape(ddText(x)))
 		}
 	}
 	return strings.Join(parts, "&")
 }
 
-func (t *DefaultTransport) HTTP(ctx context.Context, req HTTPRequest) (HTTPResponse, error) {
-	u := req.URL
-	if req.Query != nil {
-		sep := "?"
-		if strings.Contains(u, "?") {
-			sep = "&"
+// ddWithCookies is the cookies of a request (a=1; b=2) with added's, each of which takes the place of
+// the request's of its name.
+func ddWithCookies(request, added string) string {
+	pairs := func(s string) []string {
+		var out []string
+		for _, p := range strings.Split(s, ";") {
+			if p = strings.TrimSpace(p); p != "" {
+				out = append(out, p)
+			}
 		}
-		u += sep + ddEncode(req.Query, "")
+		return out
 	}
-	headers := map[string]string{}
+	name := func(p string) string {
+		n, _, _ := strings.Cut(p, "=")
+		return n
+	}
+	names := map[string]bool{}
+	for _, p := range pairs(added) {
+		names[name(p)] = true
+	}
+	var out []string
+	for _, p := range pairs(request) {
+		if !names[name(p)] {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(append(out, pairs(added)...), "; ")
+}
+
+// ddParam is an argument of an `http` task where it goes (DESIGN 43): the name it goes by there, its
+// value, OpenAPI's style and explode, and what the value is: "v" one value, "j" a `json` one, "l" a
+// list, "r" a record, with its fields in their order.
+type ddParam struct {
+	Name    string
+	Value   any
+	Style   string
+	Explode bool
+	Shape   string
+	Fields  []string
+}
+
+// ddItems is the texts of the items of a list that are there.
+func ddItems(v any) []string {
+	xs, ok := v.([]any)
+	if !ok {
+		xs = []any{v}
+	}
+	var out []string
+	for _, x := range xs {
+		if x != nil {
+			out = append(out, ddText(x))
+		}
+	}
+	return out
+}
+
+// ddFields is the names and the texts of the fields of a record that are there, in the record's order.
+func ddFields(v any, names []string) [][2]string {
+	o, _ := v.(map[string]any)
+	var out [][2]string
+	for _, f := range names {
+		if x := o[f]; x != nil {
+			out = append(out, [2]string{f, ddText(x)})
+		}
+	}
+	return out
+}
+
+// ddJoined is the items of a list, or the names and the values of a record's fields in turn, each
+// through e, between sep; false when there are none.
+func ddJoined(p ddParam, sep string, e func(string) string) (string, bool) {
+	var all []string
+	if p.Shape == "r" {
+		for _, f := range ddFields(p.Value, p.Fields) {
+			all = append(all, f[0], f[1])
+		}
+	} else {
+		all = ddItems(p.Value)
+	}
+	if len(all) == 0 {
+		return "", false
+	}
+	for i, s := range all {
+		all[i] = e(s)
+	}
+	return strings.Join(all, sep), true
+}
+
+// ddAsIs is text as it is.
+func ddAsIs(s string) string {
+	return s
+}
+
+// ddNamed is ;name=text, or ;name for empty text (matrix).
+func ddNamed(name, t string) string {
+	if t == "" {
+		return ";" + name
+	}
+	return ";" + name + "=" + t
+}
+
+// ddSep is the mark a style puts between the items: escaped in the query, as it is in a body.
+func ddSep(style string, escaped bool) string {
+	switch {
+	case style == "spaceDelimited" && escaped:
+		return "%20"
+	case style == "spaceDelimited":
+		return " "
+	case style == "pipeDelimited" && escaped:
+		return "%7C"
+	case style == "pipeDelimited":
+		return "|"
+	}
+	return ","
+}
+
+// ddQuery is the query of a call's arguments after mark ("?", or "&" after the URL's own): "" when
+// none is there.
+func ddQuery(mark string, params []ddParam) string {
+	var pairs []string
+	for _, p := range params {
+		if p.Value == nil {
+			continue
+		}
+		switch {
+		case p.Shape == "v" || p.Shape == "j":
+			pairs = append(pairs, ddEscape(p.Name)+"="+ddEscape(ddText(p.Value)))
+		case p.Shape == "l" && p.Style == "form" && p.Explode:
+			for _, t := range ddItems(p.Value) {
+				pairs = append(pairs, ddEscape(p.Name)+"="+ddEscape(t))
+			}
+		case p.Shape == "r" && (p.Style == "deepObject" || p.Style == "form" && p.Explode):
+			for _, f := range ddFields(p.Value, p.Fields) {
+				k := f[0]
+				if p.Style == "deepObject" {
+					k = p.Name + "[" + f[0] + "]"
+				}
+				pairs = append(pairs, ddEscape(k)+"="+ddEscape(f[1]))
+			}
+		default:
+			if j, ok := ddJoined(p, ddSep(p.Style, true), ddEscape); ok {
+				pairs = append(pairs, ddEscape(p.Name)+"="+j)
+			}
+		}
+	}
+	if len(pairs) == 0 {
+		return ""
+	}
+	return mark + strings.Join(pairs, "&")
+}
+
+// ddPath is an argument put into the path, as its style writes it: a,b  .a.b  ;n=a;n=b.
+func ddPath(p ddParam) string {
+	if p.Value == nil {
+		return ""
+	}
+	name := ddEscape(p.Name)
+	switch p.Shape {
+	case "v", "j":
+		t := ddEscape(ddText(p.Value))
+		switch p.Style {
+		case "label":
+			return "." + t
+		case "matrix":
+			return ddNamed(name, t)
+		}
+		return t
+	case "l":
+		var its []string
+		for _, t := range ddItems(p.Value) {
+			its = append(its, ddEscape(t))
+		}
+		if len(its) == 0 {
+			return ""
+		}
+		switch {
+		case p.Style == "label" && p.Explode:
+			return "." + strings.Join(its, ".")
+		case p.Style == "label":
+			return "." + strings.Join(its, ",")
+		case p.Style == "matrix" && p.Explode:
+			var b strings.Builder
+			for _, t := range its {
+				b.WriteString(ddNamed(name, t))
+			}
+			return b.String()
+		case p.Style == "matrix":
+			return ddNamed(name, strings.Join(its, ","))
+		}
+		return strings.Join(its, ",")
+	}
+	fs := ddFields(p.Value, p.Fields)
+	if len(fs) == 0 {
+		return ""
+	}
+	var flat, eq []string
+	var named strings.Builder
+	for _, f := range fs {
+		k, t := ddEscape(f[0]), ddEscape(f[1])
+		flat = append(flat, k, t)
+		eq = append(eq, k+"="+t)
+		named.WriteString(ddNamed(k, t))
+	}
+	switch {
+	case p.Style == "label" && p.Explode:
+		return "." + strings.Join(eq, ".")
+	case p.Style == "label":
+		return "." + strings.Join(flat, ",")
+	case p.Style == "matrix" && p.Explode:
+		return named.String()
+	case p.Style == "matrix":
+		return ddNamed(name, strings.Join(flat, ","))
+	case p.Explode:
+		return strings.Join(eq, ",")
+	}
+	return strings.Join(flat, ",")
+}
+
+// ddHeaders is the headers of a call: dandori's own, then each argument that goes in a header, as
+// simple writes it with its text as it is, then the arguments that go in a cookie, name=value as
+// form writes them, in one Cookie (DESIGN 43); nil when there is none.
+func ddHeaders(own map[string]string, params, cookies []ddParam) map[string]string {
+	out := map[string]string{}
+	for k, v := range own {
+		out[k] = v
+	}
+	for _, p := range params {
+		if p.Value == nil {
+			continue
+		}
+		var t string
+		ok := true
+		switch {
+		case p.Shape == "v" || p.Shape == "j":
+			t = ddText(p.Value)
+		case p.Shape == "r" && p.Explode:
+			var eq []string
+			for _, f := range ddFields(p.Value, p.Fields) {
+				eq = append(eq, f[0]+"="+f[1])
+			}
+			t, ok = strings.Join(eq, ","), len(eq) > 0
+		default:
+			t, ok = ddJoined(p, ",", ddAsIs)
+		}
+		if ok {
+			out[p.Name] = t
+		}
+	}
+	var pairs []string
+	for _, p := range cookies {
+		if p.Value == nil {
+			continue
+		}
+		if p.Shape == "v" || p.Shape == "j" {
+			pairs = append(pairs, p.Name+"="+ddEscape(ddText(p.Value)))
+		} else if t, ok := ddJoined(p, ",", ddEscape); ok {
+			pairs = append(pairs, p.Name+"="+t)
+		}
+	}
+	if len(pairs) > 0 {
+		out["Cookie"] = strings.Join(pairs, "; ")
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// ddForm is a URL-encoded body of a call's arguments, as the Transport is handed it (DESIGN 43): one
+// value as it is (a `json` one as its text), a list form writes with explode as its items' texts,
+// which the name repeats for, a record's fields by their names or as name[field], and the joined
+// text of the other styles; nothing for a value that is not there.
+func ddForm(params []ddParam) map[string]any {
+	out := map[string]any{}
+	for _, p := range params {
+		if p.Value == nil {
+			continue
+		}
+		switch {
+		case p.Shape == "v":
+			out[p.Name] = p.Value
+		case p.Shape == "j":
+			out[p.Name] = ddText(p.Value)
+		case p.Shape == "l" && p.Style == "form" && p.Explode:
+			if its := ddItems(p.Value); len(its) > 0 {
+				xs := make([]any, len(its))
+				for i, t := range its {
+					xs[i] = t
+				}
+				out[p.Name] = xs
+			}
+		case p.Shape == "r" && (p.Style == "deepObject" || p.Style == "form" && p.Explode):
+			for _, f := range ddFields(p.Value, p.Fields) {
+				k := f[0]
+				if p.Style == "deepObject" {
+					k = p.Name + "[" + f[0] + "]"
+				}
+				out[k] = f[1]
+			}
+		default:
+			if j, ok := ddJoined(p, ddSep(p.Style, false), ddAsIs); ok {
+				out[p.Name] = j
+			}
+		}
+	}
+	return out
+}
+
+func (t *DefaultTransport) HTTP(ctx context.Context, req HTTPRequest) (HTTPResponse, error) {
+	// as fetch sends a URL: a ' in the query as %27
+	u := req.URL
+	if i := strings.IndexByte(u, '?'); i >= 0 {
+		u = u[:i+1] + strings.ReplaceAll(u[i+1:], "'", "%27")
+	}
+	// a header's name is one in any case (http.Header): the options' headers take the place of the
+	// request's, but for the cookies, which join them
+	headers := http.Header{}
 	for k, v := range req.Headers {
-		headers[k] = v
+		headers.Set(k, v)
 	}
 	if t.o.Headers != nil {
 		for k, v := range t.o.Headers(req.URL) {
-			headers[k] = v
+			if c := headers.Values(k); len(c) > 0 && http.CanonicalHeaderKey(k) == "Cookie" {
+				v = ddWithCookies(c[0], v)
+			}
+			headers.Set(k, v)
 		}
 	}
-	if req.TypeSafe && !ddHasHeader(headers, "Authorization") {
+	if req.TypeSafe && len(headers.Values("Authorization")) == 0 {
 		key := t.o.TypeSafeAPIKey
 		if key == "" {
 			key = os.Getenv("TYPESAFE_API_KEY")
@@ -1351,9 +1959,9 @@ func (t *DefaultTransport) HTTP(ctx context.Context, req HTTPRequest) (HTTPRespo
 		if key == "" {
 			return HTTPResponse{}, errors.New("no API key for Jev: set TYPESAFE_API_KEY, or give the transport TransportOptions.TypeSafeAPIKey")
 		}
-		headers["Authorization"] = "Bearer " + key
+		headers.Set("Authorization", "Bearer "+key)
 	}
-	if req.OpenAI && !ddHasHeader(headers, "Authorization") {
+	if req.OpenAI && len(headers.Values("Authorization")) == 0 {
 		key := t.o.OpenAIAPIKey
 		if key == "" {
 			key = os.Getenv("OPENAI_API_KEY")
@@ -1361,16 +1969,16 @@ func (t *DefaultTransport) HTTP(ctx context.Context, req HTTPRequest) (HTTPRespo
 		if key == "" {
 			return HTTPResponse{}, errors.New("no API key for OpenAI's Decisions API: set OPENAI_API_KEY, or give the transport TransportOptions.OpenAIAPIKey")
 		}
-		headers["Authorization"] = "Bearer " + key
+		headers.Set("Authorization", "Bearer "+key)
 	}
 	var body io.Reader
 	if req.Body != nil {
 		if req.Form {
-			body = strings.NewReader(ddEncode(req.Body, ""))
+			body = strings.NewReader(ddEncode(req.Body))
 		} else {
 			body = strings.NewReader(ddJSONText(req.Body))
-			if !ddHasHeader(headers, "Content-Type") {
-				headers["Content-Type"] = "application/json"
+			if len(headers.Values("Content-Type")) == 0 {
+				headers.Set("Content-Type", "application/json")
 			}
 		}
 	}
@@ -1378,9 +1986,7 @@ func (t *DefaultTransport) HTTP(ctx context.Context, req HTTPRequest) (HTTPRespo
 	if err != nil {
 		return HTTPResponse{}, err
 	}
-	for k, v := range headers {
-		r.Header.Set(k, v)
-	}
+	r.Header = headers
 	c := t.o.HTTPClient
 	if c == nil {
 		c = http.DefaultClient
@@ -1402,15 +2008,6 @@ func (t *DefaultTransport) HTTP(ctx context.Context, req HTTPRequest) (HTTPRespo
 		}
 	}
 	return HTTPResponse{Status: res.StatusCode, Body: parsed}, nil
-}
-
-func ddHasHeader(headers map[string]string, name string) bool {
-	for k := range headers {
-		if strings.EqualFold(k, name) {
-			return true
-		}
-	}
-	return false
 }
 
 // openResponses runs an agent on a server of Open Responses: what Step Functions sends it, over
@@ -2160,7 +2757,8 @@ fn task_body(m: &Model, task: &TaskDef) -> Vec<String> {
             out
         }
         Some(Via::Http { method, url, form }) => {
-            let used = crate::lower::placeholders(url);
+            // the path's arguments and the query in the URL, the headers and the cookies, and the
+            // body, each written as the description says or OpenAPI's defaults do (DESIGN 43)
             let mut url_parts: Vec<String> = Vec::new();
             let mut rest = url;
             while let Some(i) = rest.find('{') {
@@ -2171,11 +2769,20 @@ fn task_body(m: &Model, task: &TaskDef) -> Vec<String> {
                 if i > 0 {
                     url_parts.push(q(&rest[..i]));
                 }
-                url_parts.push(format!("ddEscape(ddText(args[{}]))", q(&rest[i + 1..j])));
+                let ph = &rest[i + 1..j];
+                url_parts.push(match wire::path_param(m, task, ph) {
+                    Some((w, k, _)) if !wire::plain_segment(w, &k) => format!("ddPath(ddParam{})", param_go(w, &k)),
+                    Some((w, _, _)) => format!("ddEscape(ddText(args[{}]))", q(&w.param)),
+                    None => format!("ddEscape(ddText(args[{}]))", q(ph)),
+                });
                 rest = &rest[j + 1..];
             }
             if !rest.is_empty() || url_parts.is_empty() {
                 url_parts.push(q(rest));
+            }
+            let query: Vec<String> = wire::at(m, task, Place::Query).iter().map(|(w, k, _)| param_go(w, k)).collect();
+            if !query.is_empty() {
+                url_parts.push(format!("ddQuery({}, []ddParam{{{}}})", q(if url.contains('?') { "&" } else { "?" }), query.join(", ")));
             }
             let mut req = vec![format!("Method: {}", q(method)), format!("URL: {}", url_parts.join(" + "))];
             let mut headers = Vec::new();
@@ -2188,13 +2795,32 @@ fn task_body(m: &Model, task: &TaskDef) -> Vec<String> {
             if task.key {
                 headers.push("\"Idempotency-Key\": ddStr(args[\"idempotency_key\"])".to_string());
             }
-            if !headers.is_empty() {
+            let (hs, cs) = (wire::at(m, task, Place::Header), wire::at(m, task, Place::Cookie));
+            if !hs.is_empty() || !cs.is_empty() {
+                let ps = |v: &[(&WireParam, wire::Kind, &Ty)]| {
+                    if v.is_empty() {
+                        "nil".to_string()
+                    } else {
+                        format!("[]ddParam{{{}}}", v.iter().map(|(w, k, _)| param_go(w, k)).collect::<Vec<_>>().join(", "))
+                    }
+                };
+                let own = if headers.is_empty() { "nil".to_string() } else { format!("map[string]string{{{}}}", headers.join(", ")) };
+                req.push(format!("Headers: ddHeaders({own}, {}, {})", ps(&hs), ps(&cs)));
+            } else if !headers.is_empty() {
                 req.push(format!("Headers: map[string]string{{{}}}", headers.join(", ")));
             }
-            let rest_args: Vec<String> = task.params.iter().filter(|(p, _)| !used.contains(p)).map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
-            if !rest_args.is_empty() {
-                let place = if method == "GET" || method == "DELETE" { "Query" } else { "Body" };
-                req.push(format!("{place}: map[string]any{{{}}}", rest_args.join(", ")));
+            let body: Vec<&WireParam> = task.wire.iter().filter(|w| w.place == Place::Body).collect();
+            if form && !body.is_empty() && !wire::plain_form(m, task) {
+                let ps: Vec<String> = wire::at(m, task, Place::Body).iter().map(|(w, k, _)| param_go(w, k)).collect();
+                req.push(format!("Body: ddForm([]ddParam{{{}}})", ps.join(", ")));
+            } else if !body.is_empty() {
+                // a JSON body by the parameters' names; a URL-encoded one of values that are always there by the names it takes
+                let fields: Vec<String> = body.iter().map(|w| format!("{}: args[{}]", q(if form { &w.name } else { &w.param }), q(&w.param))).collect();
+                match &task.request_days {
+                    // a `connect` task's dates, as protobuf's JSON writes a `google.type.Date` (DESIGN 44)
+                    Some(t) => req.push(format!("Body: ddWireDays(map[string]any{{{}}}, {})", fields.join(", "), json_value(t))),
+                    None => req.push(format!("Body: map[string]any{{{}}}", fields.join(", "))),
+                }
             }
             if form {
                 req.push("Form: true".into());
@@ -2261,8 +2887,8 @@ fn task_body(m: &Model, task: &TaskDef) -> Vec<String> {
         Some(Via::Jev(j)) => {
             let state: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
             let url = match (j.api, &j.url) {
-                (DecisionApi::SystemOne, None) => "JevURL".to_string(),
-                (DecisionApi::Decisions, None) => "DecisionsURL".to_string(),
+                (DecisionApi::SystemOne, None) => GoOwn::of(m).own("JevURL"),
+                (DecisionApi::Decisions, None) => GoOwn::of(m).own("DecisionsURL"),
                 (_, Some(_)) => q(&j.endpoint()),
             };
             // the System One API takes the arguments as the state; the Decisions API as their JSON
@@ -2300,6 +2926,7 @@ fn activities_file(m: &Model, pkg: &str, header: &str) -> String {
     let tasks: Vec<&TaskDef> = m.tasks.iter().filter(|t| !t.is_child(p) && !t.event).collect();
     let own: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))).cloned().collect();
     let connected = crate::temporal::connect_rules(m);
+    let go_own = GoOwn::of(m);
     let mut a = header.to_string();
     a.push_str("// The tasks the workflow calls.\n//\n");
     a.push_str("// - A task that says `lambda`, `http` or `aws` is written here: it sends what Step Functions\n");
@@ -2308,8 +2935,7 @@ fn activities_file(m: &Model, pkg: &str, header: &str) -> String {
     a.push_str("//   Functions, and answers {\"answer\": …} in the JSON Schema below; the Transport runs the agent.\n");
     a.push_str("//   A Claude agent's enum values are taken without regard to case (ddFold).\n");
     a.push_str("// - So is a task that says `jev`: a decision model reads the arguments and answers the questions\n");
-    a.push_str("//   below, sent over HTTP: TypeSafe's Jev (JevURL, with TypeSafe's key), OpenAI's Decisions API\n");
-    a.push_str("//   (DecisionsURL, with OpenAI's key), or the server `url` names; ddJev reads the answer.\n");
+    a.push_str(&go_own.respell("//   below, sent over HTTP: TypeSafe's Jev (JevURL, with TypeSafe's key), OpenAI's Decisions API\n//   (DecisionsURL, with OpenAI's key), or the server `url` names; ddJev reads the answer.\n"));
     if !connected.is_empty() {
         a.push_str("// - So is a rule that says `connect` under `use rule`: it is called at its Connect service, over HTTP\n");
         a.push_str("//   through the Transport, and the answer is read as the rule's record (ddConnectRule). Its name is the\n");
@@ -2332,8 +2958,7 @@ fn activities_file(m: &Model, pkg: &str, header: &str) -> String {
         a.push_str(&format!("\t// {method} runs the task {}: {}\n\t{method}(ctx context.Context, args map[string]any) (any, error)\n", task.name, task_doc(m, task)));
     }
     a.push_str("}\n\n");
-    a.push_str("// OwnTasksBy is an OwnTasks whose every method calls f with the task's name as the .flow writes it.\n");
-    a.push_str("func OwnTasksBy(f func(ctx context.Context, task string, args map[string]any) (any, error)) OwnTasks {\n\treturn ddOwnTasksBy{f}\n}\n\n");
+    a.push_str(&go_own.respell("// OwnTasksBy is an OwnTasks whose every method calls f with the task's name as the .flow writes it.\nfunc OwnTasksBy(f func(ctx context.Context, task string, args map[string]any) (any, error)) OwnTasks {\n\treturn ddOwnTasksBy{f}\n}\n\n"));
     a.push_str("type ddOwnTasksBy struct {\n\tf func(ctx context.Context, task string, args map[string]any) (any, error)\n}\n");
     for task in &own {
         let method = exported(&task.name);
@@ -2468,6 +3093,16 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
             t.push_str("// module of its own (rulec/go/<package>), which your go.mod requires and replaces with that directory:\n//\n");
             for p in &packages {
                 t.push_str(&format!("//\trequire {p} v0.0.0\n//\treplace {p} => ./<this package's directory>/rulec/go/{p}\n"));
+            }
+            // the packages of the `enums` files the rules read enums from, which their packages
+            // import and `rulec gen` writes beside them (DESIGN 28.8): Go reads the `replace` of
+            // the main module alone
+            let enums: BTreeSet<String> = called.iter().filter(|r| m.rules[**r].is_rule()).flat_map(|r| m.rules[*r].enums_modules.iter().map(|e| e.go.clone())).filter(|p| !packages.contains(p)).collect();
+            if !enums.is_empty() {
+                t.push_str("//\n// and the package of each enums file the rules read enums from, which the rules' packages import:\n//\n");
+                for p in &enums {
+                    t.push_str(&format!("//\trequire {p} v0.0.0\n//\treplace {p} => ./<this package's directory>/rulec/go/{p}\n"));
+                }
             }
         }
         if !dated.is_empty() {
@@ -2643,7 +3278,7 @@ fn io_books_file(m: &Model, pkg: &str, header: &str) -> String {
             t.push_str(")\n");
         }
     }
-    t.push_str(BOOKS_GO);
+    t.push_str(&GoOwn::of(m).respell(BOOKS_GO));
     t.push_str("\n// ddBooks are how chobo's Go client names each transfer of a book and its parameters, by the book's name.\nvar ddBooks = map[string]map[string]ddBookNames{\n");
     for b in crate::asl::used_books(m) {
         let f = &m.books[b].facts;
@@ -2671,9 +3306,15 @@ fn io_books_file(m: &Model, pkg: &str, header: &str) -> String {
     t
 }
 
-/// What [`BOOKS_GO`] declares, by its exported names: a type of the flow cannot have one of them
-/// when the flow runs a book's operations (W105).
+/// What [`BOOKS_GO`] declares, by its exported names. When the flow runs a book's operations, a type
+/// of the flow cannot have one that a caller reads (W105): the call and the result, which a
+/// Transport of yours that runs them takes and gives. The interface is the package's own
+/// ([`BOOK_OWN`]), which gives way (DESIGN 22).
 const BOOK_NAMES: &[&str] = &["BookCall", "BookResult", "BookTransport"];
+
+/// What [`BOOKS_GO`] declares for its own use: the interface of a Transport that runs the
+/// operations of books, which the default one is.
+const BOOK_OWN: &[&str] = &["BookTransport"];
 
 /// What io_books.go shares with every flow that runs a book's operations.
 const BOOKS_GO: &str = r##"
@@ -2808,7 +3449,8 @@ fn client_file(m: &Model, pkg: &str, header: &str) -> String {
     let c = c
         .replace("\t\"go.temporal.io/sdk/client\"\n)\n", "\t\"go.temporal.io/sdk/client\"\n\t\"go.temporal.io/sdk/converter\"\n\t\"go.temporal.io/sdk/temporal\"\n)\n")
         .replace("context.Context, c client.Client,", "context.Context, c EncryptedClient,");
-    let at = c.find("// WorkflowType is the workflow's type.").unwrap_or(c.len());
+    let go_own = GoOwn::of(m);
+    let at = c.find(&format!("// {} is the workflow's type.", go_own.own("WorkflowType"))).unwrap_or(c.len());
     let mut out = c[..at].to_string();
     out.push_str("// EncryptedClient is a client of the SDK whose payloads go through a codec that encrypts them with a
 // key only those who may read the workflow's secrets hold, and the messages and the stack traces of
@@ -2825,19 +3467,19 @@ type encryptedClient struct{ client.Client }
 func (e encryptedClient) sdkClient() client.Client { return e.Client }
 
 ");
-    out.push_str("// CodecDataConverter is the workflow's data converter, whose payloads go through codec.
+    out.push_str(&go_own.respell("// CodecDataConverter is the workflow's data converter, whose payloads go through codec.
 func CodecDataConverter(codec converter.PayloadCodec) converter.DataConverter {
 	return converter.NewCodecDataConverter(converter.GetDefaultDataConverter(), codec)
 }
 
-");
-    out.push_str("// CodecFailureConverter puts the messages and the stack traces of failures where codec encrypts them.
+"));
+    out.push_str(&go_own.respell("// CodecFailureConverter puts the messages and the stack traces of failures where codec encrypts them.
 func CodecFailureConverter(codec converter.PayloadCodec) converter.FailureConverter {
 	return temporal.NewDefaultFailureConverter(temporal.DefaultFailureConverterOptions{DataConverter: CodecDataConverter(codec), EncodeCommonAttributes: true})
 }
 
-");
-    out.push_str("// Dial is a client of the SDK, made with options, whose payloads go through codec.
+"));
+    out.push_str(&go_own.respell("// Dial is a client of the SDK, made with options, whose payloads go through codec.
 func Dial(options client.Options, codec converter.PayloadCodec) (EncryptedClient, error) {
 	options.DataConverter = CodecDataConverter(codec)
 	options.FailureConverter = CodecFailureConverter(codec)
@@ -2848,22 +3490,25 @@ func Dial(options client.Options, codec converter.PayloadCodec) (EncryptedClient
 	return encryptedClient{c}, nil
 }
 
-");
+"));
     out.push_str(&c[at..]);
     out
 }
 
 fn plain_client_file(m: &Model, pkg: &str, header: &str) -> String {
     let ty = crate::temporal::workflow_type(m);
+    let go_own = GoOwn::of(m);
     let mut c = header.to_string();
     c.push_str(&format!("// Starting {} v{}, answering its callbacks, sending it events, and asking where it is.\n\npackage {pkg}\n\n", m.name, m.version));
     c.push_str("import (\n\t\"context\"\n\t\"crypto/sha256\"\n\t\"encoding/hex\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"sort\"\n\t\"strings\"\n\n\tenumspb \"go.temporal.io/api/enums/v1\"\n\thistorypb \"go.temporal.io/api/history/v1\"\n\t\"go.temporal.io/api/workflowservice/v1\"\n\t\"go.temporal.io/sdk/client\"\n)\n\n");
-    c.push_str(&format!("// WorkflowType is the workflow's type. The .flow's version is in it, so that a new version is a new workflow.\nconst WorkflowType = {}\n\n", q(&ty)));
-    c.push_str("// TaskQueue is the task queue of the workflow and its activities (the tasks that say `queue` go to theirs).\nconst TaskQueue = WorkflowType\n\n");
+    c.push_str(&go_own.respell(&format!("// WorkflowType is the workflow's type. The .flow's version is in it, so that a new version is a new workflow.\nconst WorkflowType = {}\n\n", q(&ty))));
+    c.push_str(&go_own.respell("// TaskQueue is the task queue of the workflow and its activities (the tasks that say `queue` go to theirs).\nconst TaskQueue = WorkflowType\n\n"));
     let events: Vec<String> = m.tasks.iter().filter(|t| t.event).map(|t| q(&t.name)).collect();
-    c.push_str(&format!("// Events are the events the workflow waits for (the tasks that say `event`), by name.\nvar Events = []string{{{}}}\n\n", events.join(", ")));
-    c.push_str("// Start starts the workflow as id, with input, a WorkflowInput or its JSON value. The idempotency\n// keys of its calls are made from the id, so an id is used once: a second start with it is refused,\n// even after the first run has ended. With searchAttributes, the workflow keeps the search attribute\n// DandoriCases (a keyword list) up to date with the cases' states, as \"<case>=<state>\"; register it on\n// the namespace first.\n");
-    c.push_str("func Start(ctx context.Context, c client.Client, id string, input any, searchAttributes bool) (client.WorkflowRun, error) {\n\to := client.StartWorkflowOptions{ID: id, TaskQueue: TaskQueue, WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE, WorkflowExecutionErrorWhenAlreadyStarted: true}\n\tif searchAttributes {\n\t\to.Memo = map[string]any{\"dandori.cases\": true}\n\t}\n\treturn c.ExecuteWorkflow(ctx, o, WorkflowType, input)\n}\n\n");
+    c.push_str(&go_own.respell(&format!("// Events are the events the workflow waits for (the tasks that say `event`), by name.\nvar Events = []string{{{}}}\n\n", events.join(", "))));
+    // the input is the workflow's input type, as client.ts and client.py take it (DESIGN 34): a
+    // workflow without inputs takes WorkflowInput{}, which JSON carries as {}
+    c.push_str("// Start starts the workflow as id, with input (Decode reads a JSON value into a WorkflowInput). The\n// idempotency keys of its calls are made from the id, so an id is used once: a second start with it\n// is refused, even after the first run has ended. With searchAttributes, the workflow keeps the\n// search attribute DandoriCases (a keyword list) up to date with the cases' states, as\n// \"<case>=<state>\"; register it on the namespace first.\n");
+    c.push_str(&go_own.respell("func Start(ctx context.Context, c client.Client, id string, input WorkflowInput, searchAttributes bool) (client.WorkflowRun, error) {\n\to := client.StartWorkflowOptions{ID: id, TaskQueue: TaskQueue, WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE, WorkflowExecutionErrorWhenAlreadyStarted: true}\n\tif searchAttributes {\n\t\to.Memo = map[string]any{\"dandori.cases\": true}\n\t}\n\treturn c.ExecuteWorkflow(ctx, o, WorkflowType, input)\n}\n\n"));
     c.push_str("// CallbackAnswer is a callback's answer, or an event's value: OK, or the error Error names, with Message.\ntype CallbackAnswer struct {\n\tOK      any\n\tError   string\n\tMessage string\n}\n\n");
     c.push_str("func (a CallbackAnswer) fields() map[string]any {\n\tif a.Error != \"\" {\n\t\treturn map[string]any{\"error\": a.Error, \"message\": a.Message}\n\t}\n\treturn map[string]any{\"ok\": a.OK}\n}\n\n");
     c.push_str(r#"// AnswerCallback answers a callback, by the id its task handed on. The workflow says whether it took the
@@ -2935,10 +3580,14 @@ func SendOnce(ctx context.Context, c client.Client, workflowID, event, id string
 }
 
 "#);
+    // a send is checked against the package's own Events (the comment's are Where's)
+    if go_own.to.contains_key("Events") {
+        c = c.replace("\tif !ddHas(Events, event) {\n", &format!("\tif !ddHas({}, event) {{\n", go_own.own("Events")));
+    }
     c.push_str("// Where is where a run is: the line of the call or the wait it is at, each case's state (nil before\n// it starts), and the events it waits for now.\ntype Where struct {\n\tAt     *int           `json:\"at\"`\n\tCases  map[string]any `json:\"cases\"`\n\tEvents []string       `json:\"events\"`\n}\n\n");
     c.push_str("// RunStatus is where the run id is (the query dandori.status).\nfunc RunStatus(ctx context.Context, c client.Client, id string) (Where, error) {\n\tvar w Where\n\tv, err := c.QueryWorkflow(ctx, id, \"\", \"dandori.status\")\n\tif err != nil {\n\t\treturn w, err\n\t}\n\treturn w, v.Get(&w)\n}\n\n");
     c.push_str("// RunHistory is the history of a run.\ntype RunHistory struct {\n\tWorkflowID string\n\tHistory    *historypb.History\n}\n\n");
-    c.push_str("// Histories are the histories of the runs of this workflow that query finds, by default (\"\") the\n// ones going on: replay them with new code (worker.go: Replay) before it takes them over.\nfunc Histories(ctx context.Context, c client.Client, query string) ([]RunHistory, error) {\n\tif query == \"\" {\n\t\tquery = fmt.Sprintf(\"WorkflowType = '%s' AND ExecutionStatus = 'Running'\", WorkflowType)\n\t}\n\tvar out []RunHistory\n\tvar token []byte\n\tfor {\n\t\tlisted, err := c.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Query: query, NextPageToken: token})\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tfor _, e := range listed.Executions {\n\t\t\th := &historypb.History{}\n\t\t\tevents := c.GetWorkflowHistory(ctx, e.Execution.WorkflowId, e.Execution.RunId, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)\n\t\t\tfor events.HasNext() {\n\t\t\t\tev, err := events.Next()\n\t\t\t\tif err != nil {\n\t\t\t\t\treturn nil, err\n\t\t\t\t}\n\t\t\t\th.Events = append(h.Events, ev)\n\t\t\t}\n\t\t\tout = append(out, RunHistory{WorkflowID: e.Execution.WorkflowId, History: h})\n\t\t}\n\t\ttoken = listed.NextPageToken\n\t\tif len(token) == 0 {\n\t\t\treturn out, nil\n\t\t}\n\t}\n}\n");
+    c.push_str(&go_own.respell("// Histories are the histories of the runs of this workflow that query finds, by default (\"\") the\n// ones going on: replay them with new code (worker.go: Replay) before it takes them over.\nfunc Histories(ctx context.Context, c client.Client, query string) ([]RunHistory, error) {\n\tif query == \"\" {\n\t\tquery = fmt.Sprintf(\"WorkflowType = '%s' AND ExecutionStatus = 'Running'\", WorkflowType)\n\t}\n\tvar out []RunHistory\n\tvar token []byte\n\tfor {\n\t\tlisted, err := c.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Query: query, NextPageToken: token})\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tfor _, e := range listed.Executions {\n\t\t\th := &historypb.History{}\n\t\t\tevents := c.GetWorkflowHistory(ctx, e.Execution.WorkflowId, e.Execution.RunId, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)\n\t\t\tfor events.HasNext() {\n\t\t\t\tev, err := events.Next()\n\t\t\t\tif err != nil {\n\t\t\t\t\treturn nil, err\n\t\t\t\t}\n\t\t\t\th.Events = append(h.Events, ev)\n\t\t\t}\n\t\t\tout = append(out, RunHistory{WorkflowID: e.Execution.WorkflowId, History: h})\n\t\t}\n\t\ttoken = listed.NextPageToken\n\t\tif len(token) == 0 {\n\t\t\treturn out, nil\n\t\t}\n\t}\n}\n"));
     c.push_str(UPDATE_ID_GO);
     if let Some(s) = &m.service {
         c.push_str(&service_client_go(m, s).0);
@@ -3109,8 +3758,8 @@ func ddCanonical(b *strings.Builder, v any) {
 /// client.go, for a workflow that implements a service: the service's name, a type for each
 /// message by the name the `.proto` gives it, and a function for each method, which calls the
 /// client's own Start, Send, AnswerCallback or RunStatus. The names are those of client.ts, as Go exports them.
-/// And the names it could not write.
-fn service_client_go(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
+/// And the names it could not write, and the ones it declares.
+fn service_client_go(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>, Vec<String>) {
     const FUNCTIONS: &[&str] = &["Start", "AnswerCallback", "Send", "SendOnce", "RunStatus", "Histories"];
     let mut c = String::new();
     c.push_str(&format!("\n// Service is the service the workflow implements, which `{}` describes. Its methods are the functions below.\nconst Service = {}\n", s.file, q(&s.name)));
@@ -3174,24 +3823,217 @@ fn service_client_go(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
             c.push_str(&format!("\n// {name} ({label}) {what}.\nfunc {name}{sig} {{\n{call}}}\n"));
         }
     }
-    (c, names.clashes)
+    let declared = names.declared();
+    (c, names.clashes, declared)
 }
 
-/// The exported names the package has for itself: every package's, the service's name when there
-/// is a service, what client.go declares for an encrypted history, what io_books.go declares for a
-/// flow that runs a book's operations, and what types.go declares for a flow with dates.
+/// The exported names of the package that its callers read: every package's (`GO_EXPORTED`, with
+/// the service's name when there is a service), what client.go declares for an encrypted history
+/// (`Dial`, `EncryptedClient`), and what io_books.go declares for a flow that runs a book's
+/// operations (the call and the result a Transport takes and gives). A type of the flow, or a
+/// function or a message's type of its client, cannot have one (W105).
 fn own_names(m: &Model) -> Vec<String> {
     let mut own: Vec<String> = GO_EXPORTED.iter().filter(|x| **x != "Service" || m.service.is_some()).map(|x| x.to_string()).collect();
     if m.history_encrypted.is_some() {
-        own.extend(ENCRYPTED.iter().map(|x| x.to_string()));
+        own.extend(ENCRYPTED.iter().filter(|x| !ENCRYPTED_OWN.contains(x)).map(|x| x.to_string()));
     }
     if !crate::asl::used_books(m).is_empty() {
-        own.extend(BOOK_NAMES.iter().map(|x| x.to_string()));
-    }
-    if m.uses_dates() {
-        own.push("DATE".to_string());
+        own.extend(BOOK_NAMES.iter().filter(|x| !BOOK_OWN.contains(x)).map(|x| x.to_string()));
     }
     own
+}
+
+/// The exported names the package declares for its own use, which no caller is told of: every
+/// package's (`GO_OWN`), and what types.go declares for a flow with dates (`DATE`), client.go for
+/// an encrypted history ([`ENCRYPTED_OWN`]) and io_books.go for a flow that runs a book's
+/// operations ([`BOOK_OWN`]).
+fn kept_names(m: &Model) -> Vec<&'static str> {
+    let mut kept = GO_OWN.to_vec();
+    if m.uses_dates() {
+        kept.push("DATE");
+    }
+    if m.history_encrypted.is_some() {
+        kept.extend(ENCRYPTED_OWN.iter().copied());
+    }
+    if !crate::asl::used_books(m).is_empty() {
+        kept.extend(BOOK_OWN.iter().copied());
+    }
+    kept
+}
+
+/// The package's own names ([`kept_names`]) that names of the flow's take, each with the name the
+/// package gives its own instead: the name with an `_` after it (`Events_`), which no name of a
+/// flow is, a Go name of the flow's being letters and digits alone. The flow's names are its
+/// types', what types.go declares beside them (`<enum>Values`, `Is<record>`), and the functions and
+/// the messages' types of client.go, and they keep theirs; so does every name of the package that
+/// none of them takes, and a flow whose names take none has the code it had (DESIGN 22). doc.go
+/// says which go by others, and the tests' runner reads the worker's parts by these names.
+pub fn renamed(m: &Model) -> BTreeMap<String, String> {
+    let mut theirs: BTreeSet<String> = declared_types(m).into_iter().map(|(id, _)| id).collect();
+    if let Some(s) = &m.service {
+        theirs.extend(service_client_go(m, s).2);
+    }
+    kept_names(m).into_iter().filter(|n| theirs.contains(*n)).map(|n| (n.to_string(), format!("{n}_"))).collect()
+}
+
+/// The names the package writes for its own ([`renamed`]).
+pub(crate) struct GoOwn {
+    to: BTreeMap<String, String>,
+}
+
+impl GoOwn {
+    pub(crate) fn of(m: &Model) -> GoOwn {
+        GoOwn { to: renamed(m) }
+    }
+
+    /// The package's own name `n`, as the package writes it.
+    fn own(&self, n: &str) -> String {
+        self.to.get(n).cloned().unwrap_or_else(|| n.to_string())
+    }
+
+    /// `text`, Go the package writes for itself, with no name of the flow's in it but in a
+    /// string, with the package's own names as it writes them.
+    fn respell(&self, text: &str) -> String {
+        go_respelled(text, &self.to)
+    }
+
+    /// A file the package writes for itself: what comes before its package clause (the header,
+    /// which names the flow, and what the file is) as it is, and the rest respelled.
+    fn file(&self, text: &str) -> String {
+        if self.to.is_empty() {
+            return text.to_string();
+        }
+        let at = text.find("\npackage ").map_or(0, |p| text[p + 1..].find('\n').map_or(text.len(), |e| p + 1 + e));
+        format!("{}{}", &text[..at], self.respell(&text[at..]))
+    }
+}
+
+/// A letter, a digit or `_`: what a Go identifier of dandori's own is made of.
+fn word_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
+/// `text`, Go, with each name of `to` that it reads written as `to` says: not a field or a method
+/// (after `.`, before the `:` of a key, or first on a line of a struct's or an interface's body with
+/// more after it), nor what a string or a rune holds; and in a comment, each word that is one but
+/// after `.` (`TransportOptions.Books`).
+fn go_respelled(text: &str, to: &BTreeMap<String, String>) -> String {
+    if to.is_empty() {
+        return text.to_string();
+    }
+    let cs: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len() + 32);
+    // for each `{` open, whether it is a struct's or an interface's body
+    let mut bodies: Vec<bool> = Vec::new();
+    // the word just before, past spaces: `struct` before `{`
+    let mut before = String::new();
+    let mut i = 0;
+    while i < cs.len() {
+        let c = cs[i];
+        let next = cs.get(i + 1).copied();
+        if c == '/' && (next == Some('/') || next == Some('*')) {
+            let end = if next == Some('/') {
+                cs[i..].iter().position(|&x| x == '\n').map_or(cs.len(), |p| i + p)
+            } else {
+                (i + 2..cs.len().saturating_sub(1)).find(|&j| cs[j] == '*' && cs[j + 1] == '/').map_or(cs.len(), |j| j + 2)
+            };
+            out.push_str(&comment_respelled(&cs[i..end], to));
+            i = end;
+            continue;
+        }
+        if c == '"' || c == '\'' || c == '`' {
+            let mut j = i + 1;
+            while j < cs.len() && cs[j] != c {
+                if c != '`' && cs[j] == '\\' {
+                    j += 1;
+                }
+                j += 1;
+            }
+            let end = (j + 1).min(cs.len());
+            out.extend(&cs[i..end]);
+            before.clear();
+            i = end;
+            continue;
+        }
+        if (c.is_ascii_alphabetic() || c == '_') && (i == 0 || !word_char(cs[i - 1])) {
+            let mut j = i;
+            while j < cs.len() && word_char(cs[j]) {
+                j += 1;
+            }
+            let w: String = cs[i..j].iter().collect();
+            match to.get(&w) {
+                Some(t) if read_here(&cs, i, j, bodies.last() == Some(&true)) => out.push_str(t),
+                _ => out.push_str(&w),
+            }
+            before = w;
+            i = j;
+            continue;
+        }
+        match c {
+            '{' => bodies.push(before == "struct" || before == "interface"),
+            '}' => {
+                bodies.pop();
+            }
+            _ => {}
+        }
+        if !c.is_whitespace() {
+            before.clear();
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
+/// Whether the name at `cs[i..j]` is read there: not a field or a method after `.` (but `...`), nor
+/// a key or a label before `:` (but in a `case`), nor a field or a method first on a line of a
+/// struct's or an interface's body (`in_body`) with more after it; alone there, it is a type
+/// embedded.
+fn read_here(cs: &[char], i: usize, j: usize, in_body: bool) -> bool {
+    if let Some(p) = cs[..i].iter().rposition(|c| !c.is_whitespace()) {
+        if cs[p] == '.' && !(p >= 1 && cs[p - 1] == '.') {
+            return false;
+        }
+    }
+    let start = cs[..i].iter().rposition(|&c| c == '\n').map_or(0, |p| p + 1);
+    let lead: String = cs[start..i].iter().collect();
+    if let Some(a) = cs[j..].iter().position(|&c| c != ' ' && c != '\t').map(|p| j + p) {
+        if cs[a] == ':' && cs.get(a + 1) != Some(&'=') && !lead.trim_start().starts_with("case ") {
+            return false;
+        }
+    }
+    if in_body && lead.trim().is_empty() {
+        let rest: String = cs[j..].iter().take_while(|&&c| c != '\n').collect();
+        let rest = rest.trim();
+        if !rest.is_empty() && !rest.starts_with("//") {
+            return false;
+        }
+    }
+    true
+}
+
+/// A comment, with each word of `to` in it written as `to` says, but after `.`.
+fn comment_respelled(cs: &[char], to: &BTreeMap<String, String>) -> String {
+    let mut out = String::new();
+    let mut i = 0;
+    while i < cs.len() {
+        if (cs[i].is_ascii_alphabetic() || cs[i] == '_') && (i == 0 || !word_char(cs[i - 1])) {
+            let mut j = i;
+            while j < cs.len() && word_char(cs[j]) {
+                j += 1;
+            }
+            let w: String = cs[i..j].iter().collect();
+            match to.get(&w) {
+                Some(t) if i == 0 || cs[i - 1] != '.' => out.push_str(t),
+                _ => out.push_str(&w),
+            }
+            i = j;
+        } else {
+            out.push(cs[i]);
+            i += 1;
+        }
+    }
+    out
 }
 
 /// What the package declares for the flow's types, each with the type that declares it: a type by
@@ -3226,7 +4068,7 @@ pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
     let mut held: BTreeMap<String, Name> = BTreeMap::new();
     for (id, name) in declared_types(m) {
         if own.contains(&id) {
-            let why = tr!("`{id}` はパッケージが自分で宣言します。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。", "the package declares `{id}` itself: a name cannot be declared twice, so it does not compile (`redeclared in this block`).");
+            let why = tr!("`{id}` はパッケージが自分で宣言し、呼ぶ側がそれを読みます。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。", "the package declares `{id}` itself, which a caller reads: a name cannot be declared twice, so it does not compile (`redeclared in this block`).");
             said(id, name, With::Own, why, false);
         } else if id == "Books" && !crate::asl::used_books(m).is_empty() {
             let why = tr!("`ritsu gen` のパッケージの中では、`io_books.go` が `Books` を宣言します。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。", "in a package of `ritsu gen`, `io_books.go` declares `Books`: a name cannot be declared twice, so the package does not compile (`redeclared in this block`).");
@@ -3280,7 +4122,7 @@ pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
             let why = match &with {
                 With::Name(_) => dup(&id),
                 With::TwoTypes => tr!("`client.go` の `{id}` は一つの型にしかなれません。", "`{id}` in `client.go` can be one type only."),
-                With::Own => tr!("`{id}` はパッケージが自分で宣言します。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。", "the package declares `{id}` itself: a name cannot be declared twice, so it does not compile (`redeclared in this block`)."),
+                With::Own => tr!("`{id}` はパッケージが自分で宣言し、呼ぶ側がそれを読みます。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。", "the package declares `{id}` itself, which a caller reads: a name cannot be declared twice, so it does not compile (`redeclared in this block`)."),
             };
             said(id, name, with, why, false);
         }
@@ -3342,6 +4184,23 @@ fn doc_file(m: &Model, nd: &Needs, pkg: &str, header: &str, called: &BTreeSet<us
         if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }
     )));
     d.push_str("//\n// Workflow is the workflow (workflow.go), and NewWorker its worker, with the tasks you write\n// (OwnTasks); Start, AnswerCallback, Send, SendOnce and RunStatus are its client (client.go).\n//\n");
+    // the package's own names that the flow's take (DESIGN 22)
+    let renamed = renamed(m);
+    if !renamed.is_empty() {
+        d.push_str("// The flow gives its types or methods names the package has for its own use, which go by others\n// here:");
+        let mut width = "// here:".len();
+        for (k, (n, to)) in renamed.iter().enumerate() {
+            let item = format!("{to} for {n}{}", if k + 1 == renamed.len() { "." } else { "," });
+            if width + 1 + item.len() > 100 {
+                d.push_str("\n//");
+                width = 2;
+            }
+            d.push(' ');
+            d.push_str(&item);
+            width += 1 + item.len();
+        }
+        d.push_str("\n//\n");
+    }
     d.push_str(&format!("// It is written against {}; add them to your module with go get.\n", modules.join(", ")));
     if !called.is_empty() {
         d.push_str("// The rules it calls are rulec's Go: see rules.go.\n");
@@ -3360,12 +4219,11 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     // the rules whose code goes with the workflow are in rules.go; the others are called at their services, from activities.go
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
     let constant = |text: &str| format!("{header}{}", text.replace("{{PKG}}", &pkg));
-    let mut g = Gen { m, out: String::new(), loops: vec![], can: None, time: false, now: None };
-    let wf = g.workflow(&header, &pkg);
+    let wf = workflow_file(m, &header, &pkg);
     let mut files = vec![
         (format!("{pkg}/doc.go"), doc_file(m, &nd, &pkg, &header, &called)),
         (format!("{pkg}/types.go"), types_file(m, &pkg, &header)),
-        (format!("{pkg}/values.go"), constant(VALUES)),
+        (format!("{pkg}/values.go"), days_go(m, constant(VALUES))),
         (format!("{pkg}/activities.go"), activities_file(m, &pkg, &header)),
         (format!("{pkg}/io.go"), io_file(&nd, &pkg, &header)),
     ];
@@ -3387,9 +4245,18 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         files.push((format!("{pkg}/rules.go"), rules_file(m, &pkg, &header, &called)));
     }
     files.push((format!("{pkg}/client.go"), client_file(m, &pkg, &header)));
-    let mut files: Vec<(String, String)> = files.into_iter().map(|(name, text)| (name, gofmt_columns(&text))).collect();
+    // the files the package writes for itself alone: every name in them is its own or a caller's
+    let go_own = GoOwn::of(m);
+    let alone = ["io.go", "io_aws.go", "io_openai.go", "io_claude.go", "runtime.go", "values.go"].map(|f| format!("{pkg}/{f}"));
+    let mut files: Vec<(String, String)> = files
+        .into_iter()
+        .map(|(name, text)| {
+            let text = if alone.contains(&name) { go_own.file(&text) } else { text };
+            (name, gofmt_columns(&text))
+        })
+        .collect();
     let id = crate::temporal::build_id(&files);
-    files.push((format!("{pkg}/worker.go"), gofmt_columns(&worker_file(m, &pkg, &header, !called.is_empty(), &id))));
+    files.push((format!("{pkg}/worker.go"), gofmt_columns(&go_own.file(&worker_file(m, &pkg, &header, !called.is_empty(), &id)))));
     Ok(files)
 }
 
@@ -3454,6 +4321,25 @@ struct Gen<'a> {
     time: bool,
     /// while a call that reads `now` is written: its site, whose variable read the clock for it
     now: Option<usize>,
+    /// the identifiers of the flow's variables
+    vars: render::Vars,
+    /// the names the package writes for its own
+    go_own: &'a GoOwn,
+    /// the line of the statement being written, which a read of a variable with no value names
+    at: usize,
+}
+
+/// workflow.go: the code of `ddFlow`, where the flow's variables are, has their identifiers
+/// (DESIGN 22). It is written first with each variable as a placeholder, so the names it reads are
+/// the code's own (the package's functions and the checks of its types, `IsOrder` and
+/// `StatusValues`, the imports, its parameters), and a variable takes `_` after one of them.
+fn workflow_file(m: &Model, header: &str, pkg: &str) -> String {
+    let go_own = GoOwn::of(m);
+    let gen = |vars: render::Vars| Gen { m, out: String::new(), loops: vec![], can: None, time: false, now: None, vars, go_own: &go_own, at: 0 };
+    let probe = gen(render::Vars::probe(m)).workflow(header, pkg);
+    let flow = &probe[probe.find("func ddFlow(").unwrap_or(0)..];
+    let flow = &flow[..flow.find("\n}\n").map(|j| j + 3).unwrap_or(flow.len())];
+    gen(render::Vars::new(m, go_name, Some(&render::CodeNames::of(flow, true)))).workflow(header, pkg)
 }
 
 impl<'a> Gen<'a> {
@@ -3468,7 +4354,7 @@ impl<'a> Gen<'a> {
     }
 
     fn var(&self, name: &str) -> String {
-        go_name(name)
+        self.vars.get(name)
     }
 
     fn expr(&self, e: &TExpr) -> String {
@@ -3484,11 +4370,17 @@ impl<'a> Gen<'a> {
             },
             TExpr::NowAt(site) => render::now_name(*site),
             TExpr::Var { name, fields, .. } => {
+                let mut v = self.var(name);
+                if e.must_have(self.m).is_some() {
+                    // a variable holds nil until it is set; the check says it is set here (E012), and
+                    // nil there ends the workflow (DESIGN 38)
+                    v = format!("ddHave({v}, {}, {})", q(name), self.at);
+                }
                 if fields.is_empty() {
-                    self.var(name)
+                    v
                 } else {
-                    // a field that is not there, or of a case that has not started, reads as nil
-                    format!("ddGet({}, {})", self.var(name), fields.iter().map(|f| q(f)).collect::<Vec<_>>().join(", "))
+                    // a field that is not there reads as nil
+                    format!("ddGet({v}, {})", fields.iter().map(|f| q(f)).collect::<Vec<_>>().join(", "))
                 }
             }
             TExpr::Record { fields, .. } => format!("map[string]any{{{}}}", fields.iter().map(|(f, x)| format!("{}: {}", q(f), self.expr(x))).collect::<Vec<_>>().join(", ")),
@@ -3570,9 +4462,11 @@ impl<'a> Gen<'a> {
         let resume = if self.resumes() { ", resume any" } else { "" };
         let cases: Vec<String> = m.cases.iter().map(|c| q(&c.name)).collect();
         self.out.push_str(&format!(
-            "\n// Workflow runs {} v{}. RegisterWorkflow registers it as WorkflowType.\nfunc Workflow(ctx workflow.Context, input any{resume}) (any, error) {{\n\tdd := ddNew(ctx{})\n",
+            "\n// Workflow runs {} v{}. {} registers it as {}.\nfunc Workflow(ctx workflow.Context, input any{resume}) (any, error) {{\n\tdd := ddNew(ctx{})\n",
             m.name,
             m.version,
+            self.go_own.own("RegisterWorkflow"),
+            self.go_own.own("WorkflowType"),
             cases.iter().map(|c| format!(", {c}")).collect::<String>()
         ));
         if m.tasks.iter().any(|t| t.callback) {
@@ -3581,8 +4475,16 @@ impl<'a> Gen<'a> {
         if m.tasks.iter().any(|t| t.event) {
             self.out.push_str("\tdd.listenForEvents(ctx)\n");
         }
-        self.out.push_str(&format!("\treturn ddEnd(ddFlow(ctx, dd, input{}))\n}}\n", if self.resumes() { ", resume" } else { "" }));
-        self.out.push_str(&format!("\nfunc ddFlow(ctx workflow.Context, dd *ddRun, input any{}) (any, error) {{\n", if self.resumes() { ", dd_resume any" } else { "" }));
+        let resume = if self.resumes() { ", resume" } else { "" };
+        if m.outputs.is_empty() {
+            self.out.push_str(&format!("\treturn ddEnd(ddFlow(ctx, dd, input{resume}))\n}}\n"));
+        } else {
+            // the result's JSON in the order of the outputs and of the records' fields (DESIGN 4.2)
+            self.out.push_str(&format!("\tout, err := ddEnd(ddFlow(ctx, dd, input{resume}))\n\treturn ddInOrder(out, err, ddResultFields)\n}}\n"));
+            self.out.push_str(&result_fields(m));
+        }
+        // a fault of the code (ddHave) ends the flow with its error
+        self.out.push_str(&format!("\nfunc ddFlow(ctx workflow.Context, dd *ddRun, input any{}) (dd_out any, dd_err error) {{\n\tdefer ddRecover(&dd_err)\n", if self.resumes() { ", dd_resume any" } else { "" }));
         self.body();
         self.out.push_str("}\n");
         std::mem::swap(&mut self.out, &mut body);
@@ -3768,7 +4670,8 @@ impl<'a> Gen<'a> {
     /// `more` (the loop's list, and what it has yielded).
     fn continue_as_new(&mut self, d: usize, site: usize, k: usize, more: &str) {
         self.line(d, &format!("if dd_loop_{site} > dd_first_{site} && ddHistoryIsLong(ctx) {{"));
-        self.line(d + 1, &format!("return nil, workflow.NewContinueAsNewError(ctx, WorkflowType, input, map[string]any{{\"at\": {k}, \"round\": dd_loop_{site}, \"vars\": dd_vars(){more}}})"));
+        let wt = self.go_own.own("WorkflowType");
+        self.line(d + 1, &format!("return nil, workflow.NewContinueAsNewError(ctx, {wt}, input, map[string]any{{\"at\": {k}, \"round\": dd_loop_{site}, \"vars\": dd_vars(){more}}})"));
         self.line(d, "}");
     }
 
@@ -3782,8 +4685,10 @@ impl<'a> Gen<'a> {
             self.line(d, &format!("{} := ddNow(ctx)", render::now_name(s.site)));
         }
         let outer = std::mem::replace(&mut self.now, once.then_some(s.site));
+        let at = std::mem::replace(&mut self.at, s.line);
         let ended = self.stmt_here(s, d);
         self.now = outer;
+        self.at = at;
         ended
     }
 
@@ -4000,7 +4905,11 @@ impl<'a> Gen<'a> {
                 false
             }
             TK::Match { expr, arms } => {
-                let x = self.expr(expr);
+                let x = match expr {
+                    // a case that has not started reads as none
+                    TExpr::Var { name, fields, .. } if self.m.case_index(name).is_some() => format!("ddGet({}, {})", self.var(name), fields.iter().map(|f| q(f)).collect::<Vec<_>>().join(", ")),
+                    other => self.expr(other),
+                };
                 self.line(d, "{");
                 self.line(d + 1, &format!("dd_v := {x}"));
                 let mut all_end = true;

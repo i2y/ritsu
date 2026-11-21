@@ -214,7 +214,8 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
   a hold as a state machine, how IDs are made, and what each target names things.
 - The exit code is 0 when there is no error (warnings may be), 1 when there is, and 2 for a
   mistake in how chobo is called or a file it cannot read. A flag chobo does not know is exit 2.
-- `--lang ja`, or `CHOBO_LANG=ja`, gives the messages in Japanese; the JSON keys stay English.
+- `--lang ja`, or `CHOBO_LANG=ja`, gives the messages in Japanese; the JSON keys stay English, and
+  the page `doc` writes is in Japanese with `--lang ja` only.
 
 [formats.md](formats.md) has every JSON chobo reads and writes.
 

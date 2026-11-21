@@ -214,6 +214,30 @@ fn the_command() {
     assert!(String::from_utf8(o.stdout).unwrap().contains("**October 2026**"));
 }
 
+/// The note that sends the reader to the bold days is on the page only when the months shown
+/// hold one of them.
+#[test]
+fn the_note_about_the_bold_days_is_there_only_when_a_month_shown_has_one() {
+    for (file, lang, note) in [
+        ("examples/period_of_months_two_readings.cal", "en", "The input days it fails on are in bold in the month tables below."),
+        ("examples/eom_close_two_months_later.ja.cal", "ja", "成り立たない入力の日は、下の月の表で太字にしてあります。"),
+    ] {
+        // A bold day in the month tables, which are the last section of the page.
+        let bold = |md: &str| {
+            let at = md.find("### Month by month").or_else(|| md.find("### 月の表")).expect("the month tables");
+            md[at..].lines().filter(|l| l.starts_with('|')).any(|l| l.contains("**"))
+        };
+        let o = koyomi(&["doc", file, "--lang", lang]);
+        let md = String::from_utf8(o.stdout).unwrap();
+        assert!(md.contains(note) && bold(&md), "{file}: the note and the bold days\n{md}");
+        let o = koyomi(&["doc", file, "--lang", lang, "--months", "2090-01..2090-02"]);
+        assert_eq!(o.status.code(), Some(0), "{file}");
+        let md = String::from_utf8(o.stdout).unwrap();
+        assert!(md.contains("> [!WARNING]"), "{file}: the verdict stays\n{md}");
+        assert!(!md.contains(note) && !bold(&md), "{file}: no bold day in the months shown, and no note about one\n{md}");
+    }
+}
+
 #[test]
 fn what_the_pages_say() {
     // DESIGN 7: the calendar page counts the business days and finds the longest run of

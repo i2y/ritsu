@@ -1,0 +1,21 @@
+route standard v1 "Approval by the team"
+description "A request approved by the team's leads, and by the heads too when it is a long one (fictional)"
+
+use calendar office from "../calendars/office.cal"
+
+inputs
+  long : bool
+
+route
+  lead  leads
+  head  heads  when long
+
+who
+  leads = team leads
+  heads = team heads
+
+every stage
+  due in 2 business days at end of day
+  remind after 1 business day at 09:00
+  when late expire
+  when empty skip

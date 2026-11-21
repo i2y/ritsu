@@ -1,0 +1,17 @@
+request 例(example) v1 "例"
+
+form
+  明細(lines)  : rows "明細"  count >=1 <=30
+    数量(quantity) : number "数量"  range >=1 <=1_000_000
+    単価(price)    : money[円] "単価"  range >=1円 <=1_000_000_000_000円
+    小計(subtotal) : money[円] "小計" = 数量 * 単価  range >=1円 <=100_000_000円
+  合計(amount) : money[円] "合計" = sum(明細.小計)  range >=1円 <=100_000_000円
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+ticket
+  self approval  not allowed

@@ -1,0 +1,5 @@
+warning[W109]: tests/mutants/W109_パスワードのフィールド.ringi:5:3: `パスワード` asks the requester for a secret (パスワード)
+     5 |   パスワード(password) : text "パスワード"  count <=50
+  = What is filled in stays in the ticket's history, where approvers and whoever reads the pages and the logs see it. Do not pass a secret through a request: pass it through what is made for it (a secret store, a screen the person fills in themselves).
+ok tests/mutants/W109_パスワードのフィールド.ringi: a request, 2 fields, 1 stage
+  may never end: the stage `確かめ` has no deadline (`due in …`), and waits until it is answered

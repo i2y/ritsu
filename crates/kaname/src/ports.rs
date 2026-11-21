@@ -19,6 +19,13 @@ use std::rc::Rc;
 pub struct Engine;
 
 impl Engine {
+    /// How many times a module has been checked whole on this thread (a module whose check is kept
+    /// is decided again from it, and checks nothing; [`crate::check::Run`]): what a test of the
+    /// keeping counts.
+    pub fn checks(&self) -> usize {
+        check::checks()
+    }
+
     /// `kaname check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3), with the rules,
     /// dates files and books read through `ports`, and the effects decided with `verdicts` when they
     /// are handed over (DESIGN 4.3): every finding, as the command prints it and as its `--format
@@ -37,7 +44,7 @@ impl Engine {
             suite = suite.with_verdicts(v);
         }
         let run = Run::new(suite);
-        let mut outcomes: Vec<Result<Rc<check::Outcome>, String>> = files.iter().map(|f| run.file(f)).collect();
+        let mut outcomes: Vec<Result<Rc<check::Outcome>, check::Unread>> = files.iter().map(|f| run.file(f)).collect();
         if let Some(opts) = lean {
             let given: Vec<Rc<check::Outcome>> = outcomes.iter().filter_map(|o| o.as_ref().ok().cloned()).collect();
             match check::with_lean(&given, opts) {
@@ -48,8 +55,7 @@ impl Engine {
                     }
                 }
                 Err(e) => {
-                    let head = if lang == Lang::Ja { "エラー" } else { "error" };
-                    let said = format!("{head}: {}\n", e.text().get(lang));
+                    let said = format!("{}\n", ritsu_base::cli::refusal(e.text().get(lang), lang));
                     return files.iter().map(|f| ritsu_ports::Checked::unchecked(f, said.clone())).collect();
                 }
             }
@@ -59,7 +65,7 @@ impl Engine {
             .zip(outcomes)
             .map(|(f, o)| match o {
                 Ok(o) => check::unit(root, f, Ok(&o), lang),
-                Err(e) => check::unit(root, f, Err(e), lang),
+                Err(e) => check::unit(root, f, Err(&e), lang),
             })
             .collect()
     }
@@ -67,8 +73,7 @@ impl Engine {
     /// The module at `file`, its names and types passing, analysed with the languages of `ports` and
     /// no verdicts (what the checks across the borders are asked about); else what its check says.
     fn analysed(file: &Path, ports: &ritsu_ports::Ports) -> Result<Rc<Checked>, Vec<Said>> {
-        let shown = file.to_string_lossy().to_string();
-        let o = Run::new(ports.clone().into()).file(&shown).map_err(|e| vec![Said::unreadable(&shown, &e)])?;
+        let o =Run::new(ports.clone().into()).file(&file.to_string_lossy()).map_err(|e| vec![Said::unreadable(&ritsu_base::paths::show(file), &e)])?;
         match &o.analysed {
             Some(c) => Ok(c.clone()),
             None => Err(o.diags.iter().filter(|d| d.is_error()).map(Said::of).collect()),
@@ -159,16 +164,6 @@ fn push_site(p: &Program, function: &str, site: &CallSite, out: &mut ProgramCros
     match &site.kind {
         SiteKind::Rule { canon, name } => {
             let args: Vec<Given> = site.given.iter().map(|g| given(p, g)).collect();
-            // the longest list the call gives a list the rule walks, when every one has a top
-            let tops: Vec<Option<i128>> = site
-                .given
-                .iter()
-                .filter_map(|g| match (&g.ty, &g.value) {
-                    (Ty::List(_), Abs::List(count, _)) => Some(wire_ends(*count, crate::num::Rat::int(1)).1),
-                    _ => None,
-                })
-                .collect();
-            let max_len = if tops.is_empty() { None } else { tops.iter().copied().collect::<Option<Vec<i128>>>().and_then(|ts| ts.into_iter().max()) };
             out.rules.push(ProgramRuleCall {
                 at: at(site.span),
                 function: function.to_string(),
@@ -176,7 +171,6 @@ fn push_site(p: &Program, function: &str, site: &CallSite, out: &mut ProgramCros
                 name: name.clone(),
                 args,
                 relations: site.relations.iter().map(|(a, r, b)| (a.clone(), r.shown().to_string(), b.clone())).collect(),
-                max_len,
             });
         }
         SiteKind::Date { canon, name, date } => {
@@ -203,7 +197,7 @@ fn push_site(p: &Program, function: &str, site: &CallSite, out: &mut ProgramCros
 /// The values a place across the borders is taken to by the inputs the vectors solve for (DESIGN
 /// 5.7, 9): a step past each end of what takes it, where kaname knows the ends — below 0 for an
 /// amount, past the range of the date input of a koyomi date or of a rule.
-fn targets(p: &Program, suite: &crate::suite::Suite, site: &CallSite, pl: &crate::ranges::Place) -> Vec<crate::num::Rat> {
+fn targets(p: &Program, site: &CallSite, pl: &crate::ranges::Place) -> Vec<crate::num::Rat> {
     use crate::num::Rat;
     let ends = |lo: Option<i128>, hi: Option<i128>| -> Vec<Rat> { [lo.map(|v| Rat::int(v - 1)), hi.map(|v| Rat::int(v + 1))].into_iter().flatten().collect() };
     match (&pl.what, &site.kind) {
@@ -211,10 +205,11 @@ fn targets(p: &Program, suite: &crate::suite::Suite, site: &CallSite, pl: &crate
         (What::DateDay { input, .. }, SiteKind::Date { canon, .. }) => {
             p.dates.get(canon).and_then(|f| f.inputs.iter().find(|i| i.name == *input)).map(|i| ends(Some(i.min as i128), Some(i.max as i128))).unwrap_or_default()
         }
-        (What::RuleDate { input, .. }, SiteKind::Rule { canon, .. }) => match suite.rules.as_ref().and_then(|r| r.date_range(&p.file(canon), input).ok()) {
-            Some((lo, hi)) => ends(lo.map(i128::from), hi.map(i128::from)),
-            None => Vec::new(),
-        },
+        // the range of the rule's date input, as its column carries it
+        (What::RuleDate { input, .. }, SiteKind::Rule { canon, .. }) => {
+            let range = p.rules.get(canon).and_then(|f| f.inputs.iter().find(|c| c.name == *input)).and_then(|c| crate::names::column_slot(c, canon).range);
+            range.map(|r| ends(r.min.map(|v| v.num), r.max.map(|v| v.num))).unwrap_or_default()
+        }
         _ => Vec::new(),
     }
 }
@@ -237,7 +232,7 @@ fn seen_of(c: &Rc<Checked>, suite: &crate::suite::Suite, f: usize) -> Vec<Seen> 
         for pl in facts.places.iter().filter(|pl| pl.what.across().is_some()) {
             let here = site.given.iter().any(|g| g.expr == pl.expr) || pl.expr == site.expr;
             let Some(lin) = pl.lin.as_ref().filter(|_| here) else { continue };
-            for t in targets(&p, suite, site, pl) {
+            for t in targets(&p, site, pl) {
                 for (input, _) in vectors::reach(&p, c, f, &base, lin, t) {
                     inputs.push(Vector { input, why: None });
                 }
@@ -316,8 +311,8 @@ impl ritsu_ports::Programs for Engine {
 /// only parse: what its names refer to is the check's to say.
 fn parsed(root: &Path, file: &str) -> Result<(crate::ast::Module, String), Vec<Said>> {
     let disk = ritsu_base::paths::on_disk(root, file);
-    let path = disk.to_string_lossy().to_string();
-    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+    let path = ritsu_base::paths::show(&disk);
+    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e)])?;
     let p = crate::parse::parse(&path, &src);
     if crate::diag::has_errors(&p.diags) {
         return Err(p.diags.iter().filter(|d| d.is_error()).map(Said::of).collect());
@@ -393,7 +388,7 @@ impl ritsu_ports::References for Engine {
         let (m, _) = parsed(root, file)?;
         let mut out = Vec::new();
         for u in &m.uses {
-            let Ok(p) = ritsu_base::modules::join(root, file, &u.path) else { continue };
+            let Ok(p) = ritsu_base::modules::join_opened(root, file, &u.path) else { continue };
             let tool = match u.kind {
                 UseKind::Rule => Tool::Rulec,
                 UseKind::Dates => Tool::Koyomi,

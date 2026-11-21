@@ -1,0 +1,6 @@
+error[E405]: tests/mutants/E405_承認者が直せる明細の合計の仮押さえ.ringi:26:97: The hold `予算.reserve` reads `明細`, a field approvers may edit
+    26 |   on submitted    hold 予算.reserve(request: ticket.id, attempt: ticket.attempt, dept: 部, amount: 金額)
+  = The argument `amount` of the hold reads `金額`, which is computed from `明細`, and `approvers edit` on line 25 lets an approver edit `明細`.
+  = A hold is made once, with the values the request is submitted with, and is not made again when an approver edits them.
+  = What is posted is what was held, which is no longer what the request says.
+  = Take `明細` out of `approvers edit` (the line itself, where it lists no other field).

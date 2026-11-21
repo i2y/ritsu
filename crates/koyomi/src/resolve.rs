@@ -414,7 +414,7 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
             }
             (None, Some(k)) => Start::Date(*k),
             (None, None) => {
-                c.err("E008", *sspan, tr!("「{sname}」は宣言されていません", "The name {sname} is not declared")).notes.push(tr!(
+                c.err("E008", *sspan, tr!("「{sname}」は宣言されていません", "The name {sname} is not declared")).same_mut(sname.clone()).notes.push(tr!(
                     "日付は、`inputs` の日付か、`date` で宣言したほかの日付から始めてください。",
                     "A date starts from the date under `inputs` or from another date declared with `date`."
                 ));
@@ -518,7 +518,7 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
             (None, Some(k)) => Ref::Date(*k),
             (None, None) => {
                 let n = &r.name;
-                c.err("E008", r.span, tr!("「{n}」は宣言されていません", "The name {n} is not declared"));
+                c.err("E008", r.span, tr!("「{n}」は宣言されていません", "The name {n} is not declared")).same_mut(n.clone());
                 return None;
             }
         };
@@ -541,7 +541,7 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
                     None
                 }
                 None => {
-                    c.err("E008", *s, tr!("「{n}」は宣言されていません", "The name {n} is not declared"));
+                    c.err("E008", *s, tr!("「{n}」は宣言されていません", "The name {n} is not declared")).same_mut(n.clone());
                     None
                 }
             },
@@ -562,6 +562,9 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
     {
         let mut cols: Vec<Option<(bool, usize)>> = Vec::new();
         let mut seen_cols: HashMap<&str, Span> = HashMap::new();
+        // Columns that name nothing (E008): the input or date they were written for is not said
+        // to have no column on top (ritsu's DESIGN 8.3).
+        let mut strays = 0;
         for col in &ex.columns {
             if let Some(prev) = seen_cols.get(col.name.as_str()) {
                 let l = prev.col;
@@ -583,14 +586,15 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
                     cols.push(None);
                 }
                 _ => {
-                    c.err("E008", col.span, tr!("「{n}」は宣言されていません", "The name {n} is not declared"));
+                    c.err("E008", col.span, tr!("「{n}」は宣言されていません", "The name {n} is not declared")).same_mut(n.clone());
                     cols.push(None);
+                    strays += 1;
                 }
             }
         }
         let missing_in: Vec<&str> = f.inputs.iter().enumerate().filter(|(k, _)| !cols.contains(&Some((false, *k)))).map(|(_, i)| i.name.text.as_str()).collect();
         let missing_out: Vec<&str> = f.dates.iter().enumerate().filter(|(k, _)| !cols.contains(&Some((true, *k)))).map(|(_, d)| d.name.text.as_str()).collect();
-        if (!missing_in.is_empty() || !missing_out.is_empty()) && !twice {
+        if (!missing_in.is_empty() || !missing_out.is_empty()) && !twice && strays == 0 {
             let mut all: Vec<String> = missing_in.iter().map(|s| format!("`{s}`")).collect();
             all.extend(missing_out.iter().map(|s| format!("`-> {s}`")));
             let list = all.join(", ");
@@ -628,7 +632,9 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
         }
     }
 
-    let diags = std::mem::take(&mut c.diags);
+    let mut diags = std::mem::take(&mut c.diags);
+    // a name declared nowhere is said once, where it is first written (ritsu's DESIGN 8.3)
+    ritsu_base::diag::once(&mut diags);
     if diags.iter().any(|d| d.is_error()) {
         return Err(diags);
     }
@@ -697,7 +703,7 @@ impl Names<'_> {
                     A::Lit(0)
                 }
                 None => {
-                    c.err("E008", *s, tr!("「{n}」は宣言されていません", "The name {n} is not declared")).notes.push(tr!(
+                    c.err("E008", *s, tr!("「{n}」は宣言されていません", "The name {n} is not declared")).same_mut(n.clone()).notes.push(tr!(
                         "ここに書ける名前は、`inputs` で宣言した整数（`int`）の入力です。",
                         "A name here is an integer (`int`) input declared under `inputs`."
                     ));

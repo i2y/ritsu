@@ -1,0 +1,3 @@
+エラー[E004]: tests/mutants/E004_a_cell_not_in_who.ringi:7:10: `accounting` は `who` に宣言がありません
+     7 |   check  accounting
+  = 宣言されている承認者の決め方: `finance`

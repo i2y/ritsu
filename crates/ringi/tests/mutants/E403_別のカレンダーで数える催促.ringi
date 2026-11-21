@@ -1,0 +1,23 @@
+request 例(example) v1 "例"
+
+use calendar 事務所(office) from "shared/事務所.cal"
+use calendar 工場(plant) from "shared/工場.cal"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確かめ(check)  経理
+
+who
+  経理(finance) = team finance
+
+every stage
+  due in 2 business days in 事務所 at end of day
+  remind after 2 business days in 工場 at 09:00
+
+ticket
+  self approval  not allowed
+
+claims
+  期限の前に催促する : every stage reminds before it is due

@@ -25,8 +25,6 @@ inventory/inventory.book: ok
   key: take_back once per return_id, sku; a second call that differs only in qty is refused with key_conflict
 delivery/arrange_delivery.flow: ok
 ordering/fulfillment.flow: ok
-error[sakai E105]: billing/rules/billing_need.rule:5:1: The file billing/rules/billing_need.rule does not pass rulec's check, or cannot be read
-     5 | enum order_status = received | paid | shipped | cancelled_in_ordering(cancelled)
-  = What rulec says: [E032] billing/rules/billing_need.rule:5: Enum order_status does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
-  = Make the file pass rulec's check; the references of a file that cannot be read cannot be checked.
-ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): 1 fail (2 errors); borders between the languages: 0 checked, 0 undecided
+waiting for billing/rules/billing_need.rule (rulec E032 at line 5) to pass:
+  billing/rules/billing_need.rule:5: [sakai E105] enum order_status = received | paid | shipped | cancelled_in_ordering(cancelled)
+ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): 1 fail (1 error); borders between the languages: 0 checked, 0 undecided

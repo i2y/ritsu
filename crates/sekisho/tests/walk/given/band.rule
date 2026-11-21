@@ -1,0 +1,23 @@
+rule band v1
+description "The band of an age that may be left out: a value of its own when it is, which no call that gives an age comes to"
+
+enum band = unknown | child | adult
+
+inputs
+  age : number?  range >=1 <=100
+
+outputs
+  band : band
+
+table band_of
+policy unique
+| age  | -> band |
+| none | unknown |
+| <13  | child   |
+| >=13 | adult   |
+
+examples
+| age  | -> band |
+| none | unknown |
+| 6    | child   |
+| 30   | adult   |

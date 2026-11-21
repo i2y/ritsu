@@ -1,0 +1,17 @@
+error[E014]: tests/fixtures/range_rebound.ja.flow:45:1: `n` can be outside `>=1 <=10`, the range of the parameter `個数` of `詰める`: it is `>=1 <=100`
+    45 |       詰める(個数: n)
+error[E014]: tests/fixtures/range_rebound.ja.flow:47:1: `n` can be outside `>=1 <=10`, the range of the parameter `個数` of `詰める`: it is `>=1 <=100`
+    47 |   詰める(個数: n)
+warning[W104]: tests/fixtures/range_rebound.ja.flow:53:1: nothing says what range `m` is in (the input `範囲なし` has no range), and the parameter `個数` of `詰める` takes `>=1 <=10`
+    53 |       詰める(個数: m)
+error[E014]: tests/fixtures/range_rebound.ja.flow:69:1: `d` can be outside `>=2026-01-01 <=2026-06-30`, the range of the parameter `日` of `出荷する`: it is `>=2026-07-01 <=2026-12-31`
+    69 |       出荷する(日: d)
+error[E014]: tests/fixtures/range_rebound.ja.flow:76:1: `s` can be outside `>=一般 <=シルバー`, the range of the parameter `段階` of `札を貼る`: it can be `ゴールド` or `プラチナ`
+    76 |       札を貼る(段階: s)
+  = Write `range >=一般 <=シルバー` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch on the value with `match` and give it in the arms for values the range lets in
+warning[W104]: tests/fixtures/range_rebound.ja.flow:81:1: nothing says what range `c` is in (the answer of `数える` has no range), and the parameter `個数` of `詰める` takes `>=1 <=10`
+    81 |   詰める(個数: c)
+warning[W104]: tests/fixtures/range_rebound.ja.flow:85:1: nothing says what range `t` is in (the input `ほかの数` has no range), and the parameter `個数` of `詰める` takes `>=1 <=10`
+    85 |     詰める(個数: t)
+warning[W104]: tests/fixtures/range_rebound.ja.flow:87:1: nothing says what range `t` is in (the input `ほかの数` has no range), and the parameter `個数` of `詰める` takes `>=1 <=10`
+    87 |   詰める(個数: t)

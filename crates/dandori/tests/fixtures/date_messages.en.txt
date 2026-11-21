@@ -1,0 +1,8 @@
+error[E016]: tests/fixtures/date_messages.flow:22:1: the parameter `day` is not what `days` DayService/Shift takes: `int` is not a date; declare it `date`
+    22 | task shift(day: int, by: int) -> Shifted
+error[E016]: tests/fixtures/date_messages.flow:22:1: what `days` DayService/Shift answers is not `Shifted`: in `day`, a date is not `Ymd`; declare it `date`
+    22 | task shift(day: int, by: int) -> Shifted
+error[E016]: tests/fixtures/date_messages.flow:22:1: what `days` DayService/Shift answers is not `Shifted`: in `also`, a date is not `int`; declare it `date`
+    22 | task shift(day: int, by: int) -> Shifted
+error[E016]: tests/fixtures/date_messages.flow:22:1: what `days` DayService/Shift answers is not `Shifted`: in `more`, a date is not `int`; declare it `date`
+    22 | task shift(day: int, by: int) -> Shifted

@@ -19,7 +19,7 @@ pub(super) fn drawn_from(f: &RuleFile, c: &Checked, name: &str) -> Option<String
     if !f.is_random(name) {
         return None;
     }
-    let n = crate::types::fmt_big_pub(Rat::int(crate::chances::points_of(c, name).unwrap_or(0) as i128));
+    let n = crate::types::written_num(Rat::int(crate::chances::points_of(c, name).unwrap_or(0) as i128));
     let range = range_text(c, name);
     let ty = c.ty_of(name);
     let scale = *c.scales.get(name).unwrap_or(&1);
@@ -46,7 +46,7 @@ pub(super) fn drawn_from(f: &RuleFile, c: &Checked, name: &str) -> Option<String
 
 /// One step of a value held at `scale`: `1`, `0.01`.
 fn chance_step(scale: i128) -> String {
-    crate::types::fmt_big_pub(Rat::new(1, scale.max(1)))
+    crate::types::written_num(Rat::new(1, scale.max(1)))
 }
 
 /// What a claim came to, for the column beside it: `holds: 5/14 (35.7%)`.
@@ -217,7 +217,8 @@ pub(super) fn customer(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
     for i in f.random_inputs() {
         if let Some(t) = drawn_from(f, c, &i.name.text) {
             let t = t.split_once(": ").map(|(_, t)| t.to_string()).unwrap_or(t);
-            o.push_str(&format!("- **{}**: {}\n", md_esc(&i.name.text), md_esc(&t)));
+            // in the digits the rest of the page groups, `,` (§15.300, §15.333)
+            o.push_str(&format!("- **{}**: {}\n", md_esc(&i.name.text), md_esc(&super::words::number(&t))));
         }
     }
     o.push_str(&tr!(

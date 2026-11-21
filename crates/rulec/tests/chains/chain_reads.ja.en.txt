@@ -1,0 +1,36 @@
+error[E012]: There is no type `数字`
+  --> chain_reads.ja.rule:8
+  |
+8 |   上限(limit) : 数字  range >=0 <=10
+  |                 ^^^^
+  |
+ A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. The enum of this file is `大きさ`.
+ `数字` is written on line 14 too.
+
+error[E103]: `UDS` is not a unit of money
+  --> chain_reads.ja.rule:25
+   |
+25 |   料金(fee) : money[UDS]  round up(1USD)  range >=0USD <=100USD
+   |               ^^^^^^^^^^
+   |
+ The units of money are 円 (yen, the same as JPY) 銭 (a hundredth of 円), or one of the ISO 4217 codes USD EUR GBP CHF CAD AUD NZD CNY HKD SGD KRW INR TWD THB SEK NOK DKK PLN CZK HUF TRY BRL MXN ZAR AED SAR ILS PHP IDR MYR VND (its hundredth is the code plus c: USD and USDc).
+ `money[UDS]` is written on line 29 too.
+
+error[E012]: There is no type `大きい`
+  --> chain_reads.ja.rule:13
+   |
+13 |   種類(kind) : 大きい
+   |                ^^^^^^
+   |
+ Did you mean `大きさ`?
+ A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. The enum of this file is `大きさ`.
+
+error[E012]: There is no type `mas`
+  --> chain_reads.ja.rule:15
+   |
+15 |   重さ(weight) : mas[g]  range >0g <30001g
+   |                  ^^^
+   |
+ Did you mean `mass`?
+ A type is `number`, `rate`, `bool`, `string`, `date`, a type of a unit (`money[USD]`, `mass[kg]` and the like) or an enum of this file. The enum of this file is `大きさ`.
+

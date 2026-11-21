@@ -1,0 +1,8 @@
+エラー[E016]: tests/fixtures/date_messages.flow:22:1: 引数 `day` は、`days` の DayService/Shift が受け取るものと合いません。`int` で、日付ではありません。`date` にしてください
+    22 | task shift(day: int, by: int) -> Shifted
+エラー[E016]: tests/fixtures/date_messages.flow:22:1: `days` の DayService/Shift のレスポンスは `Shifted` に合いません。`day` は、日付で、`Ymd` ではありません。`date` にしてください
+    22 | task shift(day: int, by: int) -> Shifted
+エラー[E016]: tests/fixtures/date_messages.flow:22:1: `days` の DayService/Shift のレスポンスは `Shifted` に合いません。`also` は、日付で、`int` ではありません。`date` にしてください
+    22 | task shift(day: int, by: int) -> Shifted
+エラー[E016]: tests/fixtures/date_messages.flow:22:1: `days` の DayService/Shift のレスポンスは `Shifted` に合いません。`more` は、日付で、`int` ではありません。`date` にしてください
+    22 | task shift(day: int, by: int) -> Shifted

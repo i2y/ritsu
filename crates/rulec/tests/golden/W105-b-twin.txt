@@ -7,6 +7,6 @@
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行2
    |
  両方に当てはまる例: bulk = true, member = platinum
- この例を作る入力: dest = Hokkaido, member = platinum, total = 30000, weight = 1
+ この例を作る入力: dest = Hokkaido, member = platinum, total = 30_000JPY, weight = 1g
  `policy first` のため 行1 が勝ちます。意図通りですか。
  意図通りならこのままで構いません。CI の check --diff-base は新たに生じた分だけを報告します。

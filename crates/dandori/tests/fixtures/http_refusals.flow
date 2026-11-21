@@ -1,0 +1,122 @@
+workflow http_refusals v1
+description "Arguments of HTTP calls that cannot be sent as the description says, or, with no description, as OpenAPI's defaults say: each is told where the task is (DESIGN 43)"
+
+use openapi places from "apis/places.json"
+
+record Years
+  first : int
+  last  : int
+
+record Sort
+  by    : string
+  order : string
+
+record Place
+  room  : string
+  shelf : int
+
+record Done
+  done : bool
+
+# `x_id` is the query's `x_id` and the header `X-Id` both
+task either(x_id: string) -> Done
+  http GET places "/either"
+
+# a header's name is the same in any case: both are `X-Key`
+task keys(x_key: string, X_Key: string) -> Done
+  http GET places "/keys"
+
+# a style OpenAPI does not have
+task tabs(days: list[string]) -> Done
+  http GET places "/tabs"
+
+# the description says how the filter is written with a media type
+task by_content(filter: Years) -> Done
+  http GET places "/content"
+
+# the HTTP client writes `Host` itself; a cookie goes `in: cookie`
+task with_host(host: string) -> Done
+  http GET places "/host"
+
+task with_cookie_header(cookie: string) -> Done
+  http GET places "/cookie-header"
+
+# names a header and a cookie cannot have
+task odd_names(x_印: string, セッション: string) -> Done
+  http GET places "/odd-names"
+
+# styles a place does not take
+task header_form(x_tags: list[string]) -> Done
+  http GET places "/header-form"
+
+task path_form(ids: list[string]) -> Done
+  http GET places "/path-form/{ids}"
+
+task cookie_simple(prefs: list[string]) -> Done
+  http GET places "/cookie-simple"
+
+# forms OpenAPI does not define: a list as a cookie with explode: true (the default), a list as
+# deepObject, pipeDelimited with explode: true, deepObject with explode: false
+task cookie_list(prefs: list[string]) -> Done
+  http GET places "/cookie-list"
+
+task deep_list(ids: list[string]) -> Done
+  http GET places "/deep-list"
+
+task pipes(codes: list[string]) -> Done
+  http GET places "/pipes"
+
+task deep_false(sort: Sort) -> Done
+  http GET places "/deep-false"
+
+# a `json` value goes as its JSON text, which is not how an object or a list is written
+task deep_json(filter: json) -> Done
+  http GET places "/deep-json"
+
+task json_list(tags: json) -> Done
+  http GET places "/json-list"
+
+# no style writes a list of records outside a JSON body
+task nested(ranges: list[Years]) -> Done
+  http GET places "/nested"
+
+# the header and the cookie the operation needs: one may be absent, and one is not passed
+task needs_maybe(x_board_key: string?, session: string) -> Done
+  http GET places "/needs"
+
+task needs_none(x_board_key: string) -> Done
+  http GET places "/needs"
+
+# the record's field `first` and the parameter `first` are one name in the query
+task clash(years: Years, first: int) -> Done
+  http GET places "/clash"
+
+# the idempotency key of `key` goes in `Idempotency-Key`
+task order(item: string, idempotency_key: string) -> Done
+  http POST places "/orders"
+  key
+
+# with no `key`, the task sends no `Idempotency-Key`
+task order_again(item: string) -> Done
+  http POST places "/orders"
+
+# a property of a URL-encoded body the description writes as JSON
+task note(text: string, meta: Years) -> Done
+  http POST places "/notes"
+
+# with no description: a list of records in the query and in a URL-encoded body, and two
+# arguments under one name; a JSON body takes them
+task plain_nested(ranges: list[Years]) -> Done
+  http GET "https://places.example.com/plain"
+
+task plain_clash(years: Years, first: int) -> Done
+  http GET "https://places.example.com/plain"
+
+task plain_form(ranges: list[Years], place: Place, room: string) -> Done
+  http POST "https://places.example.com/plain" form
+
+task plain_json(ranges: list[Years], place: Place, room: string) -> Done
+  http POST "https://places.example.com/plain"
+
+flow
+  pass

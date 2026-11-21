@@ -1,0 +1,13 @@
+organization company v1 "Company"
+description "A small company (fictional) whose data names a kind of team it does not declare"
+
+positions
+  staff     "Staff"
+  dept_head "Head of department"
+  president "President"
+
+team kinds
+  company    "Company"
+  department "Department"
+
+data "shared/org-unknown-kind"

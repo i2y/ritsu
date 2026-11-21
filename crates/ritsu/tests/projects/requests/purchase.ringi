@@ -1,0 +1,33 @@
+request purchase v1 "Purchase"
+description "A purchase, reviewed by finance when the table of authority asks for it and decided by the role it names"
+
+use calendar office from "calendars/office.cal"
+use rule authority from "rules/authority.rule"
+
+form
+  kind    : choice from authority.kind "Kind"
+    goods    "Goods and services"
+    software "Software"
+  amount  : money[JPY] "Amount"  range >=1JPY <=10_000_000JPY
+  summary : long text "What it is for"  count >=1 <=500
+
+route
+  finance  finance  when authority.finance
+  decide   authority.decider
+
+who
+  finance       = team finance
+  dept_head     = team dept_heads
+  division_head = team division_heads
+
+every stage
+  due in 3 business days at end of day
+  remind after 2 business days at 09:00
+  when late expire
+  when empty skip
+
+ticket
+  self approval  not allowed
+
+claims
+  reminder_before_due : every stage reminds before it is due

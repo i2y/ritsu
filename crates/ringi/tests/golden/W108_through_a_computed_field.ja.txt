@@ -1,0 +1,5 @@
+警告[W108]: tests/mutants/W108_through_a_computed_field.ringi:17:18: 承認者が `amount` を直すと、経路が変わることがあります
+    17 |   approvers edit amount
+  = 経路は `fee` を読み、`fee` は `amount` から計算します。承認者が直したときは、今のステップより後の経路を直した値で決め直し、前のステップの答えは変えません。それでよいか確かめてください。
+ok tests/mutants/W108_through_a_computed_field.ringi: 申請の種類、フィールド 2 個、ステップ 2 個
+  終わらないことがあります: ステップ `check`、`decide` には期限がありません（`due in …`）。答えが来るまで待ちます

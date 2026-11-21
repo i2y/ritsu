@@ -1,0 +1,20 @@
+rule authority v1
+description "Who decides an order, by its amount (fictional)"
+
+enum decider = dept_head "Head of department" | president "President"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000JPY
+
+outputs
+  decider : decider
+
+table authority
+| amount   | -> decider |
+| <=500JPY | dept_head  |
+| >500JPY  | president  |
+
+examples
+| amount | -> decider |
+| 1JPY   | dept_head  |
+| 501JPY | president  |

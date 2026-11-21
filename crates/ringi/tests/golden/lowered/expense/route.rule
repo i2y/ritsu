@@ -1,0 +1,39 @@
+rule expense_route v1
+description "What ringi writes from the route of expense.ringi: one optional output for each stage, whose value is the approver the stage names; a blank cell is none, the stage is not there"
+
+import enum category from "choices.rule"
+enum precheck_by = check "check"
+enum first_by = manager "manager"
+enum second_by = dept_head "dept_head" | accounting "accounting" | dept_head_and_accounting "dept_head and accounting"
+enum decide_by = travel_agent "travel_agent" | manager "manager" | dept_head "dept_head" | division_head "division_head"
+
+inputs
+  category : category
+  amount   : money[JPY]  range >=1JPY <=10_000_000JPY
+
+outputs
+  precheck : precheck_by?
+  first    : first_by?
+  second   : second_by?
+  decide   : decide_by
+
+table route
+| category | amount                     | -> precheck | first   | second                   | decide        |
+| travel   | <=30_000JPY                | none        | none    | none                     | travel_agent  |
+| travel   | >30_000JPY <=100_000JPY    | none        | none    | none                     | manager       |
+| travel   | >100_000JPY                | none        | manager | none                     | dept_head     |
+| expense  | <=100_000JPY               | check       | none    | none                     | manager       |
+| expense  | >100_000JPY <=1_000_000JPY | check       | manager | none                     | dept_head     |
+| expense  | >1_000_000JPY              | none        | manager | dept_head                | division_head |
+| purchase | <=1_000_000JPY             | none        | manager | accounting               | dept_head     |
+| purchase | >1_000_000JPY              | none        | manager | dept_head_and_accounting | division_head |
+
+possible second = dept_head_and_accounting
+
+examples
+| category | amount       | -> precheck | first   | second                   | decide        |
+| travel   | 30_000JPY    | none        | none    | none                     | travel_agent  |
+| travel   | 30_001JPY    | none        | none    | none                     | manager       |
+| expense  | 100_000JPY   | check       | none    | none                     | manager       |
+| expense  | 100_001JPY   | check       | manager | none                     | dept_head     |
+| purchase | 1_000_001JPY | none        | manager | dept_head_and_accounting | division_head |

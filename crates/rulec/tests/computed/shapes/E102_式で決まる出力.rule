@@ -1,0 +1,18 @@
+rule 式で決まる出力(expression_output) v1
+description "define が計算する、取り込んだ規則の出力を、金額と一緒に読む。行 1 は、金額が 3 万円以下で手数料が 900 円を超える場合を求めるが、そうなる金額は無い"
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=1_000_000円
+
+apply 計算(c) = "shared/手数料の計算.rule" meaning:3e7236eeefbf180f
+  金額 = 金額
+  手数料 -> 受けた手数料
+
+outputs
+  印(hidden) : bool
+
+table 印(hidden)
+| 受けた手数料 | 金額       | -> 印 |
+| >900円       | <=30_000円 | true  |
+| >900円       | >30_000円  | false |
+| <=900円      | -          | false |

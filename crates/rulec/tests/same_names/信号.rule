@@ -1,0 +1,5 @@
+enums 信号(signals_ja) v1
+description "交差点の灯り。どの規則のコードも宣言する、合った行の型と同じ名前の列挙が横にある（架空）"
+
+enum 灯り(light_ja) = 赤(red) | 緑(green)
+enum 発火(fired) = はい(yes) | いいえ(no)

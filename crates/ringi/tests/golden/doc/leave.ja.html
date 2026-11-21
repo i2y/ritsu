@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="ringi 0.55.2">
+<title>休暇の申請</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 40px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 28px 0 8px; }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+th { background: var(--soft); white-space: nowrap; }
+:target { scroll-margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- ringi 0.55.2 が leave.ja.ringi（sha256:19079ab70aff3303）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<main>
+<header>
+<h1>休暇の申請</h1>
+<p class="desc">有給休暇・病気休暇・特別休暇の申請。上長が承認し、5 営業日を超えるときは部長も承認する（架空の決まり）。有給休暇は、休暇の帳簿が持つ残りから日数を引く</p>
+</header>
+<p>ファイル：<code>leave.ja.ringi</code>（申請の種類 <code>leave_ja</code> の版 1、sha256:19079ab70aff3303）</p>
+<p>受け持つチーム：人事部（<code>hr</code>）</p>
+<p>組織は、置いてある版のそれぞれ（2026-04-01、2027-04-01 から）で読んでいます。</p>
+<nav class="toc" aria-label="目次">
+<ul>
+<li><a href="#usable">使える期間</a></li>
+<li><a href="#submitters">出せる人</a></li>
+<li><a href="#form">フォーム</a></li>
+<li><a href="#route">経路</a></li>
+<li><a href="#ways">承認者の決め方</a></li>
+<li><a href="#deadlines">期限と催促</a></li>
+<li><a href="#rules">チケットの決まり</a></li>
+<li><a href="#comments">コメント</a></li>
+<li><a href="#proxies">代理</a></li>
+<li><a href="#after">帳簿と flow</a></li>
+<li><a href="#claims">主張</a></li>
+<li><a href="#scenarios">シナリオ</a></li>
+</ul>
+</nav>
+<h2 id="usable">使える期間</h2>
+<ul>
+<li>2026-04-01 から使えます。決めているのは、組織 <code>shared/company.ringi</code> の最初の版（データ <code>../org</code>）です。</li>
+<li>終わりの日はありません。読む物に終わりがありません。</li>
+</ul>
+<h2 id="submitters">出せる人</h2>
+<p>出せるのは、全員です。ただし、取締役会（<code>board</code>）の人は出せません。</p>
+<p>人数は、2026-04-01 からの組織の 24 人のうち 19 人、2027-04-01 からの 23 人のうち 18 人です。</p>
+<p>代わりに出す代理の人は、代わる人の名前で出せます。その申請は、代わられた人の申請になります。</p>
+<h2 id="form">フォーム</h2>
+<div class="scroll"><table>
+<thead><tr><th>フィールド</th><th>型</th><th>受け付ける値</th><th>必須</th><th>表示</th></tr></thead>
+<tbody>
+<tr><td>休暇の種類</td><td>有給休暇、病気休暇、特別休暇のどれか</td><td>—</td><td>必須</td><td>いつも</td></tr>
+<tr><td>初日</td><td>日付（カレンダー <code>本社</code> の営業日）</td><td>2026-01-01から2027-12-31まで</td><td>必須</td><td>いつも</td></tr>
+<tr><td>営業日の日数</td><td>数</td><td>1から20まで</td><td>必須</td><td>いつも</td></tr>
+<tr><td>出社する日</td><td>日付。計算：「初日」から、カレンダー <code>本社</code> の営業日で「営業日の日数」日あと</td><td>—</td><td>計算する</td><td>いつも</td></tr>
+<tr><td>理由</td><td>文</td><td>200字まで</td><td>「休暇の種類」が「特別休暇」のとき</td><td>いつも</td></tr>
+<tr><td>代わりに対応する人</td><td>組織の人</td><td>—</td><td>任意</td><td>いつも</td></tr>
+</tbody>
+</table></div>
+<p class="note">空のフィールドは値を持ちません。任意のフィールド、条件つきで必須か表示のフィールド、承認者が入れるフィールド（入れるまで）がそうです。「〜でない」という条件は、値が無いときも成り立ちます。「〜である」という条件と大きさの比べは、値が無いときは成り立ちません。値の無いフィールドを読む計算も値を持ちません。合計は別で、セルが入っている行だけを足します。</p>
+<h2 id="route">経路</h2>
+<p>共有の経路 <code>manager_approval</code>（<code>shared/manager_approval.ringi</code>）を通ります。経路の <code>long</code> は「営業日の日数」が5より大きいときに成り立ちます。</p>
+<h3 id="route-manager-approval">共有の経路 <code>manager_approval</code></h3>
+<div class="scroll"><table>
+<thead><tr><th>ステップ</th><th>答える人</th><th>来るとき</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>上長</td><td>いつも</td></tr>
+<tr><td>部長</td><td>部長</td><td>「営業日の日数」が5より大きいとき</td></tr>
+</tbody>
+</table></div>
+<h2 id="ways">承認者の決め方</h2>
+<div class="scroll"><table>
+<thead><tr><th>承認者</th><th>決まる人</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>申請者の上長。申請者が主に属するチームの長で、その長が申請者自身か空なら、上のチームの長です</td></tr>
+<tr><td>部長</td><td>申請者から上へたどって最初の、種類が <code>department</code> のチームの長</td></tr>
+</tbody>
+</table></div>
+<p>承認者は、ステップが始まるときに、そのときに効いている組織の版で決めます。その日に有効な代理も、並んで答えられます（「代理」を見てください）。</p>
+<h2 id="deadlines">期限と催促</h2>
+<p>共有の経路 <code>manager_approval</code> のどのステップも：</p>
+<ul>
+<li>期限は、始まった日から 2 営業日の日の終わりです。</li>
+<li>始まった日から 1 営業日の日の 09:00 に、承認者へ催促が届きます。</li>
+<li>期限を過ぎると上の長へ回ります。期限は、そこから数え直されます。また過ぎるとチケットは期限切れで終わります。</li>
+<li>答える人がいなければ、上の長へ回ります。組織のいちばん上では、ステップは飛ばされます。</li>
+</ul>
+<p>2026-04-03（金）に始まるステップでは、次のとおりです。申請の種類のカレンダーの休みは数えません（時刻は UTC+09:00）。</p>
+<div class="scroll"><table>
+<thead><tr><th>ステップ</th><th>催促</th><th>期限</th><th>上へ回したあとの期限</th></tr></thead>
+<tbody>
+<tr><td>上長</td><td>2026-04-06（月）09:00</td><td>2026-04-07（火）の終わり</td><td>2026-04-10（金）の終わり</td></tr>
+<tr><td>部長</td><td>2026-04-06（月）09:00</td><td>2026-04-07（火）の終わり</td><td>2026-04-10（金）の終わり</td></tr>
+</tbody>
+</table></div>
+<p>チケットは、長くても 40 営業日で終わります（ステップに 3 × 10、申請者のもとで 2 × 5）。いちばん長い場合の日付は <code>ritsu ringi doc --longest</code> が見せます。</p>
+<h2 id="rules">チケットの決まり</h2>
+<ul>
+<li>申請者は、自分の申請を承認しません。どのステップの承認者からも外します。代わりに出した人も同じです。</li>
+<li>一人の承認者が、すぐ前のステップを承認していれば、そのステップはその承認で済みます。</li>
+<li>承認者は、申請者へ差し戻せます。取り下げと合わせて 2 回までです。使い切ったら、承認か却下を選びます。</li>
+<li>申請者へ戻ったら、戻った日から 5 営業日の日の終わりまでに出し直せます。過ぎると期限切れで終わります。出し直しでは、変えるフィールドだけを渡します。</li>
+<li>申請者は、決まるまで取り下げられます。取り下げたチケットは手元へ戻り、直して出し直すか、やめるかを選びます。</li>
+<li>承認者は却下できます。チケットは却下で終わり、出し直せません。</li>
+<li>申請の種類を受け持つチームは、今のステップに承認者を足せます。承認者の一人の受け持ちを、ほかの人に引き継ぐこともできます。どちらも期限を動かしません。</li>
+</ul>
+<h2 id="comments">コメント</h2>
+<ul>
+<li>人がする操作（申請、承認、差し戻し、却下、取り下げなど）には、コメントを一つ添えられます。コメントだけを書くこともできます。添えなくてもかまいません。</li>
+<li>だれが書けるかは、ほかの操作と同じく、gate <code>shared/company.gate</code> が決めます。</li>
+<li>コメントは 2000 字までです。チケットの履歴の、その人がしたことの行に、書いた人と時刻と一緒に残り、あとから変えません。コメントだけを書いても、チケットの状態と期限は変わりません。</li>
+<li>理由を書かずに却下も差し戻しもできますが、書けば、申請者は何を直せばよいかを履歴で読めます。</li>
+</ul>
+<h2 id="proxies">代理</h2>
+<ul>
+<li>承認の代理は、行の期間のあいだ、代わる人のステップに並んで答えます。答えは、代わる人の席で一票に数えます。保留と再開、承認者が直すフィールドの直し、自分がした承認の取り消しもできます。</li>
+<li>申請の代理は、代わる人の名前で申請を出します。取り下げ、出し直し、やめることも、申請者と同じくできます。</li>
+<li>代理がしたことは、だれの代わりにしたかと一緒に、履歴に残ります。</li>
+</ul>
+<p>組織のデータにある、この申請の種類の代理：</p>
+<div class="scroll"><table>
+<thead><tr><th>代わられる人</th><th>代わる人</th><th>種類</th><th>期間</th></tr></thead>
+<tbody>
+<tr><td>e1203（営業担当 3）</td><td>e1201（営業担当 1）</td><td>申請</td><td>2026-12-01〜2026-12-31</td></tr>
+</tbody>
+</table></div>
+<h2 id="after">帳簿と flow</h2>
+<ul>
+<li>出したとき、「休暇の種類」が「有給休暇」なら、帳簿に <code>休暇.take</code> の仮押さえが入ります（<code>days</code> に「営業日の日数」）。</li>
+<li>承認されたとき、「休暇の種類」が「有給休暇」なら、仮押さえ <code>休暇.take</code> が確定します。</li>
+<li>差し戻されたか、却下されたか、取り下げられたか、期限切れになったとき、「休暇の種類」が「有給休暇」なら、仮押さえ <code>休暇.take</code> が取り消されます。</li>
+</ul>
+<h2 id="claims">主張</h2>
+<p>検査は、どれも成り立つことを確かめています。成り立たない主張があれば、この申請の種類は検査を通りません。</p>
+<ul>
+<li><code>期限内に終わる</code>：どのチケットも 40 営業日のうちに終わります。長くても 40 営業日です。</li>
+</ul>
+<h2 id="scenarios">シナリオ</h2>
+<p>検査は、どのシナリオもチケットの機械で走らせ、イベントごとに、書いたステップと状態になることを確かめています。</p>
+<h3 id="scenario-e995b7e38184e69c89e7b5a6e4bc91e69a87"><code>長い有給休暇</code></h3>
+<p>申請者：e1203（営業担当 3）</p>
+<ul>
+<li>休暇の種類：有給休暇</li>
+<li>初日：2026-12-21</li>
+<li>営業日の日数：8</li>
+<li>理由：「家族に会いに行く」</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>時刻</th><th>イベント</th><th>する人</th><th>そのあとのステップ</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td>2026-11-16 09:00</td><td>申請</td><td>e1203（営業担当 3）</td><td>上長</td><td>進行中</td></tr>
+<tr><td>2026-11-16 17:00</td><td>承認</td><td>e1101（営業一課長）</td><td>部長</td><td>進行中</td></tr>
+<tr><td>2026-11-17 09:00</td><td>催促</td><td>—</td><td>部長</td><td>進行中</td></tr>
+<tr><td>2026-11-19 00:00</td><td>期限が過ぎる</td><td>—</td><td>部長</td><td>進行中</td></tr>
+<tr><td>2026-11-19 10:00</td><td>承認</td><td>e0101（営業本部長）</td><td>—</td><td>承認</td></tr>
+</tbody>
+</table></div>
+<h3 id="scenario-e382b3e383a1e383b3e38388e38292e6b7bbe38188e381a6e5b7aee38197e688bbe38199e4bc91e69a87"><code>コメントを添えて差し戻す休暇</code></h3>
+<p>申請者：e1203（営業担当 3）</p>
+<ul>
+<li>休暇の種類：有給休暇</li>
+<li>初日：2026-12-21</li>
+<li>営業日の日数：3</li>
+<li>理由：「家族に会いに行く」</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>時刻</th><th>イベント</th><th>する人</th><th>コメント</th><th>そのあとのステップ</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td>2026-11-16 09:00</td><td>申請</td><td>e1203（営業担当 3）</td><td></td><td>上長</td><td>進行中</td></tr>
+<tr><td>2026-11-16 11:00</td><td>コメント</td><td>e1101（営業一課長）</td><td>「休みのあいだ、だれが代わりに対応しますか」</td><td>上長</td><td>進行中</td></tr>
+<tr><td>2026-11-16 13:00</td><td>コメント</td><td>e1203（営業担当 3）</td><td>「e1201 さんです」</td><td>上長</td><td>進行中</td></tr>
+<tr><td>2026-11-16 17:00</td><td>差し戻し</td><td>e1101（営業一課長）</td><td>「代わりの人に e1201 さんを書いてください」</td><td>—</td><td>申請者の手元</td></tr>
+<tr><td>2026-11-16 17:30</td><td>コメント</td><td>e1203（営業担当 3）</td><td>「代わりの人は、どこに書けばよいですか」</td><td>—</td><td>申請者の手元</td></tr>
+<tr><td>2026-11-16 17:45</td><td>コメント</td><td>e1101（営業一課長）</td><td>「フォームの「代わりに対応する人」の欄です」</td><td>—</td><td>申請者の手元</td></tr>
+<tr><td>2026-11-17 09:00</td><td>出し直し（「代わりに対応する人」：e1201（営業担当 1））</td><td>e1203（営業担当 3）</td><td>「代わりの人に e1201 さんを書きました」</td><td>上長</td><td>進行中</td></tr>
+<tr><td>2026-11-17 10:00</td><td>承認</td><td>e1101（営業一課長）</td><td>「よい休みを」</td><td>—</td><td>承認</td></tr>
+</tbody>
+</table></div>
+<h3 id="scenario-e79086e794b1e38292e6b7bbe38188e381a6e58db4e4b88be38199e3828be4bc91e69a87"><code>理由を添えて却下する休暇</code></h3>
+<p>申請者：e1203（営業担当 3）</p>
+<ul>
+<li>休暇の種類：有給休暇</li>
+<li>初日：2026-12-21</li>
+<li>営業日の日数：8</li>
+<li>理由：「家族に会いに行く」</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>時刻</th><th>イベント</th><th>する人</th><th>コメント</th><th>そのあとのステップ</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td>2026-11-16 09:00</td><td>申請</td><td>e1203（営業担当 3）</td><td></td><td>上長</td><td>進行中</td></tr>
+<tr><td>2026-11-16 17:00</td><td>承認</td><td>e1101（営業一課長）</td><td></td><td>部長</td><td>進行中</td></tr>
+<tr><td>2026-11-16 18:00</td><td>却下</td><td>e3101（営業一部長）</td><td>「年末の前の週は、一年でいちばん忙しい週です」</td><td>—</td><td>却下</td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

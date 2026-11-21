@@ -1,0 +1,21 @@
+rule every_other v1
+description "A table that names every other count from 2 to 20: the ten odd counts between match no row, more parts than one report lists"
+
+inputs
+  units : number  range >=1 <=20
+
+outputs
+  even : bool
+
+table evens
+| units | -> even |
+| 2     | true    |
+| 4     | true    |
+| 6     | true    |
+| 8     | true    |
+| 10    | true    |
+| 12    | true    |
+| 14    | true    |
+| 16    | true    |
+| 18    | true    |
+| 20    | true    |

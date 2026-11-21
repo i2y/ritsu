@@ -1,0 +1,3 @@
+ok settle.rule
+ok settle.kn: 1 function, total
+ritsu check: 2 files (rulec 1, kaname 1): all pass; borders between the languages: 4 checked, 0 undecided

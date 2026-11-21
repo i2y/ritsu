@@ -9,7 +9,12 @@
 //!   code of `avp` is only built and vetted: the tests never call AWS, DESIGN 6.3);
 //! - the code of `cedar` is run on the raw values of every combination the check walks, and on the
 //!   faults it is to refuse (`sekisho::raw`), and each answer is held to what sekisho's reference
-//!   evaluation answers for the same values (`Raw::compare`).
+//!   evaluation answers for the same values (`Raw::compare`);
+//! - the entry by the action's name (`Authorize`, DESIGN 5.7) is given each case too, the resource's
+//!   id under its type and an id of every other type the gate's actions take beside it, and answers
+//!   as the action's own function does (an action with inputs of its own, refused as `input`); a
+//!   name the gate has no action of is refused as `action`, and no id, or ids of two of an action's
+//!   types, as `resource`.
 //!
 //! The module is tools/runner-go's (go.mod and go.sum: cedar-go v1.8.0, the AWS SDK's client of
 //! Verified Permissions), its modules fetched with `go mod download` in tools/runner-go. Without
@@ -279,6 +284,7 @@ func main() {
 	}
 	w := bufio.NewWriter(os.Stdout)
 	defer w.Flush()
+	same, refused, narrowed := 0, 0, 0
 	for _, c := range data.Cases {
 		held := map[[2]string]any{}
 		for _, e := range c.Store {
@@ -338,13 +344,116 @@ func main() {
 			panic(err)
 		}
 		fmt.Fprintln(w, string(line))
+		// the entry by the action's name, given the same: the resource's id under its type, beside an
+		// id of each type of the gate's the action does not take
+		resources := map[string]string{}
+		for _, t := range others[c.Action] {
+			resources[t] = "other-" + t
+		}
+		rt := ""
+		if ts := takes[c.Action]; len(ts) == 1 {
+			rt = ts[0]
+		} else if v, ok := c.Input["resource_type"].(string); ok {
+			rt = v
+		}
+		if id, ok := c.Input[a.Resource].(string); ok && rt != "" {
+			resources[rt] = id
+		}
+		b := gate.Authorize(store{held}, gate.Principal{Type: c.Principal["type"], ID: c.Principal["id"]}, c.Action, resources, now)
+		var bKind any
+		if b.Err != nil {
+			bKind = b.Err.Kind
+		}
+		switch {
+		case own[c.Action]:
+			if b.Err == nil || b.Err.Kind != "input" || b.Allowed || len(b.Policies) != 0 {
+				fmt.Fprintf(w, "by name differs: %s: %v %v %v, not a refusal of the kind input\n", c.Name, b.Allowed, b.Policies, bKind)
+			} else {
+				refused++
+			}
+		case b.Allowed != ans.FieldByName("Allowed").Bool() || !reflect.DeepEqual(b.Policies, ans.FieldByName("Policies").Interface()) || bKind != kind || !reflect.DeepEqual(b.Context, ans.FieldByName("Context").Interface()):
+			fmt.Fprintf(w, "by name differs: %s: %v %v %v %v, not %v %v %v %v\n", c.Name, b.Allowed, b.Policies, bKind, b.Context, ans.FieldByName("Allowed").Bool(), ans.FieldByName("Policies").Interface(), kind, ans.FieldByName("Context").Interface())
+		default:
+			same++
+		}
+		// the roles a sign-in carries, every role of the gate's and one it does not declare, passed
+		// through RolesOf of the principal's type as a service does: asked again, the entry does not
+		// refuse the principal
+		key := [2]string{c.Principal["type"], c.Principal["id"]}
+		if r, ok := held[key]; ok && !own[c.Action] && b.Err == nil && reflect.ValueOf(r).Elem().FieldByName("Roles").IsValid() {
+			may := map[string]bool{}
+			for _, x := range gate.RolesOf(c.Principal["type"]) {
+				may[x] = true
+			}
+			kept := []string{}
+			for _, x := range append(gate.Roles(), "no_such_role") {
+				if may[x] {
+					kept = append(kept, x)
+				}
+			}
+			cp := reflect.New(reflect.TypeOf(r).Elem())
+			cp.Elem().Set(reflect.ValueOf(r).Elem())
+			cp.Elem().FieldByName("Roles").Set(reflect.ValueOf(kept))
+			again := map[[2]string]any{}
+			for k, v := range held {
+				again[k] = v
+			}
+			again[key] = cp.Interface()
+			d := gate.Authorize(store{again}, gate.Principal{Type: c.Principal["type"], ID: c.Principal["id"]}, c.Action, resources, now)
+			if d.Err != nil && d.Err.Kind == "principal" {
+				fmt.Fprintf(w, "roles of differs: %s: %v refused as the principal: %s\n", c.Name, kept, d.Err.Message)
+			} else {
+				narrowed++
+			}
+		}
+	}
+	// what the entry refuses before any function is asked
+	probes := 0
+	probe := func(what string, b gate.Answer, kind, message string) {
+		probes++
+		if b.Err == nil || b.Err.Kind != kind || b.Allowed || len(b.Policies) != 0 || (message != "" && b.Err.Message != message) {
+			fmt.Fprintf(w, "by name differs: %s: %v %v %+v, not a refusal of the kind %s %q\n", what, b.Allowed, b.Policies, b.Err, kind, message)
+		}
+	}
+	none := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	probe("a name of no action", gate.Authorize(store{}, gate.Principal{}, "no such action", map[string]string{}, none), "action", `the gate has no action "no such action"`)
+	for action, ts := range takes {
+		if own[action] {
+			continue
+		}
+		probe(action+" with no id", gate.Authorize(store{}, gate.Principal{}, action, map[string]string{}, none), "resource", "")
+		if len(ts) > 1 {
+			all := map[string]string{}
+			for _, t := range ts {
+				all[t] = "x"
+			}
+			probe(action+" with an id of each of its types", gate.Authorize(store{}, gate.Principal{}, action, all, none), "resource", "")
+		}
+	}
+	fmt.Fprintf(w, "by name: %d answered as the action's own function answers, %d refused as taking inputs of their own, %d refusals before any function\n", same, refused, probes)
+	// the list of the roles the gate declares, a new slice each call
+	listed, _ := json.Marshal(gate.Roles())
+	again := gate.Roles()
+	if len(again) > 0 {
+		again[0] = "changed"
+	}
+	fresh, _ := json.Marshal(gate.Roles())
+	fmt.Fprintf(w, "roles: %s %s\n", listed, fresh)
+	// the roles of each type, and of a name the gate does not declare
+	fmt.Fprintf(w, "roles of: %d asked again with the roles RolesOf leaves\n", narrowed)
+	for _, t := range typeNames {
+		of, _ := json.Marshal(gate.RolesOf(t))
+		fmt.Fprintf(w, "roles of %s: %s\n", t, of)
 	}
 }
 "#;
 
 /// The registry of the harness for a gate's package: the store, a method for each `Store` method
-/// the package declares, the record types, and each action's function.
-fn registry(text: &str, actions: &[String]) -> String {
+/// the package declares, the record types, each action's function, and for the entry by the
+/// action's name, the types each action takes, the other types the gate's actions take, and the
+/// actions with inputs of their own.
+fn registry(text: &str, g: &sekisho::model::Gate) -> String {
+    let actions: Vec<String> = g.actions.iter().map(|a| a.named.alias.clone()).collect();
     let mut methods: Vec<(String, String)> = Vec::new();
     let mut inside = false;
     for l in text.lines() {
@@ -367,11 +476,25 @@ fn registry(text: &str, actions: &[String]) -> String {
     for (m, ty) in &methods {
         r.push_str(&format!("\t\"{m}\": reflect.TypeOf(gate.{ty}{{}}),\n"));
     }
-    r.push_str("}\n\nvar actions = map[string]any{\n");
-    for a in actions {
+    let names: Vec<String> = g.types.iter().map(|t| ritsu_base::json::quote(&t.named.alias)).chain([ritsu_base::json::quote("no such type")]).collect();
+    r.push_str(&format!("}}\n\nvar typeNames = []string{{{}}}\n\nvar actions = map[string]any{{\n", names.join(", ")));
+    for a in &actions {
         r.push_str(&format!("\t\"{a}\": gate.Authorize{},\n", sekisho::r#gen::go::exported(a)));
     }
     r.push_str("}\n");
+    let q = |x: &str| ritsu_base::json::quote(x);
+    let every: std::collections::BTreeSet<usize> = g.actions.iter().flat_map(|a| a.resources.iter().copied()).collect();
+    let (mut takes, mut others, mut own) = (String::new(), String::new(), String::new());
+    for a in &g.actions {
+        let ts: Vec<String> = a.resources.iter().map(|&t| q(&g.types[t].named.alias)).collect();
+        let os: Vec<String> = every.iter().filter(|t| !a.resources.contains(t)).map(|&t| q(&g.types[t].named.alias)).collect();
+        takes.push_str(&format!("\t{}: {{{}}},\n", q(&a.named.alias), ts.join(", ")));
+        others.push_str(&format!("\t{}: {{{}}},\n", q(&a.named.alias), os.join(", ")));
+        if !a.inputs.is_empty() {
+            own.push_str(&format!("\t{}: true,\n", q(&a.named.alias)));
+        }
+    }
+    r.push_str(&format!("\nvar takes = map[string][]string{{\n{takes}}}\n\nvar others = map[string][]string{{\n{others}}}\n\nvar own = map[string]bool{{\n{own}}}\n"));
     r
 }
 
@@ -385,25 +508,25 @@ fn every_case_is_answered_as_sekisho_answers_it() {
     let m = t.path().join("m");
     module(&runner, &m);
     let path = module_path(&runner);
-    let mut runs: Vec<(String, String, sekisho::raw::Raw)> = Vec::new();
+    let mut runs: Vec<(String, String, sekisho::raw::Raw, String, Vec<String>)> = Vec::new();
     for (i, g) in gates().iter().enumerate() {
         let name = format!("g{i}");
         let Some((o, text)) = package(g, &m, &path, &name, Authorizer::Cedar, ritsu_base::text::Lang::En) else { continue };
         let (scope, checked) = (o.scope.as_ref().unwrap(), o.walked.as_ref().unwrap());
         let r = sekisho::raw::raw(scope, checked, &suite);
         let pkg = ritsu_emit::ident::go_package(&checked.gate.named.alias);
-        let actions: Vec<String> = checked.gate.actions.iter().map(|a| a.named.alias.clone()).collect();
-        let main = HARNESS.replace("IMPORT", &format!("{path}/{name}/authz/{pkg}")).replace("REGISTRY", &registry(&text, &actions));
+        let main = HARNESS.replace("IMPORT", &format!("{path}/{name}/authz/{pkg}")).replace("REGISTRY", &registry(&text, &checked.gate));
         write(&m.join(&name).join("cmd/run/main.go"), &main);
         let data = t.path().join(format!("{name}.json"));
         std::fs::write(&data, r.json(&checked.gate)).unwrap();
-        runs.push((g.clone(), name, r));
+        runs.push((g.clone(), name, r, roles_of(&checked.gate), lines_of_roles_of(&checked.gate)));
     }
     // each harness built, then run
     let bin = t.path().join("bin");
     let (mut wrong, mut lines) = (Vec::new(), Vec::new());
     let mut total = 0usize;
-    for (g, name, r) in &runs {
+    let mut narrowed = 0usize;
+    for (g, name, r, declared, of) in &runs {
         if r.cases.is_empty() {
             // no action: the package declares its types, and nothing asks it
             lines.push(format!("{g}: no action, so no case"));
@@ -419,7 +542,8 @@ fn every_case_is_answered_as_sekisho_answers_it() {
             wrong.push(format!("{g}: the harness fails:\n{}", String::from_utf8_lossy(&out.stderr)));
             continue;
         }
-        match r.compare(&String::from_utf8_lossy(&out.stdout)) {
+        let printed = String::from_utf8_lossy(&out.stdout);
+        match r.compare(&printed) {
             Ok(n) => {
                 total += n;
                 let (refused, allowed) = r.counts();
@@ -427,13 +551,75 @@ fn every_case_is_answered_as_sekisho_answers_it() {
             }
             Err(e) => wrong.push(format!("{g}: {e}")),
         }
+        // the entry by the action's name
+        let differs: Vec<&str> = printed.lines().filter(|l| l.starts_with("by name differs: ")).collect();
+        if !differs.is_empty() {
+            let n = differs.len();
+            wrong.push(format!("{g}: {n} answers of Authorize differ:\n{}", differs.iter().take(20).copied().collect::<Vec<_>>().join("\n")));
+        }
+        match printed.lines().find(|l| l.starts_with("by name: ")) {
+            Some(l) => lines.push(format!("{g}: {}", l.trim_start_matches("by name: "))),
+            None => wrong.push(format!("{g}: the harness does not say what Authorize answered")),
+        }
+        // Roles() is the gate's roles as it declares them, and a change to what it returned is not
+        // in the next
+        match printed.lines().find_map(|l| l.strip_prefix("roles: ")) {
+            Some(l) if l == format!("{declared} {declared}") => {}
+            other => wrong.push(format!("{g}: Roles() gave {other:?}, not {declared} twice")),
+        }
+        // RolesOf of each type, and the cases asked again with the roles it leaves
+        for want in of {
+            if !printed.lines().any(|l| l == want) {
+                wrong.push(format!("{g}: no line {want:?}"));
+            }
+        }
+        let differs: Vec<&str> = printed.lines().filter(|l| l.starts_with("roles of differs: ")).collect();
+        if !differs.is_empty() {
+            wrong.push(format!("{g}: {} cases refused with the roles RolesOf leaves:\n{}", differs.len(), differs.iter().take(20).copied().collect::<Vec<_>>().join("\n")));
+        }
+        match printed.lines().find_map(|l| l.strip_prefix("roles of: ")).and_then(|l| l.split(' ').next()?.parse::<usize>().ok()) {
+            Some(n) => {
+                narrowed += n;
+                if g.ends_with("tests/gen/roles_of.gate") && n == 0 {
+                    wrong.push(format!("{g}: no case asked again with the roles RolesOf leaves"));
+                }
+            }
+            None => wrong.push(format!("{g}: the harness does not say what it asked with the roles RolesOf leaves")),
+        }
     }
+    println!("{narrowed} cases asked again with every role of the gate's and one more, passed through RolesOf, and none refused as the principal");
     for l in &lines {
         println!("{l}");
     }
     println!("{} gates, {total} cases, through cedar-go v1.8.0", lines.len());
     assert!(wrong.is_empty(), "{}", wrong.join("\n\n"));
     assert!(lines.iter().any(|l| l.starts_with("examples/refunds/refunds.gate: ")), "the example is run");
+}
+
+/// What the harness prints of `RolesOf` for each type of the gate and for a name it does not
+/// declare: the aliases of the roles of the type's `roles` line, in the order the gate declares the
+/// roles, as Go's `json.Marshal` writes them.
+fn lines_of_roles_of(g: &sekisho::model::Gate) -> Vec<String> {
+    let mut out: Vec<String> = g
+        .types
+        .iter()
+        .map(|t| {
+            let mut rs = t.roles.clone();
+            rs.sort_unstable();
+            rs.dedup();
+            let each: Vec<String> = rs.iter().map(|&r| ritsu_base::json::quote(&g.roles[r].named.alias)).collect();
+            format!("roles of {}: [{}]", t.named.alias, each.join(","))
+        })
+        .collect();
+    out.push("roles of no such type: []".to_string());
+    out
+}
+
+/// The aliases of the roles a gate declares, in its order, as Go's `json.Marshal` writes a slice of
+/// them.
+fn roles_of(g: &sekisho::model::Gate) -> String {
+    let each: Vec<String> = g.roles.iter().map(|r| ritsu_base::json::quote(&r.named.alias)).collect();
+    format!("[{}]", each.join(","))
 }
 
 /// The command run as a function, every language joined: its exit code, and what it printed on

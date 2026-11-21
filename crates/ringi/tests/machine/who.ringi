@@ -1,0 +1,48 @@
+request leave v1 "Leave, for those who may ask"
+description "Leave only some may ask for (fictional rules): `submitted by`, a request made in somebody's name, and a ticket made again after the organization changed"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  days : number "Business days"  range >=1 <=20
+
+route
+  manager  manager
+
+who
+  manager = manager of requester
+
+every stage
+  due in 2 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  # (fictional) the members of Sales Department 1 itself and of the board do not ask
+  submitted by   everyone except team sales1, team board
+  self approval  not allowed
+  send back      to the requester, at most 2 times
+  resubmit       within 5 business days
+
+# made by a proxy in the requester's name, sent back, and made again by the proxy
+scenario a_proxy_asks_for_someone
+  requester e1203
+  form days = 3
+| at               | event     | by    | -> stage | status         |
+| 2026-12-01 10:00 | submit    | e1201 | manager  | in progress    |
+| 2026-12-01 11:00 | send back | e1101 |          | with requester |
+| 2026-12-02 10:00 | resubmit  | e1201 | manager  | in progress    |
+| 2026-12-02 11:00 | approve   | e1101 |          | approved       |
+
+# the section is gone from the next version, and its members are members of the department, who
+# may not ask: a ticket made before is made again all the same, and its manager is the one the
+# new version gives
+scenario made_again_after_the_organization_changed
+  requester e1201
+  form days = 3
+| at               | event     | by    | -> stage | status         |
+| 2027-03-31 10:00 | submit    | e1201 | manager  | in progress    |
+| 2027-03-31 11:00 | send back | e1101 |          | with requester |
+| 2027-04-01 10:00 | resubmit  | e1201 | manager  | in progress    |
+| 2027-04-01 11:00 | approve   | e3101 |          | approved       |

@@ -1,0 +1,7 @@
+Refund:
+  type: object
+  properties:
+    order:
+      type: string
+    items:
+      type: integer

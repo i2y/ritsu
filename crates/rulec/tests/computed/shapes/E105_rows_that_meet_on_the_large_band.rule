@@ -1,0 +1,21 @@
+rule overlap_occurs v1
+description "Two rows that both take the large band from 50,000 yen up: they overlap from 100,001 yen, where the band is large, and the example is one such amount"
+
+enum choice = one | two | three | four
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000_000JPY
+
+apply t = "shared/tier.rule" meaning:8c5e54b1fadce0b7
+  amount = amount
+  band -> t_band
+
+outputs
+  x : choice
+
+table pick
+| amount      | t_band | -> x  |
+| <50_000JPY  | -      | one   |
+| >=50_000JPY | medium | two   |
+| >=50_000JPY | large  | three |
+| -           | large  | four  |

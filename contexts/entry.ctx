@@ -39,3 +39,6 @@ upstream Gates conformist
 
 upstream Programs conformist
   through kaname
+
+upstream Requests conformist
+  through ringi

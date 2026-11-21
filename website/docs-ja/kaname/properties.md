@@ -35,7 +35,7 @@ property 残りより多くは配らない(no_share_is_more_than_its_left)(明�
 ```console
 $ cd crates/kaname
 $ ritsu kaname check tests/properties/shares.ja.kn --lang ja
-エラー[E603]: tests/properties/shares.ja.kn:12:1: 性質 `どの明細にも配る` は、明細: [明細 { 品番: "a", 残り: 500000USDc }, 明細 { 品番: "a", 残り: 500000USDc }], 返金: 1USDc で成り立ちません
+エラー[E603]: tests/properties/shares.ja.kn:12:1: 性質 `どの明細にも配る` は、明細: [明細 { 品番: "a", 残り: 500_000USDc }, 明細 { 品番: "a", 残り: 500_000USDc }], 返金: 1USDc で成り立ちません
     12 | property どの明細にも配る(every_line_gets_a_share)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
   = 15 行目: `配分` は [0USDc, 1USDc]
   = `check` は、性質を引数のベクタで参照インタプリタに流します。この入力では、`when` の行がどれも `true` で、最後の行が `false` になりました。
@@ -93,7 +93,7 @@ generated: generated/lean/samples/refund_split.lean
 ```lean
 abbrev shares_add_up : Prop :=
   ∀ (lines : List Line) (refund : Int),
-    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    1 ≤ List.length lines → List.length lines ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
     0 ≤ refund → refund ≤ 10000000 →
     ((List.map (fun (s : Share) => s.share) (split lines refund)).sum) = refund
 ```

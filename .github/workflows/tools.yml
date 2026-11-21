@@ -11,7 +11,7 @@ name: tools
 # The crates run in three groups side by side, each with what it needs: rulec (the twelve
 # languages it writes, a PostgreSQL server, Lean), whose tests take two runners, dandori (the SDKs
 # and runners under its tools/; its tests read the rules through rulec's library, PLAN D.3, and
-# run the books its examples call on chobo's clients) with ritsu, and the other seven languages
+# run the books its examples call on chobo's clients) with ritsu, and the other eight languages
 # with the base layer, the test kit and xtask. The tests of the npm package (ritsu's tests/npm.rs)
 # run in jobs of their own, two side by side for each Node the package is for (DESIGN 8.8).
 
@@ -68,7 +68,7 @@ jobs:
             # the npm package's tests are the job `npm`'s
             crates: "-p dandori -p ritsu -- --skip npm::"
           - group: the others
-            crates: -p koyomi -p chobo -p geas -p yuen -p sakai -p sekisho -p kaname -p ritsu-base -p ritsu-units -p ritsu-ports -p ritsu-testkit -p ritsu-proto -p ritsu-emit -p xtask
+            crates: -p koyomi -p chobo -p geas -p yuen -p sakai -p sekisho -p kaname -p ringi -p ritsu-base -p ritsu-units -p ritsu-ports -p ritsu-testkit -p ritsu-proto -p ritsu-emit -p xtask
 
     # `rulec test` runs the generated SQL against a real PostgreSQL, because the query and the
     # function beside it are two doors on one rule and only a server can open the second. The
@@ -104,9 +104,9 @@ jobs:
         with:
           # rulec writes Rust for the browser and for WASI, koyomi a Wasm module for any host, and
           # kaname and `ritsu gen` a package of Rust that builds into one; geas reads coverage with
-          # llvm-tools, and chobo, kaname and `ritsu gen` hold their Rust to clippy's lints
+          # llvm-tools, and rulec, chobo, kaname and `ritsu gen` hold their Rust to clippy's lints
           targets: ${{ matrix.group == 'rulec' && 'wasm32-unknown-unknown, wasm32-wasip1' || 'wasm32-unknown-unknown' }}
-          components: ${{ matrix.group == 'the others' && 'llvm-tools, clippy' || matrix.group == 'dandori' && 'clippy' || '' }}
+          components: ${{ matrix.group == 'the others' && 'llvm-tools, clippy' || (matrix.group == 'dandori' || matrix.group == 'rulec') && 'clippy' || '' }}
 
       - uses: actions/cache@v6
         with:
@@ -350,7 +350,11 @@ jobs:
 
       # kaname's tests type-check the TypeScript and the Python it generates, and run them (Node
       # runs the TypeScript tsc compiles); ritsu's tests run the code `ritsu gen` writes for a
-      # project's modules the same way. Go reads tools/go's go.mod.
+      # project's modules the same way, and the code it writes for ringi's requests
+      # (tests/gen_requests.rs, in the group that runs ritsu's tests) and the module of the tickets
+      # that code holds. Go reads tools/go's go.mod. ringi's own tests need only Node (the functions
+      # of its screens are run against the vectors, tests/a2ui) and the throwaway PostgreSQL of the
+      # step below.
       - name: "kaname: tsc and mypy"
         if: matrix.group == 'the others' || matrix.group == 'dandori'
         run: |
@@ -518,6 +522,7 @@ jobs:
             the_generated_code_agrees_in_every_language_the_warning_does_not_name
             an_alias_where_the_finding_says_makes_every_language_agree
             the_code_generated_from_every_draft_answers_alike_in_every_language
+            every_rule_of_the_tree_is_silent_under_each_strict_checker
         run: cargo xtask test --level tools ${{ matrix.crates }}
 
       # --- What rulec's ci.yml ran beside `cargo test`, in the first of rulec's two jobs.

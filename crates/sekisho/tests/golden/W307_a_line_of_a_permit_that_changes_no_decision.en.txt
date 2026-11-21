@@ -1,0 +1,6 @@
+warning[W307]: tests/mutants/W307_a_line_of_a_permit_that_changes_no_decision.gate:22:1: The line `when resource.open_to_all` of the permit `services_index` changes no decision: a forbid denies every combination it leaves out
+    22 |   when resource.open_to_all
+  = Without it, the permit would also apply to the 1 combination only this line is not met on, which `services_skip_closed_docs` denies.
+  = For example: Service, Doc (open_to_all: no); denied by `services_skip_closed_docs`.
+  = Taking it out changes no answer: remove it, or correct it if it is meant to leave out something else.
+tests/mutants/W307_a_line_of_a_permit_that_changes_no_decision.gate: ok — 1 action, 2 policies (1 permit, 1 forbid), 0 expectations, 0 separations

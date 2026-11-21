@@ -1,0 +1,27 @@
+gate python_store v1
+description "A type Python reads with a method of Store, named as a keyword of Python"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can accept_return
+
+principal Clerk
+  description "The one who asks"
+  roles clerk
+
+resource Return
+  description "Goods a customer sends back"
+  attributes
+    unopened : bool
+
+action accept_return
+  description "Take in goods sent back"
+  principal Clerk
+  resource Return
+
+permit clerks_accept_returns
+  description "A clerk can: Take in goods sent back"
+  principal in clerk
+  action accept_return
+  when resource.unopened

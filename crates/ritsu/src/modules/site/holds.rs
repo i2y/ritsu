@@ -19,6 +19,10 @@ pub(super) enum Kind {
     Workflow,
     Book,
     Gate,
+    Request,
+    Route,
+    Organization,
+    Masters,
     Functions,
     Requirements,
     ContextMap,
@@ -36,6 +40,10 @@ impl Kind {
             Kind::Workflow => tr!("ワークフロー", "workflow"),
             Kind::Book => tr!("帳簿", "book"),
             Kind::Gate => tr!("ゲート", "gate"),
+            Kind::Request => tr!("申請の種類", "request type"),
+            Kind::Route => tr!("共有の経路", "shared route"),
+            Kind::Organization => tr!("組織", "organization"),
+            Kind::Masters => tr!("マスタのファイル", "masters file"),
             Kind::Functions => tr!("kaname のモジュール", "kaname module"),
             Kind::Requirements => tr!("要件のファイル", "requirements file"),
             Kind::ContextMap => tr!("コンテキストの地図", "context map"),
@@ -53,6 +61,10 @@ impl Kind {
             Kind::Workflow => tr!("ワークフロー", "Workflows"),
             Kind::Book => tr!("帳簿", "Books"),
             Kind::Gate => tr!("ゲート", "Gates"),
+            Kind::Request => tr!("申請の種類", "Request types"),
+            Kind::Route => tr!("共有の経路", "Shared routes"),
+            Kind::Organization => tr!("組織", "Organizations"),
+            Kind::Masters => tr!("マスタ", "Masters files"),
             Kind::Functions => tr!("kaname のモジュール", "kaname modules"),
             Kind::Requirements => tr!("要件", "Requirements"),
             Kind::ContextMap => tr!("コンテキストの地図", "Context maps"),
@@ -83,6 +95,10 @@ impl Kind {
             Kind::Workflow => "workflow",
             Kind::Book => "book",
             Kind::Gate => "gate",
+            Kind::Request => "request",
+            Kind::Route => "route",
+            Kind::Organization => "organization",
+            Kind::Masters => "masters",
             Kind::Functions => "functions",
             Kind::Requirements => "requirements",
             Kind::ContextMap => "contexts",
@@ -276,6 +292,40 @@ fn say(t: &Text, lang: Lang) -> String {
     t.get(lang).to_string()
 }
 
+/// What `ringi api` says of a `.ringi`: the department that owns a request, the shared route it
+/// takes, the first day it can be used on, and the names its kind of file declares (the stages of a
+/// route, the positions and kinds of team of an organization, the masters of a masters file), each as
+/// the file writes it.
+fn request_facts(api: &Json, held: &mut Held) {
+    if let Some(owner) = api.get("owner").and_then(Json::as_str) {
+        held.facts.push((tr!("受け持つ部門", "Owned by"), Value::Code(owner.to_string())));
+    }
+    let routes: Vec<String> = api
+        .get("uses")
+        .and_then(Json::as_arr)
+        .unwrap_or(&[])
+        .iter()
+        .filter(|u| u.get("kind").and_then(Json::as_str) == Some("route"))
+        .filter_map(|u| u.get("file").and_then(Json::as_str).map(str::to_string))
+        .collect();
+    if !routes.is_empty() {
+        held.facts.push((tr!("共有の経路", "Shared route"), Value::Names(routes)));
+    }
+    let items = api.get("items").and_then(Json::as_arr).unwrap_or(&[]);
+    let written = |kind: &str| -> Vec<String> {
+        items.iter().filter(|i| i.get("kind").and_then(Json::as_str) == Some(kind)).filter_map(|i| i.get("written").or_else(|| i.get("name")).and_then(Json::as_str).map(str::to_string)).collect()
+    };
+    for (kind, label) in [("stage", tr!("ステップ", "Stages")), ("position", tr!("役職", "Positions")), ("team_kind", tr!("チームの種類", "Kinds of team")), ("master", tr!("マスタ", "Masters"))] {
+        let ns = written(kind);
+        if !ns.is_empty() {
+            held.facts.push((label, Value::Names(ns)));
+        }
+    }
+    if let Some(from) = api.get("usable").and_then(|u| u.get("from")).and_then(Json::as_str) {
+        held.facts.push((tr!("使える最初の日", "Usable from"), Value::Code(from.to_string())));
+    }
+}
+
 /// What a file is, from its language and what its `api` says.
 fn kind_of(tool: Tool, api: Option<&Json>) -> Option<Kind> {
     Some(match tool {
@@ -290,6 +340,13 @@ fn kind_of(tool: Tool, api: Option<&Json>) -> Option<Kind> {
         Tool::Dandori => Kind::Workflow,
         Tool::Chobo => Kind::Book,
         Tool::Sekisho => Kind::Gate,
+        // the first word of a `.ringi` says its kind; a file that does not pass is read as a request
+        Tool::Ringi => match api.and_then(|a| a.get("kind")).and_then(Json::as_str) {
+            Some("route") => Kind::Route,
+            Some("organization") => Kind::Organization,
+            Some("masters") => Kind::Masters,
+            _ => Kind::Request,
+        },
         Tool::Kaname => Kind::Functions,
         Tool::Yuen => Kind::Requirements,
         Tool::Sakai => Kind::ContextMap,
@@ -355,6 +412,7 @@ pub(super) fn held(m: &diff::Module, rel: &str, lang: Lang, joined: &Joined) -> 
                     h.facts.push((tr!("要件", "Requirements"), Value::Names(ns)));
                 }
             }
+            Tool::Ringi => request_facts(api, &mut h),
             _ => {}
         }
     }
@@ -403,6 +461,9 @@ mod tests {
         assert_eq!(Kind::Rule.counted(1).en, "1 rule");
         assert_eq!(Kind::Rule.counted(2).ja, "規則 2 本");
         assert_eq!(Kind::Calendar.counted(5).ja, "カレンダー 5 個");
+        assert_eq!(Kind::Request.counted(2).en, "2 request types");
+        assert_eq!(Kind::Request.counted(2).ja, "申請の種類 2 つ");
+        assert_eq!(Kind::Route.counted(1).en, "1 shared route");
         assert_eq!(number("30000"), "30,000");
         assert_eq!(number("2.5"), "2.5");
     }

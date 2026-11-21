@@ -1,0 +1,45 @@
+rule fee_written_above v1
+description "A fee by the balance and the number of boxes, a tier by the fee and the boxes, and a choice read off the balance, the fee and the tier. With one box and a balance under 10 yen the fee is 260 yen, so the first tier, which one box gets from a fee of 81 yen and more, never comes there with a fee under 101 yen: the fee table's row writes 260 yen, which none of those fees stands on"
+
+enum choice = one | two
+enum tier = first | second | third
+
+inputs
+  balance : money[JPY]  range >=-40JPY <=18JPY
+  boxes   : number      range >=1 <=4
+
+outputs
+  x : choice
+
+table fee_of
+| balance        | boxes | -> fee : money[JPY] |
+| <=9JPY         | <2    | 260JPY              |
+| <=9JPY         | >1 <4 | 80JPY               |
+| <=9JPY         | >=4   | 100JPY              |
+| >=10JPY <14JPY | <2    | 80JPY               |
+| >=10JPY <14JPY | >1 <4 | 260JPY              |
+| >=10JPY <14JPY | >=4   | 80JPY               |
+| >13JPY         | <2    | 100JPY              |
+| >13JPY         | >1 <4 | 260JPY              |
+| >13JPY         | >=4   | 260JPY              |
+
+table tier_of
+| fee     | boxes  | -> tier : tier |
+| <=80JPY | <=1    | second         |
+| <=80JPY | >1 <=3 | third          |
+| <=80JPY | >=4    | first          |
+| >=81JPY | <=1    | first          |
+| >=81JPY | >1 <=3 | first          |
+| >=81JPY | >=4    | second         |
+
+table pick
+| balance         | fee      | tier   | -> x |
+| <10JPY          | <101JPY  | second | one  |
+| <10JPY          | <101JPY  | third  | two  |
+| <10JPY          | >100JPY  | first  | one  |
+| >=10JPY <=13JPY | <101JPY  | first  | two  |
+| >=10JPY <=13JPY | <101JPY  | second | one  |
+| >=10JPY <=13JPY | >100JPY  | first  | two  |
+| >13JPY          | <101JPY  | first  | one  |
+| >13JPY          | >100JPY  | first  | two  |
+| >13JPY          | >100JPY  | second | one  |

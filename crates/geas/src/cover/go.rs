@@ -6,6 +6,7 @@
 
 use super::{FileLines, Report};
 use crate::tree;
+use ritsu_base::text::Text;
 
 /// A module: its path, and the directory of its `go.mod` relative to the root
 /// (`""` for the root itself).
@@ -48,13 +49,14 @@ fn file_of(name: &str, modules: &[Module]) -> Option<String> {
 
 /// The lines of the text format: every block's lines are code, and run when its
 /// count is above zero.
-pub fn read(text: &str, modules: &[Module]) -> Result<Report, String> {
+pub fn read(text: &str, modules: &[Module]) -> Result<Report, Text> {
     let mut out = Report::new();
     for (i, line) in text.lines().enumerate() {
         if line.is_empty() || line.starts_with("mode:") {
             continue;
         }
-        let bad = || format!("line {} of the text format does not read: {line}", i + 1);
+        let n = i + 1;
+        let bad = || tr!("テキストの形式の {n} 行目を読めません: {line}", "line {n} of the text format does not read: {line}");
         let fields: Vec<&str> = line.split_whitespace().collect();
         let [place, _statements, count] = fields.as_slice() else {
             return Err(bad());

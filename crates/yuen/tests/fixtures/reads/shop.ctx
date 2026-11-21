@@ -1,0 +1,7 @@
+map Shop(shop) v1
+description "The refund desk of a small shop: written for the tests of yuen affected"
+
+use context "contexts/desk.ctx"
+
+covers "."
+code python "app"

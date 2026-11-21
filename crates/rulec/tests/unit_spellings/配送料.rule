@@ -1,0 +1,16 @@
+rule 配送料(delivery_charge) v1
+description "配送料。小計で決まる基本の料金に、寄与が足す料金を加える。通貨は JPY と書く（架空）"
+
+inputs
+  小計(subtotal) : money[JPY]  range >=0JPY <=100_000JPY
+
+outputs
+  配送料(charge) : money[JPY]  round down(1JPY)
+
+table 基本
+| 小計          | -> 基本料金(base_charge) : money[JPY] |
+| >=5_000JPY   | 0JPY                                  |
+| <5_000JPY    | 500JPY                                |
+
+open 配送料 : money[JPY]  combine sum  range >=0JPY <=10_000JPY
+  基本料金

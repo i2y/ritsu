@@ -1,0 +1,5 @@
+エラー[E001]: chain_lines.book:8:39: `:` は読めません。`account <名前>(<引数>: string, …) : <単位>`（引数が無ければ括弧は書かない。外の勘定は最後に `outside`） の形で書いてください
+     8 | account seller_balance(seller: string : USD
+エラー[E001]: chain_lines.book:22:1: `key` の行は、`account` か `transfer` の下に字下げして書いてください
+    22 | key payment
+chain_lines.book: エラー 2 件、警告 0 件

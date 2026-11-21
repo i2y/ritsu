@@ -1,0 +1,14 @@
+rule つなぎ(implode) v1
+description "PHP のモジュールの補助関数が呼ぶ組み込みの関数と同じ名前の規則"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 数量ごとの手数料(fee_by_qty)
+policy unique
+| 数量 | -> 手数料 |
+| <=5 | 3USD |
+| >5  | 2USD |

@@ -1,0 +1,13 @@
+contribution 集荷(courier) v1
+description "集荷の部門：返品を集荷で受け取り、集荷の手数料を取る"
+to "../fee.ja.rule" signature:a2829dbc31b3337c
+
+extend 戻し方 with 集荷(courier) "集荷で受け取る"
+
+clause 集荷の手数料(courier_fee) -> 手数料
+  when 戻し方 集荷
+  then 8
+
+examples
+| 戻し方 | -> 手数料 |
+| 集荷   | 8         |

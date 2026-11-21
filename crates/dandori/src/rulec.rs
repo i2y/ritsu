@@ -32,6 +32,17 @@ pub enum RType {
     Num { unit: Unit, min: Option<i64>, max: Option<i64> },
 }
 
+/// An `enums` file a rule reads enums from whole (`import enum`, rulec's §15.212): the file as dandori
+/// reaches it, and the modules the code rulec generates for it goes by where the rule's own module
+/// imports it by name, Python's module (`product_kinds`) and Go's package (`productkinds`, a module of
+/// its own beside the rule's). What goes beside the rule's module (DESIGN 28.8).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct EnumsModule {
+    pub python: String,
+    pub go: String,
+    pub file: PathBuf,
+}
+
 /// Whether the rule's input (or with `output`, its output) of this name is a day of the calendar,
 /// which the code rulec generates takes and answers as the number of days since 1970-01-01, and the
 /// workflow carries as `YYYY-MM-DD`.
@@ -51,6 +62,10 @@ pub struct Column {
 pub struct Axis {
     pub column: String,
     pub coords: Vec<String>,
+    /// For each coordinate, the first and the last value it stands for, as rulec writes them (the
+    /// port's `Axis::ends`): a number between them is one the table answers as the coordinate
+    /// (DESIGN 40). None for a coordinate that is no set of numbers; None inside for an open end.
+    pub ends: Vec<Option<(Option<String>, Option<String>)>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -106,6 +121,10 @@ pub struct RuleInfo {
     /// the enums whose values are in order (`enum tier = basic < silver < gold`, rulec's §15.210):
     /// what a `.flow` may hold to a range of their values (`range >=basic <=gold`)
     pub ordered: Vec<String>,
+    /// the enums the rule reads whole from an `enums` file (`import enum`, rulec's §15.212), by
+    /// their names in the rule: the file as dandori reaches it, and the enum's name there (the port's
+    /// `RuleEnum::origin`). What makes them one type with the same enum read elsewhere (DESIGN 28).
+    pub origins: BTreeMap<String, (PathBuf, String)>,
     pub machine: Option<Machine>,
     /// what the generated code holds a caller to beyond the shape of each input (rulec's §15.116);
     /// read, and not yet checked at the call (ritsu's DESIGN 7.4)
@@ -146,6 +165,7 @@ impl RuleInfo {
             outputs: f.outputs.iter().map(column).collect(),
             enums,
             ordered: f.enums.iter().filter(|e| e.ordered).map(|e| e.name.clone()).collect(),
+            origins: f.enums.iter().filter_map(|e| Some((e.name.clone(), e.origin.clone()?))).collect(),
             machine: f.machine.map(machine),
             preconditions: f.preconditions,
             connect: f.connect,
@@ -169,10 +189,10 @@ fn rtype(t: &ColumnType) -> RType {
     match t {
         ColumnType::Bool => RType::Bool,
         ColumnType::Str => RType::Str,
-        ColumnType::Date => RType::Date,
+        ColumnType::Date { .. } => RType::Date,
         ColumnType::Enum { name, range } => RType::Enum { name: name.clone(), range: range.clone() },
         ColumnType::Opt(inner) => rtype(inner),
-        ColumnType::Num { written, unit, min, max } => {
+        ColumnType::Num { written, unit, min, max, .. } => {
             // a spelling the table of units does not have (rulec lets none through a check now) is a
             // name that is the same only as itself, as the spellings were compared before
             let unit = unit.clone().unwrap_or_else(|| Unit::parse(written).unwrap_or_else(|_| Unit::count(written)));
@@ -192,7 +212,7 @@ pub(crate) fn machine(m: ritsu_ports::Machine) -> Machine {
         finals: m.finals,
         held: m.held,
         policy: m.policy,
-        axes: m.axes.into_iter().map(|a| Axis { column: a.column, coords: a.coords }).collect(),
+        axes: m.axes.into_iter().map(|a| Axis { column: a.column, coords: a.coords, ends: a.ends }).collect(),
         state_axis: m.state_axis,
         decides: m.decides,
         rows: m.rows.into_iter().map(|r| MRow { row: r.row, accepts: r.accepts, to: r.to, produces: r.produces }).collect(),
@@ -457,6 +477,7 @@ mod tests {
             outputs: vec![],
             enums: vec![],
             ordered: vec![],
+            origins: BTreeMap::new(),
             machine: None,
             preconditions: vec![],
             connect: Some(Connect {
@@ -543,7 +564,7 @@ mod tests {
             finals: vec![1, 2],
             held: vec![],
             policy: "first".into(),
-            axes: vec![Axis { column: "操作".into(), coords: vec!["確定".into(), "取消".into()] }],
+            axes: vec![Axis { column: "操作".into(), coords: vec!["確定".into(), "取消".into()], ends: vec![None, None] }],
             state_axis: None,
             decides: vec![],
             rows: vec![MRow { row: 1, accepts: vec![vec![0]], to: Some(1), produces: vec![] }, MRow { row: 2, accepts: vec![vec![1]], to: Some(2), produces: vec![] }],
@@ -554,7 +575,7 @@ mod tests {
         }
         assert_eq!(m.axes_with_value("確定"), [0]);
         // the same rows, with the state read as an axis: only the states it lists move
-        m.axes.insert(0, Axis { column: "状態".into(), coords: vec!["受付".into()] });
+        m.axes.insert(0, Axis { column: "状態".into(), coords: vec!["受付".into()], ends: vec![None] });
         m.state_axis = Some(0);
         m.rows = vec![MRow { row: 1, accepts: vec![vec![0], vec![0]], to: Some(1), produces: vec![] }];
         m.memo = Memo::default();

@@ -1,0 +1,4 @@
+error[E007]: ctx/受注.ctx:18:10: There is no context 在庫 in the map
+    18 | upstream 在庫 conformist
+  = The map reads the contexts 受注, 在庫品.
+  = `在庫` is written on line 21 too.

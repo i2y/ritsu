@@ -7,6 +7,13 @@
 //! enums alone. sakai's published language is E302 (sakai's own mutants).
 //!
 //! The materials are `tests/projects/regions`, English first, the Japanese versions beside them.
+//!
+//! An enum of an `enums` file is one type by every name it is read by (dandori's DESIGN 28): a rule,
+//! a workflow and a gate that each read it with `import enum`, as the skill on the relations between
+//! languages says to (`skills/ritsu/between.md`), hand its values to each other as they are
+//! (`tests/projects/shared_states`).
+
+mod common;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -18,15 +25,12 @@ fn project() -> PathBuf {
 /// `ritsu`, run in `dir`, with no language asked of the environment: its exit code, and what it
 /// printed, stdout and stderr together.
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_ritsu"))
-        .current_dir(dir)
-        .env_remove("RITSU_LANG")
-        .env_remove("DANDORI_LANG")
-        .env_remove("SEKISHO_LANG")
-        .env_remove("KANAME_LANG")
-        .args(args)
-        .output()
-        .expect("could not run ritsu");
+    let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
+    c.current_dir(dir).args(args);
+    for v in common::LANG_VARS {
+        c.env_remove(v);
+    }
+    let o = c.output().expect("could not run ritsu");
     (o.status.code().unwrap_or(-1), format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)))
 }
 
@@ -150,5 +154,26 @@ fn a_workflow_and_a_gate_read_one_enum_and_stop_when_a_value_is_renamed() {
             let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/check/enum-value-renamed.txt");
             ritsu_testkit::golden::check(&golden, &out).unwrap();
         }
+    }
+}
+
+/// The first row of the skill on the relations between languages, whole: one `enums` file, and
+/// `import enum` in a rule, a workflow and a gate (`tests/projects/shared_states`, English first,
+/// the Japanese versions beside them). The workflow hands the state it is given to the rule, which
+/// reads the enum from the same file: one type, whichever name each file reads it by (dandori's
+/// DESIGN 28). The project passes `ritsu check`, and a run gives the rule the value as it is.
+#[test]
+fn a_rule_a_workflow_and_a_gate_read_one_enum_and_the_workflow_hands_it_to_the_rule() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/projects/shared_states");
+    let (code, out) = ritsu_in(&dir, &["check", "."]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.ends_with("ritsu check: 8 files (rulec 4, dandori 2, sekisho 2): all pass; borders between the languages: 0 checked, 0 undecided\n"), "{out}");
+    for (flow, scenario, call, end) in [
+        ("refunds.flow", "scenarios/shipped.json", "refund_window(state: \"shipped\")  rulec  {\"days\":14}", "end: succeed {\"days\":14}"),
+        ("refunds.ja.flow", "scenarios/発送済.json", "返金の期限(状態: \"発送済\")  rulec  {\"日数\":14}", "end: succeed {\"日数\":14}"),
+    ] {
+        let (code, out) = ritsu_in(&dir, &["run", flow, "--scenario", scenario]);
+        assert_eq!(code, 0, "{flow}: {out}");
+        assert!(out.contains(call) && out.contains(end), "{flow}: {out}");
     }
 }

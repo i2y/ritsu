@@ -58,7 +58,8 @@ fn what_stops_a_project_before_it_is_read() {
     assert!(e.ja.contains("は ritsu のどの言語のファイルでもありません"), "{}", e.ja);
     let code = format!("{root}/py");
     let e = Project::load(std::slice::from_ref(&code), Some(&root)).unwrap_err();
-    assert!(e.en.starts_with("there is no file of ritsu's languages"), "{}", e.en);
+    assert!(e.en.starts_with("there is no .rule, .flow, .cal, .book, .geas, .req, .ctx, .gate, .kn or .proto file under `"), "{}", e.en);
+    assert!(e.ja.contains("の下に .rule、.flow、.cal、.book、.geas、.req、.ctx、.gate、.kn、.proto のファイルがありません"), "{}", e.ja);
 }
 
 /// The languages are made once: the rules dandori reads, and the index yuen and sakai look their

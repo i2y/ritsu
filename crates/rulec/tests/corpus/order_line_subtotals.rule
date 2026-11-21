@@ -1,0 +1,41 @@
+rule order_line_subtotals v1
+description "The amount of an order, and whether its shipping is free. A line's subtotal is its quantity times its price, and one line is accepted up to 10,000,000 yen: a line past that is refused where its subtotal is worked out. An example of a range on a value the rule works out for each element"
+
+# One line of the order. The caller passes as many as it has
+elements lines
+  quantity : number  range >=1 <=10_000
+  price    : money[JPY]  range >=1JPY <=50_000_000JPY
+
+# The range is what the rule accepts for a line's subtotal, not what a subtotal can come to:
+# 10,000 of 50,000,000 yen is 500,000,000,000 yen.
+define subtotal : money[JPY] = quantity * price  range >=1JPY <=10_000_000JPY
+
+sum amount over lines of subtotal  range >=0JPY <=100_000_000JPY
+
+outputs
+  amount        : money[JPY]  round down(1JPY)
+  free_shipping : bool
+
+table shipping
+policy unique
+| amount      | -> free_shipping |
+| <10_000JPY  | false            |
+| >=10_000JPY | true             |
+
+examples
+| lines     | -> amount     | free_shipping |
+| two_lines | 7_000JPY      | false         |
+| one_large | 10_000_000JPY | true          |
+| no_lines  | 0JPY          | false         |
+
+sequence two_lines
+| quantity | price    |
+| 2        | 1_500JPY |
+| 1        | 4_000JPY |
+
+sequence one_large
+| quantity | price      |
+| 100      | 100_000JPY |
+
+sequence no_lines
+| quantity | price |

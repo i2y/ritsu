@@ -1,0 +1,4 @@
+エラー[E309]: tests/mutants/E309_経路が申請者を読む.ringi:8:27: 経路は `requester.id` を読めません
+     8 |   監査(audit)    取締役会  when requester.id is "e01"
+  = 経路の条件が読めるのは、表に値を書けるフォームのフィールド（自分の値か規則の値から選ぶ選択、数、金額、日付、真偽）、申請が使う規則の出力、共有の経路の入力です。経路は、それらを列にした表に下ろして、rulec が確かめます。
+  = 申請を出せる人を絞るなら、`ticket` に `submitted by` を書いてください。組織のいちばん上の人の申請をだれかに承認させるなら、上に人がいないときの回し先を書いてください（`who` に `board = team board` と宣言して `when empty escalate, then board`）。

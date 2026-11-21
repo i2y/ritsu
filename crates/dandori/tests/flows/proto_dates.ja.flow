@@ -1,0 +1,52 @@
+# protobuf の `google.type.Date` を、Connect のサービスと受け渡す（DESIGN 44）。protobuf の JSON は
+# 日付を `{"year": 2026, "month": 11, "day": 16}` と書き、フローは `2026-11-16` の形で持つ。日付を送る
+# 先は、リクエストのすぐ下、日付のリスト、メッセージの中、メッセージのリストの中の四つ。応答の同じ
+# 場所にある日付は date で読む。範囲を書いた date、無いことがある date、`.proto` から作ったレコードの
+# 中の date がある。日の無い日付（protobuf の JSON は、日が 0 の日付をこう書く）は日付ではないので、
+# 応答の検査が拒む。どのプラットフォームでも、日を `{"year": 2026, "month": 11, "day": 16}` の形で送り、
+# 受け取った日を `2026-11-16` として読む。
+workflow 旅の日付 v1
+description "日を google.type.Date で持つ Connect のサービスで、旅を計画して予約する。初日は protobuf の JSON の日付の形で送り、計画の日は date で読んで予約へ渡す"
+
+use proto 旅 from "protos/trips.proto"
+  url "https://trips.example.com"
+
+record 計画
+  id       : string
+  start    : date  range >=2026-01-01 <=2027-12-31
+  end      : date?
+  restDays : list[date]
+  first    : 旅.Stop
+  stops    : list[旅.Stop]
+
+record 予約
+  bookingId : string
+  bookedOn  : date
+
+inputs
+  旅行者 : string
+  初日   : date
+
+outputs
+  計画ID : string
+  最初の日 : date
+  最後の日 : date
+  予約日 : date
+
+# 初日をリクエストのすぐ下へ。
+task 計画する(traveller: string, start: date) -> 計画
+  connect 旅 "TripService/Plan"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/trips/7a8b9c0d"
+
+# 計画の日を、すぐ下、リスト、メッセージの中、メッセージのリストの中へ。
+task 予約する(id: string, start: date, restDays: list[date], first: 旅.Stop, stops: list[旅.Stop]) -> 予約
+  connect 旅 "TripService/Book"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/trips/7a8b9c0d"
+
+flow
+  let 案 = 計画する(traveller: 旅行者, start: 初日)
+  let 済み = 予約する(id: 案.id, start: 案.start, restDays: 案.restDays, first: 案.first, stops: 案.stops)
+  match 案.end
+    some 終わり => let 最後 = 終わり
+    none => let 最後 = 案.start
+  succeed 計画ID = 案.id, 最初の日 = 案.first.day, 最後の日 = 最後, 予約日 = 済み.bookedOn

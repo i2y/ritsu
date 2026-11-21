@@ -1,0 +1,74 @@
+gate target_words v1
+description "Reserved words of TypeScript, Python and Go as names, where none of their code writes the name as it is: the code of every target is written, and runs"
+namespace Depot
+
+today range >=2026-10-01 <=2027-03-31 offset +00:00
+
+enum switch = new | return | import | export | default | lambda | func
+
+role public
+  description "Works at the counter"
+  can track
+
+role global
+  description "Works at every depot"
+  includes public
+  can track, delete, return
+
+principal Clerk
+  description "One who works at a depot"
+  roles public, global
+  attributes
+    default : bool
+    type    : switch
+
+resource Package
+  description "A parcel the depot holds"
+  attributes
+    state  : switch
+    due_on : date  range >=2026-10-01 <=2027-03-31
+    var    : bool
+
+action track
+  description "Look a parcel up"
+  principal Clerk
+  resource Package
+
+action delete
+  description "Take a parcel off the list"
+  principal Clerk
+  resource Package
+  input
+    class : bool
+  context
+    finally = today > resource.due_on
+
+action return
+  description "Send a parcel back"
+  principal Clerk
+  resource Package
+
+permit continue
+  description "One at the counter looks a parcel up"
+  principal in public
+  action track
+
+permit default
+  description "One who works at every depot takes a parcel off the list after its day, when asked to"
+  principal in global
+  action delete
+  when finally
+  when class
+
+permit try
+  description "One who works at every depot sends back a parcel to return, unless the clerk is a default one"
+  principal in global
+  action return
+  when resource.state is return
+  unless principal.default
+
+forbid with
+  description "Nobody touches a parcel held aside"
+  principal is Clerk
+  action any
+  when resource.var

@@ -1,0 +1,49 @@
+2026-11-16 10:00  submit  by e1201  -> plain (e1101), due 2026-11-19 end of day
+2026-11-17 10:00  remind            -> plain (e1101), due 2026-11-19 end of day; reminded e1101
+2026-11-20 00:00  late              -> plain (e3101), due 2026-11-25 end of day; plain went up to e3101
+2026-11-23 10:00  remind            -> plain (e3101), due 2026-11-25 end of day; reminded e3101
+2026-11-26 00:00  late              -> plain (e0101), due 2026-12-01 end of day; plain went up to e0101
+2026-11-27 10:00  remind            -> plain (e0101), due 2026-12-01 end of day; reminded e0101
+2026-12-02 00:00  late              -> expired; expired (late)
+scenario `reminded_each_time_it_goes_up`: as written (7 rows)
+
+2026-11-16 10:00  submit   by e1201  -> plain (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> own (e1101), due 2026-11-19 end of day
+2026-11-18 15:00  remind             -> own (e1101), due 2026-11-19 end of day; reminded e1101
+2026-11-20 00:00  late               -> own (e3101), due 2026-11-25 end of day; own went up to e3101
+2026-11-24 15:00  remind             -> own (e3101), due 2026-11-25 end of day; reminded e3101
+2026-11-26 00:00  late               -> own (e0101), due 2026-12-01 end of day; own went up to e0101
+2026-11-30 15:00  remind             -> own (e0101), due 2026-12-01 end of day; reminded e0101
+2026-12-02 00:00  late               -> expired; expired (late)
+scenario `a_reminder_of_its_own`: as written (8 rows)
+
+2026-11-16 10:00  submit   by e1201  -> plain (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> own (e1101), due 2026-11-19 end of day
+2026-11-16 12:00  approve  by e1101  -> once (e1101), due 2026-11-19 end of day
+2026-11-17 10:00  remind             -> once (e1101), due 2026-11-19 end of day; reminded e1101
+2026-11-20 00:00  late               -> once (e3101), due 2026-11-25 end of day; once went up to e3101
+2026-11-23 10:00  remind             -> once (e3101), due 2026-11-25 end of day; reminded e3101
+2026-11-26 00:00  late               -> expired; expired (late)
+scenario `a_way_up_of_its_own`: as written (7 rows)
+
+2026-11-16 10:00  submit   by e1201  -> plain (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> own (e1101), due 2026-11-19 end of day
+2026-11-16 12:00  approve  by e1101  -> once (e1101), due 2026-11-19 end of day
+2026-11-16 13:00  approve  by e1101  -> timed (e1101), due 2026-11-18 17:00
+2026-11-17 10:00  remind             -> timed (e1101), due 2026-11-18 17:00; reminded e1101
+2026-11-18 17:00  late               -> timed (e3101), due 2026-11-20 17:00; timed went up to e3101
+2026-11-19 10:00  remind             -> timed (e3101), due 2026-11-20 17:00; reminded e3101
+2026-11-20 17:00  late               -> timed (e0101), due 2026-11-24 17:00; timed went up to e0101
+2026-11-23 10:00  remind             -> timed (e0101), due 2026-11-24 17:00; reminded e0101
+2026-11-24 17:00  late               -> expired; expired (late)
+scenario `a_deadline_of_its_own`: as written (10 rows)
+
+2026-11-16 10:00  submit   by e1201  -> plain (e1101), due 2026-11-19 end of day
+2026-11-16 11:00  approve  by e1101  -> own (e1101), due 2026-11-19 end of day
+2026-11-16 12:00  approve  by e1101  -> once (e1101), due 2026-11-19 end of day
+2026-11-16 13:00  approve  by e1101  -> timed (e1101), due 2026-11-18 17:00
+2026-11-16 14:00  approve  by e1101  -> tight (e1101), due 2026-11-17 09:00
+2026-11-17 09:00  late               -> tight (e3101), due 2026-11-18 09:00; tight went up to e3101
+2026-11-18 09:00  late               -> tight (e0101), due 2026-11-19 09:00; tight went up to e0101
+2026-11-19 09:00  late               -> expired; expired (late)
+scenario `no_reminder_at_or_after_the_deadline`: as written (8 rows)

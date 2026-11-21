@@ -1,0 +1,96 @@
+request late v1 "Late request"
+description "A request nobody answers in time (fictional rules): each way to say what happens when a stage is late, for requesters with a line above their approvers and without one"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  what : text "What"  count >=1 <=100
+
+route
+  waits   manager
+    when late escalate, then stay
+  twice   manager
+    when late escalate, then escalate
+  timed   manager
+    due in 2 business days at 17:00
+    when late expire
+  alone   dept_head
+
+who
+  manager   = manager of requester
+  dept_head = head of requester.department
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+
+# it goes up twice, and expires the third time it is late
+scenario up_twice
+  requester e1201
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | waits    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | twice    | in progress |
+| 2026-11-20 00:00 | late    |       | twice    | in progress |
+| 2026-11-26 00:00 | late    |       | twice    | in progress |
+| 2026-12-02 00:00 | late    |       |          | expired     |
+
+# `then stay`: it goes up once, and waits there however late it is
+scenario up_once_and_waits
+  requester e1201
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | waits    | in progress |
+| 2026-11-20 00:00 | late    |       | waits    | in progress |
+| 2026-11-26 00:00 | late    |       | waits    | in progress |
+| 2026-12-10 10:00 | approve | e3101 | twice    | in progress |
+
+# nobody is above the president, who answers the division head's request: `then stay` waits on,
+# and `then escalate` expires at the first deadline
+scenario nowhere_to_go_up
+  requester e0101
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e0101 | waits    | in progress |
+| 2026-11-20 00:00 | late    |       | waits    | in progress |
+| 2026-11-24 10:00 | approve | e0001 | twice    | in progress |
+| 2026-11-28 00:00 | late    |       |          | expired     |
+
+# it goes up once to the president, and the second time has nowhere to go: expired at the second
+# deadline
+scenario nowhere_the_second_time
+  requester e3101
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e3101 | waits    | in progress |
+| 2026-11-16 11:00 | approve | e0101 | twice    | in progress |
+| 2026-11-20 00:00 | late    |       | twice    | in progress |
+| 2026-11-26 00:00 | late    |       |          | expired     |
+
+# a deadline at a time of day, and `when late expire`
+scenario a_deadline_at_a_time
+  requester e1201
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | waits    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | twice    | in progress |
+| 2026-11-16 12:00 | approve | e1101 | timed    | in progress |
+| 2026-11-18 17:00 | late    |       |          | expired     |
+
+# the head of a department is their own `dept_head`: the stage goes up to the division head, who
+# is late, and it goes up again from there
+scenario late_where_it_went_up_to
+  requester e3101
+  form what = "A new chair"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e3101 | waits    | in progress |
+| 2026-11-16 11:00 | approve | e0101 | twice    | in progress |
+| 2026-11-16 12:00 | approve | e0101 | timed    | in progress |
+| 2026-11-16 13:00 | approve | e0101 | alone    | in progress |
+| 2026-11-20 00:00 | late    |       | alone    | in progress |
+| 2026-11-26 00:00 | late    |       |          | expired     |

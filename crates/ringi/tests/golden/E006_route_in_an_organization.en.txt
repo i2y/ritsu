@@ -1,0 +1,3 @@
+error[E006]: tests/mutants/E006_route_in_an_organization.ringi:12:1: A file of the kind `organization` does not take `route`
+    12 | route
+  = An organization's file holds `description`, `positions`, `team kinds` and `data`, in this order.

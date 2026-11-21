@@ -1,0 +1,25 @@
+package {{package}}
+
+import (
+	"context"
+	"log/slog"
+)
+
+// Payments are the tasks of the payment flow (project/shared/pay.flow) the project writes. These
+// write to the log, where real ones pay the requester through the accounts system and tell them.
+// The flow says each is idempotent: Temporal may run one again after a failure it could not tell
+// from a success, and a real one pays a request once.
+type Payments struct{ Log *slog.Logger }
+
+// PayRequester pays the requester the amount of the request, and answers the payment's reference.
+func (p Payments) PayRequester(_ context.Context, args map[string]any) (any, error) {
+	id, _ := args["request_id"].(string)
+	p.Log.Info("paid", "request", id, "requester", args["requester"], "amount", args["amount"], "purpose", args["purpose"])
+	return map[string]any{"reference": "PAY-" + id}, nil
+}
+
+// TellRequester tells the requester the text.
+func (p Payments) TellRequester(_ context.Context, args map[string]any) (any, error) {
+	p.Log.Info("told", "request", args["request_id"], "text", args["text"])
+	return nil, nil
+}

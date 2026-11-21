@@ -60,9 +60,9 @@ ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも�
 ```console
 $ cd crates/kaname
 $ ritsu kaname run examples/late_payment/late_payment.kn claim --input tests/inputs/late_payment.json --lang ja
-claim(invoice: Invoice { id: "inv_1", invoiced: 2026-03-02, amount: 100000GBPc }, paid_on: 2026-05-20, reference_rate: 0.5%)
+claim(invoice: Invoice { id: "inv_1", invoiced: 2026-03-02, amount: 100_000GBPc }, paid_on: 2026-05-20, reference_rate: 0.5%)
   20 行目: terms.due(invoiced: 2026-03-02) = 2026-03-31
-  23 行目: charges(debt: 100000GBPc, days_late: 50, reference_rate: 0.5%) = { compensation: 70GBP, interest: 1150GBPc }
+  23 行目: charges(debt: 100_000GBPc, days_late: 50, reference_rate: 0.5%) = { compensation: 70GBP, interest: 1150GBPc }
 = Claim { due: 2026-03-31, days_late: 50, compensation: 70GBP, interest: 1150GBPc }
 ```
 
@@ -80,6 +80,8 @@ $ ritsu kaname check tests/docs/dollars.kn --lang ja
 ```
 
 フィールドを持つ列挙の値、辞書と集合、`result`、関数の値は、そのままでは規則にも日付にも振替にも渡せません。渡すには、`match` で分けるか、規則が受け取る型のリストや値に直します。
+
+列挙の型は、宣言した場所で決まります。商品の種類を `enums` ファイルに一度だけ書き、送料の規則と返品の規則がそれぞれ `import enum` で読むと、モジュールは同じ列挙を三つの名前で読みます。`use rule` で読んだそのファイルの名前（`catalog.category`）と、二つの規則の名前（`shipping.category`、`returns.category`）です。三つは一つの型なので、モジュールが持つ種類の値を、どちらの規則にも渡せます。規則が自分で `category` を宣言すると、値が同じでも別の型になり、エラーがそれぞれどこで宣言した列挙かを言います。
 
 ## 言語の境目
 
@@ -100,8 +102,8 @@ examples/payout/books/ledger.book: ok
   = 書いたエフェクトに収まるよう、失敗しうる場所を示せるようにする（渡す値を `if` で範囲に狭める）か、エフェクトを広げて書いてください。
 エラー[ritsu E203]: tests/docs/net.kn:15:74: 振替 `ledger.capture.do` の `amount` に渡す `payment.amount - fee` が、chobo の受け取らない額になることがあります
     15 |   ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount - fee)
-  = たとえば `capture(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` のとき、-48 になります。
-  = chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 9223372036854775807 までです。
+  = たとえば `capture(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` のとき、-48USDc になります。
+  = chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 2⁶³ − 1 までです。
   = kaname の生成したコードは、振替を組み立てるところで額を確かめます。関数は、そこで `range` で失敗します。
   = 振替の前に `if` で額を狭めるか、負の額は向きの違う振替に分けてください。
 ritsu check: ファイル 3 個（rulec 1、chobo 1、kaname 1）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 2 か所、決められない 0 か所

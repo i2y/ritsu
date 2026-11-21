@@ -1,0 +1,29 @@
+gate pythonのフィールド(python_field_ja) v1
+description "Python がレコードのフィールドとして書く、Python の予約語の属性"
+namespace Shop
+
+enum 席の等級(seat_class) = ファースト(first) | ビジネス(business) | エコノミー(economy)
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 席を替える
+
+principal 係の人(Clerk)
+  description "尋ねる人"
+  roles 係
+
+resource 席(Seat)
+  description "便の席"
+  attributes
+    等級(class) : 席の等級
+
+action 席を替える(change_seat)
+  description "席を替える"
+  principal 係の人
+  resource 席
+
+permit 係はエコノミーの席を替えられる(clerks_change_economy_seats)
+  description "係は次のことができる: 席を替える"
+  principal in 係
+  action 席を替える
+  when resource.等級 is エコノミー

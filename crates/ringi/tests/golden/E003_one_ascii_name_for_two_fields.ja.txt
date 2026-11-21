@@ -1,0 +1,2 @@
+エラー[E003]: tests/mutants/E003_one_ascii_name_for_two_fields.ringi:5:9: ASCII の名前 `amount` は、フォームの二つの名前に付いています（4 行目の `amount`）
+     5 |   total(amount) : money[JPY] "Total"  range >=1JPY <=100_000JPY

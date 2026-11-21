@@ -1,0 +1,8 @@
+restock.flow: ok
+ok company.ringi: an organization, 3 positions, 2 kinds of team
+  data `org`: 1 version (2026-04-01), 3 teams and 5 people, no proxies
+ok purchase.ringi: a request, 2 fields, 1 stage
+  used from 2026-04-01: the first version of the organization `company.ringi` (data `org`)
+  used with no end: no data it reads ends
+  may never end: the stage `check` has no deadline (`due in …`), and waits until it is answered
+ritsu check: 3 files (dandori 1, ringi 2): all pass; borders between the languages: 1 checked, 0 undecided

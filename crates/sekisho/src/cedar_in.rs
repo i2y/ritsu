@@ -149,6 +149,9 @@ pub fn facts(root: &Path, file: &str) -> Result<GateFacts, Vec<Said>> {
                 principals: applies.map(|t| t.principal_types.iter().map(|n| n.id.clone()).collect()).unwrap_or_default(),
                 resources: applies.map(|t| t.resource_types.iter().map(|n| n.id.clone()).collect()).unwrap_or_default(),
                 nobody: None,
+                // the context of a schema written by hand is its caller's to say, and writes no
+                // unit and no range: nothing to compare
+                inputs: Vec::new(),
             });
         }
     }
@@ -175,7 +178,7 @@ pub fn facts(root: &Path, file: &str) -> Result<GateFacts, Vec<Said>> {
 /// The operations the `@guards` of the actions of a schema names (`guards`); a policy set names
 /// none, and is only held to reading.
 pub fn references(root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
-    let t = text(root, file).ok_or_else(|| vec![Said::unreadable(file, "no such file")])?;
+    let t = text(root, file).ok_or_else(|| vec![Said::unreadable(file, &std::io::Error::from(std::io::ErrorKind::NotFound))])?;
     if file.ends_with(POLICIES) {
         cedar::parse_policies(&t).map_err(|e| unread_at(file, e))?;
         return Ok(Vec::new());

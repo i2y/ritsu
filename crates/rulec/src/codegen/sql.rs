@@ -27,6 +27,53 @@ fn q(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
+/// Whether SQLite or PostgreSQL reads the column names `a` and `b` as one: SQLite sets case aside,
+/// and PostgreSQL keeps the first 63 bytes of a name (§15.265).
+pub(super) fn one_column(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b) || cut_at(a, 63) == cut_at(b, 63)
+}
+
+/// The first `n` bytes of `s`, at the edge of a character.
+fn cut_at(s: &str, n: usize) -> &str {
+    let mut n = s.len().min(n);
+    while !s.is_char_boundary(n) {
+        n -= 1;
+    }
+    &s[..n]
+}
+
+/// A column of the query's own, or a value of the rule's, held apart from the columns of `taken`
+/// (§15.336): `name` with `_` after it, or, where PostgreSQL would cut that, the first bytes of
+/// `name` with a number after them.
+fn apart_col(name: &str, taken: &[String]) -> String {
+    let clear = |n: &str| !taken.iter().any(|t| one_column(t, n));
+    let mut n = format!("{name}_");
+    while n.len() <= 63 {
+        if clear(&n) {
+            return n;
+        }
+        n.push('_');
+    }
+    let mut k = 2usize;
+    loop {
+        let tail = format!("_{k}");
+        let n = format!("{}{tail}", cut_at(name, 63 - tail.len()));
+        if clear(&n) {
+            return n;
+        }
+        k += 1;
+    }
+}
+
+/// `name` where no column of `taken` is one with it, else held apart from them.
+fn clear_of(name: String, taken: &[String]) -> String {
+    if taken.iter().any(|t| one_column(t, &name)) {
+        apart_col(&name, taken)
+    } else {
+        name
+    }
+}
+
 /// `"name" type, "name" type` — the arguments of the function and the columns it returns,
 /// written the one way, so the file and `rulec api` cannot state different signatures.
 fn sql_sig(v: &[(String, &'static str)]) -> String {
@@ -66,6 +113,8 @@ fn round_sql(m: RoundMode, x: &str, g: &str) -> String {
 struct Sql {
     binds: Vec<(String, String)>,
     n: usize,
+    /// The columns of the query a bound operand's column keeps clear of (§15.336).
+    taken: Vec<String>,
     /// The ordered enums the expressions compare, by the type `Gen::expr` names them with, and
     /// their values in order (§15.210): a value's place is a `CASE` over them.
     ranks: std::collections::BTreeMap<String, Vec<String>>,
@@ -109,7 +158,7 @@ fn tokens(s: &str) -> Vec<String> {
 
 impl Sql {
     fn new() -> Sql {
-        Sql { binds: Vec::new(), n: 0, ranks: std::collections::BTreeMap::new() }
+        Sql { binds: Vec::new(), n: 0, taken: Vec::new(), ranks: std::collections::BTreeMap::new() }
     }
 
     /// The place of the value `a` in the order of the ordered enum `t` (§15.210).
@@ -238,7 +287,8 @@ impl Sql {
 
     fn bind(&mut self, e: String) -> String {
         self.n += 1;
-        let name = format!("_r{}", self.n);
+        let name = clear_of(format!("_r{}", self.n), &self.taken);
+        self.taken.push(name.clone());
         self.binds.push((name.clone(), e));
         q(&name)
     }
@@ -385,6 +435,53 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+        // A row column SQLite or PostgreSQL would read as one with a value's column, a column the
+        // caller reads, or the row column of a table before it, is held apart from them (§15.336).
+        let mut taken: Vec<String> = self.sql_cols().into_values().collect();
+        taken.extend(self.f.inputs.iter().map(|i| &i.name).chain(self.f.outputs.iter().map(|o| &o.name)).map(|n| self.ident(&n.text)));
+        taken.extend(["_id", "_input_error", "_contradiction"].map(|n| self.own(n)));
+        for m in out.iter_mut() {
+            m.1 = clear_of(std::mem::take(&mut m.1), &taken);
+            taken.push(m.1.clone());
+        }
+        out
+    }
+
+    /// The column the query holds each of the rule's values in, by its declared name (§15.336):
+    /// the name the rule gives it, or, where SQLite or PostgreSQL would read that as one with a
+    /// column before it in the query, or where it is `true` or `false`, which SQLite does not read
+    /// as a column of a `WITH`, that name held apart. A caller reads the inputs and the outputs
+    /// under the names the rule gives them still: the input relation has them, and the last
+    /// `SELECT` names them so.
+    pub(super) fn sql_cols(&self) -> std::collections::HashMap<String, String> {
+        let mut out = std::collections::HashMap::new();
+        let mut taken: Vec<String> = vec![self.own("_id"), self.own("_input_error")];
+        let mut hold = |name: &str| {
+            if out.contains_key(name) {
+                return;
+            }
+            let w = self.ident(name);
+            let col = if w.eq_ignore_ascii_case("true") || w.eq_ignore_ascii_case("false") { apart_col(&w, &taken) } else { clear_of(w, &taken) };
+            taken.push(col.clone());
+            out.insert(name.to_string(), col);
+        };
+        for i in &self.f.inputs {
+            hold(&i.name.text);
+        }
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => hold(&d.name.text),
+                Item::Define(d) => hold(&d.name.text),
+                Item::Table(pt) => {
+                    if let Some(t) = self.c.table_at(pt) {
+                        for oc in &t.outputs {
+                            hold(&oc.name.text);
+                        }
+                    }
+                }
+                Item::Agg(_) | Item::Fold(_) => {}
+            }
+        }
         out
     }
 
@@ -439,12 +536,13 @@ impl<'a> Gen<'a> {
         }
         // The columns of the input relation, one line each, with what to put in them.
         o.push_str(&tr!("--\n-- {} の列（一行が一件）:\n", "--\n-- The columns of {} (one row per case):\n", q(&input_rel)));
-        o.push_str(&tr!("--   \"_id\"  行を識別する値。そのまま返る\n", "--   \"_id\"  any value that identifies the row; it comes back unchanged\n"));
+        let own_cols = |text: String| -> String { text.replace("\"_id\"", &q(&self.own("_id"))).replace("\"_input_error\"", &q(&self.own("_input_error"))) };
+        o.push_str(&own_cols(tr!("--   \"_id\"  行を識別する値。そのまま返る\n", "--   \"_id\"  any value that identifies the row; it comes back unchanged\n")));
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
             o.push_str(&format!("--   {}  {}: {}\n", q(&local(&i.name.text)), i.name.text, self.sql_col_doc(&i.name.text, &ty)));
         }
-        o.push_str(&tr!("-- 出るもの: \"_id\"、入力、出力、表ごとに当てはまった行の番号、そして \"_input_error\"（宣言の外の入力ならそのメッセージ、中なら NULL）:\n", "-- Out come \"_id\", the inputs, the outputs, one column per table with the number of the row that matched, and \"_input_error\" (a sentence when an input is outside its declaration, else NULL):\n"));
+        o.push_str(&own_cols(tr!("-- 出るもの: \"_id\"、入力、出力、表ごとに当てはまった行の番号、そして \"_input_error\"（宣言の外の入力ならそのメッセージ、中なら NULL）:\n", "-- Out come \"_id\", the inputs, the outputs, one column per table with the number of the row that matched, and \"_input_error\" (a sentence when an input is outside its declaration, else NULL):\n")));
         for od in &self.f.outputs {
             let ty = self.ty_of(&od.name.text);
             o.push_str(&format!("--   {}  {}: {}\n", q(&local(&od.name.text)), od.name.text, self.sql_col_doc(&od.name.text, &ty)));
@@ -477,36 +575,40 @@ impl<'a> Gen<'a> {
     /// The query, and how many operands it binds.
     fn sql_query_bound(&self, prelude: Option<&str>) -> (String, usize) {
         let input_rel = format!("{}_input", pub_name(&self.f.name));
-        let local = |n: &str| -> String { self.ident(n) };
+        // The input relation's columns, as the caller names them, and the columns the query holds
+        // the values in from `_c0` on (§15.336).
+        let held = self.sql_cols();
+        let rel = |n: &str| -> String { self.ident(n) };
+        let local = |n: &str| -> String { held.get(n).cloned().unwrap_or_else(|| self.ident(n)) };
+        let (id, guard_col) = (q(&self.own("_id")), q(&self.own("_input_error")));
         let mut o = String::from("WITH\n");
         if let Some(p) = prelude {
             o.push_str(&format!("{p},\n"));
         }
-        let mut cols: Vec<String> = vec![q("_id")];
+        let mut cols: Vec<String> = vec![id.clone()];
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
-            let c = q(&local(&i.name.text));
+            let (r, c) = (q(&rel(&i.name.text)), q(&local(&i.name.text)));
             cols.push(match self.sql_ty(&ty) {
-                "bigint" => format!("CAST({c} AS BIGINT) AS {c}"),
-                _ => c,
+                "bigint" => format!("CAST({r} AS BIGINT) AS {c}"),
+                _ if r == c => c,
+                _ => format!("{r} AS {c}"),
             });
         }
         // The entry guard (§8.5), as a column over the relation as it came: NULL inside the
         // declared domain, otherwise the sentence the other languages raise. A query cannot
         // stop, so the runner does. Read before the cast, so that 18.3 in a column declared
-        // in steps of 0.1% is refused rather than truncated to 18 (§15.43).
+        // in steps of 0.1% is refused rather than truncated to 18 (§15.43). A `CASE` says the
+        // first `WHEN` that holds, so the tests go in the order every door looks (§15.328):
+        // each input there and of its kind, then each inside its range, then the constraints.
         let mut guard: Vec<String> = Vec::new();
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
-            let col = q(&local(&i.name.text));
-            let inner = match &ty {
-                Ty::Opt(t) => t.as_ref(),
-                other => other,
-            };
+            let col = q(&rel(&i.name.text));
             if !matches!(ty, Ty::Opt(_)) {
                 guard.push(format!("WHEN {col} IS NULL THEN {}", lit(&crate::door::missing(&i.name.text))));
             }
-            match inner {
+            match ty.present() {
                 Ty::Enum(en) => {
                     let vs: Vec<String> = self.c.enums.get(en).cloned().unwrap_or_default().iter().map(|v| lit(v)).collect();
                     guard.push(format!(
@@ -514,7 +616,21 @@ impl<'a> Gen<'a> {
                         vs.join(", "),
                         lit(&crate::door::not_in_enum(&i.name.text, en))
                     ));
-                    // The values the range of an ordered enum lets in (§15.210).
+                }
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                    guard.push(format!(
+                        "WHEN {col} <> CAST({col} AS BIGINT) THEN {}",
+                        lit(&crate::door::not_integer(&i.name.text))
+                    ));
+                }
+                _ => {}
+            }
+        }
+        for i in &self.f.inputs {
+            let col = q(&rel(&i.name.text));
+            match self.ty_of(&i.name.text).present() {
+                // The values the range of an ordered enum lets in (§15.210).
+                Ty::Enum(_) => {
                     if let Some(allowed) = self.c.enum_ranges.get(&i.name.text) {
                         guard.push(format!(
                             "WHEN {col} NOT IN ({}) THEN {}",
@@ -523,13 +639,9 @@ impl<'a> Gen<'a> {
                         ));
                     }
                 }
+                // Each end the range writes, and −(2^63−1) where it writes no lower one: a BIGINT
+                // holds one value below that, and the door refuses it (§15.295).
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
-                    guard.push(format!(
-                        "WHEN {col} <> CAST({col} AS BIGINT) THEN {}",
-                        lit(&crate::door::not_integer(&i.name.text))
-                    ));
-                    // Each end the range writes, and −(2^63−1) where it writes no lower one: a
-                    // BIGINT holds one value below that, and the door refuses it (§15.295).
                     let (lo, hi) = crate::door::ends(self.c, &i.name.text, false);
                     let test: Vec<String> = [lo.map(|l| format!("{col} < {l}")), hi.map(|h| format!("{col} > {h}"))].into_iter().flatten().collect();
                     if !test.is_empty() {
@@ -544,7 +656,7 @@ impl<'a> Gen<'a> {
         for k in &self.f.constraints {
             let op = k.op.word();
             let said = k.said();
-            let (a, b) = self.constraint_sides(k, &|n| q(&local(n)), false);
+            let (a, b) = self.constraint_sides(k, &|n| q(&rel(n)), false);
             guard.push(format!(
                 "WHEN NOT ({a} {op} {b}) THEN {}",
                 lit(&crate::door::constraint(&said))
@@ -556,7 +668,7 @@ impl<'a> Gen<'a> {
                 .iter()
                 .filter_map(|k| {
                     let name = &k.name.text;
-                    self.sql_cell(&k.cell, &local(name), &self.ty_of(name), self.scale(name))
+                    self.sql_cell(&k.cell, &rel(name), &self.ty_of(name), self.scale(name))
                 })
                 .collect();
             guard.push(format!("WHEN {} THEN {}", conds.join(" AND "), lit(&crate::door::never(&n.said()))));
@@ -566,7 +678,7 @@ impl<'a> Gen<'a> {
         day_inputs.sort();
         for name in day_inputs {
             let set = &self.c.day_sets[name];
-            let col = q(&local(name));
+            let col = q(&rel(name));
             let tests: Vec<String> = crate::codegen::day_runs(&set.days)
                 .into_iter()
                 .map(|(a, b)| if a == b { format!("{col} = {a}") } else { format!("({a} <= {col} AND {col} <= {b})") })
@@ -577,14 +689,21 @@ impl<'a> Gen<'a> {
             guard.push(format!("WHEN NOT ({}) THEN {}", tests.join(" OR "), lit(&crate::door::not_a_day(&name, &file, &date))));
         }
         cols.push(if guard.is_empty() {
-            format!("NULL AS {}", q("_input_error"))
+            format!("NULL AS {guard_col}")
         } else {
-            format!("CASE {} ELSE NULL END AS {}", guard.join(" "), q("_input_error"))
+            format!("CASE {} ELSE NULL END AS {guard_col}", guard.join(" "))
         });
         o.push_str(&format!("{} AS (\n  SELECT {} FROM {}\n)", q("_c0"), cols.join(",\n    "), q(&input_rel)));
         let mut prev = q("_c0");
         let mut stage = 0usize;
         let mut sql = Sql::new();
+        // A column the query binds an operand or an output's raw value to keeps clear of every
+        // column the query has and of what the caller reads (§15.336).
+        let members = self.sql_members();
+        sql.taken = held.values().cloned().collect();
+        sql.taken.extend(self.f.inputs.iter().map(|i| &i.name).chain(self.f.outputs.iter().map(|o| &o.name)).map(|n| rel(&n.text)));
+        sql.taken.extend(["_id", "_input_error", "_contradiction"].map(|n| self.own(n)));
+        sql.taken.extend(members.iter().map(|(_, c, _)| c.clone()));
         for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
             sql.ranks.insert(self.enum_type(en), self.c.enums.get(en).cloned().unwrap_or_default());
         }
@@ -604,6 +723,10 @@ impl<'a> Gen<'a> {
         let mut k = 0;
         let mut guard_tables: Vec<&Table> = Vec::new();
         let mut row_cols: Vec<String> = Vec::new();
+        // A value worked out past the range the rule accepts for it (§15.313): the sentence, in
+        // the order the values are worked out. A query cannot stop where one is, so `_input_error`
+        // takes the first of them where the door said nothing.
+        let mut outside: Vec<String> = Vec::new();
         for it in &self.f.items {
             match it {
                 // A rule that walks a sequence is not generated for SQL at all (§15.56).
@@ -633,6 +756,11 @@ impl<'a> Gen<'a> {
                         q(&local(&d.name.text))
                     ));
                     prev = name;
+                    if let Some((lo, hi)) = self.accepted_ends(d) {
+                        let col = q(&local(&d.name.text));
+                        let test: Vec<String> = [lo.map(|l| format!("{col} < {l}")), hi.map(|h| format!("{col} > {h}"))].into_iter().flatten().collect();
+                        outside.push(format!("CASE WHEN {} THEN {} ELSE NULL END", test.join(" OR "), lit(&crate::door::out_of_range(&d.name.text))));
+                    }
                 }
                 Item::Table(pt) => {
                     // The definition set is evaluated at its last member (§15.66);
@@ -665,7 +793,7 @@ impl<'a> Gen<'a> {
                     let merged = groups.len() > 1;
                     let mut cols_here: Vec<String> = Vec::new();
                     for (mname, member, idxs) in &groups {
-                        let row_col = self.sql_row_col(member, k);
+                        let row_col = members.get(k).map(|(_, c, _)| c.clone()).unwrap_or_else(|| self.sql_row_col(member, k));
                         let kind = if member.clause { tr!("節", "clause") } else { tr!("表", "table") };
                         let head = if merged {
                             tr!("{kind} {mname}（{tname} を定める。先に試した表か節が当たっていれば NULL）", "{kind} {mname} (defines {tname}; NULL when a table or clause tried earlier matched)")
@@ -753,7 +881,9 @@ impl<'a> Gen<'a> {
             let os = self.out_scale(out_name);
             let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
-            let raw = q(&format!("_raw_{}", local(out_name)));
+            let raw = clear_of(format!("_raw_{}", local(out_name)), &sql.taken);
+            sql.taken.push(raw.clone());
+            let raw = q(&raw);
             let text = sql.translate(&res.text);
             raws.push(format!("{text} AS {raw}"));
             finals.push(match &od.rounding {
@@ -763,12 +893,12 @@ impl<'a> Gen<'a> {
                     let grid_i = g.num * res.scale / g.den;
                     let rounded = round_sql(m, &raw, &grid_i.to_string());
                     if res.scale != os {
-                        format!("{rounded} / {} AS {}", res.scale / os, q(&local(out_name)))
+                        format!("{rounded} / {} AS {}", res.scale / os, q(&rel(out_name)))
                     } else {
-                        format!("{rounded} AS {}", q(&local(out_name)))
+                        format!("{rounded} AS {}", q(&rel(out_name)))
                     }
                 }
-                None => format!("{raw} AS {}", q(&local(out_name))),
+                None => format!("{raw} AS {}", q(&rel(out_name))),
             });
         }
         flush_binds(&mut o, &mut prev, &mut sql, &mut stage);
@@ -808,15 +938,26 @@ impl<'a> Gen<'a> {
             }
         }
 
-        let mut select: Vec<String> = vec![q("_id")];
-        select.extend(self.f.inputs.iter().map(|i| q(&local(&i.name.text))));
+        let mut select: Vec<String> = vec![id.clone()];
+        select.extend(self.f.inputs.iter().map(|i| {
+            let (r, c) = (q(&rel(&i.name.text)), q(&local(&i.name.text)));
+            if r == c {
+                c
+            } else {
+                format!("{c} AS {r}")
+            }
+        }));
         select.extend(finals);
         select.extend(row_cols.iter().map(|rc| q(rc)));
-        select.push(q("_input_error"));
-        if !contra.is_empty() {
-            select.push(format!("CASE {} ELSE NULL END AS {}", contra.join(" "), q("_contradiction")));
+        if outside.is_empty() {
+            select.push(guard_col.clone());
+        } else {
+            select.push(format!("COALESCE({guard_col}, {}) AS {guard_col}", outside.join(", ")));
         }
-        o.push_str(&format!("\nSELECT\n  {}\nFROM {prev}\nORDER BY {}", select.join(",\n  "), q("_id")));
+        if !contra.is_empty() {
+            select.push(format!("CASE {} ELSE NULL END AS {}", contra.join(" "), q(&self.own("_contradiction"))));
+        }
+        o.push_str(&format!("\nSELECT\n  {}\nFROM {prev}\nORDER BY {id}", select.join(",\n  ")));
         (o, sql.n)
     }
 
@@ -857,7 +998,8 @@ impl<'a> Gen<'a> {
             o.push('\n');
             o.push_str(&super::arith::sql_root_function());
         }
-        o.push_str(&tr!("--\n-- 引数:\n", "--\n-- The arguments:\n"));
+        // A rule that reads no input takes no argument, and says so (§15.330).
+        o.push_str(&if self.f.inputs.is_empty() { tr!("--\n-- 引数: なし\n", "--\n-- The arguments: none\n") } else { tr!("--\n-- 引数:\n", "--\n-- The arguments:\n") });
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
             o.push_str(&format!("--   {}  {}: {}\n", q(&local(&i.name.text)), i.name.text, self.sql_col_doc(&i.name.text, &ty)));
@@ -892,36 +1034,45 @@ impl<'a> Gen<'a> {
         // An argument and a column of the query have the same name by construction. The
         // pragma says which one an unqualified name means, and it is the column: the argument
         // reaches the query through the CTE below and nowhere else.
-        o.push_str(&format!("#variable_conflict use_column\nDECLARE\n  {} record;\nBEGIN\n  SELECT * INTO {} FROM (\n", q("_r"), q("_r")));
+        // The record the row is read into is a variable beside the arguments and the columns that
+        // come back, which keeps clear of them (§15.336).
+        let mut rec = String::from("_r");
+        while args.iter().chain(&rets).any(|(n, _)| *n == rec) {
+            rec.push('_');
+        }
+        let rec = q(&rec);
+        o.push_str(&format!("#variable_conflict use_column\nDECLARE\n  {rec} record;\nBEGIN\n  SELECT * INTO {rec} FROM (\n"));
         let binds: Vec<String> = self
             .f
             .inputs
             .iter()
             .map(|i| {
                 let c = q(&local(&i.name.text));
-                format!("{c} AS {c}")
+                format!(", {c} AS {c}")
             })
             .collect();
-        let prelude = format!("{} AS (\n  SELECT 0 AS {}, {}\n)", q(&input_rel), q("_id"), binds.join(", "));
+        // Each argument after the `_id`, with the comma before it: nothing for a rule that reads no
+        // input (§15.330).
+        let prelude = format!("{} AS (\n  SELECT 0 AS {}{}\n)", q(&input_rel), q(&self.own("_id")), binds.concat());
         o.push_str(&self.sql_query(Some(&prelude)));
         o.push_str(&format!("\n  ) AS {};\n", q("_one")));
         let raise = |col: &str, code: &str| -> String {
             format!(
                 "  IF {r}.{c} IS NOT NULL THEN\n    RAISE EXCEPTION '%', {r}.{c} USING ERRCODE = '{code}';\n  END IF;\n",
-                r = q("_r"),
+                r = rec,
                 c = q(col)
             )
         };
-        o.push_str(&raise("_input_error", "22023"));
+        o.push_str(&raise(&self.own("_input_error"), "22023"));
         if any_w114 {
-            o.push_str(&raise("_contradiction", "P0001"));
+            o.push_str(&raise(&self.own("_contradiction"), "P0001"));
         }
         // The casts are not decoration. A column of a record is whatever the expression made
         // it — an int4 where the declaration says bigint — and `RETURN QUERY` holds the row
         // to the declared types exactly.
         o.push_str(&format!(
             "  RETURN QUERY SELECT {};\nEND\n$rulec$;\n",
-            rets.iter().map(|(n, t)| format!("{}.{}::{t}", q("_r"), q(n))).collect::<Vec<_>>().join(", ")
+            rets.iter().map(|(n, t)| format!("{rec}.{}::{t}", q(n))).collect::<Vec<_>>().join(", ")
         ));
         // The display names (§15.211): one function per enum that gives any, from the value's
         // name, as the column holds it, to what it is shown as.
@@ -1014,6 +1165,7 @@ impl<'a> Gen<'a> {
             alias,
             body.join(", ")
         )
+        .replace("`_input_error`", &format!("`{}`", self.own("_input_error")))
     }
 
     /// What a column holds, for the header of the query.
@@ -1103,8 +1255,8 @@ impl<'a> Gen<'a> {
         crate::json::Obj::new()
             .str("file", &format!("{alias}.sql"))
             .str("input", &format!("{alias}_input"))
-            .str("id", "_id")
-            .str("guard", "_input_error")
+            .str("id", &self.own("_id"))
+            .str("guard", &self.own("_input_error"))
             .str("dialect", "postgresql")
             .raw("runs_on", crate::json::strs(&["postgresql", "sqlite"]))
             .raw("columns", crate::json::arr(&columns))
@@ -1230,7 +1382,8 @@ impl<'a> Gen<'a> {
     /// What the door says of each input, in the language the code is generated in (§15.204), as
     /// the body of a Python dict: the sentence for one that is not there, the one for a value
     /// of another kind — a truth value that is not `true` or `false` among them (§15.203) — and
-    /// whether it takes `null`.
+    /// whether it takes `null`, the one for a number past int64, and an enum's values, which the
+    /// runner holds a value to as it reads it, before the next input (§15.328).
     fn sql_say(&self) -> String {
         let py = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
         self.f
@@ -1247,7 +1400,17 @@ impl<'a> Gen<'a> {
                     _ => crate::door::not_integer(name),
                 };
                 let optional = if matches!(ty, Ty::Opt(_)) { "True" } else { "False" };
-                format!("{}: ({}, {}, {optional}, {})", py(name), py(&crate::door::missing(name)), py(&wrong), py(&crate::door::out_of_range(name)))
+                let values = match ty.present() {
+                    Ty::Enum(en) => format!("({},)", self.c.enums.get(en).cloned().unwrap_or_default().iter().map(|v| py(v)).collect::<Vec<_>>().join(", ")),
+                    _ => "None".to_string(),
+                };
+                format!(
+                    "{}: ({}, {}, {optional}, {}, {values})",
+                    py(name),
+                    py(&crate::door::missing(name)),
+                    py(&wrong),
+                    py(&crate::door::out_of_range(name))
+                )
             })
             .collect::<Vec<_>>()
             .join(", ")
@@ -1264,7 +1427,19 @@ impl<'a> Gen<'a> {
             String::new()
         };
         let [more_decl, more_start, more_pass, more_next] = self.sql_more();
-        SQL_RUNNER
+        // The relation of a rule that reads no input has the `_id` alone (§15.330).
+        // The query's own columns, as it names them (§15.336), before anything of the rule's is
+        // put in.
+        let runner = if self.f.inputs.is_empty() {
+            self.own_text(&SQL_RUNNER.replacen(
+                "db.execute('CREATE TABLE \"%s\" (\"_id\" INTEGER PRIMARY KEY, %s)' % (INPUT, \", \".join('\"%s\"' % a for _, a, _ in INPUTS)))\n",
+                "db.execute('CREATE TABLE \"%s\" (\"_id\" INTEGER PRIMARY KEY)' % INPUT)\n",
+                1,
+            ))
+        } else {
+            self.own_text(SQL_RUNNER)
+        };
+        runner
             .replace("@ROOT@", &root)
             .replace("@MACHINE@", &meta)
             .replace("@CARRY@", &carry)
@@ -1279,7 +1454,7 @@ impl<'a> Gen<'a> {
             .replace("@OUTPUTS@", &outs)
             .replace("@TABLES@", &tables)
             .replace("@LABELS@", &labels)
-            .replace("@CONTRADICTION@", if any_w114 { "\"_contradiction\"" } else { "None" })
+            .replace("@CONTRADICTION@", &if any_w114 { format!("\"{}\"", self.own("_contradiction")) } else { "None".into() })
     }
 
     /// `sql/<alias>_function_runner.py`: the same vectors through the **function**, on a real
@@ -1299,7 +1474,23 @@ impl<'a> Gen<'a> {
             .collect();
         let (meta, carry) = self.sql_machine_literals();
         let [more_decl, more_start, more_pass, more_next] = self.sql_more();
-        SQL_FUNCTION_RUNNER
+        // The subquery the answer is read through is named apart from the columns that come back:
+        // a column of its name is what `row_to_json` would be handed (§15.336).
+        let (_, rets) = self.sql_function_cols();
+        let mut sub = String::from("t");
+        while rets.iter().any(|(n, _)| *n == sub) {
+            sub.push('_');
+        }
+        let runner = if sub == "t" {
+            SQL_FUNCTION_RUNNER.to_string()
+        } else {
+            SQL_FUNCTION_RUNNER.replacen(
+                "'SELECT row_to_json(t)::text FROM (SELECT * FROM \"%s\"(%s)) AS t'",
+                &format!("'SELECT row_to_json({sub})::text FROM (SELECT * FROM \"%s\"(%s)) AS {sub}'"),
+                1,
+            )
+        };
+        runner
             .replace("@MACHINE@", &meta)
             .replace("@CARRY@", &carry)
             .replace("@MORE_DECL@", &more_decl)
@@ -1343,8 +1534,8 @@ MACHINE = @MACHINE@
 CARRY = @CARRY@@MORE_DECL@
 INPUT = "@ALIAS@_input"
 INPUTS = [@INPUTS@]
-# What the door says of each input: missing, of another kind, whether it takes null, and past
-# what SQLite and PostgreSQL hold.
+# What the door says of each input: missing, of another kind, whether it takes null, past what
+# SQLite and PostgreSQL hold, and an enum's values.
 SAY = {@SAY@}
 OUTPUTS = [@OUTPUTS@]
 TABLES = [@TABLES@]
@@ -1383,11 +1574,12 @@ def _is_date(v: object) -> bool:
 
 def _read(d: object):
     """One case's inputs as the query takes them, or the sentence its door refuses it with: an
-    input not there, of another kind (§15.204), or a number past int64 (§15.298). What lies
-    outside a range, a constraint and the days is the query's own `_input_error` to say."""
+    input not there, of another kind or not a value of its enum (§15.204), or a number past
+    int64 (§15.298). What lies outside a range, a constraint and the days is the query's own
+    `_input_error` to say."""
     vals = []
     for jp, _, k in INPUTS:
-        missing, wrong, optional, past = SAY[jp]
+        missing, wrong, optional, past, values = SAY[jp]
         if not isinstance(d, dict) or jp not in d or (d[jp] is None and not optional):
             return None, missing
         v = d[jp]
@@ -1414,7 +1606,9 @@ def _read(d: object):
                 return None, wrong
             vals.append(_ord(v))
         else:
-            if not isinstance(v, str):
+            # A value of an enum is one of its values, held to them here, before the next input
+            # is read, as every reader of the wire holds it (§15.328).
+            if not isinstance(v, str) or (values is not None and v not in values):
                 return None, wrong
             vals.append(v)
     return vals, None
@@ -1531,8 +1725,8 @@ CARRY = @CARRY@@MORE_DECL@
 FN = "@ALIAS@"
 ARGTYPES = [t.strip() for t in "@ARGTYPES@".split(",")]
 INPUTS = [@INPUTS@]
-# What the door says of each input: missing, of another kind, whether it takes null, and past
-# what SQLite and PostgreSQL hold.
+# What the door says of each input: missing, of another kind, whether it takes null, past what
+# SQLite and PostgreSQL hold, and an enum's values.
 SAY = {@SAY@}
 OUTPUTS = [@OUTPUTS@]
 TABLES = [@TABLES@]
@@ -1582,11 +1776,12 @@ def _is_date(v: object) -> bool:
 
 def _read(d: object):
     """One case's inputs as the query takes them, or the sentence its door refuses it with: an
-    input not there, of another kind (§15.204), or a number past int64 (§15.298). What lies
-    outside a range, a constraint and the days is the query's own `_input_error` to say."""
+    input not there, of another kind or not a value of its enum (§15.204), or a number past
+    int64 (§15.298). What lies outside a range, a constraint and the days is the query's own
+    `_input_error` to say."""
     vals = []
     for jp, _, k in INPUTS:
-        missing, wrong, optional, past = SAY[jp]
+        missing, wrong, optional, past, values = SAY[jp]
         if not isinstance(d, dict) or jp not in d or (d[jp] is None and not optional):
             return None, missing
         v = d[jp]
@@ -1613,7 +1808,9 @@ def _read(d: object):
                 return None, wrong
             vals.append(_ord(v))
         else:
-            if not isinstance(v, str):
+            # A value of an enum is one of its values, held to them here, before the next input
+            # is read, as every reader of the wire holds it (§15.328).
+            if not isinstance(v, str) or (values is not None and v not in values):
                 return None, wrong
             vals.append(v)
     return vals, None

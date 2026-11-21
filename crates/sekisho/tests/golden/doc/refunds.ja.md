@@ -65,7 +65,7 @@ Refund an order, in part or in whole
 
 - 守る操作：`openapi "api/orders.json" operation refundOrder`
 - principal の型：`User`、`Workflow`。resource の型：`Order`（ID は操作の引数 `orderId` から読む）
-- input `amount`：`money[GBP, incl_tax]`、1GBP〜10,000GBP
+- input `amount`：`money[GBP, incl_tax]`、1GBP〜10_000GBP
 - 計算した値：`refund_band`、`in_period`、`business_day`（下の「計算した値」）
 - 組み合わせは 1,056 通りで、そのうち 88 通りを許します。
 
@@ -534,11 +534,15 @@ Refunds a returned order once the item is back at the warehouse
 
 #### フローが呼ぶ操作
 
-フローのタスクが呼ぶ操作と、それを守る action、そのワークフローがその action を許されるかです。`ritsu check` は、これを言語をまたいで確かめます。
+フローのタスクが呼ぶ操作と、それを守る action、その呼び出しでワークフローがその action を許されるかです。答えは、その呼び出しまで進んだ実行で起こりうる組み合わせの上のものです（呼び出しが渡す値と、途中の `match` が残す値）。`ritsu check` は、これを言語をまたいで確かめます。
 
 | 行 | タスク | 操作 | 守る action | 許されるか | 拒まれたときのエラー |
 |---|---|---|---|---|---|
 | 22 | `refund_order` | `openapi "api/orders.json" operation refundOrder` | `refund_order` | 組み合わせによる | `denied` |
+
+呼び出しまで進んだ実行で決まっていること：
+
+- 22 行目：`amount`（呼び出しが渡す `amount`）は 1GBP〜50GBP。
 
 ## 守る操作
 

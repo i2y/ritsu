@@ -63,10 +63,10 @@ impl My for MySql {
     }
 
     fn load(&self, db: &str, file: &std::path::Path) -> Result<(), String> {
-        let f = std::fs::File::open(file).map_err(|e| format!("{}: {e}", file.display()))?;
-        let out = self.mysql(db).stdin(f).output().map_err(|e| e.to_string())?;
-        if !out.status.success() {
-            return Err(String::from_utf8_lossy(&out.stderr).to_string());
+        let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
+        let out = ritsu_testkit::run::finish_with_input(&mut self.mysql(db), Some(&bytes), super::SQL_LIMIT, &format!("mysql loading {} into {db}", file.display()));
+        if !out.ok {
+            return Err(out.stderr);
         }
         // on a sharded Vitess, every table of the book is sharded by its tenant (DESIGN 4.5)
         let sql = std::fs::read_to_string(file).map_err(|e| e.to_string())?;

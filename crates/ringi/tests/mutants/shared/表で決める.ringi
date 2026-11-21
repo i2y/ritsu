@@ -1,0 +1,13 @@
+route 表で決める(by_table) v1 "表で決める承認"
+
+inputs
+  長い(long) : bool
+
+route
+| 長い  | -> 確かめ(check) | 部長(head) |
+| true  | 経理             | 部長の人   |
+| false | 経理             |            |
+
+who
+  経理(finance)     = team finance
+  部長の人(heads)   = team finance_heads

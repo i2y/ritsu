@@ -1,0 +1,8 @@
+calendar office v1
+description "The office's calendar with two more days closed (fictional): a scenario's deadlines move with the calendar"
+offset +09:00
+
+closed weekly sat, sun
+closed every 12-29..01-03 "New Year break"
+closed 2026-11-18 "Inventory"
+closed 2026-11-19 "Inventory"

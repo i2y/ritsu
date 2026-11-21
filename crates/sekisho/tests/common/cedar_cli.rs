@@ -192,11 +192,37 @@ pub fn each_on_threads<T: Sync, R: Send>(items: &[T], f: impl Fn(usize, &T) -> R
     a.into_iter().map(|(_, r)| r).collect()
 }
 
-/// One change of a policy set or of its schema: what it is, and the policies or the schema it makes.
+/// One change of a policy set or of its schema: what it is, the policies or the schema it makes,
+/// and where it is.
 pub struct Change {
     pub what: String,
     pub policies: Option<PolicySet>,
     pub schema: Option<Schema>,
+    pub at: At,
+}
+
+/// Where a change is, for a change no check fails to be put beside what the check of its `.gate`
+/// says there (tests/cedar.rs): the policy by its index in the set, and in it the action taken out
+/// of the list it names, or the condition changed, by its index among the policy's conditions (with
+/// whether the change takes away a `has` the condition tests before what it reads).
+#[derive(Clone, Debug, PartialEq)]
+pub enum At {
+    /// The schema, or a policy whole: its effect, its principal, its action put in another's place,
+    /// the policy taken away.
+    Whole,
+    Action { policy: usize, action: String },
+    Condition { policy: usize, condition: usize, has: bool },
+}
+
+/// How many `has` an expression tests.
+fn has_count(e: &Expr) -> usize {
+    let mut n = 0;
+    cedar::walk(e, &mut |x| {
+        if matches!(x.kind, ExprKind::Has { .. }) {
+            n += 1;
+        }
+    });
+    n
 }
 
 pub fn with_kind(e: &Expr, kind: ExprKind) -> Expr {
@@ -334,22 +360,22 @@ pub fn policy_changes(set: &PolicySet) -> Vec<Change> {
     let actions = actions_of(set);
     let mut out = Vec::new();
     for (i, p) in set.policies.iter().enumerate() {
-        let mut push = |what: String, q: Policy| {
+        let mut push = |what: String, q: Policy, at: At| {
             let mut s = set.clone();
             s.policies[i] = q;
-            out.push(Change { what: format!("{}: {what}", p.id), policies: Some(s), schema: None });
+            out.push(Change { what: format!("{}: {what}", p.id), policies: Some(s), schema: None, at });
         };
         let mut q = p.clone();
         q.effect = if p.effect == Effect::Forbid { Effect::Permit } else { Effect::Forbid };
-        push(if p.effect == Effect::Forbid { "forbid made permit".into() } else { "permit made forbid".into() }, q);
+        push(if p.effect == Effect::Forbid { "forbid made permit".into() } else { "permit made forbid".into() }, q, At::Whole);
         if let Scope::In(EntityOrSlot::Entity(u)) = &p.principal {
             let mut q = p.clone();
             q.principal = Scope::Eq(EntityOrSlot::Entity(u.clone()));
-            push(format!("principal in {}::\"{}\" made ==", u.ty, u.id), q);
+            push(format!("principal in {}::\"{}\" made ==", u.ty, u.id), q, At::Whole);
             for r in roles.iter().filter(|r| r.ty == u.ty && r.id != u.id) {
                 let mut q = p.clone();
                 q.principal = Scope::In(EntityOrSlot::Entity(r.clone()));
-                push(format!("principal in \"{}\" made in \"{}\"", u.id, r.id), q);
+                push(format!("principal in \"{}\" made in \"{}\"", u.id, r.id), q, At::Whole);
             }
         }
         match &p.action {
@@ -357,7 +383,7 @@ pub fn policy_changes(set: &PolicySet) -> Vec<Change> {
                 for b in actions.iter().filter(|b| b.id != a.id) {
                     let mut q = p.clone();
                     q.action = ActionScope::Eq(b.clone());
-                    push(format!("action == \"{}\" made \"{}\"", a.id, b.id), q);
+                    push(format!("action == \"{}\" made \"{}\"", a.id, b.id), q, At::Whole);
                 }
             }
             ActionScope::InList(l) if l.len() > 1 => {
@@ -366,28 +392,30 @@ pub fn policy_changes(set: &PolicySet) -> Vec<Change> {
                     let mut l2 = l.clone();
                     l2.remove(j);
                     q.action = ActionScope::InList(l2);
-                    push(format!("\"{}\" taken out of the actions", a.id), q);
+                    push(format!("\"{}\" taken out of the actions", a.id), q, At::Action { policy: i, action: a.id.clone() });
                 }
             }
             _ => {}
         }
         for (j, c) in p.conditions.iter().enumerate() {
             let shown = format!("{} {{ {} }}", if c.kind == CondKind::When { "when" } else { "unless" }, cedar::write_expr(&c.body));
+            let line = At::Condition { policy: i, condition: j, has: false };
             let mut q = p.clone();
             q.conditions[j].kind = if c.kind == CondKind::When { CondKind::Unless } else { CondKind::When };
-            push(format!("`{shown}` made {}", if c.kind == CondKind::When { "unless" } else { "when" }), q);
+            push(format!("`{shown}` made {}", if c.kind == CondKind::When { "unless" } else { "when" }), q, line.clone());
             let mut q = p.clone();
             q.conditions.remove(j);
-            push(format!("`{shown}` taken away"), q);
+            push(format!("`{shown}` taken away"), q, line);
             for (w, e) in expr_changes(&c.body, &roles) {
+                let has = has_count(&e) < has_count(&c.body);
                 let mut q = p.clone();
                 q.conditions[j].body = e;
-                push(format!("in `{shown}`, {w}"), q);
+                push(format!("in `{shown}`, {w}"), q, At::Condition { policy: i, condition: j, has });
             }
         }
         let mut s = set.clone();
         s.policies.remove(i);
-        out.push(Change { what: format!("{}: the policy taken away", p.id), policies: Some(s), schema: None });
+        out.push(Change { what: format!("{}: the policy taken away", p.id), policies: Some(s), schema: None, at: At::Whole });
     }
     out
 }

@@ -1,0 +1,3 @@
+エラー[E703]: tests/mutants/E703_種類の言語の題が無い共有の経路.ringi:3:1: 画面に出る項目のうち 2 個に、ファイルの言語（`ja`）の題がありません: `stage check`、`who manager`
+     3 | use route 確認(check) from "shared/manager_check.ringi"
+  = 共有の経路のステップと決め方の題は、その経路のファイルの `labels ja` に書きます。無ければ、画面は経路が別の言語で書いた名前を出してしまいます。

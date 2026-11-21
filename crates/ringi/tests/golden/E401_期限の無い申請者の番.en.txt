@@ -1,0 +1,4 @@
+error[E401]: tests/mutants/E401_期限の無い申請者の番.ringi:23:3: The claim `期限のうちに終わる` says every ticket ends within 30 business days, and a ticket may never end
+    23 |   期限のうちに終わる : every ticket ends within 30 business days
+  = Line 20: a ticket that goes back waits for its requester with no end (there is no `resubmit within …` line).
+  = For it to end, write `resubmit within …`; if it may wait, take the claim out.

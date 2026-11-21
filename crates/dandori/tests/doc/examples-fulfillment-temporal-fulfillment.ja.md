@@ -124,7 +124,7 @@ Whether an order goes out in a hurry, and by which carrier: a member's always do
 | 名前 | 型 | 範囲 | 注記 |
 |---|---|---|---|
 | member | bool |  |  |
-| amount | money[JPY, incl_tax] | 0JPY 〜 100万JPY |  |
+| amount | money[JPY, incl_tax] | 0JPY 〜 1_000_000JPY |  |
 
 ## 出力
 

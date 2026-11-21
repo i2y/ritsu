@@ -1,6 +1,6 @@
 //! `ritsu mod diff <old> [<new>]` (DESIGN 17.9.6): the differences between two versions of a module,
-//! its files, its `require`s, the behavior of its rules, dates files, calendars and gates, and the
-//! interface of each file that changed (DESIGN 17.9.5).
+//! its files, its `require`s, the behavior of its rules, dates files, calendars, gates and requests,
+//! and the interface of each file that changed (DESIGN 17.9.5).
 //!
 //! - A side is `<module>@<version>` (the version's files in the store, or in the module at hand's
 //!   copy of it; from the git repository the module at hand's tree takes the module from, if it
@@ -9,11 +9,14 @@
 //! - What a side reads is fetched before it is read ([`super::fetch`]): a version that is in no
 //!   store, and the modules the lock of the module the side is read in pins. Nothing is asked of a
 //!   registry when the store has them; what was fetched is said on the standard error.
-//! - Behavior: rulec's difference over the whole input space, koyomi's and sekisho's, each asked in
-//!   this process. Every rule, dates file, calendar and gate both versions have is compared, not only
-//!   those whose bytes changed: a file reads others (a rule it applies, a calendar, a dependency the
-//!   lock raised), and the same bytes may answer otherwise.
-//! - Interface: what the language's `api` prints, compared by name; what a file holds (DESIGN 6.4)
+//! - Behavior: rulec's difference over the whole input space, koyomi's, sekisho's and ringi's, each
+//!   asked in this process. Every rule, dates file, calendar, gate and file of ringi's both versions
+//!   have is compared, not only those whose bytes changed: a file reads others (a rule it applies, a
+//!   calendar, the data of an organization, a dependency the lock raised), and the same bytes may
+//!   answer otherwise.
+//! - Interface: what the language's `api` prints, compared by name, without the lines and the paths
+//!   that say where a thing is written ([`without_places`]); a context of sakai's, which has no api
+//!   of its own, in the api of each map that uses it; what a file holds (DESIGN 6.4)
 //!   for dandori, geas and `.proto`; the digest for any other file. A book also goes through what
 //!   `chobo check --diff-base` holds a book to (chobo's `diffbase::between`): E050 and E051 are the
 //!   differences that break the data already in a database. A value of an enum or a field of a
@@ -96,7 +99,7 @@ pub fn budget_of(a: &Args) -> Result<Option<u64>, Text> {
         None => Ok(None),
         Some(b) => match b.replace([',', '_'], "").parse::<u64>() {
             Ok(n) if n > 0 => Ok(Some(n)),
-            _ => Err(tr!("`--budget {b}` は正の整数ではありません", "`--budget {b}` is not a positive integer")),
+            _ => Err(ritsu_base::cli::not_positive("--budget", b)),
         },
     }
 }
@@ -195,7 +198,9 @@ fn read_side(ctx: &Ctx, spelled: &str) -> Result<Side, Text> {
         fetched(ctx, spelled, opened.files.clone(), &root)?;
     }
     if !opened.with(|| ritsu_base::fs::is_file(Path::new(&opened.path))) {
-        return Err(tr!("`{spelled}` を読めません", "cannot read `{spelled}`"));
+        // as every command of ritsu says a file it cannot read: not there, or the system's reason
+        let e = opened.with(|| ritsu_base::fs::read(Path::new(&opened.path))).err();
+        return Err(e.map_or_else(|| ritsu_base::cli::not_there(spelled), |e| ritsu_base::cli::cannot_read(spelled, &e)));
     }
     Ok(Side::File(FileSide { spelled: spelled.to_string(), opened }))
 }
@@ -595,14 +600,14 @@ impl ModDiff {
 
 // ── Comparing ───────────────────────────────────────────────────────────
 
-/// The language whose diff of behavior a file has: rulec, koyomi, sekisho.
+/// The language whose diff of behavior a file has: rulec, koyomi, sekisho, ringi.
 pub(crate) fn behaves(rel: &str) -> Option<Tool> {
-    [Tool::Rulec, Tool::Koyomi, Tool::Sekisho].into_iter().find(|t| t.extensions().iter().any(|e| rel.ends_with(e)))
+    [Tool::Rulec, Tool::Koyomi, Tool::Sekisho, Tool::Ringi].into_iter().find(|t| t.extensions().iter().any(|e| rel.ends_with(e)))
 }
 
 /// The language of a file, by its ending.
 pub(crate) fn tool_of(rel: &str) -> Option<Tool> {
-    [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Sekisho, Tool::Kaname, Tool::Yuen, Tool::Sakai, Tool::Dandori, Tool::Geas, Tool::Proto]
+    [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Sekisho, Tool::Kaname, Tool::Yuen, Tool::Sakai, Tool::Dandori, Tool::Geas, Tool::Proto, Tool::Ringi]
         .into_iter()
         .find(|t| t.extensions().iter().any(|e| rel.ends_with(e)))
 }
@@ -710,7 +715,26 @@ pub(crate) fn compared(o: &Module, n: &Module, budget: Option<u64>, lang: Lang, 
             d.interface.push(i);
         }
     }
+    // A map whose bytes are the same, and a context of the module that moved (sakai): a context has
+    // no api of its own, and the map's holds what each of its contexts says (`contexts`). When a
+    // context changed, was added or was removed, each map is compared as a changed file is, and said
+    // when it differs.
+    let context = |m: &Module, r: &String| tool_of(r) == Some(Tool::Sakai) && m.files.get(r).is_some_and(|b| is_context(b));
+    let contexts_moved = d.files.changed.iter().any(|r| context(o, r) || context(n, r)) || d.files.added.iter().any(|r| context(n, r)) || d.files.removed.iter().any(|r| context(o, r));
+    let maps: Vec<String> = o.files.keys().filter(|k| contexts_moved && n.files.get(*k) == o.files.get(*k) && tool_of(k) == Some(Tool::Sakai) && !context(o, k)).cloned().collect();
+    for rel in &maps {
+        let i = interface(rel, &at(o, rel, om.as_deref()), &at(n, rel, nm.as_deref()), lang, joined);
+        if !i.changes.is_empty() || !i.breaks.is_empty() || i.note.is_some() {
+            d.interface.push(i);
+        }
+    }
     d
+}
+
+/// Whether a `.ctx` is a context of a map (`context Ordering(ordering) v1`) rather than a map: its
+/// first line that is neither blank nor a comment.
+fn is_context(bytes: &[u8]) -> bool {
+    String::from_utf8_lossy(bytes).lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#')).is_some_and(|l| l.split_whitespace().next() == Some("context"))
 }
 
 /// Two files.
@@ -800,9 +824,44 @@ pub fn behavior(tool: Tool, old: &Spot, new: &Spot, budget: Option<u64>, lang: L
             let (o, n) = (side(old)?, side(new)?);
             let d = sekisho::diff::diff(&o, &n, &suite, walk)?;
             let more = d.actions.iter().any(|a| !a.groups.is_empty());
-            Ok(Said { text: sekisho::diff::text(&d, lang), markdown: sekisho::diff::markdown(&d, lang), json: sekisho::diff::to_json(&d, lang), differs: d.differs(), total: d.unknown() == 0, more, map: None })
+            // the answers: the lines under the workflows are the gate's interface, which the
+            // difference of its api's JSON says
+            Ok(Said { text: sekisho::diff::text(&d, lang), markdown: sekisho::diff::markdown(&d, lang), json: sekisho::diff::to_json(&d, lang), differs: d.answers_differ(), total: d.unknown() == 0, more, map: None })
         }
-        _ => unreachable!("only rulec, koyomi and sekisho make a diff of behavior"),
+        Tool::Ringi => {
+            // a spelling of DESIGN 17.9.1 is opened as the other languages open it; a side of a module
+            // is read through its files, and a tree of modules that stops says so
+            let side = |s: &Spot| -> Result<ringi::diff::Side, Text> {
+                let (read, files) = match &s.through {
+                    Some(f) => (s.read.clone(), Some(f.clone())),
+                    None => {
+                        let o = address::open(&address::parse(&s.read)?)?;
+                        (o.path, o.files)
+                    }
+                };
+                if let Some(t) = within(files.clone(), || address::stopped(&read)) {
+                    return Err(t);
+                }
+                Ok(ringi::diff::Side { read, files, shown: s.shown.clone() })
+            };
+            let (o, n) = (side(old)?, side(new)?);
+            let budget = budget.map(|b| usize::try_from(b).unwrap_or(usize::MAX));
+            // rulec reads in the language of the run, as `ritsu ringi` has it read
+            let rl = if lang == Lang::Ja { rulec::i18n::Lang::Ja } else { rulec::i18n::Lang::En };
+            let d = rulec::i18n::with(rl, || ringi::diff::diff(&o, &n, &joined.ringi(), &ringi::check::Options::default(), budget, lang, lang)).map_err(|r| match r {
+                ringi::diff::Refused::Said(t) => t,
+                ringi::diff::Refused::Check { shown, errors, .. } => {
+                    let n = errors.max(1);
+                    tr!(
+                        "`{shown}` は検査を通りません（エラー {n} 件）。`ritsu ringi check` で確かめてください",
+                        "`{shown}` does not pass check ({n} {}); run `ritsu ringi check` on it",
+                        ; if n == 1 { "error" } else { "errors" }
+                    )
+                }
+            })?;
+            Ok(Said { text: ringi::diff::text(&d), markdown: ringi::diff::markdown_held(&d), json: ringi::diff::json(&d), differs: d.differs(), total: d.total && d.unsettled.is_empty(), more: false, map: None })
+        }
+        _ => unreachable!("only rulec, koyomi, sekisho and ringi make a diff of behavior"),
     }
 }
 
@@ -839,11 +898,19 @@ fn interface(file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Iface {
             }
             (Err(t), _) | (_, Err(t)) => out.note = Some(t),
         },
+        // a context of a map has no api of its own (`sakai api` takes a map): what it says is in the
+        // api of the map that uses it, which a module's diff compares in its place
+        Tool::Sakai if [o, n].iter().any(|s| s.with(|| ritsu_base::fs::read(&s.read)).is_ok_and(|b| is_context(&b))) => {
+            out.note = Some(tr!(
+                "コンテキストには自分の api が無く、中身は、それを使う地図の api で比べます",
+                "a context has no api of its own: what it says is compared in the api of the map that uses it"
+            ));
+        }
         _ => match (o.with(|| api_of(tool, &o.read, &o.label, joined)), n.with(|| api_of(tool, &n.read, &n.label, joined))) {
             (Ok(a), Ok(b)) => {
                 out.how = "api";
-                let (mut a, va) = without_heads(tool, without_unique_marks(tool, cleaned(a)));
-                let (mut b, vb) = without_heads(tool, without_unique_marks(tool, cleaned(b)));
+                let (mut a, va) = without_heads(tool, without_unique_marks(tool, without_places(tool, cleaned(a))));
+                let (mut b, vb) = without_heads(tool, without_unique_marks(tool, without_places(tool, cleaned(b))));
                 out.fed_by = fed_by_between(take_fed_by(tool, &mut a), take_fed_by(tool, &mut b));
                 let (asked_old, asked_new) = (take_preconditions(tool, &mut a), take_preconditions(tool, &mut b));
                 compare_json("", &a, &b, &mut out.changes);
@@ -1060,7 +1127,156 @@ pub(super) fn api_of(tool: Tool, path: &Path, label: &str, joined: &Joined) -> R
         Tool::Kaname => captured(&|args, out, err| ritsu::languages::kaname(args, out, err)),
         Tool::Yuen => captured(&|args, out, err| yuen::run::run(args, joined.yuen(), out, err)),
         Tool::Sakai => captured(&|args, out, err| sakai::run::run(args, joined.sakai(), out, err)),
+        Tool::Ringi => captured(&|args, out, err| ritsu::languages::ringi(args, out, err)),
         _ => Err(not_passing()),
+    }
+}
+
+/// The api JSON without what says where a thing is written rather than what it is (DESIGN 17.9.5):
+/// the lines, which move with a line added above, and the paths written from the root of the
+/// module, which move with the file to another directory of it, while the paths written from the
+/// file do not. Each language writes its own:
+///
+/// - sekisho: `line`, at any depth.
+/// - kaname: `line`, at any depth; the file's own path (`file`, at the top), and that of each file
+///   it uses (`uses[].file`), which `uses[].path` writes from the file.
+/// - sakai: the line after a file in `by` and `declared` (`contexts/ordering.ctx:23`); the files the
+///   map and each context are written in (`map.file`, `contexts[].file`); and before every other path,
+///   the map's directory, which leaves them written from the map.
+/// - ringi: `line`, `lines` and `self_approval_line`, at any depth (the rows of the route the words
+///   of a flow's input name are among them: `where` and `none` write the words without them); the
+///   file's own path (`file`) and those of the ticket and of `usable`, which `uses` names again
+///   from the file. Its items are matched by kind and name, and those that are examples
+///   (`example`, `scenario`, `claim`) are left out, as the examples of every language are
+///   ([`cleaned`]).
+///
+/// rulec, koyomi and chobo write neither.
+fn without_places(tool: Tool, j: Json) -> Json {
+    match tool {
+        Tool::Sekisho => without_keys(j, &["line"]),
+        Tool::Kaname => {
+            let mut j = without_keys(without_top(j, &["file"]), &["line"]);
+            at_each(&mut j, &["uses"], &drop_pairs(&["file"]));
+            j
+        }
+        Tool::Sakai => sakai_without_places(j),
+        Tool::Ringi => ringi_without_places(j),
+        _ => j,
+    }
+}
+
+/// `j` without the pairs whose key is one of `keys`, at any depth.
+fn without_keys(j: Json, keys: &[&str]) -> Json {
+    match j {
+        Json::Obj(pairs) => Json::Obj(pairs.into_iter().filter(|(k, _)| !keys.contains(&k.as_str())).map(|(k, v)| (k, without_keys(v, keys))).collect()),
+        Json::Arr(xs) => Json::Arr(xs.into_iter().map(|x| without_keys(x, keys)).collect()),
+        other => other,
+    }
+}
+
+/// `j` without the pairs at its top whose key is one of `keys`.
+fn without_top(j: Json, keys: &[&str]) -> Json {
+    match j {
+        Json::Obj(pairs) => Json::Obj(pairs.into_iter().filter(|(k, _)| !keys.contains(&k.as_str())).collect()),
+        other => other,
+    }
+}
+
+/// `f` on the value under each key of `path`, an array along the way standing for each of its
+/// elements.
+fn at_each(j: &mut Json, path: &[&str], f: &dyn Fn(&mut Json)) {
+    match (j, path.split_first()) {
+        (Json::Arr(xs), _) => xs.iter_mut().for_each(|x| at_each(x, path, f)),
+        (j, None) => f(j),
+        (Json::Obj(pairs), Some((first, rest))) => {
+            if let Some((_, v)) = pairs.iter_mut().find(|(k, _)| k.as_str() == *first) {
+                at_each(v, rest, f);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// An object without the pairs whose key is one of `keys`.
+fn drop_pairs(keys: &'static [&'static str]) -> impl Fn(&mut Json) {
+    move |j: &mut Json| {
+        if let Json::Obj(pairs) = j {
+            pairs.retain(|(k, _)| !keys.contains(&k.as_str()));
+        }
+    }
+}
+
+/// A ringi file's api JSON, for [`without_places`].
+fn ringi_without_places(j: Json) -> Json {
+    let mut j = without_keys(without_top(j, &["file"]), &["line", "lines", "self_approval_line"]);
+    at_each(&mut j, &["ticket", "flows"], &drop_pairs(&["flow"]));
+    at_each(&mut j, &["ticket", "gates"], &drop_pairs(&["file"]));
+    at_each(&mut j, &["ticket", "holds"], &drop_pairs(&["book"]));
+    at_each(&mut j, &["ticket", "time", "calendars"], &drop_pairs(&["file"]));
+    at_each(&mut j, &["usable", "from_by"], &drop_pairs(&["file"]));
+    at_each(&mut j, &["usable", "through_by"], &drop_pairs(&["file"]));
+    // the items by kind, each kind's by name; the examples, the scenarios and the claims left out
+    if let Json::Obj(pairs) = &mut j
+        && let Some((_, items)) = pairs.iter_mut().find(|(k, _)| k == "items")
+        && let Json::Arr(xs) = items
+    {
+        let xs = std::mem::take(xs);
+        let mut kinds: Vec<(String, Json)> = Vec::new();
+        for x in xs {
+            let Json::Obj(fields) = x else { continue };
+            let kind = fields.iter().find(|(k, _)| k == "kind").and_then(|(_, v)| v.as_str()).unwrap_or_default().to_string();
+            if matches!(kind.as_str(), "example" | "scenario" | "claim") {
+                continue;
+            }
+            let item = Json::Obj(fields.into_iter().filter(|(k, _)| k != "kind").collect());
+            match kinds.iter_mut().find(|(k, _)| *k == kind) {
+                Some((_, Json::Arr(of))) => of.push(item),
+                _ => kinds.push((kind, Json::Arr(vec![item]))),
+            }
+        }
+        *items = Json::Obj(kinds);
+    }
+    j
+}
+
+/// A context map's api JSON, for [`without_places`].
+fn sakai_without_places(j: Json) -> Json {
+    // the directory of the map, which every path the map writes begins with when it is under it
+    let file = j.get("map").and_then(|m| m.get("file")).and_then(Json::as_str).unwrap_or_default().to_string();
+    let dir = file.rfind('/').map_or(String::new(), |i| file[..=i].to_string());
+    let mut j = j;
+    at_each(&mut j, &["map"], &drop_pairs(&["file"]));
+    at_each(&mut j, &["contexts"], &drop_pairs(&["file"]));
+    from_the_map(j, &dir, "")
+}
+
+/// The strings under `j`, the value of `key`, with the paths written from the map's directory `dir`
+/// and without the line after a file in `by` and `declared`.
+fn from_the_map(j: Json, dir: &str, key: &str) -> Json {
+    match j {
+        Json::Obj(pairs) => Json::Obj(
+            pairs
+                .into_iter()
+                .map(|(k, v)| {
+                    let v = from_the_map(v, dir, &k);
+                    (k, v)
+                })
+                .collect(),
+        ),
+        Json::Arr(xs) => Json::Arr(xs.into_iter().map(|x| from_the_map(x, dir, key)).collect()),
+        Json::Str(s) => {
+            // `contexts/ordering.ctx:23`: where a thing is declared, without its line
+            let s = match (key == "by" || key == "declared", s.rsplit_once(':')) {
+                (true, Some((f, n))) if !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()) => f.to_string(),
+                _ => s,
+            };
+            if dir.is_empty() {
+                return Json::Str(s);
+            }
+            let s = if s == dir.trim_end_matches('/') { ".".to_string() } else { s.strip_prefix(dir).map_or_else(|| s.clone(), str::to_string) };
+            Json::Str(s.replace(&format!("\"{dir}"), "\""))
+        }
+        other => other,
     }
 }
 

@@ -1,0 +1,26 @@
+rule who_heads v1
+description "Whether the board decides a purchase of goods, with the finance check given another name and who heads it brought to an enum of its own, neither of them read (fictional)"
+
+enum head = dept | upper
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000_000JPY
+
+apply authority = "shared/authority.rule" meaning:19261fb92723d78d
+  kind = goods
+  amount = amount
+  board -> by_board
+  finance -> by_finance
+  decider -> who with dept_head -> dept, division_head -> upper, president -> upper
+
+outputs
+  board_decides : bool
+
+table board_decides
+| -> board_decides |
+| by_board         |
+
+examples
+| amount        | -> board_decides |
+| 1_000_000JPY  | false            |
+| 20_000_000JPY | true             |

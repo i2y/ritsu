@@ -1,0 +1,45 @@
+rule 小包のまとめ出荷(parcel_batch_ja) v1
+description "まとめて出す小包を載せる車。範囲は、書いた値を含まない端で書いてある。小包の重さは 0 g より大きく 30001 g より小さい。まとめた重さは 999 g より大きく 60001 g より小さい。割れ物は 0 個より多く 4 個より少ない。どれも一つ内側に読む。1 g から、1000 g から、割れ物は 1 個から 3 個まで"
+
+enum 車(truck) = バン(van) | トラック(lorry)
+
+# まとめて出す小包の一つぶん。呼び出し側は 3 個まで渡す
+elements 小包(parcels)
+  重さ(weight)    : mass[g]  range >0g <30001g
+  割れ物(fragile) : bool
+
+sum 総重量(total) over 小包 of 重さ  range >999g <60001g
+count 割れ物の数(fragile_parcels) over 小包 where 割れ物  range >0 <4
+
+outputs
+  車(truck)       : 車
+  緩衝材(padding) : bool
+
+table 車の判定(truck_of)
+policy unique
+| 総重量   | -> 車    |
+| <=20000g | バン     |
+| >20000g  | トラック |
+
+table 緩衝材の判定(padding_of)
+policy unique
+| 割れ物の数 | -> 緩衝材 |
+| 1          | false     |
+| >=2        | true      |
+
+examples
+| 小包     | -> 車    | 緩衝材 |
+| 最も軽い | バン     | false  |
+| 満載     | トラック | true   |
+
+# いちばん軽い形。1000 g の割れ物が一つ
+sequence 最も軽い(lightest)
+| 重さ  | 割れ物 |
+| 1000g | true   |
+
+# いちばん重い形。三つとも割れ物で 60000 g。小包の重さの両端が一つずつ入っている
+sequence 満載(full_load)
+| 重さ   | 割れ物 |
+| 30000g | true   |
+| 29999g | true   |
+| 1g     | true   |

@@ -1,0 +1,36 @@
+rule account_ja_route v1
+description "What ringi writes from the route of account.ja.ringi: one optional output for each stage, whose value is the approver the stage names; a blank cell is none, the stage is not there"
+
+import enum level from "choices.rule"
+enum manager_by = manager_approver "上長"
+enum owner_by = system_owner "システムの持ち主"
+enum security_by = it_security "情報セキュリティ"
+enum operations_by = circulate_to_it_operations "circulate to 運用担当"
+
+inputs
+  level : level
+
+outputs
+  manager    : manager_by
+  owner      : owner_by
+  security   : security_by?
+  operations : operations_by
+
+table manager
+| -> manager       |
+| manager_approver |
+
+table owner
+| -> owner     |
+| system_owner |
+
+table security
+| level      | -> security |
+| not: admin | none        |
+| admin      | it_security |
+
+table operations
+| -> operations              |
+| circulate_to_it_operations |
+
+possible security = it_security

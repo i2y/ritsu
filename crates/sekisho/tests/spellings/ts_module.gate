@@ -1,0 +1,27 @@
+gate public v1
+description "A file named as a reserved word of TypeScript's strict mode, the name the index of a package exports its module under"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can post_notice
+
+principal Clerk
+  description "The one who asks"
+  roles clerk
+
+resource Notice
+  description "A notice on the board of the shop"
+  attributes
+    approved : bool
+
+action post_notice
+  description "Put a notice on the board"
+  principal Clerk
+  resource Notice
+
+permit clerks_post_approved_notices
+  description "A clerk can: Put a notice on the board"
+  principal in clerk
+  action post_notice
+  when resource.approved

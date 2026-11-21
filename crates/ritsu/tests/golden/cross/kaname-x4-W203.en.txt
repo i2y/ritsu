@@ -10,7 +10,7 @@ error[kaname E401]: payout.kn:17:1: `settle` is written `total`, but it can fail
   = Make the places shown (narrow the values with an `if` before they go there), or write a wider effect.
 warning[ritsu W203]: payout.kn:21:85: Whether chobo takes `payment.amount - fee`, given to `amount` of the transfer `ledger.capture.do`, as an amount cannot be decided
     21 |     capture: ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount - fee),
-  = The analysis of ranges finds `payment.amount - fee` in >=-4989949 <=99999951, and no input among the function's vectors takes it out of what chobo takes.
-  = chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step.
+  = The analysis of ranges finds `payment.amount - fee` in >=-4_989_949USDc <=99_999_951USDc, and no input among the function's vectors takes it out of what chobo takes.
+  = chobo takes an amount from 0 to 2⁶³ − 1 in the unit's smallest step.
   = kaname's generated code checks it there when it runs: for an amount chobo does not take, the function fails there with `range`.
 ritsu check: 3 files (rulec 1, chobo 1, kaname 1): 1 fail (1 error, 1 warning); borders between the languages: 4 checked, 1 undecided

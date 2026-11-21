@@ -10,7 +10,9 @@
 //! conditions ask with `allowed` is allowed (DESIGN 2.11): what the policies read, in the order the
 //! walk reads them. What an action asked computes for its own answer is that action's table's, and
 //! is not a column here (its answer is). `-` is a column that does not apply to a row (the roles of a
-//! workflow, a value the principal's type does not compute). A value of a rule's enum is shown by
+//! workflow, a value the principal's type does not compute, a computed value that is absent because
+//! an attribute it reads is); such a row is not merged with a row that has a value in the column.
+//! A value of a rule's enum is shown by
 //! the name the `.rule` writes (`上限まで` for `上限まで(within_limit)`), as the `.gate` beside the
 //! table writes it; the string Cedar is given (the alias) is shown where the page puts the policies.
 
@@ -222,17 +224,19 @@ pub fn table(g: &Gate, s: &Space) -> Table {
     });
     // the values each column takes, `-` aside
     let domains: Vec<BTreeSet<Cell>> = (0..cols.len()).map(|k| rows.iter().map(|r| r.0[k].clone()).filter(|c| *c != Cell::Dash).collect()).collect();
-    // merge: rows alike but in one column become one, the column a set
+    // merge: rows alike but in one column become one, the column a set. A row the column does not
+    // apply to (`-`: a computed value that is absent, say) stays a row of its own: put into the
+    // set of a row that has a value there, it would not be shown, and the combination with it
     let mut merged: Vec<Merged> = rows.into_iter().map(|(cells, allow, p)| (cells.into_iter().map(|c| BTreeSet::from([c])).collect(), allow, p)).collect();
     loop {
         let mut changed = false;
         for k in 0..cols.len() {
-            let mut groups: BTreeMap<Merged, BTreeSet<Cell>> = BTreeMap::new();
-            let mut sizes: BTreeMap<Merged, usize> = BTreeMap::new();
+            let mut groups: BTreeMap<(Merged, bool), BTreeSet<Cell>> = BTreeMap::new();
+            let mut sizes: BTreeMap<(Merged, bool), usize> = BTreeMap::new();
             for (cells, allow, p) in &merged {
                 let mut rest = cells.clone();
                 let mine = rest.remove(k);
-                let key = (rest, *allow, p.clone());
+                let key = ((rest, *allow, p.clone()), mine.contains(&Cell::Dash));
                 groups.entry(key.clone()).or_default().extend(mine);
                 *sizes.entry(key).or_default() += 1;
             }
@@ -241,7 +245,7 @@ pub fn table(g: &Gate, s: &Space) -> Table {
             }
             merged = groups
                 .into_iter()
-                .map(|((mut rest, allow, p), set)| {
+                .map(|(((mut rest, allow, p), _), set)| {
                     rest.insert(k, set);
                     (rest, allow, p)
                 })

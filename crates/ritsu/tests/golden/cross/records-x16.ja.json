@@ -1,0 +1,53 @@
+{
+  "held": 0,
+  "failed": 1,
+  "undecided": 1,
+  "records": [
+    {
+      "check": "workflow_permission",
+      "about": "openapi \"orders.json\" operation refundOrder",
+      "at": {
+        "tool": "dandori",
+        "file": "returns.flow",
+        "line": 19
+      },
+      "to": {
+        "tool": "sekisho",
+        "file": "refunds.gate",
+        "line": 29
+      },
+      "result": "undecided",
+      "code": "W909",
+      "assumes": [
+        {
+          "file": "refunds.gate",
+          "line": 19,
+          "says": "`resource Order from order` の `total = amount`"
+        }
+      ]
+    },
+    {
+      "check": "workflow_permission",
+      "about": "openapi \"orders.json\" operation refundOrder",
+      "at": {
+        "tool": "dandori",
+        "file": "returns.flow",
+        "line": 21
+      },
+      "to": {
+        "tool": "sekisho",
+        "file": "refunds.gate",
+        "line": 29
+      },
+      "result": "failed",
+      "code": "E908",
+      "assumes": [
+        {
+          "file": "refunds.gate",
+          "line": 19,
+          "says": "`resource Order from order` の `total = amount`"
+        }
+      ]
+    }
+  ]
+}

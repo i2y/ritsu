@@ -1,0 +1,82 @@
+$ rulec check case1.rule   # define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0JPY <=20_000JPY round
+error[E047]: Extra token after the declaration
+  --> case1.rule:7
+  |
+7 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0JPY <=20_000JPY round
+  |                                                                             ^^^^^ this is not read as part of the declaration
+  |
+ A `define` line holds `range` after its expression, and nothing else.
+ A range is `range >=<value> <=<value>`: only pairs of a comparison and a value are read. A misspelled unit stops a pair from being read as one, and what is left over lands here.
+
+
+$ rulec check case2.rule   # define fee : money[JPY] = down(amount * 3%, 1JPY)  range
+error[E149]: `range` writes no end
+  --> case2.rule:7
+  |
+7 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range
+  |                                                    ^^^^^ no `>=` or `<=` follows it
+  |
+ A range is `range >=<value> <=<value>`, with at least one end. A `range` with no end decides nothing, and cannot be told from a line left half written.
+ Hint: write an end after `range`, `>=` or `<=`. Where the value has no range, take `range` off.
+
+
+$ rulec check case3.rule   # define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=100JPY <100JPY
+error[E061]: The range is empty
+  --> case3.rule:7 definition fee
+  |
+7 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=100JPY <100JPY
+  |                                                    ^^^^^^^^^^^^^^^^^^^^^^ no value lies in this range
+  |
+ The lower end is past the upper one. With no value to take, the completeness proof answers "complete" over nothing, and the generated code's entry refuses every call.
+
+
+$ rulec check case4.rule   # define fee : money[JPY] = down(amount * 3%, 1JPY)  range from koyomi "terms.cal" date payment
+error[E065]: Only an input takes `range from koyomi`
+  --> case4.rule:7
+  |
+7 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range from koyomi "terms.cal" date payment
+  |                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ fee is not an input
+  |
+ The days a koyomi date comes to are the range of a date the caller passes. The range of an output, a derive or an element's field is a claim the rule checks itself, and a definition's is the values the rule accepts for a number it works out: neither can be borrowed from another file.
+
+
+$ rulec check case5.rule   # define large : bool = amount >= 500_000JPY  range >=1
+error[E103]: Only a definition of a number takes a range
+  --> case5.rule:7 definition large
+  |
+7 | define large : bool = amount >= 500_000JPY  range >=1
+  |                                             ^^^^^^^^^ large is bool
+  |
+ The range of a definition is the values the rule accepts for the number it works out: a call whose value falls outside it is refused where the value is worked out. A truth value, a string or an enum has no range with ends, and a date is never worked out (E048), so its range goes on the date input.
+
+
+$ rulec check case6.rule   # define due : date = paid_on  range <=2026-06-30
+error[E103]: Only a definition of a number takes a range
+  --> case6.rule:8 definition due
+  |
+8 | define due : date = paid_on  range <=2026-06-30
+  |                              ^^^^^^^^^^^^^^^^^^ due is date
+  |
+ The range of a definition is the values the rule accepts for the number it works out: a call whose value falls outside it is refused where the value is worked out. A truth value, a string or an enum has no range with ends, and a date is never worked out (E048), so its range goes on the date input.
+
+
+$ rulec check case7.rule   # define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0USD <=20_000JPY
+error[E103]: The bound `0USD` is not a value of money[JPY]
+  --> case7.rule:7 definition fee
+  |
+7 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0USD <=20_000JPY
+  |        ^^^ the range on this declaration
+  |
+
+
+$ rulec check case8.rule   # constraint amount * 3% <= 20_000JPY
+error[E017]: A `constraint` is not shaped like this
+  --> case8.rule:7
+  |
+7 | constraint amount * 3% <= 20_000JPY
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the name of an input is expected on each side (one side may add several up with `+`)
+  |
+ The shape is `constraint <input> <= <input>`: one of `<=`, `<`, `>=`, `>`, with the name of an input on each side. One side may add inputs up with `+` (`constraint discount + points <= subtotal`).
+ A bound on a value worked out from the inputs — a product, a quotient, a constant — is no relation between inputs: write it as the range a `define` that works the value out accepts (`define subtotal : money[JPY] = quantity * price  range <=10_000_000JPY`).
+
+

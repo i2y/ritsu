@@ -1,0 +1,5 @@
+警告[W402]: tests/spellings/Pythonのフィールド.gate:18:1: 型 `Seat` の属性 `class` は、Python のコードで `class` と書かれ、その言語の予約語です
+    18 |     等級(class) : 席の等級
+  = Python（`--target python`）: 型 `Seat` の属性 `class` をレコードのフィールドとして `class` と書きますが、`class` は Python の予約語です。モジュールを読み込めず（`SyntaxError`）、`mypy --strict` も通りません。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
+tests/spellings/Pythonのフィールド.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

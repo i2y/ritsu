@@ -1,0 +1,27 @@
+gate go_roles_list v1
+description "A type named as the list of the roles of the Go package"
+namespace Shop
+
+role manager
+  description "Says who holds which duty"
+  can edit_duties
+
+principal Staff
+  description "One who works in the shop"
+  roles manager
+
+resource Roles
+  description "Who holds which duty in the shop"
+  attributes
+    editable : bool
+
+action edit_duties
+  description "Change who holds which duty"
+  principal Staff
+  resource Roles
+
+permit managers_edit_duties
+  description "A manager can: Change who holds which duty"
+  principal in manager
+  action edit_duties
+  when resource.editable

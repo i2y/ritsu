@@ -136,10 +136,7 @@
       {
         "call": {
           "http": "GET",
-          "url": "https://payments.example.com/orders/A-1/payment",
-          "query": {
-            "期日": "2026-05-08"
-          }
+          "url": "https://payments.example.com/orders/A-1/payment?%E6%9C%9F%E6%97%A5=2026-05-08"
         },
         "answer": {
           "ok": {
@@ -237,19 +234,6 @@
         "会員": true,
         "金額": 120
       }
-    },
-    "books": {
-      "在庫": [
-        {
-          "op": "do",
-          "kind": "入荷",
-          "args": {
-            "納品書": "D-1",
-            "sku": "ペン",
-            "数": 10
-          }
-        }
-      ]
     },
     "answers": [
       {

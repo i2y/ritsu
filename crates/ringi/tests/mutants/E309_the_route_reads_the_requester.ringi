@@ -1,0 +1,15 @@
+request example v1 "Example"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+  audit  board    when requester.id is "e01"
+
+who
+  finance = team finance
+  board   = team board
+
+ticket
+  self approval  not allowed

@@ -1,0 +1,43 @@
+rule one_way v1
+description "Who answers a request first when it has one way alone, and a kind with one value (fictional)"
+
+# Each enum here has one value: a function over its values has one answer and no choice to make,
+# and the code of every target has to be written so that its language reads it.
+import enum route from "ways.rule"
+
+enum first_by = manager "Manager"
+enum kind = only
+
+inputs
+  amount : money[JPY]  range >=1JPY <=1_000JPY
+  given  : kind
+  maybe  : kind?
+  path   : route
+
+outputs
+  first : first_by
+  again : kind
+  fee   : money[JPY]  round down(1JPY)
+  way   : route
+
+table first
+| -> first |
+| manager  |
+
+table again
+| given | -> again |
+| only  | only     |
+
+table fee
+| maybe | -> fee |
+| only  | 0JPY   |
+| none  | amount |
+
+table way
+| path   | -> way |
+| direct | direct |
+
+examples
+| amount | given | maybe | path   | -> first | -> again | -> fee | -> way |
+| 1JPY   | only  | only  | direct | manager  | only     | 0JPY   | direct |
+| 2JPY   | only  | none  | direct | manager  | only     | 2JPY   | direct |

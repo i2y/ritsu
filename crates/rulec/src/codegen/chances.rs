@@ -39,6 +39,9 @@ pub fn chances_fn_name(alias: &str, lang: &str) -> String {
 pub(crate) struct Drawn {
     pub name: String,
     pub alias: String,
+    /// What the function that counts the answers binds the drawn value to: its alias, else its name,
+    /// or the identifier the language binds it under apart from that (§15.336).
+    pub held: String,
     pub ty: Ty,
     pub from: From,
 }
@@ -67,7 +70,7 @@ impl<'a> Gen<'a> {
                     From::Range(crate::types::wire_int(lo, sc), crate::types::wire_int(hi, sc))
                 }
             };
-            out.push(Drawn { name: i.name.text.clone(), alias: pub_name(&i.name), ty, from });
+            out.push(Drawn { name: i.name.text.clone(), alias: pub_name(&i.name), held: self.held(&i.name), ty, from });
         }
         out
     }
@@ -131,12 +134,23 @@ impl<'a> Gen<'a> {
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 { self.py_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
         let rule = pub_name(&self.f.name);
+        // the rule's function where the module calls it, marked while the module is written apart (§15.336)
+        let call_rule = self.fam(&rule);
+        // A caller may name the arguments, so the function takes them as the rule names them; the
+        // body reads them as the identifiers they are bound under (§15.336).
         let mut params: Vec<String> = Vec::new();
+        let mut held: Vec<String> = Vec::new();
+        let mut pass: Vec<String> = Vec::new();
         for i in self.f.inputs.iter().filter(|i| i.random.is_none()) {
-            params.push(format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text))));
+            let ty = self.py_ty(&self.ty_of(&i.name.text));
+            params.push(format!("{}: {ty}", pub_name(&i.name)));
+            held.push(format!("{}: {ty}", self.held(&i.name)));
+            pass.push(pub_name(&i.name));
         }
         for (s, el) in self.f.elements.iter().enumerate() {
             params.push(format!("{}: list[{}]", pub_name(&el.name), self.element_type(s)));
+            held.push(format!("{}: list[{}]", self.held(&el.name), self.element_type(s)));
+            pass.push(pub_name(&el.name));
         }
         let (total, ways, out, k, last, e) = (self.temp("total"), self.temp("ways"), self.temp("out"), self.temp("k"), self.temp("last"), self.temp("e"));
         let call = |draw: Option<(&str, String)>| -> String {
@@ -146,11 +160,11 @@ impl<'a> Gen<'a> {
                 .iter()
                 .map(|i| match draw {
                     Some((d, ref v)) if pub_name(&i.name) == d => v.clone(),
-                    _ => pub_name(&i.name),
+                    _ => self.held(&i.name),
                 })
                 .collect();
             for el in &self.f.elements {
-                args.push(pub_name(&el.name));
+                args.push(self.held(&el.name));
             }
             args.join(", ")
         };
@@ -163,6 +177,12 @@ impl<'a> Gen<'a> {
         let name = self.chances_name("python");
         let mut o = format!("\n\nclass Chances(NamedTuple):\n    \"\"\"{doc_ty}\"\"\"\n\n    total: int\n    ways: list[tuple[{ret}, int]]\n\n\n");
         o.push_str(&format!("def {name}({}) -> Chances:\n    \"\"\"{doc_fn}\"\"\"\n", params.join(", ")));
+        // As the traced function does, where an argument is bound apart from its name (§15.336).
+        if held != params {
+            let inner = self.py_inner(&name);
+            o.push_str(&format!("    return {inner}({})\n\n\n", pass.join(", ")));
+            o.push_str(&format!("def {inner}({}) -> Chances:\n", held.join(", ")));
+        }
         o.push_str(&format!("    {total} = 0\n    {ways}: list[tuple[{ret}, int]] = []\n"));
         match self.chances_method() {
             Some((draw, lo, hi)) => {
@@ -170,14 +190,14 @@ impl<'a> Gen<'a> {
                 let (low, cut, n) = (self.temp("low"), self.temp("cut"), self.temp("n"));
                 o.push_str(&format!("    _, _, {cuts} = {}({})\n", self.walked_fn("python"), call(Some((&draw, lo.to_string())))));
                 o.push_str(&format!(
-                    "    if _len({cuts}) == 0 or {cuts}[_len({cuts}) - 1] == 0:\n        return Chances({}, [({rule}({}), {})])\n",
+                    "    if _len({cuts}) == 0 or {cuts}[_len({cuts}) - 1] == 0:\n        return Chances({}, [({call_rule}({}), {})])\n",
                     hi - lo + 1,
                     call(Some((&draw, lo.to_string()))),
                     hi - lo + 1
                 ));
                 o.push_str(&format!("    {low} = {lo}\n    for {cut} in {cuts}:\n        if {cut} > {low} and {low} <= {hi}:\n"));
                 o.push_str(&format!("            {n} = _min({cut}, {}) - {low}\n", hi + 1));
-                o.push_str(&format!("            {out} = {rule}({})\n", call(Some((&draw, low.clone())))));
+                o.push_str(&format!("            {out} = {call_rule}({})\n", call(Some((&draw, low.clone())))));
                 o.push_str(&add("            ", &n));
                 o.push_str(&format!("            {total} += {n}\n        if {cut} > {low}:\n            {low} = {cut}\n"));
                 o.push_str(&format!("    return Chances({total}, {ways})\n"));
@@ -191,17 +211,17 @@ impl<'a> Gen<'a> {
                             let ctr = self.temp(&format!("_i{j}"));
                             o.push_str(&format!("{ind}{ctr} = {}\n{ind}while {ctr} < {hi}:\n{ind}    {ctr} += 1\n", lo - 1));
                             let v = if matches!(d.ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { format!("{}({ctr})", super::brand_of(&d.ty)) } else { ctr.clone() };
-                            o.push_str(&format!("{ind}    {} = {v}\n", d.alias));
+                            o.push_str(&format!("{ind}    {} = {v}\n", d.held));
                         }
                         From::Values(vs) => {
                             let members: Vec<String> = vs.iter().map(|v| self.py_value(v, &d.ty)).collect();
-                            o.push_str(&format!("{ind}for {} in ({}{}):\n", d.alias, members.join(", "), if members.len() == 1 { "," } else { "" }));
+                            o.push_str(&format!("{ind}for {} in ({}{}):\n", d.held, members.join(", "), if members.len() == 1 { "," } else { "" }));
                         }
-                        From::Bool => o.push_str(&format!("{ind}for {} in (False, True):\n", d.alias)),
+                        From::Bool => o.push_str(&format!("{ind}for {} in (False, True):\n", d.held)),
                     }
                     ind.push_str("    ");
                 }
-                o.push_str(&format!("{ind}try:\n{ind}    {out} = {rule}({})\n{ind}except RuleInputError as {e}:\n{ind}    {last} = {e}\n{ind}    continue\n", call(None)));
+                o.push_str(&format!("{ind}try:\n{ind}    {out} = {call_rule}({})\n{ind}except RuleInputError as {e}:\n{ind}    {last} = {e}\n{ind}    continue\n", call(None)));
                 o.push_str(&format!("{ind}{total} += 1\n"));
                 o.push_str(&add(&ind, "1"));
                 o.push_str(&format!("    if {total} == 0 and {last} is not None:\n        raise {last}\n    return Chances({total}, {ways})\n"));
@@ -282,10 +302,14 @@ impl<'a> Gen<'a> {
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 { self.ts_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
         let rule = pub_name(&self.f.name);
+        // the rule's function where the module calls it, marked while the module is written apart (§15.336)
+        let call_rule = self.fam(&rule);
         let name = self.chances_name("typescript");
-        let mut params: Vec<String> = self.f.inputs.iter().filter(|i| i.random.is_none()).map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text)))).collect();
+        // A caller passes the arguments by their place: the function takes them under the
+        // identifiers the body reads (§15.336).
+        let mut params: Vec<String> = self.f.inputs.iter().filter(|i| i.random.is_none()).map(|i| format!("{}: {}", self.held(&i.name), self.ts_ty(&self.ty_of(&i.name.text)))).collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: readonly {}[]", pub_name(&el.name), self.element_type(s)));
+            params.push(format!("{}: readonly {}[]", self.held(&el.name), self.element_type(s)));
         }
         let (total, ways, out, k, last, e) = (self.temp("total"), self.temp("ways"), self.temp("out"), self.temp("k"), self.temp("last"), self.temp("e"));
         let same = if outs.len() == 1 {
@@ -296,7 +320,7 @@ impl<'a> Gen<'a> {
         let add = |ind: &str, n: &str| -> String {
             format!("{ind}let {k} = 0;\n{ind}while ({k} < {ways}.length && !({same})) {{\n{ind}  {k} += 1;\n{ind}}}\n{ind}if ({k} === {ways}.length) {{\n{ind}  {ways}.push([{out}, {n}]);\n{ind}}} else {{\n{ind}  {ways}[{k}][1] += {n};\n{ind}}}\n")
         };
-        let call = |draw: Option<(&str, &str)>| call_args(self, &|i| pub_name(&i.name), &|el| pub_name(&el.name), draw).join(", ");
+        let call = |draw: Option<(&str, &str)>| call_args(self, &|i| self.held(&i.name), &|el| self.held(&el.name), draw).join(", ");
         let mut o = format!("/** {doc_ty} */\nexport interface Chances {{\n  readonly total: bigint;\n  readonly ways: [{ret}, bigint][];\n}}\n\n");
         o.push_str(&format!("/** {doc_fn} */\nexport function {name}({}): Chances {{\n", params.join(", ")));
         o.push_str(&format!("  let {total} = 0n;\n  const {ways}: [{ret}, bigint][] = [];\n"));
@@ -306,13 +330,13 @@ impl<'a> Gen<'a> {
                 let at_lo = format!("{lo}n");
                 o.push_str(&format!("  const [, , {cuts}] = {}({});\n", self.walked_fn("typescript"), call(Some((&draw, &at_lo)))));
                 o.push_str(&format!(
-                    "  if ({cuts}.length === 0 || {cuts}[{cuts}.length - 1] === 0n) {{\n    return {{ total: {all}n, ways: [[{rule}({}), {all}n]] }};\n  }}\n",
+                    "  if ({cuts}.length === 0 || {cuts}[{cuts}.length - 1] === 0n) {{\n    return {{ total: {all}n, ways: [[{call_rule}({}), {all}n]] }};\n  }}\n",
                     call(Some((&draw, &at_lo))),
                     all = hi - lo + 1
                 ));
                 o.push_str(&format!("  let {low} = {lo}n;\n  for (const {cut} of {cuts}) {{\n    if ({cut} > {low} && {low} <= {hi}n) {{\n"));
                 o.push_str(&format!("      const {n} = ({cut} < {top}n ? {cut} : {top}n) - {low};\n", top = hi + 1));
-                o.push_str(&format!("      const {out} = {rule}({});\n", call(Some((&draw, &low)))));
+                o.push_str(&format!("      const {out} = {call_rule}({});\n", call(Some((&draw, &low)))));
                 o.push_str(&add("      ", &n));
                 o.push_str(&format!("      {total} += {n};\n    }}\n    if ({cut} > {low}) {{\n      {low} = {cut};\n    }}\n  }}\n"));
                 o.push_str(&format!("  return {{ total: {total}, ways: {ways} }};\n}}\n\n"));
@@ -326,18 +350,18 @@ impl<'a> Gen<'a> {
                             let ctr = self.temp(&format!("_i{j}"));
                             o.push_str(&format!("{ind}for (let {ctr} = {lo}n; {ctr} <= {hi}n; {ctr} += 1n) {{\n"));
                             let v = if matches!(d.ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { format!("{ctr} as {}", super::brand_of(&d.ty)) } else { ctr.clone() };
-                            o.push_str(&format!("{ind}  const {} = {v};\n", d.alias));
+                            o.push_str(&format!("{ind}  const {} = {v};\n", d.held));
                         }
                         From::Values(vs) => {
                             let members: Vec<String> = vs.iter().map(|v| self.ts_value(v, &d.ty)).collect();
-                            o.push_str(&format!("{ind}for (const {} of [{}]) {{\n", d.alias, members.join(", ")));
+                            o.push_str(&format!("{ind}for (const {} of [{}]) {{\n", d.held, members.join(", ")));
                         }
-                        From::Bool => o.push_str(&format!("{ind}for (const {} of [false, true]) {{\n", d.alias)),
+                        From::Bool => o.push_str(&format!("{ind}for (const {} of [false, true]) {{\n", d.held)),
                     }
                     ind.push_str("  ");
                 }
                 o.push_str(&format!(
-                    "{ind}let {out}: {ret};\n{ind}try {{\n{ind}  {out} = {rule}({});\n{ind}}} catch ({e}) {{\n{ind}  if (!({e} instanceof RuleInputError)) {{\n{ind}    throw {e};\n{ind}  }}\n{ind}  {last} = {e};\n{ind}  continue;\n{ind}}}\n{ind}{total} += 1n;\n",
+                    "{ind}let {out}: {ret};\n{ind}try {{\n{ind}  {out} = {call_rule}({});\n{ind}}} catch ({e}) {{\n{ind}  if (!({e} instanceof RuleInputError)) {{\n{ind}    throw {e};\n{ind}  }}\n{ind}  {last} = {e};\n{ind}  continue;\n{ind}}}\n{ind}{total} += 1n;\n",
                     call(None)
                 ));
                 o.push_str(&add(&ind, "1n"));
@@ -410,16 +434,20 @@ impl<'a> Gen<'a> {
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 { self.rs_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
         let rule = pub_name(&self.f.name);
+        // the rule's function where the module calls it, marked while the module is written apart (§15.336)
+        let call_rule = self.fam(&rule);
         let name = self.chances_name("rust");
-        let mut params: Vec<String> = self.f.inputs.iter().filter(|i| i.random.is_none()).map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text)))).collect();
+        // The arguments, under the identifiers the body reads (§15.336): a caller passes them by
+        // their place.
+        let mut params: Vec<String> = self.f.inputs.iter().filter(|i| i.random.is_none()).map(|i| format!("{}: {}", self.held(&i.name), self.rs_ty(&self.ty_of(&i.name.text)))).collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: &[{}]", pub_name(&el.name), self.element_type(s)));
+            params.push(format!("{}: &[{}]", self.held(&el.name), self.element_type(s)));
         }
         // A string is handed to each call afresh: the rule takes it by value.
         let pass = |i: &crate::ast::VarDecl| -> String {
-            if matches!(self.ty_of(&i.name.text).present(), Ty::Str) { format!("{}.clone()", pub_name(&i.name)) } else { pub_name(&i.name) }
+            if matches!(self.ty_of(&i.name.text).present(), Ty::Str) { format!("{}.clone()", self.held(&i.name)) } else { self.held(&i.name) }
         };
-        let call = |draw: Option<(&str, &str)>| call_args(self, &pass, &|el| pub_name(&el.name), draw).join(", ");
+        let call = |draw: Option<(&str, &str)>| call_args(self, &pass, &|el| self.held(&el.name), draw).join(", ");
         let (total, ways, out, last, e) = (self.temp("total"), self.temp("ways"), self.temp("out"), self.temp("last"), self.temp("e"));
         let add = |ind: &str, n: &str| -> String {
             format!("{ind}match {ways}.iter_mut().find(|w| w.0 == {out}) {{\n{ind}    Some(w) => w.1 += {n},\n{ind}    None => {ways}.push(({out}, {n})),\n{ind}}}\n")
@@ -432,13 +460,13 @@ impl<'a> Gen<'a> {
                 let (cuts, low, cut, n) = (self.temp("cuts"), self.temp("low"), self.temp("cut"), self.temp("n"));
                 o.push_str(&format!("    let (_, _, {cuts}) = {}({})?;\n", self.walked_fn("rust"), call(Some((&draw, &lo.to_string())))));
                 o.push_str(&format!(
-                    "    if {cuts}.last().copied().unwrap_or(0) == 0 {{\n        return Ok(Chances {{ total: {all}, ways: vec![({rule}({})?, {all})] }});\n    }}\n",
+                    "    if {cuts}.last().copied().unwrap_or(0) == 0 {{\n        return Ok(Chances {{ total: {all}, ways: vec![({call_rule}({})?, {all})] }});\n    }}\n",
                     call(Some((&draw, &lo.to_string()))),
                     all = hi - lo + 1
                 ));
                 o.push_str(&format!("    let mut {low}: i64 = {lo};\n    for {cut} in {cuts} {{\n        if {cut} > {low} && {low} <= {hi} {{\n"));
                 o.push_str(&format!("            let {n} = {cut}.min({}) - {low};\n", hi + 1));
-                o.push_str(&format!("            let {out} = {rule}({})?;\n", call(Some((&draw, &low)))));
+                o.push_str(&format!("            let {out} = {call_rule}({})?;\n", call(Some((&draw, &low)))));
                 o.push_str(&add("            ", &n));
                 o.push_str(&format!("            {total} += {n};\n        }}\n        if {cut} > {low} {{\n            {low} = {cut};\n        }}\n    }}\n"));
                 o.push_str(&format!("    Ok(Chances {{ total: {total}, ways: {ways} }})\n}}\n\n"));
@@ -452,18 +480,18 @@ impl<'a> Gen<'a> {
                             let ctr = self.temp(&format!("_i{j}"));
                             o.push_str(&format!("{ind}for {ctr} in {lo}i64..={hi}i64 {{\n"));
                             let v = if matches!(d.ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { format!("{}({ctr})", super::brand_of(&d.ty)) } else { ctr.clone() };
-                            o.push_str(&format!("{ind}    let {} = {v};\n", d.alias));
+                            o.push_str(&format!("{ind}    let {} = {v};\n", d.held));
                         }
                         From::Values(vs) => {
                             let members: Vec<String> = vs.iter().map(|v| self.rs_value(v, &d.ty)).collect();
-                            o.push_str(&format!("{ind}for {} in [{}] {{\n", d.alias, members.join(", ")));
+                            o.push_str(&format!("{ind}for {} in [{}] {{\n", d.held, members.join(", ")));
                         }
-                        From::Bool => o.push_str(&format!("{ind}for {} in [false, true] {{\n", d.alias)),
+                        From::Bool => o.push_str(&format!("{ind}for {} in [false, true] {{\n", d.held)),
                     }
                     ind.push_str("    ");
                 }
                 o.push_str(&format!(
-                    "{ind}let {out} = match {rule}({}) {{\n{ind}    Ok(o) => o,\n{ind}    Err({e} @ RuleError::Input {{ .. }}) => {{\n{ind}        {last} = Some({e});\n{ind}        continue;\n{ind}    }}\n{ind}    Err({e}) => return Err({e}),\n{ind}}};\n{ind}{total} += 1;\n",
+                    "{ind}let {out} = match {call_rule}({}) {{\n{ind}    Ok(o) => o,\n{ind}    Err({e} @ RuleError::Input {{ .. }}) => {{\n{ind}        {last} = Some({e});\n{ind}        continue;\n{ind}    }}\n{ind}    Err({e}) => return Err({e}),\n{ind}}};\n{ind}{total} += 1;\n",
                     call(None)
                 ));
                 o.push_str(&add(&ind, "1"));
@@ -663,12 +691,16 @@ impl<'a> Gen<'a> {
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 { self.rbs_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
         let rule = pub_name(&self.f.name);
+        // the rule's function where the module calls it, marked while the module is written apart (§15.336)
+        let call_rule = self.fam(&rule);
         let name = self.chances_name("ruby");
-        let mut params: Vec<String> = self.f.inputs.iter().filter(|i| i.random.is_none()).map(|i| pub_name(&i.name)).collect();
+        // The arguments, under the identifiers the body reads (§15.336): a caller passes them by
+        // their place.
+        let mut params: Vec<String> = self.f.inputs.iter().filter(|i| i.random.is_none()).map(|i| self.held(&i.name)).collect();
         for el in &self.f.elements {
-            params.push(pub_name(&el.name));
+            params.push(self.held(&el.name));
         }
-        let call = |draw: Option<(&str, &str)>| call_args(self, &|i| pub_name(&i.name), &|el| pub_name(&el.name), draw).join(", ");
+        let call = |draw: Option<(&str, &str)>| call_args(self, &|i| self.held(&i.name), &|el| self.held(&el.name), draw).join(", ");
         let (total, ways, out, k, last, e) = (self.temp("total"), self.temp("ways"), self.temp("out"), self.temp("k"), self.temp("last"), self.temp("e"));
         let add = |ind: &str, n: &str| -> String {
             format!("{ind}{k} = {ways}.index {{ |w| w[0] == {out} }}\n{ind}if {k}.nil?\n{ind}  {ways} << [{out}, {n}]\n{ind}else\n{ind}  {ways}[{k}] = [{out}, {ways}[{k}][1] + {n}]\n{ind}end\n")
@@ -681,13 +713,13 @@ impl<'a> Gen<'a> {
                 let (cuts, low, n) = (self.temp("cuts"), self.temp("low"), self.temp("n"));
                 o.push_str(&format!("    _, _, {cuts} = {}({})\n", self.walked_fn("ruby"), call(Some((&draw, &lo.to_string())))));
                 o.push_str(&format!(
-                    "    return Chances.new({all}, [[{rule}({}), {all}]]) if {cuts}.empty? || {cuts}[-1].zero?\n\n",
+                    "    return Chances.new({all}, [[{call_rule}({}), {all}]]) if {cuts}.empty? || {cuts}[-1].zero?\n\n",
                     call(Some((&draw, &lo.to_string()))),
                     all = hi - lo + 1
                 ));
                 o.push_str(&format!("    {low} = {lo}\n    {cuts}.each do |cut|\n      if cut > {low} && {low} <= {hi}\n"));
                 o.push_str(&format!("        {n} = [cut, {}].min - {low}\n", hi + 1));
-                o.push_str(&format!("        {out} = {rule}({})\n", call(Some((&draw, &low)))));
+                o.push_str(&format!("        {out} = {call_rule}({})\n", call(Some((&draw, &low)))));
                 o.push_str(&add("        ", &n));
                 o.push_str(&format!("        {total} += {n}\n      end\n      {low} = cut if cut > {low}\n    end\n    Chances.new({total}, {ways})\n  end\n\n"));
             }
@@ -696,17 +728,17 @@ impl<'a> Gen<'a> {
                 let mut ind = "    ".to_string();
                 for d in self.drawn().iter() {
                     match &d.from {
-                        From::Range(lo, hi) => o.push_str(&format!("{ind}({lo}..{hi}).each do |{}|\n", d.alias)),
+                        From::Range(lo, hi) => o.push_str(&format!("{ind}({lo}..{hi}).each do |{}|\n", d.held)),
                         From::Values(vs) => {
                             let members: Vec<String> = vs.iter().map(|v| self.rb_value(v, &d.ty)).collect();
-                            o.push_str(&format!("{ind}[{}].each do |{}|\n", members.join(", "), d.alias));
+                            o.push_str(&format!("{ind}[{}].each do |{}|\n", members.join(", "), d.held));
                         }
-                        From::Bool => o.push_str(&format!("{ind}[false, true].each do |{}|\n", d.alias)),
+                        From::Bool => o.push_str(&format!("{ind}[false, true].each do |{}|\n", d.held)),
                     }
                     ind.push_str("  ");
                 }
                 o.push_str(&format!(
-                    "{ind}begin\n{ind}  {out} = {rule}({})\n{ind}rescue RuleInputError => {e}\n{ind}  {last} = {e}\n{ind}  next\n{ind}end\n{ind}{total} += 1\n",
+                    "{ind}begin\n{ind}  {out} = {call_rule}({})\n{ind}rescue RuleInputError => {e}\n{ind}  {last} = {e}\n{ind}  next\n{ind}end\n{ind}{total} += 1\n",
                     call(None)
                 ));
                 o.push_str(&add(&ind, "1"));
@@ -798,6 +830,18 @@ end
 
     // ── Swift ─────────────────────────────────────────────────────────────────
 
+    /// A local of the Swift function that counts the answers: [`Gen::temp`]'s, kept clear of the
+    /// names Swift gives the parameters as well, which it writes in lowerCamelCase: an input `Total`
+    /// is the parameter `total`, which a local `total` hid (§15.336).
+    fn sw_temp(&self, base: &str) -> String {
+        let params: Vec<String> = self.f.inputs.iter().map(|i| &i.name).chain(self.f.elements.iter().map(|el| &el.name)).map(|n| super::sw_name(&self.held(n))).collect();
+        let mut n = self.temp(base);
+        while params.contains(&n) {
+            n = self.temp(&format!("{n}_"));
+        }
+        n
+    }
+
     /// The `Chances` and `Way` types and the function, in Swift.
     pub(crate) fn sw_chances(&self) -> String {
         if !self.f.has_random() {
@@ -808,9 +852,11 @@ end
         let ret = if outs.len() == 1 { self.sw_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
         let fname = super::sw_name(&pub_name(&self.f.name));
         let name = self.chances_name("swift");
-        let mut params: Vec<String> = self.f.inputs.iter().filter(|i| i.random.is_none()).map(|i| format!("{}: {}", super::sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text)))).collect();
+        // A caller writes the labels the rule names; the body reads the identifiers they are bound
+        // under (§15.336).
+        let mut params: Vec<String> = self.f.inputs.iter().filter(|i| i.random.is_none()).map(|i| self.sw_param(&i.name, &self.sw_ty(&self.ty_of(&i.name.text)))).collect();
         for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: [{}]", super::sw_name(&pub_name(&el.name)), self.element_type(s)));
+            params.push(self.sw_param(&el.name, &format!("[{}]", self.element_type(s))));
         }
         // Swift calls with the labels.
         let call = |draw: Option<(&str, &str)>| {
@@ -821,17 +867,17 @@ end
                 .map(|i| {
                     let v = match draw {
                         Some((d, v)) if i.name.text == d => v.to_string(),
-                        _ => super::sw_name(&pub_name(&i.name)),
+                        _ => super::sw_name(&self.held(&i.name)),
                     };
                     format!("{}: {v}", super::sw_label(&pub_name(&i.name)))
                 })
                 .collect();
             for el in &self.f.elements {
-                args.push(format!("{}: {}", super::sw_label(&pub_name(&el.name)), super::sw_name(&pub_name(&el.name))));
+                args.push(format!("{}: {}", super::sw_label(&pub_name(&el.name)), super::sw_name(&self.held(&el.name))));
             }
             args.join(", ")
         };
-        let (total, ways, out, last, e) = (self.temp("total"), self.temp("ways"), self.temp("out"), self.temp("last"), self.temp("e"));
+        let (total, ways, out, last, e) = (self.sw_temp("total"), self.sw_temp("ways"), self.sw_temp("out"), self.sw_temp("last"), self.sw_temp("e"));
         let add = |ind: &str, n: &str| -> String {
             format!("{ind}if let k = {ways}.firstIndex(where: {{ $0.out == {out} }}) {{\n{ind}    {ways}[k] = Way(out: {out}, count: {ways}[k].count + {n})\n{ind}}} else {{\n{ind}    {ways}.append(Way(out: {out}, count: {n}))\n{ind}}}\n")
         };
@@ -843,7 +889,7 @@ end
         o.push_str(&format!("    var {total}: Int64 = 0\n    var {ways}: [Way] = []\n"));
         match self.weighted_draw() {
             Some((draw, lo, hi)) => {
-                let (cuts, low, n) = (self.temp("cuts"), self.temp("low"), self.temp("n"));
+                let (cuts, low, n) = (self.sw_temp("cuts"), self.sw_temp("low"), self.sw_temp("n"));
                 o.push_str(&format!("    let (_, _, {cuts}) = try {}({})\n", self.walked_fn("swift"), call(Some((&draw, &lo.to_string())))));
                 o.push_str(&format!(
                     "    if {cuts}.last ?? 0 == 0 {{\n        return Chances(total: {all}, ways: [Way(out: try {fname}({}), count: {all})])\n    }}\n",
@@ -860,10 +906,10 @@ end
                 o.push_str(&format!("    var {last}: RuleError? = nil\n"));
                 let mut ind = "    ".to_string();
                 for (j, d) in self.drawn().iter().enumerate() {
-                    let v = super::sw_name(&d.alias);
+                    let v = super::sw_name(&d.held);
                     match &d.from {
                         From::Range(lo, hi) => {
-                            let ctr = self.temp(&format!("_i{j}"));
+                            let ctr = self.sw_temp(&format!("_i{j}"));
                             o.push_str(&format!("{ind}for {ctr} in Int64({lo})...Int64({hi}) {{\n"));
                             let x = if matches!(d.ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { format!("{}({ctr})", super::brand_of(&d.ty)) } else { ctr.clone() };
                             o.push_str(&format!("{ind}    let {v} = {x}\n"));

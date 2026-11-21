@@ -41,7 +41,9 @@ pub struct Given {
     pub shown: String,
     /// What kaname's analysis of ranges finds the value can be (kaname's DESIGN 5), on the wire,
     /// both ends in, None at an end it finds none for: a number counted in the unit of what takes
-    /// it (a rate as a count of its step), a date as its day number, a list by its count.
+    /// it (a rate as a count of its step), a date as its day number, a list by its count — the
+    /// fewest and the most elements it can have, which is what a bound a rule puts on the walk of
+    /// the sequence it is given to is asked with, each list for its own sequence.
     pub range: Ends,
     /// Every kind of place the value can come from, as an `if` or a `match` joins them: the day of
     /// a koyomi date carried unchanged (`Origin::Day`), a numeric output of a rule carried unchanged
@@ -69,9 +71,6 @@ pub struct ProgramRuleCall {
     /// The relations kaname knows hold at the call between two of the inputs it gives (kaname's
     /// DESIGN 5.3): `(input, op, input)`, `op` one of `<`, `<=` and `=`.
     pub relations: Vec<(String, String, String)>,
-    /// The most elements a list given to a list the rule walks can have (the largest, where the
-    /// call gives more than one), when kaname knows it.
-    pub max_len: Option<i128>,
 }
 
 /// One call of a koyomi date in a module, with the day given to the date's date input. The date's

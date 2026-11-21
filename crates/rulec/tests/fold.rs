@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use ritsu_testkit::{Need, TempDir, ready};
 use ritsu_testkit::tmp::tmpdir_in;
+use ritsu_testkit::run::finish;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -22,10 +23,12 @@ fn dir(tag: &str) -> (TempDir, PathBuf) {
 }
 
 fn run(args: &[&str]) -> (i32, String, String) {
+    // What `gen` and `doc` write is in the language of `--lang` alone (the root DESIGN 4.1).
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
+        .args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] })
         .output()
         .expect("rulec を起動できない");
     (
@@ -35,22 +38,17 @@ fn run(args: &[&str]) -> (i32, String, String) {
     )
 }
 
+/// How long a run of rulec may take: `rulec test` talks to the servers of the generated code,
+/// and waits for their answers without a limit of its own. Past it, rulec is stopped with every
+/// process it started, and the test fails saying what it ran and what it printed until then.
+const RULEC_LIMIT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
 /// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
 /// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
 /// with that.
 fn run_tmp(tmp: &Path, args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "ja")
-        .env("TMPDIR", tmp)
-        .current_dir(root())
-        .args(args)
-        .output()
-        .expect("rulec を起動できない");
-    (
-        o.status.code().unwrap_or(-1),
-        String::from_utf8_lossy(&o.stdout).into_owned(),
-        String::from_utf8_lossy(&o.stderr).into_owned(),
-    )
+    let o = finish(Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args).args(if args.contains(&"--lang") { &[][..] } else { &["--lang", "ja"][..] }), RULEC_LIMIT, &format!("rulec {}", args.join(" ")));
+    (o.code.unwrap_or(-1), o.stdout, o.stderr)
 }
 
 /// A tariff sheet walked row by row: skip, halt, take, or hold the best so far.
@@ -449,9 +447,13 @@ fn 受け付けない入力は生成コードでもエラーになる() {
     let body = std::fs::read_to_string(out.join("vectors/freight.refused.jsonl")).expect("受け付けない入力の一覧が無い");
     let lines: Vec<&str> = body.lines().filter(|l| !l.trim().is_empty()).collect();
     // The walk's contradiction comes first, and after it the inputs the door refuses (§15.204).
+    // The last meets the same contradiction with a third element out of its range: the walk meets
+    // the two elements first, so the contradiction is what every door says (§15.328).
     let contradictions: Vec<&&str> = lines.iter().filter(|l| l.contains("\"refused\":\"contradiction\"")).collect();
-    assert_eq!(contradictions.len(), 1, "矛盾で止まる入力は一件のはず: {body}");
+    assert_eq!(contradictions.len(), 2, "矛盾で止まる入力は二件のはず: {body}");
     assert_eq!(lines[0], *contradictions[0], "矛盾の入力が先頭に無い: {body}");
+    assert_eq!(lines[lines.len() - 1], *contradictions[1], "範囲の外の要素より先に会う矛盾の入力が最後に無い: {body}");
+    assert!(contradictions[1].contains("take_unique"), "どの矛盾か言っていない: {body}");
     let j = rulec::json::parse(lines[0]).unwrap();
     assert!(j.get("in").and_then(|i| i.get("運賃行")).is_some(), "入力が読めない形: {body}");
     // It is the transition no answer can reach, and the file says so; the sentence is the one the
@@ -505,6 +507,41 @@ fn answer_instead_of_raising(out: &Path) {
     std::fs::write(&module, broken.join("\n") + "\n").unwrap();
 }
 
+/// How `child` ended and what it printed (its standard output, then its standard error), both
+/// outputs read to their ends as `wait_with_output` reads them, for no longer than RULEC_LIMIT: past
+/// it, its process group (the child's own) is stopped, and the test fails saying `what` it waited for.
+fn output_within(mut child: std::process::Child, what: &str) -> (Option<i32>, String) {
+    fn read(mut r: impl std::io::Read + Send + 'static) -> std::sync::mpsc::Receiver<Vec<u8>> {
+        let (sent, got) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            let _ = r.read_to_end(&mut bytes);
+            let _ = sent.send(bytes);
+        });
+        got
+    }
+    let until = std::time::Instant::now() + RULEC_LIMIT;
+    let (out, err) = (read(child.stdout.take().unwrap()), read(child.stderr.take().unwrap()));
+    let left = || until.saturating_duration_since(std::time::Instant::now());
+    let read_both = out.recv_timeout(left()).and_then(|o| err.recv_timeout(left()).map(|e| (o, e)));
+    let mut status = None;
+    if read_both.is_ok() {
+        while std::time::Instant::now() < until {
+            if let Some(s) = child.try_wait().unwrap() {
+                status = Some(s);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+    let (Ok((o, e)), Some(status)) = (read_both, status) else {
+        let _ = Command::new("kill").args(["-KILL", "--", &format!("-{}", child.id())]).status();
+        let _ = child.wait();
+        panic!("{what}: it did not end within {} seconds, and its process group was stopped", RULEC_LIMIT.as_secs());
+    };
+    (status.code(), String::from_utf8_lossy(&o).into_owned() + &String::from_utf8_lossy(&e))
+}
+
 /// The processes in a process group, as `ps` lists them: `<pid> <group> <command>`.
 fn in_group(group: u32) -> Vec<String> {
     let o = Command::new("ps").args(["-A", "-o", "pid=,pgid=,command="]).output().expect("ps を起動できない");
@@ -546,8 +583,7 @@ fn 途中で落ちたrulec_testは立てたプロセスを残さない() {
     std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
     let child = cmd.spawn().expect("rulec を起動できない");
     let group = child.id();
-    let o = child.wait_with_output().unwrap();
-    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
+    let (code, said) = output_within(child, "rulec test running the generated code, in a process group of its own");
     // Asked now, while the test still holds its directory: nothing here stops a process on its
     // own, and a check made after a clean-up could only find less.
     let left = in_group(group);
@@ -556,7 +592,7 @@ fn 途中で落ちたrulec_testは立てたプロセスを残さない() {
             let _ = Command::new("kill").args(["-9", pid]).status();
         }
     }
-    assert_eq!(o.status.code(), Some(1), "{said}");
+    assert_eq!(code, Some(1), "{said}");
     // Both MCP passes, and the HTTP one in particular, stopped half way.
     assert!(said.contains("(Python, MCP/HTTP) 参照評価器と食い違います"), "HTTP の MCP サーバの段が途中で落ちていない: {said}");
     assert!(left.is_empty(), "rulec test が終わったあとに残ったプロセス:\n{}", left.join("\n"));
@@ -699,13 +735,15 @@ fn 歩きの前と後の項目は一度だけ決まる() {
 }
 
 /// The generated code keeps the stages: what is decided before the walk comes above the loop,
-/// once, and what reads the walk's answer comes after it.
+/// once, and what reads the walk's answer comes after it. The door's own loop over the sequence,
+/// which holds each element to its kinds before anything is decided (§15.328), comes first.
 #[test]
 fn 歩きの段の順に生成される() {
     let (_tmp, d) = dir("stages-shape");
     for (stem, before, walk, after) in [
-        ("best_offer", "opening = ", "for elem in bids:", "review = "),
-        ("parcel_charge", "factor = 1", "for elem in parcels:", "tier = "),
+        // the walk counts its elements where a sentence of it names one (§15.324)
+        ("best_offer", "opening = ", "for index, elem in _enumerate(bids):", "review = "),
+        ("parcel_charge", "factor = 1", "for index, elem in _enumerate(parcels):", "tier = "),
     ] {
         let (rel, _) = stage_source(stem);
         let out = d.join(stem);
@@ -713,7 +751,9 @@ fn 歩きの段の順に生成される() {
         assert_eq!(code, 0, "{said}{e}");
         let py = std::fs::read_to_string(out.join(format!("python/{stem}.py"))).unwrap();
         let at = |what: &str| py.find(what).unwrap_or_else(|| panic!("{stem}: no `{what}` in\n{py}"));
-        assert!(at(before) < at(walk) && at(walk) < at(after), "{stem}: the stages are out of order:\n{py}");
+        assert_eq!(py.matches(walk).count(), 2, "{stem}: the door's loop and the walk:\n{py}");
+        let (door_at, walk_at) = (at(walk), py.rfind(walk).unwrap());
+        assert!(door_at < at(before) && at(before) < walk_at && walk_at < at(after), "{stem}: the stages are out of order:\n{py}");
         assert_eq!(py.matches(before).count(), 1, "{stem}: `{before}` is written more than once:\n{py}");
     }
 }

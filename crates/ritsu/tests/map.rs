@@ -2,6 +2,8 @@
 //! as Cargo says them, to the contexts of `ritsu.ctx` and `contexts/`; and a language's crate
 //! that depends on another language's crate is named by sakai at the line of its Cargo.toml.
 
+mod common;
+
 use ritsu_testkit::TempDir;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -15,7 +17,7 @@ fn repo() -> PathBuf {
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "SAKAI_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");

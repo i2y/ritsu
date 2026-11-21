@@ -1,0 +1,48 @@
+# サービスを実装するワークフローに入ってくる、protobuf の `google.type.Date`（DESIGN 44）。protobuf の
+# JSON は日付を `{"year": 2026, "month": 11, "day": 16}` と書く。実行はこれを `2026-11-16` として読む。
+# 実行を始めるリクエスト（すぐ下、リスト、メッセージの中、メッセージのリストの中）とコールバックの
+# 応答の両方で読み、どのプラットフォームでも、読んだ日を date のまま次へ渡す。実行は {} で終わる。
+# 出力の日付は、protobuf の JSON の形ではなくフローが持つ形で出ていくので、日付のフィールドへ行く
+# 出力は E017 が拒む。
+workflow 貸し出しの日付 v1 implements rentals.RentalServiceJa
+description "日を google.type.Date で持つサービスで車を貸す。貸し出しの日と運転者の免許の日を date で読んで窓口に渡し、車が戻った日を窓口が答えるのを待つ"
+
+use proto rentals from "protos/rentals.proto"
+
+record 運転者
+  name       : string
+  licensedOn : date
+
+record 返却
+  returnedOn : date
+  km         : int
+
+inputs
+  car     : string
+  pickup  : date
+  dropoff : date
+  closed  : list[date]
+  driver  : 運転者
+  others  : list[運転者]
+
+task 引き渡す(車: string, 貸し出し: date, 返却予定: date, 休業日: list[date], 免許: date)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-desk"
+  idempotent
+
+# 窓口は車とコールバックの ID を受け取り、車が戻ったら答える。
+task 返却を待つ(車: string, 返却予定: date) -> 返却
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-return"
+  callback
+  timeout 7 days
+
+task 締める(車: string, 返却日: date, 距離: int)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:rental-close"
+  idempotent
+
+flow
+  引き渡す(車: car, 貸し出し: pickup, 返却予定: dropoff, 休業日: closed, 免許: driver.licensedOn)
+  for ほか in others at most 3
+    引き渡す(車: car, 貸し出し: pickup, 返却予定: dropoff, 休業日: closed, 免許: ほか.licensedOn)
+  let 戻り = 返却を待つ(車: car, 返却予定: dropoff)
+    on timeout => fail 返却の遅れ "7 日たっても車が戻りません"
+  締める(車: car, 返却日: 戻り.returnedOn, 距離: 戻り.km)

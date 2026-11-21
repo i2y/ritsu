@@ -1,0 +1,8 @@
+エラー[E101]: chain_names.gate:10:7: action `refund_order` はありません
+    10 |   can refund_order
+  = 書ける action は `refund_ordr` です。
+  = `refund_order` は 32 行目にも書かれています。
+エラー[E101]: chain_names.gate:14:9: 役割 `clerk` はありません
+    14 |   roles clerk
+  = 書ける役割は `clrk` です。
+  = `clerk` は 31 行目にも書かれています。

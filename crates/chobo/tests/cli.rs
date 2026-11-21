@@ -53,6 +53,38 @@ fn explain_all_as_markdown_has_every_code() {
     assert!(err.contains("E999"));
 }
 
+/// `explain --format json`: what the text says of a code, as data, its keys English whatever
+/// `--lang` says: the book that shows it, the book it is compared with (`--diff-base`) and the
+/// command that shows it (`chobo gen`) where the code has them.
+#[test]
+fn explain_as_json_has_every_code_and_what_shows_it() {
+    let ledger = codes::ledger();
+    for lang in ["en", "ja"] {
+        let l = ritsu_base::text::Lang::parse(lang).unwrap();
+        let (code, out, err) = run(&["explain", "--all", "--format", "json", "--lang", lang]);
+        assert_eq!((code, err.as_str()), (0, ""), "{lang}");
+        let all: Value = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{lang}: not one JSON document: {e}"));
+        let all = all.as_array().unwrap_or_else(|| panic!("{lang}: not an array"));
+        assert_eq!(all.len(), ledger.len(), "{lang}");
+        for (j, e) in all.iter().zip(&ledger) {
+            let keys: Vec<&str> = j.as_object().unwrap().keys().map(String::as_str).collect();
+            assert_eq!(keys.len(), 9, "{}: {keys:?}", e.code);
+            assert_eq!((j["code"].as_str(), j["severity"].as_str()), (Some(e.code), Some(e.severity.key())));
+            assert_eq!((j["title"].as_str(), j["when"].as_str(), j["fix"].as_str()), (Some(e.title.get(l)), Some(e.when.get(l)), Some(e.fix.get(l))), "{}", e.code);
+            assert_eq!(j["example"].as_str(), Some(e.example), "{}", e.code);
+            assert_eq!(j["before"].as_str(), e.before, "{}", e.code);
+            assert_eq!(j["command"].as_str().is_some(), e.target.is_some(), "{}", e.code);
+            assert_eq!(j["related"].as_array().map(Vec::len), Some(e.related.len()), "{}", e.code);
+        }
+    }
+    // one code, as one document, and the command of a code of `chobo gen`
+    let of_gen = ledger.iter().find(|e| e.target == Some("postgres-go")).unwrap();
+    let (code, out, _) = run(&["explain", of_gen.code, "--format", "json"]);
+    assert_eq!(code, 0);
+    let one: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(one["command"], "chobo gen <file.book> --target go --books postgres", "{out}");
+}
+
 #[test]
 fn help_comes_from_the_table() {
     let (code, out, _) = run(&["--help"]);
@@ -260,14 +292,10 @@ fn what_stops_gen_and_what_it_says() {
         assert_eq!((code, out.as_str()), (2, ""), "{args:?}: {err}");
         err
     };
-    assert_eq!(
-        said(&["gen", b, "--lang", "en"]),
-        "error: `chobo gen` needs one or more `--target sql|typescript|python|go|rust`; `--books postgres|tigerbeetle|mysql` says which database they are for (postgres if it is not given)\n"
-    );
-    assert_eq!(
-        said(&["gen", b, "--lang", "ja"]),
-        "エラー: `chobo gen` には `--target sql|typescript|python|go|rust` が一つ以上要ります。どのデータベースのためのものかは `--books postgres|tigerbeetle|mysql` で指定します（無ければ postgres）\n"
-    );
+    // what it needs, and its usage line, where `--books` says which database the books are for
+    let usage = "chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]";
+    assert_eq!(said(&["gen", b, "--lang", "en"]), format!("error: `chobo gen` needs `--target sql|typescript|python|go|rust`\nusage: {usage}\n"));
+    assert_eq!(said(&["gen", b, "--lang", "ja"]), format!("エラー: `chobo gen` には `--target sql|typescript|python|go|rust` が要ります\n使い方: {usage}\n"));
     assert_eq!(said(&["build", b, "--target", "postgres", "--lang", "en"]), "error: `chobo build` is `chobo gen` from 0.41.0\n");
     assert_eq!(said(&["build", b, "--lang", "ja"]), "エラー: `chobo build` は 0.41.0 から `chobo gen` です\n");
     // `help` reads a command as dandori and sakai do: the verb up to 0.40.0 stops there too
@@ -277,7 +305,7 @@ fn what_stops_gen_and_what_it_says() {
     assert_eq!(run(&["help", "--lang", "ja"]), run(&["--help", "--lang", "ja"]));
     let (code, out, err) = run(&["help", "nothing", "--lang", "en"]);
     assert_eq!((code, out.as_str()), (2, ""), "{err}");
-    assert!(err.starts_with("error: unknown command `nothing`\n\n"), "{err}");
+    assert_eq!(err, "error: there is no command `nothing`; run `chobo --help`\n");
     for (old, new, since) in chobo::target::RENAMED {
         assert_eq!(said(&["gen", b, "--target", old, "--lang", "en"]), format!("error: `{old}` is `{new}` from {since}\n"));
         assert_eq!(said(&["gen", b, "--target", "sql", "--target", old, "--lang", "ja"]), format!("エラー: `{old}` は {since} から `{new}` です\n"));

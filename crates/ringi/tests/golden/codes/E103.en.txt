@@ -1,0 +1,4 @@
+error[E103]: example.ringi:6:53: The range `>=20_000JPY <=30_000JPY` of the field total holds no value its computation comes to
+     6 |   total    : money[JPY] "Total" = price * quantity  range >=20_000JPY <=30_000JPY
+  = The computation comes to `>=1JPY <=10_000JPY` (from the ranges of what it reads). With this range no request can be made.
+  = Correct the range so that it meets what the computation comes to. A request whose value falls outside the range is refused; a range wider or narrower than that is no mistake.

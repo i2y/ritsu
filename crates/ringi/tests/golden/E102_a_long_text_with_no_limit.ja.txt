@@ -1,0 +1,4 @@
+エラー[E102]: tests/mutants/E102_a_long_text_with_no_limit.ringi:4:3: `purpose` の長さに上限がありません
+     4 |   purpose : long text "Purpose"
+  = `count <=100` のように、入れられる文字の数の上限を書いてください。上限が無いと、どれだけ長い文でも受け付けることになります。
+  = 直した行: purpose : long text "Purpose"  count <=100

@@ -1,0 +1,5 @@
+warning[W308]: tests/mutants/W308_どの組み合わせも外さない数の行.gate:26:1: The line `when resource.金額 > 1_000JPY` of the permit `係は一万円以上を返金できる` leaves out no combination that can happen
+    26 |   when resource.金額 > 1_000JPY
+  = It is met on the 1 combination its `principal` line and its other lines are met on.
+  = Remove the line, or correct it so that it leaves out what it is meant to.
+tests/mutants/W308_どの組み合わせも外さない数の行.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

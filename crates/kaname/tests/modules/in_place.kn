@@ -1,0 +1,56 @@
+module in_place v1
+description "Numbers written in place, given to a call before an argument whose code needs statements of its own: to a rule, in the order the rule takes them and in another, to a function, to a parameter that may be absent and to a field of a record. And a match that is a function's whole body, of a yes or no that may be missing"
+
+use rule part from "tests/rules/part.rule"
+
+record Cut
+  share  : rate[step 1%]  range >=-100% <=100%
+  amount : money[JPY]     range >=0JPY <=1_000_000JPY
+
+fn kept(v: money[JPY] range >=0JPY <=1_000_000JPY) -> money[JPY] range >=0JPY <=1_000_000JPY
+  v
+
+# a rate written in place, then a call: the rate is not made a name the code leaves unread
+fn tenth(amount: money[JPY] range >=0JPY <=1_000_000JPY) -> money[JPY]
+  part(share: 10%, amount: kept(v: amount)).part
+
+fn given_back(amount: money[JPY] range >=0JPY <=1_000_000JPY) -> money[JPY]
+  part(share: -10%, amount: kept(v: amount)).part
+
+fn none_taken(amount: money[JPY] range >=0JPY <=1_000_000JPY) -> money[JPY]
+  part(share: 0%, amount: kept(v: amount)).part
+
+# the arguments in another order than the rule takes them
+fn swapped(amount: money[JPY] range >=0JPY <=1_000_000JPY) -> money[JPY]
+  part(amount: kept(v: amount), share: 10%).part
+
+fn scaled(r: rate[step 1%] range >=-100% <=100%, v: money[JPY] range >=0JPY <=1_000_000JPY) -> money[JPY]
+  down(v * r, 1JPY)
+
+fn scaled_tenth(amount: money[JPY] range >=0JPY <=1_000_000JPY) -> money[JPY]
+  scaled(r: 10%, v: kept(v: amount))
+
+fn scaled_back(amount: money[JPY] range >=0JPY <=1_000_000JPY) -> money[JPY]
+  scaled(r: -10%, v: kept(v: amount))
+
+fn maybe(r: rate[step 1%]? range >=-100% <=100%, v: money[JPY] range >=0JPY <=1_000_000JPY) -> money[JPY]
+  match r
+    none => v
+    some x => down(v * x, 1JPY)
+
+fn maybe_tenth(amount: money[JPY] range >=0JPY <=1_000_000JPY) -> money[JPY]
+  maybe(r: 10%, v: kept(v: amount))
+
+fn cut_of(amount: money[JPY] range >=0JPY <=1_000_000JPY) -> Cut
+  Cut { share: 10%, amount: kept(v: amount) }
+
+# a match that is the whole body: Rust writes what clippy asks for, not the match
+fn yes(v: bool?) -> bool
+  match v
+    none => false
+    some b => b
+
+fn yes_or(v: bool?) -> bool
+  match v
+    some b => b
+    none => true

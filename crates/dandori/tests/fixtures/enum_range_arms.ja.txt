@@ -1,0 +1,18 @@
+エラー[E014]: tests/fixtures/enum_range_arms.flow:42:1: `wide` は `basic` になることがあり、`send` の引数 `campaign` の範囲 `>=silver <=gold` を外れます
+    42 |       send(campaign: wide)
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=silver <=gold` を書くか、その値を `match` で分けて、範囲に入る値の分岐の中で渡してください
+エラー[E014]: tests/fixtures/enum_range_arms.flow:45:1: `wide` は `platinum` になることがあり、規則 `tiers` の `campaign` の範囲 `>=basic <=gold` を外れます
+    45 |   let b = tiers(member: wide, campaign: wide, subtotal: subtotal)
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=basic <=gold` を書くか、その値を `match` で分けて、範囲に入る値の分岐の中で渡してください
+エラー[E014]: tests/fixtures/enum_range_arms.flow:65:1: `chosen` は `platinum` になることがあり、規則 `tiers` の `campaign` の範囲 `>=basic <=gold` を外れます
+    65 |       let e = tiers(member: wide, campaign: chosen, subtotal: subtotal)
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=basic <=gold` を書くか、その値を `match` で分けて、範囲に入る値の分岐の中で渡してください
+エラー[E014]: tests/fixtures/enum_range_arms.flow:72:1: `turn` は `platinum` になることがあり、規則 `tiers` の `campaign` の範囲 `>=basic <=gold` を外れます
+    72 |         let f = tiers(member: wide, campaign: turn, subtotal: subtotal)
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=basic <=gold` を書くか、その値を `match` で分けて、範囲に入る値の分岐の中で渡してください
+エラー[E014]: tests/fixtures/enum_range_arms.flow:74:1: `turn` は `platinum` になることがあり、規則 `tiers` の `campaign` の範囲 `>=basic <=gold` を外れます
+    74 |       let g = tiers(member: wide, campaign: turn, subtotal: subtotal)
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=basic <=gold` を書くか、その値を `match` で分けて、範囲に入る値の分岐の中で渡してください
+エラー[E014]: tests/fixtures/enum_range_arms.flow:80:1: `wide` は `basic` になることがあり、`send` の引数 `campaign` の範囲 `>=silver <=gold` を外れます
+    80 |   send(campaign: wide)
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=silver <=gold` を書くか、その値を `match` で分けて、範囲に入る値の分岐の中で渡してください

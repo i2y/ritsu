@@ -1,0 +1,71 @@
+request flows v1 "Projector request"
+description "An agent and a person answer one stage (fictional rules): the answer of the agent's flow comes when the flow is done, to a paused ticket too"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+use flow precheck_agent from "precheck.flow"
+
+form
+  what  : text "What"  count >=1 <=100
+
+route
+  first   check and dept_head
+  decide  division_head
+
+who
+  manager       = manager of requester
+  check         = agent precheck_agent, else manager
+  dept_head     = head of requester.department
+  division_head = head of requester.division
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval  not allowed
+  pause          at most 5 business days
+
+# the agent and the head of the department, in either order
+scenario the_agent_and_a_person
+  requester e1201
+  form what = "A projector"
+| at               | event                       | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                      | e1201 | first    | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: ok) |       | first    | in progress |
+| 2026-11-16 11:00 | approve                     | e3101 | decide   | in progress |
+
+# the head of the department approves and pauses the stage; the agent's ok is the last answer the
+# stage waits for, so the pause ends with the stage
+scenario paused_while_the_agent_checks
+  requester e1201
+  form what = "A projector"
+| at               | event                       | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                      | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve                     | e3101 | first    | in progress |
+| 2026-11-16 12:00 | pause                       | e3101 | first    | paused      |
+| 2026-11-17 13:00 | agent answered(verdict: ok) |       | decide   | in progress |
+
+# the agent doubts while the stage is paused: the manager answers in its place, and the stage stays
+# paused until it is resumed
+scenario a_doubt_while_paused
+  requester e1201
+  form what = "A projector"
+| at               | event                                                         | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                                        | e1201 | first    | in progress |
+| 2026-11-16 12:00 | pause                                                         | e3101 | first    | paused      |
+| 2026-11-16 13:00 | agent answered(verdict: doubt, reason: "No budget line fits") |       | first    | paused      |
+| 2026-11-17 09:00 | resume                                                        | e3101 | first    | in progress |
+| 2026-11-17 10:00 | approve                                                       | e1101 | first    | in progress |
+| 2026-11-17 11:00 | approve                                                       | e3101 | decide   | in progress |
+
+# the agent's flow fails while the stage is paused: a doubt, as it is at any other time
+scenario the_flow_fails_while_paused
+  requester e1201
+  form what = "A projector"
+| at               | event       | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit      | e1201 | first    | in progress |
+| 2026-11-16 12:00 | pause       | e3101 | first    | paused      |
+| 2026-11-16 13:00 | flow failed |       | first    | paused      |
+| 2026-11-24 00:00 | pause ends  |       | first    | in progress |

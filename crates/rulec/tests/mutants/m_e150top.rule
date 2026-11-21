@@ -1,0 +1,45 @@
+rule gift_basket v1
+description "Whether a gift basket ships free, and whether a card goes in. A basket has at least one wrapped item and comes to at least 500 yen: one with nothing wrapped, or under 500 yen, is refused once its lines are read, as one over 100,000 yen is. An empty basket counts 0 and adds up to 0 yen"
+
+# One line of the basket. The caller passes up to five.
+elements lines
+  price   : money[JPY]  range >=200_000JPY <=500_000JPY
+  wrapped : bool
+
+count wrapped_items over lines where wrapped  range >=1 <=5
+sum amount over lines of price  range >=500JPY <=100_000JPY
+
+outputs
+  free_shipping : bool
+  card          : bool
+
+table shipping
+policy unique
+| amount     | -> free_shipping |
+| <5_000JPY  | false            |
+| >=5_000JPY | true             |
+
+table card_of
+policy unique
+| wrapped_items | -> card |
+| 1             | false   |
+| >=2           | true    |
+
+examples
+| lines      | -> free_shipping | card  |
+| one_small  | false            | false |
+| five_lines | true             | true  |
+
+# The least a basket can be: one wrapped item, 500 yen.
+sequence one_small
+| price  | wrapped |
+| 500JPY | true    |
+
+# The most: five lines, 100,000 yen.
+sequence five_lines
+| price     | wrapped |
+| 20_000JPY | true    |
+| 20_000JPY | true    |
+| 20_000JPY | false   |
+| 20_000JPY | false   |
+| 20_000JPY | false   |

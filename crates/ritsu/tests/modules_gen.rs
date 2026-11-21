@@ -17,6 +17,7 @@
 //! copied where a test adds to it. The golden files are tests/golden/modules/gen-*.txt and
 //! gen-*.json (`RITSU_BLESS=1` writes them).
 
+mod common;
 mod type_checkers;
 
 use ritsu_base::modules::lock::{Lock, Locked};
@@ -39,7 +40,7 @@ const MODULE: &str = "gocheck/generated";
 fn ritsu_in(dir: &Path, store: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args).env(store::VARIABLE, store);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
+    for v in common::LANG_VARS {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -486,7 +487,8 @@ fn a_contribution_to_a_dependencys_rule_is_answered_alike_by_check_and_gen() {
     assert_eq!(checked(&[]), 1);
     let (code, _, err) = generated(&[]);
     assert_eq!(code, 1);
-    assert!(err.ends_with("error: 2 file(s) do not pass check, so nothing is generated: @pricing/rules/shipping_fee.rule, orders/place_order.flow\n"), "{err}");
+    // the flow that reads the rule waits for it, the dependency's file named as the flow names it (DESIGN 8.3)
+    assert!(err.ends_with("\n\nwaiting for @pricing/rules/shipping_fee.rule (rulec E107 at line 27) to pass:\n  orders/place_order.flow:7: [dandori E005] use rule shipping from \"@pricing/rules/shipping_fee.rule\"\nerror: 1 file(s) do not pass check, so nothing is generated: @pricing/rules/shipping_fee.rule; 1 file(s) wait for them: orders/place_order.flow\n"), "{err}");
     replace(&t, "pricing/rules/shipping_fee.rule", "| 2500g   | domestic | 999GBPc  |", "| 2500g   | domestic | 395GBPc  |");
     assert_eq!(checked(&[]), 0);
     // in a file of pricing's that the package does not hold

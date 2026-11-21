@@ -1,0 +1,17 @@
+rule read_result v1
+description "The fee read by a table, when only the `result` line decides it, after every table"
+
+inputs
+  amount : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  fee    : money[JPY]  round down(1JPY)
+  review : bool
+
+table review_of
+policy unique
+| fee       | -> review |
+| <1000JPY  | false     |
+| >=1000JPY | true      |
+
+result fee = down(amount * 3%, 1JPY)

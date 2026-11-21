@@ -1,0 +1,22 @@
+error[E101]: Completeness gap: some input matches no row
+  --> tests/computed/E101_ほかの規則が入れる値.rule:19 table 経路
+   |
+19 | table 経路(route)
+   |       ^^^^ the input space is not fully covered
+   |
+ No row matches these 5 parts of the input:
+   種類 = 物品, 金額 from 1_000_001円 to 3_000_000円, 経理を通す = false
+   種類 one of 物品, ソフトウェア, 金額 from 1円 to 1_000_000円, 経理を通す = true
+   種類 one of 物品, ソフトウェア, 金額 from 3_000_001円 to 100_000_000円, 経理を通す = false
+   種類 = 設備, 経理を通す = false
+   種類 = ソフトウェア, 金額 from 1_000_001円 to 3_000_000円, 経理を通す = true
+ An input that matches no row: 種類 = 物品, 金額 = 1円, 経理を通す = true
+ `経理を通す` is an input another rule's output feeds (`fed by`). `fed by` says where the value comes from, not what that rule was given, so this check reads `経理を通す` as free of the other inputs. To have it read as what that rule decides from them, bring the rule in with `apply`.
+ hint: add these rows, with what each answers written in place of `?`:
+   | 物品 | >1_000_000円 <=3_000_000円 | false | ? | ? | ? |
+   | 物品, ソフトウェア | <=1_000_000円 | true | ? | ? | ? |
+   | 物品, ソフトウェア | >3_000_000円 | false | ? | ? | ? |
+   | 設備 | - | false | ? | ? | ? |
+   | ソフトウェア | >1_000_000円 <=3_000_000円 | true | ? | ? | ? |
+ The cells are cut at the boundaries the table already writes and at the ends of the ranges: no new boundary is chosen, and the rows close the whole gap as they are. What a row answers is not the tool's to decide. Settle which of the written rule, the spreadsheet and the legacy implementation is the source, and take it from there; split a row where the answer changes inside it.
+

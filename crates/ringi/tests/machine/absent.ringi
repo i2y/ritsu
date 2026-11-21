@@ -1,0 +1,93 @@
+request absent v1 "Supplies with values left empty"
+description "A form whose conditions, computations and route read fields that may be left empty (fictional rules): a value not filled in is read as none, which no comparison and no set of values holds on, a computation that reads one has none, which the route reads too, and a total counts no row whose cell is empty"
+
+use organization org from "../../examples/shared/company.ringi"
+use calendar office from "../../examples/shared/office.cal"
+
+form
+  kind   : choice "Kind"
+    goods   "Goods"
+    service "Service"
+  size   : choice "Size"  optional
+    small "Small"
+    large "Large"
+  lines  : rows "Lines"  count >=1 <=5
+    what  : text "What"  count <=100
+    price : money[JPY] "Price"  range >=1JPY <=1_000JPY  optional
+  total  : money[JPY] "Total" = sum(lines.price)  range >=0JPY <=5_000JPY
+  left   : number "Days left"  range >=0 <=20  optional
+  asked  : number "Days asked"  range >=0 <=20
+  over   : number "Days over" = asked - left  range >=-20 <=20
+  urgent : bool "Urgent"  optional
+  stock  : number "Units in stock"  range >=0 <=100  optional
+  note   : text "Why it runs over"  count <=100  required when over > 0
+  detail : text "Detail of a large one"  count <=100  shown when size is large
+  plain  : text "What it is"  count <=100  shown when size is not large
+  why    : text "Why no size"  count <=100  required when size is none
+  hurry  : text "Why it is urgent"  count <=100  shown when urgent is true
+  many   : text "Days to spare"  count <=100  shown when left >= 5 or over is none
+  soon   : text "Why so few days are left"  count <=100  required when left < 3
+  costly : text "Why it costs over 300 yen"  count <=100  required when total > 300JPY
+  refill : text "Why stock up"  count <=100  required when stock < 10
+  where  : text "Where the stock is kept"  count <=100  shown when stock is not none
+
+# a size given (`small, large`, which none is not one of) with few days left or no end of days goes
+# to `check`; with no size, days over go to `check`, and so does no end of days, which has no days
+# over (`none`, which `<=0` does not take)
+route
+| size         | left | over | -> first | check      |
+| small, large | >=3  | -    | manager  |            |
+| small, large | <3   | -    | manager  | accounting |
+| small, large | none | -    | manager  | accounting |
+| none         | -    | >0   | manager  | accounting |
+| none         | -    | <=0  | manager  |            |
+| none         | -    | none | manager  | accounting |
+
+who
+  manager    = manager of requester
+  accounting = team accounting
+
+every stage
+  due in 3 business days at end of day
+  when late escalate, then expire
+  when empty escalate, then skip
+
+ticket
+  self approval                not allowed
+  same approver approves once
+  send back                    to the requester, at most 2 times
+  resubmit                     within 3 business days
+
+# nothing about size, days or stock: `why` is asked for, `plain` and `many` are shown, no days left
+# ask for no `soon`, no stock for no `refill` and no `where`, the row with no price adds nothing to
+# the total of 300 yen, which asks for no `costly`, and with no size and no end of days `check` comes
+# too
+scenario left_empty
+  requester e1201
+  form kind = goods, lines = [{what: "Paper"}, {what: "Pens", price: 300JPY}], asked = 3, why = "Not sized yet", plain = "Paper and pens", many = "No end set"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | check    | in progress |
+| 2026-11-16 13:00 | approve | e1002 |          | approved    |
+
+# everything filled in: three days over ask for `note`, two days left for `soon`, 900 yen for
+# `costly`, four in stock for `refill` and `where`, and a large one with few days left goes to `check`
+scenario filled_in
+  requester e1201
+  form kind = service, size = large, lines = [{what: "Desk", price: 900JPY}], left = 2, asked = 5, urgent = false, stock = 4, note = "Three days over", detail = "A desk for two", soon = "The room opens in two days", costly = "A desk for two people", refill = "Four desks are left", where = "The back room"
+| at               | event   | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit  | e1201 | first    | in progress |
+| 2026-11-16 11:00 | approve | e1101 | check    | in progress |
+| 2026-11-16 13:00 | approve | e1002 |          | approved    |
+
+# a large one with no end of days: no days over, no `soon`, `check` comes to it; given an end on a
+# resubmit, the days over are worked out and `check` no longer comes
+scenario large_with_no_end
+  requester e1201
+  form kind = goods, size = large, lines = [{what: "Shelf", price: 700JPY}, {what: "Screws"}], asked = 1, urgent = true, detail = "A shelf for the hall", hurry = "The hall opens on Monday", many = "No end set", costly = "A shelf of oak"
+| at               | event                 | by    | -> stage | status         |
+| 2026-11-16 10:00 | submit                | e1201 | first    | in progress    |
+| 2026-11-16 11:00 | approve               | e1101 | check    | in progress    |
+| 2026-11-16 13:00 | send back             | e1002 |          | with requester |
+| 2026-11-17 10:00 | resubmit(left: 10)    | e1201 | first    | in progress    |
+| 2026-11-17 11:00 | approve               | e1101 |          | approved       |

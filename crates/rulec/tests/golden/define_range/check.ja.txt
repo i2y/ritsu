@@ -1,0 +1,82 @@
+$ rulec check case1.rule   # define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0JPY <=20_000JPY round
+エラー[E047]: 宣言の後ろに余分な語があります
+  --> case1.rule:7
+  |
+7 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0JPY <=20_000JPY round
+  |                                                                             ^^^^^ この語は宣言の一部として読まれません
+  |
+ `define` の行の式の後ろに置けるのは `range` だけです。
+ 範囲は `range >=<値> <=<値>` の形で、比較の記号と値の対だけが読まれます。単位の綴りが違っていると対として読めなくなり、余った分がここに出ます。
+
+
+$ rulec check case2.rule   # define fee : money[JPY] = down(amount * 3%, 1JPY)  range
+エラー[E149]: `range` に端が書かれていません
+  --> case2.rule:7
+  |
+7 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range
+  |                                                    ^^^^^ この後に `>=` も `<=` もありません
+  |
+ 範囲は `range >=<値> <=<値>` の形で、端を少なくとも一つ書きます。端の無い `range` は何も決めず、書きかけの行と見分けがつきません。
+ ヒント: `range` の後に端（`>=` か `<=`）を書いてください。範囲を決めないなら、`range` を消してください。
+
+
+$ rulec check case3.rule   # define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=100JPY <100JPY
+エラー[E061]: 範囲が空です
+  --> case3.rule:7 定義 fee
+  |
+7 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=100JPY <100JPY
+  |                                                    ^^^^^^^^^^^^^^^^^^^^^^ この範囲に入る値は一つもありません
+  |
+ 下限が上限を超えています。取りうる値が無いと、完全性の証明は空の集合について「漏れなし」と判定し、生成コードの入口はどの呼び出しも受け付けません。
+
+
+$ rulec check case4.rule   # define fee : money[JPY] = down(amount * 3%, 1JPY)  range from koyomi "terms.cal" date payment
+エラー[E065]: `range from koyomi` を書けるのは入力だけです
+  --> case4.rule:7
+  |
+7 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range from koyomi "terms.cal" date payment
+  |                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ fee は入力ではありません
+  |
+ koyomi の日付がとりうる日は、呼び出し側が渡す日付の範囲です。出力、導出、並びの要素の範囲は、規則が自分で確かめる主張で、定義の範囲は、規則が計算した数として受け付ける値です。どちらも別のファイルから借りられません。
+
+
+$ rulec check case5.rule   # define large : bool = amount >= 500_000JPY  range >=1
+エラー[E103]: 範囲を書けるのは、数の定義だけです
+  --> case5.rule:7 定義 large
+  |
+7 | define large : bool = amount >= 500_000JPY  range >=1
+  |                                             ^^^^^^^^^ large は bool です
+  |
+ 定義の範囲は、規則が計算した数として受け付ける値で、その外になる呼び出しは、値を計算したところで受け付けません。真偽、文字列、列挙には端のある範囲が無く、日付は計算しない（E048）ので、範囲は日付の入力に書きます。
+
+
+$ rulec check case6.rule   # define due : date = paid_on  range <=2026-06-30
+エラー[E103]: 範囲を書けるのは、数の定義だけです
+  --> case6.rule:8 定義 due
+  |
+8 | define due : date = paid_on  range <=2026-06-30
+  |                              ^^^^^^^^^^^^^^^^^^ due は date です
+  |
+ 定義の範囲は、規則が計算した数として受け付ける値で、その外になる呼び出しは、値を計算したところで受け付けません。真偽、文字列、列挙には端のある範囲が無く、日付は計算しない（E048）ので、範囲は日付の入力に書きます。
+
+
+$ rulec check case7.rule   # define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0USD <=20_000JPY
+エラー[E103]: 範囲の `0USD` は money[JPY] の値ではありません
+  --> case7.rule:7 定義 fee
+  |
+7 | define fee : money[JPY] = down(amount * 3%, 1JPY)  range >=0USD <=20_000JPY
+  |        ^^^ この宣言の範囲
+  |
+
+
+$ rulec check case8.rule   # constraint amount * 3% <= 20_000JPY
+エラー[E017]: `constraint` の形が違います
+  --> case8.rule:7
+  |
+7 | constraint amount * 3% <= 20_000JPY
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 両側に入力の名前を書いてください（片側だけは `+` で足せます）
+  |
+ 形は `constraint <入力> <= <入力>` です。比較は `<=` `<` `>=` `>` の四つで、両側とも入力の名前です。片側だけは、入力を `+` で足した和にできます（`constraint 値引き + ポイント <= 小計`）。
+ 入力から計算した値（積、商、定数を含む式）の上限と下限は、入力どうしの関係ではありません。その値を計算する `define` に、受け付ける範囲として書いてください（`define 小計 : money[円] = 数量 * 単価  range <=10_000_000円`）。
+
+

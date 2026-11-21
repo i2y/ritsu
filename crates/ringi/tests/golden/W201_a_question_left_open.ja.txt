@@ -1,0 +1,6 @@
+警告[W201]: tests/mutants/W201_a_question_left_open.ringi:8:45: フィールド note が、必須なのに見せていないことがあるかを決められません
+     8 |   note   : attachment "Note"  required when spread > 15 and spread < 17  shown when asked >= 4 or left >= 4
+  = `required when` が成り立ち、`shown when` が成り立たない申請があるかを、rulec は決められませんでした。計算した値と、その計算が読む値を、二つの条件が別々に読むと、こうなることがあります。
+  = 二つの条件を同じ値で書けるなら（計算した値の代わりに、その計算が読む値で）、そう書き直してください。
+ok tests/mutants/W201_a_question_left_open.ringi: 申請の種類、フィールド 4 個、ステップ 1 個
+  終わらないことがあります: ステップ `check` には期限がありません（`due in …`）。答えが来るまで待ちます

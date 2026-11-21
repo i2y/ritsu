@@ -1,0 +1,4 @@
+エラー[E309]: tests/mutants/E309_the_route_compares_two_fields.ringi:9:24: 経路は `amount` と `limit` を比べられません
+     9 |   audit  board    when amount is limit
+  = 経路の条件が読めるのは、表に値を書けるフォームのフィールド（自分の値か規則の値から選ぶ選択、数、金額、日付、真偽）、申請が使う規則の出力、共有の経路の入力です。経路は、それらを列にした表に下ろして、rulec が確かめます。
+  = 差を計算するフィールドを足して、それを値と比べてください（`difference : money[JPY] = amount - limit` と書き、条件は `when difference is 0JPY`）。

@@ -1,0 +1,38 @@
+2026-11-16 10:00  submit   e1201  -> waits（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  approve  e1101  -> twice（e1101）、期限は 2026-11-19 の終わり
+2026-11-20 00:00  late            -> twice（e3101）、期限は 2026-11-25 の終わり; twice を e3101 へ上げた
+2026-11-26 00:00  late            -> twice（e0101）、期限は 2026-12-01 の終わり; twice を e0101 へ上げた
+2026-12-02 00:00  late            -> expired; 期限切れ（late）
+シナリオ `up_twice`: 書いたとおり（5 行）
+
+2026-11-16 10:00  submit   e1201  -> waits（e1101）、期限は 2026-11-19 の終わり
+2026-11-20 00:00  late            -> waits（e3101）、期限は 2026-11-25 の終わり; waits を e3101 へ上げた
+2026-11-26 00:00  late            -> waits（e3101）; waits が期限を過ぎた（it waits on）
+2026-12-10 10:00  approve  e3101  -> twice（e1101）、期限は 2026-12-15 の終わり
+シナリオ `up_once_and_waits`: 書いたとおり（4 行）。チケットは `in progress` のままです。置いてある時計: late 2026-12-16 00:00（twice）
+
+2026-11-16 10:00  submit   e0101  -> waits（e0001）、期限は 2026-11-19 の終わり
+2026-11-20 00:00  late            -> waits（e0001）; waits が期限を過ぎた（nowhere to go up; it waits on）
+2026-11-24 10:00  approve  e0001  -> twice（e0001）、期限は 2026-11-27 の終わり
+2026-11-28 00:00  late            -> expired; 期限切れ（late; nowhere to go up）
+シナリオ `nowhere_to_go_up`: 書いたとおり（4 行）
+
+2026-11-16 10:00  submit   e3101  -> waits（e0101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  approve  e0101  -> twice（e0101）、期限は 2026-11-19 の終わり
+2026-11-20 00:00  late            -> twice（e0001）、期限は 2026-11-25 の終わり; twice を e0001 へ上げた
+2026-11-26 00:00  late            -> expired; 期限切れ（late; nowhere to go up）
+シナリオ `nowhere_the_second_time`: 書いたとおり（4 行）
+
+2026-11-16 10:00  submit   e1201  -> waits（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  approve  e1101  -> twice（e1101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e1101  -> timed（e1101）、期限は 2026-11-18 17:00
+2026-11-18 17:00  late            -> expired; 期限切れ（late）
+シナリオ `a_deadline_at_a_time`: 書いたとおり（4 行）
+
+2026-11-16 10:00  submit   e3101  -> waits（e0101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  approve  e0101  -> twice（e0101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve  e0101  -> timed（e0101）、期限は 2026-11-18 17:00
+2026-11-16 13:00  approve  e0101  -> alone（e0101）、期限は 2026-11-19 の終わり; alone を e0101 へ上げた（it comes to the requester alone）
+2026-11-20 00:00  late            -> alone（e0001）、期限は 2026-11-25 の終わり; alone を e0001 へ上げた
+2026-11-26 00:00  late            -> expired; 期限切れ（late）
+シナリオ `late_where_it_went_up_to`: 書いたとおり（6 行）

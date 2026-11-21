@@ -1,0 +1,5 @@
+警告[W402]: tests/spellings/go_package.gate:1:1: ファイル `select` は、Go のコードで `select` と書かれ、その言語の予約語です
+     1 | gate select v1
+  = Go（`--target go`）: ファイル `select` をパッケージの名前として `select` と書きますが、`select` は Go の予約語です。パッケージをコンパイルできません（`syntax error`）。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。ファイルの別名は、生成するファイルとモジュールとパッケージの名前でもあるので、それを読むコードも合わせて直してください。
+tests/spellings/go_package.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

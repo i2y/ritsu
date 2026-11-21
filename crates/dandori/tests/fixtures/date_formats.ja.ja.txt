@@ -1,0 +1,30 @@
+エラー[E016]: tests/fixtures/date_formats.ja.flow:35:1: 引数 `period` は、`勤怠` の POST /leaves が受け取るものと合いません。`first_day` は、`timestamp` で、日付ではありません。`date` にしてください
+    35 | task 取る(employee: string, period: 期間) -> 取った休暇
+エラー[E016]: tests/fixtures/date_formats.ja.flow:35:1: `勤怠` の POST /leaves のレスポンスは `取った休暇` に合いません。`id` は、文字列で、`date` ではありません
+    35 | task 取る(employee: string, period: 期間) -> 取った休暇
+エラー[E016]: tests/fixtures/date_formats.ja.flow:35:1: `勤怠` の POST /leaves のレスポンスは `取った休暇` に合いません。`first_day` は、日付で、`timestamp` ではありません。`date` にしてください
+    35 | task 取る(employee: string, period: 期間) -> 取った休暇
+エラー[E016]: tests/fixtures/date_formats.ja.flow:35:1: `勤怠` の POST /leaves のレスポンスは `取った休暇` に合いません。`booked_at` は、日時で、`date` ではありません。`timestamp` にしてください
+    35 | task 取る(employee: string, period: 期間) -> 取った休暇
+エラー[E016]: tests/fixtures/date_formats.ja.flow:39:1: 引数 `first_day` は、`勤怠` の POST /leaves/{id}/move が受け取るものと合いません。`timestamp` で、日付ではありません。`date` にしてください
+    39 | task 移す(id: string, first_day: timestamp, previous: string, asked_at: date) -> 移した休暇
+エラー[E016]: tests/fixtures/date_formats.ja.flow:39:1: 引数 `asked_at` は、`勤怠` の POST /leaves/{id}/move が受け取るものと合いません。`date` で、日時ではありません。`timestamp` にしてください
+    39 | task 移す(id: string, first_day: timestamp, previous: string, asked_at: date) -> 移した休暇
+エラー[E016]: tests/fixtures/date_formats.ja.flow:43:1: 引数 `asked_at` は、`勤怠` の POST /leaves/{id}/move が受け取るものと合いません。`string` で、日時ではありません。`timestamp` にしてください
+    43 | task 文字列で移す(id: string, first_day: date, asked_at: string) -> 移した休暇
+エラー[E016]: tests/fixtures/date_formats.ja.flow:48:1: 引数 `day` は、`勤怠` の GET /days/{day} が受け取るものと合いません。`日の種類` で、日付ではありません。`date` にしてください
+    48 | task 休みの日か(day: 日の種類, until: int) -> 日
+エラー[E016]: tests/fixtures/date_formats.ja.flow:48:1: 引数 `until` は、`勤怠` の GET /days/{day} が受け取るものと合いません。`int` で、日付ではありません。`date` にしてください
+    48 | task 休みの日か(day: 日の種類, until: int) -> 日
+エラー[E016]: tests/fixtures/date_formats.ja.flow:48:1: `勤怠` の GET /days/{day} のレスポンスは `日` に合いません。`day` は、日付で、`日の種類` ではありません。`date` にしてください
+    48 | task 休みの日か(day: 日の種類, until: int) -> 日
+エラー[E016]: tests/fixtures/date_formats.ja.flow:48:1: `勤怠` の GET /days/{day} のレスポンスは `日` に合いません。`closing` は、`2026-12-29` のことがあり、範囲 `>=2026-12-01 <=2026-12-28` の外です
+    48 | task 休みの日か(day: 日の種類, until: int) -> 日
+エラー[E016]: tests/fixtures/date_formats.ja.flow:52:1: 引数 `day` は、`勤怠` の POST /closings が受け取るものと合いません。`date` で、2026-12-28・2026-12-29 のどれかではありません。`date  range >=2026-12-28 <=2026-12-29` にしてください
+    52 | task 年を締める(day: date) -> 締め
+エラー[E016]: tests/fixtures/date_formats.ja.flow:52:1: `勤怠` の POST /closings のレスポンスは `締め` に合いません。`day` は、`2026-12-28` のことがあり、`timestamp` はそれを受け取りません
+    52 | task 年を締める(day: date) -> 締め
+エラー[E016]: tests/fixtures/date_formats.ja.flow:59:1: 引数 `day` は、`勤怠` の POST /closings が受け取るものと合いません。`2026-12-30` のことがあり、受け取る値（2026-12-28・2026-12-29）にありません
+    59 | task その日までに締める(day: date  range >=2026-12-28 <=2026-12-30) -> 締めた日
+エラー[E016]: tests/fixtures/date_formats.ja.flow:63:1: 引数 `day` は、`勤怠` の POST /closings が受け取るものと合いません。受け取るのは 2026-12-28・2026-12-29 のどれかですが、`string` はどんな値にもなりえます。`date  range >=2026-12-28 <=2026-12-29` にしてください
+    63 | task 文字列で締める(day: string) -> 締めた日

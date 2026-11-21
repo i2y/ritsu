@@ -1,0 +1,20 @@
+rule 日付の出力(date_output) v1
+description "取り込んだ表が書く日付を、それだけで読む。下の表には、上の表が書く日ごとに行があり、その間の日の行は無い"
+
+enum 地域(zone) = 県内(local) | 県外(national)
+enum 時期(timing) = 早い(early) | 遅い(late)
+
+inputs
+  地域(zone) : 地域
+
+apply 出荷(s) = "shared/出荷日.rule" meaning:4829fabdcc60ee01
+  地域 = 地域
+  出荷日 -> 受けた出荷日
+
+outputs
+  答え(x) : 時期
+
+table 選ぶ(pick)
+| 受けた出荷日 | -> 答え |
+| <=2026-07-01 | 早い    |
+| >=2026-07-03 | 遅い    |

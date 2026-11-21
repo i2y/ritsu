@@ -1,0 +1,10 @@
+warning[W121]: `system` takes a name the code generated for Java uses itself
+  --> tests/own_names/enums_files/enums_file_named_like_a_java_lang_class.rule:1
+  |
+1 | enums system v1
+  |       ^^^^^^ the enums file's name
+  |
+ Java: the enums file's class `System` hides `java.lang`'s `System` in the whole package, which the rules' code and the rounding test read by its simple name: the code does not build, or answers otherwise.
+ For a target you do not generate, leave it. For one you do, give it an alias (`system(<alias>)`).
+
+ok tests/own_names/enums_files/enums_file_named_like_a_java_lang_class.rule

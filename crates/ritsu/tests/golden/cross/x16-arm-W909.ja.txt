@@ -1,0 +1,11 @@
+ok refund_route.rule
+returns.flow: 検査を通りました
+refunds.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0
+警告[ritsu W909]: returns.flow:19: タスク `refund_order` の呼び出しを refunds.gate の action `refund_order` がいつも許すのは、resource がゲートの書いたとおりにフローの値を持つときだけですが、タスクは拒まれたときのエラーを宣言していません
+    19 |       refund_order(orderId: order)
+  = この呼び出しまで進んだ実行で決まっていること：`route(amount: resource.total).who`（フローの `r.who`）は `itself`。
+  = resource がフローのどの値を持つかは、ゲートが書いています：`resource Order from order` の `total = amount`（refunds.gate の 19 行目）。サービスが読む resource がそのとおりであることは、どの検査も確かめていません。
+  = resource がそのとおりでなければ、呼び出しは拒まれることがあります。拒まれる組み合わせの例：ワークフロー returns、Order、who：clerk（たとえば total が 51GBP のとき）。
+  = 拒まれると、ワークフローは宣言していない失敗で止まります。
+  = タスクに `errors denied = 403` と書き、拒まれたときにどうするかを呼び出しの下に書いてください（`on denied => …`）。
+ritsu check: ファイル 3 個（rulec 1、dandori 1、sekisho 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 1 か所、決められない 1 か所
