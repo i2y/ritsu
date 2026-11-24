@@ -595,6 +595,15 @@ Go 1.26 を求めることについて：Go は新しい二つのメジャーリ
 |---|---|---|
 | `crates/chobo/tools/runner/rust`（sqlx 0.9.0 の sqlx-core が sha2 `^0.10` を求め、sha2 0.10.9 が digest 0.10.7 を通して求める） | block-buffer 0.10.4、GHSA-qwgh-2vcv-g2f7（中。ブロックの中に持つカーソルを、圧縮の関数のパニックが書き換えたままにする。パニックを捕まえて使い続けると、範囲の外を読み書きする。直ったのは 0.12.1） | 上げない。sqlx 0.9.0 が最新で、0.12.1 は digest 0.11 のものである。0.10.4 は、カーソルをブロックとは別のフィールドに持ち、`digest_blocks` は圧縮の関数が返ってからそれを書く。読み出しのバッファー（`ReadBuffer`）も無い（どちらもソースで確かめた。カーソルをブロックの最後のバイトに持つのは 0.12.1 の `Eager`）。SHA-256 の圧縮の関数もパニックしない。`osv-scanner.toml` に理由を書き、期日は 2027-01-28。sqlx が sha2 0.11 を求めたら上げる |
 
+#### 2026-11-25 に見つかったものと、したこと
+
+毎日の `audit` のジョブ（2026-11-22 の UTC の実行から）が、二つの Rust のロックファイルで落ちた。
+
+| どこ | 何 | したこと |
+|---|---|---|
+| `crates/chobo/tools/runner/rust` と `crates/kaname/tools/rust`（sqlx 0.9.0 の sqlx-core が求める） | url 2.5.8、RUSTSEC-2026-0592（2026-11-20。`Url::origin()` が、`blob:` を何重にも重ねた URL でスタックを使い切り、プロセスが落ちる。直ったのは 2.5.9） | 依存の範囲の中で 2.5.9 に上げた（form_urlencoded も 1.2.3 になる）。試験の道具で、`ritsu` には入らない。生成する `Cargo.toml` は url を名指さない |
+| `crates/chobo/tools/runner/rust` | block-buffer 0.10.4、GHSA-qwgh-2vcv-g2f7（2026-10-28 の行） | `osv-scanner.toml` から消した。アドバイザリの範囲が 0.11.0 からに直り（OSV の modified は 2026-10-30）、0.10.4 は当たらない |
+
 #### 調べていないもの
 
 - `fetch.sh` と `install.sh` で取ってくるバイナリ（TigerBeetle、MySQL、sakai の Java のツールと Context Mapper、wasm-tools、protoc）。チェックサムで確かめているが、OSV では調べていない。
