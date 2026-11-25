@@ -19,7 +19,10 @@
 //!   5.5), as `ringi api` writes it in `ticket`: a server gives it to the gate as each stage's
 //!   `self_approval` (DESIGN 12.4).
 //! - `organization`: the organization it reads (its file, name, title, positions from the lowest,
-//!   kinds of team from the widest, and where its data is).
+//!   kinds of team from the widest, and where its data is), and what the part of it every event is
+//!   given with has (`needs`, DESIGN 7.5): the people and the teams its routes and `submitted by`
+//!   name, by their IDs (`people`, `teams`, and `members_of`, the teams with every member). A server
+//!   cuts the part by it.
 //! - `form`: each field with its name, type, range (a number's as the integers on the wire, a
 //!   date's as its day), the limits on its length or its rows, its choices, whether it is written
 //!   `optional`, is computed (with the fields its computation reads, `reads`), is worked out by the
@@ -147,6 +150,14 @@ fn org_json(o: &OrgOf) -> Json {
         ("positions", Json::arr(o.positions.iter().map(Named::json))),
         ("team_kinds", Json::arr(o.team_kinds.iter().map(Named::json))),
         ("data", o.data.as_ref().map(Json::str).unwrap_or(Json::Null)),
+        (
+            "needs",
+            Json::obj([
+                ("people", Json::arr(o.needs.people.iter().map(Json::str))),
+                ("teams", Json::arr(o.needs.teams.iter().map(Json::str))),
+                ("members_of", Json::arr(o.needs.whole.iter().map(Json::str))),
+            ]),
+        ),
     ])
 }
 

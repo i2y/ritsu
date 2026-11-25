@@ -4,7 +4,8 @@
 //! here and from nowhere else.
 
 use super::{Machine, Submit, Ticket};
-use crate::ast::{How, TypeExpr, UseKind};
+use crate::ast::{Group, How, TypeExpr, UseKind};
+use crate::names::Scope;
 use crate::org::{Org, ProxyKind, Version};
 use ritsu_base::json::Json;
 use ritsu_ports::Value;
@@ -114,6 +115,53 @@ impl<'x> Need<'x> {
     }
 }
 
+/// What every part for a kind has, whatever the ticket and the event: the people and the teams its
+/// routes and `submitted by` name, by their IDs (DESIGN 7.5). `types/<name>.json` writes it
+/// (`organization.needs`), so that a server cuts a part as this does.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Named {
+    pub people: BTreeSet<String>,
+    /// The teams in the part, with the teams above them.
+    pub teams: BTreeSet<String>,
+    /// The teams whose every member a ticket may come to.
+    pub whole: BTreeSet<String>,
+}
+
+impl Named {
+    pub fn of(s: &Scope) -> Named {
+        let mut n = Named::default();
+        // the ways to choose, of the request and of the shared routes it uses
+        let mut files = vec![s.file];
+        files.extend(s.shared_routes().into_iter().flatten());
+        for w in files.iter().flat_map(|f| &f.who) {
+            match &w.how {
+                How::Person(id, _) => {
+                    n.people.insert(id.clone());
+                }
+                How::Team(t) => {
+                    n.whole.insert(t.text.clone());
+                }
+                _ => {}
+            }
+        }
+        // who may submit: the teams and the people the line names
+        if let Some(line) = crate::org::submit::of(s.file) {
+            for g in line.groups.iter().chain(line.except) {
+                match g {
+                    Group::Team(t) | Group::Everyone { within: Some(t), .. } | Group::Position { within: Some(t), .. } => {
+                        n.teams.insert(t.text.clone());
+                    }
+                    Group::Person(id, _) => {
+                        n.people.insert(id.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+        n
+    }
+}
+
 impl Machine<'_, '_> {
     /// The part of `org` an event at `now` is given with; None when no version of it is in effect
     /// that day.
@@ -122,15 +170,13 @@ impl Machine<'_, '_> {
         let v = org.in_effect(day)?;
         let s = self.s;
         let request = [s.file.name.text.as_str(), s.file.name.ascii()];
-        let mut people: BTreeSet<String> = need.people.iter().cloned().collect();
-        let mut teams: BTreeSet<String> = BTreeSet::new();
-        // the teams whose every member the ticket may come to
-        let mut whole: BTreeSet<String> = BTreeSet::new();
-        let mut form: Vec<&(String, Value)> = Vec::new();
+        let Named { mut people, mut teams, mut whole } = Named::of(s);
+        people.extend(need.people.iter().cloned());
+        let mut forms: Vec<&ritsu_ports::Values> = Vec::new();
         if let Some(t) = need.ticket {
             people.insert(t.requester.clone());
             people.extend(t.made_by.clone());
-            form.extend(t.form.iter());
+            forms.push(&t.form);
             for st in &t.stages {
                 for p in &st.parts {
                     people.extend(p.approvers.iter().cloned());
@@ -142,43 +188,11 @@ impl Machine<'_, '_> {
         if let Some(sub) = need.submit {
             people.insert(sub.requester.clone());
             people.extend(sub.by.clone());
-            form.extend(sub.form.iter());
+            forms.push(&sub.form);
         }
-        form.extend(need.values.into_iter().flatten());
-        // the ways to choose, of the request and of the shared routes it uses
-        let mut files = vec![s.file];
-        files.extend(s.shared_routes().into_iter().flatten());
-        for f in &files {
-            for w in &f.who {
-                match &w.how {
-                    How::Person(id, _) => {
-                        people.insert(id.clone());
-                    }
-                    How::Team(t) => {
-                        whole.insert(t.text.clone());
-                    }
-                    _ => {}
-                }
-            }
-        }
-        // who may submit: the teams and the people the line names
-        if let Some(line) = crate::org::submit::of(s.file) {
-            for g in line.groups.iter().chain(line.except) {
-                match g {
-                    crate::ast::Group::Team(t) => {
-                        teams.insert(t.text.clone());
-                    }
-                    crate::ast::Group::Everyone { within: Some(t), .. } | crate::ast::Group::Position { within: Some(t), .. } => {
-                        teams.insert(t.text.clone());
-                    }
-                    crate::ast::Group::Person(id, _) => {
-                        people.insert(id.clone());
-                    }
-                    _ => {}
-                }
-            }
-        }
-        // the form: the people and the teams it names, the rows of the masters it chose
+        forms.extend(need.values);
+        // the form: the people and the teams it names, the rows of the masters it chose, the fields
+        // in the order the form declares them
         let mut rows = Vec::new();
         let mut add_row = |alias: &str, name: &str, key: &str, people: &mut BTreeSet<String>| {
             let Some(md) = s.masters_data(alias).and_then(|m| m.master(name)) else { return };
@@ -197,8 +211,8 @@ impl Machine<'_, '_> {
             }
             rows.push(PartRow { master, key: key.to_string(), values: md.fields.iter().cloned().zip(r.values.iter().cloned()).collect() });
         };
-        for (n, val) in &form {
-            let Some(fd) = s.fields().iter().find(|f| f.name.ascii() == n) else { continue };
+        for (form, fd) in forms.iter().flat_map(|form| s.fields().iter().map(move |fd| (form, fd))) {
+            let Some((_, val)) = form.iter().find(|(n, _)| n == fd.name.ascii()) else { continue };
             match (&fd.ty, val) {
                 (TypeExpr::Person, Value::Str(id)) => {
                     people.insert(id.clone());

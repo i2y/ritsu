@@ -926,9 +926,12 @@ agent` and `ask note`, `notify` (`waiting`, `reminder`, `went up`, `returned`, `
 Time is the instant of the event, in seconds of UTC. The day of the request is read in the UTC
 offset of its first calendar that writes one (`utc_offset_minutes` in `types/<name>.json`), and
 picks the version of the organization; each calendar counts its business days from its own day.
-The organization is handed as the part the ticket needs (the heads above the requester, the teams
-named, the people chosen or looked up, their proxies, the rows of the masters), from the version in
-effect on that day; a part of another day is refused as `data`.
+The organization is handed as the part the ticket and the event need, from the version in effect on
+that day: the people they name (the requester, the approvers, who answered, the people the form
+names), the rows of the masters the form chose and the people those name, what the kind needs for
+every ticket (`organization.needs` in `types/<name>.json`: the people and the teams its routes and
+`submitted by` name, and the teams with every member), and, of all these, the teams, the teams above,
+their heads, and the proxies in effect. A part of another day is refused as `data`.
 
 - A stage whose approvers are found keeps them across a change of the version; the next stage is
   decided in the version in effect when it starts.
@@ -1449,7 +1452,7 @@ generated: generated/requests/a2ui/functions.js
 
 | File | What it is |
 |---|---|
-| `types/<name>.json` | the kind of request: its name, version, language and titles, the days it can be used on, its UTC offset, who may submit, self approval, the form, the stages (with the operations that ask a reason), the ways, the operations of the gate, the flows |
+| `types/<name>.json` | the kind of request: its name, version, language and titles, the days it can be used on, its UTC offset, who may submit, self approval, the organization it reads (with what a server cuts the part of it by, `needs`), the form, the stages (with the operations that ask a reason), the ways, the operations of the gate, the flows |
 | `openapi.json` | the server's API: every event a person makes, the lists (`/waiting`, `/mine`), a ticket with its history, the organization, the masters, finding people, teams and rows, the half-filled form (`worked`); the operations that take a form carry `x-ritsu-request` |
 | `mcp/tools.json` | the tools an agent is given, and the ones it cannot undo |
 | `organization/schema.json`, `organization/columns.md`, `organization/find.jsonl` | the JSON Schema of a version's data, its columns explained, and the vectors of finding people, teams and rows |

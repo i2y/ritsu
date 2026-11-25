@@ -126,7 +126,14 @@
         "labels": []
       }
     ],
-    "data": "examples/org"
+    "data": "examples/org",
+    "needs": {
+      "people": [],
+      "teams": [
+        "board"
+      ],
+      "members_of": []
+    }
   },
   "form": [
     {

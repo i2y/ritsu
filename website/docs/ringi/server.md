@@ -65,7 +65,7 @@ generated: generated/requests/a2ui/functions.js
 | `types/<name>.json` | each request type: its form, its stages and who answers them, what people may do, the flows it uses |
 | `openapi.json` | the server's API, in OpenAPI 3.1: submitting each kind, the lists of what waits for someone, approving, sending back, withdrawing, and the rest |
 | `mcp/tools.json` | the same operations as the tools of an agent, so an assistant can fill a form from the papers it is given, or answer what waits for its user |
-| `a2ui/<name>/` | five screens of each kind (the form, the card an approver answers, the list of what waits, the requester's own list, the history), in English and in Japanese, as A2UI 1.0 templates, with their catalog and its functions (`a2ui/catalog.json`, `a2ui/functions.js`) |
+| `a2ui/<name>/` | six screens of each kind (the form, the card an approver answers, the list of what waits, the requester's own list, the history, and the notice of the day a request may be made from), in English and in Japanese, as A2UI 1.0 templates, with their catalog and its functions (`a2ui/catalog.json`, `a2ui/functions.js`) |
 | `organization/schema.json`, `organization/columns.md` | what the organization's data looks like, as JSON and as the columns of its CSV files |
 | `vectors/<name>.jsonl`, `vectors/worked/<name>.jsonl`, `organization/find.jsonl` | the vectors |
 
@@ -89,8 +89,8 @@ reference interpreter does, refusals included.
 The server keeps each ticket and its history, takes the events (a person's operation, a clock, a
 flow's answer), and gives them to `next` one at a time per ticket. Before it does, it asks the gate
 whether the person may. After it, it saves the ticket, then carries out what it was told to do,
-each once, by its key. It hands `next` the version of the organization in effect, and runs the
-clocks of the deadlines and the reminders.
+each once, by its key. It hands `next` the part of the organization the ticket needs, cut from the
+version in effect, and runs the clocks of the deadlines and the reminders.
 
 How people sign in, where the tickets are kept, how notices go out, where attachments are put,
 where the organization's data comes from, and how flows are run, differ from one company to

@@ -11,13 +11,15 @@
 
 mod common;
 
+use ringi::ast::UseKind;
 use ringi::check::{Options, Run};
-use ringi::engine::{Event, Machine, What};
+use ringi::engine::{Event, Machine, OrgPart, PartRow, What};
 use ringi::org::Org;
 use ringi::scenario::{self, Input, Stepped};
 use ringi::vectors::{self, Vector};
 use ritsu_base::json::{self, Json};
 use ritsu_base::text::Lang;
+use std::collections::BTreeSet;
 
 /// The requests written for the machine that have a scenario.
 const MACHINE: [&str; 17] = ["absent", "ahead", "behind", "deep", "desk", "flows", "last", "late", "once", "ranges", "reminds", "seat", "steps", "supplies", "top", "waits", "who"];
@@ -248,6 +250,210 @@ fn the_machine_answers_each_vector_again() {
             }
         });
     }
+}
+
+/// The version of the part's day with everyone in it, every proxy in effect and every row that may be
+/// chosen, and the part's own first among the rows.
+fn whole(m: &Machine, org: &Org, part: &OrgPart) -> OrgPart {
+    let request = [m.s.file.name.text.as_str(), m.s.file.name.ascii()];
+    let proxies = org.proxies.iter().filter(|x| request.iter().any(|r| x.on(part.day, r))).cloned().collect();
+    let mut rows = Vec::new();
+    for alias in m.s.file.uses.iter().filter(|u| u.kind == UseKind::Masters).filter_map(|u| u.alias.as_ref()) {
+        for md in m.s.masters_data(&alias.text).into_iter().flat_map(|d| &d.masters) {
+            let master = format!("{}.{}", alias.text, md.name);
+            let row = |r: &ringi::org::masters::MRow| PartRow { master: master.clone(), key: r.key.clone(), values: md.fields.iter().cloned().zip(r.values.iter().cloned()).collect() };
+            rows.extend(md.rows.iter().filter(|r| r.on(part.day)).map(row));
+        }
+    }
+    let version = org.in_effect(part.day).unwrap().clone();
+    OrgPart { day: part.day, org: Org { versions: vec![version], proxies, ..part.org.clone() }, rows }
+}
+
+/// A part with more of the organization than its event needs is answered the same (DESIGN 7.5): each
+/// vector, given the whole version, the proxies and the rows of the day.
+#[test]
+fn more_of_the_organization_is_answered_the_same() {
+    let (mut given, mut more) = (0, 0);
+    for path in files() {
+        with(&path, |m, org, made| {
+            for v in made {
+                let s = &v.stepped;
+                let part = whole(m, org, &s.part);
+                for row in &s.part.rows {
+                    assert!(part.rows.contains(row), "{path}: {}: {row:?}", v.from);
+                }
+                let answer = match (&s.input, &s.before) {
+                    (Input::Submit(sub), None) => m.start(sub, s.comment.as_deref(), &part, s.now),
+                    (Input::Event(ev), Some(t)) => m.next(t, ev, s.comment.as_deref(), s.seen.as_ref(), &part, s.now),
+                    _ => panic!("{path}: {}", v.from),
+                };
+                let again = Stepped { answer, ..s.clone() };
+                assert_eq!(again.to_json(&m.names).compact(), s.to_json(&m.names).compact(), "{path}: {}", v.from);
+                given += 1;
+                more += usize::from(part.v().people.len() > s.part.v().people.len());
+            }
+        });
+    }
+    eprintln!("{given} vectors, {more} of them with more people than the part has");
+    assert!(more > 3000, "{given} {more}");
+}
+
+// ── A server cuts the part of the organization each vector holds ──
+
+/// The people and the teams of a part being cut, by their IDs.
+#[derive(Default)]
+struct Cut {
+    people: BTreeSet<String>,
+    teams: BTreeSet<String>,
+}
+
+/// A value's text, when it is one that says something.
+fn said(j: Option<&Json>) -> Option<String> {
+    j.and_then(Json::as_str).filter(|x| !x.is_empty()).map(str::to_string)
+}
+
+fn list(j: &Json, key: &str) -> Vec<Json> {
+    j.get(key).and_then(Json::as_arr).unwrap_or_default().to_vec()
+}
+
+/// The part a server cuts for a line (DESIGN 7.5), from what a server has: the kind's description,
+/// the organization's data, and the ticket and the event of the line.
+fn part_of(described: &Json, org: &Org, line: &Json) -> Json {
+    let null = Json::Null;
+    let now = line.get("now").and_then(Json::as_int).unwrap() as i64;
+    let minutes = described.get("utc_offset_minutes").and_then(Json::as_int).unwrap() as i64;
+    let day = (now + minutes * 60).div_euclid(86_400) + ringi::lex::day_of(1970, 1, 1);
+    let v = org.in_effect(day).unwrap();
+    let of = described.get("organization").unwrap();
+    let ids = |key: &str| of.get("needs").map(|n| list(n, key)).unwrap_or_default().into_iter().filter_map(|x| said(Some(&x)));
+    let mut cut = Cut { people: ids("people").collect(), teams: ids("teams").collect() };
+    let mut whole: BTreeSet<String> = ids("members_of").collect();
+
+    // whom the ticket and the event name
+    let ticket = line.get("ticket").unwrap_or(&null);
+    let (name, event) = match line.get("event").unwrap() {
+        Json::Obj(pairs) => (pairs[0].0.as_str(), pairs[0].1.clone()),
+        _ => ("", Json::Null),
+    };
+    cut.people.extend(["requester", "made_by"].iter().filter_map(|k| said(ticket.get(k))));
+    for part in list(ticket, "stages").iter().flat_map(|st| list(st, "parts")) {
+        cut.people.extend(list(&part, "approvers").iter().filter_map(|x| said(Some(x))));
+        cut.people.extend(list(&part, "answers").iter().flat_map(|a| [said(a.get("by")), said(a.get("seat"))]).flatten());
+        whole.extend(said(part.get("team")));
+    }
+    cut.people.extend(["requester", "by", "approver", "of", "to"].iter().filter(|k| !(name == "send_back" && **k == "to")).filter_map(|k| said(event.get(k))));
+
+    // what the form names, and the rows of the masters it chose
+    let mut rows: Vec<Json> = Vec::new();
+    for form in [ticket.get("form"), event.get("form"), event.get("fields")].into_iter().flatten() {
+        for f in list(described, "form") {
+            let Some(value) = said(form.get(text(&f, "name"))) else { continue };
+            match text(&f, "type") {
+                "person" => drop(cut.people.insert(value)),
+                "team" => drop(cut.teams.insert(value)),
+                ty => {
+                    let Some(master) = ty.strip_prefix("choice from ") else { continue };
+                    let Some(md) = list(described, "masters").into_iter().find(|x| text(x, "name") == master) else { continue };
+                    let Some(cells) = row_of(&md, &value, day) else { continue };
+                    if rows.iter().any(|r| text(r, "master") == master && text(r, "key") == value) {
+                        continue;
+                    }
+                    let fields = list(&md, "fields");
+                    cut.people.extend(fields.iter().filter(|x| text(x, "type") == "person").filter_map(|x| said(cells.get(text(x, "name")))));
+                    let values = fields.iter().map(|x| Json::obj([("name", x.get("name").unwrap().clone()), ("value", cells.get(text(x, "name")).unwrap().clone())]));
+                    rows.push(Json::obj([("master", Json::str(master)), ("key", Json::str(value)), ("values", Json::arr(values))]));
+                }
+            }
+        }
+    }
+
+    // up from each, and across the proxies in effect
+    let proxies: Vec<_> = org.proxies.iter().filter(|x| x.on(day, text(described, "name")) || x.on(day, text(described, "written"))).collect();
+    loop {
+        let before = (cut.people.len(), cut.teams.len());
+        cut.teams.extend(whole.iter().cloned());
+        cut.people.extend(v.members.iter().filter(|m| whole.contains(&m.team)).map(|m| m.person.clone()));
+        cut.teams.extend(v.members.iter().filter(|m| cut.people.contains(&m.person)).map(|m| m.team.clone()));
+        for t in v.teams.iter().filter(|t| cut.teams.contains(&t.id)) {
+            cut.people.extend(t.head.clone());
+        }
+        let above: Vec<String> = v.teams.iter().filter(|t| cut.teams.contains(&t.id)).filter_map(|t| t.parent.clone()).collect();
+        cut.teams.extend(above);
+        cut.people.extend(proxies.iter().filter(|x| cut.people.contains(&x.person)).map(|x| x.proxy.clone()).collect::<Vec<_>>());
+        if (cut.people.len(), cut.teams.len()) == before {
+            break;
+        }
+    }
+
+    let positions = list(of, "positions");
+    let position = |i: usize| positions[i].get("name").unwrap().clone();
+    let opt = |x: &Option<String>| x.as_ref().map(Json::str).unwrap_or(Json::Null);
+    Json::obj([
+        ("day", Json::str(ringi::lex::date_text(day))),
+        ("version", Json::str(ringi::lex::date_text(v.from))),
+        ("positions", Json::arr((0..positions.len()).map(position))),
+        (
+            "teams",
+            Json::arr(v.teams.iter().filter(|t| cut.teams.contains(&t.id)).map(|t| Json::obj([("id", Json::str(&t.id)), ("kind", Json::str(&t.kind)), ("parent", opt(&t.parent)), ("head", opt(&t.head))]))),
+        ),
+        (
+            "people",
+            Json::arr(v.people.iter().filter(|p| cut.people.contains(&p.id)).map(|p| Json::obj([("id", Json::str(&p.id)), ("name", Json::str(&p.name)), ("name_ja", Json::str(&p.name_ja))]))),
+        ),
+        (
+            "members",
+            Json::arr(v.members.iter().filter(|m| cut.people.contains(&m.person) && cut.teams.contains(&m.team)).map(|m| {
+                Json::obj([("person", Json::str(&m.person)), ("team", Json::str(&m.team)), ("position", position(m.position)), ("primary", Json::Bool(m.primary))])
+            })),
+        ),
+        (
+            "proxies",
+            Json::arr(proxies.iter().filter(|x| cut.people.contains(&x.person)).map(|x| {
+                let kind = if x.kind == ringi::org::ProxyKind::Approve { "approve" } else { "submit" };
+                Json::obj([("person", Json::str(&x.person)), ("proxy", Json::str(&x.proxy)), ("kind", Json::str(kind))])
+            })),
+        ),
+        ("rows", Json::arr(rows)),
+    ])
+}
+
+/// The row of a master (as the description gives it) with the key that may be chosen on the day, by
+/// its fields' names.
+fn row_of(md: &Json, key: &str, day: i64) -> Option<Json> {
+    let body = std::fs::read_to_string(text(md, "data")).unwrap();
+    let mut lines = body.lines().map(|l| l.split(',').map(str::trim).collect::<Vec<_>>());
+    let head = lines.next().unwrap();
+    let cell = |row: &[&str], f: &str| head.iter().position(|h| *h == f).map(|i| row[i].to_string()).unwrap_or_default();
+    let date = |x: String| (!x.is_empty()).then(|| ringi::lex::day_of(x[..4].parse().unwrap(), x[5..7].parse().unwrap(), x[8..].parse().unwrap()));
+    let on = |row: &Vec<&str>| cell(row, text(md, "key")) == key && date(cell(row, "valid_from")).is_none_or(|d| d <= day) && date(cell(row, "valid_to")).is_none_or(|d| day <= d);
+    let row = lines.find(on)?;
+    Some(Json::Obj(list(md, "fields").iter().map(|f| (text(f, "name").to_string(), Json::str(cell(&row, text(f, "name"))))).collect()))
+}
+
+/// What a server needs to cut the part of the organization an event is given with is in the kind's
+/// description (`types/<name>.json`) and in the organization's data: the part cut from them as
+/// DESIGN 7.5 says is the one each vector holds.
+#[test]
+fn a_server_cuts_the_part_of_each_vector() {
+    let mut cut = 0;
+    for path in files() {
+        let run = Run::with(common::joined(), Options { unlisted: true, unrun: true, ..Options::default() });
+        let o = run.file(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        ringi::engine::with(&o, &run, |m, org| {
+            let of = ringi::r#gen::org_path(m.s).and_then(|p| run.file(&ritsu_base::paths::show(&p)).ok()?.file.clone().map(|f| (f, p)));
+            let kind = ringi::r#gen::Kind::made(m, org, &o, std::path::Path::new("."), of.as_ref().map(|(f, p)| (&**f, p.clone())), false);
+            let described = json::parse(&ringi::r#gen::files(&[kind])[0].1).unwrap();
+            let rans: Vec<_> = m.s.file.scenarios.iter().map(|sc| scenario::run(m, org, sc)).collect();
+            for v in vectors::make(m, org, &rans) {
+                let line = v.to_json(m);
+                assert_eq!(part_of(&described, org, &line).compact(), line.get("organization").unwrap().compact(), "{path}: {}", v.from);
+                cut += 1;
+            }
+        })
+        .unwrap_or_else(|t| panic!("{path}: {}", t.en));
+    }
+    eprintln!("{cut} parts cut");
+    assert!(cut > 3000, "{cut}");
 }
 
 /// The rows of the scenarios are among the vectors as `ringi run` shows them: the same ticket,

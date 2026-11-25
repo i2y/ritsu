@@ -103,7 +103,15 @@
         "labels": []
       }
     ],
-    "data": "examples/org"
+    "data": "examples/org",
+    "needs": {
+      "people": [],
+      "teams": [],
+      "members_of": [
+        "accounting",
+        "board"
+      ]
+    }
   },
   "form": [
     {

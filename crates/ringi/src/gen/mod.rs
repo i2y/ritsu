@@ -198,6 +198,8 @@ pub struct OrgOf {
     pub team_kinds: Vec<Named>,
     /// Where the versions' directories are, from the root.
     pub data: Option<String>,
+    /// What the part of it an event is given with has, whatever the ticket (DESIGN 7.5).
+    pub needs: crate::engine::part::Named,
 }
 
 /// A kind of request, as the files describe it.
@@ -334,6 +336,7 @@ impl Kind {
             positions: of.positions.iter().map(|x| named(&x.name.text, x.name.ascii(), x.title.as_deref().unwrap_or(&x.name.text), Vec::new())).collect(),
             team_kinds: of.team_kinds.iter().map(|x| named(&x.name.text, x.name.ascii(), x.title.as_deref().unwrap_or(&x.name.text), Vec::new())).collect(),
             data: of.data.as_ref().map(|(d, _)| rel(&crate::org::data::beside(&p.display().to_string(), d))),
+            needs: crate::engine::part::Named::of(s),
         });
         let positions = organization.as_ref().map(|x| x.positions.as_slice()).unwrap_or_default();
         let submitted_by = crate::org::submit::of(f).map(|l| (l.groups.iter().map(|g| group_json(g, positions)).collect(), l.except.iter().map(|g| group_json(g, positions)).collect()));
