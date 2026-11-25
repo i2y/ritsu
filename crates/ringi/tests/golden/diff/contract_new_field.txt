@@ -1,0 +1,18 @@
+  The request `contract` (v1 → v2): `contract_old.ringi` → `contract_new.ringi`
+Route:
+  Requests where “Term in months” is from 1 to 12: the stage “review” (reviewer) no longer comes.
+  In the organization from 2026-04-01, the approvers change for 24 of 24 requesters.
+    e0001 (President (fictional)), review: reviewer: a person chooses when the ticket runs → does not come
+    e0101 (Head of Sales Division), review: reviewer: a person chooses when the ticket runs → does not come
+    e0102 (Head of Corporate Division), review: reviewer: a person chooses when the ticket runs → does not come
+    e0201 (Director 1), review: reviewer: a person chooses when the ticket runs → does not come
+    e0202 (Director 2), review: reviewer: a person chooses when the ticket runs → does not come
+    e0203 (Director 3), review: reviewer: a person chooses when the ticket runs → does not come
+    e0204 (Director 4), review: reviewer: a person chooses when the ticket runs → does not come
+    e1001 (Head of Accounting), review: reviewer: a person chooses when the ticket runs → does not come
+    e1002 (Accountant), review: reviewer: a person chooses when the ticket runs → does not come
+    e1101 (Manager of Section 1A), review: reviewer: a person chooses when the ticket runs → does not come
+  And 14 more: `--format json` lists them all.
+  Every other request comes to the same stages.
+Tickets in progress:
+  A ticket finishes with the version of the request it was submitted with: tickets submitted with version 1 finish as version 1 says, and what changes here applies to requests submitted with version 2.

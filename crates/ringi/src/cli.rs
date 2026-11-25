@@ -1029,7 +1029,13 @@ fn diff_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut 
         Ok(r) => r,
         Err(t) => return refuse(err, t, lang),
     };
-    match crate::diff::diff(&side(&root, old), &side(&root, new), suite, &opts, budget, lang, made) {
+    // two files the root names alike (`v2/expense.ringi` beside `expense.ringi`, under the root of the
+    // first) are named as they were given, so that the two are told apart
+    let (mut o, mut n) = (side(&root, old), side(&root, new));
+    if o.shown == n.shown && o.read != n.read {
+        (o.shown, n.shown) = (o.read.clone(), n.read.clone());
+    }
+    match crate::diff::diff(&o, &n, suite, &opts, budget, lang, made) {
         Ok(d) => {
             let text = match format {
                 "markdown" => crate::diff::markdown(&d),

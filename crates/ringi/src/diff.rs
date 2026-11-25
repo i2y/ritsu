@@ -290,7 +290,10 @@ pub fn diff(old: &Side, new: &Side, suite: &Suite, opts: &Options, budget: Optio
     let mut route = Vec::new();
     let mut unsettled = Vec::new();
     let mut total = true;
-    let routes = (lowered_route(&o), lowered_route(&n));
+    // the routes compared case by case could not be given the same requests: the route's lines are
+    // compared as written instead
+    let mut apart = false;
+    let routes = alike(lowered_route(&o), lowered_route(&n));
     let compared = match routes {
         (Some(a), Some(b)) if nf.kind == FileKind::Request => {
             let Some(rules) = n.run.suite.rules.clone() else {
@@ -314,8 +317,9 @@ pub fn diff(old: &Side, new: &Side, suite: &Suite, opts: &Options, budget: Optio
                         for u in &d.unknown {
                             unsettled.push((case_text(&say, &held_of(&say, &d.columns, &u.held, &names.1, &names.0)), u.why.get(made).to_string()));
                         }
-                        if let Some(b) = &d.blocked {
-                            unsettled.push((say_t("Every request", "どの申請も"), b.get(made).to_string()));
+                        if d.blocked.is_some() {
+                            apart = true;
+                            unsettled.push((say_t("Every request", "どの申請も"), reads_apart(&d.declared, &names, made)));
                         }
                     });
                     // a stage only the new version has: rulec's diff gives an output only the old rule
@@ -367,7 +371,7 @@ pub fn diff(old: &Side, new: &Side, suite: &Suite, opts: &Options, budget: Optio
         _ => false,
     };
     // what the pages say otherwise
-    let skip: &[&str] = if compared { &["route", "examples", "scenarios"] } else { &["examples", "scenarios"] };
+    let skip: &[&str] = if compared && !apart { &["route", "examples", "scenarios"] } else { &["examples", "scenarios"] };
     let mut sections = sections_of(&o.page, &n.page, skip, made);
     // the approvers, version by version of the organization
     let mut approvers = Vec::new();
@@ -437,11 +441,121 @@ pub fn diff(old: &Side, new: &Side, suite: &Suite, opts: &Options, budget: Optio
 
 /// The lowered route of a request, as a side of [`ritsu_ports::Rules::diff`] (read through the
 /// lowered files laid over the side's), with what it names things by.
-fn lowered_route(r: &Read) -> Option<(DiffSide, crate::lower::RouteNames)> {
+fn lowered_route(r: &Read) -> Option<(DiffSide, crate::lower::RouteNames, String)> {
     let l = r.o.lowered.as_ref()?;
     let f = l.files.iter().find(|f| f.part == crate::lower::Part::Route)?;
     let laid = within(&r.side.files, || crate::engine::eval::overlay(l));
-    Some((DiffSide::new(l.path(f), Some(laid)), l.route.clone().unwrap_or_default()))
+    Some((DiffSide::new(l.path(f), Some(laid)), l.route.clone().unwrap_or_default(), f.text.clone()))
+}
+
+type Route = (DiffSide, crate::lower::RouteNames);
+
+/// The two lowered routes, each declaring the inputs the other reads: a version whose route reads a
+/// field the other's does not (a stage made conditional on the amount) would leave rulec no request
+/// to give both, and nothing compared. An input a route does not read changes none of its answers,
+/// so the route that does not read it is declared to take it, and the two are compared case by
+/// case. An input typed with an enum of the other route's is not declared (the route has no such
+/// enum): rulec then says the two take different inputs ([`reads_apart`]).
+fn alike(o: Option<(DiffSide, crate::lower::RouteNames, String)>, n: Option<(DiffSide, crate::lower::RouteNames, String)>) -> (Option<Route>, Option<Route>) {
+    let (Some((os, on, ot)), Some((ns, nn, nt))) = (o.clone(), n.clone()) else {
+        return (o.map(|(s, r, _)| (s, r)), n.map(|(s, r, _)| (s, r)));
+    };
+    let (oi, ni) = (input_lines(&ot), input_lines(&nt));
+    let missing = |have: &[(String, String)], other: &[(String, String)], other_text: &str| -> Vec<String> {
+        other
+            .iter()
+            .filter(|(name, _)| !have.iter().any(|(h, _)| h == name))
+            .filter(|(_, line)| !line.contains(" fed ") && !enum_typed(line, other_text))
+            .map(|(_, line)| line.clone())
+            .collect()
+    };
+    let laid = |side: DiffSide, text: &str, add: Vec<String>| -> DiffSide {
+        if add.is_empty() {
+            return side;
+        }
+        let mut ov = ritsu_base::fs::Overlay::new(side.files.clone());
+        ov.put(&ritsu_base::paths::opened(&side.rule), with_inputs(text, &add));
+        DiffSide::new(side.rule.clone(), Some(Rc::new(ov)))
+    };
+    let (to_old, to_new) = (missing(&oi, &ni, &nt), missing(&ni, &oi, &ot));
+    (Some((laid(os, &ot, to_old), on)), Some((laid(ns, &nt, to_new), nn)))
+}
+
+/// The lines under `inputs` of a lowered rule, each with the name it declares.
+fn input_lines(text: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut inside = false;
+    for line in text.lines() {
+        if line == "inputs" {
+            inside = true;
+        } else if inside && line.starts_with("  ") {
+            if let Some((name, _)) = line.split_once(" : ") {
+                out.push((name.trim().to_string(), line.to_string()));
+            }
+        } else {
+            inside = false;
+        }
+    }
+    out
+}
+
+/// Whether an input's line types it with an enum the rule declares or imports.
+fn enum_typed(line: &str, text: &str) -> bool {
+    let ty = line.split_once(" : ").map(|(_, t)| t.split_whitespace().next().unwrap_or("").trim_end_matches('?')).unwrap_or("");
+    text.lines().any(|l| {
+        let l = l.trim_start();
+        l.strip_prefix("enum ").or_else(|| l.strip_prefix("import enum ")).is_some_and(|rest| rest.split([' ', '=']).next() == Some(ty))
+    })
+}
+
+/// A lowered rule's text with the input lines `add` declared too: under its `inputs`, or in a new
+/// `inputs` before its `outputs`.
+fn with_inputs(text: &str, add: &[String]) -> String {
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    if let Some(i) = lines.iter().position(|l| l == "inputs") {
+        let mut j = i + 1;
+        while j < lines.len() && lines[j].starts_with("  ") {
+            j += 1;
+        }
+        lines.splice(j..j, add.iter().cloned());
+    } else if let Some(i) = lines.iter().position(|l| l == "outputs") {
+        let mut put = vec!["inputs".to_string()];
+        put.extend(add.iter().cloned());
+        put.push(String::new());
+        lines.splice(i..i, put);
+    }
+    let mut out = lines.join("\n");
+    out.push('\n');
+    out
+}
+
+/// What is said of two routes that read different inputs, which no request can be given both of
+/// ([`alike`] could not declare them alike): the fields each reads that the other does not, by what
+/// the route reads in the request, and that the route's lines are compared as written instead.
+fn reads_apart(declared: &[ritsu_ports::DiffDeclared], names: &(crate::lower::RouteNames, crate::lower::RouteNames), lang: Lang) -> String {
+    let field = |name: &str| -> String {
+        let reads = names.1.inputs.iter().chain(&names.0.inputs).find(|(_, n, _)| n == name).map(|(r, _, _)| r.join(".")).unwrap_or_else(|| name.to_string());
+        format!("`{reads}`")
+    };
+    let of = |what: &str| -> Vec<String> { declared.iter().filter(|x| x.what == what).map(|x| field(&x.name)).collect() };
+    let (added, removed) = (of("input_added"), of("input_removed"));
+    let sep = if lang == Lang::Ja { "、" } else { ", " };
+    let mut parts = Vec::new();
+    if !added.is_empty() {
+        let list = added.join(sep);
+        parts.push(if lang == Lang::Ja { format!("新しい版の経路だけが {list} を読みます") } else { format!("only the new version's route reads {list}") });
+    }
+    if !removed.is_empty() {
+        let list = removed.join(sep);
+        parts.push(if lang == Lang::Ja { format!("前の版の経路だけが {list} を読みます") } else { format!("only the old version's route reads {list}") });
+    }
+    if lang == Lang::Ja {
+        let why = if parts.is_empty() { "二つの版の経路は、読む値が違います".to_string() } else { parts.join("。") };
+        format!("{why}。同じ申請を両方に渡せないので、経路は場合ごとには比べず、書いてある行どうしを比べます")
+    } else {
+        let why = if parts.is_empty() { "the two versions' routes read different values".to_string() } else { parts.join("; ") };
+        format!("{why}: no request can be given to both, so the route is not compared case by case, but line by line as written")
+    }
 }
 
 /// Each stage and each way it can be answered by, as written, with the way in words: the stages of
@@ -557,7 +671,7 @@ fn field_of<'a>(say: &Say<'_, 'a>, col: &ritsu_ports::DiffColumn, names: &(crate
 /// The union of what two boxes hold of one column: the words of both, the runs of both, a run
 /// joined to the next where no value is between them (the field's step says which are next to each
 /// other); every value where that is all the field has.
-fn union(a: &DiffHeld, b: &DiffHeld, field: Option<&crate::ast::Field>) -> DiffHeld {
+fn union(a: &DiffHeld, b: &DiffHeld, field: Option<&crate::ast::Field>, scope: &Scope) -> DiffHeld {
     match (a, b) {
         (DiffHeld::Words { words: x, other: ox }, DiffHeld::Words { words: y, other: oy }) => {
             let mut ws = x.clone();
@@ -600,7 +714,13 @@ fn union(a: &DiffHeld, b: &DiffHeld, field: Option<&crate::ast::Field>) -> DiffH
                 }
                 out.push(r);
             }
-            if out == [(None, None)] { DiffHeld::Any } else { DiffHeld::Runs(out) }
+            // one run from end to end of what the field can hold holds every request, as an open one
+            // does: the case is not narrowed by it
+            let (lo, hi) = field.map(|f| crate::lower::route::reach_or_range(scope, f)).unwrap_or((None, None));
+            let every = |r: &(Option<ritsu_units::Rat>, Option<ritsu_units::Rat>)| {
+                r.0.is_none_or(|l| lo.is_some_and(|x| l.cmp_to(x) != std::cmp::Ordering::Greater)) && r.1.is_none_or(|h| hi.is_some_and(|x| h.cmp_to(x) != std::cmp::Ordering::Less))
+            };
+            if out.len() == 1 && every(&out[0]) { DiffHeld::Any } else { DiffHeld::Runs(out) }
         }
         _ => DiffHeld::Any,
     }
@@ -622,7 +742,7 @@ fn boxes(say: &Say, columns: &[ritsu_ports::DiffColumn], changes: &[ritsu_ports:
                 }
                 let differ: Vec<usize> = (0..columns.len()).filter(|&k| a.0[k] != b.0[k]).collect();
                 if let [k] = differ[..] {
-                    let joined = union(&a.0[k], &b.0[k], fields[k]);
+                    let joined = union(&a.0[k], &b.0[k], fields[k], say.s);
                     out[i].0[k] = joined;
                     out.remove(j);
                     continue 'again;
@@ -1699,4 +1819,43 @@ pub fn versions_json(v: &Versions) -> Json {
         ),
         ("in_progress".to_string(), if v.same_version() { Json::Null } else { Json::Str(v.in_progress.clone()) }),
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const OLD: &str = "rule r v1\n\nenum a_by = x \"x\"\n\n\noutputs\n  a : a_by\n\ntable a\n| -> a |\n| x    |\n";
+    const NEW: &str = "rule r v1\n\nenum a_by = x \"x\"\nimport enum kind from \"choices.rule\"\n\ninputs\n  amount : money[JPY]  range >=1JPY <=10JPY\n  kind   : kind\n\noutputs\n  a : a_by?\n";
+
+    /// An input the other route reads is declared in a route that does not read it: under its
+    /// `inputs`, or in a new `inputs` before its `outputs`; one typed with an enum is not.
+    #[test]
+    fn an_input_the_other_route_reads_is_declared_where_it_is_not() {
+        let (old, new) = (input_lines(OLD), input_lines(NEW));
+        assert!(old.is_empty());
+        assert_eq!(new.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["amount", "kind"]);
+        assert!(!enum_typed(&new[0].1, NEW) && enum_typed(&new[1].1, NEW));
+        let added = with_inputs(OLD, &[new[0].1.clone()]);
+        assert!(added.contains("\ninputs\n  amount : money[JPY]  range >=1JPY <=10JPY\n\noutputs\n"), "{added}");
+        let more = with_inputs(NEW, &["  days : int".to_string()]);
+        assert_eq!(input_lines(&more).iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["amount", "kind", "days"]);
+    }
+
+    /// Two routes that cannot be given the same requests are said by the fields each reads that
+    /// the other does not, in both languages, with no word of a list that is not there.
+    #[test]
+    fn routes_that_read_apart_are_said_by_their_fields() {
+        let declared = vec![
+            ritsu_ports::DiffDeclared { what: "input_added".into(), name: "region_value".into(), old: None, new: None },
+            ritsu_ports::DiffDeclared { what: "output_added".into(), name: "review".into(), old: None, new: None },
+        ];
+        let mut names = (crate::lower::RouteNames::default(), crate::lower::RouteNames::default());
+        names.1.inputs.push((vec!["region".into()], "region_value".into(), crate::lower::words::ColKind::Bool));
+        let en = reads_apart(&declared, &names, Lang::En);
+        assert_eq!(en, "only the new version's route reads `region`: no request can be given to both, so the route is not compared case by case, but line by line as written");
+        let ja = reads_apart(&declared, &names, Lang::Ja);
+        assert_eq!(ja, "新しい版の経路だけが `region` を読みます。同じ申請を両方に渡せないので、経路は場合ごとには比べず、書いてある行どうしを比べます");
+        assert!(!reads_apart(&[], &names, Lang::En).contains("above") && !reads_apart(&[], &names, Lang::Ja).contains("上の"));
+    }
 }

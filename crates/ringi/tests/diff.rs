@@ -199,6 +199,10 @@ fn contract(kind: &'static str, value: i128) -> Probe {
     Probe { form: format!("value = {value}JPY, kind = {kind}"), reads: vec![("value", In::N(value)), ("kind", In::W(kind))] }
 }
 
+fn contract_for(kind: &'static str, value: i128, months: i128) -> Probe {
+    Probe { form: format!("value = {value}JPY, kind = {kind}, months = {months}"), reads: vec![("value", In::N(value)), ("kind", In::W(kind)), ("months", In::N(months))] }
+}
+
 fn account(level: &'static str) -> Probe {
     Probe { form: format!("level = {level}"), reads: vec![("level", In::W(level))] }
 }
@@ -273,6 +277,29 @@ fn variants() -> Vec<Variant> {
             grid: Some(Grid { words: vec!["nda", "service", "license"], number: "value", ends: (0, 1_000_000_000), make: contract }),
             back: true,
         },
+        // a stage made conditional on a field the old route does not read: the two routes take
+        // different inputs, and are compared case by case all the same
+        Variant {
+            name: "contract_new_field",
+            file: "examples/contract.ringi",
+            at: Some("2026-11-16"),
+            edits: vec![("  review   reviewer\n", "  review   reviewer             when months > 12\n"), ("request contract v1", "request contract v2")],
+            data: None,
+            probes: vec![contract_for("service", 1_000_000, 12), contract_for("service", 1_000_000, 13), contract_for("nda", 0, 60)],
+            grid: Some(Grid { words: vec!["nda", "service", "license"], number: "months", ends: (1, 60), make: |k, n| contract_for(k, 1_000_000, n) }),
+            back: false,
+        },
+        // the same undone: the stage comes again whatever the term
+        Variant {
+            name: "contract_new_field_back",
+            file: "examples/contract.ringi",
+            at: Some("2026-11-16"),
+            edits: vec![("  review   reviewer\n", "  review   reviewer             when months > 12\n")],
+            data: None,
+            probes: vec![contract_for("service", 1_000_000, 12), contract_for("service", 1_000_000, 13)],
+            grid: Some(Grid { words: vec!["nda", "service", "license"], number: "months", ends: (1, 60), make: |k, n| contract_for(k, 1_000_000, n) }),
+            back: true,
+        },
         Variant {
             name: "account_way",
             file: "examples/account.ringi",
@@ -324,6 +351,10 @@ fn what_the_diff_says_of_the_route_is_what_simulate_gives() {
     for v in variants() {
         let d = compared(&v, Lang::En);
         boxes += d.route.len();
+        // two routes that read different fields are compared case by case all the same
+        if v.name.starts_with("contract_new_field") {
+            assert!(d.total && d.unsettled.is_empty() && !d.route.is_empty(), "{}: {:?}", v.name, d.unsettled);
+        }
         let (o, n) = sides(&v);
         let mut probes = v.probes.clone();
         probes.extend(v.grid.as_ref().map(|g| g.probes(&d)).unwrap_or_default());
