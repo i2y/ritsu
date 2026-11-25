@@ -86,7 +86,7 @@
 
   `rulec check` が契約について言う文（E120、E121、E122）は、これまでどおり要素の中のパスを `order.lines[].sku` のように `[]` で書きます。呼び出しの一つの要素ではなく、契約がどの要素にも置く場所のことを言う文だからです。
 
-  受け付けない理由の種類（`input` と `contradiction`）と、文の横に運ぶ値は変わりません。こうした文を文字列と比べていた呼び出し側は、新しい文と比べてください。ベクタも変わります。`vectors/<別名>.refused.jsonl` の行は新しい文を言い、一つの要素についての入力は、入口が受け付ける要素のあとに悪い要素を二つ置きます（[formats.md](formats.md#vectors-rulec-vectors-generatedvectorsaliasjsonl)）。`rulec gen --check` は、ベクタを書き直すまで落ちます。`rulec fixtures` と `rulec replay` が記録をまとめる理由は、これまでどおり要素のフィールドを並びと一緒に `lines[].amount` と言います。
+  受け付けない理由の種類（`input` と `contradiction`）と、文の横に運ぶ値は変わりません。こうした文を文字列と比べていた呼び出し側は、新しい文と比べてください。ベクタも変わります。`vectors/<別名>.refused.jsonl` の行は新しい文を言い、一つの要素についての入力は、入口が受け付ける要素のあとに悪い要素を二つ置きます（[formats.md](formats.md#vectors-rulec-vectors)）。`rulec gen --check` は、ベクタを書き直すまで落ちます。`rulec fixtures` と `rulec replay` が記録をまとめる理由は、これまでどおり要素のフィールドを並びと一緒に `lines[].amount` と言います。
 
   次の版では、悪い所が二つ以上ある入力にも、どの口も一つのことを言います。一つの順で最初に当たる物です。まず、関数が引数を取る順に、引数を読んで型を確かめます。次に入力の範囲、`constraint`、並びの上限を確かめ、そのあと関数が求める物を、要素ごとに確かめます（[reference](reference.md#an-input-with-two-things-wrong)、§15.328）。参照評価器と、別の順で読んでいた口は、そうした入力の一部に前と違う理由を言います。歩きが範囲の外の要素より先に矛盾に会う入力では、断りの種類も変わります。
 

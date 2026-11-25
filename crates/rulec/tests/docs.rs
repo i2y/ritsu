@@ -94,8 +94,27 @@ fn 文書が挙げるコマンドは実在する() {
     }
 }
 
+/// The anchors of a document's headings that are the same on GitHub and on rulec's site, which shows
+/// the same documents: the letters and the digits of the heading in lower case, with `-` and `_`, and
+/// a space as `-`. A heading that holds a `<name>` has none of them, as GitHub keeps the name in the
+/// anchor and the site drops it.
+fn anchors(body: &str) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let mut fence = false;
+    for line in body.lines() {
+        if line.trim_start().starts_with("```") {
+            fence = !fence;
+        } else if let Some(heading) = line.strip_prefix('#').filter(|h| !fence && !h.contains('<')) {
+            let words = heading.trim_start_matches('#').trim().to_lowercase();
+            out.insert(words.chars().filter(|c| c.is_alphanumeric() || " -_".contains(*c)).map(|c| if c == ' ' { '-' } else { c }).collect());
+        }
+    }
+    out
+}
+
 #[test]
 fn 文書の相対リンクは実在する() {
+    let mut seen = 0;
     for (name, body) in docs() {
         let dir = if name.starts_with("docs/") { "docs" } else { "." };
         let mut rest = body.as_str();
@@ -103,18 +122,19 @@ fn 文書の相対リンクは実在する() {
             rest = &rest[k + 2..];
             let Some(end) = rest.find(')') else { break };
             let target = &rest[..end];
-            if target.starts_with("http") || target.starts_with('#') {
+            if target.starts_with("http") {
                 continue;
             }
-            // Strip an in-page anchor.
-            let path = target.split('#').next().unwrap();
-            if path.is_empty() {
-                continue;
+            let (path, anchor) = target.split_once('#').map_or((target, None), |(p, a)| (p, Some(a)));
+            let to = if path.is_empty() { name.clone() } else { format!("{dir}/{path}") };
+            assert!(locate(&to).exists(), "{name}: リンク先が無い: {target}");
+            if let Some(anchor) = anchor {
+                assert!(anchors(&read(&to)).contains(anchor), "{name}: リンク先に、GitHub とサイトで同じアンカーになる見出しが無い: {target}");
+                seen += 1;
             }
-            let full = root().join(dir).join(path);
-            assert!(full.exists(), "{name}: リンク先が無い: {target}");
         }
     }
+    assert!(seen >= 40, "見出しへのリンクが {seen} 個しか無い");
 }
 
 /// The one worked example in AGENTS.md is the shape an agent will copy, so it has to be the

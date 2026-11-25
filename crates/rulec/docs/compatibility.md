@@ -187,7 +187,7 @@ as well: "the crate `rulec`", after `i2y/tap/ritsu` in Homebrew. -->
   stay as they were. A caller that compared such a sentence with a string compares it with the
   new one. The vectors change with it: a line of `vectors/<alias>.refused.jsonl` says the new
   sentence, and a case about one element puts the element at fault second and third, after one
-  the door takes ([formats.md](formats.md#vectors-rulec-vectors-generatedvectorsaliasjsonl)), so
+  the door takes ([formats.md](formats.md#vectors-rulec-vectors)), so
   `rulec gen --check` asks for them to be written again. The reasons `rulec fixtures` and
   `rulec replay` group records by keep naming a field of an element with its sequence,
   `lines[].amount`.

@@ -2217,7 +2217,7 @@ it, as the contradiction it is. That is what makes the last fold transition cove
 merely named. The same file holds an input for every reason the door turns one away — the
 sequence and the fields of its elements among them — and every language has to refuse each for
 that reason, with the sentence the reference evaluator says
-([formats.md](formats.md#vectors-rulec-vectors-generatedvectorsaliasjsonl), §15.204). A reason
+([formats.md](formats.md#vectors-rulec-vectors), §15.204). A reason
 about one element names it by its place, the index from 0 in the input's array
 (`lines[1].amount is out of range`, `lines[1] is not an object`), and a reason two elements give
 names both (`(lines[1] and lines[3])` after the sentence): where more than one element is at

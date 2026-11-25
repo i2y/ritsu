@@ -1493,9 +1493,10 @@ renders MCP Apps it offers the page for people as the tool's view.
 The three formats below are not command output: they are files that rulec reads and writes,
 and they all use the same wire representation for a value.
 
-## Vectors (`rulec vectors`, `generated/vectors/<alias>.jsonl`)
+## Vectors (`rulec vectors`)
 
-JSON Lines, one test case per line, generated from the boundaries of the rule (§9).
+JSON Lines, one test case per line, generated from the boundaries of the rule (§9). `rulec vectors`
+prints them, and `gen --extra vectors` writes them to `generated/vectors/<alias>.jsonl`.
 
 ```json
 {"in":{"order_date":"2026-03-31"},"out":{"kind":"before"},
@@ -1534,8 +1535,8 @@ where a `define` is worked out — has a vectors file with no line, and the inpu
 `an input the definition odd refuses, where no case found is answered`); `rulec test` reports it
 as `0 vectors, 1 refused`.
 
-`gen --extra vectors` writes the vectors there, and a second file, `<alias>.expected.jsonl`,
-with one **fixtures record** per vector in the same order — `in`, the expected values as
+Beside the vectors, `gen --extra vectors` writes a second file, `<alias>.expected.jsonl`, with
+one **fixtures record** per vector in the same order — `in`, the expected values as
 `observed`, and the rows that matched as `trace` (below). The generated runner prints the same record through the module's
 own record function, and that is what `rulec test` compares, byte for byte: the agreement is
 checked row by row, and over the wire form of every input. Being a fixtures file, it is also
