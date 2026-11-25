@@ -1,14 +1,15 @@
-// Command server serves the requests of the project: the pages people use in a browser, and the
-// API. Where it keeps the tickets and how people sign in come from its flags:
+// Command server is the project's server: the pages people use in a browser, and the API. To try it
+// on this computer, choosing on a page who you are:
 //
 //	go run ./cmd/server -dev-login
 //
-// lets you choose who you are on a page, on this computer only (-addr stays on 127.0.0.1). Without
-// -dev-login, the person is the one the header X-Person names, on this computer only too: neither
-// checks anyone. With -oidc-issuer, -oidc-client-id and -oidc-redirect-url, the server signs people
-// in with an OpenID Connect provider, and -oidc-roles-claim names the claim that lists their roles.
-// -db keeps the tickets in PostgreSQL; without it, they are kept in memory and lost when the server
-// stops. go run ./cmd/server -h lists every flag.
+// A server people use keeps the requests in PostgreSQL (-db), and signs people in with an OpenID
+// Connect provider (-oidc-issuer, -oidc-client-id and -oidc-redirect-url, and -oidc-roles-claim for
+// the claim that lists their roles). Without -db, the requests are in memory, and lost when the server
+// stops. With no sign-in, the person is the one the header X-Person names. That header and -dev-login
+// check no one, so the server takes them on this computer only (-addr stays on 127.0.0.1).
+//
+// go run ./cmd/server -h lists every flag.
 {{if mcp}}
 //
 // The agents' tools are at /mcp (HandleTools): an agent signs in as a browser does.

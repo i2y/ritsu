@@ -104,9 +104,10 @@ Started with no sign-in at all, the server takes a request as that of the person
 refuses a request a proxy forwarded, and does not start with them beside `-tls-cert` or the settings
 of a sign-in.
 ==> approvals.go <==
-// Package approvals runs the requests of project/ on the framework: the package ritsu generated
-// from them (go/ and requests/, which go generate writes again), with the gate (gate.go) and a
-// notifier that writes to the log (notify.go). cmd/server is the server.
+// Package approvals is what the project gives the server: the code ritsu made from project/ (in
+// go/ and requests/, which go generate makes again), the organization's data, the part that answers
+// for the permissions (gate.go) and the part that sends the notices (notify.go). cmd/server is the
+// server.
 //
 // The server serves the agents' tools at /mcp too (tools.go).
 package approvals
@@ -128,8 +129,8 @@ var requests embed.FS
 //go:embed project/org
 var project embed.FS
 
-// Package loads the generated package: the kinds of request, with the files of the contract the
-// server reads, built into the program. The vectors are not built in: they are for the tests.
+// Package loads the code ritsu made, with the files the server reads of it (requests/), which are
+// built into the program. The vectors are not built in: they are for the tests.
 func Package() (*server.Package, error) {
 	dir, err := fs.Sub(requests, "requests")
 	if err != nil {
@@ -138,14 +139,14 @@ func Package() (*server.Package, error) {
 	return PackageFrom(dir)
 }
 
-// PackageFrom loads the generated package from dir, a directory laid out as requests/ is: the
-// tests load it from the disk, where the vectors are.
+// PackageFrom loads it with the files of dir, a directory laid out as requests/ is. The tests load it
+// from the disk, where the vectors are.
 func PackageFrom(dir fs.FS) (*server.Package, error) {
 	return server.Load(ticketkinds.Contract, ticketkinds.Lang, ticketkinds.Kinds, dir)
 }
 
-// Organization reads the organization's data in project/org: a directory for each version, named
-// by the day it takes effect.
+// Organization reads the organization's data in project/org: a directory for each version of it,
+// named by the day it takes effect.
 func Organization() server.OrgSource {
 	dir, err := fs.Sub(project, "project")
 	if err != nil {
@@ -154,9 +155,9 @@ func Organization() server.OrgSource {
 	return orgfiles.New(dir)
 }
 
-// Parts are what the project gives the server: its kinds, its organization, its gate and its
-// notifier, which write what they have to say in log. cmd/server adds where the tickets are kept and
-// how people sign in, from its flags. Once the server is made, Started gives the notifier the server.
+// Parts are what the project gives the server. A part that has something to say writes it to log.
+// cmd/server adds, from its flags, where the requests are kept and how people sign in. Once the server
+// is made, Started gives it to the parts that read it.
 func Parts(log *slog.Logger) (server.Config, error) {
 	p, err := Package()
 	if err != nil {
@@ -170,25 +171,27 @@ func Parts(log *slog.Logger) (server.Config, error) {
 	}, nil
 }
 
-// Started gives the parts of cfg that read the server the server made from cfg (by server.New, or
-// in the function Serve calls once it is made): the notifier, which says each kind by its title.
+// Started gives srv, the server made from cfg, to the parts of cfg that read it: the notifier, which
+// asks it for the titles of the request types. cmd/server calls it in the function Serve calls once
+// the server is made; after server.New, call it yourself.
 func Started(cfg server.Config, srv *server.Server) {
 	if n, ok := cfg.Notifier.(*LogNotifier); ok {
 		n.Server = srv
 	}
 }
 ==> cmd/server/main.go <==
-// Command server serves the requests of the project: the pages people use in a browser, and the
-// API. Where it keeps the tickets and how people sign in come from its flags:
+// Command server is the project's server: the pages people use in a browser, and the API. To try it
+// on this computer, choosing on a page who you are:
 //
 //	go run ./cmd/server -dev-login
 //
-// lets you choose who you are on a page, on this computer only (-addr stays on 127.0.0.1). Without
-// -dev-login, the person is the one the header X-Person names, on this computer only too: neither
-// checks anyone. With -oidc-issuer, -oidc-client-id and -oidc-redirect-url, the server signs people
-// in with an OpenID Connect provider, and -oidc-roles-claim names the claim that lists their roles.
-// -db keeps the tickets in PostgreSQL; without it, they are kept in memory and lost when the server
-// stops. go run ./cmd/server -h lists every flag.
+// A server people use keeps the requests in PostgreSQL (-db), and signs people in with an OpenID
+// Connect provider (-oidc-issuer, -oidc-client-id and -oidc-redirect-url, and -oidc-roles-claim for
+// the claim that lists their roles). Without -db, the requests are in memory, and lost when the server
+// stops. With no sign-in, the person is the one the header X-Person names. That header and -dev-login
+// check no one, so the server takes them on this computer only (-addr stays on 127.0.0.1).
+//
+// go run ./cmd/server -h lists every flag.
 //
 // The agents' tools are at /mcp (HandleTools): an agent signs in as a browser does.
 package main
@@ -275,13 +278,15 @@ import (
 	"example.com/acme/approvals/go/authz/company"
 )
 
-// Gate asks the gate ritsu generated from project/shared/company.gate (go/authz/company), with what
-// the framework's question says. The gate's Requesters and Approvers are groups: the person is in
-// them when the question lists them. An attribute added to a principal or a resource needs its
-// value in gateStore; a role the gate lets a Staff hold is in the answer of the generated RolesOf,
-// so one added to the gate needs no change here.
+// Gate answers whether a person may do what they ask to do. It asks the code ritsu made from
+// project/shared/company.gate (go/authz/company), and gives it what that code reads of the framework's
+// question: the person's department and roles, whether they are a requester or an approver of the
+// request, and the team that owns its type.
+//
+// A role added to company.gate needs no change here, as the code that was made lists the roles
+// (RolesOf). An attribute added to a principal or a resource does: gateStore gives its value.
 type Gate struct {
-	// Log is where Gate says a role a sign-in gives that the gate does not declare: once for each
+	// Log is where Gate says that a sign-in gave a role the gate does not declare: once for each
 	// role, for the first hundred of them.
 	Log *slog.Logger
 
@@ -289,20 +294,19 @@ type Gate struct {
 	told map[string]bool
 }
 
-// gateRoles are the roles a Staff principal of project/shared/company.gate can hold, in the order
-// the gate declares them: the generated package's RolesOf, asked by the principal's type in Cedar.
-// The generated gate refuses a person with a role it does not declare, whatever they ask, so Allow
-// leaves out a role the sign-in gives for something else (a claim of the provider, a header of the
-// proxy).
+// gateRoles are the roles a Staff of project/shared/company.gate can have, in the order the gate
+// declares them. The code that was made refuses a person with a role it does not declare, whatever
+// they ask, so Allow leaves out the roles a sign-in gives for something else (a claim of the provider,
+// a header of the proxy).
 func gateRoles() []string {
 	return company.RolesOf("Staff")
 }
 
 // Allow asks the gate by the action's name, with the ID of each resource the framework knows: the
 // ticket, its stage, its kind of request (the version the question is of), and the organization.
-// The gate takes the one its action asks about. An action the gate does not declare is an error;
-// the gate's other refusals are a no, a person it does not read (one with no primary team in the
-// organization's version) among them.
+// The gate takes the one its action is about. An action the gate does not declare is an error. Its
+// other refusals are a no, also for a person it cannot read: one with no primary team in the
+// organization's data.
 func (g *Gate) Allow(_ context.Context, q server.Question) (bool, error) {
 	ids := map[string]string{"Ticket": q.Ticket, "Stage": q.Ticket + "/" + q.Stage, "RequestType": q.Kind, "Organization": "organization"}
 	store := gateStore{q: q, roles: g.roles(q.Person)}
@@ -355,14 +359,18 @@ type gateStore struct {
 	roles []string
 }
 
-// Staff answers the person as the gate reads them, or nil for one the organization's version does
-// not have (no primary team in it): the gate refuses them whatever they ask, so that no one outside
-// the organization is taken as one of a department. Their department is their team of the kind of
-// the team that owns the request type, the first team of that kind at or above their primary team:
-// a request type owned by a section, a department or a division is compared at its own level,
-// whatever the organization calls its kinds of team. A question with no owner among the version's
-// teams (one of the organization, or of a request type that names no owner or a team the version
-// does not have) gives their primary team, which owns nothing of it.
+// Staff answers the person as the gate reads them: their department, their roles, and whether they
+// are a requester or an approver of the request.
+//
+// Their department is the team of theirs that is of the same kind as the team that owns the request
+// type: the first of that kind at or above their primary team. So a type a section owns is compared
+// section by section, and one a department owns department by department, whatever the organization
+// calls its kinds of team. When no team of the organization's data owns the type (the question is of
+// the organization, or the type names no owner or a team that is not there), it is their primary
+// team, which owns nothing.
+//
+// The answer is nil for a person with no primary team in the organization's data. The gate refuses
+// them whatever they ask, so that no one outside the organization is taken as one of a department.
 func (s gateStore) Staff(id string) (*company.Staff, error) {
 	kind := ""
 	if owner, ok := teamIn(s.q.Org, s.q.Owner); ok {
@@ -397,10 +405,9 @@ func (s gateStore) RequestType(string) (*company.RequestType, error) {
 	return &company.RequestType{Owner: s.owner()}, nil
 }
 
-// owner answers the team that owns the request type. One that names no owner is owned by no team:
-// the gate is given an ID that no team of the organization's version has, so that it is no one's
-// department, and only a rule that reads no department (a system administrator's) allows anything
-// of it.
+// owner answers the team that owns the request type. For a type that names no owner, it answers an ID
+// that no team of the organization's data has. It is then no one's department, and only a rule that
+// reads no department (a system administrator's) allows anything of the type.
 func (s gateStore) owner() string {
 	if s.q.Owner != "" {
 		return s.q.Owner
@@ -414,7 +421,8 @@ func (s gateStore) owner() string {
 	}
 }
 
-// teamIn answers the team of the version v with the ID id, and whether it has one.
+// teamIn answers the team with the ID id in v, the organization's data of a day, and whether it has
+// one.
 func teamIn(v *server.OrgVersion, id string) (server.Team, bool) {
 	if v != nil {
 		for _, t := range v.Teams {
@@ -428,16 +436,16 @@ func teamIn(v *server.OrgVersion, id string) (server.Team, bool) {
 ==> generate.go <==
 package approvals
 
-// ritsu writes go/ (the Go package of the project: its kinds of request, their rules and dates, and
-// the gate) and requests/ (what the server reads: openapi.json, types/, a2ui/ and mcp/, and the
-// vectors the tests run) from the files of project/. Run it again after changing them:
+// From the files of project/, ritsu makes go/ (the Go code of the request types, their rules and
+// dates, and the gate) and requests/ (what the server reads, and the vectors the tests run). Run it
+// again after changing them:
 //
 //	go generate ./...
 //
-// The same line with --check writes nothing, and fails when go/ or requests/ is not what project/
-// makes, for CI. --lang is the language of the sentences the generated code says, which the line
-// keeps the same whoever runs it. The catalog's ID is a name for the catalog of the project's
-// screens: write it as a URL you own, and keep it the same in every environment.
+// For CI, the same line with --check writes nothing, and fails when go/ or requests/ is not what
+// project/ makes. --lang is the language of the sentences in the code that is made; the line names it,
+// so that it is the same whoever runs it. --catalog is the ID of the catalog of the project's screens:
+// make it a URL you own, the same in every environment.
 //
 //go:generate ritsu gen project --root project --target go --target requests --catalog https://example.com/acme/approvals/a2ui/catalog.json --module example.com/acme/approvals/go --out . --lang en
 ==> go.mod <==
@@ -461,17 +469,18 @@ import (
 	server "github.com/i2y/ringi-server"
 )
 
-// LogNotifier writes each notice to the log, where a real one sends a mail or a chat message: the
-// notice names the people to tell, with their addresses from the organization's data. It says the
-// kind by its title in the language it writes in (Server.Title), with the language the title is in:
-// the kind's title as its file writes it where it has none in that language. A real one writes to
-// each person in their own language, and sends each key once: the framework calls it again with the
-// same key after a failure it could not tell from a success.
+// LogNotifier writes each notice to the log: what happened, to which request, and the people to tell
+// with their addresses from the organization's data. Write a part that sends a mail or a chat message
+// in its place. It should write to each person in their own language, and send a notice once: the
+// framework calls it again with the same key (Notice.Key) when it cannot tell whether a notice was
+// sent.
 type LogNotifier struct {
-	// Server is the server whose kinds the notices are of; Started sets it once the server is made.
+	// Server is the server that sends the notices. Started sets it, once the server is made.
 	Server *server.Server
 	Log    *slog.Logger
-	// Lang is the language the notices are written in; "en" when empty.
+	// Lang is the language the title of the request type is written in; "en" when empty. The log
+	// also says which language the title is in: a type with no title in Lang has the one its file
+	// gives it.
 	Lang string
 }
 

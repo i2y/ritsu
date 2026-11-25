@@ -12,13 +12,15 @@ import (
 	"{{module}}/go/authz/company"
 )
 
-// Gate asks the gate ritsu generated from project/shared/company.gate (go/authz/company), with what
-// the framework's question says. The gate's Requesters and Approvers are groups: the person is in
-// them when the question lists them. An attribute added to a principal or a resource needs its
-// value in gateStore; a role the gate lets a Staff hold is in the answer of the generated RolesOf,
-// so one added to the gate needs no change here.
+// Gate answers whether a person may do what they ask to do. It asks the code ritsu made from
+// project/shared/company.gate (go/authz/company), and gives it what that code reads of the framework's
+// question: the person's department and roles, whether they are a requester or an approver of the
+// request, and the team that owns its type.
+//
+// A role added to company.gate needs no change here, as the code that was made lists the roles
+// (RolesOf). An attribute added to a principal or a resource does: gateStore gives its value.
 type Gate struct {
-	// Log is where Gate says a role a sign-in gives that the gate does not declare: once for each
+	// Log is where Gate says that a sign-in gave a role the gate does not declare: once for each
 	// role, for the first hundred of them.
 	Log *slog.Logger
 
@@ -26,20 +28,19 @@ type Gate struct {
 	told map[string]bool
 }
 
-// gateRoles are the roles a Staff principal of project/shared/company.gate can hold, in the order
-// the gate declares them: the generated package's RolesOf, asked by the principal's type in Cedar.
-// The generated gate refuses a person with a role it does not declare, whatever they ask, so Allow
-// leaves out a role the sign-in gives for something else (a claim of the provider, a header of the
-// proxy).
+// gateRoles are the roles a Staff of project/shared/company.gate can have, in the order the gate
+// declares them. The code that was made refuses a person with a role it does not declare, whatever
+// they ask, so Allow leaves out the roles a sign-in gives for something else (a claim of the provider,
+// a header of the proxy).
 func gateRoles() []string {
 	return company.RolesOf("Staff")
 }
 
 // Allow asks the gate by the action's name, with the ID of each resource the framework knows: the
 // ticket, its stage, its kind of request (the version the question is of), and the organization.
-// The gate takes the one its action asks about. An action the gate does not declare is an error;
-// the gate's other refusals are a no, a person it does not read (one with no primary team in the
-// organization's version) among them.
+// The gate takes the one its action is about. An action the gate does not declare is an error. Its
+// other refusals are a no, also for a person it cannot read: one with no primary team in the
+// organization's data.
 func (g *Gate) Allow(_ context.Context, q server.Question) (bool, error) {
 	ids := map[string]string{"Ticket": q.Ticket, "Stage": q.Ticket + "/" + q.Stage, "RequestType": q.Kind, "Organization": "organization"}
 	store := gateStore{q: q, roles: g.roles(q.Person)}
@@ -92,14 +93,18 @@ type gateStore struct {
 	roles []string
 }
 
-// Staff answers the person as the gate reads them, or nil for one the organization's version does
-// not have (no primary team in it): the gate refuses them whatever they ask, so that no one outside
-// the organization is taken as one of a department. Their department is their team of the kind of
-// the team that owns the request type, the first team of that kind at or above their primary team:
-// a request type owned by a section, a department or a division is compared at its own level,
-// whatever the organization calls its kinds of team. A question with no owner among the version's
-// teams (one of the organization, or of a request type that names no owner or a team the version
-// does not have) gives their primary team, which owns nothing of it.
+// Staff answers the person as the gate reads them: their department, their roles, and whether they
+// are a requester or an approver of the request.
+//
+// Their department is the team of theirs that is of the same kind as the team that owns the request
+// type: the first of that kind at or above their primary team. So a type a section owns is compared
+// section by section, and one a department owns department by department, whatever the organization
+// calls its kinds of team. When no team of the organization's data owns the type (the question is of
+// the organization, or the type names no owner or a team that is not there), it is their primary
+// team, which owns nothing.
+//
+// The answer is nil for a person with no primary team in the organization's data. The gate refuses
+// them whatever they ask, so that no one outside the organization is taken as one of a department.
 func (s gateStore) Staff(id string) (*company.Staff, error) {
 	kind := ""
 	if owner, ok := teamIn(s.q.Org, s.q.Owner); ok {
@@ -134,10 +139,9 @@ func (s gateStore) RequestType(string) (*company.RequestType, error) {
 	return &company.RequestType{Owner: s.owner()}, nil
 }
 
-// owner answers the team that owns the request type. One that names no owner is owned by no team:
-// the gate is given an ID that no team of the organization's version has, so that it is no one's
-// department, and only a rule that reads no department (a system administrator's) allows anything
-// of it.
+// owner answers the team that owns the request type. For a type that names no owner, it answers an ID
+// that no team of the organization's data has. It is then no one's department, and only a rule that
+// reads no department (a system administrator's) allows anything of the type.
 func (s gateStore) owner() string {
 	if s.q.Owner != "" {
 		return s.q.Owner
@@ -151,7 +155,8 @@ func (s gateStore) owner() string {
 	}
 }
 
-// teamIn answers the team of the version v with the ID id, and whether it has one.
+// teamIn answers the team with the ID id in v, the organization's data of a day, and whether it has
+// one.
 func teamIn(v *server.OrgVersion, id string) (server.Team, bool) {
 	if v != nil {
 		for _, t := range v.Teams {

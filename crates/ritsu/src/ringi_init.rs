@@ -282,23 +282,23 @@ fn init(a: &Args, table: &Table, lang: Lang) -> Result<Text, Text> {
     let module = &chosen.module;
     let (cd, place) = if given == "." { (String::new(), tr!("ここ", "here")) } else { (format!("  cd {given}\n"), tr!("{given} ", "in {given}")) };
     let (place_ja, place_en) = (place.get(Lang::Ja), place.get(Lang::En));
-    // what the options add to the sentence: the request type with a flow, the agents' tools, the
-    // worker, and how to run the server beside Temporal and the worker
-    let (types_ja, types_en) = if chosen.temporal { ("申請の種類二つ（一つは flow を持つ）", "two request types, one with a flow, their") } else { ("申請の種類", "a request type, its") };
-    let (tools_ja, tools_en) = if chosen.mcp { ("（/mcp にエージェントのツール）", " with the agents' tools at /mcp") } else { ("", "") };
-    let (worker_ja, worker_en) = if chosen.temporal { ("、cmd/worker/ に flow のワーカー", ", a worker of the flow in cmd/worker/") } else { ("", "") };
+    // what the options add: the request type with a flow, the agents' tools, the worker, and how to
+    // run the server beside Temporal and the worker
+    let (types_ja, types_en) = if chosen.temporal { ("申請の種類二つ（一つは flow を始める）", "two request types (one starts a flow)") } else { ("申請の種類", "a request type") };
+    let (tools_ja, tools_en) = if chosen.mcp { ("  tools.go        サーバーの /mcp に出す、エージェントのツール\n", "  tools.go        the agents' tools, at /mcp of the server\n") } else { ("", "") };
+    let (worker_ja, worker_en) = if chosen.temporal { ("  cmd/worker/     flow を Temporal で動かすワーカー\n", "  cmd/worker/     a worker that runs the flow on Temporal\n") } else { ("", "") };
     let server = "  go run ./cmd/server -dev-login\n";
     let (run_ja, run_en) = if chosen.temporal {
         (
-            format!("を走らせ、Temporal の開発用サーバーを起動し（temporal server start-dev）、別々の端末で\n  go run ./cmd/worker\n{server}"),
-            format!("start Temporal's dev server (temporal server start-dev), run each of\n  go run ./cmd/worker\n{server}in a terminal of its own, "),
+            format!("次の三つは、別々の端末で起動します:\n  temporal server start-dev\n  go run ./cmd/worker\n{server}"),
+            format!("Start these three, each in a terminal of its own:\n  temporal server start-dev\n  go run ./cmd/worker\n{server}"),
         )
     } else {
         (server.to_string(), server.to_string())
     };
     Ok(tr!(
-        "{place_ja}に {n} 個のファイルを書きました（モジュール {module}）。project/ に{types_ja}と組織と gate、go/ と requests/ にそこから ritsu が生成したコード、cmd/server/ にフレームワーク {FRAMEWORK} {FRAMEWORK_VERSION} のサーバー{tools_ja}{worker_ja}、それと試験です。次に:\n{cd}  go mod tidy\n  go test ./...\n{run_ja}を走らせ、ブラウザで http://127.0.0.1:8080/pages/ を開きます。続きは README.ja.md にあります\n",
-        "wrote {n} files {place_en} (module {module}): {types_en} organization and a gate in project/, the code ritsu generates from them in go/ and requests/, a server of the framework {FRAMEWORK} {FRAMEWORK_VERSION} in cmd/server/{tools_en}{worker_en}, and tests. Next, run\n{cd}  go mod tidy\n  go test ./...\n{run_en}and open http://127.0.0.1:8080/pages/ in a browser. README.md says more\n"
+        "{place_ja}に {n} 個のファイルを書きました（モジュール {module}）\n  project/        {types_ja}、組織のデータ、権限\n  go/, requests/  project/ から ritsu が作ったコード\n{tools_ja}  cmd/server/     フレームワーク {FRAMEWORK} {FRAMEWORK_VERSION} のサーバー\n{worker_ja}次のコマンドを実行します:\n{cd}  go mod tidy\n  go test ./...\n{run_ja}起動したら、ブラウザで http://127.0.0.1:8080/pages/ を開きます\nファイルの説明と変え方は README.ja.md にあります\n",
+        "wrote {n} files {place_en} (module {module})\n  project/        {types_en}, the organization's data and the permissions\n  go/, requests/  the code ritsu makes from project/\n{tools_en}  cmd/server/     a server of the framework {FRAMEWORK} {FRAMEWORK_VERSION}\n{worker_en}Run these:\n{cd}  go mod tidy\n  go test ./...\n{run_en}Then open http://127.0.0.1:8080/pages/ in a browser\nREADME.md says what each file is, and how to change it\n"
     ))
 }
 

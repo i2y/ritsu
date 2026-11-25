@@ -63,17 +63,17 @@ fn init(lang: &str, options: &[&str]) -> (TempDir, std::path::PathBuf) {
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
     let project = t.path().join("approvals");
     let n = files(&project).len();
-    let said = if lang == "ja" { format!("approvals に {n} 個のファイルを書きました（モジュール example.com/acme/approvals）。") } else { format!("wrote {n} files in approvals (module example.com/acme/approvals): ") };
+    let said = if lang == "ja" { format!("approvals に {n} 個のファイルを書きました（モジュール example.com/acme/approvals）\n  project/ ") } else { format!("wrote {n} files in approvals (module example.com/acme/approvals)\n  project/ ") };
     assert!(out.starts_with(&said), "{out}");
     let temporal = options.contains(&"--temporal");
     let mcp = options.contains(&"--mcp");
     let next = match (temporal, lang) {
         (false, _) => "  cd approvals\n  go mod tidy\n  go test ./...\n  go run ./cmd/server -dev-login\n".to_string(),
-        (true, "ja") => "  cd approvals\n  go mod tidy\n  go test ./...\nを走らせ、Temporal の開発用サーバーを起動し（temporal server start-dev）、別々の端末で\n  go run ./cmd/worker\n  go run ./cmd/server -dev-login\nを走らせ、".to_string(),
-        (true, _) => "  cd approvals\n  go mod tidy\n  go test ./...\nstart Temporal's dev server (temporal server start-dev), run each of\n  go run ./cmd/worker\n  go run ./cmd/server -dev-login\nin a terminal of its own, and open ".to_string(),
+        (true, "ja") => "  cd approvals\n  go mod tidy\n  go test ./...\n次の三つは、別々の端末で起動します:\n  temporal server start-dev\n  go run ./cmd/worker\n  go run ./cmd/server -dev-login\n起動したら、ブラウザで ".to_string(),
+        (true, _) => "  cd approvals\n  go mod tidy\n  go test ./...\nStart these three, each in a terminal of its own:\n  temporal server start-dev\n  go run ./cmd/worker\n  go run ./cmd/server -dev-login\nThen open ".to_string(),
     };
     assert!(out.contains(&next), "{out}");
-    let (tools, worker) = if lang == "ja" { ("（/mcp にエージェントのツール）", "、cmd/worker/ に flow のワーカー") } else { (" with the agents' tools at /mcp", ", a worker of the flow in cmd/worker/") };
+    let (tools, worker) = ("\n  tools.go ", "\n  cmd/worker/ ");
     assert_eq!((out.contains(tools), out.contains(worker)), (mcp, temporal), "{out}");
     (t, project)
 }
