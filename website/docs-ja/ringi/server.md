@@ -85,7 +85,7 @@ go run ./cmd/server -dev-login
 
 `http://127.0.0.1:8080/pages/` を開き、だれとして使うかを選びます。`-dev-login` は本人を確かめないので、サーバーは自分のコンピューターにだけ答えます。自分の申請の種類は `project/` に書き、`ritsu check project` と `go generate ./...` を実行します。
 
-ページの様子と、プロジェクトがサーバーに渡すものは [ringi-server のサイト](https://i2y.github.io/ringi-server/ja/)に、設定、バックアップ、版の上げ方は[運用の手引き](https://i2y.github.io/ringi-server/ja/operations/)にあります。
+[ringi-server のチュートリアル](https://i2y.github.io/ringi-server/ja/start/)では、この手順を一つずつ進めてから、申請の種類を書き換え、通知をメールで送ります。自分の会社のデータを入れる、会社のログインをつなぐ、社員に使ってもらうサーバーを動かす、といった手引きは、[ringi-server のサイト](https://i2y.github.io/ringi-server/ja/)にあります。
 
 ## サーバーなしで見る
 

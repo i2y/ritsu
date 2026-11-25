@@ -188,5 +188,5 @@ write, or *the page for people*.
   server begins.
 - [The skill](https://github.com/i2y/ritsu/blob/main/skills/ringi/SKILL.md), for an agent that
   writes or fixes a request type.
-- [ringi-server's site](https://i2y.github.io/ringi-server/): the pages of a server of requests, how
-  to start a project, and how to run it for people.
+- [ringi-server's site](https://i2y.github.io/ringi-server/): a tutorial that makes a server of
+  requests, how it works, guides for what you want to do, and how to run it for your staff.

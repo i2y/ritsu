@@ -7,51 +7,58 @@
 ==> README.md <==
 # approvals
 
-A server of requests and approvals. The rules are written in ritsu's request language under
-`project/`, ritsu generates the Go code and the contract files from them, and the framework
-[ringi-server](https://github.com/i2y/ringi-server) serves them: the pages people use in a browser, and the API.
+A server of requests and approvals. What people fill in, who approves it and when it is due are in
+files under `project/`. The command [ritsu](https://github.com/i2y/ritsu) checks them and makes Go
+code from them, and the framework [ringi-server](https://github.com/i2y/ringi-server) runs that code as a server:
+the pages people use in a browser, and an API.
 
-`ritsu ringi init` wrote these files as a start: one request type, a small organization, a gate and
-a server. They are yours now: change them into your own rules.
+`ritsu ringi init` wrote these files as a start: a purchase request, a small company, and a server.
+They are yours to change.
 
-## What is in it
-
-| File | What it is |
-|---|---|
-| `project/purchase.ringi` | The request type: its form, its route of two stages, its deadlines, and scenarios that say what happens |
-| `project/shared/company.ringi` | The shape of the organization: the positions and the kinds of team |
-| `project/org/2026-04-01/` | The organization's data from that day: its teams, people and members, as CSV |
-| `project/shared/office.cal` | The business days the deadlines count |
-| `project/shared/company.gate` | Who may do what on the tickets |
-| `go/`, `requests/` | What ritsu generates from `project/` (do not edit them) |
-| `generate.go` | The line `go generate` runs to generate them again |
-| `approvals.go` | What the project gives the server: its request types, organization, gate and notifier |
-| `gate.go` | Asks the generated gate what the server asks |
-| `notify.go` | A notifier that writes each notice to the log |
-| `tools.go` | The agents' tools at `/mcp` of the server, over MCP |
-| `cmd/server/` | The server |
-| `*_test.go` | The tests |
-
-## Running it
+## Run it
 
 ```sh
 go mod tidy
 go run ./cmd/server -dev-login
 ```
 
-Open http://127.0.0.1:8080/pages/ in a browser and choose who you are. `s1201` (a member of the
-staff of Sales Section 1) makes a purchase request; `s1101`, the section's manager, approves it,
-then `s1001`, the head of the Sales Department. The notices go to the log. `-dev-login` checks no
-one, so the server answers this computer only.
+Open http://127.0.0.1:8080/pages/ in a browser, and choose who you are.
 
-The agents' tools are at http://127.0.0.1:8080/mcp, over MCP's streamable HTTP. An agent signs in
-as a browser does: with `-dev-login`, it sends the cookie `ringi-dev-person=s1201` (the page `/login`
-sets it in a browser); with no flag of a sign-in, the header `X-Person: s1201`. The gate decides what
-it may do with the tools, as on the pages.
+1. As Sales staff 1 (`s1201`), make a purchase request.
+2. Sign out, and approve it as the manager of Sales Section 1 (`s1101`).
+3. Sign out, and approve it as the head of Sales (`s1001`).
 
-## Changing the rules
+The notices are written to the server's log. The requests are in memory, and are gone when the server
+stops. `-dev-login` checks no one, so the server answers this computer only.
 
-Change the files of `project/`, then check them and generate the code again:
+## Use it from an agent
+
+Agents call the server's tools at http://127.0.0.1:8080/mcp, over MCP's streamable HTTP. With
+`-dev-login`, an agent sends the cookie `ringi-dev-person=s1201` (in a browser, the page `/login` sets
+it). On a server started without that flag, it sends the header `X-Person: s1201`. What it may do is
+what that person may do on the pages. [Let agents make and approve requests](https://i2y.github.io/ringi-server/agents/) lists
+the tools, and says how your staff's agents sign in.
+
+## What is in it
+
+| File | What it is |
+|---|---|
+| `project/purchase.ringi` | The purchase request: what to fill in, the order of the approvals, the deadlines, and examples of how a request goes |
+| `project/org/2026-04-01/` | The company's teams, people and who belongs where (CSV). The date is the day this data takes effect |
+| `project/shared/company.ringi` | The positions and the kinds of team |
+| `project/shared/company.gate` | Who may do what |
+| `project/shared/office.cal` | The business days |
+| `go/`, `requests/` | What ritsu makes from `project/`. Do not change it by hand |
+| `generate.go` | The command `go generate` runs, which makes `go/` and `requests/` again |
+| `approvals.go` | What the project gives the server: the code that was made, the organization's data, the permissions, and the part that sends notices |
+| `gate.go`, `notify.go` | The part that answers for the permissions, and the part that sends notices |
+| `tools.go` | The agents' tools at `/mcp` of the server |
+| `cmd/server/` | The server's command |
+| `*_test.go` | The tests |
+
+## Change it
+
+After a change in `project/`, check it and make the code again:
 
 ```sh
 ritsu check project
@@ -59,91 +66,43 @@ go generate ./...
 go test ./...
 ```
 
-`ritsu check` runs each scenario and checks what the rules claim; `ritsu ringi simulate
-project/purchase.ringi --every-requester` shows where each person's request goes. In CI, run the
-line of `generate.go` with `--check`: it writes nothing, and fails when `go/` or `requests/` is not
-what `project/` makes.
+| What to change | Where | How |
+|---|---|---|
+| The rules of a request | `project/*.ringi` | [Change the request type](https://i2y.github.io/ringi-server/change/) |
+| A new kind of request | A new file `project/<name>.ringi` | [Add and change request types](https://i2y.github.io/ringi-server/types/) |
+| The people and the teams | `project/org/` | [Prepare the organization's data](https://i2y.github.io/ringi-server/organization/) |
+| The business days and the holidays | `project/shared/office.cal` | [Set the business days](https://i2y.github.io/ringi-server/calendar/) |
+| Who may do what | `project/shared/company.gate` | [Decide who may do what](https://i2y.github.io/ringi-server/permissions/) |
+| How notices are sent | `notify.go` | [Send the notices by mail](https://i2y.github.io/ringi-server/mail/) |
+| What is left of a budget or of days of leave | A new file `project/shared/<name>.book` | [Check budgets and days of leave](https://i2y.github.io/ringi-server/books/) |
+| Work after an approval, such as a payment | A file `project/shared/<name>.flow` | [Start work after an approval](https://i2y.github.io/ringi-server/flows/) |
 
-The organization's data is built into the program: a new version of it is a directory
-`project/org/<the day it takes effect>/`, and the server reads it when it starts again. A server that
-runs takes it without starting again, from a person whose sign-in gives them the role
-`system_admin` (with `-dev-login`, chosen on its sign-in page). Check the data with
-`ritsu check project`, put `org/` into a zip archive from `project/`, and upload the archive on the
-page `/pages/admin/organization`:
+Once people use a request type, raise its version before you change its rules, so that the requests in
+progress end by the rules they were made under ([how](https://i2y.github.io/ringi-server/types/#change-the-rules-of-a-type-in-use)).
 
-```sh
-cd project && zip -r ../org.zip org -x '*/.*'
-```
+## The tests
 
-The page shows what the new data changes, day by day, and imports it when you confirm. Add the same
-version to `project/org/` too: a server started again imports the data built in only when it changed
-since the server last imported it. Each import, and each switch of a version of a request type, is
-kept in the record that `/pages/admin/records` shows.
+`go test ./...` runs four tests.
 
-## Tests
+| Test | What it sees |
+|---|---|
+| `TestVectors` | That the server does what the rules and the examples say. It gives the server every operation ritsu made from them (`requests/vectors/`), and compares what comes back |
+| `TestGate` | That `gate.go` answers rightly what each person may do, by role and department |
+| `TestPages` | That a request can be made and approved on the pages |
+| `TestTools` | That an agent can make a purchase request with the tools and read it, and that a request with no one signed in is answered 401 |
 
-`go test ./...` runs four tests:
+[Test it](https://i2y.github.io/ringi-server/testing/) says how to test the parts you write, and what to run in CI.
 
-- `TestVectors` gives the server every vector ritsu wrote in `requests/vectors/` from the rules
-  and the scenarios, and checks what it returns.
-- `TestGate` checks `gate.go` on what only the gate decides: who sees a ticket they are not on, and
-  who withdraws one; who may do each of the four operations of the administration, by role and by
-  department; that a person the organization's version does not have, and a request type that names
-  no owner, are of no one's department; and that a role the gate does not declare is left out.
-- `TestPages` makes a request on the pages with the development sign-in, and approves it.
-- `TestTools` serves the project as `cmd/server` does, with the agents' tools at `/mcp`: an agent of
-  `s1201` makes a purchase request with the tools and reads it, and a request with no one signed in
-  is answered 401.
+## Run it for your staff
 
-## Running it for people
+A server your staff use keeps the requests in PostgreSQL, signs people in with your organization's
+sign-in, and takes https. [Prepare it and start it](https://i2y.github.io/ringi-server/operations/) says what to prepare and how to
+start it. `go run ./cmd/server -h` lists the flags.
 
-`go run ./cmd/server -h` lists every flag. The framework's
-[guide for people who run a server](https://github.com/i2y/ringi-server/blob/main/docs/operations.md) has what to
-prepare, the backups, how to raise the version and what to watch.
-
-- **Where the tickets are kept**: `-db 'postgres://…'` keeps them in PostgreSQL, in the schema
-  `ringi`, with the attachments. Without `-db`, they are kept in memory and lost when the server
-  stops.
-- **How people sign in**: through an OpenID Connect provider, with `-oidc-issuer`,
-  `-oidc-client-id`, `-oidc-redirect-url https://<the server's host>/login/callback`, and the
-  client's secret and the keys of the session cookies in the environment variables
-  `RINGI_OIDC_CLIENT_SECRET` and `RINGI_SESSION_KEYS` (base64 of 32 random bytes each, the newest
-  first). A person is the one in the organization's data with the email address the provider has
-  verified. `-oidc-roles-claim` names the claim that lists a person's roles: without it no one has a
-  role, so no one may do what the gate gives to one, such as `system_admin`. Where a proxy in front of
-  the server signs people in instead, the server is made in Go, with `web.ProxyHeader`
-  ([how](https://github.com/i2y/ringi-server/blob/main/docs/embedding.md)).
-- **https**: `-tls-cert` and `-tls-key`, with `-addr` on the address people reach.
-- **The agents' tools**: `/mcp` finds the person as the pages do. With a provider, an agent needs
-  the cookie of a session signed in from a browser. To take bearer tokens instead, serve the tools
-  with `mcp.HTTP{Verify: …}` on a server of your own: the README of the module
-  [`github.com/i2y/ringi-server/mcp`](https://github.com/i2y/ringi-server/tree/main/mcp) shows how.
-
-With no flag of a sign-in, the person is the one the header `X-Person` names. The header and
-`-dev-login` check no one, so the server takes them only on an address of its own computer, and
-refuses a request a proxy forwarded. It does not start with them on an address other computers reach,
-with `-tls-cert`, or where the provider's settings are.
-
-## Adding a request type
-
-Write `project/<name>.ringi` beside `purchase.ringi`, with the same `use` lines for the organization,
-the calendar and the gate, then run `ritsu check project`, `go generate ./...` and `go test ./...`.
-The new type's scenarios become vectors that `TestVectors` runs. A type that reads masters needs
-their data built in too: add their directory to the `//go:embed project/org` line of
-`approvals.go`. `gate.go` asks the gate by the action's name, so an action added to the gate needs
-no change there; an attribute added to a principal or a resource needs its value in `gateStore`. The
-generated `RolesOf` returns the roles the gate lets a Staff hold, so one added to the gate needs no
-change either.
-
-## Adding a flow
-
-A flow is work that runs after a ticket ends or in a stage of it, such as a payment or an agent's
-check: `use flow <name> from "shared/<name>.flow"` in the request type, and `launch` or `ask` it.
-`go generate ./...` writes its Go package under `go/flows/`. The server starts flows through
-`server.Config.Flows`, and an agent's step through `Agents`. The framework's module that runs them is
-[`github.com/i2y/ringi-server/temporal`](https://github.com/i2y/ringi-server/tree/main/temporal):
-its README shows how to give them to the server and run their workers. Until a server has them, it
-keeps each start it cannot make, and tries again, with a line in the log each time.
+Started with no sign-in at all, the server takes a request as that of the person in its header
+`X-Person`. That header and `-dev-login` check no one. The server takes them on this computer only,
+refuses a request a proxy forwarded, and does not start with them beside `-tls-cert` or the settings
+of a sign-in.
 ==> approvals.go <==
 // Package approvals runs the requests of project/ on the framework: the package ritsu generated
 // from them (go/ and requests/, which go generate writes again), with the gate (gate.go) and a

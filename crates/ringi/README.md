@@ -326,7 +326,7 @@ go run ./cmd/server -dev-login
 ```
 
 Then open http://127.0.0.1:8080/pages/ and choose who you are.
-[Its site](https://i2y.github.io/ringi-server/) shows the pages, and says what your project gives the server and how to run it for people.
+[Its site](https://i2y.github.io/ringi-server/) has a tutorial that goes on from here, guides for what you want to do, and how to run the server for your staff.
 
 ## For AI agents
 

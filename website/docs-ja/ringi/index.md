@@ -148,4 +148,4 @@ $ ritsu ringi run leave.ja.ringi --scenario 長い有給休暇 --lang ja
 - [診断の一覧](https://github.com/i2y/ritsu/blob/main/crates/ringi/docs/codes.ja.md)：診断ごとに、いつ出るか、どう直すか、それを出す最小のファイル（`ritsu ringi explain` でも表示できます）。
 - [DESIGN.md](https://github.com/i2y/ritsu/blob/main/crates/ringi/DESIGN.md)：申請をイベントで進むチケットとして扱う理由、ringi がほかの言語へ下ろすもの、サーバーの受け持ちがどこから始まるか。
 - [スキル](https://github.com/i2y/ritsu/blob/main/skills/ringi/SKILL.md)：申請の種類を書いたり直したりするエージェントのためのものです。
-- [ringi-server のサイト](https://i2y.github.io/ringi-server/ja/)：申請のサーバーのページの様子、プロジェクトの始め方、人に使ってもらうときの動かし方。
+- [ringi-server のサイト](https://i2y.github.io/ringi-server/ja/)：申請のサーバーを作るチュートリアル、しくみの説明、目的別の手引き、社員に使ってもらうときの動かし方。

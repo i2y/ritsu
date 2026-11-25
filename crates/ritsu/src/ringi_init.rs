@@ -32,6 +32,9 @@ use std::path::{Path, PathBuf};
 /// The framework's module, the server the files are written for.
 pub const FRAMEWORK: &str = "github.com/i2y/ringi-server";
 
+/// The framework's site, which the README leads to: in English here, and in Japanese under `ja/`.
+const FRAMEWORK_SITE: &str = "https://i2y.github.io/ringi-server/";
+
 /// The version of the framework the files require: the one that takes the contract this ritsu
 /// generates (ringi's DESIGN 12.4, at the version `ringi::lower::shape::CONTRACT` says). A release
 /// of ritsu that changes the contract raises it to the framework's release that takes the new one;
@@ -395,6 +398,7 @@ fn written(c: &Chosen) -> Vec<(String, String)> {
         ("root_import", root_import),
         ("framework_version", FRAMEWORK_VERSION.to_string()),
         ("framework", FRAMEWORK.to_string()),
+        ("site", FRAMEWORK_SITE.to_string()),
         ("cedar_go", cedar.to_string()),
         ("go", go.to_string()),
         ("catalog", c.catalog.clone()),

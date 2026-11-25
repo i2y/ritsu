@@ -1,52 +1,23 @@
 # {{title}}
 
-申請と承認のサーバーです。決まりは `project/` に、ritsu の申請の言語で書きます。ritsu がそこから Go のコードと約束のファイルを生成し、フレームワーク [ringi-server](https://{{framework}}) がそれを動かします。人がブラウザで使うページと、API があります。
-
-英語版：[README.md](README.md)
+申請と承認のサーバーです。入力する項目、承認する人、期限は、`project/` のファイルに書いてあります。[ritsu](https://github.com/i2y/ritsu) というコマンドがそれを検査して Go のコードを作り、フレームワーク [ringi-server](https://{{framework}}) がそのコードをサーバーとして動かします。サーバーには、人がブラウザで使うページと、API があります。英語版は [README.md](README.md) です。
 
 {{if temporal}}
-最初のファイルは `ritsu ringi init` が書きました。申請の種類が二つ（一つは flow を使います）、小さな組織、gate、サーバー、ワーカーです。自分のファイルとして、自分の決まりに書き換えてください。
+最初のファイルは、`ritsu ringi init` が書きました。購買の申請、承認されると支払いを始める経費の精算、小さな会社のデータ、サーバー、支払いを動かすワーカーです。どれも、自分の会社のものに書き換えて使います。
 {{else}}
-最初のファイルは `ritsu ringi init` が書きました。申請の種類が一つ、小さな組織、gate、サーバーです。自分のファイルとして、自分の決まりに書き換えてください。
+最初のファイルは、`ritsu ringi init` が書きました。購買の申請、小さな会社のデータ、サーバーです。どれも、自分の会社のものに書き換えて使います。
 {{end}}
-
-## 中身
-
-| ファイル | 中身 |
-|---|---|
-| `project/purchase.ringi` | 申請の種類。フォーム、二つのステップの経路、期限、どう進むかを書いたシナリオ |
-{{if temporal}}
-| `project/expense.ringi` | flow を使う申請の種類。経費の精算で、申請者の上長が承認すると、flow の `支払い` が払い戻す |
-{{end}}
-| `project/shared/company.ringi` | 組織の形。役職とチームの種類 |
-| `project/org/2026-04-01/` | その日からの組織のデータ。チーム、人、所属の CSV |
-| `project/shared/office.cal` | 期限を数える営業日 |
-| `project/shared/company.gate` | チケットに、だれが何をできるか |
-{{if temporal}}
-| `project/shared/pay.flow` | 支払いの flow。経費の精算が承認されると始まる |
-{{end}}
-| `go/`、`requests/` | ritsu が `project/` から生成したもの（手で直さない） |
-| `generate.go` | 生成し直すときに `go generate` が実行する行 |
-| `{{package_file}}` | プロジェクトがサーバーに渡すもの。申請の種類、組織、gate、通知 |
-| `gate.go` | サーバーが gate に聞くことを、生成した gate に渡す |
-| `notify.go` | 通知をログに書く |
-{{if mcp}}
-| `tools.go` | サーバーの `/mcp` に、エージェントのツールを MCP で出す |
-{{end}}
-{{if temporal}}
-| `flows.go` | flow を Temporal で始めるコードと、flow を動かすワーカー |
-| `payments.go` | プロジェクトが書く、支払いのタスク。ここではログに書くだけ |
-{{end}}
-| `cmd/server/` | サーバー |
-{{if temporal}}
-| `cmd/worker/` | flow を動かすワーカー |
-{{end}}
-| `*_test.go` | 試験 |
 
 ## 動かす
 
 {{if temporal}}
-flow は Temporal で動きます。先に、Temporal の CLI で開発用サーバーを起動します（`temporal server start-dev`）。開発用サーバーは `localhost:7233` で待ち受け、サーバーとワーカーはここに接続します（ほかのアドレスは `-temporal` で渡します）。そのあと、ワーカーとサーバーを、別々の端末で起動します。
+経費の精算の支払いは、Temporal で動きます。Temporal の CLI（[入れ方](https://docs.temporal.io/cli)、英語）で、開発用のサーバーを起動します。
+
+```sh
+temporal server start-dev
+```
+
+次に、支払いを動かすワーカーと、サーバーを、別々の端末で起動します。
 
 ```sh
 go mod tidy
@@ -60,19 +31,58 @@ go run ./cmd/server -dev-login
 ```
 {{end}}
 
-ブラウザで http://127.0.0.1:8080/pages/ を開き、だれとして使うかを選びます。営業一課の担当 `s1201` が購買を申請し、課長の `s1101` が承認し、次に営業部長の `s1001` が承認します。通知はログに出ます。`-dev-login` は本人を確かめないので、サーバーはこのコンピューターにだけ応答します。
-{{if temporal}}
+ブラウザで http://127.0.0.1:8080/pages/ を開き、だれとして使うかを選びます。
 
-経費の精算は、申請者の上長だけが承認します。承認されると、サーバーが Temporal で支払いを始め、ワーカーが `payments.go` のタスクで動かします。このタスクは、申請者に払って知らせる代わりに、ワーカーのログに `paid` と `told` を書きます。
+1. 営業担当 1（`s1201`）として、購買を申請します。
+2. ログアウトし、営業一課長（`s1101`）として承認します。
+3. ログアウトし、営業部長（`s1001`）として承認します。
+{{if temporal}}
+4. 営業担当 1 として経費の精算を申請し、営業一課長として承認します。ワーカーのログに `paid` と `told` が出ます。実際に支払うわけではありません。`payments.go` のタスクはログに書くだけなので、自分の会社の処理に替えて使います。
 {{end}}
+
+通知は、サーバーのログに出ます。申請はメモリに置くので、サーバーを止めると消えます。`-dev-login` は本人かどうかを確かめないので、サーバーは自分のコンピューターからの接続だけを受け付けます。
 {{if mcp}}
 
-エージェントのツールは http://127.0.0.1:8080/mcp にあり、MCP の streamable HTTP で使います。エージェントは、ブラウザと同じ方法でログインします。`-dev-login` のときはクッキー `ringi-dev-person=s1201` を送り（ブラウザでは `/login` のページが設定します）、ログインのフラグがないときはヘッダー `X-Person: s1201` を送ります。ツールでできることは、ページと同じように gate が決めます。
+## エージェントから使う
+
+エージェントは、http://127.0.0.1:8080/mcp にあるツールを、MCP の streamable HTTP で呼びます。`-dev-login` のサーバーには、クッキー `ringi-dev-person=s1201` を送ります（ブラウザでは、`/login` のページが設定します）。このフラグを付けずに起動したサーバーには、ヘッダー `X-Person: s1201` を送ります。できることは、その人がページでできることと同じです。ツールの一覧と、社員のエージェントのログインのしかたは、[エージェントに申請と承認をさせる]({{site}}ja/agents/)にあります。
 {{end}}
 
-## 決まりを変える
+## 中身
 
-`project/` のファイルを書き換えたら、検査して、コードを生成し直します。
+| ファイル | 中身 |
+|---|---|
+| `project/purchase.ringi` | 購買の申請。入力する項目、承認の順、期限と、どう進むかの例 |
+{{if temporal}}
+| `project/expense.ringi` | 経費の精算。承認されると、支払いを始める |
+{{end}}
+| `project/org/2026-04-01/` | 会社のチーム、人、所属（CSV）。日付は、このデータが有効になる日 |
+| `project/shared/company.ringi` | 役職とチームの種類 |
+| `project/shared/company.gate` | だれが何をしてよいか（権限） |
+| `project/shared/office.cal` | 営業日 |
+{{if temporal}}
+| `project/shared/pay.flow` | 支払いの手順 |
+{{end}}
+| `go/`、`requests/` | ritsu が `project/` から作ったもの。手では直さない |
+| `generate.go` | `go generate` で動かすコマンド。`go/` と `requests/` を作り直す |
+| `{{package_file}}` | プロジェクトがサーバーに渡すもの。作られたコード、組織のデータ、権限、通知の部品 |
+| `gate.go`、`notify.go` | 権限の部品と、通知の部品 |
+{{if mcp}}
+| `tools.go` | サーバーの `/mcp` に出す、エージェントのツール |
+{{end}}
+{{if temporal}}
+| `flows.go` | 支払いを Temporal で始めるコードと、支払いを動かすワーカー |
+| `payments.go` | 支払いの一段ごとにすること。Go のコード。ここではログに書くだけ |
+{{end}}
+| `cmd/server/` | サーバーのコマンド |
+{{if temporal}}
+| `cmd/worker/` | ワーカーのコマンド |
+{{end}}
+| `*_test.go` | 試験 |
+
+## 変える
+
+`project/` を書き換えたら、検査して、コードを作り直します。
 
 ```sh
 ritsu check project
@@ -80,54 +90,43 @@ go generate ./...
 go test ./...
 ```
 
-`ritsu check` は、シナリオを一つずつ実行し、決まりに書いた主張を確かめます。だれの申請がどこへ回るかは、`ritsu ringi simulate project/purchase.ringi --every-requester` で見られます。CI では、`generate.go` の行に `--check` を付けて実行します。何も書かず、`go/` か `requests/` が `project/` から作られるものと違えば失敗します。
+| 変えるもの | 場所 | 手引き |
+|---|---|---|
+| 申請の決まり | `project/*.ringi` | [申請の種類を書き換える]({{site}}ja/change/) |
+| 新しい種類の申請 | 新しいファイル `project/<名前>.ringi` | [申請の種類を足す、変える]({{site}}ja/types/) |
+| 人とチーム | `project/org/` | [組織のデータを用意する]({{site}}ja/organization/) |
+| 営業日と祝日 | `project/shared/office.cal` | [営業日と祝日を決める]({{site}}ja/calendar/) |
+| だれが何をしてよいか | `project/shared/company.gate` | [だれが何をしてよいかを決める]({{site}}ja/permissions/) |
+| 通知の送り方 | `notify.go` | [通知をメールで送る]({{site}}ja/mail/) |
+| 予算や休暇の残り | 新しいファイル `project/shared/<名前>.book` | [予算や休暇の残りを確かめる]({{site}}ja/books/) |
+| 支払いなどの、承認のあとの処理 | `project/shared/<名前>.flow` | [承認のあとの処理を始める]({{site}}ja/flows/) |
 
-組織のデータは、プログラムに組み込まれます。組織が変わるときは、有効になる日の名前のディレクトリ `project/org/<日付>/` を足します。サーバーは、起動したときにそれを読みます。動いているサーバーに、止めずに取り込ませることもできます。それができるのは、ログインで役割 `system_admin` を持つ人です（`-dev-login` では、ログインのページで役割を選びます）。`ritsu check project` でデータを確かめ、`project/` で `org/` を zip にまとめて、ページ `/pages/admin/organization` でアップロードします。
-
-```sh
-cd project && zip -r ../org.zip org -x '*/.*'
-```
-
-ページには、新しいデータで変わることが日ごとに出て、確認すると取り込まれます。同じ版を `project/org/` にも足してください。起動し直したサーバーは、組み込んだデータが、前に取り込んだときから変わったときだけ取り込みます。取り込みも、申請の種類の版の切り替えも、ページ `/pages/admin/records` の記録に残ります。
+人が使い始めた申請の決まりを変えるときは、先に版を上げます。進行中の申請を、出したときの決まりのまま終わらせるためです（[上げ方]({{site}}ja/types/#使われている申請の決まりを変える)）。
 
 ## 試験
 
 `go test ./...` は、{{test_count_ja}}の試験を実行します。
 
-- `TestVectors`：ritsu が決まりとシナリオから `requests/vectors/` に書いたベクタを、すべてサーバーに渡し、結果を確かめます。
-- `TestGate`：gate だけが決めることを、`gate.go` で確かめます。自分に関係のないチケットをだれが見られるか、だれが取り下げられるか、管理の四つの操作を役割と部署でだれができるか、です。組織の版にいない人と、持ち主を書いていない申請の種類が、どの部署のものにもならないことと、gate が宣言していない役割を外すことも確かめます。
-- `TestPages`：開発用のログインで、ページから申請を出し、承認します。
+| 試験 | 確かめること |
+|---|---|
+| `TestVectors` | サーバーが、決まりと例のとおりに動くか。ritsu がそこから作った操作（`requests/vectors/`）をすべてサーバーに渡し、結果を比べる |
+| `TestGate` | `gate.go` が、役割と部署から、してよいことを正しく答えるか |
+| `TestPages` | ページで申請し、承認できるか |
 {{if mcp}}
-- `TestTools`：`cmd/server` と同じように、`/mcp` にエージェントのツールを置いてプロジェクトを動かします。`s1201` のエージェントがツールで購買を申請して読むことと、だれもログインしていないリクエストに 401 が返ることを確かめます。
+| `TestTools` | エージェントがツールで購買を申請し、読めるか。だれもログインしていないリクエストに 401 を返すか |
 {{end}}
 {{if temporal}}
-- `TestFlows`：承認された経費の精算の支払いを、Temporal の開発用サーバーと `cmd/worker` のワーカーで動かします。申請者に一度だけ払い、知らせることを確かめます。開発用サーバーは、`TEMPORAL_CLI` で指定した Temporal の CLI で動かします。指定がなければ、SDK が OS の一時ディレクトリに置くファイル（`temporal-cli-go-sdk-<版>`）を使います。試験は何もダウンロードしません。CLI がなければ `SKIP` と書きます。
+| `TestFlows` | 承認された経費の精算の支払いを、Temporal の開発用のサーバーと `cmd/worker` のワーカーで動かし、申請者に一度だけ支払い、知らせるか。Temporal の CLI は、`TEMPORAL_CLI` に書いたものか、SDK が OS の一時ディレクトリに置くファイル（`temporal-cli-go-sdk-<版>`）を使う。どちらもなければ、何もダウンロードせずに `SKIP` と出す |
 {{end}}
 
-## 人に使ってもらう
+自分で書いた部品の試験と、CI で実行することは、[試験する]({{site}}ja/testing/)にあります。
 
-フラグの一覧は `go run ./cmd/server -h` で出ます。用意するもの、バックアップ、版の上げ方、監視することは、フレームワークの[運用の手引き](https://{{framework}}/blob/main/docs/operations.ja.md)にあります。
+## 社員に使ってもらう
 
-- **チケットの保管**：`-db 'postgres://…'` で、PostgreSQL のスキーマ `ringi` に保管します。添付もここに入ります。`-db` がなければメモリに置き、サーバーを止めると消えます。
-- **ログイン**：OpenID Connect のプロバイダーを使います。`-oidc-issuer`、`-oidc-client-id`、`-oidc-redirect-url https://<サーバーのホスト>/login/callback` を渡し、クライアントのシークレットとセッションのクッキーの鍵を、環境変数 `RINGI_OIDC_CLIENT_SECRET` と `RINGI_SESSION_KEYS`（32 バイトの乱数の base64 を、新しい順に）に置きます。ログインした人は、プロバイダーが確認したメールアドレスで、組織のデータから探します。人の役割は、`-oidc-roles-claim` で指定したクレームから読みます。指定しなければだれも役割を持たないので、gate が `system_admin` などの役割に許したことは、だれにもできません。サーバーの前のプロキシで人をログインさせるときは、`web.ProxyHeader` を使うサーバーを Go で作ります（[作り方](https://{{framework}}/blob/main/docs/embedding.ja.md)）。
-- **https**：`-tls-cert` と `-tls-key` を渡し、`-addr` を人が使うアドレスにします。
-{{if mcp}}
-- **エージェントのツール**：`/mcp` は、ページと同じ方法で人を見つけます。プロバイダーでログインするときは、ブラウザでログインしたセッションのクッキーをエージェントに渡します。ベアラートークンを使うときは、自分の HTTP のサーバーに、`mcp.HTTP{Verify: …}` でツールを置きます。やり方は、モジュール [`{{framework}}/mcp`](https://{{framework}}/blob/main/mcp/README.ja.md) の README にあります。
-{{end}}
+社員に使ってもらうサーバーでは、申請を PostgreSQL に置き、会社のログインを使い、https で出します。用意するものと起動のしかたは、[用意して起動する]({{site}}ja/operations/)にあります。フラグの一覧は、`go run ./cmd/server -h` で出ます。
 {{if temporal}}
-- **Temporal**：`-temporal <ホスト:ポート>` を、サーバーとどのワーカーにも同じように渡します。ワーカーは、サーバーの横で、flow に要る数だけ動かします。ネームスペースや TLS は、`cmd/server/main.go` と `cmd/worker/main.go` のクライアントのオプション（`client.Options`）で決めます。
+
+サーバーとどのワーカーにも、Temporal のアドレスを `-temporal <ホスト:ポート>` で渡します。ネームスペースと TLS は、`cmd/server/main.go` と `cmd/worker/main.go` にある、クライアントのオプション（`client.Options`）で決めます。
 {{end}}
 
-ログインのフラグがないときは、ヘッダー `X-Person` の人になります。このヘッダーと `-dev-login` は本人を確かめないので、サーバーは、自分のコンピューターのアドレスでだけ使わせ、プロキシを通ったリクエストは拒否します。ほかのコンピューターから届くアドレス、`-tls-cert`、プロバイダーの設定と一緒には起動しません。
-
-## 申請の種類を足す
-
-`purchase.ringi` の横に `project/<名前>.ringi` を書き、組織、カレンダー、gate の `use` の行は同じものにします。そのあと `ritsu check project`、`go generate ./...`、`go test ./...` を実行します。新しい種類のシナリオはベクタになり、`TestVectors` が使います。マスタを読む種類なら、そのデータも組み込むため、`{{package_file}}` の `//go:embed project/org` の行にそのディレクトリを足します。`gate.go` は action の名前で gate に聞くので、gate に action を足しても `gate.go` は変えなくてかまいません。principal や resource に属性を足したら、その値を `gate.go` の `gateStore` に足します。gate が Staff に持たせる役割は、生成した `RolesOf` が返すので、gate に役割を足しても `gate.go` は変えなくてかまいません。
-
-## flow を足す
-
-{{if temporal}}
-flow は、チケットが終わったあとや、ステップの中で動く仕事です（支払い、エージェントの確認など）。申請の種類に `use flow <名前> from "shared/<名前>.flow"` と書き、`launch` か `ask` で使います。`expense.ringi` は、精算が承認されると `支払い` を `launch` で始めます。`go generate ./...` が、その Go のパッケージを `go/flows/` に書きます。`flows.go` の `Flows` は、申請の種類が使う flow を読むので、新しい flow もサーバーはそのまま始めます。ワーカーは `Workers` に足し、プロジェクトが書くタスク（パッケージの `OwnTasks`。支払いでは `Payments`）を渡します。エージェントのステップなら、そのワーカーが動くところに、エージェントのプロバイダーの鍵を置きます。flow を動かすのはフレームワークのモジュール [`{{framework}}/temporal`](https://{{framework}}/blob/main/temporal/README.ja.md) で、続きはその README にあります。
-{{else}}
-flow は、チケットが終わったあとや、ステップの中で動く仕事です（支払い、エージェントの確認など）。申請の種類に `use flow <名前> from "shared/<名前>.flow"` と書き、`launch` か `ask` で使います。`go generate ./...` が、その Go のパッケージを `go/flows/` に書きます。サーバーは、flow を `server.Config.Flows` で始めます（エージェントのステップは `Agents`）。flow を動かすのはフレームワークのモジュール [`{{framework}}/temporal`](https://{{framework}}/blob/main/temporal/README.ja.md) で、サーバーへの渡し方とワーカーの動かし方は、その README にあります。渡すまでは、サーバーは始められなかった flow を残しておき、試し直すたびにログに書きます。
-{{end}}
+ログインのフラグを付けずに起動すると、リクエストのヘッダー `X-Person` に書いた人の操作になります。このヘッダーと `-dev-login` は、本人かどうかを確かめません。そのため、サーバーは自分のコンピューターでだけ受け付け、プロキシが転送したリクエストは拒否します。`-tls-cert` や、会社のログインの設定と一緒には起動しません。

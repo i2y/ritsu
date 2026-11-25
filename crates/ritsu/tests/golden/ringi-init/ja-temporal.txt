@@ -7,51 +7,59 @@
 ==> README.ja.md <==
 # approvals
 
-申請と承認のサーバーです。決まりは `project/` に、ritsu の申請の言語で書きます。ritsu がそこから Go のコードと約束のファイルを生成し、フレームワーク [ringi-server](https://github.com/i2y/ringi-server) がそれを動かします。人がブラウザで使うページと、API があります。
+申請と承認のサーバーです。入力する項目、承認する人、期限は、`project/` のファイルに書いてあります。[ritsu](https://github.com/i2y/ritsu) というコマンドがそれを検査して Go のコードを作り、フレームワーク [ringi-server](https://github.com/i2y/ringi-server) がそのコードをサーバーとして動かします。サーバーには、人がブラウザで使うページと、API があります。英語版は [README.md](README.md) です。
 
-英語版：[README.md](README.md)
+最初のファイルは、`ritsu ringi init` が書きました。購買の申請、承認されると支払いを始める経費の精算、小さな会社のデータ、サーバー、支払いを動かすワーカーです。どれも、自分の会社のものに書き換えて使います。
 
-最初のファイルは `ritsu ringi init` が書きました。申請の種類が二つ（一つは flow を使います）、小さな組織、gate、サーバー、ワーカーです。自分のファイルとして、自分の決まりに書き換えてください。
+## 動かす
+
+経費の精算の支払いは、Temporal で動きます。Temporal の CLI（[入れ方](https://docs.temporal.io/cli)、英語）で、開発用のサーバーを起動します。
+
+```sh
+temporal server start-dev
+```
+
+次に、支払いを動かすワーカーと、サーバーを、別々の端末で起動します。
+
+```sh
+go mod tidy
+go run ./cmd/worker
+go run ./cmd/server -dev-login
+```
+
+ブラウザで http://127.0.0.1:8080/pages/ を開き、だれとして使うかを選びます。
+
+1. 営業担当 1（`s1201`）として、購買を申請します。
+2. ログアウトし、営業一課長（`s1101`）として承認します。
+3. ログアウトし、営業部長（`s1001`）として承認します。
+4. 営業担当 1 として経費の精算を申請し、営業一課長として承認します。ワーカーのログに `paid` と `told` が出ます。実際に支払うわけではありません。`payments.go` のタスクはログに書くだけなので、自分の会社の処理に替えて使います。
+
+通知は、サーバーのログに出ます。申請はメモリに置くので、サーバーを止めると消えます。`-dev-login` は本人かどうかを確かめないので、サーバーは自分のコンピューターからの接続だけを受け付けます。
 
 ## 中身
 
 | ファイル | 中身 |
 |---|---|
-| `project/purchase.ringi` | 申請の種類。フォーム、二つのステップの経路、期限、どう進むかを書いたシナリオ |
-| `project/expense.ringi` | flow を使う申請の種類。経費の精算で、申請者の上長が承認すると、flow の `支払い` が払い戻す |
-| `project/shared/company.ringi` | 組織の形。役職とチームの種類 |
-| `project/org/2026-04-01/` | その日からの組織のデータ。チーム、人、所属の CSV |
-| `project/shared/office.cal` | 期限を数える営業日 |
-| `project/shared/company.gate` | チケットに、だれが何をできるか |
-| `project/shared/pay.flow` | 支払いの flow。経費の精算が承認されると始まる |
-| `go/`、`requests/` | ritsu が `project/` から生成したもの（手で直さない） |
-| `generate.go` | 生成し直すときに `go generate` が実行する行 |
-| `approvals.go` | プロジェクトがサーバーに渡すもの。申請の種類、組織、gate、通知 |
-| `gate.go` | サーバーが gate に聞くことを、生成した gate に渡す |
-| `notify.go` | 通知をログに書く |
-| `flows.go` | flow を Temporal で始めるコードと、flow を動かすワーカー |
-| `payments.go` | プロジェクトが書く、支払いのタスク。ここではログに書くだけ |
-| `cmd/server/` | サーバー |
-| `cmd/worker/` | flow を動かすワーカー |
+| `project/purchase.ringi` | 購買の申請。入力する項目、承認の順、期限と、どう進むかの例 |
+| `project/expense.ringi` | 経費の精算。承認されると、支払いを始める |
+| `project/org/2026-04-01/` | 会社のチーム、人、所属（CSV）。日付は、このデータが有効になる日 |
+| `project/shared/company.ringi` | 役職とチームの種類 |
+| `project/shared/company.gate` | だれが何をしてよいか（権限） |
+| `project/shared/office.cal` | 営業日 |
+| `project/shared/pay.flow` | 支払いの手順 |
+| `go/`、`requests/` | ritsu が `project/` から作ったもの。手では直さない |
+| `generate.go` | `go generate` で動かすコマンド。`go/` と `requests/` を作り直す |
+| `approvals.go` | プロジェクトがサーバーに渡すもの。作られたコード、組織のデータ、権限、通知の部品 |
+| `gate.go`、`notify.go` | 権限の部品と、通知の部品 |
+| `flows.go` | 支払いを Temporal で始めるコードと、支払いを動かすワーカー |
+| `payments.go` | 支払いの一段ごとにすること。Go のコード。ここではログに書くだけ |
+| `cmd/server/` | サーバーのコマンド |
+| `cmd/worker/` | ワーカーのコマンド |
 | `*_test.go` | 試験 |
 
-## 動かす
+## 変える
 
-flow は Temporal で動きます。先に、Temporal の CLI で開発用サーバーを起動します（`temporal server start-dev`）。開発用サーバーは `localhost:7233` で待ち受け、サーバーとワーカーはここに接続します（ほかのアドレスは `-temporal` で渡します）。そのあと、ワーカーとサーバーを、別々の端末で起動します。
-
-```sh
-go mod tidy
-go run ./cmd/worker
-go run ./cmd/server -dev-login
-```
-
-ブラウザで http://127.0.0.1:8080/pages/ を開き、だれとして使うかを選びます。営業一課の担当 `s1201` が購買を申請し、課長の `s1101` が承認し、次に営業部長の `s1001` が承認します。通知はログに出ます。`-dev-login` は本人を確かめないので、サーバーはこのコンピューターにだけ応答します。
-
-経費の精算は、申請者の上長だけが承認します。承認されると、サーバーが Temporal で支払いを始め、ワーカーが `payments.go` のタスクで動かします。このタスクは、申請者に払って知らせる代わりに、ワーカーのログに `paid` と `told` を書きます。
-
-## 決まりを変える
-
-`project/` のファイルを書き換えたら、検査して、コードを生成し直します。
+`project/` を書き換えたら、検査して、コードを作り直します。
 
 ```sh
 ritsu check project
@@ -59,83 +67,63 @@ go generate ./...
 go test ./...
 ```
 
-`ritsu check` は、シナリオを一つずつ実行し、決まりに書いた主張を確かめます。だれの申請がどこへ回るかは、`ritsu ringi simulate project/purchase.ringi --every-requester` で見られます。CI では、`generate.go` の行に `--check` を付けて実行します。何も書かず、`go/` か `requests/` が `project/` から作られるものと違えば失敗します。
+| 変えるもの | 場所 | 手引き |
+|---|---|---|
+| 申請の決まり | `project/*.ringi` | [申請の種類を書き換える](https://i2y.github.io/ringi-server/ja/change/) |
+| 新しい種類の申請 | 新しいファイル `project/<名前>.ringi` | [申請の種類を足す、変える](https://i2y.github.io/ringi-server/ja/types/) |
+| 人とチーム | `project/org/` | [組織のデータを用意する](https://i2y.github.io/ringi-server/ja/organization/) |
+| 営業日と祝日 | `project/shared/office.cal` | [営業日と祝日を決める](https://i2y.github.io/ringi-server/ja/calendar/) |
+| だれが何をしてよいか | `project/shared/company.gate` | [だれが何をしてよいかを決める](https://i2y.github.io/ringi-server/ja/permissions/) |
+| 通知の送り方 | `notify.go` | [通知をメールで送る](https://i2y.github.io/ringi-server/ja/mail/) |
+| 予算や休暇の残り | 新しいファイル `project/shared/<名前>.book` | [予算や休暇の残りを確かめる](https://i2y.github.io/ringi-server/ja/books/) |
+| 支払いなどの、承認のあとの処理 | `project/shared/<名前>.flow` | [承認のあとの処理を始める](https://i2y.github.io/ringi-server/ja/flows/) |
 
-組織のデータは、プログラムに組み込まれます。組織が変わるときは、有効になる日の名前のディレクトリ `project/org/<日付>/` を足します。サーバーは、起動したときにそれを読みます。動いているサーバーに、止めずに取り込ませることもできます。それができるのは、ログインで役割 `system_admin` を持つ人です（`-dev-login` では、ログインのページで役割を選びます）。`ritsu check project` でデータを確かめ、`project/` で `org/` を zip にまとめて、ページ `/pages/admin/organization` でアップロードします。
-
-```sh
-cd project && zip -r ../org.zip org -x '*/.*'
-```
-
-ページには、新しいデータで変わることが日ごとに出て、確認すると取り込まれます。同じ版を `project/org/` にも足してください。起動し直したサーバーは、組み込んだデータが、前に取り込んだときから変わったときだけ取り込みます。取り込みも、申請の種類の版の切り替えも、ページ `/pages/admin/records` の記録に残ります。
+人が使い始めた申請の決まりを変えるときは、先に版を上げます。進行中の申請を、出したときの決まりのまま終わらせるためです（[上げ方](https://i2y.github.io/ringi-server/ja/types/#使われている申請の決まりを変える)）。
 
 ## 試験
 
 `go test ./...` は、四つの試験を実行します。
 
-- `TestVectors`：ritsu が決まりとシナリオから `requests/vectors/` に書いたベクタを、すべてサーバーに渡し、結果を確かめます。
-- `TestGate`：gate だけが決めることを、`gate.go` で確かめます。自分に関係のないチケットをだれが見られるか、だれが取り下げられるか、管理の四つの操作を役割と部署でだれができるか、です。組織の版にいない人と、持ち主を書いていない申請の種類が、どの部署のものにもならないことと、gate が宣言していない役割を外すことも確かめます。
-- `TestPages`：開発用のログインで、ページから申請を出し、承認します。
-- `TestFlows`：承認された経費の精算の支払いを、Temporal の開発用サーバーと `cmd/worker` のワーカーで動かします。申請者に一度だけ払い、知らせることを確かめます。開発用サーバーは、`TEMPORAL_CLI` で指定した Temporal の CLI で動かします。指定がなければ、SDK が OS の一時ディレクトリに置くファイル（`temporal-cli-go-sdk-<版>`）を使います。試験は何もダウンロードしません。CLI がなければ `SKIP` と書きます。
+| 試験 | 確かめること |
+|---|---|
+| `TestVectors` | サーバーが、決まりと例のとおりに動くか。ritsu がそこから作った操作（`requests/vectors/`）をすべてサーバーに渡し、結果を比べる |
+| `TestGate` | `gate.go` が、役割と部署から、してよいことを正しく答えるか |
+| `TestPages` | ページで申請し、承認できるか |
+| `TestFlows` | 承認された経費の精算の支払いを、Temporal の開発用のサーバーと `cmd/worker` のワーカーで動かし、申請者に一度だけ支払い、知らせるか。Temporal の CLI は、`TEMPORAL_CLI` に書いたものか、SDK が OS の一時ディレクトリに置くファイル（`temporal-cli-go-sdk-<版>`）を使う。どちらもなければ、何もダウンロードせずに `SKIP` と出す |
 
-## 人に使ってもらう
+自分で書いた部品の試験と、CI で実行することは、[試験する](https://i2y.github.io/ringi-server/ja/testing/)にあります。
 
-フラグの一覧は `go run ./cmd/server -h` で出ます。用意するもの、バックアップ、版の上げ方、監視することは、フレームワークの[運用の手引き](https://github.com/i2y/ringi-server/blob/main/docs/operations.ja.md)にあります。
+## 社員に使ってもらう
 
-- **チケットの保管**：`-db 'postgres://…'` で、PostgreSQL のスキーマ `ringi` に保管します。添付もここに入ります。`-db` がなければメモリに置き、サーバーを止めると消えます。
-- **ログイン**：OpenID Connect のプロバイダーを使います。`-oidc-issuer`、`-oidc-client-id`、`-oidc-redirect-url https://<サーバーのホスト>/login/callback` を渡し、クライアントのシークレットとセッションのクッキーの鍵を、環境変数 `RINGI_OIDC_CLIENT_SECRET` と `RINGI_SESSION_KEYS`（32 バイトの乱数の base64 を、新しい順に）に置きます。ログインした人は、プロバイダーが確認したメールアドレスで、組織のデータから探します。人の役割は、`-oidc-roles-claim` で指定したクレームから読みます。指定しなければだれも役割を持たないので、gate が `system_admin` などの役割に許したことは、だれにもできません。サーバーの前のプロキシで人をログインさせるときは、`web.ProxyHeader` を使うサーバーを Go で作ります（[作り方](https://github.com/i2y/ringi-server/blob/main/docs/embedding.ja.md)）。
-- **https**：`-tls-cert` と `-tls-key` を渡し、`-addr` を人が使うアドレスにします。
-- **Temporal**：`-temporal <ホスト:ポート>` を、サーバーとどのワーカーにも同じように渡します。ワーカーは、サーバーの横で、flow に要る数だけ動かします。ネームスペースや TLS は、`cmd/server/main.go` と `cmd/worker/main.go` のクライアントのオプション（`client.Options`）で決めます。
+社員に使ってもらうサーバーでは、申請を PostgreSQL に置き、会社のログインを使い、https で出します。用意するものと起動のしかたは、[用意して起動する](https://i2y.github.io/ringi-server/ja/operations/)にあります。フラグの一覧は、`go run ./cmd/server -h` で出ます。
 
-ログインのフラグがないときは、ヘッダー `X-Person` の人になります。このヘッダーと `-dev-login` は本人を確かめないので、サーバーは、自分のコンピューターのアドレスでだけ使わせ、プロキシを通ったリクエストは拒否します。ほかのコンピューターから届くアドレス、`-tls-cert`、プロバイダーの設定と一緒には起動しません。
+サーバーとどのワーカーにも、Temporal のアドレスを `-temporal <ホスト:ポート>` で渡します。ネームスペースと TLS は、`cmd/server/main.go` と `cmd/worker/main.go` にある、クライアントのオプション（`client.Options`）で決めます。
 
-## 申請の種類を足す
-
-`purchase.ringi` の横に `project/<名前>.ringi` を書き、組織、カレンダー、gate の `use` の行は同じものにします。そのあと `ritsu check project`、`go generate ./...`、`go test ./...` を実行します。新しい種類のシナリオはベクタになり、`TestVectors` が使います。マスタを読む種類なら、そのデータも組み込むため、`approvals.go` の `//go:embed project/org` の行にそのディレクトリを足します。`gate.go` は action の名前で gate に聞くので、gate に action を足しても `gate.go` は変えなくてかまいません。principal や resource に属性を足したら、その値を `gate.go` の `gateStore` に足します。gate が Staff に持たせる役割は、生成した `RolesOf` が返すので、gate に役割を足しても `gate.go` は変えなくてかまいません。
-
-## flow を足す
-
-flow は、チケットが終わったあとや、ステップの中で動く仕事です（支払い、エージェントの確認など）。申請の種類に `use flow <名前> from "shared/<名前>.flow"` と書き、`launch` か `ask` で使います。`expense.ringi` は、精算が承認されると `支払い` を `launch` で始めます。`go generate ./...` が、その Go のパッケージを `go/flows/` に書きます。`flows.go` の `Flows` は、申請の種類が使う flow を読むので、新しい flow もサーバーはそのまま始めます。ワーカーは `Workers` に足し、プロジェクトが書くタスク（パッケージの `OwnTasks`。支払いでは `Payments`）を渡します。エージェントのステップなら、そのワーカーが動くところに、エージェントのプロバイダーの鍵を置きます。flow を動かすのはフレームワークのモジュール [`github.com/i2y/ringi-server/temporal`](https://github.com/i2y/ringi-server/blob/main/temporal/README.ja.md) で、続きはその README にあります。
+ログインのフラグを付けずに起動すると、リクエストのヘッダー `X-Person` に書いた人の操作になります。このヘッダーと `-dev-login` は、本人かどうかを確かめません。そのため、サーバーは自分のコンピューターでだけ受け付け、プロキシが転送したリクエストは拒否します。`-tls-cert` や、会社のログインの設定と一緒には起動しません。
 ==> README.md <==
 # approvals
 
-A server of requests and approvals. The rules are written in ritsu's request language under
-`project/`, ritsu generates the Go code and the contract files from them, and the framework
-[ringi-server](https://github.com/i2y/ringi-server) serves them: the pages people use in a browser, and the API.
+A server of requests and approvals. What people fill in, who approves it and when it is due are in
+files under `project/`. The command [ritsu](https://github.com/i2y/ritsu) checks them and makes Go
+code from them, and the framework [ringi-server](https://github.com/i2y/ringi-server) runs that code as a server:
+the pages people use in a browser, and an API.
 
 Japanese: [README.ja.md](README.ja.md).
 
-`ritsu ringi init` wrote these files as a start: two request types, one of them with a flow, a small
-organization, a gate, a server and a worker. They are yours now: change them into your own rules.
+`ritsu ringi init` wrote these files as a start: a purchase request, an expense claim whose payment
+starts once it is approved, a small company, a server, and a worker that runs the payment. They are
+yours to change.
 
-## What is in it
+## Run it
 
-| File | What it is |
-|---|---|
-| `project/purchase.ringi` | A request type: its form, its route of two stages, its deadlines, and scenarios that say what happens |
-| `project/expense.ringi` | A request type with a flow: an expense claim, which the requester's manager approves and the flow `pay` pays back |
-| `project/shared/company.ringi` | The shape of the organization: the positions and the kinds of team |
-| `project/org/2026-04-01/` | The organization's data from that day: its teams, people and members, as CSV |
-| `project/shared/office.cal` | The business days the deadlines count |
-| `project/shared/company.gate` | Who may do what on the tickets |
-| `project/shared/pay.flow` | The flow of the payment, which an expense claim starts once it is approved |
-| `go/`, `requests/` | What ritsu generates from `project/` (do not edit them) |
-| `generate.go` | The line `go generate` runs to generate them again |
-| `approvals.go` | What the project gives the server: its request types, organization, gate and notifier |
-| `gate.go` | Asks the generated gate what the server asks |
-| `notify.go` | A notifier that writes each notice to the log |
-| `flows.go` | What starts the flows on Temporal, and the workers that run them |
-| `payments.go` | The tasks of the payment, which the project writes: these write to the log |
-| `cmd/server/` | The server |
-| `cmd/worker/` | The worker that runs the flows |
-| `*_test.go` | The tests |
+The payment of an expense claim runs on Temporal. Start its server for development, with the Temporal
+CLI ([how to install it](https://docs.temporal.io/cli)):
 
-## Running it
+```sh
+temporal server start-dev
+```
 
-The flows run on Temporal: start its dev server first, with the Temporal CLI's
-`temporal server start-dev`. It listens on `localhost:7233`, where the server and the worker look
-for it (`-temporal` gives them another address). Then run the worker and the server, each in a
-terminal of its own:
+Then start the worker, which runs the payment, and the server, each in a terminal of its own:
 
 ```sh
 go mod tidy
@@ -143,18 +131,42 @@ go run ./cmd/worker
 go run ./cmd/server -dev-login
 ```
 
-Open http://127.0.0.1:8080/pages/ in a browser and choose who you are. `s1201` (a member of the
-staff of Sales Section 1) makes a purchase request; `s1101`, the section's manager, approves it,
-then `s1001`, the head of the Sales Department. The notices go to the log. `-dev-login` checks no
-one, so the server answers this computer only.
+Open http://127.0.0.1:8080/pages/ in a browser, and choose who you are.
 
-An expense claim goes to the requester's manager alone. Once it is approved, the server starts its
-payment on Temporal, and the worker runs it with the tasks of `payments.go`, which write `paid` and
-`told` to the worker's log where real ones would pay the requester and tell them.
+1. As Sales staff 1 (`s1201`), make a purchase request.
+2. Sign out, and approve it as the manager of Sales Section 1 (`s1101`).
+3. Sign out, and approve it as the head of Sales (`s1001`).
+4. As Sales staff 1, make an expense claim, and approve it as the manager of Sales Section 1. The
+   worker's log says `paid` and `told`. Nothing is paid: the tasks of `payments.go` only write to the
+   log, and you put your company's own work in their place.
 
-## Changing the rules
+The notices are written to the server's log. The requests are in memory, and are gone when the server
+stops. `-dev-login` checks no one, so the server answers this computer only.
 
-Change the files of `project/`, then check them and generate the code again:
+## What is in it
+
+| File | What it is |
+|---|---|
+| `project/purchase.ringi` | The purchase request: what to fill in, the order of the approvals, the deadlines, and examples of how a request goes |
+| `project/expense.ringi` | The expense claim, which starts its payment once it is approved |
+| `project/org/2026-04-01/` | The company's teams, people and who belongs where (CSV). The date is the day this data takes effect |
+| `project/shared/company.ringi` | The positions and the kinds of team |
+| `project/shared/company.gate` | Who may do what |
+| `project/shared/office.cal` | The business days |
+| `project/shared/pay.flow` | The steps of the payment |
+| `go/`, `requests/` | What ritsu makes from `project/`. Do not change it by hand |
+| `generate.go` | The command `go generate` runs, which makes `go/` and `requests/` again |
+| `approvals.go` | What the project gives the server: the code that was made, the organization's data, the permissions, and the part that sends notices |
+| `gate.go`, `notify.go` | The part that answers for the permissions, and the part that sends notices |
+| `flows.go` | What starts the payment on Temporal, and the workers that run it |
+| `payments.go` | What the steps of the payment do, in Go. Here they write to the log |
+| `cmd/server/` | The server's command |
+| `cmd/worker/` | The worker's command |
+| `*_test.go` | The tests |
+
+## Change it
+
+After a change in `project/`, check it and make the code again:
 
 ```sh
 ritsu check project
@@ -162,93 +174,47 @@ go generate ./...
 go test ./...
 ```
 
-`ritsu check` runs each scenario and checks what the rules claim; `ritsu ringi simulate
-project/purchase.ringi --every-requester` shows where each person's request goes. In CI, run the
-line of `generate.go` with `--check`: it writes nothing, and fails when `go/` or `requests/` is not
-what `project/` makes.
+| What to change | Where | How |
+|---|---|---|
+| The rules of a request | `project/*.ringi` | [Change the request type](https://i2y.github.io/ringi-server/change/) |
+| A new kind of request | A new file `project/<name>.ringi` | [Add and change request types](https://i2y.github.io/ringi-server/types/) |
+| The people and the teams | `project/org/` | [Prepare the organization's data](https://i2y.github.io/ringi-server/organization/) |
+| The business days and the holidays | `project/shared/office.cal` | [Set the business days](https://i2y.github.io/ringi-server/calendar/) |
+| Who may do what | `project/shared/company.gate` | [Decide who may do what](https://i2y.github.io/ringi-server/permissions/) |
+| How notices are sent | `notify.go` | [Send the notices by mail](https://i2y.github.io/ringi-server/mail/) |
+| What is left of a budget or of days of leave | A new file `project/shared/<name>.book` | [Check budgets and days of leave](https://i2y.github.io/ringi-server/books/) |
+| Work after an approval, such as a payment | A file `project/shared/<name>.flow` | [Start work after an approval](https://i2y.github.io/ringi-server/flows/) |
 
-The organization's data is built into the program: a new version of it is a directory
-`project/org/<the day it takes effect>/`, and the server reads it when it starts again. A server that
-runs takes it without starting again, from a person whose sign-in gives them the role
-`system_admin` (with `-dev-login`, chosen on its sign-in page). Check the data with
-`ritsu check project`, put `org/` into a zip archive from `project/`, and upload the archive on the
-page `/pages/admin/organization`:
+Once people use a request type, raise its version before you change its rules, so that the requests in
+progress end by the rules they were made under ([how](https://i2y.github.io/ringi-server/types/#change-the-rules-of-a-type-in-use)).
 
-```sh
-cd project && zip -r ../org.zip org -x '*/.*'
-```
+## The tests
 
-The page shows what the new data changes, day by day, and imports it when you confirm. Add the same
-version to `project/org/` too: a server started again imports the data built in only when it changed
-since the server last imported it. Each import, and each switch of a version of a request type, is
-kept in the record that `/pages/admin/records` shows.
+`go test ./...` runs four tests.
 
-## Tests
+| Test | What it sees |
+|---|---|
+| `TestVectors` | That the server does what the rules and the examples say. It gives the server every operation ritsu made from them (`requests/vectors/`), and compares what comes back |
+| `TestGate` | That `gate.go` answers rightly what each person may do, by role and department |
+| `TestPages` | That a request can be made and approved on the pages |
+| `TestFlows` | That the payment of an approved expense claim runs on Temporal's server for development, with the workers of `cmd/worker`: the requester is paid once, and told. It uses the Temporal CLI that `TEMPORAL_CLI` names, else the file the SDK keeps in the system's temporary directory (`temporal-cli-go-sdk-<version>`). Without either it prints `SKIP`, and downloads nothing |
 
-`go test ./...` runs four tests:
+[Test it](https://i2y.github.io/ringi-server/testing/) says how to test the parts you write, and what to run in CI.
 
-- `TestVectors` gives the server every vector ritsu wrote in `requests/vectors/` from the rules
-  and the scenarios, and checks what it returns.
-- `TestGate` checks `gate.go` on what only the gate decides: who sees a ticket they are not on, and
-  who withdraws one; who may do each of the four operations of the administration, by role and by
-  department; that a person the organization's version does not have, and a request type that names
-  no owner, are of no one's department; and that a role the gate does not declare is left out.
-- `TestPages` makes a request on the pages with the development sign-in, and approves it.
-- `TestFlows` runs the payment of an approved expense claim on Temporal's dev server, with the
-  workers of `cmd/worker`: the requester is paid once, and told. The dev server runs from the
-  Temporal CLI that `TEMPORAL_CLI` names, else from the file the SDK keeps in the system's temporary
-  directory (`temporal-cli-go-sdk-<version>`). The test downloads nothing: without the CLI, it prints
-  `SKIP`.
+## Run it for your staff
 
-## Running it for people
+A server your staff use keeps the requests in PostgreSQL, signs people in with your organization's
+sign-in, and takes https. [Prepare it and start it](https://i2y.github.io/ringi-server/operations/) says what to prepare and how to
+start it. `go run ./cmd/server -h` lists the flags.
 
-`go run ./cmd/server -h` lists every flag. The framework's
-[guide for people who run a server](https://github.com/i2y/ringi-server/blob/main/docs/operations.md) has what to
-prepare, the backups, how to raise the version and what to watch.
+Give the server and each worker the address of your Temporal with `-temporal <host:port>`. The
+namespace and TLS are the client's options (`client.Options`) in `cmd/server/main.go` and
+`cmd/worker/main.go`.
 
-- **Where the tickets are kept**: `-db 'postgres://…'` keeps them in PostgreSQL, in the schema
-  `ringi`, with the attachments. Without `-db`, they are kept in memory and lost when the server
-  stops.
-- **How people sign in**: through an OpenID Connect provider, with `-oidc-issuer`,
-  `-oidc-client-id`, `-oidc-redirect-url https://<the server's host>/login/callback`, and the
-  client's secret and the keys of the session cookies in the environment variables
-  `RINGI_OIDC_CLIENT_SECRET` and `RINGI_SESSION_KEYS` (base64 of 32 random bytes each, the newest
-  first). A person is the one in the organization's data with the email address the provider has
-  verified. `-oidc-roles-claim` names the claim that lists a person's roles: without it no one has a
-  role, so no one may do what the gate gives to one, such as `system_admin`. Where a proxy in front of
-  the server signs people in instead, the server is made in Go, with `web.ProxyHeader`
-  ([how](https://github.com/i2y/ringi-server/blob/main/docs/embedding.md)).
-- **https**: `-tls-cert` and `-tls-key`, with `-addr` on the address people reach.
-- **Temporal**: `-temporal <host:port>`, the same on the server and on each worker. Run the
-  workers beside the server, as many as the flows need. The namespace and TLS are the client's
-  options (`client.Options`) in `cmd/server/main.go` and `cmd/worker/main.go`.
-
-With no flag of a sign-in, the person is the one the header `X-Person` names. The header and
-`-dev-login` check no one, so the server takes them only on an address of its own computer, and
-refuses a request a proxy forwarded. It does not start with them on an address other computers reach,
-with `-tls-cert`, or where the provider's settings are.
-
-## Adding a request type
-
-Write `project/<name>.ringi` beside `purchase.ringi`, with the same `use` lines for the organization,
-the calendar and the gate, then run `ritsu check project`, `go generate ./...` and `go test ./...`.
-The new type's scenarios become vectors that `TestVectors` runs. A type that reads masters needs
-their data built in too: add their directory to the `//go:embed project/org` line of
-`approvals.go`. `gate.go` asks the gate by the action's name, so an action added to the gate needs
-no change there; an attribute added to a principal or a resource needs its value in `gateStore`. The
-generated `RolesOf` returns the roles the gate lets a Staff hold, so one added to the gate needs no
-change either.
-
-## Adding a flow
-
-A flow is work that runs after a ticket ends or in a stage of it, such as a payment or an agent's
-check: `use flow <name> from "shared/<name>.flow"` in the request type, and `launch` or `ask` it, as
-`expense.ringi` launches `pay` once a claim is approved. `go generate ./...` writes its Go package
-under `go/flows/`. `Flows` in `flows.go` reads the flows the request types use, so the server starts a
-new one as it is; its worker goes in `Workers`, with the tasks the project writes for it (its
-package's `OwnTasks`, as `Payments` are the payment's). An agent's step needs the keys of its agents'
-providers where its worker runs. The framework's module that runs the flows is
-[`github.com/i2y/ringi-server/temporal`](https://github.com/i2y/ringi-server/tree/main/temporal): its README says more.
+Started with no sign-in at all, the server takes a request as that of the person in its header
+`X-Person`. That header and `-dev-login` check no one. The server takes them on this computer only,
+refuses a request a proxy forwarded, and does not start with them beside `-tls-cert` or the settings
+of a sign-in.
 ==> approvals.go <==
 // Package approvals runs the requests of project/ on the framework: the package ritsu generated
 // from them (go/ and requests/, which go generate writes again), with the gate (gate.go) and a
