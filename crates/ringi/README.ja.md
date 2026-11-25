@@ -327,7 +327,7 @@ go run ./cmd/server -dev-login
 ```
 
 このあと http://127.0.0.1:8080/pages/ を開き、だれとして使うかを選びます。
-ページの様子、プロジェクトがサーバーに渡すもの、人に使ってもらうときの動かし方は、[ringi-server の README](https://github.com/i2y/ringi-server/blob/main/README.ja.md) にあります。
+ページの様子、プロジェクトがサーバーに渡すもの、人に使ってもらうときの動かし方は、[ringi-server のサイト](https://i2y.github.io/ringi-server/ja/)にあります。
 
 ## AI エージェント向けのスキル
 

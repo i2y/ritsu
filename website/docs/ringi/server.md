@@ -121,10 +121,10 @@ Open `http://127.0.0.1:8080/pages/` and choose who you are. `-dev-login` checks 
 answers only your own computer. Write your request types in `project/`, beside the first one, then run
 `ritsu check project` and `go generate ./...`.
 
-[ringi-server's README](https://github.com/i2y/ringi-server#readme) shows the pages and says what your
-project gives the server, and
-[its guide for people who run a server](https://github.com/i2y/ringi-server/blob/main/docs/operations.md)
-has the settings, the backups and how to raise its version.
+[ringi-server's site](https://i2y.github.io/ringi-server/) shows the pages and says what your project
+gives the server, and
+[its guide for people who run a server](https://i2y.github.io/ringi-server/operations/) has the
+settings, the backups and how to raise its version.
 
 ## Seeing it without a server
 

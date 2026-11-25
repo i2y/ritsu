@@ -507,8 +507,8 @@ effect, serves the screens, and authenticates. [What the server adds](reference.
 has the whole table. [ringi-server](https://github.com/i2y/ringi-server), a framework in Go, does this,
 and `ritsu ringi init <dir> --module <path>` writes the first files of a project on it: a request type,
 its organization and gate, a server and its tests. When someone has no server yet, start there. The
-project's README says how to run it, and ringi-server's documents say what the project gives the server
-and how to run it for people.
+project's README says how to run it, and [ringi-server's site](https://i2y.github.io/ringi-server/) says
+what the project gives the server and how to run it for people.
 
 ## 8. What the language does not have
 
