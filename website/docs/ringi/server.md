@@ -5,9 +5,10 @@
 ritsu writes the code of the requests and stops there. The code is a library of pure functions,
 with no clock, no storage and no network: given a ticket, an event, the organization and the time,
 it answers the next ticket and what the server should do. Keeping the tickets, running the clocks,
-sending the notices and serving the screens is the server's, which is not part of ritsu. What ritsu
-writes for it is a contract: the functions, the documents that describe them, and the vectors a
-server is tested with.
+sending the notices and serving the screens is the server's. What ritsu writes for it is a contract:
+the functions, the documents that describe them, and the vectors a server is tested with.
+[ringi-server](https://github.com/i2y/ringi-server), a framework in Go, keeps this contract, and
+[a server on it](#a-server-on-ringi-server) takes a few commands.
 
 ## In each language's package
 
@@ -95,6 +96,35 @@ version in effect, and runs the clocks of the deadlines and the reminders.
 How people sign in, where the tickets are kept, how notices go out, where attachments are put,
 where the organization's data comes from, and how flows are run, differ from one company to
 another, and are the server's to choose.
+
+## A server on ringi-server
+
+[ringi-server](https://github.com/i2y/ringi-server) is a framework in Go that does all of this. It
+keeps the tickets and the attachments in PostgreSQL, signs people in through an OpenID Connect
+provider, and runs the clocks. It serves every kind of request with the same code: the pages people
+use in a browser, with JavaScript or without, the API of `openapi.json`, the A2UI screens, and the
+tools of `mcp/tools.json`. A module beside it runs the flows on Temporal. Your project gives it what
+is your own: the gate, the notices, the organization's data, the books and the flows.
+
+`ritsu ringi init` writes the first files of a project on it: one request type with the organization,
+the calendar and the gate it reads, the code generated from them, a server, its tests and a README.
+It takes Go 1.26 or later to run:
+
+```sh
+ritsu ringi init requests --module example.com/requests
+cd requests
+go mod tidy
+go run ./cmd/server -dev-login
+```
+
+Open `http://127.0.0.1:8080/pages/` and choose who you are. `-dev-login` checks no one, so the server
+answers only your own computer. Write your request types in `project/`, beside the first one, then run
+`ritsu check project` and `go generate ./...`.
+
+[ringi-server's README](https://github.com/i2y/ringi-server#readme) shows the pages and says what your
+project gives the server, and
+[its guide for people who run a server](https://github.com/i2y/ringi-server/blob/main/docs/operations.md)
+has the settings, the backups and how to raise its version.
 
 ## Seeing it without a server
 

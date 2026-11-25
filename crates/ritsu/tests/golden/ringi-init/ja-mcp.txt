@@ -7,11 +7,11 @@
 ==> README.ja.md <==
 # approvals
 
-申請と承認のサーバーです。決まりは `project/` に ritsu の申請の言語で書き、ritsu がそこから Go のコードと約束のファイルを生成し、フレームワークがそれを動かします。人がブラウザで使うページと API があります。フレームワークは Go のモジュール `github.com/i2y/ringi-server` です。
+申請と承認のサーバーです。決まりは `project/` に、ritsu の申請の言語で書きます。ritsu がそこから Go のコードと約束のファイルを生成し、フレームワーク [ringi-server](https://github.com/i2y/ringi-server) がそれを動かします。人がブラウザで使うページと、API があります。
 
 英語版：[README.md](README.md)
 
-`ritsu ringi init` が始めの形として書いたファイルです。申請の種類が一つ、小さな組織、gate、サーバーがあります。ここからは自分のファイルとして、自分の決まりに書き換えてください。
+最初のファイルは `ritsu ringi init` が書きました。申請の種類が一つ、小さな組織、gate、サーバーです。自分のファイルとして、自分の決まりに書き換えてください。
 
 ## 中身
 
@@ -19,15 +19,15 @@
 |---|---|
 | `project/purchase.ringi` | 申請の種類。フォーム、二つのステップの経路、期限、どう進むかを書いたシナリオ |
 | `project/shared/company.ringi` | 組織の形。役職とチームの種類 |
-| `project/org/2026-04-01/` | その日からの組織のデータ。チーム、人、所属を CSV で |
+| `project/org/2026-04-01/` | その日からの組織のデータ。チーム、人、所属の CSV |
 | `project/shared/office.cal` | 期限を数える営業日 |
 | `project/shared/company.gate` | チケットに、だれが何をできるか |
-| `go/`、`requests/` | ritsu が `project/` から生成した物（手で直さない） |
-| `generate.go` | 生成し直すときに `go generate` が走らせる行 |
-| `approvals.go` | プロジェクトがサーバーに渡す物。申請の種類、組織、gate、通知 |
-| `gate.go` | サーバーの問いを、生成した gate につなぐ所 |
-| `notify.go` | 通知をログに書く部品 |
-| `tools.go` | サーバーの `/mcp` で、エージェントのツールを MCP で出す所 |
+| `go/`、`requests/` | ritsu が `project/` から生成したもの（手で直さない） |
+| `generate.go` | 生成し直すときに `go generate` が実行する行 |
+| `approvals.go` | プロジェクトがサーバーに渡すもの。申請の種類、組織、gate、通知 |
+| `gate.go` | サーバーが gate に聞くことを、生成した gate に渡す |
+| `notify.go` | 通知をログに書く |
+| `tools.go` | サーバーの `/mcp` に、エージェントのツールを MCP で出す |
 | `cmd/server/` | サーバー |
 | `*_test.go` | 試験 |
 
@@ -38,9 +38,9 @@ go mod tidy
 go run ./cmd/server -dev-login
 ```
 
-ブラウザで http://127.0.0.1:8080/pages/ を開き、だれとして使うかを選びます。営業一課の担当 `s1201` が購買を申請し、課長の `s1101` が承認し、次に営業部長の `s1001` が承認します。通知はログに出ます。`-dev-login` は本人を確かめないので、このコンピューターの中だけで動きます。
+ブラウザで http://127.0.0.1:8080/pages/ を開き、だれとして使うかを選びます。営業一課の担当 `s1201` が購買を申請し、課長の `s1101` が承認し、次に営業部長の `s1001` が承認します。通知はログに出ます。`-dev-login` は本人を確かめないので、サーバーはこのコンピューターにだけ応答します。
 
-エージェントのツールは http://127.0.0.1:8080/mcp にあり、MCP の streamable HTTP で使います。エージェントは、ブラウザと同じ仕方でログインします。`-dev-login` のときはクッキー `ringi-dev-person=s1201` を送り（ブラウザでは `/login` のページが置きます）、ログインのフラグが無いときはヘッダ `X-Person: s1201` を送ります。ツールでしたことは、ページと同じく gate に尋ねられます。
+エージェントのツールは http://127.0.0.1:8080/mcp にあり、MCP の streamable HTTP で使います。エージェントは、ブラウザと同じ方法でログインします。`-dev-login` のときはクッキー `ringi-dev-person=s1201` を送り（ブラウザでは `/login` のページが設定します）、ログインのフラグがないときはヘッダー `X-Person: s1201` を送ります。ツールでできることは、ページと同じように gate が決めます。
 
 ## 決まりを変える
 
@@ -52,49 +52,49 @@ go generate ./...
 go test ./...
 ```
 
-`ritsu check` は、シナリオを一つずつ走らせ、決まりが言い切っていることを確かめます。だれの申請がどこへ回るかは、`ritsu ringi simulate project/purchase.ringi --every-requester` で見られます。CI では、`generate.go` の行に `--check` を付けて走らせます。何も書かず、`go/` か `requests/` が `project/` から作られる物と違えば落ちます。
+`ritsu check` は、シナリオを一つずつ実行し、決まりに書いた主張を確かめます。だれの申請がどこへ回るかは、`ritsu ringi simulate project/purchase.ringi --every-requester` で見られます。CI では、`generate.go` の行に `--check` を付けて実行します。何も書かず、`go/` か `requests/` が `project/` から作られるものと違えば失敗します。
 
-組織のデータはプログラムに組み込まれます。組織が変わるときは、効き始める日の名前のディレクトリ `project/org/<日付>/` を足します。サーバーは起動し直したときに読みます。動いているサーバーには、起動し直さずに取り込ませることもできます。それをするのは、ログインで役割 `system_admin` を持つ人です（`-dev-login` では、ログインのページで役割を選びます）。`ritsu check project` でデータを確かめ、`project/` から `org/` を zip にまとめて、ページ `/pages/admin/organization` で上げます。
+組織のデータは、プログラムに組み込まれます。組織が変わるときは、有効になる日の名前のディレクトリ `project/org/<日付>/` を足します。サーバーは、起動したときにそれを読みます。動いているサーバーに、止めずに取り込ませることもできます。それができるのは、ログインで役割 `system_admin` を持つ人です（`-dev-login` では、ログインのページで役割を選びます）。`ritsu check project` でデータを確かめ、`project/` で `org/` を zip にまとめて、ページ `/pages/admin/organization` でアップロードします。
 
 ```sh
 cd project && zip -r ../org.zip org -x '*/.*'
 ```
 
-ページは、新しいデータで変わることを日ごとに見せ、確かめたあとで取り込みます。同じ版を `project/org/` にも足しておきます。起動し直したサーバーは、組み込んだデータが前に取り込んだときから変わったときだけ取り込むからです。取り込みも申請の種類の版の切り替えも、`/pages/admin/records` が見せる記録に残ります。
+ページには、新しいデータで変わることが日ごとに出て、確認すると取り込まれます。同じ版を `project/org/` にも足してください。起動し直したサーバーは、組み込んだデータが、前に取り込んだときから変わったときだけ取り込みます。取り込みも、申請の種類の版の切り替えも、ページ `/pages/admin/records` の記録に残ります。
 
 ## 試験
 
-`go test ./...` は四つの試験を走らせます。
+`go test ./...` は、四つの試験を実行します。
 
-- `TestVectors`：ritsu が決まりとシナリオから `requests/vectors/` に書いたベクタを、全部サーバーに渡し、答えを確かめます。
-- `TestGate`：gate だけが決めること（自分の載っていないチケットをだれが見られるか、だれが取り下げられるか、管理の四つの操作を役割と部署でだれができるか）で、`gate.go` を確かめます。組織の版に居ない人と、持ち主を書かない申請の種類が、どの部署にも当たらないことと、gate が宣言していない役割を外して尋ねることも確かめます。
-- `TestPages`：開発用のログインでページから申請を出し、承認します。
-- `TestTools`：`cmd/server` と同じく、`/mcp` にエージェントのツールを置いてプロジェクトを動かします。`s1201` のエージェントがツールで購買を申請して読み、だれもログインしていないリクエストには 401 が返ることを確かめます。
+- `TestVectors`：ritsu が決まりとシナリオから `requests/vectors/` に書いたベクタを、すべてサーバーに渡し、結果を確かめます。
+- `TestGate`：gate だけが決めることを、`gate.go` で確かめます。自分に関係のないチケットをだれが見られるか、だれが取り下げられるか、管理の四つの操作を役割と部署でだれができるか、です。組織の版にいない人と、持ち主を書いていない申請の種類が、どの部署のものにもならないことと、gate が宣言していない役割を外すことも確かめます。
+- `TestPages`：開発用のログインで、ページから申請を出し、承認します。
+- `TestTools`：`cmd/server` と同じように、`/mcp` にエージェントのツールを置いてプロジェクトを動かします。`s1201` のエージェントがツールで購買を申請して読むことと、だれもログインしていないリクエストに 401 が返ることを確かめます。
 
 ## 人に使ってもらう
 
-フラグの一覧は `go run ./cmd/server -h` で出ます。
+フラグの一覧は `go run ./cmd/server -h` で出ます。用意するもの、バックアップ、版の上げ方、監視することは、フレームワークの[運用の手引き](https://github.com/i2y/ringi-server/blob/main/docs/operations.ja.md)にあります。
 
-- **チケットを置く所**：`-db 'postgres://…'` で、PostgreSQL のスキーマ `ringi` に置きます。添付もそこに置きます。`-db` が無ければメモリに置き、サーバーを止めると消えます。
-- **ログイン**：OpenID Connect のプロバイダーでログインするには、`-oidc-issuer`、`-oidc-client-id`、`-oidc-redirect-url https://<サーバーのホスト>/login/callback` を渡し、クライアントのシークレットとセッションのクッキーの鍵を、環境変数 `RINGI_OIDC_CLIENT_SECRET` と `RINGI_SESSION_KEYS`（32 バイトずつの base64、新しい順）に置きます。プロバイダーが返すメールアドレスを組織のデータに持つ人が、その人になります。これらのフラグも `-dev-login` も無ければ、人はヘッダ `X-Person` で決まります。前に置いたプロキシーが、人をログインさせてから付けるヘッダです。このときサーバーは、ループバックのアドレスでだけ待ち受けます。
-- **https**：`-tls-cert` と `-tls-key` を渡し、`-addr` を人が届くアドレスにします。
-- **エージェントのツール**：`/mcp` は、ページと同じ仕方で人を見つけます。プロバイダーでログインするときは、エージェントに、ブラウザでログインしたセッションのクッキーが要ります。ベアラートークンで受けたいときは、自分の HTTP のサーバーに、`mcp.HTTP{Verify: …}` でツールを置きます。やり方はモジュール `github.com/i2y/ringi-server/mcp` の README にあります。
+- **チケットの保管**：`-db 'postgres://…'` で、PostgreSQL のスキーマ `ringi` に保管します。添付もここに入ります。`-db` がなければメモリに置き、サーバーを止めると消えます。
+- **ログイン**：OpenID Connect のプロバイダーを使います。`-oidc-issuer`、`-oidc-client-id`、`-oidc-redirect-url https://<サーバーのホスト>/login/callback` を渡し、クライアントのシークレットとセッションのクッキーの鍵を、環境変数 `RINGI_OIDC_CLIENT_SECRET` と `RINGI_SESSION_KEYS`（32 バイトの乱数の base64 を、新しい順に）に置きます。ログインした人は、プロバイダーが確認したメールアドレスで、組織のデータから探します。人の役割は、`-oidc-roles-claim` で指定したクレームから読みます。指定しなければだれも役割を持たないので、gate が `system_admin` などの役割に許したことは、だれにもできません。サーバーの前のプロキシで人をログインさせるときは、`web.ProxyHeader` を使うサーバーを Go で作ります（[作り方](https://github.com/i2y/ringi-server/blob/main/docs/embedding.ja.md)）。
+- **https**：`-tls-cert` と `-tls-key` を渡し、`-addr` を人が使うアドレスにします。
+- **エージェントのツール**：`/mcp` は、ページと同じ方法で人を見つけます。プロバイダーでログインするときは、ブラウザでログインしたセッションのクッキーをエージェントに渡します。ベアラートークンを使うときは、自分の HTTP のサーバーに、`mcp.HTTP{Verify: …}` でツールを置きます。やり方は、モジュール [`github.com/i2y/ringi-server/mcp`](https://github.com/i2y/ringi-server/blob/main/mcp/README.ja.md) の README にあります。
 
-だれでもだれにでもなれてしまう設定は、サーバーが断ります。`-dev-login` やヘッダを、`-tls-cert` と一緒に使うこと、ほかのコンピューターから届くアドレスで使うこと、プロバイダーの設定がある所で使うことです。
+ログインのフラグがないときは、ヘッダー `X-Person` の人になります。このヘッダーと `-dev-login` は本人を確かめないので、サーバーは、自分のコンピューターのアドレスでだけ使わせ、プロキシを通ったリクエストは拒否します。ほかのコンピューターから届くアドレス、`-tls-cert`、プロバイダーの設定と一緒には起動しません。
 
 ## 申請の種類を足す
 
-`purchase.ringi` の横に `project/<名前>.ringi` を書き、組織、カレンダー、gate の `use` の行は同じ物にします。そのあと `ritsu check project`、`go generate ./...`、`go test ./...` を走らせます。新しい種類のシナリオはベクタになり、`TestVectors` が走らせます。マスタを読む種類なら、そのデータも組み込むため、`approvals.go` の `//go:embed project/org` の行にそのディレクトリを足します。`gate.go` は action の名前で gate に尋ねるので、gate に action を足しても `gate.go` は変えなくてかまいません。principal や resource に属性を足したら、その値を `gate.go` の `gateStore` に足します。gate が Staff に持たせる役割は生成したコードの `RolesOf` が答えるので、gate に役割を足しても `gate.go` は変えなくてかまいません。
+`purchase.ringi` の横に `project/<名前>.ringi` を書き、組織、カレンダー、gate の `use` の行は同じものにします。そのあと `ritsu check project`、`go generate ./...`、`go test ./...` を実行します。新しい種類のシナリオはベクタになり、`TestVectors` が使います。マスタを読む種類なら、そのデータも組み込むため、`approvals.go` の `//go:embed project/org` の行にそのディレクトリを足します。`gate.go` は action の名前で gate に聞くので、gate に action を足しても `gate.go` は変えなくてかまいません。principal や resource に属性を足したら、その値を `gate.go` の `gateStore` に足します。gate が Staff に持たせる役割は、生成した `RolesOf` が返すので、gate に役割を足しても `gate.go` は変えなくてかまいません。
 
 ## flow を足す
 
-flow は、チケットが終わったあとやステップの中で動く仕事です（支払い、エージェントの確かめなど）。申請の種類に `use flow <名前> from "shared/<名前>.flow"` と書き、`launch` か `ask` で使います。`go generate ./...` が、その Go のパッケージを `go/flows/` に書きます。サーバーは flow を `server.Config.Flows` で（エージェントのステップは `Agents` で）始めます。flow を動かすのはフレームワークのモジュール `github.com/i2y/ringi-server/temporal` で、サーバーへの渡し方とワーカーの動かし方はその README にあります。渡すまでのあいだ、サーバーは始められない flow を「すること」として残し、試し直すたびにログに書きます。
+flow は、チケットが終わったあとや、ステップの中で動く仕事です（支払い、エージェントの確認など）。申請の種類に `use flow <名前> from "shared/<名前>.flow"` と書き、`launch` か `ask` で使います。`go generate ./...` が、その Go のパッケージを `go/flows/` に書きます。サーバーは、flow を `server.Config.Flows` で始めます（エージェントのステップは `Agents`）。flow を動かすのはフレームワークのモジュール [`github.com/i2y/ringi-server/temporal`](https://github.com/i2y/ringi-server/blob/main/temporal/README.ja.md) で、サーバーへの渡し方とワーカーの動かし方は、その README にあります。渡すまでは、サーバーは始められなかった flow を残しておき、試し直すたびにログに書きます。
 ==> README.md <==
 # approvals
 
-Requests and approvals: the rules are written in ritsu's request language under `project/`, ritsu
-generates the Go code and the contract from them, and the framework serves them, with the pages
-people use in a browser and the API. The framework is the Go module `github.com/i2y/ringi-server`.
+A server of requests and approvals. The rules are written in ritsu's request language under
+`project/`, ritsu generates the Go code and the contract files from them, and the framework
+[ringi-server](https://github.com/i2y/ringi-server) serves them: the pages people use in a browser, and the API.
 
 Japanese: [README.ja.md](README.ja.md).
 
@@ -112,8 +112,8 @@ a server. They are yours now: change them into your own rules.
 | `project/shared/company.gate` | Who may do what on the tickets |
 | `go/`, `requests/` | What ritsu generates from `project/` (do not edit them) |
 | `generate.go` | The line `go generate` runs to generate them again |
-| `approvals.go` | What the project gives the server: its kinds, organization, gate and notifier |
-| `gate.go` | The glue between the server's questions and the generated gate |
+| `approvals.go` | What the project gives the server: its request types, organization, gate and notifier |
+| `gate.go` | Asks the generated gate what the server asks |
 | `notify.go` | A notifier that writes each notice to the log |
 | `tools.go` | The agents' tools at `/mcp` of the server, over MCP |
 | `cmd/server/` | The server |
@@ -129,12 +129,12 @@ go run ./cmd/server -dev-login
 Open http://127.0.0.1:8080/pages/ in a browser and choose who you are. `s1201` (a member of the
 staff of Sales Section 1) makes a purchase request; `s1101`, the section's manager, approves it,
 then `s1001`, the head of the Sales Department. The notices go to the log. `-dev-login` checks no
-one: it serves this computer only.
+one, so the server answers this computer only.
 
 The agents' tools are at http://127.0.0.1:8080/mcp, over MCP's streamable HTTP. An agent signs in
 as a browser does: with `-dev-login`, it sends the cookie `ringi-dev-person=s1201` (the page `/login`
-sets it in a browser); with no flag of a sign-in, the header `X-Person: s1201`. What it does with the
-tools is asked of the gate, as on the pages.
+sets it in a browser); with no flag of a sign-in, the header `X-Person: s1201`. The gate decides what
+it may do with the tools, as on the pages.
 
 ## Changing the rules
 
@@ -172,7 +172,7 @@ kept in the record that `/pages/admin/records` shows.
 `go test ./...` runs four tests:
 
 - `TestVectors` gives the server every vector ritsu wrote in `requests/vectors/` from the rules
-  and the scenarios, and checks its answers.
+  and the scenarios, and checks what it returns.
 - `TestGate` checks `gate.go` on what only the gate decides: who sees a ticket they are not on, and
   who withdraws one; who may do each of the four operations of the administration, by role and by
   department; that a person the organization's version does not have, and a request type that names
@@ -184,7 +184,9 @@ kept in the record that `/pages/admin/records` shows.
 
 ## Running it for people
 
-`go run ./cmd/server -h` lists every flag.
+`go run ./cmd/server -h` lists every flag. The framework's
+[guide for people who run a server](https://github.com/i2y/ringi-server/blob/main/docs/operations.md) has what to
+prepare, the backups, how to raise the version and what to watch.
 
 - **Where the tickets are kept**: `-db 'postgres://…'` keeps them in PostgreSQL, in the schema
   `ringi`, with the attachments. Without `-db`, they are kept in memory and lost when the server
@@ -192,18 +194,22 @@ kept in the record that `/pages/admin/records` shows.
 - **How people sign in**: through an OpenID Connect provider, with `-oidc-issuer`,
   `-oidc-client-id`, `-oidc-redirect-url https://<the server's host>/login/callback`, and the
   client's secret and the keys of the session cookies in the environment variables
-  `RINGI_OIDC_CLIENT_SECRET` and `RINGI_SESSION_KEYS` (base64 of 32 bytes each, the newest first).
-  A person is the one of the organization's data with the email address the provider gives. Without
-  these flags, and without `-dev-login`, the person is the header `X-Person`, which a proxy in front
-  of the server sets after it signs people in; the server then listens on a loopback address only.
+  `RINGI_OIDC_CLIENT_SECRET` and `RINGI_SESSION_KEYS` (base64 of 32 random bytes each, the newest
+  first). A person is the one in the organization's data with the email address the provider has
+  verified. `-oidc-roles-claim` names the claim that lists a person's roles: without it no one has a
+  role, so no one may do what the gate gives to one, such as `system_admin`. Where a proxy in front of
+  the server signs people in instead, the server is made in Go, with `web.ProxyHeader`
+  ([how](https://github.com/i2y/ringi-server/blob/main/docs/embedding.md)).
 - **https**: `-tls-cert` and `-tls-key`, with `-addr` on the address people reach.
 - **The agents' tools**: `/mcp` finds the person as the pages do. With a provider, an agent needs
   the cookie of a session signed in from a browser. To take bearer tokens instead, serve the tools
-  with `mcp.HTTP{Verify: …}` on a server of your own: the README of the module `github.com/i2y/ringi-server/mcp`
-  shows how.
+  with `mcp.HTTP{Verify: …}` on a server of your own: the README of the module
+  [`github.com/i2y/ringi-server/mcp`](https://github.com/i2y/ringi-server/tree/main/mcp) shows how.
 
-The server refuses settings that would let anyone be anyone: `-dev-login` or the header with
-`-tls-cert`, on an address other computers reach, or where the provider's settings are.
+With no flag of a sign-in, the person is the one the header `X-Person` names. The header and
+`-dev-login` check no one, so the server takes them only on an address of its own computer, and
+refuses a request a proxy forwarded. It does not start with them on an address other computers reach,
+with `-tls-cert`, or where the provider's settings are.
 
 ## Adding a request type
 
@@ -212,19 +218,19 @@ the calendar and the gate, then run `ritsu check project`, `go generate ./...` a
 The new type's scenarios become vectors that `TestVectors` runs. A type that reads masters needs
 their data built in too: add their directory to the `//go:embed project/org` line of
 `approvals.go`. `gate.go` asks the gate by the action's name, so an action added to the gate needs
-no change there; an attribute added to a principal or a resource needs its value in `gateStore`. A
-role the gate lets a Staff hold is in `RolesOf`'s answer, so one added to the gate needs no change
-either.
+no change there; an attribute added to a principal or a resource needs its value in `gateStore`. The
+generated `RolesOf` returns the roles the gate lets a Staff hold, so one added to the gate needs no
+change either.
 
 ## Adding a flow
 
 A flow is work that runs after a ticket ends or in a stage of it, such as a payment or an agent's
 check: `use flow <name> from "shared/<name>.flow"` in the request type, and `launch` or `ask` it.
 `go generate ./...` writes its Go package under `go/flows/`. The server starts flows through
-`server.Config.Flows`, and an agent's step through `Agents`. The framework's module that runs them
-is `github.com/i2y/ringi-server/temporal`:
+`server.Config.Flows`, and an agent's step through `Agents`. The framework's module that runs them is
+[`github.com/i2y/ringi-server/temporal`](https://github.com/i2y/ringi-server/tree/main/temporal):
 its README shows how to give them to the server and run their workers. Until a server has them, it
-keeps each start it cannot make as a thing to do, and says so in the log each time it tries again.
+keeps each start it cannot make, and tries again, with a line in the log each time.
 ==> approvals.go <==
 // Package approvals runs the requests of project/ on the framework: the package ritsu generated
 // from them (go/ and requests/, which go generate writes again), with the gate (gate.go) and a
@@ -306,10 +312,11 @@ func Started(cfg server.Config, srv *server.Server) {
 //	go run ./cmd/server -dev-login
 //
 // lets you choose who you are on a page, on this computer only (-addr stays on 127.0.0.1). Without
-// -dev-login, the person is the header X-Person, which a proxy in front of the server sets after it
-// signs people in; with -oidc-issuer, -oidc-client-id and -oidc-redirect-url, the server signs
-// people in with an OpenID Connect provider. -db keeps the tickets in PostgreSQL; without it, they
-// are kept in memory and lost when the server stops. go run ./cmd/server -h lists every flag.
+// -dev-login, the person is the one the header X-Person names, on this computer only too: neither
+// checks anyone. With -oidc-issuer, -oidc-client-id and -oidc-redirect-url, the server signs people
+// in with an OpenID Connect provider, and -oidc-roles-claim names the claim that lists their roles.
+// -db keeps the tickets in PostgreSQL; without it, they are kept in memory and lost when the server
+// stops. go run ./cmd/server -h lists every flag.
 //
 // The agents' tools are at /mcp (HandleTools): an agent signs in as a browser does.
 package main

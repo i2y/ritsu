@@ -311,8 +311,23 @@ $ ritsu ringi extract examples/expense.ja.ringi --out lowered --lang ja
 `start` と `next` に約束の形でない JSON を渡すと、入口が機械を動かす前に断ります。断る文は四つの言語で同じで、どこが、何を渡され、何が要るかを言います（``関数 `start` の引数 `submit.form.days` が "three" です。整数が要ります``）。
 単位の付いた ritsu の型（金額、率、量）のフィールドは、計算するフィールドも含めて生成でき、画面は単位の刻みで見せます。
 `ritsu gen --target requests` は、サーバーと画面が読む物を、プロジェクトに一度だけ書きます。申請の種類、OpenAPI 3.1 のサーバーの API、エージェントに渡す道具、A2UI 1.0 のメッセージの画面と、ritsu のカタログと画面が呼ぶ関数、組織のデータのスキーマ、ベクタです。
-`ritsu ringi init` は、このリポジトリの外のフレームワークの上で申請と承認を配る Go のプロジェクトの、最初のファイルを書きます。申請の種類一つ、それから `ritsu gen` が作るコード、サーバー、その試験です。
 ファイルごとの中身と、サーバーが足す物は [docs/reference.md](docs/reference.md#what-gen-writes)（英語）にあります。
+
+## サーバー
+
+ritsu が生成したものを動かすのは、Go のフレームワーク [ringi-server](https://github.com/i2y/ringi-server) です。
+チケットを PostgreSQL に保管し、人をログインさせ、時計を鳴らし、人がブラウザで使うページ、API、エージェントのツールを出します。どの申請の種類も同じコードで動きます。
+`ritsu ringi init` は、その上のプロジェクトの最初のファイルを書きます。申請の種類一つ、`ritsu gen` がそこから作るコード、サーバー、その試験です。
+
+```sh
+ritsu ringi init server --module example.com/requests --lang ja
+cd server
+go mod tidy
+go run ./cmd/server -dev-login
+```
+
+このあと http://127.0.0.1:8080/pages/ を開き、だれとして使うかを選びます。
+ページの様子、プロジェクトがサーバーに渡すもの、人に使ってもらうときの動かし方は、[ringi-server の README](https://github.com/i2y/ringi-server/blob/main/README.ja.md) にあります。
 
 ## AI エージェント向けのスキル
 

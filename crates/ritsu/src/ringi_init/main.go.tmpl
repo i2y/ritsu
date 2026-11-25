@@ -4,10 +4,11 @@
 //	go run ./cmd/server -dev-login
 //
 // lets you choose who you are on a page, on this computer only (-addr stays on 127.0.0.1). Without
-// -dev-login, the person is the header X-Person, which a proxy in front of the server sets after it
-// signs people in; with -oidc-issuer, -oidc-client-id and -oidc-redirect-url, the server signs
-// people in with an OpenID Connect provider. -db keeps the tickets in PostgreSQL; without it, they
-// are kept in memory and lost when the server stops. go run ./cmd/server -h lists every flag.
+// -dev-login, the person is the one the header X-Person names, on this computer only too: neither
+// checks anyone. With -oidc-issuer, -oidc-client-id and -oidc-redirect-url, the server signs people
+// in with an OpenID Connect provider, and -oidc-roles-claim names the claim that lists their roles.
+// -db keeps the tickets in PostgreSQL; without it, they are kept in memory and lost when the server
+// stops. go run ./cmd/server -h lists every flag.
 {{if mcp}}
 //
 // The agents' tools are at /mcp (HandleTools): an agent signs in as a browser does.

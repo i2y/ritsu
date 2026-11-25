@@ -310,8 +310,23 @@ wrote lowered/values.rule
 A JSON outside the contract given to `start` or `next` is refused at the entry, before the machine runs, with one sentence the four languages write alike: where it is, what was given and what is needed (``The argument `submit.form.days` of `start` is "three", and must be an integer``).
 A field of any of ritsu's types with a unit (an amount, a rate, a quantity) is generated, computed fields too, and the screens show it in the steps of its unit.
 `ritsu gen --target requests` writes what a server and its screens read, once for the project: the kinds of request, the server's API as OpenAPI 3.1, the tools an agent is given, the screens as A2UI 1.0 messages with ritsu's catalog and the functions they call, the schema of the organization's data, and the vectors.
-`ritsu ringi init` writes the first files of a Go project that serves requests and approvals on a framework outside this repository, with one request type, the code `ritsu gen` makes of it, a server and its tests.
 [docs/reference.md](docs/reference.md#what-gen-writes) has what each file holds and what the server adds.
+
+## The server
+
+[ringi-server](https://github.com/i2y/ringi-server) is a framework in Go that runs what ritsu generates.
+It keeps the tickets in PostgreSQL, signs people in, rings the clocks, and serves the pages people use in a browser, the API and the agents' tools, with the same code for every kind of request.
+`ritsu ringi init` writes the first files of a project on it: one request type, the code `ritsu gen` makes of it, a server and its tests.
+
+```sh
+ritsu ringi init server --module example.com/requests
+cd server
+go mod tidy
+go run ./cmd/server -dev-login
+```
+
+Then open http://127.0.0.1:8080/pages/ and choose who you are.
+[Its README](https://github.com/i2y/ringi-server#readme) shows the pages, and says what your project gives the server and how to run it for people.
 
 ## For AI agents
 

@@ -150,11 +150,12 @@ fn the_install_lines_name_this_repository_and_what_it_installs() {
                 }
                 installed.push(package.to_string());
             }
-            // The repository of a language by itself is not public: only ritsu's is named.
+            // The repository of a language by itself is not public: only ritsu's is named, and the one
+            // of the framework that serves the requests of ringi.
             let mut rest = line;
             while let Some(pos) = rest.find("github.com/i2y/") {
                 let name: String = rest[pos + 15..].chars().take_while(|c| c.is_alphanumeric() || *c == '-').collect();
-                if name != "ritsu" {
+                if name != "ritsu" && name != "ringi-server" {
                     wrong.push(format!("{}:{}: names github.com/i2y/{name}", p.name, n + 1));
                 }
                 rest = &rest[pos + 15..];

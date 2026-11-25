@@ -1467,8 +1467,8 @@ E704, and a text with no label in a declared language E703; `ritsu gen` writes n
 
 ### What the server adds
 
-ritsu writes the contract, and a server keeps it (a framework outside this repository does, for
-Go first):
+ritsu writes the contract, and a server keeps it. [ringi-server](https://github.com/i2y/ringi-server),
+a framework in Go, is one:
 
 | The server | What it holds to |
 |---|---|
@@ -1490,9 +1490,9 @@ refusal of the same kind), by the vectors of finding, and by operations sent at 
 ## Starting a server project (`init`)
 
 `ritsu ringi init [<dir>] --module <path>` writes the first files of a Go project that serves
-requests and approvals on the framework: one request type (`purchase.ringi`) with the organization,
-the calendar and the gate it reads, the code `ritsu gen` makes of them, a server, its tests and a
-README. `--mcp` adds the agents' tools, `--temporal` a request type with a flow and a worker, and
+requests and approvals on [ringi-server](https://github.com/i2y/ringi-server): one request type
+(`purchase.ringi`) with the organization, the calendar and the gate it reads, the code `ritsu gen`
+makes of them, a server, its tests and a README. `--mcp` adds the agents' tools, `--temporal` a request type with a flow and a worker, and
 `--lang ja` writes the project with Japanese names and a Japanese README. The files are the user's
 from then on: `init` writes them once, and writes nothing where any of them is already there. It
 runs inside ritsu only, since it runs `ritsu gen`.

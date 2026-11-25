@@ -367,10 +367,10 @@ ritsu の段階 D（言語のパッケージと申請の種類の一覧、約束
 | `crates/ritsu/tests/check.rs`（`TOOLS`、`a_request_waits_for_what_it_reads`）、`crates/ritsu/tests/playground.rs`（`a_request_is_lowered_in_memory_as_on_the_disk`）、材料の `crates/ritsu/tests/projects/requests/` | 試験の名前と材料の拡張子 | C1 |
 | `Tool::ALL`、`tests/fixtures/naming.tsv`、yuen と sakai のツール名の一覧の文と golden | 参照の書き方のツール名（`satisfied by ringi "…"`） | C4 |
 | `crates/ritsu-cross/docs/codes*.md` の X18〜X20 の文 | 言語の名前 | C4 |
-| `crates/ringi/README.md`、`README.ja.md`、`DESIGN.md`、`PLAN.md`、`examples/` | 言語の名前 | F |
+| `crates/ringi/README.md`、`README.ja.md`、`DESIGN.md`、`PLAN.md`、`docs/reference.md`、`examples/` | 言語の名前。フレームワークの名前とリポジトリへのリンク | F |
 | `crates/ringi/src/cli.rs` の `init`、`crates/ritsu/src/languages.rs`、`crates/ritsu/src/ringi_init.rs`（モジュールの名前と、フレームワークのモジュールのパス `FRAMEWORK`）、ひな形の `crates/ritsu/src/ringi_init/`（フレームワークのモジュールのパス、環境変数 `RINGI_OIDC_CLIENT_SECRET`・`RINGI_SESSION_KEYS`、スキーマ `ringi`）、`crates/ritsu/tests/ringi_init.rs` と `tests/golden/ringi-init/` | コマンド `ritsu ringi init` と、フレームワークの名前（DESIGN 16.4） | フレームワークの S6 |
-| `skills/ringi/`、`skills/README.md`、`skills/README.ja.md`、`skills/ritsu/SKILL.md` | スキルの名前 | F |
-| 根の `README.md`、`README.ja.md`、`README.zh.md`、`DESIGN.md`、`PLAN.md`、`website/` のページ、playground の言語の一覧 | 言語の一覧と節 | F（notes の文を当てる） |
+| `skills/ringi/`、`skills/README.md`、`skills/README.ja.md`、`skills/ritsu/SKILL.md` | スキルの名前。`skills/ringi/` にはフレームワークの名前とリポジトリへのリンクも | F |
+| 根の `README.md`、`README.ja.md`、`README.zh.md`、`DESIGN.md`、`PLAN.md`、`website/` のページ、playground の言語の一覧 | 言語の一覧と節。README とページの ringi の節には、フレームワークの名前とリポジトリへのリンクも（`crates/ritsu/tests/website.rs` が、ページが名前を出してよいリポジトリとして持つ） | F（notes の文を当てる） |
 | `packaging/`（`archive.sh`、`homebrew.sh`、`linux.sh`、`nfpm.yaml`、`npm/bin/ringi.js`、`npm/package.json`、`smoke.sh`）、`crates/ritsu/tests/links.rs` | 言語の名前のリンク | F |
 | `ritsu.ctx`、`contexts/requests.ctx`（コンテキスト `Requests(ringi)`）、`contexts/project.ctx`、`contexts/entry.ctx` | 処理系の地図のクレート | B |
 | `proofs/RingiCore/`、`proofs/README.md`、`proofs/lakefile.toml`、`crates/ritsu-model/tests/ringi.rs`、`.github/workflows/` | Lean のモデルと CI | G |

@@ -603,7 +603,9 @@ the page for the people who manage and approve the requests, and `ringi diff` sa
 and whose approvers, a change moves. `ritsu gen` writes the ticket's code beside the rules and dates
 it calls, and `ritsu gen --target requests` writes, apart from any language, the screens as A2UI
 messages, the server's API as OpenAPI, the tools an agent uses and the vectors a server is tested
-with; the server that keeps the tickets, signs people in and sends the reminders is not ritsu's.
+with. [ringi-server](https://github.com/i2y/ringi-server), a framework in Go, is such a server: it
+keeps the tickets, signs people in, sends the reminders, and serves the pages people use in a
+browser. `ritsu ringi init` writes the first files of a project on it.
 The [pages on the site](https://i2y.github.io/ritsu/ringi/) go through how a request type is
 written, what the check guarantees, how its pages are read and what the server does, and
 [ringi's README](crates/ringi/README.md) has the rest.

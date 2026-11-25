@@ -92,6 +92,8 @@ people.
   conditions and deadlines to rulec and koyomi to be checked, and runs its scenarios on the
   reference interpreter; `ritsu gen` writes each request's ticket as TypeScript, Python, Go and
   Rust, with the screens, the OpenAPI document and the vectors a server of requests is tested with.
+  [ringi-server](https://github.com/i2y/ringi-server), a framework in Go, is that server, with the
+  pages people use in a browser.
   [The ringi pages](ringi/index.md) show [how a request type is written](ringi/language.md),
   [what the check guarantees](ringi/checks.md), [how a person reads one](ringi/reading.md),
   [how it reads the other languages](ringi/together.md) and

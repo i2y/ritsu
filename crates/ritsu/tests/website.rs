@@ -368,12 +368,13 @@ fn the_links_into_the_repository_name_what_is_there() {
             }
             // The repository of a language by itself is not where the language is: only ritsu's is
             // named. Its releases neither: ritsu's releases hand out every language, rulec's binary,
-            // packages and action among them (rulec's install page, DESIGN 13.2). The one other name is
-            // the module shared by git, whose repository is where the module is (DESIGN 17.18).
+            // packages and action among them (rulec's install page, DESIGN 13.2). The other names are
+            // the module shared by git, whose repository is where the module is (DESIGN 17.18), and the
+            // framework that serves the requests of ringi, which is not a language's.
             let mut rest = line;
             while let Some(i) = rest.find("github.com/i2y/") {
                 let repo: String = rest[i + 15..].chars().take_while(|c| c.is_alphanumeric() || *c == '-').collect();
-                if repo != "ritsu" && repo != "ritsu-japan-liquor-tax" {
+                if !["ritsu", "ritsu-japan-liquor-tax", "ringi-server"].contains(&repo.as_str()) {
                     wrong.push(format!("{name}:{}: names github.com/i2y/{repo}", n + 1));
                 }
                 rest = &rest[i + 15..];

@@ -138,12 +138,14 @@ $ ritsu ringi run leave.ja.ringi --scenario 長い有給休暇 --lang ja
 
 - **人が読むページ。** `ritsu ringi doc` は、申請の種類を一枚のページに描きます。フォーム、各ステップでだれが答えるかを添えた経路、期限、チケットのふるまいが載ります。例のページは [申請の種類を読む](reading.md) にあります。
 - **コードと契約。** `ritsu gen` は、チケットの機械と各申請の種類のコードを TypeScript、Python、Go、Rust で書きます。`--target requests` を付けると、画面、OpenAPI の文書、エージェントのツール、サーバーを試すベクタも書きます（[生成する物とサーバー](server.md)）。
+- **動かせるサーバー。** Go のフレームワーク [ringi-server](https://github.com/i2y/ringi-server) が、人がブラウザで使うページ、API、エージェントのツールを出します。`ritsu ringi init` は、[その上のプロジェクト](server.md#ringi-server-で動かす)の最初のファイルを書きます。
 
 [ブラウザで試すページ](../playground/#project=ringi/leave.ja)で、休暇の申請を、それが読むファイルと一緒に開けます。申請や共通の経路を書き換えると、すぐに検査の結果が変わります。「生成したコード」のタブでは `ringi api`、`ringi run`、`ringi extract`、`ringi vectors` が表示するものや書くものが、「人が読むページ」のタブでは申請のページが見られます。
 
 ## もっと読む
 
-- [ringi の README](https://github.com/i2y/ritsu/blob/main/crates/ringi/README.md)：言語のあらまし、コマンド、試験の回し方。
+- [ringi の README](https://github.com/i2y/ritsu/blob/main/crates/ringi/README.ja.md)：言語のあらまし、コマンド、試験の回し方。
 - [診断の一覧](https://github.com/i2y/ritsu/blob/main/crates/ringi/docs/codes.ja.md)：診断ごとに、いつ出るか、どう直すか、それを出す最小のファイル（`ritsu ringi explain` でも表示できます）。
 - [DESIGN.md](https://github.com/i2y/ritsu/blob/main/crates/ringi/DESIGN.md)：申請をイベントで進むチケットとして扱う理由、ringi がほかの言語へ下ろすもの、サーバーの受け持ちがどこから始まるか。
 - [スキル](https://github.com/i2y/ritsu/blob/main/skills/ringi/SKILL.md)：申請の種類を書いたり直したりするエージェントのためのものです。
+- [ringi-server](https://github.com/i2y/ringi-server/blob/main/README.ja.md)：申請のサーバーのページの様子、プロジェクトの始め方、人に使ってもらうときの動かし方。

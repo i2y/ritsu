@@ -16,7 +16,8 @@ against the organization's data, for every person who may submit it, in every ve
 and `ritsu gen` writes from it what a server runs on.
 
 It does not apply to the server itself (keeping the tickets, signing people in, sending mail and
-serving the screens: a framework outside ritsu does that, from what ritsu generates), to a workflow
+serving the screens: [ringi-server](https://github.com/i2y/ringi-server), a framework in Go, does
+that from what ritsu generates, and has its own documents), to a workflow
 that runs after the approval (that is a flow of dandori the ticket launches), to the company-wide
 rules of who may do what (that is the gate of sekisho the request reads), or to the balance of a
 budget or of the days of leave (that is a book of chobo).
@@ -503,8 +504,11 @@ The server keeps the ticket as `next` returned it and its history, takes each ev
 idempotency key, asks the gate before `next`, rings the clocks, keeps the books in the ticket's
 transaction, tells people and starts flows after saving, hands over the part of the organization in
 effect, serves the screens, and authenticates. [What the server adds](reference.md#what-the-server-adds)
-has the whole table. `ritsu ringi init <dir> --module <path>` writes the first files of a Go project
-on a framework outside ritsu that does this.
+has the whole table. [ringi-server](https://github.com/i2y/ringi-server), a framework in Go, does this,
+and `ritsu ringi init <dir> --module <path>` writes the first files of a project on it: a request type,
+its organization and gate, a server and its tests. When someone has no server yet, start there. The
+project's README says how to run it, and ringi-server's documents say what the project gives the server
+and how to run it for people.
 
 ## 8. What the language does not have
 

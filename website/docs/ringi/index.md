@@ -167,6 +167,9 @@ row's stage or status is not what the ticket comes to.
   TypeScript, Python, Go and Rust, and with `--target requests` the screens, the OpenAPI document,
   the tools of an agent and the vectors a server is tested with:
   [What is generated, and what the server does](server.md).
+- **A server to run.** [ringi-server](https://github.com/i2y/ringi-server), a framework in Go, serves
+  the requests: the pages people use in a browser, the API and the tools of an agent.
+  `ritsu ringi init` writes the first files of [a project on it](server.md#a-server-on-ringi-server).
 
 [The playground](../playground/#project=ringi/leave) opens the leave request with every file it
 reads, in the browser. Edit the request or the shared route and the check answers at once; open
@@ -185,3 +188,5 @@ write, or *the page for people*.
   server begins.
 - [The skill](https://github.com/i2y/ritsu/blob/main/skills/ringi/SKILL.md), for an agent that
   writes or fixes a request type.
+- [ringi-server](https://github.com/i2y/ringi-server#readme): the pages of a server of requests, how
+  to start a project, and how to run it for people.
