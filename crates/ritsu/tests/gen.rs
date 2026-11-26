@@ -1454,6 +1454,40 @@ fn size_rule(name: &str) -> String {
     )
 }
 
+/// A symbolic link below `--out`, on the way to a file of a package, stops `ritsu gen` before it
+/// writes anything, in both languages: no target's files change, and nothing is written through
+/// the link. `--out` itself may be a link.
+#[cfg(unix)]
+#[test]
+fn a_link_below_the_output_stops_the_run_before_it_writes() {
+    let t = TempDir::new("gen-link-below");
+    let (project, real, out, outside) = (t.path().join("p"), t.path().join("real-out"), t.path().join("out"), t.path().join("outside"));
+    std::fs::create_dir_all(project.join("rules")).unwrap();
+    std::fs::create_dir_all(&real).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    std::os::unix::fs::symlink(&real, &out).unwrap();
+    std::fs::write(project.join("rules").join("a.rule"), size_rule("size_a")).unwrap();
+    let targets = ["--target", "python", "--target", "typescript"];
+    let (code, _, err) = generate(&project, &out, &targets);
+    assert_eq!(code, 0, "--out may be a link: {err}");
+    // the next run would write a file of each target
+    std::fs::write(project.join("rules").join("b.rule"), size_rule("size_b")).unwrap();
+    // the link is in the package written last (TypeScript's is written first)
+    std::fs::remove_dir_all(real.join("python").join("generated").join("rules")).unwrap();
+    std::os::unix::fs::symlink(&outside, real.join("python").join("generated").join("rules")).unwrap();
+    let before = files(&real);
+    let link = out.join("python").join("generated").join("rules");
+    for (lang, said) in [("en", format!("{} is a symbolic link; remove it, or write somewhere else", link.display())), ("ja", format!("{} がリンクです", link.display()))] {
+        let mut args = targets.to_vec();
+        args.extend(["--lang", lang]);
+        let (code, _, err) = generate(&project, &out, &args);
+        assert_eq!(code, 2, "{err}");
+        assert!(err.contains(&said), "{lang}: {err}");
+        assert_eq!(files(&real), before, "{lang}: no target is written");
+        assert!(files(&outside).is_empty(), "{lang}: nothing is written through the link");
+    }
+}
+
 /// Two files of the project that write one place of a package (rulec's §15.334): two rules whose
 /// aliases make one Go package (`size_label` and `sizeLabel`, both `sizelabel`), whose files would
 /// declare the same names twice; two that write paths differing only in the case of their letters,

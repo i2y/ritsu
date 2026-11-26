@@ -2472,6 +2472,17 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
             print!("{said}");
         }
     }
+    // a link below a package's directory, on the way to any file of any target, stops the run
+    // before it writes anything (`emit` looks again as it writes)
+    if !check {
+        for (dir, _, p, _) in &made {
+            for rel in p.files.iter().map(|(rel, _, _)| rel).chain(p.bytes.iter().map(|(rel, _, _)| rel)) {
+                if let Err(r) = no_link_below(dir, &dir.join(rel), lang) {
+                    return say(r, answer);
+                }
+            }
+        }
+    }
     let mut st = Emitted::default();
     for (dir, target, p, library) in &made {
         let emitted = emit(dir, *target, p, check, *library, &extras, &mut st, lang);
