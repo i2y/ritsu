@@ -1,3 +1,3 @@
-error[E703]: tests/mutants/E703_種類の言語の題が無い共有の経路.ringi:3:1: The screens show 2 things with no title in the file's language (`ja`): `stage check`, `who manager`
-     3 | use route 確認(check) from "shared/manager_check.ringi"
+error[E703]: tests/mutants/E703_種類の言語の題が無い共有の経路.ringi:4:1: The screens show 2 things with no title in the file's language (`ja`): `stage check`, `who manager`
+     4 | use route 確認(check) from "shared/manager_check.ringi"
   = Title them in `labels ja` of the shared route's file: without it, a screen would show the names the route writes in another language.

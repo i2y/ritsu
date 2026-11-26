@@ -1,0 +1,4 @@
+エラー[E511]: tests/mutants/E511_an_owner_the_organization_does_not_have.ringi:3:7: 2026-04-01 からの組織では、`owner` が指すチーム `accounting` がありません
+     3 | owner accounting
+  = `owner` は申請の種類を受け持つ部門です。チームが版に無ければ、その版の間、種類はどの部門の物にもならず、管理の画面では全体の管理者しか扱えません。
+  = チームの ID を直すか、版のデータにそのチームを足してください。

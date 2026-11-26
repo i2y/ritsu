@@ -36,11 +36,12 @@ fn a_label_for_a_value_the_enum_does_not_have_is_for_nothing() {
 }
 
 /// What the screens say of the request written as `src` before they are made (as `ritsu gen
-/// --target requests` checks them), and the titles of the values of its field `kind`. The request is
+/// --target requests` checks them), and the titles of the values of its field `kind`: None where the
+/// request does not pass its check, which a label it lacks fails (E703). The request is
 /// `example.ringi` beside the mutants' small organizations (`shared/small.ringi`, `shared/小さい会社
 /// .ringi`) and the examples' rule `shared/authority.rule`, whose enum `kind` writes English names
 /// (`goods "Goods and services"`, `capex "Capital expenditure"`, `software "Software"`).
-fn beside_the_rule(name: &str, src: &str) -> (Vec<&'static str>, Vec<(String, String)>) {
+fn beside_the_rule(name: &str, src: &str) -> (Vec<&'static str>, Option<Vec<(String, String)>>) {
     let t = ritsu_testkit::TempDir::new(name);
     let shared = t.path().join("shared");
     ritsu_testkit::tmp::copy_dir(std::path::Path::new("tests/mutants/shared/org-small"), &shared.join("org-small"));
@@ -52,9 +53,12 @@ fn beside_the_rule(name: &str, src: &str) -> (Vec<&'static str>, Vec<(String, St
     let codes = common::codes(&common::check_screens(path.to_str().unwrap()));
     let engine = ringi::ports::Engine::new(common::joined());
     engine.keep_listing_apart();
-    let kind = engine.kinds(std::slice::from_ref(&path), t.path()).unwrap_or_else(|e| panic!("{}", e.en)).remove(0);
-    let f = kind.form.iter().find(|f| f.named.name == "kind").unwrap();
-    (codes, f.choices.iter().map(|c| (c.name.clone(), c.label.clone())).collect())
+    let titles = engine.kinds(std::slice::from_ref(&path), t.path()).ok().map(|mut k| {
+        let kind = k.remove(0);
+        let f = kind.form.iter().find(|f| f.named.name == "kind").unwrap();
+        f.choices.iter().map(|c| (c.name.clone(), c.label.clone())).collect()
+    });
+    (codes, titles)
 }
 
 /// A request that chooses from the rule's enum `authority.kind` reading a small organization, with
@@ -69,11 +73,11 @@ fn kind_in_english(under: &str) -> String {
 /// file's language (DESIGN 4.8): an English request reads the English rule's names with no lines
 /// under the field, and a line under it titles its value over the rule's name. A Japanese request
 /// does not read them, as the rule writes them in English: a value with no line under the field is
-/// E703 there. (The small organization's president has no manager, which the check says, E502,
-/// where the screens say nothing.)
+/// E703 there, which the check says, and the request makes no screens. (The small organization's
+/// president has no manager, which the check says, E502.)
 #[test]
 fn a_rules_display_names_title_its_values_in_its_own_language() {
-    let owned = |v: &[(&str, &str)]| v.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect::<Vec<_>>();
+    let owned = |v: &[(&str, &str)]| Some(v.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect::<Vec<_>>());
     let (codes, titles) = beside_the_rule("ringi-titles-ruled", &kind_in_english(""));
     assert!(!codes.contains(&"E703"), "{codes:?}");
     assert_eq!(titles, owned(&[("goods", "Goods and services"), ("capex", "Capital expenditure"), ("software", "Software")]));
@@ -85,8 +89,9 @@ fn a_rules_display_names_title_its_values_in_its_own_language() {
             "request 例(example) v1 \"例\"\n\nuse organization 組織(org) from \"shared/小さい会社.ringi\"\nuse rule 権限表(authority) from \"shared/authority.rule\"\n\nform\n  種類(kind) : choice from 権限表.kind \"種類\"\n{under}\nroute\n  確認(check)  上長\n\nwho\n  上長(manager) = manager of requester\n\nticket\n  self approval  not allowed\n"
         )
     };
-    let (codes, _) = beside_the_rule("ringi-titles-ruled-ja", &ja("    goods \"物品・サービス\"\n"));
-    assert_eq!(codes, ["E703"]);
+    let (codes, titles) = beside_the_rule("ringi-titles-ruled-ja", &ja("    goods \"物品・サービス\"\n"));
+    assert_eq!(codes, ["E703", "E502"]);
+    assert_eq!(titles, None);
     let (codes, titles) = beside_the_rule("ringi-titles-ruled-ja-all", &ja("    goods    \"物品・サービス\"\n    capex    \"設備投資\"\n    software \"ソフトウェア\"\n"));
     assert!(!codes.contains(&"E703"), "{codes:?}");
     assert_eq!(titles, owned(&[("goods", "物品・サービス"), ("capex", "設備投資"), ("software", "ソフトウェア")]));

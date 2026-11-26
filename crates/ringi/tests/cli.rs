@@ -401,7 +401,7 @@ fn explain() {
     assert!(out.starts_with("E701 (error) — "), "{out}");
     let (code, out, _) = joined(&["explain", "--all", "--format", "json"]);
     assert_eq!(code, 0);
-    assert_eq!(ritsu_base::json::parse(&out).unwrap().as_arr().unwrap().len(), 62);
+    assert_eq!(ritsu_base::json::parse(&out).unwrap().as_arr().unwrap().len(), 63);
     let (code, _, err) = joined(&["explain", "E999"]);
     assert_eq!((code, err.as_str()), (2, "error: there is no code `E999`; run `ringi explain --all`\n"));
     let (code, _, err) = joined(&["explain"]);

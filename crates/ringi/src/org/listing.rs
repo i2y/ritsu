@@ -788,6 +788,9 @@ pub fn check(s: &Scope, usable: Option<&crate::usable::Usable>, diags: &mut Vec<
     if let (Data::Org(org), Some(l)) = (data.as_ref(), &submit) {
         facts.extend(submitters(s, org, l, usable, diags).into_iter().map(Fact::line));
     }
+    if let Data::Org(org) = data.as_ref() {
+        owner(s, org, usable, diags);
+    }
     if !approves {
         return facts;
     }
@@ -991,6 +994,28 @@ fn nobody(g: &mut Gather, v: &Version, r: &Requester, named: &Text, path: &[Occ]
 /// `submitted by` line names that a version does not have, E509 for a version no one may submit in
 /// (unless it has E508, which says the cause), each said once for the versions it holds in; and what
 /// `ok` says of how many may submit.
+/// E511: the team `owner` names, where a version of the organization the request is used in does
+/// not have it. The server passes that team to the company's rules when someone manages the kind
+/// (DESIGN 14.3), and a team the version does not have is no department's: only the rules that read
+/// no department (those of the administrators of the whole) would let anyone manage it.
+fn owner(s: &Scope, org: &Org, usable: Option<&crate::usable::Usable>, diags: &mut Vec<Diag>) {
+    let Some(w) = &s.file.owner else { return };
+    let id = &w.text;
+    let days: Vec<String> = versions(org, usable).into_iter().filter(|v| v.team(id).is_none()).map(|v| v.day()).collect();
+    if days.is_empty() {
+        return;
+    }
+    let at = in_versions(&days);
+    let d = Diag::error("E511", s.path, w.span.line, w.span.col, tr!("{}、`owner` が指すチーム `{id}` がありません", "{}, `owner` names the team `{id}`, which is not there", at.ja; at.en))
+        .source(s.src)
+        .note(tr!(
+            "`owner` は申請の種類を受け持つ部門です。チームが版に無ければ、その版の間、種類はどの部門の物にもならず、管理の画面では全体の管理者しか扱えません。",
+            "`owner` is the department that keeps the kind of request: while a version does not have the team, the kind is no department's, and only the administrators of the whole may manage it."
+        ))
+        .note(tr!("チームの ID を直すか、版のデータにそのチームを足してください。", "Correct the team's ID, or add the team to the data of the version."));
+    diags.push(d.with(crate::diag::Spaced { witness: Some(Json::obj([("versions", Json::arr(days.iter().map(Json::str))), ("team", Json::str(id))])), ..Default::default() }));
+}
+
 fn submitters(s: &Scope, org: &Org, l: &super::submit::Line, usable: Option<&crate::usable::Usable>, diags: &mut Vec<Diag>) -> Vec<Text> {
     use super::submit::Missing;
     let shown = l.shown();

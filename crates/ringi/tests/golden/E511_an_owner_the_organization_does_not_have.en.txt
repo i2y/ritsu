@@ -1,0 +1,4 @@
+error[E511]: tests/mutants/E511_an_owner_the_organization_does_not_have.ringi:3:7: In the organization from 2026-04-01, `owner` names the team `accounting`, which is not there
+     3 | owner accounting
+  = `owner` is the department that keeps the kind of request: while a version does not have the team, the kind is no department's, and only the administrators of the whole may manage it.
+  = Correct the team's ID, or add the team to the data of the version.

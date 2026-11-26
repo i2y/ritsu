@@ -1,0 +1,18 @@
+request 立替(outlay) v1 "立替"
+description "営業部の人が出し、上長が確かめる立替（架空）。経理部が受け持つが、組織にそのチームは無い"
+owner accounting
+
+use organization 組織(org) from "shared/小さい会社.ringi"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確認(check)  上長
+
+who
+  上長(manager) = manager of requester
+
+ticket
+  submitted by   everyone in sales
+  self approval  not allowed

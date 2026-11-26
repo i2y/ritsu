@@ -11,11 +11,11 @@ use ritsu_base::ledger::{self, Repro};
 use ritsu_base::text::Lang;
 
 /// What the code of `e` is given for its example in `dir`: `ringi check`'s answer, as `ritsu ringi
-/// check` checks it, E008's as the binary of ringi's own crate does, and E703's and E704's as `ritsu
-/// gen --target requests` checks the screens before it makes them (DESIGN 4.8, 13.3).
+/// check` checks it, E008's as the binary of ringi's own crate does, and E704's as `ritsu gen
+/// --target requests` checks the screens before it makes them (DESIGN 4.8, 13.3).
 fn run_example(e: &ledger::Entry, dir: &std::path::Path) -> std::rc::Rc<ringi::check::Outcome> {
     let path = dir.join("example.ringi");
-    if matches!(e.code, "E703" | "E704") {
+    if e.code == "E704" {
         return common::check_screens(path.to_str().unwrap());
     }
     let suite = if e.code == "E008" { Suite::default() } else { common::joined() };
@@ -61,9 +61,9 @@ const LATER: [&str; 2] = ["E701", "W702"];
 fn the_ledger_has_each_code_once() {
     let l = ringi::codes::ledger();
     assert!(ledger::duplicates(&l).is_empty(), "{:?}", ledger::duplicates(&l));
-    // DESIGN 9.5: E001–E009, E101–W109, E201–E203 and W201, E301–E309, E401–E409, W500–W510,
+    // DESIGN 9.5: E001–E009, E101–W109, E201–E203 and W201, E301–E309, E401–E409, W500–E511,
     // E601–E604, E701–E704, W901
-    assert_eq!(l.entries.len(), 62);
+    assert_eq!(l.entries.len(), 63);
     // every code is printed with its examples, but the two of the screens no file gives
     let later: Vec<&str> = l.entries.iter().filter(|e| matches!(e.repro, Repro::Later)).map(|e| e.code).collect();
     assert_eq!(later, LATER);

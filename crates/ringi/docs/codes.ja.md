@@ -2282,6 +2282,85 @@ e04,finance,dept_head,yes
 
 関連: [W502](#w502), [E502](#e502), [E509](#e509)
 
+<a id="e511"></a>
+
+## E511 — 組織のある版にないチームを、`owner` が指しています
+
+**いつ出るか**: 申請の種類を受け持つチーム（`owner`）が、申請を使う日の組織のある版に無いとき。サーバーは、だれかが管理の画面で種類を扱うとき、このチームを会社の決まり（sekisho の gate）に渡します。版に無いチームはどの部門の物でもないので、部門を読まない規則（全体の管理者の物）しか、その種類の管理を許しません。書いた場所で、版をまとめて言います。
+
+**直し方**: チームの ID を直すか、その版のデータにチームを足してください。
+
+**再現**:
+
+```ringi
+request 例(example) v1 "例"
+owner accounting
+
+use organization 組織(org) from "会社.ringi"
+
+form
+  金額(amount) : money[円] "金額"  range >=1円 <=100_000円
+
+route
+  確かめ(check)  財務
+
+who
+  財務(finance) = team finance
+
+ticket
+  submitted by   everyone in sales
+  self approval  not allowed
+```
+
+`会社.ringi`:
+
+```
+organization 会社(company) v1 "会社"
+description "小さな会社（架空）"
+
+positions
+  担当(staff)     "担当"
+  部長(dept_head) "部長"
+  社長(president) "社長"
+
+team kinds
+  会社(company)  "会社"
+  部(department) "部"
+
+data "org"
+```
+
+`org/2026-04-01/teams.csv`:
+
+```
+id,name,name_ja,kind,parent,head
+company,Example Co. (fictional),株式会社サンプル（架空）,company,,e01
+sales,Sales,営業部,department,company,e02
+finance,Finance,財務部,department,company,e04
+```
+
+`org/2026-04-01/people.csv`:
+
+```
+id,name,name_ja
+e01,President (fictional),社長（架空）
+e02,Head of Sales,営業部長
+e03,Sales staff,営業担当
+e04,Head of Finance,財務部長
+```
+
+`org/2026-04-01/members.csv`:
+
+```
+person,team,position,primary
+e01,company,president,yes
+e02,sales,dept_head,yes
+e03,sales,staff,yes
+e04,finance,dept_head,yes
+```
+
+関連: [E508](#e508)
+
 <a id="e601"></a>
 
 ## E601 — 経路の例が成り立ちません
@@ -2616,7 +2695,7 @@ closed weekly sat, sun
 
 ## E703 — 画面に出る項目に、その言語の文言がありません
 
-**いつ出るか**: 画面に出る項目に、要る言語の文言が無いとき。一つは、`labels` で宣言した言語に文言が無いとき（`labels ja` に `items.price` が無い）。項目は、`request`、フィールド（明細の列は `<明細>.<列>`）、選ぶ値（`<フィールド>.<値>`。規則の列挙から選ぶ値も）、`stage <名前>`、`who <名前>` です。もう一つは、ほかのファイルから来る項目に、ファイルの言語の題が無いとき。規則の列挙から選ぶ値で、フィールドの下に題の行が無く、規則がファイルの言語で書いた表示名も無い物（フィールドの行で言う）と、ほかの言語で書いた共有の経路のステップと決め方で、経路の `labels <ファイルの言語>` に題が無い物（`use route` の行で言う）です。`ritsu gen --target requests` が画面を作る前に言い、何も書きません。
+**いつ出るか**: 画面に出る項目に、要る言語の文言が無いとき。一つは、`labels` で宣言した言語に文言が無いとき（`labels ja` に `items.price` が無い）。項目は、`request`、フィールド（明細の列は `<明細>.<列>`）、選ぶ値（`<フィールド>.<値>`。規則の列挙から選ぶ値も）、`stage <名前>`、`who <名前>` です。もう一つは、ほかのファイルから来る項目に、ファイルの言語の題が無いとき。規則の列挙から選ぶ値で、フィールドの下に題の行が無く、規則がファイルの言語で書いた表示名も無い物（フィールドの行で言う）と、ほかの言語で書いた共有の経路のステップと決め方で、経路の `labels <ファイルの言語>` に題が無い物（`use route` の行で言う）です。申請の検査（`ritsu check`）が言い、`ritsu gen --target requests` も画面を作る前に言って何も書きません。
 
 **直し方**: その言語の `labels` に項目の文言を足すか、列挙の値の題をフィールドの下に書くか（`goods "物品・サービス"`）、共有の経路のファイルの `labels` に題を足してください。
 
@@ -2636,10 +2715,8 @@ route
 who
   上長(manager) = manager of requester
 
-every stage
-  when empty escalate, then skip
-
 ticket
+  submitted by   everyone in sales
   self approval  not allowed
 
 labels en

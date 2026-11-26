@@ -431,8 +431,10 @@ The usual codes (`codes.md` has every one, with its smallest reproduction):
 | E505, E508 | a proxy or a master's row for someone not in the organization; `submitted by` naming a team or a person a version does not have | ask the people who keep the data, or correct the name |
 | W506, W507 | one person at two stages of a ticket; a late stage with nowhere to go up to | ask whether one approval is meant (`same approver approves once`); ask where a late stage of the top goes |
 | E509, W510 | no one may submit in a version; requesters for whom no stage has anyone | ask whether `submitted by` or the route is wrong |
+| E511 | `owner` names a team a version of the organization does not have | correct the team's ID, or ask the people who keep the data |
 | E602-E604 | a scenario that goes another way than it writes | the ticket is right and the scenario wrong, or the other way round: ask which |
-| E701, W702, E703, E704 | a screen sends a value it does not show, shows a number in other steps, has no words in a language, or cannot hold a number's range | fix the field, its `labels`, or its range |
+| E703 | a text the screens show with no label in a language `labels` declares, or no title in the file's language | add the label, or title the value under its field |
+| E701, W702, E704 | a screen sends a value it does not show, shows a number in other steps, or cannot hold a number's range (said by `ritsu gen --target requests`) | fix the field or its range |
 | W109, W901 | a field that asks for a secret; a key written in the file | take it out; a secret is never a field of a request |
 
 `ritsu check` adds ritsu's codes across the languages, which `ritsu explain <code>` looks up:

@@ -2282,6 +2282,85 @@ e04,finance,dept_head,yes
 
 See also: [W502](#w502), [E502](#e502), [E509](#e509)
 
+<a id="e511"></a>
+
+## E511 — `owner` names a team a version does not have
+
+**When**: The team that keeps the kind of request (`owner`) is not in a version of the organization of the days the request is used on. When someone manages the kind on the admin pages, the server passes this team to the company's rules (sekisho's gate); a team a version does not have is no department's, so only a rule that reads no department (the administrators' of the whole) lets anyone manage the kind. It is said where `owner` is written, the versions together.
+
+**Fix**: Correct the team's ID, or add the team to the data of the version.
+
+**Example**:
+
+```ringi
+request example v1 "Example"
+owner accounting
+
+use organization org from "company.ringi"
+
+form
+  amount : money[JPY] "Amount"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  submitted by   everyone in sales
+  self approval  not allowed
+```
+
+`company.ringi`:
+
+```
+organization company v1 "Company"
+description "A small company (fictional)"
+
+positions
+  staff     "Staff"
+  dept_head "Head of department"
+  president "President"
+
+team kinds
+  company    "Company"
+  department "Department"
+
+data "org"
+```
+
+`org/2026-04-01/teams.csv`:
+
+```
+id,name,name_ja,kind,parent,head
+company,Example Co. (fictional),株式会社サンプル（架空）,company,,e01
+sales,Sales,営業部,department,company,e02
+finance,Finance,財務部,department,company,e04
+```
+
+`org/2026-04-01/people.csv`:
+
+```
+id,name,name_ja
+e01,President (fictional),社長（架空）
+e02,Head of Sales,営業部長
+e03,Sales staff,営業担当
+e04,Head of Finance,財務部長
+```
+
+`org/2026-04-01/members.csv`:
+
+```
+person,team,position,primary
+e01,company,president,yes
+e02,sales,dept_head,yes
+e03,sales,staff,yes
+e04,finance,dept_head,yes
+```
+
+See also: [E508](#e508)
+
 <a id="e601"></a>
 
 ## E601 — An example of the route that does not hold
@@ -2616,7 +2695,7 @@ See also: [E701](#e701)
 
 ## E703 — An item a screen shows has no words in a language
 
-**When**: An item a screen shows has no words in a language it needs. Either a language `labels` declares has no label for it (`labels ja` without `items.price`); the items are `request`, the fields (a column of rows as `<rows>.<column>`), the values to choose from (`<field>.<value>`, a value of a rule's enum too), `stage <name>` and `who <name>`. Or an item that comes from another file has no title in the file's language: a value of a rule's enum with no line under its field that titles it and no display name the rule writes in the file's language (said at the field's line), or a stage or a way to choose an approver of a shared route written in another language, which the route's `labels <the file's language>` does not title (said at the `use route` line). `ritsu gen --target requests` says it before it makes the screens, and writes nothing.
+**When**: An item a screen shows has no words in a language it needs. Either a language `labels` declares has no label for it (`labels ja` without `items.price`); the items are `request`, the fields (a column of rows as `<rows>.<column>`), the values to choose from (`<field>.<value>`, a value of a rule's enum too), `stage <name>` and `who <name>`. Or an item that comes from another file has no title in the file's language: a value of a rule's enum with no line under its field that titles it and no display name the rule writes in the file's language (said at the field's line), or a stage or a way to choose an approver of a shared route written in another language, which the route's `labels <the file's language>` does not title (said at the `use route` line). The check of the request (`ritsu check`) says it, and `ritsu gen --target requests` says it before it makes the screens, and writes nothing.
 
 **Fix**: Add the item's label to that language's `labels`, title the enum's value under its field (`goods "Goods and services"`), or add the title to the `labels` of the shared route's file.
 
@@ -2636,10 +2715,8 @@ route
 who
   manager = manager of requester
 
-every stage
-  when empty escalate, then skip
-
 ticket
+  submitted by   everyone in sales
   self approval  not allowed
 
 labels ja

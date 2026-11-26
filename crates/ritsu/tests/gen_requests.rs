@@ -1595,43 +1595,57 @@ labels ja
   who finance    "財務"
 "#;
 
-/// A request whose screens alone cannot be made (E704, E703) passes `ritsu check`: `ritsu gen
-/// --target requests` stops on it saying the request cannot be made into that package, as a file a
-/// target cannot be made from is said, not that it does not pass check (ringi's DESIGN 13.3), in
-/// English, in Japanese and in JSON; nothing is written. The targets of the languages are made from
-/// it.
+/// A request whose screens alone cannot be made (E704) passes `ritsu check`: `ritsu gen --target
+/// requests` stops on it saying the request cannot be made into that package, as a file a target
+/// cannot be made from is said, not that it does not pass check (ringi's DESIGN 13.3), in English, in
+/// Japanese and in JSON; nothing is written. The targets of the languages are made from it.
 #[test]
 fn what_the_screens_alone_refuse_is_said_as_the_target_refuses_it() {
     let t = TempDir::new("gen-requests-screens");
     lay(&t);
     std::fs::write(t.path().join("examples/parts.ringi"), PARTS).unwrap();
-    std::fs::write(t.path().join("examples/trip.ringi"), TRIP).unwrap();
-    let files = ["examples/parts.ringi", "examples/trip.ringi"];
+    let files = ["examples/parts.ringi"];
     let (code, stdout, err) = ritsu_in(t.path(), &[&["check"][..], &files, &["--root", "."]].concat());
     assert_eq!(code, 0, "ritsu check: {stdout}{err}");
     let out = t.path().join("out");
     let o = out.to_string_lossy().into_owned();
     let asked = [&["gen"][..], &files, &["--root", ".", "--out", &o, "--target", "requests", "--catalog", CATALOG]].concat();
     for (lang, last) in [
-        ("en", "error: `examples/parts.ringi` and `examples/trip.ringi` cannot be made into the requests package"),
-        ("ja", "エラー: `examples/parts.ringi`、`examples/trip.ringi` からは requests のパッケージを生成できません"),
+        ("en", "error: `examples/parts.ringi` cannot be made into the requests package"),
+        ("ja", "エラー: `examples/parts.ringi` からは requests のパッケージを生成できません"),
     ] {
         let (code, stdout, err) = ritsu_in(t.path(), &[&asked[..], &["--lang", lang]].concat());
         let said = format!("{stdout}{err}");
         assert_eq!(code, 1, "{lang}: {said}");
-        assert!(said.contains("E704]: examples/parts.ringi:8:1:") && said.contains("E703]: examples/trip.ringi:19:1:"), "{lang}: {said}");
+        assert!(said.contains("E704]: examples/parts.ringi:8:1:"), "{lang}: {said}");
         assert_eq!(said.trim_end().lines().last(), Some(last), "{lang}: {said}");
         assert!(!out.exists(), "{lang}: something is written");
     }
     let (code, stdout, _) = ritsu_in(t.path(), &[&asked[..], &["--format", "json"]].concat());
     assert_eq!(code, 1, "{stdout}");
     let j = ritsu_base::json::parse(&stdout).unwrap();
-    assert_eq!(j.get("error").and_then(|e| e.get("message")).and_then(Json::as_str), Some("`examples/parts.ringi` and `examples/trip.ringi` cannot be made into the requests package"), "{stdout}");
+    assert_eq!(j.get("error").and_then(|e| e.get("message")).and_then(Json::as_str), Some("`examples/parts.ringi` cannot be made into the requests package"), "{stdout}");
     let codes: Vec<&str> = j.get("diagnostics").and_then(Json::as_arr).unwrap().iter().filter_map(|d| d.get("code").and_then(Json::as_str)).collect();
-    assert_eq!(codes, ["E704", "E703"], "{stdout}");
+    assert_eq!(codes, ["E704"], "{stdout}");
     assert!(!out.exists(), "json: something is written");
     let (code, stdout, err) = ritsu_in(t.path(), &[&["gen"][..], &files, &["--root", ".", "--out", &o, "--target", "python"]].concat());
     assert_eq!(code, 0, "--target python: {stdout}{err}");
+}
+
+/// A label the screens show that a language the file declares labels in lacks (E703) is said by
+/// `ritsu check`, at the `labels` line (ringi's DESIGN 4.8): the file says what its pages are in, and
+/// it is found where the file is checked, not first where its screens are made.
+#[test]
+fn a_label_the_screens_lack_is_said_by_the_check() {
+    let t = TempDir::new("gen-requests-labels");
+    lay(&t);
+    std::fs::write(t.path().join("examples/trip.ringi"), TRIP).unwrap();
+    for lang in ["en", "ja"] {
+        let (code, stdout, err) = ritsu_in(t.path(), &["check", "examples/trip.ringi", "--root", ".", "--lang", lang]);
+        let said = format!("{stdout}{err}");
+        assert_eq!(code, 1, "{lang}: {said}");
+        assert!(said.contains("E703]: examples/trip.ringi:19:1:") && said.contains("`nights`"), "{lang}: {said}");
+    }
 }
 
 /// A request whose code is not written yet (here one that reads no organization, whose tickets have

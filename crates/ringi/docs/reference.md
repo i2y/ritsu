@@ -74,7 +74,7 @@ use flow pay from "shared/pay.flow"
 `description` says what the request is for, in the words of the people who make it; the pages and
 the server show it. `owner` is the team in charge of the kind of request, whose
 administrators may add an approver to a stage and hand a stage over (the gate decides who they
-are). `effective from <date>` is the first day the request is used on; without it, the first day is
+are). Every version of the organization the request is used in must have that team (E511). `effective from <date>` is the first day the request is used on; without it, the first day is
 the first day all the data it reads is there.
 
 ### Names and aliases
@@ -348,7 +348,8 @@ The titles are written in the language of the file. `labels <lang>` (`ja` or `en
 in the other language, which the screens and the pages of that language use. The keys are `request`
 (the title of the kind of request), a field, `<rows>.<field>`, `<field>.<value>`, `stage <name>` and
 `who <name>`. A label for what the file does not have is E007. In a language a request declares, a
-text the screens show with no label is E703, and `ritsu gen --target requests` writes nothing.
+text the screens show with no label is E703: `ritsu check` says it at the `labels` line, and `ritsu
+gen --target requests` writes nothing.
 
 ```ringi
 labels ja
@@ -1463,7 +1464,8 @@ generated: generated/requests/a2ui/functions.js
 `requests` needs the ID of the catalog, from `--catalog <url>` or the `catalog` line of `ritsu.mod`.
 A screen that sends a value it does not show is E701 (W702 where it shows it differently), a
 number field whose range goes past what a screen holds exactly (2^53 − 1 in the steps of its unit)
-E704, and a text with no label in a declared language E703; `ritsu gen` writes nothing then.
+E704; `ritsu gen` writes nothing then. A text with no label in a declared language is E703, which
+`ritsu check` says first.
 
 ### What the server adds
 

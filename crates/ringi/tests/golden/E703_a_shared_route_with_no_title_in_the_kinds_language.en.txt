@@ -1,3 +1,3 @@
-error[E703]: tests/mutants/E703_a_shared_route_with_no_title_in_the_kinds_language.ringi:3:1: The screens show 2 things with no title in the file's language (`en`): `stage 確認`, `who 上長`
-     3 | use route check from "shared/上長の確認.ringi"
+error[E703]: tests/mutants/E703_a_shared_route_with_no_title_in_the_kinds_language.ringi:4:1: The screens show 2 things with no title in the file's language (`en`): `stage 確認`, `who 上長`
+     4 | use route check from "shared/上長の確認.ringi"
   = Title them in `labels en` of the shared route's file: without it, a screen would show the names the route writes in another language.

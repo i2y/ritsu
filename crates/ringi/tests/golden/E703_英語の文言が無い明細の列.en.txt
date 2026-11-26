@@ -1,3 +1,3 @@
-error[E703]: tests/mutants/E703_英語の文言が無い明細の列.ringi:23:1: `labels en` has no label for 1 thing the screens show: `明細.金額`
-    23 | labels en
+error[E703]: tests/mutants/E703_英語の文言が無い明細の列.ringi:24:1: `labels en` has no label for 1 thing the screens show: `明細.金額`
+    24 | labels en
   = Where it has none, a screen in this language would show the title as the file writes it.

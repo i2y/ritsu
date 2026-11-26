@@ -18,6 +18,7 @@ who
   上長(manager) = manager of requester
 
 ticket
+  submitted by   everyone in sales
   self approval  not allowed
 
 labels en

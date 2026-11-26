@@ -24,6 +24,9 @@ them is edited.
 - **The ticket.** Where the claims ask it, every reminder comes before its deadline (E403), and
   every ticket ends within the days they give (E401). A hold in a book is posted or let go on
   every ending (E405), and keyed by the try, so a request made again holds again (E408).
+- **The words of the pages.** Each language `labels` declares has a label for every field, value,
+  stage and way the pages show, and what comes from another file has a title in the file's
+  language (E703).
 
 ## What the languages it is lowered to check
 
@@ -50,6 +53,7 @@ submit the request, in each version of the organization:
 - a quorum some requesters cannot reach (E504), one person at two stages of a ticket (W506), and a
   late stage with nowhere to go up to (W507);
 - a person a version does not have, named where a stage was to go up from them (E503);
+- the team in charge of the request (`owner`), where a version does not have it (E511);
 - the days the request can be used on: from the first version of the organization, until the end
   of what the calendar, the organization and the lists cover.
 

@@ -516,10 +516,66 @@ pub struct Said {
 /// E703: each language the file declares labels in that lacks a label the screens show, at its
 /// `labels` line, with the keys it lacks.
 pub fn labels_said(k: &Kind) -> Vec<Said> {
-    let all = keys(k);
+    let all: Vec<(String, Vec<String>)> = keys(k).into_iter().map(|x| (x.key, x.named.labels.iter().map(|(l, _)| l.clone()).collect())).collect();
+    missing_labels(&all, &k.screen.declared, &k.screen.untitled, &k.language)
+}
+
+/// E703 of a request as `check` says it: what [`labels_said`] says of the kind `ritsu gen --target
+/// requests` makes of the file, from the file alone ([`label_keys`]), so that a label the screens
+/// lack is said where the file is checked, and not first when the screens are written.
+pub fn labels_checked(s: &crate::names::Scope) -> Vec<Said> {
+    let declared: Vec<(String, usize)> = s.file.labels.iter().map(|b| (b.lang.text.clone(), b.line)).collect();
+    missing_labels(&label_keys(s), &declared, &untitled(s), crate::r#gen::written_in(s.file))
+}
+
+/// Every label the screens of a request show, as [`keys`] lists them of its kind, from the file: the
+/// request, the fields (a field's values and the fields of its rows after it), the stages and the
+/// ways, each with the languages that label it.
+pub fn label_keys(s: &crate::names::Scope) -> Vec<(String, Vec<String>)> {
+    let f = s.file;
+    let langs = |is: &dyn Fn(&LabelKey) -> bool| -> Vec<String> { f.labels.iter().filter(|b| b.entries.iter().any(|e| is(&e.key))).map(|b| b.lang.text.clone()).collect() };
+    let key_is = |words: &[crate::ast::Word], want: &[String]| words.len() == want.len() && words.iter().zip(want).all(|(w, x)| w.text == *x);
+    fn walk(s: &crate::names::Scope, x: &Field, at: &[String], out: &mut Vec<(String, Vec<String>)>, langs: &dyn Fn(&dyn Fn(&LabelKey) -> bool) -> Vec<String>, key_is: &dyn Fn(&[crate::ast::Word], &[String]) -> bool) {
+        let mut here = at.to_vec();
+        here.push(x.name.text.clone());
+        out.push((here.join("."), langs(&|k| matches!(k, LabelKey::Field(ws) if key_is(ws, &here)))));
+        let values: Vec<(String, Option<String>)> = match &x.ty {
+            TypeExpr::Choice => x.options.iter().map(|o| (o.name.text.clone(), None)).collect(),
+            TypeExpr::ChoiceFrom(p) if p.len() == 2 => s
+                .rule_facts(&p[0].text)
+                .and_then(|r| r.enums.iter().find(|e| e.name == p[1].text || e.public == p[1].text))
+                .map(|e| e.values.iter().map(|v| (v.name.clone(), Some(v.public.clone()))).collect())
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        for (name, public) in values {
+            let (mut by_name, mut by_ascii) = (here.clone(), here.clone());
+            by_name.push(name.clone());
+            by_ascii.push(public.unwrap_or_else(|| name.clone()));
+            out.push((by_name.join("."), langs(&|k| matches!(k, LabelKey::Field(ws) if key_is(ws, &by_name) || key_is(ws, &by_ascii)))));
+        }
+        for c in &x.children {
+            walk(s, c, &here, out, langs, key_is);
+        }
+    }
+    let mut out = vec![("request".to_string(), langs(&|k| matches!(k, LabelKey::Request)))];
+    for x in &f.form {
+        walk(s, x, &[], &mut out, &langs, &key_is);
+    }
+    let word = |n: &crate::ast::Name| crate::ast::Word { text: n.text.clone(), span: n.span };
+    let of = |labels: Vec<(String, String)>| labels.into_iter().map(|(l, _)| l).collect::<Vec<_>>();
+    out.extend(s.stages().unwrap_or_default().into_iter().map(|n| (format!("stage {}", n.text), of(titled(s, &LabelKey::Stage(word(n)), &n.text).1))));
+    out.extend(s.who_all().iter().map(|w| &w.who.name).map(|n| (format!("who {}", n.text), of(titled(s, &LabelKey::Who(word(n)), &n.text).1))));
+    out
+}
+
+/// E703 of the labels a kind's screens show, each with the languages that label it: each language
+/// the file declares labels in (`declared`, with its line) that lacks one, and what comes from
+/// elsewhere with no title in the file's language `lang` (`untitled`, with the line it is said at).
+fn missing_labels(all: &[(String, Vec<String>)], declared: &[(String, usize)], untitled: &[(String, usize)], lang: &str) -> Vec<Said> {
     let mut out = Vec::new();
-    for (lang, line) in &k.screen.declared {
-        let missing: Vec<String> = all.iter().filter(|x| !x.named.labels.iter().any(|(l, _)| l == lang)).map(|x| format!("`{}`", x.key)).collect();
+    for (lang, line) in declared {
+        let missing: Vec<String> = all.iter().filter(|(_, ls)| !ls.iter().any(|l| l == lang)).map(|(key, _)| format!("`{key}`")).collect();
         if missing.is_empty() {
             continue;
         }
@@ -534,20 +590,19 @@ pub fn labels_said(k: &Kind) -> Vec<Said> {
         });
     }
     // the file's own language: what comes from elsewhere, said at each line it is given at
-    let lang = k.language;
     let mut lines: Vec<usize> = Vec::new();
-    for (_, l) in &k.screen.untitled {
+    for (_, l) in untitled {
         if !lines.contains(l) {
             lines.push(*l);
         }
     }
     for line in lines {
-        let missing: Vec<String> = k.screen.untitled.iter().filter(|(_, l)| *l == line).map(|(key, _)| format!("`{key}`")).collect();
+        let missing: Vec<String> = untitled.iter().filter(|(_, l)| *l == line).map(|(key, _)| format!("`{key}`")).collect();
         let (en, ja) = (missing.join(", "), missing.join("、"));
         let n = missing.len();
         let things = ritsu_base::text::plural(n, "thing", "things");
         // a line is a `use route` line, or the line of a field that chooses from a rule's enum
-        let routed = k.screen.untitled.iter().any(|(key, l)| *l == line && (key.starts_with("stage ") || key.starts_with("who ")));
+        let routed = untitled.iter().any(|(key, l)| *l == line && (key.starts_with("stage ") || key.starts_with("who ")));
         let note = if routed {
             tr!(
                 "共有の経路のステップと決め方の題は、その経路のファイルの `labels {lang}` に書きます。無ければ、画面は経路が別の言語で書いた名前を出してしまいます。",

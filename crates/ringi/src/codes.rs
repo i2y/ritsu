@@ -1,11 +1,10 @@
 //! The ledger of every diagnostic code (DESIGN 9.5): `ringi explain` reads it, `docs/codes.md` and
 //! `docs/codes.ja.md` are its Markdown, and a test runs every entry's example and requires its code
 //! to come out, so the example cannot go stale while the prose around it still reads well. An
-//! example is in English names, and in Japanese names for `explain --lang ja`. E703 and E704 are
-//! said when the screens are made, and their examples are run as `ritsu gen --target requests` runs
-//! the check; E701 and W702 have no example, for ringi writes no template that gives them
-//! ([`later`]). The entries
-//! are ringi's; how they are written out, and how every example is run, is ritsu-base's
+//! example is in English names, and in Japanese names for `explain --lang ja`. E704 is said when
+//! the screens are made, and its example is run as `ritsu gen --target requests` runs the check;
+//! E701 and W702 have no example, for ringi writes no template that gives them ([`later`]). The
+//! entries are ringi's; how they are written out, and how every example is run, is ritsu-base's
 //! ([`ritsu_base::ledger`]).
 
 use ritsu_base::ledger::{Entry, Ledger, Repro};
@@ -265,10 +264,8 @@ route
 who
   manager = manager of requester
 
-every stage
-  when empty escalate, then skip
-
 ticket
+  submitted by   everyone in sales
   self approval  not allowed
 
 labels ja
@@ -290,10 +287,8 @@ route
 who
   上長(manager) = manager of requester
 
-every stage
-  when empty escalate, then skip
-
 ticket
+  submitted by   everyone in sales
   self approval  not allowed
 
 labels en
@@ -1721,6 +1716,43 @@ ticket
   self approval  not allowed
 ";
 
+const E511_EN: &str = "request example v1 \"Example\"
+owner accounting
+
+use organization org from \"company.ringi\"
+
+form
+  amount : money[JPY] \"Amount\"  range >=1JPY <=100_000JPY
+
+route
+  check  finance
+
+who
+  finance = team finance
+
+ticket
+  submitted by   everyone in sales
+  self approval  not allowed
+";
+const E511_JA: &str = "request 例(example) v1 \"例\"
+owner accounting
+
+use organization 組織(org) from \"会社.ringi\"
+
+form
+  金額(amount) : money[円] \"金額\"  range >=1円 <=100_000円
+
+route
+  確かめ(check)  財務
+
+who
+  財務(finance) = team finance
+
+ticket
+  submitted by   everyone in sales
+  self approval  not allowed
+";
+
 const W510_EN: &str = "request example v1 \"Example\"
 
 use organization org from \"company.ringi\"
@@ -3125,6 +3157,18 @@ pub fn ledger() -> Ledger {
             (W510_JA, SMALL_ORG_JA),
             &["W502", "E502", "E509"],
         ),
+        with_files(
+            "E511",
+            tr!("組織のある版にないチームを、`owner` が指しています", "`owner` names a team a version does not have"),
+            tr!(
+                "申請の種類を受け持つチーム（`owner`）が、申請を使う日の組織のある版に無いとき。サーバーは、だれかが管理の画面で種類を扱うとき、このチームを会社の決まり（sekisho の gate）に渡します。版に無いチームはどの部門の物でもないので、部門を読まない規則（全体の管理者の物）しか、その種類の管理を許しません。書いた場所で、版をまとめて言います。",
+                "The team that keeps the kind of request (`owner`) is not in a version of the organization of the days the request is used on. When someone manages the kind on the admin pages, the server passes this team to the company's rules (sekisho's gate); a team a version does not have is no department's, so only a rule that reads no department (the administrators' of the whole) lets anyone manage the kind. It is said where `owner` is written, the versions together."
+            ),
+            tr!("チームの ID を直すか、その版のデータにチームを足してください。", "Correct the team's ID, or add the team to the data of the version."),
+            (E511_EN, SMALL_ORG_EN),
+            (E511_JA, SMALL_ORG_JA),
+            &["E508"],
+        ),
         // ── Examples and scenarios ──
         e(
             "E601",
@@ -3208,8 +3252,8 @@ pub fn ledger() -> Ledger {
             "E703",
             tr!("画面に出る項目に、その言語の文言がありません", "An item a screen shows has no words in a language"),
             tr!(
-                "画面に出る項目に、要る言語の文言が無いとき。一つは、`labels` で宣言した言語に文言が無いとき（`labels ja` に `items.price` が無い）。項目は、`request`、フィールド（明細の列は `<明細>.<列>`）、選ぶ値（`<フィールド>.<値>`。規則の列挙から選ぶ値も）、`stage <名前>`、`who <名前>` です。もう一つは、ほかのファイルから来る項目に、ファイルの言語の題が無いとき。規則の列挙から選ぶ値で、フィールドの下に題の行が無く、規則がファイルの言語で書いた表示名も無い物（フィールドの行で言う）と、ほかの言語で書いた共有の経路のステップと決め方で、経路の `labels <ファイルの言語>` に題が無い物（`use route` の行で言う）です。`ritsu gen --target requests` が画面を作る前に言い、何も書きません。",
-                "An item a screen shows has no words in a language it needs. Either a language `labels` declares has no label for it (`labels ja` without `items.price`); the items are `request`, the fields (a column of rows as `<rows>.<column>`), the values to choose from (`<field>.<value>`, a value of a rule's enum too), `stage <name>` and `who <name>`. Or an item that comes from another file has no title in the file's language: a value of a rule's enum with no line under its field that titles it and no display name the rule writes in the file's language (said at the field's line), or a stage or a way to choose an approver of a shared route written in another language, which the route's `labels <the file's language>` does not title (said at the `use route` line). `ritsu gen --target requests` says it before it makes the screens, and writes nothing."
+                "画面に出る項目に、要る言語の文言が無いとき。一つは、`labels` で宣言した言語に文言が無いとき（`labels ja` に `items.price` が無い）。項目は、`request`、フィールド（明細の列は `<明細>.<列>`）、選ぶ値（`<フィールド>.<値>`。規則の列挙から選ぶ値も）、`stage <名前>`、`who <名前>` です。もう一つは、ほかのファイルから来る項目に、ファイルの言語の題が無いとき。規則の列挙から選ぶ値で、フィールドの下に題の行が無く、規則がファイルの言語で書いた表示名も無い物（フィールドの行で言う）と、ほかの言語で書いた共有の経路のステップと決め方で、経路の `labels <ファイルの言語>` に題が無い物（`use route` の行で言う）です。申請の検査（`ritsu check`）が言い、`ritsu gen --target requests` も画面を作る前に言って何も書きません。",
+                "An item a screen shows has no words in a language it needs. Either a language `labels` declares has no label for it (`labels ja` without `items.price`); the items are `request`, the fields (a column of rows as `<rows>.<column>`), the values to choose from (`<field>.<value>`, a value of a rule's enum too), `stage <name>` and `who <name>`. Or an item that comes from another file has no title in the file's language: a value of a rule's enum with no line under its field that titles it and no display name the rule writes in the file's language (said at the field's line), or a stage or a way to choose an approver of a shared route written in another language, which the route's `labels <the file's language>` does not title (said at the `use route` line). The check of the request (`ritsu check`) says it, and `ritsu gen --target requests` says it before it makes the screens, and writes nothing."
             ),
             tr!(
                 "その言語の `labels` に項目の文言を足すか、列挙の値の題をフィールドの下に書くか（`goods \"物品・サービス\"`）、共有の経路のファイルの `labels` に題を足してください。",

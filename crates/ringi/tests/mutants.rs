@@ -1,7 +1,7 @@
 //! The mutants (PLAN B.7): every `tests/mutants/<CODE>_<what>.ringi` gives its code, checked as
-//! `ritsu ringi check` checks it (an E008 mutant as the binary of ringi's own crate does, an E703 or
-//! E704 mutant as `ritsu gen --target requests` checks the screens), and what `ringi check` prints for
-//! it, in English and in Japanese, is its golden file in `tests/golden/`.
+//! `ritsu ringi check` checks it (an E008 mutant as the binary of ringi's own crate does, an E704
+//! mutant as `ritsu gen --target requests` checks the screens), and what `ringi check` prints for it,
+//! in English and in Japanese, is its golden file in `tests/golden/`.
 //! An English mutant and a Japanese one are a pair by the code at their start; the files they read
 //! are in `tests/mutants/shared/`. `RINGI_BLESS=1 cargo test -p ringi --test mutants` writes the
 //! golden files again; read the diff.
@@ -29,10 +29,10 @@ fn japanese(name: &str) -> bool {
 }
 
 /// What a mutant for `code` is given: `ringi check`'s answer, as `ritsu ringi check` checks it, an
-/// E008 mutant's as the binary of ringi's own crate does, and an E703 or E704 mutant's as `ritsu
-/// gen --target requests` checks the screens before it makes them (DESIGN 4.8, 13.3).
+/// E008 mutant's as the binary of ringi's own crate does, and an E704 mutant's as `ritsu gen
+/// --target requests` checks the screens before it makes them (DESIGN 4.8, 13.3).
 fn outcome(path: &str, code: &str) -> std::rc::Rc<ringi::check::Outcome> {
-    if matches!(code, "E703" | "E704") {
+    if code == "E704" {
         return common::check_screens(path);
     }
     let suite = if code == "E008" { Suite::default() } else { common::joined() };

@@ -369,6 +369,15 @@ impl Run {
                         facts.extend(listed);
                         usable = Some(u);
                     }
+                    // a label the file's screens show that a language it declares labels in lacks,
+                    // or that has no title in the file's language (E703): the file says what its pages
+                    // are in, and that is said where the file is checked, not first where its screens
+                    // are made. A range a screen cannot hold (E704) is the screens' own limit, which
+                    // the package of a language does not have, and is left to `--target requests`
+                    if file.kind == FileKind::Request {
+                        let said = crate::screens::labels_checked(&scope);
+                        diags.extend(said.into_iter().map(|x| x.notes.into_iter().fold(Diag::error(x.code, path, x.line, 1, x.message).source(src), |d, n| d.note(n))));
+                    }
                 }
             }
         }

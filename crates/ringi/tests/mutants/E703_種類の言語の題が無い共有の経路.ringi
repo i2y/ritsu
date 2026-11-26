@@ -1,5 +1,6 @@
 request 例(example) v1 "例"
 
+use organization 組織(org) from "shared/small.ringi"
 use route 確認(check) from "shared/manager_check.ringi"
 
 form
@@ -8,4 +9,5 @@ form
 route 確認()
 
 ticket
+  submitted by   everyone in sales
   self approval  not allowed
