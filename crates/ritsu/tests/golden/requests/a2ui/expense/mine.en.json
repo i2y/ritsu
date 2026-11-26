@@ -118,6 +118,270 @@
             "child": "line.made_by"
           },
           {
+            "id": "line.due.stage.words",
+            "component": "Text",
+            "text": "Due",
+            "variant": "caption"
+          },
+          {
+            "id": "line.due.stage.at",
+            "component": "Text",
+            "text": {
+              "@call": "formatDate",
+              "args": {
+                "value": {
+                  "@path": "due/stage"
+                },
+                "format": "yyyy-MM-dd HH:mm"
+              }
+            }
+          },
+          {
+            "id": "line.due.stage.at.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@call": "not",
+              "args": {
+                "value": {
+                  "@call": "required",
+                  "args": {
+                    "value": {
+                      "@path": "due/stage_day"
+                    }
+                  }
+                }
+              }
+            },
+            "child": "line.due.stage.at"
+          },
+          {
+            "id": "line.due.stage.day",
+            "component": "Text",
+            "text": {
+              "@path": "due/stage_day"
+            }
+          },
+          {
+            "id": "line.due.stage.day.end",
+            "component": "Text",
+            "text": "at the end of the day"
+          },
+          {
+            "id": "line.due.stage.day.row",
+            "component": "Row",
+            "children": [
+              "line.due.stage.day",
+              "line.due.stage.day.end"
+            ]
+          },
+          {
+            "id": "line.due.stage.day.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "due/stage_day"
+            },
+            "child": "line.due.stage.day.row"
+          },
+          {
+            "id": "line.due.stage",
+            "component": "Row",
+            "children": [
+              "line.due.stage.words",
+              "line.due.stage.at.shown",
+              "line.due.stage.day.shown"
+            ]
+          },
+          {
+            "id": "line.due.stage.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "due/stage"
+            },
+            "child": "line.due.stage"
+          },
+          {
+            "id": "line.due.resubmit.words",
+            "component": "Text",
+            "text": "Resubmit by",
+            "variant": "caption"
+          },
+          {
+            "id": "line.due.resubmit.at",
+            "component": "Text",
+            "text": {
+              "@call": "formatDate",
+              "args": {
+                "value": {
+                  "@path": "due/resubmit"
+                },
+                "format": "yyyy-MM-dd HH:mm"
+              }
+            }
+          },
+          {
+            "id": "line.due.resubmit.at.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@call": "not",
+              "args": {
+                "value": {
+                  "@call": "required",
+                  "args": {
+                    "value": {
+                      "@path": "due/resubmit_day"
+                    }
+                  }
+                }
+              }
+            },
+            "child": "line.due.resubmit.at"
+          },
+          {
+            "id": "line.due.resubmit.day",
+            "component": "Text",
+            "text": {
+              "@path": "due/resubmit_day"
+            }
+          },
+          {
+            "id": "line.due.resubmit.day.end",
+            "component": "Text",
+            "text": "at the end of the day"
+          },
+          {
+            "id": "line.due.resubmit.day.row",
+            "component": "Row",
+            "children": [
+              "line.due.resubmit.day",
+              "line.due.resubmit.day.end"
+            ]
+          },
+          {
+            "id": "line.due.resubmit.day.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "due/resubmit_day"
+            },
+            "child": "line.due.resubmit.day.row"
+          },
+          {
+            "id": "line.due.resubmit",
+            "component": "Row",
+            "children": [
+              "line.due.resubmit.words",
+              "line.due.resubmit.at.shown",
+              "line.due.resubmit.day.shown"
+            ]
+          },
+          {
+            "id": "line.due.resubmit.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "due/resubmit"
+            },
+            "child": "line.due.resubmit"
+          },
+          {
+            "id": "line.due.pause_ends.words",
+            "component": "Text",
+            "text": "On hold until",
+            "variant": "caption"
+          },
+          {
+            "id": "line.due.pause_ends.at",
+            "component": "Text",
+            "text": {
+              "@call": "formatDate",
+              "args": {
+                "value": {
+                  "@path": "due/pause_ends"
+                },
+                "format": "yyyy-MM-dd HH:mm"
+              }
+            }
+          },
+          {
+            "id": "line.due.pause_ends.at.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@call": "not",
+              "args": {
+                "value": {
+                  "@call": "required",
+                  "args": {
+                    "value": {
+                      "@path": "due/pause_ends_day"
+                    }
+                  }
+                }
+              }
+            },
+            "child": "line.due.pause_ends.at"
+          },
+          {
+            "id": "line.due.pause_ends.day",
+            "component": "Text",
+            "text": {
+              "@path": "due/pause_ends_day"
+            }
+          },
+          {
+            "id": "line.due.pause_ends.day.end",
+            "component": "Text",
+            "text": "at the end of the day"
+          },
+          {
+            "id": "line.due.pause_ends.day.row",
+            "component": "Row",
+            "children": [
+              "line.due.pause_ends.day",
+              "line.due.pause_ends.day.end"
+            ]
+          },
+          {
+            "id": "line.due.pause_ends.day.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "due/pause_ends_day"
+            },
+            "child": "line.due.pause_ends.day.row"
+          },
+          {
+            "id": "line.due.pause_ends",
+            "component": "Row",
+            "children": [
+              "line.due.pause_ends.words",
+              "line.due.pause_ends.at.shown",
+              "line.due.pause_ends.day.shown"
+            ]
+          },
+          {
+            "id": "line.due.pause_ends.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "due/pause_ends"
+            },
+            "child": "line.due.pause_ends"
+          },
+          {
+            "id": "line.due",
+            "component": "Row",
+            "children": [
+              "line.due.stage.shown",
+              "line.due.resubmit.shown",
+              "line.due.pause_ends.shown"
+            ]
+          },
+          {
             "id": "line.category",
             "component": "Text",
             "text": {
@@ -186,6 +450,7 @@
               "line.status",
               "line.stage",
               "line.made_by.shown",
+              "line.due",
               "line.category",
               "line.used_on.shown",
               "line.open"

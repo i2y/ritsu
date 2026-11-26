@@ -111,7 +111,12 @@ pub fn components() -> Vec<(&'static str, Json)> {
             component(
                 "FileAttachment",
                 "Picks a file, hands it to the server at `upload` (a `POST` of `multipart/form-data` with one part, `file`, answered with the ID the server keeps the file by: `{\"id\": …}`), and writes that ID to `value`. A person who holds as many files on no ticket as the server takes is answered 429, with no `Retry-After`: waiting does not change it.",
-                vec![("label", label()), ("value", common("DynamicString")), ("upload", described(common("DynamicString"), "The address the file is handed to: the server's, which fills it in the screen's data (`/upload`)."))],
+                vec![
+                    ("label", label()),
+                    ("value", common("DynamicString")),
+                    ("name", described(common("DynamicString"), "The name of the file `value` holds, shown in place of its ID: the screen looks it up in the names the server fills in its data (`/file_names`), which have the files the person may open; a file it does not have is shown by its ID.")),
+                    ("upload", described(common("DynamicString"), "The address the file is handed to: the server's, which fills it in the screen's data (`/upload`).")),
+                ],
                 &["label", "value", "upload"],
                 true,
             ),

@@ -145,6 +145,10 @@
             "value": {
               "$ref": "common_types.json#/$defs/DynamicString"
             },
+            "name": {
+              "$ref": "common_types.json#/$defs/DynamicString",
+              "description": "The name of the file `value` holds, shown in place of its ID: the screen looks it up in the names the server fills in its data (`/file_names`), which have the files the person may open; a file it does not have is shown by its ID."
+            },
             "upload": {
               "$ref": "common_types.json#/$defs/DynamicString",
               "description": "The address the file is handed to: the server's, which fills it in the screen's data (`/upload`)."

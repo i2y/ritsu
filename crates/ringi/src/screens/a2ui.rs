@@ -510,7 +510,11 @@ impl<'a> S<'a> {
                 Some(m) => self.radd(id, "MasterPicker", checked(vec![("label", lbl), ("value", value), ("master", Json::str(m)), ("find", path("/find"))])),
                 None => self.add(id, "TextField", checked(vec![("label", lbl), ("value", value), ("variant", Json::str("shortText"))])),
             },
-            TypeExpr::Attachment => self.radd(id, "FileAttachment", checked(vec![("label", lbl), ("value", value), ("upload", path("/upload"))])),
+            TypeExpr::Attachment => {
+                // the name the file was given, by its ID: the ID itself where the table has none
+                let name = self.rcall("lookup", vec![("value", value.clone()), ("table", path("/file_names"))]);
+                self.radd(id, "FileAttachment", checked(vec![("label", lbl), ("value", value), ("name", name), ("upload", path("/upload"))]))
+            }
             TypeExpr::Person | TypeExpr::Team => {
                 let of = if matches!(f.ty, TypeExpr::Team) { "team" } else { "person" };
                 self.radd(id, "PersonPicker", checked(vec![("label", lbl), ("value", value), ("of", Json::str(of)), ("find", path("/find"))]))
@@ -579,9 +583,10 @@ impl<'a> S<'a> {
             TypeExpr::Person | TypeExpr::Team => self.rcall("lookup", vec![("value", v()), ("table", path("/people"))]),
             TypeExpr::Bool => self.rcall("lookup", vec![("value", v()), ("table", obj(vec![("true", Json::str(self.t("Yes", "はい"))), ("false", Json::str(self.t("No", "いいえ")))]))]),
             TypeExpr::Attachment => {
-                let name = self.text(&format!("{id}.name"), v());
+                // the file's name by its ID, and its URL: one table of each for a row's file too
+                let name = self.rcall("lookup", vec![("value", v()), ("table", path("/file_names"))]);
+                let name = self.text(&format!("{id}.name"), name);
                 let open_text = self.text(&format!("{id}.open.text"), Json::str(self.t("Open the file", "ファイルを開く")));
-                // the URL of the file the field holds, by its ID: one table for a row's file too
                 let url = self.rcall("lookup", vec![("value", v()), ("table", path("/files"))]);
                 let action = obj(vec![("functionCall", call("openUrl", vec![("url", url)]))]);
                 let open = self.add(&format!("{id}.open"), "Button", vec![("child", Json::str(open_text)), ("variant", Json::str("borderless")), ("action", action)]);
@@ -690,9 +695,9 @@ impl<'a> S<'a> {
     /// The data: `requester` and `submit_for` (whom a proxy may make it for), `form`, `before` (on a
     /// request made again, the values the ticket holds), `ticket` (`id`, `revision`,
     /// `sent_back_by`), `comment`, `can`, `people`, `refused` (the refusal of the operation a button
-    /// sent), `upload` where the form takes a file (the address the file is handed to), `find` (the
-    /// address the pickers find people and rows of masters at), and `may_submit` where `submitted
-    /// by` is written.
+    /// sent), `upload` and `file_names` where the form takes a file (the address the file is handed
+    /// to, and the names of the files it holds), `find` (the address the pickers find people and rows
+    /// of masters at), and `may_submit` where `submitted by` is written.
     fn form(&mut self) -> Json {
         let k = self.k;
         let title_text = self.label(&k.named);
@@ -775,7 +780,7 @@ impl<'a> S<'a> {
             ("refused", Self::refused_data()),
         ];
         if k.form.iter().any(|f| matches!(f.ty, TypeExpr::Attachment) || f.fields.iter().any(|c| matches!(c.ty, TypeExpr::Attachment))) {
-            data.push(("upload", Json::Null));
+            data.extend([("upload", Json::Null), ("file_names", obj(vec![]))]);
         }
         if self.finds() {
             data.push(("find", Json::Null));
@@ -786,15 +791,19 @@ impl<'a> S<'a> {
         obj(data)
     }
 
-    /// The card: whose request it is (and who made it for them, where a proxy did), the ticket's
-    /// place in its route, every field, the fields an approver gives, the comment, and a button for
+    /// The card: whose request it is (and who made it for them, where a proxy did), the deadlines
+    /// it runs to, the ticket's place in its route, what an agent answered, what became of the work
+    /// it launched, every field, the fields an approver gives, the comment, and a button for
     /// each event a person makes on the ticket (adding an approver, one for each part of the stage
     /// that waits for one). The data: `ticket` (`id`, `revision`, `status`, `stage`, `requester`,
-    /// `made_by`), `form`, `route`, `edit` (the server fills it with the ticket's values of the
+    /// `made_by`), `due` (the deadlines: [`Self::deadlines`]), `form`, `route`, `agent` (what an agent
+    /// answered, of a kind with an agent's stage: [`Self::agent_said`]), `works` (what became of the
+    /// work the ticket launched, of a kind that launches work: [`Self::works`]), `edit` (the server fills it with the ticket's values of the
     /// fields an approver gives or corrects), `comment`, the values of the events (`send_back`,
-    /// `add_approver` with its `parts`, `hand_over`), `can`, the names `people`, `masters`,
-    /// `files`, `refused` (the refusal of the operation a button sent), `upload` where an approver
-    /// gives a file, and `find` where a picker finds people or rows of masters.
+    /// `add_approver` with its `parts`, `hand_over`), `can`, the names `people`, `masters`, the
+    /// files' URLs `files` and their names `file_names`, `refused` (the refusal of the operation a
+    /// button sent), `upload` where an approver gives a file, and `find` where a picker finds people
+    /// or rows of masters.
     fn card(&mut self) -> Json {
         let k = self.k;
         let title_text = self.label(&k.named);
@@ -813,10 +822,23 @@ impl<'a> S<'a> {
         let by = self.row("made_by", vec![by_label, by_name]);
         let by = self.show("made_by.shown", path("/ticket/made_by"), by);
         let whose = self.row("whose", vec![rq_label, rq_name, by]);
+        let due = self.deadlines("due", "/due");
         // the card places every field of the form, and a refusal of one beside it
         let refused = self.refused_head(&[]);
         let route = self.radd("route", "ApprovalRoute", vec![("stages", path("/route")), ("current", path("/ticket/stage")), ("labels", self.stage_table()), ("ways", self.way_table()), ("people", path("/people"))]);
-        let mut children = vec![head, whose, refused, route];
+        let mut children = vec![head, whose, due, refused, route];
+        // what an agent answered in the round the ticket is in, so that the person a doubt hands the
+        // stage to reads why (DESIGN 15.1): of a kind with an agent's stage
+        let agent = k.flows.iter().any(|f| f.role == "agent");
+        if agent {
+            children.push(self.agent_said());
+        }
+        // what became of the work the ticket launched once it ended, so that the requester reads
+        // whether it was done and what it ended with (DESIGN 13.8): of a kind that launches work
+        let works = k.flows.iter().any(|f| f.role == "launch");
+        if works {
+            children.push(self.works());
+        }
         let mut values = Vec::new();
         for f in &k.form {
             let id = format!("field.{}", f.named.name);
@@ -921,30 +943,118 @@ impl<'a> S<'a> {
         self.column("root", children);
         let mut data = vec![
             ("ticket", obj(vec![("id", Json::Null), ("revision", Json::Null), ("status", Json::Null), ("stage", Json::Null), ("requester", Json::Null), ("made_by", Json::Null)])),
+            ("due", Self::deadlines_data()),
             ("form", Json::obj(values)),
             ("route", Json::arr([])),
             ("comment", Json::str("")),
         ];
         data.extend(data_extra);
-        data.extend([("can", obj(can)), ("people", obj(vec![])), ("masters", Self::masters_data(k.form.iter())), ("files", self.files_data()), ("refused", Self::refused_data())]);
+        data.extend([
+            ("can", obj(can)),
+            ("people", obj(vec![])),
+            ("masters", Self::masters_data(k.form.iter())),
+            ("files", obj(vec![])),
+            ("file_names", obj(vec![])),
+            ("refused", Self::refused_data()),
+        ]);
         if !edited.is_empty() && edited.iter().any(|f| matches!(f.ty, TypeExpr::Attachment)) {
             data.push(("upload", Json::Null));
         }
         if self.finds() {
             data.push(("find", Json::Null));
         }
+        if agent {
+            data.push(("agent", Json::arr([])));
+        }
+        if works {
+            data.push(("works", Json::arr([])));
+        }
         obj(data)
+    }
+
+    /// The work the ticket launched once it ended (`on … launch`), a line for each, as the server
+    /// puts them in `/works` (`flow`, `state`, `at`, `outputs` and `reason`): the name of its flow,
+    /// what became of it (`waiting`, not started yet; `retrying`, starting it failed and it is tried
+    /// again; `started`; `done` or `failed`, as the work said), when, what it ended with, and why it
+    /// failed.
+    fn works(&mut self) -> String {
+        let words = self.t("After approval", "承認のあとの処理");
+        let words = self.caption("works.line.words", &words);
+        let flow = self.text("works.line.flow", path("flow"));
+        let states = [
+            ("waiting", "Not started yet", "まだ始めていません"),
+            ("retrying", "Could not be started, and is tried again", "始められず、やり直しています"),
+            ("started", "Started", "始めました"),
+            ("done", "Done", "済みました"),
+            ("failed", "Failed", "失敗しました"),
+        ];
+        let table = Json::obj(states.iter().map(|(k, en, ja)| (*k, Json::str(self.t(en, ja)))));
+        let state = self.rcall("lookup", vec![("value", path("state")), ("table", table)]);
+        let state = self.text("works.line.state", state);
+        let at = self.text("works.line.at", call("formatDate", vec![("value", path("at")), ("format", Json::str("yyyy-MM-dd HH:mm"))]));
+        let at = self.show("works.line.at.shown", path("at"), at);
+        let outputs = self.text("works.line.outputs", path("outputs"));
+        let outputs = self.show("works.line.outputs.shown", path("outputs"), outputs);
+        let reason = self.text("works.line.reason", path("reason"));
+        let reason = self.show("works.line.reason.shown", path("reason"), reason);
+        let line = self.row("works.line", vec![words, flow, state, at, outputs, reason]);
+        self.add("works", "List", vec![("children", obj(vec![("componentId", Json::str(line)), ("path", Json::str("/works"))]))])
+    }
+
+    /// What an agent answered in the round the ticket is in, a line for each, as the server puts the
+    /// lines of the history in `/agent` (`stage`, `did` and `comment`): the stage it was asked at,
+    /// whether it agreed (`agent ok`), had doubts (`agent doubt`) or could not answer (`agent
+    /// failed`), and the reason it gave.
+    fn agent_said(&mut self) -> String {
+        let stage = self.rcall("lookup", vec![("value", path("stage")), ("table", self.stage_table())]);
+        let stage = self.text("agent.line.stage", stage);
+        let words = [("agent ok", "The agent agreed", "エージェントが認めました"), ("agent doubt", "The agent had doubts", "エージェントが疑問を出しました"), ("agent failed", "The agent could not answer", "エージェントが答えられませんでした")];
+        let table = Json::obj(words.iter().map(|(k, en, ja)| (*k, Json::str(self.t(en, ja)))));
+        let did = self.rcall("lookup", vec![("value", path("did")), ("table", table)]);
+        let did = self.text("agent.line.did", did);
+        let reason = self.text("agent.line.comment", path("comment"));
+        let reason = self.show("agent.line.comment.shown", path("comment"), reason);
+        let line = self.row("agent.line", vec![stage, did, reason]);
+        self.add("agent", "List", vec![("children", obj(vec![("componentId", Json::str(line)), ("path", Json::str("/agent"))]))])
+    }
+
+    /// The deadlines a ticket runs to, each a line shown while it has one, read at `at` (the card's
+    /// `/due`, a list's `due` of a row): `stage`, when the stage it waits at is due; `resubmit`,
+    /// when the requester is to submit it again by, while it is with them; and `pause_ends`, when
+    /// its hold ends, while it is on hold. The server fills them from the ticket, as times in the
+    /// kind's zone (RFC 3339), and leaves null the ones the ticket does not run to now; a deadline
+    /// at the end of a day there (at midnight) has that day beside it (`stage_day`, …), and is said
+    /// as ringi says it, "2026-11-19 at the end of the day", not as the next day's 00:00 (DESIGN 13.8).
+    fn deadlines(&mut self, id: &str, at: &str) -> String {
+        let mut lines = Vec::new();
+        for (key, en, ja) in DEADLINES {
+            let place = format!("{at}/{key}");
+            let day = format!("{at}/{key}_day");
+            let line = format!("{id}.{key}");
+            let words = self.t(en, ja);
+            let words = self.caption(&format!("{line}.words"), &words);
+            let when = self.text(&format!("{line}.at"), call("formatDate", vec![("value", path(&place)), ("format", Json::str("yyyy-MM-dd HH:mm"))]));
+            let when = self.show(&format!("{line}.at.shown"), call("not", vec![("value", call("required", vec![("value", path(&day))]))]), when);
+            let the_day = self.text(&format!("{line}.day"), path(&day));
+            let end = self.t("at the end of the day", "の終わり");
+            let end = self.text(&format!("{line}.day.end"), Json::str(end));
+            let ends = self.row(&format!("{line}.day.row"), vec![the_day, end]);
+            let ends = self.show(&format!("{line}.day.shown"), path(&day), ends);
+            let row = self.row(&line, vec![words, when, ends]);
+            lines.push(self.show(&format!("{line}.shown"), path(&place), row));
+        }
+        self.row(id, lines)
+    }
+
+    /// The deadlines a screen starts with: none, the server's to fill.
+    fn deadlines_data() -> Json {
+        Json::obj(DEADLINES.iter().flat_map(|(key, _, _)| [(key.to_string(), Json::Null), (format!("{key}_day"), Json::Null)]))
     }
 
     /// The names of the rows of the masters the choices of `fields` read, by field: empty, the
     /// server's to fill.
     fn masters_data<'f>(fields: impl Iterator<Item = &'f Fld>) -> Json {
         Json::obj(fields.filter(|f| matches!(f.ty, TypeExpr::ChoiceFrom(_)) && f.choices.is_empty()).map(|f| (f.named.name.as_str(), obj(vec![]))))
-    }
-
-    /// Where each file the form holds is opened, by the file's ID: the server's to fill.
-    fn files_data(&self) -> Json {
-        obj(vec![])
     }
 
     /// The refusal of the operation a button sent, which the server fills when the machine refuses
@@ -967,9 +1077,9 @@ impl<'a> S<'a> {
     }
 
     /// The list of the tickets that wait for the person (`list_waiting`): a line for each ticket,
-    /// with its number, state, stage, requester and the short fields of its form, and a button that
-    /// opens it; below a full page, a button that reads the next. The data: `tickets` (each with
-    /// `id`, `status`, `stage`, `requester`, `form`), `more` (the list's `more`), and the names
+    /// with its number, state, stage, requester, the deadlines it runs to and the short fields of its
+    /// form, and a button that opens it; below a full page, a button that reads the next. The data:
+    /// `tickets` (each with `id`, `status`, `stage`, `requester`, `due`, `form`), `more` (the list's `more`), and the names
     /// `people` and `masters` (of the choices of masters it shows).
     fn list(&mut self) -> Json {
         let title_text = self.label(&self.k.named);
@@ -981,7 +1091,8 @@ impl<'a> S<'a> {
         let stage = self.text("line.stage", stage);
         let requester = self.rcall("lookup", vec![("value", path("requester")), ("table", path("/people"))]);
         let requester = self.text("line.requester", requester);
-        let mut cells = vec![id_text, status, stage, requester];
+        let due = self.deadlines("line.due", "due");
+        let mut cells = vec![id_text, status, stage, requester, due];
         let short: Vec<&Fld> = self.k.given().filter(|f| !matches!(f.ty, TypeExpr::Rows | TypeExpr::LongText | TypeExpr::Attachment) && f.shown_when.is_none()).collect();
         let masters = Self::masters_data(short.iter().copied());
         for f in short {
@@ -1001,9 +1112,10 @@ impl<'a> S<'a> {
     }
 
     /// The person's own requests of the kind (`list_mine`): a line for each ticket, with its number,
-    /// state and stage, the one who made it for them where a proxy did, and the short fields of its
-    /// form, and a button that opens it; below a full page, a button that reads the next, of the
-    /// kind. The data: `tickets` (each with `id`, `status`, `stage`, `made_by`, `form`), `more` (the
+    /// state and stage, the one who made it for them where a proxy did, the deadlines it runs to and
+    /// the short fields of its form, and a button that opens it; below a full page, a button that
+    /// reads the next, of the kind. The data: `tickets` (each with `id`, `status`, `stage`,
+    /// `made_by`, `due`, `form`), `more` (the
     /// list's `more`), and the names `people` and `masters` (of the choices of masters it shows).
     fn mine(&mut self) -> Json {
         let kind = self.label(&self.k.named);
@@ -1019,7 +1131,8 @@ impl<'a> S<'a> {
         let by_name = self.text("line.made_by.name", by_name);
         let by = self.row("line.made_by", vec![by_words, by_name]);
         let by = self.show("line.made_by.shown", path("made_by"), by);
-        let mut cells = vec![id_text, status, stage, by];
+        let due = self.deadlines("line.due", "due");
+        let mut cells = vec![id_text, status, stage, by, due];
         let short: Vec<&Fld> = self.k.given().filter(|f| !matches!(f.ty, TypeExpr::Rows | TypeExpr::LongText | TypeExpr::Attachment) && f.shown_when.is_none()).collect();
         let masters = Self::masters_data(short.iter().copied());
         for f in short {
@@ -1103,6 +1216,10 @@ impl<'a> S<'a> {
         obj(vec![("from", Json::Null), ("home", Json::Null)])
     }
 }
+
+/// The deadlines a card and a list's rows show, each with its words: the stage's, the requester's
+/// to submit the request again, and the end of a hold (the keys of `/due` and of a row's `due`).
+const DEADLINES: [(&str, &str, &str); 3] = [("stage", "Due", "期限"), ("resubmit", "Resubmit by", "再申請の期限"), ("pause_ends", "On hold until", "保留の終わり")];
 
 /// A label set in a Japanese sentence: a space after it where it ends in a letter, a digit or a
 /// sign of another script (of ASCII, mostly), and before it where it starts with one and comes

@@ -42,6 +42,7 @@
             "comment": false
           },
           "upload": null,
+          "file_names": {},
           "find": null
         }
       }
@@ -692,6 +693,18 @@
             "label": "Receipt",
             "value": {
               "@path": "/form/receipt"
+            },
+            "name": {
+              "@call": "lookup",
+              "catalogId": "https://requests.example.com/a2ui/catalog.json",
+              "args": {
+                "value": {
+                  "@path": "/form/receipt"
+                },
+                "table": {
+                  "@path": "/file_names"
+                }
+              }
             },
             "upload": {
               "@path": "/upload"

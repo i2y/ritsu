@@ -21,6 +21,14 @@
             "requester": null,
             "made_by": null
           },
+          "due": {
+            "stage": null,
+            "stage_day": null,
+            "resubmit": null,
+            "resubmit_day": null,
+            "pause_ends": null,
+            "pause_ends_day": null
+          },
           "form": {
             "kind": null,
             "first_day": null,
@@ -52,6 +60,7 @@
           "people": {},
           "masters": {},
           "files": {},
+          "file_names": {},
           "refused": {
             "text": null,
             "field": null,
@@ -177,6 +186,270 @@
               "requester.label",
               "requester.name",
               "made_by.shown"
+            ]
+          },
+          {
+            "id": "due.stage.words",
+            "component": "Text",
+            "text": "Due",
+            "variant": "caption"
+          },
+          {
+            "id": "due.stage.at",
+            "component": "Text",
+            "text": {
+              "@call": "formatDate",
+              "args": {
+                "value": {
+                  "@path": "/due/stage"
+                },
+                "format": "yyyy-MM-dd HH:mm"
+              }
+            }
+          },
+          {
+            "id": "due.stage.at.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@call": "not",
+              "args": {
+                "value": {
+                  "@call": "required",
+                  "args": {
+                    "value": {
+                      "@path": "/due/stage_day"
+                    }
+                  }
+                }
+              }
+            },
+            "child": "due.stage.at"
+          },
+          {
+            "id": "due.stage.day",
+            "component": "Text",
+            "text": {
+              "@path": "/due/stage_day"
+            }
+          },
+          {
+            "id": "due.stage.day.end",
+            "component": "Text",
+            "text": "at the end of the day"
+          },
+          {
+            "id": "due.stage.day.row",
+            "component": "Row",
+            "children": [
+              "due.stage.day",
+              "due.stage.day.end"
+            ]
+          },
+          {
+            "id": "due.stage.day.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "/due/stage_day"
+            },
+            "child": "due.stage.day.row"
+          },
+          {
+            "id": "due.stage",
+            "component": "Row",
+            "children": [
+              "due.stage.words",
+              "due.stage.at.shown",
+              "due.stage.day.shown"
+            ]
+          },
+          {
+            "id": "due.stage.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "/due/stage"
+            },
+            "child": "due.stage"
+          },
+          {
+            "id": "due.resubmit.words",
+            "component": "Text",
+            "text": "Resubmit by",
+            "variant": "caption"
+          },
+          {
+            "id": "due.resubmit.at",
+            "component": "Text",
+            "text": {
+              "@call": "formatDate",
+              "args": {
+                "value": {
+                  "@path": "/due/resubmit"
+                },
+                "format": "yyyy-MM-dd HH:mm"
+              }
+            }
+          },
+          {
+            "id": "due.resubmit.at.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@call": "not",
+              "args": {
+                "value": {
+                  "@call": "required",
+                  "args": {
+                    "value": {
+                      "@path": "/due/resubmit_day"
+                    }
+                  }
+                }
+              }
+            },
+            "child": "due.resubmit.at"
+          },
+          {
+            "id": "due.resubmit.day",
+            "component": "Text",
+            "text": {
+              "@path": "/due/resubmit_day"
+            }
+          },
+          {
+            "id": "due.resubmit.day.end",
+            "component": "Text",
+            "text": "at the end of the day"
+          },
+          {
+            "id": "due.resubmit.day.row",
+            "component": "Row",
+            "children": [
+              "due.resubmit.day",
+              "due.resubmit.day.end"
+            ]
+          },
+          {
+            "id": "due.resubmit.day.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "/due/resubmit_day"
+            },
+            "child": "due.resubmit.day.row"
+          },
+          {
+            "id": "due.resubmit",
+            "component": "Row",
+            "children": [
+              "due.resubmit.words",
+              "due.resubmit.at.shown",
+              "due.resubmit.day.shown"
+            ]
+          },
+          {
+            "id": "due.resubmit.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "/due/resubmit"
+            },
+            "child": "due.resubmit"
+          },
+          {
+            "id": "due.pause_ends.words",
+            "component": "Text",
+            "text": "On hold until",
+            "variant": "caption"
+          },
+          {
+            "id": "due.pause_ends.at",
+            "component": "Text",
+            "text": {
+              "@call": "formatDate",
+              "args": {
+                "value": {
+                  "@path": "/due/pause_ends"
+                },
+                "format": "yyyy-MM-dd HH:mm"
+              }
+            }
+          },
+          {
+            "id": "due.pause_ends.at.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@call": "not",
+              "args": {
+                "value": {
+                  "@call": "required",
+                  "args": {
+                    "value": {
+                      "@path": "/due/pause_ends_day"
+                    }
+                  }
+                }
+              }
+            },
+            "child": "due.pause_ends.at"
+          },
+          {
+            "id": "due.pause_ends.day",
+            "component": "Text",
+            "text": {
+              "@path": "/due/pause_ends_day"
+            }
+          },
+          {
+            "id": "due.pause_ends.day.end",
+            "component": "Text",
+            "text": "at the end of the day"
+          },
+          {
+            "id": "due.pause_ends.day.row",
+            "component": "Row",
+            "children": [
+              "due.pause_ends.day",
+              "due.pause_ends.day.end"
+            ]
+          },
+          {
+            "id": "due.pause_ends.day.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "/due/pause_ends_day"
+            },
+            "child": "due.pause_ends.day.row"
+          },
+          {
+            "id": "due.pause_ends",
+            "component": "Row",
+            "children": [
+              "due.pause_ends.words",
+              "due.pause_ends.at.shown",
+              "due.pause_ends.day.shown"
+            ]
+          },
+          {
+            "id": "due.pause_ends.shown",
+            "component": "Show",
+            "@catalogId": "https://requests.example.com/a2ui/catalog.json",
+            "when": {
+              "@path": "/due/pause_ends"
+            },
+            "child": "due.pause_ends"
+          },
+          {
+            "id": "due",
+            "component": "Row",
+            "children": [
+              "due.stage.shown",
+              "due.resubmit.shown",
+              "due.pause_ends.shown"
             ]
           },
           {
@@ -1269,6 +1542,7 @@
             "children": [
               "head",
               "whose",
+              "due",
               "refused.shown",
               "route",
               "field.kind.labelled",

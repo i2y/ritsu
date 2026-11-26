@@ -26,7 +26,8 @@ import (
 // TestFlows runs the payment of an approved expense claim on Temporal's dev server, as cmd/server
 // and cmd/worker run it: s1201 claims an expense, the manager approves it, the server starts the
 // payment (Flows), and the worker runs it with the project's tasks (Workers, Payments): the
-// requester is paid once, and told. The dev server runs from the Temporal CLI TEMPORAL_CLI names,
+// requester is paid once, and told, and the page of the claim says under "After approval" that the
+// payment was done, with its reference. The dev server runs from the Temporal CLI TEMPORAL_CLI names,
 // else the one the SDK keeps in the system's temporary directory; the test never downloads it, and
 // without it says SKIP.
 func TestFlows(t *testing.T) {
@@ -107,9 +108,34 @@ func TestFlows(t *testing.T) {
 	if n := strings.Count(log.String(), "msg=paid request="+id+" "); n != 1 || !strings.Contains(log.String(), "PAY-"+id) {
 		t.Errorf("the requester was paid %d times:\n%s", n, log.String())
 	}
+	// The flow tells the server what became of it (Server.WorkEnded), and the page of the claim shows it.
+	for end := time.Now().Add(time.Minute); ; time.Sleep(50 * time.Millisecond) {
+		works, err := srv.Works(t.Context(), server.Person{ID: "s1201"}, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(works) == 1 && works[0].State == "done" {
+			out := works[0].Outputs
+			if ref, _ := firstText(out); len(out) != 1 || out[0].Name != "reference" || ref != "PAY-"+id {
+				t.Errorf("the payment ended with %+v", out)
+			}
+			break
+		}
+		if time.Now().After(end) {
+			t.Fatalf("the payment on the page of the claim, after a minute: %+v", works)
+		}
+	}
 	if tk := ticketOf(t, srv, "s1201", id); tk.Status != "approved" {
 		t.Errorf("the claim after the approval: %+v", tk)
 	}
+}
+
+// firstText is the first of values as a text, if it is one.
+func firstText(values []server.NamedValue) (string, bool) {
+	if len(values) == 0 {
+		return "", false
+	}
+	return values[0].Str()
 }
 
 // lockedBuffer is a log the server and the worker write to while the test reads it.
