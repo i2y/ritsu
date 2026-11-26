@@ -282,11 +282,12 @@ impl One<'_> {
             let g = listed(given);
             d = d.note(tr!("{} は、申請の {line} 行目が書いている操作です。", "Line {line} of the request gives its tickets {}.", g.ja; g.en));
         }
-        // `see` is no operation on a ticket: what is asked of it is who else sees one
+        // `see` is no operation on a ticket: what is asked of it is who else sees one, and who sees all
+        // the tickets of a request type (ringi-server's list of them)
         let d = if names.contains(&"see") {
             d.note(tr!(
-                "`see` は、チケットに載っていない人にチケットを見せるかを、サーバーがゲートに尋ねる action です。無ければ、申請者の側と承認者の側の人のほかはだれも見られず、チケットに載っていない管理する人は、承認者を足すことも引き継がせることもできません（見られない人の操作は 404 になります）。",
-                "`see` is what the server asks the gate before it shows a ticket to someone not on it. Without it, no one but the requester's side and the approvers' side sees a ticket, and an administrator not on the ticket can neither add an approver nor hand a place over (every operation of one who does not see a ticket is answered 404)."
+                "`see` は、チケットに載っていない人にチケットを見せるか、申請の種類のチケットをまとめて見せるかを、サーバーがゲートに尋ねる action です。無ければ、申請者の側と承認者の側の人のほかはだれもチケットを見られず、申請の種類のすべての申請を並べられる人もいません。チケットに載っていない管理する人は、承認者を足すことも引き継がせることもできません（見られない人の操作は 404 になります）。",
+                "`see` is what the server asks the gate before it shows a ticket to someone not on it, or all the tickets of a request type. Without it, no one but the requester's side and the approvers' side sees a ticket, no one lists all the requests of a request type, and an administrator not on the ticket can neither add an approver nor hand a place over (every operation of one who does not see a ticket is answered 404)."
             ))
         } else {
             d
